@@ -3231,8 +3231,20 @@ html[data-theme="light"] .masthead .font-display {
     flex-wrap: nowrap !important;
     gap: 0.4rem !important;
   }
+  .gpt-home section.command-card.composer-dock form .mt-2.flex.flex-wrap.items-center.gap-2 {
+    display: contents !important;
+  }
+  .gpt-home button[aria-label="Speak"] {
+    width: 2.5rem !important;
+    height: 2.5rem !important;
+    min-height: 2.5rem !important;
+    background: #2f6bff !important;
+    color: #fff !important;
+    border: 0 !important;
+    border-radius: 999px !important;
+  }
   /* keep Attach (≈+) Dictate mic Send(white) visible; hide mid actions when idle */
-  section.command-card.composer-dock:not(:focus-within) form .mt-2.flex.flex-wrap.items-center.gap-2 > button:not([aria-label="Dictate"]):not([type="submit"]):not(:first-child) {
+  section.command-card.composer-dock:not(:focus-within) form .mt-2.flex.flex-wrap.items-center.gap-2 > button:not([aria-label="Dictate"]):not([aria-label="Speak"]):not([type="submit"]):not(:first-child) {
     display: none !important;
   }
   section.command-card.composer-dock:not(:focus-within) form .mt-2.flex.flex-wrap.items-center.gap-2 > button:first-child {

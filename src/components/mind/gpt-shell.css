@@ -1,0 +1,231 @@
+/* Phone shell matched to the ChatGPT screenshots: solid drawer, empty field, one pill. */
+
+.gpt-rail,
+aside.rail.nav-drawer-open {
+  background: #000 !important;
+  backdrop-filter: none !important;
+  -webkit-backdrop-filter: none !important;
+}
+
+.gpt-rail .meta-label {
+  display: none !important;
+}
+
+.gpt-rail nav button,
+.gpt-rail nav a.nav-item {
+  min-height: 2.75rem;
+  border: 0 !important;
+  background: transparent !important;
+  box-shadow: none !important;
+  border-radius: 12px !important;
+  color: #f4f4f5 !important;
+}
+
+.gpt-rail .sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+@media (max-width: 767px) {
+  .topbar .command-search,
+  .topbar .header-voice-mode,
+  .topbar > button:not([aria-label="Open menu"]) {
+    display: none !important;
+  }
+  nav[aria-label="Primary"] {
+    display: none !important;
+  }
+  .live-voice-compact-entry {
+    display: none !important;
+  }
+  .shell[data-view="command"] [data-testid="failure-banner"] {
+    display: none !important;
+  }
+  .main-stage {
+    padding-bottom: 0.5rem !important;
+  }
+  aside.rail.nav-drawer-open {
+    position: fixed !important;
+    inset: 0 !important;
+    width: 100% !important;
+    height: 100% !important;
+    background: #000 !important;
+    z-index: 80 !important;
+  }
+  .signed-out-entry {
+    position: absolute !important;
+    top: 4.25rem !important;
+    right: 1rem !important;
+    left: 1rem !important;
+    bottom: auto !important;
+    max-width: none !important;
+    margin: 0 1rem 0.75rem;
+    background: #171717 !important;
+    box-shadow: none !important;
+  }
+}
+
+.gpt-home {
+  min-height: calc(100dvh - 4.25rem);
+  background: #000;
+  justify-content: flex-end;
+}
+
+.gpt-home > :not(.gpt-starters):not([data-composer="floating"]) {
+  display: none !important;
+}
+
+.gpt-home .masthead,
+.gpt-home .composer-modes,
+.gpt-home .composer-advanced,
+.gpt-home .composer-more,
+.gpt-home .composer-effort,
+.gpt-home .legacy-composer-voice,
+.gpt-home label:has(select),
+.gpt-home .composer-toolbar > button:not(:first-child):not(.composer-send):not(.gpt-voice) {
+  display: none !important;
+}
+
+.gpt-starters {
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+  margin: 0 0 1.25rem;
+}
+
+.gpt-starters button {
+  display: flex;
+  align-items: center;
+  gap: 0.9rem;
+  min-height: 2.8rem;
+  padding: 0.2rem;
+  color: #f5f5f5;
+  background: transparent;
+  border: 0;
+  text-align: left;
+  font-size: 1.05rem;
+}
+
+.gpt-home .floating-composer,
+.gpt-home [data-composer="floating"] {
+  background: transparent !important;
+  border: 0 !important;
+  box-shadow: none !important;
+  padding: 0 !important;
+  backdrop-filter: none !important;
+}
+
+.gpt-home form {
+  display: flex;
+  align-items: center;
+  gap: 0.15rem;
+  border: 1px solid rgb(255 255 255 / 0.16);
+  border-radius: 1.8rem;
+  background: #1c1c1e;
+  padding: 0.2rem 0.3rem;
+}
+
+.gpt-home .composer-toolbar {
+  display: contents !important;
+}
+
+.gpt-home section.command-card.composer-dock form .composer-toolbar {
+  display: contents !important;
+}
+
+.gpt-home textarea {
+  order: 2;
+  flex: 1 1 auto;
+  width: auto !important;
+  min-height: 2.75rem !important;
+  height: 2.75rem;
+  margin: 0 !important;
+  border: 0 !important;
+  border-radius: 0 !important;
+  background: transparent !important;
+  box-shadow: none !important;
+  padding: 0.6rem 0.35rem !important;
+  position: static !important;
+}
+
+.gpt-home .composer-toolbar > button:first-child,
+.gpt-home .composer-send,
+.gpt-home .gpt-voice {
+  width: 2.6rem;
+  height: 2.6rem;
+  min-height: 2.6rem;
+  justify-content: center;
+  border: 0 !important;
+  border-radius: 999px !important;
+  padding: 0 !important;
+  font-size: 0 !important;
+  background: transparent !important;
+  color: #fff !important;
+}
+
+.gpt-home .composer-toolbar > button:first-child {
+  order: 1;
+}
+
+.gpt-home .composer-send,
+.gpt-home .gpt-voice {
+  order: 3;
+  background: #2f6bff !important;
+}
+
+.shell .gpt-home button.gpt-voice {
+  display: grid !important;
+  order: 4;
+  margin-left: auto;
+  background: #2f6bff !important;
+  color: #fff !important;
+  border-radius: 999px !important;
+}
+
+.gpt-home .composer-send:disabled {
+  display: none !important;
+}
+
+.gpt-home .composer-send:not(:disabled) ~ .gpt-voice {
+  display: none !important;
+}
+
+.settings-index {
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  border: 1px solid rgb(255 255 255 / 0.08);
+  border-radius: 16px;
+  background: #171717;
+}
+
+.settings-index button {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  min-height: 3.25rem;
+  padding: 0 1rem;
+  border: 0;
+  border-bottom: 1px solid rgb(255 255 255 / 0.08);
+  background: transparent;
+  color: #f4f4f5;
+  text-align: left;
+  font-size: 1rem;
+}
+
+.settings-index button:last-child {
+  border-bottom: 0;
+}
+
+.settings-index button::after {
+  content: "›";
+  color: #a1a1aa;
+  font-size: 1.25rem;
+}

@@ -3,6 +3,7 @@ import { Link } from "@tanstack/react-router";
 import "./command-drawer-nav.css";
 import "./command-search.css";
 import "./command-voice-mode.css";
+import "./gpt-shell.css";
 import { getBearerToken } from "@/lib/auth/client";
 import { loadMcpWithHttpFallback } from "@/lib/mind/mcp-list-http";
 import { getRecentChats } from "@/lib/mind/recent-chats";
@@ -337,36 +338,40 @@ const NAV_ICON_SRC: Partial<Record<View, string>> = {
 
 const NAV_GROUPS: { label: string; items: { id: View; label: string; icon: typeof Home }[] }[] = [
   {
-    label: "Workspace",
+    label: "Main",
     items: [
-      { id: "command", label: "Chat", icon: MessageSquare },
-      { id: "intelligence", label: "EVE / Intelligence", icon: Bot },
-      { id: "agents", label: "Bots & Agents", icon: Bot },
-      { id: "dashboard", label: "3D Graph", icon: Network },
-      { id: "build", label: "Build", icon: Terminal },
-      { id: "projects", label: "Projects", icon: Folder },
-      { id: "research", label: "Research", icon: Search },
       { id: "files", label: "Library", icon: FileText },
-      { id: "chat", label: "Thread", icon: MessageSquare },
-      { id: "runs", label: "Runs", icon: ListTree },
-    ],
-  },
-  {
-    label: "Systems",
-    items: [
-      { id: "connected", label: "Connected", icon: Link2 },
-      { id: "tools", label: "Tools", icon: Wrench },
-      { id: "skills", label: "Skills", icon: Zap },
+      { id: "projects", label: "Projects", icon: Folder },
+      { id: "connected", label: "Plugins", icon: Zap },
       { id: "scheduled", label: "Scheduled", icon: CalendarClock },
-      { id: "memory", label: "Memory", icon: Database },
-      { id: "activity", label: "Activity", icon: Activity },
+    ],
+  },
+];
+
+const SETTINGS_PAGES: { group: string; items: { id: View; label: string; detail: string }[] }[] = [
+  {
+    group: "Work",
+    items: [
+      { id: "intelligence", label: "EVE", detail: "Operator workbench" },
+      { id: "agents", label: "Bots", detail: "Agents and templates" },
+      { id: "dashboard", label: "3D graph", detail: "Workspace map" },
+      { id: "projects", label: "Projects", detail: "Records on this device" },
+      { id: "research", label: "Research", detail: "Search when a provider is set" },
+      { id: "files", label: "Library", detail: "Text copies in this browser" },
+      { id: "chat", label: "Threads", detail: "One conversation at a time" },
+      { id: "runs", label: "Runs", detail: "What an agent already did" },
     ],
   },
   {
-    label: "Personal",
+    group: "System",
     items: [
-      { id: "settings", label: "Settings", icon: Settings },
-      { id: "help", label: "Help", icon: CircleHelp },
+      { id: "tools", label: "Tools", detail: "What this app can call" },
+      { id: "skills", label: "Skills", detail: "Installed abilities" },
+      { id: "scheduled", label: "Scheduled", detail: "Jobs that wait for a time" },
+      { id: "memory", label: "Memory", detail: "Notes you chose to keep" },
+      { id: "activity", label: "Activity", detail: "What this device recorded" },
+      { id: "integrations", label: "Integrations", detail: "Provider setup" },
+      { id: "help", label: "Help", detail: "How the controls behave" },
     ],
   },
 ];
@@ -521,6 +526,8 @@ function isEnabledSkillMap(value: unknown): value is Record<string, boolean> {
 export function CommandApp() {
   const { ws, setWs, ready, syncNote, serverHeld, saveError, retrySave } = useMindWorkspace();
   const [view, setView] = useState<View>("command");
+  const [homeAction, setHomeAction] = useState<"ask" | "image" | "write" | "search">("ask");
+  const [settingsPane, setSettingsPane] = useState<null | "general" | "connections" | "voice" | "pages" | "data" | "safety">(null);
   const [query, setQuery] = useState("");
   const [paletteOpen, setPaletteOpen] = useState(false);
   const [paletteIndex, setPaletteIndex] = useState(0);
@@ -3836,29 +3843,13 @@ export function CommandApp() {
   const dictationDisabled = ws.halted || voiceListening || voiceOverlayOpen;
 
   return (
-    <div className="shell flex h-dvh flex-col bg-bg text-fg md:flex-row">
-      <aside ref={navDrawerRef} onMouseDown={closeNavFromBackdrop} role={navOpen ? "dialog" : undefined} aria-modal={navOpen ? true : undefined} aria-label={navOpen ? "Workspace navigation" : undefined} className={`rail ${navOpen ? "nav-drawer-open flex" : "hidden"} fixed inset-0 z-40 w-full flex-col md:static md:flex md:h-dvh ${railCollapsed ? "md:w-[4.5rem]" : "md:w-72"} md:shrink-0`}>
-        <div className="flex items-center gap-3 px-4 py-4">
-          <span className="logo-badge grid size-11 shrink-0 place-items-center overflow-hidden rounded-2xl">
-            <img src="/brand/logo-mark.jpg" alt="" className="size-11 object-cover" />
-          </span>
-          {!railCollapsed && (
-            <div className="min-w-0 flex-1">
-              <p className="text-sm font-bold tracking-wide">ADRIAN'S MIND</p>
-              <p className="text-[10px] tracking-[0.22em] text-muted">COMMAND OS</p>
-            </div>
-          )}
-          <button ref={navCloseRef} type="button" className="grid size-11 place-items-center rounded-panel border border-line md:hidden" aria-label="Close menu" onClick={() => setNavOpen(false)}>
-            <span className="text-lg">×</span>
-          </button>
-          <button type="button" className="hidden size-11 place-items-center rounded-panel border border-line md:grid" aria-label={railCollapsed ? "Expand sidebar" : "Collapse sidebar"} onClick={() => setRailCollapsed((value) => !value)}>
-            <PanelLeft className="size-4" />
-          </button>
-        </div>
-        <div className={`px-3 pb-2 ${railCollapsed ? "flex justify-center" : ""}`}>
+    <div className="shell flex h-dvh flex-col bg-bg text-fg md:flex-row" data-view={view}>
+      <aside ref={navDrawerRef} onMouseDown={closeNavFromBackdrop} role={navOpen ? "dialog" : undefined} aria-modal={navOpen ? true : undefined} aria-label={navOpen ? "Workspace navigation" : undefined} className={`rail gpt-rail ${navOpen ? "nav-drawer-open flex" : "hidden"} fixed inset-0 z-40 w-full flex-col md:static md:flex md:h-dvh ${railCollapsed ? "md:w-[4.5rem]" : "md:w-72"} md:shrink-0`}>
+        <div className="gpt-rail-head flex items-center gap-3 px-4 py-4">
+          {!railCollapsed && <p className="min-w-0 flex-1 text-2xl font-semibold tracking-tight">Adrian</p>}
           <button
             type="button"
-            className={`nav-item flex min-h-11 items-center gap-3 rounded-2xl border border-line/70 bg-surface-2/40 px-3 text-sm text-muted ${railCollapsed ? "size-11 justify-center px-0" : "w-full"}`}
+            className="grid size-11 place-items-center rounded-full bg-white/8"
             aria-label="Search workspace"
             onClick={() => {
               setPaletteOpen(true);
@@ -3866,8 +3857,13 @@ export function CommandApp() {
               window.setTimeout(() => searchRef.current?.focus(), 0);
             }}
           >
-            <Search className="size-4 shrink-0" />
-            {!railCollapsed && <span>Search</span>}
+            <Search className="size-4" />
+          </button>
+          <button ref={navCloseRef} type="button" className="grid size-11 place-items-center rounded-full bg-white/8 md:hidden" aria-label="Close menu" onClick={() => setNavOpen(false)}>
+            <span className="text-lg">×</span>
+          </button>
+          <button type="button" className="hidden size-11 place-items-center rounded-full bg-white/8 md:grid" aria-label={railCollapsed ? "Expand sidebar" : "Collapse sidebar"} onClick={() => setRailCollapsed((value) => !value)}>
+            <PanelLeft className="size-4" />
           </button>
         </div>
         <nav className="flex-1 overflow-auto px-3 pb-3">
@@ -3892,39 +3888,26 @@ export function CommandApp() {
                       }}
                       className={`nav-item flex min-h-11 w-full items-center gap-3 rounded-2xl px-3 text-sm font-medium ${on ? "nav-item-active" : "text-muted hover:bg-white/5"} ${railCollapsed ? "justify-center px-0" : ""}`}
                     >
-                      {NAV_ICON_SRC[item.id] ? <img src={NAV_ICON_SRC[item.id]} alt="" className="nav-icon-img" /> : <Icon className="size-4 shrink-0 opacity-90" />}
+                      <Icon className="size-4 shrink-0 opacity-90" />
                       {!railCollapsed && item.label}
                     </button>
                   );
-                  if (group.label === "Workspace" && itemIndex === 0) {
-                    return (
-                      <div key={`workspace-head-${item.id}`} className="contents">
-                        {button}
-                        {WORKSPACE_ROUTE_LINKS.map((routeItem) => (
-                          <Link
-                            key={routeItem.id}
-                            to={routeItem.href}
-                            title={routeItem.label}
-                            aria-label={routeItem.label}
-                            data-testid={`nav-route-${routeItem.id}`}
-                            onClick={() => {
-                              setNavOpen(false);
-                              closeMenus();
-                            }}
-                            className={`nav-route-link nav-item flex min-h-11 w-full items-center gap-3 rounded-2xl px-3 text-sm font-medium text-muted hover:bg-white/5 ${railCollapsed ? "justify-center px-0" : ""}`}
-                          >
-                            <img src={routeItem.iconSrc} alt="" className="nav-icon-img" />
-                            {!railCollapsed && routeItem.label}
-                          </Link>
-                        ))}
-                      </div>
-                    );
-                  }
                   return button;
                 })}
               </div>
             </div>
           ))}
+          <Link
+            to="/explore"
+            data-testid="nav-route-explore"
+            className={`nav-item flex min-h-11 items-center gap-3 rounded-2xl px-3 text-sm font-medium text-muted ${railCollapsed ? "justify-center" : ""}`}
+            onClick={() => setNavOpen(false)}
+          >
+            <Search className="size-4 shrink-0" />
+            {!railCollapsed && "Explore"}
+          </Link>
+          <Link to="/dashboard" data-testid="nav-route-dashboard" className="nav-route-link sr-only">Dashboard</Link>
+          {!railCollapsed && <div className="mx-3 my-3 border-t border-white/10" />}
           {ws.pins.length > 0 && !railCollapsed && (
             <div className="mb-3">
               <p className="px-3 pb-1 text-[10px] font-semibold tracking-[0.18em] text-muted">PINNED</p>
@@ -3964,39 +3947,52 @@ export function CommandApp() {
             <div className="mb-3">
               <p className="px-3 pb-1 text-[10px] font-semibold tracking-[0.18em] text-muted">RECENT</p>
               {getRecentChats(ws.chats, 5, new Set(ws.pins.filter((pin) => pin.kind === "chat").map((pin) => pin.ref))).map((chat) => (
-                <button
-                  key={chat.id}
-                  type="button"
-                  className="flex min-h-11 w-full items-center rounded-2xl px-3 text-left text-sm text-muted"
-                  onClick={() => {
-                    setActiveId(chat.id);
-                    setView("chat");
-                    setNavOpen(false);
-                  }}
-                >
-                  <span className="truncate">{chat.title}</span>
-                </button>
+                <div key={chat.id} className="flex min-h-11 items-center">
+                  <button
+                    type="button"
+                    className="min-w-0 flex-1 truncate rounded-2xl px-3 text-left text-sm text-muted"
+                    onClick={() => {
+                      setActiveId(chat.id);
+                      setView("chat");
+                      setNavOpen(false);
+                    }}
+                  >
+                    {chat.title}
+                  </button>
+                  <button
+                    type="button"
+                    className="grid size-9 shrink-0 place-items-center rounded-full text-muted hover:bg-white/5"
+                    aria-label={`Pin ${chat.title}`}
+                    onClick={() => setWs((prev) => togglePin(prev, "chat", chat.id))}
+                  >
+                    <Pin className="size-3.5" />
+                  </button>
+                </div>
               ))}
             </div>
           )}
+          {!railCollapsed && (
+            <button type="button" className="px-3 py-2 text-left text-sm text-muted" onClick={() => { setView("chat"); setNavOpen(false); }}>
+              See all…
+            </button>
+          )}
         </nav>
-        <div className={`shrink-0 border-t border-line/70 bg-bg p-3 ${railCollapsed ? "flex flex-col items-center gap-2" : ""}`}>
+        <div className={`gpt-rail-foot shrink-0 bg-bg p-3 ${railCollapsed ? "flex flex-col items-center gap-2" : "flex items-center justify-between gap-3"}`}>
           <button
             type="button"
-            className={`sidebar-plus inline-flex min-h-11 items-center justify-center gap-2 rounded-2xl bg-accent px-3 text-sm font-semibold text-accent-ink ${railCollapsed ? "size-11 px-0" : "w-full"}`}
-            aria-label="New chat"
+            className="gpt-chat-pill inline-flex min-h-11 items-center gap-2 rounded-full bg-[#2f6bff] px-4 text-sm font-semibold text-white"
+            aria-label="Chat"
             onClick={() => {
-              openChat();
-              setView("chat");
+              setView("command");
               setNavOpen(false);
             }}
           >
-            <Plus className="size-4" />
-            {!railCollapsed && "New"}
+            <MessageSquare className="size-4" />
+            {!railCollapsed && "Chat"}
           </button>
           <button
             type="button"
-            className={`mt-3 flex min-h-11 w-full items-center gap-3 rounded-2xl px-2 text-left hover:bg-white/5 ${railCollapsed ? "justify-center" : ""}`}
+            className="grid size-11 shrink-0 place-items-center rounded-full bg-[#3dd68c] text-sm font-bold text-[#05210f]"
             aria-label="Open Settings"
             title="Settings"
             onClick={() => {
@@ -4005,18 +4001,8 @@ export function CommandApp() {
               closeMenus();
             }}
           >
-            <span className="grid size-9 shrink-0 place-items-center rounded-full bg-accent text-sm font-bold text-accent-ink">A</span>
-            {!railCollapsed && <span className="min-w-0"><span className="block text-sm font-semibold">Adrian (Personal)</span><span className="block text-xs text-muted">Settings · this device</span></span>}
+            A
           </button>
-          {!railCollapsed && (
-            <div className="mt-3 px-1">
-              <div className="h-1.5 overflow-hidden rounded-full bg-line">
-                <div className="h-full rounded-full bg-glow" style={{ width: `${Math.min(100, (storedBytes / 5_000_000) * 100)}%` }} />
-              </div>
-              <p className="mt-2 text-xs text-muted">Storage · {formatBytes(storedBytes)} in this browser</p>
-              <p className="text-xs text-muted">Not a cloud quota. Pins stay in this browser copy.</p>
-            </div>
-          )}
         </div>
       </aside>
 
@@ -4283,29 +4269,33 @@ export function CommandApp() {
             </div>
           )}
           {view === "command" && (
-            <div className="mx-auto flex max-w-6xl flex-col gap-4 p-4 md:p-6">
+            <div className="gpt-home mx-auto flex min-h-full max-w-3xl flex-col justify-end gap-4 p-4 md:p-6">
+              <div className="gpt-starters">
+                <button type="button" onClick={() => { setHomeAction("image"); setCommandMode("ask"); setDraft(""); }}>
+                  <Image className="size-5" /> Create an image
+                </button>
+                <button type="button" onClick={() => { setHomeAction("write"); setCommandMode("build"); setDraft(""); }}>
+                  <FileText className="size-5" /> Write or edit
+                </button>
+                <button type="button" onClick={() => { setHomeAction("search"); setCommandMode("research"); setDraft(""); }}>
+                  <Search className="size-5" /> Search the web
+                </button>
+              </div>
               <div className="masthead flex items-center gap-3">
-                <DigitalHuman framing="upper" className="size-16 shrink-0" />
                 <div className="flex flex-wrap items-end justify-between gap-3">
                   <div>
                     <h1 className="font-display text-3xl font-bold md:text-4xl">
                       {now ? greeting(now) : "Hello"}, <span className="text-accent">Adrian</span>
                     </h1>
-                    <p className="text-sm text-muted">Your workspace, under your control.</p>
+                    <p className="text-sm text-muted">Ask, build, or connect. The rest lives in Settings.</p>
                   </div>
-                  <p className="text-right text-sm text-muted">
-                    {now
-                      ? now.toLocaleDateString(undefined, { weekday: "short", month: "short", day: "numeric", year: "numeric" })
-                      : "—"}
-                    <span className="mt-1 block font-display text-2xl text-fg">
-                      {now ? now.toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit" }) : ""}
-                    </span>
-                  </p>
                 </div>
               </div>
 
               <section className="floating-composer command-card composer-dock rounded-panel p-3 md:p-4" data-composer="floating">
-                <div className="flex flex-wrap items-center gap-2">
+                <details className="composer-advanced">
+                  <summary>Controls</summary>
+                <div className="mt-2 flex flex-wrap items-center gap-2">
                   <button type="button" onClick={() => setAutonomy("ask")} title="Review and approve before action" className={`min-h-10 rounded-full px-3 text-sm font-semibold ${autonomy === "ask" ? "bg-accent text-accent-ink" : "border border-line text-muted"}`}>
                     Ask first
                   </button>
@@ -4332,14 +4322,19 @@ export function CommandApp() {
                     </span>
                   </button>
                 </div>
+                </details>
                 <form
-                  className="mt-3"
+                  className="mt-2"
                   onSubmit={(event) => {
                     event.preventDefault();
+                    if (homeAction === "image") {
+                      void runImagine(draft.trim() || undefined, null);
+                      return;
+                    }
                     void sendCommand();
                   }}
                 >
-                  <div className="mb-2 flex flex-wrap gap-2">
+                  <div className="composer-modes mb-2">
                     {([
                       ["ask", "Ask"],
                       ["research", "Research"],
@@ -4356,16 +4351,10 @@ export function CommandApp() {
                       </button>
                     ))}
                   </div>
-                  <RoutingModeControl
-                    mode={routingMode}
-                    panel={routingPanel}
-                    onMode={chooseRoutingMode}
-                    onToggle={toggleRoutingSeat}
-                  />
                   <textarea
                     value={draft}
                     onChange={(event) => setDraft(event.target.value)}
-                    placeholder="What would you like to work on?"
+                    placeholder={homeAction === "image" ? "Describe the image" : homeAction === "write" ? "What should I write or edit?" : homeAction === "search" ? "Search the web" : "Ask Adrian"}
                     aria-label="Command"
                     rows={3}
                     className="input-glow w-full resize-none rounded-[1.1rem] border border-line/80 bg-bg/70 px-3 py-3 text-sm"
@@ -4380,6 +4369,9 @@ export function CommandApp() {
                     <button type="button" className="inline-flex min-h-11 items-center gap-2 rounded-panel border border-line px-3 text-sm" onClick={() => imageInputRef.current?.click()}>
                       <Image className="size-4" /> Image
                     </button>
+                    <details className="composer-more">
+                      <summary>More</summary>
+                      <div className="mt-2 flex flex-wrap gap-2">
                     <button type="button" className="inline-flex min-h-11 items-center gap-2 rounded-panel border border-line px-3 text-sm" onClick={() => setCameraOpen(true)}>
                       <Camera className="size-4" /> Camera
                     </button>
@@ -4425,6 +4417,14 @@ export function CommandApp() {
                     <button type="button" className="inline-flex min-h-11 items-center gap-2 rounded-panel border border-line px-3 text-sm" onClick={() => setProjectOpen(true)}>
                       <Folder className="size-4" /> Projects
                     </button>
+                      </div>
+                      <RoutingModeControl
+                        mode={routingMode}
+                        panel={routingPanel}
+                        onMode={chooseRoutingMode}
+                        onToggle={toggleRoutingSeat}
+                      />
+                    </details>
                     <div className="legacy-composer-voice"><VoiceLevelMeter level={voiceLevel} listening={voiceListening} className="mr-1" /><BrowserDictationControl
                       state={dictation.phase}
                       level={dictationLevel}
@@ -4449,6 +4449,9 @@ export function CommandApp() {
                     </label>
                     <button type="submit" disabled={busy || ws.halted || (!draft.trim() && pendingImages.length === 0 && !staged)} className="composer-send inline-flex min-h-11 items-center gap-2 rounded-panel bg-accent px-4 text-sm font-semibold text-accent-ink disabled:opacity-50">
                       <Send className="size-4" /> {busy ? "Sending" : "Send"}
+                    </button>
+                    <button type="button" className="gpt-voice grid size-11 place-items-center rounded-full bg-[#2f6bff] text-white" aria-label="Speak" onClick={() => void speak("")}>
+                      <Volume2 className="size-4" />
                     </button>
                   </div>
                 </form>
@@ -5481,7 +5484,60 @@ export function CommandApp() {
                 <h2 className="font-display text-3xl font-bold">Settings</h2>
                 <p className="text-sm text-muted">Preferences stay in this browser. Server keys are not edited here.</p>
               </div>
-              <div className="settings-card card-texture rounded-panel p-4 text-sm">
+              <nav className="settings-index" aria-label="Settings sections" hidden={settingsPane !== null}>
+                <button type="button" onClick={() => setSettingsPane("general")}>General</button>
+                <button type="button" onClick={() => setSettingsPane("connections")}>Connections</button>
+                <button type="button" onClick={() => setSettingsPane("voice")}>Voice</button>
+                <button type="button" onClick={() => setSettingsPane("pages")}>Pages</button>
+                <button type="button" onClick={() => setSettingsPane("data")}>Data</button>
+                <button type="button" onClick={() => setSettingsPane("safety")}>Safety</button>
+              </nav>
+              {settingsPane && (
+                <button type="button" className="text-sm text-muted" onClick={() => setSettingsPane(null)}>Back</button>
+              )}
+              <section id="settings-pages" hidden={settingsPane !== "pages"} className="settings-card rounded-panel border border-line p-4">
+                <p className="font-semibold">Pages</p>
+                <p className="mt-1 text-sm text-muted">These stay out of the sidebar so Chat stays short. Search still opens them.</p>
+                <div className="mt-4 space-y-4">
+                  {SETTINGS_PAGES.map((group) => (
+                    <div key={group.group}>
+                      <p className="text-xs font-semibold uppercase tracking-wide text-muted">{group.group}</p>
+                      <div className="mt-2 divide-y divide-white/8 overflow-hidden rounded-xl border border-white/8">
+                        {group.items.map((item) => (
+                          <button
+                            key={item.id}
+                            type="button"
+                            className="flex min-h-12 w-full items-center justify-between gap-3 px-3 text-left text-sm hover:bg-white/5"
+                            onClick={() => {
+                              setView(item.id);
+                              setNavOpen(false);
+                            }}
+                          >
+                            <span>
+                              <span className="block font-medium">{item.label}</span>
+                              <span className="block text-xs text-muted">{item.detail}</span>
+                            </span>
+                            <span className="text-muted" aria-hidden="true">›</span>
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  ))}
+                  <div>
+                    <p className="text-xs font-semibold uppercase tracking-wide text-muted">Routes</p>
+                    <div className="mt-2 divide-y divide-white/8 overflow-hidden rounded-xl border border-white/8">
+                      <Link to="/explore" className="flex min-h-12 items-center justify-between px-3 text-sm hover:bg-white/5">
+                        <span>
+                          <span className="block font-medium">Explore</span>
+                          <span className="block text-xs text-muted">Public directory</span>
+                        </span>
+                        <span className="text-muted" aria-hidden="true">›</span>
+                      </Link>
+                    </div>
+                  </div>
+                </div>
+              </section>
+              <div id="settings-general" hidden={settingsPane !== "general"} className="settings-card card-texture rounded-panel p-4 text-sm">
                 <div className="settings-row">
                   <div>
                     <p className="font-semibold">Appearance</p>
@@ -5521,9 +5577,15 @@ export function CommandApp() {
                   <span className={`h-6 w-11 rounded-full ${failoverPolicy === "grok" ? "bg-accent-ink/30" : "bg-line"}`} />
                 </button>
               </div>
-              <AiProviderConnections onChange={setCustomAiProviders} />
-              <SafeKeysPanel />
-              <VoiceSettingsBlock />
+              <div id="settings-connections" hidden={settingsPane !== "connections"} className="space-y-4">
+                <AiProviderConnections onChange={setCustomAiProviders} />
+                <SafeKeysPanel />
+                <button type="button" className="min-h-11 rounded-panel border border-line px-3 text-sm" onClick={() => setView("connected")}>Open connections</button>
+              </div>
+              <div id="settings-voice" hidden={settingsPane !== "voice"}>
+                <VoiceSettingsBlock />
+              </div>
+              <div id="settings-data" hidden={settingsPane !== "data"} className="space-y-4">
               <p className="text-sm text-muted">Storage on this device: {formatBytes(storedBytes)}. {syncNote}</p>
               {serverHeld && (
                 <button
@@ -5551,8 +5613,8 @@ export function CommandApp() {
                   Save this browser copy over the server copy
                 </button>
               )}
-              <div className="rounded-panel border border-line bg-surface p-4 text-sm">
-                <p className="font-semibold">How to use this</p>
+              <details className="rounded-panel border border-line bg-surface p-4 text-sm">
+                <summary className="cursor-pointer font-semibold">How to use this</summary>
                 <ul className="mt-2 space-y-2 text-muted">
                   <li>Command is home. Ask is the default. Automatic still asks before a delete or a replace.</li>
                   <li>Memory is off until you confirm it. A memory-off chat cannot read or save notes.</li>
@@ -5568,7 +5630,9 @@ export function CommandApp() {
                   <li>Oak Bridge and BridgePoint are external labels. This app does not open them.</li>
                   <li>A dedicated database needs a new Supabase organization. The current free organization is already full.</li>
                 </ul>
+              </details>
               </div>
+              <div id="settings-safety" hidden={settingsPane !== "safety"} className="space-y-4">
               <button
                 type="button"
                 className="inline-flex min-h-11 items-center gap-2 rounded-panel border border-line px-3 text-sm"
@@ -5629,6 +5693,7 @@ export function CommandApp() {
                     <li key={row.id}>{row.text} — {row.note}</li>
                   ))}
                 </ul>
+              </div>
               </div>
             </section>
           )}
