@@ -14,6 +14,8 @@ import {
   type PendingOAuth,
 } from "./store.ts";
 import { hasDurableOAuthStore, saveDurablePendingOAuth, takeDurablePendingOAuth, saveDurableConnection, readDurableConnection, getDurableAccessToken, clearDurableConnection } from "./durable-oauth.server.ts";
+import { updateDurableAccountLabel } from "./durable-oauth.server.ts";
+import { googleAccountEmail } from "./google-account.server.ts";
 
 function ownerIdsMatch(a: string, b: string): boolean {
   try {
@@ -231,6 +233,10 @@ export async function exchangeAuthorizationCode(
     return { ok: false, error: safeTokenExchangeError(response.status) };
   }
   const hints = provider.parseAccount(json);
+  if (provider.id === "gmail" || provider.id === "google_calendar" || provider.id === "google_drive" || provider.id === "youtube") {
+    const email = await googleAccountEmail(json.access_token, input.fetch ?? fetch);
+    if (email) hints.accountLabel = email;
+  }
   try {
     const save = hasDurableOAuthStore()
       ? saveDurableConnection
@@ -273,7 +279,18 @@ export async function connectionStatusPersistent(
   const conn = hasDurableOAuthStore()
     ? await readDurableConnection(ownerId, provider.id)
     : readConnection(ownerId, provider.id);
-  return toPublic(provider.id, conn, providerConfigured(cfg));
+  const labeled = conn && hasDurableOAuthStore() && !conn.accountLabel?.includes("@")
+    && (provider.id === "gmail" || provider.id === "google_calendar" || provider.id === "google_drive" || provider.id === "youtube")
+    ? await labelFromGoogle(ownerId, provider.id, conn)
+    : conn;
+  return toPublic(provider.id, labeled, providerConfigured(cfg));
+}
+async function labelFromGoogle(ownerId: string, connector: ConnectorId, conn: NonNullable<Awaited<ReturnType<typeof readDurableConnection>>>) {
+  const token = await getDurableAccessToken(ownerId, connector);
+  const email = token ? await googleAccountEmail(token) : null;
+  if (!email) return conn;
+  await updateDurableAccountLabel(ownerId, connector, email);
+  return { ...conn, accountLabel: email };
 }
 
 export type DisconnectResult = ConnectionPublic & { revokeOk?: boolean; revokeDetail?: string };

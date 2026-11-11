@@ -79,6 +79,14 @@ export async function getDurableAccessToken(ownerId: string, connector: Connecto
   const row = await readDurableConnection(ownerId, connector);
   return row ? decryptSecret(row.accessTokenEnc) : null;
 }
+export async function updateDurableAccountLabel(ownerId: string, connector: ConnectorId, accountLabel: string): Promise<void> {
+  if (!ownerId || !isConnectorId(connector) || !accountLabel.includes("@")) return;
+  const sql = await getSql();
+  await sql.query(
+    "UPDATE mind_oauth_connections SET account_label = $3 WHERE owner_id = $1 AND connector = $2",
+    [ownerId, connector, accountLabel],
+  );
+}
 export async function saveDurablePendingOAuth(pending: PendingOAuth): Promise<void> {
   if (!isValidOAuthState(pending.state) || !pending.ownerId || !isConnectorId(pending.connector)) {
     throw new Error("Invalid pending OAuth state.");
