@@ -27,11 +27,14 @@ This is evidence from this pass. It is not a claim that Adrian OS is complete.
 - Build no longer says nothing can run when the Companion is offline. Submit attempts the hosted runtime and must show that runtime’s real result.
 - Registered projects can be opened and archived through the existing project API. Saved sessions can be renamed through the existing session API. Neither action claims the workspace path is reachable.
 
+- Local production build passed on this machine. `DATABASE_URL` was unset, so the migrator skipped. Migration `0008` is additive `create table if not exists` SQL, but it has not been applied to production from here.
+- Local preview at `http://127.0.0.1:4173` rendered Build workspace, not the older empty Build page. It showed Companion offline, sign-in required, and “Hosted attempt on submit.” No task was executed.
+
 ## Not verified
 
 - Owner sign-in on this browser session.
-- Production deploy of this branch.
+- Production deploy of this branch. No Vercel token is available in this environment.
 - Production database migration `0008`.
 - A Kimi coding task. The local CLI can open a session, but the subscription does not include Kimi Code.
-- Saved provider keys are still not injected into Kimi. The UI still says so.
+- Saved provider keys are still not injected into Kimi. The installed CLI manages providers through a registry import, not a saved key field. The UI still says keys are not injected.
 - Notion, Gmail, voice realtime, Git push, and a signed-in production walkthrough.
