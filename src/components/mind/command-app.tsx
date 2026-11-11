@@ -437,8 +437,10 @@ function humanAction(action: string) {
     emergency_stop_active: "Emergency stop blocked an action",
     rea_doctor: "REA doctor ran",
     rea_inspect: "REA inspected a file",
+    forbidden_cross_site: "Blocked a cross-site request",
+    notion_failed: "Notion search failed",
   };
-  return map[action] ?? action;
+  return map[action] ?? action.replaceAll("_", " ");
 }
 
 function stamp(iso: string) {
@@ -3978,7 +3980,7 @@ export function CommandApp() {
             </div>
           )}
         </nav>
-        <div className={`border-t border-line/70 p-3 ${railCollapsed ? "flex flex-col items-center gap-2" : ""}`}>
+        <div className={`shrink-0 border-t border-line/70 bg-bg p-3 ${railCollapsed ? "flex flex-col items-center gap-2" : ""}`}>
           <button
             type="button"
             className={`sidebar-plus inline-flex min-h-11 items-center justify-center gap-2 rounded-2xl bg-accent px-3 text-sm font-semibold text-accent-ink ${railCollapsed ? "size-11 px-0" : "w-full"}`}
@@ -4282,8 +4284,8 @@ export function CommandApp() {
           )}
           {view === "command" && (
             <div className="mx-auto flex max-w-6xl flex-col gap-4 p-4 md:p-6">
-              <div className="masthead grid items-center gap-4 md:grid-cols-[minmax(16rem,22rem)_1fr]">
-                <DigitalHuman framing="upper" className="w-full" />
+              <div className="masthead flex items-center gap-3">
+                <DigitalHuman framing="upper" className="size-16 shrink-0" />
                 <div className="flex flex-wrap items-end justify-between gap-3">
                   <div>
                     <h1 className="font-display text-3xl font-bold md:text-4xl">
@@ -4303,19 +4305,18 @@ export function CommandApp() {
               </div>
 
               <section className="floating-composer command-card composer-dock rounded-panel p-3 md:p-4" data-composer="floating">
-                <div className="grid gap-2 md:grid-cols-[1fr_1fr_auto]">
-                  <button type="button" onClick={() => setAutonomy("ask")} className={`min-h-16 rounded-panel px-4 text-left ${autonomy === "ask" ? "bg-accent text-accent-ink tile-active" : "bg-surface-2/80 text-muted"}`}>
-                    <span className="block text-sm font-bold">ASK</span>
-                    <span className="block text-xs">Review and approve before action</span>
+                <div className="flex flex-wrap items-center gap-2">
+                  <button type="button" onClick={() => setAutonomy("ask")} title="Review and approve before action" className={`min-h-10 rounded-full px-3 text-sm font-semibold ${autonomy === "ask" ? "bg-accent text-accent-ink" : "border border-line text-muted"}`}>
+                    Ask first
                   </button>
-                  <button type="button" onClick={() => setAutonomy("automatic")} className={`min-h-16 rounded-panel px-4 text-left ${autonomy === "automatic" ? "bg-accent text-accent-ink tile-active" : "bg-surface-2/80 text-muted"}`}>
-                    <span className="block text-sm font-bold">AUTOMATIC</span>
-                    <span className="block text-xs">Deletes and replacements still ask you</span>
+                  <button type="button" onClick={() => setAutonomy("automatic")} title="Deletes and replacements still ask you" className={`min-h-10 rounded-full px-3 text-sm font-semibold ${autonomy === "automatic" ? "bg-accent text-accent-ink" : "border border-line text-muted"}`}>
+                    Automatic
                   </button>
                   <button
                     type="button"
                     role="switch"
                     aria-checked={memoryChoice === "on"}
+                    title="Opt in before this command can read notes."
                     onClick={() => {
                       if (memoryChoice === "on") {
                         setMemoryChoice("off");
@@ -4323,14 +4324,11 @@ export function CommandApp() {
                       }
                       setArmMemory("composer");
                     }}
-                    className="flex min-h-16 items-center justify-between gap-4 rounded-panel bg-surface-2 px-4 text-left"
+                    className="inline-flex min-h-10 items-center gap-2 rounded-full border border-line px-3 text-sm"
                   >
-                    <span>
-                      <span className="block text-sm font-semibold">Memory: {memoryChoice === "on" ? "ON" : "OFF"}</span>
-                      <span className="block text-xs text-muted">Opt in before this command can read notes.</span>
-                    </span>
-                    <span className={`relative h-6 w-11 rounded-full ${memoryChoice === "on" ? "bg-accent" : "bg-line"}`}>
-                      <span className={`absolute top-0.5 size-5 rounded-full bg-fg ${memoryChoice === "on" ? "right-0.5" : "left-0.5"}`} />
+                    <span>Memory {memoryChoice === "on" ? "on" : "off"}</span>
+                    <span className={`relative h-5 w-9 rounded-full ${memoryChoice === "on" ? "bg-accent" : "bg-line"}`}>
+                      <span className={`absolute top-0.5 size-4 rounded-full bg-fg ${memoryChoice === "on" ? "right-0.5" : "left-0.5"}`} />
                     </span>
                   </button>
                 </div>

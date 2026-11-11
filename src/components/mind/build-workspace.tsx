@@ -402,7 +402,7 @@ export function BuildWorkspace() {
         {online ? <Activity className="size-5 text-success" aria-hidden="true" /> : <WifiOff className="size-5 text-warning" aria-hidden="true" />}
         <div className="min-w-0 flex-1">
           <p className="font-semibold">{online ? "Companion connected" : "Companion offline"}</p>
-          <p className="text-sm text-muted">{online ? (companion.detail || "A paired runtime reported a heartbeat.") : (companion.error || "No Companion heartbeat. Submit still attempts the hosted runtime and shows its real result. It does not ask for a Kimi login.")}</p>
+          <p className="text-sm text-muted">{online ? (companion.detail || "A paired runtime reported a heartbeat.") : "No paired computer. Submit still tries the hosted runtime and shows the real result."}</p>
         </div>
         <span className="rounded-full border border-line px-2 py-1 text-xs">{online ? "Ready to queue" : "Hosted attempt on submit"}</span>
       </div>
