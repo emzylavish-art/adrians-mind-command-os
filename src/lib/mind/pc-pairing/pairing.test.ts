@@ -4,9 +4,11 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, it } from "node:test";
 import {
+  appendJobEvent,
   claimNextJob,
   completeJob,
   enqueueJob,
+  listJobEvents,
   listAgents,
   onlineAgents,
   registerAgent,
@@ -76,6 +78,25 @@ describe("pc pairing", () => {
     assert.equal(claimed?.id, job.id);
     const done = completeJob({ jobId: job.id, agentId: reg.agentId, ok: true, output: "hi\n" });
     assert.equal(done?.status, "done");
+  });
+
+  it("persists Kimi ACP events only for the owning paired agent", () => {
+    setPcPairingDirectory(mkdtempSync(join(tmpdir(), "pc-pair-")));
+    const reg = registerAgent({ ownerId: "owner" });
+    assert.equal(reg.ok, true);
+    if (!reg.ok) return;
+    const job = enqueueJob({
+      ownerId: "owner",
+      agentId: reg.agentId,
+      kind: "kimi-acp",
+      payload: { prompt: "inspect the workspace" },
+      command: "kimi acp",
+      confirm: false,
+    });
+    assert.equal(appendJobEvent({ jobId: job.id, agentId: reg.agentId, type: "session_update", payload: { text: "hello" } })?.jobId, job.id);
+    assert.equal(listJobEvents("owner", job.id).length, 1);
+    assert.equal(listJobEvents("other-owner", job.id).length, 0);
+    assert.equal(appendJobEvent({ jobId: job.id, agentId: "000000000000000000000000", type: "forged" }), null);
   });
 
   it("reports no online agents when lastSeen is stale", () => {

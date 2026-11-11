@@ -159,6 +159,7 @@ import type { Chat, MemoryScope, Msg, Workspace } from "@/lib/mind/types";
 import { ServiceBoard } from "@/components/mind/service-board";
 import { EveWorkbench } from "@/components/mind/eve-workbench";
 import { FleetPanel } from "@/components/mind/fleet-panels";
+import { BuildWorkspace } from "@/components/mind/build-workspace";
 import { MessageBody } from "@/components/mind/message-body";
 import { MemorySavedIndicator } from "@/components/mind/memory-saved-indicator";
 import { MemoryChatToggle } from "@/components/mind/memory-chat-toggle";
@@ -371,13 +372,6 @@ const NAV_GROUPS: { label: string; items: { id: View; label: string; icon: typeo
 ];
 
 const NAV = NAV_GROUPS.flatMap((group) => group.items);
-
-/** Shown on an empty Build view. Click selects only — mounting this list does not run a tool. */
-const BUILD_SUGGESTIONS = [
-  { id: "outline", label: "Outline a change" },
-  { id: "tests", label: "Plan the tests" },
-  { id: "notes", label: "Review a local note" },
-] as const;
 
 const TITLES: Record<View, string> = {
   command: "Chat",
@@ -689,9 +683,6 @@ export function CommandApp() {
   const [routingMode, setRoutingMode] = useState<RoutingMode>("A");
   const [routingPanel, setRoutingPanel] = useState<LogicRouteId[]>([]);
   const [ratings, setRatings] = useState<ResponseRating[]>([]);
-  const [pcAgentOnline, setPcAgentOnline] = useState(false);
-  const [pcAgentDetail, setPcAgentDetail] = useState("No paired PC agent is online.");
-  const [buildPick, setBuildPick] = useState<string | null>(null);
   const [lastResolvedTier, setLastResolvedTier] = useState<ConcreteModelTier | null>(null);
   const [lastModelUsed, setLastModelUsed] = useState<string | null>(null);
   const [failoverPolicy, setFailoverPolicy] = useState<"none" | "grok">("none");
@@ -782,45 +773,6 @@ export function CommandApp() {
     const storage = typeof localStorage === "undefined" ? null : localStorage;
     setComposerEffort(loadComposerEffort(storage));
   }, []);
-
-  useEffect(() => {
-    if (view !== "build") return;
-    let cancel = false;
-    const token = getBearerToken();
-    const prefix = previewPathPrefix(window.location.hostname, window.location.pathname) ?? "";
-    const controller = new AbortController();
-    void fetch(`${prefix}/api/mind/pc/status`, {
-      method: "GET",
-      signal: controller.signal,
-      credentials: "include",
-      headers: token ? { Authorization: `Bearer ${token}` } : {},
-    })
-      .then(async (response) => {
-        if (!response.ok) return null;
-        return (await response.json()) as { ok?: boolean; onlineAgentIds?: unknown; detail?: unknown };
-      })
-      .then((body) => {
-        if (cancel) return;
-        const online = body?.ok && Array.isArray(body.onlineAgentIds) ? body.onlineAgentIds.length : 0;
-        setPcAgentOnline(online > 0);
-        setPcAgentDetail(
-          body?.ok && typeof body.detail === "string" && body.detail.trim()
-            ? body.detail
-            : online > 0
-              ? `${online} paired PC agent(s) online.`
-              : "No paired PC agent is online.",
-        );
-      })
-      .catch(() => {
-        if (cancel) return;
-        setPcAgentOnline(false);
-        setPcAgentDetail("No paired PC agent is online.");
-      });
-    return () => {
-      cancel = true;
-      controller.abort();
-    };
-  }, [view]);
 
   useEffect(() => {
     voiceModeRef.current = voiceMode;
@@ -5263,59 +5215,7 @@ export function CommandApp() {
           )}
           {view === "scheduled" && <FleetPanel mode="scheduled" ws={ws} setWs={setWs} />}
           {view === "tools" && <FleetPanel mode="tools" ws={ws} setWs={setWs} onFailure={(message, retry, surface) => reportFailure(message, surface === "mcp" ? "mcp_tool_failed" : "open_page_failed", surface === "mcp" ? "mcp:tools" : "browser", retry)} />}
-          {view === "build" && (
-            <section className="page-shell space-y-4">
-              <div className="page-hero">
-                <div className="flex items-center gap-3">
-                  <img src="/icons/build.svg" alt="" className="size-8" />
-                  <div>
-                    <h2 className="font-display text-3xl font-bold">Build</h2>
-                    <p className="text-sm text-muted">This page does not edit the repository, run a terminal, install packages, or create commits. A paired computer is required before any of that can run.</p>
-                  </div>
-                </div>
-              </div>
-              <div className="empty-state" data-testid="build-empty">
-                <img src="/empty/empty-folder.svg" alt="" />
-                <p className="font-semibold">Let's build</p>
-                <p className="text-sm text-muted">No build is running. Suggestion cards do not run anything just by appearing.</p>
-                <p className="text-sm font-semibold">{pcAgentOnline ? "PC agent online" : "Not paired"}</p>
-                <p className="text-sm text-muted">{pcAgentDetail}</p>
-                <p className="text-xs text-muted">Build effort is not wired to a different model. Send stays on Direct.</p>
-              </div>
-              <div className="flex flex-wrap gap-2">
-                {BUILD_SUGGESTIONS.map((item) => (
-                  <button
-                    key={item.id}
-                    type="button"
-                    className="suggestion-chip"
-                    onClick={() => {
-                      setBuildPick(item.label);
-                      if (!pcAgentOnline) {
-                        setNotice(`${item.label} was not run. Not paired. Nothing was executed.`);
-                        return;
-                      }
-                      setNotice(`${item.label} is selected. Nothing was executed.`);
-                    }}
-                  >
-                    {item.label}
-                  </button>
-                ))}
-              </div>
-              {buildPick ? <p className="text-sm text-muted">Selected {buildPick}. Nothing was executed.</p> : null}
-              <div className="promo-banner text-sm">
-                <img src="/empty/empty-folder.svg" alt="" className="h-14 w-20" />
-                <div className="min-w-0 flex-1">
-                  <p className="font-semibold">Local Companion not paired</p>
-                  <p className="text-muted">Pair a computer to unlock file edits, tests, and git. Nothing runs until then.</p>
-                </div>
-              </div>
-              <ul className="dense-grid space-y-0 text-sm">
-                <li className="dense-card dense-row">Read this workspace’s projects, chats, and notes. Available from Ask: “show my projects”.</li>
-                <li className="dense-card dense-row">Edit files, run tests, and use git. Not available. No files were changed.</li>
-                <li className="dense-card dense-row">HP EliteBook and iPhone control. Not paired.</li>
-              </ul>
-            </section>
-          )}
+          {view === "build" && <BuildWorkspace />}
           {view === "research" && (
             <section className="page-shell">
               <div className="page-hero card-texture">

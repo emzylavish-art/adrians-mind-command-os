@@ -1,0 +1,2659 @@
+ADRIAN OS — COMPLETE KIMI CODE INTEGRATION, ENGINEERING, FEATURE-PARITY, EXECUTION AND DEPLOYMENT MASTER BLUEPRINT
+Document type: Authoritative master implementation specification Project: Adrian’s Mind Command OS Primary module: Build Integration: Full Kimi Code runtime and capability integration Primary delivery target: Existing Adrian OS website Secondary delivery target: Windows PC Companion Implementation team: Manus, coding agents, engineering agents, QA agents and the designated integration lead Repository: emzylavish-art/adrians-mind-command-os Working branch: feature/adrian-build-kimi-integration Primary objective: Deliver a genuinely functional, deeply integrated AI software-development environment inside Adrian OS.
+ 
+⸻
+ 
+PART 1 — THE MISSION AND NON-NEGOTIABLE OBJECTIVE
+1.1 The mission
+Build a complete, production-quality Kimi Code experience inside Adrian OS.
+The existing Adrian OS Build destination must become a powerful software-development environment in which the user can instruct an AI coding agent to inspect repositories, understand projects, plan tasks, create and modify files, execute commands, debug applications, work with Git, manage agents, use skills, manage integrations, run tests, review changes and carry out substantial software-development work.
+The result must feel like a native Adrian OS product.
+It must not be:
+* A visual imitation of Kimi Code.
+* A basic chat interface with a coding label.
+* A page that simply redirects users to another product.
+* A static dashboard with nonfunctional buttons.
+* A frontend prototype disconnected from an execution engine.
+* A collection of hardcoded responses.
+* A mocked terminal that displays invented output.
+* A feature catalogue that claims capabilities exist without implementing them.
+* A system that only works in the developer’s local environment.
+The goal is to connect the real Kimi Code engine to Adrian OS and expose its useful capabilities through Adrian’s own interface, authentication, projects, workspace management, security controls, integrations, voice experience and persistence infrastructure.
+The user must be able to perform actual software-development work from the Adrian OS website.
+1.2 What success looks like
+A user signs into Adrian OS, opens Build, selects a project, chooses a model or provider, and instructs the agent to perform a substantial task.
+The system should then be capable of:
+1. Understanding the request.
+2. Inspecting the existing project.
+3. Reading relevant files.
+4. Understanding the architecture and dependencies.
+5. Creating an execution plan.
+6. Identifying the files and systems that need to change.
+7. Asking for approval when an action requires it.
+8. Editing files.
+9. Creating new files and directories.
+10. Executing permitted terminal commands.
+11. Installing permitted dependencies.
+12. Running tests and builds.
+13. Reading errors and diagnosing failures.
+14. Revising its implementation.
+15. Coordinating subagents when useful.
+16. Tracking progress.
+17. Showing file changes and diffs.
+18. Reporting what was completed.
+19. Preserving project and session history.
+20. Resuming work after a browser refresh or temporary disconnection.
+The experience must support meaningful multi-step engineering work, not merely question-and-answer interaction.
+1.3 The website-first rule
+The website is the first delivery target.
+The initial implementation must operate through a persistent hosted execution environment. The user’s personal Windows computer must not be required for the website’s core Build functionality.
+The architecture must support a future Windows Companion without making that companion a dependency for the first release.
+The hosted runtime and Windows Companion must ultimately use the same Adrian Build interface and shared capability, authorization, event and policy contracts.
+1.4 The ownership rule
+Adrian OS remains the primary product and control plane.
+Adrian OS owns:
+* User identity.
+* Authentication.
+* Workspace ownership.
+* Project authorization.
+* Session ownership.
+* Runtime assignment.
+* Credential storage.
+* Provider configuration.
+* Integration governance.
+* Approval policies.
+* Usage and quotas.
+* Audit records.
+* Emergency stop.
+* Device pairing.
+* User preferences.
+* Adrian Speak integration.
+* User-facing experience.
+Kimi Code supplies the coding-agent execution capabilities.
+The integration must preserve a clear boundary between Adrian’s application responsibilities and Kimi’s execution responsibilities.
+1.5 The no-fake-functionality rule
+Every feature must be connected to a real operation.
+A button must not appear functional when it is not connected to a working backend operation.
+A status must not say connected when the connection has not been verified.
+A task must not say completed when the runtime has not confirmed completion.
+A terminal must not show fabricated output.
+A plugin must not say installed merely because its name appears in a catalogue.
+A session must not be considered saved merely because it remains visible in React state.
+A test must not be marked passed merely because a mocked response was returned.
+When a feature cannot work in the current environment, show its actual status and explain what is missing.
+Use these status values consistently:
+* VERIFIED
+* PARTIAL
+* BLOCKED
+* UNSUPPORTED
+* NOT_CONFIGURED
+* NOT_AUDITED
+* FAILED
+* DISCONNECTED
+Only mark a feature VERIFIED after its real end-to-end behavior has been demonstrated.
+ 
+⸻
+ 
+PART 2 — FIRST ACTION: INSPECT THE EXISTING ADRIAN OS PROJECT
+2.1 Do not start by rebuilding the application
+Before changing code, inspect the actual repository.
+The existing application contains infrastructure that must be reused where appropriate. Rebuilding existing systems without inspecting them can create duplicate authentication, duplicate integrations, conflicting persistence, unnecessary complexity and broken existing features.
+The first task is a complete technical audit.
+Inspect:
+* Repository structure.
+* Repository instructions.
+* Existing application architecture.
+* Existing Build route and sidebar navigation.
+* Existing authentication.
+* Existing database and persistence.
+* Existing API routes.
+* Existing AI-provider configuration.
+* Existing credential handling.
+* Existing MCP architecture.
+* Existing integration registry.
+* Existing agent functionality.
+* Existing PC pairing.
+* Existing voice infrastructure.
+* Existing approval system.
+* Existing audit system.
+* Existing emergency-stop mechanisms.
+* Existing deployment configuration.
+* Existing automated tests.
+* Existing environment-variable conventions.
+* Existing design system and reusable components.
+2.2 Repository areas requiring special inspection
+Inspect these existing areas before deciding where to implement the integration:
+Existing area	What must be established
+src/components/mind/command-app.tsx	Existing application shell and Build navigation
+src/components/mind/agent-command-center.tsx	Existing agent UI and reusable interaction patterns
+src/components/mind/ai-provider-connections.tsx	Existing provider configuration experience
+src/lib/mind/server.ts	Server-side application infrastructure
+src/lib/mind/agent.ts	Existing agent capabilities and execution limitations
+src/lib/mind/connected-mcp.server.ts	Existing connected MCP handling
+src/lib/mind/ai-provider-config.server.ts	Provider configuration and credential integration
+src/lib/mind/providers.ts	Existing provider definitions
+src/lib/mind/provider-call.ts	Existing provider execution
+src/lib/mind/ai-provider-native.ts	Existing native AI integration
+src/lib/mind/mcp/	Existing MCP implementation
+src/lib/mind/pairing/	Existing pairing architecture
+src/lib/mind/pc-pairing/	Existing PC pairing functionality
+src/lib/mind/voice-live/	Existing live voice infrastructure
+src/lib/mind/voice/	Existing voice services
+src/lib/mind/skills.ts	Existing skill catalogue and functionality
+tools/integrations/catalog.json	Existing integration catalogue
+These are inspection targets, not instructions to blindly overwrite files or create duplicate implementations.
+2.3 Audit every existing module
+For each relevant module, document:
+1. Its current purpose.
+2. Whether it is actually implemented.
+3. Whether it is connected to a real backend.
+4. Whether it persists information.
+5. Whether it has authentication and authorization.
+6. Whether it is production-ready.
+7. Whether it has automated tests.
+8. Whether it can be extended.
+9. Whether it should be reused, refactored, replaced or left unchanged.
+10. Which Kimi integration requirement it can support.
+Classify each existing capability as:
+* Fully implemented and reusable.
+* Implemented but incomplete.
+* Presentational only.
+* Catalogue entry only.
+* Connected but unverified.
+* Broken.
+* Missing.
+Do not assume an existing integration catalogue entry represents a live integration.
+2.4 Required Phase 0 audit report
+Produce a repository audit containing:
+* Current application architecture.
+* Current Build module status.
+* Current backend architecture.
+* Existing database entities and migrations.
+* Existing provider capabilities.
+* Existing MCP capabilities.
+* Existing agent limitations.
+* Existing voice capabilities.
+* Existing pairing capabilities.
+* Existing security controls.
+* Existing test coverage.
+* Existing deployment arrangement.
+* Reusable modules.
+* Required new modules.
+* Files requiring modification.
+* Files that should remain untouched.
+* Architectural risks.
+* Missing infrastructure.
+* Dependencies between workstreams.
+The audit must include actual file paths and evidence from the repository.
+Do not begin large-scale implementation until this audit has been completed and the proposed architecture has been reconciled with the existing codebase.
+ 
+⸻
+ 
+PART 3 — TARGET SYSTEM ARCHITECTURE
+3.1 Required logical architecture
+The intended architecture is:
+ADRIAN OS WEBSITE
+│
+├── Existing Authentication
+│
+├── Existing Adrian OS Sidebar
+│   │
+│   └── BUILD
+│       │
+│       ├── Project Manager
+│       ├── Session Manager
+│       ├── Coding Agent Workspace
+│       ├── Agent Activity
+│       ├── File Explorer
+│       ├── Code Editor
+│       ├── Diff Review
+│       ├── Terminal
+│       ├── Git / Source Control
+│       ├── Skills Manager
+│       ├── Subagent Manager
+│       ├── Plugin Manager
+│       ├── MCP / Integration Manager
+│       ├── Hook Manager
+│       ├── Provider / Model Manager
+│       ├── Attachment Manager
+│       ├── Approval Center
+│       ├── Usage / Cost Center
+│       └── Runtime Settings
+│
+├── ADRIAN BUILD CONTROL PLANE
+│   │
+│   ├── Authentication Bridge
+│   ├── Authorization Engine
+│   ├── Project Service
+│   ├── Session Service
+│   ├── Task Service
+│   ├── Runtime Gateway
+│   ├── Runtime Scheduler
+│   ├── Durable Job Queue
+│   ├── Event Service
+│   ├── Approval Service
+│   ├── Credential Bridge
+│   ├── Provider Bridge
+│   ├── MCP Governance
+│   ├── Plugin Governance
+│   ├── Audit Service
+│   ├── Usage / Quota Service
+│   ├── Notification Service
+│   └── Adrian Speak Bridge
+│
+└── EXECUTION LAYER
+    │
+    ├── Hosted Kimi Runtime — FIRST RELEASE
+    │   ├── Pinned Kimi Code Engine
+    │   ├── Isolated Project Filesystem
+    │   ├── Session Manager
+    │   ├── Agent Execution
+    │   ├── Subagent Execution
+    │   ├── Process Supervisor
+    │   ├── Terminal
+    │   ├── Tool Execution
+    │   ├── MCP Connections
+    │   ├── Skills
+    │   ├── Plugins
+    │   ├── Hooks
+    │   └── REST / WebSocket Interfaces
+    │
+    └── Windows Companion — LATER RELEASE
+        ├── Device Pairing
+        ├── Local Workspace Access
+        ├── Local Filesystem Broker
+        ├── Local Terminal
+        ├── Local Git
+        └── Outbound Authenticated Channel
+3.2 Application and runtime separation
+The Adrian OS frontend and the Kimi runtime must be separate execution layers.
+The frontend is responsible for user interaction.
+The Adrian server is responsible for identity, authorization, routing, policy, persistence and governance.
+The Kimi runtime is responsible for coding-agent execution.
+The hosted runtime must not depend on a normal short-lived frontend request to stay alive.
+Do not attempt to run a persistent Kimi process inside an ordinary Vercel serverless function.
+Vercel can continue hosting the existing Adrian OS website and short-lived server operations. The persistent Kimi execution service must run on an appropriate persistent container, worker or virtual-machine environment.
+3.3 Browser communication
+The browser must communicate with Adrian OS server endpoints.
+The browser must not:
+* Receive Kimi runtime service tokens.
+* Receive provider API keys.
+* Receive private runtime addresses.
+* Connect directly to an unrestricted runtime port.
+* Control another user’s runtime.
+* Bypass Adrian approval checks.
+* Submit arbitrary filesystem paths without server-side validation.
+The server authenticates the user, validates workspace access, checks policy, creates a task and forwards the permitted operation to the assigned runtime.
+3.4 Runtime isolation
+Every active workspace must have a defined isolation boundary.
+Implement:
+* Separate workspace filesystem roots.
+* Separate runtime identities or equivalent tenant boundaries.
+* Per-workspace process limits.
+* Per-workspace storage limits.
+* Per-task execution limits.
+* Per-user concurrency limits.
+* Restricted environment variables.
+* Restricted network egress.
+* Runtime lease expiration.
+* Process cleanup.
+* Workspace cleanup and retention rules.
+* Isolation verification.
+Never allow one user’s writable project directory, Kimi configuration, credentials, session data or process environment to become accessible to another user.
+3.5 Runtime lifecycle
+Implement a real runtime lifecycle:
+1. User opens Build.
+2. Adrian identifies the selected workspace.
+3. Adrian checks whether an appropriate runtime is available.
+4. The scheduler allocates or wakes the runtime.
+5. The runtime verifies its identity.
+6. The gateway checks runtime compatibility.
+7. The runtime lease is created or renewed.
+8. The project workspace is mounted or initialized.
+9. The Kimi session is created or resumed.
+10. The UI receives the runtime and session status.
+11. Work is submitted.
+12. The runtime executes.
+13. Events are persisted and streamed.
+14. The task finishes, fails or is canceled.
+15. The runtime remains available or is suspended according to policy.
+16. Session and project data remain recoverable.
+3.6 Runtime recovery
+The system must recover from:
+* Runtime process crash.
+* Runtime container restart.
+* Network interruption.
+* Browser refresh.
+* WebSocket disconnection.
+* Worker restart.
+* Expired runtime lease.
+* Failed task dispatch.
+* Interrupted terminal process.
+* Database temporary unavailability.
+* Provider timeout.
+* Kimi API incompatibility.
+The system must distinguish between a completed task, a failed task, an interrupted task and an unknown task state.
+Never automatically rerun a potentially destructive task simply because the browser reconnects.
+ 
+⸻
+ 
+PART 4 — KIMI CODE ENGINE INTEGRATION
+4.1 Integrate the actual engine
+Use the real Kimi Code engine.
+The integration must preserve actual execution capabilities instead of implementing a separate simplified coding agent and presenting it as Kimi.
+Inspect the upstream implementation and official documentation. Identify the exact release and supported runtime interface selected for Adrian Build.
+The implementation team must verify:
+* Kimi Code installation and startup.
+* Supported runtime requirements.
+* CLI execution.
+* Server execution.
+* REST API availability.
+* WebSocket event availability.
+* Session management.
+* Agent execution.
+* Tool execution.
+* File operations.
+* Terminal operations.
+* MCP support.
+* Plugin support.
+* Skills support.
+* Hooks support.
+* Provider support.
+* Subagent support.
+* Configuration behavior.
+* Supported attachment and media capabilities.
+4.2 Use the actual runtime schemas
+Where the selected Kimi runtime exposes OpenAPI and AsyncAPI documents, retrieve them from the exact pinned runtime.
+Use those documents as the source of truth for the actual endpoints and events available in that version.
+The integration must not assume that a route documented for a different version exists.
+The adapter must:
+* Store the schema snapshot.
+* Record the runtime version.
+* Record the schema digest.
+* Validate required endpoints.
+* Validate event structures.
+* Detect incompatible runtime versions.
+* Fail safely if mandatory operations are missing.
+* Run contract tests during upgrades.
+The documented Kimi server interfaces have included REST endpoints and WebSocket streaming, but the exact implementation must follow the selected runtime’s actual schemas.
+4.3 Kimi runtime gateway
+Create a dedicated server-side gateway that connects Adrian Build to the Kimi runtime.
+Its responsibilities include:
+* Runtime discovery.
+* Runtime assignment.
+* Authentication.
+* Request forwarding.
+* Request validation.
+* Workspace binding.
+* Session binding.
+* Task dispatch.
+* Event normalization.
+* Cancellation.
+* Timeout enforcement.
+* Retry handling.
+* Health checking.
+* Compatibility checking.
+* Error translation.
+* Usage accounting.
+* Audit recording.
+The gateway must be the only normal application route into hosted Kimi execution.
+4.4 Typed adapter contract
+Create a stable Adrian-side contract so that the application does not become tightly coupled to one runtime implementation.
+The contract should cover:
+Runtime
+  connect
+  disconnect
+  health
+  capabilities
+  version
+  acquireLease
+  renewLease
+  releaseLease
+
+Projects
+  list
+  create
+  open
+  close
+  archive
+  delete
+
+Sessions
+  create
+  list
+  get
+  resume
+  rename
+  archive
+  delete
+  export
+
+Tasks
+  submit
+  inspect
+  cancel
+  resume
+  getStatus
+
+Events
+  subscribe
+  replay
+  acknowledge
+  normalize
+
+Files
+  list
+  read
+  search
+  write
+  patch
+  rename
+  move
+  delete
+
+Terminal
+  execute
+  stream
+  inspect
+  cancel
+
+Git
+  status
+  diff
+  log
+  branch
+  checkout
+  commit
+  push
+  pull
+  fetch
+  reset
+
+Capabilities
+  listAgents
+  delegateAgent
+  listSkills
+  activateSkill
+  listPlugins
+  installPlugin
+  updatePlugin
+  disablePlugin
+  removePlugin
+  listMcpServers
+  connectMcp
+  disconnectMcp
+  listMcpTools
+  callMcpTool
+  listHooks
+  inspectHooks
+This is a logical contract, not a claim that every operation exists in every Kimi version.
+The adapter must implement only operations supported by the actual runtime and must expose unsupported capabilities truthfully.
+4.5 Runtime capability negotiation
+When a runtime connects, it must report:
+* Runtime ID.
+* Kimi version.
+* Engine version.
+* API schema version or digest.
+* Supported protocols.
+* Supported tools.
+* Supported agent types.
+* Supported skills functionality.
+* Plugin functionality.
+* MCP functionality.
+* Hook functionality.
+* Provider functionality.
+* Attachment capabilities.
+* Streaming capabilities.
+* Runtime target.
+* Resource limits.
+* Current health.
+Adrian Build must use this information to determine which controls are enabled.
+A runtime without plugin support must not display a working plugin installation action.
+A runtime without a particular media capability must explain that limitation.
+A runtime with an incompatible schema must not receive new coding tasks.
+ 
+⸻
+ 
+PART 5 — COMPLETE FEATURE-PARITY IMPLEMENTATION
+This section is a mandatory feature-by-feature implementation programme.
+Do not treat the list as optional inspiration. Every item must be audited, implemented where supported, tested and recorded.
+5.1 Coding agent
+The main coding agent is the central Build experience.
+It must support:
+* Starting a new coding session.
+* Continuing an existing session.
+* Sending natural-language instructions.
+* Sending structured task requests.
+* Understanding the active project.
+* Inspecting relevant source files.
+* Reading project configuration.
+* Understanding dependencies.
+* Planning multi-step work.
+* Performing file operations.
+* Running permitted commands.
+* Reading test results.
+* Diagnosing errors.
+* Revising code.
+* Reporting completed work.
+* Reporting remaining work.
+* Asking for clarification when necessary.
+* Requesting approval for restricted actions.
+* Canceling active work.
+* Resuming eligible interrupted work.
+The agent must retain the context of the selected project and active session.
+The user must not have to repeatedly explain which project is open.
+5.2 Project manager
+Create a proper project management system.
+Users must be able to:
+* Create a project.
+* Import a supported repository.
+* Open an existing project.
+* Select a project.
+* Rename a project.
+* View project details.
+* View the project root.
+* View its runtime.
+* View its Git status.
+* View recent sessions.
+* View recent tasks.
+* Archive a project.
+* Restore an archived project.
+* Delete a project under the configured confirmation policy.
+Each project must retain:
+* Project ID.
+* Owner ID.
+* Name.
+* Description.
+* Source location.
+* Workspace root.
+* Runtime assignment.
+* Default model/provider preference.
+* Default instructions.
+* Project settings.
+* Git metadata.
+* Created date.
+* Updated date.
+* Last activity.
+* Retention status.
+Do not store the only copy of project data in browser state.
+5.3 Session manager
+Provide a full session system.
+Required functions:
+* Create session.
+* List sessions.
+* Search sessions.
+* Resume session.
+* Rename session.
+* Archive session.
+* Delete session.
+* Export supported session data.
+* View session details.
+* View session activity.
+* View task history.
+* View associated project.
+* View runtime information.
+* Restore the last active session.
+Session records must be linked to the correct Adrian user, project, runtime and Kimi session identifier.
+Session history must survive page refreshes and ordinary runtime restarts.
+Where the upstream runtime supports session forking or branching, expose it through the adapter after testing its actual behavior.
+5.4 File explorer
+Implement a real project file explorer.
+Required capabilities:
+* List directories.
+* Expand and collapse folders.
+* Open files.
+* Read file content.
+* Search filenames.
+* Search file content.
+* Create files.
+* Create directories.
+* Rename files.
+* Move files.
+* Delete files.
+* Show file metadata.
+* Refresh the tree.
+* Track selected files.
+* Display changed-file indicators.
+* Display ignored files where supported.
+File access must be restricted to the authorized workspace.
+Reject:
+* Path traversal.
+* Unauthorized absolute paths.
+* Symlink escapes.
+* Access to runtime secrets.
+* Access to other tenant directories.
+* Access to system directories outside approved workspace boundaries.
+Large directories must be paginated or lazily loaded.
+Large files must be handled without freezing the browser.
+5.5 Code editor
+The editor must support real editing, not just read-only source display.
+Implement:
+* Syntax highlighting.
+* File tabs.
+* Active file selection.
+* Unsaved-change indicators.
+* Save.
+* Save status.
+* Search within file.
+* Replace within file.
+* Line numbers.
+* Error and warning display where available.
+* Diff comparison.
+* Keyboard shortcuts.
+* Multiple open files.
+* Editor resizing.
+* Theme compatibility.
+* File restoration after refresh where appropriate.
+Use a suitable editor library already present in the project or introduce one after reviewing the existing dependencies.
+The editor must synchronize correctly with runtime file content.
+Prevent silent overwriting when the file changes externally while the user is editing.
+Use file versions, content hashes or equivalent concurrency protection.
+5.6 Diff and change review
+Every AI-generated file change must be attributable to a task and session.
+Show:
+* File path.
+* Change type.
+* Added lines.
+* Removed lines.
+* Changed lines.
+* Before state.
+* After state.
+* Task responsible.
+* Approval state.
+* Application state.
+Support:
+* Review all changes.
+* Review individual files.
+* Accept changes where the workflow permits.
+* Reject changes.
+* Revert eligible changes.
+* Compare against the previous version.
+* Compare against Git HEAD.
+* View patch details.
+When approval is required, do not apply the change before approval.
+The approval record must be tied to the exact patch or content hash. If the proposed patch changes after review, invalidate the old approval.
+5.7 Terminal
+Implement a real terminal connected to the selected runtime.
+Required features:
+* Start a command.
+* Stream standard output.
+* Stream standard error.
+* Display exit code.
+* Display running state.
+* Display execution duration.
+* Cancel command.
+* Display timeout.
+* Maintain command history according to the configured retention policy.
+* Support multiple terminal sessions where safe.
+* Show the working directory.
+* Show the active project.
+* Display process failure.
+* Recover from temporary stream disconnection.
+Terminal output must be real runtime output.
+Do not render arbitrary terminal output as executable HTML.
+Enforce:
+* Command execution permissions.
+* Runtime resource limits.
+* Execution timeouts.
+* Output-size limits.
+* Process-count limits.
+* Process-tree termination.
+* Network restrictions.
+* Environment-variable restrictions.
+Commands with destructive consequences must require the configured approval.
+5.8 Git and source control
+Provide a functional source-control panel.
+Required operations, where supported:
+* Git status.
+* Changed files.
+* Staged files.
+* Unstaged files.
+* Diff.
+* Commit history.
+* Branch list.
+* Current branch.
+* Create branch.
+* Switch branch.
+* Stage changes.
+* Unstage changes.
+* Commit.
+* Fetch.
+* Pull.
+* Push.
+* Merge.
+* Conflict inspection.
+* Conflict resolution support.
+* Reset.
+* Revert.
+Require appropriate confirmation or approval for operations that can overwrite work, rewrite history, remove changes or affect remote repositories.
+Never silently push code to a remote repository.
+Display the repository, branch and target remote before remote operations.
+Provide useful errors when credentials, permissions or remote access are unavailable.
+5.9 Task planning and execution
+The agent must support structured execution plans for substantial work.
+A plan should contain:
+* Objective.
+* Project scope.
+* Required changes.
+* Files or modules likely involved.
+* Dependencies.
+* Work sequence.
+* Validation steps.
+* Risks.
+* Approval requirements.
+* Expected deliverables.
+The agent should update task progress as work advances.
+Represent task states consistently:
+CREATED → QUEUED → RUNNING → WAITING_FOR_APPROVAL → COMPLETED
+Alternative terminal states:
+FAILED, CANCELED, INTERRUPTED, EXPIRED.
+A task must not be marked complete until the execution result has been reconciled.
+5.10 Subagents
+Expose real Kimi subagent capabilities where supported.
+Required functionality:
+* Discover available agent types.
+* View agent descriptions.
+* Delegate a bounded subtask.
+* Display active subagents.
+* Display agent status.
+* Display progress.
+* Display results.
+* Display errors.
+* Cancel a subagent.
+* Track parent-child task relationships.
+* Enforce concurrency limits.
+* Enforce execution budgets.
+* Prevent unbounded delegation depth.
+A subagent must inherit the parent task’s authorization boundaries.
+A subagent must not gain broader filesystem, terminal, provider or integration permissions than its parent.
+The interface must distinguish between the main agent and delegated agents.
+5.11 Skills manager
+Build a proper Skills Library.
+Required functionality:
+* Discover available skills.
+* Search skills.
+* View skill details.
+* Preview instructions.
+* View source.
+* View version.
+* View installation scope.
+* Install supported skills.
+* Enable and disable skills.
+* Activate skills.
+* Remove skills.
+* View activation errors.
+* View skill availability to a project or session.
+A skill must not automatically receive elevated execution privileges.
+Skill instructions are not authorization.
+The policy engine remains responsible for permissions.
+Track which skills were active during a task so that debugging and audit records can explain the task context.
+5.12 Plugin manager and marketplace
+Implement a full plugin lifecycle.
+Required capabilities:
+* Browse available plugins.
+* Search plugins.
+* Filter plugins.
+* View plugin descriptions.
+* View plugin version.
+* View source.
+* View manifest.
+* View included skills.
+* View included agents.
+* View included MCP servers.
+* View included hooks.
+* Preview installation.
+* Install.
+* Enable.
+* Disable.
+* Update.
+* Remove.
+* Roll back to a previous working version where supported.
+* View installation errors.
+* View plugin execution status.
+Support the plugin sources actually available in the selected Kimi runtime.
+Inspect the actual plugin manifest formats supported by that runtime.
+Do not invent a manifest schema.
+Do not treat a marketplace listing as a successful installation.
+Every installation must be verified by the runtime and reflected in Adrian’s persistent records.
+5.13 MCP and integrations
+Adrian’s existing MCP governance must remain the source of truth.
+Do not create a second disconnected integration registry.
+Integrate the Kimi MCP functionality into the existing Adrian integration architecture.
+Support, where available:
+* MCP server discovery.
+* Server details.
+* Transport information.
+* Configuration.
+* Authentication.
+* OAuth authorization.
+* Connection.
+* Disconnection.
+* Reconnection.
+* Tool discovery.
+* Tool descriptions.
+* Tool invocation.
+* Tool result display.
+* Error reporting.
+* Credential revocation.
+* Connection health.
+* Per-project or per-user scope.
+* Permission review.
+Support the transports actually supported by the selected runtime, including applicable standard input/output and HTTP-based transports.
+For each connection, show:
+* Name.
+* Source.
+* Transport.
+* Status.
+* Required permissions.
+* Granted permissions.
+* Available tools.
+* Last successful connection.
+* Last error.
+* Connected project or user scope.
+Every MCP tool call must pass Adrian’s policy checks and produce an audit event.
+5.14 Hooks
+Expose hook capabilities supported by the actual runtime.
+Hooks may be associated with lifecycle events such as:
+* Session start.
+* Session end.
+* Task start.
+* Task completion.
+* Tool execution.
+* File changes.
+* Agent lifecycle events.
+* Other upstream-supported lifecycle events.
+The interface must show:
+* Hook name.
+* Event.
+* Source.
+* Configuration.
+* Enabled state.
+* Last execution.
+* Last result.
+* Failure reason.
+* Permission requirements.
+Hooks must not be able to bypass Adrian’s authorization or approval system.
+Test hook timeout, failure, denial, repeated execution and cancellation behavior.
+5.15 Provider and model management
+Integrate with the existing Adrian provider system.
+Do not create a duplicate credential vault.
+The provider layer must support the providers and authentication methods actually supported by the selected Kimi runtime.
+Where available, support:
+* Kimi-managed access.
+* Anthropic-compatible access.
+* OpenAI-compatible providers.
+* OpenAI Responses-compatible access.
+* Google GenAI.
+* Other providers supported by the selected runtime.
+Required UI:
+* Provider list.
+* Provider connection status.
+* Model list.
+* Model capabilities.
+* Default model.
+* Session model selection.
+* Provider connection test.
+* Credential status.
+* Usage information.
+* Provider error details.
+* Rate-limit status.
+Do not silently switch providers or models when a selected provider fails.
+If fallback is configured, display the fallback decision and record it.
+Provider secrets must remain server-side and must not appear in browser state, URLs, frontend logs or unredacted task events.
+5.16 Attachments and media
+Implement supported attachment workflows.
+Potential file types include:
+* Text files.
+* Source files.
+* Configuration files.
+* Images.
+* Documents.
+* PDFs.
+* Video files where supported.
+* Other upstream-supported input formats.
+The implementation must discover actual Kimi capabilities and avoid advertising unsupported formats.
+Support:
+* Upload.
+* File validation.
+* Size validation.
+* Type validation.
+* Storage.
+* Attachment preview.
+* Attachment removal.
+* Session association.
+* Task association.
+* Secure retrieval.
+* Retention handling.
+Large uploads must use an appropriate upload strategy rather than sending unrestricted binary content through a normal application request.
+5.17 Runtime and capability dashboard
+Show the real state of the execution environment.
+Display:
+* Runtime target.
+* Runtime health.
+* Runtime version.
+* Engine version.
+* Active project.
+* Active session.
+* Active task.
+* Queue status.
+* Current execution state.
+* Runtime lease status.
+* Resource status where available.
+* Provider connection status.
+* MCP connection status.
+* Available capabilities.
+* Last successful operation.
+* Last runtime error.
+Do not present guessed resource metrics as real measurements.
+5.18 Export and import
+Support appropriate export and import operations.
+Where technically supported, users should be able to:
+* Export session transcripts.
+* Export task history.
+* Export project metadata.
+* Export relevant configuration.
+* Import supported project archives.
+* Import supported repositories.
+* Restore project snapshots.
+* Restore eligible session context.
+Exports must exclude secrets and private runtime credentials.
+ 
+⸻
+ 
+PART 6 — ADRIAN BUILD USER INTERFACE
+6.1 Preserve the existing Adrian OS shell
+Build must remain inside the existing Adrian OS application.
+Do not create a separate product website.
+Do not add a second authentication flow.
+Do not replace the existing sidebar with a different navigation system.
+Do not break existing Adrian OS modules.
+Use the existing design system and application conventions.
+6.2 Main workspace layout
+The desktop experience should contain:
+Top toolbar
+* Project selector.
+* Session selector.
+* Runtime selector.
+* Model selector.
+* Runtime status.
+* Current task status.
+* Approval indicator.
+* Stop control.
+* Settings access.
+Left panel
+* Projects.
+* Recent sessions.
+* Session search.
+* New session action.
+* Project settings.
+Main panel
+* Agent conversation.
+* Task plan.
+* Progress timeline.
+* Agent messages.
+* Tool activity.
+* Approval requests.
+* Completion report.
+Editor panel
+* File explorer.
+* Open files.
+* Editor tabs.
+* Diff view.
+* File status.
+Bottom panel
+* Terminal.
+* Build output.
+* Test results.
+* Runtime logs.
+* Git changes.
+Right panel
+* Agent activity.
+* Subagents.
+* Tool calls.
+* Pending approvals.
+* Changed files.
+* Task details.
+Panels should be resizable and collapsible.
+Save user layout preferences.
+6.3 Mobile experience
+Mobile must not be ignored.
+Provide:
+* Project switching.
+* Session switching.
+* Agent conversation.
+* Task progress.
+* Approval actions.
+* Stop control.
+* Runtime status.
+* File preview.
+* Diff viewing.
+* Terminal access.
+* Settings access.
+Advanced panels can be displayed through tabs or drawers, but essential actions must remain reachable.
+6.4 Design standards
+The UI must:
+* Match Adrian OS.
+* Use consistent spacing.
+* Use existing typography.
+* Support existing themes.
+* Use accessible contrast.
+* Support keyboard navigation.
+* Provide loading states.
+* Provide empty states.
+* Provide error states.
+* Provide offline states.
+* Provide clear confirmation dialogs.
+* Avoid unnecessary visual clutter.
+* Avoid duplicate controls.
+* Avoid dead buttons.
+* Avoid excessive animation.
+Do not spend implementation time building elaborate decorative elements before the underlying operations work.
+Functional completeness takes priority over decorative polish.
+6.5 Streaming experience
+The conversation must support real-time task activity.
+Display:
+* Agent response.
+* Current task.
+* Current phase.
+* Tool execution.
+* File operation.
+* Terminal command.
+* Subagent activity.
+* Approval request.
+* Error.
+* Retry.
+* Completion.
+Streaming must not lose messages when the browser disconnects.
+Use durable event cursors and replay.
+6.6 Error experience
+Every important failure must have a useful explanation.
+Examples:
+* Runtime unavailable.
+* Runtime incompatible.
+* Workspace missing.
+* Project access denied.
+* Provider authentication failed.
+* MCP server disconnected.
+* Plugin installation failed.
+* Task timed out.
+* Command rejected by policy.
+* Approval expired.
+* File changed externally.
+* Event stream disconnected.
+Provide a safe recovery action where possible.
+ 
+⸻
+ 
+PART 7 — BACKEND SERVICES AND MODULE RESPONSIBILITIES
+The implementation team must fit new modules into existing repository conventions. The following is the logical module breakdown.
+7.1 Kimi integration layer
+Create or extend a server-only Kimi integration area.
+Suggested responsibilities:
+Contracts
+* Request types.
+* Response types.
+* Runtime capability types.
+* Event types.
+* Error types.
+* Status types.
+Adapter
+* REST operations.
+* WebSocket operations.
+* Request serialization.
+* Response parsing.
+* Runtime version handling.
+* Error normalization.
+Gateway
+* Runtime routing.
+* Authentication.
+* Workspace binding.
+* Request authorization.
+* Service-to-service communication.
+Event bridge
+* Event normalization.
+* Event persistence.
+* Event replay.
+* Duplicate suppression.
+* Cursor management.
+Policy bridge
+* Action classification.
+* Approval checks.
+* Permission checks.
+* Execution decisions.
+Configuration bridge
+* Provider configuration.
+* MCP configuration.
+* Plugin configuration.
+* Skill configuration.
+* Runtime settings.
+Compatibility manager
+* Runtime version.
+* Schema digest.
+* Capability discovery.
+* Compatibility tests.
+* Upgrade checks.
+These responsibilities may be implemented in different files if the repository has a better established structure.
+7.2 Runtime scheduler
+The scheduler must:
+* Discover available runtime capacity.
+* Allocate a runtime.
+* Bind a workspace.
+* Create a lease.
+* Renew a lease.
+* Detect unhealthy runtimes.
+* Release unused runtimes.
+* Reconcile interrupted tasks.
+* Enforce concurrency.
+* Respect resource limits.
+* Prevent cross-tenant allocation mistakes.
+Runtime allocation must be durable and auditable.
+7.3 Durable task queue
+Long-running coding work must not depend on a browser request remaining open.
+Implement a durable queue or equivalent reliable dispatch mechanism.
+It must support:
+* Task creation.
+* Task dispatch.
+* Queue visibility.
+* Retry policy.
+* Lease management.
+* Idempotency.
+* Cancellation.
+* Timeout.
+* Failure handling.
+* Recovery after worker restart.
+* Task reconciliation.
+Retries must be operation-aware.
+A retry of a harmless status request may be safe. A retry of a remote push, destructive command or payment-related integration action may not be safe.
+Do not blindly retry non-idempotent actions.
+7.4 Event system
+Create a durable event pipeline.
+Each event should include:
+* Event ID.
+* Task ID.
+* Session ID.
+* Project ID.
+* Runtime ID.
+* Owner ID.
+* Event sequence.
+* Event type.
+* Timestamp.
+* Redacted payload.
+* Correlation ID.
+* Source.
+The event system must support:
+* Ordered events.
+* Durable writes.
+* Cursor replay.
+* Duplicate detection.
+* Reconnection.
+* Event retention.
+* Redaction.
+* Task-state reconciliation.
+7.5 Error normalization
+Normalize upstream and infrastructure errors into consistent Adrian error types.
+Include:
+* Authentication errors.
+* Authorization errors.
+* Runtime errors.
+* Provider errors.
+* Network errors.
+* Timeout errors.
+* Schema errors.
+* Validation errors.
+* Tool errors.
+* Filesystem errors.
+* Process errors.
+* Resource-limit errors.
+* Cancellation errors.
+Preserve useful diagnostic details server-side while returning safe messages to the user.
+ 
+⸻
+ 
+PART 8 — DATABASE AND PERSISTENCE
+8.1 Inspect before creating tables
+First inspect the current database.
+Reuse existing entities where they already provide the required functionality.
+Do not create duplicate tables simply because the new module has a different name.
+Document every schema decision.
+8.2 Required logical records
+The system must persist the following concepts, either through existing tables or new records:
+Build workspace
+* ID.
+* Owner.
+* Name.
+* Project root.
+* Runtime preference.
+* Policy profile.
+* Settings.
+* Created date.
+* Updated date.
+Build runtime
+* ID.
+* Owner/workspace binding.
+* Runtime target.
+* Runtime version.
+* Image reference.
+* Status.
+* Capabilities.
+* Lease.
+* Health.
+* Last successful operation.
+Build session
+* ID.
+* Adrian owner.
+* Workspace.
+* Runtime.
+* Kimi session ID.
+* Title.
+* Status.
+* Metadata.
+* Created date.
+* Updated date.
+Build task
+* ID.
+* Session.
+* Workspace.
+* Runtime.
+* Idempotency key.
+* Task description.
+* Status.
+* Execution budget.
+* Cancellation state.
+* Created date.
+* Completed date.
+Build event
+* ID.
+* Task.
+* Session.
+* Sequence.
+* Event type.
+* Payload.
+* Timestamp.
+* Correlation ID.
+Build approval
+* ID.
+* Owner.
+* Requesting task.
+* Action.
+* Target.
+* Resource.
+* Proposed change hash.
+* Reason.
+* Expiration.
+* Decision.
+* Approver.
+* Decision timestamp.
+Build connection
+* ID.
+* Owner.
+* Connection type.
+* Provider or MCP reference.
+* Scope.
+* Authentication state.
+* Status.
+* Last health check.
+Build extension
+* ID.
+* Owner or project scope.
+* Extension type.
+* Source.
+* Version.
+* Hash.
+* Manifest.
+* Installation state.
+* Enabled state.
+Build usage
+* ID.
+* Owner.
+* Workspace.
+* Task.
+* Provider.
+* Model.
+* Runtime.
+* Usage measurements.
+* Estimated cost.
+* Actual cost where available.
+* Budget reservation.
+* Reconciliation state.
+Build audit
+* ID.
+* Actor.
+* Owner.
+* Workspace.
+* Task.
+* Action.
+* Resource.
+* Decision.
+* Result.
+* Timestamp.
+* Correlation ID.
+8.3 Data ownership
+Every user-owned record must have a verified ownership boundary.
+Do not trust owner IDs supplied by the browser.
+Resolve identity from the authenticated Adrian session.
+Apply database row-level security or equivalent verified server-side authorization.
+Test cross-user access for:
+* Projects.
+* Sessions.
+* Tasks.
+* Events.
+* Runtime IDs.
+* Files.
+* Approvals.
+* Connections.
+* Extensions.
+* Exports.
+8.4 Persistence requirements
+The following must survive ordinary browser refreshes:
+* Projects.
+* Sessions.
+* Session metadata.
+* Task records.
+* Task status.
+* Event history.
+* Approvals.
+* User layout.
+* Provider references.
+* MCP connection metadata.
+* Plugin installation metadata.
+* Usage history.
+Do not use React state or local browser storage as the only persistent record of important execution data.
+8.5 Migrations
+Migrations must be:
+* Reviewed.
+* Additive where practical.
+* Tested on a disposable database.
+* Compatible with the existing application.
+* Reversible where possible.
+* Backed up before production application.
+* Documented.
+Never point migration experiments at unrelated or forbidden database projects.
+The forbidden Supabase project references remain off-limits:
+* ybxowvzicirinpdcfyqe
+* espmxiitzucooxblmnpr
+ 
+⸻
+ 
+PART 9 — SECURITY, PERMISSIONS AND EXECUTION GOVERNANCE
+9.1 Security architecture
+Security must be built into the execution architecture.
+Do not add it as a final decorative layer.
+The system must protect:
+* User accounts.
+* Project files.
+* Provider credentials.
+* MCP credentials.
+* Runtime service credentials.
+* Session history.
+* Task history.
+* Terminal access.
+* Git credentials.
+* Plugin execution.
+* Subagent execution.
+* Local PC access in the later Companion release.
+9.2 Authentication
+All Build operations must require an authenticated Adrian OS user.
+The server must resolve the identity and verify access to the requested workspace.
+Do not accept a client-supplied user ID as proof of identity.
+9.3 Authorization
+Create clear permission categories.
+Examples:
+* Read project.
+* Read files.
+* Search files.
+* Edit files.
+* Delete files.
+* Execute terminal commands.
+* Install dependencies.
+* Change Git branches.
+* Commit changes.
+* Push remote changes.
+* Install plugins.
+* Enable hooks.
+* Connect MCP.
+* Invoke MCP tools.
+* Change provider settings.
+* Delete projects.
+* Export data.
+Permission checks must be performed server-side.
+9.4 Approval levels
+Use an action-risk model.
+Level 0 — Read-only
+* Read permitted files.
+* List files.
+* Inspect Git status.
+* Read session history.
+* Inspect runtime health.
+Level 1 — Ordinary project modification
+* Create files.
+* Edit files.
+* Run ordinary project tests.
+* Create project directories.
+Level 2 — Elevated project action
+* Install dependencies.
+* Run scripts with broader effects.
+* Change project configuration.
+* Modify build settings.
+* Execute commands with broader access.
+Level 3 — Destructive or external action
+* Delete substantial project data.
+* Reset or overwrite work.
+* Push to a remote repository.
+* Change production deployment configuration.
+* Remove important integrations.
+* Perform actions with significant external consequences.
+The exact approval behavior must be configurable by the owner.
+An approval must identify the exact action and target.
+A general approval must not become unlimited permission for unrelated future actions.
+9.5 Emergency stop
+Provide an emergency stop accessible from the Build interface.
+When activated:
+1. Mark the affected execution scope as stopped.
+2. Reject new task dispatches.
+3. Cancel active tasks.
+4. Terminate permitted active process trees.
+5. Stop subagents.
+6. Prevent new tool calls.
+7. Record the action.
+8. Show the resulting state.
+The emergency stop must not depend on the normal task stream being healthy.
+Provide a server-side control path.
+Only an authorized owner can re-enable execution.
+9.6 Secret management
+Reuse Adrian’s existing credential vault.
+Secrets must not appear in:
+* Browser bundles.
+* Browser local storage.
+* Query parameters.
+* URLs.
+* Frontend error messages.
+* Unredacted logs.
+* Task event payloads.
+* Source control.
+The runtime should receive only the credentials required for the authorized task or connection.
+Prefer short-lived credentials and scoped access.
+9.7 Prompt injection and untrusted content
+Treat repository files, README documents, issue text, web content, plugin descriptions, skill instructions and MCP results as potentially untrusted input.
+The agent must not interpret untrusted content as permission to bypass Adrian policy.
+A file saying “ignore previous restrictions” must not change the system’s authorization model.
+Tool permissions must be enforced outside the language model.
+9.8 Sandbox and filesystem security
+Implement:
+* Workspace root enforcement.
+* Path normalization.
+* Symlink checks.
+* Archive extraction checks.
+* Process isolation.
+* Restricted environment variables.
+* Resource limits.
+* Network controls.
+* Runtime cleanup.
+* File permission controls.
+Test attempts to escape the workspace.
+9.9 Network security
+Use deny-by-default network egress where practical.
+Allow only required destinations.
+Protect against:
+* Server-side request forgery.
+* Private network access.
+* DNS rebinding.
+* Unapproved local endpoints.
+* Credential exfiltration.
+* Arbitrary outbound connections.
+MCP destinations must be validated and governed.
+9.10 Audit records
+Record important operations:
+* Login context.
+* Project creation and deletion.
+* Session creation.
+* Task dispatch.
+* Tool invocation.
+* File changes.
+* Terminal execution.
+* Approval requests.
+* Approval decisions.
+* Plugin installation.
+* MCP connection changes.
+* Provider changes.
+* Runtime allocation.
+* Emergency stop.
+* Device pairing.
+* Export and deletion.
+Audit records must be protected from ordinary modification by the agent.
+ 
+⸻
+ 
+PART 10 — PROVIDERS, MODELS AND USAGE CONTROL
+10.1 Provider bridge
+The provider bridge must use Adrian’s existing provider configuration where possible.
+Map Adrian provider references to the exact configuration format expected by the selected Kimi runtime.
+Do not copy secrets into a second permanent store.
+10.2 Provider verification
+For every supported provider, test:
+1. Credential availability.
+2. Authentication.
+3. Model discovery.
+4. Model selection.
+5. Basic text generation.
+6. Streaming.
+7. Tool calling where supported.
+8. Error handling.
+9. Rate-limit behavior.
+10. Usage reporting.
+11. Credential revocation.
+A provider must not be marked verified after a successful connection test alone if the required coding-agent workflow has not been tested.
+10.3 Model capabilities
+Display useful model information where available:
+* Model name.
+* Provider.
+* Context capability.
+* Tool support.
+* Streaming support.
+* Image input support.
+* Other supported modalities.
+* Known limitations.
+Do not invent capability information.
+10.4 Usage and budgets
+Implement:
+* Per-user usage.
+* Per-project usage.
+* Per-task usage.
+* Provider usage.
+* Model usage.
+* Runtime execution duration.
+* Estimated costs.
+* Actual costs where available.
+* Budget reservations.
+* Budget limits.
+* Concurrency limits.
+* Maximum task duration.
+If the upstream provider does not expose a particular measurement, display it as unavailable rather than fabricating a number.
+10.5 Usage reconciliation
+A canceled task may still have incurred upstream usage.
+Record the final available usage and distinguish estimated from confirmed amounts.
+Do not silently discard usage when a browser disconnects or a runtime restarts.
+ 
+⸻
+ 
+PART 11 — ADRIAN SPEAK INTEGRATION
+11.1 Voice must control the active Build session
+Integrate Adrian Speak with the same Build session and task model.
+Voice must not create an unrelated hidden coding session.
+The user should be able to speak a coding instruction and have it submitted to the currently selected project and session.
+11.2 Required voice capabilities
+Where supported by the existing voice infrastructure:
+* Start voice interaction.
+* Stop voice interaction.
+* Transcribe speech.
+* Display transcript.
+* Submit instruction.
+* Receive spoken response.
+* Interrupt speech.
+* Cancel an active response.
+* Resume the same session.
+* Show voice state.
+* Show microphone errors.
+* Handle permission denial.
+11.3 Shared policy
+Voice requests must pass through exactly the same policy engine as typed requests.
+Speaking a command must not bypass approval requirements.
+11.4 Voice acceptance tests
+Verify:
+* Voice input reaches the active session.
+* Session identity remains consistent.
+* Transcription is visible.
+* Agent output is synchronized.
+* Stop works.
+* Barge-in works where supported.
+* Approval requirements remain active.
+* Voice failure does not corrupt the task.
+ 
+⸻
+ 
+PART 12 — OBSERVABILITY, DIAGNOSTICS AND OPERATIONS
+12.1 Logging
+Implement structured server-side logs.
+Include:
+* Request ID.
+* Correlation ID.
+* Runtime ID.
+* Task ID.
+* Session ID.
+* Workspace ID.
+* Operation.
+* Result.
+* Duration.
+* Error category.
+Redact credentials, private keys, access tokens and sensitive file content.
+12.2 Metrics
+Track:
+* Runtime health.
+* Runtime startup time.
+* Runtime allocation time.
+* Task queue depth.
+* Task wait time.
+* Task duration.
+* Task success rate.
+* Task failure rate.
+* Cancellation rate.
+* WebSocket disconnects.
+* Event replay failures.
+* Provider errors.
+* MCP errors.
+* Plugin installation failures.
+* Resource consumption.
+* Usage and cost.
+* Runtime restarts.
+12.3 Health checks
+Create distinct health checks for:
+* Adrian application.
+* Build API.
+* Runtime gateway.
+* Runtime scheduler.
+* Durable queue.
+* Kimi runtime.
+* Event stream.
+* Database.
+* Provider connectivity where appropriate.
+A healthy website must not automatically imply that the Kimi runtime is healthy.
+12.4 Diagnostics panel
+Provide an authorized diagnostics view with:
+* Runtime status.
+* Runtime version.
+* Recent failures.
+* Last successful task.
+* Queue state.
+* Connection state.
+* Event-stream state.
+* Provider state.
+* Relevant correlation IDs.
+Do not expose sensitive internal details to ordinary users.
+12.5 Incident handling
+Document procedures for:
+* Runtime unavailable.
+* Provider unavailable.
+* Database unavailable.
+* Runtime compromise.
+* Credential exposure.
+* Cross-tenant access finding.
+* Task stuck in running state.
+* Queue backlog.
+* Failed runtime upgrade.
+* Failed deployment.
+ 
+⸻
+ 
+PART 13 — WINDOWS PC COMPANION: SECOND DELIVERY STAGE
+13.1 Do not block website delivery
+Windows Companion is a later phase.
+The hosted website must work independently.
+Do not delay the first functional Build release because the Windows Companion is unfinished.
+13.2 Companion purpose
+The Windows Companion will allow Adrian Build to work with approved projects and tools on the user’s Windows computer.
+It must connect through Adrian’s established device-pairing architecture.
+13.3 Companion architecture
+The Companion should contain:
+* Device identity.
+* Pairing service.
+* Authenticated outbound connection.
+* Local workspace broker.
+* Filesystem access layer.
+* Terminal process supervisor.
+* Git integration.
+* Runtime health reporting.
+* Command approval bridge.
+* Audit reporting.
+* Update mechanism.
+* Revocation handling.
+13.4 Pairing
+The user must be able to:
+1. Install the Companion.
+2. Open Adrian OS.
+3. Initiate pairing.
+4. Approve the device.
+5. Select permitted folders.
+6. See the paired device in Build.
+7. Select the device as an execution target.
+8. Revoke the device.
+13.5 Local workspace restrictions
+The Companion must only access folders explicitly authorized by the user.
+It must not gain unrestricted access to the user’s entire computer.
+Implement:
+* Folder allowlists.
+* Path validation.
+* Symlink handling.
+* Process restrictions.
+* Device revocation.
+* Token rotation.
+* Connection recovery.
+* Clear local/hosted workspace labeling.
+13.6 Runtime selector
+The Build interface should eventually support:
+* Hosted Runtime.
+* Paired Windows PC.
+The same project/session interface should work with either target wherever the capability is supported.
+The user must always know where their project files are physically located.
+13.7 Companion acceptance tests
+Verify:
+* Device pairing.
+* Device revocation.
+* Folder allowlisting.
+* Local file operations.
+* Local terminal.
+* Git.
+* Task streaming.
+* Network interruption.
+* Device sleep and reconnect.
+* Token expiration.
+* Unauthorized path denial.
+* Policy parity with hosted runtime.
+ 
+⸻
+ 
+PART 14 — IMPLEMENTATION PHASES AND EXACT EXECUTION ORDER
+The following sequence is mandatory. Workstreams can operate in parallel only after their interfaces and ownership boundaries have been established.
+PHASE 0 — REPOSITORY AUDIT AND ARCHITECTURE LOCK
+Objective: Understand the real application before making major changes.
+Tasks:
+1. Inspect repository instructions.
+2. Inspect current branch and main branch.
+3. Inspect current PR state.
+4. Inspect the Build route.
+5. Inspect the application shell.
+6. Inspect the database.
+7. Inspect authentication.
+8. Inspect provider configuration.
+9. Inspect credential handling.
+10. Inspect MCP.
+11. Inspect skills.
+12. Inspect agent infrastructure.
+13. Inspect pairing.
+14. Inspect voice.
+15. Inspect audit and approval systems.
+16. Inspect deployment.
+17. Inspect test commands.
+18. Inspect upstream Kimi runtime documentation.
+19. Retrieve actual runtime API schemas.
+20. Produce a feature-gap matrix.
+21. Produce an architecture decision record.
+22. Produce a dependency map.
+23. Identify the minimum viable hosted runtime infrastructure.
+Exit criteria:
+* Repository audit completed.
+* Existing reusable functionality identified.
+* Duplicate architecture avoided.
+* Runtime strategy defined.
+* API compatibility strategy defined.
+* Implementation tasks assigned.
+* No production side effects performed.
+PHASE 1 — REAL KIMI RUNTIME FOUNDATION
+Objective: Prove the actual Kimi engine works through Adrian’s server architecture.
+Tasks:
+1. Prepare a reproducible runtime environment.
+2. Pin the selected Kimi runtime version.
+3. Build the runtime image or deployment package.
+4. Configure isolated workspace storage.
+5. Start the Kimi process.
+6. Bind its server interface to the private runtime environment.
+7. Verify runtime authentication.
+8. Retrieve actual API schemas.
+9. Implement version and capability checks.
+10. Implement runtime health.
+11. Implement the Adrian gateway.
+12. Implement service authentication.
+13. Implement runtime allocation.
+14. Implement runtime leases.
+15. Create a real Kimi session.
+16. Submit a real test prompt.
+17. Receive real output.
+18. Stream real events.
+19. Retrieve session state.
+20. Cancel a real task.
+21. Restart the runtime.
+22. Verify recovery behavior.
+Exit criteria:
+* Actual Kimi runtime executes.
+* Adrian gateway reaches it securely.
+* A real session works.
+* Real events stream.
+* Cancellation works.
+* Restart behavior is understood.
+* No Windows PC is required.
+PHASE 2 — BUILD UI AND CORE CODING WORKFLOW
+Objective: Make the existing Build destination a working coding workspace.
+Tasks:
+1. Wire the existing Build navigation.
+2. Create the native Build workspace shell.
+3. Create project selection.
+4. Create session selection.
+5. Create runtime status.
+6. Create model selection.
+7. Create the agent composer.
+8. Connect prompt submission.
+9. Stream agent output.
+10. Display task state.
+11. Add cancellation.
+12. Add session history.
+13. Add reconnect and event replay.
+14. Add file explorer.
+15. Add read-only file preview.
+16. Add diff display.
+17. Add terminal.
+18. Add responsive layouts.
+19. Persist layout preferences.
+Exit criteria:
+* A signed-in user opens Build.
+* Selects a hosted project.
+* Starts a real Kimi session.
+* Receives real streamed output.
+* Sees real task state.
+* Can stop a task.
+* Can refresh and reconnect.
+* No mocked execution is used.
+PHASE 3 — PROJECT, FILESYSTEM, EDITOR AND GIT
+Objective: Deliver a usable coding environment.
+Tasks:
+1. Complete project lifecycle.
+2. Complete file navigation.
+3. Implement file reading.
+4. Implement file writing.
+5. Implement file creation.
+6. Implement file deletion.
+7. Implement safe rename and move.
+8. Add editor tabs.
+9. Add syntax highlighting.
+10. Add save and conflict handling.
+11. Add patch review.
+12. Add file restoration.
+13. Add Git status.
+14. Add Git diff.
+15. Add Git history.
+16. Add branch management.
+17. Add staging.
+18. Add commit.
+19. Add remote operations with approval.
+20. Add project snapshots and recovery.
+Exit criteria:
+* Actual project files can be read and modified.
+* Diffs are accurate.
+* File permissions are enforced.
+* Git works against a test repository.
+* Destructive actions follow policy.
+* Project recovery is demonstrated.
+PHASE 4 — AGENTS, SKILLS, PLUGINS, MCP AND HOOKS
+Objective: Expose Kimi’s advanced capabilities inside Adrian Build.
+Tasks:
+1. Discover actual runtime capabilities.
+2. Implement agent discovery.
+3. Implement subagent delegation.
+4. Implement parent-child task tracking.
+5. Implement cancellation propagation.
+6. Implement Skills Library.
+7. Implement skill activation.
+8. Implement skill state persistence.
+9. Implement plugin discovery.
+10. Implement plugin details.
+11. Implement plugin installation.
+12. Implement enable and disable.
+13. Implement plugin updates.
+14. Implement plugin removal.
+15. Implement rollback where supported.
+16. Integrate MCP with Adrian’s registry.
+17. Implement MCP authentication.
+18. Implement MCP connection management.
+19. Implement tool discovery.
+20. Implement tool invocation.
+21. Implement hook discovery.
+22. Implement hook configuration.
+23. Implement hook execution visibility.
+24. Implement permission enforcement.
+25. Implement extension audit records.
+Exit criteria:
+* Real subagent execution works.
+* Real skill activation works.
+* A controlled test plugin installs and can be removed.
+* A controlled test MCP server connects and executes an approved tool.
+* Hooks execute only within policy.
+* Extension operations are auditable.
+PHASE 5 — PROVIDERS, USAGE, ATTACHMENTS AND VOICE
+Objective: Complete the AI configuration and interaction layer.
+Tasks:
+1. Bridge provider configuration.
+2. Reuse the existing credential vault.
+3. Implement supported provider selection.
+4. Implement model selection.
+5. Implement connection tests.
+6. Implement provider-specific streaming tests.
+7. Implement usage tracking.
+8. Implement budget reservation.
+9. Implement quota enforcement.
+10. Implement attachment upload.
+11. Implement supported media input.
+12. Implement attachment retention.
+13. Connect Adrian Speak.
+14. Synchronize voice and text sessions.
+15. Implement voice stop and interruption.
+16. Ensure voice follows the same approval rules.
+Exit criteria:
+* Supported providers work in real sessions.
+* Secrets remain protected.
+* Usage is recorded.
+* Attachments work for supported types.
+* Voice controls the same active Build session.
+PHASE 6 — SECURITY, RESILIENCE AND OPERATIONS
+Objective: Make the complete system dependable.
+Tasks:
+1. Complete threat modeling.
+2. Test tenant isolation.
+3. Test filesystem restrictions.
+4. Test command restrictions.
+5. Test environment-variable isolation.
+6. Test network restrictions.
+7. Test SSRF protection.
+8. Test credential redaction.
+9. Test approval enforcement.
+10. Test emergency stop.
+11. Test plugin isolation.
+12. Test MCP permissions.
+13. Test subagent permissions.
+14. Test runtime crashes.
+15. Test network interruptions.
+16. Test queue recovery.
+17. Test event replay.
+18. Test duplicate task prevention.
+19. Test resource limits.
+20. Test backups.
+21. Test restore.
+22. Implement monitoring.
+23. Implement alerting.
+24. Write incident procedures.
+25. Verify rollback.
+Exit criteria:
+* Critical security tests pass.
+* Cross-user access is blocked.
+* Runtime recovery is demonstrated.
+* Emergency stop works.
+* Monitoring is operational.
+* Backup and restore procedures are tested.
+PHASE 7 — PREVIEW AND PRODUCTION READINESS
+Objective: Prove the integrated system in a staging environment.
+Tasks:
+1. Reconcile the implementation branch.
+2. Run repository checks.
+3. Run unit tests.
+4. Run integration tests.
+5. Run contract tests.
+6. Run security tests.
+7. Run end-to-end tests.
+8. Build the frontend.
+9. Build the runtime image.
+10. Deploy to preview/staging.
+11. Test a real signed-in browser workflow.
+12. Test real Kimi execution.
+13. Test file editing.
+14. Test terminal.
+15. Test Git.
+16. Test MCP.
+17. Test skills.
+18. Test plugins.
+19. Test subagents.
+20. Test provider configuration.
+21. Test Adrian Speak.
+22. Test emergency stop.
+23. Test reconnect.
+24. Test runtime restart.
+25. Test mobile layouts.
+26. Record all evidence.
+27. Produce a final release report.
+Exit criteria:
+* All required release tests pass.
+* No unresolved critical or high-severity issue remains.
+* Runtime and frontend versions are recorded.
+* Rollback is ready.
+* Owner approval is obtained for production actions.
+PHASE 8 — WEBSITE PRODUCTION RELEASE
+Objective: Deploy the website-first Build experience.
+Tasks:
+1. Confirm the exact release commit.
+2. Confirm the runtime image.
+3. Confirm environment configuration.
+4. Confirm database migration status.
+5. Confirm backups.
+6. Confirm monitoring.
+7. Confirm provider configuration.
+8. Confirm capacity.
+9. Confirm rollback.
+10. Obtain explicit production approval.
+11. Deploy through the existing Adrian OS website deployment process.
+12. Deploy the approved persistent runtime.
+13. Run production smoke tests.
+14. Verify the actual deployed frontend commit.
+15. Verify the actual runtime version.
+16. Verify real Kimi task execution.
+17. Monitor initial usage.
+18. Document the release.
+Do not create a duplicate Adrian OS website project or replace the existing production deployment without authorization.
+PHASE 9 — WINDOWS COMPANION
+Implement the Windows Companion only after the hosted website path is stable.
+Follow the requirements in Part 13.
+PHASE 10 — CONTINUOUS IMPROVEMENT
+After release:
+* Maintain the feature matrix.
+* Test runtime upgrades.
+* Monitor performance.
+* Monitor costs.
+* Improve error handling.
+* Improve workspace recovery.
+* Improve UI usability.
+* Review security findings.
+* Test backup restoration.
+* Keep provider and integration status current.
+* Add supported upstream capabilities through controlled releases.
+ 
+⸻
+ 
+PART 15 — WORKSTREAM OWNERSHIP AND PARALLEL EXECUTION
+15.1 Workstream A: Runtime and infrastructure
+Responsible for:
+* Kimi runtime.
+* Container image.
+* Runtime hosting.
+* Runtime gateway.
+* Runtime scheduler.
+* Runtime leases.
+* Process supervision.
+* Queue.
+* Event transport.
+* Health checks.
+* Recovery.
+15.2 Workstream B: Adrian Build frontend
+Responsible for:
+* Build route.
+* Main workspace.
+* Project UI.
+* Session UI.
+* Conversation.
+* Streaming.
+* File explorer.
+* Editor.
+* Diff.
+* Terminal.
+* Git UI.
+* Responsive design.
+15.3 Workstream C: Advanced capabilities
+Responsible for:
+* Subagents.
+* Skills.
+* Plugins.
+* MCP.
+* Hooks.
+* Provider/model selection.
+* Attachments.
+* Capability discovery.
+15.4 Workstream D: Security and persistence
+Responsible for:
+* Identity.
+* Authorization.
+* Database.
+* Migrations.
+* Credential bridge.
+* Approvals.
+* Audit.
+* Emergency stop.
+* Tenant isolation.
+* Usage limits.
+* Data retention.
+15.5 Workstream E: Adrian Speak and device integration
+Responsible for:
+* Voice session bridge.
+* Transcript synchronization.
+* Voice controls.
+* Existing pairing architecture.
+* Future Windows Companion interface.
+15.6 Workstream F: QA and release
+Responsible for:
+* Feature matrix.
+* Test planning.
+* Contract tests.
+* Integration tests.
+* E2E tests.
+* Security tests.
+* Preview validation.
+* Deployment evidence.
+* Rollback validation.
+15.7 Parallel work rules
+Parallel agents must not edit the same shared files without coordination.
+Before parallel implementation:
+1. Define interfaces.
+2. Assign file ownership.
+3. Define shared types.
+4. Define dependencies.
+5. Define test expectations.
+6. Define integration checkpoints.
+A single integration lead must reconcile the workstreams.
+The integration lead must resolve conflicting implementations and maintain one authoritative set of contracts.
+Do not create multiple competing versions of the runtime gateway, policy engine, provider bridge or MCP registry.
+ 
+⸻
+ 
+PART 16 — TESTING AND ACCEPTANCE REQUIREMENTS
+16.1 Testing principle
+Tests must prove actual behavior.
+A mocked API response may be useful for isolated unit testing, but it does not prove that the real runtime works.
+Use real test environments for end-to-end acceptance.
+16.2 Adapter tests
+Test:
+* Runtime connection.
+* Authentication.
+* Version negotiation.
+* Capability discovery.
+* REST request handling.
+* WebSocket connection.
+* Event decoding.
+* Malformed responses.
+* Timeouts.
+* Retries.
+* Cancellation.
+* Idempotency.
+* Schema mismatch.
+* Runtime unavailable behavior.
+16.3 Database tests
+Test:
+* Record ownership.
+* Row-level access.
+* Cross-user isolation.
+* Session persistence.
+* Task persistence.
+* Event ordering.
+* Event replay.
+* Approval expiration.
+* Usage reconciliation.
+* Export.
+* Deletion.
+* Retention.
+16.4 Filesystem tests
+Test:
+* Read.
+* Write.
+* Create.
+* Rename.
+* Move.
+* Delete.
+* Search.
+* Large files.
+* Large directories.
+* Path traversal.
+* Symlink escape.
+* Unauthorized absolute paths.
+* Concurrent edits.
+* File restoration.
+16.5 Terminal tests
+Test:
+* Harmless command execution.
+* Output streaming.
+* Error streaming.
+* Exit codes.
+* Timeout.
+* Cancellation.
+* Process-tree termination.
+* Output truncation.
+* Resource limits.
+* Unauthorized command denial.
+* Environment isolation.
+16.6 Git tests
+Test:
+* Status.
+* Diff.
+* History.
+* Branch creation.
+* Branch switching.
+* Staging.
+* Commit.
+* Pull.
+* Push.
+* Merge conflict.
+* Reset approval.
+* Remote authentication failure.
+Use disposable test repositories.
+16.7 Agent tests
+Test:
+* New session.
+* Existing session.
+* Multi-step coding task.
+* Planning.
+* File inspection.
+* File modification.
+* Test execution.
+* Error diagnosis.
+* Retry.
+* Cancellation.
+* Task completion.
+* Session restoration.
+16.8 Extension tests
+Test:
+* Skill discovery.
+* Skill activation.
+* Skill removal.
+* Plugin preview.
+* Plugin installation.
+* Plugin enable.
+* Plugin disable.
+* Plugin update.
+* Plugin removal.
+* MCP connection.
+* MCP authentication.
+* MCP tool discovery.
+* MCP tool execution.
+* MCP revocation.
+* Hook execution.
+* Hook denial.
+* Subagent delegation.
+* Subagent cancellation.
+16.9 Security tests
+Test:
+* Unauthenticated requests.
+* Unauthorized workspace access.
+* Cross-user session access.
+* Cross-user runtime access.
+* Forged owner IDs.
+* Replayed events.
+* Replayed task submissions.
+* Token exposure.
+* Prompt injection.
+* Path traversal.
+* Symlink escape.
+* Shell injection.
+* SSRF.
+* DNS rebinding.
+* Unapproved network access.
+* Malicious extension behavior.
+* Approval bypass attempts.
+* Emergency-stop bypass attempts.
+16.10 UI tests
+Test:
+* Build navigation.
+* Project switching.
+* Session switching.
+* Prompt submission.
+* Streaming.
+* Reconnection.
+* Diff review.
+* Approval.
+* Terminal.
+* Git.
+* Settings.
+* Error states.
+* Empty states.
+* Loading states.
+* Mobile layout.
+* Keyboard accessibility.
+16.11 Mandatory real-world acceptance scenario
+Run the following complete scenario:
+1. Sign into Adrian OS.
+2. Open Build.
+3. Create a test project.
+4. Allocate a hosted runtime.
+5. Start a real Kimi session.
+6. Ask Kimi to inspect the project.
+7. Ask Kimi to explain the project architecture.
+8. Ask Kimi to create a small feature.
+9. Observe the actual file operations.
+10. Review the resulting diff.
+11. Approve the change where required.
+12. Ask Kimi to run the project tests.
+13. Observe actual terminal output.
+14. Ask Kimi to diagnose a deliberately introduced test failure.
+15. Confirm the agent makes an appropriate correction.
+16. Review the new diff.
+17. Run the tests again.
+18. Confirm the final test result.
+19. Inspect Git status.
+20. Commit only after the required approval.
+21. Refresh the browser.
+22. Resume the same session.
+23. Confirm the event history is intact.
+24. Restart the runtime.
+25. Confirm the session is recovered or accurately marked interrupted.
+26. Test cancellation during an active task.
+27. Verify that no unauthorized command executes.
+28. Verify that another test user cannot access the project.
+29. Inspect the audit records.
+30. Confirm no secret appears in browser-visible data or logs.
+This scenario must be executed against a real hosted Kimi runtime.
+16.12 Evidence requirements
+Every completed test must have:
+* Test ID.
+* Test date.
+* Application commit SHA.
+* Runtime version.
+* Runtime image identifier.
+* Environment.
+* Test steps.
+* Expected result.
+* Actual result.
+* Pass/fail status.
+* Relevant logs or screenshots.
+* Correlation ID where applicable.
+* Responsible workstream.
+Do not mark tests passed without evidence.
+ 
+⸻
+ 
+PART 17 — FEATURE MATRIX AND COMPLETION TRACKING
+Maintain one authoritative feature matrix.
+Each feature must contain:
+Field	Required information
+Feature	Exact feature name
+Subfeature	Specific operation
+Kimi capability	Relevant upstream functionality
+Adrian UI	Where the user accesses it
+Backend operation	Actual endpoint or adapter method
+Runtime	Hosted or Windows Companion
+Persistence	What is saved
+Security	Required permission
+Approval	Approval requirement
+Test	Automated test identifier
+Evidence	Test result or recording
+Status	Verified, partial, blocked, unsupported or not audited
+Remaining work	Exact missing implementation
+Owner	Responsible workstream
+The feature matrix must be updated continuously.
+A feature cannot be marked complete merely because:
+* A component exists.
+* A route exists.
+* A button is visible.
+* An API endpoint exists.
+* A catalogue entry exists.
+* A mock test passes.
+* A developer says it works.
+* A runtime health endpoint returns success.
+The feature must work end to end.
+ 
+⸻
+ 
+PART 18 — DEPLOYMENT AND CONFIGURATION
+18.1 Environment separation
+Maintain separate environments for:
+* Development.
+* Preview/staging.
+* Production.
+Do not share production runtime credentials with development.
+Do not allow preview credentials to reach production runtimes.
+18.2 Runtime configuration
+Use server-side configuration for:
+* Runtime private address.
+* Runtime service authentication.
+* Runtime image reference.
+* Runtime version.
+* API schema digest.
+* Resource limits.
+* Queue settings.
+* Execution timeouts.
+* Concurrency.
+* Network policy.
+* Storage.
+* Retention.
+Names must follow the repository’s established conventions.
+18.3 Startup validation
+At startup, validate required configuration.
+If required security settings are missing, production execution must not start.
+Do not expose server-only configuration through public frontend environment variables.
+18.4 Deployment separation
+Deploy:
+1. Adrian OS frontend and application services through the existing website process.
+2. Persistent Kimi runtime through the approved persistent hosting environment.
+3. Database changes through the existing migration process.
+4. Background workers and queue consumers through their appropriate execution environment.
+Record the exact deployed versions.
+18.5 Cost controls
+Implement:
+* Runtime idle limits.
+* Task duration limits.
+* Concurrent task limits.
+* Per-user budgets.
+* Per-workspace budgets.
+* Provider usage tracking.
+* Resource limits.
+* Queue limits.
+* Storage limits.
+Do not provision paid infrastructure or change production billing arrangements without explicit owner approval.
+18.6 Rollback
+Maintain a known-good version of:
+* Frontend.
+* Runtime image.
+* Adapter.
+* Database migration state.
+* Runtime configuration.
+If a runtime upgrade breaks compatibility, stop promotion and return to the previous verified runtime.
+If the frontend deployment fails, restore the previous working deployment through the existing project process.
+Do not delete user data as a rollback strategy.
+ 
+⸻
+ 
+PART 19 — REQUIRED DELIVERABLES
+The implementation must produce the following:
+1. Complete repository audit.
+2. Updated architecture diagram.
+3. Runtime architecture decision record.
+4. Actual Kimi runtime integration.
+5. Reproducible runtime build.
+6. Runtime deployment configuration.
+7. Adrian runtime gateway.
+8. Typed Kimi adapter.
+9. API schema snapshots.
+10. Compatibility checks.
+11. Runtime scheduler.
+12. Runtime leases.
+13. Durable task queue.
+14. Durable event pipeline.
+15. Native Adrian Build UI.
+16. Project manager.
+17. Session manager.
+18. Coding agent workflow.
+19. File explorer.
+20. Code editor.
+21. Diff review.
+22. Terminal.
+23. Git integration.
+24. Subagent integration.
+25. Skills manager.
+26. Plugin manager.
+27. MCP integration.
+28. Hook management.
+29. Provider/model integration.
+30. Attachment support.
+31. Approval center.
+32. Emergency stop.
+33. Audit records.
+34. Usage and quota management.
+35. Adrian Speak integration.
+36. Database changes.
+37. Automated tests.
+38. Real end-to-end acceptance evidence.
+39. Security test report.
+40. Monitoring and diagnostic tools.
+41. Backup and recovery procedures.
+42. Deployment and rollback documentation.
+43. Updated feature matrix.
+44. Operator documentation.
+45. Windows Companion implementation plan.
+Each deliverable must be linked to actual repository files, tests or evidence.
+ 
+⸻
+ 
+PART 20 — STRICT IMPLEMENTATION RULES FOR MANUS AND CODING AGENTS
+These instructions govern the implementation.
+20.1 Work from the real repository
+Always inspect the current repository before editing.
+Do not assume that the documentation perfectly describes the current code.
+The source code and actual deployment evidence determine what exists.
+20.2 Do substantial work before requesting handoff
+Do not simply produce a plan and hand the entire job to another agent.
+Complete the available work in the assigned environment.
+Implement the real modules, tests, integrations and documentation that can be completed safely.
+Only hand off work when there is a concrete reason, such as:
+* A task requires a different execution environment.
+* A task requires an unavailable credential.
+* A task requires owner authorization.
+* A task requires a separate specialist.
+* A task requires a production operation outside the current permissions.
+A handoff must contain exact remaining work, not a vague summary.
+20.3 No premature completion claims
+Never report the entire integration as complete when only the UI or documentation exists.
+Report each phase separately.
+Use the feature matrix.
+Show evidence.
+Identify remaining work.
+20.4 No unnecessary rewrites
+Reuse existing infrastructure where it is genuinely functional.
+Do not replace the authentication system.
+Do not create duplicate MCP registries.
+Do not create duplicate provider vaults.
+Do not rebuild the entire Adrian OS interface.
+Do not break existing modules to make room for Build.
+20.5 No fake shortcuts
+Do not use:
+* Hardcoded successful responses.
+* Fake terminal output.
+* Fake session history.
+* Fake agent activity.
+* Simulated plugin installations presented as real.
+* Mock provider connections presented as real.
+* Static capability lists presented as live runtime discovery.
+* Placeholder API routes presented as working integrations.
+Mocks are allowed for isolated tests, but the real acceptance suite must use real services.
+20.6 No unnecessary infrastructure
+Do not introduce services, databases, frameworks or dependencies without a clear technical reason.
+Prefer the existing stack.
+Avoid duplicating capabilities already available through Adrian OS.
+Keep architecture modular but not needlessly fragmented.
+20.7 Preserve the existing product
+Do not replace the existing Adrian OS website.
+Do not create a competing Build destination.
+Do not change unrelated modules unnecessarily.
+Do not change production secrets.
+Do not modify unrelated database projects.
+Do not merge to main or deploy to production without the appropriate explicit approval.
+20.8 Commit discipline
+Work on the designated feature branch.
+Use coherent commits.
+Run relevant tests before committing.
+Do not commit broken intermediate states as finished implementation.
+Record commit SHAs in the task ledger.
+20.9 Continuous reporting
+Maintain a live implementation ledger:
+Work item	Status	Owner	Dependency	Evidence	Remaining action
+Repository audit					
+Runtime foundation					
+Gateway					
+Adapter					
+Build UI					
+Projects					
+Sessions					
+Filesystem					
+Editor					
+Terminal					
+Git					
+Subagents					
+Skills					
+Plugins					
+MCP					
+Hooks					
+Providers					
+Attachments					
+Adrian Speak					
+Security					
+Persistence					
+Testing					
+Preview					
+Production					
+Windows Companion					
+Update the ledger as work progresses.
+20.10 Owner decisions
+Do not interrupt the owner for decisions that can be resolved by repository inspection, technical research or ordinary engineering judgment.
+Ask only when a decision genuinely requires owner input.
+Examples:
+* Paid hosting approval.
+* Production credential changes.
+* Production migration approval.
+* Production deployment approval.
+* Material data-retention decisions.
+* Irreversible data operations.
+* Major product behavior choices that cannot be inferred safely.
+When asking, explain the exact decision, why it is needed and the consequences of each option.
+ 
+⸻
+ 
+PART 21 — FINAL DEFINITION OF DONE
+The Kimi Code integration is complete only when all mandatory website-first capabilities have been implemented and verified.
+The following must be true:
+1. Adrian OS authentication works.
+2. Build opens from the existing sidebar.
+3. Build is a native Adrian OS experience.
+4. A hosted persistent Kimi runtime is available.
+5. The browser communicates through Adrian’s server gateway.
+6. Real Kimi sessions can be created.
+7. Real coding tasks can be executed.
+8. Real task events stream.
+9. Projects persist.
+10. Sessions persist.
+11. Tasks persist.
+12. Events can be replayed.
+13. Files can be inspected.
+14. Files can be modified.
+15. Changes can be reviewed.
+16. Terminal commands execute in the real runtime.
+17. Terminal output is real.
+18. Git operations work.
+19. Subagents work where supported.
+20. Skills work where supported.
+21. Plugins work where supported.
+22. MCP integrations work where supported.
+23. Hooks work where supported.
+24. Providers and models work where supported.
+25. Attachments work for supported formats.
+26. Approval policies are enforced.
+27. Emergency stop works.
+28. Secrets remain protected.
+29. Users are isolated from one another.
+30. Adrian Speak operates through the active Build session.
+31. Browser refresh does not destroy durable task history.
+32. Runtime restart does not silently lose or duplicate tasks.
+33. Monitoring and diagnostics work.
+34. Backups and recovery are tested.
+35. Automated tests pass.
+36. Real acceptance tests pass.
+37. Feature statuses are evidence-based.
+38. The production release has the required approval.
+39. The Windows Companion can be added later without redesigning the entire Build experience.
+Unsupported capabilities must be clearly identified and must not be misrepresented as complete.
+The website-first release must not wait for the Windows Companion.
+ 
+⸻
+ 
+PART 22 — THE FINAL EXECUTION DIRECTIVE
+Manus and all assigned coding agents must treat this document as the single authoritative implementation blueprint for the Adrian OS Kimi Code integration.
+Your job is to turn the requirements into a working product.
+Do not stop after reading this document and returning a summary.
+Do not spend the majority of the available execution time producing more planning documents.
+Do not create a beautiful interface while leaving the runtime disconnected.
+Do not implement a simplified chat wrapper and call it Kimi Code integration.
+Do not leave critical operations as placeholders.
+Do not claim a feature is complete without proving that it works.
+Start by auditing the actual Adrian OS repository. Identify what is already implemented, what can be reused, what is incomplete and what must be built.
+Then execute the phases in order.
+Build the persistent hosted Kimi runtime first. Connect it securely to Adrian’s server architecture. Establish the real session and event flow. Build the native Build workspace around that working foundation. Expand into files, editor, terminal, Git, agents, skills, plugins, MCP, hooks, providers, attachments, voice, approvals, security and operational readiness.
+Use parallel agents for genuinely independent work, but keep shared interfaces under one integration owner.
+Run real tests.
+Fix failures.
+Re-run tests.
+Maintain the feature matrix.
+Record the evidence.
+Continue until the website-first release meets its acceptance criteria or every remaining blocker has been clearly identified with its exact cause and required action.
+If something is already implemented correctly, verify it and reuse it. Do not rebuild it merely to claim new work.
+If something is incomplete, finish it.
+If something is broken, fix it.
+If something is unsupported by the selected runtime, report it accurately and do not fake it.
+If an external dependency or owner decision blocks progress, complete every independent task that can safely proceed and provide a precise handoff for the blocked item.
+The required outcome is a genuinely working Adrian Build environment powered by the real Kimi Code engine, operating inside the existing Adrian OS website, with a reliable hosted execution system, persistent projects and sessions, real coding tools, advanced agent capabilities, controlled integrations, security, observability and verifiable end-to-end functionality.
+Build the product. Verify the product. Demonstrate the product. Do not declare completion until the evidence supports it.

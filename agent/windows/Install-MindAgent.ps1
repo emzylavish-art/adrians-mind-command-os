@@ -24,6 +24,8 @@ param(
   [Parameter(Mandatory = $true)][string]$DashboardUrl,
   [Parameter(Mandatory = $true)][string]$PairingCode,
   [string]$DeviceName = $env:COMPUTERNAME,
+  [string]$KimiPath = "kimi",
+  [string]$NodePath = "node",
   [switch]$ForceAdmin
 )
 
@@ -44,6 +46,7 @@ $ConfigPath = Join-Path $AgentRoot "config.json"
 $LogPath = Join-Path $AgentRoot "agent.log"
 $AgentScript = Join-Path $AgentRoot "MindAgent.ps1"
 $StopScript = Join-Path $AgentRoot "Emergency-Stop.ps1"
+$KimiClientScript = Join-Path $AgentRoot "KimiAcpClient.mjs"
 $StartupName = "MindCommandLocalAgent"
 
 if ($ForceAdmin) {
@@ -90,6 +93,13 @@ try {
 
 if (-not $resp.ok) { throw "Handshake rejected: $($resp.error)" }
 
+# Local control plane shared secret (localhost only).
+$rng = [System.Security.Cryptography.RandomNumberGenerator]::Create()
+$bytes = New-Object byte[] 32
+$rng.GetBytes($bytes)
+$localAuth = [Convert]::ToBase64String($bytes)
+$rng.Dispose()
+
 $config = @{
   dashboardUrl = $DashboardUrl.TrimEnd("/")
   deviceId = $resp.deviceId
@@ -106,6 +116,8 @@ $config = @{
     port = 17355
     authToken = $localAuth
   }
+  kimiPath = $KimiPath
+  nodePath = $NodePath
   pinnedOrigin = $DashboardUrl.TrimEnd("/")
 }
 $config | ConvertTo-Json | Set-Content -Path $ConfigPath -Encoding utf8
@@ -117,6 +129,7 @@ New-Item -ItemType Directory -Force -Path (Join-Path $env:USERPROFILE "MindWorks
 # Copy agent + emergency-stop scripts next to config
 Copy-Item -Force (Join-Path $PSScriptRoot "MindAgent.ps1") $AgentScript
 Copy-Item -Force (Join-Path $PSScriptRoot "Emergency-Stop.ps1") $StopScript
+Copy-Item -Force (Join-Path $PSScriptRoot "KimiAcpClient.mjs") $KimiClientScript
 
 # Integrity manifest (sha256 of agent scripts) — agent refuses to run if hashes drift
 function Get-Sha256([string]$Path) {
@@ -134,8 +147,11 @@ if (-not $remote.ok -or -not $remote.manifest) { throw "Dashboard did not return
 $localHashes = @{
   "MindAgent.ps1" = (Get-Sha256 $AgentScript)
   "Emergency-Stop.ps1" = (Get-Sha256 $StopScript)
+  "KimiAcpClient.mjs" = (Get-Sha256 $KimiClientScript)
+  "Install-MindAgent.ps1" = (Get-Sha256 (Join-Path $PSScriptRoot "Install-MindAgent.ps1"))
+  "Uninstall-MindAgent.ps1" = (Get-Sha256 (Join-Path $PSScriptRoot "Uninstall-MindAgent.ps1"))
 }
-foreach ($name in @("MindAgent.ps1", "Emergency-Stop.ps1")) {
+foreach ($name in @("MindAgent.ps1", "Emergency-Stop.ps1", "KimiAcpClient.mjs", "Install-MindAgent.ps1", "Uninstall-MindAgent.ps1")) {
   $expected = $remote.manifest.files.$name
   if (-not $expected) { throw "Signed manifest missing $name" }
   if ($localHashes[$name].ToLowerInvariant() -ne $expected.ToLowerInvariant()) {
@@ -148,13 +164,6 @@ $verifyBody = @{ manifest = $remote.manifest; localFiles = $localHashes } | Conv
 $verified = Invoke-RestMethod -Method Post -Uri $verifyUri -Body $verifyBody -ContentType "application/json"
 if (-not $verified.ok) { throw "Manifest signature verification failed: $($verified.error)" }
 $remote.manifest | ConvertTo-Json -Depth 5 | Set-Content -Path (Join-Path $AgentRoot "agent.manifest.json") -Encoding utf8
-
-# Local control plane shared secret (localhost only). DLL/PATH: prefer absolute powershell path.
-$rng = [System.Security.Cryptography.RandomNumberGenerator]::Create()
-$bytes = New-Object byte[] 32
-$rng.GetBytes($bytes)
-$localAuth = [Convert]::ToBase64String($bytes)
-
 
 # User-visible Startup entry (CurrentUser Run key) — uninstall removes it
 $runKey = "HKCU:\Software\Microsoft\Windows\CurrentVersion\Run"
