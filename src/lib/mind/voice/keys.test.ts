@@ -31,4 +31,10 @@ describe("voice keys", () => {
       rmSync(dir, { recursive: true, force: true });
     }
   });
+
+  it("uses the model key only when no speech key exists and it is not the management key", () => {
+    assert.equal(resolveVoiceApiKey({ XAI_API_KEY: "xai-model" }, "/tmp/missing-voice-secrets"), "xai-model");
+    assert.equal(resolveVoiceApiKey({ XAI_API_KEY: "xai-same", XAI_MANAGEMENT_KEY: "xai-same" }, "/tmp/missing-voice-secrets"), undefined);
+    assert.equal(resolveVoiceApiKey({ XAI_VOICE_API_KEY: "xai-voice", XAI_API_KEY: "xai-model" }, "/tmp/missing-voice-secrets"), "xai-voice");
+  });
 });

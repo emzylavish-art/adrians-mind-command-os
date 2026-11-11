@@ -36,6 +36,9 @@ export function resolveVoiceApiKey(env: Record<string, string | undefined> = pro
     env.XAI_VOICE_API_KEY = fromFile;
     return fromFile;
   }
+  const chatKey = env.XAI_API_KEY?.trim();
+  const management = env.XAI_MANAGEMENT_KEY?.trim();
+  if (chatKey && chatKey !== management) return chatKey;
   return undefined;
 }
 

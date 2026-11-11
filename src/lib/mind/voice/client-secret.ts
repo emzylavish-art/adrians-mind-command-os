@@ -34,7 +34,7 @@ export async function mintRealtimeClientSecret(input: {
   if (!apiKey) {
     return {
       ok: false,
-      error: "No speech key is configured. The chat key is not used for voice. Nothing was started.",
+      error: "No speech key is configured. Nothing was started.",
     };
   }
   const fetchImpl = input.fetchImpl ?? fetch;
