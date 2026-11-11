@@ -1,5 +1,5 @@
-import { requireUserId } from "../../auth/verify.server";
-import { assertSameOrigin } from "../connectors/oauth-csrf";
+import { requireUserId } from "../../../auth/verify.server";
+import { assertSameOrigin } from "../../connectors/oauth-csrf";
 import { probeKimiAcp } from "./acp-client.ts";
 
 function json(body: unknown, status = 200) {

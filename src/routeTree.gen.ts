@@ -26,6 +26,7 @@ import { Route as ApiMindKimiCapabilitiesRouteImport } from './routes/api/mind/k
 import { Route as ApiMindKimiFilesRouteImport } from './routes/api/mind/kimi/files'
 import { Route as ApiMindKimiProjectsRouteImport } from './routes/api/mind/kimi/projects'
 import { Route as ApiMindKimiProvidersRouteImport } from './routes/api/mind/kimi/providers'
+import { Route as ApiMindKimiRuntimeRouteImport } from './routes/api/mind/kimi/runtime'
 import { Route as ApiMindKimiSessionRouteImport } from './routes/api/mind/kimi/session'
 import { Route as ApiMindKimiTerminalRouteImport } from './routes/api/mind/kimi/terminal'
 import { Route as ApiMindKimiVoiceRouteImport } from './routes/api/mind/kimi/voice'
@@ -149,6 +150,11 @@ const ApiMindKimiProjectsRoute = ApiMindKimiProjectsRouteImport.update({
 const ApiMindKimiProvidersRoute = ApiMindKimiProvidersRouteImport.update({
   id: '/api/mind/kimi/providers',
   path: '/api/mind/kimi/providers',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ApiMindKimiRuntimeRoute = ApiMindKimiRuntimeRouteImport.update({
+  id: '/api/mind/kimi/runtime',
+  path: '/api/mind/kimi/runtime',
   getParentRoute: () => rootRouteImport,
 } as any)
 const ApiMindKimiSessionRoute = ApiMindKimiSessionRouteImport.update({
@@ -374,6 +380,7 @@ export interface FileRoutesByFullPath {
   '/api/mind/kimi/files': typeof ApiMindKimiFilesRoute
   '/api/mind/kimi/projects': typeof ApiMindKimiProjectsRoute
   '/api/mind/kimi/providers': typeof ApiMindKimiProvidersRoute
+  '/api/mind/kimi/runtime': typeof ApiMindKimiRuntimeRoute
   '/api/mind/kimi/session': typeof ApiMindKimiSessionRoute
   '/api/mind/kimi/terminal': typeof ApiMindKimiTerminalRoute
   '/api/mind/kimi/voice': typeof ApiMindKimiVoiceRoute
@@ -432,6 +439,7 @@ export interface FileRoutesByTo {
   '/api/mind/kimi/files': typeof ApiMindKimiFilesRoute
   '/api/mind/kimi/projects': typeof ApiMindKimiProjectsRoute
   '/api/mind/kimi/providers': typeof ApiMindKimiProvidersRoute
+  '/api/mind/kimi/runtime': typeof ApiMindKimiRuntimeRoute
   '/api/mind/kimi/session': typeof ApiMindKimiSessionRoute
   '/api/mind/kimi/terminal': typeof ApiMindKimiTerminalRoute
   '/api/mind/kimi/voice': typeof ApiMindKimiVoiceRoute
@@ -491,6 +499,7 @@ export interface FileRoutesById {
   '/api/mind/kimi/files': typeof ApiMindKimiFilesRoute
   '/api/mind/kimi/projects': typeof ApiMindKimiProjectsRoute
   '/api/mind/kimi/providers': typeof ApiMindKimiProvidersRoute
+  '/api/mind/kimi/runtime': typeof ApiMindKimiRuntimeRoute
   '/api/mind/kimi/session': typeof ApiMindKimiSessionRoute
   '/api/mind/kimi/terminal': typeof ApiMindKimiTerminalRoute
   '/api/mind/kimi/voice': typeof ApiMindKimiVoiceRoute
@@ -551,6 +560,7 @@ export interface FileRouteTypes {
     | '/api/mind/kimi/files'
     | '/api/mind/kimi/projects'
     | '/api/mind/kimi/providers'
+    | '/api/mind/kimi/runtime'
     | '/api/mind/kimi/session'
     | '/api/mind/kimi/terminal'
     | '/api/mind/kimi/voice'
@@ -609,6 +619,7 @@ export interface FileRouteTypes {
     | '/api/mind/kimi/files'
     | '/api/mind/kimi/projects'
     | '/api/mind/kimi/providers'
+    | '/api/mind/kimi/runtime'
     | '/api/mind/kimi/session'
     | '/api/mind/kimi/terminal'
     | '/api/mind/kimi/voice'
@@ -667,6 +678,7 @@ export interface FileRouteTypes {
     | '/api/mind/kimi/files'
     | '/api/mind/kimi/projects'
     | '/api/mind/kimi/providers'
+    | '/api/mind/kimi/runtime'
     | '/api/mind/kimi/session'
     | '/api/mind/kimi/terminal'
     | '/api/mind/kimi/voice'
@@ -726,6 +738,7 @@ export interface RootRouteChildren {
   ApiMindKimiFilesRoute: typeof ApiMindKimiFilesRoute
   ApiMindKimiProjectsRoute: typeof ApiMindKimiProjectsRoute
   ApiMindKimiProvidersRoute: typeof ApiMindKimiProvidersRoute
+  ApiMindKimiRuntimeRoute: typeof ApiMindKimiRuntimeRoute
   ApiMindKimiSessionRoute: typeof ApiMindKimiSessionRoute
   ApiMindKimiTerminalRoute: typeof ApiMindKimiTerminalRoute
   ApiMindKimiVoiceRoute: typeof ApiMindKimiVoiceRoute
@@ -886,6 +899,13 @@ declare module '@tanstack/react-router' {
       path: '/api/mind/kimi/providers'
       fullPath: '/api/mind/kimi/providers'
       preLoaderRoute: typeof ApiMindKimiProvidersRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/mind/kimi/runtime': {
+      id: '/api/mind/kimi/runtime'
+      path: '/api/mind/kimi/runtime'
+      fullPath: '/api/mind/kimi/runtime'
+      preLoaderRoute: typeof ApiMindKimiRuntimeRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/api/mind/kimi/session': {
@@ -1182,6 +1202,7 @@ const rootRouteChildren: RootRouteChildren = {
   ApiMindKimiFilesRoute: ApiMindKimiFilesRoute,
   ApiMindKimiProjectsRoute: ApiMindKimiProjectsRoute,
   ApiMindKimiProvidersRoute: ApiMindKimiProvidersRoute,
+  ApiMindKimiRuntimeRoute: ApiMindKimiRuntimeRoute,
   ApiMindKimiSessionRoute: ApiMindKimiSessionRoute,
   ApiMindKimiTerminalRoute: ApiMindKimiTerminalRoute,
   ApiMindKimiVoiceRoute: ApiMindKimiVoiceRoute,

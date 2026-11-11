@@ -223,10 +223,6 @@ export function BuildWorkspace() {
       setNotice("Describe the coding task before submitting.");
       return;
     }
-    if (!online) {
-      setNotice("No paired Windows Companion is online. Nothing was executed.");
-      return;
-    }
     setLoading(true);
     setNotice(null);
     setEvents([]);

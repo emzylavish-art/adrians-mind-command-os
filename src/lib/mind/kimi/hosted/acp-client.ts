@@ -19,6 +19,14 @@ function isObject(value: unknown): value is JsonObject {
 }
 
 export async function probeKimiAcp(command = process.env.KIMI_BIN || "kimi", cwd = process.cwd()): Promise<KimiProbe> {
+  return await exchange(command, cwd, []);
+}
+
+export async function runHostedPrompt(prompt: string, command = process.env.KIMI_BIN || "kimi", cwd = process.cwd()): Promise<KimiProbe & { output?: string }> {
+  return await exchange(command, cwd, [prompt]);
+}
+
+async function exchange(command: string, cwd: string, prompts: string[]): Promise<KimiProbe & { output?: string }> {
   if (!command.trim()) return { status: "not_configured", command, error: "Kimi command is not configured.", runtimeVerified: false };
   return await new Promise((resolve) => {
     const child = spawn(command, ["acp"], {
@@ -28,15 +36,15 @@ export async function probeKimiAcp(command = process.env.KIMI_BIN || "kimi", cwd
     });
     let buffer = "";
     let settled = false;
-    const seen: KimiProbe = { status: "failed", command, runtimeVerified: false };
-    const finish = (probe: KimiProbe) => {
+    const seen: KimiProbe & { output?: string } = { status: "failed", command, runtimeVerified: false };
+    const finish = (probe: KimiProbe & { output?: string }) => {
       if (settled) return;
       settled = true;
       clearTimeout(timer);
       child.kill();
       resolve(probe);
     };
-    const timer = setTimeout(() => finish({ ...seen, status: seen.version ? "failed" : "failed", error: seen.error || "Kimi ACP did not complete the handshake within 12 seconds." }), 12_000);
+    const timer = setTimeout(() => finish({ ...seen, status: "failed", error: seen.error || "Kimi ACP did not complete the handshake within 20 seconds." }), prompts.length ? 20_000 : 12_000);
     child.on("error", (error) => finish({ status: "not_configured", command, error: error.message, runtimeVerified: false }));
     child.stdin.write(`${JSON.stringify({ jsonrpc: "2.0", id: 1, method: "initialize", params: { protocolVersion: 1, clientCapabilities: {}, clientInfo: { name: "adrian-os", version: "0.1" } } })}\n`);
     child.stdout.on("data", (chunk: Buffer) => {
@@ -62,8 +70,20 @@ export async function probeKimiAcp(command = process.env.KIMI_BIN || "kimi", cwd
           if (isObject(message.error)) {
             const text = typeof message.error.message === "string" ? message.error.message : "Kimi rejected the session.";
             finish({ ...seen, status: /auth/i.test(text) ? "authentication_required" : "failed", error: text });
+          } else if (prompts.length && isObject(message.result)) {
+            const sessionId = typeof message.result.sessionId === "string" ? message.result.sessionId : "";
+            if (!sessionId) finish({ ...seen, status: "failed", error: "Kimi created a session without an id." });
+            else child.stdin.write(`${JSON.stringify({ jsonrpc: "2.0", id: 3, method: "session/prompt", params: { sessionId, prompt: [{ type: "text", text: prompts[0] }] } })}\n`);
           } else {
             finish({ ...seen, status: "session_created", error: undefined });
+          }
+        }
+        if (message.id === 3) {
+          if (isObject(message.error)) {
+            const text = typeof message.error.message === "string" ? message.error.message : "Kimi rejected the task.";
+            finish({ ...seen, status: "failed", error: text });
+          } else {
+            finish({ ...seen, status: "session_created", error: undefined, output: "Kimi accepted the prompt." });
           }
         }
       }

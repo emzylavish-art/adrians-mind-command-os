@@ -4,7 +4,7 @@ import os
 import unittest
 from unittest.mock import MagicMock, patch
 
-import controller
+from tools.notion import controller
 
 
 class NotionControllerTests(unittest.TestCase):

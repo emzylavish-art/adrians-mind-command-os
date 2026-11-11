@@ -9,10 +9,10 @@ export type KimiCapability = {
 };
 
 export const KIMI_CAPABILITIES: KimiCapability[] = [
-  { id: "task_submit", group: "agent", label: "Submit coding task", status: "fully_integrated", evidence: "Authenticated /api/mind/kimi/session queues a kimi-acp job." },
-  { id: "agent_output", group: "agent", label: "Agent output and timeline", status: "fully_integrated", evidence: "Build workspace renders stored ACP events and assistant text." },
+  { id: "task_submit", group: "agent", label: "Submit coding task", status: "limited", evidence: "The route can queue a Companion job. A real Kimi 2.5.3 session was created, then the account rejected the coding task for lack of Kimi Code access. It is not fully integrated." },
+  { id: "agent_output", group: "agent", label: "Agent output and timeline", status: "limited", evidence: "The workspace can render stored events. No completed real coding transcript exists." },
   { id: "planning_modes", group: "agent", label: "Plan, explore, and coding modes", status: "not_supported", evidence: "Installed Kimi session/set_mode has not been verified. No mode control is advertised." },
-  { id: "file_browse", group: "tools", label: "Browse, read, and save files", status: "fully_integrated", evidence: "Companion file-op jobs enforce allowed roots and return reviewed writes." },
+  { id: "file_browse", group: "tools", label: "Browse, read, and save files", status: "limited", evidence: "Companion file jobs exist and local smokes passed. They have not been proven on the live site or a real Kimi session." },
   { id: "file_search", group: "tools", label: "Search approved workspace", status: "limited", evidence: "Bounded path and text search runs on the Companion. It is not a full code index." },
   { id: "file_mutate", group: "tools", label: "Create, rename, and delete files", status: "limited", evidence: "Operations are workspace-bound. Delete and rename require an explicit confirmation flag." },
   { id: "shell", group: "tools", label: "Approved terminal commands", status: "limited", evidence: "Commands run only after a one-time owner approval. ACP reverse terminal RPC stays denied." },
@@ -24,7 +24,7 @@ export const KIMI_CAPABILITIES: KimiCapability[] = [
   { id: "instructions", group: "extensions", label: "Project instructions", status: "limited", evidence: "Instructions are stored with the registered project and prepended to the next task." },
   { id: "git_read", group: "git", label: "Git status, diff, and log", status: "limited", evidence: "Exact read-only Git commands can be submitted through the existing approval terminal." },
   { id: "git_write", group: "git", label: "Commit, branch, and restore", status: "planned", evidence: "Write operations remain manual approved commands. No automatic commit or restore is implemented." },
-  { id: "session_create_cancel", group: "session", label: "Create, recover, and cancel sessions", status: "fully_integrated", evidence: "Session queue, refresh recovery, and owner cancellation are implemented." },
+  { id: "session_create_cancel", group: "session", label: "Create, recover, and cancel sessions", status: "limited", evidence: "Queue, refresh, and cancel code exist. A real Kimi session was created, but the coding prompt was rejected and cancellation of a live coding process was not proven." },
   { id: "session_history", group: "session", label: "Rename, archive, and history", status: "limited", evidence: "Owner-scoped file records survive restart. They are not durable cloud history until Postgres is configured." },
   { id: "session_resume_fork", group: "session", label: "ACP resume, load, and fork", status: "not_supported", evidence: "Those ACP methods are not called until an installed Kimi version verifies them." },
   { id: "provider_select", group: "provider", label: "Provider and model selection", status: "limited", evidence: "Profiles can be saved and a model id forwarded. Kimi still authenticates through its local CLI login." },

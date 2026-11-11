@@ -2,6 +2,8 @@ import { requireUserId } from "../../auth/verify.server";
 import { assertSameOrigin } from "../connectors/oauth-csrf";
 import { haltIsOn } from "../halt.server";
 import { enqueueJob, listJobEvents, onlineAgents, readJob } from "../pc-pairing/store";
+import { runHostedPrompt } from "./hosted/acp-client.ts";
+import { recordKimiAttempt } from "./persist.ts";
 
 const MAX_PROMPT = 8_000;
 const MAX_CWD = 500;
@@ -26,12 +28,22 @@ export async function handleKimiSession(request: Request): Promise<Response> {
     try {
       const ownerId = await ownerIdFromRequest(request);
       if (await haltIsOn(ownerId)) return json({ ok: false, error: "Emergency stop is on. No Kimi session was queued." }, 403);
-      const agents = onlineAgents(ownerId);
-      if (agents.length === 0) return json({ ok: false, error: "No paired Windows Companion is online." }, 409);
       const body = (await request.json().catch(() => ({}))) as { prompt?: unknown; cwd?: unknown };
       const prompt = typeof body.prompt === "string" ? body.prompt.trim().slice(0, MAX_PROMPT) : "";
       if (!prompt) return json({ ok: false, error: "prompt is required." }, 400);
       const cwd = typeof body.cwd === "string" && body.cwd.trim() ? body.cwd.trim().slice(0, MAX_CWD) : undefined;
+      const agents = onlineAgents(ownerId);
+      if (agents.length === 0) {
+        const hosted = await runHostedPrompt(prompt, process.env.KIMI_BIN || "kimi", cwd || process.cwd());
+        await recordKimiAttempt({ ownerId, status: hosted.status, error: hosted.error });
+        return json({
+          ok: false,
+          executed: false,
+          error: hosted.error || "The connected runtime did not accept the task. No Kimi login is requested.",
+          runtime: hosted.status,
+          version: hosted.version,
+        }, hosted.status === "not_configured" ? 503 : 409);
+      }
       const agent = agents[0];
       const job = enqueueJob({
         ownerId,
