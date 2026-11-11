@@ -25,7 +25,10 @@ export function resolveProvider(id: string, fallback: boolean): { ok: true; id: 
   return { ok: true, id: "grok", model: "grok-4.5" };
 }
 
-export function providerChoices(grokConfigured: boolean | null) {
+export function providerChoices(grokConfigured: boolean | null, verifiedModel?: string | null) {
+  const verified = typeof verifiedModel === "string" && /^[A-Za-z0-9][A-Za-z0-9_.:/@-]{0,80}$/.test(verifiedModel)
+    ? verifiedModel
+    : "";
   return PROVIDERS.map((item) => ({
     id: item.id,
     label: item.label,
@@ -33,7 +36,9 @@ export function providerChoices(grokConfigured: boolean | null) {
     reason:
       item.id === "grok"
         ? grokConfigured === true
-          ? "Configured. A live request was not verified in the last test."
+          ? verified
+            ? `Live. The last reply used ${verified}.`
+            : "Configured. Send a message to verify a live reply."
           : grokConfigured === false
             ? "No Grok key is configured on the server."
             : "Status has not finished. Send still uses Grok only."
@@ -69,4 +74,3 @@ export function assertLiveProvider(id: unknown): { ok: true; id: "grok"; model: 
   if (typeof id !== "string") return { ok: false, error: "That provider is not known." };
   return resolveProvider(id, true);
 }
-

@@ -4745,7 +4745,7 @@ export function CommandApp() {
                 setView("agents");
                 void checkRea();
               }}
-              providerChoices={[...providerChoices(grokConfigured), ...customAiChoices]}
+              providerChoices={[...providerChoices(grokConfigured, lastModelUsed), ...customAiChoices]}
               providerChoice={providerChoice}
               onProvider={(id) => {
                 if (isLogicRouteId(id)) {
