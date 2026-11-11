@@ -13,9 +13,14 @@ export function oauthBoardState(oauth: BoardOauth, legacy?: BoardLegacy): { stat
   if (oauth.state === "unavailable" || /status could not be read/i.test(oauth.detail)) {
     return { state: "Status unavailable", detail: oauth.detail || "Connection status could not be read." };
   }
-  if (oauth.state === "connected") return { state: "Connected", detail: oauth.detail };
-  if (oauth.state === "not_configured") return { state: "Not configured", detail: oauth.detail };
-  if (oauth.state === "not_connected") return { state: "Not connected", detail: oauth.detail };
+ if (oauth.state === "connected") return { state: "Connected", detail: oauth.detail };
+  if (oauth.state === "not_configured") {
+    if (legacy?.state === "connected") {
+      return { state: "API token present", detail: `${legacy.detail} This is not an OAuth session.` };
+    }
+    return { state: "Not configured", detail: oauth.detail };
+  }
+ if (oauth.state === "not_connected") return { state: "Not connected", detail: oauth.detail };
   if (legacy?.state === "connected") {
     return { state: "API token present", detail: `${legacy.detail} This is not an OAuth session.` };
   }

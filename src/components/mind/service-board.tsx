@@ -30,6 +30,7 @@ const SERVICES: Service[] = [
   { name: "Google Drive", state: "Not connected", detail: "No Drive connection. No files are listed." },
   { name: "Google Docs", state: "Not connected", detail: "No Docs connection." },
   { name: "Google Calendar", state: "Not connected", detail: "No Calendar connection." },
+  { name: "YouTube", state: "Not connected", detail: "No YouTube connection." },
   { name: "Slack", state: "Not connected", detail: "Slack is not configured." },
   { name: "OpenAI", state: "Not configured", detail: "No API key. A chat subscription is not used." },
   { name: "Claude", state: "Not configured", detail: "No API key. Nothing is sent to Anthropic." },
@@ -50,6 +51,7 @@ const OAUTH_BOARD: Record<string, { connector: string; path: string; messageType
   Gmail: { connector: "gmail", path: "gmail", messageType: "gmail-oauth" },
   "Google Calendar": { connector: "google_calendar", path: "google_calendar", messageType: "google_calendar-oauth" },
   "Google Drive": { connector: "google_drive", path: "google_drive", messageType: "google_drive-oauth" },
+  YouTube: { connector: "youtube", path: "youtube", messageType: "youtube-oauth" },
   Slack: { connector: "slack", path: "slack", messageType: "slack-oauth" },
   GitHub: { connector: "github", path: "github", messageType: "github-oauth" },
 };

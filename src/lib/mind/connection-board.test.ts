@@ -25,4 +25,14 @@ describe("oauth connection board", () => {
     );
     assert.equal(oauthBoardState(null).state, "Status unavailable");
   });
+
+  it("shows a server integration token when OAuth is not configured", () => {
+    const board = oauthBoardState(
+      { state: "not_configured", detail: "Notion OAuth is not configured." },
+      { state: "connected", detail: "Notion is connected on the server. The secret is not shown." },
+    );
+    assert.equal(board.state, "API token present");
+    assert.match(board.detail, /not an OAuth session/);
+    assert.equal(board.detail.includes("secret_"), false);
+  });
 });
