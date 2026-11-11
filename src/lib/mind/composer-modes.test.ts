@@ -3,11 +3,11 @@ import { describe, it } from "node:test";
 import { loadComposerEffort, resolveSendPath, saveComposerEffort } from "./composer-modes.ts";
 
 describe("composer modes", () => {
-  it("keeps Orchestrator selection honest when fan-out is not wired", () => {
+  it("keeps text send on Direct until a paired computer can run Orchestrator", () => {
     const resolved = resolveSendPath("orchestrator");
     assert.equal(resolved.path, "blocked-orchestrator");
     assert.equal(resolved.badge, "Direct");
-    assert.match(resolved.notice ?? "", /not wired/i);
+    assert.match(resolved.notice ?? "", /Direct/i);
   });
 
   it("maps Auto to Direct", () => {

@@ -25,9 +25,9 @@ export const COMPOSER_MODES: ComposerMode[] = [
   {
     id: "orchestrator",
     label: "Orchestrator",
-    detail: "Multi-agent fan-out is not wired.",
+    detail: "Uses the existing Orchestrator route when a computer is paired.",
     wired: false,
-    notice: "Orchestrator fan-out is not wired. Send stays on Direct. Nothing was fanned out.",
+    notice: "Text send stays on Direct. Orchestrator runs only when a computer is paired.",
   },
 ];
 

@@ -843,7 +843,7 @@ export function CommandApp() {
     setComposerEffort(mode);
     const resolved = resolveSendPath(mode);
     if (resolved.notice) setNotice(resolved.notice);
-    // Effort does not change modelTier. The server model stays on the Direct path.
+    applyVoiceMode(mode === "orchestrator" ? "orchestrator" : "direct");
     if (mode === "build") setView("build");
   }
 
@@ -4235,7 +4235,7 @@ export function CommandApp() {
           </div>
         ) : null}
 
-        <div className={`min-h-0 flex-1 ${view === "chat" || view === "dashboard" || view === "intelligence" ? "overflow-hidden" : "overflow-auto"}`}>
+        <div className={`min-h-0 flex-1 ${view === "chat" || view === "dashboard" || view === "intelligence" ? "overflow-hidden" : "overflow-auto pb-24"}`}>
           {view === "intelligence" && (
             <EveWorkbench
               workspace={ws}
@@ -4353,7 +4353,6 @@ export function CommandApp() {
                       </button>
                     ))}
                   </div>
-                  <ComposerEffortControl mode={composerEffort} onChoose={chooseComposerEffort} />
                   <RoutingModeControl
                     mode={routingMode}
                     panel={routingPanel}
@@ -4438,6 +4437,13 @@ export function CommandApp() {
                       {voiceListening ? <Square className="size-4" /> : <Mic className="size-4" />}
                     </button></div>
 
+                    <ComposerEffortControl mode={composerEffort} onChoose={chooseComposerEffort} />
+                    <label className="inline-flex min-h-11 items-center gap-2 text-xs text-muted">
+                      Style
+                      <select aria-label="Conversation style" value={defaultPersonalityId} onChange={(event) => setDefaultPersonalityId(event.target.value as PersonalityId)} className="min-h-11 rounded-panel border border-line bg-transparent px-2 text-sm text-fg">
+                        {CONVERSATIONAL_PERSONALITIES.map((profile) => <option key={profile.id} value={profile.id}>{profile.label}</option>)}
+                      </select>
+                    </label>
                     <button type="submit" disabled={busy || ws.halted || (!draft.trim() && pendingImages.length === 0 && !staged)} className="composer-send inline-flex min-h-11 items-center gap-2 rounded-panel bg-accent px-4 text-sm font-semibold text-accent-ink disabled:opacity-50">
                       <Send className="size-4" /> {busy ? "Sending" : "Send"}
                     </button>
@@ -6443,7 +6449,6 @@ function ChatPane({
             for (const file of files.slice(0, 4)) onAddImageFile(file);
           }}
         >
-          <ComposerEffortControl mode={composerEffort} onChoose={onComposerEffort} />
           <RoutingModeControl mode={routingMode} panel={routingPanel} onMode={onRoutingMode} onToggle={onToggleRoute} />
           <input
             value={draft}
@@ -6518,6 +6523,13 @@ function ChatPane({
               {speaking ? "Reading" : "Read aloud"}
             </button></div>
             
+            <ComposerEffortControl mode={composerEffort} onChoose={onComposerEffort} />
+            <label className="inline-flex min-h-11 items-center gap-2 text-xs text-muted">
+              Style
+              <select aria-label="Conversation style" value={personalityId} disabled={!active || busy} onChange={(event) => onPersonalityChange(event.target.value as PersonalityId)} className="min-h-11 rounded-panel border border-line bg-transparent px-2 text-sm text-fg">
+                {CONVERSATIONAL_PERSONALITIES.map((profile) => <option key={profile.id} value={profile.id}>{profile.label}</option>)}
+              </select>
+            </label>
             <button type="submit" disabled={busy || halted || !active || (!draft.trim() && pendingImages.length === 0 && !stagedName)} className="composer-send min-h-11 rounded-panel bg-accent px-4 text-sm font-semibold text-accent-ink disabled:opacity-50">Send</button>
           </div>
           <div className="composer-voice-chrome" data-testid="composer-voice-chrome" hidden aria-hidden="true">
@@ -6744,7 +6756,7 @@ function ComposerEffortControl({
   const resolved = resolveSendPath(mode);
   const current = COMPOSER_MODES.find((item) => item.id === mode) ?? COMPOSER_MODES[0];
   return (
-    <div className="mb-2" data-testid="composer-effort">
+    <div className="composer-effort" data-testid="composer-effort">
       <div className="flex flex-wrap items-center gap-2">
         <span className="text-xs text-muted">Effort</span>
         {COMPOSER_MODES.map((item) => (

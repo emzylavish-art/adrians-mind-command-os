@@ -86,7 +86,7 @@ while ($true) {
     $jobsUri = $cfg.dashboardUrl.TrimEnd("/") + "/api/mind/pc/jobs"
     $jobs = Invoke-RestMethod -Method Get -Uri $jobsUri -Headers @{ Authorization = "Bearer $($cfg.token)" }
     if ($jobs.ok -and $jobs.job) {
-      if ($jobs.job.kind -eq "kimi-acp" -or $jobs.job.kind -eq "file-op") { Invoke-KimiJob $jobs.job }
+      if ($jobs.job.kind -eq "kimi-acp" -or $jobs.job.kind -eq "file-op" -or $jobs.job.kind -eq "shell") { Invoke-KimiJob $jobs.job }
       else { Send-JobResult $jobs.job.id $false "" "Unsupported Companion job kind." }
     }
   } catch { Write-AgentLog "Job poll error: $($_.Exception.Message)" }

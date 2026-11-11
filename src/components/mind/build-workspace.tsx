@@ -270,6 +270,22 @@ export function BuildWorkspace() {
     setNotice(data.ok ? "Workspace registered for this account." : data.error || "Workspace was not registered.");
   }
 
+  async function archiveRegisteredProject(id: string) {
+    const response = await fetch("/api/mind/kimi/projects", { method: "POST", credentials: "include", headers: { "content-type": "application/json" }, body: JSON.stringify({ action: "archive", id }) });
+    const data = await response.json() as { ok?: boolean; error?: string };
+    if (data.ok) setProjects((current) => current.filter((project) => project.id !== id));
+    setNotice(data.ok ? "Project archived." : data.error || "Project was not archived.");
+  }
+
+  async function renameSession(jobId: string, name: string) {
+    const next = name.trim();
+    if (!next) return;
+    const response = await fetch("/api/mind/kimi/projects", { method: "POST", credentials: "include", headers: { "content-type": "application/json" }, body: JSON.stringify({ action: "session", jobId, name: next }) });
+    const data = await response.json() as { ok?: boolean; session?: { jobId: string; name: string; archived: boolean }; error?: string };
+    if (data.session) setSessions((current) => current.map((session) => session.jobId === jobId ? data.session! : session));
+    setNotice(data.ok ? "Session renamed." : data.error || "Session was not renamed.");
+  }
+
   async function submitVoice() {
     if (!transcript.trim()) return;
     const instructions = projects.find((project) => project.cwd === cwd)?.instructions || "";
@@ -317,10 +333,27 @@ export function BuildWorkspace() {
       <div className={`dense-card flex flex-wrap items-center gap-3 ${online ? "border-success/40" : "border-warning/40"}`}>
         {online ? <Activity className="size-5 text-success" aria-hidden="true" /> : <WifiOff className="size-5 text-warning" aria-hidden="true" />}
         <div className="min-w-0 flex-1">
-          <p className="font-semibold">{online ? "Companion connected" : "Companion unavailable"}</p>
-          <p className="text-sm text-muted">{companion.detail || companion.error || "No paired Windows runtime has reported a heartbeat."}</p>
+          <p className="font-semibold">{online ? "Companion connected" : "Companion offline"}</p>
+          <p className="text-sm text-muted">{online ? (companion.detail || "A paired runtime reported a heartbeat.") : (companion.error || "No Companion heartbeat. Submit still attempts the hosted runtime and shows its real result. It does not ask for a Kimi login.")}</p>
         </div>
-        <span className="rounded-full border border-line px-2 py-1 text-xs">{online ? "Ready to queue" : "Nothing runs"}</span>
+        <span className="rounded-full border border-line px-2 py-1 text-xs">{online ? "Ready to queue" : "Hosted attempt on submit"}</span>
+      </div>
+
+      <div className="dense-card space-y-3">
+        <h3 className="font-semibold">Projects and sessions</h3>
+        {projects.length === 0 ? <p className="text-sm text-muted">No workspace is registered yet. Registering stores the label and path for this account. It does not prove the path is reachable.</p> : projects.map((project) => (
+          <div key={project.id} className="flex flex-wrap items-center gap-2 text-sm">
+            <span className="min-w-0 flex-1">{project.label} · {project.cwd || "no path"}</span>
+            <button type="button" className="min-h-11 rounded-panel border border-line px-3 text-sm" onClick={() => { setCwd(project.cwd); setNotice(`Opened ${project.label}. File access still requires the runtime that owns this path.`); }}>Open</button>
+            <button type="button" className="min-h-11 rounded-panel border border-line px-3 text-sm" onClick={() => void archiveRegisteredProject(project.id)}>Archive</button>
+          </div>
+        ))}
+        {sessions.length === 0 ? <p className="text-sm text-muted">No saved session names yet.</p> : sessions.filter((session) => !session.archived).map((session) => (
+          <form key={session.jobId} className="flex flex-wrap items-center gap-2" onSubmit={(event) => { event.preventDefault(); const data = new FormData(event.currentTarget); void renameSession(session.jobId, String(data.get("name") || "")); }}>
+            <input name="name" defaultValue={session.name} aria-label={`Rename session ${session.name}`} className="min-h-11 min-w-40 flex-1 rounded-panel border border-line bg-transparent px-3 text-sm" />
+            <button type="submit" className="min-h-11 rounded-panel border border-line px-3 text-sm">Rename</button>
+          </form>
+        ))}
       </div>
 
       <form className="dense-card space-y-3" onSubmit={submit}>

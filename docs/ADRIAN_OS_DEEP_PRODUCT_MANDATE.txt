@@ -1,0 +1,1705 @@
+ADRIAN OS — DEEP PRODUCT AUDIT, LIVE APPLICATION INSPECTION, CAPABILITY EXPANSION AND CONTINUOUS IMPLEMENTATION MANDATE
+
+Project: Adrian’s Mind Command OS
+Repository: emzylavish-art/adrians-mind-command-os
+Primary application: https://adrians-mind.vercel.app
+Primary target: The existing Adrian OS application, especially the Build module
+Execution environment: Manus with its authorized browser, terminal, GitHub, deployment and connected workspace tools
+Instruction type: Additive product evolution and implementation mandate
+Priority: High
+Operating requirement: Inspect, establish evidence, implement, test, inspect again, and continue correcting verified deficiencies.
+
+⸻
+
+1. PURPOSE OF THIS ADDITIONAL MANDATE
+
+You have already received the existing Adrian OS blueprints, Kimi Code integration blueprint, repository audit instructions, implementation instructions, personality specification, and previous execution prompts.
+
+Those documents remain the existing project authority.
+
+This document introduces an additional responsibility: independently evaluate the real product and identify what those previous documents, implementation passes, and current code have not adequately addressed.
+
+Do not rewrite the earlier blueprints.
+
+Do not create another competing architecture.
+
+Do not repeat their entire feature lists as though those features are new requirements.
+
+Do not simply tell the owner that the existing implementation is comprehensive.
+
+Your job is to discover the difference between:
+
+* What Adrian OS is intended to be.
+* What the repository actually implements.
+* What the production website actually serves.
+* What an authenticated owner can actually use.
+* What external integrations really execute.
+* What is partially implemented.
+* What is merely displayed in the interface.
+* What is operational but unreliable.
+* What is missing from the complete user experience.
+* What should be improved to make the platform substantially more capable.
+
+Then implement the appropriate improvements within the existing architecture.
+
+The central objective is not to create more documentation. It is to improve the actual Adrian OS application.
+
+The result must be a materially better, more coherent, more capable, more reliable and genuinely usable product.
+
+⸻
+
+2. ESTABLISH THE ACTUAL PROJECT STATE BEFORE CHANGING ANYTHING
+
+Start by inspecting the current state of the repository and the live application.
+
+Do not rely exclusively on earlier reports, previous Manus messages, screenshots, or documentation.
+
+Those materials may be useful, but the current source code, actual deployment and real application behavior are the authoritative evidence.
+
+2.1 Repository inspection
+
+Inspect the entire repository at a meaningful architectural level.
+
+Do not stop after reading the README.
+
+Inspect:
+
+* All major application directories.
+* Application routes.
+* Main navigation and module entry points.
+* Authentication and identity boundaries.
+* Server-side services.
+* Client-side components.
+* API endpoints.
+* Database migrations and actual persistence mechanisms.
+* Environment-variable contracts.
+* External service adapters.
+* Model-provider integrations.
+* MCP infrastructure.
+* OAuth implementations.
+* Agent execution infrastructure.
+* Windows Companion implementation.
+* Kimi ACP implementation.
+* Voice and speech infrastructure.
+* Memory and knowledge systems.
+* File handling and media infrastructure.
+* Scheduling and background processing.
+* Existing testing infrastructure.
+* CI/CD workflows.
+* Deployment configuration.
+* Existing technical documentation.
+* Existing audit and acceptance records.
+
+Identify the real source of truth for each important feature.
+
+Where multiple implementations exist, determine which one is active, which one is obsolete, and which one is actually mounted into the application.
+
+Identify dead code, duplicate implementations, unused adapters, disconnected components, abandoned experiments, and functionality that appears in documentation but cannot be reached through the live interface.
+
+2.2 Branch, commit and release inspection
+
+Inspect the current:
+
+* Default branch.
+* Active implementation branches.
+* Open pull requests.
+* Recently merged pull requests.
+* Current commit history.
+* CI results.
+* Deployment history.
+* Production branch.
+* Production alias.
+* Preview deployments.
+* Exact commit SHA serving production.
+
+In particular, reconcile the latest Kimi Build changes with the existing Kimi documentation and previous implementation branches.
+
+The repository has recorded a Build workspace and Kimi control-plane addition in commit:
+
+0f08b03be451d3af6f649824b3412a5ea45f3182
+
+Do not assume that this commit, a newer commit, or a successful deployment automatically proves the product works.
+
+Determine the exact current state.
+
+2.3 Existing project work must be preserved
+
+Do not delete, overwrite, simplify or replace working functionality merely because another implementation appears easier.
+
+Before modifying a component:
+
+1. Identify its current purpose.
+2. Find its callers and dependencies.
+3. Identify its data contracts.
+4. Inspect its tests.
+5. Determine whether another module depends on it.
+6. Identify the consequences of changing it.
+7. Preserve its valid existing behavior.
+
+When a component needs improvement, prefer a controlled enhancement over an unnecessary replacement.
+
+⸻
+
+3. AUTHENTICATED LIVE WEBSITE INSPECTION
+
+A source-code review is not enough.
+
+Use the authorized Manus browser to inspect the actual Adrian OS website.
+
+Open the production website.
+
+If authentication is required, use the owner’s normal authorized sign-in session. Do not bypass authentication, request unnecessary credentials, or attempt to defeat access controls.
+
+If a login requires the owner to complete an interactive authentication step, pause only for that specific step.
+
+Once authenticated, inspect the application as a real user.
+
+3.1 Inspect the complete application shell
+
+Review:
+
+* Landing experience.
+* Login and account experience.
+* Main navigation.
+* Sidebar.
+* Command center.
+* Module switching.
+* Build entry.
+* Settings.
+* Provider connections.
+* Integration connections.
+* Memory controls.
+* Voice controls.
+* Workspace navigation.
+* Search.
+* Notifications.
+* Error states.
+* Loading states.
+* Empty states.
+* Mobile navigation.
+* Responsive layouts.
+
+Identify inconsistencies between the interface and actual backend functionality.
+
+3.2 Inspect every important module
+
+Do not assume Build is the only place where improvements might be needed.
+
+Inspect the complete platform to understand whether modules communicate coherently.
+
+Examine the existing:
+
+* Chat and intelligence experience.
+* Build.
+* Agent Command Center.
+* EVE Workbench.
+* Memory.
+* Voice and Adrian Speak.
+* Digital human interface.
+* Provider connections.
+* MCP and tool registry.
+* Connected services.
+* Projects and workspaces.
+* Research capabilities.
+* File and media workflows.
+* Dashboard.
+* Scheduling.
+* Agent and fleet monitoring.
+* Settings and account controls.
+
+The objective is not to redesign every module indiscriminately.
+
+Identify defects and missing capabilities that materially affect the complete product.
+
+3.3 Visual and interaction inspection
+
+Inspect the actual rendered interface rather than assuming the source code reflects the experience.
+
+Check:
+
+* Visual hierarchy.
+* Spacing.
+* Alignment.
+* Typography.
+* Component consistency.
+* Color consistency.
+* Contrast.
+* Navigation clarity.
+* Button behavior.
+* Form behavior.
+* Modal behavior.
+* Focus management.
+* Keyboard navigation.
+* Touch interactions.
+* Loading feedback.
+* Error communication.
+* Responsive behavior.
+* Scroll behavior.
+* Empty and populated states.
+* Long-content handling.
+
+Test the actual controls.
+
+A button that looks interactive but does nothing is a defect.
+
+A connection card that displays Connected without a successful connection check is a defect.
+
+A capability indicator that says Available without runtime evidence is a defect.
+
+A project card that cannot open or resume the corresponding project is a defect.
+
+A status label that cannot be reconciled with backend state is a defect.
+
+Record these issues with the actual route, component, behavior and evidence.
+
+⸻
+
+4. THE BUILD MODULE MUST BECOME A COMPLETE, COHERENT WORKING ENVIRONMENT
+
+The Build module is the most important product area in this mandate.
+
+Do not treat it as a decorative chat window with a terminal panel.
+
+It should become a coherent coding and project-execution workspace within Adrian OS.
+
+The existing Kimi integration, Companion protocol, file operations, approval mechanisms and control plane must remain the foundation.
+
+Improve that foundation rather than creating a second unrelated execution system.
+
+4.1 Complete project workspace experience
+
+Evaluate the complete project lifecycle.
+
+A user should be able to:
+
+* Create a project.
+* Name a project.
+* Select an approved workspace.
+* Configure project instructions.
+* Open an existing project.
+* Resume work.
+* View previous sessions.
+* Rename sessions.
+* Archive sessions.
+* Recover sessions after refresh.
+* Understand which project is active.
+* Understand which runtime is executing the task.
+* See whether the Companion is connected.
+* See whether the selected provider is usable.
+* Understand whether a task is queued, running, blocked, cancelled, failed or completed.
+
+All project and session actions must operate on real persisted state.
+
+Do not implement visual controls that merely change local UI state while leaving the actual project unchanged.
+
+4.2 Improve the coding workspace
+
+Evaluate whether the current editor is sufficient for real development work.
+
+The existing bounded text editor should not be described as a full IDE.
+
+Where technically appropriate, improve the editor experience with:
+
+* A proper file explorer.
+* Directory navigation.
+* File search.
+* File type recognition.
+* Syntax highlighting.
+* Line numbers.
+* Search within the current file.
+* Unsaved-change indicators.
+* Save confirmation.
+* Dirty-state protection.
+* Diff visualization.
+* File-change review.
+* Revert and restore capabilities.
+* Multiple open files.
+* Tabs or another coherent multi-file navigation method.
+* Large-file handling.
+* Clear read-only and editable states.
+
+Consider Monaco or another appropriate editor implementation only after inspecting bundle size, browser compatibility, performance and actual integration requirements.
+
+Do not install a large editor merely for visual prestige.
+
+The final editor must be genuinely connected to the approved workspace.
+
+4.3 File operations must be trustworthy
+
+Audit every file operation.
+
+Check:
+
+* List.
+* Read.
+* Search.
+* Create.
+* Write.
+* Rename.
+* Delete.
+* Restore.
+* Diff.
+* File-size limits.
+* Path validation.
+* Workspace root enforcement.
+* Symlink handling.
+* Concurrent modifications.
+* Partial writes.
+* Encoding.
+* Binary-file handling.
+* File locking.
+* Operation cancellation.
+* Error recovery.
+
+Prevent path traversal, unintended deletion, writes outside approved roots and accidental corruption.
+
+A successful write must be verified against the actual file.
+
+A failed write must not be displayed as successful.
+
+Where a write changes an existing file, preserve a recoverable before-state where practical.
+
+4.4 Improve change review
+
+A coding workspace should make changes understandable.
+
+Provide a coherent review experience showing:
+
+* Changed files.
+* Added files.
+* Modified files.
+* Deleted files.
+* Before and after comparisons.
+* Added and removed lines.
+* Change summaries.
+* File-level approval where appropriate.
+* Revert options.
+* Git status.
+* Commit state.
+
+Do not automatically accept every generated modification.
+
+The user must be able to understand what changed and why.
+
+4.5 Terminal and command execution
+
+Inspect the existing approval-gated terminal.
+
+Improve its usability without weakening its security boundary.
+
+Requirements:
+
+* Show the exact command.
+* Show the target workspace.
+* Show the device executing it.
+* Show the requested permissions.
+* Show approval expiration.
+* Require explicit approval for consequential commands.
+* Display actual output.
+* Display exit status.
+* Display timeout state.
+* Support cancellation.
+* Prevent replay of approvals.
+* Record execution history.
+* Distinguish denied commands from failed commands.
+* Distinguish a command that was never executed from one that executed unsuccessfully.
+
+Investigate command classification and risk levels.
+
+Do not turn the approval interface into a general bypass for the existing policy system.
+
+4.6 Git integration
+
+The current implementation has limited Git functionality.
+
+Investigate the best way to make Git a first-class part of Build.
+
+Consider:
+
+* Current branch.
+* Working-tree status.
+* Untracked files.
+* Modified files.
+* Staged files.
+* Diff inspection.
+* Commit history.
+* Branch creation.
+* Branch switching.
+* Commit creation.
+* Restore.
+* Revert.
+* Pull.
+* Push.
+* Merge.
+* Conflict detection.
+* Conflict resolution assistance.
+* Remote configuration.
+* Authentication state.
+
+Use real Git operations in the approved workspace.
+
+Separate read-only Git operations from write operations.
+
+Require appropriate confirmation before destructive or consequential actions.
+
+Never represent a local commit as pushed.
+
+Never represent a pushed branch as merged.
+
+Never represent a merged commit as deployed.
+
+4.7 Task execution and progress visibility
+
+Improve how the Build agent communicates progress.
+
+The user should understand:
+
+* What task was accepted.
+* What the agent is currently doing.
+* Which project is involved.
+* What files are being inspected.
+* Whether a tool is running.
+* Whether approval is required.
+* Whether execution is waiting.
+* Whether a dependency failed.
+* Whether the task is recoverable.
+* What has actually been completed.
+* What remains unresolved.
+
+Do not expose private reasoning or sensitive raw tool payloads.
+
+Provide useful task summaries, observable execution events, and clear evidence.
+
+Avoid meaningless progress percentages.
+
+Progress should be derived from actual task state or explicitly identified as an estimate.
+
+⸻
+
+5. PROVIDER CONNECTIONS MUST BECOME REAL EXECUTABLE CONNECTIONS
+
+The provider interface is a critical part of Adrian OS.
+
+The current repository includes a Moonshot provider profile and encrypted key storage.
+
+However, the current code explicitly identifies the stored provider’s runtime use as not_injected.
+
+This is a significant product gap.
+
+Do not confuse saving a credential with configuring a runtime.
+
+5.1 Provider connection architecture
+
+Audit every existing provider and its actual adapter.
+
+Determine which providers can be used by:
+
+* Adrian OS chat.
+* Build.
+* Kimi ACP.
+* Background agents.
+* EVE.
+* Adrian Speak.
+* Research.
+* Other model-powered services.
+
+Do not assume that a provider connected to one module is automatically available to every other module.
+
+Implement an explicit provider-to-runtime mapping.
+
+The owner should be able to choose the appropriate provider and model for the appropriate workload.
+
+5.2 Provider management experience
+
+Create or improve a clear provider connection experience with:
+
+* Provider selection.
+* API key entry.
+* Base URL configuration where applicable.
+* Model selection.
+* Custom model support where valid.
+* Connection testing.
+* Model discovery where supported.
+* Key validation.
+* Credential status.
+* Last successful test.
+* Error diagnostics.
+* Default model selection.
+* Per-module routing.
+* Provider fallback.
+* Usage visibility.
+* Disconnect and credential rotation.
+
+Support the providers already present in the application’s architecture and any additional providers justified by real user needs.
+
+Do not invent provider compatibility.
+
+Use the provider’s actual API contract.
+
+5.3 Kimi-specific connection behavior
+
+Determine the exact execution mode.
+
+If Kimi is running through its local CLI authentication, make that explicit.
+
+If Kimi is using a configured API key, prove that the key is actually injected into the intended Kimi runtime.
+
+If the provider profile is stored only for future use, show that clearly.
+
+Do not leave a user believing that a saved key is powering Kimi when the runtime is still using another authentication method.
+
+Test:
+
+1. Credential submission.
+2. Encrypted storage.
+3. Server-side retrieval.
+4. Runtime configuration.
+5. Provider authentication.
+6. Model selection.
+7. Actual inference.
+8. Failure handling.
+9. Credential rotation.
+10. Disconnect behavior.
+
+Do not expose secrets to browser logs, application logs, telemetry, URLs or user-visible error messages.
+
+5.4 Provider test results
+
+A provider connection test must perform a real, minimal, controlled request when the provider supports it.
+
+Return an honest result:
+
+* Connected and verified.
+* Credentials rejected.
+* Model unavailable.
+* Endpoint unreachable.
+* Rate limited.
+* Quota exhausted.
+* Configuration invalid.
+* Not tested.
+* Unsupported.
+
+Do not mark a provider Connected merely because an API key has been saved.
+
+⸻
+
+6. MCP, PLUGINS, SKILLS AND CONNECTED SERVICES
+
+Adrian OS already contains a substantial integration foundation.
+
+Improve its practical usefulness without duplicating the existing registry or bypassing its governance.
+
+6.1 Integration discovery and lifecycle
+
+Inspect the existing integration catalogue and registry.
+
+Distinguish:
+
+* Catalogue entry.
+* Source documentation.
+* Available adapter.
+* Installed connector.
+* Authenticated connector.
+* Enabled connector.
+* Runtime-accessible connector.
+* Successfully tested connector.
+
+These are different states.
+
+Provide a clear connection lifecycle.
+
+The user should understand what an integration can do, what permissions it needs, and whether it is currently usable.
+
+6.2 MCP runtime integration
+
+Investigate how approved MCP servers can be exposed to the relevant execution runtimes.
+
+Verify:
+
+* Actual transport.
+* Authentication requirements.
+* Server identity.
+* Tool discovery.
+* Tool schemas.
+* Tool invocation.
+* Result normalization.
+* Timeout behavior.
+* Reconnection.
+* Failure handling.
+* Permission boundaries.
+* Secret resolution.
+* Server removal.
+* Connection revocation.
+
+Do not forward every registered MCP server automatically.
+
+Use the existing approved-server registry and explicit authorization.
+
+Never expose connector secrets to the browser or Kimi transcript.
+
+6.3 Skills and plugins
+
+Investigate how the existing skills and plugin catalogues can become operational.
+
+Where supported, enable:
+
+* Skill discovery.
+* Skill installation.
+* Skill configuration.
+* Project-level skills.
+* User-level skills.
+* Skill version information.
+* Enable/disable.
+* Update.
+* Removal.
+* Dependency checks.
+* Compatibility validation.
+* Permission review.
+
+For plugins, investigate their actual manifest and execution model.
+
+Do not treat a Markdown description as an executable plugin.
+
+Do not claim plugin installation unless the relevant runtime confirms it.
+
+6.4 Connected services
+
+Review the existing OAuth and integration infrastructure.
+
+Test the actual connection lifecycle for supported services.
+
+For each integration, verify:
+
+* Authorization.
+* Callback handling.
+* State validation.
+* Token exchange.
+* Encrypted token storage.
+* Refresh.
+* Expiration.
+* Revocation.
+* Status reporting.
+* Actual read operations.
+* Actual write operations where authorized.
+
+A successful OAuth callback is not proof that all service operations work.
+
+⸻
+
+7. AGENT ORCHESTRATION AND DELEGATION
+
+Investigate whether Adrian OS can support a more capable execution model using its existing agent infrastructure.
+
+Do not introduce a parallel orchestration framework without first understanding the current one.
+
+Evaluate:
+
+* Main agent.
+* Task planner.
+* Research agent.
+* Coding agent.
+* Reviewer.
+* Testing agent.
+* Documentation agent.
+* Delegated subagents.
+* Parallel task execution.
+* Agent communication.
+* Task dependencies.
+* Shared project context.
+* Result aggregation.
+* Failure recovery.
+* Cancellation.
+* Execution budgets.
+* Agent permissions.
+
+If the Kimi runtime supports subagents, determine how they can be safely exposed.
+
+If it does not, do not fake subagent functionality.
+
+Use the existing fleet infrastructure where appropriate.
+
+7.1 Delegation workflow
+
+A task may be decomposed into independent workstreams when that improves execution.
+
+For example:
+
+* One agent investigates the existing implementation.
+* Another examines tests and failure modes.
+* Another investigates integration compatibility.
+* The primary agent coordinates the work and integrates results.
+
+Avoid parallel edits to the same files without ownership coordination.
+
+Each workstream must report:
+
+* Assigned scope.
+* Files affected.
+* Findings.
+* Changes made.
+* Tests performed.
+* Remaining issues.
+
+7.2 Review and verification agent
+
+Investigate a dedicated verification workflow that independently examines implementation claims.
+
+The verifier should compare:
+
+* Requested behavior.
+* Actual source changes.
+* Test evidence.
+* Runtime evidence.
+* Deployment evidence.
+* Known limitations.
+
+The implementing agent must not be the sole authority declaring its own work complete.
+
+⸻
+
+8. PERSISTENCE, RECOVERY AND MULTI-INSTANCE RELIABILITY
+
+Investigate the current persistence model carefully.
+
+The current Build store uses local .data JSON records.
+
+That may be acceptable for a bounded local workflow, but it must not silently become the production persistence strategy for customer-facing multi-instance functionality.
+
+Determine what storage exists in each environment.
+
+Evaluate:
+
+* Build projects.
+* Sessions.
+* Event history.
+* Provider profiles.
+* Credentials.
+* File metadata.
+* Audit history.
+* Runtime registration.
+* Device pairing.
+* Approval records.
+* User preferences.
+* Project instructions.
+
+Determine which records require durable database storage and which should remain local to a trusted Companion.
+
+8.1 Reliability requirements
+
+Investigate:
+
+* Process restarts.
+* Server restarts.
+* Browser refresh.
+* Network interruptions.
+* Companion disconnection.
+* Duplicate events.
+* Duplicate submissions.
+* Concurrent sessions.
+* Stale state.
+* Job expiration.
+* Event retention.
+* Data corruption.
+* Partial persistence.
+* Recovery after deployment.
+
+Implement appropriate recovery mechanisms.
+
+Do not store security-sensitive credentials in an unencrypted or browser-accessible location.
+
+8.2 Multi-instance behavior
+
+If the production platform can run multiple instances, verify that the required state is not accidentally tied to one process or one filesystem.
+
+Where a local Companion owns execution state, make that boundary explicit.
+
+Where cloud persistence is required, use the existing approved database architecture.
+
+Do not introduce another database without a demonstrated need.
+
+⸻
+
+9. SECURITY, TRUST AND EXECUTION GOVERNANCE
+
+Inspect the existing security system as a product-wide contract.
+
+Do not weaken established protections to make the interface appear more powerful.
+
+Review:
+
+* Authentication.
+* Authorization.
+* Owner isolation.
+* Project isolation.
+* Device identity.
+* Pairing.
+* Approval expiration.
+* Approval replay protection.
+* CSRF.
+* Origin validation.
+* File-path validation.
+* Shell execution.
+* Command classification.
+* MCP trust.
+* OAuth state.
+* Secret encryption.
+* Secret rotation.
+* Logging and redaction.
+* Emergency stop.
+* Audit records.
+
+Look for mismatches between frontend behavior and server enforcement.
+
+The server must remain authoritative.
+
+9.1 User-visible security
+
+The application should clearly communicate:
+
+* Which device is connected.
+* Which project is active.
+* Which permissions are granted.
+* Which actions require approval.
+* Which actions were denied.
+* Whether the emergency stop is active.
+* Whether a connection has expired.
+* Whether credentials are stored.
+* Whether a runtime is authenticated.
+
+Avoid overwhelming the user with security jargon.
+
+Communicate the practical consequence of each state.
+
+9.2 Security regression tests
+
+Add meaningful adversarial tests for:
+
+* Cross-owner access.
+* Forged session IDs.
+* Forged approval tokens.
+* Replayed approvals.
+* Expired approvals.
+* Path traversal.
+* Symlink escape.
+* Unauthorized terminal execution.
+* Malicious MCP responses.
+* OAuth state mismatch.
+* Secret leakage.
+* Emergency-stop bypass.
+* Duplicate or replayed job events.
+
+Preserve all existing security tests.
+
+⸻
+
+10. BUILD PERFORMANCE AND USER EXPERIENCE
+
+Evaluate the actual application experience on both desktop and mobile.
+
+Improve the product where real evidence justifies it.
+
+Consider:
+
+* Fast module switching.
+* Responsive workspace layout.
+* Efficient file browsing.
+* Smooth event streaming.
+* Large-output rendering.
+* Long-running task handling.
+* Background polling.
+* Network reconnection.
+* Optimistic updates only where safe.
+* Error recovery.
+* Keyboard shortcuts.
+* Accessible controls.
+* Screen-reader labels.
+* Reduced-motion support.
+* Mobile touch targets.
+* Low-bandwidth behavior.
+
+Avoid unnecessary animations and excessive visual effects.
+
+The interface should feel like a serious, sophisticated working environment.
+
+Prioritize usability and clarity over decoration.
+
+10.1 Mobile Build experience
+
+Specifically test Build on a mobile viewport.
+
+Investigate whether the user can:
+
+* Open a project.
+* Submit a task.
+* Read agent output.
+* Inspect changes.
+* Browse files.
+* Review a diff.
+* Approve a terminal command.
+* See runtime status.
+* Recover a session.
+* Understand errors.
+
+If the complete desktop editor cannot fit naturally on mobile, design an appropriate mobile workspace experience instead of shrinking the desktop layout.
+
+10.2 Accessibility
+
+Test:
+
+* Keyboard navigation.
+* Focus visibility.
+* Modal focus trapping.
+* Accessible labels.
+* Semantic headings.
+* Contrast.
+* Screen-reader status announcements.
+* Form error association.
+* Reduced-motion behavior.
+
+Do not introduce visual improvements that make the application less accessible.
+
+⸻
+
+11. EVE, ADRIAN SPEAK AND PERSONAL INTELLIGENCE COHERENCE
+
+The platform should feel like one coherent product rather than several independent applications sharing a navigation menu.
+
+Inspect the relationship between:
+
+* Main intelligence chat.
+* EVE.
+* Adrian Speak.
+* Build.
+* Memory.
+* Projects.
+* Provider routing.
+* Tool connections.
+
+Identify opportunities to preserve useful context between these modules without creating uncontrolled cross-session data sharing.
+
+11.1 Shared project context
+
+Investigate whether a project can maintain a coherent context across:
+
+* Chat.
+* Build.
+* Voice.
+* Files.
+* Instructions.
+* Tool connections.
+* Task history.
+
+The user should not need to repeatedly explain the same project context if the relevant information already exists and the user has authorized its reuse.
+
+11.2 Voice-to-Build workflow
+
+Evaluate the full voice workflow.
+
+The user should be able to issue a spoken coding instruction, have it transcribed accurately, review or edit the resulting task, and submit it to the same approved Build execution pathway.
+
+Distinguish transcription from native audio processing.
+
+Do not claim that audio itself is being processed by Kimi when only a text transcript is sent.
+
+11.3 Memory and project continuity
+
+Investigate how project-specific memory can preserve:
+
+* Project goals.
+* Important decisions.
+* Technical conventions.
+* File locations.
+* Known defects.
+* Completed work.
+* Current blockers.
+* Last successful tests.
+* Next implementation steps.
+
+Make this useful without allowing stale context to override the current repository.
+
+The current code and explicit project decisions must remain authoritative.
+
+⸻
+
+12. OBSERVABILITY AND OPERATIONAL CONTROL
+
+The user must be able to understand whether Adrian OS is actually functioning.
+
+Improve the operational visibility of the platform.
+
+Consider a coherent status layer for:
+
+* Application health.
+* Database health.
+* Authentication.
+* Provider availability.
+* Kimi runtime.
+* Companion connection.
+* Active sessions.
+* Job queue.
+* MCP connections.
+* OAuth connections.
+* Voice services.
+* Background workers.
+* Recent failures.
+* Last successful execution.
+
+Each status must come from a real health check or a clearly identified stored state.
+
+Do not create a dashboard that simply displays optimistic labels.
+
+12.1 Diagnostic experience
+
+When a connection fails, provide actionable diagnostics.
+
+For example:
+
+* Companion offline.
+* Kimi executable unavailable.
+* Kimi CLI not authenticated.
+* Provider key rejected.
+* Model unavailable.
+* Runtime timeout.
+* Workspace not permitted.
+* MCP transport unsupported.
+* Database unavailable.
+* Authentication expired.
+
+Explain what failed, what was not executed, and what action is required.
+
+Do not leak secrets or internal stack traces to the user.
+
+12.2 Audit and execution history
+
+Provide a reliable way to inspect important operations.
+
+The record should identify:
+
+* Actor.
+* Project.
+* Session.
+* Action.
+* Target.
+* Time.
+* Approval state.
+* Execution state.
+* Result.
+* Failure reason.
+
+Keep audit records separate from conversational content where appropriate.
+
+⸻
+
+13. REAL FEATURE COVERAGE — IDENTIFY THE NEXT GENERATION OF ADRIAN OS
+
+After the core application is audited, look for product improvements not adequately addressed in the previous documents.
+
+Investigate whether the following would materially improve Adrian OS.
+
+Do not implement everything blindly. Evaluate each capability against user value, technical feasibility, architecture fit, security, maintenance cost and actual need.
+
+Potential areas include:
+
+1. A unified project home.
+2. Cross-module project continuity.
+3. A global command palette.
+4. Better global search.
+5. Unified activity history.
+6. A task inbox.
+7. Project-level knowledge.
+8. Context-aware agent routing.
+9. Better provider/model routing.
+10. A unified integration health center.
+11. File and artifact management.
+12. Exportable project history.
+13. Reusable project templates.
+14. Workspace backups and restore.
+15. Better execution recovery.
+16. Background task monitoring.
+17. Scheduled agent tasks.
+18. User-configurable workflow automation.
+19. Better usage and cost visibility.
+20. More complete Git workflows.
+21. More complete coding editor functionality.
+22. Better code review and verification.
+23. Better project onboarding.
+24. Better first-run experience.
+25. Better mobile operation.
+26. Better accessibility.
+27. Better error explanations.
+28. Better system diagnostics.
+29. Better account and credential management.
+30. Better feature discovery.
+
+For every proposed improvement, explain the actual user problem it solves.
+
+Reject unnecessary features.
+
+Do not add features merely because another AI platform has them.
+
+The objective is a stronger Adrian OS, not a collection of copied product features.
+
+⸻
+
+14. VISUAL AND FUNCTIONAL DESIGN REVIEW
+
+Perform a focused design review after understanding the existing interface.
+
+Preserve established owner-approved design decisions.
+
+Do not introduce a completely different visual identity without evidence that it is needed.
+
+Improve:
+
+* Consistency.
+* Information hierarchy.
+* Navigation.
+* Module identity.
+* Workspace density.
+* Status communication.
+* Empty states.
+* Error states.
+* Responsive layouts.
+* Visual polish.
+
+Where a component is already good, preserve it.
+
+Where a component is confusing, improve it.
+
+Where a component is visually impressive but functionally disconnected, prioritize the functional correction.
+
+Do not use a static HTML prototype as a substitute for the real application.
+
+All accepted changes must be integrated into the actual application source.
+
+⸻
+
+15. RESEARCH AND COMPATIBILITY VERIFICATION
+
+When an improvement depends on an external provider, runtime, library or API, verify the current official technical documentation.
+
+Pay particular attention to:
+
+* Kimi CLI and ACP.
+* Kimi runtime capabilities.
+* Provider authentication.
+* Model identifiers.
+* MCP transports.
+* Plugin manifests.
+* Skills.
+* OAuth.
+* Editor libraries.
+* Database drivers.
+* Browser compatibility.
+* Deployment runtime constraints.
+
+Use actual installed versions and real schemas.
+
+Do not infer that a capability exists because it appears in a marketing page.
+
+Do not implement against outdated API assumptions.
+
+Pin dependencies appropriately.
+
+Document version-sensitive behavior.
+
+⸻
+
+16. REQUIRED AUDIT DELIVERABLES
+
+Before making substantial changes, produce a compact but sufficiently detailed audit inside the working environment.
+
+The audit must be evidence-based.
+
+Create the following internal records:
+
+A. Current Product Reality
+
+For every major module, identify:
+
+* Route or entry point.
+* Relevant components.
+* Backend services.
+* Persistence.
+* External dependencies.
+* Actual working functionality.
+* Partially working functionality.
+* Missing functionality.
+* Test evidence.
+* Live application evidence.
+
+B. Build Capability Reconciliation
+
+For every important Build capability, classify it as:
+
+* Implemented and verified.
+* Implemented but not runtime-verified.
+* Partially implemented.
+* Interface only.
+* Planned.
+* Unsupported.
+* Blocked.
+
+Include the evidence supporting the classification.
+
+C. Product Defect Register
+
+For each discovered defect, record:
+
+* Defect ID.
+* Description.
+* Severity.
+* Affected module.
+* Affected files.
+* User impact.
+* Root cause.
+* Dependencies.
+* Proposed correction.
+* Test required.
+* Completion evidence.
+
+D. Improvement Register
+
+For each new product improvement, record:
+
+* Improvement ID.
+* User problem.
+* Expected benefit.
+* Implementation scope.
+* Dependencies.
+* Risk.
+* Priority.
+* Acceptance criteria.
+
+E. Release and Runtime Truth
+
+Record:
+
+* Current source SHA.
+* Current production SHA.
+* Production deployment status.
+* Current runtime availability.
+* Companion state.
+* Provider connection state.
+* Database state.
+* MCP state.
+* OAuth state.
+* Known production blockers.
+
+Do not invent any values.
+
+⸻
+
+17. IMPLEMENTATION PRIORITY
+
+Do not let the audit become another endless planning exercise.
+
+After the initial inspection, prioritize actual implementation.
+
+Use this order unless evidence establishes a better dependency sequence.
+
+Priority 1 — Core reliability
+
+* Authentication and owner isolation.
+* Runtime connection.
+* Kimi execution.
+* Companion pairing.
+* Project persistence.
+* Session recovery.
+* File safety.
+* Terminal approvals.
+* Error handling.
+* Production configuration.
+
+Priority 2 — Build product quality
+
+* Project management.
+* File explorer.
+* Editor improvements.
+* Diff review.
+* Git workflows.
+* Session management.
+* Progress visibility.
+* Runtime diagnostics.
+
+Priority 3 — Real integration functionality
+
+* Provider runtime injection.
+* Provider testing.
+* MCP execution.
+* Approved connector mapping.
+* Skills and plugin lifecycle.
+* OAuth health.
+* Tool discovery.
+
+Priority 4 — Advanced intelligence
+
+* Agent delegation.
+* Project context.
+* Cross-module continuity.
+* Voice-to-Build workflow.
+* Background execution.
+* Task recovery.
+* Better orchestration.
+
+Priority 5 — Product refinement
+
+* Visual consistency.
+* Mobile experience.
+* Accessibility.
+* Performance.
+* Onboarding.
+* Diagnostics.
+* Usage visibility.
+
+This ordering is a default dependency guide, not permission to ignore a critical blocker found elsewhere.
+
+⸻
+
+18. IMPLEMENTATION RULES
+
+1. Work in the existing Adrian OS repository.
+2. Use a dedicated implementation branch.
+3. Preserve unrelated owner changes.
+4. Inspect before editing.
+5. Avoid duplicate infrastructure.
+6. Reuse existing approved services.
+7. Do not bypass authentication.
+8. Do not expose secrets.
+9. Do not fabricate integration status.
+10. Do not fabricate runtime output.
+11. Do not create fake test results.
+12. Do not hide incomplete features.
+13. Do not replace working code unnecessarily.
+14. Do not perform unrelated refactors.
+15. Do not introduce unnecessary paid services.
+16. Do not introduce an additional database without a concrete reason.
+17. Do not create another parallel Kimi control plane.
+18. Do not create a second ungoverned MCP registry.
+19. Do not make production changes before the relevant safety and release gates are satisfied.
+20. Do not report an implementation as complete merely because its source files exist.
+
+Use the existing application conventions.
+
+Follow existing TypeScript, React, server-route, database and testing patterns.
+
+⸻
+
+19. CONTINUOUS VERIFICATION LOOP
+
+The most important instruction in this document is that implementation must be followed by independent verification.
+
+Do not stop when the code compiles.
+
+Do not stop when the page renders.
+
+Do not stop when the deployment succeeds.
+
+For every substantial improvement:
+
+1. Inspect the requirement.
+2. Identify the relevant implementation.
+3. Make the change.
+4. Run the focused tests.
+5. Run relevant regression tests.
+6. Run typecheck.
+7. Run lint where configured.
+8. Run the production build.
+9. Open the actual application.
+10. Exercise the changed workflow.
+11. Verify the backend result.
+12. Verify persistence.
+13. Verify security boundaries.
+14. Record the evidence.
+15. Correct failures.
+16. Repeat the verification.
+
+Independent review pass
+
+After implementation, perform a second audit as though a different engineer had built the changes.
+
+The reviewer must not rely solely on the implementation agent’s completion report.
+
+Compare the actual code and behavior against the requirements.
+
+Look for:
+
+* Missing routes.
+* Disconnected buttons.
+* Incorrect API contracts.
+* Incorrect state handling.
+* Stale UI.
+* Persistence gaps.
+* Authentication gaps.
+* Authorization gaps.
+* Secret exposure.
+* Race conditions.
+* Broken cancellation.
+* Inaccurate capability labels.
+* Incorrect provider status.
+* Mobile defects.
+* Accessibility defects.
+* Incomplete tests.
+* Regression failures.
+
+Fix confirmed defects.
+
+Repeat the review until the defined acceptance criteria are met or a genuine external blocker remains.
+
+Do not claim mathematical perfection or guarantee that no defect exists.
+
+⸻
+
+20. PRODUCTION RELEASE AND LIVE APPLICATION REQUIREMENTS
+
+The goal is a better working Adrian OS on the actual website, not a detached development branch that never reaches the user.
+
+However, production changes must be evidence-based.
+
+Before release, verify:
+
+* The intended branch.
+* The exact commit.
+* CI results.
+* Build result.
+* Database migration safety.
+* Environment-variable availability.
+* Required secrets.
+* Deployment readiness.
+* Domain and alias.
+* Authentication.
+* Actual Build execution.
+* Provider connectivity.
+* Companion connectivity.
+* Error monitoring.
+
+Use a preview deployment for review when appropriate.
+
+Do not apply an unverified database migration to production.
+
+Do not overwrite production configuration blindly.
+
+Do not rotate credentials without understanding their consumers.
+
+Do not merge unrelated branches.
+
+Do not declare a release successful because Vercel reports a deployment object.
+
+A production release is complete only when the correct deployment is READY, the production alias points to the intended commit, and the relevant authenticated workflows have been tested.
+
+Where an irreversible or consequential owner decision is required, present the exact action and wait for authorization.
+
+⸻
+
+21. FINAL ACCEPTANCE TESTS
+
+The implementation is not ready merely because the UI looks complete.
+
+At minimum, demonstrate these real workflows.
+
+Workflow A — Open Build
+
+* Owner signs in.
+* Build opens.
+* Project list loads.
+* Runtime status is accurate.
+* No false Connected status appears.
+
+Workflow B — Connect a runtime
+
+* Companion is paired.
+* Companion is online.
+* Kimi executable is found.
+* Kimi authentication is valid.
+* ACP initializes.
+* Runtime identity and version are recorded.
+
+Workflow C — Execute a coding task
+
+* Owner selects a project.
+* Owner enters a task.
+* Task is submitted.
+* Real Kimi execution occurs.
+* Actual events appear.
+* Files are inspected or changed.
+* Result is reported.
+* No fake output is presented.
+
+Workflow D — Edit and review files
+
+* Browse workspace.
+* Open a file.
+* Edit content.
+* Save.
+* Inspect before/after diff.
+* Confirm the actual file changed.
+* Confirm the correct workspace was used.
+
+Workflow E — Terminal approval
+
+* Submit a command.
+* Review exact command and target.
+* Approve explicitly.
+* Execute on the approved Companion.
+* Inspect real output.
+* Confirm approval cannot be reused.
+
+Workflow F — Session recovery
+
+* Start a task.
+* Refresh the browser.
+* Reopen Build.
+* Recover the correct project/session.
+* Display actual execution state.
+* Do not fabricate completion.
+
+Workflow G — Provider connection
+
+* Add a supported provider.
+* Save the credential securely.
+* Test the credential.
+* Select the model.
+* Execute a real minimal request.
+* Confirm the selected runtime actually uses the configured provider.
+
+Workflow H — MCP connection
+
+* Select an approved server.
+* Verify transport.
+* Verify authentication.
+* Discover tools.
+* Execute an authorized read-only tool.
+* Inspect the actual result.
+* Confirm that unapproved tools remain unavailable.
+
+Workflow I — Mobile experience
+
+* Open the production or review deployment on a mobile viewport.
+* Open Build.
+* Submit a task.
+* Inspect output.
+* Navigate files.
+* Review changes.
+* Check approval controls.
+* Confirm the interface remains usable.
+
+Workflow J — Failure recovery
+
+Test:
+
+* Runtime offline.
+* Provider authentication failure.
+* Network interruption.
+* Companion disconnect.
+* Invalid workspace.
+* Expired approval.
+* Emergency stop.
+* Failed file write.
+* Failed task.
+* Cancelled task.
+
+The interface must communicate the real outcome.
+
+⸻
+
+22. DEFINITION OF DONE
+
+The work is complete only when:
+
+1. The current application has been inspected.
+2. The actual production deployment has been identified.
+3. Existing implementation and documentation have been reconciled.
+4. Missing functionality has been identified with evidence.
+5. High-priority defects have been corrected.
+6. The Build experience has been materially improved.
+7. Provider connection behavior is honest and functional.
+8. Runtime connectivity has been demonstrated.
+9. Existing integrations have been tested where access permits.
+10. Project and session behavior is reliable.
+11. Security boundaries remain intact.
+12. Relevant tests pass.
+13. The actual website has been visually inspected.
+14. The changed workflows have been exercised.
+15. Independent review has been performed.
+16. Remaining blockers are explicitly documented.
+17. The release state is reported accurately.
+
+A feature may be marked verified only when its relevant acceptance evidence exists.
+
+⸻
+
+23. REQUIRED FINAL REPORT TO THE OWNER
+
+At completion, provide one clear report containing:
+
+1. Initial state: What was actually present before this additional work.
+
+2. Important discoveries: What previous instructions, reports or implementation passes had not adequately addressed.
+
+3. Improvements implemented: Actual source changes and affected modules.
+
+4. Build improvements: Specific changes to the live Build experience.
+
+5. Provider and integration results: Which providers and connections were actually tested.
+
+6. Runtime results: Whether real Kimi execution was demonstrated, and on which device/runtime.
+
+7. Verification: Tests, build results, browser workflows and evidence.
+
+8. Deployment: Exact deployed commit and production URL, if deployment was completed.
+
+9. Remaining limitations: Anything that is still incomplete, unsupported or blocked.
+
+10. Next owner action: Only the specific action that genuinely requires the owner’s involvement.
+
+Link the relevant pull request, commit, deployment and evidence where available.
+
+Do not produce a celebratory report that conceals incomplete work.
+
+⸻
+
+24. FINAL EXECUTION DIRECTIVE
+
+You are not being asked to rewrite Adrian OS.
+
+You are being asked to make the existing Adrian OS substantially better.
+
+The previous blueprints establish the broader vision and implementation direction. This additional mandate exists to discover the weaknesses that can only be identified by examining the actual repository, actual runtime, actual integrations and actual user experience.
+
+Treat the application as a real product.
+
+Treat every claimed capability as something that must be demonstrated.
+
+Treat every connection as something that must be tested.
+
+Treat every important state as something that must be accurate.
+
+Treat the Build module as a real working environment, not a visual demonstration.
+
+Do not waste time rebuilding components that already work.
+
+Do not waste resources generating another architecture document when an implementation gap is already understood.
+
+Do not stop after an audit.
+
+Do not stop after a plan.
+
+Do not stop after the first successful build.
+
+Inspect → Discover → Prioritize → Implement → Test → Open the application → Verify → Correct → Review again.
+
+Continue through the highest-priority actionable improvements.
+
+When an external dependency genuinely prevents completion, isolate that dependency, complete everything else that can be completed safely, and report the exact blocker.
+
+Do not invent success to make the project appear finished.
+
+Do not confuse the existence of a feature with the ability to use it.
+
+Do not confuse a saved connection with a functioning integration.
+
+Do not confuse a successful deployment with a verified product.
+
+The objective is a more capable Adrian OS that the owner can actually open, understand, connect, operate and rely on.
+
+Make the product better in reality, not merely better on paper.
