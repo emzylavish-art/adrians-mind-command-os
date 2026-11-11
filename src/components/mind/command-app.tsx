@@ -6184,6 +6184,7 @@ function ChatPane({
   const markPreview = (control: string) => {
     setChromeNote(`${control} is preview only. No voice provider is connected.`);
   };
+  const grokVerified = Boolean(active?.messages.some((message) => message.role === "assistant" && typeof message.model === "string" && /grok/i.test(message.model)));
   const needle = filter.trim().toLowerCase();
   const scoped = projectId ? chats.filter((chat) => chat.projectId === projectId) : chats;
   const visible = needle ? scoped.filter((chat) => chat.title.toLowerCase().includes(needle)) : scoped;
@@ -6280,7 +6281,7 @@ function ChatPane({
             </div>
           )}
           <div className="mt-3 xl:hidden">
-            <ProviderPicker name="mind-provider-mobile" choices={choices} choice={providerChoice} onChoose={onProvider} logicRoutes={logicRoutes} />
+            <ProviderPicker name="mind-provider-mobile" choices={choices} choice={providerChoice} onChoose={onProvider} logicRoutes={logicRoutes} grokVerified={grokVerified} />
             <div className="mt-3">
               <ModelTierPicker name="mind-tier-mobile" tier={modelTier} onChoose={onModelTier} logicRoute={logicRoute} logicRoutes={logicRoutes} onChooseLogic={onChooseLogic} />
             </div>
@@ -6609,7 +6610,7 @@ function ChatPane({
       </section>
       <aside className="hidden w-72 shrink-0 flex-col gap-3 overflow-auto border-l border-line/70 p-3 xl:flex" data-testid="chat-right-rail">
         <section className="glass-panel rounded-panel p-3">
-          <ProviderPicker name="mind-provider-side" choices={choices} choice={providerChoice} onChoose={onProvider} logicRoutes={logicRoutes} />
+          <ProviderPicker name="mind-provider-side" choices={choices} choice={providerChoice} onChoose={onProvider} logicRoutes={logicRoutes} grokVerified={grokVerified} />
         </section>
         <section className="glass-panel rounded-panel p-3">
           <ModelTierPicker name="mind-tier-side" tier={modelTier} onChoose={onModelTier} logicRoute={logicRoute} logicRoutes={logicRoutes} onChooseLogic={onChooseLogic} />
@@ -6918,12 +6919,14 @@ function ProviderPicker({
   choice,
   onChoose,
   logicRoutes = [],
+  grokVerified = false,
 }: {
   name: string;
   choices: { id: string; label: string; enabled: boolean; reason: string }[];
   choice: string;
   onChoose: (id: string) => void;
   logicRoutes?: LogicRoutePublic[];
+  grokVerified?: boolean;
 }) {
   return (
     <fieldset className="space-y-2">
@@ -6967,7 +6970,7 @@ function ProviderPicker({
           />
           <span>
             {item.label}
-            {item.id === "grok" && item.enabled ? <span className="text-muted"> · Configured, not live verified</span> : null}
+            {item.id === "grok" && item.enabled ? <span className="text-muted"> · {grokVerified ? "A reply in this chat came from Grok" : "Configured. No reply in this chat has verified it yet."}</span> : null}
             <span className="block text-xs text-muted">{item.reason}</span>
           </span>
         </label>
