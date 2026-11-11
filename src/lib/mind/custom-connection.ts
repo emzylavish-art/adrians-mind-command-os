@@ -311,7 +311,7 @@ async function refreshMcp(db: ConnectionDb | null, userId: string, id: string, d
     body: JSON.stringify({ jsonrpc: "2.0", id: 1, method: "initialize", params: { protocolVersion: "2024-11-05", capabilities: {}, clientInfo: { name: "adrians-mind", version: "1" } } }),
   }, deps, row.token ?? "");
   if (!opened.ok) return fail(opened.status === "unauthorized" ? "unauthorized" : "failed", opened.error);
-  if (!initialized(opened.text)) return fail("failed", "The MCP initialize handshake failed. The connection is not connected.");
+  if (!initialized(opened.text) && !opened.sessionId) return fail("failed", "The MCP initialize handshake failed. The connection is not connected.");
   const meta = rpcEnvelope(opened.text).result;
   const version = meta && typeof meta === "object" && typeof (meta as { protocolVersion?: unknown }).protocolVersion === "string"
     ? (meta as { protocolVersion: string }).protocolVersion : "2024-11-05";

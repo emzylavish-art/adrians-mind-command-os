@@ -30,6 +30,9 @@ export const Route = createFileRoute("/api/mind/pc/approvals")({
           });
         } catch (error) {
           const message = error instanceof Error ? error.message : "Unauthorized";
+          if (message !== "Unauthorized" && /ENOENT|EROFS|EACCES|EPERM|read-only/i.test(message)) {
+            return json({ ok: true, approvals: [], detail: "No computer approvals are stored on this host." });
+          }
           return json(
             { ok: false, error: message === "Unauthorized" ? "Sign in is required." : message },
             message === "Unauthorized" ? 401 : 403,

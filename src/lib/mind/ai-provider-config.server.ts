@@ -37,7 +37,7 @@ function validModelId(value: string): boolean {
 
 function baseUrl(raw: string): { ok: true; value: string; host: string } | { ok: false; error: string } {
   try {
-    const url = new URL(raw.trim());
+    const url = new URL(canonicalProviderBase(raw.trim()));
     const hostname = url.hostname.toLowerCase();
     if (url.protocol !== "https:" || url.username || url.password || url.hash || url.search ||
         !hostname || isLocalHostname(hostname) || isPrivateAddressLiteral(hostname) ||
@@ -61,6 +61,26 @@ function asModels(value: unknown): string[] {
   return Array.isArray(models)
     ? [...new Set(models.filter((v): v is string => typeof v === "string" && validModelId(v)))].slice(0, 120)
     : [];
+}
+
+const OFFICIAL_API_BASES: Record<string, string> = {
+  "aistudio.google.com": "https://generativelanguage.googleapis.com/v1beta",
+  "ai.google.dev": "https://generativelanguage.googleapis.com/v1beta",
+  "makersuite.google.com": "https://generativelanguage.googleapis.com/v1beta",
+  "platform.openai.com": "https://api.openai.com/v1",
+  "console.anthropic.com": "https://api.anthropic.com/v1",
+  "console.x.ai": "https://api.x.ai/v1",
+  "openrouter.ai": "https://openrouter.ai/api/v1",
+};
+
+export function canonicalProviderBase(raw: string): string {
+  try {
+    const url = new URL(raw.trim());
+    const official = OFFICIAL_API_BASES[url.hostname.toLowerCase()];
+    return official ?? raw.trim();
+  } catch {
+    return raw.trim();
+  }
 }
 
 function publicRow(row: StoredProvider): PublicAiProvider {
@@ -183,13 +203,15 @@ export async function discoverAiModels(userId: string, id: string):
   if (!row) return { ok: false, error: "Provider not found for this account." };
   const key = decryptSecret(row.key_ciphertext);
   if (!key) return { ok: false, error: "The saved provider credential could not be decrypted." };
+  const canonical = canonicalProviderBase(row.base_url);
+  const requestRow = canonical === row.base_url ? row : { ...row, base_url: canonical };
   let status = "configured";
   let lastError = "";
   let models = asModels(row.models);
   try {
-    const res = await requestProvider(row, "models", {
+    const res = await requestProvider(requestRow, "models", {
       method: "GET",
-      headers: modelDiscoveryHeaders(providerWireProtocol(row.base_url), key),
+      headers: modelDiscoveryHeaders(providerWireProtocol(requestRow.base_url), key),
     });
     if (res.status !== 200) {
       lastError = providerError(res.status);
@@ -211,10 +233,10 @@ export async function discoverAiModels(userId: string, id: string):
   }
   const defaultModel = row.default_model || models[0] || "";
   await sql.query(
-    "update mind_ai_providers set default_model = $3, models = $4::jsonb, status = $5, last_error = $6, updated_at = now() where user_id = $1 and id = $2",
-    [userId, id, defaultModel, JSON.stringify(models), status, lastError],
+    "update mind_ai_providers set base_url = $3, default_model = $4, models = $5::jsonb, status = $6, last_error = $7, updated_at = now() where user_id = $1 and id = $2",
+    [userId, id, requestRow.base_url, defaultModel, JSON.stringify(models), status, lastError],
   );
-  return { ok: true, provider: publicRow({ ...row, default_model: defaultModel, models, status, last_error: lastError }) };
+  return { ok: true, provider: publicRow({ ...requestRow, default_model: defaultModel, models, status, last_error: lastError }) };
 }
 
 export function parseCustomProviderChoice(value: unknown):

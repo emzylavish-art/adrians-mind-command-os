@@ -112,8 +112,11 @@ export function classifyListFailure(
   if (status === 401 || raw === "Unauthorized" || /sign in is required/i.test(raw)) {
     return { kind: "auth_required", message: LIST_AUTH_NOTICE_COPY[scope] };
   }
-  if (status === 403 || /cross-site request blocked|^Forbidden/i.test(raw)) {
+  if (status === 403 && (/cross-site request blocked|^Forbidden/i.test(raw) || raw === "" || /^HTTP 403$/i.test(raw))) {
     return { kind: "forbidden_cross_site", message: HONEST_FAILURE_MESSAGES.forbidden_cross_site };
+  }
+  if (status === 403) {
+    return { kind: "network_failure", message: `${failed} ${raw || "HTTP 403"}`.slice(0, 300) };
   }
   if (status !== null && status >= 500) {
     return { kind: "network_failure", message: `${failed} (HTTP ${status})` };

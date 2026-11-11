@@ -149,10 +149,20 @@ export function createPcApproval(input: {
 }
 
 export function listPendingApprovals(ownerId: string, nowMs = Date.now()): PcApprovalPublic[] {
-  pruneExpiredApprovals(nowMs);
-  ensure();
+  try {
+    pruneExpiredApprovals(nowMs);
+    ensure();
+  } catch {
+    return [];
+  }
   const out: PcApprovalPublic[] = [];
-  for (const name of readdirSync(directory)) {
+  let names: string[] = [];
+  try {
+    names = readdirSync(directory);
+  } catch {
+    return [];
+  }
+  for (const name of names) {
     if (!name.endsWith(".json")) continue;
     const record = readRecord(name.slice(0, -".json".length));
     if (!record || record.ownerId !== ownerId) continue;
