@@ -12,10 +12,10 @@ export type ComposerMode = {
 };
 
 export const COMPOSER_MODES: ComposerMode[] = [
-  { id: "auto", label: "Auto", detail: "Direct single-model path with Ask autonomy.", wired: true },
-  { id: "fast", label: "Fast", detail: "Same Direct path. No separate fast model is configured.", wired: true },
-  { id: "expert", label: "Expert", detail: "Same Direct path. No separate expert model is configured.", wired: true },
-  { id: "heavy", label: "Heavy", detail: "Same Direct path. No separate heavy model is configured.", wired: true },
+  { id: "auto", label: "Auto", detail: "Uses the existing Auto route. It picks Fast, Expert, Heavy, or Build from the prompt.", wired: true },
+  { id: "fast", label: "Fast", detail: "Selects the existing Fast Grok tier.", wired: true },
+  { id: "expert", label: "Expert", detail: "Selects the existing Expert Grok tier.", wired: true },
+  { id: "heavy", label: "Heavy", detail: "Selects the existing Heavy Grok tier.", wired: true },
   {
     id: "build",
     label: "Build",
@@ -39,6 +39,25 @@ export function resolveSendPath(mode: ComposerModeId): { path: SendPath; badge: 
     return { path: "blocked-orchestrator", badge: "Direct", notice: found.notice ?? null };
   }
   return { path: "direct", badge: "Direct", notice: null };
+}
+
+export type EffortModelTier = "Auto" | "Fast" | "Expert" | "Heavy";
+
+/** Effort values that already have a Grok tier. Build and Orchestrator do not change the chat model. */
+export function effortModelTier(mode: ComposerModeId): EffortModelTier | null {
+  if (mode === "auto") return "Auto";
+  if (mode === "fast") return "Fast";
+  if (mode === "expert") return "Expert";
+  if (mode === "heavy") return "Heavy";
+  return null;
+}
+
+export function effortForModelTier(tier: string): ComposerModeId | null {
+  if (tier === "Auto") return "auto";
+  if (tier === "Fast") return "fast";
+  if (tier === "Expert") return "expert";
+  if (tier === "Heavy") return "heavy";
+  return null;
 }
 
 export function modeLabel(mode: ComposerModeId): string {

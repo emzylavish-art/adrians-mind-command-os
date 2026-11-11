@@ -213,7 +213,7 @@ import { runSkill, searchSkills, SKILLS } from "@/lib/mind/skills";
 import LocalSkillsTools from "@/components/mind/local-skills-tools";
 import { exportChat, prepareRegenerate, prepareRetry, renameChat, reviseUserTurn } from "@/lib/mind/transcript";
 import { useMindWorkspace } from "@/lib/mind/use-mind-workspace";
-import { COMPOSER_MODES, loadComposerEffort, resolveSendPath, saveComposerEffort, type ComposerModeId } from "@/lib/mind/composer-modes";
+import { COMPOSER_MODES, effortForModelTier, effortModelTier, loadComposerEffort, resolveSendPath, saveComposerEffort, type ComposerModeId } from "@/lib/mind/composer-modes";
 import { planRouting, readRatings, readRoutingMode, readRoutingPanel, ROUTING_MODE_LABEL, saveRating, writeRoutingMode, writeRoutingPanel, type ResponseRating, type RoutingMode } from "@/lib/mind/routing-modes";
 import { canSend } from "@/lib/mind/send-gate";
 import { saveFailureMessage } from "@/lib/mind/save-error";
@@ -843,8 +843,24 @@ export function CommandApp() {
     setComposerEffort(mode);
     const resolved = resolveSendPath(mode);
     if (resolved.notice) setNotice(resolved.notice);
+    const tier = effortModelTier(mode);
+    if (tier) {
+      setLogicRoute(null);
+      setModelTier(tier);
+    }
     applyVoiceMode(mode === "orchestrator" ? "orchestrator" : "direct");
     if (mode === "build") setView("build");
+  }
+
+  function chooseModelTier(tier: ModelTier) {
+    setLogicRoute(null);
+    if (isLogicRouteId(providerChoice)) setProviderChoice("grok");
+    setModelTier(tier);
+    const effort = effortForModelTier(tier);
+    if (effort) {
+      saveComposerEffort(typeof localStorage === "undefined" ? null : localStorage, effort);
+      setComposerEffort(effort);
+    }
   }
 
   function chooseRoutingMode(mode: RoutingMode) {
@@ -4073,11 +4089,7 @@ export function CommandApp() {
           <div className="hidden md:block">
             <ModelTierChip
               tier={modelTier}
-              onChoose={(tier) => {
-                setLogicRoute(null);
-                if (isLogicRouteId(providerChoice)) setProviderChoice("grok");
-                setModelTier(tier);
-              }}
+              onChoose={chooseModelTier}
               lastResolved={lastResolvedTier}
               lastModel={lastModelUsed}
               logicRoute={logicRoute}
@@ -4321,13 +4333,6 @@ export function CommandApp() {
                       <span className={`absolute top-0.5 size-5 rounded-full bg-fg ${memoryChoice === "on" ? "right-0.5" : "left-0.5"}`} />
                     </span>
                   </button>
-                </div>
-                <div className="mt-3 flex flex-wrap items-center gap-3 rounded-panel border border-line/70 bg-bg/60 px-3 py-2">
-                  <label htmlFor="new-chat-personality" className="text-sm font-medium">Conversation style</label>
-                  <select id="new-chat-personality" value={defaultPersonalityId} onChange={(event) => setDefaultPersonalityId(event.target.value as PersonalityId)} className="min-h-10 rounded-panel border border-line bg-surface px-3 text-sm">
-                    {CONVERSATIONAL_PERSONALITIES.map((profile) => <option key={profile.id} value={profile.id}>{profile.label}</option>)}
-                  </select>
-                  <span className="text-xs text-muted">Style only. It does not change tools, permissions or approvals.</span>
                 </div>
                 <form
                   className="mt-3"
@@ -4756,11 +4761,7 @@ export function CommandApp() {
                 }
               }}
               modelTier={modelTier}
-              onModelTier={(tier) => {
-                setLogicRoute(null);
-                if (isLogicRouteId(providerChoice)) setProviderChoice("grok");
-                setModelTier(tier);
-              }}
+              onModelTier={chooseModelTier}
               logicRoute={logicRoute}
               logicRoutes={logicRoutes}
               onChooseLogic={(route) => {
@@ -6774,7 +6775,7 @@ function ComposerEffortControl({
         <span className="rounded-full border border-line px-2 py-0.5 text-xs text-muted">{resolved.badge}</span>
       </div>
       <p className="mt-1 text-xs text-muted">
-        {current?.detail} This effort is not wired to a different model.
+        {current?.detail}
         {resolved.notice ? ` ${resolved.notice}` : ""}
       </p>
     </div>

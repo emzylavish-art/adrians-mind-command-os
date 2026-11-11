@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
-import { loadComposerEffort, resolveSendPath, saveComposerEffort } from "./composer-modes.ts";
+import { effortForModelTier, effortModelTier, loadComposerEffort, resolveSendPath, saveComposerEffort } from "./composer-modes.ts";
 
 describe("composer modes", () => {
   it("keeps text send on Direct until a paired computer can run Orchestrator", () => {
@@ -34,5 +34,16 @@ describe("composer modes", () => {
     saveComposerEffort(storage, "expert");
     assert.equal(loadComposerEffort(storage), "expert");
     assert.equal(loadComposerEffort(null), "auto");
+  });
+
+  it("maps Fast, Expert, and Heavy to the existing Grok tiers", () => {
+    assert.equal(effortModelTier("fast"), "Fast");
+    assert.equal(effortModelTier("expert"), "Expert");
+    assert.equal(effortModelTier("heavy"), "Heavy");
+    assert.equal(effortModelTier("auto"), "Auto");
+    assert.equal(effortModelTier("build"), null);
+    assert.equal(effortModelTier("orchestrator"), null);
+    assert.equal(effortForModelTier("Fast"), "fast");
+    assert.equal(effortForModelTier("Build"), null);
   });
 });
