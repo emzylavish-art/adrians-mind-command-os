@@ -5097,7 +5097,8 @@ export function CommandApp() {
           {view === "connected" && (
             <section className="page-shell">
               <div className="page-hero mb-4 flex items-center gap-3"><img src="/icons/systems.svg" alt="" className="size-8" /><div><h2 className="font-display text-3xl font-bold">Connected</h2><p className="text-sm text-muted">Setup explains what is missing. A service is connected only after the server says so.</p></div></div>
-              {statusSignedIn === false ? <div className="sign-in-summary" role="status">Sign in to check your connections. <Link to="/login">Sign in</Link></div> : <ServiceBoard
+              {statusSignedIn === false ? <div className="sign-in-summary" role="status">Sign in to check your connections. <Link to="/login">Sign in</Link></div> : null}
+              <ServiceBoard
                 grokConfigured={grokConfigured === true}
                 notion={notion}
                 mcp={mcpBoard}
@@ -5123,7 +5124,7 @@ export function CommandApp() {
                     setNotice(status.detail);
                   });
                 }}
-              />}
+              />
               <form
                 id="owner-notion-search"
                 className="rounded-panel border border-line bg-surface p-3"

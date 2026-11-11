@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { useEffect } from "react";
 import { getBearerToken } from "@/lib/auth/client";
 
 type Start = {
@@ -14,20 +15,59 @@ type Start = {
 };
 
 const OFFICIAL = [
-  ["Kimi Datasource", "Market, news, company, and legal lookups. Runs after Kimi login."],
-  ["Kimi Browser Extension", "Drives the browser you already use. Needs the extension installed."],
-  ["Kimi Computer Use", "Desktop control on macOS or Windows. Not a Vercel process."],
+  { id: "kimi-datasource", name: "Kimi Datasource", description: "Market, news, company, and legal lookups.", action: "key" as const },
+  { id: "kimi-webbridge", name: "Kimi Browser Extension", description: "Drive the browser you already use.", action: "link" as const, href: "https://chromewebstore.google.com/detail/kimi-webbridge/fldmhceldgbpfpkbgopacenieobmligc" },
+  { id: "kimi-computer-use", name: "Kimi Computer Use", description: "Desktop control for the computer you choose.", action: "link" as const, href: "https://cdn.kimi.com/kimi-computer-use-windows/latest/kimi-cu-win-plugin.zip" },
+  { id: "superpowers", name: "Superpowers", description: "Planning, debugging, and delivery workflows.", action: "link" as const, href: "https://github.com/obra/superpowers" },
+  { id: "vercel-plugin", name: "Vercel Plugin", description: "Vercel skills and deploy conventions.", action: "link" as const, href: "https://github.com/vercel/vercel-plugin" },
+  { id: "modern-web-guidance", name: "Modern Web Guidance", description: "Web platform and browser guidance.", action: "link" as const, href: "https://github.com/GoogleChrome/modern-web-guidance" },
+  { id: "cloudbase", name: "Tencent CloudBase", description: "CloudBase database, functions, and hosting.", action: "mcp" as const, href: "https://github.com/TencentCloudBase/CloudBase-AI-Toolkit" },
 ] as const;
+
+const ADDED_KEY = "adrian-added-plugins";
 
 export function KimiDeviceConnect() {
   const [mode, setMode] = useState<"oauth" | "key">("oauth");
-  const [notice, setNotice] = useState("This is Kimi's own login. No password is typed here.");
+  const [notice, setNotice] = useState("Add a plugin here. The button opens its install step. Nothing is marked connected until that step finishes.");
   const [userCode, setUserCode] = useState("");
   const [url, setUrl] = useState("");
   const [mcpUrl, setMcpUrl] = useState("");
   const [apiKey, setApiKey] = useState("");
   const [plugins, setPlugins] = useState<{ id: string; name: string; description: string }[]>([]);
   const [busy, setBusy] = useState(false);
+  const [added, setAdded] = useState<string[]>([]);
+  const [tab, setTab] = useState<"installed" | "official" | "curated" | "custom">("official");
+
+  useEffect(() => {
+    try {
+      const saved = JSON.parse(localStorage.getItem(ADDED_KEY) || "[]");
+      if (Array.isArray(saved)) setAdded(saved.filter((item) => typeof item === "string"));
+    } catch { /* keep the empty list */ }
+  }, []);
+
+  function remember(next: string[]) {
+    setAdded(next);
+    localStorage.setItem(ADDED_KEY, JSON.stringify(next));
+  }
+
+  function addPlugin(plugin: (typeof OFFICIAL)[number]) {
+    if (!added.includes(plugin.id)) remember([...added, plugin.id]);
+    setTab("custom");
+    if (plugin.action === "key") {
+      setMode("key");
+      setNotice(`${plugin.name} is on Adrian. Paste the key below. It stays on the server and is not shown again.`);
+      window.setTimeout(() => document.getElementById("kimi-api-key")?.focus(), 80);
+      return;
+    }
+    if (plugin.action === "mcp") {
+      setMode("oauth");
+      setNotice(`${plugin.name} is on Adrian. Paste its MCP address below, then press Connect MCP.`);
+      window.setTimeout(() => document.getElementById("kimi-mcp-url")?.focus(), 80);
+      return;
+    }
+    setNotice(`${plugin.name} is on Adrian. The install page is open.`);
+    if ("href" in plugin && plugin.href) window.open(plugin.href, "_blank", "noopener,noreferrer");
+  }
 
   async function authed(path: string, init?: RequestInit) {
     const token = getBearerToken();
@@ -112,8 +152,35 @@ export function KimiDeviceConnect() {
 
   return (
     <section className="mt-6 rounded-panel border border-line p-3" aria-label="Kimi login">
-      <h3 className="font-semibold">Kimi login</h3>
+      <h3 className="font-semibold">Plugins</h3>
       <p className="mt-1 text-sm text-muted">{notice}</p>
+      <div className="mt-3 flex flex-wrap gap-1" role="tablist" aria-label="Plugin groups">
+        {(["installed", "official", "curated", "custom"] as const).map((item) => (
+          <button key={item} type="button" role="tab" aria-selected={tab === item} onClick={() => setTab(item)} className={"min-h-11 rounded-panel border px-3 text-sm capitalize " + (tab === item ? "border-accent bg-surface font-semibold" : "border-line")}>
+            {item}
+          </button>
+        ))}
+      </div>
+      <div className="mt-3 grid gap-2" aria-label="Adrian plugins">
+        {(tab === "installed" ? OFFICIAL.filter((plugin) => added.includes(plugin.id)) : tab === "official" ? OFFICIAL.filter((plugin) => plugin.id.startsWith("kimi")) : tab === "curated" ? OFFICIAL.filter((plugin) => !plugin.id.startsWith("kimi")) : []).map((plugin) => {
+          const on = added.includes(plugin.id);
+          return (
+            <article key={plugin.id} className="rounded-panel border border-line p-3">
+              <div className="flex items-center justify-between gap-3">
+                <div>
+                  <p className="font-semibold">{plugin.name}</p>
+                  <p className="text-sm text-muted">{plugin.description}</p>
+                </div>
+                <button type="button" className={"min-h-11 shrink-0 rounded-panel px-4 text-sm font-semibold " + (on ? "border border-line" : "bg-accent text-accent-ink")} onClick={() => on ? remember(added.filter((id) => id !== plugin.id)) : addPlugin(plugin)}>
+                  {on ? "Remove" : "Add"}
+                </button>
+              </div>
+            </article>
+          );
+        })}
+        {tab === "installed" && added.length === 0 ? <p className="text-sm text-muted">Nothing is added yet. Open Official or Curated and press Add.</p> : null}
+      </div>
+      {tab === "custom" ? <div>
       <div className="mt-3 flex flex-wrap gap-2">
         <button type="button" className="min-h-11 rounded-panel border border-line px-3 text-sm" aria-pressed={mode === "oauth"} onClick={() => setMode("oauth")}>Kimi Code</button>
         <button type="button" className="min-h-11 rounded-panel border border-line px-3 text-sm" aria-pressed={mode === "key"} onClick={() => setMode("key")}>API key</button>
@@ -127,18 +194,15 @@ export function KimiDeviceConnect() {
         </div>
       ) : (
         <form className="mt-3 flex flex-wrap gap-2" onSubmit={(event) => { event.preventDefault(); void saveKey(); }}>
-          <input value={apiKey} onChange={(event) => setApiKey(event.target.value)} type="password" autoComplete="off" placeholder="Kimi platform API key" className="min-h-11 min-w-64 flex-1 rounded-panel border border-line bg-bg px-3 text-sm" />
+          <input id="kimi-api-key" value={apiKey} onChange={(event) => setApiKey(event.target.value)} type="password" autoComplete="off" placeholder="Kimi platform API key" className="min-h-11 min-w-64 flex-1 rounded-panel border border-line bg-bg px-3 text-sm" />
           <button type="submit" className="min-h-11 rounded-panel border border-line px-3 text-sm" disabled={busy}>Save API key</button>
         </form>
       )}
       <form className="mt-4 flex flex-wrap gap-2" onSubmit={(event) => { event.preventDefault(); void saveMcp(); }}>
-        <input value={mcpUrl} onChange={(event) => setMcpUrl(event.target.value)} placeholder="https://your-mcp.example/mcp" className="min-h-11 min-w-64 flex-1 rounded-panel border border-line bg-bg px-3 text-sm" />
+        <input id="kimi-mcp-url" value={mcpUrl} onChange={(event) => setMcpUrl(event.target.value)} placeholder="https://your-mcp.example/mcp" className="min-h-11 min-w-64 flex-1 rounded-panel border border-line bg-bg px-3 text-sm" />
         <button type="submit" className="min-h-11 rounded-panel border border-line px-3 text-sm" disabled={busy}>Connect MCP</button>
       </form>
-      <ul className="mt-3 space-y-1 text-sm text-muted">
-        {OFFICIAL.map(([name, detail]) => <li key={name}>{name}. {detail}</li>)}
-        <li>Skills, hooks, and subagents stay on the Kimi runtime. This page does not pretend they already ran.</li>
-      </ul>
+      </div> : null}
       {plugins.length > 0 ? (
         <ul className="mt-3 space-y-1 text-sm">
           {plugins.map((plugin) => <li key={plugin.id || plugin.name}>{plugin.name}{plugin.description ? `. ${plugin.description}` : ""}</li>)}
