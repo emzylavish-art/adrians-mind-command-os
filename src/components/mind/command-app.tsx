@@ -5106,6 +5106,17 @@ export function CommandApp() {
                   if (emitFailure("serviceBoard", mountFailure({ message, action: "service_setup", target: "serviceBoard" }, retry))) return;
                   setNotice(message);
                 }}
+                onOpenConnect={(name) => {
+                  if (name === "Slack") {
+                    setNotice("Slack stays off. No Slack login was started.");
+                    return;
+                  }
+                  const target = name === "MCP" ? "owner-mcp-connect" : name === "Notion" ? "owner-notion-search" : name === "OpenAI" || name === "Claude" || name === "Gemini" || name === "OpenRouter" ? "owner-api-connect" : null;
+                  if (!target) return;
+                  window.dispatchEvent(new CustomEvent("adrian-open-connect", { detail: { name } }));
+                  document.getElementById(target)?.scrollIntoView({ behavior: "smooth", block: "center" });
+                  setNotice("The paste form is open below. A card is connected only after the server says so.");
+                }}
                 onDisconnect={() => {
                   void notionDisconnect().then((status) => {
                     setNotion(status);
@@ -5114,6 +5125,7 @@ export function CommandApp() {
                 }}
               />}
               <form
+                id="owner-notion-search"
                 className="rounded-panel border border-line bg-surface p-3"
                 onSubmit={(event) => {
                   event.preventDefault();
@@ -5157,6 +5169,7 @@ export function CommandApp() {
                 </ul>
               </form>
               <form
+                id="owner-mcp-connect"
                 className="rounded-panel border border-line bg-surface p-3"
                 onSubmit={(event) => {
                   event.preventDefault();

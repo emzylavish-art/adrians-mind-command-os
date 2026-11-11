@@ -18,7 +18,6 @@ import {
   cancelRun,
   deployAgent,
   enqueueRun,
-  gmailConnectAttempt,
   pauseRun,
   resumeRun,
   runDueSchedules,
@@ -656,7 +655,7 @@ export function FleetPanel({
           <input value={mailLabel} onChange={(event) => setMailLabel(event.target.value)} placeholder="Mailbox label" className="min-h-11 rounded-panel border border-line bg-surface px-3 text-sm" />
           <input value={mailAddress} onChange={(event) => setMailAddress(event.target.value)} placeholder="name@example.com" className="min-h-11 rounded-panel border border-line bg-surface px-3 text-sm" />
           <button type="button" className="min-h-11 rounded-panel border border-line px-3 text-sm" onClick={() => runMutation(snapshotFleetMutationParams({ kind: "add_mailbox", label: mailLabel, address: mailAddress }))}>Add mailbox record</button>
-          <button type="button" className="is-coming-soon min-h-11 rounded-panel border border-line px-3 text-sm" title="Coming soon — Google OAuth is not started from this button" aria-disabled={true} onClick={() => setNote(gmailConnectAttempt().error)}>Connect Google</button>
+          <button type="button" className="min-h-11 rounded-panel border border-line px-3 text-sm" onClick={() => document.getElementById("owner-service-board")?.scrollIntoView({ behavior: "smooth", block: "start" })}>Google cards</button>
         </div>
         <p className="mt-4 text-sm" data-testid="gmail-oauth-status">Gmail OAuth: {gmailBoard.state}. {gmailBoard.detail}</p>
         <KimiDeviceConnect />

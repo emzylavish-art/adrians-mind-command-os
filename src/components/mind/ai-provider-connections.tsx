@@ -45,6 +45,20 @@ export function AiProviderConnections({ onChange }: { onChange?: (rows: PublicRo
     onChange?.(next);
   };
   useEffect(() => { void load().catch(() => setNotice("Sign in to load your saved AI providers.")); }, []);
+  useEffect(() => {
+    const open = (event: Event) => {
+      const name = (event as CustomEvent<{ name?: string }>).detail?.name;
+      const kindByName: Record<string, ProviderKind> = { OpenAI: "openai", Claude: "anthropic", Gemini: "gemini", OpenRouter: "openrouter" };
+      const next = name ? kindByName[name] : undefined;
+      if (!next) return;
+      setKind(next);
+      setBaseUrl(PRESETS[next]);
+      setLabel(next === "openrouter" ? "OpenRouter" : next === "openai" ? "OpenAI" : next === "anthropic" ? "Anthropic" : "Gemini");
+      window.setTimeout(() => document.getElementById("owner-api-key")?.focus(), 50);
+    };
+    window.addEventListener("adrian-open-connect", open);
+    return () => window.removeEventListener("adrian-open-connect", open);
+  }, []);
   async function run(action: Record<string, unknown>, success: string) {
     if (loading) return;
     setLoading(true);
@@ -60,7 +74,7 @@ export function AiProviderConnections({ onChange }: { onChange?: (rows: PublicRo
     } finally { setLoading(false); }
   }
   return (
-    <section className="settings-card rounded-panel p-4 text-sm" aria-label="Custom AI API providers" data-testid="custom-ai-providers">
+    <section id="owner-api-connect" className="settings-card rounded-panel p-4 text-sm" aria-label="Custom AI API providers" data-testid="custom-ai-providers">
       <h3 className="font-semibold">Custom AI APIs and models</h3>
       <p className="mt-1 text-muted">Connect OpenAI-compatible, Anthropic or Gemini APIs, discover supported models, then choose a model from chat. Your key is encrypted on the server. Some providers require a manually entered model ID.</p>
       <form className="mt-4 grid gap-3 md:grid-cols-2" onSubmit={(event) => {
@@ -93,7 +107,7 @@ export function AiProviderConnections({ onChange }: { onChange?: (rows: PublicRo
         </label>
         <label className="grid gap-1">
           <span>API key</span>
-          <input required type="password" autoComplete="off" value={apiKey} onChange={(event) => setApiKey(event.target.value)} placeholder="Enter key (never displayed again)" className="min-h-11 rounded-panel border border-line bg-bg px-3" />
+          <input id="owner-api-key" required type="password" autoComplete="off" value={apiKey} onChange={(event) => setApiKey(event.target.value)} placeholder="Enter key (never displayed again)" className="min-h-11 rounded-panel border border-line bg-bg px-3" />
         </label>
         <label className="grid gap-1">
           <span>Initial model ID (optional)</span>

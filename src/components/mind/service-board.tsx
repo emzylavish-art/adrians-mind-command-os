@@ -70,6 +70,7 @@ export function ServiceBoard({
   localComputer,
   onDisconnect,
   onFailure,
+  onOpenConnect,
 }: {
   grokConfigured: boolean;
   onSetup: (message: string) => void;
@@ -79,6 +80,8 @@ export function ServiceBoard({
   onDisconnect?: () => void;
   /** Optional: reportFailure for top View log — mount wiring may live outside this lane. */
   onFailure?: (message: string, retry: () => void) => void;
+  /** Opens the paste form for a card. Setup must not only repeat a sentence. */
+  onOpenConnect?: (name: string) => void;
 }) {
   const [oauthByName, setOauthByName] = useState<Record<string, OauthStatus | null | undefined>>({});
   const [busy, setBusy] = useState<string | null>(null);
@@ -204,9 +207,14 @@ export function ServiceBoard({
     runOauthAction(snapshotOauthBoardActionParams({ action: "disconnect", name, path: meta.path }));
   }
 
+  function explainOrOpen(name: string, detail: string) {
+    onOpenConnect?.(name);
+    onSetup(detail);
+  }
+
   return (
     <>
-    <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-3">
+    <div id="owner-service-board" className="grid gap-2 sm:grid-cols-2 xl:grid-cols-3">
       {[grok, ...services].map((service) => {
         const meta = OAUTH_BOARD[service.name];
         const oauth = meta ? oauthByName[service.name] : undefined;
@@ -249,7 +257,7 @@ export function ServiceBoard({
                 Connect
               </button>
             ) : meta && showNotConfigured ? (
-              <button type="button" className="mt-3 min-h-11 rounded-panel border border-line px-3 text-sm" onClick={() => onSetup(service.detail)}>
+              <button type="button" className="mt-3 min-h-11 rounded-panel border border-line px-3 text-sm" onClick={() => explainOrOpen(service.name, service.detail)}>
                 Setup
               </button>
             ) : legacyConnected && onDisconnect ? (
@@ -257,7 +265,7 @@ export function ServiceBoard({
                 Disconnect
               </button>
             ) : (
-              <button type="button" className="mt-3 min-h-11 rounded-panel border border-line px-3 text-sm" onClick={() => onSetup(service.detail)}>
+              <button type="button" className="mt-3 min-h-11 rounded-panel border border-line px-3 text-sm" onClick={() => explainOrOpen(service.name, service.detail)}>
                 {service.name === "Grok" && grokConfigured ? "How it works" : "Setup"}
               </button>
             )}

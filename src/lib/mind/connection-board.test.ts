@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import { oauthBoardState } from "./connection-board.ts";
+import { ownerApiKind, ownerConnectTarget } from "./connection-board.ts";
 
 describe("oauth connection board", () => {
   it("does not let a legacy Connected flag override OAuth not_connected", () => {
@@ -34,5 +35,13 @@ describe("oauth connection board", () => {
     assert.equal(board.state, "API token present");
     assert.match(board.detail, /not an OAuth session/);
     assert.equal(board.detail.includes("secret_"), false);
+  });
+
+  it("sends API and MCP setup to a paste form, and leaves Slack without one", () => {
+    assert.equal(ownerConnectTarget("OpenAI"), "api");
+    assert.equal(ownerConnectTarget("Claude"), "api");
+    assert.equal(ownerApiKind("Gemini"), "gemini");
+    assert.equal(ownerConnectTarget("MCP"), "mcp");
+    assert.equal(ownerConnectTarget("Slack"), null);
   });
 });

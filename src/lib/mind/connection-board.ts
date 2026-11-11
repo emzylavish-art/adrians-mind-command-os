@@ -28,3 +28,21 @@ export function oauthBoardState(oauth: BoardOauth, legacy?: BoardLegacy): { stat
   if (legacy) return { state: "Not connected", detail: legacy.detail };
   return { state: "Not connected", detail: oauth.detail || "Not connected." };
 }
+
+export type OwnerConnectTarget = "api" | "mcp" | "notion";
+
+/** Cards whose Setup button must open a real paste form, not only a sentence. */
+export function ownerConnectTarget(name: string): OwnerConnectTarget | null {
+  if (name === "OpenAI" || name === "Claude" || name === "Gemini" || name === "OpenRouter") return "api";
+  if (name === "MCP") return "mcp";
+  if (name === "Notion") return "notion";
+  return null;
+}
+
+export function ownerApiKind(name: string): "openai" | "anthropic" | "gemini" | "openrouter" | null {
+  if (name === "OpenAI") return "openai";
+  if (name === "Claude") return "anthropic";
+  if (name === "Gemini") return "gemini";
+  if (name === "OpenRouter") return "openrouter";
+  return null;
+}
