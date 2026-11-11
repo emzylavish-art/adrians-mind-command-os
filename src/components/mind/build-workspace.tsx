@@ -68,6 +68,7 @@ export function BuildWorkspace() {
   const [workspaceFiles, setWorkspaceFiles] = useState<WorkspaceFile[]>([]);
   const [selectedFile, setSelectedFile] = useState("");
   const [editorText, setEditorText] = useState("");
+  const [savedText, setSavedText] = useState("");
   const [fileBusy, setFileBusy] = useState(false);
   const [fileNotice, setFileNotice] = useState<string | null>(null);
   const [terminalCommand, setTerminalCommand] = useState("");
@@ -91,6 +92,7 @@ export function BuildWorkspace() {
   );
   const online = (companion.onlineAgentIds?.length ?? 0) > 0;
   const active = job?.status === "queued" || job?.status === "running";
+  const editorDirty = selectedFile !== "" && editorText !== savedText;
   const changedFiles = useMemo(
     () => events
       .filter((event) => event.type === "file_write")
@@ -159,14 +161,20 @@ export function BuildWorkspace() {
   }
 
   async function openFile(path: string) {
+    if (editorDirty && typeof window !== "undefined" && !window.confirm("This file has edits that were not verified as saved. Open another file anyway?")) return;
     const result = await runFileOperation("read", path) as { content?: string } | null;
-    if (result && typeof result.content === "string") { setSelectedFile(path); setEditorText(result.content); setPanel("editor"); }
+    if (result && typeof result.content === "string") { setSelectedFile(path); setEditorText(result.content); setSavedText(result.content); setPanel("editor"); }
   }
 
   async function saveFile() {
     if (!selectedFile) { setFileNotice("Select a file before saving."); return; }
     const result = await runFileOperation("write", selectedFile, editorText) as { path?: string; before?: string; after?: string } | null;
-    if (result?.path) { setLastDiff({ path: result.path, before: result.before || "", after: result.after || editorText }); setFileNotice(`Saved ${result.path}.`); }
+    if (result?.path) {
+      const verified = result.after || editorText;
+      setSavedText(verified);
+      setLastDiff({ path: result.path, before: result.before || "", after: verified });
+      setFileNotice(`Saved ${result.path}. The before/after text is the reviewed result, not an assumed write.`);
+    }
   }
 
   async function requestTerminalApproval() {
@@ -198,6 +206,16 @@ export function BuildWorkspace() {
     const timer = window.setInterval(() => void refreshCompanion(), 10_000);
     return () => window.clearInterval(timer);
   }, []);
+
+  useEffect(() => {
+    if (!editorDirty) return;
+    const onLeave = (event: BeforeUnloadEvent) => {
+      event.preventDefault();
+      event.returnValue = "";
+    };
+    window.addEventListener("beforeunload", onLeave);
+    return () => window.removeEventListener("beforeunload", onLeave);
+  }, [editorDirty]);
 
   useEffect(() => {
     const savedJobId = typeof localStorage === "undefined" ? "" : localStorage.getItem("adrian-build-last-job") || "";
@@ -412,7 +430,7 @@ export function BuildWorkspace() {
             </> : null}
             {panel === "timeline" ? <ol className="max-h-96 space-y-2 overflow-auto text-sm">{events.map((item) => <li key={item.id} className="rounded-panel border border-line p-2"><div className="flex items-center justify-between gap-2"><span className="font-medium">{eventLabel(item)}</span><time className="text-xs text-muted">{new Date(item.createdAt).toLocaleTimeString()}</time></div>{updateText(item) ? <p className="mt-1 text-xs text-muted">{updateText(item).slice(0, 240)}</p> : null}</li>)}{!events.length ? <li className="text-sm text-muted">No events yet.</li> : null}</ol> : null}
             {panel === "changes" ? <div className="space-y-2">{changedFiles.map((path) => <div key={path} className="rounded-panel border border-line p-3 text-sm"><FileDiff className="mr-2 inline size-4 text-accent" />{path}<span className="ml-2 text-xs text-muted">written by ACP</span></div>)}{lastDiff ? <div className="rounded-panel border border-line p-3 text-xs"><p className="font-semibold">Reviewed save: {lastDiff.path}</p><p className="mt-2 whitespace-pre-wrap text-danger">{lastDiff.before}</p><hr className="my-2 border-line" /><p className="whitespace-pre-wrap text-success">{lastDiff.after}</p></div> : null}{!changedFiles.length && !lastDiff ? <p className="text-sm text-muted">No file-write events have been reported for this session.</p> : null}<p className="text-xs text-muted">Reviewed file saves return before/after content for bounded change review.</p></div> : null}
-            {panel === "editor" ? <div className="grid gap-3 lg:grid-cols-[13rem_minmax(0,1fr)]"><div className="max-h-80 space-y-1 overflow-auto rounded-panel border border-line p-2">{workspaceFiles.map((file) => <button key={file.path} type="button" onClick={() => void openFile(file.path)} className={`block w-full truncate rounded px-2 py-2 text-left text-xs ${selectedFile === file.path ? "bg-accent text-accent-ink" : "text-muted hover:bg-white/5"}`}>{file.path}<span className="ml-1 opacity-60">{file.bytes} B</span></button>)}{searchMatches.map((path) => <p key={path} className="px-2 text-xs text-muted">Match: {path}</p>)}{!workspaceFiles.length && !searchMatches.length ? <p className="p-2 text-xs text-muted">Choose Browse to list the approved workspace.</p> : null}</div><div className="space-y-2"><textarea value={editorText} onChange={(event) => setEditorText(event.target.value)} disabled={!selectedFile} className="min-h-56 w-full rounded-panel border border-line bg-black/20 p-4 font-mono text-xs outline-none focus:border-accent disabled:opacity-60" placeholder="Select a file to read it here." aria-label="Workspace file editor" /><div className="flex items-center gap-2"><button type="button" disabled={!selectedFile || fileBusy} onClick={() => void saveFile()} className="min-h-10 rounded-panel bg-accent px-3 text-sm font-semibold text-accent-ink disabled:opacity-50">{fileBusy ? "Saving…" : "Save reviewed file"}</button><span className="text-xs text-muted">{selectedFile || "No file selected"}</span></div></div></div> : null}
+            {panel === "editor" ? <div className="grid gap-3 lg:grid-cols-[13rem_minmax(0,1fr)]"><div className="max-h-80 space-y-1 overflow-auto rounded-panel border border-line p-2">{workspaceFiles.map((file) => <button key={file.path} type="button" onClick={() => void openFile(file.path)} className={`block w-full truncate rounded px-2 py-2 text-left text-xs ${selectedFile === file.path ? "bg-accent text-accent-ink" : "text-muted hover:bg-white/5"}`}>{file.path}<span className="ml-1 opacity-60">{file.bytes} B</span></button>)}{searchMatches.map((path) => <p key={path} className="px-2 text-xs text-muted">Match: {path}</p>)}{!workspaceFiles.length && !searchMatches.length ? <p className="p-2 text-xs text-muted">Choose Browse to list the approved workspace.</p> : null}</div><div className="space-y-2"><textarea value={editorText} onChange={(event) => setEditorText(event.target.value)} disabled={!selectedFile} className="min-h-56 w-full rounded-panel border border-line bg-black/20 p-4 font-mono text-xs outline-none focus:border-accent disabled:opacity-60" placeholder="Select a file to read it here." aria-label="Workspace file editor" /><div className="flex items-center gap-2"><button type="button" disabled={!selectedFile || fileBusy || !editorDirty} onClick={() => void saveFile()} className="min-h-10 rounded-panel bg-accent px-3 text-sm font-semibold text-accent-ink disabled:opacity-50">{fileBusy ? "Saving…" : "Save reviewed file"}</button><span className="text-xs text-muted">{selectedFile ? `${selectedFile} · ${editorText.split("\n").length} lines · ${editorDirty ? "Unsaved" : "Matches last read or verified save"}` : "No file selected"}</span></div></div></div> : null}
             {panel === "capabilities" ? <div className="space-y-2">{capabilities.map((item) => <div key={item.id} className="rounded-panel border border-line p-3 text-sm"><div className="flex items-center justify-between gap-2"><span className="font-medium">{item.label}</span><span className="text-xs text-muted">{item.status.replaceAll("_", " ")}</span></div><p className="mt-1 text-xs text-muted">{item.evidence}</p></div>)}{!capabilities.length ? <p className="text-sm text-muted">Capability inventory has not loaded.</p> : null}<div className="rounded-panel border border-line p-3 text-xs text-muted"><p>Projects: {projects.map((project) => project.label).join(", ") || "none"}</p><p>Sessions: {sessions.map((session) => session.name).join(", ") || "none"}</p><p>Providers: {providers.map((provider) => `${provider.model}${provider.hasKey ? " (key stored)" : ""} · ${provider.runtimeUse}`).join(", ") || "none"}</p></div></div> : null}
             {panel === "capabilities" ? <KimiPhase4Panel initializeResponse={null} updates={events} /> : null}
             {panel === "terminal" ? <div className="space-y-3"><input value={terminalCommand} onChange={(event) => setTerminalCommand(event.target.value)} placeholder="Command requiring explicit approval" className="min-h-11 w-full rounded-panel border border-line bg-transparent px-3 font-mono text-sm outline-none focus:border-accent" aria-label="Terminal command" /><div className="flex flex-wrap gap-2"><button type="button" disabled={terminalBusy || !terminalCommand.trim()} onClick={() => void requestTerminalApproval()} className="min-h-10 rounded-panel border border-line px-3 text-sm disabled:opacity-50">{terminalBusy ? "Requesting…" : "Request approval"}</button>{terminalApproval ? <button type="button" disabled={terminalBusy} onClick={() => void approveTerminal()} className="min-h-10 rounded-panel bg-accent px-3 text-sm font-semibold text-accent-ink disabled:opacity-50">Approve exact command</button> : null}</div>{terminalApproval ? <p className="rounded-panel border border-warning/40 bg-warning/10 p-3 text-xs">Pending approval: <code>{terminalApproval.command}</code></p> : null}<div className="min-h-40 whitespace-pre-wrap rounded-panel border border-line bg-black/20 p-4 font-mono text-xs text-muted">{terminalOutput || (deniedTerminals ? `${deniedTerminals} ACP terminal request${deniedTerminals === 1 ? "" : "s"} denied by the agent safety policy.` : "No approved terminal output yet.")}</div><p className="text-xs text-muted">Commands execute only after this explicit approval and remain bounded by the paired Companion workspace.</p></div> : null}
