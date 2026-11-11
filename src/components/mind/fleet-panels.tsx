@@ -64,6 +64,7 @@ import {
   type McpCallActionState,
 } from "@/lib/mind/mcp-call-action";
 import { CustomConnections } from "@/components/mind/custom-connections";
+import { KimiDeviceConnect } from "@/components/mind/kimi-device-connect";
 import {
   OpenPageActionStatusRows,
   onceRetry as onceOpenPageRetry,
@@ -658,6 +659,7 @@ export function FleetPanel({
           <button type="button" className="is-coming-soon min-h-11 rounded-panel border border-line px-3 text-sm" title="Coming soon — Google OAuth is not started from this button" aria-disabled={true} onClick={() => setNote(gmailConnectAttempt().error)}>Connect Google</button>
         </div>
         <p className="mt-4 text-sm" data-testid="gmail-oauth-status">Gmail OAuth: {gmailBoard.state}. {gmailBoard.detail}</p>
+        <KimiDeviceConnect />
         <ul className="mt-3 space-y-2">
           {ws.mailboxes.map((item) => (
             <li key={item.id} className="text-sm text-muted">{item.label} · {item.address} · local record {item.status}. This is not the OAuth session.</li>

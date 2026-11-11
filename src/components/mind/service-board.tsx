@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { getBearerToken } from "@/lib/auth/client";
+import { KimiDeviceConnect } from "@/components/mind/kimi-device-connect";
 import { checkMcpStorage } from "@/lib/mind/mcp-storage-status";
 import { oauthBoardState } from "@/lib/mind/connection-board";
 import {
@@ -202,6 +203,7 @@ export function ServiceBoard({
   }
 
   return (
+    <>
     <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-3">
       {[grok, ...services].map((service) => {
         const meta = OAUTH_BOARD[service.name];
@@ -294,5 +296,7 @@ export function ServiceBoard({
       })}
 
     </div>
+    <KimiDeviceConnect />
+    </>
   );
 }
