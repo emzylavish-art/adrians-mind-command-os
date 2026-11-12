@@ -951,3 +951,33 @@ form.thread-composer {
   border: 1px solid rgb(255 255 255 / 0.08) !important;
   border-radius: 0.75rem !important;
 }
+
+.explore-panel {
+  background: #141416 !important;
+  border: 1px solid rgb(255 255 255 / 0.08) !important;
+  border-radius: 0.9rem !important;
+  margin-bottom: 1rem;
+}
+
+.explore-panel button,
+.explore-panel input {
+  background: #1c1c1f !important;
+  border-color: rgb(255 255 255 / 0.1) !important;
+}
+
+.explore-panel button[aria-pressed="true"] {
+  background: #f4f4f5 !important;
+  color: #111 !important;
+}
+
+.explore-panel__next,
+.explore-panel li {
+  background: #101012 !important;
+  border: 1px solid rgb(255 255 255 / 0.08) !important;
+  border-radius: 0.75rem !important;
+}
+
+.page-shell article.dense-card span.rounded-full {
+  text-transform: none !important;
+  letter-spacing: 0 !important;
+}

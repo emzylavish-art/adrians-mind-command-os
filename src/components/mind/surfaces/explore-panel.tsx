@@ -215,8 +215,8 @@ export function ExplorePanel() {
     <section className="explore-panel" aria-labelledby="explore-panel-title" data-testid="explore-panel">
       <style>{PANEL_CSS}</style>
       <header className="explore-panel__head">
-        <h1 id="explore-panel-title">Explore</h1>
-        <p>Keep a local shelf, filter the personas already on this device, and follow the exact next step before Chat.</p>
+        <h2 id="explore-panel-title">Local shelf</h2>
+        <p>Filter the templates already on this device, save one, then open it in Chat.</p>
       </header>
 
       <p className="explore-panel__next" role="status">
@@ -361,11 +361,15 @@ const PANEL_CSS = `
   flex-direction: column;
   gap: 0.85rem;
   padding: 1rem;
+  background: #141416;
+  border: 1px solid rgb(255 255 255 / 0.08);
+  border-radius: 0.9rem;
   color: var(--color-fg, #f4f6fb);
   font-family: var(--font-sans, system-ui, sans-serif);
 }
 .explore-panel *, .explore-panel *::before, .explore-panel *::after { box-sizing: border-box; }
-.explore-panel__head h1 {
+.explore-panel__head h1,
+.explore-panel__head h2 {
   margin: 0;
   font-size: clamp(1.5rem, 2.4vw, 2rem);
   line-height: 1.15;
@@ -402,7 +406,7 @@ const PANEL_CSS = `
   min-height: 2.75rem;
   border: 1px solid var(--color-line, #243044);
   border-radius: 999px;
-  background: transparent;
+  background: #1c1c1f;
   color: inherit;
   font: inherit;
   line-height: 1.3;
