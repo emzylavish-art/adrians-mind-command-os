@@ -37,6 +37,7 @@ export function SpeakStage(props: {
   onClose: () => void;
   onSignIn: () => void;
   onLive?: () => void;
+  onAsk?: (text: string) => Promise<string | null>;
 }) {
   const videoRef = useRef<HTMLVideoElement>(null);
   const streamRef = useRef<MediaStream | null>(null);
@@ -46,6 +47,8 @@ export function SpeakStage(props: {
   const [muted, setMuted] = useState(false);
   const [listening, setListening] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
+  const [line, setLine] = useState("");
+  const [asking, setAsking] = useState(false);
   const [voice, setVoice] = useState<XaiBuiltinVoice>("eve");
   const [rate, setRate] = useState<RateId>("natural");
   const [uploadName, setUploadName] = useState<string | null>(null);
@@ -149,6 +152,22 @@ export function SpeakStage(props: {
     setNotice(`${next} pace is saved.`);
   }
 
+  async function ask() {
+    const text = line.trim();
+    if (!text || !props.onAsk || asking) return;
+    setAsking(true);
+    setNotice("Adrian is answering. The reply will be spoken.");
+    try {
+      const error = await props.onAsk(text);
+      setNotice(error ?? "Spoken.");
+      if (!error) setLine("");
+    } catch {
+      setNotice("The reply did not finish. Nothing was spoken.");
+    } finally {
+      setAsking(false);
+    }
+  }
+
   if (!props.open) return null;
 
   return (
@@ -172,6 +191,10 @@ export function SpeakStage(props: {
           </p>
           {uploadName ? <p className="speak-file">{uploadName}</p> : null}
           {notice ? <p className="speak-notice">{notice}</p> : null}
+          <form className="speak-ask" onSubmit={(event) => { event.preventDefault(); void ask(); }}>
+            <input aria-label="Type to Speak" placeholder="Type if the mic is blocked" value={line} onChange={(event) => setLine(event.target.value)} />
+            <button type="submit" disabled={asking || !line.trim()}>{asking ? "Speaking" : "Speak"}</button>
+          </form>
           {!props.signedIn ? (
             <button type="button" className="speak-signin" onClick={props.onSignIn}>Sign in to start the live call</button>
           ) : null}

@@ -226,7 +226,6 @@ import {
   DEFAULT_VOICE_SETTINGS,
   loadVoiceSettings,
   saveVoiceSettings,
-  unusedUntilLiveNotice,
   type VoiceActivation,
   type VoicePersonality,
   type VoiceSettings,
@@ -5787,6 +5786,7 @@ export function CommandApp() {
                   <div>
                     <h2 className="font-display text-3xl font-bold">Settings</h2>
                     <p className="text-sm text-muted">Preferences stay in this browser. Server keys are not edited here.</p>
+                    <p className="text-sm text-muted">Preferences stay in this browser. Open Safe keys to copy a saved key.</p>
                   </div>
                 </div>
               </div>
@@ -5957,7 +5957,20 @@ export function CommandApp() {
                 <SpeakPanel />
               </div>
               <div id="settings-data" hidden={settingsPane !== "data"} className="space-y-4">
-              <p className="text-sm text-muted">Storage on this device: {formatBytes(storedBytes)}. {syncNote}</p>
+              <div className="settings-card rounded-panel p-4 text-sm">
+                <div className="settings-row">
+                  <div>
+                    <p className="font-semibold">On this device</p>
+                    <p className="text-muted">{formatBytes(storedBytes)}. {syncNote}</p>
+                  </div>
+                </div>
+                <div className="settings-row">
+                  <div>
+                    <p className="font-semibold">What stays here</p>
+                    <p className="text-muted">Chats, notes, and files on this browser. A phone keeps its own copy.</p>
+                  </div>
+                </div>
+              </div>
               {serverHeld && (
                 <button
                   type="button"
@@ -5984,34 +5997,19 @@ export function CommandApp() {
                   Save this browser copy over the server copy
                 </button>
               )}
-              <details className="rounded-panel border border-line bg-surface p-4 text-sm">
-                <summary className="cursor-pointer font-semibold">How to use this</summary>
-                <ul className="mt-2 space-y-2 text-muted">
-                  <li>Command is home. Ask is the default. Automatic still asks before a delete or a replace.</li>
-                  <li>Memory is off until you confirm it. A memory-off chat cannot read or save notes.</li>
-                  <li>Open chats on a project shows only that project’s chats. Show all chats clears the filter.</li>
-                  <li>Research runs only when a search endpoint and key are set. A missing provider refuses and creates no citations. Links are only URLs the provider returned.</li>
-                  <li>Workspace lookup is three local reads. The bounded planner can ask Grok to use those same reads. It is not a general agent, and Stop this run is not Emergency stop.</li>
-                  <li>Files are text copies in this browser. REA may reject them. A rejection is not an inspection.</li>
-                  <li>Stop this reply cancels only the current answer. It is not Emergency stop. The unfinished answer is not saved. The provider may still charge for text it generated before it saw the cancel.</li>
-                  <li>Stop blocks new sends on this page and on the server. A signed-out request cannot clear it. The stop file survives a process restart on this machine. It is not durable on a serverless disk. Without a database URL the server copy is a file on this machine, not cloud backup. Your phone keeps its own copy.</li>
-                  <li>Replies appear as Grok writes them. A stopped, empty, or broken reply is not saved.</li>
-                  <li>If this browser and the server both already have a copy, this page keeps the browser copy until you choose to replace the server copy.</li>
-                  <li>Grok, voice, REA, and saving a server copy require a signed-in owner. A refused sign-in does not spend the model.</li>
-                  <li>Oak Bridge and BridgePoint are external labels. This app does not open them.</li>
-                  <li>A dedicated database needs a new Supabase organization. The current free organization is already full.</li>
-                </ul>
-              </details>
               </div>
               <div id="settings-safety" hidden={settingsPane !== "safety"} className="space-y-4">
+              <div className="settings-card rounded-panel p-4 text-sm">
               <button
                 type="button"
-                className="inline-flex min-h-11 items-center gap-2 rounded-panel border border-line px-3 text-sm"
+                className="inline-flex min-h-11 items-center gap-2 rounded-panel border border-line px-3 text-sm font-semibold"
                 onClick={() => void toggleStop()}
               >
                 <Square className="size-4" /> {ws.halted ? "Clear emergency stop" : "Emergency stop"}
               </button>
-              <div className="rounded-panel border border-line bg-surface p-4">
+              <p className="mt-2 text-muted">Stops new sends on this page and on the server. It is not the same as stopping one reply.</p>
+              </div>
+              <div className="settings-card rounded-panel p-4">
                 <p className="font-semibold">Archive</p>
                 <label className="mt-2 flex items-start gap-2 text-sm">
                   <input type="checkbox" checked={includeTemporary} onChange={(event) => setIncludeTemporary(event.target.checked)} />
@@ -6056,7 +6054,7 @@ export function CommandApp() {
                   </div>
                 )}
               </div>
-              <div className="rounded-panel border border-line bg-surface p-4 text-sm">
+              <div className="settings-card rounded-panel p-4 text-sm">
                 <p className="font-semibold">Requirement record</p>
                 <p className="mt-1 text-muted">Verified {counts.verified} · In the app {counts.implemented} · Blocked {counts.blocked} · Planned {counts.planned} · Deferred {counts.deferred}</p>
                 <ul className="mt-2 space-y-1 text-muted">
@@ -6210,6 +6208,12 @@ export function CommandApp() {
         onClose={() => { setSpeakStageOpen(false); void listen({ mode: "stop" }); }}
         onSignIn={() => { setSpeakStageOpen(false); window.location.assign("/login"); }}
         onLive={() => void listen({ mode: voiceListening ? "stop" : "start" })}
+        onAsk={async (text) => {
+          const turn = await speakChatTurn(text);
+          if (!turn.ok) return turn.error;
+          await speak(turn.text);
+          return null;
+        }}
       />
       <LiveVoiceBar
         compactIdle
@@ -7267,18 +7271,21 @@ function VoiceSettingsBlock() {
       const next = { ...current, ...patch };
       const storage = typeof localStorage === "undefined" ? null : localStorage;
       saveVoiceSettings(storage, next);
+      if (patch.speed && storage) {
+        const pace = patch.speed === "slow" ? "slow" : patch.speed === "fast" ? "brisk" : "natural";
+        storage.setItem("adrian-speak-rate", pace);
+      }
       return next;
     });
   }
   return (
     <div className="settings-card card-texture rounded-panel p-4 text-sm" data-testid="voice-settings">
       <p className="font-semibold">Voice</p>
-      <p className="text-muted">{unusedUntilLiveNotice()}</p>
-      <p className="mt-1 text-xs text-muted">Stored in this browser only. No speech provider is called.</p>
+      <p className="text-muted">Speak uses the voice key on this computer. These choices stay in this browser.</p>
       <div className="settings-row mt-3">
         <div>
           <p className="font-semibold">Personality</p>
-          <p className="text-muted">Saved locally. Not sent to a voice service.</p>
+          <p className="text-muted">Saved on this device. Chat style is separate.</p>
         </div>
         <div className="flex flex-wrap gap-2">
           {VOICE_PERSONALITIES.map((item) => (
@@ -7291,7 +7298,7 @@ function VoiceSettingsBlock() {
       <div className="settings-row">
         <div>
           <p className="font-semibold">Activation</p>
-          <p className="text-muted">Saved locally. Does not start the microphone.</p>
+          <p className="text-muted">Saved on this device. Record still starts the call.</p>
         </div>
         <div className="flex flex-wrap gap-2">
           {VOICE_ACTIVATIONS.map((item) => (
@@ -7304,7 +7311,7 @@ function VoiceSettingsBlock() {
       <div className="settings-row">
         <div>
           <p className="font-semibold">Speed</p>
-          <p className="text-muted">Saved locally. Playback speed is unchanged.</p>
+          <p className="text-muted">Slow, natural, or brisk. Speak uses this pace next time it opens.</p>
         </div>
         <div className="flex flex-wrap gap-2">
           {VOICE_SPEEDS.map((item) => (
