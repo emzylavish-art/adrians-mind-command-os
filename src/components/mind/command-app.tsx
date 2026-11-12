@@ -642,6 +642,7 @@ export function CommandApp() {
   const [dictationLevel, setDictationLevel] = useState(0);
   const [voiceOverlayOpen, setVoiceOverlayOpen] = useState(false);
   const [speakStageOpen, setSpeakStageOpen] = useState(false);
+  const [helpQuery, setHelpQuery] = useState("");
   const overlayOpenRef = useRef(false);
   overlayOpenRef.current = voiceOverlayOpen;
   const [overlayPhase, setOverlayPhase] = useState<VoiceOverlayPhase>("idle");
@@ -5503,17 +5504,49 @@ export function CommandApp() {
             </section>
           )}
           {view === "help" && (
-            <section className="mx-auto max-w-3xl space-y-3 p-4 md:p-6">
-              <h2 className="font-display text-3xl font-bold">Help</h2>
-              <p className="text-sm text-muted">The pictures of this product are a layout. Green checks, file counts, and “completed” tasks in those pictures are not live data.</p>
-              <ul className="space-y-2 text-sm">
-                <li className="dense-card p-3"><span className="font-semibold">Chat.</span> Ask sends a normal question to Grok when you press Send. Notion is called only when the server has a token. Gmail, search, image, video, and the computer are refused.</li>
-                <li className="dense-card p-3"><span className="font-semibold">Bots &amp; Agents.</span> Templates and custom bots are saved on this device. Run worker once on the Runs screen. Nothing runs in the background.</li>
-                <li className="dense-card p-3"><span className="font-semibold">Build.</span> No repository is edited and no terminal runs until a computer is paired.</li>
-                <li className="dense-card p-3"><span className="font-semibold">Connected.</span> Setup does not connect the service. Grok shows “Key present” only when the server key exists.</li>
-              </ul>
+            <section className="page-shell mx-auto max-w-3xl space-y-4">
+              <div className="page-hero">
+                <div className="flex items-center gap-3">
+                  <img src="/brand/marks/help.png" alt="" className="size-8 rounded-lg" />
+                  <div>
+                    <h2 className="font-display text-3xl font-bold">Help</h2>
+                    <p className="text-sm text-muted">Pick a row. It opens that part of the app. Nothing here pretends a service is connected.</p>
+                  </div>
+                </div>
+              </div>
+              <input
+                value={helpQuery}
+                onChange={(event) => setHelpQuery(event.target.value)}
+                placeholder="Search help"
+                aria-label="Search help"
+                className="input-glow min-h-11 w-full rounded-panel border border-line bg-surface/80 px-3 text-sm"
+              />
+              <div className="divide-y divide-white/8 overflow-hidden rounded-xl border border-white/8">
+                {[
+                  { id: "chat", label: "Send a chat", detail: "Type in the field and press Enter, or press the blue button. An empty field opens Speak.", mark: "/brand/marks/chat.png", open: () => setView("command") },
+                  { id: "speak", label: "Speak", detail: "Opens the call screen with camera, screen share, mute, and end.", mark: "/brand/marks/speak.png", open: () => setSpeakStageOpen(true) },
+                  { id: "settings", label: "Settings", detail: "Theme, voice, connections, and the pages that stay off the short sidebar.", mark: "/brand/marks/settings.png", open: () => setView("settings") },
+                  { id: "plugins", label: "Plugins", detail: "Catalog and connection marks. Opening a row does not connect the service.", mark: "/brand/marks/plugins.png", open: () => setView("connected") },
+                  { id: "library", label: "Library", detail: "Text copies in this browser. Upload text or open a file you already attached.", mark: "/brand/marks/library.png", open: () => setView("files") },
+                  { id: "projects", label: "Projects", detail: "Records on this device. Open chats or notes from a project card.", mark: "/brand/marks/projects.png", open: () => setView("projects") },
+                  { id: "scheduled", label: "Scheduled", detail: "Jobs that wait for a time. Nothing runs until you start it.", mark: "/brand/marks/scheduled.png", open: () => setView("scheduled") },
+                  { id: "build", label: "Build", detail: "Editor and next-step controls. No repository is edited until a computer is paired.", mark: "/brand/marks/build.png", open: () => setView("build") },
+                  { id: "explore", label: "Explore", detail: "Filter local templates, save one, then open it in Chat.", mark: "/brand/marks/explore.png", open: () => window.location.assign("/explore") },
+                  { id: "dashboard", label: "Dashboard", detail: "Opens the workspace map inside this app.", mark: "/brand/marks/general.png", open: () => setView("dashboard") },
+                ].filter((item) => `${item.label} ${item.detail}`.toLowerCase().includes(helpQuery.trim().toLowerCase())).map((item) => (
+                  <button key={item.id} type="button" className="flex min-h-14 w-full items-center gap-3 px-3 text-left text-sm hover:bg-white/5" onClick={() => { item.open(); setNavOpen(false); }}>
+                    <img src={item.mark} alt="" width={28} height={28} className="size-7 rounded-lg" />
+                    <span className="min-w-0 flex-1">
+                      <span className="block font-medium">{item.label}</span>
+                      <span className="block text-xs text-muted">{item.detail}</span>
+                    </span>
+                    <span className="text-muted" aria-hidden="true">›</span>
+                  </button>
+                ))}
+              </div>
             </section>
           )}
+
           {view === "settings" && (
             <section className="page-shell mx-auto max-w-3xl space-y-4">
               <div className="page-hero">
@@ -5589,6 +5622,13 @@ export function CommandApp() {
                         <span>
                           <span className="block font-medium">Explore</span>
                           <span className="block text-xs text-muted">Public directory</span>
+                        </span>
+                        <span className="text-muted" aria-hidden="true">›</span>
+                      </Link>
+                      <Link to="/dashboard" className="flex min-h-12 items-center justify-between px-3 text-sm hover:bg-white/5">
+                        <span>
+                          <span className="block font-medium">Dashboard</span>
+                          <span className="block text-xs text-muted">Public command center</span>
                         </span>
                         <span className="text-muted" aria-hidden="true">›</span>
                       </Link>
