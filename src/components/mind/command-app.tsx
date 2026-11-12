@@ -2789,8 +2789,8 @@ export function CommandApp() {
       ...prev,
       audit: [{ id: auditId, at: new Date().toISOString(), action, target, result: message }, ...prev.audit].slice(0, 200),
     }));
-    setFailure({ message, auditId, retry: onceRetry(retry), kind, action: failureAction });
-    setError(message);
+   setFailure({ message, auditId, retry: onceRetry(retry), kind, action: failureAction });
+    setError(null);
     setNotice(null);
   }
 

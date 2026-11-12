@@ -1030,3 +1030,72 @@ form.thread-composer {
   background-color: #141416 !important;
   background-blend-mode: normal !important;
 }
+
+@media (max-width: 767.98px) {
+  .thread-shell > aside .px-3.pb-2,
+  .thread-shell > aside .min-h-0.flex-1 {
+    display: none !important;
+  }
+
+  .thread-shell > aside {
+    max-height: none !important;
+    overflow: visible !important;
+  }
+
+  .thread-shell > section {
+    overflow: auto !important;
+  }
+
+  .thread-shell .composer-toolbar {
+    display: flex !important;
+    flex-wrap: wrap !important;
+    overflow: visible !important;
+    width: 100% !important;
+  }
+
+  .thread-shell .composer-toolbar > :nth-child(n + 4):not(.composer-send),
+  .thread-shell .composer-toolbar > label,
+  .thread-shell .composer-toolbar .legacy-composer-voice {
+    display: none !important;
+  }
+
+  .thread-shell .chat-empty-hero {
+    position: static !important;
+    margin-bottom: 0.75rem;
+  }
+}
+
+@media (max-width: 767.98px) {
+  .thread-shell .chat-empty-hero {
+    margin-bottom: 2.75rem !important;
+  }
+}
+
+@media (max-width: 767.98px) {
+  .thread-shell .chat-empty-hero p:nth-of-type(3) {
+    display: none !important;
+  }
+}
+
+@media (max-width: 767.98px) {
+  .thread-shell .grid.min-h-64 {
+    min-height: 0 !important;
+    padding: 0 !important;
+  }
+
+  .thread-shell .chat-empty-hero {
+    gap: 0.2rem !important;
+    margin-bottom: 0 !important;
+    padding: 0 !important;
+  }
+
+  .thread-shell .chat-empty-hero > span {
+    width: 2.5rem !important;
+    height: 2.5rem !important;
+  }
+
+  .thread-shell .chat-empty-title {
+    margin-top: 0.2rem !important;
+    font-size: 1.15rem !important;
+  }
+}
