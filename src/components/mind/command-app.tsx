@@ -6180,14 +6180,12 @@ function ReaPanel({
   onInspect: (() => void) | null;
 }) {
   return (
-    <section className="page-shell p-4 md:p-6">
-      <div className="page-hero">
-        <h2 className="font-display text-3xl font-bold">{title}</h2>
-        <p className="mt-2 max-w-2xl text-sm text-muted">{lead}</p>
-      </div>
-      <div className="mt-4 grid gap-3 lg:grid-cols-[1fr_18rem]">
+    <section className="page-shell px-4 pb-4 md:px-6">
+      <div className="rea-layout mt-4 grid gap-3">
         <div className="dense-card card-texture p-4">
-          <p className="text-sm font-semibold">What can run</p>
+          <h3 className="font-semibold">{title}</h3>
+          <p className="mt-1 text-sm text-muted">{lead}</p>
+          <p className="mt-4 text-sm font-semibold">What can run</p>
           <ul className="mt-3 space-y-2 text-sm">
             <li className="flex items-center justify-between gap-3 rounded-panel bg-bg px-3 py-2"><span>REA doctor</span><span className="text-xs text-muted">Live check</span></li>
             <li className="flex items-center justify-between gap-3 rounded-panel bg-bg px-3 py-2"><span>REA file inspect</span><span className="text-xs text-muted">Staged text only</span></li>
