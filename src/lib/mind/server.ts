@@ -130,11 +130,17 @@ export const searchWeb = createServerFn({ method: "POST" })
     if (!allowMindRequest("search", context.userId, 6)) {
       return { ok: false as const, configured: false, citations: [] as { title: string; url: string }[], error: "Too many searches. Wait a minute and try again." };
     }
-    return performSearch({
-      query: data.query,
-      endpoint: process.env.MIND_SEARCH_ENDPOINT,
-      key: process.env.MIND_SEARCH_KEY,
-    });
+    const endpoint = process.env.MIND_SEARCH_ENDPOINT?.trim();
+    const key = process.env.MIND_SEARCH_KEY?.trim();
+    if (endpoint && key) {
+      return performSearch({
+        query: data.query,
+        endpoint,
+        key,
+      });
+    }
+    const { searchWithGrok } = await import("./xai-search");
+    return searchWithGrok(data.query);
   });
 
 export const recordAgentExecution = createServerFn({ method: "POST" })

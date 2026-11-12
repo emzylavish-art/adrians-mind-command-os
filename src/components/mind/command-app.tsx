@@ -5624,7 +5624,7 @@ export function CommandApp() {
                   <img src="/brand/marks/research.png" alt="" className="size-8 rounded-lg" />
                   <div>
                     <h2 className="font-display text-3xl font-bold">Research</h2>
-                    <p className="text-sm text-muted">A search runs only when a search key is set. Otherwise this refuses and creates no citations.</p>
+                    <p className="text-sm text-muted">Search uses the Grok key saved on this computer. Citations appear only when the search returns real links.</p>
                   </div>
                 </div>
               </div>
@@ -5639,7 +5639,7 @@ export function CommandApp() {
                   <div className="empty-state mt-4">
                     <img src="/empty/empty-search.svg" alt="" />
                     <p className="font-semibold">No citations yet</p>
-                    <p className="text-sm text-muted">Run a check when a search provider is configured.</p>
+                    <p className="text-sm text-muted">Type a question, then press Check research.</p>
                   </div>
                 ) : null}
                 {researchCitations.length > 0 && (

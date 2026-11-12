@@ -52,7 +52,7 @@ const STARTERS: LocalQuestion[] = [
 ];
 
 const DEFAULT_NEXT =
-  "Next: type a question in What do you want to research?, then press Check research. A blank question is not searched. If no search endpoint and key are set, Check research refuses, does not call Grok, and creates no citations.";
+  "Next: type a question in What do you want to research?, then press Check research. A blank question is not searched. If the saved Grok key cannot search, Check research refuses and creates no citations.";
 
 function readKey(key: string): string | null {
   try {
@@ -146,14 +146,14 @@ function checkStep(raw: string, depth: DepthId, focus: FocusId, halted: boolean)
   const stopNote = halted
     ? " Emergency stop is on in this browser. Press Clear stop first, or Check research does not run."
     : " If Emergency stop is on, press Clear stop before Check research.";
-  return `Next: type ${quote(ask)} in What do you want to research?, then press Check research. That sends at most 300 characters.${pathNote} If no search endpoint and key are set, it refuses, does not call Grok, and creates no citations.${stopNote}`;
+  return `Next: type ${quote(ask)} in What do you want to research?, then press Check research. That sends at most 300 characters.${pathNote} If the saved Grok key cannot search, it refuses and creates no citations.${stopNote}`;
 }
 
 function refusalStep(halted: boolean): string {
   if (halted) {
-    return "Next: Emergency stop is on in this browser. Press Clear stop, type a question in What do you want to research?, then press Check research. With no search endpoint and key, that still refuses, does not call Grok, and creates no citations.";
+    return "Next: Emergency stop is on in this browser. Press Clear stop, type a question in What do you want to research?, then press Check research. If the saved Grok key cannot search, that still refuses and creates no citations.";
   }
-  return "Next: type a question in What do you want to research?, then press Check research. With no search endpoint and key, the page refuses, does not call Grok, and creates no citations. Do not read a refusal as sources found.";
+  return "Next: type a question in What do you want to research?, then press Check research. If the saved Grok key cannot search, the page refuses and creates no citations. Do not read a refusal as sources found.";
 }
 
 function fileStep(): string {

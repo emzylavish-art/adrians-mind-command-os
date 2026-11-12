@@ -1807,6 +1807,30 @@ form.thread-composer {
   flex: 0 0 auto !important;
 }
 
+.solid-form ul {
+  display: grid !important;
+  gap: 0 !important;
+  overflow: hidden;
+  border: 1px solid rgb(255 255 255 / 0.1);
+  border-radius: 14px;
+  background: #171717 !important;
+}
+
+.solid-form ul .dense-row {
+  min-height: 2.75rem !important;
+  margin: 0 !important;
+  padding: 0.65rem 0.85rem !important;
+  border: 0 !important;
+  border-bottom: 1px solid rgb(255 255 255 / 0.08) !important;
+  border-radius: 0 !important;
+  background: transparent !important;
+  background-image: none !important;
+}
+
+.solid-form ul .dense-row:last-child {
+  border-bottom: 0 !important;
+}
+
 @media (max-width: 800px) {
   .tool-list {
     grid-template-columns: 1fr !important;
