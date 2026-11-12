@@ -1166,3 +1166,29 @@ form.thread-composer {
     overflow: hidden !important;
   }
 }
+
+.thread-shell form.thread-composer {
+  flex: 0 0 auto !important;
+  height: auto !important;
+}
+
+@media (min-width: 768px) {
+  .thread-shell .chat-empty-hero > span {
+    width: 2.5rem !important;
+    height: 2.5rem !important;
+  }
+
+  .thread-shell .chat-empty-hero p:nth-of-type(3) {
+    display: none !important;
+  }
+}
+
+@media (min-width: 768px) and (max-height: 900px) {
+  .thread-shell .chat-head > p.text-sm {
+    display: none !important;
+  }
+
+  .thread-shell .chat-head .mt-2.flex {
+    flex-wrap: nowrap !important;
+  }
+}
