@@ -797,6 +797,8 @@ img.service-mark {
 .settings-index button strong {
   font-size: 0.98rem;
   font-weight: 650;
+  white-space: normal;
+  overflow: visible;
 }
 
 .settings-index button small {
@@ -804,6 +806,8 @@ img.service-mark {
   font-size: 0.75rem;
   letter-spacing: 0;
   text-transform: none;
+  white-space: normal;
+  overflow: visible;
 }
 
 .settings-index button::after {

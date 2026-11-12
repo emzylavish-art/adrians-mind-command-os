@@ -26,13 +26,21 @@ export function resolveProvider(id: string, fallback: boolean): { ok: true; id: 
 }
 
 export function providerChoices(grokConfigured: boolean | null, verifiedModel?: string | null) {
+  return providerChoicesWithKeys(grokConfigured, verifiedModel, {});
+}
+
+export function providerChoicesWithKeys(
+  grokConfigured: boolean | null,
+  verifiedModel: string | null | undefined,
+  keys: Partial<Record<"openai" | "anthropic" | "gemini" | "openrouter", boolean>>,
+) {
   const verified = typeof verifiedModel === "string" && /^[A-Za-z0-9][A-Za-z0-9_.:/@-]{0,80}$/.test(verifiedModel)
     ? verifiedModel
     : "";
   return PROVIDERS.map((item) => ({
     id: item.id,
     label: item.label,
-    enabled: item.id === "grok" && grokConfigured !== false,
+    enabled: item.id === "grok" ? grokConfigured !== false : keys[item.id] === true,
     reason:
       item.id === "grok"
         ? grokConfigured === true
@@ -42,7 +50,9 @@ export function providerChoices(grokConfigured: boolean | null, verifiedModel?: 
           : grokConfigured === false
             ? "No Grok key is configured on the server."
             : "Status has not finished. Send still uses Grok only."
-        : `${item.reason} It cannot be selected.`,
+        : keys[item.id] === true
+          ? "Key present. Select it to send through this provider."
+          : `${item.reason} It cannot be selected.`,
   }));
 }
 

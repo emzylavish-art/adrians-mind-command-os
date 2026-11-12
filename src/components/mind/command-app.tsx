@@ -199,7 +199,7 @@ import { describeFile } from "@/lib/mind/files-read";
 import { extractPdfText } from "@/lib/mind/pdf-text";
 import { ModelTierChip } from "@/components/mind/model-tier-chip";
 import { MODEL_TIERS, type ConcreteModelTier, type ModelTier } from "@/lib/mind/model-tiers";
-import { chosenProvider, failover, providerChoices } from "@/lib/mind/providers";
+import { chosenProvider, failover, providerChoicesWithKeys } from "@/lib/mind/providers";
 import { emitFailure, mountFailure, surfaceForReport } from "@/lib/mind/failure-mount";
 import { useMcpFailureMount, type McpReportedOutcome } from "./use-mcp-failure-mount";
 import { routeFailureAction, type RouteFailureAction } from "@/lib/mind/route-failure";
@@ -775,6 +775,7 @@ export function CommandApp() {
   const [databasePill, setDatabasePill] = useState("Checking");
   const [databaseDetail, setDatabaseDetail] = useState("The status check has not finished.");
   const [grokConfigured, setGrokConfigured] = useState<boolean | null>(null);
+  const [liveProviders, setLiveProviders] = useState<Partial<Record<"openai" | "anthropic" | "gemini" | "openrouter", boolean>>>({});
   const [providerChoice, setProviderChoice] = useState("grok");
   const [customAiProviders, setCustomAiProviders] = useState<PublicAiProvider[]>([]);
   const customAiChoices = customAiProviders.flatMap((item) => item.models.map((model) => ({ id: `custom:${item.id}:${encodeURIComponent(model)}`, label: `${item.label}: ${model}`, enabled: true, reason: `Custom API at ${item.host}. Requires usable API credit.` })));
@@ -1095,6 +1096,7 @@ export function CommandApp() {
       .then((status) => {
         if (!active) return;
         setGrokConfigured(status.grok === "configured");
+        if (status.providers && typeof status.providers === "object") setLiveProviders(status.providers);
         setGrok(status.grok === "configured" ? "Configured" : status.grok === "down" ? "Refused" : "Unavailable");
         setStatusSignedIn(status.signedIn === true);
         setDatabaseConfigured(status.databaseBackend === "postgres");
@@ -1773,15 +1775,16 @@ export function CommandApp() {
       }
     }
     const isCustomProvider = providerChoice.startsWith("custom:") && !activeLogic;
+    const otherReady = !activeLogic && !isCustomProvider && providerChoice !== "grok" && liveProviders[providerChoice as "openai" | "anthropic" | "gemini" | "openrouter"] === true;
     let routed = chosenProvider(activeLogic || isCustomProvider ? "grok" : providerChoice, isCustomProvider ? true : grokConfigured);
-    if (!activeLogic && !isCustomProvider && !routed.ok) {
+    if (!otherReady && !activeLogic && !isCustomProvider && !routed.ok) {
       const switched = failover(providerChoice, grokConfigured === true, failoverPolicy);
       if (switched.provider === "grok") {
         routed = chosenProvider("grok", grokConfigured);
         if (routed.ok) setNotice(switched.note);
       }
     }
-    if (!activeLogic && !isCustomProvider && !routed.ok) {
+    if (!otherReady && !activeLogic && !isCustomProvider && !routed.ok) {
       reportFailure(routed.error, "model_unavailable", "provider", () => {
         void deliver(chat, text, wsRef.current, resume, snapped);
       });
@@ -1856,7 +1859,7 @@ export function CommandApp() {
               .map((image) => ({ dataUrl: image.dataUrl!, name: image.name })),
           })),
           memoryContext: memoriesForChat(source, chat).map((item) => ({ id: item.id, text: item.text })),
-          provider: activeLogic ?? (isCustomProvider ? providerChoice : (routed.ok ? routed.id : providerChoice)),
+          provider: activeLogic ?? (isCustomProvider || otherReady ? providerChoice : (routed.ok ? routed.id : providerChoice)),
           modelTier,
           logicRoute: activeLogic,
           images: snapped.map((image) => ({ dataUrl: image.dataUrl, name: image.name })),
@@ -4960,7 +4963,7 @@ export function CommandApp() {
                 setView("agents");
                 void checkRea();
               }}
-              providerChoices={[...providerChoices(grokConfigured, lastModelUsed), ...customAiChoices]}
+              providerChoices={[...providerChoicesWithKeys(grokConfigured, lastModelUsed, liveProviders), ...customAiChoices]}
               providerChoice={providerChoice}
               onProvider={(id) => {
                 if (isLogicRouteId(id)) {
