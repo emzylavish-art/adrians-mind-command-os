@@ -1320,6 +1320,15 @@ form.thread-composer {
   background-blend-mode: normal !important;
 }
 
+#settings-general .settings-row {
+  flex-wrap: wrap;
+}
+
+#settings-general .settings-row button {
+  flex: 0 0 auto;
+  min-width: 4.6rem;
+}
+
 .main-stage .page-shell.mx-auto {
   width: min(100%, 48rem) !important;
   max-width: 48rem !important;

@@ -5895,22 +5895,26 @@ export function CommandApp() {
                 <div className="settings-row">
                   <div>
                     <p className="font-semibold">Appearance</p>
-                    <p className="text-muted">Theme for the app UI. Saved in this browser only.</p>
+                    <p className="text-muted">Dark, light, or follow this device. Saved in this browser only.</p>
                   </div>
                   <div className="flex flex-wrap gap-2">
-                    {(["dark", "light", "system"] as const).map((choice) => (
+                    {(["dark", "light", "system"] as const).map((choice) => {
+                      const label = choice === "dark" ? "Dark" : choice === "light" ? "Light" : "System";
+                      return (
                       <button key={choice} type="button" className={`min-h-11 rounded-panel border px-3 ${theme === choice ? "border-accent bg-accent text-accent-ink tile-active" : "border-line"}`} onClick={() => setTheme(choice)}>
-                        {choice}
+                        {label}
                       </button>
-                    ))}
+                    );})}
                   </div>
                 </div>
                 <div className="settings-row">
                   <div>
                     <p className="font-semibold">Provider failover</p>
-                    <p className="text-muted">Off. A failed or unconfigured provider is not replaced with another one.</p>
+                    <p className="text-muted">{failoverPolicy === "none" ? "Off. A failed provider is not replaced." : "On. A failed provider can switch to Grok, and the switch is recorded."}</p>
                   </div>
-                  <span className="rounded-full border border-line px-3 py-1 text-xs text-muted">Off</span>
+                  <button type="button" role="switch" aria-checked={failoverPolicy === "grok"} className={`min-h-11 rounded-panel border px-3 ${failoverPolicy === "grok" ? "border-accent bg-accent text-accent-ink" : "border-line"}`} onClick={() => setFailoverPolicy((current) => (current === "grok" ? "none" : "grok"))}>
+                    {failoverPolicy === "grok" ? "On" : "Off"}
+                  </button>
                 </div>
               </div>
               <div className="settings-card rounded-panel p-4 text-sm hidden">
