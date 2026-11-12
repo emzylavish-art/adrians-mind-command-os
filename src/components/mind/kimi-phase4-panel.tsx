@@ -18,10 +18,10 @@ export function KimiPhase4Panel({ initializeResponse, updates = [] }: { initiali
   return (
     <section className="dense-card space-y-3 p-4" aria-labelledby="kimi-phase4-heading" data-testid="kimi-phase4-panel">
       <div>
-        <h3 id="kimi-phase4-heading" className="font-semibold">Kimi runtime capabilities</h3>
+        <h3 id="kimi-phase4-heading" className="font-semibold">Build runtime</h3>
         <p className="text-xs text-muted" role="status" aria-live="polite">
           {receivedInitialize
-            ? `${inventory.agent.name ?? "Kimi runtime"}${inventory.agent.version ? ` · ${inventory.agent.version}` : ""} · capability data from initialize`
+            ? `${inventory.agent.name ?? "Build runtime"}${inventory.agent.version ? ` · ${inventory.agent.version}` : ""} · capability data from initialize`
             : "Waiting for a real ACP initialize response. No capabilities are assumed available."}
         </p>
       </div>
@@ -49,7 +49,7 @@ export function KimiPhase4Panel({ initializeResponse, updates = [] }: { initiali
       <div className="border-t border-line pt-3">
         <h4 className="text-sm font-semibold">ACP activity</h4>
         {events.length ? (
-          <ol className="mt-2 space-y-2" aria-label="Normalized Kimi activity timeline">
+          <ol className="mt-2 space-y-2" aria-label="Build activity">
             {events.map((event, index) => (
               <li key={`${event.updateType}-${index}`} className="dense-row text-sm">
                 <div className="flex flex-wrap items-center gap-2">

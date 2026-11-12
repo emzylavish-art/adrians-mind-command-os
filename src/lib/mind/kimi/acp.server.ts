@@ -39,7 +39,7 @@ export async function handleKimiSession(request: Request): Promise<Response> {
         return json({
           ok: false,
           executed: false,
-          error: hosted.error || "The connected runtime did not accept the task. No Kimi login is requested.",
+          error: hosted.error || "The connected runtime did not accept the task. No extra login is requested.",
           runtime: hosted.status,
           version: hosted.version,
         }, hosted.status === "not_configured" ? 503 : 409);

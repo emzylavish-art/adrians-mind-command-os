@@ -96,21 +96,21 @@ export function KimiDeviceConnect() {
       });
       if (!body) return;
       if (!body.ok) {
-        setNotice(body.error || "Kimi login did not start.");
+        setNotice(body.error || "The coding login did not start.");
         return;
       }
       if (body.verificationUriComplete) {
         setUrl(body.verificationUriComplete);
         setUserCode(body.userCode || "");
-        setNotice("Approve this code on Kimi's page, then press Check.");
+        setNotice("Approve this code on the login page, then press Check.");
         window.open(body.verificationUriComplete, "_blank", "noopener,noreferrer");
         return;
       }
-      if (body.state === "connected") setNotice(`${body.accountLabel || "Kimi Code"} is connected. The token stays on the server.`);
-      else setNotice(body.detail || "Waiting for you to approve the Kimi page.");
+      if (body.state === "connected") setNotice(`${body.accountLabel || "Coding account"} is connected. The token stays on the server.`);
+      else setNotice(body.detail || "Waiting for you to approve the login page.");
       if (Array.isArray(body.plugins)) setPlugins(body.plugins);
     } catch {
-      setNotice("Kimi login could not be reached.");
+      setNotice("The coding login could not be reached.");
     } finally {
       setBusy(false);
     }
@@ -125,7 +125,7 @@ export function KimiDeviceConnect() {
         body: JSON.stringify({ label: "Kimi Platform", baseUrl: "https://api.kimi.ai/coding/v1", apiKey, model: "kimi-for-coding" }),
       });
       setApiKey("");
-      setNotice(body?.ok ? "Kimi API key saved on the server. It is not shown again." : body?.error || "The API key was not saved.");
+      setNotice(body?.ok ? "API key saved on the server. It is not shown again." : body?.error || "The API key was not saved.");
     } catch {
       setNotice("The API key was not saved.");
     } finally {

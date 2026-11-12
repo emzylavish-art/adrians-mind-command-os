@@ -258,12 +258,12 @@ export function BuildWorkspace() {
       });
       const data = (await response.json()) as { ok?: boolean; jobId?: string; error?: string };
       if (!response.ok || !data.ok || !data.jobId) {
-        setNotice(data.error || "Kimi session could not be queued.");
+        setNotice(data.error || "The build session could not be queued.");
         return;
       }
       setJob({ id: data.jobId, status: "queued", output: "", error: "", createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() });
       localStorage.setItem("adrian-build-last-job", data.jobId);
-      setNotice("Task queued. Waiting for the Companion to start Kimi ACP.");
+      setNotice("Task queued. Waiting for the companion to start the build.");
     } catch {
       setNotice("The Build request could not reach Adrian OS. Nothing was executed.");
     } finally {
@@ -371,7 +371,7 @@ export function BuildWorkspace() {
     const data = await response.json() as { ok?: boolean; provider?: { id: string; label: string; model: string; hasKey: boolean; runtimeUse: string }; error?: string };
     if (data.provider) setProviders((current) => [data.provider!, ...current]);
     setApiKey("");
-    setNotice(data.ok ? "Provider profile saved. The key is encrypted and is not injected into Kimi." : data.error || "Provider profile was not saved.");
+    setNotice(data.ok ? "Provider profile saved. The key is encrypted and stays on the server." : data.error || "Provider profile was not saved.");
   }
 
   function speakResult() {
@@ -442,13 +442,13 @@ export function BuildWorkspace() {
           <button type="button" onClick={speakResult} className="min-h-11 rounded-panel border border-line px-3 text-sm">Read result</button>
         </div>
         <div className="flex flex-wrap gap-2">
-          <input value={model} onChange={(event) => setModel(event.target.value)} className="min-h-11 w-40 rounded-panel border border-line bg-transparent px-3 text-sm outline-none focus:border-accent" aria-label="Kimi model" />
-          <input value={apiKey} onChange={(event) => setApiKey(event.target.value)} type="password" placeholder="Optional Moonshot key" className="min-h-11 min-w-40 flex-1 rounded-panel border border-line bg-transparent px-3 text-sm outline-none focus:border-accent" aria-label="Provider key" />
+          <input value={model} onChange={(event) => setModel(event.target.value)} className="min-h-11 w-40 rounded-panel border border-line bg-transparent px-3 text-sm outline-none focus:border-accent" aria-label="Build model" />
+          <input value={apiKey} onChange={(event) => setApiKey(event.target.value)} type="password" placeholder="Optional coding key" className="min-h-11 min-w-40 flex-1 rounded-panel border border-line bg-transparent px-3 text-sm outline-none focus:border-accent" aria-label="Provider key" />
           <button type="button" disabled={!model.trim()} onClick={() => void saveProvider()} className="min-h-11 rounded-panel border border-line px-3 text-sm disabled:opacity-50">Save profile</button>
         </div>
         <div className="flex flex-wrap items-center gap-2">
           <button type="submit" disabled={loading || Boolean(active)} className="inline-flex min-h-11 items-center gap-2 rounded-panel bg-accent px-4 text-sm font-semibold text-accent-ink disabled:cursor-not-allowed disabled:opacity-50">
-            <Send className="size-4" aria-hidden="true" /> {loading ? "Queueing…" : active ? "Task running…" : "Run with Kimi"}
+            <Send className="size-4" aria-hidden="true" /> {loading ? "Queueing…" : active ? "Task running…" : "Run build"}
           </button>
           <button type="button" disabled={planning || !prompt.trim()} onClick={() => void planWithGrok()} className="inline-flex min-h-11 items-center gap-2 rounded-panel border border-line px-4 text-sm disabled:opacity-50">
             {planning ? "Planning…" : "Plan with Grok"}
@@ -478,7 +478,7 @@ export function BuildWorkspace() {
               {active ? <Square className="size-4 animate-pulse text-warning" aria-label="Task active" /> : <ShieldCheck className="size-5 text-success" aria-label="Task settled" />}
             </div>
             {panel === "agent" ? <>
-              <div className="min-h-32 whitespace-pre-wrap rounded-panel border border-line bg-black/10 p-3 text-sm">{assistantText || job?.output || job?.error || "No active Kimi task. Submit a task to stream agent output here."}</div>
+              <div className="min-h-32 whitespace-pre-wrap rounded-panel border border-line bg-black/10 p-3 text-sm">{assistantText || job?.output || job?.error || "No active build task. Submit a task to stream agent output here."}</div>
               {active ? <button type="button" onClick={() => void cancelBuild()} className="min-h-10 rounded-panel border border-danger/40 px-3 text-sm text-danger">Stop task</button> : null}
               {job?.error ? <p className="text-sm text-danger" role="alert">{job.error}</p> : null}
             </> : null}

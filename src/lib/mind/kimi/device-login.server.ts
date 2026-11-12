@@ -86,15 +86,15 @@ export async function pollKimiDeviceLogin(ownerId: string, fetchImpl: typeof fet
       "SELECT account_label FROM mind_oauth_connections WHERE owner_id = $1 AND connector = $2",
       [ownerId, CONNECTOR],
     );
-    if (existing[0]) return { ok: true, state: "connected", accountLabel: existing[0].account_label ?? "Kimi Code" };
-    return { ok: false, error: "No Kimi login is waiting. Press Connect Kimi Code first." };
+    if (existing[0]) return { ok: true, state: "connected", accountLabel: existing[0].account_label ?? "Coding account" };
+    return { ok: false, error: "No coding login is waiting. Press Connect coding account first." };
   }
   if (Date.now() > new Date(row.expires_at).getTime()) {
     await sql.query("DELETE FROM mind_oauth_pending WHERE owner_id = $1 AND connector = $2", [ownerId, CONNECTOR]);
-    return { ok: false, error: "That Kimi login expired. Press Connect Kimi Code again." };
+    return { ok: false, error: "That coding login expired. Press Connect coding account again." };
   }
   const deviceCode = decryptSecret(row.code_verifier_enc);
-  if (!deviceCode) return { ok: false, error: "The saved Kimi login could not be read. Press Connect Kimi Code again." };
+  if (!deviceCode) return { ok: false, error: "The saved coding login could not be read. Press Connect coding account again." };
   const { status, data } = await postForm("/api/oauth/token", {
     client_id: CLIENT_ID,
     device_code: deviceCode,
@@ -106,11 +106,11 @@ export async function pollKimiDeviceLogin(ownerId: string, fetchImpl: typeof fet
     if (errorCode === "access_denied" || errorCode === "expired_token") {
       await sql.query("DELETE FROM mind_oauth_pending WHERE owner_id = $1 AND connector = $2", [ownerId, CONNECTOR]);
     }
-    return { ok: false, error: errorCode === "access_denied" ? "Kimi login was denied. Nothing was stored." : "Kimi has not approved this login yet." };
+    return { ok: false, error: errorCode === "access_denied" ? "The coding login was denied. Nothing was stored." : "The login page has not approved this yet." };
   }
   const access = encryptSecret(data.access_token).ciphertext;
   const refresh = typeof data.refresh_token === "string" ? encryptSecret(data.refresh_token).ciphertext : null;
-  const label = "Kimi Code";
+  const label = "Coding account";
   await sql.query(
     "INSERT INTO mind_oauth_connections (owner_id, connector, access_token_enc, refresh_token_enc, account_label, connected_at, token_type, scopes) VALUES ($1,$2,$3,$4,$5,$6,$7,$8) ON CONFLICT (owner_id, connector) DO UPDATE SET access_token_enc = excluded.access_token_enc, refresh_token_enc = excluded.refresh_token_enc, account_label = excluded.account_label, connected_at = excluded.connected_at, token_type = excluded.token_type",
     [ownerId, CONNECTOR, access, refresh, label, new Date().toISOString(), typeof data.token_type === "string" ? data.token_type : "Bearer", typeof data.scope === "string" ? data.scope : null],
