@@ -3852,7 +3852,12 @@ export function CommandApp() {
     <div className="shell flex h-dvh flex-col bg-bg text-fg md:flex-row" data-view={view}>
       <aside ref={navDrawerRef} onMouseDown={closeNavFromBackdrop} role={navOpen ? "dialog" : undefined} aria-modal={navOpen ? true : undefined} aria-label={navOpen ? "Workspace navigation" : undefined} className={`rail gpt-rail ${navOpen ? "nav-drawer-open flex" : "hidden"} fixed inset-0 z-40 w-full flex-col md:static md:flex md:h-dvh ${railCollapsed ? "md:w-[4.5rem]" : "md:w-72"} md:shrink-0`}>
         <div className="gpt-rail-head flex items-center gap-3 px-4 py-4">
-          {!railCollapsed && <p className="min-w-0 flex-1 text-2xl font-semibold tracking-tight">Adrian</p>}
+          {!railCollapsed && (
+            <p className="flex min-w-0 flex-1 items-center gap-2 text-2xl font-semibold tracking-tight">
+              <img className="service-mark" src="/brand/marks/adrian.png" alt="" width={28} height={28} />
+              Adrian
+            </p>
+          )}
           <button
             type="button"
             className="grid size-11 place-items-center rounded-full bg-white/8"
@@ -3998,7 +4003,7 @@ export function CommandApp() {
           </button>
           <button
             type="button"
-            className="grid size-11 shrink-0 place-items-center rounded-full bg-[#3dd68c] text-sm font-bold text-[#05210f]"
+            className="grid size-11 shrink-0 place-items-center rounded-full bg-white/8"
             aria-label="Open Settings"
             title="Settings"
             onClick={() => {
@@ -4007,7 +4012,7 @@ export function CommandApp() {
               closeMenus();
             }}
           >
-            A
+            <img src="/brand/marks/settings.png" alt="" width={28} height={28} className="size-7 rounded-full object-cover" />
           </button>
         </div>
       </aside>
@@ -4120,7 +4125,7 @@ export function CommandApp() {
               setBellOpen(false);
             }}
           >
-            <span className="grid size-8 place-items-center rounded-full bg-accent text-sm font-bold text-accent-ink">A</span>
+            <img src="/brand/marks/account.png" alt="" width={32} height={32} className="size-8 rounded-full object-cover" />
             <span className="hidden text-sm md:inline">Adrian</span>
           </button>
         </header>
