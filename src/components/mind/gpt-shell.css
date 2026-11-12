@@ -1099,3 +1099,17 @@ form.thread-composer {
     font-size: 1.15rem !important;
   }
 }
+
+.main-stage .settings-card,
+#settings-pages,
+#settings-general {
+  background-image: none !important;
+  background-color: #141416 !important;
+  background-blend-mode: normal !important;
+}
+
+.main-stage .page-shell.mx-auto {
+  width: min(100%, 48rem) !important;
+  max-width: 48rem !important;
+  margin-inline: auto !important;
+}
