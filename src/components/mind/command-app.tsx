@@ -1115,8 +1115,13 @@ export function CommandApp() {
       });
     notionStatus()
       .then((status) => { if (active) setNotion(status); })
-      .catch(() => {
+      .catch((caught) => {
         if (!active) return;
+        const text = caught instanceof Error ? `${caught.name} ${caught.message}` : String(caught ?? "");
+        if (/unauthorized|sign in/i.test(text)) {
+          setNotion({ state: "disconnected", detail: "Sign in is required. Notion is not connected until you sign in." });
+          return;
+        }
         setNotion(null);
         const message = "Notion status could not be read. Its connection state is unknown.";
         reportFailureRef.current(message, "notion_status_failed", "notion:status", () => {
@@ -5723,34 +5728,50 @@ export function CommandApp() {
               </div>
               <nav className="settings-index" aria-label="Settings sections" hidden={settingsPane !== null}>
                 {[
-                  ["general", "General", () => setSettingsPane("general")],
-                  ["personalization", "Personalization", () => { setView("chat"); setNavOpen(false); }],
-                  ["memory", "Memory", () => { setView("memory"); setNavOpen(false); }],
-                  ["plugins", "Plugins", () => { setView("connected"); setNavOpen(false); }],
-                  ["connections", "Connections", () => setSettingsPane("connections")],
-                  ["voice", "Voice", () => setSettingsPane("voice")],
-                  ["scheduled", "Scheduled", () => { setView("scheduled"); setNavOpen(false); }],
-                  ["bots", "Bots", () => { setView("agents"); setNavOpen(false); }],
-                  ["eve", "EVE", () => { setView("intelligence"); setNavOpen(false); }],
-                  ["runs", "Runs", () => { setView("runs"); setNavOpen(false); }],
-                  ["tools", "Tools", () => { setView("tools"); setNavOpen(false); }],
-                  ["skills", "Skills", () => { setView("skills"); setNavOpen(false); }],
-                  ["build", "Build", () => { setView("build"); setNavOpen(false); }],
-                  ["research", "Research", () => { setView("research"); setNavOpen(false); }],
-                  ["library", "Library", () => { setView("files"); setNavOpen(false); }],
-                  ["projects", "Projects", () => { setView("projects"); setNavOpen(false); }],
-                  ["activity", "Activity", () => { setView("activity"); setNavOpen(false); }],
-                  ["integrations", "Integrations", () => { setView("integrations"); setNavOpen(false); }],
-                  ["help", "Help", () => { setView("help"); setNavOpen(false); }],
-                  ["pages", "Pages", () => setSettingsPane("pages")],
-                  ["data", "Data", () => setSettingsPane("data")],
-                  ["safety", "Safety", () => setSettingsPane("safety")],
-                  ["security", "Security and login", () => { window.location.assign("/login"); }],
-                ].map(([id, label, open]) => (
-                  <button key={id} type="button" onClick={open}>
-                    <img src={`/brand/marks/${id}.png`} alt="" width={28} height={28} />
-                    <span>{label}</span>
-                  </button>
+                  { group: "Account", items: [
+                    ["general", "General", "Theme and appearance", () => setSettingsPane("general")],
+                    ["personalization", "Personalization", "How replies sound", () => { setView("chat"); setNavOpen(false); }],
+                    ["memory", "Memory", "Notes you chose to keep", () => { setView("memory"); setNavOpen(false); }],
+                    ["voice", "Voice", "Speak voice and pace", () => setSettingsPane("voice")],
+                    ["security", "Security and login", "Sign in to connect services", () => { window.location.assign("/login"); }],
+                  ]},
+                  { group: "Connections", items: [
+                    ["plugins", "Plugins", "Marks and setup for each service", () => { setView("connected"); setNavOpen(false); }],
+                    ["connections", "Connections", "API keys and saved providers", () => setSettingsPane("connections")],
+                    ["integrations", "Integrations", "What each provider can do", () => { setView("integrations"); setNavOpen(false); }],
+                  ]},
+                  { group: "Work", items: [
+                    ["scheduled", "Scheduled", "Jobs that wait for a time", () => { setView("scheduled"); setNavOpen(false); }],
+                    ["bots", "Bots", "Agents and templates", () => { setView("agents"); setNavOpen(false); }],
+                    ["eve", "EVE", "Operator workbench", () => { setView("intelligence"); setNavOpen(false); }],
+                    ["runs", "Runs", "What an agent already did", () => { setView("runs"); setNavOpen(false); }],
+                    ["tools", "Tools", "What this app can call", () => { setView("tools"); setNavOpen(false); }],
+                    ["skills", "Skills", "Installed abilities", () => { setView("skills"); setNavOpen(false); }],
+                    ["build", "Build", "Editor and next step", () => { setView("build"); setNavOpen(false); }],
+                    ["research", "Research", "Search when a provider is set", () => { setView("research"); setNavOpen(false); }],
+                    ["library", "Library", "Text copies in this browser", () => { setView("files"); setNavOpen(false); }],
+                    ["projects", "Projects", "Records on this device", () => { setView("projects"); setNavOpen(false); }],
+                  ]},
+                  { group: "System", items: [
+                    ["activity", "Activity", "What this device recorded", () => { setView("activity"); setNavOpen(false); }],
+                    ["pages", "Pages", "Every section in one list", () => setSettingsPane("pages")],
+                    ["data", "Data", "What stays in this browser", () => setSettingsPane("data")],
+                    ["safety", "Safety", "Stops and confirmations", () => setSettingsPane("safety")],
+                    ["help", "Help", "How the controls behave", () => { setView("help"); setNavOpen(false); }],
+                  ]},
+                ].map((section) => (
+                  <div key={section.group} className="settings-group">
+                    <p>{section.group}</p>
+                    {section.items.map(([id, label, detail, open]) => (
+                      <button key={id} type="button" onClick={open}>
+                        <img src={`/brand/marks/${id}.png`} alt="" width={28} height={28} />
+                        <span>
+                          <strong>{label}</strong>
+                          <small>{detail}</small>
+                        </span>
+                      </button>
+                    ))}
+                  </div>
                 ))}
               </nav>
               {settingsPane && (
@@ -5762,7 +5783,7 @@ export function CommandApp() {
                 <div className="mt-4 space-y-4">
                   {SETTINGS_PAGES.map((group) => (
                     <div key={group.group}>
-                      <p className="text-xs font-semibold uppercase tracking-wide text-muted">{group.group}</p>
+                      <p className="text-sm font-semibold text-muted">{group.group}</p>
                       <div className="mt-2 divide-y divide-white/8 overflow-hidden rounded-xl border border-white/8">
                         {group.items.map((item) => (
                           <button
@@ -5785,7 +5806,7 @@ export function CommandApp() {
                     </div>
                   ))}
                   <div>
-                    <p className="text-xs font-semibold uppercase tracking-wide text-muted">Routes</p>
+                    <p className="text-sm font-semibold text-muted">Routes</p>
                     <div className="mt-2 divide-y divide-white/8 overflow-hidden rounded-xl border border-white/8">
                       <Link to="/explore" className="flex min-h-12 items-center justify-between px-3 text-sm hover:bg-white/5">
                         <span>

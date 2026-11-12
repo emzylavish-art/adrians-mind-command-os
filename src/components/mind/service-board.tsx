@@ -261,6 +261,8 @@ export function ServiceBoard({
         const meta = OAUTH_BOARD[service.name];
         const oauth = meta ? oauthByName[service.name] : undefined;
         const unavailable = Boolean(oauth && isStatusUnavailable(oauth));
+        const needsSignIn = Boolean(oauth && /sign in required/i.test(oauth.detail));
+        const slackOff = service.name === "Slack";
         const oauthConnected = Boolean(meta && oauth?.state === "connected");
         const legacyConnected = service.name === "Notion" && !oauthConnected && notion?.state === "connected";
         const showOauthConnect = Boolean(meta && oauth?.state === "not_connected" && !unavailable);
@@ -270,10 +272,18 @@ export function ServiceBoard({
           <article key={service.name} className="dense-card card-texture min-w-0 overflow-hidden p-3">
             <div className="flex min-w-0 flex-wrap items-start justify-between gap-2">
               <h3 className="flex min-w-0 items-center gap-2 break-words font-semibold"><ServiceMark name={service.name} />{service.name}</h3>
-              <span className="max-w-full break-words rounded-full border border-line px-2 py-0.5 text-xs text-muted">{service.state}</span>
+              <span className="max-w-full break-words rounded-full border border-line px-2 py-0.5 text-xs text-muted">{slackOff ? "Off" : needsSignIn ? "Not connected" : service.state}</span>
             </div>
-            {unavailable ? null : <p className="mt-2 break-words text-sm text-muted">{service.detail}</p>}
-            {unavailable && oauth ? (
+            {slackOff ? (
+              <p className="mt-2 break-words text-sm text-muted">Slack stays off. No Slack login is started.</p>
+            ) : needsSignIn ? (
+              <p className="mt-2 break-words text-sm text-muted">Sign in before this app can check this connection.</p>
+            ) : unavailable ? null : <p className="mt-2 break-words text-sm text-muted">{service.detail}</p>}
+            {slackOff ? null : needsSignIn ? (
+              <button type="button" className="mt-3 min-h-11 rounded-panel bg-accent px-3 text-sm font-semibold text-accent-ink" onClick={() => window.location.assign("/login")}>
+                Sign in
+              </button>
+            ) : unavailable && oauth ? (
               <div
                 className="mt-3 flex flex-wrap items-center justify-between gap-2 rounded-panel border border-danger/40 bg-danger/10 px-3 py-2"
                 role="alert"
