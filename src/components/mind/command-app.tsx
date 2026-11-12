@@ -4479,16 +4479,18 @@ export function CommandApp() {
                 </div>
               </div>
               <div className="gpt-starters">
-                <button type="button" onClick={() => { setHomeAction("image"); setCommandMode("ask"); setDraft(""); }}>
+               <button type="button" onClick={() => { setHomeAction("image"); setCommandMode("ask"); setDraft(""); }}>
+                <button type="button" aria-pressed={homeAction === "image"} onClick={() => { setHomeAction("image"); setCommandMode("ask"); setDraft(""); }}>
                   <Image className="size-5" /> Create an image
                 </button>
-                <button type="button" onClick={() => { setHomeAction("write"); setCommandMode("build"); setDraft(""); }}>
+                <button type="button" aria-pressed={homeAction === "write"} onClick={() => { setHomeAction("write"); setCommandMode("build"); setDraft(""); }}>
                   <FileText className="size-5" /> Write or edit
                 </button>
-                <button type="button" onClick={() => { setHomeAction("search"); setCommandMode("research"); setDraft(""); }}>
+                <button type="button" aria-pressed={homeAction === "search"} onClick={() => { setHomeAction("search"); setCommandMode("research"); setDraft(""); }}>
                   <Search className="size-5" /> Search the web
                 </button>
               </div>
+              {homeAction !== "ask" ? <p className="gpt-starters text-sm text-muted">{homeAction === "image" ? "Image. Describe it, then send." : homeAction === "write" ? "Write. Say what to change, then send." : "Search. Type the question, then send."}</p> : null}
 
               <section className="floating-composer command-card composer-dock rounded-panel p-3 md:p-4" data-composer="floating">
                 <details className="composer-advanced">

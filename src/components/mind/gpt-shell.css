@@ -149,6 +149,11 @@ aside.rail.nav-drawer-open {
   font-size: 1.05rem;
 }
 
+.gpt-starters button[aria-pressed="true"] {
+  color: #fff;
+  font-weight: 700;
+}
+
 .gpt-home .floating-composer,
 .gpt-home [data-composer="floating"] {
   background: transparent !important;
