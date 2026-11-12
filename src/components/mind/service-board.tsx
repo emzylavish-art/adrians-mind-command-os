@@ -33,6 +33,16 @@ function ServiceMark({ name }: { name: string }) {
     "Google Docs": "/brand/marks/docs.png",
     "Google Calendar": "/brand/marks/calendar.png",
     YouTube: "/brand/marks/youtube.png",
+    Slack: "/brand/marks/slack.png",
+    OpenAI: "/brand/marks/openai.png",
+    Claude: "/brand/marks/claude.png",
+    Gemini: "/brand/marks/gemini.png",
+    OpenRouter: "/brand/marks/openrouter.png",
+    "Web search": "/brand/marks/search.png",
+    "Image and video": "/brand/marks/media.png",
+    Voice: "/brand/marks/voice.png",
+    MCP: "/brand/marks/mcp.png",
+    "Local computer": "/brand/marks/computer.png",
   };
   const marks: Record<string, { bg: string; fg: string; letter: string }> = {
     Gmail: { bg: "#EA4335", fg: "#fff", letter: "M" },

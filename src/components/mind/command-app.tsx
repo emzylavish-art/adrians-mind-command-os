@@ -61,6 +61,7 @@ import { LiveVoiceBar } from "@/components/mind/live-voice-bar";
 import { DictationPill } from "@/components/mind/dictation-pill";
 import { VoiceModeOverlay, type VoiceOverlayPhase } from "@/components/mind/voice-mode-overlay";
 import { SpeakStage } from "@/components/mind/speak-stage";
+import { SpeakPanel } from "@/components/mind/surfaces/speak-panel";
 import { ChatEmptyHero } from "@/components/mind/chat-empty-hero";
 import {
   ComposerBar,
@@ -5632,6 +5633,7 @@ export function CommandApp() {
               </div>
               <div id="settings-voice" hidden={settingsPane !== "voice"}>
                 <VoiceSettingsBlock />
+                <SpeakPanel />
               </div>
               <div id="settings-data" hidden={settingsPane !== "data"} className="space-y-4">
               <p className="text-sm text-muted">Storage on this device: {formatBytes(storedBytes)}. {syncNote}</p>
