@@ -601,3 +601,10 @@ img.service-mark {
   background-image: none !important;
   background-color: #141416 !important;
 }
+
+.main-stage input.rounded-panel.border.border-line,
+.main-stage textarea.rounded-panel.border.border-line,
+.main-stage select.rounded-panel.border.border-line {
+  background-image: none !important;
+  background-color: #141416 !important;
+}

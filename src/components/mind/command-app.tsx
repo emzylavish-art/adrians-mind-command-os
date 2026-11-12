@@ -536,6 +536,11 @@ export function CommandApp() {
   const navTriggerRef = useRef<HTMLButtonElement>(null);
   const navWasOpenRef = useRef(false);
   const [voiceSignInNotice, setVoiceSignInNotice] = useState(false);
+  const pageScrollRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    const scroller = pageScrollRef.current;
+    if (scroller) scroller.scrollTop = 0;
+  }, [view]);
   useEffect(() => {
     if (!navOpen) {
       if (navWasOpenRef.current) {
@@ -4252,7 +4257,7 @@ export function CommandApp() {
           </div>
         ) : null}
 
-        <div className={`min-h-0 flex-1 ${view === "chat" || view === "dashboard" || view === "intelligence" ? "overflow-hidden" : "overflow-auto pb-24"}`}>
+        <div ref={pageScrollRef} className={`min-h-0 flex-1 ${view === "chat" || view === "dashboard" || view === "intelligence" ? "overflow-hidden" : "overflow-auto pb-24"}`}>
           {view === "intelligence" && (
             <EveWorkbench
               workspace={ws}
