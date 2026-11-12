@@ -1079,6 +1079,12 @@ export function CommandApp() {
     node?.scrollIntoView({ block: "nearest", behavior: "smooth" });
   }, [focusAuditId, view, ws.audit]);
 
+  useEffect(() => {
+    if (view !== "chat") return;
+    const scroller = document.querySelector(".thread-shell .flex.min-w-0.flex-1.flex-col > .min-h-0.flex-1");
+    if (scroller instanceof HTMLElement) scroller.scrollTop = scroller.scrollHeight;
+  }, [view, active?.id, active?.messages.length]);
+
   const timelineRunning = useMemo(() => timelineCounts(toolTimeline).running, [toolTimeline]);
   useEffect(() => {
     if (!timelineRunning) return;

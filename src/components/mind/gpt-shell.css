@@ -1436,7 +1436,7 @@ form.thread-composer {
   flex: 1 1 auto !important;
   min-height: 0 !important;
   overflow: auto !important;
-  padding-bottom: 15rem !important;
+  padding-bottom: 1rem !important;
 }
 
 .thread-shell article img {
@@ -1787,7 +1787,12 @@ form.thread-composer {
 }
 
 .owner-video {
-  max-height: 360px;
+  display: block;
+  width: min(100%, 28rem);
+  height: 12rem;
+  max-height: 12rem;
+  background: #000;
+  border-radius: 14px;
 }
 
 .thread-shell section.flex.min-w-0.flex-1.flex-col {
@@ -1805,12 +1810,32 @@ form.thread-composer {
   position: relative !important;
   z-index: 6;
   flex: 0 0 auto !important;
+  height: auto !important;
+  max-height: none !important;
+}
+.thread-shell .flex.min-w-0.flex-1.flex-col {
+  display: grid !important;
+  grid-template-rows: auto minmax(0, 1fr) auto !important;
+  min-height: 0 !important;
+  overflow: hidden !important;
+}
+.thread-shell .min-h-0.flex-1.overflow-auto {
+  min-height: 0 !important;
+  height: auto !important;
+  max-height: 100% !important;
+  overflow: auto !important;
 }
 .thread-shell .composer-toolbar {
   display: flex !important;
-  flex-wrap: wrap !important;
-  overflow: visible !important;
-  row-gap: 0.35rem !important;
+  flex-wrap: nowrap !important;
+  overflow-x: auto !important;
+  overflow-y: hidden !important;
+  max-width: 100% !important;
+}
+.thread-shell .flex.min-w-0.flex-1.flex-col > .min-h-0.flex-1 {
+  min-height: 0 !important;
+  max-height: 100% !important;
+  overflow: auto !important;
 }
 .thread-shell .composer-toolbar button {
   flex: 0 0 auto !important;
