@@ -199,7 +199,7 @@ export function BuildPanel() {
     <section className="build-panel" aria-labelledby="build-panel-title" data-testid="build-panel">
       <style>{PANEL_CSS}</style>
       <header className="build-panel__head">
-        <h1 id="build-panel-title">Build</h1>
+        <h1 id="build-panel-title"><img src="/brand/marks/build.png" alt="" width="32" height="32" />Build</h1>
         <p>Set the target and scope, keep a short task list, and follow the exact next step before a file or command runs.</p>
       </header>
 
@@ -324,9 +324,17 @@ const PANEL_CSS = `
 .build-panel *, .build-panel *::before, .build-panel *::after { box-sizing: border-box; }
 .build-panel__head h1 {
   margin: 0;
+  display: flex;
+  align-items: center;
+  gap: 0.65rem;
   font-size: clamp(1.5rem, 2.4vw, 2rem);
   line-height: 1.15;
   letter-spacing: -0.03em;
+}
+.build-panel__head h1 img {
+  width: 2rem;
+  height: 2rem;
+  border-radius: 0.6rem;
 }
 .build-panel__head p,
 .build-panel__note,

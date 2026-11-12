@@ -386,7 +386,7 @@ export function BuildWorkspace() {
       <div className="page-hero">
         <div className="flex flex-wrap items-start justify-between gap-4">
           <div className="flex items-center gap-3">
-            <Terminal className="size-8 text-accent" aria-hidden="true" />
+            <img src="/brand/marks/build.png" alt="" className="size-8 rounded-lg" />
             <div>
               <h2 className="font-display text-3xl font-bold">Adrian Build</h2>
               <p className="text-sm text-muted">Plans use Grok. File edits still need a runtime that can write. A plan is not a file change.</p>
