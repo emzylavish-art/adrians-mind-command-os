@@ -28,7 +28,7 @@ const ADDED_KEY = "adrian-added-plugins";
 
 export function KimiDeviceConnect() {
   const [mode, setMode] = useState<"oauth" | "key">("oauth");
-  const [notice, setNotice] = useState("Add a plugin here. The button opens its install step. Nothing is marked connected until that step finishes.");
+  const [notice, setNotice] = useState("Build uses the saved Grok key. There is no separate coding login.");
   const [userCode, setUserCode] = useState("");
   const [url, setUrl] = useState("");
   const [mcpUrl, setMcpUrl] = useState("");
@@ -87,52 +87,6 @@ export function KimiDeviceConnect() {
     return (await response.json()) as Start;
   }
 
-  async function call(action: "start" | "poll" | "status") {
-    setBusy(true);
-    try {
-      const body = await authed(action === "status" ? "/api/mind/kimi/providers?view=kimi" : "/api/mind/kimi/providers", {
-        method: action === "status" ? "GET" : "POST",
-        body: action === "status" ? undefined : JSON.stringify({ action: action === "start" ? "device_start" : "device_poll" }),
-      });
-      if (!body) return;
-      if (!body.ok) {
-        setNotice(body.error || "The coding login did not start.");
-        return;
-      }
-      if (body.verificationUriComplete) {
-        setUrl(body.verificationUriComplete);
-        setUserCode(body.userCode || "");
-        setNotice("Approve this code on the login page, then press Check.");
-        window.open(body.verificationUriComplete, "_blank", "noopener,noreferrer");
-        return;
-      }
-      if (body.state === "connected") setNotice(`${body.accountLabel || "Coding account"} is connected. The token stays on the server.`);
-      else setNotice(body.detail || "Waiting for you to approve the login page.");
-      if (Array.isArray(body.plugins)) setPlugins(body.plugins);
-    } catch {
-      setNotice("The coding login could not be reached.");
-    } finally {
-      setBusy(false);
-    }
-  }
-
-  async function saveKey() {
-    if (!apiKey.trim()) return;
-    setBusy(true);
-    try {
-      const body = await authed("/api/mind/kimi/providers", {
-        method: "POST",
-        body: JSON.stringify({ label: "Kimi Platform", baseUrl: "https://api.kimi.ai/coding/v1", apiKey, model: "kimi-for-coding" }),
-      });
-      setApiKey("");
-      setNotice(body?.ok ? "API key saved on the server. It is not shown again." : body?.error || "The API key was not saved.");
-    } catch {
-      setNotice("The API key was not saved.");
-    } finally {
-      setBusy(false);
-    }
-  }
-
   async function saveMcp() {
     if (!mcpUrl.trim()) return;
     setBusy(true);
@@ -184,23 +138,7 @@ export function KimiDeviceConnect() {
         {tab === "installed" && added.length === 0 ? <p className="text-sm text-muted">Nothing is added yet. Open Official or Curated and press Add.</p> : null}
       </div>
       {tab === "custom" ? <div>
-      <div className="mt-3 flex flex-wrap gap-2">
-        <button type="button" className="min-h-11 rounded-panel border border-line px-3 text-sm" aria-pressed={mode === "oauth"} onClick={() => setMode("oauth")}>Coding login</button>
-        <button type="button" className="min-h-11 rounded-panel border border-line px-3 text-sm" aria-pressed={mode === "key"} onClick={() => setMode("key")}>API key</button>
-      </div>
-      {mode === "oauth" ? (
-        <div className="mt-3 flex flex-wrap gap-2">
-          <button type="button" className="min-h-11 rounded-panel bg-accent px-4 text-sm font-semibold text-accent-ink" disabled={busy} onClick={() => void call("start")}>Connect coding account</button>
-          <button type="button" className="min-h-11 rounded-panel border border-line px-3 text-sm" disabled={busy} onClick={() => void call("poll")}>Check</button>
-          {url ? <a className="inline-flex min-h-11 items-center px-3 text-sm underline" href={url} target="_blank" rel="noreferrer">Open the login page</a> : null}
-          {userCode ? <p className="w-full font-mono text-sm">Code: {userCode}</p> : null}
-        </div>
-      ) : (
-        <form className="mt-3 flex flex-wrap gap-2" onSubmit={(event) => { event.preventDefault(); void saveKey(); }}>
-          <input id="kimi-api-key" value={apiKey} onChange={(event) => setApiKey(event.target.value)} type="password" autoComplete="off" placeholder="Coding platform API key" className="min-h-11 min-w-64 flex-1 rounded-panel border border-line bg-bg px-3 text-sm" />
-          <button type="submit" className="min-h-11 rounded-panel border border-line px-3 text-sm" disabled={busy}>Save API key</button>
-        </form>
-      )}
+      <p className="mt-3 text-sm text-muted">There is no Kimi login on this page. A coding task uses the Grok key already saved for Adrian.</p>
       <form className="mt-4 flex flex-wrap gap-2" onSubmit={(event) => { event.preventDefault(); void saveMcp(); }}>
         <input id="kimi-mcp-url" value={mcpUrl} onChange={(event) => setMcpUrl(event.target.value)} placeholder="https://your-mcp.example/mcp" className="min-h-11 min-w-64 flex-1 rounded-panel border border-line bg-bg px-3 text-sm" />
         <button type="submit" className="min-h-11 rounded-panel border border-line px-3 text-sm" disabled={busy}>Connect MCP</button>

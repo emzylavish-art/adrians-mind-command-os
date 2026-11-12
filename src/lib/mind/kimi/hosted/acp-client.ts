@@ -1,4 +1,7 @@
 import { spawn } from "node:child_process";
+import { existsSync, mkdirSync, writeFileSync } from "node:fs";
+import { fileURLToPath } from "node:url";
+import { resolveXaiInferenceApiKey } from "../../media/xai-key.ts";
 
 export type KimiProbe = {
   status: "session_created" | "authentication_required" | "failed" | "not_configured";
@@ -18,20 +21,75 @@ function isObject(value: unknown): value is JsonObject {
   return Boolean(value && typeof value === "object" && !Array.isArray(value));
 }
 
-export async function probeKimiAcp(command = process.env.KIMI_BIN || "kimi", cwd = process.cwd()): Promise<KimiProbe> {
+function adrianBuildEnv(): NodeJS.ProcessEnv {
+  const key = resolveXaiInferenceApiKey();
+  const home = process.env.KIMI_CODE_HOME || "/tmp/adrian-build-home";
+  mkdirSync(home, { recursive: true });
+  const config = `${home}/config.toml`;
+  if (!existsSync(config)) {
+    writeFileSync(config, [
+      "telemetry = false",
+      'default_model = "adrian/grok"',
+      'default_permission_mode = "manual"',
+      "[providers.adrian]",
+      'type = "openai"',
+      'base_url = "https://api.x.ai/v1"',
+      'api_key_env = "XAI_API_KEY"',
+      '[models."adrian/grok"]',
+      'provider = "adrian"',
+      'model = "grok-4.20-0309-non-reasoning"',
+      "max_context_size = 131072",
+      'capabilities = ["tool_use", "thinking"]',
+      'display_name = "Adrian Grok"',
+      "",
+    ].join("\n"));
+  }
+  return {
+    ...process.env,
+    KIMI_CODE_HOME: home,
+    KIMI_DISABLE_TELEMETRY: "1",
+    KIMI_CODE_NO_AUTO_UPDATE: "1",
+    KIMI_CODE_IDENTITY_NAME: "Adrian",
+    KIMI_CODE_IDENTITY_SLUG: "adrian",
+    KIMI_MODEL_NAME: "grok-4.20-0309-non-reasoning",
+    KIMI_MODEL_PROVIDER_TYPE: "openai",
+    KIMI_MODEL_BASE_URL: "https://api.x.ai/v1",
+    KIMI_MODEL_API_KEY: key || "",
+    KIMI_MODEL_DISPLAY_NAME: "Adrian Grok",
+    KIMI_MODEL_CAPABILITIES: "tool_use,thinking",
+    KIMI_MODEL_MAX_CONTEXT_SIZE: "131072",
+  };
+}
+
+export function adrianBuildCommand(env: NodeJS.ProcessEnv = process.env): string {
+  const packaged = fileURLToPath(new URL("../../../../node_modules/@moonshot-ai/kimi-code/dist/main.mjs", import.meta.url));
+  const candidates = [
+    env.KIMI_BIN,
+    packaged,
+    "node_modules/@moonshot-ai/kimi-code/dist/main.mjs",
+    "/home/ubuntu/.nvm/versions/node/v22.13.0/lib/node_modules/@moonshot-ai/kimi-code/dist/main.mjs",
+  ];
+  for (const candidate of candidates) {
+    if (candidate && existsSync(candidate)) return candidate;
+  }
+  return env.KIMI_BIN || "kimi";
+}
+
+export async function probeKimiAcp(command = adrianBuildCommand(), cwd = process.cwd()): Promise<KimiProbe> {
   return await exchange(command, cwd, []);
 }
 
-export async function runHostedPrompt(prompt: string, command = process.env.KIMI_BIN || "kimi", cwd = process.cwd()): Promise<KimiProbe & { output?: string }> {
+export async function runHostedPrompt(prompt: string, command = adrianBuildCommand(), cwd = process.cwd()): Promise<KimiProbe & { output?: string }> {
   return await exchange(command, cwd, [prompt]);
 }
 
 async function exchange(command: string, cwd: string, prompts: string[]): Promise<KimiProbe & { output?: string }> {
   if (!command.trim()) return { status: "not_configured", command, error: "Kimi command is not configured.", runtimeVerified: false };
   return await new Promise((resolve) => {
-    const child = spawn(command, ["acp"], {
+    const script = command.endsWith(".mjs") || command.endsWith(".js");
+    const child = spawn(script ? process.execPath : command, script ? [command, "acp"] : ["acp"], {
       cwd,
-      env: { ...process.env, KIMI_DISABLE_TELEMETRY: "1", KIMI_CODE_NO_AUTO_UPDATE: "1" },
+      env: adrianBuildEnv(),
       stdio: ["pipe", "pipe", "pipe"],
     });
     let buffer = "";

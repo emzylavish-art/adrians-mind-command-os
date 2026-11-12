@@ -2,7 +2,7 @@ import { requireUserId } from "../../auth/verify.server";
 import { assertSameOrigin } from "../connectors/oauth-csrf";
 import { haltIsOn } from "../halt.server";
 import { enqueueJob, listJobEvents, onlineAgents, readJob } from "../pc-pairing/store";
-import { runHostedPrompt } from "./hosted/acp-client.ts";
+import { adrianBuildCommand, runHostedPrompt } from "./hosted/acp-client.ts";
 import { recordKimiAttempt } from "./persist.ts";
 
 const MAX_PROMPT = 8_000;
@@ -34,7 +34,7 @@ export async function handleKimiSession(request: Request): Promise<Response> {
       const cwd = typeof body.cwd === "string" && body.cwd.trim() ? body.cwd.trim().slice(0, MAX_CWD) : undefined;
       const agents = onlineAgents(ownerId);
       if (agents.length === 0) {
-        const hosted = await runHostedPrompt(prompt, process.env.KIMI_BIN || "kimi", cwd || process.cwd());
+        const hosted = await runHostedPrompt(prompt, adrianBuildCommand(), cwd || process.cwd());
         await recordKimiAttempt({ ownerId, status: hosted.status, error: hosted.error });
         return json({
           ok: false,
