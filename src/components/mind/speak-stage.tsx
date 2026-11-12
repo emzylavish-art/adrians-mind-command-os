@@ -37,7 +37,7 @@ export function SpeakStage(props: {
   onClose: () => void;
   onSignIn: () => void;
   onLive?: () => void;
-  onAsk?: (text: string) => Promise<string | null>;
+  onAsk?: (text: string) => Promise<string | null | { reply?: string; error?: string }>;
 }) {
   const videoRef = useRef<HTMLVideoElement>(null);
   const streamRef = useRef<MediaStream | null>(null);
@@ -49,6 +49,7 @@ export function SpeakStage(props: {
   const [notice, setNotice] = useState<string | null>(null);
   const [line, setLine] = useState("");
   const [asking, setAsking] = useState(false);
+  const [reply, setReply] = useState("");
   const [voice, setVoice] = useState<XaiBuiltinVoice>("eve");
   const [rate, setRate] = useState<RateId>("natural");
   const [uploadName, setUploadName] = useState<string | null>(null);
@@ -156,12 +157,21 @@ export function SpeakStage(props: {
     const text = line.trim();
     if (!text || !props.onAsk || asking) return;
     setAsking(true);
+    setReply("");
     setNotice("Adrian is answering. The reply will be spoken.");
     try {
-      const error = await props.onAsk(text);
-      setNotice(error ?? "Spoken.");
-      if (!error) setLine("");
+      const result = await props.onAsk(text);
+      if (result && typeof result === "object") {
+        setReply(result.reply ?? "");
+        setNotice(result.error ?? (result.reply ? "Spoken." : "The reply did not include text."));
+        if (!result.error) setLine("");
+      } else {
+        setReply("");
+        setNotice(result ?? "Spoken.");
+        if (!result) setLine("");
+      }
     } catch {
+      setReply("");
       setNotice("The reply did not finish. Nothing was spoken.");
     } finally {
       setAsking(false);
@@ -192,6 +202,7 @@ export function SpeakStage(props: {
           </p>
           {uploadName ? <p className="speak-file">{uploadName}</p> : null}
           {notice ? <p className="speak-notice">{notice}</p> : null}
+          {reply ? <p className="speak-notice" data-testid="speak-reply">{reply}</p> : null}
           <form className="speak-ask" onSubmit={(event) => { event.preventDefault(); void ask(); }}>
             <input aria-label="Type to Speak" placeholder="Type if the mic is blocked" value={line} onChange={(event) => setLine(event.target.value)} />
             <button type="submit" disabled={asking || !line.trim()}>{asking ? "Speaking" : "Speak"}</button>

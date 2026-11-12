@@ -256,14 +256,19 @@ export function BuildWorkspace() {
         headers: { "content-type": "application/json" },
         body: JSON.stringify({ prompt: text, cwd: cwd.trim() || undefined }),
       });
-      const data = (await response.json()) as { ok?: boolean; jobId?: string; error?: string };
+      const data = (await response.json()) as { ok?: boolean; jobId?: string; executed?: boolean; error?: string; version?: string; agent?: string; loginRequired?: boolean; output?: string; package?: string };
       if (!response.ok || !data.ok || !data.jobId) {
+        if (data.executed) {
+          setNotice(`${data.agent || "The coding package"} ${data.version || ""} ran ${data.package || "the in-repo package"}. No login was requested.`.replace(/\s+/g, " "));
+          setJob({ id: "local", status: "done", output: [data.package, data.output].filter(Boolean).join("\n") || "Accepted.", error: "", createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() });
+          return;
+        }
         setNotice(data.error || "The build session could not be queued.");
         return;
       }
       setJob({ id: data.jobId, status: "queued", output: "", error: "", createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() });
       localStorage.setItem("adrian-build-last-job", data.jobId);
-      setNotice("Task queued. Waiting for the companion to start the build.");
+      setNotice("Task queued on the paired computer.");
     } catch {
       setNotice("The Build request could not reach Adrian OS. Nothing was executed.");
     } finally {

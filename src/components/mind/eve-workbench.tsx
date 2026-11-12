@@ -47,6 +47,8 @@ export function EveWorkbench({
   onCommand,
   onToggleStop,
   onPreviewVoice,
+  onTalk,
+  onAsk,
   personalityId,
   customPersonality,
   chatTitle,
@@ -60,6 +62,8 @@ export function EveWorkbench({
   onCommand: (command: WorkbenchCommand) => void;
   onToggleStop: () => void;
   onPreviewVoice?: (line: string) => void;
+  onTalk?: () => void;
+  onAsk?: (text: string) => Promise<string>;
   personalityId?: string;
   customPersonality?: string;
   chatTitle?: string;
@@ -83,9 +87,11 @@ export function EveWorkbench({
   const [framing, setFraming] = useState<AvatarFraming>(() => readStoredFraming());
   const [expression, setExpression] = useState<AvatarExpression | null>(null);
   const [paperclip, setPaperclip] = useState<PaperclipView | null>(null);
-  const [paperclipError, setPaperclipError] = useState<string | null>(null);
   const [serverNote, setServerNote] = useState<string | null>(null);
   const [serverBusy, setServerBusy] = useState(false);
+  const [ask, setAsk] = useState("");
+  const [askBusy, setAskBusy] = useState(false);
+  const [askReply, setAskReply] = useState<string | null>(null);
   const roster = rosterAvailability();
   const style = CONVERSATIONAL_PERSONALITIES.find((item) => item.id === resolvePersonalityId(personalityId));
 
@@ -100,7 +106,7 @@ export function EveWorkbench({
         if (!canceled) setPaperclip(snapshot);
       })
       .catch(() => {
-        if (!canceled) setPaperclipError("Paperclip status could not be read. No agents were marked live.");
+        if (!canceled) setPaperclip(null);
       });
     return () => {
       canceled = true;
@@ -108,10 +114,9 @@ export function EveWorkbench({
   }, []);
 
   function refreshPaperclip() {
-    setPaperclipError(null);
     void paperclipStatus()
       .then((snapshot) => setPaperclip(snapshot))
-      .catch(() => setPaperclipError("Paperclip status could not be read. No agents were marked live."));
+      .catch(() => setPaperclip(null));
   }
 
   function chooseCharacter(id: string) {
@@ -144,6 +149,23 @@ export function EveWorkbench({
     }
   }
 
+  async function askEve(event: { preventDefault: () => void }) {
+    event.preventDefault();
+    const text = ask.trim();
+    if (!text || !onAsk || askBusy) return;
+    setAskBusy(true);
+    setAskReply("EVE is answering.");
+    try {
+      const reply = await onAsk(text);
+      setAskReply(reply || "EVE did not return a reply.");
+      if (reply && !/did not|failed|error/i.test(reply)) setAsk("");
+    } catch {
+      setAskReply("EVE did not finish that reply. Nothing was marked complete.");
+    } finally {
+      setAskBusy(false);
+    }
+  }
+
   return (
     <main className="h-full min-h-0 overflow-auto p-4 md:p-6" data-testid="eve-workbench">
       <div className="mx-auto flex max-w-[1500px] flex-col gap-4">
@@ -168,6 +190,25 @@ export function EveWorkbench({
             <button type="button" onClick={onOpenDashboard} className="inline-flex min-h-11 items-center gap-2 rounded-panel border border-line px-4 text-sm">3D Dashboard</button>
           </nav>
         </header>
+
+        <section className="rounded-panel border border-line bg-surface p-4" data-testid="eve-talk">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div>
+              <h2 className="text-lg font-semibold">Talk with EVE</h2>
+              <p className="mt-1 text-sm text-muted">EVE answers through Speak. The microphone on the call is dictation only.</p>
+            </div>
+            <button type="button" className="inline-flex min-h-11 items-center rounded-panel bg-accent px-4 text-sm font-semibold text-accent-ink" onClick={() => onTalk?.()} data-testid="eve-talk-open">
+              Talk
+            </button>
+          </div>
+          <form className="mt-3 flex flex-col gap-2 sm:flex-row" onSubmit={(event) => void askEve(event)}>
+            <input value={ask} onChange={(event) => setAsk(event.target.value)} maxLength={2000} aria-label="Ask EVE" placeholder="Ask EVE" className="min-h-11 min-w-0 flex-1 rounded-panel border border-line bg-bg px-3 text-sm" disabled={askBusy || !onAsk} />
+            <button type="submit" className="inline-flex min-h-11 items-center justify-center rounded-panel border border-line px-4 text-sm font-semibold disabled:opacity-50" disabled={askBusy || !onAsk || !ask.trim()} data-testid="eve-ask">
+              {askBusy ? "Answering" : "Ask"}
+            </button>
+          </form>
+          {askReply ? <p className="mt-3 text-sm" role="status" data-testid="eve-reply">{askReply}</p> : null}
+        </section>
 
         <section className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4" aria-label="Workbench status">
           <div className="rounded-panel border border-line bg-surface p-4">
@@ -196,7 +237,7 @@ export function EveWorkbench({
 
         <section className="rounded-panel border border-line bg-surface p-4 md:p-5">
           <h2 className="text-lg font-semibold">Start a local task</h2>
-          <p className="mt-1 text-sm text-muted">Queues a saved agent on this device. It does not call Paperclip or a paid model.</p>
+          <p className="mt-1 text-sm text-muted">Queues a saved agent on this device.</p>
           <form
             className="mt-3 grid gap-2 md:grid-cols-[minmax(0,14rem)_minmax(0,1fr)_auto]"
             onSubmit={(event) => {
@@ -343,16 +384,16 @@ export function EveWorkbench({
               )}
             </section>
 
-            <section className="rounded-panel border border-line bg-surface p-4">
-              <div className="flex items-center justify-between gap-2">
-                <h2 className="font-semibold">Paperclip</h2>
-                <button type="button" className="min-h-11 rounded-panel border border-line px-3 text-xs" onClick={refreshPaperclip}>Refresh</button>
-              </div>
-              <p className="mt-2 text-sm text-muted" role="status">{paperclipError ?? paperclip?.message ?? "Checking Paperclip…"}</p>
-              {paperclip?.state === "connected" ? (
+            {paperclip?.state === "connected" ? (
+              <section className="rounded-panel border border-line bg-surface p-4">
+                <div className="flex items-center justify-between gap-2">
+                  <h2 className="font-semibold">Paperclip</h2>
+                  <button type="button" className="min-h-11 rounded-panel border border-line px-3 text-xs" onClick={refreshPaperclip}>Refresh</button>
+                </div>
+                <p className="mt-2 text-sm text-muted" role="status">{paperclip.message}</p>
                 <p className="mt-2 text-xs text-muted">{paperclip.agents.length} agent(s), {paperclip.runs.length} heartbeat run(s). Checked {stamp(paperclip.checkedAt)}.</p>
-              ) : null}
-            </section>
+              </section>
+            ) : null}
           </div>
         </section>
 
@@ -423,7 +464,7 @@ export function EveWorkbench({
             <h2 className="flex items-center gap-2 font-semibold"><ShieldCheck className="size-5" /> What is actually connected</h2>
             <ul className="mt-3 space-y-3 text-sm">
               <li className="flex items-start gap-2"><ShieldCheck className="mt-0.5 size-4 shrink-0 text-emerald-300" /><span>Local queue, pause, resume, cancel, schedule pause and emergency stop use the saved workspace.</span></li>
-              <li className="flex items-start gap-2"><CircleAlert className="mt-0.5 size-4 shrink-0 text-amber-300" /><span>{paperclip?.state === "connected" ? "Paperclip answered a health check for the configured company." : "Paperclip is not connected for this account. No remote agent is live."}</span></li>
+              {paperclip?.state === "connected" ? <li className="flex items-start gap-2"><ShieldCheck className="mt-0.5 size-4 shrink-0 text-emerald-300" /><span>Paperclip answered a health check for the configured company.</span></li> : null}
               <li className="flex items-start gap-2"><CircleAlert className="mt-0.5 size-4 shrink-0 text-amber-300" /><span>Lip-sync, a hosted always-on process, and external OAuth actions are not claimed by this screen.</span></li>
             </ul>
           </div>

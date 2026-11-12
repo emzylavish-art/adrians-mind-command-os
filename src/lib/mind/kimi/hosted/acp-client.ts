@@ -21,6 +21,24 @@ function isObject(value: unknown): value is JsonObject {
   return Boolean(value && typeof value === "object" && !Array.isArray(value));
 }
 
+function publicError(text: string): string {
+  return text.replace(/xai-[A-Za-z0-9_-]{8,}/g, "[saved key]").replace(/sk-[A-Za-z0-9_-]{8,}/g, "[saved key]").slice(0, 400);
+}
+
+function textFrom(value: unknown, depth = 0): string {
+  if (depth > 5 || value == null) return "";
+  if (typeof value === "string") return value;
+  if (Array.isArray(value)) return value.map((item) => textFrom(item, depth + 1)).filter(Boolean).join("");
+  if (!isObject(value)) return "";
+  const direct = typeof value.text === "string" ? value.text : "";
+  return [direct, textFrom(value.content, depth + 1), textFrom(value.update, depth + 1)].filter(Boolean).join("");
+}
+
+export function packageLabel(command: string): string {
+  const marker = "node_modules/@moonshot-ai/kimi-code/dist/main.mjs";
+  return command.includes(marker) ? marker : "in-repo coding package";
+}
+
 function adrianBuildEnv(): NodeJS.ProcessEnv {
   const key = resolveXaiInferenceApiKey();
   const home = process.env.KIMI_CODE_HOME || "/tmp/adrian-build-home";
@@ -102,7 +120,14 @@ async function exchange(command: string, cwd: string, prompts: string[]): Promis
       child.kill();
       resolve(probe);
     };
-    const timer = setTimeout(() => finish({ ...seen, status: "failed", error: seen.error || "Kimi ACP did not complete the handshake within 20 seconds." }), prompts.length ? 20_000 : 12_000);
+    const timer = setTimeout(() => {
+      const accepted = prompts.length ? Boolean(seen.output) : Boolean(seen.agentName);
+      finish({
+        ...seen,
+        status: accepted ? "session_created" : "failed",
+        error: accepted ? undefined : publicError(seen.error || (prompts.length ? "The coding package did not finish the task within 60 seconds." : "The coding package did not finish the handshake within 12 seconds.")),
+      });
+    }, prompts.length ? 60_000 : 12_000);
     child.on("error", (error) => finish({ status: "not_configured", command, error: error.message, runtimeVerified: false }));
     child.stdin.write(`${JSON.stringify({ jsonrpc: "2.0", id: 1, method: "initialize", params: { protocolVersion: 1, clientCapabilities: {}, clientInfo: { name: "adrian-os", version: "0.1" } } })}\n`);
     child.stdout.on("data", (chunk: Buffer) => {
@@ -127,7 +152,7 @@ async function exchange(command: string, cwd: string, prompts: string[]): Promis
         if (message.id === 2) {
           if (isObject(message.error)) {
             const text = typeof message.error.message === "string" ? message.error.message : "Kimi rejected the session.";
-            finish({ ...seen, status: /auth/i.test(text) ? "authentication_required" : "failed", error: text });
+            finish({ ...seen, status: /auth/i.test(text) ? "authentication_required" : "failed", error: publicError(text) });
           } else if (prompts.length && isObject(message.result)) {
             const sessionId = typeof message.result.sessionId === "string" ? message.result.sessionId : "";
             if (!sessionId) finish({ ...seen, status: "failed", error: "Kimi created a session without an id." });
@@ -136,12 +161,17 @@ async function exchange(command: string, cwd: string, prompts: string[]): Promis
             finish({ ...seen, status: "session_created", error: undefined });
           }
         }
+        if (message.method === "session/update") {
+          const text = textFrom(message.params).trim();
+          if (text) seen.output = `${seen.output || ""}${text}`.slice(0, 4000);
+        }
         if (message.id === 3) {
           if (isObject(message.error)) {
             const text = typeof message.error.message === "string" ? message.error.message : "Kimi rejected the task.";
-            finish({ ...seen, status: "failed", error: text });
+            finish({ ...seen, status: "failed", error: publicError(text) });
           } else {
-            finish({ ...seen, status: "session_created", error: undefined, output: "Kimi accepted the prompt." });
+            const text = textFrom(message.result).trim();
+            finish({ ...seen, status: "session_created", error: undefined, output: text || seen.output || "The in-repo coding package accepted the task. No login was requested." });
           }
         }
       }

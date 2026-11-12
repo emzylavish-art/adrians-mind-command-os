@@ -2,7 +2,7 @@ import { requireUserId } from "../../auth/verify.server";
 import { assertSameOrigin } from "../connectors/oauth-csrf";
 import { haltIsOn } from "../halt.server";
 import { enqueueJob, listJobEvents, onlineAgents, readJob } from "../pc-pairing/store";
-import { adrianBuildCommand, runHostedPrompt } from "./hosted/acp-client.ts";
+import { adrianBuildCommand, packageLabel, runHostedPrompt } from "./hosted/acp-client.ts";
 import { recordKimiAttempt } from "./persist.ts";
 
 const MAX_PROMPT = 8_000;
@@ -36,13 +36,18 @@ export async function handleKimiSession(request: Request): Promise<Response> {
       if (agents.length === 0) {
         const hosted = await runHostedPrompt(prompt, adrianBuildCommand(), cwd || process.cwd());
         await recordKimiAttempt({ ownerId, status: hosted.status, error: hosted.error });
+        const accepted = hosted.status === "session_created";
         return json({
-          ok: false,
-          executed: false,
-          error: hosted.error || "The connected runtime did not accept the task. No extra login is requested.",
+          ok: accepted,
+          executed: accepted,
+          loginRequired: hosted.status === "authentication_required",
+          error: accepted ? undefined : hosted.error || "The coding package did not accept the task. No extra login is requested.",
           runtime: hosted.status,
           version: hosted.version,
-        }, hosted.status === "not_configured" ? 503 : 409);
+          agent: hosted.agentName,
+          output: hosted.output || "",
+          package: packageLabel(hosted.command),
+        }, accepted ? 200 : hosted.status === "not_configured" ? 503 : 409);
       }
       const agent = agents[0];
       const job = enqueueJob({

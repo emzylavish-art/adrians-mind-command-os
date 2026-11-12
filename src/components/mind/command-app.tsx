@@ -364,34 +364,6 @@ const MORE_NAV: { id: View; label: string; icon: typeof Home }[] = [
   { id: "help", label: "Help", icon: CircleHelp },
 ];
 
-const SETTINGS_PAGES: { group: string; items: { id: View; label: string; detail: string }[] }[] = [
-  {
-    group: "Work",
-    items: [
-      { id: "intelligence", label: "EVE", detail: "Operator workbench" },
-      { id: "agents", label: "Bots", detail: "Agents and templates" },
-      { id: "dashboard", label: "3D graph", detail: "Workspace map" },
-      { id: "projects", label: "Projects", detail: "Records on this device" },
-      { id: "research", label: "Research", detail: "Search when a provider is set" },
-      { id: "files", label: "Library", detail: "Text copies in this browser" },
-      { id: "chat", label: "Threads", detail: "One conversation at a time" },
-      { id: "runs", label: "Runs", detail: "What an agent already did" },
-    ],
-  },
-  {
-    group: "System",
-    items: [
-      { id: "tools", label: "Tools", detail: "What this app can call" },
-      { id: "skills", label: "Skills", detail: "Installed abilities" },
-      { id: "scheduled", label: "Scheduled", detail: "Jobs that wait for a time" },
-      { id: "memory", label: "Memory", detail: "Notes you chose to keep" },
-      { id: "activity", label: "Activity", detail: "What this device recorded" },
-      { id: "integrations", label: "Integrations", detail: "Provider setup" },
-      { id: "help", label: "Help", detail: "How the controls behave" },
-    ],
-  },
-];
-
 const NAV = NAV_GROUPS.flatMap((group) => group.items);
 
 const TITLES: Record<View, string> = {
@@ -848,6 +820,7 @@ export function CommandApp() {
   const [pendingImages, setPendingImages] = useState<ImageAttachment[]>([]);
   const [cameraOpen, setCameraOpen] = useState(false);
   const [cloudPickerOpen, setCloudPickerOpen] = useState(false);
+  const [driveConnected, setDriveConnected] = useState(false);
   const imageInputRef = useRef<HTMLInputElement>(null);
   const [contextOpen, setContextOpen] = useState(false);
   const [toolsOpen, setToolsOpen] = useState(false);
@@ -882,6 +855,22 @@ export function CommandApp() {
       setAvatarPresence("idle");
     }
   }, [ws.halted, ws.runs, voiceListening, speaking]);
+
+  useEffect(() => {
+    let canceled = false;
+    void fetch("/api/mind/media/cloud/status", { credentials: "include" })
+      .then((response) => response.json())
+      .then((body: { sources?: { state?: string }[] }) => {
+        if (canceled) return;
+        setDriveConnected(Boolean(body.sources?.some((row) => row.state === "connected")));
+      })
+      .catch(() => {
+        if (!canceled) setDriveConnected(false);
+      });
+    return () => {
+      canceled = true;
+    };
+  }, []);
 
   useEffect(() => {
     // Single store: hydrate from localStorage once; every badge reads the same snapshot.
@@ -3177,7 +3166,7 @@ export function CommandApp() {
     setView("chat");
   }
 
-  async function speakChatTurn(transcript: string) {
+  async function speakChatTurn(transcript: string, options?: { stay?: boolean }) {
     let chat = (activeId ? wsRef.current.chats.find((item) => item.id === activeId) : null) ?? null;
     let source = wsRef.current;
     if (!chat) {
@@ -3191,7 +3180,7 @@ export function CommandApp() {
       chat = made.chat;
       source = { ...source, chats: [made.chat, ...source.chats] };
       setActiveId(made.chat.id);
-      setView("chat");
+      if (!options?.stay) setView("chat");
       setWs((prev) => pushAudit({ ...prev, chats: [made.chat, ...prev.chats] }, "create_chat", made.chat.id, "speak"));
     }
     const reply = await deliver(chat, transcript, source);
@@ -4337,12 +4326,6 @@ export function CommandApp() {
               <p className="mt-1 text-sm text-muted">Start one from Chat. Recent threads stay in this menu.</p>
             </div>
           )}
-          {!railCollapsed && (
-            <button type="button" className="nav-item mt-3 flex min-h-11 w-full items-center gap-3 rounded-2xl px-3 text-left text-sm text-muted" onClick={() => { setView("settings"); setSettingsPane("pages"); setNavOpen(false); }}>
-              <img src="/brand/marks/pages.png" alt="" width={22} height={22} className="size-5 rounded-md" />
-              <span>All pages</span>
-            </button>
-          )}
         </nav>
         <div className={`gpt-rail-foot shrink-0 bg-bg p-3 ${railCollapsed ? "flex flex-col items-center gap-2" : "flex items-center justify-between gap-3"}`}>
           <button
@@ -4413,10 +4396,10 @@ export function CommandApp() {
               </div>
             ) : null}
           </div>
-          <button type="button" className="header-voice-mode inline-flex items-center gap-1" onClick={() => applyVoiceMode(toggleVoiceMode(voiceMode))} aria-label={`Switch voice mode (currently ${voiceMode})`}>
-            {voiceMode === "direct" ? <img src="/brand/marks/direct.png" alt="" width={16} height={16} className="size-4 rounded" /> : null}
-            {voiceMode === "direct" ? "Direct" : "Orchestrator"}
-          </button>
+          <span className="header-voice-mode inline-flex items-center gap-1" aria-label="Voice route Direct">
+            <img src="/brand/marks/direct.png" alt="" width={16} height={16} className="size-4 rounded" />
+            Direct
+          </span>
           <div className="command-search relative min-w-0 flex-1">
             <Search className="pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2 text-muted" />
             <input
@@ -4671,6 +4654,13 @@ export function CommandApp() {
               }}
               onToggleStop={() => { void toggleStop(); }}
               onPreviewVoice={(line) => { void speak(line); }}
+              onTalk={() => setSpeakStageOpen(true)}
+              onAsk={async (text) => {
+                const turn = await speakChatTurn(text, { stay: true });
+                if (!turn.ok) return turn.error;
+                await speak(turn.text);
+                return turn.text;
+              }}
               onOpenChat={() => { setView("command"); setNavOpen(false); }}
               onOpenDashboard={() => { setView("dashboard"); setNavOpen(false); }}
               onOpenAgents={() => { setView("agents"); setNavOpen(false); }}
@@ -4812,9 +4802,11 @@ export function CommandApp() {
                     <button type="button" className="inline-flex min-h-11 items-center gap-2 rounded-panel border border-line px-3 text-sm" onClick={() => setCameraOpen(true)}>
                       <Camera className="size-4" /> Camera
                     </button>
-                    <button type="button" className="inline-flex min-h-11 items-center gap-2 rounded-panel border border-line px-3 text-sm" onClick={() => setCloudPickerOpen(true)}>
-                      Drive
-                    </button>
+                    {driveConnected ? (
+                      <button type="button" className="inline-flex min-h-11 items-center gap-2 rounded-panel border border-line px-3 text-sm" onClick={() => setCloudPickerOpen(true)}>
+                        Drive
+                      </button>
+                    ) : null}
                     <button
                       type="button"
                       className="inline-flex min-h-11 items-center gap-2 rounded-panel border border-line px-3 text-sm"
@@ -4855,12 +4847,6 @@ export function CommandApp() {
                       <Folder className="size-4" /> Projects
                     </button>
                       </div>
-                      <RoutingModeControl
-                        mode={routingMode}
-                        panel={routingPanel}
-                        onMode={chooseRoutingMode}
-                        onToggle={toggleRoutingSeat}
-                      />
                     </details>
                     <div className="legacy-composer-voice"><VoiceLevelMeter level={voiceLevel} listening={voiceListening} className="mr-1" /><BrowserDictationControl
                       state={dictation.phase}
@@ -5169,6 +5155,7 @@ export function CommandApp() {
               onAttachImage={() => imageInputRef.current?.click()}
               onOpenCamera={() => setCameraOpen(true)}
               onOpenCloud={() => setCloudPickerOpen(true)}
+              driveConnected={driveConnected}
               onImagine={() => {
                 const viaCmd = parseImagineCommand(draft);
                 const prompt = viaCmd !== null ? viaCmd : draft.trim();
@@ -5824,7 +5811,7 @@ export function CommandApp() {
                 </div>
                 <div className="flex flex-wrap gap-2">
                   <button type="button" className="min-h-11 rounded-panel bg-accent px-4 text-sm font-semibold text-white" onClick={() => fileRef.current?.click()}>Upload text</button>
-                  <button type="button" className="min-h-11 rounded-panel border border-line px-4 text-sm" onClick={() => setCloudPickerOpen(true)}>Browse Drive</button>
+                  {driveConnected ? <button type="button" className="min-h-11 rounded-panel border border-line px-4 text-sm" onClick={() => setCloudPickerOpen(true)}>Browse Drive</button> : null}
                 </div>
               </div>
               <div id="owner-library">
@@ -6010,7 +5997,7 @@ export function CommandApp() {
                   <img src="/brand/marks/settings.png" alt="" className="size-8 rounded-lg" />
                   <div>
                     <h2 className="font-display text-3xl font-bold">Settings</h2>
-                    <p className="text-sm text-muted">Preferences stay in this browser. Open Safe keys to copy a saved key.</p>
+                    <p className="text-sm text-muted">Preferences stay in this browser. Pages are grouped below, not dumped in one list.</p>
                   </div>
                 </div>
               </div>
@@ -6019,102 +6006,55 @@ export function CommandApp() {
                   { group: "Account", items: [
                     ["general", "General", "Theme and appearance", () => setSettingsPane("general")],
                     ["personalization", "Personalization", "How replies sound", () => { setView("chat"); setNavOpen(false); }],
-                    ["memory", "Memory", "Notes you chose to keep", () => { setView("memory"); setNavOpen(false); }],
                     ["voice", "Voice", "Speak voice and pace", () => setSettingsPane("voice")],
                     ["keys", "Safe keys", "Open a saved key and copy it", () => setSettingsPane("keys")],
                     ["security", "Security and login", "Sign in to connect services", () => { window.location.assign("/login"); }],
+                    ["data", "Data", "What stays in this browser", () => setSettingsPane("data")],
+                    ["safety", "Safety", "Stops and confirmations", () => setSettingsPane("safety")],
                   ]},
                   { group: "Connections", items: [
                     ["plugins", "Plugins", "Marks and setup for each service", () => { setView("connected"); setNavOpen(false); }],
                     ["connections", "Connections", "API keys and saved providers", () => setSettingsPane("connections")],
                     ["integrations", "Integrations", "What each provider can do", () => { setView("integrations"); setNavOpen(false); }],
-                  ]},
-                  { group: "Work", items: [
                     ["scheduled", "Scheduled", "Jobs that wait for a time", () => { setView("scheduled"); setNavOpen(false); }],
-                    ["bots", "Bots", "Agents and templates", () => { setView("agents"); setNavOpen(false); }],
+                  ]},
+                  { group: "Workspace", items: [
+                    ["dashboard", "Dashboard", "Workspace map", () => { setView("dashboard"); setNavOpen(false); }],
+                    ["explore", "Explore", "Public directory", () => { window.location.assign("/explore"); }],
+                    ["chat", "Threads", "One conversation at a time", () => { setView("chat"); setNavOpen(false); }],
                     ["eve", "EVE", "Operator workbench", () => { setView("intelligence"); setNavOpen(false); }],
-                    ["runs", "Runs", "What an agent already did", () => { setView("runs"); setNavOpen(false); }],
-                    ["tools", "Tools", "What this app can call", () => { setView("tools"); setNavOpen(false); }],
-                    ["skills", "Skills", "Installed abilities", () => { setView("skills"); setNavOpen(false); }],
+                    ["bots", "Bots", "Agents and templates", () => { setView("agents"); setNavOpen(false); }],
                     ["build", "Build", "Editor and next step", () => { setView("build"); setNavOpen(false); }],
                     ["research", "Research", "Search when a provider is set", () => { setView("research"); setNavOpen(false); }],
-                    ["library", "Library", "Text copies in this browser", () => { setView("files"); setNavOpen(false); }],
                     ["projects", "Projects", "Records on this device", () => { setView("projects"); setNavOpen(false); }],
+                    ["library", "Library", "Text copies in this browser", () => { setView("files"); setNavOpen(false); }],
+                    ["runs", "Runs", "What an agent already did", () => { setView("runs"); setNavOpen(false); }],
                   ]},
                   { group: "System", items: [
+                    ["tools", "Tools", "What this app can call", () => { setView("tools"); setNavOpen(false); }],
+                    ["skills", "Skills", "Installed abilities", () => { setView("skills"); setNavOpen(false); }],
+                    ["memory", "Memory", "Notes you chose to keep", () => { setView("memory"); setNavOpen(false); }],
                     ["activity", "Activity", "What this device recorded", () => { setView("activity"); setNavOpen(false); }],
-                    ["pages", "Pages", "Every section in one list", () => setSettingsPane("pages")],
-                    ["data", "Data", "What stays in this browser", () => setSettingsPane("data")],
-                    ["safety", "Safety", "Stops and confirmations", () => setSettingsPane("safety")],
                     ["help", "Help", "How the controls behave", () => { setView("help"); setNavOpen(false); }],
                   ]},
-                ].map((section) => (
-                  <div key={section.group} className="settings-group">
-                    <p>{section.group}</p>
+               ].map((section) => (
+                  <details key={section.group} className="settings-group">
+                    <summary>{section.group}</summary>
                     {section.items.map(([id, label, detail, open]) => (
                       <button key={id} type="button" onClick={open}>
-                        <img src={`/brand/marks/${id}.png`} alt="" width={28} height={28} />
+                        <img src={`/brand/marks/${id === "dashboard" ? "general" : id}.png`} alt="" width={28} height={28} />
                         <span>
                           <strong>{label}</strong>
                           <small>{detail}</small>
                         </span>
                       </button>
                     ))}
-                  </div>
+                  </details>
                 ))}
               </nav>
               {settingsPane && (
                 <button type="button" className="text-sm text-muted" onClick={() => setSettingsPane(null)}>Back</button>
               )}
-              <section id="settings-pages" hidden={settingsPane !== "pages"} className="settings-card rounded-panel border border-line p-4">
-                <p className="font-semibold">Pages</p>
-                <p className="mt-1 text-sm text-muted">These stay out of the sidebar so Chat stays short. Search still opens them.</p>
-                <div className="mt-4 space-y-4">
-                  {SETTINGS_PAGES.map((group) => (
-                    <div key={group.group}>
-                      <p className="text-sm font-semibold text-muted">{group.group}</p>
-                      <div className="mt-2 divide-y divide-white/8 overflow-hidden rounded-xl border border-white/8">
-                        {group.items.map((item) => (
-                          <button
-                            key={item.id}
-                            type="button"
-                            className="flex min-h-12 w-full items-center justify-between gap-3 px-3 text-left text-sm hover:bg-white/5"
-                            onClick={() => {
-                              setView(item.id);
-                              setNavOpen(false);
-                            }}
-                          >
-                            <span>
-                              <span className="block font-medium">{item.label}</span>
-                              <span className="block text-xs text-muted">{item.detail}</span>
-                            </span>
-                            <span className="text-muted" aria-hidden="true">›</span>
-                          </button>
-                        ))}
-                      </div>
-                    </div>
-                  ))}
-                  <div>
-                    <p className="text-sm font-semibold text-muted">Routes</p>
-                    <div className="mt-2 divide-y divide-white/8 overflow-hidden rounded-xl border border-white/8">
-                      <Link to="/explore" className="flex min-h-12 items-center justify-between px-3 text-sm hover:bg-white/5">
-                        <span>
-                          <span className="block font-medium">Explore</span>
-                          <span className="block text-xs text-muted">Public directory</span>
-                        </span>
-                        <span className="text-muted" aria-hidden="true">›</span>
-                      </Link>
-                      <Link to="/dashboard" className="flex min-h-12 items-center justify-between px-3 text-sm hover:bg-white/5">
-                        <span>
-                          <span className="block font-medium">Dashboard</span>
-                          <span className="block text-xs text-muted">Public command center</span>
-                        </span>
-                        <span className="text-muted" aria-hidden="true">›</span>
-                      </Link>
-                    </div>
-                  </div>
-                </div>
-              </section>
               <div id="settings-general" hidden={settingsPane !== "general"} className="settings-card card-texture rounded-panel p-4 text-sm">
                 <div className="settings-row">
                   <div>
@@ -6434,9 +6374,9 @@ export function CommandApp() {
         onLive={() => void listen({ mode: voiceListening ? "stop" : "start" })}
         onAsk={async (text) => {
           const turn = await speakChatTurn(text);
-          if (!turn.ok) return turn.error;
+          if (!turn.ok) return { error: turn.error };
           await speak(turn.text);
-          return null;
+          return { reply: turn.text };
         }}
       />
       <LiveVoiceBar
@@ -6720,6 +6660,7 @@ function ChatPane({
   onAttachImage,
   onOpenCamera,
   onOpenCloud,
+  driveConnected = false,
   onImagine,
   onEditImagine,
   onSaveImage,
@@ -6809,6 +6750,7 @@ function ChatPane({
   onAttachImage: () => void;
   onOpenCamera: () => void;
   onOpenCloud: () => void;
+  driveConnected?: boolean;
   onImagine: () => void;
   onEditImagine: (src: string) => void;
   onSaveImage: (src: string, alt: string) => void;
@@ -7131,7 +7073,6 @@ function ChatPane({
             for (const file of files.slice(0, 4)) onAddImageFile(file);
           }}
         >
-          <RoutingModeControl mode={routingMode} panel={routingPanel} onMode={onRoutingMode} onToggle={onToggleRoute} />
           <input
             value={draft}
             onChange={(event) => setDraft(event.target.value)}
@@ -7185,9 +7126,11 @@ function ChatPane({
                 <button type="button" className="inline-flex min-h-11 items-center gap-2 rounded-panel border border-line/80 bg-white/5 px-3 text-sm" onClick={onOpenCamera}>
                   <Camera className="size-4" /> Camera
                 </button>
-                <button type="button" className="inline-flex min-h-11 items-center gap-2 rounded-panel border border-line/80 bg-white/5 px-3 text-sm" onClick={onOpenCloud}>
-                  Drive
-                </button>
+                {driveConnected ? (
+                  <button type="button" className="inline-flex min-h-11 items-center gap-2 rounded-panel border border-line/80 bg-white/5 px-3 text-sm" onClick={onOpenCloud}>
+                    Drive
+                  </button>
+                ) : null}
                 <button type="button" className="inline-flex min-h-11 items-center gap-2 rounded-panel border border-line/80 bg-white/5 px-3 text-sm" disabled={busy || halted} onClick={onImagine}>
                   Imagine
                 </button>
@@ -7356,12 +7299,13 @@ function ChatPane({
           </ul>
         </section>
         </details>
+        {connectedServices.some((item) => item.tone === "ok") || systemStatus.rows.some((row) => row.ok) ? (
         <details className="rail-pack">
           <summary>Connections</summary>
           <section className="glass-panel rounded-panel p-3 text-sm" data-testid="connected-services-rail">
           <p className="font-semibold">Connected Services</p>
           <ul className="mt-2 space-y-2">
-            {connectedServices.map((item) => (
+            {connectedServices.filter((item) => item.tone === "ok").map((item) => (
               <li key={item.name} className="flex items-center justify-between gap-2 text-xs">
                 <span>{item.name}</span>
                 <span className={item.tone === "ok" ? "text-ok" : item.tone === "danger" ? "text-danger" : "text-muted"}>{item.state}</span>
@@ -7371,9 +7315,8 @@ function ChatPane({
         </section>
         <section className="glass-panel rounded-panel p-3 text-sm" data-testid="system-status-rail">
           <p className="font-semibold">System Status</p>
-          <p className="mt-1 text-xs text-muted">{systemStatus.headline}</p>
           <ul className="mt-2 space-y-2">
-            {systemStatus.rows.map((row) => (
+            {systemStatus.rows.filter((row) => row.ok).map((row) => (
               <li key={row.name} className="flex items-center justify-between gap-2 text-xs">
                 <span>{row.name}</span>
                 <span className={row.ok ? "text-ok" : "text-muted"}>{row.state}</span>
@@ -7382,6 +7325,7 @@ function ChatPane({
           </ul>
         </section>
         </details>
+        ) : null}
         <section className="glass-panel rounded-panel p-3 text-sm">
           <p className="font-semibold">{active?.title ?? "New session"}</p>
           <p className="text-xs text-muted">On this device · Memory {memoryChoice}</p>
