@@ -4,6 +4,7 @@
  */
 import { createElement } from "react";
 import { VOICE_SIGN_IN_REQUIRED } from "./errors.ts";
+import { speakCanRetry } from "./speak-failures.ts";
 import {
   classifySpeakFailure,
   runSpeakAction,
@@ -225,17 +226,24 @@ export async function runMountedSpeak(input: SpeakMountedInput): Promise<{ ok: b
   } catch (caught) {
     if (!input.isCurrent()) return { ok: false, params };
     const classified = classifySpeakFailure(caught);
-    input.reportFailure(classified.message, classified.kind, params.messageId || "speak", () => {
-      input.again(snapshotSpeakRetryParams(params));
-    });
+    input.reportFailure(
+      classified.message,
+      classified.kind,
+      params.messageId || "speak",
+      speakCanRetry(classified.message, params) ? () => input.again(snapshotSpeakRetryParams(params)) : null,
+    );
     return { ok: false, params };
   }
   if (!input.isCurrent()) return { ok: false, params };
   if (!result.ok) {
     const classified = classifySpeakFailure({ ok: false, error: result.message });
-    input.reportFailure(classified.message || result.message, classified.kind, result.params.messageId || "speak", () => {
-      input.again(snapshotSpeakRetryParams(result.params));
-    });
+    const message = classified.message || result.message;
+    input.reportFailure(
+      message,
+      classified.kind,
+      result.params.messageId || "speak",
+      speakCanRetry(message, result.params) ? () => input.again(snapshotSpeakRetryParams(result.params)) : null,
+    );
     return { ok: false, params: result.params };
   }
   input.clearFailure();
@@ -245,10 +253,12 @@ export function SpeakLiveControl(props: {
   phase: SpeakPhase;
   error: string | null;
   notice: string | null;
+  retryable?: boolean;
   onSpeak: () => void;
   onRetry: () => void;
   onDismiss: () => void;
 }) {
+  const connectionError = /connection|network/i.test(props.error ?? "");
   const label = props.phase === "getting_session"
     ? "Getting session…"
     : props.phase === "listening"
@@ -258,7 +268,7 @@ export function SpeakLiveControl(props: {
         : props.phase === "speaking"
           ? "Speaking…"
           : props.phase === "error"
-            ? "Connection failed"
+            ? connectionError ? "Connection failed" : "Speak failed"
             : "Speak";
   return createElement(
     "div",
@@ -286,7 +296,7 @@ export function SpeakLiveControl(props: {
       { type: "button", "data-testid": "composer-speak", onClick: props.onSpeak },
       "Speak",
     ),
-    props.phase === "error"
+    props.phase === "error" && props.retryable
       ? createElement(
           "button",
           { type: "button", "data-testid": "composer-voice-live-retry", onClick: props.onRetry },

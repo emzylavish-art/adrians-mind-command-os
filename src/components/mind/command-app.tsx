@@ -88,6 +88,7 @@ import {
 import { captureSpeakUtterance } from "@/lib/mind/voice/capture-utterance";
 import { type SpeakRetryParams } from "@/lib/mind/voice/speak-action";
 import { runMountedSpeak } from "@/lib/mind/voice/speak-click";
+import { speakCanRetry } from "@/lib/mind/voice/speak-failures";
 import { interruptMessageSpeak } from "@/lib/mind/voice/speak-control";
 import { withSessionTimeout } from "@/lib/mind/voice/session-timeout";
 import { clampSpeakText, sanitizeVoiceTranscript } from "@/lib/mind/voice/limits";
@@ -1297,6 +1298,12 @@ export function CommandApp() {
         searchRef.current?.focus();
       }
       if (event.key === "Escape") {
+        if (speakStageOpenRef.current) {
+          event.preventDefault();
+          setSpeakStageOpen(false);
+          if (!overlayOpenRef.current) void listenRef.current({ mode: "stop" });
+          return;
+        }
         if (overlayOpenRef.current) {
           event.preventDefault();
           closeVoiceOverlayRef.current();
@@ -3213,6 +3220,7 @@ export function CommandApp() {
     setAvatarPresence("processing");
     let speechFailed = false;
     let speechError = "";
+    let spokeProvider = "";
     await runMountedSpeak({
       text,
       messageId,
@@ -3247,13 +3255,16 @@ export function CommandApp() {
         synthesize: async (reply, voice) => {
           noteSpokenText(reply);
           const spoken = await speakText({ data: { text: reply, voiceId: voice } });
-          if (spoken && typeof spoken === "object" && "ok" in spoken && spoken.ok && "provider" in spoken && spoken.provider) {
-            setNotice(`${spoken.provider} spoke this reply.`);
+          if (spoken && typeof spoken === "object" && "ok" in spoken && spoken.ok) {
+            const audio = "audio" in spoken && typeof spoken.audio === "string" ? spoken.audio.trim() : "";
+            if (!audio) return { ok: false, error: "The provider returned no audio. Nothing was played." };
+            if ("provider" in spoken && typeof spoken.provider === "string" && spoken.provider) spokeProvider = spoken.provider;
           }
           return spoken;
         },
         play: async (audio) => {
           await sharedAudioOutput.playMpegBase64(audio);
+          setNotice(spokeProvider ? `${spokeProvider} spoke this reply.` : "The reply was spoken.");
         },
       },
       reportFailure: (message, action, target, retry) => {
@@ -3597,8 +3608,6 @@ export function CommandApp() {
 
   function startBrowserDictation() {
     if (!voiceCanStart()) return;
-    // Browser SpeechRecognition only. Recorder capture in dictation.ts and server stt.ts stay unwired:
-    // no transcribe server fn exists, and a new xAI STT call would be a live provider call.
     if (wsRef.current.halted) {
       setError("Emergency stop is on. Dictation was not started.");
       return;
@@ -3623,11 +3632,7 @@ export function CommandApp() {
     }
     const Ctor = browserSpeechCtor();
     if (!Ctor) {
-      commitDictation({
-        type: "stop_error",
-        message: "This browser has no speech recognition. Nothing was transcribed. This is browser speech, not a realtime voice provider.",
-      });
-      setDictationLevel(0);
+      void startServerDictation();
       return;
     }
     commitDictation({ type: "start" });
@@ -3709,7 +3714,11 @@ export function CommandApp() {
       setNotice("Listening. Press the mic again to insert the words. Send is separate.");
     } catch {
       serverDictationRef.current = null;
-      startBrowserDictation();
+      commitDictation({
+        type: "stop_error",
+        message: "This browser could not record. Nothing was transcribed.",
+      });
+      setNotice("This browser could not record. Nothing was transcribed. Nothing was sent.");
     }
   }
 
@@ -3762,6 +3771,24 @@ export function CommandApp() {
     setNotice("Voice mode closed. Realtime session stopped.");
   }
 
+  function clearOverlayFlag() {
+    overlayOpenRef.current = false;
+    setVoiceOverlayOpen(false);
+    setOverlayPhase("idle");
+    setOverlayError(null);
+    setOverlayNotice(null);
+  }
+
+  function openSpeakStage() {
+    clearOverlayFlag();
+    setSpeakStageOpen(true);
+  }
+
+  function closeSpeakStage() {
+    setSpeakStageOpen(false);
+    if (!overlayOpenRef.current) void listen({ mode: "stop" });
+  }
+
   function interruptVoiceOverlay() {
     pushBarge({ type: "manual_interrupt" });
   }
@@ -3773,6 +3800,7 @@ export function CommandApp() {
       return;
     }
     cancelBrowserDictation(false);
+    setSpeakStageOpen(false);
     overlayOpenRef.current = true;
     setVoiceOverlayOpen(true);
     setOverlayError(null);
@@ -4494,7 +4522,7 @@ export function CommandApp() {
             className="grid size-11 min-h-11 min-w-11 shrink-0 place-items-center rounded-full border border-line bg-white/5"
             aria-label="Speak"
             title="Speak"
-            onClick={() => setSpeakStageOpen(true)}
+            onClick={openSpeakStage}
           >
             <img src="/brand/marks/speak.png" alt="" width={22} height={22} className="size-5 rounded" />
           </button>
@@ -4592,11 +4620,10 @@ export function CommandApp() {
                     setNavOpen(false);
                   }}
                 >Setup</button>
-              ) : failure.action !== "none" ? <button
+              ) : failure.retry ? <button
                 type="button"
                 data-testid="failure-retry"
-                className="inline-flex min-h-11 items-center justify-center rounded-panel bg-accent px-4 text-sm font-semibold text-accent-ink disabled:opacity-50"
-                disabled={!failure.retry}
+                className="inline-flex min-h-11 items-center justify-center rounded-panel bg-accent px-4 text-sm font-semibold text-accent-ink"
                 onClick={() => {
                   const retry = failure.retry;
                   clearFailure();
@@ -4669,7 +4696,7 @@ export function CommandApp() {
               }}
               onToggleStop={() => { void toggleStop(); }}
               onPreviewVoice={(line) => { void speak(line); }}
-              onTalk={() => setSpeakStageOpen(true)}
+              onTalk={openSpeakStage}
               onAsk={async (text) => {
                 const turn = await speakChatTurn(text, { stay: true });
                 if (!turn.ok) return turn.error;
@@ -4802,6 +4829,9 @@ export function CommandApp() {
                       {error.includes("Sign in") ? <Link to="/login">Sign in</Link> : null}
                     </p>
                   ) : null}
+                  {notice && /dictat|microphone|speech recognition|inserted|Listening\.|Words inserted|No words were caught|could not record|End Speak before the mic/i.test(notice) ? (
+                    <p className="composer-notice mt-2 text-sm text-muted" role="status" data-testid="composer-dictation-notice">{presentVoiceCopy(notice)}</p>
+                  ) : null}
                   {staged && (
                     <p className="mt-2 text-xs text-muted">Staged: {staged.name}. It stays in this browser and is sent only if you press Send.</p>
                   )}
@@ -4889,12 +4919,15 @@ export function CommandApp() {
                     <button type="submit" disabled={busy || ws.halted || (!draft.trim() && pendingImages.length === 0 && !staged)} className="composer-send inline-flex min-h-11 items-center gap-2 rounded-panel bg-accent px-4 text-sm font-semibold text-accent-ink disabled:opacity-50">
                       <Send className="size-4" /> {busy ? "Sending" : "Send"}
                     </button>
+                    <button type="button" className="composer-mic-dictate inline-flex min-h-11 items-center gap-2 rounded-full border border-line px-3 text-sm" data-testid="composer-mic-dictate" aria-label="Dictate" onClick={onDictationMic}>
+                      <Mic className="size-4" /> Dictate
+                    </button>
                     {draft.trim() || pendingImages.length > 0 || staged ? (
                       <button type="submit" className="gpt-voice grid size-11 place-items-center rounded-full bg-[#2f6bff] text-white" aria-label="Send">
                         <Send className="size-4" />
                       </button>
                     ) : (
-                      <button type="button" className="gpt-voice grid size-11 place-items-center rounded-full bg-[#2f6bff] text-white" aria-label="Speak" onPointerDown={(event) => { event.preventDefault(); setSpeakStageOpen(true); }} onClick={() => setSpeakStageOpen(true)}>
+                      <button type="button" className="gpt-voice grid size-11 place-items-center rounded-full bg-[#2f6bff] text-white" aria-label="Speak" onPointerDown={(event) => { event.preventDefault(); openSpeakStage(); }} onClick={openSpeakStage}>
                         <Volume2 className="size-4" />
                       </button>
                     )}
@@ -5983,7 +6016,7 @@ export function CommandApp() {
               <div id="owner-help">
                 {[
                   { id: "chat", label: "Send a chat", detail: "Type in the field and press Enter, or press the blue button. An empty field opens Speak.", mark: "/brand/marks/chat.png", open: () => setView("command") },
-                  { id: "speak", label: "Speak", detail: "Opens the call screen with camera, screen share, mute, and end.", mark: "/brand/marks/speak.png", open: () => setSpeakStageOpen(true) },
+                  { id: "speak", label: "Speak", detail: "Opens the call screen with camera, screen share, mute, and end.", mark: "/brand/marks/speak.png", open: openSpeakStage },
                   { id: "settings", label: "Settings", detail: "Theme, voice, connections, and the pages that stay off the short sidebar.", mark: "/brand/marks/settings.png", open: () => setView("settings") },
                   { id: "plugins", label: "Plugins", detail: "Catalog and connection marks. Opening a row does not connect the service.", mark: "/brand/marks/plugins.png", open: () => setView("connected") },
                   { id: "library", label: "Library", detail: "Text copies in this browser. Upload text or open a file you already attached.", mark: "/brand/marks/library.png", open: () => setView("files") },
@@ -6379,13 +6412,13 @@ export function CommandApp() {
         onMute={toggleVoiceMute}
         onClose={closeVoiceOverlay}
         onInterrupt={interruptVoiceOverlay}
-        onRetry={() => void retryVoiceOverlay()}
+        onRetry={overlayError && !speakCanRetry(presentVoiceCopy(overlayError)) ? undefined : () => void retryVoiceOverlay()}
       />
       <SpeakStage
         open={speakStageOpen}
         signedIn={statusSignedIn === true || (typeof window !== "undefined" && (window.location.hostname === "127.0.0.1" || window.location.hostname === "localhost"))}
         live={voiceListening}
-        onClose={() => { setSpeakStageOpen(false); void listen({ mode: "stop" }); }}
+        onClose={closeSpeakStage}
         onSignIn={() => { setSpeakStageOpen(false); window.location.assign("/login"); }}
         onLive={() => void listen({ mode: voiceListening ? "stop" : "start" })}
         heard={speakCall.heard}
@@ -6406,7 +6439,7 @@ export function CommandApp() {
         onSignInRequired={() => setVoiceSignInNotice(true)}
         onCompactSpeak={() => void speak("")}
         onChatAttachImage={(image) => setPendingImages((prev) => prev.length >= 4 ? prev : [...prev, image])}
-        onDictateToggle={() => startBrowserDictation()}
+        onDictateToggle={onDictationMic}
         isOverlayMicOpen={() =>
           Boolean(
             overlayOpenRef.current ||

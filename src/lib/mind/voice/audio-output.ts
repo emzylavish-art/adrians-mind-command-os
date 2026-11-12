@@ -158,9 +158,11 @@ export class SharedAudioOutput {
       audio.onerror = () => fail(new Error("The browser blocked playback."));
       audio.onerror = () => fail(new Error("The browser blocked playback."));
       const played = audio.play();
-      if (played && typeof (played as Promise<void>).catch === "function") {
-        void (played as Promise<void>).catch((err) => fail(err instanceof Error ? err : new Error("The browser blocked playback.")));
+      if (!played || typeof (played as Promise<void>).catch !== "function") {
+        fail(new Error("The browser blocked playback."));
+        return;
       }
+      void (played as Promise<void>).catch((err) => fail(err instanceof Error ? err : new Error("The browser blocked playback.")));
     });
   }
 

@@ -36,13 +36,13 @@ export const SPEAK_FAILURES: Record<SpeakCode, SpeakFailureSpec> = {
   unauthenticated: {
     code: "unauthenticated",
     message: "Sign in is required before using Speak.",
-    retryable: true,
+    retryable: false,
     retry: SPEAK_RETRY.start,
   },
   session_expired: {
     code: "session_expired",
     message: "Your session expired. Sign in again. Nothing was spoken.",
-    retryable: true,
+    retryable: false,
     retry: SPEAK_RETRY.start,
   },
   provider_not_configured: {
@@ -78,19 +78,19 @@ export const SPEAK_FAILURES: Record<SpeakCode, SpeakFailureSpec> = {
   mic_denied: {
     code: "mic_denied",
     message: "Microphone permission was denied. Nothing was transcribed.",
-    retryable: true,
+    retryable: false,
     retry: SPEAK_RETRY.start,
   },
   mic_missing: {
     code: "mic_missing",
     message: "No microphone was found. Nothing was transcribed.",
-    retryable: true,
+    retryable: false,
     retry: SPEAK_RETRY.start,
   },
   rate_limited: {
     code: "rate_limited",
     message: "Too many voice requests. Wait a minute.",
-    retryable: true,
+    retryable: false,
     retry: SPEAK_RETRY.start,
   },
   emergency_stop: {
@@ -109,6 +109,18 @@ export type SpeakFailure = SpeakFailureSpec & {
 
 export function speakFailure(code: SpeakCode, extra?: { transcript?: string; audio?: string }): SpeakFailure {
   return { ok: false, ...SPEAK_FAILURES[code], ...extra };
+}
+
+const SPEAK_NOT_RETRYABLE = /sign in is required|session expired|no speech key is configured|microphone permission was denied|no microphone was found|too many voice requests|emergency stop is on/i;
+
+/** A Retry button is honest only when repeating the same attempt can succeed. */
+export function speakCanRetry(
+  message: string,
+  replay?: { chatCommitted?: boolean; audio?: string | null; reply?: string | null },
+): boolean {
+  if (SPEAK_NOT_RETRYABLE.test(message)) return false;
+  if (replay?.chatCommitted && !replay.reply && !replay.audio) return false;
+  return true;
 }
 
 /** User closed Speak before a provider step finished. Not a provider failure. */

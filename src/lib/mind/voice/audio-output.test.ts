@@ -90,6 +90,39 @@ describe("SharedAudioOutput", () => {
     }
   });
 
+  it("rejects when audio.play() does not return a promise", async () => {
+    const out = new SharedAudioOutput();
+    const AudioStub = class {
+      onended: (() => void) | null = null;
+      onerror: (() => void) | null = null;
+      src = "";
+      play() {
+        return undefined;
+      }
+      pause() {}
+      removeAttribute() {}
+      load() {}
+    };
+    const g = globalThis as unknown as { Audio?: typeof Audio; URL?: typeof URL; Blob?: typeof Blob };
+    const prevAudio = g.Audio;
+    const prevURL = g.URL;
+    const prevBlob = g.Blob;
+    g.Audio = AudioStub as unknown as typeof Audio;
+    g.URL = { createObjectURL: () => "blob:test", revokeObjectURL: () => undefined } as unknown as typeof URL;
+    g.Blob = class { constructor(_parts?: unknown[], _opts?: unknown) {} } as unknown as typeof Blob;
+    try {
+      await assert.rejects(
+        () => out.playMpegBase64(Buffer.from("ID3").toString("base64")),
+        /blocked playback/,
+      );
+      assert.equal(out.isPlaying, false);
+    } finally {
+      g.Audio = prevAudio;
+      g.URL = prevURL;
+      g.Blob = prevBlob;
+    }
+  });
+
   it("publishes a clock when MPEG playback is interrupted", async () => {
     const out = new SharedAudioOutput();
     const clocks: { playing: boolean; current: number; duration: number }[] = [];

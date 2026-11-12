@@ -125,8 +125,12 @@ aside.rail.nav-drawer-open {
 .gpt-home .composer-effort,
 .gpt-home .legacy-composer-voice,
 .gpt-home label:has(select),
-.gpt-home .composer-toolbar > button:not(:first-child):not(.composer-send):not(.gpt-voice) {
+.gpt-home .composer-toolbar > button:not(:first-child):not(.composer-send):not(.gpt-voice):not(.composer-mic-dictate) {
   display: none !important;
+}
+.gpt-home .composer-toolbar > button.composer-mic-dictate {
+  display: inline-flex !important;
+  min-height: 44px;
 }
 
 .gpt-starters {

@@ -47,9 +47,9 @@ export function VoiceModeOverlay(props: {
                 ? "Speaking…"
                 : props.phase === "interrupted"
                   ? "Interrupted — listening"
-                  : props.phase === "error"
-                    ? "Connection failed"
-                    : "Voice mode";
+                : props.phase === "error"
+                  ? props.error && !/connection|network/i.test(props.error) ? "Voice failed" : "Connection failed"
+                  : "Voice mode";
   const active =
     props.phase === "listening" ||
     props.phase === "speaking" ||
@@ -144,7 +144,7 @@ export function VoiceModeOverlay(props: {
               Interrupt
             </button>
           ) : null}
-          {props.phase === "error" ? (
+          {props.phase === "error" && props.onRetry ? (
             <button
               type="button"
               className="inline-flex min-h-11 items-center gap-2 rounded-panel bg-accent px-4 text-sm font-semibold text-accent-ink"
