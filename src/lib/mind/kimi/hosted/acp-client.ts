@@ -39,7 +39,7 @@ export function packageLabel(command: string): string {
   return command.includes(marker) ? marker : "in-repo coding package";
 }
 
-function adrianBuildEnv(): NodeJS.ProcessEnv {
+export function adrianBuildEnv(): NodeJS.ProcessEnv {
   const key = resolveXaiInferenceApiKey();
   const home = process.env.KIMI_CODE_HOME || "/tmp/adrian-build-home";
   mkdirSync(home, { recursive: true });

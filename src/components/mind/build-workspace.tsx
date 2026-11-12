@@ -69,7 +69,9 @@ export function BuildWorkspace() {
   const [plan, setPlan] = useState("");
   const [planModel, setPlanModel] = useState("");
   const [planning, setPlanning] = useState(false);
-  const [panel, setPanel] = useState<"agent" | "timeline" | "changes" | "editor" | "terminal" | "capabilities">("agent");
+  const [panel, setPanel] = useState<"agent" | "timeline" | "changes" | "editor" | "terminal" | "capabilities" | "browser">("agent");
+  const [browserFrame, setBrowserFrame] = useState("");
+  const [browserNotice, setBrowserNotice] = useState("");
   const [workspaceFiles, setWorkspaceFiles] = useState<WorkspaceFile[]>([]);
   const [selectedFile, setSelectedFile] = useState("");
   const [editorText, setEditorText] = useState("");
@@ -163,6 +165,24 @@ export function BuildWorkspace() {
   async function browseWorkspace() {
     const result = await runFileOperation("list") as { files?: WorkspaceFile[] } | null;
     if (result?.files) { setWorkspaceFiles(result.files); setPanel("editor"); }
+  }
+
+  async function openCodingBrowser() {
+    setPanel("browser");
+    setBrowserNotice("Opening the coding browser on this computer.");
+    try {
+      const response = await fetch("/api/mind/kimi/browser", { method: "POST", credentials: "include" });
+      const data = (await response.json()) as { ok?: boolean; frame?: string; package?: string; error?: string };
+      if (!response.ok || !data.ok || !data.frame) {
+        setBrowserFrame("");
+        setBrowserNotice(data.error || "The coding browser did not start. No Kimi login was requested.");
+        return;
+      }
+      setBrowserFrame(data.frame);
+      setBrowserNotice(`${data.package || "In-repo coding package"} is open on this computer. It is not a public page.`);
+    } catch {
+      setBrowserNotice("The coding browser could not be reached.");
+    }
   }
 
   async function openFile(path: string) {
@@ -470,8 +490,8 @@ export function BuildWorkspace() {
       {(
         <div className="grid gap-4 xl:grid-cols-[13rem_minmax(0,1fr)]">
           <nav className="dense-card h-fit space-y-1" aria-label="Build panels">
-            {(["agent", "timeline", "changes", "editor", "terminal", "capabilities"] as const).map((item) => (
-              <button key={item} type="button" onClick={() => setPanel(item)} className={`flex min-h-11 w-full items-center justify-between rounded-panel px-3 text-left text-sm ${panel === item ? "bg-accent text-accent-ink" : "text-muted hover:bg-white/5"}`}>
+            {(["agent", "timeline", "changes", "editor", "terminal", "browser", "capabilities"] as const).map((item) => (
+              <button key={item} type="button" onClick={() => item === "browser" ? void openCodingBrowser() : setPanel(item)} className={`flex min-h-11 w-full items-center justify-between rounded-panel px-3 text-left text-sm ${panel === item ? "bg-accent text-accent-ink" : "text-muted hover:bg-white/5"}`}>
                 <span className="flex items-center gap-2">{item === "agent" ? <Activity className="size-4" /> : item === "changes" ? <FileDiff className="size-4" /> : item === "editor" ? <Code2 className="size-4" /> : <Terminal className="size-4" />}{item[0].toUpperCase() + item.slice(1)}</span>
                 {item === "changes" && changedFiles.length ? <span>{changedFiles.length}</span> : null}
               </button>
@@ -479,9 +499,10 @@ export function BuildWorkspace() {
           </nav>
           <section className="dense-card min-w-0 space-y-3">
             <div className="flex flex-wrap items-center justify-between gap-2">
-              <div><p className="text-xs uppercase tracking-[0.18em] text-muted">Build panel</p><h3 className="font-semibold">{panel === "agent" ? "Agent output" : panel === "timeline" ? "Execution timeline" : panel === "changes" ? "File-change review" : panel === "editor" ? "Code editor" : panel === "terminal" ? "Integrated terminal" : "Capability inventory"}</h3></div>
+              <div><p className="text-xs uppercase tracking-[0.18em] text-muted">Build panel</p><h3 className="font-semibold">{panel === "agent" ? "Agent output" : panel === "timeline" ? "Execution timeline" : panel === "changes" ? "File-change review" : panel === "editor" ? "Code editor" : panel === "terminal" ? "Integrated terminal" : panel === "browser" ? "Coding browser" : "Capability inventory"}</h3></div>
               {active ? <Square className="size-4 animate-pulse text-warning" aria-label="Task active" /> : <ShieldCheck className="size-5 text-success" aria-label="Task settled" />}
             </div>
+            {panel === "browser" ? <div className="space-y-2"><p className="text-sm text-muted" role="status">{browserNotice || "The coding browser uses the in-repo package and the saved Grok key. It does not ask for a Kimi login."}</p>{browserFrame ? <iframe title="Coding browser" src={browserFrame} className="h-[32rem] w-full rounded-panel border border-line bg-black" /> : null}</div> : null}
             {panel === "agent" ? <>
               <div className="min-h-32 whitespace-pre-wrap rounded-panel border border-line bg-black/10 p-3 text-sm">{assistantText || job?.output || job?.error || "No active build task. Submit a task to stream agent output here."}</div>
               {active ? <button type="button" onClick={() => void cancelBuild()} className="min-h-10 rounded-panel border border-danger/40 px-3 text-sm text-danger">Stop task</button> : null}

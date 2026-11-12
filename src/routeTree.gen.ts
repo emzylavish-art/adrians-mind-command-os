@@ -21,6 +21,7 @@ import { Route as ApiMindAgentRouteImport } from './routes/api/mind/agent'
 import { Route as ApiMindProvidersRouteImport } from './routes/api/mind/providers'
 import { Route as ApiMindTurnRouteImport } from './routes/api/mind/turn'
 import { Route as ApiMindDashboardStatusRouteImport } from './routes/api/mind/dashboard/status'
+import { Route as ApiMindKimiBrowserRouteImport } from './routes/api/mind/kimi/browser'
 import { Route as ApiMindKimiCancelRouteImport } from './routes/api/mind/kimi/cancel'
 import { Route as ApiMindKimiCapabilitiesRouteImport } from './routes/api/mind/kimi/capabilities'
 import { Route as ApiMindKimiFilesRouteImport } from './routes/api/mind/kimi/files'
@@ -125,6 +126,11 @@ const ApiMindTurnRoute = ApiMindTurnRouteImport.update({
 const ApiMindDashboardStatusRoute = ApiMindDashboardStatusRouteImport.update({
   id: '/api/mind/dashboard/status',
   path: '/api/mind/dashboard/status',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ApiMindKimiBrowserRoute = ApiMindKimiBrowserRouteImport.update({
+  id: '/api/mind/kimi/browser',
+  path: '/api/mind/kimi/browser',
   getParentRoute: () => rootRouteImport,
 } as any)
 const ApiMindKimiCancelRoute = ApiMindKimiCancelRouteImport.update({
@@ -375,6 +381,7 @@ export interface FileRoutesByFullPath {
   '/api/mind/providers': typeof ApiMindProvidersRoute
   '/api/mind/turn': typeof ApiMindTurnRoute
   '/api/mind/dashboard/status': typeof ApiMindDashboardStatusRoute
+  '/api/mind/kimi/browser': typeof ApiMindKimiBrowserRoute
   '/api/mind/kimi/cancel': typeof ApiMindKimiCancelRoute
   '/api/mind/kimi/capabilities': typeof ApiMindKimiCapabilitiesRoute
   '/api/mind/kimi/files': typeof ApiMindKimiFilesRoute
@@ -434,6 +441,7 @@ export interface FileRoutesByTo {
   '/api/mind/providers': typeof ApiMindProvidersRoute
   '/api/mind/turn': typeof ApiMindTurnRoute
   '/api/mind/dashboard/status': typeof ApiMindDashboardStatusRoute
+  '/api/mind/kimi/browser': typeof ApiMindKimiBrowserRoute
   '/api/mind/kimi/cancel': typeof ApiMindKimiCancelRoute
   '/api/mind/kimi/capabilities': typeof ApiMindKimiCapabilitiesRoute
   '/api/mind/kimi/files': typeof ApiMindKimiFilesRoute
@@ -494,6 +502,7 @@ export interface FileRoutesById {
   '/api/mind/providers': typeof ApiMindProvidersRoute
   '/api/mind/turn': typeof ApiMindTurnRoute
   '/api/mind/dashboard/status': typeof ApiMindDashboardStatusRoute
+  '/api/mind/kimi/browser': typeof ApiMindKimiBrowserRoute
   '/api/mind/kimi/cancel': typeof ApiMindKimiCancelRoute
   '/api/mind/kimi/capabilities': typeof ApiMindKimiCapabilitiesRoute
   '/api/mind/kimi/files': typeof ApiMindKimiFilesRoute
@@ -555,6 +564,7 @@ export interface FileRouteTypes {
     | '/api/mind/providers'
     | '/api/mind/turn'
     | '/api/mind/dashboard/status'
+    | '/api/mind/kimi/browser'
     | '/api/mind/kimi/cancel'
     | '/api/mind/kimi/capabilities'
     | '/api/mind/kimi/files'
@@ -614,6 +624,7 @@ export interface FileRouteTypes {
     | '/api/mind/providers'
     | '/api/mind/turn'
     | '/api/mind/dashboard/status'
+    | '/api/mind/kimi/browser'
     | '/api/mind/kimi/cancel'
     | '/api/mind/kimi/capabilities'
     | '/api/mind/kimi/files'
@@ -673,6 +684,7 @@ export interface FileRouteTypes {
     | '/api/mind/providers'
     | '/api/mind/turn'
     | '/api/mind/dashboard/status'
+    | '/api/mind/kimi/browser'
     | '/api/mind/kimi/cancel'
     | '/api/mind/kimi/capabilities'
     | '/api/mind/kimi/files'
@@ -733,6 +745,7 @@ export interface RootRouteChildren {
   ApiMindProvidersRoute: typeof ApiMindProvidersRoute
   ApiMindTurnRoute: typeof ApiMindTurnRoute
   ApiMindDashboardStatusRoute: typeof ApiMindDashboardStatusRoute
+  ApiMindKimiBrowserRoute: typeof ApiMindKimiBrowserRoute
   ApiMindKimiCancelRoute: typeof ApiMindKimiCancelRoute
   ApiMindKimiCapabilitiesRoute: typeof ApiMindKimiCapabilitiesRoute
   ApiMindKimiFilesRoute: typeof ApiMindKimiFilesRoute
@@ -864,6 +877,13 @@ declare module '@tanstack/react-router' {
       path: '/api/mind/dashboard/status'
       fullPath: '/api/mind/dashboard/status'
       preLoaderRoute: typeof ApiMindDashboardStatusRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/mind/kimi/browser': {
+      id: '/api/mind/kimi/browser'
+      path: '/api/mind/kimi/browser'
+      fullPath: '/api/mind/kimi/browser'
+      preLoaderRoute: typeof ApiMindKimiBrowserRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/api/mind/kimi/cancel': {
@@ -1197,6 +1217,7 @@ const rootRouteChildren: RootRouteChildren = {
   ApiMindProvidersRoute: ApiMindProvidersRoute,
   ApiMindTurnRoute: ApiMindTurnRoute,
   ApiMindDashboardStatusRoute: ApiMindDashboardStatusRoute,
+  ApiMindKimiBrowserRoute: ApiMindKimiBrowserRoute,
   ApiMindKimiCancelRoute: ApiMindKimiCancelRoute,
   ApiMindKimiCapabilitiesRoute: ApiMindKimiCapabilitiesRoute,
   ApiMindKimiFilesRoute: ApiMindKimiFilesRoute,

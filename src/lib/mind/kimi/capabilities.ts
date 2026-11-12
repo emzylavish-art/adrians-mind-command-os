@@ -17,6 +17,7 @@ export const KIMI_CAPABILITIES: KimiCapability[] = [
   { id: "file_mutate", group: "tools", label: "Create, rename, and delete files", status: "limited", evidence: "Operations are workspace-bound. Delete and rename require an explicit confirmation flag." },
   { id: "shell", group: "tools", label: "Approved terminal commands", status: "limited", evidence: "Commands run only after a one-time owner approval. ACP reverse terminal RPC stays denied." },
   { id: "web_research", group: "tools", label: "Web research", status: "not_supported", evidence: "No Adrian OS web-research bridge is bound to Kimi ACP." },
+  { id: "in_app_browser", group: "tools", label: "In-app coding browser", status: "limited", evidence: "Build can start the in-repo kimi web process on this computer and frame it. It is not a public site page, and it does not request a Kimi login." },
   { id: "hooks", group: "tools", label: "Lifecycle hooks", status: "not_supported", evidence: "Kimi hook configuration was not verified or exposed." },
   { id: "subagents", group: "orchestration", label: "Subagents and delegated tasks", status: "not_supported", evidence: "No subagent protocol was verified. Parallel agents are not advertised." },
   { id: "mcp", group: "extensions", label: "MCP servers", status: "limited", evidence: "Adrian OS already has an MCP registry. It is not automatically forwarded into kimi acp." },
