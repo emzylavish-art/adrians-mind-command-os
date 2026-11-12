@@ -871,3 +871,44 @@ form.thread-composer {
     grid-template-columns: repeat(4, minmax(0, 1fr)) !important;
   }
 }
+
+.page-shell .empty-state {
+  background-image: none !important;
+  background-color: #141416 !important;
+  border: 1px solid rgb(255 255 255 / 0.08) !important;
+  border-style: solid !important;
+  min-height: 8rem !important;
+  box-shadow: none !important;
+}
+
+.page-shell .empty-state img {
+  width: 3rem !important;
+  height: 3rem !important;
+  opacity: 0.85;
+}
+
+.main-stage .page-shell .empty-state,
+.main-stage .page-shell [data-empty="true"] {
+  background-image: none !important;
+  background-color: #141416 !important;
+  border: 1px solid rgb(255 255 255 / 0.08) !important;
+  min-height: 8rem !important;
+  box-shadow: none !important;
+}
+
+.min-h-0.flex-1.overflow-auto .page-shell ul.mt-3.space-y-1 > li.empty-state,
+.min-h-0.flex-1.overflow-auto .page-shell ul.mt-4.space-y-2 > li.empty-state,
+.min-h-0.flex-1.overflow-auto .page-shell .empty-state {
+  background: #141416 !important;
+  background-image: none !important;
+  border: 1px solid rgb(255 255 255 / 0.08) !important;
+  border-style: solid !important;
+  color: #f4f4f5 !important;
+  box-shadow: none !important;
+}
+
+.min-h-0.flex-1.overflow-auto .page-shell ul.mt-3.space-y-1 > li.empty-state::before,
+.min-h-0.flex-1.overflow-auto .page-shell .empty-state::before {
+  display: none !important;
+  content: none !important;
+}
