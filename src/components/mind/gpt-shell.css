@@ -1192,3 +1192,15 @@ form.thread-composer {
     flex-wrap: nowrap !important;
   }
 }
+
+@media (max-width: 767.98px) {
+  [data-view="memory"] .page-shell .mt-4.grid.gap-3 > .glow-card,
+  [data-view="memory"] .page-shell > p.mt-4.text-sm.text-muted {
+    display: none !important;
+  }
+
+  [data-view="memory"] .page-shell textarea {
+    height: 2.75rem !important;
+    min-height: 2.75rem !important;
+  }
+}
