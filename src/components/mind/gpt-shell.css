@@ -766,3 +766,10 @@ form.thread-composer {
     display: none !important;
   }
 }
+
+.main-stage form.thread-composer.floating-composer.command-card.composer-dock {
+  background: #121214 !important;
+  background-image: none !important;
+  background-blend-mode: normal !important;
+  box-shadow: none !important;
+}
