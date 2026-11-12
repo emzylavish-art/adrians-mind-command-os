@@ -286,11 +286,25 @@ aside.rail.nav-drawer-open {
   font-weight: 700;
 }
 
+.speak-stage header p + p {
+  max-width: 18rem;
+  margin-top: 0.15rem;
+  color: #a1a1aa;
+  font-size: 0.75rem;
+  font-weight: 400;
+}
+
 .speak-stage header span {
   display: block;
   color: #a1a1aa;
   font-size: 0.8rem;
   font-weight: 400;
+}
+
+@media (max-width: 899px) {
+  .speak-stage__body {
+    padding-top: 5.5rem;
+  }
 }
 
 .speak-stage header button,

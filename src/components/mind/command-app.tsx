@@ -5997,7 +5997,7 @@ export function CommandApp() {
                   <img src="/brand/marks/settings.png" alt="" className="size-8 rounded-lg" />
                   <div>
                     <h2 className="font-display text-3xl font-bold">Settings</h2>
-                    <p className="text-sm text-muted">Preferences stay in this browser. Pages are grouped below, not dumped in one list.</p>
+                    <p className="text-sm text-muted">Preferences stay in this browser. Open a group to reach its pages.</p>
                   </div>
                 </div>
               </div>
