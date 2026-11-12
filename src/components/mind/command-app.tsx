@@ -5514,28 +5514,35 @@ export function CommandApp() {
                 <p className="text-sm text-muted">Preferences stay in this browser. Server keys are not edited here.</p>
               </div>
               <nav className="settings-index" aria-label="Settings sections" hidden={settingsPane !== null}>
-                <button type="button" onClick={() => setSettingsPane("general")}>General</button>
-                <button type="button" onClick={() => { setView("chat"); setNavOpen(false); }}>Personalization</button>
-                <button type="button" onClick={() => { setView("memory"); setNavOpen(false); }}>Memory</button>
-                <button type="button" onClick={() => { setView("connected"); setNavOpen(false); }}>Plugins</button>
-                <button type="button" onClick={() => setSettingsPane("connections")}>Connections</button>
-                <button type="button" onClick={() => setSettingsPane("voice")}>Voice</button>
-                <button type="button" onClick={() => { setView("scheduled"); setNavOpen(false); }}>Scheduled</button>
-                <button type="button" onClick={() => { setView("agents"); setNavOpen(false); }}>Bots</button>
-                <button type="button" onClick={() => { setView("runs"); setNavOpen(false); }}>Runs</button>
-                <button type="button" onClick={() => { setView("tools"); setNavOpen(false); }}>Tools</button>
-                <button type="button" onClick={() => { setView("skills"); setNavOpen(false); }}>Skills</button>
-                <button type="button" onClick={() => { setView("build"); setNavOpen(false); }}>Build</button>
-                <button type="button" onClick={() => { setView("research"); setNavOpen(false); }}>Research</button>
-                <button type="button" onClick={() => { setView("files"); setNavOpen(false); }}>Library</button>
-                <button type="button" onClick={() => { setView("projects"); setNavOpen(false); }}>Projects</button>
-                <button type="button" onClick={() => { setView("activity"); setNavOpen(false); }}>Activity</button>
-                <button type="button" onClick={() => { setView("integrations"); setNavOpen(false); }}>Integrations</button>
-                <button type="button" onClick={() => { setView("help"); setNavOpen(false); }}>Help</button>
-                <button type="button" onClick={() => setSettingsPane("pages")}>Pages</button>
-                <button type="button" onClick={() => setSettingsPane("data")}>Data</button>
-                <button type="button" onClick={() => setSettingsPane("safety")}>Safety</button>
-                <button type="button" onClick={() => { window.location.assign("/login"); }}>Security and login</button>
+                {[
+                  ["general", "General", () => setSettingsPane("general")],
+                  ["personalization", "Personalization", () => { setView("chat"); setNavOpen(false); }],
+                  ["memory", "Memory", () => { setView("memory"); setNavOpen(false); }],
+                  ["plugins", "Plugins", () => { setView("connected"); setNavOpen(false); }],
+                  ["connections", "Connections", () => setSettingsPane("connections")],
+                  ["voice", "Voice", () => setSettingsPane("voice")],
+                  ["scheduled", "Scheduled", () => { setView("scheduled"); setNavOpen(false); }],
+                  ["bots", "Bots", () => { setView("agents"); setNavOpen(false); }],
+                  ["runs", "Runs", () => { setView("runs"); setNavOpen(false); }],
+                  ["tools", "Tools", () => { setView("tools"); setNavOpen(false); }],
+                  ["skills", "Skills", () => { setView("skills"); setNavOpen(false); }],
+                  ["build", "Build", () => { setView("build"); setNavOpen(false); }],
+                  ["research", "Research", () => { setView("research"); setNavOpen(false); }],
+                  ["library", "Library", () => { setView("files"); setNavOpen(false); }],
+                  ["projects", "Projects", () => { setView("projects"); setNavOpen(false); }],
+                  ["activity", "Activity", () => { setView("activity"); setNavOpen(false); }],
+                  ["integrations", "Integrations", () => { setView("integrations"); setNavOpen(false); }],
+                  ["help", "Help", () => { setView("help"); setNavOpen(false); }],
+                  ["pages", "Pages", () => setSettingsPane("pages")],
+                  ["data", "Data", () => setSettingsPane("data")],
+                  ["safety", "Safety", () => setSettingsPane("safety")],
+                  ["security", "Security and login", () => { window.location.assign("/login"); }],
+                ].map(([id, label, open]) => (
+                  <button key={id} type="button" onClick={open}>
+                    <img src={`/brand/marks/${id}.png`} alt="" width={28} height={28} />
+                    <span>{label}</span>
+                  </button>
+                ))}
               </nav>
               {settingsPane && (
                 <button type="button" className="text-sm text-muted" onClick={() => setSettingsPane(null)}>Back</button>
