@@ -677,15 +677,31 @@ export function FleetPanel({
           : null;
     return (
       <section className="page-shell">
-        <div className="page-hero mb-4"><h2 className="font-display text-3xl font-bold">Scheduled tasks</h2><p className="text-sm text-muted">{workerDetail ? `${workerDetail} ` : ""}This database is local. It is not hosted scheduling.</p></div>
+        <div className="page-hero mb-4 flex items-center gap-3">
+          <img src="/brand/marks/scheduled.png" alt="" className="size-8 rounded-lg" />
+          <div>
+            <h2 className="font-display text-3xl font-bold">Scheduled</h2>
+            <p className="text-sm text-muted">{workerDetail ? `${workerDetail} ` : ""}Jobs wait on this device. Nothing runs until you start it.</p>
+          </div>
+        </div>
         <ul className="mb-2 space-y-2">
           <WorkerHealthStatusRows state={workerHealthState} onRetry={onceListRetry(loadWorkerHealth)} />
         </ul>
-        <p className="mt-2 text-xs text-muted">One pass: node --experimental-strip-types scripts/schedule-tick.mjs. Stay up: node --experimental-strip-types scripts/schedule-worker.mjs. Interval: MIND_WORKER_INTERVAL_MS.</p>
-        <div className="mt-4 flex flex-wrap gap-2">
-          <input value={jobName} onChange={(event) => setJobName(event.target.value)} placeholder="Morning notes" className="min-h-11 rounded-panel border border-line bg-surface px-3 text-sm" />
-          <input value={jobZone} onChange={(event) => setJobZone(event.target.value)} placeholder="America/Chicago" className="min-h-11 rounded-panel border border-line bg-surface px-3 text-sm" />
-          <input value={jobHour} onChange={(event) => setJobHour(event.target.value)} placeholder="Hour 0-23, optional" className="min-h-11 w-28 rounded-panel border border-line bg-surface px-3 text-sm" />
+        <details className="mt-2 rounded-panel border border-line px-3 py-2 text-sm">
+          <summary className="min-h-11 cursor-pointer">Worker command</summary>
+          <p className="pb-2 text-xs text-muted">One pass: node --experimental-strip-types scripts/schedule-tick.mjs. Stay up: node --experimental-strip-types scripts/schedule-worker.mjs. Interval: MIND_WORKER_INTERVAL_MS.</p>
+        </details>
+        <div className="mt-4 grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
+          <label className="text-sm">Name
+            <input value={jobName} onChange={(event) => setJobName(event.target.value)} placeholder="Morning notes" aria-label="Job name" className="mt-1 min-h-11 w-full rounded-panel border border-line bg-surface px-3 text-sm" />
+          </label>
+          <label className="text-sm">Time zone
+            <input value={jobZone} onChange={(event) => setJobZone(event.target.value)} placeholder="America/Chicago" aria-label="Time zone" className="mt-1 min-h-11 w-full rounded-panel border border-line bg-surface px-3 text-sm" />
+          </label>
+          <label className="text-sm">Hour
+            <input value={jobHour} onChange={(event) => setJobHour(event.target.value)} placeholder="0-23" aria-label="Hour" className="mt-1 min-h-11 w-full rounded-panel border border-line bg-surface px-3 text-sm" />
+          </label>
+          <div className="flex items-end gap-2">
           <button
             type="button"
             className="min-h-11 rounded-panel bg-accent px-4 text-sm font-semibold text-accent-ink"
@@ -704,8 +720,9 @@ export function FleetPanel({
           >
             Add daily job
           </button>
-          <button type="button" className="min-h-11 rounded-panel border border-line px-3 text-sm" onClick={() => setWs((prev) => runDueSchedules(prev, new Date().toISOString()))}>Run due schedules</button>
+          </div>
         </div>
+        <button type="button" className="mt-3 min-h-11 rounded-panel border border-line px-3 text-sm" onClick={() => setWs((prev) => runDueSchedules(prev, new Date().toISOString()))}>Run due schedules</button>
         <ul className="mt-4 space-y-2">
           {ws.schedules.length === 0 && (
             <li className="empty-state">
@@ -732,8 +749,13 @@ export function FleetPanel({
   return (
     <section className="page-shell">
       <div className="page-hero mb-4">
-        <h2 className="font-display text-3xl font-bold">Tools</h2>
-        <p className="text-sm text-muted">Local reads run in the worker. Page inspect uses the browser driver only when you press Open page. Image, video, and model calls are not made here.</p>
+        <div className="flex items-center gap-3">
+          <img src="/brand/marks/tools.png" alt="" className="size-8 rounded-lg" />
+          <div>
+            <h2 className="font-display text-3xl font-bold">Tools</h2>
+            <p className="text-sm text-muted">Local reads run in the worker. Page inspect uses the browser driver only when you press Open page. Image, video, and model calls are not made here.</p>
+          </div>
+        </div>
       </div>
       <div className="mt-4 flex flex-wrap gap-2">
         <input value={pageUrl} onChange={(event) => setPageUrl(event.target.value)} placeholder="https://example.com" className="min-h-11 min-w-0 flex-1 rounded-panel border border-line bg-surface px-3 text-sm" />
