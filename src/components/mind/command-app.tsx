@@ -3923,7 +3923,7 @@ export function CommandApp() {
           {!railCollapsed && <div className="mx-3 my-3 border-t border-white/10" />}
           {ws.pins.length > 0 && !railCollapsed && (
             <div className="mb-3">
-              <p className="px-3 pb-1 text-[10px] font-semibold tracking-[0.18em] text-muted">PINNED</p>
+              <p className="px-3 pb-1 text-xs font-medium text-muted">Pinned</p>
               {ws.pins.map((pin) => {
                 const label =
                   pin.kind === "agent"
@@ -3958,7 +3958,7 @@ export function CommandApp() {
           )}
           {ws.chats.length > 0 && !railCollapsed && (
             <div className="mb-3">
-              <p className="px-3 pb-1 text-[10px] font-semibold tracking-[0.18em] text-muted">RECENT</p>
+              <p className="px-3 pb-1 text-xs font-medium text-muted">Recent</p>
               {getRecentChats(ws.chats, 5, new Set(ws.pins.filter((pin) => pin.kind === "chat").map((pin) => pin.ref))).map((chat) => (
                 <div key={chat.id} className="flex min-h-11 items-center">
                   <button
@@ -3987,9 +3987,16 @@ export function CommandApp() {
               ))}
             </div>
           )}
+          {ws.chats.length === 0 && !railCollapsed && (
+            <div className="mx-3 rounded-2xl border border-white/8 bg-[#141416] p-3">
+              <p className="text-sm font-medium">No chats yet</p>
+              <p className="mt-1 text-sm text-muted">Start one from Chat. Recent threads stay in this menu.</p>
+            </div>
+          )}
           {!railCollapsed && (
-            <button type="button" className="px-3 py-2 text-left text-sm text-muted" onClick={() => { setView("settings"); setSettingsPane("pages"); setNavOpen(false); }}>
-              All pages
+            <button type="button" className="nav-item mt-3 flex min-h-11 w-full items-center gap-3 rounded-2xl px-3 text-left text-sm text-muted" onClick={() => { setView("settings"); setSettingsPane("pages"); setNavOpen(false); }}>
+              <img src="/brand/marks/pages.png" alt="" width={22} height={22} className="size-5 rounded-md" />
+              <span>All pages</span>
             </button>
           )}
         </nav>
