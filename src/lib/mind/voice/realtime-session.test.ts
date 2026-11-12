@@ -59,6 +59,9 @@ describe("RealtimeVoiceSession", () => {
     socket.emitMessage({ type: "response.output_audio_transcript.done", transcript: "Ready now." });
     assert.deepEqual(transcripts, ["hello world", "assistant:Ready now."]);
     session.interruptPlayback();
+    assert.equal(socket.sent.some((line: string) => line.includes("response.cancel")), false);
+    socket.emitMessage({ type: "response.created" });
+    session.interruptPlayback();
     assert.ok(socket.sent.some((line: string) => line.includes("response.cancel")));
     session.close();
   });

@@ -76,6 +76,7 @@ export class RealtimeVoiceSession {
   private socketFactory: RealtimeSocketFactory;
   private pendingTranscript = "";
   private pendingAssistantText = "";
+  private responseActive = false;
   private intentionalClose = false;
   private muted = false;
   private analyser: AnalyserNode | null = null;
@@ -200,13 +201,19 @@ export class RealtimeVoiceSession {
     }
     const type = msg.type || "";
     if (type === "error") {
-      this.handlers.onError?.(msg.error?.message || "Voice realtime error.");
+      const message = msg.error?.message || "Voice realtime error.";
+      if (/no active response/i.test(message)) return;
+      this.handlers.onError?.(message);
       return;
     }
     if (type === "input_audio_buffer.speech_started") {
-      this.interruptPlayback();
+      if (this.responseActive) this.interruptPlayback();
       this.handlers.onSpeechStarted?.();
       this.handlers.onStatus?.("listening");
+      return;
+    }
+    if (type === "response.created") {
+      this.responseActive = true;
       return;
     }
     if (
@@ -231,6 +238,7 @@ export class RealtimeVoiceSession {
     }
     if (type === "response.output_audio.delta" || type === "response.audio.delta") {
       if (msg.delta) {
+        this.responseActive = true;
         this.handlers.onStatus?.("speaking");
         void this.output.playPcm16Base64(msg.delta, { sampleRate: REALTIME_SAMPLE_RATE });
       }
@@ -252,6 +260,7 @@ export class RealtimeVoiceSession {
       return;
     }
     if (type === "response.done") {
+      this.responseActive = false;
       const leftover = this.pendingAssistantText.trim();
       this.pendingAssistantText = "";
       if (leftover) this.handlers.onAssistantTranscript?.(leftover);
@@ -262,6 +271,8 @@ export class RealtimeVoiceSession {
   /** Cut local playback and cancel in-flight model audio. */
   interruptPlayback() {
     this.output.interrupt();
+    if (!this.responseActive) return;
+    this.responseActive = false;
     this.send({ type: "response.cancel" });
   }
 
@@ -290,6 +301,17 @@ export class RealtimeVoiceSession {
     this.media = media;
     const Ctx = window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
     this.audioCtx = new Ctx({ sampleRate: REALTIME_SAMPLE_RATE });
+    const captureRate = this.audioCtx.sampleRate || REALTIME_SAMPLE_RATE;
+    if (captureRate !== REALTIME_SAMPLE_RATE) {
+      this.send({
+        type: "session.update",
+        session: {
+          audio: {
+            input: { format: { type: "audio/pcm", rate: captureRate } },
+          },
+        },
+      });
+    }
     this.source = this.audioCtx.createMediaStreamSource(media);
     this.analyser = this.audioCtx.createAnalyser();
     this.analyser.fftSize = 2048;

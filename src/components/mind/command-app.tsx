@@ -3988,7 +3988,6 @@ export function CommandApp() {
               return;
             }
             interruptSpeakPlayback();
-            session.interruptPlayback();
           },
           onError: (message) => {
             setAvatarPresence("error");
