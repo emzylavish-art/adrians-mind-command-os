@@ -5510,11 +5510,27 @@ export function CommandApp() {
               </div>
               <nav className="settings-index" aria-label="Settings sections" hidden={settingsPane !== null}>
                 <button type="button" onClick={() => setSettingsPane("general")}>General</button>
+                <button type="button" onClick={() => { setView("chat"); setNavOpen(false); }}>Personalization</button>
+                <button type="button" onClick={() => { setView("memory"); setNavOpen(false); }}>Memory</button>
+                <button type="button" onClick={() => { setView("connected"); setNavOpen(false); }}>Plugins</button>
                 <button type="button" onClick={() => setSettingsPane("connections")}>Connections</button>
                 <button type="button" onClick={() => setSettingsPane("voice")}>Voice</button>
+                <button type="button" onClick={() => { setView("scheduled"); setNavOpen(false); }}>Scheduled</button>
+                <button type="button" onClick={() => { setView("agents"); setNavOpen(false); }}>Bots</button>
+                <button type="button" onClick={() => { setView("runs"); setNavOpen(false); }}>Runs</button>
+                <button type="button" onClick={() => { setView("tools"); setNavOpen(false); }}>Tools</button>
+                <button type="button" onClick={() => { setView("skills"); setNavOpen(false); }}>Skills</button>
+                <button type="button" onClick={() => { setView("build"); setNavOpen(false); }}>Build</button>
+                <button type="button" onClick={() => { setView("research"); setNavOpen(false); }}>Research</button>
+                <button type="button" onClick={() => { setView("files"); setNavOpen(false); }}>Library</button>
+                <button type="button" onClick={() => { setView("projects"); setNavOpen(false); }}>Projects</button>
+                <button type="button" onClick={() => { setView("activity"); setNavOpen(false); }}>Activity</button>
+                <button type="button" onClick={() => { setView("integrations"); setNavOpen(false); }}>Integrations</button>
+                <button type="button" onClick={() => { setView("help"); setNavOpen(false); }}>Help</button>
                 <button type="button" onClick={() => setSettingsPane("pages")}>Pages</button>
                 <button type="button" onClick={() => setSettingsPane("data")}>Data</button>
                 <button type="button" onClick={() => setSettingsPane("safety")}>Safety</button>
+                <button type="button" onClick={() => { window.location.assign("/login"); }}>Security and login</button>
               </nav>
               {settingsPane && (
                 <button type="button" className="text-sm text-muted" onClick={() => setSettingsPane(null)}>Back</button>

@@ -15,13 +15,13 @@ type Start = {
 };
 
 const OFFICIAL = [
-  { id: "kimi-datasource", name: "Kimi Datasource", description: "Market, news, company, and legal lookups.", action: "key" as const },
-  { id: "kimi-webbridge", name: "Kimi Browser Extension", description: "Drive the browser you already use.", action: "link" as const, href: "https://chromewebstore.google.com/detail/kimi-webbridge/fldmhceldgbpfpkbgopacenieobmligc" },
-  { id: "kimi-computer-use", name: "Kimi Computer Use", description: "Desktop control for the computer you choose.", action: "link" as const, href: "https://cdn.kimi.com/kimi-computer-use-windows/latest/kimi-cu-win-plugin.zip" },
-  { id: "superpowers", name: "Superpowers", description: "Planning, debugging, and delivery workflows.", action: "link" as const, href: "https://github.com/obra/superpowers" },
-  { id: "vercel-plugin", name: "Vercel Plugin", description: "Vercel skills and deploy conventions.", action: "link" as const, href: "https://github.com/vercel/vercel-plugin" },
-  { id: "modern-web-guidance", name: "Modern Web Guidance", description: "Web platform and browser guidance.", action: "link" as const, href: "https://github.com/GoogleChrome/modern-web-guidance" },
-  { id: "cloudbase", name: "Tencent CloudBase", description: "CloudBase database, functions, and hosting.", action: "mcp" as const, href: "https://github.com/TencentCloudBase/CloudBase-AI-Toolkit" },
+  { id: "kimi-datasource", name: "Datasource", mark: "Ds", color: "#2f6bff", description: "Market, news, company, and legal lookups.", action: "key" as const },
+  { id: "kimi-webbridge", name: "Browser", mark: "Br", color: "#f4b400", description: "Drive the browser you already use.", action: "link" as const, href: "https://chromewebstore.google.com/detail/kimi-webbridge/fldmhceldgbpfpkbgopacenieobmligc" },
+  { id: "kimi-computer-use", name: "Computer", mark: "Pc", color: "#34a853", description: "Desktop control for the computer you choose.", action: "link" as const, href: "https://cdn.kimi.com/kimi-computer-use-windows/latest/kimi-cu-win-plugin.zip" },
+  { id: "superpowers", name: "Superpowers", mark: "Sp", color: "#d97757", description: "Planning, debugging, and delivery workflows.", action: "link" as const, href: "https://github.com/obra/superpowers" },
+  { id: "vercel-plugin", name: "Vercel", mark: "Vc", color: "#111111", description: "Deploy skills and conventions.", action: "link" as const, href: "https://github.com/vercel/vercel-plugin" },
+  { id: "modern-web-guidance", name: "Web guidance", mark: "Wb", color: "#1a73e8", description: "Web platform and browser guidance.", action: "link" as const, href: "https://github.com/GoogleChrome/modern-web-guidance" },
+  { id: "cloudbase", name: "CloudBase", mark: "Cb", color: "#00a4ff", description: "Database, functions, and hosting.", action: "mcp" as const, href: "https://github.com/TencentCloudBase/CloudBase-AI-Toolkit" },
 ] as const;
 
 const ADDED_KEY = "adrian-added-plugins";
@@ -72,7 +72,7 @@ export function KimiDeviceConnect() {
   async function authed(path: string, init?: RequestInit) {
     const token = getBearerToken();
     if (!token) {
-      setNotice("Sign in to Adrian OS first. Then use Kimi's login.");
+      setNotice("Sign in on this site first. Then the server can store the key. The plugin list stays usable without that.");
       return null;
     }
     const response = await fetch(path, {
@@ -151,7 +151,7 @@ export function KimiDeviceConnect() {
   }
 
   return (
-    <section className="mt-6 rounded-panel border border-line p-3" aria-label="Kimi login">
+    <section className="mt-6 rounded-panel border border-line p-3" aria-label="Plugins">
       <h3 className="font-semibold">Plugins</h3>
       <p className="mt-1 text-sm text-muted">{notice}</p>
       <div className="mt-3 flex flex-wrap gap-1" role="tablist" aria-label="Plugin groups">
@@ -167,9 +167,12 @@ export function KimiDeviceConnect() {
           return (
             <article key={plugin.id} className="rounded-panel border border-line p-3">
               <div className="flex items-center justify-between gap-3">
-                <div>
-                  <p className="font-semibold">{plugin.name}</p>
-                  <p className="text-sm text-muted">{plugin.description}</p>
+                <div className="flex min-w-0 items-center gap-3">
+                  <span className="service-mark" style={{ background: plugin.color, color: plugin.color === "#111111" || plugin.color === "#f4b400" ? "#fff" : "#fff" }} aria-hidden="true">{plugin.mark}</span>
+                  <div className="min-w-0">
+                    <p className="font-semibold">{plugin.name}</p>
+                    <p className="text-sm text-muted">{plugin.description}</p>
+                  </div>
                 </div>
                 <button type="button" className={"min-h-11 shrink-0 rounded-panel px-4 text-sm font-semibold " + (on ? "border border-line" : "bg-accent text-accent-ink")} onClick={() => on ? remember(added.filter((id) => id !== plugin.id)) : addPlugin(plugin)}>
                   {on ? "Remove" : "Add"}
@@ -182,19 +185,19 @@ export function KimiDeviceConnect() {
       </div>
       {tab === "custom" ? <div>
       <div className="mt-3 flex flex-wrap gap-2">
-        <button type="button" className="min-h-11 rounded-panel border border-line px-3 text-sm" aria-pressed={mode === "oauth"} onClick={() => setMode("oauth")}>Kimi Code</button>
+        <button type="button" className="min-h-11 rounded-panel border border-line px-3 text-sm" aria-pressed={mode === "oauth"} onClick={() => setMode("oauth")}>Coding login</button>
         <button type="button" className="min-h-11 rounded-panel border border-line px-3 text-sm" aria-pressed={mode === "key"} onClick={() => setMode("key")}>API key</button>
       </div>
       {mode === "oauth" ? (
         <div className="mt-3 flex flex-wrap gap-2">
-          <button type="button" className="min-h-11 rounded-panel bg-accent px-4 text-sm font-semibold text-accent-ink" disabled={busy} onClick={() => void call("start")}>Connect Kimi Code</button>
+          <button type="button" className="min-h-11 rounded-panel bg-accent px-4 text-sm font-semibold text-accent-ink" disabled={busy} onClick={() => void call("start")}>Connect coding account</button>
           <button type="button" className="min-h-11 rounded-panel border border-line px-3 text-sm" disabled={busy} onClick={() => void call("poll")}>Check</button>
-          {url ? <a className="inline-flex min-h-11 items-center px-3 text-sm underline" href={url} target="_blank" rel="noreferrer">Open Kimi login</a> : null}
+          {url ? <a className="inline-flex min-h-11 items-center px-3 text-sm underline" href={url} target="_blank" rel="noreferrer">Open the login page</a> : null}
           {userCode ? <p className="w-full font-mono text-sm">Code: {userCode}</p> : null}
         </div>
       ) : (
         <form className="mt-3 flex flex-wrap gap-2" onSubmit={(event) => { event.preventDefault(); void saveKey(); }}>
-          <input id="kimi-api-key" value={apiKey} onChange={(event) => setApiKey(event.target.value)} type="password" autoComplete="off" placeholder="Kimi platform API key" className="min-h-11 min-w-64 flex-1 rounded-panel border border-line bg-bg px-3 text-sm" />
+          <input id="kimi-api-key" value={apiKey} onChange={(event) => setApiKey(event.target.value)} type="password" autoComplete="off" placeholder="Coding platform API key" className="min-h-11 min-w-64 flex-1 rounded-panel border border-line bg-bg px-3 text-sm" />
           <button type="submit" className="min-h-11 rounded-panel border border-line px-3 text-sm" disabled={busy}>Save API key</button>
         </form>
       )}
