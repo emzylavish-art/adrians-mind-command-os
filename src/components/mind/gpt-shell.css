@@ -624,3 +624,31 @@ img.service-mark {
   border-left: 0 !important;
   box-shadow: none !important;
 }
+
+.main-stage button.grid.place-items-center {
+  display: grid !important;
+}
+
+.main-stage .page-shell article.dense-card.card-texture,
+.main-stage .page-shell li.dense-card {
+  background-image: none !important;
+  background-color: #141416 !important;
+  background-blend-mode: normal !important;
+  border: 1px solid rgb(255 255 255 / 0.08) !important;
+  border-radius: 0.9rem !important;
+}
+
+.page-shell p.text-xs,
+.page-shell p.text-sm {
+  text-transform: none !important;
+  letter-spacing: 0 !important;
+  font-weight: 400 !important;
+}
+
+@media (min-width: 900px) {
+  .page-shell > .grid {
+    display: grid !important;
+    flex-direction: unset !important;
+    gap: 0.75rem !important;
+  }
+}

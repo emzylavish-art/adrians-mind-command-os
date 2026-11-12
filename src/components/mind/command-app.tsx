@@ -5471,9 +5471,14 @@ export function CommandApp() {
           {view === "integrations" && (
             <section className="page-shell">
               <div className="page-hero">
-                <h2 className="font-display text-3xl font-bold">Integrations</h2>
-                <p className="text-sm text-muted">{system}</p>
-                <p className="text-xs text-muted">Last check {stamp(checkedAt) || checkedAt}. Green means that behavior was verified here. Configured means a key or setting exists and a live call was not verified.</p>
+                <div className="flex items-center gap-3">
+                  <img src="/brand/marks/integrations.png" alt="" className="size-8 rounded-lg" />
+                  <div>
+                    <h2 className="font-display text-3xl font-bold">Integrations</h2>
+                    <p className="text-sm text-muted">{system}</p>
+                    <p className="text-xs text-muted">Last check {stamp(checkedAt) || checkedAt}. Green means that behavior was verified here. Configured means a key or setting exists and a live call was not verified.</p>
+                  </div>
+                </div>
               </div>
               <div className="mt-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
                 {CAPABILITIES.map((item) => {
