@@ -669,19 +669,13 @@ export function FleetPanel({
   }
 
   if (mode === "scheduled") {
-    const workerDetail =
-      workerHealthState.status === "ready"
-        ? workerHealthState.health.detail
-        : workerHealthState.status === "loading"
-          ? "Checking the worker."
-          : null;
     return (
       <section className="page-shell">
         <div className="page-hero mb-4 flex items-center gap-3">
           <img src="/brand/marks/scheduled.png" alt="" className="size-8 rounded-lg" />
           <div>
             <h2 className="font-display text-3xl font-bold">Scheduled</h2>
-            <p className="text-sm text-muted">{workerDetail ? `${workerDetail} ` : ""}Jobs wait on this device. Nothing runs until you start it.</p>
+            <p className="text-sm text-muted">Jobs wait on this device. Nothing runs until you start it.</p>
           </div>
         </div>
         <ul className="mb-2 space-y-2">
@@ -691,9 +685,9 @@ export function FleetPanel({
           <summary className="min-h-11 cursor-pointer">Worker command</summary>
           <p className="pb-2 text-xs text-muted">One pass: node --experimental-strip-types scripts/schedule-tick.mjs. Stay up: node --experimental-strip-types scripts/schedule-worker.mjs. Interval: MIND_WORKER_INTERVAL_MS.</p>
         </details>
-        <div className="solid-form mt-4">
+        <div id="owner-scheduled" className="solid-form mt-4">
           <p className="text-sm text-muted">Add a daily job. It waits here until you run due schedules or the worker is started.</p>
-          <div className="mt-3 grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
+          <div className="job-fields mt-3">
           <label className="text-sm">Name
             <input value={jobName} onChange={(event) => setJobName(event.target.value)} placeholder="Morning notes" aria-label="Job name" className="mt-1 min-h-11 w-full rounded-panel border border-line bg-surface px-3 text-sm" />
           </label>
@@ -737,7 +731,7 @@ export function FleetPanel({
           {ws.schedules.map((job) => (
             <li key={job.id} className="dense-card p-3 text-sm">
               <p className="font-semibold">{job.name}</p>
-              <p className="mt-1 text-sm text-muted">{job.enabled ? "On." : "Off."} {job.clockHour == null ? `Runs every ${job.intervalMinutes} minutes.` : `Runs daily at ${String(job.clockHour).padStart(2, "0")}:${String(job.clockMinute ?? 0).padStart(2, "0")} ${job.timeZone || "UTC"}.`}</p>
+              <p className="mt-1 text-sm text-muted">{job.enabled ? "On." : "Off."} {job.clockHour == null ? (job.intervalMinutes === 1440 ? "Runs once a day. Add an hour to choose the time." : `Runs every ${job.intervalMinutes} minutes.`) : `Runs daily at ${String(job.clockHour).padStart(2, "0")}:${String(job.clockMinute ?? 0).padStart(2, "0")} ${job.timeZone || "UTC"}.`}</p>
               <p className="text-sm text-muted">Next run {job.nextRunAt}. Last run {job.lastRunAt ?? "never"}. {job.lastError || "No error."}</p>
               <button type="button" className="mt-2 min-h-11 rounded-panel border border-line px-3 text-sm" onClick={() => setWs((prev) => setScheduleEnabled(prev, job.id, !job.enabled))}>{job.enabled ? "Turn off" : "Turn on"}</button>
             </li>
@@ -761,7 +755,7 @@ export function FleetPanel({
           </div>
         </div>
       </div>
-      <div className="mt-4 flex flex-wrap gap-2">
+      <div id="owner-tools" className="mt-4 flex flex-wrap gap-2">
         <input value={pageUrl} onChange={(event) => setPageUrl(event.target.value)} placeholder="https://example.com" className="min-h-11 min-w-0 flex-1 rounded-panel border border-line bg-surface px-3 text-sm" />
         <button
           type="button"

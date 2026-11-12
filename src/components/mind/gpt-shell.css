@@ -1204,3 +1204,134 @@ form.thread-composer {
     min-height: 2.75rem !important;
   }
 }
+
+#owner-integrations {
+  display: grid !important;
+  grid-template-columns: minmax(0, 1fr) !important;
+  gap: 0.75rem !important;
+  margin-top: 1rem;
+}
+
+@media (min-width: 768px) {
+  #owner-integrations {
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+  }
+}
+
+@media (min-width: 1100px) {
+  #owner-integrations {
+    grid-template-columns: repeat(3, minmax(0, 1fr)) !important;
+  }
+}
+
+#owner-integrations > .integration-card {
+  min-width: 0;
+  background: #141416 !important;
+  background-image: none !important;
+  border: 1px solid rgb(255 255 255 / 0.08) !important;
+  border-radius: 0.9rem !important;
+  padding: 0.9rem !important;
+}
+
+#owner-integrations > .integration-card p {
+  display: block !important;
+  overflow: visible !important;
+  white-space: normal !important;
+  -webkit-line-clamp: unset !important;
+  color: #a1a1aa !important;
+}
+
+#owner-integrations > .integration-card button {
+  background: #1c1c1f !important;
+  color: #f4f4f5 !important;
+  text-transform: none !important;
+}
+
+#owner-skills,
+#owner-projects,
+#owner-help,
+#owner-library {
+  display: grid !important;
+  grid-template-columns: minmax(0, 1fr) !important;
+  gap: 0.75rem !important;
+}
+
+@media (min-width: 900px) {
+  #owner-skills,
+  #owner-projects {
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+  }
+
+  #owner-library {
+    grid-template-columns: 16rem minmax(0, 1fr) !important;
+  }
+}
+
+#owner-skills > .skill-card,
+#owner-projects > article,
+#owner-library > .library-list,
+#owner-library > div,
+#owner-scheduled,
+#owner-tools,
+.owner-fold {
+  min-width: 0;
+  background: #141416 !important;
+  background-image: none !important;
+  border: 1px solid rgb(255 255 255 / 0.08) !important;
+  border-radius: 0.9rem !important;
+  padding: 0.9rem !important;
+}
+
+#owner-help > button {
+  display: flex !important;
+  min-height: 4.25rem;
+  align-items: center;
+  gap: 0.75rem;
+  border: 1px solid rgb(255 255 255 / 0.08) !important;
+  border-radius: 0.9rem !important;
+  background: #141416 !important;
+  padding: 0.75rem 0.9rem !important;
+  text-align: left;
+}
+
+#owner-skills > .skill-card p,
+#owner-projects > article p,
+#owner-help > button span {
+  display: block !important;
+  overflow: visible !important;
+  white-space: normal !important;
+  -webkit-line-clamp: unset !important;
+  text-transform: none !important;
+  letter-spacing: 0 !important;
+}
+
+#owner-scheduled .job-fields {
+  display: grid !important;
+  grid-template-columns: minmax(0, 1fr) !important;
+  gap: 0.75rem !important;
+}
+
+@media (min-width: 900px) {
+  #owner-scheduled .job-fields {
+    grid-template-columns: 1.4fr 1.2fr 6rem auto !important;
+    align-items: end !important;
+  }
+}
+
+.owner-fold > summary {
+  min-height: 2.75rem;
+  cursor: pointer;
+  font-weight: 600;
+}
+
+#owner-tools {
+  align-items: center;
+}
+
+#owner-tools input,
+#owner-tools button,
+#owner-skills button,
+#owner-scheduled button,
+#owner-projects button {
+  text-transform: none !important;
+}

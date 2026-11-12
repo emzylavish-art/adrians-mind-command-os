@@ -404,9 +404,96 @@ function statusWord(status: CapabilityStatus) {
   if (status === "blocked") return "Blocked";
   if (status === "unconfigured") return "Not configured";
   if (status === "local_required") return "Local only";
-  if (status === "paid_required") return "Paid, not called";
-  return "Not implemented";
+ if (status === "paid_required") return "Paid, not called";
+ return "Not implemented";
 }
+
+const CAPABILITY_MARK: Record<string, string> = {
+  "chat.grok": "grok",
+  "chat.openai": "openai",
+  "chat.anthropic": "claude",
+  "chat.gemini": "gemini",
+  "chat.openrouter": "openrouter",
+  "chat.local": "computer",
+  policy: "safety",
+  memory: "memory",
+  supabase: "datasource",
+  rea: "tools",
+  pc: "computer",
+  research: "research",
+  agents: "bots",
+  "agents.planner": "plan",
+  "agents.worker": "bots",
+  "agents.hosted": "vercel",
+  "browser.inspect": "browser",
+  gmail: "gmail",
+  image: "media",
+  video: "media",
+  voice: "voice",
+  "shell.palette": "search",
+  "shell.pins": "recent",
+  "chat.router": "connections",
+  notion: "notion",
+  "build.workspace": "build",
+};
+
+const CAPABILITY_PAGE: Partial<Record<string, View>> = {
+  "chat.grok": "connected",
+  "chat.openai": "settings",
+  "chat.anthropic": "settings",
+  "chat.gemini": "settings",
+  "chat.openrouter": "settings",
+  "chat.local": "connected",
+  policy: "settings",
+  memory: "memory",
+  pc: "connected",
+  research: "research",
+  agents: "agents",
+  "agents.planner": "agents",
+  "agents.worker": "agents",
+  "agents.hosted": "agents",
+  "browser.inspect": "tools",
+  gmail: "connected",
+  image: "connected",
+  video: "connected",
+  voice: "settings",
+  "shell.palette": "command",
+  "chat.router": "settings",
+  notion: "connected",
+  "build.workspace": "build",
+};
+
+const CAPABILITY_CONNECT: Partial<Record<string, string>> = {
+  "chat.openai": "OpenAI",
+  "chat.anthropic": "Claude",
+  "chat.gemini": "Gemini",
+  "chat.openrouter": "OpenRouter",
+  notion: "Notion",
+};
+
+function openCapability(id: string, setView: (view: View) => void, setSettingsPane: (pane: null | "general" | "connections" | "voice" | "pages" | "data" | "safety") => void) {
+  const page = CAPABILITY_PAGE[id];
+  if (!page) return;
+  const connect = CAPABILITY_CONNECT[id];
+  setView(page);
+  setSettingsPane(page !== "settings" ? null : id === "voice" ? "voice" : connect ? "connections" : null);
+  if (connect) {
+    window.setTimeout(() => {
+      window.dispatchEvent(new CustomEvent("adrian-open-connect", { detail: { name: connect } }));
+      document.getElementById(connect === "Notion" ? "owner-notion-search" : "owner-api-connect")?.scrollIntoView({ block: "center" });
+    }, 60);
+  }
+}
+
+const SKILL_MARK: Record<string, string> = {
+  projects: "projects",
+  chats: "chat",
+  notes: "memory",
+  notion: "notion",
+  browser: "browser",
+  voice: "voice",
+  gmail: "gmail",
+};
 
 function humanAction(action: string) {
   const map: Record<string, string> = {
@@ -4874,7 +4961,7 @@ export function CommandApp() {
                 <span className="rounded-panel bg-accent px-3 py-2 text-sm text-white">On this device ({ws.projects.length})</span>
                 <span className="rounded-panel border border-line px-3 py-2 text-sm text-muted">External (2) · unchanged</span>
               </div>
-              <div className="mt-4 grid gap-3 lg:grid-cols-2">
+              <div id="owner-projects">
                 {ws.projects.length === 0 && (
                   <article className="empty-state lg:col-span-2">
                     <img src="/empty/empty-folder.svg" alt="" />
@@ -5380,13 +5467,16 @@ export function CommandApp() {
                 </div>
               </div>
               <input value={skillQuery} onChange={(event) => setSkillQuery(event.target.value)} placeholder="Search skills" className="min-h-11 w-full rounded-panel border border-line bg-surface px-3 text-sm" />
-              <div className="grid gap-3 md:grid-cols-2">
+              <div id="owner-skills">
                 {(skillQuery.trim() ? searchSkills(skillQuery) : SKILLS).map((skill) => {
                   const on = skill.kind === "built-in" && enabledSkills[skill.id] !== false;
                   return (
-                    <article key={skill.id} className="dense-card p-3">
-                      <div className="flex items-center justify-between gap-2">
-                        <h3 className="font-semibold">{skill.name}</h3>
+                    <article key={skill.id} className="skill-card">
+                      <div className="flex items-start justify-between gap-3">
+                        <div className="flex min-w-0 items-center gap-3">
+                          <img src={`/brand/marks/${SKILL_MARK[skill.id] ?? "skills"}.png`} alt="" className="size-8 shrink-0 rounded-lg" />
+                          <h3 className="font-semibold">{skill.name}</h3>
+                        </div>
                         <span className="rounded-full border border-line px-2 py-0.5 text-xs text-muted">{skill.kind === "built-in" ? (on ? "On" : "Off") : "Not installed"}</span>
                       </div>
                       <p className="mt-2 text-sm">{skill.description}</p>
@@ -5424,7 +5514,10 @@ export function CommandApp() {
               </div>
               {skillStorageError && <p className="rounded-panel border border-danger/40 p-3 text-sm text-danger" role="alert">{skillStorageError}</p>}
               {notice && <p className="voice-copy rounded-panel border border-line bg-surface px-3 py-2 text-sm text-muted">{presentVoiceCopy(notice)}</p>}
-              <LocalSkillsTools skills={SKILLS} enabledSkills={Object.fromEntries(SKILLS.map((skill) => [skill.id, skill.kind === "built-in" && enabledSkills[skill.id] !== false]))} />
+              <details className="owner-fold">
+                <summary>Draft library</summary>
+                <LocalSkillsTools skills={SKILLS} enabledSkills={Object.fromEntries(SKILLS.map((skill) => [skill.id, skill.kind === "built-in" && enabledSkills[skill.id] !== false]))} />
+              </details>
           </section>
           {view === "files" && (
             <section className="page-shell">
@@ -5441,8 +5534,8 @@ export function CommandApp() {
                   <button type="button" className="min-h-11 rounded-panel border border-line px-4 text-sm" onClick={() => setCloudPickerOpen(true)}>Browse Drive</button>
                 </div>
               </div>
-              <div className="mt-4 grid gap-3 lg:grid-cols-[16rem_1fr]">
-                <aside className="dense-card card-texture p-3 text-sm">
+              <div id="owner-library">
+                <aside className="library-list text-sm">
                   <p className="font-semibold">Text copies</p>
                   <p className="mt-2 text-xs text-muted">These are the words you attached, not the original file and not a cloud drive.</p>
                   <ul className="mt-3 space-y-1">
@@ -5503,23 +5596,31 @@ export function CommandApp() {
                   <img src="/brand/marks/integrations.png" alt="" className="size-8 rounded-lg" />
                   <div>
                     <h2 className="font-display text-3xl font-bold">Integrations</h2>
-                    <p className="text-sm text-muted">{system}</p>
                     <p className="text-xs text-muted">Last check {stamp(checkedAt) || checkedAt}. Green means that behavior was verified here. Configured means a key or setting exists and a live call was not verified.</p>
                   </div>
                 </div>
               </div>
-              <div className="mt-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+              <div id="owner-integrations" className="mt-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
                 {CAPABILITIES.map((item) => {
                   const live = isVerifiedCapability(item.status);
+                  const page = CAPABILITY_PAGE[item.id];
                   return (
-                    <article key={item.id} className="dense-card card-texture p-4">
-                      <div className="flex items-center justify-between gap-3">
-                        <h3 className="text-sm font-semibold">{item.name}</h3>
+                    <article key={item.id} className="integration-card">
+                      <div className="flex items-start justify-between gap-3">
+                        <div className="flex min-w-0 items-center gap-3">
+                          <img src={`/brand/marks/${CAPABILITY_MARK[item.id] ?? "integrations"}.png`} alt="" className="size-8 shrink-0 rounded-lg" />
+                          <h3 className="text-sm font-semibold">{item.name}</h3>
+                        </div>
                         <span className={`rounded-full border px-2 py-0.5 text-xs ${live ? "border-ok/40 text-ok" : item.status === "blocked" || item.status === "paid_required" ? "border-danger/40 text-danger" : "border-line text-muted"}`}>
                           {statusWord(item.status)}
                         </span>
                       </div>
                       <p className="mt-2 text-sm text-muted">{item.why}</p>
+                      {page && (
+                        <button type="button" className="mt-3 min-h-11 rounded-panel border border-line px-3 text-sm" onClick={() => openCapability(item.id, setView, setSettingsPane)}>
+                          {CAPABILITY_CONNECT[item.id] ? "Set up" : "Open"}
+                        </button>
+                      )}
                     </article>
                   );
                 })}
@@ -5583,7 +5684,7 @@ export function CommandApp() {
                 aria-label="Search help"
                 className="input-glow min-h-11 w-full rounded-panel border border-line bg-surface/80 px-3 text-sm"
               />
-              <div className="divide-y divide-white/8 overflow-hidden rounded-xl border border-white/8">
+              <div id="owner-help">
                 {[
                   { id: "chat", label: "Send a chat", detail: "Type in the field and press Enter, or press the blue button. An empty field opens Speak.", mark: "/brand/marks/chat.png", open: () => setView("command") },
                   { id: "speak", label: "Speak", detail: "Opens the call screen with camera, screen share, mute, and end.", mark: "/brand/marks/speak.png", open: () => setSpeakStageOpen(true) },
@@ -5612,8 +5713,13 @@ export function CommandApp() {
           {view === "settings" && (
             <section className="page-shell mx-auto max-w-3xl space-y-4">
               <div className="page-hero">
-                <h2 className="font-display text-3xl font-bold">Settings</h2>
-                <p className="text-sm text-muted">Preferences stay in this browser. Server keys are not edited here.</p>
+                <div className="flex items-center gap-3">
+                  <img src="/brand/marks/settings.png" alt="" className="size-8 rounded-lg" />
+                  <div>
+                    <h2 className="font-display text-3xl font-bold">Settings</h2>
+                    <p className="text-sm text-muted">Preferences stay in this browser. Server keys are not edited here.</p>
+                  </div>
+                </div>
               </div>
               <nav className="settings-index" aria-label="Settings sections" hidden={settingsPane !== null}>
                 {[
