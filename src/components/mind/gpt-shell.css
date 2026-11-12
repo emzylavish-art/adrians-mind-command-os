@@ -304,6 +304,14 @@ aside.rail.nav-drawer-open {
 @media (max-width: 899px) {
   .speak-stage__body {
     padding-top: 5.5rem;
+    min-height: 0;
+    flex: 1;
+    width: 100%;
+    overflow: auto;
+  }
+
+  .speak-controls {
+    flex: 0 0 auto;
   }
 }
 
