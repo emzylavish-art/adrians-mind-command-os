@@ -4114,6 +4114,15 @@ export function CommandApp() {
           <button
             type="button"
             className="grid size-11 min-h-11 min-w-11 shrink-0 place-items-center rounded-full border border-line bg-white/5"
+            aria-label="Speak"
+            title="Speak"
+            onClick={() => setSpeakStageOpen(true)}
+          >
+            <img src="/brand/marks/speak.png" alt="" width={22} height={22} className="size-5 rounded" />
+          </button>
+          <button
+            type="button"
+            className="grid size-11 min-h-11 min-w-11 shrink-0 place-items-center rounded-full border border-line bg-white/5"
             aria-label="Alerts"
             aria-expanded={bellOpen}
             aria-controls="alerts-panel"

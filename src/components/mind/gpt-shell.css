@@ -535,6 +535,10 @@ img.service-mark {
   display: none !important;
 }
 
+.shell .live-voice-compact-entry {
+  display: none !important;
+}
+
   .gpt-home [data-composer="floating"] {
     position: relative !important;
   }
