@@ -6200,7 +6200,7 @@ function ReaPanel({
             </button>
           </div>
         </div>
-        <p className="glow-card whitespace-pre-wrap rounded-panel border border-line bg-surface p-4 text-sm text-muted">
+        <p className="min-w-0 whitespace-pre-wrap rounded-panel border border-line bg-surface p-4 text-sm text-muted">
           {report ?? "No REA report yet. A report appears only after you run doctor or inspect."}
         </p>
       </div>

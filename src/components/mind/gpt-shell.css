@@ -1023,3 +1023,10 @@ form.thread-composer {
   border: 1px solid rgb(255 255 255 / 0.08) !important;
   min-height: 2.75rem;
 }
+
+.main-stage section.dense-card.card-texture,
+.main-stage .rea-layout > p {
+  background-image: none !important;
+  background-color: #141416 !important;
+  background-blend-mode: normal !important;
+}
