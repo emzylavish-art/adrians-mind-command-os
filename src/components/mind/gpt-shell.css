@@ -679,3 +679,18 @@ img.service-mark {
     gap: 0.75rem !important;
   }
 }
+
+.main-stage .gpt-home form button.composer-send {
+  display: none !important;
+}
+
+.main-stage .gpt-home .composer-toolbar.flex.flex-wrap.gap-2 > button {
+  font-size: 0 !important;
+  line-height: 0 !important;
+  overflow: hidden !important;
+}
+
+.main-stage .gpt-home .composer-toolbar > button svg {
+  width: 1.15rem !important;
+  height: 1.15rem !important;
+}
