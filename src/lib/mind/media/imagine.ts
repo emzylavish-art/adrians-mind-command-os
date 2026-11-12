@@ -1,7 +1,7 @@
 import { IMAGINE_MAX_N, checkImagineRateLimit, imagineRateLimitKey, mapImagineHttpError } from "./harden.ts";
 import { assertImagineSpendAllowed, getImagineSpendLedger } from "./spend-ledger.ts";
 import { fetchPinnedUrl, resolveAndPinUrl, type LookupFn } from "./ssrf.ts";
-import { resolveXaiInferenceApiKey } from "./xai-key.ts";
+import { resolveImageApiKey } from "./xai-key.ts";
 import { MAX_DATA_URL_CHARS, MAX_IMAGES_PER_TURN } from "./types.ts";
 import {
   GROK_IMAGINE_MODEL,
@@ -153,7 +153,7 @@ export async function generateImagineImages(
     if (!allowed.ok) return { ok: false, error: allowed.error, status: allowed.status };
   }
 
-  const apiKey = options.apiKey ?? resolveXaiInferenceApiKey();
+  const apiKey = options.apiKey ?? resolveImageApiKey();
   if (!apiKey) {
     return {
       ok: false,
@@ -408,4 +408,3 @@ export async function editImagineImage(
     usage: record.usage,
   };
 }
-

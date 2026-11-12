@@ -10,7 +10,7 @@ export const OWNER_VOICE_SECRET_PATHS = [
   "/home/box/.secrets/xai_voice.env",
 ] as const;
 
-export type OwnerKeyId = "module" | "management" | "voice";
+export type OwnerKeyId = "module" | "management" | "voice" | "image" | "video";
 
 export type OwnerKeySlot = {
   id: OwnerKeyId;
@@ -40,6 +40,8 @@ const SLOT_META: ReadonlyArray<{ id: OwnerKeyId; label: string; use: string }> =
     label: "Voice",
     use: "Voice",
   },
+  { id: "image", label: "Image", use: "Image generation" },
+  { id: "video", label: "Video", use: "Video generation" },
 ];
 
 type EnvBag = Record<string, string | undefined>;
@@ -98,10 +100,35 @@ function resolveVoiceKey(env: EnvBag): string | undefined {
   return undefined;
 }
 
+const IMAGE_PATHS = ["/home/ubuntu/.secrets/adrian-image.env", "/home/box/.secrets/xai_image.env"] as const;
+const VIDEO_PATHS = ["/home/ubuntu/.secrets/adrian-video.env", "/home/box/.secrets/xai_video.env"] as const;
+
+function resolveImageKey(env: EnvBag): string | undefined {
+  const fromEnv = trimmed(env.XAI_IMAGE_API_KEY);
+  if (fromEnv) return fromEnv;
+  for (const path of IMAGE_PATHS) {
+    const fromFile = readNamedEnvFile(path, "XAI_IMAGE_API_KEY");
+    if (fromFile) return fromFile;
+  }
+  return undefined;
+}
+
+function resolveVideoKey(env: EnvBag): string | undefined {
+  const fromEnv = trimmed(env.XAI_VIDEO_API_KEY);
+  if (fromEnv) return fromEnv;
+  for (const path of VIDEO_PATHS) {
+    const fromFile = readNamedEnvFile(path, "XAI_VIDEO_API_KEY");
+    if (fromFile) return fromFile;
+  }
+  return undefined;
+}
+
 function resolveOwnerKey(id: OwnerKeyId, env: EnvBag): string | undefined {
   if (id === "module") return resolveModuleKey(env);
   if (id === "management") return resolveManagementKey(env);
-  return resolveVoiceKey(env);
+  if (id === "voice") return resolveVoiceKey(env);
+  if (id === "image") return resolveImageKey(env);
+  return resolveVideoKey(env);
 }
 
 function slotFor(id: OwnerKeyId, env: EnvBag): OwnerKeySlot {
@@ -157,7 +184,7 @@ export async function copyOwnerKey(id: string, env: EnvBag = process.env): Promi
   if (!host || !hostIsLocal(host)) {
     return { ok: false, error: "Copy is only available on this machine." };
   }
-  if (id !== "module" && id !== "management" && id !== "voice") {
+  if (id !== "module" && id !== "management" && id !== "voice" && id !== "image" && id !== "video") {
     return { ok: false, error: "Unknown key." };
   }
   const value = resolveOwnerKey(id, env);

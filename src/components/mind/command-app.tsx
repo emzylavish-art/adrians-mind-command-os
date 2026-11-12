@@ -4974,10 +4974,8 @@ export function CommandApp() {
                   setProviderChoice(id);
                   return;
                 }
-                if (id === "grok" || id.startsWith("custom:")) {
-                  setLogicRoute(null);
-                  setProviderChoice(id);
-                }
+                setLogicRoute(null);
+                setProviderChoice(id);
               }}
               modelTier={modelTier}
               onModelTier={chooseModelTier}
@@ -7073,18 +7071,26 @@ function ChatPane({
         <section className="glass-panel rounded-panel p-3">
           <ProviderPicker name="mind-provider-side" choices={choices} choice={providerChoice} onChoose={onProvider} logicRoutes={logicRoutes} grokVerified={grokVerified} />
         </section>
-        <section className="glass-panel rounded-panel p-3">
-          <ModelTierPicker name="mind-tier-side" tier={modelTier} onChoose={onModelTier} logicRoute={logicRoute} logicRoutes={logicRoutes} onChooseLogic={onChooseLogic} />
-        </section>
-        <section className="glass-panel rounded-panel p-3">
+        <details className="rail-pack">
+          <summary>Mode</summary>
+          <section className="glass-panel rounded-panel p-3">
+            <ModelTierPicker name="mind-tier-side" tier={modelTier} onChoose={onModelTier} logicRoute={logicRoute} logicRoutes={logicRoutes} onChooseLogic={onChooseLogic} />
+          </section>
+        </details>
+        <details className="rail-pack">
+          <summary>This chat</summary>
+          <section className="glass-panel rounded-panel p-3">
           <button type="button" onClick={() => onComposerMode("ask")} className={`mb-2 min-h-11 w-full rounded-panel px-3 text-left text-sm ${mode === "ask" ? "bg-accent text-accent-ink tile-active" : "bg-surface-2/80"}`}>Ask</button>
           <button type="button" onClick={() => onComposerMode("automatic")} className={`min-h-11 w-full rounded-panel px-3 text-left text-sm ${mode === "automatic" ? "bg-accent text-accent-ink tile-active" : "bg-surface-2/80"}`}>Automatic</button>
-        </section>
-        <section className="glass-panel rounded-panel p-3" data-testid="memory-chat-toggle-rail">
+          </section>
+          <section className="glass-panel rounded-panel p-3" data-testid="memory-chat-toggle-rail">
           <MemoryChatToggle memory={memoryChoice} onChange={onMemoryChange} disabled={!active || busy || halted} />
           <p className="mt-2 text-xs text-muted">Off means this chat cannot read or save notes.</p>
         </section>
-        <section className="glass-panel rounded-panel p-3 text-sm" data-testid="agent-activity-live">
+        </details>
+        <details className="rail-pack">
+          <summary>Activity</summary>
+          <section className="glass-panel rounded-panel p-3 text-sm" data-testid="agent-activity-live">
           <div className="flex items-center justify-between gap-2">
             <p className="font-semibold">Agent Activity</p>
             <span className={`rounded-full px-2 py-0.5 text-[10px] font-semibold uppercase ${agentActivity.live ? "bg-ok/20 text-ok" : "bg-surface-2 text-muted"}`}>
@@ -7113,7 +7119,10 @@ function ChatPane({
             ))}
           </ul>
         </section>
-        <section className="glass-panel rounded-panel p-3 text-sm" data-testid="connected-services-rail">
+        </details>
+        <details className="rail-pack">
+          <summary>Connections</summary>
+          <section className="glass-panel rounded-panel p-3 text-sm" data-testid="connected-services-rail">
           <p className="font-semibold">Connected Services</p>
           <ul className="mt-2 space-y-2">
             {connectedServices.map((item) => (
@@ -7136,6 +7145,7 @@ function ChatPane({
             ))}
           </ul>
         </section>
+        </details>
         <section className="glass-panel rounded-panel p-3 text-sm">
           <p className="font-semibold">{active?.title ?? "New session"}</p>
           <p className="text-xs text-muted">On this device · Memory {memoryChoice}</p>
@@ -7393,24 +7403,45 @@ function ProviderPicker({
   logicRoutes?: LogicRoutePublic[];
   grokVerified?: boolean;
 }) {
+  const groupOf = (item: { id: string; label: string }) => {
+    const label = item.label.toLowerCase();
+    if (item.id === "grok" || label.startsWith("grok")) return "Grok";
+    if (item.id === "openai" || label.includes("gpt") || label.includes("astra") || label.includes("sol") || label.includes("luna")) return "OpenAI";
+    if (item.id.startsWith("custom:")) return "Saved";
+    return "Other";
+  };
+  const groups = ["Grok", "OpenAI", "Other", "Saved"].map((title) => ({
+    title,
+    items: choices.filter((item) => groupOf(item) === title),
+  })).filter((group) => group.items.length > 0);
+  const selected = choices.find((item) => item.id === choice);
   return (
-    <fieldset className="space-y-2">
-      <legend className="text-sm font-semibold">Provider</legend>
-      {LOGIC_ROUTES.map((id) => {
+    <div className="provider-pack">
+      <p className="text-sm font-semibold">Providers</p>
+      <p className="mt-1 text-xs text-muted">{selected ? selected.label : "Choose a provider"}</p>
+      {groups.map((group) => (
+        <details key={group.title} className="provider-group" open={group.items.some((item) => item.id === choice) || undefined}>
+          <summary>{group.title}</summary>
+          {group.items.map((item) => (
+            <label key={item.id} className={`flex items-start gap-2 rounded-xl px-2 py-2 text-sm ${choice === item.id ? "model-option-active" : ""} ${!item.enabled ? "opacity-60" : ""}`}>
+              <input type="radio" name={name} className="mt-1" checked={choice === item.id} disabled={!item.enabled} onChange={() => { if (item.enabled) onChoose(item.id); }} />
+              <span>
+                {item.label}
+                {item.id === "grok" && item.enabled ? <span className="text-muted"> · {grokVerified ? "A reply in this chat came from Grok" : "Configured"}</span> : null}
+                <span className="block text-xs text-muted">{item.reason}</span>
+              </span>
+            </label>
+          ))}
+        </details>
+      ))}
+      <details className="provider-group">
+        <summary>Routes</summary>
+        {LOGIC_ROUTES.map((id) => {
         const view = logicRoutes.find((item) => item.id === id);
         const menu = logicMenuState(view, id);
         return (
           <label key={id} className={`flex items-start gap-2 rounded-xl px-2 py-2 text-sm ${choice === id ? "model-option-active" : ""} ${menu.selectable ? "" : "opacity-70"}`}>
-            <input
-              type="radio"
-              name={name}
-              className="mt-1"
-              checked={choice === id}
-              disabled={!menu.selectable}
-              onChange={() => {
-                if (menu.selectable) onChoose(id);
-              }}
-            />
+            <input type="radio" name={name} className="mt-1" checked={choice === id} disabled={!menu.selectable} onChange={() => { if (menu.selectable) onChoose(id); }} />
             <span>
               {menu.label}{view ? ` · ${view.state}` : ""}
               <span className="block text-xs text-muted">{menu.detail}</span>
@@ -7418,29 +7449,8 @@ function ProviderPicker({
           </label>
         );
       })}
-      {choices.map((item) => (
-        <label
-          key={item.id}
-          className={`flex items-start gap-2 rounded-xl px-2 py-2 text-sm ${choice === item.id ? "model-option-active" : "hover:bg-white/5"} ${!item.enabled ? "opacity-60" : ""}`}
-        >
-          <input
-            type="radio"
-            name={name}
-            className="mt-1"
-            checked={choice === item.id}
-            disabled={!item.enabled}
-            onChange={() => {
-              if (item.enabled) onChoose(item.id);
-            }}
-          />
-          <span>
-            {item.label}
-            {item.id === "grok" && item.enabled ? <span className="text-muted"> · {grokVerified ? "A reply in this chat came from Grok" : "Configured. No reply in this chat has verified it yet."}</span> : null}
-            <span className="block text-xs text-muted">{item.reason}</span>
-          </span>
-        </label>
-      ))}
-    </fieldset>
+      </details>
+    </div>
   );
 }
 

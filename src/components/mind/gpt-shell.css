@@ -1600,3 +1600,26 @@ form.thread-composer {
 #owner-projects button {
   text-transform: none !important;
 }
+
+.provider-group,
+.rail-pack {
+  margin-top: 0.55rem;
+  padding: 0.15rem 0.7rem 0.35rem;
+  background: #141416;
+  border: 1px solid rgb(255 255 255 / 0.08);
+  border-radius: 14px;
+}
+
+.provider-group summary,
+.rail-pack summary {
+  display: flex;
+  align-items: center;
+  min-height: 2.6rem;
+  cursor: pointer;
+  font-weight: 650;
+}
+
+[data-testid="chat-right-rail"] .glass-panel {
+  background-image: none !important;
+  background-color: #141416 !important;
+}
