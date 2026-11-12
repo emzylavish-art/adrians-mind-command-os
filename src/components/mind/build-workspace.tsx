@@ -88,7 +88,7 @@ export function BuildWorkspace() {
   const [searchQuery, setSearchQuery] = useState("");
   const [searchMatches, setSearchMatches] = useState<string[]>([]);
   const [transcript, setTranscript] = useState("");
-  const [model, setModel] = useState("kimi-k2");
+  const [model, setModel] = useState("grok");
   const [apiKey, setApiKey] = useState("");
 
   const assistantText = useMemo(
@@ -442,8 +442,8 @@ export function BuildWorkspace() {
           <button type="button" onClick={speakResult} className="min-h-11 rounded-panel border border-line px-3 text-sm">Read result</button>
         </div>
         <div className="flex flex-wrap gap-2">
-          <input value={model} onChange={(event) => setModel(event.target.value)} className="min-h-11 w-40 rounded-panel border border-line bg-transparent px-3 text-sm outline-none focus:border-accent" aria-label="Build model" />
-          <input value={apiKey} onChange={(event) => setApiKey(event.target.value)} type="password" placeholder="Optional coding key" className="min-h-11 min-w-40 flex-1 rounded-panel border border-line bg-transparent px-3 text-sm outline-none focus:border-accent" aria-label="Provider key" />
+          <input value={model} onChange={(event) => setModel(event.target.value)} placeholder="Grok" className="min-h-11 w-40 rounded-panel border border-line bg-transparent px-3 text-sm outline-none focus:border-accent" aria-label="Build model" />
+          <input value={apiKey} onChange={(event) => setApiKey(event.target.value)} type="password" placeholder="Uses the saved Grok key" className="min-h-11 min-w-40 flex-1 rounded-panel border border-line bg-transparent px-3 text-sm outline-none focus:border-accent" aria-label="Provider key" />
           <button type="button" disabled={!model.trim()} onClick={() => void saveProvider()} className="min-h-11 rounded-panel border border-line px-3 text-sm disabled:opacity-50">Save profile</button>
         </div>
         <div className="flex flex-wrap items-center gap-2">

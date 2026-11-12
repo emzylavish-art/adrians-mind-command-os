@@ -113,7 +113,7 @@ export function SpeakStage(props: {
   async function toggleMic() {
     if (props.onLive) {
       props.onLive();
-      setNotice(props.live ? "Speak stopped." : "Connecting. Speak, and Adrian answers on this call.");
+      setNotice(props.live ? "EVE stopped." : "Connecting. Speak, and EVE answers on this call.");
       return;
     }
     if (listening) {
@@ -171,10 +171,11 @@ export function SpeakStage(props: {
   if (!props.open) return null;
 
   return (
-    <div className="speak-stage" role="dialog" aria-modal="true" aria-label="Speak" data-testid="speak-stage">
+    <div className="speak-stage" role="dialog" aria-modal="true" aria-label="EVE" data-testid="speak-stage">
       <header>
         <div>
-          <p>Speak</p>
+          <p>EVE</p>
+          <p className="text-xs text-muted">The intelligence layer. Speak, and EVE answers on this call.</p>
           <span>Talk with Adrian</span>
         </div>
         <button type="button" aria-label="Close Speak" onClick={props.onClose}><X /></button>

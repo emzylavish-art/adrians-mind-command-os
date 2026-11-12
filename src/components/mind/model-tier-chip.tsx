@@ -46,7 +46,9 @@ export function ModelTierChip({
   const effectiveResolved = lastResolved ?? remembered?.resolved ?? null;
   const effectiveModel = lastModel ?? remembered?.model ?? null;
   const tierLabel = chipLabelForTier({ selected: tier, lastResolved: effectiveResolved, lastModel: effectiveModel });
-  const label = activePickerLabel({ logicRoute, tierLabel, routes: logicRoutes });
+  const selectedView = logicRoute ? logicRoutes.find((item) => item.id === logicRoute) : undefined;
+  const shownRoute = selectedView?.ready && !selectedView.credentialFallback ? logicRoute : null;
+  const label = activePickerLabel({ logicRoute: shownRoute, tierLabel, routes: logicRoutes });
   const reasonText =
     (tierReason && tierReason.trim()) ||
     (remembered?.reason && remembered.reason.trim()) ||
@@ -104,8 +106,10 @@ export function ModelTierChip({
               {item}
             </button>
           ))}
-          <p className="mt-2 px-2 text-[10px] font-semibold tracking-[0.16em] text-muted">ASTRA / SOL / LUNA</p>
-          {LOGIC_ROUTES.map((id) => {
+          {LOGIC_ROUTES.filter((id) => {
+            const view = logicRoutes.find((item) => item.id === id);
+            return Boolean(view?.ready && !view.credentialFallback);
+          }).map((id) => {
             const view = logicRoutes.find((item) => item.id === id);
             const menu = logicMenuState(view, id);
             const selected = logicRoute === id;
@@ -132,9 +136,6 @@ export function ModelTierChip({
               </button>
             );
           })}
-          <p className="mt-2 border-t border-line/60 px-2 pt-2 text-[11px] text-muted">
-            Astra, Sol, and Luna use provider.status. A needs-config or blocked route cannot be selected. The reply shows the provider and model that actually answered.
-          </p>
         </div>
       )}
     </div>

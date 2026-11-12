@@ -321,6 +321,7 @@ const NAV_ICON_SRC: Partial<Record<View, string>> = {
   scheduled: "/brand/marks/scheduled.png",
   build: "/brand/marks/build.png",
   research: "/brand/marks/research.png",
+  intelligence: "/brand/marks/eve.png",
   agents: "/brand/marks/bots.png",
   runs: "/brand/marks/runs.png",
   tools: "/brand/marks/tools.png",
@@ -335,14 +336,32 @@ const NAV_ICON_SRC: Partial<Record<View, string>> = {
 
 const NAV_GROUPS: { label: string; items: { id: View; label: string; icon: typeof Home }[] }[] = [
   {
-    label: "Main",
+    label: "Work",
     items: [
-      { id: "files", label: "Library", icon: FileText },
+      { id: "build", label: "Build", icon: Terminal },
+      { id: "research", label: "Research", icon: Search },
       { id: "projects", label: "Projects", icon: Folder },
+      { id: "files", label: "Library", icon: FileText },
+    ],
+  },
+  {
+    label: "Connect",
+    items: [
       { id: "connected", label: "Plugins", icon: Zap },
       { id: "scheduled", label: "Scheduled", icon: CalendarClock },
     ],
   },
+];
+
+const MORE_NAV: { id: View; label: string; icon: typeof Home }[] = [
+  { id: "intelligence", label: "EVE", icon: Bot },
+  { id: "agents", label: "Bots", icon: Bot },
+  { id: "tools", label: "Tools", icon: Wrench },
+  { id: "skills", label: "Skills", icon: Zap },
+  { id: "runs", label: "Runs", icon: Activity },
+  { id: "memory", label: "Memory", icon: Database },
+  { id: "activity", label: "Activity", icon: Activity },
+  { id: "help", label: "Help", icon: CircleHelp },
 ];
 
 const SETTINGS_PAGES: { group: string; items: { id: View; label: string; detail: string }[] }[] = [
@@ -733,6 +752,7 @@ export function CommandApp() {
   const [dictationLevel, setDictationLevel] = useState(0);
   const [voiceOverlayOpen, setVoiceOverlayOpen] = useState(false);
   const [speakStageOpen, setSpeakStageOpen] = useState(false);
+  const [surfaceMenu, setSurfaceMenu] = useState(false);
   const [helpQuery, setHelpQuery] = useState("");
   const overlayOpenRef = useRef(false);
   overlayOpenRef.current = voiceOverlayOpen;
@@ -1259,6 +1279,14 @@ export function CommandApp() {
       /* a private browser can refuse storage */
     }
   }, [providerChoice, modelTier, logicRoute, failoverPolicy]);
+
+  useEffect(() => {
+    if (logicRoutes.length === 0) return;
+    const stored = logicRoutes.find((item) => item.id === logicRoute || item.id === providerChoice);
+    if (!stored || (stored.ready && !stored.credentialFallback)) return;
+    setLogicRoute(null);
+    if (isLogicRouteId(providerChoice)) setProviderChoice("grok");
+  }, [logicRoutes, logicRoute, providerChoice]);
 
   useEffect(() => {
     const tick = () => setNow(new Date());
@@ -4154,7 +4182,7 @@ export function CommandApp() {
         <div className="gpt-rail-head flex items-center gap-3 px-4 py-4">
           {!railCollapsed && (
             <p className="flex min-w-0 flex-1 items-center gap-2 text-2xl font-semibold tracking-tight">
-              <img className="service-mark" src="/brand/marks/adrian.png" alt="" width={28} height={28} />
+              <img className="service-mark adrian-mark" src="/brand/logo-mark.jpg" alt="" width={32} height={32} />
               Adrian
             </p>
           )}
@@ -4217,6 +4245,24 @@ export function CommandApp() {
             <img className="service-mark" src="/brand/marks/explore.png" alt="" width={22} height={22} />
             {!railCollapsed && "Explore"}
           </Link>
+          {!railCollapsed && (
+            <details className="nav-more mt-3">
+              <summary>More</summary>
+              <div className="space-y-1">
+                {MORE_NAV.map((item) => (
+                  <button
+                    key={item.id}
+                    type="button"
+                    className={`nav-item flex min-h-11 w-full items-center gap-3 rounded-2xl px-3 text-sm font-medium ${view === item.id ? "nav-item-active" : "text-muted"}`}
+                    onClick={() => { setView(item.id); setNavOpen(false); }}
+                  >
+                    {NAV_ICON_SRC[item.id] ? <img className="service-mark" src={NAV_ICON_SRC[item.id]} alt="" width={22} height={22} /> : null}
+                    {item.label}
+                  </button>
+                ))}
+              </div>
+            </details>
+          )}
           <Link to="/dashboard" data-testid="nav-route-dashboard" className="nav-route-link sr-only">Dashboard</Link>
           {!railCollapsed && <div className="mx-3 my-3 border-t border-white/10" />}
           {ws.pins.length > 0 && !railCollapsed && (
@@ -4330,13 +4376,43 @@ export function CommandApp() {
 
       <div className="main-stage page-enter flex min-h-0 min-w-0 flex-1 flex-col pb-36 md:pb-36" inert={navOpen}>
         <header className="topbar flex items-center gap-2 px-3 py-3 md:gap-3 md:px-5">
-          <button type="button" className="grid size-11 shrink-0 place-items-center rounded-panel border border-line md:hidden" aria-label="Open menu" onClick={openNav}>
-            <Menu className="size-4" />
-          </button>
-          <p className="hidden items-center gap-2 text-sm font-semibold md:flex">
-            <img src={view === "command" ? "/brand/marks/chat.png" : NAV_ICON_SRC[view] ?? "/brand/marks/adrian.png"} alt="" width={22} height={22} className="size-5 rounded-md" />
-            {TITLES[view]}
-          </p>
+         <button type="button" className="grid size-11 shrink-0 place-items-center rounded-panel border border-line md:hidden" aria-label="Open menu" onClick={openNav}>
+           <Menu className="size-4" />
+         </button>
+          <div className="surface-switch relative">
+            <button
+              type="button"
+              className="surface-switch__button"
+              aria-expanded={surfaceMenu}
+              aria-haspopup="menu"
+              aria-label="Switch between Chat, Build, and EVE"
+              onClick={() => setSurfaceMenu((open) => !open)}
+            >
+              <img className="adrian-mark" src="/brand/logo-mark.jpg" alt="" width={28} height={28} />
+              <span>{view === "build" ? "Build" : view === "intelligence" ? "EVE" : "Chat"}</span>
+              <span aria-hidden="true">▾</span>
+            </button>
+            {surfaceMenu ? (
+              <div className="surface-menu" role="menu">
+                {([
+                  ["command", "Chat", "Conversation"],
+                  ["build", "Build", "Coding workspace"],
+                  ["intelligence", "EVE", "Intelligence layer"],
+                ] as const).map(([id, label, detail]) => (
+                  <button
+                    key={id}
+                    type="button"
+                    role="menuitem"
+                    className={view === id || (id === "command" && view === "chat") ? "is-on" : ""}
+                    onClick={() => { setView(id); setSurfaceMenu(false); setNavOpen(false); }}
+                  >
+                    <span>{label}</span>
+                    <span>{detail}</span>
+                  </button>
+                ))}
+              </div>
+            ) : null}
+          </div>
           <button type="button" className="header-voice-mode inline-flex items-center gap-1" onClick={() => applyVoiceMode(toggleVoiceMode(voiceMode))} aria-label={`Switch voice mode (currently ${voiceMode})`}>
             {voiceMode === "direct" ? <img src="/brand/marks/direct.png" alt="" width={16} height={16} className="size-4 rounded" /> : null}
             {voiceMode === "direct" ? "Direct" : "Orchestrator"}
@@ -6882,8 +6958,8 @@ function ChatPane({
             </div>
           )}
           </details>
-          <details className="thread-mobile-tools mt-3 xl:hidden">
-            <summary className="min-h-11 cursor-pointer text-sm">Choose a provider</summary>
+          <details className="thread-mobile-tools mt-3">
+            <summary className="min-h-11 cursor-pointer text-sm">Provider</summary>
             <ProviderPicker name="mind-provider-mobile" choices={choices} choice={providerChoice} onChoose={onProvider} logicRoutes={logicRoutes} grokVerified={grokVerified} />
             <div className="mt-3">
               <ModelTierPicker name="mind-tier-mobile" tier={modelTier} onChoose={onModelTier} logicRoute={logicRoute} logicRoutes={logicRoutes} onChooseLogic={onChooseLogic} />
@@ -7038,7 +7114,6 @@ function ChatPane({
           {error && active?.messages.at(-1)?.role === "user" && (
             <button type="button" className="min-h-11 text-sm text-accent" disabled={busy || halted} onClick={onRetry}>Retry</button>
           )}
-          {active && <p className="text-xs text-muted">Chat memory is {active.memory === "on" ? "on" : "off"} for this session. The agent session is on this device. Hosted realtime is not connected. The schedule worker is separate.</p>}
           <div className="flex items-center gap-2"><VoiceLevelMeter level={voiceLevel} listening={voiceListening} /></div>
         </div>
         <form
@@ -7097,6 +7172,9 @@ function ChatPane({
           <div className="composer-toolbar mt-2 flex flex-wrap items-center gap-2">
            <button type="button" className="inline-flex min-h-11 items-center gap-2 rounded-panel border border-line/80 bg-white/5 px-3 text-sm" onClick={onAttach}>
              <Paperclip className="size-4" /> Attach
+           </button>
+           <button type="button" className="inline-flex min-h-11 items-center gap-2 rounded-panel border border-line/80 bg-white/5 px-3 text-sm" onClick={onAttachImage} aria-label="Upload an image">
+             <Image className="size-4" /> Image
            </button>
             <details className="composer-more">
               <summary>More</summary>
@@ -7351,22 +7429,6 @@ function RoutingModeControl({
           </button>
         ))}
       </div>
-      {mode !== "A" && (
-        <div className="mt-2 flex flex-wrap items-center gap-2">
-          <span className="text-xs text-muted">Routes</span>
-          {(["astra", "sol", "luna"] as const).map((id) => (
-            <button
-              key={id}
-              type="button"
-              aria-pressed={panel.includes(id)}
-              className={`min-h-11 rounded-full px-3 text-sm ${panel.includes(id) ? "bg-accent text-accent-ink tile-active" : "border border-line/80 bg-white/5 text-muted"}`}
-              onClick={() => onToggle(id)}
-            >
-              {id}
-            </button>
-          ))}
-        </div>
-      )}
       <p className="mt-1 text-xs text-muted">
         {mode === "A" && "One model answers. Nothing else is called."}
         {mode === "B" && "Two ready routes answer. Both replies stay. Nothing is merged."}
@@ -7548,7 +7610,7 @@ function ProviderPicker({
   };
   const groups = ["Grok", "OpenAI", "Other", "Saved"].map((title) => ({
     title,
-    items: choices.filter((item) => groupOf(item) === title),
+    items: choices.filter((item) => groupOf(item) === title && item.enabled),
   })).filter((group) => group.items.length > 0);
   const selected = choices.find((item) => item.id === choice);
   return (
