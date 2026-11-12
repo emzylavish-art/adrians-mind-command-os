@@ -51,6 +51,7 @@ import { REQUIREMENTS, requirementCounts } from "@/lib/mind/requirements";
 import { consumeMindTurn, shouldStoreReply, STOPPED_REPLY } from "@/lib/mind/live-turn";
 import { analyzeImageFile, createVoiceClientSecret, mcpCommand, mcpList, mcpRemove, mcpRegistryList, mcpRegistryToggle, mcpSave, mindStatus, notionCommand, notionDisconnect, notionStatus, recordAgentExecution, searchWeb, setExecutionHalt, speakText } from "@/lib/mind/server";
 import { SafeKeysPanel } from "@/components/mind/safe-keys-panel";
+import { copyOwnerKeyFn } from "@/lib/mind/owner-keys-fns";
 import { AiProviderConnections } from "@/components/mind/ai-provider-connections";
 import type { PublicAiProvider } from "@/lib/mind/ai-provider-config.server";
 import { VoiceWaveform } from "@/components/mind/voice-waveform";
@@ -115,7 +116,7 @@ import { readStoredCharacterId } from "@/lib/mind/characters";
 import { noteSpokenText, readAvatarSession, setAvatarPresence } from "@/lib/mind/avatar/session";
 import { applyWorkbenchCommand } from "@/lib/mind/workbench-command";
 import { sharedAudioOutput } from "@/lib/mind/voice/audio-output";
-import { appendDictationText } from "@/lib/mind/voice/dictation";
+import { appendDictationText, blobToBase64, createDictationRecorder, type DictationRecorder } from "@/lib/mind/voice/dictation";
 import {
   createDictationMachine,
   DICTATION_SILENCE_PEAK,
@@ -611,7 +612,7 @@ export function CommandApp() {
   const { ws, setWs, ready, syncNote, serverHeld, saveError, retrySave } = useMindWorkspace();
   const [view, setView] = useState<View>("command");
   const [homeAction, setHomeAction] = useState<"ask" | "image" | "write" | "search">("ask");
-  const [settingsPane, setSettingsPane] = useState<null | "general" | "connections" | "voice" | "pages" | "data" | "safety">(null);
+  const [settingsPane, setSettingsPane] = useState<null | "general" | "connections" | "voice" | "pages" | "data" | "safety" | "keys">(null);
   const [query, setQuery] = useState("");
   const [paletteOpen, setPaletteOpen] = useState(false);
   const [paletteIndex, setPaletteIndex] = useState(0);
@@ -726,6 +727,7 @@ export function CommandApp() {
   const dictationRef = useRef(dictation);
   dictationRef.current = dictation;
   const dictationRecRef = useRef<BrowserSpeechRec | null>(null);
+  const serverDictationRef = useRef<DictationRecorder | null>(null);
   const dictationBufferRef = useRef("");
   const userStoppedDictationRef = useRef(false);
   const [dictationElapsed, setDictationElapsed] = useState(0);
@@ -3416,7 +3418,9 @@ export function CommandApp() {
 
   function voiceCanStart() {
     if (wsRef.current.halted) { setError("Emergency stop is on. Voice was not started."); return false; }
-    if (statusSignedIn !== true) { setVoiceSignInNotice(true); return false; }
+    const host = typeof window === "undefined" ? "" : window.location.hostname;
+    const localPreview = host === "127.0.0.1" || host === "localhost";
+    if (statusSignedIn !== true && !localPreview) { setVoiceSignInNotice(true); return false; }
     return true;
   }
 
@@ -3510,11 +3514,68 @@ export function CommandApp() {
 
   function onDictationMic() {
     if (dictationRef.current.phase === "recording") {
-      stopBrowserDictation();
+      void finishServerDictation();
       return;
     }
     if (dictationRef.current.phase === "transcribing") return;
-    startBrowserDictation();
+    void startServerDictation();
+  }
+
+  async function startServerDictation() {
+    if (wsRef.current.halted) {
+      setError("Emergency stop is on. Dictation was not started.");
+      return;
+    }
+    if (overlayOpenRef.current || voiceActiveRef.current || voiceSession.current?.isOpen || isLiveVoiceOccupied()) {
+      setNotice("End Speak before the mic. The mic only inserts words. It does not talk back.");
+      return;
+    }
+    try {
+      const recorder = await createDictationRecorder();
+      serverDictationRef.current = recorder;
+      await recorder.start();
+      commitDictation({ type: "start" });
+      setNotice("Listening. Press the mic again to insert the words. Send is separate.");
+    } catch {
+      serverDictationRef.current = null;
+      startBrowserDictation();
+    }
+  }
+
+  async function finishServerDictation() {
+    const recorder = serverDictationRef.current;
+    if (!recorder) {
+      stopBrowserDictation();
+      return;
+    }
+    serverDictationRef.current = null;
+    commitDictation({ type: "stop_begin" }, false);
+    try {
+      const captured = await recorder.stop();
+      if (captured.blob.size < 32) {
+        commitDictation({ type: "stop_empty" });
+        setNotice("No words were caught. Press the mic, speak, then press it again.");
+        return;
+      }
+      const audioBase64 = await blobToBase64(captured.blob);
+      const mime = captured.mime.split(";")[0] || "audio/webm";
+      const response = await fetch("/api/mind/voice/stt", {
+        method: "POST",
+        credentials: "same-origin",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ audioBase64, mime, filename: mime.includes("mp4") ? "dictation.m4a" : "dictation.webm" }),
+      });
+      const body = await response.json() as { ok?: boolean; text?: string; error?: string };
+      const text = body.text?.trim() ?? "";
+      if (response.ok && body.ok && text) {
+        commitDictation({ type: "stop_inserted", text });
+        setNotice("Words inserted into the field. Press Send when you want a reply.");
+        return;
+      }
+      commitDictation({ type: "stop_error", message: body.error || "Nothing was transcribed." });
+    } catch {
+      commitDictation({ type: "stop_error", message: "Dictation could not finish. Nothing was inserted." });
+    }
   }
 
   function closeVoiceOverlay() {
@@ -5733,6 +5794,7 @@ export function CommandApp() {
                     ["personalization", "Personalization", "How replies sound", () => { setView("chat"); setNavOpen(false); }],
                     ["memory", "Memory", "Notes you chose to keep", () => { setView("memory"); setNavOpen(false); }],
                     ["voice", "Voice", "Speak voice and pace", () => setSettingsPane("voice")],
+                    ["keys", "Safe keys", "Open a saved key and copy it", () => setSettingsPane("keys")],
                     ["security", "Security and login", "Sign in to connect services", () => { window.location.assign("/login"); }],
                   ]},
                   { group: "Connections", items: [
@@ -5868,8 +5930,20 @@ export function CommandApp() {
               </div>
               <div id="settings-connections" hidden={settingsPane !== "connections"} className="space-y-4">
                 <AiProviderConnections onChange={setCustomAiProviders} />
-                <SafeKeysPanel />
+                <button type="button" className="min-h-11 rounded-panel border border-line px-3 text-sm" onClick={() => setSettingsPane("keys")}>Open Safe keys</button>
                 <button type="button" className="min-h-11 rounded-panel border border-line px-3 text-sm" onClick={() => setView("connected")}>Open connections</button>
+              </div>
+              <div id="settings-keys" hidden={settingsPane !== "keys"} className="space-y-4">
+                <SafeKeysPanel
+                  onCopy={async (id) => {
+                    try {
+                      const result = await copyOwnerKeyFn({ data: { id } });
+                      return result.ok ? result.value : null;
+                    } catch {
+                      return null;
+                    }
+                  }}
+                />
               </div>
               <div id="settings-voice" hidden={settingsPane !== "voice"}>
                 <VoiceSettingsBlock />
@@ -6124,9 +6198,11 @@ export function CommandApp() {
       />
       <SpeakStage
         open={speakStageOpen}
-        signedIn={statusSignedIn === true}
-        onClose={() => setSpeakStageOpen(false)}
+        signedIn={statusSignedIn === true || (typeof window !== "undefined" && (window.location.hostname === "127.0.0.1" || window.location.hostname === "localhost"))}
+        live={voiceListening}
+        onClose={() => { setSpeakStageOpen(false); void listen({ mode: "stop" }); }}
         onSignIn={() => { setSpeakStageOpen(false); window.location.assign("/login"); }}
+        onLive={() => void listen({ mode: voiceListening ? "stop" : "start" })}
       />
       <LiveVoiceBar
         compactIdle

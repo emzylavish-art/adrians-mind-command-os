@@ -4,6 +4,7 @@
 import { existsSync, readFileSync } from "node:fs";
 
 export const XAI_VOICE_SECRETS_PATH = "/home/box/.secrets/xai_voice.env";
+const LOCAL_VOICE_SECRETS_PATH = "/home/ubuntu/.secrets/adrian-voice.env";
 
 /** Read `XAI_VOICE_API_KEY=...` from the box secrets file. */
 export function readVoiceSecretsFile(path: string = XAI_VOICE_SECRETS_PATH): string | undefined {
@@ -32,9 +33,14 @@ export function resolveVoiceApiKey(env: Record<string, string | undefined> = pro
   const legacy = env.VOICE_API_KEY?.trim();
   if (legacy) return legacy;
   const fromFile = readVoiceSecretsFile(secretsPath);
+  const fromLocal = fromFile ?? readVoiceSecretsFile(LOCAL_VOICE_SECRETS_PATH);
   if (fromFile) {
     env.XAI_VOICE_API_KEY = fromFile;
     return fromFile;
+  }
+  if (fromLocal) {
+    env.XAI_VOICE_API_KEY = fromLocal;
+    return fromLocal;
   }
   const chatKey = env.XAI_API_KEY?.trim();
   const management = env.XAI_MANAGEMENT_KEY?.trim();

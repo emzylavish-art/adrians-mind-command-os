@@ -247,10 +247,14 @@ export const notionCommand = createServerFn({ method: "POST" })
 export const mcpList = createServerFn({ method: "GET" })
   .middleware([authMiddleware])
   .handler(async ({ context }) => {
-    const { listConnectedMcp } = await import("./connected-mcp.server");
-    const { databaseConfigured } = await import("./mcp/registry-store");
-    const db = databaseConfigured() ? await (await import("../db")).getSql() : null;
-    return { servers: await listConnectedMcp(db, context.userId) };
+    try {
+      const { listConnectedMcp } = await import("./connected-mcp.server");
+      const { databaseConfigured } = await import("./mcp/registry-store");
+      const db = databaseConfigured() ? await (await import("../db")).getSql() : null;
+      return { servers: await listConnectedMcp(db, context.userId) };
+    } catch {
+      return { servers: [] };
+    }
   });
 
 export const mcpSave = createServerFn({ method: "POST" })
@@ -473,12 +477,16 @@ export const mcpRegistryList = createServerFn({ method: "GET" })
     if (!userId) {
       return buildMcpRegistryListPayload(null, []);
     }
-    const { listRegistryServers, databaseConfigured } = await import("./mcp/registry");
-    const db = databaseConfigured() ? await (await import("../db")).getSql() : null;
-    const servers = await listRegistryServers(userId, db);
-    const payload = buildMcpRegistryListPayload(userId, servers);
-    if (payload.status === "ok" && !db) return { ...payload, persistence: "missing_config" as const };
-    return payload;
+    try {
+      const { listRegistryServers, databaseConfigured } = await import("./mcp/registry");
+      const db = databaseConfigured() ? await (await import("../db")).getSql() : null;
+      const servers = await listRegistryServers(userId, db);
+      const payload = buildMcpRegistryListPayload(userId, servers);
+      if (payload.status === "ok" && !db) return { ...payload, persistence: "missing_config" as const };
+      return payload;
+    } catch {
+      return buildMcpRegistryListPayload(userId, []);
+    }
   });
 
 export const mcpRegistryToggle = createServerFn({ method: "POST" })

@@ -33,8 +33,10 @@ type RateId = (typeof RATES)[number]["id"];
 export function SpeakStage(props: {
   open: boolean;
   signedIn: boolean;
+  live?: boolean;
   onClose: () => void;
   onSignIn: () => void;
+  onLive?: () => void;
 }) {
   const videoRef = useRef<HTMLVideoElement>(null);
   const streamRef = useRef<MediaStream | null>(null);
@@ -106,6 +108,11 @@ export function SpeakStage(props: {
   }
 
   async function toggleMic() {
+    if (props.onLive) {
+      props.onLive();
+      setNotice(props.live ? "Speak stopped." : "Connecting. Speak, and Adrian answers on this call.");
+      return;
+    }
     if (listening) {
       stopMic();
       setNotice("Recording stopped.");
@@ -156,12 +163,12 @@ export function SpeakStage(props: {
       <video ref={videoRef} className={source === "none" ? "is-hidden" : source} playsInline muted autoPlay />
       <div className="speak-stage__body">
         <div className="speak-stage__stage">
-          {source === "none" ? <div className={`speak-orb ${listening ? "is-live" : ""}`} aria-hidden="true" /> : null}
-          <div className={`speak-wave ${listening ? "is-live" : ""}`} aria-hidden="true">
+          {source === "none" ? <div className={`speak-orb ${props.live || listening ? "is-live" : ""}`} aria-hidden="true" /> : null}
+          <div className={`speak-wave ${props.live || listening ? "is-live" : ""}`} aria-hidden="true">
             <span /><span /><span /><span /><span /><span /><span />
           </div>
           <p className="speak-status" role="status">
-            {source === "camera" ? "Camera on" : source === "screen" ? "Sharing your screen" : listening ? "Recording" : `${voiceDisplayName(voice)} · ${rate}`}
+            {source === "camera" ? "Camera on" : source === "screen" ? "Sharing your screen" : props.live || listening ? "Live" : `${voiceDisplayName(voice)} · ${rate}`}
           </p>
           {uploadName ? <p className="speak-file">{uploadName}</p> : null}
           {notice ? <p className="speak-notice">{notice}</p> : null}
@@ -191,7 +198,7 @@ export function SpeakStage(props: {
       <div className="speak-controls">
         <button type="button" aria-label="Camera" aria-pressed={source === "camera"} onClick={() => void show("camera")}><Camera /><span>Camera</span></button>
         <button type="button" aria-label="Upload" onClick={() => fileRef.current?.click()}><Paperclip /><span>Upload</span></button>
-        <button type="button" className="mic" aria-label={listening ? "Stop recording" : "Start recording"} aria-pressed={listening && !muted} onClick={() => void toggleMic()}>{muted || !listening ? <MicOff /> : <Mic />}<span>{listening ? "Stop" : "Record"}</span></button>
+        <button type="button" className="mic" aria-label={props.live || listening ? "Stop recording" : "Start recording"} aria-pressed={(props.live || listening) && !muted} onClick={() => void toggleMic()}>{muted || !(props.live || listening) ? <MicOff /> : <Mic />}<span>{props.live || listening ? "Stop" : "Record"}</span></button>
         <button type="button" aria-label="Screen share" aria-pressed={source === "screen"} onClick={() => void show("screen")}><MonitorUp /><span>Screen</span></button>
         <button type="button" className="end" aria-label="End call" onClick={() => { stopVideo(); stopMic(); props.onClose(); }}><PhoneOff /><span>End</span></button>
       </div>

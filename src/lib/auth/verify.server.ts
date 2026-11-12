@@ -113,6 +113,7 @@ export async function getSessionUser(
  * - Auth disabled + no database -> the shared dev user id.
  */
 export async function requireUserId(bearerToken?: string): Promise<string> {
+  if (loopbackPreview() && !databaseConfigured) return DEV_USER_ID;
   if (!authConfigured && !gateIdentityEnabled()) {
     if (databaseConfigured) {
       throw new Error(
@@ -125,4 +126,14 @@ export async function requireUserId(bearerToken?: string): Promise<string> {
   const user = await getSessionUser(bearerToken);
   if (!user) throw new UnauthorizedError();
   return user.id;
+}
+
+/** This computer's preview only. A public host still requires a real session. */
+function loopbackPreview(): boolean {
+  try {
+    const host = (getRequest().headers.get("host") ?? "").split(":")[0]?.toLowerCase();
+    return host === "127.0.0.1" || host === "localhost" || host === "::1";
+  } catch {
+    return false;
+  }
 }
