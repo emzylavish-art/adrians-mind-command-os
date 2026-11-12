@@ -3967,7 +3967,10 @@ export function CommandApp() {
                       setNavOpen(false);
                     }}
                   >
-                    {chat.title}
+                    <span className="flex min-w-0 items-center gap-2">
+                      <img src="/brand/marks/recent.png" alt="" width={18} height={18} className="size-4 shrink-0 rounded" />
+                      <span className="truncate">{chat.title}</span>
+                    </span>
                   </button>
                   <button
                     type="button"
@@ -4923,8 +4926,13 @@ export function CommandApp() {
           {view === "memory" && (
             <section className="p-4 md:p-6">
               <div className="masthead">
-                <h2 className="font-display text-3xl font-bold">Memory</h2>
-                <p className="text-sm text-muted">Your context, notes, and knowledge. Kept in this browser, not a remote database.</p>
+                <div className="flex items-center gap-3">
+                  <img src="/brand/marks/memory.png" alt="" className="size-8 rounded-lg" />
+                  <div>
+                    <h2 className="font-display text-3xl font-bold">Memory</h2>
+                    <p className="text-sm text-muted">Notes you chose to keep. They stay in this browser, not a remote database.</p>
+                  </div>
+                </div>
               </div>
               <div className={`glow-card mt-4 grid gap-4 rounded-panel border p-4 md:grid-cols-2 ${memoryChoice === "on" ? "border-ok/40" : "border-danger/40"}`}>
                 <div className="flex items-center gap-3">
