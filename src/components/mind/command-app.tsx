@@ -4256,6 +4256,12 @@ export function CommandApp() {
             </button>
           </div>
         ) : null}
+        {statusSignedIn !== true && (
+          <div className="signed-out-entry sign-in-strip" data-testid="signed-out-entry" role="status">
+            <span>Sign in to use voice and connected services.</span>
+            <Link to="/login" className="signed-out-entry__link">Sign in</Link>
+          </div>
+        )}
 
         <div ref={pageScrollRef} className={`min-h-0 flex-1 ${view === "chat" || view === "dashboard" || view === "intelligence" ? "overflow-hidden" : "overflow-auto pb-24"}`}>
           {view === "intelligence" && (
@@ -5901,12 +5907,6 @@ export function CommandApp() {
             <button type="button" className="min-h-11 flex-1 rounded-panel bg-accent font-semibold text-accent-ink" onClick={confirmPending}>{pending.confirm}</button>
           </div>
         </Overlay>
-      )}
-      {statusSignedIn !== true && (
-        <div className="signed-out-entry" data-testid="signed-out-entry" role="status">
-          <span>Sign in to use voice and connected services.</span>
-          <Link to="/login" className="signed-out-entry__link">Sign in</Link>
-        </div>
       )}
       <style>{`@media (max-width: 767.98px) {
         nav.fixed.inset-x-0.bottom-0[aria-label="Primary"] { z-index: 30 !important; }

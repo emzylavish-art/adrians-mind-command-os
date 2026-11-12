@@ -608,3 +608,19 @@ img.service-mark {
   background-image: none !important;
   background-color: #141416 !important;
 }
+
+.shell .sign-in-strip {
+  position: static !important;
+  top: auto !important;
+  right: auto !important;
+  bottom: auto !important;
+  left: auto !important;
+  z-index: auto !important;
+  width: auto !important;
+  max-width: none !important;
+  margin: 0 !important;
+  border-radius: 0 !important;
+  border-right: 0 !important;
+  border-left: 0 !important;
+  box-shadow: none !important;
+}
