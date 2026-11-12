@@ -92,6 +92,8 @@ export function BuildWorkspace() {
   const [transcript, setTranscript] = useState("");
   const [model, setModel] = useState("grok");
   const [apiKey, setApiKey] = useState("");
+  const [mode, setMode] = useState<"default" | "plan" | "auto">("auto");
+  const [sessionId, setSessionId] = useState("");
 
   const assistantText = useMemo(
     () => events.map(updateText).filter(Boolean).join(""),
@@ -274,13 +276,14 @@ export function BuildWorkspace() {
         method: "POST",
         credentials: "include",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ prompt: text, cwd: cwd.trim() || undefined }),
+        body: JSON.stringify({ prompt: text, cwd: cwd.trim() || undefined, mode, resumeSessionId: sessionId || undefined }),
       });
-      const data = (await response.json()) as { ok?: boolean; jobId?: string; executed?: boolean; error?: string; version?: string; agent?: string; loginRequired?: boolean; output?: string; package?: string };
+      const data = (await response.json()) as { ok?: boolean; jobId?: string; executed?: boolean; error?: string; version?: string; agent?: string; loginRequired?: boolean; output?: string; package?: string; sessionId?: string; mode?: string; resumed?: boolean; forkedSessionId?: string };
       if (!response.ok || !data.ok || !data.jobId) {
         if (data.executed) {
-          setNotice(`${data.agent || "The coding package"} ${data.version || ""} ran ${data.package || "the in-repo package"}. No login was requested.`.replace(/\s+/g, " "));
-          setJob({ id: "local", status: "done", output: [data.package, data.output].filter(Boolean).join("\n") || "Accepted.", error: "", createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() });
+          if (data.sessionId) setSessionId(data.sessionId);
+          setNotice(`${data.mode || mode} mode ran ${data.package || "the in-repo package"}${data.resumed ? " and resumed the last session" : ""}. No login was requested.`);
+          setJob({ id: "local", status: "done", output: [data.package, data.mode ? `mode ${data.mode}` : "", data.resumed ? "resumed" : "", data.forkedSessionId ? `fork ${data.forkedSessionId}` : "", data.output].filter(Boolean).join("\n") || "Accepted.", error: "", createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() });
           return;
         }
         setNotice(data.error || "The build session could not be queued.");
@@ -472,13 +475,16 @@ export function BuildWorkspace() {
           <button type="button" disabled={!model.trim()} onClick={() => void saveProvider()} className="min-h-11 rounded-panel border border-line px-3 text-sm disabled:opacity-50">Save profile</button>
         </div>
         <div className="flex flex-wrap items-center gap-2">
+          {(["plan", "default", "auto"] as const).map((item) => (
+            <button key={item} type="button" onClick={() => setMode(item)} className={`min-h-11 rounded-panel border px-3 text-sm ${mode === item ? "border-accent" : "border-line"}`} aria-pressed={mode === item}>{item === "plan" ? "Plan" : item === "default" ? "Default" : "Auto"}</button>
+          ))}
           <button type="submit" disabled={loading || Boolean(active)} className="inline-flex min-h-11 items-center gap-2 rounded-panel bg-accent px-4 text-sm font-semibold text-accent-ink disabled:cursor-not-allowed disabled:opacity-50">
             <Send className="size-4" aria-hidden="true" /> {loading ? "Queueing…" : active ? "Task running…" : "Run build"}
           </button>
           <button type="button" disabled={planning || !prompt.trim()} onClick={() => void planWithGrok()} className="inline-flex min-h-11 items-center gap-2 rounded-panel border border-line px-4 text-sm disabled:opacity-50">
             {planning ? "Planning…" : "Plan with Grok"}
           </button>
-          <span className="text-xs text-muted">File access is workspace-bound. Terminal requests remain approval-gated.</span>
+          <span className="text-xs text-muted">{sessionId ? `Session ${sessionId.slice(0, 8)} resumes on the next run.` : "Plan does not edit files. Auto can edit the approved workspace."}</span>
         </div>
       </form>
 

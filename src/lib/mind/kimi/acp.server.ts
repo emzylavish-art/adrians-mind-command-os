@@ -2,7 +2,7 @@ import { requireUserId } from "../../auth/verify.server";
 import { assertSameOrigin } from "../connectors/oauth-csrf";
 import { haltIsOn } from "../halt.server";
 import { enqueueJob, listJobEvents, onlineAgents, readJob } from "../pc-pairing/store";
-import { adrianBuildCommand, packageLabel, runHostedPrompt } from "./hosted/acp-client.ts";
+import { adrianBuildCommand, packageLabel, runCodingTurn, runHostedPrompt, type CodingMode } from "./hosted/acp-client.ts";
 import { recordKimiAttempt } from "./persist.ts";
 
 const MAX_PROMPT = 8_000;
@@ -28,12 +28,31 @@ export async function handleKimiSession(request: Request): Promise<Response> {
     try {
       const ownerId = await ownerIdFromRequest(request);
       if (await haltIsOn(ownerId)) return json({ ok: false, error: "Emergency stop is on. No Kimi session was queued." }, 403);
-      const body = (await request.json().catch(() => ({}))) as { prompt?: unknown; cwd?: unknown };
+      const body = (await request.json().catch(() => ({}))) as { prompt?: unknown; cwd?: unknown; mode?: unknown; resumeSessionId?: unknown; fork?: unknown };
       const prompt = typeof body.prompt === "string" ? body.prompt.trim().slice(0, MAX_PROMPT) : "";
       if (!prompt) return json({ ok: false, error: "prompt is required." }, 400);
       const cwd = typeof body.cwd === "string" && body.cwd.trim() ? body.cwd.trim().slice(0, MAX_CWD) : undefined;
+      const mode = body.mode === "plan" || body.mode === "auto" || body.mode === "yolo" || body.mode === "default" ? body.mode as CodingMode : undefined;
+      const resumeSessionId = typeof body.resumeSessionId === "string" ? body.resumeSessionId.trim().slice(0, 80) : "";
       const agents = onlineAgents(ownerId);
       if (agents.length === 0) {
+        if (mode || resumeSessionId || body.fork === true) {
+          const turn = await runCodingTurn({ prompt, cwd: cwd || process.cwd(), mode, resumeSessionId: resumeSessionId || undefined, fork: body.fork === true });
+          await recordKimiAttempt({ ownerId, status: turn.ok ? "session_created" : "failed", error: turn.error });
+          return json({
+            ok: turn.ok,
+            executed: turn.ok,
+            error: turn.ok ? undefined : turn.error || "The coding package did not finish the task.",
+            output: turn.output || "",
+            sessionId: turn.sessionId,
+            mode: turn.mode,
+            resumed: turn.resumed,
+            forkedSessionId: turn.forkedSessionId,
+            mcpServers: turn.mcpServers,
+            package: packageLabel(turn.command),
+            loginRequired: false,
+          }, turn.ok ? 200 : 409);
+        }
         const hosted = await runHostedPrompt(prompt, adrianBuildCommand(), cwd || process.cwd());
         await recordKimiAttempt({ ownerId, status: hosted.status, error: hosted.error });
         const accepted = hosted.status === "session_created";

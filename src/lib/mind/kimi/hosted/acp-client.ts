@@ -1,5 +1,5 @@
 import { spawn } from "node:child_process";
-import { existsSync, mkdirSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { resolveXaiInferenceApiKey } from "../../media/xai-key.ts";
 import { installCodingExtensions } from "./coding-extensions.server.ts";
@@ -67,11 +67,11 @@ export function adrianBuildEnv(): NodeJS.ProcessEnv {
 }
 
 export function adrianBuildCommand(env: NodeJS.ProcessEnv = process.env): string {
-  const packaged = fileURLToPath(new URL("../../../../node_modules/@moonshot-ai/kimi-code/dist/main.mjs", import.meta.url));
+  const packaged = fileURLToPath(new URL("../../../../../node_modules/@moonshot-ai/kimi-code/dist/main.mjs", import.meta.url));
   const candidates = [
     env.KIMI_BIN,
     packaged,
-    "node_modules/@moonshot-ai/kimi-code/dist/main.mjs",
+    fileURLToPath(new URL("../../../../../node_modules/@moonshot-ai/kimi-code/dist/main.mjs", import.meta.url)),
     "/home/ubuntu/.nvm/versions/node/v22.13.0/lib/node_modules/@moonshot-ai/kimi-code/dist/main.mjs",
   ];
   for (const candidate of candidates) {
@@ -160,6 +160,126 @@ async function exchange(command: string, cwd: string, prompts: string[]): Promis
             const text = textFrom(message.result).trim();
             finish({ ...seen, status: "session_created", error: undefined, output: text || seen.output || "The in-repo coding package accepted the task. No login was requested." });
           }
+        }
+      }
+    });
+  });
+}
+
+export type CodingMode = "default" | "plan" | "auto" | "yolo";
+
+export type CodingTurn = {
+  ok: boolean;
+  command: string;
+  sessionId?: string;
+  mode?: CodingMode;
+  resumed?: boolean;
+  forkedSessionId?: string;
+  output?: string;
+  error?: string;
+  mcpServers: number;
+};
+
+function mcpServersFor(cwd: string): { name: string; command?: string; args?: string[]; type?: "http"; url?: string }[] {
+  const file = `${cwd}/.mcp.json`;
+  if (!existsSync(file)) return [];
+  try {
+    const parsed = JSON.parse(readFileSync(file, "utf8")) as { mcpServers?: Record<string, { command?: string; args?: string[]; url?: string }> };
+    return Object.entries(parsed.mcpServers || {}).flatMap(([name, server]) => {
+      if (server.command) return [{ name, command: server.command, args: server.args || [] }];
+      if (server.url?.startsWith("https://")) return [{ type: "http" as const, name, url: server.url }];
+      return [];
+    });
+  } catch {
+    return [];
+  }
+}
+
+export async function runCodingTurn(input: { prompt: string; cwd: string; mode?: CodingMode; resumeSessionId?: string; fork?: boolean }): Promise<CodingTurn> {
+  const command = adrianBuildCommand();
+  const mode = input.mode;
+  const mcpServers = mcpServersFor(input.cwd);
+  const empty: CodingTurn = { ok: false, command, mode, mcpServers: mcpServers.length };
+  if (!command.endsWith(".mjs") && !command.endsWith(".js")) return { ...empty, error: "The in-repo coding package was not found." };
+  return await new Promise((resolve) => {
+    const child = spawn(process.execPath, [command, "acp"], { cwd: input.cwd, env: adrianBuildEnv(), stdio: ["pipe", "pipe", "pipe"] });
+    let buffer = "";
+    let settled = false;
+    let output = "";
+    let stderr = "";
+    let sessionId = input.resumeSessionId || "";
+    const finish = (turn: CodingTurn) => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timer);
+      child.kill();
+      resolve(turn);
+    };
+    const send = (id: number, method: string, params: JsonObject) => {
+      child.stdin.write(`${JSON.stringify({ jsonrpc: "2.0", id, method, params })}\n`);
+    };
+    const timer = setTimeout(() => finish({ ...empty, sessionId, output, ok: Boolean(output), error: output ? undefined : publicError(stderr || "The coding package did not finish the task within 120 seconds.") }), 120_000);
+    child.on("error", (error) => finish({ ...empty, error: error.message }));
+    child.stderr?.on("data", (chunk: Buffer) => {
+      stderr = publicError(`${stderr}${chunk.toString("utf8")}`).slice(0, 300);
+    });
+    send(1, "initialize", { protocolVersion: 1, clientCapabilities: {}, clientInfo: { name: "adrian-os", version: "0.1" } });
+    child.stdout.on("data", (chunk: Buffer) => {
+      buffer += chunk.toString("utf8");
+      const lines = buffer.split("\n");
+      buffer = lines.pop() || "";
+      for (const line of lines) {
+        if (!line.trim()) continue;
+        let message: JsonObject;
+        try { message = JSON.parse(line) as JsonObject; } catch { continue; }
+        if (message.method === "session/update") {
+          const text = textFrom(message.params).trim();
+          if (text) output = `${output}${text}\n`.slice(0, 4000);
+        }
+        if (typeof message.method === "string" && message.id != null) {
+          const allow = mode === "auto" || mode === "yolo";
+          child.stdin.write(`${JSON.stringify({ jsonrpc: "2.0", id: message.id, result: message.method === "session/request_permission" ? { outcome: { outcome: allow ? "selected" : "cancelled", optionId: allow ? "allow-once" : undefined } } : {} })}\n`);
+        }
+        if (message.id === 1) {
+          if (sessionId) send(2, "session/load", { sessionId, cwd: input.cwd, mcpServers });
+          else send(2, "session/new", { cwd: input.cwd, mcpServers });
+        }
+        if (message.id === 2) {
+          if (isObject(message.error)) {
+            const text = typeof message.error.message === "string" ? message.error.message : "The coding session was not accepted.";
+            finish({ ...empty, error: publicError(text) });
+            return;
+          }
+          if (isObject(message.result) && typeof message.result.sessionId === "string") sessionId = message.result.sessionId;
+          if (mode) send(4, "session/set_mode", { sessionId, modeId: mode });
+          else send(3, "session/prompt", { sessionId, prompt: [{ type: "text", text: input.prompt }] });
+        }
+        if (message.id === 4) {
+          if (isObject(message.error)) {
+            const text = typeof message.error.message === "string" ? message.error.message : "The coding mode was not accepted.";
+            output = `${output}Mode was not changed: ${publicError(text)}\n`.slice(0, 4000);
+          }
+          send(3, "session/prompt", { sessionId, prompt: [{ type: "text", text: input.prompt }] });
+        }
+        if (message.id === 3) {
+          if (isObject(message.error)) {
+            const text = typeof message.error.message === "string" ? message.error.message : "The coding task was not accepted.";
+            finish({ ...empty, sessionId, output, error: publicError(text) });
+            return;
+          }
+          const text = textFrom(message.result).trim();
+          if (text) output = `${output}${text}\n`.slice(0, 4000);
+          if (input.fork && sessionId) send(5, "session/fork", { sessionId, cwd: input.cwd, mcpServers });
+          else finish({ ...empty, ok: true, sessionId, resumed: Boolean(input.resumeSessionId), output: output.trim() || "The coding package accepted the task." });
+        }
+        if (message.id === 5) {
+          const forked = isObject(message.result) && typeof message.result.sessionId === "string" ? message.result.sessionId : undefined;
+          if (!forked) {
+            const text = isObject(message.error) && typeof message.error.message === "string" ? message.error.message : "The session was not forked.";
+            finish({ ...empty, sessionId, output, error: publicError(text) });
+            return;
+          }
+          finish({ ...empty, ok: true, sessionId, resumed: Boolean(input.resumeSessionId), forkedSessionId: forked, output: output.trim() || "The coding package forked the session." });
         }
       }
     });
