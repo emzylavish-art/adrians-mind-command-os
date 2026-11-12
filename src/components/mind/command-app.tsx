@@ -4962,7 +4962,7 @@ export function CommandApp() {
               </div>
               <div className={`glow-card mt-4 grid gap-4 rounded-panel border p-4 md:grid-cols-2 ${memoryChoice === "on" ? "border-ok/40" : "border-danger/40"}`}>
                 <div className="flex items-center gap-3">
-                  <span className="grid size-12 place-items-center rounded-2xl bg-accent/15 text-accent"><Database className="size-5" /></span>
+                  <img src="/brand/marks/memory.png" alt="" className="size-12 rounded-2xl" />
                   <div>
                     <p className="font-semibold">Memory: <span className={memoryChoice === "on" ? "text-ok" : "text-danger"}>{memoryChoice === "on" ? "ON" : "OFF"}</span></p>
                     <p className="text-sm text-muted">{memoryChoice === "on" ? "The next command can read notes in its scope. Existing chats stay off until you enable them there." : "A memory-off chat cannot read or save notes."}</p>
@@ -5002,7 +5002,7 @@ export function CommandApp() {
                   <p className="mt-3 text-xs text-muted">This size is the note text on this device. It is not a cloud quota.</p>
                 </div>
                 <div className="grid gap-2">
-                <textarea value={memoryText} onChange={(event) => setMemoryText(event.target.value)} placeholder="Write a note you want kept" rows={3} className="rounded-panel border border-line bg-surface px-3 py-2 text-sm" />
+                <textarea value={memoryText} onChange={(event) => setMemoryText(event.target.value)} placeholder="Write a note you want kept" rows={2} className="rounded-panel border border-line bg-surface px-3 py-2 text-sm" />
                 <div className="flex flex-wrap gap-2">
                   <select aria-label="Memory scope" value={memoryScope} onChange={(event) => setMemoryScope(event.target.value as MemoryScope)} className="min-h-11 rounded-panel border border-line bg-surface px-3 text-sm">
                     <option value="global">Global</option>
@@ -5016,6 +5016,7 @@ export function CommandApp() {
                       ))}
                     </select>
                   )}
+                  <input aria-label="Search notes" value={memoryQuery} onChange={(event) => setMemoryQuery(event.target.value)} placeholder="Search notes" className="min-h-11 min-w-40 flex-1 rounded-panel border border-line bg-surface px-3 text-sm" />
                   <button
                     type="button"
                     className="min-h-11 rounded-panel bg-accent px-4 text-sm font-semibold text-accent-ink"
@@ -5039,7 +5040,6 @@ export function CommandApp() {
                     Save note
                   </button>
                 </div>
-                <input value={memoryQuery} onChange={(event) => setMemoryQuery(event.target.value)} placeholder="Search notes" className="min-h-11 rounded-panel border border-line bg-surface px-3 text-sm" />
                 <label className="flex items-center gap-2 text-sm text-muted">
                   <input type="checkbox" checked={showArchived} onChange={(event) => setShowArchived(event.target.checked)} /> Show archived
                 </label>
