@@ -522,14 +522,18 @@ img.service-mark {
     width: 100%;
   }
 
-  .shell[data-view="command"] .live-voice-compact-entry,
-  .shell[data-view="command"] .signed-out-entry {
-    top: 4.6rem;
-    left: calc(17rem + 1rem);
-    right: 1.5rem;
-    bottom: auto;
-    width: auto;
-  }
+.shell[data-view="command"] .live-voice-compact-entry,
+.shell[data-view="command"] .signed-out-entry {
+  top: 4.6rem;
+  left: calc(17rem + 1rem);
+  right: 1.5rem;
+  bottom: auto;
+  width: auto;
+}
+
+.shell[data-view="command"] .live-voice-compact-entry {
+  display: none !important;
+}
 
   .gpt-home [data-composer="floating"] {
     position: relative !important;
@@ -643,6 +647,13 @@ img.service-mark {
   text-transform: none !important;
   letter-spacing: 0 !important;
   font-weight: 400 !important;
+}
+
+.shell .main-stage .page-hero,
+.shell .page-shell .page-hero {
+  background-image: none !important;
+  background-color: #121214 !important;
+  background-blend-mode: normal !important;
 }
 
 @media (min-width: 900px) {
