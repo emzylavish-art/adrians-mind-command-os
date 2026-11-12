@@ -303,14 +303,12 @@ const EXTERNAL = [
   {
     name: "Oak Bridge Capital",
     detail: "Separate product. This app does not open, edit, or store it.",
-    tone: "bg-warn/15 text-warn",
-    mark: "OB",
+    mark: "/brand/marks/oak-bridge.png",
   },
   {
     name: "BridgePoint",
     detail: "Separate product. This app does not open, edit, or store it.",
-    tone: "bg-info/15 text-info",
-    mark: "BP",
+    mark: "/brand/marks/bridgepoint.png",
   },
 ];
 
@@ -4927,7 +4925,7 @@ export function CommandApp() {
                 {EXTERNAL.map((item) => (
                   <article key={item.name} className="rounded-panel border border-line bg-surface p-4">
                     <div className="flex items-start gap-3">
-                      <span className={`grid size-11 place-items-center rounded-2xl ${item.tone}`}>{item.mark}</span>
+                      <img src={item.mark} alt="" className="size-11 rounded-2xl" />
                       <div>
                         <div className="flex items-center gap-2">
                           <h3 className="font-semibold">{item.name}</h3>
