@@ -163,6 +163,7 @@ import { EveWorkbench } from "@/components/mind/eve-workbench";
 import { FleetPanel } from "@/components/mind/fleet-panels";
 import { BuildWorkspace } from "@/components/mind/build-workspace";
 import { BuildPanel } from "@/components/mind/surfaces/build-panel";
+import { ResearchPanel } from "@/components/mind/surfaces/research-panel";
 import { MessageBody } from "@/components/mind/message-body";
 import { MemorySavedIndicator } from "@/components/mind/memory-saved-indicator";
 import { MemoryChatToggle } from "@/components/mind/memory-chat-toggle";
@@ -5318,10 +5319,13 @@ export function CommandApp() {
                   <img src="/brand/marks/research.png" alt="" className="size-8 rounded-lg" />
                   <div>
                     <h2 className="font-display text-3xl font-bold">Research</h2>
-                    <p className="text-sm text-muted">A search runs only when the server has a search endpoint and key. Otherwise this refuses, does not call Grok, and creates no citations. Links appear only when the provider returned them.</p>
+                    <p className="text-sm text-muted">A search runs only when a search key is set. Otherwise this refuses and creates no citations.</p>
                   </div>
                 </div>
-                <textarea value={researchText} onChange={(event) => setResearchText(event.target.value)} placeholder="What do you want to research?" rows={3} className="input-glow mt-3 w-full rounded-panel border border-line bg-bg/70 px-3 py-2 text-sm" />
+              </div>
+              <div className="solid-form mt-4">
+                <label className="text-sm" htmlFor="research-question">Question</label>
+                <textarea id="research-question" value={researchText} onChange={(event) => setResearchText(event.target.value)} placeholder="What do you want to research?" rows={3} className="input-glow mt-2 w-full rounded-panel border border-line bg-bg px-3 py-2 text-sm" />
                 <button type="button" className="mt-3 min-h-11 rounded-panel bg-accent px-4 text-sm font-semibold text-white disabled:opacity-50" disabled={ws.halted} onClick={startResearch}>
                   Check research
                 </button>
@@ -5344,6 +5348,9 @@ export function CommandApp() {
                 )}
               </div>
               <div className="mt-4">
+                <ResearchPanel onUse={setResearchText} />
+              </div>
+              <div className="mt-4">
                 <ReaPanel
                   title="File inspection"
                   lead="REA inspect-artifact runs on text you stage. Web pages are not fetched."
@@ -5356,8 +5363,15 @@ export function CommandApp() {
             </section>
           )}
           <section className={view === "skills" ? "page-shell space-y-4" : "hidden"}>
-              <div className="page-hero"><h2 className="font-display text-3xl font-bold">Skills</h2>
-              <p className="text-sm text-muted">Built-in skills read this device. Not installed means the outside service is not connected. Nothing is marked installed unless it can run.</p></div>
+              <div className="page-hero">
+                <div className="flex items-center gap-3">
+                  <img src="/brand/marks/skills.png" alt="" className="size-8 rounded-lg" />
+                  <div>
+                    <h2 className="font-display text-3xl font-bold">Skills</h2>
+                    <p className="text-sm text-muted">Built-in skills read this device. Not installed means the outside service is not connected.</p>
+                  </div>
+                </div>
+              </div>
               <input value={skillQuery} onChange={(event) => setSkillQuery(event.target.value)} placeholder="Search skills" className="min-h-11 w-full rounded-panel border border-line bg-surface px-3 text-sm" />
               <div className="grid gap-3 md:grid-cols-2">
                 {(skillQuery.trim() ? searchSkills(skillQuery) : SKILLS).map((skill) => {
@@ -6413,7 +6427,7 @@ function ChatPane({
     .filter((group) => group.items.length > 0);
   const lastReply = [...(active?.messages ?? [])].reverse().find((msg) => msg.role === "assistant");
   return (
-    <div className="flex h-full min-h-0 flex-col xl:flex-row">
+    <div className="thread-shell flex h-full min-h-0 flex-col xl:flex-row">
       <aside className="flex max-h-72 shrink-0 flex-col border-b border-line xl:max-h-none xl:w-64 xl:border-r xl:border-b-0">
         <div className="p-3">
           <button type="button" onClick={onNew} className="flex min-h-11 w-full items-center justify-center gap-2 rounded-panel bg-accent text-sm font-semibold text-accent-ink">
@@ -6499,12 +6513,13 @@ function ChatPane({
               <MemoryChatToggle memory={memoryChoice} onChange={onMemoryChange} disabled={busy || halted} />
             </div>
           )}
-          <div className="thread-mobile-tools mt-3 xl:hidden">
+          <details className="thread-mobile-tools mt-3 xl:hidden">
+            <summary className="min-h-11 cursor-pointer text-sm">Choose a provider</summary>
             <ProviderPicker name="mind-provider-mobile" choices={choices} choice={providerChoice} onChoose={onProvider} logicRoutes={logicRoutes} grokVerified={grokVerified} />
             <div className="mt-3">
               <ModelTierPicker name="mind-tier-mobile" tier={modelTier} onChoose={onModelTier} logicRoute={logicRoute} logicRoutes={logicRoutes} onChooseLogic={onChooseLogic} />
             </div>
-          </div>
+          </details>
         </div>
         <div className="min-h-0 flex-1 space-y-3 overflow-auto p-4">
           {(!active || active.messages.length === 0) && !busy && (

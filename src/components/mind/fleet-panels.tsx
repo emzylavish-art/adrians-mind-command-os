@@ -691,7 +691,9 @@ export function FleetPanel({
           <summary className="min-h-11 cursor-pointer">Worker command</summary>
           <p className="pb-2 text-xs text-muted">One pass: node --experimental-strip-types scripts/schedule-tick.mjs. Stay up: node --experimental-strip-types scripts/schedule-worker.mjs. Interval: MIND_WORKER_INTERVAL_MS.</p>
         </details>
-        <div className="mt-4 grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
+        <div className="solid-form mt-4">
+          <p className="text-sm text-muted">Add a daily job. It waits here until you run due schedules or the worker is started.</p>
+          <div className="mt-3 grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
           <label className="text-sm">Name
             <input value={jobName} onChange={(event) => setJobName(event.target.value)} placeholder="Morning notes" aria-label="Job name" className="mt-1 min-h-11 w-full rounded-panel border border-line bg-surface px-3 text-sm" />
           </label>
@@ -722,6 +724,7 @@ export function FleetPanel({
           </button>
           </div>
         </div>
+        </div>
         <button type="button" className="mt-3 min-h-11 rounded-panel border border-line px-3 text-sm" onClick={() => setWs((prev) => runDueSchedules(prev, new Date().toISOString()))}>Run due schedules</button>
         <ul className="mt-4 space-y-2">
           {ws.schedules.length === 0 && (
@@ -734,7 +737,8 @@ export function FleetPanel({
           {ws.schedules.map((job) => (
             <li key={job.id} className="dense-card p-3 text-sm">
               <p className="font-semibold">{job.name}</p>
-              <p className="text-xs text-muted">{job.enabled ? "On" : "Off"} · {job.timeZone || "UTC"}{job.clockHour == null ? ` · every ${job.intervalMinutes} minutes` : ` · ${String(job.clockHour).padStart(2, "0")}:${String(job.clockMinute ?? 0).padStart(2, "0")}`} · next {job.nextRunAt} · last {job.lastRunAt ?? "never"} · {job.lastStatus || "no run"} · {job.lastError || "No error"}</p>
+              <p className="mt-1 text-sm text-muted">{job.enabled ? "On." : "Off."} {job.clockHour == null ? `Runs every ${job.intervalMinutes} minutes.` : `Runs daily at ${String(job.clockHour).padStart(2, "0")}:${String(job.clockMinute ?? 0).padStart(2, "0")} ${job.timeZone || "UTC"}.`}</p>
+              <p className="text-sm text-muted">Next run {job.nextRunAt}. Last run {job.lastRunAt ?? "never"}. {job.lastError || "No error."}</p>
               <button type="button" className="mt-2 min-h-11 rounded-panel border border-line px-3 text-sm" onClick={() => setWs((prev) => setScheduleEnabled(prev, job.id, !job.enabled))}>{job.enabled ? "Turn off" : "Turn on"}</button>
             </li>
           ))}

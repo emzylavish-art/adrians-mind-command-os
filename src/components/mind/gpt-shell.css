@@ -773,3 +773,101 @@ form.thread-composer {
   background-blend-mode: normal !important;
   box-shadow: none !important;
 }
+
+@media (max-width: 767.98px) {
+  .chat-head + .min-h-0 .grid.min-h-64 {
+    min-height: 0 !important;
+  }
+}
+
+@media (max-width: 767.98px) {
+  .thread-shell > aside {
+    max-height: 6.5rem !important;
+    overflow: hidden;
+  }
+  .thread-shell > section {
+    min-height: 0 !important;
+    overflow: hidden;
+  }
+  .thread-shell .chat-head > p,
+  .thread-shell .chat-head .mt-2.flex {
+    display: none !important;
+  }
+  .thread-shell form.thread-composer {
+    flex: 0 0 auto;
+    max-height: 9.5rem;
+    overflow: auto;
+  }
+}
+
+@media (max-width: 767.98px) {
+  .thread-shell > aside .border-b.border-line.px-2 {
+    display: none !important;
+  }
+  .thread-shell form.thread-composer > .flex:first-child,
+  .thread-shell form.thread-composer > p {
+    display: none !important;
+  }
+  .thread-shell form.thread-composer {
+    max-height: none;
+    overflow: visible;
+  }
+}
+
+@media (max-width: 767.98px) {
+  .thread-shell form.thread-composer > .mb-2 {
+    display: none !important;
+  }
+  .thread-shell > aside input[placeholder="Search conversations"] {
+    display: none !important;
+  }
+}
+
+@media (max-width: 767.98px) {
+  .thread-shell form.thread-composer {
+    width: calc(100% - 1rem) !important;
+    max-width: calc(100% - 1rem) !important;
+    margin-inline: 0.5rem !important;
+    box-sizing: border-box;
+  }
+  .thread-shell .composer-toolbar button {
+    font-size: 0.75rem !important;
+    padding-inline: 0.5rem !important;
+  }
+}
+
+.page-shell .solid-form,
+.page-shell .research-panel {
+  background-color: #141416 !important;
+  background-image: none !important;
+  border: 1px solid rgb(255 255 255 / 0.08) !important;
+  border-radius: 0.9rem !important;
+  padding: 1rem !important;
+}
+
+.page-shell .research-panel li,
+.page-shell .research-panel__next {
+  background-color: #101012;
+  border: 1px solid rgb(255 255 255 / 0.08);
+  border-radius: 0.75rem;
+  padding: 0.75rem;
+}
+
+.page-shell .research-panel button {
+  background-color: #1c1c1f;
+}
+
+@media (min-width: 900px) {
+  .page-shell .solid-form .grid {
+    display: grid !important;
+    flex-direction: unset !important;
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+    gap: 0.75rem !important;
+  }
+}
+
+@media (min-width: 1100px) {
+  .page-shell .solid-form .grid {
+    grid-template-columns: repeat(4, minmax(0, 1fr)) !important;
+  }
+}
