@@ -1136,3 +1136,20 @@ form.thread-composer {
     overflow-x: auto !important;
   }
 }
+
+@media (min-width: 1280px) {
+  [data-testid="chat-right-rail"] {
+    position: sticky;
+    top: 0;
+    align-self: flex-start;
+    max-height: calc(100dvh - 17rem);
+    overflow: auto !important;
+  }
+}
+
+[data-testid="chat-right-rail"] .text-xs {
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
