@@ -125,10 +125,11 @@ export function GraphFiltersPanel({ triggerOnly = false }: Props) {
       type="button"
       className="dash3d-pill"
       data-testid="graph-filters-toggle"
-      aria-expanded={open}
-      aria-controls="dash3d-graph-filters-body"
-      onClick={() => setOpen((o) => !o)}
-    >
+     aria-expanded={open}
+     aria-controls="dash3d-graph-filters-body"
+      title="Search, health, lane, and orphans"
+     onClick={() => setOpen((o) => !o)}
+   >
       {open ? "Close filters" : "Filters"}
     </button>
   );
@@ -137,21 +138,9 @@ export function GraphFiltersPanel({ triggerOnly = false }: Props) {
   return (
     <>
       {!triggerOnly ? (
-        <aside
-          className="dash3d-graph-filters dash3d-glass dash3d-graph-filters-dock"
-          data-testid="graph-filters"
-          aria-label="Constellation filters"
-        >
-          <div className="dash3d-feed-head">
-            <h2>Filters</h2>
-            {trigger}
-          </div>
-          {!open ? (
-            <p className="dash3d-muted dash3d-graph-filters-hint" style={{ fontSize: "0.68rem", margin: 0 }}>
-              Search · health · lane · orphans
-            </p>
-          ) : null}
-        </aside>
+        <span className="dash3d-graph-filters-trigger-slot" data-testid="graph-filters">
+          {trigger}
+        </span>
       ) : (
         <span className="dash3d-graph-filters-trigger-slot" data-testid="graph-filters-trigger-slot">
           {trigger}
