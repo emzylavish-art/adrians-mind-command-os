@@ -205,14 +205,28 @@ aside.rail.nav-drawer-open {
   background: #2f6bff !important;
 }
 
-.shell .gpt-home button.gpt-voice {
-  display: grid !important;
-  order: 4;
-  margin-left: auto;
-  background: #2f6bff !important;
-  color: #fff !important;
-  border-radius: 999px !important;
-}
+  .shell .gpt-home button.gpt-voice {
+    display: grid !important;
+    order: 4;
+    margin-left: auto;
+    background: #2f6bff !important;
+    color: #fff !important;
+    border-radius: 999px !important;
+  }
+
+  @media (max-width: 767.98px) {
+    .gpt-home section.floating-composer.command-card.composer-dock:focus-within,
+    .gpt-home [data-composer="floating"]:focus-within {
+      max-height: none !important;
+      overflow: visible !important;
+    }
+    .gpt-home .floating-composer:focus-within textarea,
+    .gpt-home [data-composer="floating"]:focus-within textarea,
+    .gpt-home textarea {
+      min-height: 2.75rem !important;
+      height: 2.75rem !important;
+    }
+  }
 
 .composer-error {
   margin: 0.4rem 0.2rem 0;
@@ -247,6 +261,7 @@ aside.rail.nav-drawer-open {
   display: flex;
   align-items: center;
   justify-content: space-between;
+  z-index: 2;
 }
 
 .speak-stage header p {

@@ -4481,7 +4481,7 @@ export function CommandApp() {
                         <Send className="size-4" />
                       </button>
                     ) : (
-                      <button type="button" className="gpt-voice grid size-11 place-items-center rounded-full bg-[#2f6bff] text-white" aria-label="Speak" onClick={() => setSpeakStageOpen(true)}>
+                      <button type="button" className="gpt-voice grid size-11 place-items-center rounded-full bg-[#2f6bff] text-white" aria-label="Speak" onPointerDown={(event) => { event.preventDefault(); setSpeakStageOpen(true); }} onClick={() => setSpeakStageOpen(true)}>
                         <Volume2 className="size-4" />
                       </button>
                     )}
