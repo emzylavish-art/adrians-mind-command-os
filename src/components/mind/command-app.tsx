@@ -4020,8 +4020,12 @@ export function CommandApp() {
           <button type="button" className="grid size-11 shrink-0 place-items-center rounded-panel border border-line md:hidden" aria-label="Open menu" onClick={openNav}>
             <Menu className="size-4" />
           </button>
-          <p className="hidden text-sm font-semibold md:block">{TITLES[view]}</p>
-          <button type="button" className="header-voice-mode" onClick={() => applyVoiceMode(toggleVoiceMode(voiceMode))} aria-label={`Switch voice mode (currently ${voiceMode})`}>
+          <p className="hidden items-center gap-2 text-sm font-semibold md:flex">
+            <img src={view === "command" ? "/brand/marks/chat.png" : NAV_ICON_SRC[view] ?? "/brand/marks/adrian.png"} alt="" width={22} height={22} className="size-5 rounded-md" />
+            {TITLES[view]}
+          </p>
+          <button type="button" className="header-voice-mode inline-flex items-center gap-1" onClick={() => applyVoiceMode(toggleVoiceMode(voiceMode))} aria-label={`Switch voice mode (currently ${voiceMode})`}>
+            {voiceMode === "direct" ? <img src="/brand/marks/direct.png" alt="" width={16} height={16} className="size-4 rounded" /> : null}
             {voiceMode === "direct" ? "Direct" : "Orchestrator"}
           </button>
           <div className="command-search relative min-w-0 flex-1">
@@ -4080,7 +4084,7 @@ export function CommandApp() {
             )}
           </div>
           <span className={`hidden h-11 items-center gap-2 rounded-full border px-3 text-sm md:inline-flex glass-panel ${headerTone}`}>
-            <span className="size-2 rounded-full bg-current" />
+            <img src="/brand/marks/grok.png" alt="" width={16} height={16} className="size-4 rounded" />
             {headerState}
           </span>
           <div className="hidden md:block">
