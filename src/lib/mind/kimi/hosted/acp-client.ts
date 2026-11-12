@@ -1,7 +1,9 @@
 import { spawn } from "node:child_process";
-import { existsSync, mkdirSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { resolveXaiInferenceApiKey } from "../../media/xai-key.ts";
+import { installCodingExtensions } from "./coding-extensions.server.ts";
+import { codingSearchUrl } from "./coding-search-bridge.server.ts";
 
 export type KimiProbe = {
   status: "session_created" | "authentication_required" | "failed" | "not_configured";
@@ -43,30 +45,13 @@ export function adrianBuildEnv(): NodeJS.ProcessEnv {
   const key = resolveXaiInferenceApiKey();
   const home = process.env.KIMI_CODE_HOME || "/tmp/adrian-build-home";
   mkdirSync(home, { recursive: true });
-  const config = `${home}/config.toml`;
-  if (!existsSync(config)) {
-    writeFileSync(config, [
-      "telemetry = false",
-      'default_model = "adrian/grok"',
-      'default_permission_mode = "manual"',
-      "[providers.adrian]",
-      'type = "openai"',
-      'base_url = "https://api.x.ai/v1"',
-      'api_key_env = "XAI_API_KEY"',
-      '[models."adrian/grok"]',
-      'provider = "adrian"',
-      'model = "grok-4.20-0309-non-reasoning"',
-      "max_context_size = 131072",
-      'capabilities = ["tool_use", "thinking"]',
-      'display_name = "Adrian Grok"',
-      "",
-    ].join("\n"));
-  }
+  installCodingExtensions(home, codingSearchUrl());
   return {
     ...process.env,
     KIMI_CODE_HOME: home,
     KIMI_DISABLE_TELEMETRY: "1",
     KIMI_CODE_NO_AUTO_UPDATE: "1",
+    KIMI_CODE_TRUST_WORKSPACE: "1",
     KIMI_CODE_IDENTITY_NAME: "Adrian",
     KIMI_CODE_IDENTITY_SLUG: "adrian",
     KIMI_MODEL_NAME: "grok-4.20-0309-non-reasoning",
@@ -74,8 +59,10 @@ export function adrianBuildEnv(): NodeJS.ProcessEnv {
     KIMI_MODEL_BASE_URL: "https://api.x.ai/v1",
     KIMI_MODEL_API_KEY: key || "",
     KIMI_MODEL_DISPLAY_NAME: "Adrian Grok",
-    KIMI_MODEL_CAPABILITIES: "tool_use,thinking",
+    KIMI_MODEL_CAPABILITIES: "tool_use",
     KIMI_MODEL_MAX_CONTEXT_SIZE: "131072",
+    KIMI_WEB_SEARCH_BASE_URL: codingSearchUrl(),
+    KIMI_WEB_SEARCH_API_KEY: "adrian-local",
   };
 }
 

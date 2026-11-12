@@ -10,7 +10,7 @@ test("capability inventory never advertises unverified features as available", (
   assertNoFalseAvailability();
   const summary = capabilitySummary();
   assert.equal(summary.fully_integrated + summary.limited + summary.not_supported + summary.planned, KIMI_CAPABILITIES.length);
-  assert.equal(KIMI_CAPABILITIES.find((item) => item.id === "subagents")?.status, "not_supported");
+  assert.equal(KIMI_CAPABILITIES.find((item) => item.id === "subagents")?.status, "limited");
   assert.equal(KIMI_CAPABILITIES.find((item) => item.id === "voice_audio")?.status, "not_supported");
 });
 

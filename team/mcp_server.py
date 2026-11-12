@@ -82,7 +82,7 @@ def tool_specs(manifest):
                 "additionalProperties": False,
             }
         elif name == "team.queue":
-            description = "Manage local SQLite durable worker jobs. Queue records payloads only; it never executes queued jobs."
+            description = "Manage local SQLite durable worker jobs. Pass action or operation. Queue records payloads only; it never executes queued jobs."
             schema = {
                 "type": "object",
                 "properties": {
@@ -104,7 +104,6 @@ def tool_specs(manifest):
                     "limit": {"type": "integer", "minimum": 1, "maximum": 1000},
                     "timeout_seconds": {"type": "integer", "minimum": 1, "maximum": 120},
                 },
-                "oneOf": [{"required": ["action"]}, {"required": ["operation"]}],
                 "additionalProperties": False,
             }
 
@@ -136,7 +135,7 @@ def tool_specs(manifest):
                 "additionalProperties": False,
             }
         elif name == "model.generate":
-            description = "Generate text through an explicitly configured model route. Auto routing attempts Astra, then Sol, then Luna and records the selected provider."
+            description = "Generate text through an explicitly configured model route. Pass prompt or messages. Auto routing attempts Astra, then Sol, then Luna and records the selected provider."
             schema = {
                 "type": "object",
                 "properties": {
@@ -147,7 +146,6 @@ def tool_specs(manifest):
                     "timeout_seconds": {"type": "integer", "minimum": 1, "maximum": 300},
                     "stream": {"type": "boolean"},
                 },
-                "oneOf": [{"required": ["prompt"]}, {"required": ["messages"]}],
                 "additionalProperties": False,
             }
         elif name == "notion.controller":

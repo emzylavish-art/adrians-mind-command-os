@@ -1,6 +1,7 @@
-import { type ChildProcess, spawn } from "node:child_process";
+import { type ChildProcess, execFileSync, spawn } from "node:child_process";
 import { readFileSync } from "node:fs";
 import { adrianBuildCommand, adrianBuildEnv, packageLabel } from "./acp-client.ts";
+import { ensureCodingSearchBridge } from "./coding-search-bridge.server.ts";
 
 const PORT = 58631;
 
@@ -17,6 +18,17 @@ function redact(text: string): string {
     .replace(/sk-[A-Za-z0-9_-]{8,}/g, "[saved key]")
     .replace(/token[=:\s]+[A-Za-z0-9._~+/-]{8,}/gi, "token=[redacted]")
     .slice(0, 280);
+}
+
+function releasePort(port: number) {
+  try {
+    const listed = execFileSync("ss", ["-ltnp"], { encoding: "utf8" });
+    const line = listed.split("\n").find((item) => item.includes(`:${port}`));
+    const match = line?.match(/pid=(\d+)/);
+    if (match) process.kill(Number(match[1]), "SIGTERM");
+  } catch {
+    // The port is already free, or this computer cannot list listeners.
+  }
 }
 
 function tokenFor(env: NodeJS.ProcessEnv): string {
@@ -43,7 +55,13 @@ export async function ensureCodingBrowser(): Promise<{ ok: boolean; port?: numbe
   if (!command.endsWith(".mjs") && !command.endsWith(".js")) {
     return { ok: false, package: label, error: "The in-repo coding package was not found." };
   }
-  if (running && running.child.exitCode == null) return { ok: true, port: running.port, package: label };
+  const bridge = await ensureCodingSearchBridge();
+  if (!bridge.ok) return { ok: false, package: label, error: bridge.error || "The coding search bridge did not start." };
+  if (running && running.child.exitCode == null) {
+    running.child.kill();
+    running = null;
+  }
+  releasePort(PORT);
 
   const env = adrianBuildEnv();
   const child = spawn(process.execPath, [command, "web", "--no-open", "--port", String(PORT)], {

@@ -1,0 +1,14 @@
+{
+  "name": "adrian-coding",
+  "version": "1.0.0",
+  "description": "Adrian hooks, research skill, and research subagent for the coding process.",
+  "skills": "./skills",
+  "agents": "./agents",
+  "systemPrompt": "The research-web skill and research-web subagent are available. For a public web question, call WebSearch and then FetchURL, and cite the real URL.",
+  "hooks": [
+    {
+      "event": "SessionStart",
+      "command": "python3 hooks/record.py"
+    }
+  ]
+}
