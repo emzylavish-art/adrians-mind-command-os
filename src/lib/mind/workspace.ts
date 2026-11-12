@@ -136,6 +136,8 @@ function normalizeChat(row: unknown): Chat | null {
         content: msg.content,
         at: str(msg.at, new Date(0).toISOString()),
         model: typeof msg.model === "string" ? msg.model : undefined,
+        ...publicImages(msg.images),
+        ...publicVideo(msg.videoUrl),
         ...(msg.memorySaved === true
           ? {
               memorySaved: true as const,
@@ -176,6 +178,35 @@ function normalizeFile(row: unknown): LocalFile | null {
     projectId: typeof row.projectId === "string" ? row.projectId : null,
     createdAt: str(row.createdAt, new Date(0).toISOString()),
   };
+}
+
+function publicImages(value: unknown): { images: NonNullable<Msg["images"]> } | Record<string, never> {
+  if (!Array.isArray(value)) return {};
+  const images: NonNullable<Msg["images"]> = [];
+  for (const item of value.slice(0, 4)) {
+    if (!isRecord(item)) continue;
+    const dataUrl = typeof item.dataUrl === "string" && item.dataUrl.startsWith("data:image/") && item.dataUrl.length < 1_500_000 ? item.dataUrl : undefined;
+    const blobId = typeof item.blobId === "string" && item.blobId.length > 0 && item.blobId.length < 200 ? item.blobId : undefined;
+    if (!dataUrl && !blobId) continue;
+    images.push({
+      dataUrl,
+      blobId,
+      name: typeof item.name === "string" ? item.name.slice(0, 120) : undefined,
+      mime: typeof item.mime === "string" ? item.mime.slice(0, 40) : undefined,
+    });
+  }
+  return images.length ? { images } : {};
+}
+
+function publicVideo(value: unknown): { videoUrl: string } | Record<string, never> {
+  if (typeof value !== "string" || value.length > 2000) return {};
+  try {
+    const url = new URL(value);
+    if (url.protocol !== "https:" || url.username || url.password) return {};
+    return { videoUrl: url.toString() };
+  } catch {
+    return {};
+  }
 }
 
 function normalizeMemory(row: unknown): MemoryItem | null {

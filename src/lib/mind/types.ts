@@ -36,6 +36,8 @@ export type Msg = {
   /** Set when this assistant turn's SSE done reported a real memory save. */
   memorySaved?: boolean;
   savedMemoryId?: string | null;
+  /** Temporary https link returned by the video service. */
+  videoUrl?: string;
 };
 
 export type Retrieval = { at: string; ids: string[] };

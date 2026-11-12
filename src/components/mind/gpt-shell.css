@@ -965,6 +965,29 @@ img.service-mark {
   background-blend-mode: normal !important;
 }
 
+[data-testid="eve-workbench"] header.page-hero {
+  display: flex !important;
+  flex-direction: column !important;
+  align-items: stretch !important;
+  gap: 0.8rem !important;
+  overflow: visible !important;
+}
+
+[data-testid="eve-workbench"] header.page-hero nav {
+  display: flex !important;
+  flex-wrap: wrap !important;
+  gap: 0.45rem !important;
+}
+
+[data-testid="eve-workbench"] header.page-hero nav button {
+  height: auto !important;
+  min-height: 2.75rem !important;
+  width: auto !important;
+  overflow: visible !important;
+  font-size: 0.9rem !important;
+  white-space: nowrap !important;
+}
+
 @media (min-width: 900px) {
   [data-testid="eve-workbench"] section.grid {
     display: grid !important;
@@ -1410,9 +1433,18 @@ form.thread-composer {
 }
 
 .thread-shell > section > .min-h-0.flex-1 {
-  flex: 0 0 auto !important;
-  min-height: 9.5rem !important;
-  overflow: hidden !important;
+  flex: 1 1 auto !important;
+  min-height: 0 !important;
+  overflow: auto !important;
+  padding-bottom: 15rem !important;
+}
+
+.thread-shell article img {
+  display: block;
+  max-width: min(100%, 28rem);
+  max-height: 18rem;
+  border-radius: 14px;
+  object-fit: contain;
 }
 
 @media (min-width: 768px) {
@@ -1696,4 +1728,102 @@ form.thread-composer {
 [data-testid="chat-right-rail"] .glass-panel {
   background-image: none !important;
   background-color: #141416 !important;
+}
+
+.settings-index button,
+.settings-index button span,
+.settings-index button strong,
+.settings-index button small,
+#settings-pages button,
+#settings-pages .text-xs,
+.settings-card .text-xs {
+  height: auto !important;
+  max-height: none !important;
+  overflow: visible !important;
+  white-space: normal !important;
+  text-transform: none !important;
+  letter-spacing: 0 !important;
+  line-height: 1.35 !important;
+  -webkit-line-clamp: unset !important;
+  line-clamp: unset !important;
+}
+
+.tool-list {
+  display: grid !important;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.75rem !important;
+}
+
+.tool-card {
+  min-height: 5.5rem;
+  border-radius: 16px !important;
+  border: 1px solid rgb(255 255 255 / 0.1) !important;
+  background: #171717 !important;
+  background-image: none !important;
+}
+
+.tool-card[aria-pressed="true"] {
+  border-color: #f4f4f5 !important;
+}
+
+.tool-read,
+.owner-video {
+  width: 100%;
+  border-radius: 16px;
+  background: #111 !important;
+}
+.tool-read,
+.tool-read p,
+.tool-read pre {
+  display: block !important;
+  position: static !important;
+  width: 100% !important;
+  max-width: 100% !important;
+  height: auto !important;
+  overflow: visible !important;
+  white-space: pre-wrap !important;
+  background-image: none !important;
+  color: #e4e4e7 !important;
+}
+
+.owner-video {
+  max-height: 360px;
+}
+
+.thread-shell section.flex.min-w-0.flex-1.flex-col {
+  min-height: 0 !important;
+  overflow: hidden !important;
+}
+
+.thread-shell section.flex.min-w-0.flex-1.flex-col > .min-h-0.flex-1.overflow-auto {
+  flex: 1 1 0 !important;
+  min-height: 0 !important;
+  overflow: auto !important;
+}
+
+.thread-shell .thread-composer {
+  position: relative !important;
+  z-index: 6;
+  flex: 0 0 auto !important;
+}
+
+@media (max-width: 800px) {
+  .tool-list {
+    grid-template-columns: 1fr !important;
+  }
+
+  .page-hero,
+  header.page-hero {
+    display: flex !important;
+    flex-direction: column !important;
+    align-items: stretch !important;
+    gap: 0.75rem !important;
+    overflow: visible !important;
+  }
+
+  .page-hero nav,
+  header.page-hero nav {
+    display: flex !important;
+    flex-wrap: wrap !important;
+  }
 }

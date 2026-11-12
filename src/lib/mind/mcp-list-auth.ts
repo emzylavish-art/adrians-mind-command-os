@@ -27,9 +27,12 @@ export function resolveMcpListUserId(input: {
   gateIdentityEnabled: boolean;
   databaseConfigured: boolean;
   devUserId: string;
+  /** This computer's preview only. A public host must not set this. */
+  loopbackPreview?: boolean;
 }): string | null {
   const fromSession = input.sessionUser?.id?.trim() || "";
   if (fromSession) return fromSession;
+  if (input.loopbackPreview && !input.databaseConfigured) return input.devUserId;
   // Match requireUserId auth-off path: shared dev user only without a real DB.
   if (!input.authConfigured && !input.gateIdentityEnabled && !input.databaseConfigured) {
     return input.devUserId;

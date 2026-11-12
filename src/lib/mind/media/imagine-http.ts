@@ -13,6 +13,7 @@ import {
   setImagineSpendLedger,
 } from "./spend-ledger.ts";
 import { editImagineImage, generateImagineImages, normalizeImaginePrompt, resolveImagineModel } from "./imagine.ts";
+import { readOwnerVideo, startOwnerVideo } from "./video.ts";
 import { normalizeImageDataUrl } from "./data-url.ts";
 import { MAX_DATA_URL_CHARS } from "./types.ts";
 
@@ -105,6 +106,7 @@ export async function handleImagineGenerate(request: Request): Promise<Response>
   // via meter.ownerId so custom execute paths cannot bypass.
 
   const record = body && typeof body === "object" ? (body as Record<string, unknown>) : {};
+  if (record.kind === "video") return handleOwnerVideo(record);
   const normalized = normalizeImaginePrompt(record.prompt);
   if (!normalized.ok) return json({ ok: false, error: normalized.error }, 400);
 
@@ -176,6 +178,19 @@ export async function handleImagineGenerate(request: Request): Promise<Response>
       name: `imagine-${index + 1}.${image.mime === "image/png" ? "png" : image.mime === "image/webp" ? "webp" : "jpg"}`,
     })),
   });
+}
+
+async function handleOwnerVideo(record: Record<string, unknown>): Promise<Response> {
+  if (record.action === "status") {
+    const requestId = typeof record.requestId === "string" ? record.requestId : "";
+    const result = await readOwnerVideo(requestId);
+    return json(result, result.ok ? 200 : result.status);
+  }
+  const result = await startOwnerVideo({
+    prompt: typeof record.prompt === "string" ? record.prompt : "",
+    duration: typeof record.duration === "number" ? record.duration : 5,
+  });
+  return json(result, result.ok ? 200 : result.status);
 }
 
 export async function handleImagineStatus(request: Request): Promise<Response> {

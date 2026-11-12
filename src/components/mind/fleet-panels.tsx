@@ -106,6 +106,28 @@ function botAvatarSrc(name: string) {
   return pool[hash];
 }
 
+function readLocalTool(id: string, ws: Workspace): string {
+  if (id === "list_projects") {
+    if (ws.projects.length === 0) return "No projects stored in this browser.";
+    return ws.projects.map((project) => project.name).join("\n");
+  }
+  if (id === "list_chats") {
+    if (ws.chats.length === 0) return "No chats stored in this browser.";
+    return ws.chats.map((chat) => chat.title || "Untitled chat").join("\n");
+  }
+  if (id === "search_notes") {
+    const notes = ws.memories.filter((item) => !item.archived && item.text.trim());
+    if (notes.length === 0) return "No notes stored in this browser.";
+    return notes.slice(0, 12).map((item) => item.text.trim()).join("\n\n");
+  }
+  if (id === "delegate") return "Delegate is available from Runs. Choose an agent, type a goal, then press Queue run. This card does not start a run by itself.";
+  if (id === "web_search") return "Web search is not configured on this card. Nothing was searched.";
+  if (id === "browser") return "Open a page with the field above. This card does not browse on its own.";
+  if (id === "gmail_read" || id === "gmail_send") return "No Gmail account is connected. Nothing was read or sent.";
+  if (id === "model") return "This worker does not call a model. Use Chat for a reply.";
+  return "This tool has no local result.";
+}
+
 export function FleetPanel({
   mode,
   ws,
@@ -124,6 +146,8 @@ export function FleetPanel({
   onSelectProvider?: (id: string) => void;
 }) {
   const [note, setNote] = useState<string | null>(null);
+  const [toolReadId, setToolReadId] = useState<string | null>(null);
+  const [toolRead, setToolRead] = useState<string | null>(null);
   const [mutationState, setMutationState] = useState<FleetMutationActionState>({ status: "idle" });
   const [goal, setGoal] = useState("");
   const [agentId, setAgentId] = useState("");
@@ -822,12 +846,29 @@ export function FleetPanel({
       ) : null}
       <ul className="tool-list mt-4 space-y-2 text-sm">
         {toolCatalog().map((tool) => (
-          <li key={tool.id} className="tool-card dense-card flex flex-col gap-1 p-3" data-available={tool.available ? "true" : "false"}>
-            <p className="font-semibold">{tool.name} · {tool.available ? "Available" : "Not available"}</p>
-            <p className="text-xs text-muted">{tool.reason}</p>
+          <li key={tool.id}>
+            <button
+              type="button"
+              className="tool-card dense-card flex w-full flex-col gap-1 p-3 text-left"
+              data-available={tool.available ? "true" : "false"}
+              aria-pressed={toolReadId === tool.id}
+              onClick={() => {
+                setToolReadId(tool.id);
+                setToolRead(readLocalTool(tool.id, ws));
+              }}
+            >
+              <span className="font-semibold">{tool.name} · {tool.available ? "Available" : "Not available"}</span>
+              <span className="text-xs text-muted">{tool.reason}</span>
+            </button>
           </li>
         ))}
       </ul>
+      {toolRead ? (
+        <section className="tool-read mt-4 rounded-panel border border-line bg-surface p-4 text-sm" aria-live="polite">
+          <p className="font-semibold">Result</p>
+          <pre className="mt-2 whitespace-pre-wrap text-sm text-muted">{toolRead}</pre>
+        </section>
+      ) : null}
 
       <div className="mt-6 space-y-3">
         <h3 className="font-semibold">PC shell approvals</h3>

@@ -461,7 +461,7 @@ export const mcpRegistryList = createServerFn({ method: "GET" })
       }),
   ])
   .handler(async ({ context }) => {
-    const { DEV_USER_ID, authConfigured, getSessionUser } = await import("../auth/verify.server");
+    const { DEV_USER_ID, authConfigured, getSessionUser, isLoopbackPreview } = await import("../auth/verify.server");
     const { gateIdentityEnabled } = await import("../auth/gate-identity.server");
     const { resolveMcpListUserId, buildMcpRegistryListPayload } = await import("./mcp-list-auth");
     // Always reuse getSessionUser (Supabase cookies first, then Better Auth) so a
@@ -473,6 +473,7 @@ export const mcpRegistryList = createServerFn({ method: "GET" })
       gateIdentityEnabled: gateIdentityEnabled(),
       databaseConfigured: Boolean(resolveDatabaseUrl(process.env)),
       devUserId: DEV_USER_ID,
+      loopbackPreview: isLoopbackPreview(),
     });
     if (!userId) {
       return buildMcpRegistryListPayload(null, []);

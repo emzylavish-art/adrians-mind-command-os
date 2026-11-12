@@ -610,7 +610,7 @@ function isEnabledSkillMap(value: unknown): value is Record<string, boolean> {
 export function CommandApp() {
   const { ws, setWs, ready, syncNote, serverHeld, saveError, retrySave } = useMindWorkspace();
   const [view, setView] = useState<View>("command");
-  const [homeAction, setHomeAction] = useState<"ask" | "image" | "write" | "search">("ask");
+  const [homeAction, setHomeAction] = useState<"ask" | "image" | "video" | "write" | "search">("ask");
   const [settingsPane, setSettingsPane] = useState<null | "general" | "connections" | "voice" | "pages" | "data" | "safety" | "keys">(null);
   const [query, setQuery] = useState("");
   const [paletteOpen, setPaletteOpen] = useState(false);
@@ -758,6 +758,7 @@ export function CommandApp() {
   const turnGen = useRef(0);
   const turnInFlight = useRef(false);
   const imagineInFlight = useRef(false);
+  const videoInFlight = useRef(false);
   const mcpInFlight = useRef(false);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
@@ -2553,6 +2554,142 @@ export function CommandApp() {
       imagineInFlight.current = false;
       setBusy(false);
       setLiveText("");
+    }
+  }
+
+  async function runVideo(promptRaw?: string) {
+    if (videoInFlight.current) return;
+    const prompt = (promptRaw ?? draft).trim();
+    if (!prompt) {
+      setError("Write what the video should show, then send.");
+      return;
+    }
+    if (shouldBlockForEmergencyStop(wsRef.current.halted)) {
+      reportEmergencyStop("video", () => {
+        void runVideo(prompt);
+      });
+      return;
+    }
+    setDraft("");
+    setError(null);
+    setNotice("Video started. A short clip usually takes about a minute.");
+    const token = getBearerToken();
+    const prefix = previewPathPrefix(window.location.hostname, window.location.pathname) ?? "";
+    let chat = active;
+    if (!chat) {
+      const made = createChat(ws, {
+        memory: memoryChoice,
+        autonomy,
+        temporary,
+        projectId: projectChoice || null,
+        personalityId: defaultPersonalityId,
+      });
+      chat = made.chat;
+      setActiveId(made.chat.id);
+      setView("chat");
+      setWs((prev) =>
+        pushAudit({ ...prev, chats: [made.chat, ...prev.chats] }, "create_chat", made.chat.id, "video"),
+      );
+    } else {
+      setView("chat");
+    }
+    const chatId = chat.id;
+    const userMsg = {
+      id: crypto.randomUUID(),
+      role: "user" as const,
+      content: `/video ${prompt}`,
+      at: new Date().toISOString(),
+    };
+    setWs((prev) => ({
+      ...prev,
+      chats: prev.chats.map((item) =>
+        item.id === chatId
+          ? {
+              ...item,
+              title: item.messages.length ? item.title : prompt.replace(/\s+/g, " ").slice(0, 48),
+              messages: [...item.messages, userMsg],
+            }
+          : item,
+      ),
+    }));
+    videoInFlight.current = true;
+    const fail = (message: string) => {
+      setError(message);
+      setWs((prev) => ({
+        ...prev,
+        chats: prev.chats.map((item) =>
+          item.id === chatId
+            ? {
+                ...item,
+                messages: [...item.messages, { id: crypto.randomUUID(), role: "assistant" as const, content: message, at: new Date().toISOString() }],
+              }
+            : item,
+        ),
+      }));
+    };
+    try {
+      const start = await fetch(`${prefix}/api/mind/media/generate`, {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+          ...(token ? { authorization: `Bearer ${token}` } : {}),
+        },
+        body: JSON.stringify({ kind: "video", action: "start", prompt, duration: 5 }),
+      });
+      const started = (await start.json()) as { ok?: boolean; error?: string; requestId?: string; model?: string };
+      if (!start.ok || !started.ok || !started.requestId) {
+        fail(started.error || "Video did not start.");
+        return;
+      }
+      const requestId = started.requestId;
+      const model = started.model || "grok-imagine-video";
+      const deadline = Date.now() + 8 * 60 * 1000;
+      while (Date.now() < deadline) {
+        await new Promise((resolve) => setTimeout(resolve, 5000));
+        const statusResponse = await fetch(`${prefix}/api/mind/media/generate`, {
+          method: "POST",
+          headers: {
+            "content-type": "application/json",
+            ...(token ? { authorization: `Bearer ${token}` } : {}),
+          },
+          body: JSON.stringify({ kind: "video", action: "status", requestId }),
+        });
+        const status = (await statusResponse.json()) as { ok?: boolean; error?: string; state?: string; url?: string; model?: string };
+        if (status.state === "done" && status.url) {
+          setNotice("Video is ready.");
+          setWs((prev) => ({
+            ...prev,
+            chats: prev.chats.map((item) =>
+              item.id === chatId
+                ? {
+                    ...item,
+                    messages: [
+                      ...item.messages,
+                      {
+                        id: crypto.randomUUID(),
+                        role: "assistant" as const,
+                        content: `Generated with ${status.model || model}. The clip is below. The link expires, so play or download it while it is here.`,
+                        at: new Date().toISOString(),
+                        model: status.model || model,
+                        videoUrl: status.url,
+                      },
+                    ],
+                  }
+                : item,
+            ),
+          }));
+          return;
+        }
+        if (!statusResponse.ok || status.ok === false || status.state === "failed") {
+          fail(status.error || "Video generation failed.");
+          return;
+        }
+      }
+      fail("The video is still rendering. Nothing was invented in its place.");
+    } catch {
+      fail("Could not reach the video service.");
+    } finally {
+      videoInFlight.current = false;
     }
   }
 
@@ -4482,6 +4619,9 @@ export function CommandApp() {
                <button type="button" aria-pressed={homeAction === "image"} onClick={() => { setHomeAction("image"); setCommandMode("ask"); setDraft(""); }}>
                  <Image className="size-5" /> Create an image
                </button>
+               <button type="button" aria-pressed={homeAction === "video"} onClick={() => { setHomeAction("video"); setCommandMode("ask"); setDraft(""); }}>
+                 <Video className="size-5" /> Create a video
+               </button>
                 <button type="button" aria-pressed={homeAction === "write"} onClick={() => { setHomeAction("write"); setCommandMode("build"); setDraft(""); }}>
                   <FileText className="size-5" /> Write or edit
                 </button>
@@ -4489,7 +4629,7 @@ export function CommandApp() {
                   <Search className="size-5" /> Search the web
                 </button>
               </div>
-              {homeAction !== "ask" ? <p className="gpt-starters text-sm text-muted">{homeAction === "image" ? "Image. Describe it, then send." : homeAction === "write" ? "Write. Say what to change, then send." : "Search. Type the question, then send."}</p> : null}
+              {homeAction !== "ask" ? <p className="gpt-starters text-sm text-muted">{homeAction === "image" ? "Image. Describe it, then send." : homeAction === "video" ? "Video. Describe it, then send. A short clip takes about a minute." : homeAction === "write" ? "Write. Say what to change, then send." : "Search. Type the question, then send."}</p> : null}
 
               <section className="floating-composer command-card composer-dock rounded-panel p-3 md:p-4" data-composer="floating">
                 <details className="composer-advanced">
@@ -4530,6 +4670,10 @@ export function CommandApp() {
                       void runImagine(draft.trim() || undefined, null);
                       return;
                     }
+                    if (homeAction === "video") {
+                      void runVideo(draft.trim() || undefined);
+                      return;
+                    }
                     void sendCommand();
                   }}
                 >
@@ -4559,7 +4703,7 @@ export function CommandApp() {
                         event.currentTarget.form?.requestSubmit();
                       }
                     }}
-                    placeholder={homeAction === "image" ? "Describe the image" : homeAction === "write" ? "What should I write or edit?" : homeAction === "search" ? "Search the web" : "Ask Adrian"}
+                    placeholder={homeAction === "image" ? "Describe the image" : homeAction === "video" ? "Describe the video" : homeAction === "write" ? "What should I write or edit?" : homeAction === "search" ? "Search the web" : "Ask Adrian"}
                     aria-label="Command"
                     rows={3}
                     className="input-glow w-full resize-none rounded-[1.1rem] border border-line/80 bg-bg/70 px-3 py-3 text-sm"
@@ -5784,7 +5928,6 @@ export function CommandApp() {
                   <img src="/brand/marks/settings.png" alt="" className="size-8 rounded-lg" />
                   <div>
                     <h2 className="font-display text-3xl font-bold">Settings</h2>
-                    <p className="text-sm text-muted">Preferences stay in this browser. Server keys are not edited here.</p>
                     <p className="text-sm text-muted">Preferences stay in this browser. Open Safe keys to copy a saved key.</p>
                   </div>
                 </div>
@@ -6768,7 +6911,10 @@ function ChatPane({
                   </div>
                 </form>
               ) : (
-                <MessageBody text={msg.content} images={msg.images} onEditImagine={(src) => onEditImagine(src)} onSaveImage={onSaveImage} onDownloadImage={onDownloadImage} />
+                <>
+                  <MessageBody text={msg.content} images={msg.images} onEditImagine={(src) => onEditImagine(src)} onSaveImage={onSaveImage} onDownloadImage={onDownloadImage} />
+                  {msg.videoUrl ? <video className="owner-video mt-2" src={msg.videoUrl} controls playsInline preload="metadata" /> : null}
+                </>
               )}
               <div className="mt-2 flex flex-wrap gap-3">
                 <button
@@ -6873,7 +7019,7 @@ function ChatPane({
           )}
           {busy && !liveText && toolTimeline.length === 0 && (
             <div className="max-w-3xl space-y-2 rounded-panel border border-line/70 bg-surface/80 p-3" aria-live="polite">
-              <p className="text-xs text-muted">Waiting for Grok.</p>
+              <p className="text-xs text-muted">{active?.messages.at(-1)?.content.startsWith("/video") ? "Rendering the video." : active?.messages.at(-1)?.content.startsWith("/imagine") ? "Creating the image." : "Waiting for Grok."}</p>
               <div className="skeleton h-3" style={{ width: "75%" }} />
               <div className="skeleton h-3" style={{ width: "50%" }} />
               <div className="skeleton h-3" style={{ width: "66%" }} />
@@ -7360,36 +7506,14 @@ function ModelTierPicker({
 }) {
   return (
     <fieldset className="space-y-2">
-      <legend className="text-sm font-semibold">Mode</legend>
-      <p className="text-xs text-muted">Grok modes use the tier models. Astra, Sol, and Luna follow provider.status.</p>
+     <legend className="text-sm font-semibold">Mode</legend>
+      <p className="text-xs text-muted">These modes use the Grok key already saved on this computer.</p>
       {MODEL_TIERS.map((item) => (
         <label key={item} className="flex items-start gap-2 text-sm">
           <input type="radio" name={name} checked={logicRoute == null && tier === item} onChange={() => onChoose(item)} className="mt-1" />
           <span className="font-medium">{item}</span>
         </label>
       ))}
-      {LOGIC_ROUTES.map((id) => {
-        const view = logicRoutes.find((item) => item.id === id);
-        const menu = logicMenuState(view, id);
-        return (
-          <label key={id} className={`flex items-start gap-2 text-sm ${menu.selectable ? "" : "opacity-70"}`} data-testid={`logic-route-radio-${id}`}>
-            <input
-              type="radio"
-              name={name}
-              className="mt-1"
-              checked={logicRoute === id}
-              disabled={!menu.selectable}
-              onChange={() => {
-                if (menu.selectable) onChooseLogic?.(id);
-              }}
-            />
-            <span>
-              <span className="font-medium">{menu.label}{view ? ` · ${view.state}` : ""}</span>
-              <span className="block text-xs text-muted">{menu.detail}</span>
-            </span>
-          </label>
-        );
-      })}
     </fieldset>
   );
 }
@@ -7440,22 +7564,6 @@ function ProviderPicker({
           ))}
         </details>
       ))}
-      <details className="provider-group">
-        <summary>Routes</summary>
-        {LOGIC_ROUTES.map((id) => {
-        const view = logicRoutes.find((item) => item.id === id);
-        const menu = logicMenuState(view, id);
-        return (
-          <label key={id} className={`flex items-start gap-2 rounded-xl px-2 py-2 text-sm ${choice === id ? "model-option-active" : ""} ${menu.selectable ? "" : "opacity-70"}`}>
-            <input type="radio" name={name} className="mt-1" checked={choice === id} disabled={!menu.selectable} onChange={() => { if (menu.selectable) onChoose(id); }} />
-            <span>
-              {menu.label}{view ? ` · ${view.state}` : ""}
-              <span className="block text-xs text-muted">{menu.detail}</span>
-            </span>
-          </label>
-        );
-      })}
-      </details>
     </div>
   );
 }
