@@ -702,3 +702,18 @@ img.service-mark {
   letter-spacing: 0 !important;
   font-weight: 400 !important;
 }
+
+[data-testid="eve-workbench"] header.page-hero,
+[data-testid="eve-workbench"] .rounded-panel.border.border-line.bg-surface {
+  background-image: none !important;
+  background-color: #141416 !important;
+  background-blend-mode: normal !important;
+}
+
+@media (min-width: 900px) {
+  [data-testid="eve-workbench"] section.grid {
+    display: grid !important;
+    grid-template-columns: repeat(4, minmax(0, 1fr)) !important;
+    gap: 0.75rem !important;
+  }
+}

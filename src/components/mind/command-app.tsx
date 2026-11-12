@@ -3988,8 +3988,8 @@ export function CommandApp() {
             </div>
           )}
           {!railCollapsed && (
-            <button type="button" className="px-3 py-2 text-left text-sm text-muted" onClick={() => { setView("chat"); setNavOpen(false); }}>
-              See all…
+            <button type="button" className="px-3 py-2 text-left text-sm text-muted" onClick={() => { setView("settings"); setSettingsPane("pages"); setNavOpen(false); }}>
+              All pages
             </button>
           )}
         </nav>
@@ -4013,6 +4013,7 @@ export function CommandApp() {
             title="Settings"
             onClick={() => {
               setView("settings");
+              setSettingsPane(null);
               setNavOpen(false);
               closeMenus();
             }}
@@ -5604,6 +5605,7 @@ export function CommandApp() {
                   ["voice", "Voice", () => setSettingsPane("voice")],
                   ["scheduled", "Scheduled", () => { setView("scheduled"); setNavOpen(false); }],
                   ["bots", "Bots", () => { setView("agents"); setNavOpen(false); }],
+                  ["eve", "EVE", () => { setView("intelligence"); setNavOpen(false); }],
                   ["runs", "Runs", () => { setView("runs"); setNavOpen(false); }],
                   ["tools", "Tools", () => { setView("tools"); setNavOpen(false); }],
                   ["skills", "Skills", () => { setView("skills"); setNavOpen(false); }],

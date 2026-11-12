@@ -147,7 +147,7 @@ export function EveWorkbench({
   return (
     <main className="h-full min-h-0 overflow-auto p-4 md:p-6" data-testid="eve-workbench">
       <div className="mx-auto flex max-w-[1500px] flex-col gap-4">
-        <header className="masthead flex flex-col gap-4 p-4 md:flex-row md:items-center md:justify-between md:p-6">
+        <header className="page-hero flex flex-col gap-4 p-4 md:flex-row md:items-center md:justify-between md:p-6">
           <div className="flex min-w-0 items-center gap-4">
             <div className="grid size-16 shrink-0 place-items-center rounded-2xl border border-accent/30 bg-accent/10 text-accent">
               <Bot className="size-8" aria-hidden="true" />
