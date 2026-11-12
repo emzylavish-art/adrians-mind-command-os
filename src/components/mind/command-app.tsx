@@ -315,25 +315,21 @@ const EXTERNAL = [
 type Staged = { name: string; text: string };
 
 const NAV_ICON_SRC: Partial<Record<View, string>> = {
-  command: "/icons/chat.svg",
-  intelligence: "/icons/bots.svg",
-  agents: "/icons/bots.svg",
-  build: "/icons/build.svg",
-  projects: "/icons/projects.svg",
-  research: "/icons/research.svg",
-  files: "/icons/library.svg",
-  chat: "/icons/thread.svg",
-  runs: "/icons/runs.svg",
-  connected: "/icons/systems.svg",
-  tools: "/icons/systems.svg",
-  scheduled: "/icons/systems.svg",
-  skills: "/icons/systems.svg",
-  memory: "/icons/library.svg",
-  dashboard: "/icons/systems.svg",
-  activity: "/icons/runs.svg",
-  settings: "/icons/systems.svg",
-  help: "/icons/systems.svg",
-  integrations: "/icons/systems.svg",
+  files: "/brand/marks/library.png",
+  projects: "/brand/marks/projects.png",
+  connected: "/brand/marks/plugins.png",
+  scheduled: "/brand/marks/scheduled.png",
+  build: "/brand/marks/build.png",
+  research: "/brand/marks/research.png",
+  agents: "/brand/marks/bots.png",
+  runs: "/brand/marks/runs.png",
+  tools: "/brand/marks/tools.png",
+  skills: "/brand/marks/skills.png",
+  memory: "/brand/marks/memory.png",
+  activity: "/brand/marks/activity.png",
+  help: "/brand/marks/help.png",
+  integrations: "/brand/marks/integrations.png",
+  settings: "/brand/marks/settings.png",
 };
 
 
@@ -3899,7 +3895,7 @@ export function CommandApp() {
                       }}
                       className={`nav-item flex min-h-11 w-full items-center gap-3 rounded-2xl px-3 text-sm font-medium ${on ? "nav-item-active" : "text-muted hover:bg-white/5"} ${railCollapsed ? "justify-center px-0" : ""}`}
                     >
-                      <Icon className="size-4 shrink-0 opacity-90" />
+                      {NAV_ICON_SRC[item.id] ? <img className="service-mark" src={NAV_ICON_SRC[item.id]} alt="" width={22} height={22} /> : <Icon className="size-4 shrink-0 opacity-90" />}
                       {!railCollapsed && item.label}
                     </button>
                   );
@@ -3914,7 +3910,7 @@ export function CommandApp() {
             className={`nav-item flex min-h-11 items-center gap-3 rounded-2xl px-3 text-sm font-medium text-muted ${railCollapsed ? "justify-center" : ""}`}
             onClick={() => setNavOpen(false)}
           >
-            <Search className="size-4 shrink-0" />
+            <img className="service-mark" src="/brand/marks/explore.png" alt="" width={22} height={22} />
             {!railCollapsed && "Explore"}
           </Link>
           <Link to="/dashboard" data-testid="nav-route-dashboard" className="nav-route-link sr-only">Dashboard</Link>
