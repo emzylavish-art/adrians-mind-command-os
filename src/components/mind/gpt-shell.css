@@ -694,3 +694,9 @@ img.service-mark {
   width: 1.15rem !important;
   height: 1.15rem !important;
 }
+
+.main-stage p.text-xs.text-muted {
+  text-transform: none !important;
+  letter-spacing: 0 !important;
+  font-weight: 400 !important;
+}

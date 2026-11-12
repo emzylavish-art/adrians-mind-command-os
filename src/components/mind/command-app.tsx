@@ -4944,8 +4944,8 @@ export function CommandApp() {
           )}
 
           {view === "memory" && (
-            <section className="p-4 md:p-6">
-              <div className="masthead">
+            <section className="page-shell p-4 md:p-6">
+              <div className="page-hero">
                 <div className="flex items-center gap-3">
                   <img src="/brand/marks/memory.png" alt="" className="size-8 rounded-lg" />
                   <div>
@@ -6167,8 +6167,8 @@ function ReaPanel({
   onInspect: (() => void) | null;
 }) {
   return (
-    <section className="p-4 md:p-6">
-      <div className="masthead">
+    <section className="page-shell p-4 md:p-6">
+      <div className="page-hero">
         <h2 className="font-display text-3xl font-bold">{title}</h2>
         <p className="mt-2 max-w-2xl text-sm text-muted">{lead}</p>
       </div>
