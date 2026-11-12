@@ -4371,7 +4371,7 @@ export function CommandApp() {
                     rows={3}
                     className="input-glow w-full resize-none rounded-[1.1rem] border border-line/80 bg-bg/70 px-3 py-3 text-sm"
                   />
-                  {error ? (
+                  {error && !error.includes("Notion status") ? (
                     <p className="composer-error" role="alert">
                       {error}{" "}
                       {error.includes("Sign in") ? <Link to="/login">Sign in</Link> : null}

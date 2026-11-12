@@ -339,6 +339,74 @@ aside.rail.nav-drawer-open {
   line-height: 1;
 }
 
+/* One row on the phone and the desktop. No letter stacks, no banner over the field. */
+.gpt-home form button {
+  overflow: hidden !important;
+  font-size: 0 !important;
+  line-height: 0 !important;
+  color: transparent !important;
+}
+
+.gpt-home form button svg {
+  color: #fff !important;
+}
+
+.gpt-home form button svg {
+  width: 1.15rem !important;
+  height: 1.15rem !important;
+}
+
+.shell[data-view="command"] .bg-danger\/10 {
+  display: none;
+}
+
+@media (max-width: 767.98px) {
+  .gpt-home {
+    width: 100%;
+    max-width: 100%;
+    padding-bottom: 6.5rem;
+  }
+
+  .gpt-home [data-composer="floating"] {
+    position: relative !important;
+    margin-bottom: 0.5rem;
+  }
+
+  .shell[data-view="command"] .signed-out-entry {
+    top: 3.4rem;
+    right: 0.75rem;
+    bottom: auto;
+    left: 0.75rem;
+  }
+}
+
+@media (min-width: 768px) {
+  .gpt-home {
+    width: min(46rem, calc(100% - 2rem));
+    margin-inline: auto;
+    min-height: 100% !important;
+    height: 100%;
+    padding-bottom: 1.25rem;
+  }
+
+  .gpt-home form {
+    width: 100%;
+  }
+
+  .shell[data-view="command"] .live-voice-compact-entry,
+  .shell[data-view="command"] .signed-out-entry {
+    top: 4.6rem;
+    left: calc(17rem + 1rem);
+    right: 1.5rem;
+    bottom: auto;
+    width: auto;
+  }
+
+  .gpt-home [data-composer="floating"] {
+    position: relative !important;
+  }
+}
+
 .gpt-home .composer-send:disabled {
   display: none !important;
 }
