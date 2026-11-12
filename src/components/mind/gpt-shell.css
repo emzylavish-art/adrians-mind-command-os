@@ -189,11 +189,161 @@ aside.rail.nav-drawer-open {
   border-radius: 999px !important;
 }
 
+.composer-error {
+  margin: 0.4rem 0.2rem 0;
+  color: #f4f4f5;
+  font-size: 0.9rem;
+}
+
+.composer-error a {
+  color: #8eb6ff;
+  font-weight: 700;
+}
+
+.speak-stage {
+  position: fixed;
+  inset: 0;
+  z-index: 90;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 0.8rem;
+  background: #000;
+  color: #fff;
+  padding: 1rem 1rem calc(1.4rem + env(safe-area-inset-bottom));
+}
+
+.speak-stage header {
+  position: absolute;
+  top: 0.8rem;
+  left: 1rem;
+  right: 1rem;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.speak-stage header p {
+  margin: 0;
+  font-size: 1.15rem;
+  font-weight: 700;
+}
+
+.speak-stage header button,
+.speak-controls button {
+  display: grid;
+  width: 3.4rem;
+  height: 3.4rem;
+  place-items: center;
+  border: 0;
+  border-radius: 999px;
+  background: #1c1c1e;
+  color: #fff;
+}
+
+.speak-controls button.end {
+  background: #ff3b30;
+}
+
+.speak-controls button[aria-pressed="true"] {
+  background: #2f6bff;
+}
+
+.speak-stage video {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  background: #000;
+}
+
+.speak-stage video.is-hidden {
+  display: none;
+}
+
+.speak-orb {
+  width: 9rem;
+  height: 9rem;
+  margin-bottom: auto;
+  margin-top: 8rem;
+  border-radius: 999px;
+  background: radial-gradient(circle at 40% 35%, #8eb6ff, #2f6bff 42%, #111 72%);
+  box-shadow: 0 0 80px rgb(47 107 255 / 0.45);
+}
+
+.speak-status,
+.speak-notice,
+.speak-signin {
+  position: relative;
+  z-index: 1;
+  margin: 0;
+  text-align: center;
+}
+
+.speak-notice {
+  max-width: 22rem;
+  color: #d4d4d8;
+  font-size: 0.9rem;
+}
+
+.speak-signin {
+  border: 0;
+  border-radius: 999px;
+  background: #fff;
+  color: #111;
+  font-weight: 700;
+  min-height: 2.75rem;
+  padding: 0 1rem;
+}
+
+.speak-controls {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  gap: 0.8rem;
+}
+
+.speak-styles {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  gap: 0.4rem;
+}
+
+.speak-styles button {
+  min-height: 2.2rem;
+  border: 1px solid rgb(255 255 255 / 0.16);
+  border-radius: 999px;
+  background: transparent;
+  color: #fff;
+  padding: 0 0.7rem;
+  font-size: 0.8rem;
+}
+
+.speak-styles button[aria-pressed="true"] {
+  background: #fff;
+  color: #111;
+}
+
+.service-mark {
+  display: inline-grid;
+  width: 1.7rem;
+  height: 1.7rem;
+  flex: 0 0 auto;
+  place-items: center;
+  border-radius: 7px;
+  font-size: 0.68rem;
+  font-weight: 800;
+  line-height: 1;
+}
+
 .gpt-home .composer-send:disabled {
   display: none !important;
 }
 
-.gpt-home .composer-send:not(:disabled) ~ .gpt-voice {
+.gpt-home .composer-send {
   display: none !important;
 }
 

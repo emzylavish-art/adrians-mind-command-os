@@ -23,6 +23,26 @@ type Service = {
   detail: string;
 };
 
+function ServiceMark({ name }: { name: string }) {
+  const marks: Record<string, { bg: string; fg: string; letter: string }> = {
+    Gmail: { bg: "#EA4335", fg: "#fff", letter: "M" },
+    "Google Calendar": { bg: "#4285F4", fg: "#fff", letter: "31" },
+    "Google Drive": { bg: "#0F9D58", fg: "#fff", letter: "D" },
+    "Google Docs": { bg: "#4285F4", fg: "#fff", letter: "W" },
+    YouTube: { bg: "#FF0033", fg: "#fff", letter: "▶" },
+    GitHub: { bg: "#f4f4f5", fg: "#111", letter: "GH" },
+    Notion: { bg: "#f4f4f5", fg: "#111", letter: "N" },
+    Slack: { bg: "#4A154B", fg: "#fff", letter: "#" },
+    Grok: { bg: "#111", fg: "#fff", letter: "G" },
+    OpenAI: { bg: "#10a37f", fg: "#fff", letter: "AI" },
+    Claude: { bg: "#d97757", fg: "#fff", letter: "C" },
+    Gemini: { bg: "#8ab4f8", fg: "#111", letter: "Ge" },
+    Voice: { bg: "#2f6bff", fg: "#fff", letter: "♪" },
+  };
+  const mark = marks[name] ?? { bg: "#27272a", fg: "#fff", letter: name.slice(0, 1) };
+  return <span className="service-mark" style={{ background: mark.bg, color: mark.fg }} aria-hidden="true">{mark.letter}</span>;
+}
+
 const SERVICES: Service[] = [
   { name: "Notion", state: "Not connected", detail: "No Notion OAuth. Nothing can be searched or updated." },
   { name: "GitHub", state: "Not connected", detail: "No repository connection. Nothing can be pushed." },
@@ -219,7 +239,7 @@ export function ServiceBoard({
       <div className="flex gap-1 overflow-auto lg:flex-col" role="tablist" aria-label="Connections">
         {[grok, ...services].map((service) => (
           <button key={service.name} type="button" role="tab" aria-selected={selected === service.name} onClick={() => setSelected(service.name)} className={"flex min-h-11 min-w-40 items-center justify-between gap-2 rounded-panel border px-3 text-left text-sm " + (selected === service.name ? "border-accent bg-surface" : "border-line")}>
-            <span className="font-semibold">{service.name}</span>
+            <span className="flex min-w-0 items-center gap-2 font-semibold"><ServiceMark name={service.name} />{service.name}</span>
             <span className="max-w-24 truncate text-xs text-muted">{service.state}</span>
           </button>
         ))}
@@ -237,7 +257,7 @@ export function ServiceBoard({
         return (
           <article key={service.name} className="dense-card card-texture min-w-0 overflow-hidden p-3">
             <div className="flex min-w-0 flex-wrap items-start justify-between gap-2">
-              <h3 className="min-w-0 break-words font-semibold">{service.name}</h3>
+              <h3 className="flex min-w-0 items-center gap-2 break-words font-semibold"><ServiceMark name={service.name} />{service.name}</h3>
               <span className="max-w-full break-words rounded-full border border-line px-2 py-0.5 text-xs text-muted">{service.state}</span>
             </div>
             {unavailable ? null : <p className="mt-2 break-words text-sm text-muted">{service.detail}</p>}

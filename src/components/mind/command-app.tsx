@@ -60,6 +60,7 @@ import { VoicePicker } from "@/components/mind/voice-picker";
 import { LiveVoiceBar } from "@/components/mind/live-voice-bar";
 import { DictationPill } from "@/components/mind/dictation-pill";
 import { VoiceModeOverlay, type VoiceOverlayPhase } from "@/components/mind/voice-mode-overlay";
+import { SpeakStage } from "@/components/mind/speak-stage";
 import { ChatEmptyHero } from "@/components/mind/chat-empty-hero";
 import {
   ComposerBar,
@@ -642,6 +643,7 @@ export function CommandApp() {
   const [dictationElapsed, setDictationElapsed] = useState(0);
   const [dictationLevel, setDictationLevel] = useState(0);
   const [voiceOverlayOpen, setVoiceOverlayOpen] = useState(false);
+  const [speakStageOpen, setSpeakStageOpen] = useState(false);
   const overlayOpenRef = useRef(false);
   overlayOpenRef.current = voiceOverlayOpen;
   const [overlayPhase, setOverlayPhase] = useState<VoiceOverlayPhase>("idle");
@@ -2202,7 +2204,11 @@ export function CommandApp() {
   }
 
   async function sendInChat() {
-    if (!active || busy || turnInFlight.current) return;
+    if (busy || turnInFlight.current) return;
+    if (!active) {
+      void sendCommand();
+      return;
+    }
     const text = draft.trim();
     const images = snapshotImages(pendingImages);
     const file = staged;
@@ -4354,11 +4360,23 @@ export function CommandApp() {
                   <textarea
                     value={draft}
                     onChange={(event) => setDraft(event.target.value)}
+                    onKeyDown={(event) => {
+                      if (event.key === "Enter" && !event.shiftKey) {
+                        event.preventDefault();
+                        event.currentTarget.form?.requestSubmit();
+                      }
+                    }}
                     placeholder={homeAction === "image" ? "Describe the image" : homeAction === "write" ? "What should I write or edit?" : homeAction === "search" ? "Search the web" : "Ask Adrian"}
                     aria-label="Command"
                     rows={3}
                     className="input-glow w-full resize-none rounded-[1.1rem] border border-line/80 bg-bg/70 px-3 py-3 text-sm"
                   />
+                  {error ? (
+                    <p className="composer-error" role="alert">
+                      {error}{" "}
+                      {error.includes("Sign in") ? <Link to="/login">Sign in</Link> : null}
+                    </p>
+                  ) : null}
                   {staged && (
                     <p className="mt-2 text-xs text-muted">Staged: {staged.name}. It stays in this browser and is sent only if you press Send.</p>
                   )}
@@ -4450,9 +4468,15 @@ export function CommandApp() {
                     <button type="submit" disabled={busy || ws.halted || (!draft.trim() && pendingImages.length === 0 && !staged)} className="composer-send inline-flex min-h-11 items-center gap-2 rounded-panel bg-accent px-4 text-sm font-semibold text-accent-ink disabled:opacity-50">
                       <Send className="size-4" /> {busy ? "Sending" : "Send"}
                     </button>
-                    <button type="button" className="gpt-voice grid size-11 place-items-center rounded-full bg-[#2f6bff] text-white" aria-label="Speak" onClick={() => void speak("")}>
-                      <Volume2 className="size-4" />
-                    </button>
+                    {draft.trim() || pendingImages.length > 0 || staged ? (
+                      <button type="submit" className="gpt-voice grid size-11 place-items-center rounded-full bg-[#2f6bff] text-white" aria-label="Send">
+                        <Send className="size-4" />
+                      </button>
+                    ) : (
+                      <button type="button" className="gpt-voice grid size-11 place-items-center rounded-full bg-[#2f6bff] text-white" aria-label="Speak" onClick={() => setSpeakStageOpen(true)}>
+                        <Volume2 className="size-4" />
+                      </button>
+                    )}
                   </div>
                 </form>
                 {contextOpen && (
@@ -5838,6 +5862,12 @@ export function CommandApp() {
         onInterrupt={interruptVoiceOverlay}
         onRetry={() => void retryVoiceOverlay()}
       />
+      <SpeakStage
+        open={speakStageOpen}
+        signedIn={statusSignedIn === true}
+        onClose={() => setSpeakStageOpen(false)}
+        onSignIn={() => { setSpeakStageOpen(false); window.location.assign("/login"); }}
+      />
       <LiveVoiceBar
         compactIdle
         authReady={statusSignedIn === true}
@@ -6532,6 +6562,12 @@ function ChatPane({
           <input
             value={draft}
             onChange={(event) => setDraft(event.target.value)}
+            onKeyDown={(event) => {
+              if (event.key === "Enter") {
+                event.preventDefault();
+                event.currentTarget.form?.requestSubmit();
+              }
+            }}
             onPaste={(event) => {
               const items = Array.from(event.clipboardData?.items ?? []);
               const imageItems = items.filter((item) => item.type.startsWith("image/"));
@@ -6609,7 +6645,7 @@ function ChatPane({
                 {CONVERSATIONAL_PERSONALITIES.map((profile) => <option key={profile.id} value={profile.id}>{profile.label}</option>)}
               </select>
             </label>
-            <button type="submit" disabled={busy || halted || !active || (!draft.trim() && pendingImages.length === 0 && !stagedName)} className="composer-send min-h-11 rounded-panel bg-accent px-4 text-sm font-semibold text-accent-ink disabled:opacity-50">Send</button>
+            <button type="submit" disabled={busy || halted || (!draft.trim() && pendingImages.length === 0 && !stagedName)} className="composer-send min-h-11 rounded-panel bg-accent px-4 text-sm font-semibold text-accent-ink disabled:opacity-50">Send</button>
           </div>
           <div className="composer-voice-chrome" data-testid="composer-voice-chrome" hidden aria-hidden="true">
             <p className="text-xs text-muted" role="status">{chromeNote}</p>
