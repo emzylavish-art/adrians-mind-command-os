@@ -1,6 +1,7 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import { PersonaDirectoryView } from "@/components/mind/persona-directory";
+import { ExplorePanel } from "@/components/mind/surfaces/explore-panel";
 import { emptyWorkspace, loadWorkspace } from "@/lib/mind/workspace";
 import type { Workspace } from "@/lib/mind/types";
 
@@ -36,6 +37,14 @@ function ExplorePage() {
   return (
     <main className="min-h-screen bg-bg text-fg">
       <div className="mx-auto max-w-6xl px-4 py-6 md:px-6">
+        <div className="mb-4 flex items-center gap-3">
+          <img src="/brand/marks/explore.png" alt="" width={32} height={32} className="size-8 rounded-lg" />
+          <div>
+            <h1 className="text-3xl font-bold">Explore</h1>
+            <p className="text-sm text-muted">Filter local templates, save one, then open it in Chat. Nothing here starts a remote bot.</p>
+          </div>
+        </div>
+        <ExplorePanel />
         <PersonaDirectoryView
           ws={ws}
           setWs={setWs}
