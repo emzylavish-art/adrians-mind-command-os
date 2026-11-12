@@ -650,7 +650,9 @@ img.service-mark {
 }
 
 .main-stage .page-shell article.dense-card.card-texture,
-.main-stage .page-shell li.dense-card {
+.main-stage .page-shell .dense-card.card-texture,
+.main-stage .page-shell li.dense-card,
+.main-stage .page-shell .dense-card {
   background-image: none !important;
   background-color: #141416 !important;
   background-blend-mode: normal !important;
