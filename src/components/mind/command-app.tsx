@@ -4305,7 +4305,17 @@ export function CommandApp() {
             </div>
           )}
           {view === "command" && (
-            <div className="gpt-home mx-auto flex min-h-full max-w-3xl flex-col justify-end gap-4 p-4 md:p-6">
+           <div className="gpt-home mx-auto flex min-h-full max-w-3xl flex-col justify-end gap-4 p-4 md:p-6">
+              <div className="masthead flex items-center gap-3">
+                <div className="flex flex-wrap items-end justify-between gap-3">
+                  <div>
+                    <h1 className="font-display text-3xl font-bold md:text-4xl">
+                      {now ? greeting(now) : "Hello"}, <span className="text-accent">Adrian</span>
+                    </h1>
+                    <p className="text-sm text-muted">Ask, build, or connect. The rest lives in Settings.</p>
+                  </div>
+                </div>
+              </div>
               <div className="gpt-starters">
                 <button type="button" onClick={() => { setHomeAction("image"); setCommandMode("ask"); setDraft(""); }}>
                   <Image className="size-5" /> Create an image
@@ -4316,16 +4326,6 @@ export function CommandApp() {
                 <button type="button" onClick={() => { setHomeAction("search"); setCommandMode("research"); setDraft(""); }}>
                   <Search className="size-5" /> Search the web
                 </button>
-              </div>
-              <div className="masthead flex items-center gap-3">
-                <div className="flex flex-wrap items-end justify-between gap-3">
-                  <div>
-                    <h1 className="font-display text-3xl font-bold md:text-4xl">
-                      {now ? greeting(now) : "Hello"}, <span className="text-accent">Adrian</span>
-                    </h1>
-                    <p className="text-sm text-muted">Ask, build, or connect. The rest lives in Settings.</p>
-                  </div>
-                </div>
               </div>
 
               <section className="floating-composer command-card composer-dock rounded-panel p-3 md:p-4" data-composer="floating">

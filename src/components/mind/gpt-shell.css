@@ -115,11 +115,10 @@ aside.rail.nav-drawer-open {
   justify-content: flex-end;
 }
 
-.gpt-home > :not(.gpt-starters):not([data-composer="floating"]) {
+.gpt-home > :not(.gpt-starters):not(.masthead):not([data-composer="floating"]) {
   display: none !important;
 }
 
-.gpt-home .masthead,
 .gpt-home .composer-modes,
 .gpt-home .composer-advanced,
 .gpt-home .composer-more,
@@ -980,4 +979,22 @@ form.thread-composer {
 .page-shell article.dense-card span.rounded-full {
   text-transform: none !important;
   letter-spacing: 0 !important;
+}
+
+.gpt-home .masthead > :first-child {
+  display: flex !important;
+}
+
+.gpt-home .masthead {
+  display: flex !important;
+  background: transparent !important;
+  border: 0 !important;
+  box-shadow: none !important;
+  padding: 0 !important;
+}
+
+@media (min-width: 768px) {
+  .gpt-home {
+    justify-content: center !important;
+  }
 }
