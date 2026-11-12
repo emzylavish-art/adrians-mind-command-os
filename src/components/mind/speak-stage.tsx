@@ -72,7 +72,7 @@ export function SpeakStage(props: {
   return (
     <div className="speak-stage" role="dialog" aria-modal="true" aria-label="Speak" data-testid="speak-stage">
       <header>
-        <p>Speak</p>
+        <p className="flex items-center gap-2"><img src="/brand/marks/speak.png" alt="" width={28} height={28} className="size-7 rounded-lg" />Speak</p>
         <button type="button" aria-label="Close Speak" onClick={props.onClose}><X /></button>
       </header>
       <video ref={videoRef} className={source === "none" ? "is-hidden" : source} playsInline muted autoPlay />

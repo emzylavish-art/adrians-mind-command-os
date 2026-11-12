@@ -3846,7 +3846,7 @@ export function CommandApp() {
   const dictationDisabled = ws.halted || voiceListening || voiceOverlayOpen;
 
   return (
-    <div className="shell flex h-dvh flex-col bg-bg text-fg md:flex-row" data-view={view}>
+    <div className="shell flex h-dvh flex-col bg-bg text-fg md:flex-row" data-view={view} data-search={paletteOpen ? "open" : "closed"}>
       <aside ref={navDrawerRef} onMouseDown={closeNavFromBackdrop} role={navOpen ? "dialog" : undefined} aria-modal={navOpen ? true : undefined} aria-label={navOpen ? "Workspace navigation" : undefined} className={`rail gpt-rail ${navOpen ? "nav-drawer-open flex" : "hidden"} fixed inset-0 z-40 w-full flex-col md:static md:flex md:h-dvh ${railCollapsed ? "md:w-[4.5rem]" : "md:w-72"} md:shrink-0`}>
         <div className="gpt-rail-head flex items-center gap-3 px-4 py-4">
           {!railCollapsed && (

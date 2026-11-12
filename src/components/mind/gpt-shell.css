@@ -70,6 +70,22 @@ aside.rail.nav-drawer-open {
     background: #171717 !important;
     box-shadow: none !important;
   }
+  .shell[data-search="open"] .topbar .command-search {
+    display: block !important;
+    position: fixed !important;
+    top: 4.5rem;
+    left: 0.75rem;
+    right: 0.75rem;
+    z-index: 90;
+  }
+}
+
+@media (min-width: 768px) {
+  .signed-out-entry {
+    left: 19.5rem !important;
+    right: auto !important;
+    max-width: 22rem;
+  }
 }
 
 .gpt-home {
