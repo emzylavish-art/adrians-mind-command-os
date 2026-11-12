@@ -717,3 +717,52 @@ img.service-mark {
     gap: 0.75rem !important;
   }
 }
+
+.chat-head {
+  display: flex !important;
+  flex-direction: column !important;
+  align-items: stretch !important;
+  gap: 0.55rem !important;
+  background: transparent !important;
+  background-image: none !important;
+  border: 0 !important;
+  min-height: 0 !important;
+}
+
+.chat-head > * {
+  display: block !important;
+  width: auto !important;
+  max-width: 100% !important;
+}
+
+form.thread-composer {
+  position: static !important;
+  inset: auto !important;
+  z-index: 1 !important;
+  background-image: none !important;
+  background-color: #121214 !important;
+}
+
+[data-testid="chat-right-rail"] .glass-panel {
+  background-image: none !important;
+  background-color: #141416 !important;
+  background-blend-mode: normal !important;
+}
+
+[data-testid="chat-right-rail"] p,
+[data-testid="chat-right-rail"] .text-xs {
+  text-transform: none !important;
+  letter-spacing: 0 !important;
+}
+
+.chat-head .text-xs,
+.chat-head label {
+  text-transform: none !important;
+  letter-spacing: 0 !important;
+}
+
+@media (min-width: 1024px) {
+  .thread-mobile-tools {
+    display: none !important;
+  }
+}

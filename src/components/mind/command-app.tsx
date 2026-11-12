@@ -113,7 +113,6 @@ import { RealtimeVoiceSession } from "@/lib/mind/voice/realtime-session";
 import { voiceSessionInstructions } from "@/lib/mind/voice-live/session-instructions";
 import { readStoredCharacterId } from "@/lib/mind/characters";
 import { noteSpokenText, readAvatarSession, setAvatarPresence } from "@/lib/mind/avatar/session";
-import { DigitalHuman } from "@/components/mind/avatar/digital-human";
 import { applyWorkbenchCommand } from "@/lib/mind/workbench-command";
 import { sharedAudioOutput } from "@/lib/mind/voice/audio-output";
 import { appendDictationText } from "@/lib/mind/voice/dictation";
@@ -6446,8 +6445,7 @@ function ChatPane({
         </div>
       </aside>
       <section className="flex min-w-0 flex-1 flex-col">
-        <div className="masthead px-4 pt-4">
-          <DigitalHuman framing="compact" className="mb-3 max-w-[9.5rem]" />
+        <div className="chat-head px-4 pt-4">
           <div className="flex flex-wrap items-end justify-between gap-2">
             <h2 className="font-display text-3xl font-bold">{active?.title || "AI Chat"}</h2>
             {active && !renaming && (
@@ -6501,7 +6499,7 @@ function ChatPane({
               <MemoryChatToggle memory={memoryChoice} onChange={onMemoryChange} disabled={busy || halted} />
             </div>
           )}
-          <div className="mt-3 xl:hidden">
+          <div className="thread-mobile-tools mt-3 xl:hidden">
             <ProviderPicker name="mind-provider-mobile" choices={choices} choice={providerChoice} onChoose={onProvider} logicRoutes={logicRoutes} grokVerified={grokVerified} />
             <div className="mt-3">
               <ModelTierPicker name="mind-tier-mobile" tier={modelTier} onChoose={onModelTier} logicRoute={logicRoute} logicRoutes={logicRoutes} onChooseLogic={onChooseLogic} />
@@ -6657,7 +6655,7 @@ function ChatPane({
           <div className="flex items-center gap-2"><VoiceLevelMeter level={voiceLevel} listening={voiceListening} /></div>
         </div>
         <form
-          className="floating-composer command-card composer-dock m-3 p-3" data-composer="floating"
+          className="floating-composer command-card composer-dock thread-composer m-3 p-3" data-composer="floating"
           onSubmit={(event) => {
             event.preventDefault();
             onSend();
