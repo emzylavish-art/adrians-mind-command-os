@@ -39,6 +39,18 @@ aside.rail.nav-drawer-open {
   .topbar > button:not([aria-label="Open menu"]) {
     display: none !important;
   }
+  .topbar > button[aria-label="Speak"],
+  .topbar > button[aria-label="Alerts"] {
+    display: grid !important;
+  }
+  .topbar > button[aria-label="Account menu"] {
+    display: flex !important;
+    margin-left: auto !important;
+    padding-inline: 0.35rem !important;
+  }
+  .topbar > button[aria-label="Account menu"] span {
+    display: none !important;
+  }
   nav[aria-label="Primary"] {
     display: none !important;
   }
