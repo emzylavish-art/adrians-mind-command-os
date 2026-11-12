@@ -339,12 +339,38 @@ aside.rail.nav-drawer-open {
   line-height: 1;
 }
 
+img.service-mark {
+  display: block;
+  object-fit: cover;
+  background: transparent;
+  padding: 0;
+}
+
+
 /* One row on the phone and the desktop. No letter stacks, no banner over the field. */
 .gpt-home form button {
   overflow: hidden !important;
   font-size: 0 !important;
   line-height: 0 !important;
   color: transparent !important;
+}
+
+.main-stage .gpt-home form button.text-sm,
+.main-stage .gpt-home form button {
+  font-size: 0 !important;
+  line-height: 0 !important;
+  color: transparent !important;
+  display: grid !important;
+  place-items: center !important;
+  width: 2.6rem !important;
+  height: 2.6rem !important;
+  padding: 0 !important;
+}
+
+.main-stage .gpt-home form button svg {
+  color: #fff !important;
+  width: 1.15rem !important;
+  height: 1.15rem !important;
 }
 
 .gpt-home form button svg {
@@ -359,6 +385,64 @@ aside.rail.nav-drawer-open {
 .shell[data-view="command"] .bg-danger\/10 {
   display: none;
 }
+
+#owner-service-board > [role="tablist"] {
+  align-items: center !important;
+  height: auto !important;
+}
+
+#owner-service-board > [role="tablist"] > button {
+  flex: 0 0 auto !important;
+  width: auto !important;
+  min-width: 11rem !important;
+  height: 2.75rem !important;
+  min-height: 2.75rem !important;
+  max-height: 2.75rem !important;
+  white-space: nowrap !important;
+  writing-mode: horizontal-tb !important;
+}
+
+@media (max-width: 767.98px) {
+  #owner-service-board > [role="tablist"] > button .max-w-24 {
+    display: none !important;
+  }
+}
+
+@media (min-width: 1024px) {
+  #owner-service-board > [role="tablist"] {
+    align-items: stretch !important;
+  }
+
+  #owner-service-board > [role="tablist"] > button {
+    width: 100% !important;
+    min-width: 0 !important;
+  }
+}
+
+
+@media (max-width: 767.98px) {
+  #owner-service-board > [role="tablist"] > button .max-w-24 {
+    display: none !important;
+  }
+}
+
+@media (min-width: 1024px) {
+  #owner-service-board > [role="tablist"] {
+    align-items: stretch !important;
+  }
+
+  #owner-service-board > [role="tablist"] > button {
+    width: 100% !important;
+    min-width: 0 !important;
+  }
+}
+
+
+.shell[data-view="connected"] .signed-out-entry,
+.shell[data-view="connected"] .live-voice-compact-entry {
+  display: none !important;
+}
+
 
 @media (max-width: 767.98px) {
   .gpt-home {

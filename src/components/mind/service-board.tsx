@@ -24,6 +24,16 @@ type Service = {
 };
 
 function ServiceMark({ name }: { name: string }) {
+  const files: Record<string, string> = {
+    Grok: "/brand/marks/grok.png",
+    Notion: "/brand/marks/notion.svg",
+    GitHub: "/brand/marks/github.png",
+    Gmail: "/brand/marks/gmail.png",
+    "Google Drive": "/brand/marks/drive.png",
+    "Google Docs": "/brand/marks/docs.png",
+    "Google Calendar": "/brand/marks/calendar.png",
+    YouTube: "/brand/marks/youtube.png",
+  };
   const marks: Record<string, { bg: string; fg: string; letter: string }> = {
     Gmail: { bg: "#EA4335", fg: "#fff", letter: "M" },
     "Google Calendar": { bg: "#4285F4", fg: "#fff", letter: "31" },
@@ -40,6 +50,8 @@ function ServiceMark({ name }: { name: string }) {
     Voice: { bg: "#2f6bff", fg: "#fff", letter: "♪" },
   };
   const mark = marks[name] ?? { bg: "#27272a", fg: "#fff", letter: name.slice(0, 1) };
+  const file = files[name];
+  if (file) return <img className="service-mark" src={file} alt="" width={28} height={28} />;
   return <span className="service-mark" style={{ background: mark.bg, color: mark.fg }} aria-hidden="true">{mark.letter}</span>;
 }
 
