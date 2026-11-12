@@ -1153,3 +1153,16 @@ form.thread-composer {
   -webkit-box-orient: vertical;
   overflow: hidden;
 }
+
+.thread-shell .chat-head {
+  flex: 0 0 auto !important;
+  min-height: min-content !important;
+}
+
+@media (min-width: 768px) {
+  .thread-shell > section > .min-h-0.flex-1 {
+    flex: 1 1 auto !important;
+    min-height: 0 !important;
+    overflow: hidden !important;
+  }
+}
