@@ -46,7 +46,7 @@ function ClientUniverseScene(props: UniverseProps) {
 }
 
 export function DashboardApp({ embedded = false }: { embedded?: boolean }) {
-  const { state } = useDashboardStatus();
+  const { state, refresh } = useDashboardStatus();
   const [selected, setSelected] = useState<BotNode | null>(null);
   const [notionPage, setNotionPage] = useState<NotionSnapPage | null>(null);
   const [webglError, setWebglError] = useState<string | null>(null);
@@ -365,8 +365,9 @@ export function DashboardApp({ embedded = false }: { embedded?: boolean }) {
       {state.status === "error" ? (
         <div className="dash3d-fallback">
           <div className="dash3d-glass">
-            <h2>Status error</h2>
+            <p className="dash3d-title">The map did not load</p>
             <p className="dash3d-muted">{state.error}</p>
+            <button type="button" className="dash3d-glass dash3d-zoomout" onClick={() => void refresh()}>Retry</button>
           </div>
         </div>
       ) : null}

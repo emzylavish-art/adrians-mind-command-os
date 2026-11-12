@@ -19,7 +19,11 @@ export function useDashboardStatus() {
     const ac = new AbortController();
     inFlight.current = ac;
     const seq = ++seqRef.current;
-    const timer = window.setTimeout(() => ac.abort(), FETCH_TIMEOUT_MS);
+    let timedOut = false;
+    const timer = window.setTimeout(() => {
+      timedOut = true;
+      ac.abort();
+    }, FETCH_TIMEOUT_MS);
     try {
       const res = await fetch("/api/mind/dashboard/status", { signal: ac.signal, cache: "no-store" });
       if (!res.ok) {
@@ -32,7 +36,8 @@ export function useDashboardStatus() {
       setState((prev) => reducePoll(prev, { type: "success", seq, data }));
     } catch (err) {
       const aborted = (err as Error)?.name === "AbortError";
-      const error = aborted ? "Status request timed out/aborted" : err instanceof Error ? err.message : String(err);
+      if (aborted && !timedOut) return;
+      const error = timedOut ? "The workspace map did not answer in time." : err instanceof Error ? err.message : String(err);
       setState((prev) => reducePoll(prev, { type: "failure", seq, error, at: new Date().toISOString() }));
     } finally {
       window.clearTimeout(timer);
