@@ -5063,6 +5063,13 @@ export function CommandApp() {
 
           {view === "agents" && (
             <>
+            <div className="page-hero mx-4 mt-4 flex items-center gap-3 md:mx-6">
+              <img src="/brand/marks/bots.png" alt="" className="size-8 rounded-lg" />
+              <div>
+                <h2 className="font-display text-3xl font-bold">Bots</h2>
+                <p className="text-sm text-muted">Templates stay on this device. A hosted bot runs only when its service answers.</p>
+              </div>
+            </div>
             <ReaPanel
               title="Agents"
               lead="REA checks a file. Workspace lookup lists projects and chats, then searches notes. It does not call a model, browse the web, or mark itself running."
@@ -5071,8 +5078,10 @@ export function CommandApp() {
               onCheck={() => void checkRea()}
               onInspect={staged ? () => void inspectWithRea(staged, "agents") : null}
             />
+            <details className="mx-4 mb-6 rounded-panel border border-line bg-surface p-4 md:mx-6">
+              <summary className="min-h-11 cursor-pointer font-semibold">Look up on this device</summary>
             <form
-              className="mx-4 mb-6 rounded-panel border border-line bg-surface p-4 md:mx-6"
+              className="mt-3"
               onSubmit={(event) => {
                 event.preventDefault();
                 runLookup(lookupQuery);
@@ -5084,7 +5093,7 @@ export function CommandApp() {
               <button type="submit" className="mt-3 min-h-11 rounded-panel bg-accent px-4 text-sm font-semibold text-accent-ink disabled:opacity-50" disabled={ws.halted || !lookupQuery.trim()}>Run lookup</button>
             </form>
             <form
-              className="mx-4 mb-6 rounded-panel border border-line bg-surface p-4 md:mx-6"
+              className="mt-4 border-t border-line pt-4"
               onSubmit={(event) => {
                 event.preventDefault();
                 void runPlanner();
@@ -5123,6 +5132,7 @@ export function CommandApp() {
                 </ol>
               )}
             </form>
+            </details>
             <FleetPanel mode="agents" ws={ws} setWs={setWs} />
             </>
           )}
