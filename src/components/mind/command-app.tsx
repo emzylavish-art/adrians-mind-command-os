@@ -6678,15 +6678,15 @@ function ChatPane({
       </aside>
       <section className="flex min-w-0 flex-1 flex-col">
         <div className="chat-head px-4 pt-4">
-          <div className="flex flex-wrap items-end justify-between gap-2">
-            <h2 className="font-display text-3xl font-bold">{active?.title || "AI Chat"}</h2>
-            {active && !renaming && (
-              <div className="flex gap-3">
-                <button type="button" className="min-h-11 text-sm text-accent" onClick={onExport}>Export chat</button>
-                <button type="button" className="min-h-11 text-sm text-accent" onClick={() => { setTitleDraft(active.title); setRenaming(true); }}>Rename</button>
-              </div>
-            )}
-          </div>
+         <div className="flex flex-wrap items-end justify-between gap-2">
+           <h2 className="font-display text-3xl font-bold">{active?.title || "AI Chat"}</h2>
+           {active && !renaming && (
+             <div className="flex gap-3">
+               <button type="button" className="min-h-11 text-sm text-accent" onClick={onExport}>Export chat</button>
+               <button type="button" className="min-h-11 text-sm text-accent" onClick={() => { setTitleDraft(active.title); setRenaming(true); }}>Rename</button>
+             </div>
+           )}
+         </div>
           {renaming && (
             <form
               className="mt-2 flex gap-2"
@@ -6700,13 +6700,14 @@ function ChatPane({
               <button type="submit" className="min-h-11 rounded-panel bg-accent px-3 text-sm font-semibold text-accent-ink">Save</button>
             </form>
           )}
-          <p className="text-sm text-muted">Only a configured provider can be selected. Another provider is not substituted.</p>
-          <div className="mt-2 flex flex-wrap items-center gap-2">
-            <label htmlFor="thread-personality" className="text-xs font-semibold text-muted">EVE / conversation style</label>
-            <select id="thread-personality" value={personalityId} onChange={(event) => onPersonalityChange(event.target.value as PersonalityId)} className="min-h-10 rounded-panel border border-line bg-surface px-3 text-sm" disabled={!active || busy}>
-              {CONVERSATIONAL_PERSONALITIES.map((profile) => <option key={profile.id} value={profile.id}>{profile.label}</option>)}
-            </select>
-            <span className="text-xs text-muted">Style only · same permissions and approval rules</span>
+         <details className="thread-chat-settings">
+           <summary>Chat settings</summary>
+            <p className="text-sm text-muted">Only a configured provider can be selected. Another provider is not substituted.</p>
+           <div className="mt-2 flex flex-wrap items-center gap-2">
+           <label htmlFor="thread-personality" className="text-xs font-semibold text-muted">Conversation style</label>
+           <select id="thread-personality" value={personalityId} onChange={(event) => onPersonalityChange(event.target.value as PersonalityId)} className="min-h-10 rounded-panel border border-line bg-surface px-3 text-sm" disabled={!active || busy}>
+             {CONVERSATIONAL_PERSONALITIES.map((profile) => <option key={profile.id} value={profile.id}>{profile.label}</option>)}
+           </select>
           </div>
           {active && personalityId === "custom" && (
             <div className="mt-2 max-w-xl space-y-1">
@@ -6731,6 +6732,7 @@ function ChatPane({
               <MemoryChatToggle memory={memoryChoice} onChange={onMemoryChange} disabled={busy || halted} />
             </div>
           )}
+          </details>
           <details className="thread-mobile-tools mt-3 xl:hidden">
             <summary className="min-h-11 cursor-pointer text-sm">Choose a provider</summary>
             <ProviderPicker name="mind-provider-mobile" choices={choices} choice={providerChoice} onChoose={onProvider} logicRoutes={logicRoutes} grokVerified={grokVerified} />

@@ -990,6 +990,32 @@ img.service-mark {
   max-width: 100% !important;
 }
 
+.chat-head h2 {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.thread-chat-settings {
+  border: 1px solid rgb(255 255 255 / 0.08);
+  border-radius: 14px;
+  background: #141416;
+  padding: 0.15rem 0.8rem 0.4rem;
+}
+
+.thread-chat-settings summary {
+  display: flex;
+  align-items: center;
+  min-height: 2.6rem;
+  cursor: pointer;
+  font-weight: 650;
+}
+
+.thread-chat-settings:not([open]) > :not(summary) {
+  display: none !important;
+}
+
 form.thread-composer {
   position: static !important;
   inset: auto !important;
