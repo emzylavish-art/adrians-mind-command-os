@@ -38,6 +38,9 @@ export function SpeakStage(props: {
   onSignIn: () => void;
   onLive?: () => void;
   onAsk?: (text: string) => Promise<string | null | { reply?: string; error?: string }>;
+  heard?: string;
+  spoken?: string;
+  callError?: string;
 }) {
   const videoRef = useRef<HTMLVideoElement>(null);
   const streamRef = useRef<MediaStream | null>(null);
@@ -59,6 +62,10 @@ export function SpeakStage(props: {
     const saved = window.localStorage.getItem("adrian-speak-rate");
     if (saved === "slow" || saved === "natural" || saved === "brisk") setRate(saved);
   }, []);
+
+  useEffect(() => {
+    if (props.live) setNotice((current) => current?.startsWith("Connecting") ? "Live. Speak, and EVE answers on this call." : current);
+  }, [props.live]);
 
   function stopVideo() {
     streamRef.current?.getTracks().forEach((track) => track.stop());
@@ -202,7 +209,9 @@ export function SpeakStage(props: {
           </p>
           {uploadName ? <p className="speak-file">{uploadName}</p> : null}
           {notice ? <p className="speak-notice">{notice}</p> : null}
-          {reply ? <p className="speak-notice" data-testid="speak-reply">{reply}</p> : null}
+          {props.heard ? <p className="speak-notice" data-testid="speak-heard">Heard: {props.heard}</p> : null}
+          {reply || props.spoken ? <p className="speak-notice" data-testid="speak-reply">{reply || props.spoken}</p> : null}
+          {props.callError ? <p className="speak-notice" data-testid="speak-call-error">{props.callError}</p> : null}
           <form className="speak-ask" onSubmit={(event) => { event.preventDefault(); void ask(); }}>
             <input aria-label="Type to Speak" placeholder="Type if the mic is blocked" value={line} onChange={(event) => setLine(event.target.value)} />
             <button type="submit" disabled={asking || !line.trim()}>{asking ? "Speaking" : "Speak"}</button>

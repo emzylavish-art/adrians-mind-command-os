@@ -724,6 +724,11 @@ export function CommandApp() {
   const [dictationLevel, setDictationLevel] = useState(0);
   const [voiceOverlayOpen, setVoiceOverlayOpen] = useState(false);
   const [speakStageOpen, setSpeakStageOpen] = useState(false);
+  const [speakCall, setSpeakCall] = useState({ heard: "", reply: "", error: "" });
+  const speakStageOpenRef = useRef(false);
+  useEffect(() => {
+    speakStageOpenRef.current = speakStageOpen;
+  }, [speakStageOpen]);
   const [surfaceMenu, setSurfaceMenu] = useState(false);
   const [helpQuery, setHelpQuery] = useState("");
   const overlayOpenRef = useRef(false);
@@ -3207,6 +3212,7 @@ export function CommandApp() {
     setSpeaking(true);
     setAvatarPresence("processing");
     let speechFailed = false;
+    let speechError = "";
     await runMountedSpeak({
       text,
       messageId,
@@ -3252,6 +3258,7 @@ export function CommandApp() {
       },
       reportFailure: (message, action, target, retry) => {
         speechFailed = true;
+        speechError = message;
         setAvatarPresence("error");
         reportFailure(message, action, target, retry);
         setFailure((current) => (current ? { ...current, kind: (classifyHonestFailure(message) ?? (action as HonestFailureKind)) } : current));
@@ -3264,6 +3271,7 @@ export function CommandApp() {
     if (generation !== speakGenRef.current || abort.signal.aborted) return;
     setSpeaking(false);
     if (!speechFailed && !wsRef.current.halted) setAvatarPresence("idle");
+    return speechFailed ? { ok: false as const, error: speechError || "The reply was not spoken." } : { ok: true as const };
   }
 
   function appendLiveVoiceUser(text: string) {
@@ -3478,6 +3486,7 @@ export function CommandApp() {
     connectStateRef.current = failed;
     setError(shown);
     setVoiceListening(false);
+    if (speakStageOpenRef.current) setSpeakCall((current) => ({ ...current, error: shown }));
     if (overlayOpenRef.current) {
       setOverlayPhase("error");
       setOverlayError(failed.error);
@@ -3963,7 +3972,12 @@ export function CommandApp() {
         {
           onTranscript: (text) => {
             setVoiceLiveTranscript(clampLiveTranscript(text));
+            if (speakStageOpenRef.current) setSpeakCall((current) => ({ ...current, heard: text, error: "" }));
             void handleVoiceTranscript(text);
+          },
+          onAssistantTranscript: (text) => {
+            appendLiveVoiceAssistant(text);
+            if (speakStageOpenRef.current) setSpeakCall((current) => ({ ...current, reply: text, error: "" }));
           },
           onPartialTranscript: (text) => {
             setVoiceLiveTranscript(clampLiveTranscript(text));
@@ -3980,6 +3994,7 @@ export function CommandApp() {
             setAvatarPresence("error");
             const shown = message || "Voice realtime error.";
             setError(shown);
+            if (speakStageOpenRef.current) setSpeakCall((current) => ({ ...current, error: shown }));
             if (overlayOpenRef.current) {
               const failed = failStage(connectStateRef.current.stage, shown);
               connectStateRef.current = failed;
@@ -3997,6 +4012,7 @@ export function CommandApp() {
               if (readAvatarSession().utterance) setAvatarPresence("speaking");
             }
             if (status === "listening") setAvatarPresence("listening");
+            if (speakStageOpenRef.current && status === "listening") setSpeakCall((current) => ({ ...current, error: "" }));
             if (status === "idle" || status === "listening" || status === "closed") setSpeaking(false);
             if (status === "idle" || status === "closed") {
               if (!wsRef.current.halted) setAvatarPresence("idle");
@@ -4658,7 +4674,8 @@ export function CommandApp() {
               onAsk={async (text) => {
                 const turn = await speakChatTurn(text, { stay: true });
                 if (!turn.ok) return turn.error;
-                await speak(turn.text);
+                const spoken = await speak(turn.text);
+                if (!spoken?.ok) return spoken?.error || "The reply was written, but it was not spoken.";
                 return turn.text;
               }}
               onOpenChat={() => { setView("command"); setNavOpen(false); }}
@@ -6372,10 +6389,14 @@ export function CommandApp() {
         onClose={() => { setSpeakStageOpen(false); void listen({ mode: "stop" }); }}
         onSignIn={() => { setSpeakStageOpen(false); window.location.assign("/login"); }}
         onLive={() => void listen({ mode: voiceListening ? "stop" : "start" })}
+        heard={speakCall.heard}
+        spoken={speakCall.reply}
+        callError={speakCall.error}
         onAsk={async (text) => {
           const turn = await speakChatTurn(text);
           if (!turn.ok) return { error: turn.error };
-          await speak(turn.text);
+          const spoken = await speak(turn.text);
+          if (!spoken?.ok) return { reply: turn.text, error: spoken?.error || "The reply was written, but it was not spoken." };
           return { reply: turn.text };
         }}
       />

@@ -8,6 +8,8 @@ export const REALTIME_SAMPLE_RATE = 24000;
 
 export type RealtimeHandlers = {
   onTranscript?: (text: string) => void;
+  /** Spoken reply text from the live call, after the model finishes a turn. */
+  onAssistantTranscript?: (text: string) => void;
   /** Live interim ASR partials; replaced when the final transcript arrives. */
   onPartialTranscript?: (text: string) => void;
   onSpeechStarted?: () => void;
@@ -73,6 +75,7 @@ export class RealtimeVoiceSession {
   private output: SharedAudioOutput;
   private socketFactory: RealtimeSocketFactory;
   private pendingTranscript = "";
+  private pendingAssistantText = "";
   private intentionalClose = false;
   private muted = false;
   private analyser: AnalyserNode | null = null;
@@ -233,7 +236,25 @@ export class RealtimeVoiceSession {
       }
       return;
     }
+    if (
+      type === "response.output_audio_transcript.delta" ||
+      type === "response.audio_transcript.delta" ||
+      type === "response.output_text.delta"
+    ) {
+      const piece = msg.delta || "";
+      if (piece) this.pendingAssistantText += piece;
+      return;
+    }
+    if (type === "response.output_audio_transcript.done" || type === "response.audio_transcript.done") {
+      const text = (msg.transcript || this.pendingAssistantText || "").trim();
+      this.pendingAssistantText = "";
+      if (text) this.handlers.onAssistantTranscript?.(text);
+      return;
+    }
     if (type === "response.done") {
+      const leftover = this.pendingAssistantText.trim();
+      this.pendingAssistantText = "";
+      if (leftover) this.handlers.onAssistantTranscript?.(leftover);
       this.handlers.onStatus?.(this.capturing ? "listening" : "idle");
     }
   }

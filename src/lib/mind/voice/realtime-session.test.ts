@@ -35,7 +35,10 @@ describe("RealtimeVoiceSession", () => {
     const output = new SharedAudioOutput();
     const transcripts: string[] = [];
     const session = new RealtimeVoiceSession(
-      { onTranscript: (text) => transcripts.push(text) },
+      {
+        onTranscript: (text) => transcripts.push(text),
+        onAssistantTranscript: (text) => transcripts.push(`assistant:${text}`),
+      },
       output,
       (url, protocols) => {
         assert.equal(url, REALTIME_ENDPOINT);
@@ -52,6 +55,9 @@ describe("RealtimeVoiceSession", () => {
     assert.ok(socket.sent.some((line: string) => line.includes("session.update")));
     socket.emitMessage({ type: "conversation.item.input_audio_transcription.completed", transcript: "hello world" });
     assert.deepEqual(transcripts, ["hello world"]);
+    socket.emitMessage({ type: "response.output_audio_transcript.delta", delta: "Ready " });
+    socket.emitMessage({ type: "response.output_audio_transcript.done", transcript: "Ready now." });
+    assert.deepEqual(transcripts, ["hello world", "assistant:Ready now."]);
     session.interruptPlayback();
     assert.ok(socket.sent.some((line: string) => line.includes("response.cancel")));
     session.close();
