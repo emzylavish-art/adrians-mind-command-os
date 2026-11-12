@@ -1,1 +1,183 @@
-{"generatedAt": "", "source": "sanitized-preview", "note": "No live data in this public preview", "pages": [], "edges": [], "botPageMap": {}, "stats": {"pages": 0, "edges": 0, "botsMapped": 0}}
+{
+  "generatedAt": "2026-11-12T15:13:00.000Z",
+  "source": "notion-search",
+  "note": "Pages returned by the connected Notion workspace. No invented pages.",
+  "pages": [
+    {
+      "id": "3c51aa27-6323-8146-9561-c8447c809f30",
+      "title": "ADRIAN \u2014 PERSONAL OPERATING SYSTEM",
+      "url": "https://www.notion.so/3c51aa27632381469561c8447c809f30",
+      "parentId": null,
+      "lastEdited": "2026-11-11T21:53:00.000Z",
+      "excerpt": "The root of Adrian's operating system.",
+      "kind": "page"
+    },
+    {
+      "id": "40b1aa27-6323-8176-8d58-cde0731f142a",
+      "title": "ADRIAN'S MIND COMMAND OS \u2014 AI HANDOFF 2026-10-31",
+      "url": "https://www.notion.so/40b1aa27632381768d58cde0731f142a",
+      "parentId": "3c51aa27-6323-8146-9561-c8447c809f30",
+      "lastEdited": "2026-11-10T14:07:00.000Z",
+      "excerpt": "Handoff for Adrian's Mind.",
+      "kind": "page"
+    },
+    {
+      "id": "3d11aa27-6323-81c6-a41c-c0e52b21c92a",
+      "title": "ADRIAN \u2014 PERSONAL OPERATING ROUTINE v1.0",
+      "url": "https://www.notion.so/3d11aa27632381c6a41cc0e52b21c92a",
+      "parentId": "3c51aa27-6323-8146-9561-c8447c809f30",
+      "lastEdited": "2026-09-07T08:38:00.000Z",
+      "excerpt": "Daily operating routine.",
+      "kind": "page"
+    },
+    {
+      "id": "40c1aa27-6323-811e-941a-e76416bed7b0",
+      "title": "FLEET CONNECTION-TO-EXECUTION BLUEPRINT",
+      "url": "https://www.notion.so/40c1aa276323811e941ae76416bed7b0",
+      "parentId": "3c51aa27-6323-8146-9561-c8447c809f30",
+      "lastEdited": "2026-11-02T12:52:00.000Z",
+      "excerpt": "Telegram, GPT, Manus, and Grok into Adrian's Mind.",
+      "kind": "page"
+    },
+    {
+      "id": "3d11aa27-6323-81dc-8a75-fe0c0978e13c",
+      "title": "PERSONAL AI OPERATING LAYER v2.0",
+      "url": "https://www.notion.so/3d11aa27632381dc8a75fe0c0978e13c",
+      "parentId": "3c51aa27-6323-8146-9561-c8447c809f30",
+      "lastEdited": "2026-09-29T01:09:00.000Z",
+      "excerpt": "The intelligence layer around Adrian.",
+      "kind": "page"
+    },
+    {
+      "id": "40e1aa27-6323-8168-b59f-c97e299d9db1",
+      "title": "Adrian's Mind analysis for Zapia \u2014 2026-11-04",
+      "url": "https://www.notion.so/40e1aa2763238168b59fc97e299d9db1",
+      "parentId": "3c51aa27-6323-8146-9561-c8447c809f30",
+      "lastEdited": "2026-11-04T16:21:00.000Z",
+      "excerpt": "First-pass analysis of the live site.",
+      "kind": "page"
+    },
+    {
+      "id": "3d41aa27-6323-81bf-b623-d016e68815ba",
+      "title": "MASTER SYSTEM ACHIEVEMENT & PROJECT STATE",
+      "url": "https://www.notion.so/3d41aa27632381bfb623d016e68815ba",
+      "parentId": "3c51aa27-6323-8146-9561-c8447c809f30",
+      "lastEdited": "2026-11-05T09:14:00.000Z",
+      "excerpt": "Project state across Adrian's systems.",
+      "kind": "page"
+    },
+    {
+      "id": "3c81aa27-6323-8180-a8ca-fab1d38e6807",
+      "title": "FINAL BLUEPRINT \u2014 PERSONAL AI OPERATING SYSTEM",
+      "url": "https://www.notion.so/3c81aa2763238180a8cafab1d38e6807",
+      "parentId": "3c51aa27-6323-8146-9561-c8447c809f30",
+      "lastEdited": "2026-11-10T09:56:00.000Z",
+      "excerpt": "Master architecture and EVE blueprint.",
+      "kind": "page"
+    },
+    {
+      "id": "40f1aa27-6323-8131-8d5e-e6ec954a1ba7",
+      "title": "Fleet Handoff \u2014 Astra/Zapia",
+      "url": "https://www.notion.so/40f1aa27632381318d5ee6ec954a1ba7",
+      "parentId": "40b1aa27-6323-8176-8d58-cde0731f142a",
+      "lastEdited": "2026-11-05T10:22:00.000Z",
+      "excerpt": "Fleet handoff under the Mind OS page.",
+      "kind": "page"
+    },
+    {
+      "id": "4111aa27-6323-8155-a224-f9208d297022",
+      "title": "Remaining Mind Build Reconciliation",
+      "url": "https://www.notion.so/4111aa2763238155a224f9208d297022",
+      "parentId": "40b1aa27-6323-8176-8d58-cde0731f142a",
+      "lastEdited": "2026-11-07T16:43:00.000Z",
+      "excerpt": "Missing evidence and production decision.",
+      "kind": "page"
+    },
+    {
+      "id": "4101aa27-6323-81ae-8cfc-cf041f910082",
+      "title": "Gap Dispatcher \u2014 Adrian's Mind audit pass",
+      "url": "https://www.notion.so/4101aa27632381ae8cfccf041f910082",
+      "parentId": "40b1aa27-6323-8176-8d58-cde0731f142a",
+      "lastEdited": "2026-11-06T21:52:00.000Z",
+      "excerpt": "Bounded gap-dispatch pass.",
+      "kind": "page"
+    },
+    {
+      "id": "40c1aa27-6323-81e8-ba5e-e76f76f4e683",
+      "title": "GROK BUILD EXECUTION BLUEPRINT",
+      "url": "https://www.notion.so/40c1aa27632381e8ba5ee76f76f4e683",
+      "parentId": "3c51aa27-6323-8146-9561-c8447c809f30",
+      "lastEdited": "2026-11-03T00:32:00.000Z",
+      "excerpt": "Paste-ready Grok build steps.",
+      "kind": "page"
+    }
+  ],
+  "edges": [
+    {
+      "from": "3c51aa27-6323-8146-9561-c8447c809f30",
+      "to": "40b1aa27-6323-8176-8d58-cde0731f142a",
+      "kind": "parent"
+    },
+    {
+      "from": "3c51aa27-6323-8146-9561-c8447c809f30",
+      "to": "3d11aa27-6323-81c6-a41c-c0e52b21c92a",
+      "kind": "parent"
+    },
+    {
+      "from": "3c51aa27-6323-8146-9561-c8447c809f30",
+      "to": "40c1aa27-6323-811e-941a-e76416bed7b0",
+      "kind": "parent"
+    },
+    {
+      "from": "3c51aa27-6323-8146-9561-c8447c809f30",
+      "to": "3d11aa27-6323-81dc-8a75-fe0c0978e13c",
+      "kind": "parent"
+    },
+    {
+      "from": "3c51aa27-6323-8146-9561-c8447c809f30",
+      "to": "40e1aa27-6323-8168-b59f-c97e299d9db1",
+      "kind": "parent"
+    },
+    {
+      "from": "3c51aa27-6323-8146-9561-c8447c809f30",
+      "to": "3d41aa27-6323-81bf-b623-d016e68815ba",
+      "kind": "parent"
+    },
+    {
+      "from": "3c51aa27-6323-8146-9561-c8447c809f30",
+      "to": "3c81aa27-6323-8180-a8ca-fab1d38e6807",
+      "kind": "parent"
+    },
+    {
+      "from": "40b1aa27-6323-8176-8d58-cde0731f142a",
+      "to": "40f1aa27-6323-8131-8d5e-e6ec954a1ba7",
+      "kind": "parent"
+    },
+    {
+      "from": "40b1aa27-6323-8176-8d58-cde0731f142a",
+      "to": "4111aa27-6323-8155-a224-f9208d297022",
+      "kind": "parent"
+    },
+    {
+      "from": "40b1aa27-6323-8176-8d58-cde0731f142a",
+      "to": "4101aa27-6323-81ae-8cfc-cf041f910082",
+      "kind": "parent"
+    },
+    {
+      "from": "3c51aa27-6323-8146-9561-c8447c809f30",
+      "to": "40c1aa27-6323-81e8-ba5e-e76f76f4e683",
+      "kind": "parent"
+    }
+  ],
+  "botPageMap": {
+    "grok-build": "40c1aa27-6323-81e8-ba5e-e76f76f4e683",
+    "conductor": "3d11aa27-6323-81dc-8a75-fe0c0978e13c",
+    "gap-dispatcher": "4101aa27-6323-81ae-8cfc-cf041f910082",
+    "dashboard": "3d41aa27-6323-81bf-b623-d016e68815ba"
+  },
+  "stats": {
+    "pages": 12,
+    "edges": 11,
+    "botsMapped": 4
+  }
+}

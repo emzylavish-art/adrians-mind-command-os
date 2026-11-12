@@ -11,7 +11,7 @@ import { readFileSync } from "node:fs";
 import { locksDirFromEnvSafe, repoDirFromEnvSafe } from "./safe-paths.ts";
 import { classifyHealth } from "./health.ts";
 import { readLocksDir } from "./locks.ts";
-import { fetchNotionStopPoints } from "./notion.ts";
+import { fetchNotionGraph, fetchNotionStopPoints } from "./notion.ts";
 import { buildConstellations, constellationEdges, systemWeather } from "./constellations.ts";
 import { loadNotionSnapshotFile } from "./notion-graph.ts";
 import { buildProjectsDashboard } from "./projects.ts";
@@ -108,7 +108,8 @@ export async function buildDashboardStatus(
   }
 
   const notion = await fetchNotionStopPoints(env.NOTION_TOKEN);
-  const notionGraph = loadNotionSnapshotFile();
+  const liveGraph = await fetchNotionGraph(env.NOTION_TOKEN);
+  const notionGraph = liveGraph ?? loadNotionSnapshotFile();
   if (notion.available) {
     notionGraph.mode = notionGraph.available ? notionGraph.mode : "live";
   }

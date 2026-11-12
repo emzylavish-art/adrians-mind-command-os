@@ -234,6 +234,11 @@ export function DashboardApp({ embedded = false }: { embedded?: boolean }) {
             <p className="dash3d-muted" style={{ margin: "0.15rem 0 0", fontSize: "0.72rem" }}>
               Drag rotate · scroll zoom · click node · Cmd/Ctrl-K search
             </p>
+            <p className="dash3d-muted" style={{ margin: "0.2rem 0 0", fontSize: "0.72rem" }}>
+              {state.data.notionGraph.pages.length
+                ? `${state.data.notionGraph.pages.length} Notion pages · ${state.data.notionGraph.mode}`
+                : "Notion pages are not connected."}
+            </p>
           </div>
           <div className="dash3d-graph-chrome-tools">
             <button
