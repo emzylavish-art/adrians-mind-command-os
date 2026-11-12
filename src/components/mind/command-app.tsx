@@ -163,6 +163,7 @@ import { ServiceBoard } from "@/components/mind/service-board";
 import { EveWorkbench } from "@/components/mind/eve-workbench";
 import { FleetPanel } from "@/components/mind/fleet-panels";
 import { BuildWorkspace } from "@/components/mind/build-workspace";
+import { BuildPanel } from "@/components/mind/surfaces/build-panel";
 import { MessageBody } from "@/components/mind/message-body";
 import { MemorySavedIndicator } from "@/components/mind/memory-saved-indicator";
 import { MemoryChatToggle } from "@/components/mind/memory-chat-toggle";
@@ -4825,7 +4826,7 @@ export function CommandApp() {
             <section className="page-shell">
               <div className="page-hero mb-4 flex flex-wrap items-center justify-between gap-3">
                 <div className="flex items-center gap-3">
-                  <img src="/icons/projects.svg" alt="" className="size-10" />
+                  <img src="/brand/marks/projects.png" alt="" className="size-10 rounded-xl" />
                   <div>
                     <h2 className="font-display text-3xl font-bold">Projects</h2>
                     <p className="text-sm text-muted">Records on this device. Oak Bridge and BridgePoint stay outside this app.</p>
@@ -5123,7 +5124,7 @@ export function CommandApp() {
           {view === "runs" && <FleetPanel mode="runs" ws={ws} setWs={setWs} />}
           {view === "connected" && (
             <section className="page-shell">
-              <div className="page-hero mb-4 flex items-center gap-3"><img src="/icons/systems.svg" alt="" className="size-8" /><div><h2 className="font-display text-3xl font-bold">Connected</h2><p className="text-sm text-muted">Setup explains what is missing. A service is connected only after the server says so.</p></div></div>
+              <div className="page-hero mb-4 flex items-center gap-3"><img src="/brand/marks/plugins.png" alt="" className="size-8 rounded-lg" /><div><h2 className="font-display text-3xl font-bold">Connected</h2><p className="text-sm text-muted">Setup explains what is missing. A service is connected only after the server says so.</p></div></div>
               {statusSignedIn === false ? <div className="sign-in-summary" role="status">Sign in to check your connections. <Link to="/login">Sign in</Link></div> : null}
               <ServiceBoard
                 grokConfigured={grokConfigured === true}
@@ -5263,12 +5264,17 @@ export function CommandApp() {
           )}
           {view === "scheduled" && <FleetPanel mode="scheduled" ws={ws} setWs={setWs} />}
           {view === "tools" && <FleetPanel mode="tools" ws={ws} setWs={setWs} onFailure={(message, retry, surface) => reportFailure(message, surface === "mcp" ? "mcp_tool_failed" : "open_page_failed", surface === "mcp" ? "mcp:tools" : "browser", retry)} />}
-          {view === "build" && <BuildWorkspace />}
+          {view === "build" && (
+            <section className="page-shell space-y-4">
+              <BuildPanel />
+              <BuildWorkspace />
+            </section>
+          )}
           {view === "research" && (
             <section className="page-shell">
               <div className="page-hero card-texture">
                 <div className="flex items-center gap-3">
-                  <img src="/icons/research.svg" alt="" className="size-8" />
+                  <img src="/brand/marks/research.png" alt="" className="size-8 rounded-lg" />
                   <div>
                     <h2 className="font-display text-3xl font-bold">Research</h2>
                     <p className="text-sm text-muted">A search runs only when the server has a search endpoint and key. Otherwise this refuses, does not call Grok, and creates no citations. Links appear only when the provider returned them.</p>
@@ -5362,7 +5368,7 @@ export function CommandApp() {
             <section className="page-shell">
               <div className="page-hero mb-4 flex flex-wrap items-center justify-between gap-3">
                 <div className="flex items-center gap-3">
-                  <img src="/icons/library.svg" alt="" className="size-8" />
+                  <img src="/brand/marks/library.png" alt="" className="size-8 rounded-lg" />
                   <div>
                     <h2 className="font-display text-3xl font-bold">Library</h2>
                     <p className="text-sm text-muted">Text, markdown, CSV, and JSON are read as text. PDF text can be extracted when attached. Images attached on Command are decoded for Grok vision and Imagine — they are not OCR’d into Library text copies.</p>
@@ -5457,7 +5463,7 @@ export function CommandApp() {
             <section className="page-shell">
               <div className="page-hero">
                 <div className="flex items-center gap-3">
-                  <img src="/icons/runs.svg" alt="" className="size-8" />
+                  <img src="/brand/marks/activity.png" alt="" className="size-8 rounded-lg" />
                   <div>
                     <h2 className="font-display text-3xl font-bold">Activity</h2>
                     <p className="text-sm text-muted">Only actions this app actually recorded. Nothing is filled in to look busy.</p>
