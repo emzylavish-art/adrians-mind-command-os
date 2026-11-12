@@ -442,9 +442,8 @@ const PANEL_CSS = `
 }
 .explore-panel__list-head {
   display: flex;
-  flex-wrap: wrap;
-  align-items: end;
-  justify-content: space-between;
+  flex-direction: column;
+  align-items: stretch;
   gap: 0.65rem;
 }
 .explore-panel__list-head label {

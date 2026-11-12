@@ -1806,6 +1806,17 @@ form.thread-composer {
   z-index: 6;
   flex: 0 0 auto !important;
 }
+.thread-shell .composer-toolbar {
+  display: flex !important;
+  flex-wrap: wrap !important;
+  overflow: visible !important;
+  row-gap: 0.35rem !important;
+}
+.thread-shell .composer-toolbar button {
+  flex: 0 0 auto !important;
+  overflow: visible !important;
+  white-space: nowrap !important;
+}
 
 .solid-form ul {
   display: grid !important;
@@ -1856,7 +1867,7 @@ form.thread-composer {
   gap: 0.5rem !important;
 }
 
-.page-shell .build-panel__list-head {
+[class$="__list-head"] {
   display: flex !important;
   flex-direction: column !important;
   align-items: stretch !important;
@@ -1864,8 +1875,8 @@ form.thread-composer {
   position: static !important;
 }
 
-.page-shell .build-panel__list h2,
-.page-shell .build-panel__list-head label,
+[class$="__list-head"] h2,
+[class$="__list-head"] label,
 .page-shell .build-panel__count {
   position: static !important;
   height: auto !important;
@@ -1873,13 +1884,13 @@ form.thread-composer {
   white-space: normal !important;
 }
 
-.page-shell .build-panel__list h2 {
+[class$="__list-head"] h2 {
   font-size: 1rem !important;
   line-height: 1.3 !important;
   margin: 0 !important;
 }
 
-.page-shell .build-panel__list-head label {
+[class$="__list-head"] label {
   display: flex !important;
   flex-direction: column !important;
   width: 100% !important;

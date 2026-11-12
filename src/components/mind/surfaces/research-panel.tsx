@@ -579,9 +579,8 @@ const PANEL_CSS = `
 }
 .research-panel__list-head {
   display: flex;
-  flex-wrap: wrap;
-  align-items: end;
-  justify-content: space-between;
+  flex-direction: column;
+  align-items: stretch;
   gap: 0.65rem;
 }
 .research-panel__list-head label {
