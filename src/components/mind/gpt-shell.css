@@ -594,3 +594,10 @@ img.service-mark {
   color: #a1a1aa;
   font-size: 1.25rem;
 }
+
+.main-stage input.rounded-panel.border.border-line.bg-surface,
+.main-stage textarea.rounded-panel.border.border-line.bg-surface,
+.main-stage select.rounded-panel.border.border-line.bg-surface {
+  background-image: none !important;
+  background-color: #141416 !important;
+}
