@@ -1113,3 +1113,26 @@ form.thread-composer {
   max-width: 48rem !important;
   margin-inline: auto !important;
 }
+
+.thread-shell .grid.min-h-64 {
+  min-height: 0 !important;
+}
+
+.thread-shell > section > .min-h-0.flex-1 {
+  flex: 0 0 auto !important;
+  min-height: 9.5rem !important;
+  overflow: hidden !important;
+}
+
+@media (min-width: 768px) {
+  .thread-shell > section {
+    padding-bottom: 0.75rem;
+    overflow: auto;
+  }
+
+  .thread-shell .composer-toolbar {
+    flex-wrap: nowrap !important;
+    max-width: 100%;
+    overflow-x: auto !important;
+  }
+}

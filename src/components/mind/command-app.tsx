@@ -6951,8 +6951,9 @@ function RoutingModeControl({
 }) {
   const modes: RoutingMode[] = ["A", "B", "C", "D"];
   return (
-    <div className="mb-2" data-testid="routing-mode">
-      <div className="flex flex-wrap items-center gap-2">
+    <details className="mb-2" data-testid="routing-mode">
+      <summary className="min-h-11 cursor-pointer text-sm">Routing · {ROUTING_MODE_LABEL[mode]}</summary>
+      <div className="mt-2 flex flex-wrap items-center gap-2">
         <span className="text-xs text-muted">Routing</span>
         {modes.map((item) => (
           <button
@@ -6988,7 +6989,7 @@ function RoutingModeControl({
         {mode === "C" && "Each selected ready route answers on its own. Nothing is merged."}
         {mode === "D" && "Selected ready routes stay side by side. Nothing is merged."}
       </p>
-    </div>
+    </details>
   );
 }
 
