@@ -130,7 +130,6 @@ export function ServiceBoard({
   const [refreshing, setRefreshing] = useState<string | null>(null);
   const [note, setNote] = useState<{ name: string; text: string } | null>(null);
   const [oauthActionState, setOauthActionState] = useState<OauthBoardActionState>({ status: "idle" });
-  const [selected, setSelected] = useState("Grok");
   const [mcpStorage, setMcpStorage] = useState<{ state: "checking" | "ready" | "error"; detail: string } | null>(null);
   const inFlight = useRef<Set<string>>(new Set());
 
@@ -257,17 +256,8 @@ export function ServiceBoard({
 
   return (
     <>
-    <div id="owner-service-board" className="grid gap-3 lg:grid-cols-[240px_minmax(0,1fr)]">
-      <div className="flex gap-1 overflow-auto lg:flex-col" role="tablist" aria-label="Connections">
-        {[grok, ...services].map((service) => (
-          <button key={service.name} type="button" role="tab" aria-selected={selected === service.name} onClick={() => setSelected(service.name)} className={"flex min-h-11 min-w-40 items-center justify-between gap-2 rounded-panel border px-3 text-left text-sm " + (selected === service.name ? "border-accent bg-surface" : "border-line")}>
-            <span className="flex min-w-0 items-center gap-2 font-semibold"><ServiceMark name={service.name} />{service.name}</span>
-            <span className="max-w-24 truncate text-xs text-muted">{service.state}</span>
-          </button>
-        ))}
-      </div>
-      <div>
-      {[grok, ...services].filter((service) => service.name === selected).map((service) => {
+    <div id="owner-service-board" className="service-board grid gap-3">
+      {[grok, ...services].map((service) => {
         const meta = OAUTH_BOARD[service.name];
         const oauth = meta ? oauthByName[service.name] : undefined;
         const unavailable = Boolean(oauth && isStatusUnavailable(oauth));
@@ -356,8 +346,6 @@ export function ServiceBoard({
           </article>
         );
       })}
-
-      </div>
     </div>
     <KimiDeviceConnect />
     </>

@@ -912,3 +912,18 @@ form.thread-composer {
   display: none !important;
   content: none !important;
 }
+
+@media (min-width: 900px) {
+  #owner-service-board.service-board {
+    display: grid !important;
+    grid-template-columns: repeat(3, minmax(0, 1fr)) !important;
+    gap: 0.75rem !important;
+    align-items: start !important;
+  }
+}
+
+#owner-service-board .dense-card span,
+#owner-service-board .dense-card p {
+  text-transform: none !important;
+  letter-spacing: 0 !important;
+}
