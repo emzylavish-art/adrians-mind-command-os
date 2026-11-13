@@ -5748,14 +5748,14 @@ export function CommandApp() {
                 <label className="text-sm" htmlFor="research-question">Question</label>
                 <textarea id="research-question" value={researchText} onChange={(event) => setResearchText(event.target.value)} placeholder="What do you want to research?" rows={3} className="input-glow mt-2 w-full rounded-panel border border-line bg-bg px-3 py-2 text-sm" />
                 <button type="button" className="mt-3 min-h-11 rounded-panel bg-accent px-4 text-sm font-semibold text-white disabled:opacity-50" disabled={ws.halted} onClick={startResearch}>
-                  Check research
+                  Start research
                 </button>
                 {researchNote ? <p className="mt-3 text-sm text-muted">{researchNote}</p> : null}
                 {researchCitations.length === 0 && !researchNote ? (
                   <div className="empty-state mt-4">
                     <img src="/empty/empty-search.svg" alt="" />
                     <p className="font-semibold">No citations yet</p>
-                    <p className="text-sm text-muted">Type a question, then press Check research.</p>
+                    <p className="text-sm text-muted">Type a question, then press Start research.</p>
                   </div>
                 ) : null}
                 {researchCitations.length > 0 && (

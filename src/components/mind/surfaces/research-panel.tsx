@@ -52,7 +52,7 @@ const STARTERS: LocalQuestion[] = [
 ];
 
 const DEFAULT_NEXT =
-  "Next: type a question in What do you want to research?, then press Check research. A blank question is not searched. If the saved Grok key cannot search, Check research refuses and creates no citations.";
+  "Next: type a question in What do you want to research?, then press Start research. A blank question is not searched. If the saved Grok key cannot search, Start research refuses and creates no citations.";
 
 function readKey(key: string): string | null {
   try {
@@ -138,22 +138,22 @@ function composeAsk(raw: string, depth: DepthId, focus: FocusId): string {
 function checkStep(raw: string, depth: DepthId, focus: FocusId, halted: boolean): string {
   const ask = composeAsk(raw, depth, focus);
   if (!ask) {
-    return "Next: type a question in Question to save, or in What do you want to research?, then press Check research. A blank question is not searched and creates no citations.";
+    return "Next: type a question in Question to save, or in What do you want to research?, then press Start research. A blank question is not searched and creates no citations.";
   }
   const pathNote = shouldRunDeepResearch(ask)
     ? " This wording runs the multi-search path because it says deep research or is at least 160 characters."
     : " This wording stays a single search because it is under 160 characters and does not say deep research.";
   const stopNote = halted
-    ? " Emergency stop is on in this browser. Press Clear stop first, or Check research does not run."
-    : " If Emergency stop is on, press Clear stop before Check research.";
-  return `Next: type ${quote(ask)} in What do you want to research?, then press Check research. That sends at most 300 characters.${pathNote} If the saved Grok key cannot search, it refuses and creates no citations.${stopNote}`;
+    ? " Emergency stop is on in this browser. Press Clear stop first, or Start research does not run."
+    : " If Emergency stop is on, press Clear stop before Start research.";
+  return `Next: type ${quote(ask)} in What do you want to research?, then press Start research. That sends at most 300 characters.${pathNote} If the saved Grok key cannot search, it refuses and creates no citations.${stopNote}`;
 }
 
 function refusalStep(halted: boolean): string {
   if (halted) {
-    return "Next: Emergency stop is on in this browser. Press Clear stop, type a question in What do you want to research?, then press Check research. If the saved Grok key cannot search, that still refuses and creates no citations.";
+    return "Next: Emergency stop is on in this browser. Press Clear stop, type a question in What do you want to research?, then press Start research. If the saved Grok key cannot search, that still refuses and creates no citations.";
   }
-  return "Next: type a question in What do you want to research?, then press Check research. If the saved Grok key cannot search, the page refuses and creates no citations. Do not read a refusal as sources found.";
+  return "Next: type a question in What do you want to research?, then press Start research. If the saved Grok key cannot search, the page refuses and creates no citations. Do not read a refusal as sources found.";
 }
 
 function fileStep(): string {
@@ -207,7 +207,7 @@ function compareQuestions(sort: SortId) {
 
 /**
  * Research page controls. Preferences and questions stay on this device.
- * Check research on the page still owns the search. This panel never fetches or invents a citation.
+ * Start research on the page still owns the search. This panel never fetches or invents a citation.
  */
 export function ResearchPanel({ onUse }: { onUse?: (text: string) => void } = {}) {
   const [depth, setDepth] = useState<DepthId>("single");
@@ -376,7 +376,7 @@ export function ResearchPanel({ onUse }: { onUse?: (text: string) => void } = {}
 
       <div className="research-panel__actions">
         <button type="button" onClick={() => setNext(checkStep(draft, depth, focus, halted))}>
-          Show the Check research step for this draft
+          Show the Start research step for this draft
         </button>
         <button type="button" onClick={() => setNext(refusalStep(halted))}>
           Show what a missing provider does
