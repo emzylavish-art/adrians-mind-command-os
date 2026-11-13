@@ -6065,18 +6065,6 @@ export function CommandApp() {
                     ["integrations", "Integrations", "What each provider can do", () => { setView("integrations"); setNavOpen(false); }],
                     ["scheduled", "Scheduled", "Jobs that wait for a time", () => { setView("scheduled"); setNavOpen(false); }],
                   ]},
-                  { group: "Workspace", items: [
-                    ["dashboard", "Dashboard", "Workspace map", () => { setView("dashboard"); setNavOpen(false); }],
-                    ["explore", "Explore", "Public directory", () => { window.location.assign("/explore"); }],
-                    ["chat", "Threads", "One conversation at a time", () => { setView("chat"); setNavOpen(false); }],
-                    ["eve", "EVE", "Operator workbench", () => { setView("intelligence"); setNavOpen(false); }],
-                    ["bots", "Bots", "Agents and templates", () => { setView("agents"); setNavOpen(false); }],
-                    ["build", "Build", "Editor and next step", () => { setView("build"); setNavOpen(false); }],
-                    ["research", "Research", "Search when a provider is set", () => { setView("research"); setNavOpen(false); }],
-                    ["projects", "Projects", "Records on this device", () => { setView("projects"); setNavOpen(false); }],
-                    ["library", "Library", "Text copies in this browser", () => { setView("files"); setNavOpen(false); }],
-                    ["runs", "Runs", "What an agent already did", () => { setView("runs"); setNavOpen(false); }],
-                  ]},
                   { group: "System", items: [
                     ["tools", "Tools", "What this app can call", () => { setView("tools"); setNavOpen(false); }],
                     ["skills", "Skills", "Installed abilities", () => { setView("skills"); setNavOpen(false); }],
