@@ -131,6 +131,7 @@ export function ServiceBoard({
   const [note, setNote] = useState<{ name: string; text: string } | null>(null);
   const [oauthActionState, setOauthActionState] = useState<OauthBoardActionState>({ status: "idle" });
   const [mcpStorage, setMcpStorage] = useState<{ state: "checking" | "ready" | "error"; detail: string } | null>(null);
+  const [showWaiting, setShowWaiting] = useState(false);
   const inFlight = useRef<Set<string>>(new Set());
 
   const refreshOne = useCallback((name: string) => {
@@ -256,8 +257,19 @@ export function ServiceBoard({
 
   return (
     <>
+    {(() => {
+      const readyState = (state: string) => state === "Key present" || state === "Connected" || state === "API token present";
+      const waiting = [grok, ...services].filter((service) => !readyState(service.state)).length;
+      return (
+        <button type="button" className="mb-3 min-h-11 rounded-panel border border-line px-3 text-sm" onClick={() => setShowWaiting((open) => !open)}>
+          {showWaiting ? "Hide services that are not connected" : `Show ${waiting} services that are not connected`}
+        </button>
+      );
+    })()}
     <div id="owner-service-board" className="service-board grid gap-3">
       {[grok, ...services].map((service) => {
+        const ready = service.state === "Key present" || service.state === "Connected" || service.state === "API token present";
+        if (!ready && !showWaiting) return null;
         const meta = OAUTH_BOARD[service.name];
         const oauth = meta ? oauthByName[service.name] : undefined;
         const unavailable = Boolean(oauth && isStatusUnavailable(oauth));
