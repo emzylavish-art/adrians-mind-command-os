@@ -278,12 +278,15 @@ export function BuildWorkspace() {
         headers: { "content-type": "application/json" },
         body: JSON.stringify({ prompt: text, cwd: cwd.trim() || undefined, mode, resumeSessionId: sessionId || undefined }),
       });
-      const data = (await response.json()) as { ok?: boolean; jobId?: string; executed?: boolean; error?: string; version?: string; agent?: string; loginRequired?: boolean; output?: string; package?: string; sessionId?: string; mode?: string; resumed?: boolean; forkedSessionId?: string };
+      const data = (await response.json()) as { ok?: boolean; jobId?: string; executed?: boolean; error?: string; version?: string; agent?: string; loginRequired?: boolean; output?: string; package?: string; sessionId?: string; mode?: string; resumed?: boolean; forkedSessionId?: string; filesChanged?: { path: string; before: string; after: string }[] };
       if (!response.ok || !data.ok || !data.jobId) {
         if (data.executed) {
           if (data.sessionId) setSessionId(data.sessionId);
-          setNotice(`${data.mode || mode} mode ran ${data.package || "the in-repo package"}${data.resumed ? " and resumed the last session" : ""}. No login was requested.`);
+          const change = data.filesChanged?.[0];
+          if (change) setLastDiff(change);
+          setNotice(`${data.mode || mode} mode ran Kimi Code${data.resumed ? " and resumed the last session" : ""}. ${change ? `Changed ${change.path}.` : "No file change was reported."}`);
           setJob({ id: "local", status: "done", output: [data.package, data.mode ? `mode ${data.mode}` : "", data.resumed ? "resumed" : "", data.forkedSessionId ? `fork ${data.forkedSessionId}` : "", data.output].filter(Boolean).join("\n") || "Accepted.", error: "", createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() });
+          setPanel("agent");
           return;
         }
         setNotice(data.error || "The build session could not be queued.");
@@ -417,7 +420,7 @@ export function BuildWorkspace() {
             <img src="/brand/marks/build.png" alt="" className="size-8 rounded-lg" />
             <div>
               <h2 className="font-display text-3xl font-bold">Adrian Build</h2>
-              <p className="text-sm text-muted">Plans use Grok. File edits still need a runtime that can write. A plan is not a file change.</p>
+              <p className="text-sm text-muted">Kimi Code runs inside Adrian Build with the saved Grok key. Type a task and press Run. Plan explains only; Default and Auto can change the selected workspace.</p>
             </div>
           </div>
           <button type="button" className="inline-flex min-h-11 items-center gap-2 rounded-panel border border-line px-3 text-sm" onClick={() => { void refreshCompanion(); if (job) void refreshJob(job.id); }}>
@@ -429,10 +432,10 @@ export function BuildWorkspace() {
       <div className={`dense-card flex flex-wrap items-center gap-3 ${online ? "border-success/40" : "border-warning/40"}`}>
         {online ? <Activity className="size-5 text-success" aria-hidden="true" /> : <WifiOff className="size-5 text-warning" aria-hidden="true" />}
         <div className="min-w-0 flex-1">
-          <p className="font-semibold">{online ? "Companion connected" : "Companion offline"}</p>
-          <p className="text-sm text-muted">{online ? (companion.detail || "A paired runtime reported a heartbeat.") : "No paired computer. Submit still tries the hosted runtime and shows the real result."}</p>
+          <p className="font-semibold">{online ? "Paired computer connected" : "Kimi Code ready on this site"}</p>
+          <p className="text-sm text-muted">{online ? (companion.detail || "A paired computer reported a heartbeat.") : "No paired computer is online. Run uses the hosted Kimi Code workspace and shows the real result."}</p>
         </div>
-        <span className="rounded-full border border-line px-2 py-1 text-xs">{online ? "Ready to queue" : "Hosted attempt on submit"}</span>
+        <span className="rounded-full border border-line px-2 py-1 text-xs">{online ? "Ready to queue" : "Hosted Kimi ready"}</span>
       </div>
 
       <div className="dense-card space-y-3">
@@ -458,7 +461,7 @@ export function BuildWorkspace() {
           <h3 className="font-semibold">Approved workspace</h3>
         </div>
         <div className="flex gap-2"><input value={cwd} onChange={(event) => setCwd(event.target.value)} placeholder="Optional local path, e.g. C:\\Users\\You\\MindWorkspace" className="min-h-11 min-w-0 flex-1 rounded-panel border border-line bg-transparent px-3 text-sm outline-none focus:border-accent" aria-label="Approved workspace path" /><button type="button" disabled={fileBusy} onClick={() => void browseWorkspace()} className="inline-flex min-h-11 items-center gap-2 rounded-panel border border-line px-3 text-sm disabled:opacity-50"><FolderOpen className="size-4" />{fileBusy ? "Loading…" : "Browse"}</button></div>
-        <textarea value={prompt} onChange={(event) => setPrompt(event.target.value)} placeholder="Describe the coding task…" className="min-h-32 w-full rounded-panel border border-line bg-transparent p-3 text-sm outline-none focus:border-accent" aria-label="Coding task" />
+        <textarea value={prompt} onChange={(event) => setPrompt(event.target.value)} placeholder="Ask Adrian Build to create, edit, debug, or explain code…" className="min-h-32 w-full rounded-panel border border-line bg-transparent p-3 text-sm outline-none focus:border-accent" aria-label="Coding task" />
         <div className="flex flex-wrap gap-2">
           <input value={searchQuery} onChange={(event) => setSearchQuery(event.target.value)} placeholder="Search approved workspace" className="min-h-11 min-w-40 flex-1 rounded-panel border border-line bg-transparent px-3 text-sm outline-none focus:border-accent" aria-label="Workspace search" />
           <button type="button" disabled={fileBusy || !searchQuery.trim()} onClick={() => void searchWorkspace()} className="min-h-11 rounded-panel border border-line px-3 text-sm disabled:opacity-50">Search</button>

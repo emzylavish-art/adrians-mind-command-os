@@ -164,7 +164,6 @@ import { ServiceBoard } from "@/components/mind/service-board";
 import { EveWorkbench } from "@/components/mind/eve-workbench";
 import { FleetPanel } from "@/components/mind/fleet-panels";
 import { BuildWorkspace } from "@/components/mind/build-workspace";
-import { BuildPanel } from "@/components/mind/surfaces/build-panel";
 import { ResearchPanel } from "@/components/mind/surfaces/research-panel";
 import { MessageBody } from "@/components/mind/message-body";
 import { MemorySavedIndicator } from "@/components/mind/memory-saved-indicator";
@@ -5730,8 +5729,7 @@ export function CommandApp() {
           {view === "scheduled" && <FleetPanel mode="scheduled" ws={ws} setWs={setWs} />}
           {view === "tools" && <FleetPanel mode="tools" ws={ws} setWs={setWs} onFailure={(message, retry, surface) => reportFailure(message, surface === "mcp" ? "mcp_tool_failed" : "open_page_failed", surface === "mcp" ? "mcp:tools" : "browser", retry)} />}
           {view === "build" && (
-            <section className="page-shell space-y-4">
-              <BuildPanel />
+            <section className="page-shell">
               <BuildWorkspace />
             </section>
           )}

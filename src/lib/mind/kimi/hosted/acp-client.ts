@@ -1,6 +1,7 @@
 import { spawn } from "node:child_process";
 import { existsSync, mkdirSync, readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
+import { resolve } from "node:path";
 import { resolveXaiInferenceApiKey } from "../../media/xai-key.ts";
 import { installCodingExtensions } from "./coding-extensions.server.ts";
 import { codingSearchUrl } from "./coding-search-bridge.server.ts";
@@ -45,6 +46,7 @@ export function adrianBuildEnv(): NodeJS.ProcessEnv {
   const key = resolveXaiInferenceApiKey();
   const home = process.env.KIMI_CODE_HOME || "/tmp/adrian-build-home";
   mkdirSync(home, { recursive: true });
+  mkdirSync(adrianHostedWorkspace(), { recursive: true });
   installCodingExtensions(home, codingSearchUrl());
   return {
     ...process.env,
@@ -78,6 +80,19 @@ export function adrianBuildCommand(env: NodeJS.ProcessEnv = process.env): string
     if (candidate && existsSync(candidate)) return candidate;
   }
   return env.KIMI_BIN || "kimi";
+}
+
+export function adrianHostedWorkspace(): string {
+  return resolve(process.env.ADRIAN_BUILD_WORKSPACE || "/tmp/adrian-build-workspace");
+}
+
+export function resolveBuildWorkspace(input: string | undefined): string {
+  const requested = input?.trim();
+  if (!requested) return adrianHostedWorkspace();
+  const root = adrianHostedWorkspace();
+  const candidate = resolve(requested);
+  if (candidate === root || candidate.startsWith(`${root}/`)) return candidate;
+  return requested;
 }
 
 export async function probeKimiAcp(command = adrianBuildCommand(), cwd = process.cwd()): Promise<KimiProbe> {

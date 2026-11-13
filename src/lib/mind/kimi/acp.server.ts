@@ -2,7 +2,9 @@ import { requireUserId } from "../../auth/verify.server";
 import { assertSameOrigin } from "../connectors/oauth-csrf";
 import { haltIsOn } from "../halt.server";
 import { enqueueJob, listJobEvents, onlineAgents, readJob } from "../pc-pairing/store";
-import { adrianBuildCommand, packageLabel, runCodingTurn, runHostedPrompt, type CodingMode } from "./hosted/acp-client.ts";
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
+import { adrianBuildCommand, adrianHostedWorkspace, packageLabel, resolveBuildWorkspace, runCodingTurn, runHostedPrompt, type CodingMode } from "./hosted/acp-client.ts";
 import { recordKimiAttempt } from "./persist.ts";
 
 const MAX_PROMPT = 8_000;
@@ -13,6 +15,20 @@ function json(body: unknown, status = 200) {
     status,
     headers: { "content-type": "application/json; charset=utf-8", "cache-control": "no-store" },
   });
+}
+
+function safeRead(path: string): string {
+  try { return readFileSync(path, "utf8").slice(0, 20_000); } catch { return ""; }
+}
+
+function fileChange(workspace: string, prompt: string): { path: string; before: string; after: string }[] {
+  const match = prompt.match(/([A-Za-z0-9._/-]+\.(?:md|txt|json|ts|tsx|js|py|css))/i);
+  const relative = match?.[1]?.replace(/^\/+/, "");
+  if (!relative || relative.includes("..")) return [];
+  const path = join(workspace, relative);
+  if (!path.startsWith(`${workspace}/`) && path !== workspace) return [];
+  const before = safeRead(path);
+  return [{ path: relative, before, after: before }];
 }
 
 async function ownerIdFromRequest(request: Request): Promise<string> {
@@ -31,13 +47,20 @@ export async function handleKimiSession(request: Request): Promise<Response> {
       const body = (await request.json().catch(() => ({}))) as { prompt?: unknown; cwd?: unknown; mode?: unknown; resumeSessionId?: unknown; fork?: unknown };
       const prompt = typeof body.prompt === "string" ? body.prompt.trim().slice(0, MAX_PROMPT) : "";
       if (!prompt) return json({ ok: false, error: "prompt is required." }, 400);
-      const cwd = typeof body.cwd === "string" && body.cwd.trim() ? body.cwd.trim().slice(0, MAX_CWD) : undefined;
+      const requestedCwd = typeof body.cwd === "string" && body.cwd.trim() ? body.cwd.trim().slice(0, MAX_CWD) : undefined;
+      const cwd = resolveBuildWorkspace(requestedCwd);
       const mode = body.mode === "plan" || body.mode === "auto" || body.mode === "yolo" || body.mode === "default" ? body.mode as CodingMode : undefined;
       const resumeSessionId = typeof body.resumeSessionId === "string" ? body.resumeSessionId.trim().slice(0, 80) : "";
       const agents = onlineAgents(ownerId);
       if (agents.length === 0) {
         if (mode || resumeSessionId || body.fork === true) {
-          const turn = await runCodingTurn({ prompt, cwd: cwd || process.cwd(), mode, resumeSessionId: resumeSessionId || undefined, fork: body.fork === true });
+          const workspace = cwd || adrianHostedWorkspace();
+          const watched = fileChange(workspace, prompt);
+          const turn = await runCodingTurn({ prompt, cwd: workspace, mode, resumeSessionId: resumeSessionId || undefined, fork: body.fork === true });
+          const filesChanged = watched.flatMap((item) => {
+            const after = safeRead(join(workspace, item.path));
+            return item.before === after ? [] : [{ ...item, after }];
+          });
           await recordKimiAttempt({ ownerId, status: turn.ok ? "session_created" : "failed", error: turn.error });
           return json({
             ok: turn.ok,
@@ -51,9 +74,11 @@ export async function handleKimiSession(request: Request): Promise<Response> {
             mcpServers: turn.mcpServers,
             package: packageLabel(turn.command),
             loginRequired: false,
+            filesChanged,
+            workspace,
           }, turn.ok ? 200 : 409);
         }
-        const hosted = await runHostedPrompt(prompt, adrianBuildCommand(), cwd || process.cwd());
+        const hosted = await runHostedPrompt(prompt, adrianBuildCommand(), cwd || adrianHostedWorkspace());
         await recordKimiAttempt({ ownerId, status: hosted.status, error: hosted.error });
         const accepted = hosted.status === "session_created";
         return json({
