@@ -137,12 +137,12 @@ export function BuildWorkspace() {
   }
 
   async function runFileOperation(operation: "list" | "read" | "write" | "search" | "rename" | "delete", path?: string, content?: string, extra?: { query?: string; to?: string; confirm?: boolean }) {
-    if (!online) { setFileNotice("No paired Companion is online. No file operation was executed."); return null; }
     setFileBusy(true);
     setFileNotice(null);
     try {
       const response = await fetch("/api/mind/kimi/files", { method: "POST", credentials: "include", headers: { "content-type": "application/json" }, body: JSON.stringify({ operation, cwd: cwd.trim() || undefined, path, content, ...extra }) });
-      const queued = (await response.json()) as { ok?: boolean; jobId?: string; error?: string };
+      const queued = (await response.json()) as { ok?: boolean; jobId?: string; error?: string; files?: WorkspaceFile[]; matches?: { path: string }[]; content?: string; result?: { files?: WorkspaceFile[]; matches?: { path: string }[]; content?: string; path?: string; before?: string; after?: string } };
+      if (response.ok && queued.ok && !queued.jobId) return queued.result || queued;
       if (!response.ok || !queued.ok || !queued.jobId) { setFileNotice(queued.error || "File operation could not be queued."); return null; }
       for (let attempt = 0; attempt < 90; attempt += 1) {
         const statusResponse = await fetch(`/api/mind/kimi/files?jobId=${encodeURIComponent(queued.jobId)}`, { credentials: "include", cache: "no-store" });
