@@ -4,6 +4,8 @@ import { haltIsOn } from "../halt.server";
 import { enqueueJob, onlineAgents, readJob } from "../pc-pairing/store";
 import { KIMI_CAPABILITIES, capabilitySummary } from "./capabilities";
 import { archiveProject, listAudit, listProjects, listProviders, listSessions, saveProject, saveProvider, saveSessionMeta } from "./build-store";
+import { adrianHostedWorkspace, packageLabel, resolveBuildWorkspace, runCodingTurn } from "./hosted/acp-client.ts";
+import { recordKimiAttempt } from "./persist.ts";
 
 function json(body: unknown, status = 200) {
   return new Response(JSON.stringify(body), { status, headers: { "content-type": "application/json; charset=utf-8", "cache-control": "no-store" } });
@@ -70,12 +72,17 @@ export async function handleKimiVoice(request: Request): Promise<Response> {
     const ownerId = await owner(request);
     if (await haltIsOn(ownerId)) return json({ ok: false, error: "Emergency stop is on. Voice task was not queued." }, 403);
     const agent = onlineAgents(ownerId)[0];
-    if (!agent) return json({ ok: false, error: "No paired Windows Companion is online." }, 409);
     const body = (await request.json().catch(() => ({}))) as { transcript?: string; cwd?: string; instructions?: string };
     const transcript = body.transcript?.trim().slice(0, 4_000) || "";
     if (!transcript) return json({ ok: false, error: "transcript is required." }, 400);
     const instructions = body.instructions?.trim().slice(0, 2_000) || "";
     const prompt = `${instructions ? `Project instructions:\n${instructions}\n\n` : ""}[Adrian Speak transcript]\n${transcript}`;
+    if (!agent) {
+      const workspace = resolveBuildWorkspace(body.cwd) || adrianHostedWorkspace();
+      const turn = await runCodingTurn({ prompt, cwd: workspace, mode: "auto" });
+      await recordKimiAttempt({ ownerId, status: turn.ok ? "session_created" : "failed", error: turn.error });
+      return json({ ok: turn.ok, executed: turn.ok, output: turn.output || "", sessionId: turn.sessionId, package: packageLabel(turn.command), limitation: "Audio was not sent to Kimi. The transcript ran in the hosted Build workspace." }, turn.ok ? 200 : 409);
+    }
     const job = enqueueJob({ ownerId, agentId: agent.id, kind: "kimi-acp", command: "kimi acp", confirm: false, payload: { prompt, cwd: body.cwd?.trim().slice(0, 500) || undefined, source: "adrian-speak" } });
     return json({ ok: true, jobId: job.id, status: job.status, limitation: "Audio was not sent to Kimi. The transcript uses the same Build session queue." }, 202);
   } catch (error) { return fail(error); }

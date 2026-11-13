@@ -5672,7 +5672,7 @@ export function CommandApp() {
                 <h3 className="font-semibold">MCP server</h3>
                 <p className="mt-1 text-sm text-muted">The token stays on the server. Connected means the server answered initialize and tools/list.</p>
                 <input value={mcpLabel} onChange={(event) => setMcpLabel(event.target.value)} placeholder="Label" className="mt-3 min-h-11 w-full rounded-panel border border-line bg-bg px-3 text-sm" />
-                <input value={mcpUrl} onChange={(event) => setMcpUrl(event.target.value)} placeholder="https://mcp.example/tools" className="mt-2 min-h-11 w-full rounded-panel border border-line bg-bg px-3 text-sm" />
+                <input value={mcpUrl} onChange={(event) => setMcpUrl(event.target.value)} placeholder="Paste the HTTPS address of your MCP server" aria-label="MCP server address" className="mt-2 min-h-11 w-full rounded-panel border border-line bg-bg px-3 text-sm" />
                 <input value={mcpToken} onChange={(event) => setMcpToken(event.target.value)} type="password" placeholder="Token, optional" autoComplete="off" className="mt-2 min-h-11 w-full rounded-panel border border-line bg-bg px-3 text-sm" />
                 <button type="submit" className="mt-3 min-h-11 rounded-panel bg-accent px-4 text-sm font-semibold text-accent-ink" disabled={ws.halted || mcpMutationBusy || !mcpUrl.trim()}>Test and save</button>
                 <ul className="mt-3 space-y-2">
