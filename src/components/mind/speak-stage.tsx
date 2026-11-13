@@ -134,7 +134,15 @@ export function SpeakStage(props: {
       return;
     }
     try {
+      const status = await navigator.permissions?.query?.({ name: "microphone" as PermissionName }).catch(() => null);
+      if (status?.state === "denied") {
+        setNotice("Microphone permission is blocked for this site. Allow it once in the browser settings, then return here.");
+        return;
+      }
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      stream.getTracks().forEach((track) => {
+        track.enabled = true;
+      });
       micRef.current = stream;
       setListening(true);
       setMuted(false);
