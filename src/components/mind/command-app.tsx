@@ -5788,7 +5788,7 @@ export function CommandApp() {
                 )}
                 {researchNote && researchCitations.length > 0 ? (
                   <button type="button" className="mt-3 min-h-11 rounded-panel border border-line px-3 text-sm" onClick={() => { setDraft(`Follow up on this research:\n${researchText}\n\n${researchNote}`); setView("chat"); setNavOpen(false); }}>Ask a follow-up in Chat</button>
-                )}
+                ) : null}
                 {researchHistory.length > 0 && (
                   <div className="mt-4">
                     <p className="text-sm font-semibold">Recent reports</p>

@@ -69,7 +69,8 @@ export function BuildWorkspace() {
   const [plan, setPlan] = useState("");
   const [planModel, setPlanModel] = useState("");
   const [planning, setPlanning] = useState(false);
-  const [panel, setPanel] = useState<"agent" | "timeline" | "changes" | "editor" | "terminal" | "capabilities" | "browser">("agent");
+  const [panel, setPanel] = useState<"agent" | "timeline" | "changes" | "editor" | "terminal" | "capabilities" | "browser">("editor");
+  const [newFileName, setNewFileName] = useState("");
   const [browserFrame, setBrowserFrame] = useState("");
   const [browserNotice, setBrowserNotice] = useState("");
   const [workspaceFiles, setWorkspaceFiles] = useState<WorkspaceFile[]>([]);
@@ -191,6 +192,22 @@ export function BuildWorkspace() {
     if (editorDirty && typeof window !== "undefined" && !window.confirm("This file has edits that were not verified as saved. Open another file anyway?")) return;
     const result = await runFileOperation("read", path) as { content?: string } | null;
     if (result && typeof result.content === "string") { setSelectedFile(path); setEditorText(result.content); setSavedText(result.content); setPanel("editor"); }
+  }
+
+  async function createFile() {
+    const name = newFileName.trim().replace(/^\/+/, "");
+    if (!name || name.includes("..") || name.includes("\\")) {
+      setFileNotice("Use a file name inside this workspace.");
+      return;
+    }
+    const result = await runFileOperation("write", name, "") as { path?: string } | null;
+    if (!result?.path) return;
+    setNewFileName("");
+    setSelectedFile(result.path);
+    setEditorText("");
+    setSavedText("");
+    setPanel("editor");
+    setFileNotice(`Created ${result.path}. Type in the editor, then save.`);
   }
 
   async function saveFile() {
@@ -441,7 +458,7 @@ export function BuildWorkspace() {
             <img src="/brand/marks/build.png" alt="" className="size-8 rounded-lg" />
             <div>
               <h2 className="font-display text-3xl font-bold">Adrian Build</h2>
-              <p className="text-sm text-muted">Kimi Code runs inside Adrian Build with the saved Grok key. Type a task and press Run. Plan explains only; Default and Auto can change the selected workspace.</p>
+              <p className="text-sm text-muted">Kimi Code runs here with the saved Grok key. Type a task and press Run build, or open a file and type in the editor.</p>
             </div>
           </div>
           <button type="button" className="inline-flex min-h-11 items-center gap-2 rounded-panel border border-line px-3 text-sm" onClick={() => { void refreshCompanion(); if (job) void refreshJob(job.id); }}>
@@ -459,8 +476,8 @@ export function BuildWorkspace() {
         <span className="rounded-full border border-line px-2 py-1 text-xs">{online ? "Ready to queue" : "Hosted Kimi ready"}</span>
       </div>
 
-      <div className="dense-card space-y-3">
-        <h3 className="font-semibold">Projects and sessions</h3>
+      <details className="dense-card space-y-3">
+        <summary className="cursor-pointer font-semibold">Projects and sessions</summary>
         {projects.length === 0 ? <p className="text-sm text-muted">No workspace is registered yet. Registering stores the label and path for this account. It does not prove the path is reachable.</p> : projects.map((project) => (
           <div key={project.id} className="flex flex-wrap items-center gap-2 text-sm">
             <span className="min-w-0 flex-1">{project.label} · {project.cwd || "no path"}</span>
@@ -474,7 +491,7 @@ export function BuildWorkspace() {
             <button type="submit" className="min-h-11 rounded-panel border border-line px-3 text-sm">Rename</button>
           </form>
         ))}
-      </div>
+      </details>
 
       <form className="dense-card space-y-3" onSubmit={submit}>
         <div className="flex items-center gap-2">
@@ -548,10 +565,10 @@ export function BuildWorkspace() {
             {panel === "timeline" ? <ol className="max-h-96 space-y-2 overflow-auto text-sm">{events.map((item) => <li key={item.id} className="rounded-panel border border-line p-2"><div className="flex items-center justify-between gap-2"><span className="font-medium">{eventLabel(item)}</span><time className="text-xs text-muted">{new Date(item.createdAt).toLocaleTimeString()}</time></div>{updateText(item) ? <p className="mt-1 text-xs text-muted">{updateText(item).slice(0, 240)}</p> : null}</li>)}{!events.length ? <li className="text-sm text-muted">No events yet.</li> : null}</ol> : null}
             {panel === "changes" ? <div className="space-y-2">{changedFiles.map((path) => <div key={path} className="rounded-panel border border-line p-3 text-sm"><FileDiff className="mr-2 inline size-4 text-accent" />{path}<span className="ml-2 text-xs text-muted">written by ACP</span></div>)}{lastDiff ? <div className="rounded-panel border border-line p-3 text-xs"><p className="font-semibold">Reviewed save: {lastDiff.path}</p><p className="mt-2 whitespace-pre-wrap text-danger">{lastDiff.before}</p><hr className="my-2 border-line" /><p className="whitespace-pre-wrap text-success">{lastDiff.after}</p></div> : null}{!changedFiles.length && !lastDiff ? <p className="text-sm text-muted">No file-write events have been reported for this session.</p> : null}<p className="text-xs text-muted">Reviewed file saves return before/after content for bounded change review.</p></div> : null}
             {panel === "changes" ? <button type="button" className="min-h-11 rounded-panel border border-line px-3 text-sm" onClick={() => void restoreLatestCheckpoint()}>Restore last checkpoint</button> : null}
-            {panel === "editor" ? <div className="grid gap-3 lg:grid-cols-[13rem_minmax(0,1fr)]"><div className="max-h-80 space-y-1 overflow-auto rounded-panel border border-line p-2">{workspaceFiles.map((file) => <button key={file.path} type="button" onClick={() => void openFile(file.path)} className={`block w-full truncate rounded px-2 py-2 text-left text-xs ${selectedFile === file.path ? "bg-accent text-accent-ink" : "text-muted hover:bg-white/5"}`}>{file.path}<span className="ml-1 opacity-60">{file.bytes} B</span></button>)}{searchMatches.map((path) => <p key={path} className="px-2 text-xs text-muted">Match: {path}</p>)}{!workspaceFiles.length && !searchMatches.length ? <p className="p-2 text-xs text-muted">Choose Browse to list the approved workspace.</p> : null}</div><div className="space-y-2"><div className="grid grid-cols-[2.5rem_minmax(0,1fr)] gap-2"><pre aria-hidden="true" className="overflow-hidden pt-4 text-right font-mono text-xs leading-5 text-muted">{(editorText || " ").split("\n").map((_, index) => String(index + 1)).join("\n")}</pre><textarea value={editorText} onChange={(event) => setEditorText(event.target.value)} disabled={!selectedFile} className="min-h-56 w-full rounded-panel border border-line bg-black/20 p-4 font-mono text-xs leading-5 outline-none focus:border-accent disabled:opacity-60" placeholder="Select a file to read it here." aria-label="Workspace file editor" /></div><div className="flex items-center gap-2"><button type="button" disabled={!selectedFile || fileBusy || !editorDirty} onClick={() => void saveFile()} className="min-h-10 rounded-panel bg-accent px-3 text-sm font-semibold text-accent-ink disabled:opacity-50">{fileBusy ? "Saving…" : "Save reviewed file"}</button><span className="text-xs text-muted">{selectedFile ? `${selectedFile} · ${editorText.split("\n").length} lines · ${editorDirty ? "Unsaved" : "Matches last read or verified save"}` : "No file selected"}</span></div></div></div> : null}
+            {panel === "editor" ? <div className="grid gap-3 lg:grid-cols-[13rem_minmax(0,1fr)]"><div className="max-h-80 space-y-1 overflow-auto rounded-panel border border-line p-2"><form className="mb-2 flex gap-1" onSubmit={(event) => { event.preventDefault(); void createFile(); }}><input value={newFileName} onChange={(event) => setNewFileName(event.target.value)} placeholder="new-file.md" aria-label="New file name" className="min-h-10 min-w-0 flex-1 rounded-panel border border-line bg-transparent px-2 text-xs" /><button type="submit" className="min-h-10 rounded-panel border border-line px-2 text-xs">New</button></form>{workspaceFiles.map((file) => <button key={file.path} type="button" onClick={() => void openFile(file.path)} className={`block w-full truncate rounded px-2 py-2 text-left text-xs ${selectedFile === file.path ? "bg-accent text-accent-ink" : "text-muted hover:bg-white/5"}`}>{file.path}<span className="ml-1 opacity-60">{file.bytes} B</span></button>)}{searchMatches.map((path) => <p key={path} className="px-2 text-xs text-muted">Match: {path}</p>)}{!workspaceFiles.length && !searchMatches.length ? <p className="p-2 text-xs text-muted">Choose Browse to list the approved workspace.</p> : null}</div><div className="space-y-2"><div className="grid grid-cols-[2.5rem_minmax(0,1fr)] gap-2"><pre aria-hidden="true" className="overflow-hidden pt-4 text-right font-mono text-xs leading-5 text-muted">{(editorText || " ").split("\n").map((_, index) => String(index + 1)).join("\n")}</pre><textarea value={editorText} onChange={(event) => setEditorText(event.target.value)} disabled={!selectedFile} className="min-h-56 w-full rounded-panel border border-line bg-black/20 p-4 font-mono text-xs leading-5 outline-none focus:border-accent disabled:opacity-60" placeholder="Select a file to read it here." aria-label="Workspace file editor" /></div><div className="flex items-center gap-2"><button type="button" disabled={!selectedFile || fileBusy || !editorDirty} onClick={() => void saveFile()} className="min-h-10 rounded-panel bg-accent px-3 text-sm font-semibold text-accent-ink disabled:opacity-50">{fileBusy ? "Saving…" : "Save reviewed file"}</button><span className="text-xs text-muted">{selectedFile ? `${selectedFile} · ${editorText.split("\n").length} lines · ${editorDirty ? "Unsaved" : "Matches last read or verified save"}` : "No file selected"}</span></div></div></div> : null}
             {panel === "capabilities" ? <div className="space-y-2">{capabilities.map((item) => <div key={item.id} className="rounded-panel border border-line p-3 text-sm"><div className="flex items-center justify-between gap-2"><span className="font-medium">{item.label}</span><span className="text-xs text-muted">{item.status.replaceAll("_", " ")}</span></div><p className="mt-1 text-xs text-muted">{item.evidence}</p></div>)}{!capabilities.length ? <p className="text-sm text-muted">Capability inventory has not loaded.</p> : null}<div className="rounded-panel border border-line p-3 text-xs text-muted"><p>Projects: {projects.map((project) => project.label).join(", ") || "none"}</p><p>Sessions: {sessions.map((session) => session.name).join(", ") || "none"}</p><p>Providers: {providers.map((provider) => `${provider.model}${provider.hasKey ? " (key stored)" : ""} · ${provider.runtimeUse}`).join(", ") || "none"}</p></div></div> : null}
             {panel === "capabilities" ? <KimiPhase4Panel initializeResponse={null} updates={events} /> : null}
-            {panel === "terminal" ? <div className="space-y-3"><input value={terminalCommand} onChange={(event) => setTerminalCommand(event.target.value)} placeholder="Command requiring explicit approval" className="min-h-11 w-full rounded-panel border border-line bg-transparent px-3 font-mono text-sm outline-none focus:border-accent" aria-label="Terminal command" /><div className="flex flex-wrap gap-2"><button type="button" disabled={terminalBusy || !terminalCommand.trim()} onClick={() => void requestTerminalApproval()} className="min-h-10 rounded-panel border border-line px-3 text-sm disabled:opacity-50">{terminalBusy ? "Requesting…" : "Request approval"}</button>{terminalApproval ? <button type="button" disabled={terminalBusy} onClick={() => void approveTerminal()} className="min-h-10 rounded-panel bg-accent px-3 text-sm font-semibold text-accent-ink disabled:opacity-50">Approve exact command</button> : null}</div>{terminalApproval ? <p className="rounded-panel border border-warning/40 bg-warning/10 p-3 text-xs">Pending approval: <code>{terminalApproval.command}</code></p> : null}<div className="min-h-40 whitespace-pre-wrap rounded-panel border border-line bg-black/20 p-4 font-mono text-xs text-muted">{terminalOutput || (deniedTerminals ? `${deniedTerminals} ACP terminal request${deniedTerminals === 1 ? "" : "s"} denied by the agent safety policy.` : "No approved terminal output yet.")}</div><p className="text-xs text-muted">Commands execute only after this explicit approval and remain bounded by the paired Companion workspace.</p></div> : null}
+            {panel === "terminal" ? <div className="space-y-3"><input value={terminalCommand} onChange={(event) => setTerminalCommand(event.target.value)} placeholder="Command requiring explicit approval" className="min-h-11 w-full rounded-panel border border-line bg-transparent px-3 font-mono text-sm outline-none focus:border-accent" aria-label="Terminal command" /><div className="flex flex-wrap gap-2"><button type="button" disabled={terminalBusy || !terminalCommand.trim()} onClick={() => void requestTerminalApproval()} className="min-h-10 rounded-panel border border-line px-3 text-sm disabled:opacity-50">{terminalBusy ? "Requesting…" : "Request approval"}</button>{terminalApproval ? <button type="button" disabled={terminalBusy} onClick={() => void approveTerminal()} className="min-h-10 rounded-panel bg-accent px-3 text-sm font-semibold text-accent-ink disabled:opacity-50">Approve exact command</button> : null}</div>{terminalApproval ? <p className="rounded-panel border border-warning/40 bg-warning/10 p-3 text-xs">Pending approval: <code>{terminalApproval.command}</code></p> : null}<div className="min-h-40 whitespace-pre-wrap rounded-panel border border-line bg-black/20 p-4 font-mono text-xs text-muted">{terminalOutput || (deniedTerminals ? `${deniedTerminals} ACP terminal request${deniedTerminals === 1 ? "" : "s"} denied by the agent safety policy.` : "No approved terminal output yet.")}</div><p className="text-xs text-muted">The exact command runs only after you approve it. It runs in the hosted workspace when no computer is paired.</p></div> : null}
           </section>
         </div>
       )}
