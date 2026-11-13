@@ -80,7 +80,7 @@ export function BuildWorkspace() {
   const [fileNotice, setFileNotice] = useState<string | null>(null);
   const [terminalCommand, setTerminalCommand] = useState("");
   const [terminalOutput, setTerminalOutput] = useState("");
-  const [terminalApproval, setTerminalApproval] = useState<{ id: string; token: string; command: string } | null>(null);
+  const [terminalApproval, setTerminalApproval] = useState<{ id: string; token: string; command: string; hosted?: boolean } | null>(null);
   const [terminalBusy, setTerminalBusy] = useState(false);
   const [lastDiff, setLastDiff] = useState<{ path: string; before: string; after: string } | null>(null);
   const [capabilities, setCapabilities] = useState<{ id: string; label: string; status: string; evidence: string }[]>([]);
@@ -92,7 +92,7 @@ export function BuildWorkspace() {
   const [transcript, setTranscript] = useState("");
   const [model, setModel] = useState("grok");
   const [apiKey, setApiKey] = useState("");
-  const [mode, setMode] = useState<"default" | "plan" | "auto">("auto");
+  const [mode, setMode] = useState<"default" | "plan" | "auto">("default");
   const [sessionId, setSessionId] = useState("");
 
   const assistantText = useMemo(
@@ -209,9 +209,9 @@ export function BuildWorkspace() {
     setTerminalBusy(true);
     try {
       const response = await fetch("/api/mind/kimi/terminal", { method: "POST", credentials: "include", headers: { "content-type": "application/json" }, body: JSON.stringify({ command: terminalCommand.trim() }) });
-      const data = (await response.json()) as { ok?: boolean; approval?: { id: string; token: string; command: string }; error?: string };
+      const data = (await response.json()) as { ok?: boolean; hosted?: boolean; approval?: { id: string; token: string; command: string }; error?: string };
       if (!response.ok || !data.ok || !data.approval) { setFileNotice(data.error || "Terminal approval request failed."); return; }
-      setTerminalApproval(data.approval);
+      setTerminalApproval({ ...data.approval, hosted: data.hosted === true });
       setFileNotice("Terminal approval created. Review the exact command before approving.");
     } catch { setFileNotice("Terminal approval request could not reach Adrian OS."); } finally { setTerminalBusy(false); }
   }
@@ -220,7 +220,7 @@ export function BuildWorkspace() {
     if (!terminalApproval) return;
     setTerminalBusy(true);
     try {
-      const response = await fetch("/api/mind/pc/approve", { method: "POST", credentials: "include", headers: { "content-type": "application/json" }, body: JSON.stringify({ approvalId: terminalApproval.id, token: terminalApproval.token, command: terminalApproval.command }) });
+      const response = await fetch(terminalApproval.hosted ? "/api/mind/kimi/terminal" : "/api/mind/pc/approve", { method: "POST", credentials: "include", headers: { "content-type": "application/json" }, body: JSON.stringify({ approvalId: terminalApproval.id, token: terminalApproval.token, command: terminalApproval.command, confirm: terminalApproval.hosted === true }) });
       const data = (await response.json()) as { ok?: boolean; text?: string; error?: string };
       setTerminalOutput(data.text || data.error || "No terminal output returned.");
       setFileNotice(data.ok ? "Approved terminal command completed." : data.error || "Approved terminal command failed.");
@@ -232,6 +232,15 @@ export function BuildWorkspace() {
     void refreshCompanion();
     const timer = window.setInterval(() => void refreshCompanion(), 10_000);
     return () => window.clearInterval(timer);
+  }, []);
+
+  useEffect(() => {
+    void browseWorkspace();
+    const draft = sessionStorage.getItem("adrian-build-draft");
+    if (!draft) return;
+    setPrompt(draft);
+    sessionStorage.removeItem("adrian-build-draft");
+    setNotice("Opened from Chat. Review the task, then press Run build.");
   }, []);
 
   useEffect(() => {
@@ -481,8 +490,12 @@ export function BuildWorkspace() {
           </div>
         </details>
         <div className="flex flex-wrap items-center gap-2">
-          {(["plan", "default", "auto"] as const).map((item) => (
-            <button key={item} type="button" onClick={() => setMode(item)} className={`min-h-11 rounded-panel border px-3 text-sm ${mode === item ? "border-accent" : "border-line"}`} aria-pressed={mode === item}>{item === "plan" ? "Plan" : item === "default" ? "Default" : "Auto"}</button>
+          {([
+            ["plan", "Ask", "Explains only. No file is changed."],
+            ["default", "Edit", "Kimi can change files in this workspace."],
+            ["auto", "Run", "Kimi can change files and use tools in this workspace."],
+          ] as const).map(([item, label, sentence]) => (
+            <button key={item} type="button" title={sentence} onClick={() => setMode(item)} className={`min-h-11 rounded-panel border px-3 text-sm ${mode === item ? "border-accent" : "border-line"}`} aria-pressed={mode === item}>{label}</button>
           ))}
           <button type="submit" disabled={loading || Boolean(active)} className="inline-flex min-h-11 items-center gap-2 rounded-panel bg-accent px-4 text-sm font-semibold text-accent-ink disabled:cursor-not-allowed disabled:opacity-50">
             <Send className="size-4" aria-hidden="true" /> {loading ? "Queueing…" : active ? "Task running…" : "Run build"}
@@ -490,7 +503,7 @@ export function BuildWorkspace() {
           <button type="button" disabled={planning || !prompt.trim()} onClick={() => void planWithGrok()} className="inline-flex min-h-11 items-center gap-2 rounded-panel border border-line px-4 text-sm disabled:opacity-50">
             {planning ? "Planning…" : "Plan with Grok"}
           </button>
-          <span className="text-xs text-muted">{sessionId ? `Session ${sessionId.slice(0, 8)} resumes on the next run.` : "Plan does not edit files. Auto can edit the approved workspace."}</span>
+          <span className="text-xs text-muted">{mode === "plan" ? "Ask explains only. No file is changed." : mode === "default" ? "Edit can change files in this workspace." : "Run can change files and use tools in this workspace."}</span>
         </div>
       </form>
 
@@ -504,7 +517,7 @@ export function BuildWorkspace() {
           <nav className="dense-card h-fit space-y-1" aria-label="Build panels">
             {(["agent", "timeline", "changes", "editor", "terminal", "browser", "capabilities"] as const).map((item) => (
               <button key={item} type="button" onClick={() => item === "browser" ? void openCodingBrowser() : setPanel(item)} className={`flex min-h-11 w-full items-center justify-between rounded-panel px-3 text-left text-sm ${panel === item ? "bg-accent text-accent-ink" : "text-muted hover:bg-white/5"}`}>
-                <span className="flex items-center gap-2">{item === "agent" ? <Activity className="size-4" /> : item === "changes" ? <FileDiff className="size-4" /> : item === "editor" ? <Code2 className="size-4" /> : <Terminal className="size-4" />}{item[0].toUpperCase() + item.slice(1)}</span>
+                <span className="flex items-center gap-2">{item === "agent" ? <Activity className="size-4" /> : item === "changes" ? <FileDiff className="size-4" /> : item === "editor" ? <Code2 className="size-4" /> : <Terminal className="size-4" />}{{ agent: "Task", timeline: "Steps", changes: "Changes", editor: "Files", terminal: "Terminal", browser: "Preview", capabilities: "Status" }[item]}</span>
                 {item === "changes" && changedFiles.length ? <span>{changedFiles.length}</span> : null}
               </button>
             ))}

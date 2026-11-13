@@ -5,6 +5,7 @@ import { enqueueJob, listJobEvents, onlineAgents, readJob } from "../pc-pairing/
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { adrianBuildCommand, adrianHostedWorkspace, packageLabel, resolveBuildWorkspace, runCodingTurn, runHostedPrompt, type CodingMode } from "./hosted/acp-client.ts";
+import { snapshotHostedWorkspace } from "./hosted/shell.server.ts";
 import { recordKimiAttempt } from "./persist.ts";
 
 const MAX_PROMPT = 8_000;
@@ -55,6 +56,7 @@ export async function handleKimiSession(request: Request): Promise<Response> {
       if (agents.length === 0) {
         if (mode || resumeSessionId || body.fork === true) {
           const workspace = cwd || adrianHostedWorkspace();
+          const checkpoint = snapshotHostedWorkspace();
           const watched = fileChange(workspace, prompt);
           const turn = await runCodingTurn({ prompt, cwd: workspace, mode, resumeSessionId: resumeSessionId || undefined, fork: body.fork === true });
           const filesChanged = watched.flatMap((item) => {
@@ -76,6 +78,7 @@ export async function handleKimiSession(request: Request): Promise<Response> {
             loginRequired: false,
             filesChanged,
             workspace,
+            checkpoint,
           }, turn.ok ? 200 : 409);
         }
         const hosted = await runHostedPrompt(prompt, adrianBuildCommand(), cwd || adrianHostedWorkspace());

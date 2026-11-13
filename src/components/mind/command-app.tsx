@@ -786,7 +786,8 @@ export function CommandApp() {
   const [lastResolvedTier, setLastResolvedTier] = useState<ConcreteModelTier | null>(null);
   const [lastModelUsed, setLastModelUsed] = useState<string | null>(null);
   const [failoverPolicy, setFailoverPolicy] = useState<"none" | "grok">("none");
-  const [researchCitations, setResearchCitations] = useState<{ title: string; url: string }[]>([]);
+ const [researchCitations, setResearchCitations] = useState<{ title: string; url: string }[]>([]);
+  const [researchHistory, setResearchHistory] = useState<{ id: string; question: string; summary: string; citations: { title: string; url: string }[]; at: string }[]>([]);
   const [agentGoal, setAgentGoal] = useState("");
   const [agentBusy, setAgentBusy] = useState(false);
   const [agentNote, setAgentNote] = useState<string | null>(null);
@@ -1360,6 +1361,14 @@ export function CommandApp() {
     try {
       const stored = localStorage.getItem("amcos.theme.v1");
       if (stored === "light" || stored === "dark" || stored === "system") setTheme(stored);
+    } catch {
+      /* a private browser can refuse storage */
+    }
+  }, []);
+  useEffect(() => {
+    try {
+      const stored = JSON.parse(localStorage.getItem("amcos.research.v1") || "[]") as { id: string; question: string; summary: string; citations: { title: string; url: string }[]; at: string }[];
+      if (Array.isArray(stored)) setResearchHistory(stored.slice(0, 8));
     } catch {
       /* a private browser can refuse storage */
     }
@@ -2254,6 +2263,12 @@ export function CommandApp() {
           void startResearch();
         });
       } else {
+        const report = { id: crypto.randomUUID(), question: query, summary: result.summary || "", citations: result.citations, at: new Date().toISOString() };
+        setResearchHistory((current) => {
+          const next = [report, ...current].slice(0, 8);
+          try { localStorage.setItem("amcos.research.v1", JSON.stringify(next)); } catch { /* private mode */ }
+          return next;
+        });
         clearFailure();
       }
     } catch (caught) {
@@ -5144,6 +5159,11 @@ export function CommandApp() {
               }}
               onNew={openChat}
               onSpeak={(text, messageId) => void speak(text, messageId ?? "")}
+              onOpenBuild={(text) => {
+                sessionStorage.setItem("adrian-build-draft", text.slice(0, 4000));
+                setView("build");
+                setNavOpen(false);
+              }}
               onListen={() => void listen()}
               onListenStop={() => void listen({ mode: "stop" })}
               onLiveUserTranscript={(text) => appendLiveVoiceUser(text)}
@@ -5766,6 +5786,20 @@ export function CommandApp() {
                       </li>
                     ))}
                   </ul>
+                )}
+                {researchHistory.length > 0 && (
+                  <div className="mt-4">
+                    <p className="text-sm font-semibold">Recent reports</p>
+                    <ul className="mt-2 space-y-2">
+                      {researchHistory.map((report) => (
+                        <li key={report.id}>
+                          <button type="button" className="min-h-11 text-left text-sm text-accent" onClick={() => { setResearchText(report.question); setResearchNote(report.summary); setResearchCitations(report.citations); }}>
+                            {report.question} · {report.citations.length} sources
+                          </button>
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
                 )}
               </div>
               <div className="mt-4">
@@ -6660,6 +6694,7 @@ function ChatPane({
   onSave,
   onNew,
   onSpeak,
+  onOpenBuild,
   onListen,
   onListenStop,
   onLiveUserTranscript,
@@ -6750,6 +6785,7 @@ function ChatPane({
   onSave: (content: string) => void;
   onNew: () => void;
   onSpeak: (text: string, messageId?: string) => void;
+  onOpenBuild: (text: string) => void;
   onListen: () => void;
   onListenStop?: () => void;
   onLiveUserTranscript?: (text: string) => void;
@@ -6995,6 +7031,9 @@ function ChatPane({
                   <button type="button" className="min-h-11 text-xs text-accent" onClick={() => onSpeak(msg.content, msg.id)} disabled={speaking}>
                     {speaking ? "Speaking" : "Read aloud"}
                   </button>
+                )}
+                {msg.role === "assistant" && (
+                  <button type="button" className="min-h-11 text-xs text-accent" onClick={() => onOpenBuild(msg.content)}>Open in Build</button>
                 )}
                 {msg.role === "assistant" && (
                   <span className="flex flex-wrap items-center gap-1 text-xs text-muted">

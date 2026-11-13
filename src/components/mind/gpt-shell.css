@@ -7,6 +7,25 @@ aside.rail.nav-drawer-open {
   -webkit-backdrop-filter: none !important;
 }
 
+html[data-theme="light"] .gpt-rail,
+html[data-theme="light"] aside.rail.nav-drawer-open,
+html[data-theme="light"] aside.rail.gpt-rail.nav-drawer-open.fixed.inset-0.z-40.flex {
+  background: #f6f7f9 !important;
+  color: #111318 !important;
+}
+
+html[data-theme="light"] .gpt-rail nav button,
+html[data-theme="light"] .gpt-rail nav a.nav-item {
+  color: #111318 !important;
+}
+
+@media (max-width: 767px) {
+  html[data-theme="light"] aside.rail.nav-drawer-open {
+    background: #f6f7f9 !important;
+    color: #111318 !important;
+  }
+}
+
 .gpt-rail .meta-label {
   display: none !important;
 }

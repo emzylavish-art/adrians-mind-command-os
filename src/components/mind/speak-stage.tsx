@@ -201,7 +201,7 @@ export function SpeakStage(props: {
         <div>
           <p>EVE</p>
           <p className="text-xs text-muted">The intelligence layer. Speak, and EVE answers on this call.</p>
-          <span>Talk with Adrian</span>
+          <span>Live call, or type one line and press Speak.</span>
         </div>
         <button type="button" aria-label="Close Speak" onClick={props.onClose}><X /></button>
       </header>
