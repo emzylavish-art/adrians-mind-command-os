@@ -83,7 +83,7 @@ export type LiveSessionDeps = {
   runConductor?: typeof runOllamaConductor;
   now?: () => number;
   /** Injected mic preflight (tests / headless). */
-  probeMic?: () => Promise<{ ok: true } | { ok: false; error: string }>;
+  probeMic?: () => Promise<{ ok: true; stream?: MediaStream } | { ok: false; error: string }>;
   /** Skip opening getUserMedia (tests driving WS only). */
   skipMic?: boolean;
 };
@@ -108,6 +108,7 @@ export class LiveVoiceSession {
   > &
     LiveSessionDeps;
   private phase: LiveVoicePhase = "off";
+  private preopenedMic?: MediaStream;
   private error: string | null = null;
   private muted = false;
   private level = 0;
@@ -239,6 +240,7 @@ export class LiveVoiceSession {
         this.fail(probe.error);
         return;
       }
+      this.preopenedMic = probe.stream;
       await this.connectAndCapture(ticket.generation, connectAbort.signal);
     } catch (caught) {
       if (this.intentionalClose || isAbortError(caught)) return;
@@ -354,6 +356,8 @@ export class LiveVoiceSession {
   }
 
   private teardownMedia(closeWs: boolean) {
+    this.preopenedMic?.getTracks().forEach((track) => track.stop());
+    this.preopenedMic = undefined;
     if (this.interruptTimer) {
       clearTimeout(this.interruptTimer);
       this.interruptTimer = null;
@@ -515,13 +519,16 @@ export class LiveVoiceSession {
 
       try {
         await withTimeout(
-          this.mic.start(),
+          this.mic.start(this.preopenedMic),
           MIC_START_TIMEOUT_MS,
           "mic-start",
           "Microphone start timed out. Check permissions or connect a mic, then try again.",
           outerSignal ?? this.connectAbort?.signal ?? null,
         );
+        this.preopenedMic = undefined;
       } catch (err) {
+        this.preopenedMic?.getTracks().forEach((track) => track.stop());
+        this.preopenedMic = undefined;
         if (this.intentionalClose || isAbortError(err) || outerSignal?.aborted) {
           this.teardownMedia(true);
           return;

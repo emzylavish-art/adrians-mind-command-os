@@ -24,6 +24,16 @@ html[data-theme="light"] .gpt-rail nav a.nav-item {
     background: #f6f7f9 !important;
     color: #111318 !important;
   }
+  [data-testid="build-workspace"] nav[aria-label="Build panels"] {
+    display: flex;
+    gap: 0.35rem;
+    overflow-x: auto;
+    padding-bottom: 0.25rem;
+  }
+  [data-testid="build-workspace"] nav[aria-label="Build panels"] button {
+    flex: 0 0 auto;
+    width: auto;
+  }
 }
 
 .gpt-rail .meta-label {

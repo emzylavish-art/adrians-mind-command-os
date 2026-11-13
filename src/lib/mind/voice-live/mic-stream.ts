@@ -67,15 +67,15 @@ export class LiveMicStream {
     this.muted = next;
   }
 
-  async start() {
+  async start(existing?: MediaStream) {
     if (this.running) return;
     const gum =
       this.getUserMediaImpl ??
       (typeof navigator !== "undefined" ? navigator.mediaDevices?.getUserMedia?.bind(navigator.mediaDevices) : undefined);
-    if (!gum) throw Object.assign(new Error("No microphone API in this environment."), { name: "NotFoundError" });
+    if (!existing && !gum) throw Object.assign(new Error("No microphone API in this environment."), { name: "NotFoundError" });
     let media: MediaStream;
     try {
-      media = await gum({
+      media = existing ?? await gum!({
         audio: {
           channelCount: 1,
           echoCancellation: true,

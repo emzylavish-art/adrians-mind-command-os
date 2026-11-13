@@ -4,7 +4,7 @@
  */
 
 export type MicPreflightResult =
-  | { ok: true }
+  | { ok: true; stream?: MediaStream }
   | {
       ok: false;
       error: string;
@@ -80,8 +80,7 @@ export async function probeMicrophone(options?: {
     ((constraints: MediaStreamConstraints) => navigator.mediaDevices.getUserMedia(constraints));
   try {
     const stream = await getUserMedia({ audio: true, video: false });
-    stream.getTracks().forEach((t) => t.stop());
-    return { ok: true };
+    return { ok: true, stream };
   } catch (caught) {
     return mapGetUserMediaError(caught);
   }
