@@ -1,6 +1,6 @@
 import { spawn } from "node:child_process";
 import { randomBytes } from "node:crypto";
-import { cpSync, mkdirSync } from "node:fs";
+import { cpSync, existsSync, mkdirSync, readdirSync, rmSync } from "node:fs";
 import { adrianHostedWorkspace } from "./acp-client.ts";
 
 type Pending = { id: string; token: string; command: string; expires: number };
@@ -20,6 +20,23 @@ export function snapshotHostedWorkspace(): string {
   mkdirSync(dest, { recursive: true });
   cpSync(adrianHostedWorkspace(), dest, { recursive: true });
   return id;
+}
+
+export function listHostedCheckpoints(): string[] {
+  const root = "/tmp/adrian-build-checkpoints";
+  if (!existsSync(root)) return [];
+  return readdirSync(root).filter((id) => existsSync(`${root}/${id}`)).sort().reverse().slice(0, 8);
+}
+
+export function restoreHostedCheckpoint(id: string): boolean {
+  if (!/^[\dTZ-]+$/.test(id)) return false;
+  const source = `/tmp/adrian-build-checkpoints/${id}`;
+  if (!existsSync(source)) return false;
+  const workspace = adrianHostedWorkspace();
+  rmSync(workspace, { recursive: true, force: true });
+  mkdirSync(workspace, { recursive: true });
+  cpSync(source, workspace, { recursive: true });
+  return true;
 }
 
 export function runHostedTerminal(input: { id: string; token: string; command: string }): Promise<{ ok: boolean; text: string; error?: string }> {

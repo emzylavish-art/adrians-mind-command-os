@@ -5,6 +5,7 @@ import { enqueueJob, listJobEvents, onlineAgents, readJob } from "../pc-pairing/
 import { readdirSync, readFileSync, renameSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { join, relative, resolve } from "node:path";
 import { adrianHostedWorkspace } from "./hosted/acp-client.ts";
+import { listHostedCheckpoints, restoreHostedCheckpoint } from "./hosted/shell.server.ts";
 
 const MAX_CWD = 500;
 const MAX_PATH = 1_000;
@@ -20,8 +21,16 @@ function inside(root: string, path: string): boolean {
 }
 
 function runHostedFileOperation(body: { operation?: unknown; path?: unknown; content?: unknown; query?: unknown; to?: unknown; confirm?: unknown }): Response {
+  const operationName = typeof body.operation === "string" ? body.operation : "";
+  if (operationName === "checkpoints") return json({ ok: true, checkpoints: listHostedCheckpoints(), result: { checkpoints: listHostedCheckpoints() } });
+  if (operationName === "restore") {
+    if (body.confirm !== true) return json({ ok: false, error: "Confirm restore before replacing the workspace." }, 400);
+    const id = typeof body.path === "string" ? body.path : "";
+    const restored = restoreHostedCheckpoint(id);
+    return json({ ok: restored, checkpoint: id, error: restored ? undefined : "Checkpoint was not found. Nothing was restored." }, restored ? 200 : 404);
+  }
   const root = adrianHostedWorkspace();
-  const operation = typeof body.operation === "string" ? body.operation : "";
+  const operation = operationName;
   const relativePath = typeof body.path === "string" ? body.path.replace(/^\/+/, "") : "";
   const target = resolve(root, relativePath);
   if (!inside(root, target)) return json({ ok: false, error: "Path is outside the hosted workspace." }, 400);

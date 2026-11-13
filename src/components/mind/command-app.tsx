@@ -5535,8 +5535,8 @@ export function CommandApp() {
             <div className="page-hero mx-4 mt-4 flex items-center gap-3 md:mx-6">
               <img src="/brand/marks/bots.png" alt="" className="size-8 rounded-lg" />
               <div>
-                <h2 className="font-display text-3xl font-bold">Bots</h2>
-                <p className="text-sm text-muted">Templates stay on this device. A hosted bot runs only when its service answers.</p>
+                <h2 className="font-display text-3xl font-bold">Agents</h2>
+                <p className="text-sm text-muted">Run lookup reads this device. Run planner asks Grok and can only read projects, chats, and notes.</p>
               </div>
             </div>
             <ReaPanel
@@ -5547,8 +5547,7 @@ export function CommandApp() {
               onCheck={() => void checkRea()}
               onInspect={staged ? () => void inspectWithRea(staged, "agents") : null}
             />
-            <details className="mx-4 mb-6 rounded-panel border border-line bg-surface p-4 md:mx-6">
-              <summary className="min-h-11 cursor-pointer font-semibold">Look up on this device</summary>
+            <section className="mx-4 mb-6 rounded-panel border border-line bg-surface p-4 md:mx-6">
             <form
               className="mt-3"
               onSubmit={(event) => {
@@ -5601,7 +5600,7 @@ export function CommandApp() {
                 </ol>
               )}
             </form>
-            </details>
+            </section>
             <FleetPanel mode="agents" ws={ws} setWs={setWs} />
             </>
           )}
