@@ -6020,7 +6020,7 @@ export function CommandApp() {
                   { id: "library", label: "Library", detail: "Text copies in this browser. Upload text or open a file you already attached.", mark: "/brand/marks/library.png", open: () => setView("files") },
                   { id: "projects", label: "Projects", detail: "Records on this device. Open chats or notes from a project card.", mark: "/brand/marks/projects.png", open: () => setView("projects") },
                   { id: "scheduled", label: "Scheduled", detail: "Jobs that wait for a time. Nothing runs until you start it.", mark: "/brand/marks/scheduled.png", open: () => setView("scheduled") },
-                  { id: "build", label: "Build", detail: "Editor and next-step controls. No repository is edited until a computer is paired.", mark: "/brand/marks/build.png", open: () => setView("build") },
+                  { id: "build", label: "Build", detail: "Kimi Code workspace. A task can edit the hosted workspace, or a paired computer when one is connected.", mark: "/brand/marks/build.png", open: () => setView("build") },
                   { id: "explore", label: "Explore", detail: "Filter local templates, save one, then open it in Chat.", mark: "/brand/marks/explore.png", open: () => window.location.assign("/explore") },
                   { id: "dashboard", label: "Dashboard", detail: "Opens the workspace map inside this app.", mark: "/brand/marks/general.png", open: () => setView("dashboard") },
                 ].filter((item) => `${item.label} ${item.detail}`.toLowerCase().includes(helpQuery.trim().toLowerCase())).map((item) => (
