@@ -25,23 +25,23 @@ type Service = {
 
 function ServiceMark({ name }: { name: string }) {
   const files: Record<string, string> = {
-    Grok: "/brand/marks/grok.png",
-    Notion: "/brand/marks/notion.svg",
-    GitHub: "/brand/marks/github.png",
-    Gmail: "/brand/marks/gmail.png",
-    "Google Drive": "/brand/marks/drive.png",
-    "Google Docs": "/brand/marks/docs.png",
-    "Google Calendar": "/brand/marks/calendar.png",
-    YouTube: "/brand/marks/youtube.png",
-    Slack: "/brand/marks/slack.png",
-    OpenAI: "/brand/marks/openai.png",
-    Claude: "/brand/marks/claude.png",
-    Gemini: "/brand/marks/gemini.png",
-    OpenRouter: "/brand/marks/openrouter.png",
+    Grok: "/brand/logos/grok.svg",
+    Notion: "/brand/logos/notion.svg",
+    GitHub: "/brand/logos/github.svg",
+    Gmail: "/brand/logos/gmail.svg",
+    "Google Drive": "/brand/logos/drive.svg",
+    "Google Docs": "/brand/logos/docs.svg",
+    "Google Calendar": "/brand/logos/calendar.svg",
+    YouTube: "/brand/logos/youtube.svg",
+    Slack: "/brand/logos/slack.svg",
+    OpenAI: "/brand/logos/openai.svg",
+    Claude: "/brand/logos/claude.svg",
+    Gemini: "/brand/logos/gemini.svg",
+    OpenRouter: "/brand/logos/openrouter.svg",
     "Web search": "/brand/marks/search.png",
     "Image and video": "/brand/marks/media.png",
     Voice: "/brand/marks/voice.png",
-    MCP: "/brand/marks/mcp.png",
+    MCP: "/brand/logos/mcp.svg",
     "Local computer": "/brand/marks/computer.png",
   };
   const marks: Record<string, { bg: string; fg: string; letter: string }> = {
@@ -61,7 +61,8 @@ function ServiceMark({ name }: { name: string }) {
   };
   const mark = marks[name] ?? { bg: "#27272a", fg: "#fff", letter: name.slice(0, 1) };
   const file = files[name];
-  if (file) return <img className="service-mark" src={file} alt="" width={28} height={28} />;
+  const tile = name === "OpenAI" || name === "GitHub" || name === "MCP";
+  if (file) return <img className={tile ? "service-mark on-tile" : "service-mark"} src={file} alt="" width={28} height={28} />;
   return <span className="service-mark" style={{ background: mark.bg, color: mark.fg }} aria-hidden="true">{mark.letter}</span>;
 }
 

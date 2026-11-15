@@ -15,13 +15,13 @@ type Start = {
 };
 
 const OFFICIAL = [
-  { id: "kimi-datasource", name: "Datasource", mark: "Ds", image: "/brand/marks/datasource.png", color: "#2f6bff", description: "Market, news, company, and legal lookups.", action: "key" as const },
-  { id: "kimi-webbridge", name: "Browser", mark: "Br", image: "/brand/marks/browser.png", color: "#f4b400", description: "Drive the browser you already use.", action: "link" as const, href: "https://chromewebstore.google.com/detail/kimi-webbridge/fldmhceldgbpfpkbgopacenieobmligc" },
-  { id: "kimi-computer-use", name: "Computer", mark: "Pc", image: "/brand/marks/computer.png", color: "#34a853", description: "Desktop control for the computer you choose.", action: "link" as const, href: "https://cdn.kimi.com/kimi-computer-use-windows/latest/kimi-cu-win-plugin.zip" },
-  { id: "superpowers", name: "Superpowers", mark: "Sp", image: "/brand/marks/superpowers.png", color: "#d97757", description: "Planning, debugging, and delivery workflows.", action: "link" as const, href: "https://github.com/obra/superpowers" },
-  { id: "vercel-plugin", name: "Vercel", mark: "Vc", image: "/brand/marks/vercel.png", color: "#111111", description: "Deploy skills and conventions.", action: "link" as const, href: "https://github.com/vercel/vercel-plugin" },
-  { id: "modern-web-guidance", name: "Web guidance", mark: "Wb", image: "/brand/marks/webguidance.png", color: "#1a73e8", description: "Web platform and browser guidance.", action: "link" as const, href: "https://github.com/GoogleChrome/modern-web-guidance" },
-  { id: "cloudbase", name: "CloudBase", mark: "Cb", image: "/brand/marks/cloudbase.png", color: "#00a4ff", description: "Database, functions, and hosting.", action: "mcp" as const, href: "https://github.com/TencentCloudBase/CloudBase-AI-Toolkit" },
+  { id: "kimi-datasource", name: "Datasource", mark: "Ds", color: "#2f6bff", description: "Market, news, company, and legal lookups.", action: "key" as const },
+  { id: "kimi-webbridge", name: "Browser", mark: "Br", color: "#f4b400", description: "Drive the browser you already use.", action: "link" as const, href: "https://chromewebstore.google.com/detail/kimi-webbridge/fldmhceldgbpfpkbgopacenieobmligc" },
+  { id: "kimi-computer-use", name: "Computer", mark: "Pc", color: "#34a853", description: "Desktop control for the computer you choose.", action: "link" as const, href: "https://cdn.kimi.com/kimi-computer-use-windows/latest/kimi-cu-win-plugin.zip" },
+  { id: "superpowers", name: "Superpowers", mark: "Sp", color: "#d97757", description: "Planning, debugging, and delivery workflows.", action: "link" as const, href: "https://github.com/obra/superpowers" },
+  { id: "vercel-plugin", name: "Vercel", mark: "Vc", image: "/brand/logos/vercel.svg", color: "#111111", description: "Deploy skills and conventions.", action: "link" as const, href: "https://github.com/vercel/vercel-plugin" },
+  { id: "modern-web-guidance", name: "Web guidance", mark: "Wb", color: "#1a73e8", description: "Web platform and browser guidance.", action: "link" as const, href: "https://github.com/GoogleChrome/modern-web-guidance" },
+  { id: "cloudbase", name: "CloudBase", mark: "Cb", color: "#00a4ff", description: "Database, functions, and hosting.", action: "mcp" as const, href: "https://github.com/TencentCloudBase/CloudBase-AI-Toolkit" },
 ] as const;
 
 const ADDED_KEY = "adrian-added-plugins";

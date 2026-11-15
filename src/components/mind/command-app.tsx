@@ -440,6 +440,23 @@ const CAPABILITY_MARK: Record<string, string> = {
   "build.workspace": "build",
 };
 
+const PRODUCT_LOGO: Record<string, string> = {
+  grok: "/brand/logos/grok.svg",
+  openai: "/brand/logos/openai.svg",
+  claude: "/brand/logos/claude.svg",
+  gemini: "/brand/logos/gemini.svg",
+  openrouter: "/brand/logos/openrouter.svg",
+  vercel: "/brand/logos/vercel.svg",
+  gmail: "/brand/logos/gmail.svg",
+  notion: "/brand/logos/notion.svg",
+  github: "/brand/logos/github.svg",
+  mcp: "/brand/logos/mcp.svg",
+};
+
+function productMark(name: string) {
+  return PRODUCT_LOGO[name] ?? `/brand/marks/${name}.png`;
+}
+
 const CAPABILITY_PAGE: Partial<Record<string, View>> = {
   "chat.grok": "connected",
   "chat.openai": "settings",
@@ -4747,7 +4764,7 @@ export function CommandApp() {
             )}
           </div>
           <span className={`hidden h-11 items-center gap-2 rounded-full border px-3 text-sm md:inline-flex glass-panel ${headerTone}`}>
-            <img src="/brand/marks/grok.png" alt="" width={16} height={16} className="size-4 rounded" />
+            <img src="/brand/logos/grok.svg" alt="" width={16} height={16} className="size-4 rounded" />
             {headerState}
           </span>
           <div className="hidden md:block">
@@ -6160,7 +6177,7 @@ export function CommandApp() {
                     <article key={skill.id} className="skill-card">
                       <div className="flex items-start justify-between gap-3">
                         <div className="flex min-w-0 items-center gap-3">
-                          <img src={`/brand/marks/${SKILL_MARK[skill.id] ?? "skills"}.png`} alt="" className="size-8 shrink-0 rounded-lg" />
+                          <img src={productMark(SKILL_MARK[skill.id] ?? "skills")} alt="" className="size-8 shrink-0 rounded-lg" />
                           <h3 className="font-semibold">{skill.name}</h3>
                         </div>
                         <span className="rounded-full border border-line px-2 py-0.5 text-xs text-muted">{skill.kind === "not-installed" ? "Not installed" : skill.kind === "installed" ? (on ? "Installed" : "Off") : (on ? "On" : "Off")}</span>
@@ -6302,7 +6319,7 @@ export function CommandApp() {
                     <article key={item.id} className="integration-card">
                       <div className="flex items-start justify-between gap-3">
                         <div className="flex min-w-0 items-center gap-3">
-                          <img src={`/brand/marks/${CAPABILITY_MARK[item.id] ?? "integrations"}.png`} alt="" className="size-8 shrink-0 rounded-lg" />
+                          <img src={productMark(CAPABILITY_MARK[item.id] ?? "integrations")} alt="" className="size-8 shrink-0 rounded-lg" />
                           <h3 className="text-sm font-semibold">{item.name}</h3>
                         </div>
                         <span className={`rounded-full border px-2 py-0.5 text-xs ${live ? "border-ok/40 text-ok" : item.status === "blocked" || item.status === "paid_required" ? "border-danger/40 text-danger" : "border-line text-muted"}`}>
@@ -8029,7 +8046,10 @@ function ProviderPicker({
       <p className="mt-1 text-xs text-muted">{selected ? selected.label : "Choose a provider"}</p>
       {groups.map((group) => (
         <details key={group.title} className="provider-group" open={group.items.some((item) => item.id === choice) || undefined}>
-          <summary>{group.title}</summary>
+          <summary className="flex items-center gap-2">
+            {PRODUCT_LOGO[group.title.toLowerCase()] ? <img src={PRODUCT_LOGO[group.title.toLowerCase()]} alt="" width={16} height={16} className="size-4 rounded" /> : null}
+            {group.title}
+          </summary>
           {group.items.map((item) => (
             <label key={item.id} className={`flex items-start gap-2 rounded-xl px-2 py-2 text-sm ${choice === item.id ? "model-option-active" : ""} ${!item.enabled ? "opacity-60" : ""}`}>
               <input type="radio" name={name} className="mt-1" checked={choice === item.id} disabled={!item.enabled} onChange={() => { if (item.enabled) onChoose(item.id); }} />

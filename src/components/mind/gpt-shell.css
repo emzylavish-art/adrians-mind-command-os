@@ -1292,9 +1292,14 @@ html.eve-call-open body > *:not([data-testid="speak-stage"]) {
 
 img.service-mark {
   display: block;
-  object-fit: cover;
+  object-fit: contain;
   background: transparent;
   padding: 0;
+}
+
+img.service-mark.on-tile {
+  background: #fff;
+  padding: 2px;
 }
 
 
