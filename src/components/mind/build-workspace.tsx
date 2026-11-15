@@ -1,6 +1,9 @@
-import { useEffect, useMemo, useState, type FormEvent } from "react";
+import { useEffect, useMemo, useRef, useState, type FormEvent } from "react";
 import { Activity, Code2, FileDiff, FolderOpen, RefreshCw, Send, ShieldCheck, Square, Terminal, WifiOff } from "lucide-react";
 import { KimiPhase4Panel } from "@/components/mind/kimi-phase4-panel";
+import { GitReview, type GitReport } from "@/components/mind/git-review";
+import { CodeIde } from "@/components/mind/code-ide";
+import { OwnerFlow } from "@/components/mind/owner-flow";
 import { chatTurnBody } from "@/lib/mind/logic-routes";
 import { consumeMindTurn } from "@/lib/mind/live-turn";
 
@@ -58,7 +61,23 @@ function eventLabel(event: BuildEvent): string {
   return labels[event.type] ?? event.type.replaceAll("_", " ");
 }
 
-export function BuildWorkspace() {
+function shortDiff(path: string, before: string, after: string): string {
+  if (before === after) return `${path} was reported, but the text did not change.`;
+  const changed = after.split("\n").filter((line) => !before.split("\n").includes(line)).slice(0, 12);
+  return [`Changed ${path}.`, ...changed.map((line) => `+ ${line}`)].join("\n");
+}
+
+
+export function BuildWorkspace(props: {
+  onDiscuss?: (text: string) => void;
+  onResult?: (text: string) => void;
+  halted?: boolean;
+  recording?: boolean;
+  recordingSeconds?: number;
+  onOpenSpeak?: () => void;
+  onToggleStop?: () => void;
+  onStopRecording?: () => void;
+} = {}) {
   const [companion, setCompanion] = useState<CompanionState>({});
   const [prompt, setPrompt] = useState("");
   const [cwd, setCwd] = useState("");
@@ -75,13 +94,16 @@ export function BuildWorkspace() {
   const [browserNotice, setBrowserNotice] = useState("");
   const [workspaceFiles, setWorkspaceFiles] = useState<WorkspaceFile[]>([]);
   const [selectedFile, setSelectedFile] = useState("");
-  const [editorText, setEditorText] = useState("");
-  const [savedText, setSavedText] = useState("");
+  const [tabs, setTabs] = useState<string[]>([]);
+  const [buffers, setBuffers] = useState<Record<string, { draft: string; saved: string }>>({});
+  const buffersRef = useRef(buffers);
   const [fileBusy, setFileBusy] = useState(false);
   const [fileNotice, setFileNotice] = useState<string | null>(null);
   const [terminalCommand, setTerminalCommand] = useState("");
   const [terminalOutput, setTerminalOutput] = useState("");
-  const [terminalApproval, setTerminalApproval] = useState<{ id: string; token: string; command: string; hosted?: boolean } | null>(null);
+  const [terminalApproval, setTerminalApproval] = useState<{ id: string; token: string; command: string; hosted?: boolean; expiresAt?: string } | null>(null);
+  const [terminalHistory, setTerminalHistory] = useState<{ command: string; text: string; ok: boolean }[]>([]);
+  const [gitReport, setGitReport] = useState<GitReport | null>(null);
   const [terminalBusy, setTerminalBusy] = useState(false);
   const [lastDiff, setLastDiff] = useState<{ path: string; before: string; after: string } | null>(null);
   const [capabilities, setCapabilities] = useState<{ id: string; label: string; status: string; evidence: string }[]>([]);
@@ -102,7 +124,10 @@ export function BuildWorkspace() {
   );
   const online = (companion.onlineAgentIds?.length ?? 0) > 0;
   const active = job?.status === "queued" || job?.status === "running";
-  const editorDirty = selectedFile !== "" && editorText !== savedText;
+  buffersRef.current = buffers;
+  const editorText = buffers[selectedFile]?.draft ?? "";
+  const editorDirty = Object.values(buffers).some((buffer) => buffer.draft !== buffer.saved);
+  const dirtyTabs = Object.entries(buffers).filter(([, buffer]) => buffer.draft !== buffer.saved).map(([path]) => path);
   const changedFiles = useMemo(
     () => events
       .filter((event) => event.type === "file_write")
@@ -178,7 +203,7 @@ export function BuildWorkspace() {
       const data = (await response.json()) as { ok?: boolean; frame?: string; package?: string; error?: string };
       if (!response.ok || !data.ok || !data.frame) {
         setBrowserFrame("");
-        setBrowserNotice(data.error || "The coding browser did not start. No Kimi login was requested.");
+        setBrowserNotice(data.error || "The coding browser did not start. No separate login was requested.");
         return;
       }
       setBrowserFrame(data.frame);
@@ -189,9 +214,29 @@ export function BuildWorkspace() {
   }
 
   async function openFile(path: string) {
-    if (editorDirty && typeof window !== "undefined" && !window.confirm("This file has edits that were not verified as saved. Open another file anyway?")) return;
+    setTabs((prev) => prev.includes(path) ? prev : [...prev, path]);
+    const cached = buffersRef.current[path];
+    if (cached) {
+      setSelectedFile(path);
+      setPanel("editor");
+      return;
+    }
     const result = await runFileOperation("read", path) as { content?: string } | null;
-    if (result && typeof result.content === "string") { setSelectedFile(path); setEditorText(result.content); setSavedText(result.content); setPanel("editor"); }
+    if (result && typeof result.content === "string") {
+      setBuffers((prev) => ({ ...prev, [path]: prev[path] ?? { draft: result.content, saved: result.content } }));
+      setSelectedFile(path);
+      setPanel("editor");
+    }
+  }
+
+  function closeTab(path: string) {
+    const buffer = buffersRef.current[path];
+    if (buffer && buffer.draft !== buffer.saved && typeof window !== "undefined" && !window.confirm(`Close ${path} without a verified save?`)) return;
+    setTabs((prev) => {
+      const next = prev.filter((item) => item !== path);
+      if (selectedFile === path) setSelectedFile(next.at(-1) || "");
+      return next;
+    });
   }
 
   async function createFile() {
@@ -203,9 +248,9 @@ export function BuildWorkspace() {
     const result = await runFileOperation("write", name, "") as { path?: string } | null;
     if (!result?.path) return;
     setNewFileName("");
+    setTabs((prev) => prev.includes(result.path) ? prev : [...prev, result.path]);
+    setBuffers((prev) => ({ ...prev, [result.path]: { draft: "", saved: "" } }));
     setSelectedFile(result.path);
-    setEditorText("");
-    setSavedText("");
     setPanel("editor");
     setFileNotice(`Created ${result.path}. Type in the editor, then save.`);
   }
@@ -215,7 +260,7 @@ export function BuildWorkspace() {
     const result = await runFileOperation("write", selectedFile, editorText) as { path?: string; before?: string; after?: string } | null;
     if (result?.path) {
       const verified = result.after || editorText;
-      setSavedText(verified);
+      setBuffers((prev) => ({ ...prev, [selectedFile]: { draft: verified, saved: verified } }));
       setLastDiff({ path: result.path, before: result.before || "", after: verified });
       setFileNotice(`Saved ${result.path}. The before/after text is the reviewed result, not an assumed write.`);
     }
@@ -239,10 +284,57 @@ export function BuildWorkspace() {
     try {
       const response = await fetch(terminalApproval.hosted ? "/api/mind/kimi/terminal" : "/api/mind/pc/approve", { method: "POST", credentials: "include", headers: { "content-type": "application/json" }, body: JSON.stringify({ approvalId: terminalApproval.id, token: terminalApproval.token, command: terminalApproval.command, confirm: terminalApproval.hosted === true }) });
       const data = (await response.json()) as { ok?: boolean; text?: string; error?: string };
-      setTerminalOutput(data.text || data.error || "No terminal output returned.");
+      const text = data.text || data.error || "No terminal output returned.";
+      setTerminalOutput(text);
+      setTerminalHistory((prev) => [{ command: terminalApproval.command, text, ok: data.ok === true }, ...prev].slice(0, 8));
       setFileNotice(data.ok ? "Approved terminal command completed." : data.error || "Approved terminal command failed.");
       setTerminalApproval(null);
     } catch { setFileNotice("Terminal approval could not be completed."); } finally { setTerminalBusy(false); }
+  }
+
+  async function readGit(init = false) {
+    setFileBusy(true);
+    setFileNotice(null);
+    try {
+      const response = await fetch("/api/mind/kimi/files", { method: "POST", credentials: "include", headers: { "content-type": "application/json" }, body: JSON.stringify({ operation: init ? "git-init" : "git", confirm: init }) });
+      const data = (await response.json()) as GitReport & { ok?: boolean };
+      setGitReport(data);
+      setFileNotice(data.notice || data.error || "Git read finished. Nothing was pushed.");
+    } catch {
+      setFileNotice("Git status could not be read. Nothing was committed or pushed.");
+    } finally {
+      setFileBusy(false);
+    }
+  }
+
+  async function commitGit(message: string) {
+    setFileBusy(true);
+    setFileNotice(null);
+    try {
+      const response = await fetch("/api/mind/kimi/files", { method: "POST", credentials: "include", headers: { "content-type": "application/json" }, body: JSON.stringify({ operation: "git-commit", confirm: true, content: message }) });
+      const data = (await response.json()) as GitReport & { ok?: boolean };
+      setGitReport(data);
+      setFileNotice(data.notice || data.error || "Local commit finished. Nothing was pushed.");
+    } catch {
+      setFileNotice("Local commit could not be completed. Nothing was pushed.");
+    } finally {
+      setFileBusy(false);
+    }
+  }
+
+  async function branchGit(name: string) {
+    setFileBusy(true);
+    setFileNotice(null);
+    try {
+      const response = await fetch("/api/mind/kimi/files", { method: "POST", credentials: "include", headers: { "content-type": "application/json" }, body: JSON.stringify({ operation: "git-branch", confirm: true, to: name }) });
+      const data = (await response.json()) as GitReport & { ok?: boolean };
+      setGitReport(data);
+      setFileNotice(data.notice || data.error || "Local branch finished. Nothing was pushed.");
+    } catch {
+      setFileNotice("Local branch could not be created. Nothing was pushed.");
+    } finally {
+      setFileBusy(false);
+    }
   }
 
   useEffect(() => {
@@ -253,11 +345,19 @@ export function BuildWorkspace() {
 
   useEffect(() => {
     void browseWorkspace();
+    const live = sessionStorage.getItem("adrian-build-live-session");
+    if (live) setSessionId(live);
     const draft = sessionStorage.getItem("adrian-build-draft");
     if (!draft) return;
     setPrompt(draft);
     sessionStorage.removeItem("adrian-build-draft");
-    setNotice("Opened from Chat. Review the task, then press Run build.");
+    const fromHuman = Boolean(sessionStorage.getItem("adrian-human-return"));
+    const requested = sessionStorage.getItem("adrian-build-mode");
+    if (requested === "auto" || requested === "plan" || requested === "default") {
+      setMode(requested);
+      sessionStorage.removeItem("adrian-build-mode");
+    }
+    setNotice(fromHuman ? "Opened from Intelligence. Review the task, then press Run build. The result returns to that thread." : "Opened from Chat. Review the task, then press Run build.");
   }, []);
 
   useEffect(() => {
@@ -307,10 +407,17 @@ export function BuildWorkspace() {
       const data = (await response.json()) as { ok?: boolean; jobId?: string; executed?: boolean; error?: string; version?: string; agent?: string; loginRequired?: boolean; output?: string; package?: string; sessionId?: string; mode?: string; resumed?: boolean; forkedSessionId?: string; filesChanged?: { path: string; before: string; after: string }[] };
       if (!response.ok || !data.ok || !data.jobId) {
         if (data.executed) {
-          if (data.sessionId) setSessionId(data.sessionId);
+          if (data.sessionId) {
+            setSessionId(data.sessionId);
+            sessionStorage.setItem("adrian-build-live-session", data.sessionId);
+          }
           const change = data.filesChanged?.[0];
           if (change) setLastDiff(change);
-          setNotice(`${data.mode || mode} mode ran Kimi Code${data.resumed ? " and resumed the last session" : ""}. ${change ? `Changed ${change.path}.` : "No file change was reported."}`);
+          const alive = (data as { processAlive?: boolean }).processAlive === true;
+          const reused = (data as { reused?: boolean }).reused === true;
+          setNotice(`${data.mode || mode} mode ran Adrian Build${reused ? " on the same running process" : data.resumed ? " and resumed the last session" : ""}. ${alive ? "The process is still running for this session." : ""} ${change ? `Changed ${change.path}.` : "No file change was reported."}`);
+          const result = [change ? shortDiff(change.path, change.before, change.after) : "No file change was found on disk.", data.output].filter(Boolean).join("\n").slice(0, 2000);
+          if (sessionStorage.getItem("adrian-human-return")) props.onResult?.(result);
           setJob({ id: "local", status: "done", output: [data.package, data.mode ? `mode ${data.mode}` : "", data.resumed ? "resumed" : "", data.forkedSessionId ? `fork ${data.forkedSessionId}` : "", data.output].filter(Boolean).join("\n") || "Accepted.", error: "", createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() });
           setPanel("agent");
           return;
@@ -382,6 +489,20 @@ export function BuildWorkspace() {
     } catch { setNotice("Cancellation request could not reach Adrian OS."); }
   }
 
+  async function endCodingSession() {
+    if (!sessionId) return;
+    try {
+      const response = await fetch("/api/mind/kimi/session", { method: "POST", credentials: "include", headers: { "content-type": "application/json" }, body: JSON.stringify({ action: "close", resumeSessionId: sessionId }) });
+      const data = (await response.json()) as { ok?: boolean; closed?: boolean; error?: string };
+      if (!response.ok || !data.ok) { setNotice(data.error || "The coding process was not closed."); return; }
+      sessionStorage.removeItem("adrian-build-live-session");
+      setSessionId("");
+      setNotice(data.closed ? "The coding process for this session was closed." : "No coding process was still running.");
+    } catch {
+      setNotice("The coding process could not be closed.");
+    }
+  }
+
   async function searchWorkspace() {
     const result = await runFileOperation("search", undefined, undefined, { query: searchQuery }) as { matches?: { path: string }[] } | null;
     setSearchMatches(result?.matches?.map((item) => item.path) || []);
@@ -447,18 +568,21 @@ export function BuildWorkspace() {
     const text = assistantText || job?.output || "";
     if (!text || typeof window === "undefined" || !window.speechSynthesis) { setNotice("Speech output is not available in this browser."); return; }
     window.speechSynthesis.cancel();
-    window.speechSynthesis.speak(new SpeechSynthesisUtterance(text.slice(0, 1_000)));
+    const utterance = new SpeechSynthesisUtterance(text.slice(0, 1_000));
+    const pace = localStorage.getItem("adrian-speak-rate");
+    utterance.rate = pace === "slow" ? 0.85 : pace === "brisk" ? 1.15 : 1;
+    window.speechSynthesis.speak(utterance);
   }
 
   return (
-    <section className="page-shell space-y-4" data-testid="build-workspace">
+    <section className="page-shell intelligence-main" data-testid="build-workspace">
       <div className="page-hero">
         <div className="flex flex-wrap items-start justify-between gap-4">
           <div className="flex items-center gap-3">
             <img src="/brand/marks/build.png" alt="" className="size-8 rounded-lg" />
             <div>
               <h2 className="font-display text-3xl font-bold">Adrian Build</h2>
-              <p className="text-sm text-muted">Kimi Code runs here with the saved Grok key. Type a task and press Run build, or open a file and type in the editor.</p>
+              <p className="text-sm text-muted">Adrian Build runs here with the saved Grok key. Type a task and press Run build, or open a file and type in the editor.</p>
             </div>
           </div>
           <button type="button" className="inline-flex min-h-11 items-center gap-2 rounded-panel border border-line px-3 text-sm" onClick={() => { void refreshCompanion(); if (job) void refreshJob(job.id); }}>
@@ -467,17 +591,24 @@ export function BuildWorkspace() {
         </div>
       </div>
 
-      <div className={`dense-card flex flex-wrap items-center gap-3 ${online ? "border-success/40" : "border-warning/40"}`}>
+      <section className={`intelligence-group flex flex-wrap items-center gap-3 ${online ? "border-success/40" : "border-warning/40"}`} aria-label="Status">
+        <h3 className="w-full">Status</h3>
         {online ? <Activity className="size-5 text-success" aria-hidden="true" /> : <WifiOff className="size-5 text-warning" aria-hidden="true" />}
-        <div className="min-w-0 flex-1">
-          <p className="font-semibold">{online ? "Paired computer connected" : "Kimi Code ready on this site"}</p>
-          <p className="text-sm text-muted">{online ? (companion.detail || "A paired computer reported a heartbeat.") : "No paired computer is online. Run uses the hosted Kimi Code workspace and shows the real result."}</p>
-        </div>
-        <span className="rounded-full border border-line px-2 py-1 text-xs">{online ? "Ready to queue" : "Hosted Kimi ready"}</span>
-      </div>
+        <p className="min-w-0 flex-1 text-sm">{online ? (companion.detail || "Paired computer connected.") : "Adrian Build is ready on this site. Run uses the hosted workspace."}</p>
+        <span className="rounded-full border border-line px-2 py-1 text-xs">{online ? "Ready to queue" : "Hosted workspace ready"}</span>
+      </section>
 
-      <details className="dense-card space-y-3">
-        <summary className="cursor-pointer font-semibold">Projects and sessions</summary>
+      <OwnerFlow
+        halted={props.halted === true}
+        recording={props.recording === true}
+        recordingSeconds={props.recordingSeconds ?? 0}
+        onOpenSpeak={() => props.onOpenSpeak?.()}
+        onToggleStop={() => props.onToggleStop?.()}
+        onStopRecording={() => props.onStopRecording?.()}
+      />
+
+      <section className="intelligence-group" aria-label="Workspace">
+        <h3>Workspace</h3>
         {projects.length === 0 ? <p className="text-sm text-muted">No workspace is registered yet. Registering stores the label and path for this account. It does not prove the path is reachable.</p> : projects.map((project) => (
           <div key={project.id} className="flex flex-wrap items-center gap-2 text-sm">
             <span className="min-w-0 flex-1">{project.label} · {project.cwd || "no path"}</span>
@@ -491,14 +622,23 @@ export function BuildWorkspace() {
             <button type="submit" className="min-h-11 rounded-panel border border-line px-3 text-sm">Rename</button>
           </form>
         ))}
-      </details>
+      </section>
 
-      <form className="dense-card space-y-3" onSubmit={submit}>
+      {workspaceFiles.length ? (
+        <div className="flex gap-2 overflow-auto" aria-label="Workspace files">
+          {workspaceFiles.slice(0, 8).map((file) => (
+            <button key={file.path} type="button" className="min-h-11 shrink-0 rounded-panel border border-line px-3 text-xs" onClick={() => void openFile(file.path)}>{file.path}</button>
+          ))}
+        </div>
+      ) : null}
+      <section className="intelligence-group" aria-label="Task">
+        <h3>Task</h3>
+      <form className="space-y-3" onSubmit={submit}>
         <div className="flex items-center gap-2">
           <FolderOpen className="size-4 text-accent" aria-hidden="true" />
-          <h3 className="font-semibold">Kimi Code</h3>
+          <p className="font-semibold">Adrian Build</p>
         </div>
-        <textarea value={prompt} onChange={(event) => setPrompt(event.target.value)} placeholder="Ask Adrian Build to create, edit, debug, or explain code…" className="min-h-32 w-full rounded-panel border border-line bg-transparent p-3 text-sm outline-none focus:border-accent" aria-label="Coding task" />
+        <textarea value={prompt} onChange={(event) => setPrompt(event.target.value)} placeholder="Ask Adrian Build to create, edit, debug, or explain code…" className="min-h-20 w-full rounded-panel border border-line bg-transparent p-3 text-sm outline-none focus:border-accent" aria-label="Coding task" />
         <details className="rounded-panel border border-line p-3">
           <summary className="cursor-pointer text-sm font-semibold">Workspace and advanced controls</summary>
           <div className="mt-3 flex gap-2"><input value={cwd} onChange={(event) => setCwd(event.target.value)} placeholder="Optional local path, or leave blank for the hosted workspace" className="min-h-11 min-w-0 flex-1 rounded-panel border border-line bg-transparent px-3 text-sm outline-none focus:border-accent" aria-label="Approved workspace path" /><button type="button" disabled={fileBusy} onClick={() => void browseWorkspace()} className="inline-flex min-h-11 items-center gap-2 rounded-panel border border-line px-3 text-sm disabled:opacity-50"><FolderOpen className="size-4" />{fileBusy ? "Loading…" : "Browse"}</button></div>
@@ -511,6 +651,9 @@ export function BuildWorkspace() {
           <input value={transcript} onChange={(event) => setTranscript(event.target.value)} placeholder="Dictate or paste an Adrian Speak transcript" className="min-h-11 min-w-40 flex-1 rounded-panel border border-line bg-transparent px-3 text-sm outline-none focus:border-accent" aria-label="Voice transcript" />
           <button type="button" disabled={!transcript.trim()} onClick={() => void submitVoice()} className="min-h-11 rounded-panel border border-line px-3 text-sm disabled:opacity-50">Send transcript</button>
           <button type="button" onClick={speakResult} className="min-h-11 rounded-panel border border-line px-3 text-sm">Read result</button>
+          <button type="button" disabled={planning || !prompt.trim()} onClick={() => void planWithGrok()} className="min-h-11 rounded-panel border border-line px-3 text-sm disabled:opacity-50">{planning ? "Planning…" : "Plan with Grok"}</button>
+          <button type="button" disabled={!prompt.trim()} onClick={() => props.onDiscuss?.(prompt)} className="min-h-11 rounded-panel border border-line px-3 text-sm disabled:opacity-50">Discuss in Intelligence</button>
+          <button type="button" onClick={() => props.onResult?.(job?.output || notice || prompt || "Build has no result yet.")} className="min-h-11 rounded-panel border border-line px-3 text-sm">Save result in Intelligence</button>
           </div>
           <div className="mt-3 flex flex-wrap gap-2">
           <input value={model} onChange={(event) => setModel(event.target.value)} placeholder="Grok" className="min-h-11 w-40 rounded-panel border border-line bg-transparent px-3 text-sm outline-none focus:border-accent" aria-label="Build model" />
@@ -521,16 +664,13 @@ export function BuildWorkspace() {
         <div className="flex flex-wrap items-center gap-2">
           {([
             ["plan", "Ask", "Explains only. No file is changed."],
-            ["default", "Edit", "Kimi can change files in this workspace."],
-            ["auto", "Run", "Kimi can change files and use tools in this workspace."],
+            ["default", "Edit", "Adrian Build can change files in this workspace."],
+            ["auto", "Run", "Adrian Build can change files and use tools in this workspace."],
           ] as const).map(([item, label, sentence]) => (
             <button key={item} type="button" title={sentence} onClick={() => setMode(item)} className={`min-h-11 rounded-panel border px-3 text-sm ${mode === item ? "border-accent" : "border-line"}`} aria-pressed={mode === item}>{label}</button>
           ))}
           <button type="submit" disabled={loading || Boolean(active)} className="inline-flex min-h-11 items-center gap-2 rounded-panel bg-accent px-4 text-sm font-semibold text-accent-ink disabled:cursor-not-allowed disabled:opacity-50">
             <Send className="size-4" aria-hidden="true" /> {loading ? "Queueing…" : active ? "Task running…" : "Run build"}
-          </button>
-          <button type="button" disabled={planning || !prompt.trim()} onClick={() => void planWithGrok()} className="inline-flex min-h-11 items-center gap-2 rounded-panel border border-line px-4 text-sm disabled:opacity-50">
-            {planning ? "Planning…" : "Plan with Grok"}
           </button>
           <span className="text-xs text-muted">{mode === "plan" ? "Ask explains only. No file is changed." : mode === "default" ? "Edit can change files in this workspace." : "Run can change files and use tools in this workspace."}</span>
         </div>
@@ -541,8 +681,10 @@ export function BuildWorkspace() {
       {fileNotice ? <p className="dense-card text-sm" role="status">{fileNotice}</p> : null}
 
       {!hasWorkspaceSurface ? <div className="promo-banner text-sm"><ShieldCheck className="size-5 text-accent" aria-hidden="true" /><div><p className="font-semibold">Honest runtime boundary</p><p className="text-muted">This workspace never fabricates agent output. It shows queued, running, permission, error, and completed states from the ACP event stream.</p></div></div> : null}
-      {(
-        <div className="grid gap-4 xl:grid-cols-[13rem_minmax(0,1fr)]">
+      </section>
+      <section className="intelligence-group" aria-label="Editor">
+        <h3>Editor</h3>
+        <div className="build-panel-grid grid gap-4">
           <nav className="dense-card h-fit space-y-1" aria-label="Build panels">
             {(["agent", "timeline", "changes", "editor", "terminal", "browser", "capabilities"] as const).map((item) => (
               <button key={item} type="button" onClick={() => item === "browser" ? void openCodingBrowser() : setPanel(item)} className={`flex min-h-11 w-full items-center justify-between rounded-panel px-3 text-left text-sm ${panel === item ? "bg-accent text-accent-ink" : "text-muted hover:bg-white/5"}`}>
@@ -556,22 +698,24 @@ export function BuildWorkspace() {
               <div><p className="text-xs uppercase tracking-[0.18em] text-muted">Build panel</p><h3 className="font-semibold">{panel === "agent" ? "Agent output" : panel === "timeline" ? "Execution timeline" : panel === "changes" ? "File-change review" : panel === "editor" ? "Code editor" : panel === "terminal" ? "Integrated terminal" : panel === "browser" ? "Coding browser" : "Capability inventory"}</h3></div>
               {active ? <Square className="size-4 animate-pulse text-warning" aria-label="Task active" /> : <ShieldCheck className="size-5 text-success" aria-label="Task settled" />}
             </div>
-            {panel === "browser" ? <div className="space-y-2"><p className="text-sm text-muted" role="status">{browserNotice || "The coding browser uses the in-repo package and the saved Grok key. It does not ask for a Kimi login."}</p>{browserFrame ? <iframe title="Coding browser" src={browserFrame} className="h-[32rem] w-full rounded-panel border border-line bg-black" /> : null}</div> : null}
+            {panel === "browser" ? <div className="space-y-2"><p className="text-sm text-muted" role="status">{browserNotice || "The coding browser uses the in-repo package and the saved Grok key. It does not ask for a separate login."}</p>{browserFrame ? <iframe title="Coding browser" src={browserFrame} className="h-[32rem] w-full rounded-panel border border-line bg-black" /> : null}</div> : null}
             {panel === "agent" ? <>
               <div className="min-h-32 whitespace-pre-wrap rounded-panel border border-line bg-black/10 p-3 text-sm">{assistantText || job?.output || job?.error || "No active build task. Submit a task to stream agent output here."}</div>
               {active ? <button type="button" onClick={() => void cancelBuild()} className="min-h-10 rounded-panel border border-danger/40 px-3 text-sm text-danger">Stop task</button> : null}
+              {sessionId ? <button type="button" onClick={() => void endCodingSession()} className="min-h-10 rounded-panel border border-line px-3 text-sm">End coding session</button> : null}
               {job?.error ? <p className="text-sm text-danger" role="alert">{job.error}</p> : null}
             </> : null}
             {panel === "timeline" ? <ol className="max-h-96 space-y-2 overflow-auto text-sm">{events.map((item) => <li key={item.id} className="rounded-panel border border-line p-2"><div className="flex items-center justify-between gap-2"><span className="font-medium">{eventLabel(item)}</span><time className="text-xs text-muted">{new Date(item.createdAt).toLocaleTimeString()}</time></div>{updateText(item) ? <p className="mt-1 text-xs text-muted">{updateText(item).slice(0, 240)}</p> : null}</li>)}{!events.length ? <li className="text-sm text-muted">No events yet.</li> : null}</ol> : null}
+            {panel === "changes" ? <GitReview report={gitReport} busy={fileBusy} onRead={() => void readGit(false)} onInit={() => void readGit(true)} onCommit={(message) => void commitGit(message)} onBranch={(name) => void branchGit(name)} onOpen={(path) => { setPanel("editor"); void openFile(path); }} /> : null}
             {panel === "changes" ? <div className="space-y-2">{changedFiles.map((path) => <div key={path} className="rounded-panel border border-line p-3 text-sm"><FileDiff className="mr-2 inline size-4 text-accent" />{path}<span className="ml-2 text-xs text-muted">written by ACP</span></div>)}{lastDiff ? <div className="rounded-panel border border-line p-3 text-xs"><p className="font-semibold">Reviewed save: {lastDiff.path}</p><p className="mt-2 whitespace-pre-wrap text-danger">{lastDiff.before}</p><hr className="my-2 border-line" /><p className="whitespace-pre-wrap text-success">{lastDiff.after}</p></div> : null}{!changedFiles.length && !lastDiff ? <p className="text-sm text-muted">No file-write events have been reported for this session.</p> : null}<p className="text-xs text-muted">Reviewed file saves return before/after content for bounded change review.</p></div> : null}
             {panel === "changes" ? <button type="button" className="min-h-11 rounded-panel border border-line px-3 text-sm" onClick={() => void restoreLatestCheckpoint()}>Restore last checkpoint</button> : null}
-            {panel === "editor" ? <div className="grid gap-3 lg:grid-cols-[13rem_minmax(0,1fr)]"><div className="max-h-80 space-y-1 overflow-auto rounded-panel border border-line p-2"><form className="mb-2 flex gap-1" onSubmit={(event) => { event.preventDefault(); void createFile(); }}><input value={newFileName} onChange={(event) => setNewFileName(event.target.value)} placeholder="new-file.md" aria-label="New file name" className="min-h-10 min-w-0 flex-1 rounded-panel border border-line bg-transparent px-2 text-xs" /><button type="submit" className="min-h-10 rounded-panel border border-line px-2 text-xs">New</button></form>{workspaceFiles.map((file) => <button key={file.path} type="button" onClick={() => void openFile(file.path)} className={`block w-full truncate rounded px-2 py-2 text-left text-xs ${selectedFile === file.path ? "bg-accent text-accent-ink" : "text-muted hover:bg-white/5"}`}>{file.path}<span className="ml-1 opacity-60">{file.bytes} B</span></button>)}{searchMatches.map((path) => <p key={path} className="px-2 text-xs text-muted">Match: {path}</p>)}{!workspaceFiles.length && !searchMatches.length ? <p className="p-2 text-xs text-muted">Choose Browse to list the approved workspace.</p> : null}</div><div className="space-y-2"><div className="grid grid-cols-[2.5rem_minmax(0,1fr)] gap-2"><pre aria-hidden="true" className="overflow-hidden pt-4 text-right font-mono text-xs leading-5 text-muted">{(editorText || " ").split("\n").map((_, index) => String(index + 1)).join("\n")}</pre><textarea value={editorText} onChange={(event) => setEditorText(event.target.value)} disabled={!selectedFile} className="min-h-56 w-full rounded-panel border border-line bg-black/20 p-4 font-mono text-xs leading-5 outline-none focus:border-accent disabled:opacity-60" placeholder="Select a file to read it here." aria-label="Workspace file editor" /></div><div className="flex items-center gap-2"><button type="button" disabled={!selectedFile || fileBusy || !editorDirty} onClick={() => void saveFile()} className="min-h-10 rounded-panel bg-accent px-3 text-sm font-semibold text-accent-ink disabled:opacity-50">{fileBusy ? "Saving…" : "Save reviewed file"}</button><span className="text-xs text-muted">{selectedFile ? `${selectedFile} · ${editorText.split("\n").length} lines · ${editorDirty ? "Unsaved" : "Matches last read or verified save"}` : "No file selected"}</span></div></div></div> : null}
+            {panel === "editor" ? <CodeIde files={workspaceFiles} matches={searchMatches} tabs={tabs} dirty={dirtyTabs} selected={selectedFile} text={editorText} busy={fileBusy} notice={fileNotice} newName={newFileName} onNewName={setNewFileName} onCreate={() => void createFile()} onOpen={(path) => void openFile(path)} onCloseTab={closeTab} onChange={(value) => setBuffers((prev) => ({ ...prev, [selectedFile]: { draft: value, saved: prev[selectedFile]?.saved ?? "" } }))} onSave={() => void saveFile()} /> : null}
             {panel === "capabilities" ? <div className="space-y-2">{capabilities.map((item) => <div key={item.id} className="rounded-panel border border-line p-3 text-sm"><div className="flex items-center justify-between gap-2"><span className="font-medium">{item.label}</span><span className="text-xs text-muted">{item.status.replaceAll("_", " ")}</span></div><p className="mt-1 text-xs text-muted">{item.evidence}</p></div>)}{!capabilities.length ? <p className="text-sm text-muted">Capability inventory has not loaded.</p> : null}<div className="rounded-panel border border-line p-3 text-xs text-muted"><p>Projects: {projects.map((project) => project.label).join(", ") || "none"}</p><p>Sessions: {sessions.map((session) => session.name).join(", ") || "none"}</p><p>Providers: {providers.map((provider) => `${provider.model}${provider.hasKey ? " (key stored)" : ""} · ${provider.runtimeUse}`).join(", ") || "none"}</p></div></div> : null}
             {panel === "capabilities" ? <KimiPhase4Panel initializeResponse={null} updates={events} /> : null}
-            {panel === "terminal" ? <div className="space-y-3"><input value={terminalCommand} onChange={(event) => setTerminalCommand(event.target.value)} placeholder="Command requiring explicit approval" className="min-h-11 w-full rounded-panel border border-line bg-transparent px-3 font-mono text-sm outline-none focus:border-accent" aria-label="Terminal command" /><div className="flex flex-wrap gap-2"><button type="button" disabled={terminalBusy || !terminalCommand.trim()} onClick={() => void requestTerminalApproval()} className="min-h-10 rounded-panel border border-line px-3 text-sm disabled:opacity-50">{terminalBusy ? "Requesting…" : "Request approval"}</button>{terminalApproval ? <button type="button" disabled={terminalBusy} onClick={() => void approveTerminal()} className="min-h-10 rounded-panel bg-accent px-3 text-sm font-semibold text-accent-ink disabled:opacity-50">Approve exact command</button> : null}</div>{terminalApproval ? <p className="rounded-panel border border-warning/40 bg-warning/10 p-3 text-xs">Pending approval: <code>{terminalApproval.command}</code></p> : null}<div className="min-h-40 whitespace-pre-wrap rounded-panel border border-line bg-black/20 p-4 font-mono text-xs text-muted">{terminalOutput || (deniedTerminals ? `${deniedTerminals} ACP terminal request${deniedTerminals === 1 ? "" : "s"} denied by the agent safety policy.` : "No approved terminal output yet.")}</div><p className="text-xs text-muted">The exact command runs only after you approve it. It runs in the hosted workspace when no computer is paired.</p></div> : null}
+            {panel === "terminal" ? <div className="space-y-3"><input value={terminalCommand} onChange={(event) => setTerminalCommand(event.target.value)} placeholder="Command requiring explicit approval" className="min-h-11 w-full rounded-panel border border-line bg-transparent px-3 font-mono text-sm outline-none focus:border-accent" aria-label="Terminal command" /><div className="flex flex-wrap gap-2"><button type="button" disabled={terminalBusy || !terminalCommand.trim()} onClick={() => void requestTerminalApproval()} className="min-h-10 rounded-panel border border-line px-3 text-sm disabled:opacity-50">{terminalBusy ? "Requesting…" : "Request approval"}</button>{terminalApproval ? <button type="button" disabled={terminalBusy} onClick={() => void approveTerminal()} className="min-h-10 rounded-panel bg-accent px-3 text-sm font-semibold text-accent-ink disabled:opacity-50">Approve exact command</button> : null}</div>{terminalApproval ? <p className="rounded-panel border border-warning/40 bg-warning/10 p-3 text-xs">Pending approval: <code>{terminalApproval.command}</code>{terminalApproval.expiresAt ? ` · expires ${terminalApproval.expiresAt}` : ""} · hosted workspace</p> : null}<div className="min-h-40 whitespace-pre-wrap rounded-panel border border-line bg-black/20 p-4 font-mono text-xs text-muted">{terminalOutput || (deniedTerminals ? `${deniedTerminals} ACP terminal request${deniedTerminals === 1 ? "" : "s"} denied by the agent safety policy.` : "No approved terminal output yet.")}</div><p className="text-xs text-muted">The exact command runs only after you approve it. It runs in the hosted workspace when no computer is paired. Dangerous commands are refused by the server even after approval. {terminalHistory.map((item) => `${item.ok ? "ok" : "failed"}: ${item.command}`).join(" · ")}</p></div> : null}
           </section>
         </div>
-      )}
+      </section>
     </section>
   );
 }

@@ -119,15 +119,15 @@ export function KimiDeviceConnect() {
         {(tab === "installed" ? OFFICIAL.filter((plugin) => added.includes(plugin.id)) : tab === "official" ? OFFICIAL.filter((plugin) => plugin.id.startsWith("kimi")) : tab === "curated" ? OFFICIAL.filter((plugin) => !plugin.id.startsWith("kimi")) : []).map((plugin) => {
           const on = added.includes(plugin.id);
           return (
-            <article key={plugin.id} className="rounded-panel border border-line p-3">
-              <div className="flex items-center justify-between gap-3">
-                <div className="flex min-w-0 items-center gap-3">
-                  {"image" in plugin ? <img className="service-mark" src={plugin.image} alt="" width={28} height={28} /> : <span className="service-mark" style={{ background: plugin.color, color: "#fff" }} aria-hidden="true">{plugin.mark}</span>}
-                  <div className="min-w-0">
-                    <p className="font-semibold">{plugin.name}</p>
-                    <p className="text-sm text-muted">{plugin.description}</p>
-                  </div>
+            <article key={plugin.id} className="plugin-link">
+              <div className="plugin-link__main">
+                {"image" in plugin ? <img className="service-mark" src={plugin.image} alt="" width={28} height={28} /> : <span className="service-mark" style={{ background: plugin.color, color: "#fff" }} aria-hidden="true">{plugin.mark}</span>}
+                <div className="min-w-0">
+                  {"href" in plugin && plugin.href ? <a className="font-semibold underline" href={plugin.href} target="_blank" rel="noreferrer">{plugin.name}</a> : <p className="font-semibold">{plugin.name}</p>}
+                  <p className="text-sm text-muted">{plugin.description}</p>
                 </div>
+              </div>
+              <div className="plugin-link__action">
                 <button type="button" className={"min-h-11 shrink-0 rounded-panel px-4 text-sm font-semibold " + (on ? "border border-line" : "bg-accent text-accent-ink")} onClick={() => on ? remember(added.filter((id) => id !== plugin.id)) : addPlugin(plugin)}>
                   {on ? "Remove" : "Add"}
                 </button>
@@ -138,7 +138,7 @@ export function KimiDeviceConnect() {
         {tab === "installed" && added.length === 0 ? <p className="text-sm text-muted">Nothing is added yet. Open Official or Curated and press Add.</p> : null}
       </div>
       {tab === "custom" ? <div>
-      <p className="mt-3 text-sm text-muted">There is no Kimi login on this page. A coding task uses the Grok key already saved for Adrian.</p>
+      <p className="mt-3 text-sm text-muted">There is no separate coding login on this page. A coding task uses the Grok key already saved for Adrian.</p>
       <form className="mt-4 flex flex-wrap gap-2" onSubmit={(event) => { event.preventDefault(); void saveMcp(); }}>
         <input id="kimi-mcp-url" value={mcpUrl} onChange={(event) => setMcpUrl(event.target.value)} placeholder="https://your-mcp.example/mcp" className="min-h-11 min-w-64 flex-1 rounded-panel border border-line bg-bg px-3 text-sm" />
         <button type="submit" className="min-h-11 rounded-panel border border-line px-3 text-sm" disabled={busy}>Connect MCP</button>

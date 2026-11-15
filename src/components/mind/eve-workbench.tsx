@@ -1,6 +1,8 @@
 import { useEffect, useState } from "react";
 import { Activity, ArrowUpRight, Bot, CircleAlert, Clock3, FileText, Globe2, ShieldCheck } from "lucide-react";
-import { DigitalHuman, readStoredFraming, writeStoredFraming } from "@/components/mind/avatar/digital-human";
+import { readStoredFraming, writeStoredFraming } from "@/components/mind/avatar/digital-human";
+import { EveTurn } from "@/components/mind/eve-turn";
+import { isIntelligenceThread } from "@/components/mind/human-code-panel";
 import { AVATAR_EXPRESSIONS, type AvatarExpression, type AvatarFraming } from "@/lib/mind/avatar/presence";
 import { MIND_CHARACTERS, readStoredCharacterId, rosterAvailability, writeStoredCharacterId } from "@/lib/mind/characters";
 import { paperclipStatus, runDurableCorePass } from "@/lib/mind/server";
@@ -8,10 +10,20 @@ import { CONVERSATIONAL_PERSONALITIES, resolvePersonalityId } from "@/lib/mind/p
 import type { WorkbenchCommand } from "@/lib/mind/workbench-command";
 import { writeStoredVoiceChoice } from "@/lib/mind/voice/voices";
 import type { Workspace } from "@/lib/mind/types";
+import { APPROVABLE_TODAY, BLOCKED_CONTROL, decideComputerAction } from "@/lib/mind/computer-control";
+import { projectFromSpeech } from "@/lib/mind/eve-projection";
+import { OwnerFlow } from "@/components/mind/owner-flow";
 
 function stamp(value: string): string {
   const parsed = Date.parse(value);
   return Number.isFinite(parsed) ? new Date(parsed).toLocaleString() : "Time unavailable";
+}
+
+function threadLabel(thread: { title?: string; messages?: { role: string; content: string }[] }) {
+  const title = thread.title?.trim();
+  if (title && title !== "Human Code" && title !== "Intelligence" && title !== "From EVE" && title !== "New coding thread") return title;
+  const first = thread.messages?.find((message) => message.role === "user")?.content.replace(/\s+/g, " ").trim();
+  return (first || "Intelligence").slice(0, 42);
 }
 
 function stateTone(value: string): string {
@@ -40,6 +52,7 @@ function storageOrNull(): Storage | null {
 export function EveWorkbench({
   workspace,
   onOpenChat,
+  onOpenCode,
   onOpenDashboard,
   onOpenAgents,
   onOpenRuns,
@@ -52,9 +65,13 @@ export function EveWorkbench({
   personalityId,
   customPersonality,
   chatTitle,
+  recording = false,
+  recordingSeconds = 0,
+  onStopRecording,
 }: {
   workspace: Workspace;
   onOpenChat: () => void;
+  onOpenCode?: (text: string) => void;
   onOpenDashboard: () => void;
   onOpenAgents: () => void;
   onOpenRuns: () => void;
@@ -67,6 +84,9 @@ export function EveWorkbench({
   personalityId?: string;
   customPersonality?: string;
   chatTitle?: string;
+  recording?: boolean;
+  recordingSeconds?: number;
+  onStopRecording?: () => void;
 }) {
   const runs = [...workspace.runs].sort((a, b) => Date.parse(b.updatedAt) - Date.parse(a.updatedAt));
   const visibleRuns = runs.slice(0, 12);
@@ -92,12 +112,36 @@ export function EveWorkbench({
   const [ask, setAsk] = useState("");
   const [askBusy, setAskBusy] = useState(false);
   const [askReply, setAskReply] = useState<string | null>(null);
+  const [receipts, setReceipts] = useState<Array<{ id: string; state: string; action: string; detail: string }>>([]);
+  const [pairedComputer, setPairedComputer] = useState(false);
+  useEffect(() => {
+    let gone = false;
+    void fetch("/api/mind/pairing/status", { credentials: "include" })
+      .then((response) => response.json())
+      .then((data) => { if (!gone) setPairedComputer(data?.card?.paired === true); })
+      .catch(() => { if (!gone) setPairedComputer(false); });
+    return () => { gone = true; };
+  }, []);
   const roster = rosterAvailability();
   const style = CONVERSATIONAL_PERSONALITIES.find((item) => item.id === resolvePersonalityId(personalityId));
+  const codeThreads = workspace.chats.filter((chat) => isIntelligenceThread(chat.customPersonality)).slice(0, 4);
 
   useEffect(() => {
     if (!agentId && firstAgentId) setAgentId(firstAgentId);
   }, [agentId, firstAgentId]);
+
+  useEffect(() => {
+    let canceled = false;
+    void fetch("/api/mind/receipts", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ operation: "list" }) })
+      .then((response) => response.json())
+      .then((body: { receipts?: Array<{ id: string; state: string; action: string; detail: string }> }) => {
+        if (!canceled && body.receipts) setReceipts(body.receipts);
+      })
+      .catch(() => undefined);
+    return () => {
+      canceled = true;
+    };
+  }, []);
 
   useEffect(() => {
     let canceled = false;
@@ -153,11 +197,21 @@ export function EveWorkbench({
     event.preventDefault();
     const text = ask.trim();
     if (!text || !onAsk || askBusy) return;
+    const decision = decideComputerAction({ text, halted: workspace.halted, paired: pairedComputer, actor: "eve" });
+    if (decision.kind !== "none") {
+      setAskReply(decision.message);
+      const recorded = await fetch("/api/mind/receipts", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ operation: "record", state: "PROPOSED", action: "computer-control", detail: decision.message }) }).then((response) => response.json()).catch(() => null);
+      if (recorded?.receipt) setReceipts((prev) => [recorded.receipt, ...prev].slice(0, 8));
+      return;
+    }
     setAskBusy(true);
     setAskReply("EVE is answering.");
+    void fetch("/api/mind/receipts", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ operation: "record", state: "PROPOSED", action: "ask-eve", detail: text.slice(0, 180) }) });
     try {
       const reply = await onAsk(text);
       setAskReply(reply || "EVE did not return a reply.");
+      const recorded = await fetch("/api/mind/receipts", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ operation: "record", state: "EXECUTED", action: "ask-eve", detail: reply ? "EVE answered." : "EVE did not return a reply." }) }).then((response) => response.json()).catch(() => null);
+      if (recorded?.receipt) setReceipts((prev) => [recorded.receipt, ...prev].slice(0, 8));
       if (reply && !/did not|failed|error/i.test(reply)) setAsk("");
     } catch {
       setAskReply("EVE did not finish that reply. Nothing was marked complete.");
@@ -166,24 +220,25 @@ export function EveWorkbench({
     }
   }
 
+  const heard = projectFromSpeech(ask);
+
   return (
     <main className="h-full min-h-0 overflow-auto p-4 md:p-6" data-testid="eve-workbench">
       <div className="mx-auto flex max-w-[1500px] flex-col gap-4">
         <header className="page-hero flex flex-col gap-4 p-4 md:flex-row md:items-center md:justify-between md:p-6">
           <div className="flex min-w-0 items-center gap-4">
-            <div className="grid size-16 shrink-0 place-items-center rounded-2xl border border-accent/30 bg-accent/10 text-accent">
-              <Bot className="size-8" aria-hidden="true" />
-            </div>
+            <EveTurn state={askBusy ? "listening" : askReply ? "speaking" : "idle"} expression={expression} spoken={askReply} framing="full" projection={heard} className="eve-stage-panel" />
             <div className="min-w-0">
               <p className="text-xs font-semibold uppercase tracking-[0.18em] text-muted">Adrian Core · Intelligence</p>
-              <h1 className="font-display text-3xl font-bold md:text-4xl">EVE Workbench</h1>
-              <p className="mt-1 text-sm text-muted">Operator controls for saved tasks. Empty means nothing is recorded.</p>
+              <h1 className="font-display text-3xl font-bold md:text-4xl">EVE</h1>
+              <p className="mt-1 text-sm text-muted">Talk to EVE here. This is the person, not the Speak overlay. She is AI.</p>
             </div>
           </div>
           <nav className="flex flex-wrap gap-2" aria-label="EVE workbench destinations">
             <button type="button" onClick={onOpenChat} className="inline-flex min-h-11 items-center gap-2 rounded-panel bg-accent px-4 text-sm font-semibold text-accent-ink">
               Open Chat <ArrowUpRight className="size-4" />
             </button>
+            <button type="button" data-testid="eve-human-code" onClick={() => onOpenCode?.(ask.trim() || codeThreads[0]?.title || "continue the coding discussion")} className="inline-flex min-h-11 items-center gap-2 rounded-panel border border-line px-4 text-sm">Continue in Intelligence</button>
             <button type="button" onClick={onOpenAgents} className="inline-flex min-h-11 items-center gap-2 rounded-panel border border-line px-4 text-sm">Agents</button>
             <button type="button" onClick={onOpenRuns} className="inline-flex min-h-11 items-center gap-2 rounded-panel border border-line px-4 text-sm">Run history</button>
             <button type="button" onClick={onOpenConnections} className="inline-flex min-h-11 items-center gap-2 rounded-panel border border-line px-4 text-sm">Connections</button>
@@ -195,19 +250,38 @@ export function EveWorkbench({
           <div className="flex flex-wrap items-center justify-between gap-3">
             <div>
               <h2 className="text-lg font-semibold">Talk with EVE</h2>
-              <p className="mt-1 text-sm text-muted">EVE answers through Speak. The microphone on the call is dictation only.</p>
+              <p className="mt-1 text-sm text-muted">EVE can read chats, projects, files, agents, and connections. Memory stays on for her. She cannot press the emergency stop.</p>
             </div>
             <button type="button" className="inline-flex min-h-11 items-center rounded-panel bg-accent px-4 text-sm font-semibold text-accent-ink" onClick={() => onTalk?.()} data-testid="eve-talk-open">
               Talk
             </button>
           </div>
           <form className="mt-3 flex flex-col gap-2 sm:flex-row" onSubmit={(event) => void askEve(event)}>
-            <input value={ask} onChange={(event) => setAsk(event.target.value)} maxLength={2000} aria-label="Ask EVE" placeholder="Ask EVE" className="min-h-11 min-w-0 flex-1 rounded-panel border border-line bg-bg px-3 text-sm" disabled={askBusy || !onAsk} />
+            <input value={ask} onChange={(event) => setAsk(event.target.value)} maxLength={2000} aria-label="Ask EVE" placeholder="Speak or type. Her screen changes as you talk." className="min-h-11 min-w-0 flex-1 rounded-panel border border-line bg-bg px-3 text-sm" disabled={askBusy || !onAsk} />
             <button type="submit" className="inline-flex min-h-11 items-center justify-center rounded-panel border border-line px-4 text-sm font-semibold disabled:opacity-50" disabled={askBusy || !onAsk || !ask.trim()} data-testid="eve-ask">
               {askBusy ? "Answering" : "Ask"}
             </button>
           </form>
           {askReply ? <p className="mt-3 text-sm" role="status" data-testid="eve-reply">{askReply}</p> : null}
+          <div className="mt-3 rounded-panel border border-line p-3" data-testid="eve-projection">
+            <p className="text-sm font-semibold">EVE's computer</p>
+            <p className="mt-1 text-xs text-muted">{heard.note}</p>
+            <p className="mt-1 text-sm" data-testid="eve-projection-label">Projecting {heard.label}</p>
+            <div className="mt-2 h-8 rounded-panel" style={{ background: heard.sky }} data-testid="eve-projection-swatch" />
+          </div>
+          <div className="mt-3" data-testid="eve-receipts">
+            <p className="text-xs uppercase tracking-wide text-muted">Receipts</p>
+            {receipts.length === 0 ? <p className="mt-1 text-sm text-muted">No receipt yet. Ask EVE and the account store records it.</p> : receipts.map((item) => <p key={item.id} className="mt-1 text-sm">{item.state} · {item.action} · {item.detail}</p>)}
+          </div>
+          {codeThreads.length > 0 ? (
+            <div className="mt-3 flex flex-wrap gap-2" aria-label="Recent coding threads">
+              {codeThreads.map((thread) => (
+                <button key={thread.id} type="button" title={threadLabel(thread)} className="inline-flex min-h-11 max-w-full items-center truncate rounded-panel border border-line px-3 text-sm" onClick={() => onOpenCode?.(thread.title)}>
+                  {threadLabel(thread)}
+                </button>
+              ))}
+            </div>
+          ) : null}
         </section>
 
         <section className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4" aria-label="Workbench status">
@@ -227,13 +301,29 @@ export function EveWorkbench({
             <p className="mt-1 text-xs text-muted">Saved text artifacts on this device</p>
           </div>
           <div className="rounded-panel border border-line bg-surface p-4">
-            <p className="text-xs uppercase tracking-wide text-muted">Emergency stop</p>
+            <p className="text-xs uppercase tracking-wide text-muted">Emergency stop · owner only</p>
             <p className={"mt-2 text-xl font-semibold " + (workspace.halted ? "text-rose-300" : "text-emerald-300")}>{workspace.halted ? "ON" : "OFF"}</p>
-            <button type="button" onClick={onToggleStop} className="mt-3 inline-flex min-h-11 items-center rounded-panel border border-line px-3 text-sm">
+            <p className="mt-1 text-xs text-muted">EVE cannot press this. It stays with you.</p>
+            <button type="button" onClick={onToggleStop} data-testid="owner-emergency-stop" className="mt-3 inline-flex min-h-11 items-center rounded-panel border border-line px-3 text-sm">
               {workspace.halted ? "Clear stop" : "Emergency stop"}
             </button>
           </div>
+          <div className="rounded-panel border border-line bg-surface p-4" data-testid="computer-control">
+            <p className="text-xs uppercase tracking-wide text-muted">Your computer</p>
+            <p className="mt-2 text-xl font-semibold">{pairedComputer ? "Paired" : "Not paired"}</p>
+            <p className="mt-1 text-xs text-muted">Build on this site codes in the hosted workspace. No Windows install is required for that.</p>
+            <p className="mt-2 text-xs text-muted">Blocked: {BLOCKED_CONTROL.join(", ")}. {pairedComputer ? `Approvable only by you: ${APPROVABLE_TODAY.join(", ")}.` : "Nothing on a Windows PC moves until that computer is paired and you approve the exact action."} EVE cannot approve or press the stop.</p>
+          </div>
         </section>
+
+        <OwnerFlow
+          halted={workspace.halted}
+          recording={recording}
+          recordingSeconds={recordingSeconds}
+          onOpenSpeak={() => onTalk?.()}
+          onToggleStop={onToggleStop}
+          onStopRecording={() => onStopRecording?.()}
+        />
 
         <section className="rounded-panel border border-line bg-surface p-4 md:p-5">
           <h2 className="text-lg font-semibold">Start a local task</h2>
@@ -335,7 +425,7 @@ export function EveWorkbench({
             <section className="rounded-panel border border-line bg-surface p-4">
               <h2 className="flex items-center gap-2 font-semibold"><Bot className="size-5" /> Digital human</h2>
               <p className="mt-1 text-xs text-muted">{roster.femaleFilled} of {roster.femaleFilled + roster.femaleOpen} female identities filled. {roster.maleFilled} of {roster.maleOpen} male identities filled. Same Adrian Core. No extra permissions.</p>
-              <DigitalHuman characterId={characterId} framing={framing} expression={expression} className="mt-3" />
+              <EveTurn state={askBusy ? "listening" : askReply ? "speaking" : "idle"} expression={expression} spoken={askReply} framing={framing} projection={heard} />
               <div className="mt-3 flex flex-wrap gap-2" role="group" aria-label="Avatar framing">
                 {(["full", "upper", "face", "compact"] as AvatarFraming[]).map((mode) => (
                   <button key={mode} type="button" className={"min-h-11 rounded-panel border px-3 text-xs " + (framing === mode ? "border-accent bg-accent/10" : "border-line")} onClick={() => { setFraming(mode); writeStoredFraming(mode); }}>{mode}</button>

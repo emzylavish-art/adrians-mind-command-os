@@ -12,7 +12,7 @@ export type CharacterLook = {
 
 /** Original materials for the in-engine body. The face is the photographic plate. */
 export const CHARACTER_LOOK: Record<string, CharacterLook> = {
-  eve: { skin: "#8d5b45", hair: "#140e0c", cloth: "#2a2a2e", pants: "#141416", shoes: "#0c0c0e" },
+  eve: { skin: "#8d5b45", hair: "#140e0c", cloth: "#c4b8ae", pants: "#3d3538", shoes: "#1a1614" },
   liora: { skin: "#c4a078", hair: "#6a3418", cloth: "#6f7d68", pants: "#2a2c28", shoes: "#1a1816" },
   iris: { skin: "#e0c2a8", hair: "#16141a", cloth: "#1d2c44", pants: "#1a1c22", shoes: "#101216" },
   luna: { skin: "#c4926a", hair: "#2a160e", cloth: "#d7cfc4", pants: "#3a342e", shoes: "#241c16" },
@@ -28,13 +28,13 @@ export type CameraFrame = {
 export function cameraForFraming(framing: AvatarFraming): CameraFrame {
   switch (framing) {
     case "full":
-      return { position: [0, 0.98, 2.35], target: [0, 0.92, 0], fov: 30 };
+      return { position: [0, 0.96, 3.45], target: [0, 0.84, 0], fov: 28 };
     case "face":
-      return { position: [0, 1.58, 0.52], target: [0, 1.56, 0], fov: 26 };
+      return { position: [0, 1.64, 1.15], target: [0, 1.62, 0.1], fov: 28 };
     case "compact":
-      return { position: [0, 1.52, 0.72], target: [0, 1.5, 0], fov: 28 };
+      return { position: [0, 1.58, 1.35], target: [0, 1.55, 0.1], fov: 30 };
     default:
-      return { position: [0, 1.32, 1.15], target: [0, 1.28, 0], fov: 28 };
+      return { position: [0, 1.2, 2.4], target: [0, 1.15, 0], fov: 28 };
   }
 }
 
@@ -57,6 +57,40 @@ function mat(color: string, roughness = 0.62): THREE.MeshStandardMaterial {
   return new THREE.MeshStandardMaterial({ color, roughness, metalness: 0.02 });
 }
 
+/** Oval limb. A straight cylinder reads as a tube; this one tapers at the joint. */
+function shapedLimb(points: Array<[number, number]>, squash = 0.78): THREE.BufferGeometry {
+  const geo = new THREE.LatheGeometry(points.map(([radius, y]) => new THREE.Vector2(radius, y)), 20);
+  geo.scale(squash, 1, 1.08);
+  geo.computeVertexNormals();
+  return geo;
+}
+
+function shoeShape(): THREE.BufferGeometry {
+  const shape = new THREE.Shape();
+  shape.moveTo(-0.04, 0.01);
+  shape.lineTo(0.05, 0.01);
+  shape.lineTo(0.055, 0.035);
+  shape.quadraticCurveTo(0.02, 0.07, -0.03, 0.05);
+  shape.lineTo(-0.04, 0.01);
+  const geo = new THREE.ExtrudeGeometry(shape, { depth: 0.16, bevelEnabled: true, bevelSize: 0.006, bevelThickness: 0.006, bevelSegments: 1 });
+  geo.rotateX(Math.PI / 2);
+  geo.translate(0, 0.03, 0.02);
+  return geo;
+}
+
+function addFingers(hand: THREE.Mesh, skin: THREE.Material, side: -1 | 1) {
+  for (const [index, x] of [-0.016, -0.005, 0.006, 0.016].entries()) {
+    const finger = new THREE.Mesh(new THREE.BoxGeometry(0.008, 0.028, 0.008), skin);
+    finger.name = `finger-${side}-${index}`;
+    finger.position.set(x, -0.05, 0.006);
+    hand.add(finger);
+  }
+  const thumb = new THREE.Mesh(new THREE.BoxGeometry(0.01, 0.022, 0.01), skin);
+  thumb.position.set(side * 0.028, -0.02, 0.012);
+  thumb.rotation.z = side * -0.7;
+  hand.add(thumb);
+}
+
 function mesh(name: string, geometry: THREE.BufferGeometry, material: THREE.Material, parent: THREE.Object3D, x: number, y: number, z: number): THREE.Mesh {
   const item = new THREE.Mesh(geometry, material);
   item.name = name;
@@ -64,6 +98,61 @@ function mesh(name: string, geometry: THREE.BufferGeometry, material: THREE.Mate
   item.castShadow = true;
   parent.add(item);
   return item;
+}
+
+/**
+ * Fitted top over trousers. One lathe from collar to hip, then vertex-shaped
+ * so the chest and seat are part of the cloth instead of stacked balls.
+ * Idle may scale the torso group; the silhouette lives in this geometry.
+ */
+function clothedTorso(): THREE.BufferGeometry {
+  const profile = [
+    [0.042, 1.52],
+    [0.062, 1.47],
+    [0.098, 1.40],
+    [0.132, 1.35],
+    [0.140, 1.31],
+    [0.134, 1.24],
+    [0.122, 1.18],
+    [0.096, 1.10],
+    [0.078, 1.04],
+    [0.108, 0.97],
+    [0.162, 0.90],
+    [0.210, 0.84],
+    [0.200, 0.76],
+    [0.200, 0.66],
+  ].map(([x, y]) => new THREE.Vector2(x, y));
+  const geo = new THREE.LatheGeometry(profile, 40);
+  const pos = geo.attributes.position;
+  for (let i = 0; i < pos.count; i++) {
+    let x = pos.getX(i);
+    const y = pos.getY(i);
+    let z = pos.getZ(i);
+    const radial = Math.hypot(x, z) || 1;
+    const front = Math.max(0, z / radial);
+    const back = Math.max(0, -z / radial);
+    if (y >= 0.78) z *= 0.82;
+    if (y > 1.12 && y < 1.30) {
+      const t = 1 - Math.abs(y - 1.21) / 0.09;
+      const lobe = t * t;
+      z += lobe * front * 0.045;
+      x *= 1 + lobe * front * 0.02;
+    }
+    if (y > 1.00 && y < 1.10) z *= 0.94;
+    if (y > 0.78 && y < 0.96) {
+      const t = 1 - Math.abs(y - 0.86) / 0.09;
+      z += t * back * 0.04;
+      z += t * front * 0.02;
+    }
+    pos.setXYZ(i, x, y, z);
+  }
+  let hemY = Infinity;
+  for (let i = 0; i < pos.count; i++) hemY = Math.min(hemY, pos.getY(i));
+  for (let i = 0; i < pos.count; i++) {
+    if (pos.getY(i) <= hemY + 0.02) pos.setY(i, hemY);
+  }
+  geo.computeVertexNormals();
+  return geo;
 }
 
 /**
@@ -85,40 +174,69 @@ export function createHumanRig(look: CharacterLook): THREE.Group {
   body.name = "body";
   rig.add(body);
 
-  mesh("torso", new THREE.BoxGeometry(0.36, 0.46, 0.2), cloth, body, 0, 1.22, 0);
-  mesh("pelvis", new THREE.BoxGeometry(0.3, 0.16, 0.18), pants, body, 0, 0.92, 0);
-  mesh("thighL", new THREE.CapsuleGeometry(0.07, 0.28, 4, 8), pants, body, -0.09, 0.66, 0);
-  mesh("thighR", new THREE.CapsuleGeometry(0.07, 0.28, 4, 8), pants, body, 0.09, 0.66, 0);
-  mesh("calfL", new THREE.CapsuleGeometry(0.055, 0.26, 4, 8), pants, body, -0.09, 0.32, 0);
-  mesh("calfR", new THREE.CapsuleGeometry(0.055, 0.26, 4, 8), pants, body, 0.09, 0.32, 0);
-  mesh("shoeL", new THREE.BoxGeometry(0.09, 0.06, 0.18), shoes, body, -0.09, 0.04, 0.03);
-  mesh("shoeR", new THREE.BoxGeometry(0.09, 0.06, 0.18), shoes, body, 0.09, 0.04, 0.03);
+  const torso = new THREE.Group();
+  torso.name = "torso";
+  body.add(torso);
 
-  const armL = mesh("armL", new THREE.CapsuleGeometry(0.045, 0.22, 4, 8), cloth, body, -0.24, 1.28, 0);
-  armL.rotation.z = 0.18;
-  const armR = mesh("armR", new THREE.CapsuleGeometry(0.045, 0.22, 4, 8), cloth, body, 0.24, 1.28, 0);
-  armR.rotation.z = -0.18;
-  mesh("foreL", new THREE.CapsuleGeometry(0.04, 0.2, 4, 8), skin, body, -0.28, 1.02, 0.02);
-  mesh("foreR", new THREE.CapsuleGeometry(0.04, 0.2, 4, 8), skin, body, 0.28, 1.02, 0.02);
-  mesh("handL", new THREE.SphereGeometry(0.04, 12, 10), skin, body, -0.28, 0.86, 0.03);
-  mesh("handR", new THREE.SphereGeometry(0.04, 12, 10), skin, body, 0.28, 0.86, 0.03);
+  const dress = mesh("dress", clothedTorso(), cloth, torso, 0, 0, 0);
+  dress.castShadow = true;
+  const collar = mesh("collar", new THREE.CylinderGeometry(0.045, 0.07, 0.08, 16), cloth, torso, 0, 1.5, 0);
+  collar.castShadow = true;
+  // Hidden proportion markers. The dress, not these spheres, is the silhouette.
+  mesh("bust", new THREE.SphereGeometry(0.05, 10, 8), cloth, torso, 0, 1.21, 0.06);
+  mesh("waist", new THREE.SphereGeometry(0.09, 12, 8), cloth, torso, 0, 1.04, 0);
+  mesh("hips", new THREE.SphereGeometry(0.2, 14, 10), pants, torso, 0, 0.86, 0);
+  mesh("shoulderL", new THREE.SphereGeometry(0.02, 8, 6), cloth, torso, -0.14, 1.34, 0);
+  mesh("shoulderR", new THREE.SphereGeometry(0.02, 8, 6), cloth, torso, 0.14, 1.34, 0);
+  for (const hidden of ["bust", "waist", "hips", "shoulderL", "shoulderR"]) {
+    const part = torso.getObjectByName(hidden);
+    if (part) part.visible = false;
+  }
 
-  mesh("neck", new THREE.CylinderGeometry(0.045, 0.05, 0.1, 12), skin, body, 0, 1.5, 0);
+  const neck = mesh("neck", new THREE.CylinderGeometry(0.038, 0.046, 0.14, 16), skin, body, 0, 1.54, 0.02);
+  neck.castShadow = true;
+
+  const upperArm = shapedLimb([[0.058, 0.18], [0.046, 0.08], [0.038, -0.02], [0.03, -0.18]]);
+  const forearm = shapedLimb([[0.032, 0.16], [0.026, 0.04], [0.02, -0.16]], 0.74);
+  const thighShape = new THREE.CylinderGeometry(0.055, 0.055, 0.38, 16);
+  const calfShape = new THREE.CylinderGeometry(0.055, 0.055, 0.32, 16);
+  const armL = mesh("armL", upperArm, cloth, torso, -0.155, 1.28, 0.02);
+  armL.rotation.z = -0.12;
+  const armR = mesh("armR", upperArm.clone(), cloth, torso, 0.155, 1.28, 0.02);
+  armR.rotation.z = 0.12;
+  const foreL = mesh("foreL", forearm, cloth, armL, 0, -0.32, 0.01);
+  const foreR = mesh("foreR", forearm.clone(), cloth, armR, 0, -0.32, 0.01);
+  foreL.rotation.x = 0.22;
+  foreR.rotation.x = 0.22;
+  const handL = mesh("handL", new THREE.BoxGeometry(0.05, 0.07, 0.02), skin, foreL, 0, -0.2, 0.012);
+  const handR = mesh("handR", new THREE.BoxGeometry(0.05, 0.07, 0.02), skin, foreR, 0, -0.2, 0.012);
+  addFingers(handL, skin, -1);
+  addFingers(handR, skin, 1);
+  const thighL = mesh("thighL", thighShape, pants, torso, -0.09, 0.66, 0.015);
+  const thighR = mesh("thighR", thighShape.clone(), pants, torso, 0.09, 0.66, 0.015);
+  const calfL = mesh("calfL", calfShape, pants, thighL, 0, -0.32, 0);
+  const calfR = mesh("calfR", calfShape.clone(), pants, thighR, 0, -0.32, 0);
+  calfL.rotation.x = 0;
+  calfR.rotation.x = 0;
+  mesh("shoeL", shoeShape(), shoes, calfL, 0, -0.2, 0.03);
+  mesh("shoeR", shoeShape(), shoes, calfR, 0, -0.2, 0.03);
 
   const head = new THREE.Group();
   head.name = "head";
-  head.position.set(0, 1.6, 0);
+  head.position.set(0, 1.58, 0);
   body.add(head);
 
   mesh("cranium", new THREE.SphereGeometry(0.12, 24, 18), skin, head, 0, 0, 0);
-  const hairCap = mesh("hair", new THREE.SphereGeometry(0.125, 24, 16, 0, Math.PI * 2, 0, Math.PI * 0.55), hair, head, 0, 0.02, -0.01);
-  hairCap.scale.set(1, 1, 1.05);
+  const hairCap = mesh("hair", new THREE.SphereGeometry(0.125, 24, 16, Math.PI * 1.05, Math.PI * 0.9, 0.08, Math.PI * 0.5), hair, head, 0, 0.04, -0.04);
+  hairCap.scale.set(1.05, 1.05, 0.9);
+  mesh("hairL", new THREE.SphereGeometry(0.04, 12, 10), hair, head, -0.1, -0.02, -0.05).scale.set(0.6, 1.3, 0.5);
+  mesh("hairR", new THREE.SphereGeometry(0.04, 12, 10), hair, head, 0.1, -0.02, -0.05).scale.set(0.6, 1.3, 0.5);
 
   const faceMat = new THREE.MeshStandardMaterial({ color: "#ffffff", roughness: 0.5, metalness: 0 });
   faceMat.name = "face";
   const face = mesh(
     "face",
-    new THREE.SphereGeometry(0.121, 32, 24, -0.7, 1.4, 0.45, 1.15),
+    new THREE.SphereGeometry(0.121, 32, 24, Math.PI / 2 - 0.7, 1.4, 0.42, 1.2),
     faceMat,
     head,
     0,

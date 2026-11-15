@@ -62,7 +62,9 @@ import { LiveVoiceBar } from "@/components/mind/live-voice-bar";
 import { DictationPill } from "@/components/mind/dictation-pill";
 import { VoiceModeOverlay, type VoiceOverlayPhase } from "@/components/mind/voice-mode-overlay";
 import { SpeakStage } from "@/components/mind/speak-stage";
+import { HUMAN_CODE_NOTE, HumanCodePanel, isIntelligenceThread } from "@/components/mind/human-code-panel";
 import { SpeakPanel } from "@/components/mind/surfaces/speak-panel";
+import { SharedFleet } from "@/components/mind/shared-fleet";
 import { ChatEmptyHero } from "@/components/mind/chat-empty-hero";
 import {
   ComposerBar,
@@ -165,7 +167,7 @@ import { EveWorkbench } from "@/components/mind/eve-workbench";
 import { FleetPanel } from "@/components/mind/fleet-panels";
 import { BuildWorkspace } from "@/components/mind/build-workspace";
 import { ResearchPanel } from "@/components/mind/surfaces/research-panel";
-import { MessageBody } from "@/components/mind/message-body";
+import { AnswerTabs, MessageBody } from "@/components/mind/message-body";
 import { MemorySavedIndicator } from "@/components/mind/memory-saved-indicator";
 import { MemoryChatToggle } from "@/components/mind/memory-chat-toggle";
 import { AttachmentChips } from "@/components/mind/media/attachment-chips";
@@ -241,6 +243,9 @@ import {
   normalizeClientFailureMessage,
   type HonestFailureKind,
 } from "@/lib/mind/failure-states";
+import { eveAccessNotes } from "@/lib/mind/eve-access";
+import { createTaskRecorder, recordingEndsWithDocument } from "@/lib/mind/task-recording";
+import { decideComputerAction } from "@/lib/mind/computer-control";
 import {
   commandSendPlan,
   historyForDeliver,
@@ -256,6 +261,7 @@ import {
   addMemory,
   addProject,
   createChat,
+  loadWorkspace,
   memoriesForChat,
   mergeWorkspace,
   packWorkspace,
@@ -268,6 +274,7 @@ import {
 } from "@/lib/mind/workspace";
 import { WORKSPACE_ROUTE_LINKS } from "@/lib/mind/workspace-nav";
 import { CONVERSATIONAL_PERSONALITIES, type PersonalityId } from "@/lib/mind/personalities";
+import { clearPersonaSelection, readPersonaSelection } from "@/lib/mind/personas/selection";
 
 type View =
   | "command"
@@ -282,6 +289,7 @@ type View =
   | "connected"
   | "tools"
   | "build"
+  | "code"
   | "scheduled"
   | "integrations"
   | "activity"
@@ -339,6 +347,7 @@ const NAV_GROUPS: { label: string; items: { id: View; label: string; icon: typeo
     label: "Work",
     items: [
       { id: "build", label: "Build", icon: Terminal },
+      { id: "code", label: "Intelligence", icon: MessageSquare },
       { id: "research", label: "Research", icon: Search },
       { id: "projects", label: "Projects", icon: Folder },
       { id: "files", label: "Library", icon: FileText },
@@ -377,6 +386,7 @@ const TITLES: Record<View, string> = {
   research: "Research",
   files: "Library",
   build: "Build",
+  code: "Intelligence",
   connected: "Connected",
   tools: "Tools",
   skills: "Skills",
@@ -598,6 +608,36 @@ function isEnabledSkillMap(value: unknown): value is Record<string, boolean> {
     Object.values(value as Record<string, unknown>).every((entry) => typeof entry === "boolean");
 }
 
+
+function appendHumanResult<T extends { chats: { id: string; messages: { id: string; role: "user" | "assistant"; content: string; at: string }[] }[] }>(ws: T, id: string, user: string, assistant: string): T {
+  const generic = (title?: string) => !title || title === "Human Code" || title === "Intelligence" || title === "From EVE" || title === "New coding thread";
+  const title = humanThreadTitle(user);
+  const stamp = new Date().toISOString();
+  return {
+    ...ws,
+    chats: ws.chats.map((chat) => chat.id === id ? { ...chat, title: generic((chat as { title?: string }).title) ? title : (chat as { title?: string }).title, messages: [...chat.messages, { id: crypto.randomUUID(), role: "user" as const, content: user, at: stamp }, { id: crypto.randomUUID(), role: "assistant" as const, content: assistant, at: stamp }] } : chat),
+  };
+}
+
+function humanThreadTitle(text: string) {
+  const rest = text.replace(/^\/\S+\s*/, "").replace(/\s+/g, " ").trim();
+  const command = text.trim().match(/^\/(\S+)/)?.[1];
+  if (command && !rest) {
+    if (command === "test") return "Test check";
+    if (command === "files") return "Workspace files";
+    if (command === "diff") return "Local diff";
+    if (command === "run") return "Build task";
+    if (command === "fix") return "Fix task";
+  }
+  return (rest || text).replace(/\s+/g, " ").trim().slice(0, 48) || "Intelligence";
+}
+
+function shownChatTitle(chat: { title?: string; messages?: { role: string; content: string }[] }) {
+  if (chat.title && chat.title !== "Human Code" && chat.title !== "Intelligence" && chat.title !== "New coding thread" && chat.title !== "From EVE") return chat.title;
+  const first = chat.messages?.find((message) => message.role === "user")?.content || "";
+  return first ? humanThreadTitle(first) : "Intelligence";
+}
+
 export function CommandApp() {
   const { ws, setWs, ready, syncNote, serverHeld, saveError, retrySave } = useMindWorkspace();
   const [view, setView] = useState<View>("command");
@@ -724,11 +764,50 @@ export function CommandApp() {
   const [dictationLevel, setDictationLevel] = useState(0);
   const [voiceOverlayOpen, setVoiceOverlayOpen] = useState(false);
   const [speakStageOpen, setSpeakStageOpen] = useState(false);
+  const taskRecorder = useRef(createTaskRecorder());
+  const taskStream = useRef<MediaStream | null>(null);
+  const [taskRecording, setTaskRecording] = useState(false);
+  const [taskSeconds, setTaskSeconds] = useState(0);
   const [speakCall, setSpeakCall] = useState({ heard: "", reply: "", error: "" });
   const speakStageOpenRef = useRef(false);
   useEffect(() => {
     speakStageOpenRef.current = speakStageOpen;
   }, [speakStageOpen]);
+  useEffect(() => {
+    if (!taskRecording) return;
+    const id = window.setInterval(() => setTaskSeconds(Math.round(taskRecorder.current.elapsed() / 1000)), 500);
+    return () => window.clearInterval(id);
+  }, [taskRecording]);
+  useEffect(() => {
+    const end = (event: Event) => {
+      if (!recordingEndsWithDocument(event)) return;
+      taskStream.current?.getTracks().forEach((track) => track.stop());
+      taskStream.current = null;
+      void taskRecorder.current.stop();
+      setTaskRecording(false);
+      setTaskSeconds(0);
+    };
+    window.addEventListener("pagehide", end);
+    window.addEventListener("beforeunload", end);
+    return () => {
+      window.removeEventListener("pagehide", end);
+      window.removeEventListener("beforeunload", end);
+    };
+  }, []);
+  function keepTaskRecording(stream: MediaStream) {
+    taskStream.current = stream;
+    taskRecorder.current.start(stream);
+    setTaskRecording(true);
+    setTaskSeconds(0);
+  }
+  async function stopTaskRecording() {
+    const blob = await taskRecorder.current.stop();
+    taskStream.current?.getTracks().forEach((track) => track.stop());
+    taskStream.current = null;
+    setTaskRecording(false);
+    setTaskSeconds(0);
+    setNotice(blob ? "Recording stopped in this tab. It cannot continue after the browser is closed." : "Recording was already stopped.");
+  }
   const [surfaceMenu, setSurfaceMenu] = useState(false);
   const [helpQuery, setHelpQuery] = useState("");
   const overlayOpenRef = useRef(false);
@@ -886,6 +965,40 @@ export function CommandApp() {
     voiceChoiceRef.current = choice;
     setVoiceChoice(choice);
   }, []);
+
+  const personaHandoffDone = useRef(false);
+  useEffect(() => {
+    if (!ready || personaHandoffDone.current || typeof window === "undefined") return;
+    const selection = readPersonaSelection(window.localStorage);
+    const params = new URLSearchParams(window.location.search);
+    const agentId = selection?.agentId || params.get("agentId");
+    if (!agentId || (params.get("mode") !== "agent" && !selection)) return;
+    personaHandoffDone.current = true;
+    const stored = loadWorkspace(window.localStorage);
+    const agent = stored.agents.find((item) => item.id === agentId && !item.archived) ?? ws.agents.find((item) => item.id === agentId && !item.archived);
+    clearPersonaSelection(window.localStorage);
+    window.history.replaceState({}, "", "/");
+    if (!agent) {
+      setNotice("That persona was not found on this device. Nothing was opened.");
+      return;
+    }
+    const made = createChat(ws, {
+      memory: agent.memory,
+      autonomy: agent.approval,
+      temporary: false,
+      projectId: agent.projectId,
+      personalityId: "custom",
+      customPersonality: agent.instructions,
+    });
+    const chat = { ...made.chat, title: agent.name };
+    setWs((prev) => {
+      const base = prev.agents.some((item) => item.id === agent.id) ? prev : stored;
+      return { ...base, chats: [chat, ...base.chats.filter((item) => item.id !== chat.id)] };
+    });
+    setActiveId(chat.id);
+    setView("chat");
+    setNotice(`${agent.name} is open in Chat.`);
+  }, [ready, ws, setWs]);
 
   useEffect(() => {
     const storage = typeof localStorage === "undefined" ? null : localStorage;
@@ -1389,7 +1502,7 @@ export function CommandApp() {
       paletteHits({
         query,
         projects: ws.projects,
-        chats: ws.chats,
+        chats: ws.chats.map((chat) => ({ ...chat, title: shownChatTitle(chat), humanCode: isIntelligenceThread(chat.customPersonality) })),
         memories: ws.memories,
         files: ws.files,
         agents: ws.agents,
@@ -1512,11 +1625,11 @@ export function CommandApp() {
         unavailableReason: "",
         run: (text) => {
           const matches = searchSkills(text.replace(/\bskills?\b/gi, " "));
-          const usable = matches.filter((skill) => skill.kind === "built-in");
+          const usable = matches.filter((skill) => skill.kind !== "not-installed");
           const one = usable.length === 1 ? usable[0] : null;
           const reply = one
             ? runSkill(source, one, enabledSkills[one.id] !== false).text
-            : matches.map((skill) => `${skill.name} — ${skill.kind === "built-in" ? "Built-in" : "Not installed"}. ${skill.needs}`).join("\n") || "No skill matches. Nothing was run.";
+            : matches.map((skill) => `${skill.name} — ${skill.kind === "not-installed" ? "Not installed" : skill.kind === "installed" ? "Installed" : "Built-in"}. ${skill.needs}`).join("\n") || "No skill matches. Nothing was run.";
           return { ok: true, text: reply };
         },
       },
@@ -1793,7 +1906,7 @@ export function CommandApp() {
     source: Workspace,
     resume = false,
     images: ImageAttachment[] = [],
-    options?: { logicRoute?: LogicRouteId | null; skipUserMessage?: boolean; isolateOutputs?: boolean },
+    options?: { logicRoute?: LogicRouteId | null; skipUserMessage?: boolean; isolateOutputs?: boolean; accessNotes?: { id: string; text: string }[] },
   ): Promise<string | null> {
     if (turnInFlight.current) return null;
     const snapped = snapshotImages(images);
@@ -1892,7 +2005,7 @@ export function CommandApp() {
         },
         body: chatTurnBody({
           text,
-          memory: chat.memory,
+          memory: options?.accessNotes?.length ? "on" : chat.memory,
           halted: wsRef.current.halted,
           history: history.map((item) => ({
             role: item.role,
@@ -1901,7 +2014,7 @@ export function CommandApp() {
               ?.filter((image) => typeof image.dataUrl === "string" && image.dataUrl.startsWith("data:image/"))
               .map((image) => ({ dataUrl: image.dataUrl!, name: image.name })),
           })),
-          memoryContext: memoriesForChat(source, chat).map((item) => ({ id: item.id, text: item.text })),
+          memoryContext: [...(options?.accessNotes ?? []), ...memoriesForChat(source, chat).map((item) => ({ id: item.id, text: item.text }))].slice(0, 12),
           provider: activeLogic ?? (isCustomProvider || otherReady ? providerChoice : (routed.ok ? routed.id : providerChoice)),
           modelTier,
           logicRoute: activeLogic,
@@ -3192,6 +3305,114 @@ export function CommandApp() {
     setView("chat");
   }
 
+  function openHumanCode() {
+    handToHumanCode("", "New coding thread");
+  }
+
+  function speakStylePersonality(style: string | null): PersonalityId {
+    if (style === "Unhinged") return "unhinged";
+    if (style === "Storyteller") return "storyteller";
+    if (style === "Supportive") return "supportive";
+    if (style === "Playful") return "playful";
+    if (style === "Calm") return "professional";
+    return defaultPersonalityId;
+  }
+
+  function handToHumanCode(text: string, title = "Intelligence") {
+    const made = createChat(ws, {
+      memory: memoryChoice,
+      autonomy,
+      temporary,
+      projectId: chatProjectId || projectChoice || null,
+      personalityId: "custom",
+      customPersonality: HUMAN_CODE_NOTE,
+    });
+    made.chat.title = title;
+    setWs((prev) => pushAudit({ ...prev, chats: [made.chat, ...prev.chats] }, "create_chat", made.chat.id, "human code"));
+    setActiveId(made.chat.id);
+    if (text.trim()) sessionStorage.setItem("adrian-human-draft", text.trim().slice(0, 4000));
+    setView("code");
+    setNavOpen(false);
+    setSpeakStageOpen(false);
+    setNotice("Intelligence thread opened. Ask about code, or send a task to Build.");
+  }
+
+  async function sendHumanCode(id: string, text: string, image?: { dataUrl: string; name: string }) {
+    const source = wsRef.current;
+    const chat = source.chats.find((item) => item.id === id);
+    if (!chat) {
+      setNotice("That Intelligence thread is gone. Open a new one.");
+      return;
+    }
+    setActiveId(id);
+    setView("code");
+    setNotice("Intelligence is answering.");
+    const command = text.trim().split(/\s+/)[0]?.toLowerCase() ?? "";
+    if (command === "/diff" || command === "/run" || command === "/test" || command === "/fix" || command === "/files") {
+      setNotice(await humanCodeAction(id, command, text));
+      return;
+    }
+    const safe = text.replace(/(?:^|\n)\s*[A-Z0-9_]*(?:KEY|TOKEN|SECRET|PASSWORD)[A-Z0-9_]*\s*=\s*\S+/gi, " [secret omitted]");
+    const generic = !chat.title || chat.title === "Human Code" || chat.title === "Intelligence" || chat.title === "From EVE" || chat.title === "New coding thread";
+    const named = generic ? { ...chat, title: text.replace(/^\/(\S+)\s*/, "$1 ").replace(/\s+/g, " ").trim().slice(0, 48) || "Intelligence" } : chat;
+    const namedSource = generic ? { ...source, chats: source.chats.map((item) => item.id === id ? named : item) } : source;
+    const reply = await deliver(named, ["/explain", "/review", "/plan", "/refactor"].includes(command) ? `Coding discussion only. Do not claim a file changed. ${safe}` : safe, namedSource, false, image ? [{ dataUrl: image.dataUrl, name: image.name }] : []);
+    setNotice(reply ? "Intelligence answered. File changes still go to Build." : "Intelligence did not answer. Nothing was sent to Build.");
+  }
+
+  async function humanCodeAction(id: string, command: string, text: string) {
+    if (command === "/files") {
+      try {
+        const response = await fetch("/api/mind/kimi/files", { method: "POST", credentials: "include", headers: { "content-type": "application/json" }, body: JSON.stringify({ operation: "list" }) });
+        const data = await response.json() as { ok?: boolean; files?: { path: string }[]; error?: string };
+        const names = (data.files || []).slice(0, 200).map((file) => file.path).filter((path) => !/(^|\/)\.env($|\.)/i.test(path));
+        setWs((prev) => appendHumanResult(prev, id, text, data.ok ? `Indexed ${names.length} files, capped at 200.\n${names.slice(0, 40).join("\n")}` : data.error || "Build could not list files. Discussion-only mode is still available."));
+        return data.ok ? "Intelligence indexed the hosted workspace." : "Build is unavailable for files. Intelligence stayed in discussion.";
+      } catch {
+        setWs((prev) => appendHumanResult(prev, id, text, "Build is unavailable. Nothing was changed."));
+        return "Build is unavailable. Intelligence stayed in discussion.";
+      }
+    }
+    if (command === "/diff") {
+      try {
+        const response = await fetch("/api/mind/kimi/files", { method: "POST", credentials: "include", headers: { "content-type": "application/json" }, body: JSON.stringify({ operation: "git" }) });
+        const data = await response.json() as { ok?: boolean; branch?: string; status?: string; diff?: string; notice?: string; error?: string };
+        const body = data.ok ? `${data.notice || "Local Git read."}\nBranch: ${data.branch || "none"}\n${(data.status || "").slice(0, 1200)}\n${(data.diff || "").slice(0, 1800)}` : data.error || "Build could not read Git. Discussion-only mode is still available.";
+        setWs((prev) => appendHumanResult(prev, id, text, body));
+        return data.ok ? "Intelligence read the local diff. Nothing was committed or pushed." : "Build is unavailable for Git. Intelligence stayed in discussion.";
+      } catch {
+        setWs((prev) => appendHumanResult(prev, id, text, "Build is unavailable. Nothing was changed. You can still discuss the code."));
+        return "Build is unavailable. Intelligence stayed in discussion.";
+      }
+    }
+    if (command === "/test") {
+      try {
+        const response = await fetch("/api/mind/kimi/files", { method: "POST", credentials: "include", headers: { "content-type": "application/json" }, body: JSON.stringify({ operation: "list" }) });
+        const data = await response.json() as { ok?: boolean; files?: { path: string }[] };
+        const tests = (data.files || []).map((file) => file.path).filter((path) => /(^|\/)(package\.json|pytest\.ini|.*\.(test|spec)\.(ts|tsx|js|jsx)|test_.*\.py|.*_test\.py)$/i.test(path));
+        if (data.ok && tests.length === 0) {
+          setWs((prev) => appendHumanResult(prev, id, text, "No test file or package.json is in the hosted workspace. Nothing was run. Nothing is marked passed."));
+          return "No test runner is in this workspace. Nothing was marked passed.";
+        }
+      } catch {
+        setWs((prev) => appendHumanResult(prev, id, text, "Build could not check for tests. Nothing was marked passed."));
+        return "Build could not check for tests. Nothing was marked passed.";
+      }
+    }
+    const rest = text.replace(/^\/\S+\s*/, "").trim();
+    const task = command === "/test"
+      ? `Run the relevant tests in the hosted workspace and report the output. Do not claim a pass unless the output says so. ${rest}`.trim()
+      : command === "/fix"
+        ? `Fix only the files named here. ${rest}`.trim()
+        : `Do this in the hosted workspace and report what changed. ${rest || text}`.trim();
+    sessionStorage.setItem("adrian-build-draft", task.slice(0, 4000));
+    sessionStorage.setItem("adrian-human-return", id);
+    if (command === "/fix" || command === "/run" || command === "/test") sessionStorage.setItem("adrian-build-mode", "auto");
+    setWs((prev) => appendHumanResult(prev, id, text, "Handed to Build. File changes happen only after you press Run build. This thread stays here."));
+    setView("build");
+    return "Opened Build with this Intelligence task. The thread is still saved.";
+  }
+
   async function speakChatTurn(transcript: string, options?: { stay?: boolean }) {
     let chat = (activeId ? wsRef.current.chats.find((item) => item.id === activeId) : null) ?? null;
     let source = wsRef.current;
@@ -3209,7 +3430,8 @@ export function CommandApp() {
       if (!options?.stay) setView("chat");
       setWs((prev) => pushAudit({ ...prev, chats: [made.chat, ...prev.chats] }, "create_chat", made.chat.id, "speak"));
     }
-    const reply = await deliver(chat, transcript, source);
+    const spokenStyle = speakStylePersonality(typeof localStorage === "undefined" ? null : localStorage.getItem("adrian-speak-style"));
+    const reply = await deliver({ ...chat, personalityId: spokenStyle, memory: "on" }, transcript, source, false, [], { accessNotes: eveAccessNotes(source) });
     if (!reply) return { ok: false as const, error: "The chat turn failed. Nothing was spoken." };
     return { ok: true as const, text: reply };
   }
@@ -3277,7 +3499,12 @@ export function CommandApp() {
           return spoken;
         },
         play: async (audio) => {
-          await sharedAudioOutput.playMpegBase64(audio);
+          const pace = localStorage.getItem("adrian-speak-rate");
+          const volume = Number(localStorage.getItem("adrian-speak-volume"));
+          await sharedAudioOutput.playMpegBase64(audio, {
+            rate: pace === "slow" ? 0.85 : pace === "brisk" ? 1.15 : 1,
+            volume: Number.isFinite(volume) ? volume / 100 : 1,
+          });
           setNotice(spokeProvider ? `${spokeProvider} spoke this reply.` : "The reply was spoken.");
         },
       },
@@ -4006,7 +4233,7 @@ export function CommandApp() {
       const voiceChat = wsRef.current.chats.find((item) => item.id === activeId) ?? null;
       const voiceBuilt = voiceSessionInstructions({
         mode: getVoiceMode(),
-        personalityId: voiceChat?.personalityId ?? "assistant",
+        personalityId: speakStylePersonality(typeof localStorage === "undefined" ? null : localStorage.getItem("adrian-speak-style")),
         customPersonality: voiceChat?.customPersonality ?? "",
         characterId: readStoredCharacterId(typeof localStorage === "undefined" ? null : localStorage),
       });
@@ -4251,7 +4478,7 @@ export function CommandApp() {
             <PanelLeft className="size-4" />
           </button>
         </div>
-        <nav className="flex-1 overflow-auto px-3 pb-3">
+        <nav className="flex-1 overflow-hidden px-3 pb-3">
           {NAV_GROUPS.map((group) => (
             <div key={group.label} className="mb-4">
               {!railCollapsed && <p className="meta-label px-3 pb-2">{group.label}</p>}
@@ -4332,7 +4559,7 @@ export function CommandApp() {
                     onClick={() => {
                       if (pin.kind === "chat") {
                         setActiveId(pin.ref);
-                        setView("chat");
+                        setView(isIntelligenceThread(ws.chats.find((chat) => chat.id === pin.ref)?.customPersonality) ? "code" : "chat");
                       } else if (pin.kind === "agent") setView("agents");
                       else if (pin.kind === "project") setView("projects");
                       else setView("files");
@@ -4344,43 +4571,6 @@ export function CommandApp() {
                   </button>
                 );
               })}
-            </div>
-          )}
-          {ws.chats.length > 0 && !railCollapsed && (
-            <div className="mb-3">
-              <p className="px-3 pb-1 text-xs font-medium text-muted">Recent</p>
-              {getRecentChats(ws.chats, 5, new Set(ws.pins.filter((pin) => pin.kind === "chat").map((pin) => pin.ref))).map((chat) => (
-                <div key={chat.id} className="flex min-h-11 items-center">
-                  <button
-                    type="button"
-                    className="min-w-0 flex-1 truncate rounded-2xl px-3 text-left text-sm text-muted"
-                    onClick={() => {
-                      setActiveId(chat.id);
-                      setView("chat");
-                      setNavOpen(false);
-                    }}
-                  >
-                    <span className="flex min-w-0 items-center gap-2">
-                      <img src="/brand/marks/recent.png" alt="" width={18} height={18} className="size-4 shrink-0 rounded" />
-                      <span className="truncate">{chat.title}</span>
-                    </span>
-                  </button>
-                  <button
-                    type="button"
-                    className="grid size-9 shrink-0 place-items-center rounded-full text-muted hover:bg-white/5"
-                    aria-label={`Pin ${chat.title}`}
-                    onClick={() => setWs((prev) => togglePin(prev, "chat", chat.id))}
-                  >
-                    <Pin className="size-3.5" />
-                  </button>
-                </div>
-              ))}
-            </div>
-          )}
-          {ws.chats.length === 0 && !railCollapsed && (
-            <div className="mx-3 rounded-2xl border border-white/8 bg-[#141416] p-3">
-              <p className="text-sm font-medium">No chats yet</p>
-              <p className="mt-1 text-sm text-muted">Start one from Chat. Recent threads stay in this menu.</p>
             </div>
           )}
         </nav>
@@ -4425,11 +4615,11 @@ export function CommandApp() {
               className="surface-switch__button"
               aria-expanded={surfaceMenu}
               aria-haspopup="menu"
-              aria-label="Switch between Chat, Build, and EVE"
+              aria-label="Switch between Chat, Build, Intelligence, and EVE"
               onClick={() => setSurfaceMenu((open) => !open)}
             >
               <img className="adrian-mark" src="/brand/logo-mark.jpg" alt="" width={28} height={28} />
-              <span>{view === "build" ? "Build" : view === "intelligence" ? "EVE" : "Chat"}</span>
+              <span>{view === "build" ? "Build" : view === "code" ? "Intelligence" : view === "intelligence" ? "EVE" : "Chat"}</span>
               <span aria-hidden="true">▾</span>
             </button>
             {surfaceMenu ? (
@@ -4437,6 +4627,7 @@ export function CommandApp() {
                 {([
                   ["command", "Chat", "Conversation"],
                   ["build", "Build", "Coding workspace"],
+                  ["code", "Intelligence", "Coding conversation"],
                   ["intelligence", "EVE", "Intelligence layer"],
                 ] as const).map(([id, label, detail]) => (
                   <button
@@ -4684,7 +4875,7 @@ export function CommandApp() {
             </button>
           </div>
         ) : null}
-        {statusSignedIn !== true && (
+        {statusSignedIn !== true && typeof window !== "undefined" && window.location.hostname !== "127.0.0.1" && window.location.hostname !== "localhost" && (
           <div className="signed-out-entry sign-in-strip" data-testid="signed-out-entry" role="status">
             <span>Sign in to use voice and connected services.</span>
             <Link to="/login" className="signed-out-entry__link">Sign in</Link>
@@ -4712,6 +4903,8 @@ export function CommandApp() {
               onPreviewVoice={(line) => { void speak(line); }}
               onTalk={openSpeakStage}
               onAsk={async (text) => {
+                const blocked = decideComputerAction({ text, halted: wsRef.current.halted === true, paired: false, actor: "eve" });
+                if (blocked.kind !== "none") return blocked.message;
                 const turn = await speakChatTurn(text, { stay: true });
                 if (!turn.ok) return turn.error;
                 const spoken = await speak(turn.text);
@@ -4719,10 +4912,25 @@ export function CommandApp() {
                 return turn.text;
               }}
               onOpenChat={() => { setView("command"); setNavOpen(false); }}
+              onOpenCode={(text) => {
+                const threads = wsRef.current.chats.filter((chat) => isIntelligenceThread(chat.customPersonality));
+                const needle = text.trim().toLowerCase();
+                const match = needle ? threads.find((chat) => chat.title.toLowerCase().includes(needle) || chat.messages.some((message) => message.content.toLowerCase().includes(needle))) : threads[0];
+                if (match) {
+                  setActiveId(match.id);
+                  setView("code");
+                  setNotice(`Resumed ${match.title}.`);
+                  return;
+                }
+                handToHumanCode(text || "Continue the coding discussion", "From EVE");
+              }}
               onOpenDashboard={() => { setView("dashboard"); setNavOpen(false); }}
               onOpenAgents={() => { setView("agents"); setNavOpen(false); }}
               onOpenRuns={() => { setView("runs"); setNavOpen(false); }}
               onOpenConnections={() => { setView("connected"); setNavOpen(false); }}
+              recording={taskRecording}
+              recordingSeconds={taskSeconds}
+              onStopRecording={() => void stopTaskRecording()}
             />
           )}
           {view === "dashboard" && (
@@ -4741,6 +4949,15 @@ export function CommandApp() {
                       {now ? greeting(now) : "Hello"}, <span className="text-accent">Adrian</span>
                     </h1>
                     <p className="text-sm text-muted">Ask, build, or connect. The rest lives in Settings.</p>
+                    {ws.chats.length > 0 ? (
+                      <div className="mt-3 flex flex-wrap gap-2" aria-label="Recent chats">
+                        {ws.chats.slice(0, 6).map((chat) => (
+                          <button key={chat.id} type="button" className="inline-flex min-h-11 max-w-full items-center truncate rounded-panel border border-line px-3 text-sm" onClick={() => { setActiveId(chat.id); setView("chat"); }}>
+                            {shownChatTitle(chat)}
+                          </button>
+                        ))}
+                      </div>
+                    ) : null}
                   </div>
                 </div>
               </div>
@@ -4843,8 +5060,8 @@ export function CommandApp() {
                       {error.includes("Sign in") ? <Link to="/login">Sign in</Link> : null}
                     </p>
                   ) : null}
-                  {notice && /dictat|microphone|speech recognition|inserted|Listening\.|Words inserted|No words were caught|could not record|End Speak before the mic/i.test(notice) ? (
-                    <p className="composer-notice mt-2 text-sm text-muted" role="status" data-testid="composer-dictation-notice">{presentVoiceCopy(notice)}</p>
+                  {notice ? (
+                    <p className="composer-notice mt-2 text-sm text-muted" role="status" data-testid="composer-notice">{presentVoiceCopy(notice)}</p>
                   ) : null}
                   {staged && (
                     <p className="mt-2 text-xs text-muted">Staged: {staged.name}. It stays in this browser and is sent only if you press Send.</p>
@@ -5164,6 +5381,7 @@ export function CommandApp() {
                 setView("build");
                 setNavOpen(false);
               }}
+              onOpenHuman={(text) => handToHumanCode(text, "From Chat")}
               onListen={() => void listen()}
               onListenStop={() => void listen({ mode: "stop" })}
               onLiveUserTranscript={(text) => appendLiveVoiceUser(text)}
@@ -5539,6 +5757,7 @@ export function CommandApp() {
                 <p className="text-sm text-muted">Run lookup reads this device. Run planner asks Grok and can only read projects, chats, and notes.</p>
               </div>
             </div>
+            <SharedFleet />
             <ReaPanel
               title="Agents"
               lead="REA checks a file. Workspace lookup lists projects and chats, then searches notes. It does not call a model, browse the web, or mark itself running."
@@ -5626,7 +5845,10 @@ export function CommandApp() {
                   const target = name === "MCP" ? "owner-mcp-connect" : name === "Notion" ? "owner-notion-search" : name === "OpenAI" || name === "Claude" || name === "Gemini" || name === "OpenRouter" ? "owner-api-connect" : null;
                   if (!target) return;
                   window.dispatchEvent(new CustomEvent("adrian-open-connect", { detail: { name } }));
-                  document.getElementById(target)?.scrollIntoView({ behavior: "smooth", block: "center" });
+                  const node = document.getElementById(target);
+                  const box = node?.closest("details");
+                  if (box) box.open = true;
+                  node?.scrollIntoView({ behavior: "smooth", block: "center" });
                   setNotice("The paste form is open below. A card is connected only after the server says so.");
                 }}
                 onDisconnect={() => {
@@ -5636,6 +5858,8 @@ export function CommandApp() {
                   });
                 }}
               />
+              <details className="intelligence-group mt-4">
+                <summary className="cursor-pointer text-sm font-semibold">Notion search</summary>
               <form
                 id="owner-notion-search"
                 className="rounded-panel border border-line bg-surface p-3"
@@ -5680,6 +5904,9 @@ export function CommandApp() {
                   ))}
                 </ul>
               </form>
+              </details>
+              <details className="intelligence-group">
+                <summary className="cursor-pointer text-sm font-semibold">Custom MCP</summary>
               <form
                 id="owner-mcp-connect"
                 className="rounded-panel border border-line bg-surface p-3"
@@ -5721,8 +5948,14 @@ export function CommandApp() {
                   />
                 </ul>
               </form>
+              </details>
               {notice && <p className="voice-copy rounded-panel border border-line bg-surface px-3 py-2 text-sm text-muted">{presentVoiceCopy(notice)}</p>}
+              <details className="intelligence-group">
+                <summary className="cursor-pointer text-sm font-semibold">API keys</summary>
               <AiProviderConnections onChange={setCustomAiProviders} />
+              </details>
+              <details className="intelligence-group">
+                <summary className="cursor-pointer text-sm font-semibold">Provider routes</summary>
               <FleetPanel
                 mode="connected"
                 ws={ws}
@@ -5743,14 +5976,35 @@ export function CommandApp() {
                   }
                 }}
               />
+              </details>
             </section>
           )}
           {view === "scheduled" && <FleetPanel mode="scheduled" ws={ws} setWs={setWs} />}
           {view === "tools" && <FleetPanel mode="tools" ws={ws} setWs={setWs} onFailure={(message, retry, surface) => reportFailure(message, surface === "mcp" ? "mcp_tool_failed" : "open_page_failed", surface === "mcp" ? "mcp:tools" : "browser", retry)} />}
           {view === "build" && (
             <section className="page-shell">
-              <BuildWorkspace />
+              <BuildWorkspace onDiscuss={(text) => handToHumanCode(text, "From Build")} onResult={(text) => {
+                const id = sessionStorage.getItem("adrian-human-return");
+                if (!id) { handToHumanCode(text, "Build result"); return; }
+                sessionStorage.removeItem("adrian-human-return");
+                setWs((prev) => appendHumanResult(prev, id, "Build result", text || "Build finished. No output was reported."));
+                setActiveId(id);
+                setView("code");
+                setNotice("Build result saved in the Intelligence thread.");
+              }} halted={ws.halted} recording={taskRecording} recordingSeconds={taskSeconds} onOpenSpeak={openSpeakStage} onToggleStop={() => { void toggleStop(); }} onStopRecording={() => void stopTaskRecording()} />
             </section>
+          )}
+          {view === "code" && (
+            <HumanCodePanel
+              threads={ws.chats.filter((chat) => isIntelligenceThread(chat.customPersonality)).map((chat) => ({ id: chat.id, title: shownChatTitle(chat), messages: chat.messages.map((message) => ({ role: message.role, content: message.content })) }))}
+              activeId={activeId || ""}
+              busy={busy}
+              notice={notice}
+              onNew={openHumanCode}
+              onOpen={(id) => { setActiveId(id); setView("code"); }}
+              onSend={(id, text, image) => void sendHumanCode(id, text, image)}
+              onBuild={(text) => { if (activeId) sessionStorage.setItem("adrian-human-return", activeId); sessionStorage.setItem("adrian-build-draft", text.slice(0, 4000)); setView("build"); setNavOpen(false); }}
+            />
           )}
           {view === "research" && (
             <section className="page-shell">
@@ -5832,7 +6086,7 @@ export function CommandApp() {
               <input value={skillQuery} onChange={(event) => setSkillQuery(event.target.value)} placeholder="Search skills" className="min-h-11 w-full rounded-panel border border-line bg-surface px-3 text-sm" />
               <div id="owner-skills">
                 {(skillQuery.trim() ? searchSkills(skillQuery) : SKILLS).map((skill) => {
-                  const on = skill.kind === "built-in" && enabledSkills[skill.id] !== false;
+                  const on = skill.kind !== "not-installed" && enabledSkills[skill.id] !== false;
                   return (
                     <article key={skill.id} className="skill-card">
                       <div className="flex items-start justify-between gap-3">
@@ -5840,12 +6094,12 @@ export function CommandApp() {
                           <img src={`/brand/marks/${SKILL_MARK[skill.id] ?? "skills"}.png`} alt="" className="size-8 shrink-0 rounded-lg" />
                           <h3 className="font-semibold">{skill.name}</h3>
                         </div>
-                        <span className="rounded-full border border-line px-2 py-0.5 text-xs text-muted">{skill.kind === "built-in" ? (on ? "On" : "Off") : "Not installed"}</span>
+                        <span className="rounded-full border border-line px-2 py-0.5 text-xs text-muted">{skill.kind === "not-installed" ? "Not installed" : skill.kind === "installed" ? (on ? "Installed" : "Off") : (on ? "On" : "Off")}</span>
                       </div>
                       <p className="mt-2 text-sm">{skill.description}</p>
                       <p className="mt-1 text-sm text-muted">{skill.needs}</p>
                       <div className="mt-3 flex gap-2">
-                        {skill.kind === "built-in" ? (
+                        {skill.kind !== "not-installed" ? (
                           <button
                             type="button"
                             className="min-h-11 rounded-panel border border-line px-3 text-sm"
@@ -5879,7 +6133,7 @@ export function CommandApp() {
               {notice && <p className="voice-copy rounded-panel border border-line bg-surface px-3 py-2 text-sm text-muted">{presentVoiceCopy(notice)}</p>}
               <details className="owner-fold">
                 <summary>Draft library</summary>
-                <LocalSkillsTools skills={SKILLS} enabledSkills={Object.fromEntries(SKILLS.map((skill) => [skill.id, skill.kind === "built-in" && enabledSkills[skill.id] !== false]))} />
+                <LocalSkillsTools skills={SKILLS} enabledSkills={Object.fromEntries(SKILLS.map((skill) => [skill.id, skill.kind !== "not-installed" && enabledSkills[skill.id] !== false]))} />
               </details>
           </section>
           {view === "files" && (
@@ -6056,7 +6310,7 @@ export function CommandApp() {
                   { id: "library", label: "Library", detail: "Text copies in this browser. Upload text or open a file you already attached.", mark: "/brand/marks/library.png", open: () => setView("files") },
                   { id: "projects", label: "Projects", detail: "Records on this device. Open chats or notes from a project card.", mark: "/brand/marks/projects.png", open: () => setView("projects") },
                   { id: "scheduled", label: "Scheduled", detail: "Jobs that wait for a time. Nothing runs until you start it.", mark: "/brand/marks/scheduled.png", open: () => setView("scheduled") },
-                  { id: "build", label: "Build", detail: "Kimi Code workspace. A task can edit the hosted workspace, or a paired computer when one is connected.", mark: "/brand/marks/build.png", open: () => setView("build") },
+                  { id: "build", label: "Build", detail: "Adrian Build workspace. A task can edit the hosted workspace, or a paired computer when one is connected.", mark: "/brand/marks/build.png", open: () => setView("build") },
                   { id: "explore", label: "Explore", detail: "Filter local templates, save one, then open it in Chat.", mark: "/brand/marks/explore.png", open: () => window.location.assign("/explore") },
                   { id: "dashboard", label: "Dashboard", detail: "Opens the workspace map inside this app.", mark: "/brand/marks/general.png", open: () => setView("dashboard") },
                 ].filter((item) => `${item.label} ${item.detail}`.toLowerCase().includes(helpQuery.trim().toLowerCase())).map((item) => (
@@ -6074,7 +6328,7 @@ export function CommandApp() {
           )}
 
           {view === "settings" && (
-            <section className="page-shell mx-auto max-w-3xl space-y-4">
+            <section className="page-shell intelligence-main mx-auto max-w-3xl">
               <div className="page-hero">
                 <div className="flex items-center gap-3">
                   <img src="/brand/marks/settings.png" alt="" className="size-8 rounded-lg" />
@@ -6084,33 +6338,37 @@ export function CommandApp() {
                   </div>
                 </div>
               </div>
-              <nav className="settings-index" aria-label="Settings sections" hidden={settingsPane !== null}>
+              <nav className="intelligence-main settings-index" aria-label="Settings sections" hidden={settingsPane !== null}>
                 {[
                   { group: "Account", items: [
-                    ["general", "General", "Theme and appearance", () => setSettingsPane("general")],
-                    ["personalization", "Personalization", "How replies sound", () => { setView("chat"); setNavOpen(false); }],
-                    ["voice", "Voice", "Speak voice and pace", () => setSettingsPane("voice")],
-                    ["keys", "Safe keys", "Open a saved key and copy it", () => setSettingsPane("keys")],
                     ["security", "Security and login", "Sign in to connect services", () => { window.location.assign("/login"); }],
+                    ["keys", "Safe keys", "Open a saved key and copy it", () => setSettingsPane("keys")],
                     ["data", "Data", "What stays in this browser", () => setSettingsPane("data")],
                     ["safety", "Safety", "Stops and confirmations", () => setSettingsPane("safety")],
                   ]},
+                  { group: "Preferences", items: [
+                    ["general", "Appearance", "Dark, light, or follow this device", () => setSettingsPane("general")],
+                    ["voice", "Voice", "Speak voice and pace", () => setSettingsPane("voice")],
+                  ]},
+                  { group: "Personalization", items: [
+                    ["personalization", "Personalization", "How replies sound", () => { setView("chat"); setNavOpen(false); }],
+                  ]},
                   { group: "Connections", items: [
-                    ["plugins", "Plugins", "Marks and setup for each service", () => { setView("connected"); setNavOpen(false); }],
+                    ["plugins", "Plugins", "Connected services and Kimi links", () => { setView("connected"); setNavOpen(false); }],
                     ["connections", "Connections", "API keys and saved providers", () => setSettingsPane("connections")],
-                    ["integrations", "Integrations", "What each provider can do", () => { setView("integrations"); setNavOpen(false); }],
-                    ["scheduled", "Scheduled", "Jobs that wait for a time", () => { setView("scheduled"); setNavOpen(false); }],
                   ]},
                   { group: "System", items: [
+                    ["integrations", "Integrations", "What each provider can do", () => { setView("integrations"); setNavOpen(false); }],
+                    ["scheduled", "Scheduled", "Jobs that wait for a time", () => { setView("scheduled"); setNavOpen(false); }],
                     ["tools", "Tools", "What this app can call", () => { setView("tools"); setNavOpen(false); }],
                     ["skills", "Skills", "Installed abilities", () => { setView("skills"); setNavOpen(false); }],
                     ["memory", "Memory", "Notes you chose to keep", () => { setView("memory"); setNavOpen(false); }],
                     ["activity", "Activity", "What this device recorded", () => { setView("activity"); setNavOpen(false); }],
                     ["help", "Help", "How the controls behave", () => { setView("help"); setNavOpen(false); }],
                   ]},
-               ].map((section) => (
-                  <details key={section.group} className="settings-group">
-                    <summary>{section.group}</summary>
+                ].map((section) => (
+                  <section key={section.group} className="intelligence-group" aria-label={section.group}>
+                    <h3>{section.group}</h3>
                     {section.items.map(([id, label, detail, open]) => (
                       <button key={id} type="button" onClick={open}>
                         <img src={`/brand/marks/${id === "dashboard" ? "general" : id}.png`} alt="" width={28} height={28} />
@@ -6120,7 +6378,7 @@ export function CommandApp() {
                         </span>
                       </button>
                     ))}
-                  </details>
+                  </section>
                 ))}
               </nav>
               {settingsPane && (
@@ -6441,12 +6699,21 @@ export function CommandApp() {
         signedIn={statusSignedIn === true || (typeof window !== "undefined" && (window.location.hostname === "127.0.0.1" || window.location.hostname === "localhost"))}
         live={voiceListening}
         onClose={closeSpeakStage}
+        onKeepRecording={keepTaskRecording}
+        onHandCode={(text) => handToHumanCode(text, "From Speak")}
+        onStyle={(style) => {
+          const personalityId = speakStylePersonality(style);
+          if (activeId) setWs((prev) => updateChatPersonality(prev, activeId, personalityId));
+          setNotice(`${style} is saved as the personality. The voice name is separate.`);
+        }}
         onSignIn={() => { setSpeakStageOpen(false); window.location.assign("/login"); }}
         onLive={() => void listen({ mode: voiceListening ? "stop" : "start" })}
         heard={speakCall.heard}
         spoken={speakCall.reply}
         callError={speakCall.error}
         onAsk={async (text) => {
+          const blocked = decideComputerAction({ text, halted: wsRef.current.halted === true, paired: false, actor: "eve" });
+          if (blocked.kind !== "none") return { error: blocked.message };
           const turn = await speakChatTurn(text);
           if (!turn.ok) return { error: turn.error };
           const spoken = await speak(turn.text);
@@ -6454,6 +6721,12 @@ export function CommandApp() {
           return { reply: turn.text };
         }}
       />
+      {taskRecording ? (
+        <div className="fixed left-1/2 top-20 z-40 flex -translate-x-1/2 items-center gap-3 rounded-panel border border-line bg-surface px-4 py-2 shadow-lg" data-testid="task-recording" role="status">
+          <span className="text-sm">Recording this tab · {taskSeconds}s. Closing this tab stops it. It cannot continue after the tab closes.</span>
+          <button type="button" className="min-h-11 rounded-panel border border-line px-3 text-sm" onClick={() => void stopTaskRecording()}>Stop</button>
+        </div>
+      ) : null}
       <LiveVoiceBar
         compactIdle
         authReady={statusSignedIn === true}
@@ -6697,6 +6970,7 @@ function ChatPane({
   onNew,
   onSpeak,
   onOpenBuild,
+  onOpenHuman,
   onListen,
   onListenStop,
   onLiveUserTranscript,
@@ -6788,6 +7062,7 @@ function ChatPane({
   onNew: () => void;
   onSpeak: (text: string, messageId?: string) => void;
   onOpenBuild: (text: string) => void;
+  onOpenHuman: (text: string) => void;
   onListen: () => void;
   onListenStop?: () => void;
   onLiveUserTranscript?: (text: string) => void;
@@ -6923,7 +7198,7 @@ function ChatPane({
       <section className="flex min-w-0 flex-1 flex-col">
         <div className="chat-head px-4 pt-4">
          <div className="flex flex-wrap items-end justify-between gap-2">
-           <h2 className="font-display text-3xl font-bold">{active?.title || "AI Chat"}</h2>
+          <h2 className="font-display text-3xl font-bold">{active?.title || "AI Chat"}</h2>
            {active && !renaming && (
              <div className="flex gap-3">
                <button type="button" className="min-h-11 text-sm text-accent" onClick={onExport}>Export chat</button>
@@ -6931,6 +7206,7 @@ function ChatPane({
              </div>
            )}
          </div>
+          {active && customPersonality.trim() ? <p className="mt-1 text-sm text-muted">{active.title} is open in Chat. Its saved instructions are used for the next reply.</p> : null}
           {renaming && (
             <form
               className="mt-2 flex gap-2"
@@ -6955,7 +7231,7 @@ function ChatPane({
           </div>
           {active && personalityId === "custom" && (
             <div className="mt-2 max-w-xl space-y-1">
-              <label htmlFor="thread-custom-personality" className="text-xs font-semibold text-muted">Describe EVE's conversation style</label>
+              <label htmlFor="thread-custom-personality" className="text-xs font-semibold text-muted">Persona instructions</label>
               <textarea
                 id="thread-custom-personality"
                 value={customPersonality}
@@ -7013,7 +7289,7 @@ function ChatPane({
                 </form>
               ) : (
                 <>
-                  <MessageBody text={msg.content} images={msg.images} onEditImagine={(src) => onEditImagine(src)} onSaveImage={onSaveImage} onDownloadImage={onDownloadImage} />
+                  {msg.role === "assistant" ? <AnswerTabs text={msg.content} images={msg.images} onEditImagine={(src) => onEditImagine(src)} onSaveImage={onSaveImage} onDownloadImage={onDownloadImage} /> : <MessageBody text={msg.content} images={msg.images} onEditImagine={(src) => onEditImagine(src)} onSaveImage={onSaveImage} onDownloadImage={onDownloadImage} />}
                   {msg.videoUrl ? <video className="owner-video mt-2" src={msg.videoUrl} controls playsInline preload="metadata" /> : null}
                 </>
               )}
@@ -7035,7 +7311,10 @@ function ChatPane({
                   </button>
                 )}
                 {msg.role === "assistant" && (
-                  <button type="button" className="min-h-11 text-xs text-accent" onClick={() => onOpenBuild(msg.content)}>Open in Build</button>
+                  <>
+                    <button type="button" className="min-h-11 text-xs text-accent" onClick={() => onOpenBuild(msg.content)}>Open in Build</button>
+                    <button type="button" className="min-h-11 text-xs text-accent" onClick={() => onOpenHuman(msg.content)}>Open in Intelligence</button>
+                  </>
                 )}
                 {msg.role === "assistant" && (
                   <span className="flex flex-wrap items-center gap-1 text-xs text-muted">
@@ -7218,6 +7497,13 @@ function ChatPane({
                 <button type="button" className="min-h-11 rounded-panel border border-line/80 bg-white/5 px-3 text-sm" onClick={() => { setTools((open) => !open); setContext(false); }}>Tools</button>
                 <button type="button" className="min-h-11 rounded-panel border border-line/80 bg-white/5 px-3 text-sm" onClick={onDelete} disabled={!active}>Delete</button>
                 <button type="button" className="min-h-11 rounded-panel border border-line/80 bg-white/5 px-3 text-sm" onClick={() => onMemoryChange(memoryChoice === "on" ? "off" : "on")} disabled={!active || busy || halted} aria-label={memoryChoice === "on" ? "Memory on for this chat" : "Don't use memory for this chat"}>{memoryChoice === "on" ? "Memory on" : "Memory off"}</button>
+                <ComposerEffortControl mode={composerEffort} onChoose={onComposerEffort} />
+                <label className="inline-flex min-h-11 items-center gap-2 text-xs text-muted">
+                  Style
+                  <select aria-label="Conversation style" value={personalityId} disabled={!active || busy} onChange={(event) => onPersonalityChange(event.target.value as PersonalityId)} className="min-h-11 rounded-panel border border-line bg-transparent px-2 text-sm text-fg">
+                    {CONVERSATIONAL_PERSONALITIES.map((profile) => <option key={profile.id} value={profile.id}>{profile.label}</option>)}
+                  </select>
+                </label>
               </div>
             </details>
             <div className="legacy-composer-voice"><VoiceLevelMeter level={voiceLevel} listening={voiceListening} />
@@ -7242,13 +7528,6 @@ function ChatPane({
               {speaking ? "Reading" : "Read aloud"}
             </button></div>
             
-            <ComposerEffortControl mode={composerEffort} onChoose={onComposerEffort} />
-            <label className="inline-flex min-h-11 items-center gap-2 text-xs text-muted">
-              Style
-              <select aria-label="Conversation style" value={personalityId} disabled={!active || busy} onChange={(event) => onPersonalityChange(event.target.value as PersonalityId)} className="min-h-11 rounded-panel border border-line bg-transparent px-2 text-sm text-fg">
-                {CONVERSATIONAL_PERSONALITIES.map((profile) => <option key={profile.id} value={profile.id}>{profile.label}</option>)}
-              </select>
-            </label>
             <button type="submit" disabled={busy || halted || (!draft.trim() && pendingImages.length === 0 && !stagedName)} className="composer-send min-h-11 rounded-panel bg-accent px-4 text-sm font-semibold text-accent-ink disabled:opacity-50">Send</button>
           </div>
           <div className="composer-voice-chrome" data-testid="composer-voice-chrome" hidden aria-hidden="true">

@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
-import { Camera, Mic, MicOff, MonitorUp, Paperclip, PhoneOff, X } from "lucide-react";
+import { createPortal } from "react-dom";
+import { AudioLines, Camera, Mic, MicOff, MonitorUp, PhoneOff, Plus, Settings, Volume2, VolumeX, X } from "lucide-react";
 import { openCameraStream, openScreenStream } from "@/components/mind/live-voice-bar/frame-capture";
 import {
   readStoredVoiceChoice,
@@ -23,7 +24,16 @@ const RATES = [
   { id: "brisk", label: "Brisk" },
 ] as const;
 
+const STYLES = ["Storyteller", "Supportive", "Playful", "Calm", "Unhinged"] as const;
+const ACTIVATION = [
+  { id: "default", label: "Default" },
+  { id: "isolation", label: "Voice isolation" },
+  { id: "push", label: "Push to talk" },
+] as const;
+
 type RateId = (typeof RATES)[number]["id"];
+type StyleId = (typeof STYLES)[number];
+type ActivationId = (typeof ACTIVATION)[number]["id"];
 
 /**
  * Full-screen Speak, matched to the dark Grok voice screen:
@@ -38,6 +48,9 @@ export function SpeakStage(props: {
   onSignIn: () => void;
   onLive?: () => void;
   onAsk?: (text: string) => Promise<string | null | { reply?: string; error?: string }>;
+  onKeepRecording?: (stream: MediaStream) => void;
+  onHandCode?: (text: string) => void;
+  onStyle?: (style: string) => void;
   heard?: string;
   spoken?: string;
   callError?: string;
@@ -46,6 +59,8 @@ export function SpeakStage(props: {
   const streamRef = useRef<MediaStream | null>(null);
   const micRef = useRef<MediaStream | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
+  const keepRef = useRef(props.onKeepRecording);
+  keepRef.current = props.onKeepRecording;
   const [source, setSource] = useState<"none" | "camera" | "screen">("none");
   const [muted, setMuted] = useState(false);
   const [listening, setListening] = useState(false);
@@ -56,11 +71,25 @@ export function SpeakStage(props: {
   const [voice, setVoice] = useState<XaiBuiltinVoice>("eve");
   const [rate, setRate] = useState<RateId>("natural");
   const [uploadName, setUploadName] = useState<string | null>(null);
+  const [settingsOpen, setSettingsOpen] = useState(false);
+  const [speakerMuted, setSpeakerMuted] = useState(false);
+  const [showTranscript, setShowTranscript] = useState(false);
+  const [style, setStyle] = useState<StyleId>("Storyteller");
+  const [activation, setActivation] = useState<ActivationId>("default");
+  const [volume, setVolume] = useState(100);
+  const [calling, setCalling] = useState(false);
+  const [callHeard, setCallHeard] = useState("");
 
   useEffect(() => {
     setVoice(readStoredVoiceChoice(window.localStorage));
     const saved = window.localStorage.getItem("adrian-speak-rate");
     if (saved === "slow" || saved === "natural" || saved === "brisk") setRate(saved);
+    const savedStyle = window.localStorage.getItem("adrian-speak-style");
+    if (savedStyle === "Storyteller" || savedStyle === "Supportive" || savedStyle === "Playful" || savedStyle === "Calm" || savedStyle === "Unhinged") setStyle(savedStyle);
+    const savedVolume = Number(window.localStorage.getItem("adrian-speak-volume"));
+    if (Number.isFinite(savedVolume)) setVolume(Math.min(100, Math.max(0, savedVolume)));
+    const savedActivation = window.localStorage.getItem("adrian-speak-activation");
+    if (savedActivation === "default" || savedActivation === "isolation" || savedActivation === "push") setActivation(savedActivation);
   }, []);
 
   useEffect(() => {
@@ -83,15 +112,34 @@ export function SpeakStage(props: {
   useEffect(() => {
     if (!props.open) {
       stopVideo();
-      stopMic();
+      const kept = micRef.current;
+      if (kept && keepRef.current) {
+        micRef.current = null;
+        setListening(false);
+        keepRef.current(kept);
+      } else {
+        stopMic();
+      }
+      setSettingsOpen(false);
+      document.documentElement.classList.remove("eve-call-open");
+    } else {
+      document.documentElement.classList.add("eve-call-open");
     }
     return () => {
-      streamRef.current?.getTracks().forEach((track) => track.stop());
-      micRef.current?.getTracks().forEach((track) => track.stop());
-      streamRef.current = null;
-      micRef.current = null;
+      document.documentElement.classList.remove("eve-call-open");
     };
   }, [props.open]);
+
+  useEffect(() => {
+    return () => {
+      streamRef.current?.getTracks().forEach((track) => track.stop());
+      const kept = micRef.current;
+      if (kept && keepRef.current) keepRef.current(kept);
+      else kept?.getTracks().forEach((track) => track.stop());
+      micRef.current = null;
+      streamRef.current = null;
+    };
+  }, []);
 
   async function show(next: "camera" | "screen") {
     if (source === next) {
@@ -119,13 +167,9 @@ export function SpeakStage(props: {
   }
 
   async function toggleMic() {
-    if (props.onLive) {
-      props.onLive();
-      setNotice(props.live ? "EVE stopped." : "Connecting. Speak, and EVE answers on this call.");
-      return;
-    }
     if (listening) {
       stopMic();
+      if (props.onLive && props.live) props.onLive();
       setNotice("Recording stopped.");
       return;
     }
@@ -139,14 +183,19 @@ export function SpeakStage(props: {
         setNotice("Microphone permission is blocked for this site. Allow it once in the browser settings, then return here.");
         return;
       }
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      const stream = await navigator.mediaDevices.getUserMedia({
+        audio: activation === "isolation"
+          ? { echoCancellation: true, noiseSuppression: true, autoGainControl: true }
+          : true,
+      });
       stream.getTracks().forEach((track) => {
         track.enabled = true;
       });
       micRef.current = stream;
       setListening(true);
       setMuted(false);
-      setNotice(props.signedIn ? "Recording. The live reply starts when the voice session connects." : "Recording on this device. Sign in before a live reply can start.");
+      setNotice("Recording this tab. Leave this screen and it keeps running.");
+      props.onLive?.();
     } catch {
       setNotice("Microphone permission was blocked. Allow it for this site, then press the mic again.");
     }
@@ -166,6 +215,35 @@ export function SpeakStage(props: {
       /* private mode */
     }
     setNotice(`${next} pace is saved.`);
+  }
+
+  function chooseStyle(next: StyleId) {
+    setStyle(next);
+    try { window.localStorage.setItem("adrian-speak-style", next); } catch { /* private mode */ }
+    props.onStyle?.(next);
+    setNotice(`${next} is saved for this call.`);
+  }
+
+  function chooseVolume(next: number) {
+    const level = Math.min(100, Math.max(0, next));
+    setVolume(level);
+    try { window.localStorage.setItem("adrian-speak-volume", String(level)); } catch { /* private mode */ }
+    document.querySelectorAll("audio").forEach((element) => { element.volume = level / 100; });
+    setNotice(level === 0 ? "Speaker volume is off." : `Speaker volume is ${level}.`);
+  }
+
+  function chooseActivation(next: ActivationId) {
+    setActivation(next);
+    try { window.localStorage.setItem("adrian-speak-activation", next); } catch { /* private mode */ }
+    setNotice(next === "push" ? "Push to talk is saved. Hold the microphone to talk." : next === "isolation" ? "Voice isolation is saved for the next microphone open." : "Default voice activation is saved.");
+  }
+
+  function toggleSpeaker() {
+    const next = !speakerMuted;
+    setSpeakerMuted(next);
+    document.querySelectorAll("audio").forEach((element) => { element.muted = next; });
+    if (next) window.speechSynthesis?.cancel();
+    setNotice(next ? "Speaker muted for this call." : "Speaker on.");
   }
 
   async function ask() {
@@ -193,67 +271,100 @@ export function SpeakStage(props: {
     }
   }
 
-  if (!props.open) return null;
+  async function placeCall() {
+    if (calling) return;
+    setCalling(true);
+    setCallHeard("");
+    setReply("");
+    setNotice("Calling. Speech is being heard and answered.");
+    setShowTranscript(true);
+    try {
+      const response = await fetch("/api/mind/voice/call", { method: "POST", headers: { "content-type": "application/json" }, body: "{}" });
+      const body = await response.json().catch(() => ({})) as { ok?: boolean; heard?: string; reply?: string; audio?: string; error?: string };
+      if (!body.ok || !body.reply) {
+        setNotice(body.error || "The call did not finish. Nothing was spoken.");
+        return;
+      }
+      setCallHeard(body.heard || "");
+      setReply(body.reply);
+      setNotice("On a call. The reply was spoken.");
+      if (body.audio && !speakerMuted) {
+        const audio = new Audio(`data:audio/mpeg;base64,${body.audio}`);
+        audio.setAttribute("data-testid", "call-audio");
+        audio.volume = volume / 100;
+        await audio.play().catch(() => undefined);
+      }
+    } catch {
+      setNotice("The call did not finish. Nothing was spoken.");
+    } finally {
+      setCalling(false);
+    }
+  }
 
-  return (
-    <div className="speak-stage" role="dialog" aria-modal="true" aria-label="EVE" data-testid="speak-stage">
-      <header>
-        <div>
-          <p>EVE</p>
-          <p className="text-xs text-muted">The intelligence layer. Speak, and EVE answers on this call.</p>
-          <span>Live call, or type one line and press Speak.</span>
-        </div>
-        <button type="button" aria-label="Close Speak" onClick={props.onClose}><X /></button>
-      </header>
+  if (!props.open) return null;
+  const status = source === "camera" ? "Camera on" : source === "screen" ? "Sharing your screen" : props.live ? "Live" : listening ? "Listening" : "Start talking";
+  const transcript = [uploadName, notice, props.heard ? `Heard: ${props.heard}` : "", reply || props.spoken || "", props.callError || ""].filter(Boolean).join("\n");
+  const callTranscript = [callHeard ? `Heard: ${callHeard}` : "", reply ? `Spoken: ${reply}` : "", notice || ""].filter(Boolean).join("\n");
+  const eveState = calling ? "listening" : reply || props.spoken ? "speaking" : listening ? "listening" : "idle";
+
+  const stage = (
+    <div className="speak-stage speak-call" role="dialog" aria-modal="true" aria-label="EVE" data-testid="speak-stage" style={{ position: "fixed", inset: 0, zIndex: 500, background: "#07080c" }}>
+      <section className="speak-system" data-testid="speak-system" style={{ position: "absolute", top: "18%", left: "8%", right: "8%", zIndex: 2, color: "#f4f4f5" }}>
+        <p>System call</p>
+        <h2 style={{ fontSize: "1.6rem", fontWeight: 700 }}>Speak talks to the system.</h2>
+        <p style={{ marginTop: "0.5rem", maxWidth: "36rem", color: "#d4d4d8" }}>This call shows the saved face. The person and the live stage stay on Intelligence. It cannot press the emergency stop. Leave this screen and the recording keeps running in this tab.</p>
+      </section>
+      <img src="/brand/eve-idle.jpg" alt="EVE" width="160" height="208" data-testid="speak-face" style={{ position: "absolute", top: "34%", right: "8%", width: "9rem", height: "12rem", objectFit: "cover", borderRadius: "1rem", zIndex: 2 }} />
       <video ref={videoRef} className={source === "none" ? "is-hidden" : source} playsInline muted autoPlay />
-      <div className="speak-stage__body">
-        <div className="speak-stage__stage">
-          {source === "none" ? <div className={`speak-orb ${props.live || listening ? "is-live" : ""}`} aria-hidden="true" /> : null}
-          <div className={`speak-wave ${props.live || listening ? "is-live" : ""}`} aria-hidden="true">
-            <span /><span /><span /><span /><span /><span /><span />
+      <div className="speak-call__status">
+        <AudioLines aria-hidden="true" />
+        <p role="status">{status}</p>
+        <button type="button" className="speak-call__place" disabled={calling} onClick={() => void placeCall()}>{calling ? "Calling…" : "Place call"}</button>
+      </div>
+      {callTranscript ? <p className="speak-call__transcript" data-testid="speak-reply">{callTranscript}</p> : reply || props.spoken || props.callError ? <p className="speak-call__transcript" data-testid="speak-reply">{props.callError || reply || props.spoken}</p> : null}
+      {!callTranscript && showTranscript && transcript ? <p className="speak-call__transcript" data-testid="speak-transcript">{transcript}</p> : null}
+      <div className="speak-call__pills" aria-label="Call controls">
+        <button type="button" aria-label="Screen share" aria-pressed={source === "screen"} onClick={() => void show("screen")}><MonitorUp /></button>
+        <button type="button" aria-label={speakerMuted ? "Unmute speaker" : "Mute speaker"} aria-pressed={speakerMuted} onClick={toggleSpeaker}>{speakerMuted ? <VolumeX /> : <Volume2 />}</button>
+        <button type="button" aria-label={muted || !(props.live || listening) ? "Unmute microphone" : "Mute microphone"} aria-pressed={(props.live || listening) && !muted} onClick={() => { if (activation === "push" && !listening) return; void toggleMic(); }} onPointerDown={() => { if (activation === "push" && !listening) void toggleMic(); }} onPointerUp={() => { if (activation === "push" && listening) stopMic(); }}>{muted || !(props.live || listening) ? <MicOff /> : <Mic />}</button>
+        <button type="button" aria-label="Voice settings" aria-pressed={settingsOpen} onClick={() => setSettingsOpen((open) => !open)}><Settings /></button>
+        <button type="button" className="speak-call__notes" aria-label="Transcript" aria-pressed={showTranscript} onClick={() => setShowTranscript((open) => !open)}><AudioLines /></button>
+        <button type="button" className="speak-call__code" aria-label="Open in Intelligence" onClick={() => props.onHandCode?.(line.trim() || props.heard || props.spoken || "")}>Code</button>
+      </div>
+      <form className="speak-call__bar" onSubmit={(event) => { event.preventDefault(); void ask(); }}>
+        <button type="button" aria-label="Add a file" onClick={() => fileRef.current?.click()}><Plus /></button>
+        <input aria-label="Ask Anything" placeholder="Ask Anything" value={line} onChange={(event) => setLine(event.target.value)} />
+        <button type="button" className="speak-call__end" aria-label="End call" onClick={() => { stopVideo(); props.onClose(); }}><PhoneOff /></button>
+      </form>
+      {settingsOpen ? (
+        <section className="speak-sheet" aria-label="Voice settings">
+          <header>
+            <button type="button" aria-label="Close voice settings" onClick={() => setSettingsOpen(false)}><X /></button>
+            <h2>Voice settings</h2>
+          </header>
+          <button type="button" className="speak-sheet__voice" onClick={() => chooseVoice(VOICES[(VOICES.findIndex((item) => item.id === voice) + 1) % VOICES.length].id)}>
+            <span>Voice</span>
+            <strong>{voiceDisplayName(voice)}</strong>
+          </button>
+          <p>Personality</p>
+          <p className="text-xs text-muted">Personality changes how the reply is written. Voice changes who speaks it.</p>
+          <div className="speak-sheet__styles">
+            {STYLES.map((item) => <button key={item} type="button" aria-pressed={style === item} onClick={() => chooseStyle(item)}>{item}</button>)}
           </div>
-          <p className="speak-status" role="status">
-            {source === "camera" ? "Camera on" : source === "screen" ? "Sharing your screen" : props.live || listening ? "Live" : `${voiceDisplayName(voice)} · ${rate}`}
-          </p>
-          {uploadName ? <p className="speak-file">{uploadName}</p> : null}
-          {notice ? <p className="speak-notice">{notice}</p> : null}
-          {props.heard ? <p className="speak-notice" data-testid="speak-heard">Heard: {props.heard}</p> : null}
-          {reply || props.spoken ? <p className="speak-notice" data-testid="speak-reply">{reply || props.spoken}</p> : null}
-          {props.callError ? <p className="speak-notice" data-testid="speak-call-error">{props.callError}</p> : null}
-          <form className="speak-ask" onSubmit={(event) => { event.preventDefault(); void ask(); }}>
-            <input aria-label="Type to Speak" placeholder="Type if the mic is blocked" value={line} onChange={(event) => setLine(event.target.value)} />
-            <button type="submit" disabled={asking || !line.trim()}>{asking ? "Speaking" : "Speak"}</button>
-          </form>
-          {!props.signedIn ? (
-            <button type="button" className="speak-signin" onClick={props.onSignIn}>Sign in to start the live call</button>
-          ) : null}
-        </div>
-        <section className="speak-voices" aria-label="Speak settings">
-          <p>Choose a voice</p>
-          <div className="speak-rates" role="group" aria-label="Speaking pace">
-            {RATES.map((item) => (
-              <button key={item.id} type="button" aria-pressed={rate === item.id} onClick={() => chooseRate(item.id)}>{item.label}</button>
-            ))}
+          <label className="speak-sheet__volume">Volume
+            <input aria-label="Speaker volume" type="range" min={0} max={100} value={volume} onChange={(event) => chooseVolume(Number(event.target.value))} />
+          </label>
+          <p>Voice activation</p>
+          <div className="speak-sheet__activation" role="group" aria-label="Voice activation">
+            {ACTIVATION.map((item) => <button key={item.id} type="button" aria-pressed={activation === item.id} onClick={() => chooseActivation(item.id)}>{item.label}</button>)}
           </div>
-          <ul>
-            {VOICES.map((item) => (
-              <li key={item.id}>
-                <button type="button" aria-pressed={voice === item.id} onClick={() => chooseVoice(item.id)}>
-                  <strong>{voiceDisplayName(item.id)}</strong>
-                  <span>{item.line}</span>
-                </button>
-              </li>
-            ))}
-          </ul>
+          <div className="speak-sheet__rates" role="group" aria-label="Speaking pace">
+            {RATES.map((item) => <button key={item.id} type="button" aria-pressed={rate === item.id} onClick={() => chooseRate(item.id)}>{item.label}</button>)}
+          </div>
+          <button type="button" aria-pressed={source === "camera"} onClick={() => void show("camera")}><Camera /> Camera</button>
+          {!props.signedIn ? <button type="button" onClick={props.onSignIn}>Sign in to start the live call</button> : null}
         </section>
-      </div>
-      <div className="speak-controls">
-        <button type="button" aria-label="Camera" aria-pressed={source === "camera"} onClick={() => void show("camera")}><Camera /><span>Camera</span></button>
-        <button type="button" aria-label="Upload" onClick={() => fileRef.current?.click()}><Paperclip /><span>Upload</span></button>
-        <button type="button" className="mic" aria-label={props.live || listening ? "Stop recording" : "Start recording"} aria-pressed={(props.live || listening) && !muted} onClick={() => void toggleMic()}>{muted || !(props.live || listening) ? <MicOff /> : <Mic />}<span>{props.live || listening ? "Stop" : "Record"}</span></button>
-        <button type="button" aria-label="Screen share" aria-pressed={source === "screen"} onClick={() => void show("screen")}><MonitorUp /><span>Screen</span></button>
-        <button type="button" className="end" aria-label="End call" onClick={() => { stopVideo(); stopMic(); props.onClose(); }}><PhoneOff /><span>End</span></button>
-      </div>
+      ) : null}
       <input
         ref={fileRef}
         type="file"
@@ -264,9 +375,12 @@ export function SpeakStage(props: {
           event.target.value = "";
           if (!file) return;
           setUploadName(file.name);
+          setShowTranscript(true);
           setNotice(`${file.name} is on this screen. It stays on this device until a signed-in call can use it.`);
         }}
       />
     </div>
   );
+  if (typeof document === "undefined") return stage;
+  return createPortal(stage, document.body);
 }
