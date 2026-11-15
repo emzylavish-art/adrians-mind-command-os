@@ -55,8 +55,8 @@ export function HumanCodePanel(props: {
     void (async () => {
       try {
         const [listed, git] = await Promise.all([
-          fetch("/api/mind/kimi/files", { method: "POST", credentials: "include", headers: { "content-type": "application/json" }, body: JSON.stringify({ operation: "list" }) }).then((response) => response.json()),
-          fetch("/api/mind/kimi/files", { method: "POST", credentials: "include", headers: { "content-type": "application/json" }, body: JSON.stringify({ operation: "git" }) }).then((response) => response.json()),
+          fetch("/api/mind/build/files", { method: "POST", credentials: "include", headers: { "content-type": "application/json" }, body: JSON.stringify({ operation: "list" }) }).then((response) => response.json()),
+          fetch("/api/mind/build/files", { method: "POST", credentials: "include", headers: { "content-type": "application/json" }, body: JSON.stringify({ operation: "git" }) }).then((response) => response.json()),
         ]);
         if (stop) return;
         const nextFiles = Array.isArray(listed.files) ? listed.files.slice(0, 200) : [];
@@ -86,7 +86,7 @@ export function HumanCodePanel(props: {
       setFileNote("Secret files stay on this computer. Nothing was sent.");
       return;
     }
-    const response = await fetch("/api/mind/kimi/files", { method: "POST", credentials: "include", headers: { "content-type": "application/json" }, body: JSON.stringify({ operation: "read", path: filePath }) });
+    const response = await fetch("/api/mind/build/files", { method: "POST", credentials: "include", headers: { "content-type": "application/json" }, body: JSON.stringify({ operation: "read", path: filePath }) });
     const data = await response.json() as { content?: string; error?: string; truncated?: boolean };
     if (!response.ok || typeof data.content !== "string") {
       setFileNote(data.error || `${filePath} is not in the hosted workspace. Nothing was sent.`);

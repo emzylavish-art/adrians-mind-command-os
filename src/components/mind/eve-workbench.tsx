@@ -110,6 +110,7 @@ export function EveWorkbench({
   const [serverNote, setServerNote] = useState<string | null>(null);
   const [serverBusy, setServerBusy] = useState(false);
   const [ask, setAsk] = useState("");
+  const [eveBand, setEveBand] = useState<"talk" | "status" | "pairing" | "tasks" | "figure" | "records">("talk");
   const [askBusy, setAskBusy] = useState(false);
   const [askReply, setAskReply] = useState<string | null>(null);
   const [receipts, setReceipts] = useState<Array<{ id: string; state: string; action: string; detail: string }>>([]);
@@ -226,15 +227,17 @@ export function EveWorkbench({
     <main className="h-full min-h-0 overflow-auto p-4 md:p-6" data-testid="eve-workbench">
       <div className="mx-auto flex max-w-[1500px] flex-col gap-4">
         <header className="page-hero flex flex-col gap-4 p-4 md:flex-row md:items-center md:justify-between md:p-6">
-          <div className="flex min-w-0 items-center gap-4">
+          <div className="flex min-w-0 flex-col items-stretch gap-4 sm:flex-row sm:items-center">
+            <div hidden={eveBand !== "talk" && eveBand !== "figure"}>
             <EveTurn state={askBusy ? "listening" : askReply ? "speaking" : "idle"} expression={expression} spoken={askReply} framing="full" projection={heard} className="eve-stage-panel" />
+            </div>
             <div className="min-w-0">
               <p className="text-xs font-semibold uppercase tracking-[0.18em] text-muted">Adrian Core · Intelligence</p>
               <h1 className="font-display text-3xl font-bold md:text-4xl">EVE</h1>
               <p className="mt-1 text-sm text-muted">Talk to EVE here. This is the person, not the Speak overlay. She is AI.</p>
             </div>
           </div>
-          <nav className="flex flex-wrap gap-2" aria-label="EVE workbench destinations">
+          <nav className="flex flex-wrap gap-2" aria-label="EVE workbench destinations" hidden={eveBand !== "talk"}>
             <button type="button" onClick={onOpenChat} className="inline-flex min-h-11 items-center gap-2 rounded-panel bg-accent px-4 text-sm font-semibold text-accent-ink">
               Open Chat <ArrowUpRight className="size-4" />
             </button>
@@ -245,8 +248,20 @@ export function EveWorkbench({
             <button type="button" onClick={onOpenDashboard} className="inline-flex min-h-11 items-center gap-2 rounded-panel border border-line px-4 text-sm">3D Dashboard</button>
           </nav>
         </header>
+        <nav className="flex flex-wrap gap-2" aria-label="EVE groups">
+          {([
+            ["talk", "Talk"],
+            ["status", "Status"],
+            ["pairing", "Pairing"],
+            ["tasks", "Tasks"],
+            ["figure", "Figure"],
+            ["records", "Records"],
+          ] as const).map(([id, label]) => (
+            <button key={id} type="button" className={`min-h-11 rounded-panel border px-3 text-sm ${eveBand === id ? "border-accent bg-accent text-accent-ink" : "border-line"}`} aria-pressed={eveBand === id} onClick={() => setEveBand(id)}>{label}</button>
+          ))}
+        </nav>
 
-        <section className="rounded-panel border border-line bg-surface p-4" data-testid="eve-talk">
+        <section className="rounded-panel border border-line bg-surface p-4" data-testid="eve-talk" hidden={eveBand !== "talk"}>
           <div className="flex flex-wrap items-center justify-between gap-3">
             <div>
               <h2 className="text-lg font-semibold">Talk with EVE</h2>
@@ -284,7 +299,7 @@ export function EveWorkbench({
           ) : null}
         </section>
 
-        <section className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4" aria-label="Workbench status">
+        <section className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4" aria-label="Workbench status" hidden={eveBand !== "status"}>
           <div className="rounded-panel border border-line bg-surface p-4">
             <p className="text-xs uppercase tracking-wide text-muted">Active tasks</p>
             <p className="mt-2 text-3xl font-semibold tabular-nums">{activeRuns.length}</p>
@@ -316,6 +331,7 @@ export function EveWorkbench({
           </div>
         </section>
 
+        <div hidden={eveBand !== "pairing"}>
         <OwnerFlow
           halted={workspace.halted}
           recording={recording}
@@ -324,8 +340,9 @@ export function EveWorkbench({
           onToggleStop={onToggleStop}
           onStopRecording={() => onStopRecording?.()}
         />
+        </div>
 
-        <section className="rounded-panel border border-line bg-surface p-4 md:p-5">
+        <section className="rounded-panel border border-line bg-surface p-4 md:p-5" hidden={eveBand !== "tasks"}>
           <h2 className="text-lg font-semibold">Start a local task</h2>
           <p className="mt-1 text-sm text-muted">Queues a saved agent on this device.</p>
           <form
@@ -363,8 +380,8 @@ export function EveWorkbench({
           {serverNote ? <p className="mt-2 text-sm text-muted" role="status">{serverNote}</p> : null}
         </section>
 
-        <section className="grid gap-4 xl:grid-cols-[minmax(0,1.5fr)_minmax(18rem,0.8fr)]">
-          <div className="rounded-panel border border-line bg-surface p-4 md:p-5">
+        <section className="grid gap-4 xl:grid-cols-[minmax(0,1.5fr)_minmax(18rem,0.8fr)]" hidden={eveBand !== "tasks" && eveBand !== "figure"}>
+          <div className="rounded-panel border border-line bg-surface p-4 md:p-5" hidden={eveBand !== "tasks"}>
             <div className="flex flex-wrap items-center justify-between gap-2">
               <div>
                 <h2 className="flex items-center gap-2 text-lg font-semibold"><Activity className="size-5" /> Task activity</h2>
@@ -421,7 +438,7 @@ export function EveWorkbench({
             ) : null}
           </div>
 
-          <div className="flex flex-col gap-4">
+          <div className="flex flex-col gap-4" hidden={eveBand !== "figure"}>
             <section className="rounded-panel border border-line bg-surface p-4">
               <h2 className="flex items-center gap-2 font-semibold"><Bot className="size-5" /> Digital human</h2>
               <p className="mt-1 text-xs text-muted">{roster.femaleFilled} of {roster.femaleFilled + roster.femaleOpen} female identities filled. {roster.maleFilled} of {roster.maleOpen} male identities filled. Same Adrian Core. No extra permissions.</p>
@@ -487,7 +504,7 @@ export function EveWorkbench({
           </div>
         </section>
 
-        <section className="grid gap-4 xl:grid-cols-3">
+        <section className="grid gap-4 xl:grid-cols-3" hidden={eveBand !== "records"}>
           <div className="rounded-panel border border-line bg-surface p-4">
             <h2 className="font-semibold">Agent health</h2>
             {agents.length === 0 ? <p className="mt-2 text-sm text-muted">No saved agents.</p> : (
@@ -535,7 +552,7 @@ export function EveWorkbench({
           </div>
         </section>
 
-        <section className="grid gap-4 xl:grid-cols-2">
+        <section className="grid gap-4 xl:grid-cols-2" hidden={eveBand !== "records"}>
           <div className="rounded-panel border border-line bg-surface p-4">
             <h2 className="flex items-center gap-2 font-semibold"><Clock3 className="size-5" /> Recorded events</h2>
             {events.length === 0 ? <p className="mt-2 text-sm text-muted">No run events have been recorded.</p> : (

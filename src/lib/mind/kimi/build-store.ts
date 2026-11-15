@@ -70,18 +70,50 @@ function id() {
   return randomBytes(12).toString("hex");
 }
 
+const LEGACY_WORKSPACE = "/tmp/adrian-build-workspace";
+
+function durableWorkspace() {
+  return process.env.ADRIAN_BUILD_WORKSPACE || join(process.cwd(), ".data", "adrian-build-workspace");
+}
+
+function rewriteLegacy(project: BuildProject): BuildProject {
+  if (project.cwd !== LEGACY_WORKSPACE && project.label !== LEGACY_WORKSPACE) return project;
+  const next: BuildProject = {
+    ...project,
+    cwd: project.cwd === LEGACY_WORKSPACE ? durableWorkspace() : project.cwd,
+    label: project.label === LEGACY_WORKSPACE ? "Hosted workspace" : project.label,
+    updatedAt: new Date().toISOString(),
+  };
+  writeNamed("project-", next.id, next);
+  return next;
+}
+
 export function listProjects(ownerId: string): BuildProject[] {
-  return readAll<BuildProject>("project-").filter((item) => item.ownerId === ownerId && !item.archived).sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
+  const items = readAll<BuildProject>("project-").filter((item) => item.ownerId === ownerId && !item.archived).map(rewriteLegacy).sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
+  const seen = new Set<string>();
+  const unique: BuildProject[] = [];
+  for (const item of items) {
+    if (seen.has(item.cwd)) {
+      item.archived = true;
+      writeNamed("project-", item.id, item);
+      continue;
+    }
+    seen.add(item.cwd);
+    unique.push(item);
+  }
+  return unique;
 }
 
 export function saveProject(input: { ownerId: string; id?: string; label: string; cwd: string; instructions?: string }): BuildProject {
   const now = new Date().toISOString();
+  const cwd = input.cwd.trim() === LEGACY_WORKSPACE ? durableWorkspace() : input.cwd;
+  const label = input.label.trim() === LEGACY_WORKSPACE ? "Hosted workspace" : input.label;
   const existing = input.id ? readAll<BuildProject>("project-").find((item) => item.id === input.id && item.ownerId === input.ownerId) : undefined;
   const project: BuildProject = {
     id: existing?.id || id(),
     ownerId: input.ownerId,
-    label: input.label.trim().slice(0, 80) || "Workspace",
-    cwd: input.cwd.trim().slice(0, 500),
+    label: label.trim().slice(0, 80) || "Workspace",
+    cwd: cwd.trim().slice(0, 500),
     instructions: (input.instructions || existing?.instructions || "").slice(0, 4_000),
     archived: false,
     createdAt: existing?.createdAt || now,

@@ -209,7 +209,7 @@ function compareQuestions(sort: SortId) {
  * Research page controls. Preferences and questions stay on this device.
  * Start research on the page still owns the search. This panel never fetches or invents a citation.
  */
-export function ResearchPanel({ onUse }: { onUse?: (text: string) => void } = {}) {
+export function ResearchPanel({ onUse, start = "ask" }: { onUse?: (text: string) => void; start?: "ask" | "preferences" | "saved" } = {}) {
   const [depth, setDepth] = useState<DepthId>("single");
   const [focus, setFocus] = useState<FocusId>("plain");
   const [sort, setSort] = useState<SortId>("recent");
@@ -220,6 +220,7 @@ export function ResearchPanel({ onUse }: { onUse?: (text: string) => void } = {}
   const [halted, setHalted] = useState(false);
   const [next, setNext] = useState(DEFAULT_NEXT);
   const [savedNote, setSavedNote] = useState("Preferences load from this browser.");
+  const [band, setBand] = useState<"ask" | "preferences" | "saved">(start);
 
   useEffect(() => {
     const storedDepth = readKey(DEPTH_KEY);
@@ -365,16 +366,26 @@ export function ResearchPanel({ onUse }: { onUse?: (text: string) => void } = {}
     <section className="research-panel" aria-labelledby="research-panel-title" data-testid="research-panel">
       <style>{PANEL_CSS}</style>
       <header className="research-panel__head">
-        <h2 id="research-panel-title">Saved questions</h2>
-        <p>These stay on this device. Use a question to fill the search box. Nothing here searches by itself.</p>
+        <h2 id="research-panel-title">{band === "ask" ? "Ask" : band === "preferences" ? "Preferences" : "Saved"}</h2>
+        <p>{band === "saved" ? "These stay on this device. Use a question to fill the search box. Nothing here searches by itself." : "One group at a time. Nothing here searches by itself."}</p>
       </header>
 
-      <p className="research-panel__next" role="status">
+      <p className="research-panel__next" role="status" hidden={start === "saved"}>
         {next}
       </p>
-      <p className="research-panel__note">{savedNote}</p>
+      <p className="research-panel__note" hidden={start === "saved"}>{savedNote}</p>
 
-      <div className="research-panel__actions">
+      <nav className="research-panel__row" aria-label="Research groups" hidden={start === "saved"}>
+        {([
+          ["ask", "Ask"],
+          ["preferences", "Preferences"],
+          ["saved", "Saved"],
+        ] as const).map(([id, label]) => (
+          <button key={id} type="button" aria-pressed={band === id} onClick={() => setBand(id)}>{label}</button>
+        ))}
+      </nav>
+
+      <div className="research-panel__actions" hidden={band !== "ask"}>
         <button type="button" onClick={() => setNext(checkStep(draft, depth, focus, halted))}>
           Show the Start research step for this draft
         </button>
@@ -389,7 +400,7 @@ export function ResearchPanel({ onUse }: { onUse?: (text: string) => void } = {}
         </button>
       </div>
 
-      <fieldset className="research-panel__group">
+      <fieldset className="research-panel__group" hidden={band !== "preferences"}>
         <legend>Depth saved on this device</legend>
         <div className="research-panel__row" role="group" aria-label="Research depth">
           {DEPTHS.map((item) => (
@@ -400,7 +411,7 @@ export function ResearchPanel({ onUse }: { onUse?: (text: string) => void } = {}
         </div>
       </fieldset>
 
-      <fieldset className="research-panel__group">
+      <fieldset className="research-panel__group" hidden={band !== "preferences"}>
         <legend>Focus saved on this device</legend>
         <div className="research-panel__row" role="group" aria-label="Research focus">
           {FOCUSES.map((item) => (
@@ -411,7 +422,7 @@ export function ResearchPanel({ onUse }: { onUse?: (text: string) => void } = {}
         </div>
       </fieldset>
 
-      <fieldset className="research-panel__group">
+      <fieldset className="research-panel__group" hidden={band !== "preferences"}>
         <legend>Sort saved on this device</legend>
         <div className="research-panel__row" role="group" aria-label="Question sort">
           {SORTS.map((item) => (
@@ -422,7 +433,7 @@ export function ResearchPanel({ onUse }: { onUse?: (text: string) => void } = {}
         </div>
       </fieldset>
 
-      <div className="research-panel__list">
+      <div className="research-panel__list" hidden={band !== "saved"}>
         <div className="research-panel__list-head">
           <h2>Local questions</h2>
           <label>

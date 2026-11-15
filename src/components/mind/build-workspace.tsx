@@ -79,6 +79,7 @@ export function BuildWorkspace(props: {
   onStopRecording?: () => void;
 } = {}) {
   const [companion, setCompanion] = useState<CompanionState>({});
+  const [band, setBand] = useState<"actions" | "files" | "message" | "editor">("actions");
   const [prompt, setPrompt] = useState("");
   const [cwd, setCwd] = useState("");
   const [job, setJob] = useState<BuildJob | null>(null);
@@ -149,7 +150,7 @@ export function BuildWorkspace(props: {
 
   async function refreshJob(jobId: string) {
     try {
-      const response = await fetch(`/api/mind/kimi/session?jobId=${encodeURIComponent(jobId)}`, { credentials: "include", cache: "no-store" });
+      const response = await fetch(`/api/mind/build/session?jobId=${encodeURIComponent(jobId)}`, { credentials: "include", cache: "no-store" });
       const data = (await response.json()) as { ok?: boolean; job?: BuildJob; events?: BuildEvent[]; error?: string };
       if (!response.ok || !data.ok || !data.job) {
         setNotice(data.error || "Build session status could not be read.");
@@ -166,12 +167,12 @@ export function BuildWorkspace(props: {
     setFileBusy(true);
     setFileNotice(null);
     try {
-      const response = await fetch("/api/mind/kimi/files", { method: "POST", credentials: "include", headers: { "content-type": "application/json" }, body: JSON.stringify({ operation, cwd: cwd.trim() || undefined, path, content, ...extra }) });
+      const response = await fetch("/api/mind/build/files", { method: "POST", credentials: "include", headers: { "content-type": "application/json" }, body: JSON.stringify({ operation, cwd: cwd.trim() || undefined, path, content, ...extra }) });
       const queued = (await response.json()) as { ok?: boolean; jobId?: string; error?: string; files?: WorkspaceFile[]; matches?: { path: string }[]; content?: string; result?: { files?: WorkspaceFile[]; matches?: { path: string }[]; content?: string; path?: string; before?: string; after?: string } };
       if (response.ok && queued.ok && !queued.jobId) return queued.result || queued;
       if (!response.ok || !queued.ok || !queued.jobId) { setFileNotice(queued.error || "File operation could not be queued."); return null; }
       for (let attempt = 0; attempt < 90; attempt += 1) {
-        const statusResponse = await fetch(`/api/mind/kimi/files?jobId=${encodeURIComponent(queued.jobId)}`, { credentials: "include", cache: "no-store" });
+        const statusResponse = await fetch(`/api/mind/build/files?jobId=${encodeURIComponent(queued.jobId)}`, { credentials: "include", cache: "no-store" });
         const status = (await statusResponse.json()) as { ok?: boolean; job?: { status: string; output?: string; error?: string }; error?: string };
         if (!statusResponse.ok || !status.ok || !status.job) { setFileNotice(status.error || "File operation status could not be read."); return null; }
         if (["done", "error", "timeout"].includes(status.job.status)) {
@@ -199,7 +200,7 @@ export function BuildWorkspace(props: {
     setPanel("browser");
     setBrowserNotice("Opening the coding browser on this computer.");
     try {
-      const response = await fetch("/api/mind/kimi/browser", { method: "POST", credentials: "include" });
+      const response = await fetch("/api/mind/build/browser", { method: "POST", credentials: "include" });
       const data = (await response.json()) as { ok?: boolean; frame?: string; package?: string; error?: string };
       if (!response.ok || !data.ok || !data.frame) {
         setBrowserFrame("");
@@ -270,7 +271,7 @@ export function BuildWorkspace(props: {
     if (!terminalCommand.trim()) { setFileNotice("Enter a terminal command before requesting approval."); return; }
     setTerminalBusy(true);
     try {
-      const response = await fetch("/api/mind/kimi/terminal", { method: "POST", credentials: "include", headers: { "content-type": "application/json" }, body: JSON.stringify({ command: terminalCommand.trim() }) });
+      const response = await fetch("/api/mind/build/terminal", { method: "POST", credentials: "include", headers: { "content-type": "application/json" }, body: JSON.stringify({ command: terminalCommand.trim() }) });
       const data = (await response.json()) as { ok?: boolean; hosted?: boolean; approval?: { id: string; token: string; command: string }; error?: string };
       if (!response.ok || !data.ok || !data.approval) { setFileNotice(data.error || "Terminal approval request failed."); return; }
       setTerminalApproval({ ...data.approval, hosted: data.hosted === true });
@@ -282,7 +283,7 @@ export function BuildWorkspace(props: {
     if (!terminalApproval) return;
     setTerminalBusy(true);
     try {
-      const response = await fetch(terminalApproval.hosted ? "/api/mind/kimi/terminal" : "/api/mind/pc/approve", { method: "POST", credentials: "include", headers: { "content-type": "application/json" }, body: JSON.stringify({ approvalId: terminalApproval.id, token: terminalApproval.token, command: terminalApproval.command, confirm: terminalApproval.hosted === true }) });
+      const response = await fetch(terminalApproval.hosted ? "/api/mind/build/terminal" : "/api/mind/pc/approve", { method: "POST", credentials: "include", headers: { "content-type": "application/json" }, body: JSON.stringify({ approvalId: terminalApproval.id, token: terminalApproval.token, command: terminalApproval.command, confirm: terminalApproval.hosted === true }) });
       const data = (await response.json()) as { ok?: boolean; text?: string; error?: string };
       const text = data.text || data.error || "No terminal output returned.";
       setTerminalOutput(text);
@@ -296,7 +297,7 @@ export function BuildWorkspace(props: {
     setFileBusy(true);
     setFileNotice(null);
     try {
-      const response = await fetch("/api/mind/kimi/files", { method: "POST", credentials: "include", headers: { "content-type": "application/json" }, body: JSON.stringify({ operation: init ? "git-init" : "git", confirm: init }) });
+      const response = await fetch("/api/mind/build/files", { method: "POST", credentials: "include", headers: { "content-type": "application/json" }, body: JSON.stringify({ operation: init ? "git-init" : "git", confirm: init }) });
       const data = (await response.json()) as GitReport & { ok?: boolean };
       setGitReport(data);
       setFileNotice(data.notice || data.error || "Git read finished. Nothing was pushed.");
@@ -311,7 +312,7 @@ export function BuildWorkspace(props: {
     setFileBusy(true);
     setFileNotice(null);
     try {
-      const response = await fetch("/api/mind/kimi/files", { method: "POST", credentials: "include", headers: { "content-type": "application/json" }, body: JSON.stringify({ operation: "git-commit", confirm: true, content: message }) });
+      const response = await fetch("/api/mind/build/files", { method: "POST", credentials: "include", headers: { "content-type": "application/json" }, body: JSON.stringify({ operation: "git-commit", confirm: true, content: message }) });
       const data = (await response.json()) as GitReport & { ok?: boolean };
       setGitReport(data);
       setFileNotice(data.notice || data.error || "Local commit finished. Nothing was pushed.");
@@ -326,7 +327,7 @@ export function BuildWorkspace(props: {
     setFileBusy(true);
     setFileNotice(null);
     try {
-      const response = await fetch("/api/mind/kimi/files", { method: "POST", credentials: "include", headers: { "content-type": "application/json" }, body: JSON.stringify({ operation: "git-branch", confirm: true, to: name }) });
+      const response = await fetch("/api/mind/build/files", { method: "POST", credentials: "include", headers: { "content-type": "application/json" }, body: JSON.stringify({ operation: "git-branch", confirm: true, to: name }) });
       const data = (await response.json()) as GitReport & { ok?: boolean };
       setGitReport(data);
       setFileNotice(data.notice || data.error || "Local branch finished. Nothing was pushed.");
@@ -376,9 +377,9 @@ export function BuildWorkspace(props: {
   }, []);
 
   useEffect(() => {
-    void fetch("/api/mind/kimi/capabilities", { credentials: "include" }).then((response) => response.json()).then((data) => { if (data.capabilities) setCapabilities(data.capabilities); }).catch(() => undefined);
-    void fetch("/api/mind/kimi/projects", { credentials: "include" }).then((response) => response.json()).then((data) => { setProjects(data.projects || []); setSessions(data.sessions || []); }).catch(() => undefined);
-    void fetch("/api/mind/kimi/providers", { credentials: "include" }).then((response) => response.json()).then((data) => setProviders(data.providers || [])).catch(() => undefined);
+    void fetch("/api/mind/build/capabilities", { credentials: "include" }).then((response) => response.json()).then((data) => { if (data.capabilities) setCapabilities(data.capabilities); }).catch(() => undefined);
+    void fetch("/api/mind/build/projects", { credentials: "include" }).then((response) => response.json()).then((data) => { setProjects(data.projects || []); setSessions(data.sessions || []); }).catch(() => undefined);
+    void fetch("/api/mind/build/providers", { credentials: "include" }).then((response) => response.json()).then((data) => setProviders(data.providers || [])).catch(() => undefined);
   }, []);
 
   useEffect(() => {
@@ -398,7 +399,7 @@ export function BuildWorkspace(props: {
     setNotice(null);
     setEvents([]);
     try {
-      const response = await fetch("/api/mind/kimi/session", {
+      const response = await fetch("/api/mind/build/session", {
         method: "POST",
         credentials: "include",
         headers: { "content-type": "application/json" },
@@ -483,7 +484,7 @@ export function BuildWorkspace(props: {
   async function cancelBuild() {
     if (!job?.id || !active) return;
     try {
-      const response = await fetch("/api/mind/kimi/cancel", { method: "POST", credentials: "include", headers: { "content-type": "application/json" }, body: JSON.stringify({ jobId: job.id }) });
+      const response = await fetch("/api/mind/build/cancel", { method: "POST", credentials: "include", headers: { "content-type": "application/json" }, body: JSON.stringify({ jobId: job.id }) });
       const data = (await response.json()) as { ok?: boolean; error?: string };
       setNotice(data.ok ? "Cancellation requested. Waiting for the Companion to stop the runtime." : data.error || "Cancellation was not accepted.");
     } catch { setNotice("Cancellation request could not reach Adrian OS."); }
@@ -492,7 +493,7 @@ export function BuildWorkspace(props: {
   async function endCodingSession() {
     if (!sessionId) return;
     try {
-      const response = await fetch("/api/mind/kimi/session", { method: "POST", credentials: "include", headers: { "content-type": "application/json" }, body: JSON.stringify({ action: "close", resumeSessionId: sessionId }) });
+      const response = await fetch("/api/mind/build/session", { method: "POST", credentials: "include", headers: { "content-type": "application/json" }, body: JSON.stringify({ action: "close", resumeSessionId: sessionId }) });
       const data = (await response.json()) as { ok?: boolean; closed?: boolean; error?: string };
       if (!response.ok || !data.ok) { setNotice(data.error || "The coding process was not closed."); return; }
       sessionStorage.removeItem("adrian-build-live-session");
@@ -510,26 +511,26 @@ export function BuildWorkspace(props: {
   }
 
   async function restoreLatestCheckpoint() {
-    const listed = await fetch("/api/mind/kimi/files", { method: "POST", credentials: "include", headers: { "content-type": "application/json" }, body: JSON.stringify({ operation: "checkpoints" }) });
+    const listed = await fetch("/api/mind/build/files", { method: "POST", credentials: "include", headers: { "content-type": "application/json" }, body: JSON.stringify({ operation: "checkpoints" }) });
     const data = await listed.json() as { ok?: boolean; checkpoints?: string[]; error?: string };
     const id = data.checkpoints?.[0];
     if (!id) { setNotice("No checkpoint yet. A checkpoint is saved before the next coding task."); return; }
     if (!window.confirm(`Restore checkpoint ${id}? The current workspace files will be replaced.`)) return;
-    const restored = await fetch("/api/mind/kimi/files", { method: "POST", credentials: "include", headers: { "content-type": "application/json" }, body: JSON.stringify({ operation: "restore", path: id, confirm: true }) });
+    const restored = await fetch("/api/mind/build/files", { method: "POST", credentials: "include", headers: { "content-type": "application/json" }, body: JSON.stringify({ operation: "restore", path: id, confirm: true }) });
     const result = await restored.json() as { ok?: boolean; error?: string };
     setNotice(result.ok ? `Restored checkpoint ${id}.` : result.error || "Checkpoint was not restored.");
     if (result.ok) void browseWorkspace();
   }
 
   async function registerProject() {
-    const response = await fetch("/api/mind/kimi/projects", { method: "POST", credentials: "include", headers: { "content-type": "application/json" }, body: JSON.stringify({ label: cwd.trim() || "Workspace", cwd }) });
+    const response = await fetch("/api/mind/build/projects", { method: "POST", credentials: "include", headers: { "content-type": "application/json" }, body: JSON.stringify({ label: cwd.trim() || "Workspace", cwd }) });
     const data = await response.json() as { ok?: boolean; project?: { id: string; label: string; cwd: string; instructions: string }; error?: string };
     if (data.project) setProjects((current) => [data.project!, ...current]);
     setNotice(data.ok ? "Workspace registered for this account." : data.error || "Workspace was not registered.");
   }
 
   async function archiveRegisteredProject(id: string) {
-    const response = await fetch("/api/mind/kimi/projects", { method: "POST", credentials: "include", headers: { "content-type": "application/json" }, body: JSON.stringify({ action: "archive", id }) });
+    const response = await fetch("/api/mind/build/projects", { method: "POST", credentials: "include", headers: { "content-type": "application/json" }, body: JSON.stringify({ action: "archive", id }) });
     const data = await response.json() as { ok?: boolean; error?: string };
     if (data.ok) setProjects((current) => current.filter((project) => project.id !== id));
     setNotice(data.ok ? "Project archived." : data.error || "Project was not archived.");
@@ -538,7 +539,7 @@ export function BuildWorkspace(props: {
   async function renameSession(jobId: string, name: string) {
     const next = name.trim();
     if (!next) return;
-    const response = await fetch("/api/mind/kimi/projects", { method: "POST", credentials: "include", headers: { "content-type": "application/json" }, body: JSON.stringify({ action: "session", jobId, name: next }) });
+    const response = await fetch("/api/mind/build/projects", { method: "POST", credentials: "include", headers: { "content-type": "application/json" }, body: JSON.stringify({ action: "session", jobId, name: next }) });
     const data = await response.json() as { ok?: boolean; session?: { jobId: string; name: string; archived: boolean }; error?: string };
     if (data.session) setSessions((current) => current.map((session) => session.jobId === jobId ? data.session! : session));
     setNotice(data.ok ? "Session renamed." : data.error || "Session was not renamed.");
@@ -547,7 +548,7 @@ export function BuildWorkspace(props: {
   async function submitVoice() {
     if (!transcript.trim()) return;
     const instructions = projects.find((project) => project.cwd === cwd)?.instructions || "";
-    const response = await fetch("/api/mind/kimi/voice", { method: "POST", credentials: "include", headers: { "content-type": "application/json" }, body: JSON.stringify({ transcript, cwd, instructions }) });
+    const response = await fetch("/api/mind/build/voice", { method: "POST", credentials: "include", headers: { "content-type": "application/json" }, body: JSON.stringify({ transcript, cwd, instructions }) });
     const data = await response.json() as { ok?: boolean; jobId?: string; error?: string; limitation?: string };
     if (data.jobId) {
       setJob({ id: data.jobId, status: "queued", output: "", error: "", createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() });
@@ -557,7 +558,7 @@ export function BuildWorkspace(props: {
   }
 
   async function saveProvider() {
-    const response = await fetch("/api/mind/kimi/providers", { method: "POST", credentials: "include", headers: { "content-type": "application/json" }, body: JSON.stringify({ model, apiKey }) });
+    const response = await fetch("/api/mind/build/providers", { method: "POST", credentials: "include", headers: { "content-type": "application/json" }, body: JSON.stringify({ model, apiKey }) });
     const data = await response.json() as { ok?: boolean; provider?: { id: string; label: string; model: string; hasKey: boolean; runtimeUse: string }; error?: string };
     if (data.provider) setProviders((current) => [data.provider!, ...current]);
     setApiKey("");
@@ -591,13 +592,28 @@ export function BuildWorkspace(props: {
         </div>
       </div>
 
-      <section className={`intelligence-group flex flex-wrap items-center gap-3 ${online ? "border-success/40" : "border-warning/40"}`} aria-label="Status">
+      <section className={`intelligence-group flex flex-wrap items-center gap-3 ${online ? "border-success/40" : "border-warning/40"}`} aria-label="Status" hidden={band !== "actions"}>
         <h3 className="w-full">Status</h3>
         {online ? <Activity className="size-5 text-success" aria-hidden="true" /> : <WifiOff className="size-5 text-warning" aria-hidden="true" />}
         <p className="min-w-0 flex-1 text-sm">{online ? (companion.detail || "Paired computer connected.") : "Adrian Build is ready on this site. Run uses the hosted workspace."}</p>
         <span className="rounded-full border border-line px-2 py-1 text-xs">{online ? "Ready to queue" : "Hosted workspace ready"}</span>
       </section>
 
+      <nav className="intelligence-group" aria-label="Build sections">
+        <h3>Sections</h3>
+        <div className="flex flex-wrap gap-2">
+          {([
+            ["actions", "Actions"],
+            ["files", "Workspace"],
+            ["message", "Message"],
+            ["editor", "Editor"],
+          ] as const).map(([id, label]) => (
+            <button key={id} type="button" className={`min-h-11 rounded-panel border px-3 text-sm ${band === id ? "border-accent bg-accent text-accent-ink" : "border-line"}`} aria-pressed={band === id} onClick={() => setBand(id)}>{label}</button>
+          ))}
+        </div>
+      </nav>
+
+      <div hidden={band !== "actions"}>
       <OwnerFlow
         halted={props.halted === true}
         recording={props.recording === true}
@@ -606,12 +622,13 @@ export function BuildWorkspace(props: {
         onToggleStop={() => props.onToggleStop?.()}
         onStopRecording={() => props.onStopRecording?.()}
       />
+      </div>
 
-      <section className="intelligence-group" aria-label="Workspace">
+      <section className="intelligence-group" aria-label="Workspace" hidden={band !== "files"}>
         <h3>Workspace</h3>
         {projects.length === 0 ? <p className="text-sm text-muted">No workspace is registered yet. Registering stores the label and path for this account. It does not prove the path is reachable.</p> : projects.map((project) => (
-          <div key={project.id} className="flex flex-wrap items-center gap-2 text-sm">
-            <span className="min-w-0 flex-1">{project.label} · {project.cwd || "no path"}</span>
+          <div key={project.id} className="grid gap-2 text-sm">
+            <span className="min-w-0 break-all">{project.label} · {project.cwd || "no path"}</span>
             <button type="button" className="min-h-11 rounded-panel border border-line px-3 text-sm" onClick={() => { setCwd(project.cwd); setNotice(`Opened ${project.label}. File access still requires the runtime that owns this path.`); }}>Open</button>
             <button type="button" className="min-h-11 rounded-panel border border-line px-3 text-sm" onClick={() => void archiveRegisteredProject(project.id)}>Archive</button>
           </div>
@@ -625,13 +642,13 @@ export function BuildWorkspace(props: {
       </section>
 
       {workspaceFiles.length ? (
-        <div className="flex gap-2 overflow-auto" aria-label="Workspace files">
+        <div className="flex flex-wrap gap-2" aria-label="Workspace files" hidden={band !== "files"}>
           {workspaceFiles.slice(0, 8).map((file) => (
-            <button key={file.path} type="button" className="min-h-11 shrink-0 rounded-panel border border-line px-3 text-xs" onClick={() => void openFile(file.path)}>{file.path}</button>
+            <button key={file.path} type="button" className="min-h-11 max-w-full break-all rounded-panel border border-line px-3 text-left text-xs" onClick={() => void openFile(file.path)}>{file.path}</button>
           ))}
         </div>
       ) : null}
-      <section className="intelligence-group" aria-label="Task">
+      <section className="intelligence-group" aria-label="Task" hidden={band !== "message"}>
         <h3>Task</h3>
       <form className="space-y-3" onSubmit={submit}>
         <div className="flex items-center gap-2">
@@ -682,7 +699,7 @@ export function BuildWorkspace(props: {
 
       {!hasWorkspaceSurface ? <div className="promo-banner text-sm"><ShieldCheck className="size-5 text-accent" aria-hidden="true" /><div><p className="font-semibold">Honest runtime boundary</p><p className="text-muted">This workspace never fabricates agent output. It shows queued, running, permission, error, and completed states from the ACP event stream.</p></div></div> : null}
       </section>
-      <section className="intelligence-group" aria-label="Editor">
+      <section className="intelligence-group" aria-label="Editor" hidden={band !== "editor"}>
         <h3>Editor</h3>
         <div className="build-panel-grid grid gap-4">
           <nav className="dense-card h-fit space-y-1" aria-label="Build panels">

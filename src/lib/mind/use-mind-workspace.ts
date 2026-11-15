@@ -7,7 +7,12 @@ import { emptyWorkspace, loadWorkspace, WORKSPACE_KEY } from "./workspace";
 import { SAVE_FAIL, saveFailureMessage } from "./save-error";
 
 function hasContent(ws: Workspace) {
-  return ws.chats.length + ws.memories.length + ws.projects.length + ws.files.length + ws.audit.length > 0;
+  return ws.chats.length + ws.memories.length + ws.projects.length + ws.files.length + ws.audit.length + ws.agents.length > 0;
+}
+
+function mergeStoredAgents(ws: Workspace, stored: Workspace): Workspace {
+  const missing = stored.agents.filter((agent) => !ws.agents.some((item) => item.id === agent.id));
+  return missing.length > 0 ? { ...ws, agents: [...ws.agents, ...missing] } : ws;
 }
 
 
@@ -34,6 +39,7 @@ export function useMindWorkspace() {
         local = localRaw;
       }
       if (cancel) return;
+      local = mergeStoredAgents(local, localRaw);
       setWs(local);
       setReady(true);
       try {
@@ -54,7 +60,7 @@ export function useMindWorkspace() {
           }
           if (cancel) return;
           savedJson.current = JSON.stringify(result.workspace);
-          setWs(serverWs);
+          setWs(mergeStoredAgents(serverWs, localRaw));
           setSyncNote("Loaded the server copy because this browser was empty. It is still not cloud backup.");
           return;
         }
@@ -93,10 +99,13 @@ export function useMindWorkspace() {
     const write = () => {
       void (async () => {
         let persisted = ws;
+        const stored = loadWorkspace(localStorage);
+        const missingAgents = stored.agents.filter((agent) => !persisted.agents.some((item) => item.id === agent.id));
+        if (missingAgents.length > 0) persisted = { ...persisted, agents: [...persisted.agents, ...missingAgents] };
         try {
-          persisted = (await compactWorkspaceImages(ws, blobStore.current)) as Workspace;
+          persisted = (await compactWorkspaceImages(persisted, blobStore.current)) as Workspace;
         } catch {
-          persisted = ws;
+          persisted = persisted;
         }
         if (cancelled) return;
         localStorage.setItem(WORKSPACE_KEY, JSON.stringify(persisted));

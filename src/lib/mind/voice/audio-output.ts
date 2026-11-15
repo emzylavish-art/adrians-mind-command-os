@@ -114,7 +114,7 @@ export class SharedAudioOutput {
     });
   }
 
-  async playMpegBase64(b64: string) {
+  async playMpegBase64(b64: string, options?: { rate?: number; volume?: number }) {
     this.stopped = false;
     const bytes = decodeBase64(b64);
     const copy = new Uint8Array(bytes.byteLength);
@@ -122,6 +122,8 @@ export class SharedAudioOutput {
     const blob = new Blob([copy], { type: "audio/mpeg" });
     const url = URL.createObjectURL(blob);
     const audio = new Audio(url);
+    if (options?.rate && Number.isFinite(options.rate)) audio.playbackRate = Math.min(1.5, Math.max(0.7, options.rate));
+    if (options?.volume != null && Number.isFinite(options.volume)) audio.volume = Math.min(1, Math.max(0, options.volume));
     this.htmlAudio = audio;
     this.playing = true;
     this.emitClock();

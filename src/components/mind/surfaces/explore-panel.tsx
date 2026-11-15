@@ -10,6 +10,7 @@ import {
 } from "@/lib/mind/personas";
 import { emptyWorkspace, loadWorkspace } from "@/lib/mind/workspace";
 import type { Workspace } from "@/lib/mind/types";
+import { persistPersonaOpen, selectPersona } from "@/lib/mind/personas/selection";
 
 const SHELF_KEY = "adrian-explore-shelf";
 const SOURCE_KEY = "adrian-explore-source";
@@ -188,6 +189,26 @@ export function ExplorePanel() {
     noteSaved(`“${card.name}”`, writeKey(PINS_KEY, JSON.stringify(nextPins)));
   }
 
+  function openInChat(card: PersonaCard) {
+    const result = selectPersona(workspace, card);
+    if (!result.ok) {
+      setNext(result.error);
+      return;
+    }
+    try {
+      const persisted = persistPersonaOpen(window.localStorage, result.ws, result.selection);
+      if (!persisted.ok) {
+        setNext("Could not save this persona. Nothing was opened.");
+        return;
+      }
+    } catch {
+      setNext("This browser blocked storage. Nothing was opened.");
+      return;
+    }
+    setWorkspace(result.ws);
+    window.location.assign(result.href);
+  }
+
   function reloadLocal() {
     try {
       const loaded = loadWorkspace(window.localStorage);
@@ -324,7 +345,7 @@ export function ExplorePanel() {
               return (
                 <li key={card.id}>
                   <p>
-                    <span>{`${card.badge} · ${card.role} · Not live`}</span>
+                    <span>{`${card.badge} · ${card.role}`}</span>
                     {card.name}
                     {". "}
                     {card.description}
@@ -332,8 +353,8 @@ export function ExplorePanel() {
                     {card.statusLabel}.
                   </p>
                   <div className="explore-panel__row">
-                    <button type="button" onClick={() => setNext(openStep(card))}>
-                      Use this persona next
+                    <button type="button" onClick={() => openInChat(card)}>
+                      Save and open Chat
                     </button>
                     <button type="button" aria-pressed={saved} onClick={() => togglePin(card)}>
                       {saved ? "Saved" : "Save"}

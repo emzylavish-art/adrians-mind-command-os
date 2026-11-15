@@ -157,6 +157,7 @@ export function FleetPanel({
   const [provider, setProvider] = useState<string>(providerChoice ?? "openai");
   const [gmailBoard, setGmailBoard] = useState<{ state: string; detail: string }>({ state: "Checking", detail: "Checking connection…" });
   const [jobName, setJobName] = useState("");
+  const [scheduleBand, setScheduleBand] = useState<"jobs" | "new">("jobs");
   const [jobZone, setJobZone] = useState("America/Chicago");
   const [jobHour, setJobHour] = useState("");
   const [workerHealthState, setWorkerHealthState] = useState<WorkerHealthState>({ status: "loading" });
@@ -705,11 +706,19 @@ export function FleetPanel({
         <ul className="mb-2 space-y-2">
           <WorkerHealthStatusRows state={workerHealthState} onRetry={onceListRetry(loadWorkerHealth)} />
         </ul>
+        <nav className="mt-3 flex flex-wrap gap-2" aria-label="Schedule groups">
+          {([
+            ["jobs", "Jobs"],
+            ["new", "New job"],
+          ] as const).map(([id, label]) => (
+            <button key={id} type="button" className={`min-h-11 rounded-panel border px-3 text-sm ${scheduleBand === id ? "border-accent bg-accent text-accent-ink" : "border-line"}`} aria-pressed={scheduleBand === id} onClick={() => setScheduleBand(id)}>{label}</button>
+          ))}
+        </nav>
         <details className="mt-2 rounded-panel border border-line px-3 py-2 text-sm">
           <summary className="min-h-11 cursor-pointer">Worker command</summary>
           <p className="pb-2 text-xs text-muted">One pass: node --experimental-strip-types scripts/schedule-tick.mjs. Stay up: node --experimental-strip-types scripts/schedule-worker.mjs. Interval: MIND_WORKER_INTERVAL_MS.</p>
         </details>
-        <div id="owner-scheduled" className="solid-form mt-4">
+        <div id="owner-scheduled" className="solid-form mt-4" hidden={scheduleBand !== "new"}>
           <p className="text-sm text-muted">Add a daily job. It waits here until you run due schedules or the worker is started.</p>
           <div className="job-fields mt-3">
           <label className="text-sm">Name
@@ -743,6 +752,7 @@ export function FleetPanel({
           </div>
         </div>
         </div>
+        <div hidden={scheduleBand !== "jobs"}>
         <button type="button" className="mt-3 min-h-11 rounded-panel border border-line px-3 text-sm" onClick={() => setWs((prev) => runDueSchedules(prev, new Date().toISOString()))}>Run due schedules</button>
         <ul className="mt-4 space-y-2">
           {ws.schedules.length === 0 && (
@@ -763,6 +773,7 @@ export function FleetPanel({
         </ul>
         {mutationBanner()}
         {note && mutationState.status !== "error" ? <p className="mt-3 text-sm text-muted">{note}</p> : null}
+        </div>
       </section>
     );
   }

@@ -49,6 +49,9 @@ export function SpeakStage(props: {
   onLive?: () => void;
   onAsk?: (text: string) => Promise<string | null | { reply?: string; error?: string }>;
   onKeepRecording?: (stream: MediaStream) => void;
+  onEmergencyStop?: () => void;
+  halted?: boolean;
+  onClearStop?: () => void;
   onHandCode?: (text: string) => void;
   onStyle?: (style: string) => void;
   heard?: string;
@@ -79,6 +82,56 @@ export function SpeakStage(props: {
   const [volume, setVolume] = useState(100);
   const [calling, setCalling] = useState(false);
   const [callHeard, setCallHeard] = useState("");
+  const callAbortRef = useRef<AbortController | null>(null);
+  const callAudioRef = useRef<HTMLAudioElement | null>(null);
+  const speechCutRef = useRef(false);
+  const cutSpeechRef = useRef<(reason: "owner" | "tab") => void>(() => undefined);
+
+  function cutSpeech(reason: "owner" | "tab") {
+    speechCutRef.current = true;
+    callAbortRef.current?.abort();
+    callAbortRef.current = null;
+    const playing = callAudioRef.current;
+    if (playing) {
+      playing.pause();
+      try { playing.currentTime = 0; } catch { /* a closed element can refuse */ }
+      playing.removeAttribute("src");
+      playing.load();
+      callAudioRef.current = null;
+    }
+    document.querySelectorAll("audio").forEach((element) => {
+      element.pause();
+      try { element.currentTime = 0; } catch { /* ignore */ }
+    });
+    window.speechSynthesis?.cancel();
+    setCalling(false);
+    setReply("");
+    const message = reason === "tab"
+      ? "Speech cut. The tab is closing."
+      : "Speech cut. Emergency stop is on. EVE can press Clear.";
+    setNotice(message);
+    if (reason === "owner") props.onEmergencyStop?.();
+  }
+  cutSpeechRef.current = cutSpeech;
+
+  function clearStop() {
+    speechCutRef.current = false;
+    setCalling(false);
+    setReply("");
+    setNotice("EVE cleared the stop. Speech can start again.");
+    props.onClearStop?.();
+  }
+
+  useEffect(() => {
+    if (!props.open) return;
+    const cut = () => cutSpeechRef.current("tab");
+    window.addEventListener("pagehide", cut);
+    window.addEventListener("beforeunload", cut);
+    return () => {
+      window.removeEventListener("pagehide", cut);
+      window.removeEventListener("beforeunload", cut);
+    };
+  }, [props.open]);
 
   useEffect(() => {
     setVoice(readStoredVoiceChoice(window.localStorage));
@@ -272,29 +325,59 @@ export function SpeakStage(props: {
   }
 
   async function placeCall() {
-    if (calling) return;
+    if (calling || props.halted || speechCutRef.current) {
+      setNotice(props.halted || speechCutRef.current ? "Emergency stop is on. Speech was not started." : "Calling. Speech is being heard and answered.");
+      return;
+    }
+    const abort = new AbortController();
+    callAbortRef.current = abort;
     setCalling(true);
     setCallHeard("");
     setReply("");
     setNotice("Calling. Speech is being heard and answered.");
     setShowTranscript(true);
     try {
-      const response = await fetch("/api/mind/voice/call", { method: "POST", headers: { "content-type": "application/json" }, body: "{}" });
+      const response = await fetch("/api/mind/voice/call", {
+        method: "POST",
+        credentials: "include",
+        headers: { "content-type": "application/json" },
+        body: "{}",
+        signal: abort.signal,
+      });
+      if (speechCutRef.current || abort.signal.aborted) {
+        setNotice("Speech cut. Nothing continued.");
+        return;
+      }
       const body = await response.json().catch(() => ({})) as { ok?: boolean; heard?: string; reply?: string; audio?: string; error?: string };
+      if (speechCutRef.current || abort.signal.aborted) {
+        setNotice("Speech cut. Nothing continued.");
+        return;
+      }
       if (!body.ok || !body.reply) {
         setNotice(body.error || "The call did not finish. Nothing was spoken.");
         return;
       }
       setCallHeard(body.heard || "");
       setReply(body.reply);
-      setNotice("On a call. The reply was spoken.");
+      setNotice(`Spoken: ${body.reply}`);
       if (body.audio && !speakerMuted) {
         const audio = new Audio(`data:audio/mpeg;base64,${body.audio}`);
+        callAudioRef.current = audio;
         audio.setAttribute("data-testid", "call-audio");
+        document.body.appendChild(audio);
         audio.volume = volume / 100;
+        if (speechCutRef.current) {
+          audio.pause();
+          setNotice("Speech cut. Nothing continued.");
+          return;
+        }
         await audio.play().catch(() => undefined);
       }
-    } catch {
+    } catch (err) {
+      if (speechCutRef.current || (err instanceof DOMException && err.name === "AbortError")) {
+        setNotice((current) => current?.startsWith("Speech cut") ? current : "Speech cut. Nothing continued.");
+        return;
+      }
       setNotice("The call did not finish. Nothing was spoken.");
     } finally {
       setCalling(false);
@@ -309,17 +392,22 @@ export function SpeakStage(props: {
 
   const stage = (
     <div className="speak-stage speak-call" role="dialog" aria-modal="true" aria-label="EVE" data-testid="speak-stage" style={{ position: "fixed", inset: 0, zIndex: 500, background: "#07080c" }}>
-      <section className="speak-system" data-testid="speak-system" style={{ position: "absolute", top: "18%", left: "8%", right: "8%", zIndex: 2, color: "#f4f4f5" }}>
+      <section className="speak-system" data-testid="speak-system" style={{ position: "relative", zIndex: 2, width: "min(100%, 28rem)", color: "#f4f4f5", textAlign: "center" }}>
         <p>System call</p>
-        <h2 style={{ fontSize: "1.6rem", fontWeight: 700 }}>Speak talks to the system.</h2>
-        <p style={{ marginTop: "0.5rem", maxWidth: "36rem", color: "#d4d4d8" }}>This call shows the saved face. The person and the live stage stay on Intelligence. It cannot press the emergency stop. Leave this screen and the recording keeps running in this tab.</p>
+        <h2 style={{ fontSize: "1.35rem", fontWeight: 700 }}>Speak talks to the system.</h2>
+        <p style={{ marginTop: "0.4rem", color: "#d4d4d8" }}>The saved face is here. The live stage stays on Intelligence. EVE cannot press the emergency stop. EVE can press Clear.</p>
+        <div style={{ display: "flex", justifyContent: "center", gap: "0.5rem", marginTop: "0.8rem" }}>
+          <button type="button" data-testid="speak-emergency-stop" onClick={() => cutSpeechRef.current("owner")} style={{ minHeight: "2.75rem", border: "1px solid #fb7185", borderRadius: "0.75rem", padding: "0 0.9rem", color: "#fecdd3", background: "transparent" }}>Emergency stop</button>
+          <button type="button" data-testid="speak-clear-stop" onClick={() => clearStop()} style={{ minHeight: "2.75rem", border: "1px solid #86efac", borderRadius: "0.75rem", padding: "0 0.9rem", color: "#bbf7d0", background: "transparent" }}>Clear stop</button>
+        </div>
+        <p data-testid="speak-speech-cut" role="status">{notice?.startsWith("Speech cut") || notice?.startsWith("EVE cleared") ? notice : props.halted ? "Emergency stop is on. EVE can press Clear." : "Only you can press the emergency stop. EVE can press Clear."}</p>
       </section>
-      <img src="/brand/eve-idle.jpg" alt="EVE" width="160" height="208" data-testid="speak-face" style={{ position: "absolute", top: "34%", right: "8%", width: "9rem", height: "12rem", objectFit: "cover", borderRadius: "1rem", zIndex: 2 }} />
+      <img src="/brand/eve-idle.jpg" alt="EVE" width="160" height="208" data-testid="speak-face" style={{ position: "relative", width: "8rem", height: "10rem", objectFit: "cover", borderRadius: "1rem", zIndex: 2 }} />
       <video ref={videoRef} className={source === "none" ? "is-hidden" : source} playsInline muted autoPlay />
       <div className="speak-call__status">
         <AudioLines aria-hidden="true" />
-        <p role="status">{status}</p>
-        <button type="button" className="speak-call__place" disabled={calling} onClick={() => void placeCall()}>{calling ? "Calling…" : "Place call"}</button>
+        <p role="status" data-testid="speak-status">{reply ? `Spoken: ${reply}` : status}</p>
+        <button type="button" className="speak-call__place" disabled={calling || props.halted || speechCutRef.current} onClick={() => void placeCall()}>{calling ? "Calling…" : "Place call"}</button>
       </div>
       {callTranscript ? <p className="speak-call__transcript" data-testid="speak-reply">{callTranscript}</p> : reply || props.spoken || props.callError ? <p className="speak-call__transcript" data-testid="speak-reply">{props.callError || reply || props.spoken}</p> : null}
       {!callTranscript && showTranscript && transcript ? <p className="speak-call__transcript" data-testid="speak-transcript">{transcript}</p> : null}

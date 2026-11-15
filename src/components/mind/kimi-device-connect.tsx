@@ -91,7 +91,7 @@ export function KimiDeviceConnect() {
     if (!mcpUrl.trim()) return;
     setBusy(true);
     try {
-      const body = await authed("/api/mind/kimi/providers", {
+      const body = await authed("/api/mind/build/providers", {
         method: "POST",
         body: JSON.stringify({ action: "mcp_save", label: "Custom MCP", url: mcpUrl }),
       });

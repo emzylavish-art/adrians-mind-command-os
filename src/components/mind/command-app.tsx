@@ -224,6 +224,7 @@ import { COMPOSER_MODES, effortForModelTier, effortModelTier, loadComposerEffort
 import { planRouting, readRatings, readRoutingMode, readRoutingPanel, ROUTING_MODE_LABEL, saveRating, writeRoutingMode, writeRoutingPanel, type ResponseRating, type RoutingMode } from "@/lib/mind/routing-modes";
 import { canSend } from "@/lib/mind/send-gate";
 import { saveFailureMessage } from "@/lib/mind/save-error";
+import { resetAppearance, resetVoice } from "@/lib/mind/settings-reset";
 import {
   DEFAULT_VOICE_SETTINGS,
   loadVoiceSettings,
@@ -885,11 +886,13 @@ export function CommandApp() {
   const [memoryQuery, setMemoryQuery] = useState("");
   const [memoryTab, setMemoryTab] = useState<"mine" | "project" | "transfer">("mine");
   const [researchText, setResearchText] = useState("");
+  const [researchBand, setResearchBand] = useState<"search" | "saved" | "files">("search");
   const [researchNote, setResearchNote] = useState<string | null>(null);
   const [lookupQuery, setLookupQuery] = useState("");
   const [chatProjectId, setChatProjectId] = useState<string | null>(null);
   const [activityQuery, setActivityQuery] = useState("");
   const [openFileId, setOpenFileId] = useState<string | null>(null);
+  const [libraryBand, setLibraryBand] = useState<"files" | "preview">("files");
   const [showArchived, setShowArchived] = useState(false);
   const [editId, setEditId] = useState<string | null>(null);
   const [editText, setEditText] = useState("");
@@ -1191,6 +1194,7 @@ export function CommandApp() {
   const [mcpUrl, setMcpUrl] = useState("");
   const [mcpToken, setMcpToken] = useState("");
   const [skillQuery, setSkillQuery] = useState("");
+  const [skillBand, setSkillBand] = useState<"device" | "installed" | "missing">("device");
   const [enabledSkills, setEnabledSkills] = useState<Record<string, boolean>>({});
   const [skillStorageError, setSkillStorageError] = useState("");
   const searchRef = useRef<HTMLInputElement>(null);
@@ -3168,6 +3172,41 @@ export function CommandApp() {
       setError(next ? "The server did not confirm the stop. Sends are blocked in this browser." : "The server did not confirm it. The stop is off in this browser.");
     }
   }
+  async function pressEmergencyStop() {
+    interruptSpeakPlayback();
+    if (wsRef.current.halted) return;
+    turnAbort.current?.abort();
+    agentAbort.current?.abort();
+    setError(null);
+    setWs((prev) => {
+      if (prev.halted) return prev;
+      const updated = pushAudit({ ...prev, halted: true }, "emergency_stop", "session", "on");
+      const stopped = haltFleet(updated);
+      return {
+        ...stopped,
+        schedules: stopped.schedules.map((job) => (job.enabled ? { ...job, enabled: false } : job)),
+      };
+    });
+    setNotice("Emergency stop is on. Open runs were canceled and schedules were paused. Logs and memory were kept.");
+    try {
+      const result = await setExecutionHalt({ data: { on: true } });
+      if (!result.ok) setError(result.error);
+    } catch {
+      setError("The server did not confirm the stop. Sends are blocked in this browser.");
+    }
+  }
+  async function clearEmergencyStop() {
+    clearedStop.current = true;
+    setError(null);
+    setWs((prev) => (prev.halted ? pushAudit({ ...prev, halted: false }, "emergency_stop", "session", "cleared by eve") : prev));
+    setNotice("EVE cleared the emergency stop from Speak. Schedules stay paused until you enable them.");
+    try {
+      const result = await setExecutionHalt({ data: { on: false } });
+      if (!result.ok) setError(result.error);
+    } catch {
+      setError("The server did not confirm the clear. The stop is off in this browser.");
+    }
+  }
   function explain(text: string) {
     setNotice(text);
     setError(null);
@@ -3363,7 +3402,7 @@ export function CommandApp() {
   async function humanCodeAction(id: string, command: string, text: string) {
     if (command === "/files") {
       try {
-        const response = await fetch("/api/mind/kimi/files", { method: "POST", credentials: "include", headers: { "content-type": "application/json" }, body: JSON.stringify({ operation: "list" }) });
+        const response = await fetch("/api/mind/build/files", { method: "POST", credentials: "include", headers: { "content-type": "application/json" }, body: JSON.stringify({ operation: "list" }) });
         const data = await response.json() as { ok?: boolean; files?: { path: string }[]; error?: string };
         const names = (data.files || []).slice(0, 200).map((file) => file.path).filter((path) => !/(^|\/)\.env($|\.)/i.test(path));
         setWs((prev) => appendHumanResult(prev, id, text, data.ok ? `Indexed ${names.length} files, capped at 200.\n${names.slice(0, 40).join("\n")}` : data.error || "Build could not list files. Discussion-only mode is still available."));
@@ -3375,7 +3414,7 @@ export function CommandApp() {
     }
     if (command === "/diff") {
       try {
-        const response = await fetch("/api/mind/kimi/files", { method: "POST", credentials: "include", headers: { "content-type": "application/json" }, body: JSON.stringify({ operation: "git" }) });
+        const response = await fetch("/api/mind/build/files", { method: "POST", credentials: "include", headers: { "content-type": "application/json" }, body: JSON.stringify({ operation: "git" }) });
         const data = await response.json() as { ok?: boolean; branch?: string; status?: string; diff?: string; notice?: string; error?: string };
         const body = data.ok ? `${data.notice || "Local Git read."}\nBranch: ${data.branch || "none"}\n${(data.status || "").slice(0, 1200)}\n${(data.diff || "").slice(0, 1800)}` : data.error || "Build could not read Git. Discussion-only mode is still available.";
         setWs((prev) => appendHumanResult(prev, id, text, body));
@@ -3387,7 +3426,7 @@ export function CommandApp() {
     }
     if (command === "/test") {
       try {
-        const response = await fetch("/api/mind/kimi/files", { method: "POST", credentials: "include", headers: { "content-type": "application/json" }, body: JSON.stringify({ operation: "list" }) });
+        const response = await fetch("/api/mind/build/files", { method: "POST", credentials: "include", headers: { "content-type": "application/json" }, body: JSON.stringify({ operation: "list" }) });
         const data = await response.json() as { ok?: boolean; files?: { path: string }[] };
         const tests = (data.files || []).map((file) => file.path).filter((path) => /(^|\/)(package\.json|pytest\.ini|.*\.(test|spec)\.(ts|tsx|js|jsx)|test_.*\.py|.*_test\.py)$/i.test(path));
         if (data.ok && tests.length === 0) {
@@ -4619,7 +4658,7 @@ export function CommandApp() {
               onClick={() => setSurfaceMenu((open) => !open)}
             >
               <img className="adrian-mark" src="/brand/logo-mark.jpg" alt="" width={28} height={28} />
-              <span>{view === "build" ? "Build" : view === "code" ? "Intelligence" : view === "intelligence" ? "EVE" : "Chat"}</span>
+              <span>{TITLES[view] ?? "Chat"}</span>
               <span aria-hidden="true">▾</span>
             </button>
             {surfaceMenu ? (
@@ -4950,18 +4989,22 @@ export function CommandApp() {
                     </h1>
                     <p className="text-sm text-muted">Ask, build, or connect. The rest lives in Settings.</p>
                     {ws.chats.length > 0 ? (
-                      <div className="mt-3 flex flex-wrap gap-2" aria-label="Recent chats">
-                        {ws.chats.slice(0, 6).map((chat) => (
+                      <div className="mt-3" aria-label="Recent">
+                        <p className="mb-2 text-xs uppercase tracking-wide text-muted">Recent</p>
+                        <div className="flex flex-wrap gap-2">
+                        {ws.chats.filter((chat, index, list) => list.findIndex((item) => shownChatTitle(item) === shownChatTitle(chat)) === index).slice(0, 4).map((chat) => (
                           <button key={chat.id} type="button" className="inline-flex min-h-11 max-w-full items-center truncate rounded-panel border border-line px-3 text-sm" onClick={() => { setActiveId(chat.id); setView("chat"); }}>
                             {shownChatTitle(chat)}
                           </button>
                         ))}
+                        </div>
                       </div>
                     ) : null}
                   </div>
                 </div>
               </div>
              <div className="gpt-starters">
+               <p className="mb-1 text-xs uppercase tracking-wide text-muted">Start</p>
                <button type="button" aria-pressed={homeAction === "image"} onClick={() => { setHomeAction("image"); setCommandMode("ask"); setDraft(""); }}>
                  <Image className="size-5" /> Create an image
                </button>
@@ -6018,6 +6061,16 @@ export function CommandApp() {
                 </div>
               </div>
               <div className="solid-form mt-4">
+                <nav className="mb-3 flex flex-wrap gap-2" aria-label="Research page">
+                  {([
+                    ["search", "Ask"],
+                    ["saved", "Saved"],
+                    ["files", "Files"],
+                  ] as const).map(([id, label]) => (
+                    <button key={id} type="button" className={`min-h-11 rounded-panel border px-3 text-sm ${researchBand === id ? "border-accent bg-accent text-accent-ink" : "border-line"}`} aria-pressed={researchBand === id} onClick={() => setResearchBand(id)}>{label}</button>
+                  ))}
+                </nav>
+                <div hidden={researchBand !== "search"}>
                 <label className="text-sm" htmlFor="research-question">Question</label>
                 <textarea id="research-question" value={researchText} onChange={(event) => setResearchText(event.target.value)} placeholder="What do you want to research?" rows={3} className="input-glow mt-2 w-full rounded-panel border border-line bg-bg px-3 py-2 text-sm" />
                 <button type="button" className="mt-3 min-h-11 rounded-panel bg-accent px-4 text-sm font-semibold text-white disabled:opacity-50" disabled={ws.halted} onClick={startResearch}>
@@ -6057,11 +6110,12 @@ export function CommandApp() {
                     </ul>
                   </div>
                 )}
+                </div>
               </div>
-              <div className="mt-4">
-                <ResearchPanel onUse={setResearchText} />
+              <div className="mt-4" hidden={researchBand !== "saved"}>
+                <ResearchPanel onUse={setResearchText} start="saved" />
               </div>
-              <div className="mt-4">
+              <div className="mt-4" hidden={researchBand !== "files"}>
                 <ReaPanel
                   title="File inspection"
                   lead="REA inspect-artifact runs on text you stage. Web pages are not fetched."
@@ -6084,8 +6138,17 @@ export function CommandApp() {
                 </div>
               </div>
               <input value={skillQuery} onChange={(event) => setSkillQuery(event.target.value)} placeholder="Search skills" className="min-h-11 w-full rounded-panel border border-line bg-surface px-3 text-sm" />
+              <nav className="flex flex-wrap gap-2" aria-label="Skill groups">
+                {([
+                  ["device", "On this device"],
+                  ["installed", "Installed"],
+                  ["missing", "Not installed"],
+                ] as const).map(([id, label]) => (
+                  <button key={id} type="button" className={`min-h-11 rounded-panel border px-3 text-sm ${skillBand === id ? "border-accent bg-accent text-accent-ink" : "border-line"}`} aria-pressed={skillBand === id} onClick={() => setSkillBand(id)}>{label}</button>
+                ))}
+              </nav>
               <div id="owner-skills">
-                {(skillQuery.trim() ? searchSkills(skillQuery) : SKILLS).map((skill) => {
+                {(skillQuery.trim() ? searchSkills(skillQuery) : SKILLS).filter((skill) => skillBand === "device" ? skill.kind === "built-in" : skillBand === "installed" ? skill.kind === "installed" : skill.kind === "not-installed").map((skill) => {
                   const on = skill.kind !== "not-installed" && enabledSkills[skill.id] !== false;
                   return (
                     <article key={skill.id} className="skill-card">
@@ -6152,7 +6215,15 @@ export function CommandApp() {
                 </div>
               </div>
               <div id="owner-library">
-                <aside className="library-list text-sm">
+                <nav className="mb-3 flex flex-wrap gap-2" aria-label="Library groups">
+                  {([
+                    ["files", "Files"],
+                    ["preview", "Preview"],
+                  ] as const).map(([id, label]) => (
+                    <button key={id} type="button" className={`min-h-11 rounded-panel border px-3 text-sm ${libraryBand === id ? "border-accent bg-accent text-accent-ink" : "border-line"}`} aria-pressed={libraryBand === id} onClick={() => setLibraryBand(id)}>{label}</button>
+                  ))}
+                </nav>
+                <aside className="library-list text-sm" hidden={libraryBand !== "files"}>
                   <p className="font-semibold">Text copies</p>
                   <p className="mt-2 text-xs text-muted">These are the words you attached, not the original file and not a cloud drive.</p>
                   <ul className="mt-3 space-y-1">
@@ -6171,7 +6242,7 @@ export function CommandApp() {
                     ))}
                   </ul>
                 </aside>
-                <div className="dense-card p-4 text-sm">
+                <div className="dense-card p-4 text-sm" hidden={libraryBand !== "preview"}>
                   {!ws.files.find((file) => file.id === openFileId) && (
                     <div className="empty-state">
                       <img src="/empty/empty-folder.svg" alt="" />
@@ -6354,7 +6425,7 @@ export function CommandApp() {
                     ["personalization", "Personalization", "How replies sound", () => { setView("chat"); setNavOpen(false); }],
                   ]},
                   { group: "Connections", items: [
-                    ["plugins", "Plugins", "Connected services and Kimi links", () => { setView("connected"); setNavOpen(false); }],
+                    ["plugins", "Plugins", "Connected services and Build links", () => { setView("connected"); setNavOpen(false); }],
                     ["connections", "Connections", "API keys and saved providers", () => setSettingsPane("connections")],
                   ]},
                   { group: "System", items: [
@@ -6409,6 +6480,20 @@ export function CommandApp() {
                     {failoverPolicy === "grok" ? "On" : "Off"}
                   </button>
                 </div>
+                <button
+                  type="button"
+                  data-testid="settings-reset-appearance"
+                  className="mt-3 min-h-11 rounded-panel border border-line px-3 text-sm"
+                  onClick={() => {
+                    resetAppearance(localStorage);
+                    setTheme("dark");
+                    setFailoverPolicy("none");
+                    setNotice("Appearance reset to Dark and failover Off. Voice was not changed.");
+                  }}
+                >
+                  Reset to defaults
+                </button>
+                <p data-testid="settings-reset-appearance-status" className="mt-2 text-muted">Documented defaults: Dark, failover Off.</p>
               </div>
               <div className="settings-card rounded-panel p-4 text-sm hidden">
                 <p className="font-semibold">Provider failover</p>
@@ -6711,6 +6796,9 @@ export function CommandApp() {
         heard={speakCall.heard}
         spoken={speakCall.reply}
         callError={speakCall.error}
+        halted={ws.halted}
+        onEmergencyStop={() => { void pressEmergencyStop(); }}
+        onClearStop={() => { void clearEmergencyStop(); }}
         onAsk={async (text) => {
           const blocked = decideComputerAction({ text, halted: wsRef.current.halted === true, paired: false, actor: "eve" });
           if (blocked.kind !== "none") return { error: blocked.message };
@@ -7856,6 +7944,19 @@ function VoiceSettingsBlock() {
           ))}
         </div>
       </div>
+      <button
+        type="button"
+        data-testid="settings-reset-voice"
+        className="mt-3 min-h-11 rounded-panel border border-line px-3"
+        onClick={() => {
+          const storage = typeof localStorage === "undefined" ? null : localStorage;
+          resetVoice(storage);
+          setSettings({ ...DEFAULT_VOICE_SETTINGS });
+        }}
+      >
+        Reset to defaults
+      </button>
+      <p data-testid="settings-reset-voice-status" className="mt-2 text-muted">Documented defaults: Eve, Adrian, default activation, normal pace. Appearance is not changed.</p>
     </div>
   );
 }

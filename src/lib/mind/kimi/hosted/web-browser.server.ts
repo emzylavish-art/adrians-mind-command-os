@@ -1,5 +1,6 @@
 import { type ChildProcess, execFileSync, spawn } from "node:child_process";
 import { readFileSync } from "node:fs";
+import { join } from "node:path";
 import { adrianBuildCommand, adrianBuildEnv, packageLabel } from "./acp-client.ts";
 import { ensureCodingSearchBridge } from "./coding-search-bridge.server.ts";
 
@@ -32,7 +33,7 @@ function releasePort(port: number) {
 }
 
 function tokenFor(env: NodeJS.ProcessEnv): string {
-  const home = env.KIMI_CODE_HOME || "/tmp/adrian-build-home";
+  const home = env.KIMI_CODE_HOME || join(process.cwd(), ".data", "adrian-build-home");
   return readFileSync(`${home}/server.token`, "utf8").trim();
 }
 

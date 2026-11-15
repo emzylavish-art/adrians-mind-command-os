@@ -132,6 +132,7 @@ export function ServiceBoard({
   const [oauthActionState, setOauthActionState] = useState<OauthBoardActionState>({ status: "idle" });
   const [mcpStorage, setMcpStorage] = useState<{ state: "checking" | "ready" | "error"; detail: string } | null>(null);
   const [showWaiting, setShowWaiting] = useState(false);
+  const [catalogQuery, setCatalogQuery] = useState("");
   const inFlight = useRef<Set<string>>(new Set());
 
   const refreshOne = useCallback((name: string) => {
@@ -256,20 +257,66 @@ export function ServiceBoard({
   }
 
   return (
-    <>
+    <div className="intelligence-main" data-testid="plugins-pane">
     {(() => {
       const readyState = (state: string) => state === "Key present" || state === "Connected" || state === "API token present";
-      const waiting = [grok, ...services].filter((service) => !readyState(service.state)).length;
+      const rows = [grok, ...services];
+      const connected = rows.filter((service) => readyState(service.state));
+      const waiting = rows.filter((service) => !readyState(service.state));
+      const needle = catalogQuery.trim().toLowerCase();
+      const catalog = waiting.filter((service) => !needle || `${service.name} ${service.detail}`.toLowerCase().includes(needle));
+      const bands = ["Communication", "Productivity", "Developer", "Models", "Research and media", "Custom MCP", "Other"]
+        .map((label) => ({ label, items: catalog.filter((service) => catalogBand(service.name) === label) }))
+        .filter((band) => band.items.length > 0);
       return (
-        <button type="button" className="mb-3 min-h-11 rounded-panel border border-line px-3 text-sm" onClick={() => setShowWaiting((open) => !open)}>
-          {showWaiting ? "Hide services that are not connected" : `Show ${waiting} services that are not connected`}
-        </button>
+        <>
+          <section className="intelligence-group" aria-label="Connected" data-testid="connected-services">
+            <h3>Connected</h3>
+            <p className="mb-2 text-sm text-muted">Grok and Voice stay here. A connection is removed only when you press Disconnect.</p>
+            <div id="owner-service-board" className="service-board plugin-links">
+              {connected.map((service) => renderService(service))}
+            </div>
+          </section>
+          <section className="intelligence-group" aria-label="Build links" data-testid="kimi-connection">
+            <h3>Build links</h3>
+            <p className="mb-2 text-sm text-muted">These are the working plugin links. Adding one does not remove Grok or Voice.</p>
+            <KimiDeviceConnect />
+          </section>
+          <section className="intelligence-group" aria-label="Not connected">
+            <h3>Not connected</h3>
+            <p className="mb-2 text-sm text-muted">These stay hidden until you ask. Custom MCP is added in Build links, not mixed into the other groups.</p>
+            <button type="button" className="min-h-11 rounded-panel border border-line px-3 text-sm" onClick={() => setShowWaiting((open) => !open)}>
+              {showWaiting ? "Hide services that are not connected" : `Show ${waiting.length} services that are not connected`}
+            </button>
+            {showWaiting ? (
+              <div className="mt-3 space-y-3">
+                <input aria-label="Search plugins" value={catalogQuery} onChange={(event) => setCatalogQuery(event.target.value)} placeholder="Search plugins" className="min-h-11 w-full rounded-panel border border-line bg-transparent px-3 text-sm" />
+                {bands.length === 0 ? <p className="text-sm text-muted">No plugin matches that search.</p> : bands.map((band) => (
+                  <details key={band.label} className="rounded-panel border border-line p-3" open={needle.length > 0}>
+                    <summary className="cursor-pointer text-sm font-semibold">{band.label}</summary>
+                    <div className="service-board plugin-links mt-3">{band.items.map((service) => renderService(service))}</div>
+                  </details>
+                ))}
+              </div>
+            ) : null}
+          </section>
+        </>
       );
     })()}
-    <div id="owner-service-board" className="service-board grid gap-3">
-      {[grok, ...services].map((service) => {
-        const ready = service.state === "Key present" || service.state === "Connected" || service.state === "API token present";
-        if (!ready && !showWaiting) return null;
+    </div>
+  );
+
+  function catalogBand(name: string) {
+    if (name === "Gmail" || name === "Slack") return "Communication";
+    if (name === "Notion" || name === "Google Drive" || name === "Google Docs" || name === "Google Calendar") return "Productivity";
+    if (name === "GitHub" || name === "Local computer") return "Developer";
+    if (name === "OpenAI" || name === "Claude" || name === "Gemini" || name === "OpenRouter") return "Models";
+    if (name === "YouTube" || name === "Web search" || name === "Image and video") return "Research and media";
+    if (name === "MCP") return "Custom MCP";
+    return "Other";
+  }
+
+  function renderService(service: Service) {
         const meta = OAUTH_BOARD[service.name];
         const oauth = meta ? oauthByName[service.name] : undefined;
         const unavailable = Boolean(oauth && isStatusUnavailable(oauth));
@@ -281,27 +328,21 @@ export function ServiceBoard({
         const showNotConfigured = Boolean(meta && oauth?.state === "not_configured");
         const isBusy = busy === service.name;
         return (
-          <article key={service.name} className="dense-card card-texture min-w-0 overflow-hidden p-3">
-            <div className="flex min-w-0 flex-wrap items-start justify-between gap-2">
-              <h3 className="flex min-w-0 items-center gap-2 break-words font-semibold"><ServiceMark name={service.name} />{service.name}</h3>
-              <span className="max-w-full break-words rounded-full border border-line px-2 py-0.5 text-xs text-muted">{slackOff ? "Off" : needsSignIn ? "Not connected" : service.state}</span>
+          <article key={service.name} className="plugin-link">
+            <div className="plugin-link__main">
+              <ServiceMark name={service.name} />
+              <div>
+                <p className="font-semibold">{service.name}</p>
+                <p className="text-sm text-muted">{slackOff ? "Slack stays off. No Slack login is started." : needsSignIn ? "Sign in before this app can check this connection." : service.detail}</p>
+              </div>
             </div>
-            {slackOff ? (
-              <p className="mt-2 break-words text-sm text-muted">Slack stays off. No Slack login is started.</p>
-            ) : needsSignIn ? (
-              <p className="mt-2 break-words text-sm text-muted">Sign in before this app can check this connection.</p>
-            ) : unavailable ? null : <p className="mt-2 break-words text-sm text-muted">{service.detail}</p>}
+            <span className="plugin-link__state">{slackOff ? "Off" : needsSignIn ? "Not connected" : service.state}</span>
+            <div className="plugin-link__action">
             {slackOff ? null : needsSignIn ? (
-              <button type="button" className="mt-3 min-h-11 rounded-panel bg-accent px-3 text-sm font-semibold text-accent-ink" onClick={() => window.location.assign("/login")}>
+              <button type="button" className="min-h-11 rounded-panel bg-accent px-3 text-sm font-semibold text-accent-ink" onClick={() => window.location.assign("/login")}>
                 Sign in
               </button>
             ) : unavailable && oauth ? (
-              <div
-                className="mt-3 flex flex-wrap items-center justify-between gap-2 rounded-panel border border-danger/40 bg-danger/10 px-3 py-2"
-                role="alert"
-                data-testid="connector-status-unavailable"
-              >
-                <p className="text-sm text-danger">{oauth.detail}</p>
                 <button
                   type="button"
                   className="inline-flex min-h-11 items-center justify-center rounded-panel border border-danger/40 px-3 text-sm text-danger"
@@ -311,30 +352,30 @@ export function ServiceBoard({
                 >
                   Retry
                 </button>
-              </div>
             ) : meta && oauthConnected ? (
-              <button type="button" className="mt-3 min-h-11 rounded-panel border border-line px-3 text-sm" disabled={isBusy} onClick={() => void disconnectOauth(service.name)}>
+              <button type="button" className="min-h-11 rounded-panel border border-line px-3 text-sm" disabled={isBusy} onClick={() => void disconnectOauth(service.name)}>
                 Disconnect
               </button>
             ) : meta && showOauthConnect ? (
-              <button type="button" className="mt-3 min-h-11 rounded-panel border border-line px-3 text-sm" disabled={isBusy} onClick={() => void connectOauth(service.name)}>
+              <button type="button" className="min-h-11 rounded-panel border border-line px-3 text-sm" disabled={isBusy} onClick={() => void connectOauth(service.name)}>
                 Connect
               </button>
             ) : meta && showNotConfigured ? (
-              <button type="button" className="mt-3 min-h-11 rounded-panel border border-line px-3 text-sm" onClick={() => explainOrOpen(service.name, service.detail)}>
+              <button type="button" className="min-h-11 rounded-panel border border-line px-3 text-sm" onClick={() => explainOrOpen(service.name, service.detail)}>
                 Setup
               </button>
             ) : legacyConnected && onDisconnect ? (
-              <button type="button" className="mt-3 min-h-11 rounded-panel border border-line px-3 text-sm" onClick={onDisconnect}>
+              <button type="button" className="min-h-11 rounded-panel border border-line px-3 text-sm" onClick={onDisconnect}>
                 Disconnect
               </button>
             ) : (
-              <button type="button" className="mt-3 min-h-11 rounded-panel border border-line px-3 text-sm" onClick={() => explainOrOpen(service.name, service.detail)}>
+              <button type="button" className="min-h-11 rounded-panel border border-line px-3 text-sm" onClick={() => explainOrOpen(service.name, service.detail)}>
                 {service.name === "Grok" && grokConfigured ? "How it works" : "Setup"}
               </button>
             )}
+            </div>
             {service.name === "MCP" ? (
-              <div className="mt-3 grid min-w-0 gap-2">
+              <div className="plugin-link__extra">
                 <button
                   type="button"
                   className="min-h-11 rounded-panel border border-line px-3 text-left text-sm disabled:opacity-50"
@@ -367,9 +408,5 @@ export function ServiceBoard({
             ) : null}
           </article>
         );
-      })}
-    </div>
-    <KimiDeviceConnect />
-    </>
-  );
+  }
 }

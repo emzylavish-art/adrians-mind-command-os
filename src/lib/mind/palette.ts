@@ -7,6 +7,7 @@ export const PALETTE_DESTINATIONS = [
   { id: "research", label: "Research" },
   { id: "files", label: "Library" },
   { id: "build", label: "Build" },
+  { id: "code", label: "Human Code" },
   { id: "connected", label: "Connected" },
   { id: "tools", label: "Tools" },
   { id: "skills", label: "Skills" },
@@ -28,7 +29,7 @@ export type PaletteHit = {
 type PaletteInput = {
   query: string;
   projects: { id: string; name: string; description: string }[];
-  chats: { id: string; title: string; messages: { content: string }[] }[];
+  chats: { id: string; title: string; messages: { content: string }[]; humanCode?: boolean }[];
   memories: { id: string; text: string; archived: boolean }[];
   files: { id: string; name: string; text: string }[];
   agents: { id: string; name: string; description: string; archived: boolean }[];
@@ -63,7 +64,7 @@ export function paletteHits(input: PaletteInput): PaletteHit[] {
   for (const chat of input.chats) {
     const blob = `${chat.title} ${chat.messages.map((msg) => msg.content).join(" ")}`.toLowerCase();
     if (blob.includes(search)) {
-      rows.push({ key: chat.id, label: chat.title, meta: "Chat", view: "chat", ref: chat.id });
+      rows.push({ key: chat.id, label: chat.title, meta: chat.humanCode ? "Human Code" : "Chat", view: chat.humanCode ? "code" : "chat", ref: chat.id });
     }
   }
   for (const note of input.memories) {

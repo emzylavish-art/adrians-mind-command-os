@@ -72,7 +72,7 @@ export function installCodingExtensions(home: string, searchUrl: string): { hook
     "",
     '[models."adrian/grok"]',
     'provider = "adrian"',
-    'model = "grok-4.20-0309-non-reasoning"',
+    'model = "grok-4.7"',
     "max_context_size = 131072",
     'capabilities = ["tool_use"]',
     'display_name = "Adrian Grok"',

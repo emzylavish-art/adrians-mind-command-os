@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { CANNOT_RUN, DEMO_COMMAND, DEMO_FILE, DEMO_WRITE, HOSTED_ACTIONS, canRunApproved, exactAction, type HostedActionId } from "@/lib/mind/owner-flow";
+import { CANNOT_RUN, DEMO_COMMAND, DEMO_FILE, DEMO_WRITE, DESKTOP_ACTIONS, HOSTED_ACTIONS, INSTALLER_HREF, canRunApproved, canRunDesktop, exactAction, exactDesktopAction, type HostedActionId } from "@/lib/mind/owner-flow";
 
 export function OwnerFlow(props: {
   halted: boolean;
@@ -27,7 +27,7 @@ export function OwnerFlow(props: {
     setBusy(id);
     try {
       if (id === "terminal") {
-        const requested = await fetch("/api/mind/kimi/terminal", {
+        const requested = await fetch("/api/mind/build/terminal", {
           method: "POST",
           credentials: "include",
           headers: { "content-type": "application/json" },
@@ -38,7 +38,7 @@ export function OwnerFlow(props: {
           setResult(id, pending.error || "Terminal approval was not created. Nothing ran.");
           return;
         }
-        const confirmed = await fetch("/api/mind/kimi/terminal", {
+        const confirmed = await fetch("/api/mind/build/terminal", {
           method: "POST",
           credentials: "include",
           headers: { "content-type": "application/json" },
@@ -53,7 +53,7 @@ export function OwnerFlow(props: {
         : id === "file_write"
           ? { operation: "write", path: DEMO_FILE, content: DEMO_WRITE }
           : { operation: "delete", path: DEMO_FILE, confirm: true };
-      const response = await fetch("/api/mind/kimi/files", {
+      const response = await fetch("/api/mind/build/files", {
         method: "POST",
         credentials: "include",
         headers: { "content-type": "application/json" },
@@ -78,8 +78,9 @@ export function OwnerFlow(props: {
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
           <p className="text-xs uppercase tracking-wide text-muted">Windows pairing</p>
-          <h2 className="mt-1 text-lg font-semibold">Not installed</h2>
-          <p className="mt-1 max-w-2xl text-sm text-muted" data-testid="windows-not-installed">Desktop software is not built. It waits for your command. These four actions run only in the hosted workspace, and only after you approve each one.</p>
+          <h2 className="mt-1 text-lg font-semibold">Installer ready</h2>
+          <p className="mt-1 max-w-2xl text-sm text-muted" data-testid="windows-installer-ready">The Windows installer is a local download. It is not deployed. Hosted actions stay in this site. Desktop actions stay off until that installer is on your PC and the computer is paired.</p>
+          <a className="mt-3 inline-flex min-h-11 items-center rounded-panel bg-accent px-3 text-sm font-semibold text-accent-ink" href={INSTALLER_HREF} download data-testid="download-installer">Download installer</a>
         </div>
         <div className="flex flex-wrap gap-2">
           <button type="button" className="inline-flex min-h-11 items-center rounded-panel border border-line px-3 text-sm" onClick={props.onOpenSpeak} data-testid="owner-flow-speak">Open Speak</button>
@@ -90,8 +91,9 @@ export function OwnerFlow(props: {
         {props.recording ? `Recording this tab · ${props.recordingSeconds}s. Closing this tab stops it. It cannot continue after the tab closes.` : "Microphone is off. Open Speak and press the mic. Recording stays in this tab only. Closing the tab stops it."}
       </p>
       {props.recording ? <button type="button" className="mt-2 inline-flex min-h-11 items-center rounded-panel border border-line px-3 text-sm" onClick={props.onStopRecording}>Stop recording</button> : null}
-      <p className={"mt-3 text-sm font-semibold " + (props.halted ? "text-rose-300" : "text-emerald-300")} data-testid="owner-flow-halt">{props.halted ? "Emergency stop is on. EVE cannot clear it." : "Emergency stop is off. Only you can press it."}</p>
-      <ul className="mt-4 grid gap-3">
+      <p className={"mt-3 text-sm font-semibold " + (props.halted ? "text-rose-300" : "text-emerald-300")} data-testid="owner-flow-halt">{props.halted ? "Emergency stop is on. EVE can press Clear on Speak." : "Emergency stop is off. Only you can press the stop. EVE can press Clear."}</p>
+      <h3 className="mt-4 text-sm font-semibold">Hosted workspace</h3>
+      <ul className="mt-2 grid gap-3">
         {HOSTED_ACTIONS.map((action) => (
           <li key={action.id} className="rounded-panel border border-line p-3" data-testid={`owner-action-${action.id}`}>
             <div className="flex flex-wrap items-center justify-between gap-2">
@@ -112,6 +114,21 @@ export function OwnerFlow(props: {
             {results[action.id] ? <p className="mt-2 text-sm" data-testid={`owner-result-${action.id}`}>{results[action.id]}</p> : null}
           </li>
         ))}
+      </ul>
+      <h3 className="mt-4 text-sm font-semibold">Desktop control</h3>
+      <ul className="mt-2 grid gap-3" data-testid="desktop-actions">
+        {DESKTOP_ACTIONS.map((action) => {
+          const exact = exactDesktopAction(action.id);
+          const gate = canRunDesktop({ halted: props.halted, paired: false, approved: null, exact });
+          return (
+            <li key={action.id} className="rounded-panel border border-line p-3" data-testid={`desktop-action-${action.id}`}>
+              <p className="text-sm font-semibold">{action.label}</p>
+              <p className="text-xs text-muted">{exact}</p>
+              <p className="mt-1 text-xs text-muted">{gate.message}</p>
+              <button type="button" className="mt-2 min-h-11 rounded-panel bg-accent px-3 text-sm font-semibold text-accent-ink disabled:opacity-50" disabled data-testid={`desktop-run-${action.id}`}>Run</button>
+            </li>
+          );
+        })}
       </ul>
       <div className="mt-4" data-testid="cannot-run">
         <p className="text-xs uppercase tracking-wide text-muted">Cannot run</p>

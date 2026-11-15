@@ -19,12 +19,25 @@ import { Route as AuthCallbackRouteImport } from './routes/auth/callback'
 import { Route as ApiAuthSplatRouteImport } from './routes/api/auth/$'
 import { Route as ApiMindAgentRouteImport } from './routes/api/mind/agent'
 import { Route as ApiMindProvidersRouteImport } from './routes/api/mind/providers'
+import { Route as ApiMindReceiptsRouteImport } from './routes/api/mind/receipts'
 import { Route as ApiMindTurnRouteImport } from './routes/api/mind/turn'
+import { Route as ApiMindBuildBrowserRouteImport } from './routes/api/mind/build/browser'
+import { Route as ApiMindBuildCancelRouteImport } from './routes/api/mind/build/cancel'
+import { Route as ApiMindBuildCapabilitiesRouteImport } from './routes/api/mind/build/capabilities'
+import { Route as ApiMindBuildFilesRouteImport } from './routes/api/mind/build/files'
+import { Route as ApiMindBuildIdeRouteImport } from './routes/api/mind/build/ide'
+import { Route as ApiMindBuildProjectsRouteImport } from './routes/api/mind/build/projects'
+import { Route as ApiMindBuildProvidersRouteImport } from './routes/api/mind/build/providers'
+import { Route as ApiMindBuildRuntimeRouteImport } from './routes/api/mind/build/runtime'
+import { Route as ApiMindBuildSessionRouteImport } from './routes/api/mind/build/session'
+import { Route as ApiMindBuildTerminalRouteImport } from './routes/api/mind/build/terminal'
+import { Route as ApiMindBuildVoiceRouteImport } from './routes/api/mind/build/voice'
 import { Route as ApiMindDashboardStatusRouteImport } from './routes/api/mind/dashboard/status'
 import { Route as ApiMindKimiBrowserRouteImport } from './routes/api/mind/kimi/browser'
 import { Route as ApiMindKimiCancelRouteImport } from './routes/api/mind/kimi/cancel'
 import { Route as ApiMindKimiCapabilitiesRouteImport } from './routes/api/mind/kimi/capabilities'
 import { Route as ApiMindKimiFilesRouteImport } from './routes/api/mind/kimi/files'
+import { Route as ApiMindKimiIdeRouteImport } from './routes/api/mind/kimi/ide'
 import { Route as ApiMindKimiProjectsRouteImport } from './routes/api/mind/kimi/projects'
 import { Route as ApiMindKimiProvidersRouteImport } from './routes/api/mind/kimi/providers'
 import { Route as ApiMindKimiRuntimeRouteImport } from './routes/api/mind/kimi/runtime'
@@ -51,6 +64,7 @@ import { Route as ApiMindPcJobsRouteImport } from './routes/api/mind/pc/jobs'
 import { Route as ApiMindPcRegisterRouteImport } from './routes/api/mind/pc/register'
 import { Route as ApiMindPcResultRouteImport } from './routes/api/mind/pc/result'
 import { Route as ApiMindPcStatusRouteImport } from './routes/api/mind/pc/status'
+import { Route as ApiMindVoiceCallRouteImport } from './routes/api/mind/voice/call'
 import { Route as ApiMindVoiceSessionRouteImport } from './routes/api/mind/voice/session'
 import { Route as ApiMindVoiceSttRouteImport } from './routes/api/mind/voice/stt'
 import { Route as ApiMindVoiceTtsRouteImport } from './routes/api/mind/voice/tts'
@@ -118,9 +132,70 @@ const ApiMindProvidersRoute = ApiMindProvidersRouteImport.update({
   path: '/api/mind/providers',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ApiMindReceiptsRoute = ApiMindReceiptsRouteImport.update({
+  id: '/api/mind/receipts',
+  path: '/api/mind/receipts',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const ApiMindTurnRoute = ApiMindTurnRouteImport.update({
   id: '/api/mind/turn',
   path: '/api/mind/turn',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ApiMindBuildBrowserRoute = ApiMindBuildBrowserRouteImport.update({
+  id: '/api/mind/build/browser',
+  path: '/api/mind/build/browser',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ApiMindBuildCancelRoute = ApiMindBuildCancelRouteImport.update({
+  id: '/api/mind/build/cancel',
+  path: '/api/mind/build/cancel',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ApiMindBuildCapabilitiesRoute =
+  ApiMindBuildCapabilitiesRouteImport.update({
+    id: '/api/mind/build/capabilities',
+    path: '/api/mind/build/capabilities',
+    getParentRoute: () => rootRouteImport,
+  } as any)
+const ApiMindBuildFilesRoute = ApiMindBuildFilesRouteImport.update({
+  id: '/api/mind/build/files',
+  path: '/api/mind/build/files',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ApiMindBuildIdeRoute = ApiMindBuildIdeRouteImport.update({
+  id: '/api/mind/build/ide',
+  path: '/api/mind/build/ide',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ApiMindBuildProjectsRoute = ApiMindBuildProjectsRouteImport.update({
+  id: '/api/mind/build/projects',
+  path: '/api/mind/build/projects',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ApiMindBuildProvidersRoute = ApiMindBuildProvidersRouteImport.update({
+  id: '/api/mind/build/providers',
+  path: '/api/mind/build/providers',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ApiMindBuildRuntimeRoute = ApiMindBuildRuntimeRouteImport.update({
+  id: '/api/mind/build/runtime',
+  path: '/api/mind/build/runtime',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ApiMindBuildSessionRoute = ApiMindBuildSessionRouteImport.update({
+  id: '/api/mind/build/session',
+  path: '/api/mind/build/session',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ApiMindBuildTerminalRoute = ApiMindBuildTerminalRouteImport.update({
+  id: '/api/mind/build/terminal',
+  path: '/api/mind/build/terminal',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ApiMindBuildVoiceRoute = ApiMindBuildVoiceRouteImport.update({
+  id: '/api/mind/build/voice',
+  path: '/api/mind/build/voice',
   getParentRoute: () => rootRouteImport,
 } as any)
 const ApiMindDashboardStatusRoute = ApiMindDashboardStatusRouteImport.update({
@@ -146,6 +221,11 @@ const ApiMindKimiCapabilitiesRoute = ApiMindKimiCapabilitiesRouteImport.update({
 const ApiMindKimiFilesRoute = ApiMindKimiFilesRouteImport.update({
   id: '/api/mind/kimi/files',
   path: '/api/mind/kimi/files',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ApiMindKimiIdeRoute = ApiMindKimiIdeRouteImport.update({
+  id: '/api/mind/kimi/ide',
+  path: '/api/mind/kimi/ide',
   getParentRoute: () => rootRouteImport,
 } as any)
 const ApiMindKimiProjectsRoute = ApiMindKimiProjectsRouteImport.update({
@@ -278,6 +358,11 @@ const ApiMindPcStatusRoute = ApiMindPcStatusRouteImport.update({
   path: '/api/mind/pc/status',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ApiMindVoiceCallRoute = ApiMindVoiceCallRouteImport.update({
+  id: '/api/mind/voice/call',
+  path: '/api/mind/voice/call',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const ApiMindVoiceSessionRoute = ApiMindVoiceSessionRouteImport.update({
   id: '/api/mind/voice/session',
   path: '/api/mind/voice/session',
@@ -379,12 +464,25 @@ export interface FileRoutesByFullPath {
   '/api/auth/$': typeof ApiAuthSplatRoute
   '/api/mind/agent': typeof ApiMindAgentRoute
   '/api/mind/providers': typeof ApiMindProvidersRoute
+  '/api/mind/receipts': typeof ApiMindReceiptsRoute
   '/api/mind/turn': typeof ApiMindTurnRoute
+  '/api/mind/build/browser': typeof ApiMindBuildBrowserRoute
+  '/api/mind/build/cancel': typeof ApiMindBuildCancelRoute
+  '/api/mind/build/capabilities': typeof ApiMindBuildCapabilitiesRoute
+  '/api/mind/build/files': typeof ApiMindBuildFilesRoute
+  '/api/mind/build/ide': typeof ApiMindBuildIdeRoute
+  '/api/mind/build/projects': typeof ApiMindBuildProjectsRoute
+  '/api/mind/build/providers': typeof ApiMindBuildProvidersRoute
+  '/api/mind/build/runtime': typeof ApiMindBuildRuntimeRoute
+  '/api/mind/build/session': typeof ApiMindBuildSessionRoute
+  '/api/mind/build/terminal': typeof ApiMindBuildTerminalRoute
+  '/api/mind/build/voice': typeof ApiMindBuildVoiceRoute
   '/api/mind/dashboard/status': typeof ApiMindDashboardStatusRoute
   '/api/mind/kimi/browser': typeof ApiMindKimiBrowserRoute
   '/api/mind/kimi/cancel': typeof ApiMindKimiCancelRoute
   '/api/mind/kimi/capabilities': typeof ApiMindKimiCapabilitiesRoute
   '/api/mind/kimi/files': typeof ApiMindKimiFilesRoute
+  '/api/mind/kimi/ide': typeof ApiMindKimiIdeRoute
   '/api/mind/kimi/projects': typeof ApiMindKimiProjectsRoute
   '/api/mind/kimi/providers': typeof ApiMindKimiProvidersRoute
   '/api/mind/kimi/runtime': typeof ApiMindKimiRuntimeRoute
@@ -411,6 +509,7 @@ export interface FileRoutesByFullPath {
   '/api/mind/pc/register': typeof ApiMindPcRegisterRoute
   '/api/mind/pc/result': typeof ApiMindPcResultRoute
   '/api/mind/pc/status': typeof ApiMindPcStatusRoute
+  '/api/mind/voice/call': typeof ApiMindVoiceCallRoute
   '/api/mind/voice/session': typeof ApiMindVoiceSessionRoute
   '/api/mind/voice/stt': typeof ApiMindVoiceSttRoute
   '/api/mind/voice/tts': typeof ApiMindVoiceTtsRoute
@@ -439,12 +538,25 @@ export interface FileRoutesByTo {
   '/api/auth/$': typeof ApiAuthSplatRoute
   '/api/mind/agent': typeof ApiMindAgentRoute
   '/api/mind/providers': typeof ApiMindProvidersRoute
+  '/api/mind/receipts': typeof ApiMindReceiptsRoute
   '/api/mind/turn': typeof ApiMindTurnRoute
+  '/api/mind/build/browser': typeof ApiMindBuildBrowserRoute
+  '/api/mind/build/cancel': typeof ApiMindBuildCancelRoute
+  '/api/mind/build/capabilities': typeof ApiMindBuildCapabilitiesRoute
+  '/api/mind/build/files': typeof ApiMindBuildFilesRoute
+  '/api/mind/build/ide': typeof ApiMindBuildIdeRoute
+  '/api/mind/build/projects': typeof ApiMindBuildProjectsRoute
+  '/api/mind/build/providers': typeof ApiMindBuildProvidersRoute
+  '/api/mind/build/runtime': typeof ApiMindBuildRuntimeRoute
+  '/api/mind/build/session': typeof ApiMindBuildSessionRoute
+  '/api/mind/build/terminal': typeof ApiMindBuildTerminalRoute
+  '/api/mind/build/voice': typeof ApiMindBuildVoiceRoute
   '/api/mind/dashboard/status': typeof ApiMindDashboardStatusRoute
   '/api/mind/kimi/browser': typeof ApiMindKimiBrowserRoute
   '/api/mind/kimi/cancel': typeof ApiMindKimiCancelRoute
   '/api/mind/kimi/capabilities': typeof ApiMindKimiCapabilitiesRoute
   '/api/mind/kimi/files': typeof ApiMindKimiFilesRoute
+  '/api/mind/kimi/ide': typeof ApiMindKimiIdeRoute
   '/api/mind/kimi/projects': typeof ApiMindKimiProjectsRoute
   '/api/mind/kimi/providers': typeof ApiMindKimiProvidersRoute
   '/api/mind/kimi/runtime': typeof ApiMindKimiRuntimeRoute
@@ -471,6 +583,7 @@ export interface FileRoutesByTo {
   '/api/mind/pc/register': typeof ApiMindPcRegisterRoute
   '/api/mind/pc/result': typeof ApiMindPcResultRoute
   '/api/mind/pc/status': typeof ApiMindPcStatusRoute
+  '/api/mind/voice/call': typeof ApiMindVoiceCallRoute
   '/api/mind/voice/session': typeof ApiMindVoiceSessionRoute
   '/api/mind/voice/stt': typeof ApiMindVoiceSttRoute
   '/api/mind/voice/tts': typeof ApiMindVoiceTtsRoute
@@ -500,12 +613,25 @@ export interface FileRoutesById {
   '/api/auth/$': typeof ApiAuthSplatRoute
   '/api/mind/agent': typeof ApiMindAgentRoute
   '/api/mind/providers': typeof ApiMindProvidersRoute
+  '/api/mind/receipts': typeof ApiMindReceiptsRoute
   '/api/mind/turn': typeof ApiMindTurnRoute
+  '/api/mind/build/browser': typeof ApiMindBuildBrowserRoute
+  '/api/mind/build/cancel': typeof ApiMindBuildCancelRoute
+  '/api/mind/build/capabilities': typeof ApiMindBuildCapabilitiesRoute
+  '/api/mind/build/files': typeof ApiMindBuildFilesRoute
+  '/api/mind/build/ide': typeof ApiMindBuildIdeRoute
+  '/api/mind/build/projects': typeof ApiMindBuildProjectsRoute
+  '/api/mind/build/providers': typeof ApiMindBuildProvidersRoute
+  '/api/mind/build/runtime': typeof ApiMindBuildRuntimeRoute
+  '/api/mind/build/session': typeof ApiMindBuildSessionRoute
+  '/api/mind/build/terminal': typeof ApiMindBuildTerminalRoute
+  '/api/mind/build/voice': typeof ApiMindBuildVoiceRoute
   '/api/mind/dashboard/status': typeof ApiMindDashboardStatusRoute
   '/api/mind/kimi/browser': typeof ApiMindKimiBrowserRoute
   '/api/mind/kimi/cancel': typeof ApiMindKimiCancelRoute
   '/api/mind/kimi/capabilities': typeof ApiMindKimiCapabilitiesRoute
   '/api/mind/kimi/files': typeof ApiMindKimiFilesRoute
+  '/api/mind/kimi/ide': typeof ApiMindKimiIdeRoute
   '/api/mind/kimi/projects': typeof ApiMindKimiProjectsRoute
   '/api/mind/kimi/providers': typeof ApiMindKimiProvidersRoute
   '/api/mind/kimi/runtime': typeof ApiMindKimiRuntimeRoute
@@ -532,6 +658,7 @@ export interface FileRoutesById {
   '/api/mind/pc/register': typeof ApiMindPcRegisterRoute
   '/api/mind/pc/result': typeof ApiMindPcResultRoute
   '/api/mind/pc/status': typeof ApiMindPcStatusRoute
+  '/api/mind/voice/call': typeof ApiMindVoiceCallRoute
   '/api/mind/voice/session': typeof ApiMindVoiceSessionRoute
   '/api/mind/voice/stt': typeof ApiMindVoiceSttRoute
   '/api/mind/voice/tts': typeof ApiMindVoiceTtsRoute
@@ -562,12 +689,25 @@ export interface FileRouteTypes {
     | '/api/auth/$'
     | '/api/mind/agent'
     | '/api/mind/providers'
+    | '/api/mind/receipts'
     | '/api/mind/turn'
+    | '/api/mind/build/browser'
+    | '/api/mind/build/cancel'
+    | '/api/mind/build/capabilities'
+    | '/api/mind/build/files'
+    | '/api/mind/build/ide'
+    | '/api/mind/build/projects'
+    | '/api/mind/build/providers'
+    | '/api/mind/build/runtime'
+    | '/api/mind/build/session'
+    | '/api/mind/build/terminal'
+    | '/api/mind/build/voice'
     | '/api/mind/dashboard/status'
     | '/api/mind/kimi/browser'
     | '/api/mind/kimi/cancel'
     | '/api/mind/kimi/capabilities'
     | '/api/mind/kimi/files'
+    | '/api/mind/kimi/ide'
     | '/api/mind/kimi/projects'
     | '/api/mind/kimi/providers'
     | '/api/mind/kimi/runtime'
@@ -594,6 +734,7 @@ export interface FileRouteTypes {
     | '/api/mind/pc/register'
     | '/api/mind/pc/result'
     | '/api/mind/pc/status'
+    | '/api/mind/voice/call'
     | '/api/mind/voice/session'
     | '/api/mind/voice/stt'
     | '/api/mind/voice/tts'
@@ -622,12 +763,25 @@ export interface FileRouteTypes {
     | '/api/auth/$'
     | '/api/mind/agent'
     | '/api/mind/providers'
+    | '/api/mind/receipts'
     | '/api/mind/turn'
+    | '/api/mind/build/browser'
+    | '/api/mind/build/cancel'
+    | '/api/mind/build/capabilities'
+    | '/api/mind/build/files'
+    | '/api/mind/build/ide'
+    | '/api/mind/build/projects'
+    | '/api/mind/build/providers'
+    | '/api/mind/build/runtime'
+    | '/api/mind/build/session'
+    | '/api/mind/build/terminal'
+    | '/api/mind/build/voice'
     | '/api/mind/dashboard/status'
     | '/api/mind/kimi/browser'
     | '/api/mind/kimi/cancel'
     | '/api/mind/kimi/capabilities'
     | '/api/mind/kimi/files'
+    | '/api/mind/kimi/ide'
     | '/api/mind/kimi/projects'
     | '/api/mind/kimi/providers'
     | '/api/mind/kimi/runtime'
@@ -654,6 +808,7 @@ export interface FileRouteTypes {
     | '/api/mind/pc/register'
     | '/api/mind/pc/result'
     | '/api/mind/pc/status'
+    | '/api/mind/voice/call'
     | '/api/mind/voice/session'
     | '/api/mind/voice/stt'
     | '/api/mind/voice/tts'
@@ -682,12 +837,25 @@ export interface FileRouteTypes {
     | '/api/auth/$'
     | '/api/mind/agent'
     | '/api/mind/providers'
+    | '/api/mind/receipts'
     | '/api/mind/turn'
+    | '/api/mind/build/browser'
+    | '/api/mind/build/cancel'
+    | '/api/mind/build/capabilities'
+    | '/api/mind/build/files'
+    | '/api/mind/build/ide'
+    | '/api/mind/build/projects'
+    | '/api/mind/build/providers'
+    | '/api/mind/build/runtime'
+    | '/api/mind/build/session'
+    | '/api/mind/build/terminal'
+    | '/api/mind/build/voice'
     | '/api/mind/dashboard/status'
     | '/api/mind/kimi/browser'
     | '/api/mind/kimi/cancel'
     | '/api/mind/kimi/capabilities'
     | '/api/mind/kimi/files'
+    | '/api/mind/kimi/ide'
     | '/api/mind/kimi/projects'
     | '/api/mind/kimi/providers'
     | '/api/mind/kimi/runtime'
@@ -714,6 +882,7 @@ export interface FileRouteTypes {
     | '/api/mind/pc/register'
     | '/api/mind/pc/result'
     | '/api/mind/pc/status'
+    | '/api/mind/voice/call'
     | '/api/mind/voice/session'
     | '/api/mind/voice/stt'
     | '/api/mind/voice/tts'
@@ -743,12 +912,25 @@ export interface RootRouteChildren {
   ApiAuthSplatRoute: typeof ApiAuthSplatRoute
   ApiMindAgentRoute: typeof ApiMindAgentRoute
   ApiMindProvidersRoute: typeof ApiMindProvidersRoute
+  ApiMindReceiptsRoute: typeof ApiMindReceiptsRoute
   ApiMindTurnRoute: typeof ApiMindTurnRoute
+  ApiMindBuildBrowserRoute: typeof ApiMindBuildBrowserRoute
+  ApiMindBuildCancelRoute: typeof ApiMindBuildCancelRoute
+  ApiMindBuildCapabilitiesRoute: typeof ApiMindBuildCapabilitiesRoute
+  ApiMindBuildFilesRoute: typeof ApiMindBuildFilesRoute
+  ApiMindBuildIdeRoute: typeof ApiMindBuildIdeRoute
+  ApiMindBuildProjectsRoute: typeof ApiMindBuildProjectsRoute
+  ApiMindBuildProvidersRoute: typeof ApiMindBuildProvidersRoute
+  ApiMindBuildRuntimeRoute: typeof ApiMindBuildRuntimeRoute
+  ApiMindBuildSessionRoute: typeof ApiMindBuildSessionRoute
+  ApiMindBuildTerminalRoute: typeof ApiMindBuildTerminalRoute
+  ApiMindBuildVoiceRoute: typeof ApiMindBuildVoiceRoute
   ApiMindDashboardStatusRoute: typeof ApiMindDashboardStatusRoute
   ApiMindKimiBrowserRoute: typeof ApiMindKimiBrowserRoute
   ApiMindKimiCancelRoute: typeof ApiMindKimiCancelRoute
   ApiMindKimiCapabilitiesRoute: typeof ApiMindKimiCapabilitiesRoute
   ApiMindKimiFilesRoute: typeof ApiMindKimiFilesRoute
+  ApiMindKimiIdeRoute: typeof ApiMindKimiIdeRoute
   ApiMindKimiProjectsRoute: typeof ApiMindKimiProjectsRoute
   ApiMindKimiProvidersRoute: typeof ApiMindKimiProvidersRoute
   ApiMindKimiRuntimeRoute: typeof ApiMindKimiRuntimeRoute
@@ -775,6 +957,7 @@ export interface RootRouteChildren {
   ApiMindPcRegisterRoute: typeof ApiMindPcRegisterRoute
   ApiMindPcResultRoute: typeof ApiMindPcResultRoute
   ApiMindPcStatusRoute: typeof ApiMindPcStatusRoute
+  ApiMindVoiceCallRoute: typeof ApiMindVoiceCallRoute
   ApiMindVoiceSessionRoute: typeof ApiMindVoiceSessionRoute
   ApiMindVoiceSttRoute: typeof ApiMindVoiceSttRoute
   ApiMindVoiceTtsRoute: typeof ApiMindVoiceTtsRoute
@@ -865,11 +1048,95 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApiMindProvidersRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/api/mind/receipts': {
+      id: '/api/mind/receipts'
+      path: '/api/mind/receipts'
+      fullPath: '/api/mind/receipts'
+      preLoaderRoute: typeof ApiMindReceiptsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/api/mind/turn': {
       id: '/api/mind/turn'
       path: '/api/mind/turn'
       fullPath: '/api/mind/turn'
       preLoaderRoute: typeof ApiMindTurnRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/mind/build/browser': {
+      id: '/api/mind/build/browser'
+      path: '/api/mind/build/browser'
+      fullPath: '/api/mind/build/browser'
+      preLoaderRoute: typeof ApiMindBuildBrowserRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/mind/build/cancel': {
+      id: '/api/mind/build/cancel'
+      path: '/api/mind/build/cancel'
+      fullPath: '/api/mind/build/cancel'
+      preLoaderRoute: typeof ApiMindBuildCancelRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/mind/build/capabilities': {
+      id: '/api/mind/build/capabilities'
+      path: '/api/mind/build/capabilities'
+      fullPath: '/api/mind/build/capabilities'
+      preLoaderRoute: typeof ApiMindBuildCapabilitiesRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/mind/build/files': {
+      id: '/api/mind/build/files'
+      path: '/api/mind/build/files'
+      fullPath: '/api/mind/build/files'
+      preLoaderRoute: typeof ApiMindBuildFilesRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/mind/build/ide': {
+      id: '/api/mind/build/ide'
+      path: '/api/mind/build/ide'
+      fullPath: '/api/mind/build/ide'
+      preLoaderRoute: typeof ApiMindBuildIdeRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/mind/build/projects': {
+      id: '/api/mind/build/projects'
+      path: '/api/mind/build/projects'
+      fullPath: '/api/mind/build/projects'
+      preLoaderRoute: typeof ApiMindBuildProjectsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/mind/build/providers': {
+      id: '/api/mind/build/providers'
+      path: '/api/mind/build/providers'
+      fullPath: '/api/mind/build/providers'
+      preLoaderRoute: typeof ApiMindBuildProvidersRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/mind/build/runtime': {
+      id: '/api/mind/build/runtime'
+      path: '/api/mind/build/runtime'
+      fullPath: '/api/mind/build/runtime'
+      preLoaderRoute: typeof ApiMindBuildRuntimeRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/mind/build/session': {
+      id: '/api/mind/build/session'
+      path: '/api/mind/build/session'
+      fullPath: '/api/mind/build/session'
+      preLoaderRoute: typeof ApiMindBuildSessionRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/mind/build/terminal': {
+      id: '/api/mind/build/terminal'
+      path: '/api/mind/build/terminal'
+      fullPath: '/api/mind/build/terminal'
+      preLoaderRoute: typeof ApiMindBuildTerminalRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/mind/build/voice': {
+      id: '/api/mind/build/voice'
+      path: '/api/mind/build/voice'
+      fullPath: '/api/mind/build/voice'
+      preLoaderRoute: typeof ApiMindBuildVoiceRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/api/mind/dashboard/status': {
@@ -905,6 +1172,13 @@ declare module '@tanstack/react-router' {
       path: '/api/mind/kimi/files'
       fullPath: '/api/mind/kimi/files'
       preLoaderRoute: typeof ApiMindKimiFilesRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/mind/kimi/ide': {
+      id: '/api/mind/kimi/ide'
+      path: '/api/mind/kimi/ide'
+      fullPath: '/api/mind/kimi/ide'
+      preLoaderRoute: typeof ApiMindKimiIdeRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/api/mind/kimi/projects': {
@@ -1089,6 +1363,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApiMindPcStatusRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/api/mind/voice/call': {
+      id: '/api/mind/voice/call'
+      path: '/api/mind/voice/call'
+      fullPath: '/api/mind/voice/call'
+      preLoaderRoute: typeof ApiMindVoiceCallRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/api/mind/voice/session': {
       id: '/api/mind/voice/session'
       path: '/api/mind/voice/session'
@@ -1215,12 +1496,25 @@ const rootRouteChildren: RootRouteChildren = {
   ApiAuthSplatRoute: ApiAuthSplatRoute,
   ApiMindAgentRoute: ApiMindAgentRoute,
   ApiMindProvidersRoute: ApiMindProvidersRoute,
+  ApiMindReceiptsRoute: ApiMindReceiptsRoute,
   ApiMindTurnRoute: ApiMindTurnRoute,
+  ApiMindBuildBrowserRoute: ApiMindBuildBrowserRoute,
+  ApiMindBuildCancelRoute: ApiMindBuildCancelRoute,
+  ApiMindBuildCapabilitiesRoute: ApiMindBuildCapabilitiesRoute,
+  ApiMindBuildFilesRoute: ApiMindBuildFilesRoute,
+  ApiMindBuildIdeRoute: ApiMindBuildIdeRoute,
+  ApiMindBuildProjectsRoute: ApiMindBuildProjectsRoute,
+  ApiMindBuildProvidersRoute: ApiMindBuildProvidersRoute,
+  ApiMindBuildRuntimeRoute: ApiMindBuildRuntimeRoute,
+  ApiMindBuildSessionRoute: ApiMindBuildSessionRoute,
+  ApiMindBuildTerminalRoute: ApiMindBuildTerminalRoute,
+  ApiMindBuildVoiceRoute: ApiMindBuildVoiceRoute,
   ApiMindDashboardStatusRoute: ApiMindDashboardStatusRoute,
   ApiMindKimiBrowserRoute: ApiMindKimiBrowserRoute,
   ApiMindKimiCancelRoute: ApiMindKimiCancelRoute,
   ApiMindKimiCapabilitiesRoute: ApiMindKimiCapabilitiesRoute,
   ApiMindKimiFilesRoute: ApiMindKimiFilesRoute,
+  ApiMindKimiIdeRoute: ApiMindKimiIdeRoute,
   ApiMindKimiProjectsRoute: ApiMindKimiProjectsRoute,
   ApiMindKimiProvidersRoute: ApiMindKimiProvidersRoute,
   ApiMindKimiRuntimeRoute: ApiMindKimiRuntimeRoute,
@@ -1247,6 +1541,7 @@ const rootRouteChildren: RootRouteChildren = {
   ApiMindPcRegisterRoute: ApiMindPcRegisterRoute,
   ApiMindPcResultRoute: ApiMindPcResultRoute,
   ApiMindPcStatusRoute: ApiMindPcStatusRoute,
+  ApiMindVoiceCallRoute: ApiMindVoiceCallRoute,
   ApiMindVoiceSessionRoute: ApiMindVoiceSessionRoute,
   ApiMindVoiceSttRoute: ApiMindVoiceSttRoute,
   ApiMindVoiceTtsRoute: ApiMindVoiceTtsRoute,

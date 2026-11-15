@@ -146,10 +146,12 @@ function clothedTorso(): THREE.BufferGeometry {
     }
     pos.setXYZ(i, x, y, z);
   }
-  let hemY = Infinity;
-  for (let i = 0; i < pos.count; i++) hemY = Math.min(hemY, pos.getY(i));
+  const hemY = 0.7;
   for (let i = 0; i < pos.count; i++) {
-    if (pos.getY(i) <= hemY + 0.02) pos.setY(i, hemY);
+    const y = pos.getY(i);
+    if (y > 0.8) continue;
+    const x = Math.max(-0.19, Math.min(0.19, pos.getX(i)));
+    pos.setXYZ(i, x, y < hemY ? hemY : y, y < 0.76 ? 0.08 : pos.getZ(i));
   }
   geo.computeVertexNormals();
   return geo;
@@ -180,6 +182,18 @@ export function createHumanRig(look: CharacterLook): THREE.Group {
 
   const dress = mesh("dress", clothedTorso(), cloth, torso, 0, 0, 0);
   dress.castShadow = true;
+  const hemShape = new THREE.Shape();
+  hemShape.moveTo(-0.17, -0.12);
+  hemShape.lineTo(0.17, -0.12);
+  hemShape.quadraticCurveTo(0.21, -0.12, 0.21, -0.08);
+  hemShape.lineTo(0.21, 0.14);
+  hemShape.lineTo(-0.21, 0.14);
+  hemShape.lineTo(-0.21, -0.08);
+  hemShape.quadraticCurveTo(-0.21, -0.12, -0.17, -0.12);
+  const hemGeo = new THREE.ExtrudeGeometry(hemShape, { depth: 0.18, bevelEnabled: false });
+  hemGeo.translate(0, 0.74, -0.05);
+  const hemFill = mesh("hem-fill", hemGeo, cloth, torso, 0, 0, 0);
+  hemFill.castShadow = true;
   const collar = mesh("collar", new THREE.CylinderGeometry(0.045, 0.07, 0.08, 16), cloth, torso, 0, 1.5, 0);
   collar.castShadow = true;
   // Hidden proportion markers. The dress, not these spheres, is the silhouette.
@@ -227,8 +241,8 @@ export function createHumanRig(look: CharacterLook): THREE.Group {
   body.add(head);
 
   mesh("cranium", new THREE.SphereGeometry(0.12, 24, 18), skin, head, 0, 0, 0);
-  const hairCap = mesh("hair", new THREE.SphereGeometry(0.125, 24, 16, Math.PI * 1.05, Math.PI * 0.9, 0.08, Math.PI * 0.5), hair, head, 0, 0.04, -0.04);
-  hairCap.scale.set(1.05, 1.05, 0.9);
+  const hairCap = mesh("hair", new THREE.SphereGeometry(0.09, 24, 16), hair, head, 0, 0.075, -0.015);
+  hairCap.scale.set(1.05, 0.72, 0.95);
   mesh("hairL", new THREE.SphereGeometry(0.04, 12, 10), hair, head, -0.1, -0.02, -0.05).scale.set(0.6, 1.3, 0.5);
   mesh("hairR", new THREE.SphereGeometry(0.04, 12, 10), hair, head, 0.1, -0.02, -0.05).scale.set(0.6, 1.3, 0.5);
 

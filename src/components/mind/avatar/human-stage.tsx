@@ -17,13 +17,11 @@ import {
 } from "@/lib/mind/avatar/human-rig";
 
 function coverEyes(ctx: CanvasRenderingContext2D, shiftX: number) {
-  for (const [cx, cy] of [[168, 168], [360, 186]] as const) {
-    const sample = ctx.getImageData(Math.round(cx + shiftX), cy + 24, 1, 1).data;
-    ctx.fillStyle = `rgba(${sample[0]}, ${sample[1]}, ${sample[2]}, 0.98)`;
-    ctx.beginPath();
-    ctx.ellipse(cx + shiftX, cy, 78, 40, 0, 0, Math.PI * 2);
-    ctx.fill();
-  }
+  const sample = ctx.getImageData(256, 230, 1, 1).data;
+  ctx.fillStyle = `rgba(${sample[0]}, ${sample[1]}, ${sample[2]}, 0.98)`;
+  ctx.beginPath();
+  ctx.ellipse(270 + shiftX, 174, 156, 26, 0, 0, Math.PI * 2);
+  ctx.fill();
 }
 
 function mouthOpen(viseme: string) {
@@ -150,13 +148,14 @@ export function HumanStage({
     faceCanvas.height = 512;
     const faceCtx = faceCanvas.getContext("2d");
     const faceTexture = new THREE.CanvasTexture(faceCanvas);
+    (window as unknown as { __eveFaceCanvas?: HTMLCanvasElement }).__eveFaceCanvas = faceCanvas;
     faceTexture.colorSpace = THREE.SRGBColorSpace;
     faceTexture.wrapS = THREE.ClampToEdgeWrapping;
     faceTexture.wrapT = THREE.ClampToEdgeWrapping;
     const material = faceMaterial(rig);
     if (material && faceCtx) {
       material.map = faceTexture;
-      material.side = THREE.DoubleSide;
+      material.side = THREE.FrontSide;
       material.transparent = true;
       material.alphaTest = 0.05;
       material.needsUpdate = true;
@@ -164,14 +163,14 @@ export function HumanStage({
       if (curved) curved.visible = false;
       const head = rig.getObjectByName("head");
       if (head) {
-        const plate = new THREE.CircleGeometry(0.072, 40);
+        const plate = new THREE.CircleGeometry(0.064, 48);
         const points = plate.attributes.position;
         const skull = 0.12;
         for (let i = 0; i < points.count; i += 1) {
           const x = points.getX(i);
           const y = points.getY(i) - 0.01;
           const surface = Math.sqrt(Math.max(0.004, skull * skull - x * x - y * y));
-          points.setXYZ(i, x, y, Math.max(surface + 0.008, 0.1));
+          points.setXYZ(i, x, y, surface + 0.004);
         }
         plate.computeVertexNormals();
         material.polygonOffset = true;
@@ -243,7 +242,6 @@ export function HumanStage({
         faceCtx.clearRect(0, 0, 512, 512);
         faceCtx.drawImage(plate, sx, sy, sw, sh, 0, 0, 512, 512);
         const mood = liveRef.current.expression ?? "";
-        if (blink > 0) coverEyes(faceCtx, shiftX);
         if (mood === "smiling" || mood === "laughing" || mood === "excited") liftMouth(faceCtx, 1, shiftX);
         if (mood === "concerned" || mood === "sad") liftMouth(faceCtx, -1, shiftX);
         const speaking = speech.speaking || mood === "speaking" || mood === "laughing" || mood === "excited";
@@ -256,6 +254,15 @@ export function HumanStage({
         faceCtx.ellipse(256, 248, 188, 220, 0, 0, Math.PI * 2);
         faceCtx.fill();
         faceCtx.restore();
+        faceCtx.save();
+        faceCtx.globalCompositeOperation = "destination-out";
+        const fade = faceCtx.createRadialGradient(256, 248, 150, 256, 248, 210);
+        fade.addColorStop(0, "rgba(0,0,0,0)");
+        fade.addColorStop(1, "rgba(0,0,0,1)");
+        faceCtx.fillStyle = fade;
+        faceCtx.fillRect(0, 0, 512, 512);
+        faceCtx.restore();
+        if (blink > 0) coverEyes(faceCtx, shiftX);
         host.dataset.blink = blink > 0 ? "1" : "0";
         host.dataset.viseme = speech.speaking ? speech.viseme : mood === "speaking" || mood === "laughing" || mood === "excited" ? "aa" : "rest";
         host.dataset.gaze = gaze > 0 ? "right" : "left";
@@ -272,6 +279,8 @@ export function HumanStage({
       const forcedYaw = (window as unknown as { __eveYaw?: number }).__eveYaw;
       if (typeof forcedYaw === "number") drag = forcedYaw;
       rig.rotation.y = drag;
+      const plateMesh = rig.getObjectByName("face-card");
+      if (plateMesh) plateMesh.visible = Math.cos(drag) > 0.45;
       host.dataset.facing = Math.abs(drag) < 0.2 ? "front" : "turned";
       host.dataset.framing = liveRef.current.framing;
       const projected = liveRef.current.projection;

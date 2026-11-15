@@ -1,0 +1,26 @@
+Reference notes captured 2026-11-14 for continuous visual fixes. Not a completion claim.
+
+Grok Speak, from the owner recording and public descriptions:
+- Dark full-screen call, not a settings page.
+- Voice name centered, waveform, bottom pill controls: screen share, speaker, mic, settings, transcript.
+- Red end-call button at the right of the ask bar.
+- Voice settings is a sheet over the call, not a separate product.
+- Camera, upload, and screen share stay available during the call.
+- Voice choice and personality are separate.
+
+ChatGPT / Codex, from OpenAI release notes and the Codex app page:
+- One top switcher between conversation and coding.
+- Composer stays calm: one input, attachment, tools behind a picker, send.
+- Coding workspace keeps the prompt, files, and review together.
+- Do not scatter every control on the first screen.
+
+Adrian gaps still being fixed from these references:
+- Speak pace and volume must change playback, not only sit in storage.
+- Build results must return to the Human Code thread that created the task.
+- Chat and Build still need the same quiet hierarchy as the references.
+
+Reference URLs used for layout, 2026-11-14:
+https://help.openai.com/articles/6825453-chatgpt-release-notes
+https://openai.com/index/introducing-the-codex-app/
+https://aiuxplayground.com/teardowns/chatgpt/composer
+Owner recording: Grok Speak dark call with voice, waveform, screen share, camera, settings sheet.

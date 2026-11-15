@@ -4,7 +4,7 @@ import { haltIsOn } from "../halt.server";
 import { enqueueJob, listJobEvents, onlineAgents, readJob } from "../pc-pairing/store";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
-import { adrianBuildCommand, adrianHostedWorkspace, packageLabel, resolveBuildWorkspace, runCodingTurn, runHostedPrompt, type CodingMode } from "./hosted/acp-client.ts";
+import { adrianBuildCommand, adrianHostedWorkspace, closeHostedCodingSession, packageLabel, resolveBuildWorkspace, runCodingTurn, runHostedPrompt, type CodingMode } from "./hosted/acp-client.ts";
 import { snapshotHostedWorkspace } from "./hosted/shell.server.ts";
 import { recordKimiAttempt } from "./persist.ts";
 
@@ -44,8 +44,13 @@ export async function handleKimiSession(request: Request): Promise<Response> {
     if (!origin.ok) return json({ ok: false, error: origin.error }, 403);
     try {
       const ownerId = await ownerIdFromRequest(request);
+      const body = (await request.json().catch(() => ({}))) as { prompt?: unknown; cwd?: unknown; mode?: unknown; resumeSessionId?: unknown; fork?: unknown; action?: unknown };
+      if ((body as { action?: unknown }).action === "close") {
+        const sessionId = typeof body.resumeSessionId === "string" ? body.resumeSessionId.trim().slice(0, 80) : "";
+        if (!sessionId) return json({ ok: false, error: "session id is required to close the coding process." }, 400);
+        return json({ ok: true, closed: closeHostedCodingSession(sessionId), sessionId });
+      }
       if (await haltIsOn(ownerId)) return json({ ok: false, error: "Emergency stop is on. No Kimi session was queued." }, 403);
-      const body = (await request.json().catch(() => ({}))) as { prompt?: unknown; cwd?: unknown; mode?: unknown; resumeSessionId?: unknown; fork?: unknown };
       const prompt = typeof body.prompt === "string" ? body.prompt.trim().slice(0, MAX_PROMPT) : "";
       if (!prompt) return json({ ok: false, error: "prompt is required." }, 400);
       const requestedCwd = typeof body.cwd === "string" && body.cwd.trim() ? body.cwd.trim().slice(0, MAX_CWD) : undefined;
@@ -76,6 +81,10 @@ export async function handleKimiSession(request: Request): Promise<Response> {
             mcpServers: turn.mcpServers,
             package: packageLabel(turn.command),
             loginRequired: false,
+            processAlive: turn.processAlive === true,
+            reused: turn.reused === true,
+            clientCalls: turn.clientCalls || [],
+            processNote: turn.processNote || "",
             filesChanged,
             workspace,
             checkpoint,
@@ -111,7 +120,7 @@ export async function handleKimiSession(request: Request): Promise<Response> {
         agentId: agent.id,
         agentLabel: agent.label,
         status: job.status,
-        eventsUrl: `/api/mind/kimi/session?jobId=${encodeURIComponent(job.id)}`,
+        eventsUrl: `/api/mind/build/session?jobId=${encodeURIComponent(job.id)}`,
       }, 202);
     } catch (error) {
       const message = error instanceof Error ? error.message : "Unauthorized";

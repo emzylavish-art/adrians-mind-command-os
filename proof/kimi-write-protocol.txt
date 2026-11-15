@@ -1,0 +1,17 @@
+Kimi ACP file write facts, read from node_modules/@moonshot-ai/kimi-code/dist/main.mjs on 2026-11-14.
+
+Permission option kinds: allow_once, allow_always, reject_once, reject_always.
+Permission response: { outcome: { outcome: "selected", optionId } } or { outcome: { outcome: "cancelled" } }.
+optionId must be the id from the request options, not the invented string allow-once.
+
+Client methods:
+- session/request_permission
+- fs/write_text_file params: sessionId, path, content. Response is {}.
+- fs/read_text_file params: sessionId, path, line, limit. Response: { content }.
+
+initialize clientCapabilities default is fs read/write false and terminal false.
+If fsWriteTextFile is false, Kimi writes with its own filesystem. If true, it calls the client and does not fall back when the client errors.
+
+A turn on grok-4.20-0309-reasoning narrated an edit to scratch.md and included {"path":"scratch.md"} in the text, but the file on disk did not change.
+
+Follow-up probe: grok-4.20-0309-reasoning produced only fs/read_text_file. Direct xAI probes showed grok-4.7 emits a write tool call. After switching the coding model to grok-4.7 and advertising client fs write, a turn called fs/write_text_file and scratch.md changed. The Human Code to Build path then returned "Changed scratch.md" and "+journey-return". The first append was glued to the previous line; the second line was written on its own line.

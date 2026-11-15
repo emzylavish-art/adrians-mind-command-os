@@ -70,6 +70,62 @@ export function MessageBody({
   /** Optional: reportFailure for top View log — mount wiring may live outside this lane. */
   onFailure?: (message: string, retry: () => void) => void;
 }) {
+  return <AnswerBody text={text} images={images} onEditImagine={onEditImagine} onSaveImage={onSaveImage} onDownloadImage={onDownloadImage} onFailure={onFailure} />;
+}
+
+export function AnswerTabs({
+  text,
+  images,
+  onEditImagine,
+  onSaveImage,
+  onDownloadImage,
+  onFailure,
+}: {
+  text: string;
+  images?: MsgImage[];
+  onEditImagine?: (src: string) => void;
+  onSaveImage?: (src: string, alt: string) => void;
+  onDownloadImage?: (src: string, alt: string) => void;
+  onFailure?: (message: string, retry: () => void) => void;
+}) {
+  const [tab, setTab] = useState<"answer" | "links" | "images">("answer");
+  const links = Array.from(text.matchAll(/https?:\/\/[^\s)>\]]+/g)).map((match) => match[0].replace(/[.,;]+$/, ""));
+  const pictures = images ?? [];
+  return (
+    <div data-testid="answer-tabs">
+      <div className="mb-2 flex flex-wrap gap-2" role="tablist" aria-label="Answer, links, and images">
+        {(["answer", "links", "images"] as const).map((item) => (
+          <button key={item} type="button" role="tab" aria-selected={tab === item} className={`min-h-11 rounded-panel border px-3 text-xs ${tab === item ? "border-accent" : "border-line text-muted"}`} onClick={() => setTab(item)}>
+            {item === "answer" ? "Answer" : item === "links" ? `Links${links.length ? ` ${links.length}` : ""}` : `Images${pictures.length ? ` ${pictures.length}` : ""}`}
+          </button>
+        ))}
+      </div>
+      {tab === "links" ? (
+        links.length ? <ul className="space-y-1">{links.map((href) => <li key={href}><a className="text-accent" href={href} target="_blank" rel="noreferrer">{href}</a></li>)}</ul> : <p className="text-sm text-muted">No links were returned with this answer.</p>
+      ) : tab === "images" ? (
+        pictures.length ? pictures.map((image, index) => <InlineImage key={`${image.dataUrl}-${index}`} src={image.dataUrl} alt={image.name || `Image ${index + 1}`} onEditImagine={onEditImagine} onSave={onSaveImage} onDownload={onDownloadImage} />) : <p className="text-sm text-muted">No images were returned with this answer.</p>
+      ) : (
+        <AnswerBody text={text} images={images} onEditImagine={onEditImagine} onSaveImage={onSaveImage} onDownloadImage={onDownloadImage} onFailure={onFailure} />
+      )}
+    </div>
+  );
+}
+
+function AnswerBody({
+  text,
+  images,
+  onEditImagine,
+  onSaveImage,
+  onDownloadImage,
+  onFailure,
+}: {
+  text: string;
+  images?: MsgImage[];
+  onEditImagine?: (src: string) => void;
+  onSaveImage?: (src: string, alt: string) => void;
+  onDownloadImage?: (src: string, alt: string) => void;
+  onFailure?: (message: string, retry: () => void) => void;
+}) {
   const blocks = splitBlocks(text);
   const [copied, setCopied] = useState<number | null>(null);
   const [copyState, setCopyState] = useState<CopyCodeState>({ status: "idle" });

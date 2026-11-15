@@ -1,0 +1,25 @@
+Reference: /home/ubuntu/upload/ScreenRecording_11-12-202611-48-14AM_1.mp4
+Owner sent this as a visual reference on 2026-11-13. Do not treat it as Adrian's current product.
+
+Grok phone composer (about 1:03):
+- Top: menu, Ask, Imagine, Build, compose icon
+- Dark screen, faint mark in the center
+- Composer: plus, Fast, microphone, white Speak pill
+- Adrian keeps Chat, Build, and EVE. Do not rename those to Ask, Imagine, Build.
+
+Grok Speak call (about 1:05):
+- Almost black screen
+- Small waveform and the words "Start talking" near the lower third
+- Pill row: screen share, speaker, microphone, settings, transcript
+- Bottom bar: plus, "Ask Anything" field, large red circular end-call button
+
+Voice settings sheet (about 1:13):
+- Title Voice Settings, close button
+- Voice row, currently Eve
+- Personality circles
+- Voice activation choices
+
+Adrian mapping:
+- Keep the Adrian logo and Chat / Build / EVE switch.
+- Match the call layout, not the Grok logo or Get Premium button.
+- Screen share, speaker mute, mic mute, settings, transcript, typed ask, and red end button must be real controls.

@@ -26,13 +26,15 @@ html[data-theme="light"] .gpt-rail nav a.nav-item {
   }
   [data-testid="build-workspace"] nav[aria-label="Build panels"] {
     display: flex;
+    flex-wrap: wrap;
     gap: 0.35rem;
-    overflow-x: auto;
+    overflow: visible;
     padding-bottom: 0.25rem;
   }
   [data-testid="build-workspace"] nav[aria-label="Build panels"] button {
-    flex: 0 0 auto;
+    flex: 1 1 7.5rem;
     width: auto;
+    white-space: normal;
   }
 }
 
@@ -692,6 +694,10 @@ html[data-theme="light"] .gpt-rail nav a.nav-item {
 }
 
 .speak-call {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  overflow: auto;
   justify-content: flex-end;
   gap: 0.85rem;
   padding-bottom: calc(1.1rem + env(safe-area-inset-bottom));
@@ -832,11 +838,11 @@ html.eve-call-open body > *:not([data-testid="speak-stage"]) {
 }
 
 .speak-sheet {
-  position: absolute;
-  right: 0.8rem;
-  bottom: 8.5rem;
-  left: 0.8rem;
-  z-index: 3;
+  position: fixed;
+  inset: 0.7rem;
+  z-index: 6;
+  max-height: calc(100dvh - 1.4rem);
+  overflow: auto;
   display: grid;
   gap: 0.7rem;
   border-radius: 1.4rem;
@@ -1030,6 +1036,7 @@ html.eve-call-open body > *:not([data-testid="speak-stage"]) {
   }
   .main-stage .code-ide-status {
     display: flex !important;
+    flex-wrap: wrap;
     align-items: center;
     gap: 0.5rem;
     padding: 0.5rem;
@@ -1147,9 +1154,18 @@ html.eve-call-open body > *:not([data-testid="speak-stage"]) {
 
 .intelligence-main {
   display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  width: 100%;
+  max-width: 100%;
   gap: 0.75rem;
   align-content: start;
   min-width: 0;
+}
+
+.intelligence-main > *,
+.page-shell > * {
+  min-width: 0;
+  max-width: 100%;
 }
 
 .intelligence-group {
@@ -1157,8 +1173,19 @@ html.eve-call-open body > *:not([data-testid="speak-stage"]) {
   display: block;
   border: 1px solid rgb(255 255 255 / 0.08);
   border-radius: 14px;
-  background: #141416;
+  background-color: #141416;
+  background-image: none;
   padding: 0.85rem;
+  min-width: 0;
+  max-width: 100%;
+  overflow-wrap: anywhere;
+}
+
+[data-testid="owner-flow"],
+[data-testid="owner-flow"] .rounded-panel,
+.intelligence-group .rounded-panel {
+  background-image: none !important;
+  background-color: #101012 !important;
 }
 
 .intelligence-group h3 {

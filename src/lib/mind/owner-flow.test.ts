@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
-import { CANNOT_RUN, HOSTED_ACTIONS, canRunApproved, exactAction, recordingContinuesAfterTabClose } from "./owner-flow.ts";
+import { CANNOT_RUN, DESKTOP_ACTIONS, HOSTED_ACTIONS, canRunApproved, canRunDesktop, exactAction, exactDesktopAction, recordingContinuesAfterTabClose } from "./owner-flow.ts";
 import { recordingEndsWithDocument } from "./task-recording.ts";
 
 describe("owner flow", () => {
@@ -23,8 +23,12 @@ describe("owner flow", () => {
   it("allows a run only when the approval matches that exact action", () => {
     assert.equal(canRunApproved({ halted: false, approved: exactAction("file_write"), exact: exactAction("file_read") }).ok, false);
     assert.equal(canRunApproved({ halted: false, approved: exactAction("terminal"), exact: exactAction("terminal") }).ok, true);
-    assert.equal(CANNOT_RUN.includes("Mouse"), true);
-    assert.equal(CANNOT_RUN.includes("Windows desktop software"), true);
+    assert.equal(CANNOT_RUN.includes("Microphone after the browser closes"), true);
+    assert.equal(CANNOT_RUN.includes("Browser pointer on your PC"), true);
+    assert.equal(DESKTOP_ACTIONS.map((item) => item.id).includes("mouse"), true);
+    assert.equal(canRunDesktop({ halted: false, paired: false, approved: exactDesktopAction("mouse"), exact: exactDesktopAction("mouse") }).ok, false);
+    assert.match(canRunDesktop({ halted: false, paired: false, approved: exactDesktopAction("mouse"), exact: exactDesktopAction("mouse") }).message, /No computer is paired/);
+    assert.equal(canRunDesktop({ halted: true, paired: true, approved: exactDesktopAction("keyboard"), exact: exactDesktopAction("keyboard") }).ok, false);
     assert.equal(recordingContinuesAfterTabClose(), false);
     assert.equal(recordingEndsWithDocument({ type: "pagehide" }), true);
     assert.equal(recordingEndsWithDocument({ type: "click" }), false);

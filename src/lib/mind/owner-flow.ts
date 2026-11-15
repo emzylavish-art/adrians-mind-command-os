@@ -8,13 +8,34 @@ export const HOSTED_ACTIONS = [
 export type HostedActionId = (typeof HOSTED_ACTIONS)[number]["id"];
 
 export const CANNOT_RUN = [
-  "Windows desktop software",
-  "Mouse",
-  "Keyboard",
   "Browser pointer on your PC",
   "Microphone after the browser closes",
-  "Files on your Windows PC",
 ] as const;
+
+export const INSTALLER_HREF = "/downloads/AdriansMind-Setup.exe";
+
+export const DESKTOP_ACTIONS = [
+  { id: "mouse", label: "Mouse" },
+  { id: "keyboard", label: "Keyboard" },
+  { id: "screen", label: "Screen" },
+  { id: "pc_file", label: "Files on your Windows PC" },
+] as const;
+
+export type DesktopActionId = (typeof DESKTOP_ACTIONS)[number]["id"];
+
+export function exactDesktopAction(id: DesktopActionId): string {
+  if (id === "mouse") return "mouse move 0,0";
+  if (id === "keyboard") return "keyboard type desktop-ok";
+  if (id === "screen") return "screen read approved-window";
+  return "pc_file read Desktop\\adrian-proof.txt";
+}
+
+export function canRunDesktop(input: { halted: boolean; paired: boolean; approved: string | null; exact: string }): { ok: boolean; message: string } {
+  if (input.halted) return { ok: false, message: "Emergency stop is on. Nothing ran." };
+  if (!input.paired) return { ok: false, message: "No computer is paired. Nothing ran on a Windows PC." };
+  if (input.approved !== input.exact) return { ok: false, message: "Approve this exact desktop action first. Nothing ran." };
+  return { ok: false, message: "The browser does not move the mouse or type on the PC. The paired companion runs that action. Nothing ran here." };
+}
 
 export const DEMO_FILE = "owner-flow-demo.txt";
 export const DEMO_COMMAND = "printf hosted-ok";
