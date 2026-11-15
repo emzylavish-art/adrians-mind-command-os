@@ -912,7 +912,7 @@ export function CommandApp() {
   const [chatProjectId, setChatProjectId] = useState<string | null>(null);
   const [activityQuery, setActivityQuery] = useState("");
   const [openFileId, setOpenFileId] = useState<string | null>(null);
-  const [libraryBand, setLibraryBand] = useState<"files" | "preview">("files");
+  const [libraryBand, setLibraryBand] = useState<"files" | "preview" | "media">("files");
   const [showArchived, setShowArchived] = useState(false);
   const [editId, setEditId] = useState<string | null>(null);
   const [editText, setEditText] = useState("");
@@ -6242,6 +6242,7 @@ export function CommandApp() {
                   {([
                     ["files", "Files"],
                     ["preview", "Preview"],
+                    ["media", "Media"],
                   ] as const).map(([id, label]) => (
                     <button key={id} type="button" className={`min-h-11 rounded-panel border px-3 text-sm ${libraryBand === id ? "border-accent bg-accent text-accent-ink" : "border-line"}`} aria-pressed={libraryBand === id} onClick={() => setLibraryBand(id)}>{label}</button>
                   ))}
@@ -6296,6 +6297,14 @@ export function CommandApp() {
                       <p className="mt-3 text-xs text-muted">REA inspect-artifact often rejects plain text. A failure stays a failure. It is not marked inspected.</p>
                     </div>
                   ))}
+                </div>
+                <div className="dense-card p-4 text-sm" hidden={libraryBand !== "media"} data-testid="library-media">
+                  <p className="font-semibold">HyperFrames export</p>
+                  <p className="mt-2 text-xs text-muted">This is the local render already counted: 60 of 60 frames, 2.0 seconds, 30 fps, 1280 by 720. HyperFrames 0.9.52 wrote it. The app can play this file. It does not render a new sequence from this page.</p>
+                  <video className="mt-3 w-full max-w-full rounded-panel bg-black" controls preload="metadata" src="/media/hyperframes/one-sequence.mp4">
+                    <a href="/media/hyperframes/one-sequence.mp4">Open the export</a>
+                  </video>
+                  <p className="mt-3 text-xs text-muted">Closeout still needs a publisher certificate and signtool or osslsigncode, a paired Windows PC, the Notion page ID, and the Stage 0 phrase. Those values were not given. This export does not supply them.</p>
                 </div>
               </div>
             </section>

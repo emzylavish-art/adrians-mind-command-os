@@ -38,7 +38,7 @@ export function SharedFleet() {
         </div>
         <div className="rounded-panel border border-line px-3 py-2 text-sm">
           <p className="font-semibold">Blocked without your machine</p>
-          <p className="mt-1 text-muted">Windows installer, desktop control, HyperFrames, a local model download, and a production deploy stay blocked. No bot can close those from this preview.</p>
+          <p className="mt-1 text-muted">The counted HyperFrames export is in Library, Media. This page still cannot render a new sequence. Windows signing, a paired PC, a local model download, and a production deploy stay blocked. No bot can close those from this preview.</p>
         </div>
       </div>
     </section>
