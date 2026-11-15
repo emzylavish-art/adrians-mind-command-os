@@ -4980,7 +4980,7 @@ export function CommandApp() {
             </div>
           )}
           {view === "command" && (
-           <div className="gpt-home mx-auto flex min-h-full max-w-3xl flex-col justify-end gap-4 p-4 md:p-6">
+           <div className="gpt-home mx-auto flex min-h-full w-full max-w-none flex-col justify-end gap-4 p-4 md:p-6">
               <div className="masthead flex items-center gap-3">
                 <div className="flex flex-wrap items-end justify-between gap-3">
                   <div>
@@ -5144,8 +5144,9 @@ export function CommandApp() {
                       type="button"
                       className="inline-flex min-h-11 items-center gap-2 rounded-panel border border-line px-3 text-sm"
                       onClick={() => {
-                        setContextOpen((open) => !open);
                         setToolsOpen(false);
+                        setContextOpen((open) => !open);
+                        document.querySelectorAll("details.composer-more[open]").forEach((node) => node.removeAttribute("open"));
                       }}
                     >
                       <Database className="size-4" /> Add Context
@@ -5154,8 +5155,9 @@ export function CommandApp() {
                       type="button"
                       className="inline-flex min-h-11 items-center gap-2 rounded-panel border border-line px-3 text-sm"
                       onClick={() => {
-                        setToolsOpen((open) => !open);
                         setContextOpen(false);
+                        setToolsOpen((open) => !open);
+                        document.querySelectorAll("details.composer-more[open]").forEach((node) => node.removeAttribute("open"));
                       }}
                     >
                       <Wrench className="size-4" /> Tools
@@ -6355,7 +6357,7 @@ export function CommandApp() {
             </section>
           )}
           {view === "help" && (
-            <section className="page-shell mx-auto max-w-3xl space-y-4">
+            <section className="page-shell mx-auto w-full max-w-none space-y-4">
               <div className="page-hero">
                 <div className="flex items-center gap-3">
                   <img src="/brand/marks/help.png" alt="" className="size-8 rounded-lg" />
@@ -6399,7 +6401,7 @@ export function CommandApp() {
           )}
 
           {view === "settings" && (
-            <section className="page-shell intelligence-main mx-auto max-w-3xl">
+            <section className="page-shell intelligence-main mx-auto w-full max-w-none">
               <div className="page-hero">
                 <div className="flex items-center gap-3">
                   <img src="/brand/marks/settings.png" alt="" className="size-8 rounded-lg" />
@@ -7358,7 +7360,7 @@ function ChatPane({
           {active?.messages.map((msg) => {
             const last = active.messages.at(-1);
             return (
-            <article key={msg.id} className={`max-w-3xl rounded-panel border border-line/70 px-3 py-2 text-sm shadow-[0_10px_28px_rgb(0_0_0/0.28)] ${msg.role === "user" ? "ml-auto bg-surface-2/90" : "bg-surface/90 backdrop-blur"}`}>
+            <article key={msg.id} className={`w-full max-w-none rounded-panel border border-line/70 px-3 py-2 text-sm shadow-[0_10px_28px_rgb(0_0_0/0.28)] ${msg.role === "user" ? "bg-surface-2/90" : "bg-surface/90 backdrop-blur"}`}>
               <p className="mb-1 text-xs text-muted">{msg.role === "user" ? "You" : msg.model || "Grok 4.5"} · {stamp(msg.at)}</p>
               {editingId === msg.id ? (
                 <form
@@ -7448,7 +7450,7 @@ function ChatPane({
             );
           })}
           {toolTimeline.length > 0 && (
-            <div className="max-w-3xl rounded-panel border border-line bg-surface p-3" data-testid="executing-tools">
+            <div className="w-full max-w-none rounded-panel border border-line bg-surface p-3" data-testid="executing-tools">
               {(() => {
                 const counts = timelineCounts(toolTimeline);
                 return (
@@ -7483,13 +7485,13 @@ function ChatPane({
             </div>
           )}
           {busy && liveText && (
-            <article className="max-w-3xl rounded-panel border border-line bg-surface px-3 py-2 text-sm">
+            <article className="w-full max-w-none rounded-panel border border-line bg-surface px-3 py-2 text-sm">
               <p className="mb-1 text-xs text-muted">{modelTier} · writing</p>
               <p className="whitespace-pre-wrap">{liveText}</p>
             </article>
           )}
           {busy && !liveText && toolTimeline.length === 0 && (
-            <div className="max-w-3xl space-y-2 rounded-panel border border-line/70 bg-surface/80 p-3" aria-live="polite">
+            <div className="w-full max-w-none space-y-2 rounded-panel border border-line/70 bg-surface/80 p-3" aria-live="polite">
               <p className="text-xs text-muted">{active?.messages.at(-1)?.content.startsWith("/video") ? "Rendering the video." : active?.messages.at(-1)?.content.startsWith("/imagine") ? "Creating the image." : "Waiting for Grok."}</p>
               <div className="skeleton h-3" style={{ width: "75%" }} />
               <div className="skeleton h-3" style={{ width: "50%" }} />
@@ -7581,8 +7583,8 @@ function ChatPane({
                 <button type="button" className="inline-flex min-h-11 items-center gap-2 rounded-panel border border-line/80 bg-white/5 px-3 text-sm" disabled={busy || halted} onClick={onImagine}>
                   Imagine
                 </button>
-                <button type="button" className="min-h-11 rounded-panel border border-line/80 bg-white/5 px-3 text-sm" onClick={() => { setContext((open) => !open); setTools(false); }}>Add Context</button>
-                <button type="button" className="min-h-11 rounded-panel border border-line/80 bg-white/5 px-3 text-sm" onClick={() => { setTools((open) => !open); setContext(false); }}>Tools</button>
+                <button type="button" className="min-h-11 rounded-panel border border-line/80 bg-white/5 px-3 text-sm" onClick={() => { setTools(false); setContext((open) => !open); document.querySelectorAll("details.composer-more[open]").forEach((node) => node.removeAttribute("open")); }}>Add Context</button>
+                <button type="button" className="min-h-11 rounded-panel border border-line/80 bg-white/5 px-3 text-sm" onClick={() => { setContext(false); setTools((open) => !open); document.querySelectorAll("details.composer-more[open]").forEach((node) => node.removeAttribute("open")); }}>Tools</button>
                 <button type="button" className="min-h-11 rounded-panel border border-line/80 bg-white/5 px-3 text-sm" onClick={onDelete} disabled={!active}>Delete</button>
                 <button type="button" className="min-h-11 rounded-panel border border-line/80 bg-white/5 px-3 text-sm" onClick={() => onMemoryChange(memoryChoice === "on" ? "off" : "on")} disabled={!active || busy || halted} aria-label={memoryChoice === "on" ? "Memory on for this chat" : "Don't use memory for this chat"}>{memoryChoice === "on" ? "Memory on" : "Memory off"}</button>
                 <ComposerEffortControl mode={composerEffort} onChoose={onComposerEffort} />

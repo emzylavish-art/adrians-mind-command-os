@@ -2099,9 +2099,15 @@ form.thread-composer {
     overflow: visible !important;
   }
 
-  .thread-shell > section {
-    overflow: auto !important;
-  }
+.thread-shell > section {
+  overflow: auto !important;
+}
+
+.thread-shell .chat-head h2 {
+  white-space: normal !important;
+  overflow: visible !important;
+  text-overflow: unset !important;
+}
 
   .thread-shell .composer-toolbar {
     display: flex !important;
@@ -2175,8 +2181,8 @@ form.thread-composer {
 }
 
 .main-stage .page-shell.mx-auto {
-  width: min(100%, 48rem) !important;
-  max-width: 48rem !important;
+  width: 100% !important;
+  max-width: none !important;
   margin-inline: auto !important;
 }
 

@@ -6977,3 +6977,56 @@ html[data-theme="light"] aside.rail > div.border-t {
     height: 2.75rem !important;
   }
 }
+
+/* The field stays in view while typing. One open panel must not cover the reply. */
+.thread-shell > section {
+  min-width: 0;
+}
+.thread-shell article,
+.thread-shell [data-testid="executing-tools"] {
+  width: 100% !important;
+  max-width: none !important;
+  overflow: visible !important;
+}
+.thread-shell article p,
+.thread-shell article .whitespace-pre-wrap {
+  white-space: pre-wrap !important;
+  overflow-wrap: anywhere;
+}
+.gpt-home [data-composer="floating"],
+.gpt-home section.floating-composer.composer-dock,
+.thread-shell form.thread-composer {
+  position: sticky !important;
+  bottom: 0.5rem !important;
+  z-index: 30;
+  max-height: 46vh !important;
+  overflow: auto !important;
+}
+@media (min-width: 768px) {
+  .gpt-home [data-testid="composer-effort"],
+  .thread-shell [data-testid="composer-effort"] {
+    max-height: 4.5rem;
+    overflow: auto;
+  }
+}
+
+@media (max-width: 767.98px) {
+  .gpt-home form {
+    display: flex !important;
+    align-items: center !important;
+    width: 100% !important;
+  }
+  .gpt-home form textarea[aria-label="Command"] {
+    flex: 1 1 auto !important;
+    min-width: 0 !important;
+    width: 1% !important;
+    max-width: calc(100vw - 8.5rem) !important;
+  }
+  .gpt-home [data-composer="floating"],
+  .gpt-home section.floating-composer.composer-dock {
+    position: fixed !important;
+    left: 0.75rem !important;
+    right: 0.75rem !important;
+    bottom: calc(0.65rem + env(safe-area-inset-bottom)) !important;
+  }
+}
