@@ -6,8 +6,15 @@ import { requireUserId } from "../../auth/verify.server.ts";
 import { assertSameOrigin } from "../connectors/oauth-csrf.ts";
 import { adrianHostedWorkspace } from "./hosted/acp-client.ts";
 
-const ts = createRequire(import.meta.url)("typescript") as typeof import("typescript");
 const SECRET = /(^|\/)\.env($|\.)|(^|\/)credentials?\.(json|txt|pem)$/i;
+
+function loadTypeScript(): typeof import("typescript") | null {
+  try {
+    return createRequire(import.meta.url)("typescript") as typeof import("typescript");
+  } catch {
+    return null;
+  }
+}
 
 function json(body: unknown, status = 200) {
   return new Response(JSON.stringify(body), { status, headers: { "content-type": "application/json; charset=utf-8", "cache-control": "no-store" } });
@@ -31,6 +38,8 @@ function offsetAt(text: string, line: number, column: number): number {
 }
 
 export function completeSource(path: string, text: string, line: number, column: number): string[] {
+  const ts = loadTypeScript();
+  if (!ts) return [];
   const fileName = /\.(tsx?|jsx?|mjs)$/i.test(path) ? path : "file.ts";
   const options: import("typescript").CompilerOptions = {
     allowJs: true,
