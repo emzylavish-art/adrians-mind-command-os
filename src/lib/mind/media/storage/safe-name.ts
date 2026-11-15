@@ -41,6 +41,7 @@ export function sanitizeFolderSegments(segments: unknown): string[] {
 }
 
 export function sniffMime(bytes: Uint8Array, fallback = "application/octet-stream"): string {
+  if (bytes.length >= 2 && bytes[0] === 0x4d && bytes[1] === 0x5a) return "application/octet-stream";
   if (bytes.length >= 4) {
     if (bytes[0] === 0x89 && bytes[1] === 0x50 && bytes[2] === 0x4e && bytes[3] === 0x47) return "image/png";
     if (bytes[0] === 0xff && bytes[1] === 0xd8 && bytes[2] === 0xff) return "image/jpeg";
@@ -48,4 +49,11 @@ export function sniffMime(bytes: Uint8Array, fallback = "application/octet-strea
     if (bytes[0] === 0x52 && bytes[1] === 0x49 && bytes[2] === 0x46 && bytes[3] === 0x46) return "image/webp";
   }
   return fallback;
+}
+
+/** A .png name is not an image when the bytes are a Windows executable. */
+export function rejectDisguisedExecutable(fileName: string, bytes: Uint8Array): boolean {
+  const claimedImage = /\.(png|jpe?g|gif|webp)$/i.test(fileName);
+  const executable = bytes.length >= 2 && bytes[0] === 0x4d && bytes[1] === 0x5a;
+  return claimedImage && executable;
 }

@@ -3,7 +3,7 @@ import { resolveStorageAccessToken, isStorageAccountConnected } from "./credenti
 import { appendStorageAudit } from "./audit.ts";
 import { bumpLedgerUsed, readLedgerUsed, setLedgerUsed } from "./ledger.ts";
 import { createDefaultProviders } from "./providers/index.ts";
-import { sanitizeFolderSegments, sanitizeStorageFileName, sniffMime } from "./safe-name.ts";
+import { rejectDisguisedExecutable, sanitizeFolderSegments, sanitizeStorageFileName, sniffMime } from "./safe-name.ts";
 import {
   MAX_UPLOAD_BYTES,
   type AccountPublicStatus,
@@ -70,6 +70,9 @@ export async function storeMedia(input: StoreMediaInput, deps: RotationDeps = {}
   }
 
   const fileName = sanitizeStorageFileName(input.fileName);
+  if (rejectDisguisedExecutable(fileName, input.bytes)) {
+    return { ok: false, error: "That file is not an image. A renamed program was rejected.", code: "invalid_input" };
+  }
   const mimeType = input.mimeType?.trim() || sniffMime(input.bytes);
   const folderSegments = sanitizeFolderSegments(input.folderSegments ?? ["media"]);
   const config = loadStorageAccountsConfig(deps.configPath);

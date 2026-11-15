@@ -15,6 +15,35 @@ import type {
 
 export const WORKSPACE_KEY = "amcos.workspace.v1";
 const LEGACY_KEY = "amcos.chats.v1";
+const OWNER_EMAIL = "emzylavish@gmail.com";
+
+/** A real account never reads the shared preview key or another account's key. */
+export function accountWorkspaceKey(userId: string | null | undefined): string {
+  if (!userId || userId === "dev-user") return WORKSPACE_KEY;
+  const safe = userId.replace(/[^a-zA-Z0-9_-]/g, "").slice(0, 80);
+  return `${WORKSPACE_KEY}.u.${safe || "account"}`;
+}
+
+export function isPrimaryOwner(email: string | null | undefined): boolean {
+  return (email ?? "").trim().toLowerCase() === OWNER_EMAIL;
+}
+
+export function loadWorkspaceForAccount(
+  storage: Pick<Storage, "getItem">,
+  userId: string | null | undefined,
+  email?: string | null,
+): Workspace {
+  if (!userId) return emptyWorkspace();
+  const key = accountWorkspaceKey(userId);
+  const current = storage.getItem(key);
+  const raw = current ?? (userId !== "dev-user" && isPrimaryOwner(email) ? storage.getItem(WORKSPACE_KEY) : null);
+  if (!raw) return emptyWorkspace();
+  try {
+    return normalizeWorkspace(JSON.parse(raw));
+  } catch {
+    return emptyWorkspace();
+  }
+}
 
 export function emptyWorkspace(): Workspace {
   return { version: 1, halted: false, chats: [], memories: [], projects: [], files: [], usage: [], audit: [], ...emptyFleet() };

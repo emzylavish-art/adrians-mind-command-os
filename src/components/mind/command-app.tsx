@@ -220,6 +220,7 @@ import { runSkill, searchSkills, SKILLS } from "@/lib/mind/skills";
 import LocalSkillsTools from "@/components/mind/local-skills-tools";
 import { exportChat, prepareRegenerate, prepareRetry, renameChat, reviseUserTurn } from "@/lib/mind/transcript";
 import { useMindWorkspace } from "@/lib/mind/use-mind-workspace";
+import { useCurrentUser } from "@/lib/auth/use-current-user";
 import { COMPOSER_MODES, effortForModelTier, effortModelTier, loadComposerEffort, resolveSendPath, saveComposerEffort, type ComposerModeId } from "@/lib/mind/composer-modes";
 import { planRouting, readRatings, readRoutingMode, readRoutingPanel, ROUTING_MODE_LABEL, saveRating, writeRoutingMode, writeRoutingPanel, type ResponseRating, type RoutingMode } from "@/lib/mind/routing-modes";
 import { canSend } from "@/lib/mind/send-gate";
@@ -640,7 +641,9 @@ function shownChatTitle(chat: { title?: string; messages?: { role: string; conte
 }
 
 export function CommandApp() {
-  const { ws, setWs, ready, syncNote, serverHeld, saveError, retrySave } = useMindWorkspace();
+  const account = useCurrentUser();
+  const loopback = typeof window !== "undefined" && (window.location.hostname === "127.0.0.1" || window.location.hostname === "localhost");
+  const { ws, setWs, ready, syncNote, serverHeld, saveError, retrySave } = useMindWorkspace(account?.id ?? (loopback ? "dev-user" : null), account?.primaryEmail ?? null);
   const [view, setView] = useState<View>("command");
   const [homeAction, setHomeAction] = useState<"ask" | "image" | "video" | "write" | "search">("ask");
   const [settingsPane, setSettingsPane] = useState<null | "general" | "connections" | "voice" | "pages" | "data" | "safety" | "keys">(null);
@@ -945,6 +948,7 @@ export function CommandApp() {
   }, [ws.halted, ws.runs, voiceListening, speaking]);
 
   useEffect(() => {
+    if (statusSignedIn !== true) return;
     let canceled = false;
     void fetch("/api/mind/media/cloud/status", { credentials: "include" })
       .then((response) => response.json())
@@ -958,7 +962,7 @@ export function CommandApp() {
     return () => {
       canceled = true;
     };
-  }, []);
+  }, [statusSignedIn]);
 
   useEffect(() => {
     // Single store: hydrate from localStorage once; every badge reads the same snapshot.

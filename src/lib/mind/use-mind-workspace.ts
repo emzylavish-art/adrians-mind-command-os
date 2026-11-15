@@ -3,7 +3,7 @@ import { compactWorkspaceImages, createIndexedDbBlobStore, hydrateWorkspaceImage
 import { loadMindCopy, saveMindCopy } from "./server";
 import { chooseServerSync } from "./sync";
 import type { Workspace } from "./types";
-import { emptyWorkspace, loadWorkspace, WORKSPACE_KEY } from "./workspace";
+import { accountWorkspaceKey, emptyWorkspace, loadWorkspaceForAccount, WORKSPACE_KEY } from "./workspace";
 import { SAVE_FAIL, saveFailureMessage } from "./save-error";
 
 function hasContent(ws: Workspace) {
@@ -16,7 +16,7 @@ function mergeStoredAgents(ws: Workspace, stored: Workspace): Workspace {
 }
 
 
-export function useMindWorkspace() {
+export function useMindWorkspace(userId: string | null = "dev-user", email: string | null = null) {
   const [ws, setWs] = useState<Workspace>(emptyWorkspace);
   const [ready, setReady] = useState(false);
   const [syncNote, setSyncNote] = useState("Browser copy. Server copy has not been checked.");
@@ -31,7 +31,7 @@ export function useMindWorkspace() {
   useEffect(() => {
     let cancel = false;
     void (async () => {
-      const localRaw = loadWorkspace(localStorage);
+      const localRaw = userId ? loadWorkspaceForAccount(localStorage, userId, email) : emptyWorkspace();
       let local = localRaw;
       try {
         local = (await hydrateWorkspaceImages(localRaw, blobStore.current)) as Workspace;
@@ -91,7 +91,7 @@ export function useMindWorkspace() {
     return () => {
       cancel = true;
     };
-  }, []);
+  }, [userId, email]);
 
   useEffect(() => {
     if (!ready) return;
@@ -99,7 +99,7 @@ export function useMindWorkspace() {
     const write = () => {
       void (async () => {
         let persisted = ws;
-        const stored = loadWorkspace(localStorage);
+        const stored = userId ? loadWorkspaceForAccount(localStorage, userId, email) : emptyWorkspace();
         const missingAgents = stored.agents.filter((agent) => !persisted.agents.some((item) => item.id === agent.id));
         if (missingAgents.length > 0) persisted = { ...persisted, agents: [...persisted.agents, ...missingAgents] };
         try {
@@ -108,7 +108,9 @@ export function useMindWorkspace() {
           persisted = persisted;
         }
         if (cancelled) return;
-        localStorage.setItem(WORKSPACE_KEY, JSON.stringify(persisted));
+        if (!userId) return;
+        localStorage.setItem(accountWorkspaceKey(userId), JSON.stringify(persisted));
+        if (userId === "dev-user") localStorage.setItem(WORKSPACE_KEY, JSON.stringify(persisted));
       })();
     };
     const id = window.setTimeout(write, 250);
@@ -118,7 +120,7 @@ export function useMindWorkspace() {
       window.clearTimeout(id);
       window.removeEventListener("pagehide", write);
     };
-  }, [ready, ws]);
+  }, [ready, ws, userId, email]);
 
   useEffect(() => {
     if (!ready || !followServer.current) return;
