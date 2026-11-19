@@ -123,7 +123,7 @@ export function KimiDeviceConnect() {
               <div className="plugin-link__main">
                 {"image" in plugin ? <img className="service-mark" src={plugin.image} alt="" width={28} height={28} /> : <span className="service-mark" style={{ background: plugin.color, color: "#fff" }} aria-hidden="true">{plugin.mark}</span>}
                 <div className="min-w-0">
-                  {"href" in plugin && plugin.href ? <a className="font-semibold underline" href={plugin.href} target="_blank" rel="noreferrer">{plugin.name}</a> : <p className="font-semibold">{plugin.name}</p>}
+                  {"href" in plugin && plugin.href ? <a className="inline-flex min-h-11 items-center font-semibold underline" href={plugin.href} target="_blank" rel="noreferrer">{plugin.name}</a> : <p className="font-semibold">{plugin.name}</p>}
                   <p className="text-sm text-muted">{plugin.description}</p>
                 </div>
               </div>

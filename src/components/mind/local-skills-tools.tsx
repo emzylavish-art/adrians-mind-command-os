@@ -133,7 +133,7 @@ export default function LocalSkillsTools({ skills, enabledSkills }: Props) {
           Request (local classification only)
           <textarea name="request" className={fieldClass} rows={3} maxLength={2000} value={request} onChange={(event) => setRequest(event.target.value)} />
         </label>
-        <div className="flex gap-3">
+        <div className="local-skills-actions flex gap-3">
           <button type="submit">Classify locally</button>
           <button type="button" onClick={() => { setRequest(""); setDecision(null); }}>Clear</button>
         </div>
@@ -204,7 +204,7 @@ export default function LocalSkillsTools({ skills, enabledSkills }: Props) {
 
           {editorDirty && <p role="status">Editor text has not been appended to the library. Saving now will save only library versions.</p>}
           {libraryDirty && <p role="status">Library changes are in memory and need an explicit save.</p>}
-          <div className="flex flex-wrap gap-3">
+          <div className="local-skills-actions flex flex-wrap gap-3">
             <button
               type="button"
               disabled={!content.title.trim() || (selected ? full : library.drafts.length >= LIMITS.drafts)}

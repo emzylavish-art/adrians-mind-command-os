@@ -7064,3 +7064,21 @@ html[data-theme="light"] .main-stage .shared-fleet .fleet-department {
   background-color: var(--mind-elevated, #fff) !important;
   border-color: var(--mind-border, rgb(40 57 86 / 0.14)) !important;
 }
+
+/* Audit baseline: navigation and local-draft controls remain comfortably
+   tappable without changing their actions. */
+aside.rail nav button,
+aside.rail nav a.nav-item {
+  min-height: 2.75rem !important;
+}
+
+.local-skills-actions > button {
+  min-height: 2.75rem;
+  padding-inline: 0.75rem;
+}
+
+details.intelligence-group > summary {
+  display: flex;
+  min-height: 2.75rem;
+  align-items: center;
+}

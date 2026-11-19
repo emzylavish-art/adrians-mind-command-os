@@ -18,6 +18,7 @@ const viewports = [
   { name: "desktop", width: 1440, height: 1000 },
   { name: "mobile", width: 390, height: 844, isMobile: true },
 ];
+const themes = ["dark", "light"];
 
 // These are navigation-only controls. Do not add controls with side effects.
 const primaryViews = ["Build", "Intelligence", "Research", "Projects", "Library", "Plugins", "Scheduled"];
@@ -36,7 +37,12 @@ async function layoutProblems(page) {
       .filter((element) => {
         const box = element.getBoundingClientRect();
         const style = getComputedStyle(element);
-        return box.width > 0 && box.height > 0 && style.visibility !== "hidden" && style.display !== "none";
+        return box.width > 0
+          && box.height > 0
+          && style.visibility !== "hidden"
+          && style.display !== "none"
+          && !element.classList.contains("sr-only")
+          && element.getAttribute("aria-hidden") !== "true";
       });
     const overflow = elements
       .filter((element) => element.getBoundingClientRect().right > width + 1 || element.getBoundingClientRect().left < -1)
@@ -64,14 +70,15 @@ async function layoutProblems(page) {
   });
 }
 
-async function auditState(page, viewportName, label, report) {
+async function auditState(page, viewportName, theme, label, report) {
   await page.waitForTimeout(250);
   const layout = await layoutProblems(page);
   const accessibility = await new AxeBuilder({ page }).analyze();
-  const shot = `${viewportName}-${slug(label)}.png`;
+  const shot = `${viewportName}-${theme}-${slug(label)}.png`;
   await page.screenshot({ path: resolve(artifactDir, shot), fullPage: false });
   report.states.push({
     viewport: viewportName,
+    theme,
     label,
     screenshot: shot,
     layout,
@@ -107,33 +114,37 @@ try {
     // axe opens an isolated helper page while it evaluates the document, so it
     // requires a BrowserContext rather than browser.newPage().
     const context = await browser.newContext({ viewport: { width: viewport.width, height: viewport.height }, isMobile: viewport.isMobile });
-    const page = await context.newPage();
-    await page.goto(baseUrl, { waitUntil: "domcontentloaded", timeout: 45_000 });
-    await page.waitForTimeout(1_000);
-    await auditState(page, viewport.name, "Chat home", report);
+    for (const theme of themes) {
+      const page = await context.newPage();
+      await page.goto(baseUrl, { waitUntil: "domcontentloaded", timeout: 45_000 });
+      await page.waitForTimeout(1_000);
+      await page.evaluate((nextTheme) => { document.documentElement.dataset.theme = nextTheme; }, theme);
+      await auditState(page, viewport.name, theme, "Chat home", report);
 
-    for (const label of [...primaryViews, ...moreViews]) {
+      for (const label of [...primaryViews, ...moreViews]) {
+        try {
+          if (viewport.isMobile) {
+            const openMenu = page.getByRole("button", { name: "Open menu" });
+            if (await openMenu.count()) await openMenu.click();
+          }
+          await openView(page, label, moreViews.includes(label));
+          await auditState(page, viewport.name, theme, label, report);
+        } catch (error) {
+          report.failures.push({ viewport: viewport.name, theme, label, error: error instanceof Error ? error.message : String(error) });
+        }
+      }
+
       try {
         if (viewport.isMobile) {
           const openMenu = page.getByRole("button", { name: "Open menu" });
           if (await openMenu.count()) await openMenu.click();
         }
-        await openView(page, label, moreViews.includes(label));
-        await auditState(page, viewport.name, label, report);
+        await page.locator("aside button[aria-label='Open Settings']").click();
+        await auditState(page, viewport.name, theme, "Settings", report);
       } catch (error) {
-        report.failures.push({ viewport: viewport.name, label, error: error instanceof Error ? error.message : String(error) });
+        report.failures.push({ viewport: viewport.name, theme, label: "Settings", error: error instanceof Error ? error.message : String(error) });
       }
-    }
-
-    try {
-      if (viewport.isMobile) {
-        const openMenu = page.getByRole("button", { name: "Open menu" });
-        if (await openMenu.count()) await openMenu.click();
-      }
-      await page.locator("aside button[aria-label='Open Settings']").click();
-      await auditState(page, viewport.name, "Settings", report);
-    } catch (error) {
-      report.failures.push({ viewport: viewport.name, label: "Settings", error: error instanceof Error ? error.message : String(error) });
+      await page.close();
     }
     await context.close();
   }
