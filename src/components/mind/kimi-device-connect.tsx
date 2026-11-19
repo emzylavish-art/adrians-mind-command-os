@@ -25,7 +25,6 @@ const OFFICIAL = [
 ] as const;
 
 const ADDED_KEY = "adrian-added-plugins";
-const DARK_MARK_TEXT = new Set(["kimi-datasource"]);
 
 export function KimiDeviceConnect() {
   const [mode, setMode] = useState<"oauth" | "key">("oauth");
@@ -122,7 +121,7 @@ export function KimiDeviceConnect() {
           return (
             <article key={plugin.id} className="plugin-link">
               <div className="plugin-link__main">
-                {"image" in plugin ? <img className="service-mark" src={plugin.image} alt="" width={28} height={28} /> : <span className="service-mark" style={{ background: plugin.color, color: DARK_MARK_TEXT.has(plugin.id) ? "#fff" : "#111827" }} aria-hidden="true">{plugin.mark}</span>}
+                <img className="service-mark" src={plugin.image} alt="" width={28} height={28} />
                 <div className="min-w-0">
                   {"href" in plugin && plugin.href ? <a className="inline-flex min-h-11 items-center font-semibold underline" href={plugin.href} target="_blank" rel="noreferrer">{plugin.name}</a> : <p className="font-semibold">{plugin.name}</p>}
                   <p className="text-sm text-muted">{plugin.description}</p>
