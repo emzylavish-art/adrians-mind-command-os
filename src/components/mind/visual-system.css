@@ -295,6 +295,84 @@ html[data-theme="light"] .thread-shell article {
   letter-spacing: 0.04em;
 }
 
+.runtime-status {
+  width: fit-content;
+  padding: 0.28rem 0.58rem;
+  border: 1px solid var(--mind-border);
+  border-radius: 999px;
+  background: var(--mind-raised);
+  color: var(--mind-muted);
+  font-size: 0.72rem;
+  font-weight: 650;
+}
+
+.runtime-status--connected {
+  border-color: rgb(125 255 168 / 0.42);
+  color: var(--color-ok);
+}
+
+.runtime-status--not_configured {
+  border-color: rgb(255 210 122 / 0.42);
+  color: var(--color-warn);
+}
+
+.runtime-status--unavailable {
+  border-color: rgb(255 107 122 / 0.42);
+  color: var(--color-danger);
+}
+
+.shell .shared-fleet {
+  background-color: var(--mind-elevated) !important;
+  background-image: none !important;
+  color: var(--mind-copy);
+  box-shadow: var(--mind-shadow);
+}
+
+.fleet-facts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+.fleet-facts span {
+  padding: 0.28rem 0.58rem;
+  border: 1px solid var(--mind-border);
+  border-radius: 999px;
+  background: var(--mind-raised);
+  color: var(--mind-muted);
+  font-size: 0.72rem;
+  font-weight: 600;
+}
+
+.fleet-boundary {
+  padding: 0.7rem 0.8rem;
+  border-left: 3px solid var(--color-warn);
+  border-radius: 0.5rem;
+  background: color-mix(in srgb, var(--color-warn) 8%, transparent);
+  color: var(--mind-copy);
+}
+
+.fleet-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(12rem, 1fr));
+  gap: 0.6rem;
+}
+
+.shell .fleet-department {
+  min-height: 7rem;
+  background-color: var(--mind-raised) !important;
+  background-image: none !important;
+  border-color: var(--mind-border) !important;
+}
+
+html[data-theme="light"] .shell .shared-fleet,
+html[data-theme="light"] .shell .fleet-department {
+  background-color: var(--mind-elevated) !important;
+  background-image: none !important;
+  border-color: var(--mind-border) !important;
+  color: var(--mind-copy);
+}
+
 html[data-theme="light"] .provider-identity {
   background: var(--mind-raised);
   color: var(--mind-copy);

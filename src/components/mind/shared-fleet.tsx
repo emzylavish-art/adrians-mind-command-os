@@ -13,32 +13,35 @@ const BLOCKED = canBotRun({
 
 export function SharedFleet() {
   return (
-    <section className="relative z-10 mx-4 mb-6 rounded-panel border border-line p-4 md:mx-6" style={{ background: "#0c0c0e" }} data-testid="shared-fleet" aria-label="Shared fleet">
-      <h3 className="font-semibold">Shared fleet</h3>
-      <p className="mt-1 text-sm text-muted">
-        One orchestrator, {ORCHESTRATOR}, routes work. These bots use the same {RULES.memoryId} memory. They are not separate brains. They cannot see secrets, and they cannot turn the emergency stop on or off.
+    <section className="shared-fleet relative z-10 mx-4 mb-6 rounded-2xl border border-line p-4 md:mx-6" data-testid="shared-fleet" aria-label="Shared fleet">
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div><h3 className="font-semibold">Shared fleet</h3><p className="mt-1 max-w-3xl text-sm text-muted">{ORCHESTRATOR} routes department definitions. They share {RULES.memoryId} memory; they are not independent accounts or running processes.</p></div>
+        <span className="runtime-status runtime-status--not_configured">Definitions only</span>
+      </div>
+      <div className="fleet-facts mt-3" aria-label="Fleet boundaries">
+        <span>Shared memory</span><span>Approval required</span><span>{DEPARTMENTS.length} departments</span><span>Secrets unavailable</span>
+      </div>
+      <p className="fleet-boundary mt-3 text-sm" data-testid="fleet-blocked">
+        <strong>Current boundary:</strong> {BLOCKED.ok ? "Mouse was allowed." : BLOCKED.reason} Windows desktop is not controlled.
       </p>
-      <p className="mt-2 text-sm" data-testid="fleet-blocked">
-        {BLOCKED.ok ? "Mouse was allowed." : BLOCKED.reason} Windows desktop is not controlled.
-      </p>
-      <ul className="mt-3 space-y-2">
+      <p className="mt-5 text-xs font-semibold uppercase tracking-wide text-muted">Department definitions</p>
+      <ul className="fleet-grid mt-2">
         {DEPARTMENTS.map((name) => (
-          <li key={name} className="rounded-panel border border-line px-3 py-2 text-sm" data-testid="fleet-bot">
+          <li key={name} className="fleet-department rounded-xl border border-line px-3 py-3 text-sm" data-testid="fleet-bot">
             <span className="font-semibold">{name}</span>
-            <span className="mt-1 block text-muted">
-              Same {RULES.memoryId} memory. Same capabilities: {ACTIONS}. Each runs only after you approve that exact action. Halt blocks every bot. None can approve or press the stop.
-            </span>
+            <span className="mt-1 block text-xs text-muted">{ACTIONS}</span>
+            <span className="mt-2 block text-xs text-muted">Definition saved · action approval required</span>
           </li>
         ))}
       </ul>
       <div className="mt-4 grid gap-3 md:grid-cols-2" data-testid="fleet-split">
         <div className="rounded-panel border border-line px-3 py-2 text-sm">
-          <p className="font-semibold">These nine can close locally</p>
-          <p className="mt-1 text-muted">Shared memory, the four hosted actions after the exact approval, department routing, and a refusal for mouse, keyboard, and browser. That work stays in this preview.</p>
+          <p className="font-semibold">Available when a runtime is connected</p>
+          <p className="mt-1 text-muted">Department routing and the listed capabilities can be requested after per-action approval.</p>
         </div>
         <div className="rounded-panel border border-line px-3 py-2 text-sm">
-          <p className="font-semibold">Blocked without your machine</p>
-          <p className="mt-1 text-muted">The counted HyperFrames export is in Library, Media. This page still cannot render a new sequence. Windows signing, a paired PC, a local model download, and a production deploy stay blocked. No bot can close those from this preview.</p>
+          <p className="font-semibold">Still requires your setup</p>
+          <p className="mt-1 text-muted">A paired PC, local model download, Windows signing, and production deployment are not delegated by this directory.</p>
         </div>
       </div>
     </section>

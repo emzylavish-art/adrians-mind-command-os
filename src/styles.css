@@ -2012,6 +2012,7 @@ html[data-theme="light"] [data-composer="floating"] {
   }
 }
 
+
 /* —— Cycle 32 / item 2: ComposerBar layout hooks (from pass-10, mono) —— */
 :root {
   --composer-speak-fg: #0a0a0b;
@@ -7042,4 +7043,24 @@ html[data-theme="light"] aside.rail > div.border-t {
     right: 0.75rem !important;
     bottom: calc(0.65rem + env(safe-area-inset-bottom)) !important;
   }
+}
+
+/* Keep the fleet directory readable: its category cards carry information,
+   not a decorative texture. This file loads after feature styles. */
+.main-stage .shared-fleet,
+.main-stage .shared-fleet .fleet-department {
+  background-color: var(--mind-elevated, #101725) !important;
+  background-image: none !important;
+  background-blend-mode: normal !important;
+}
+
+.main-stage .shared-fleet .fleet-department {
+  background-color: var(--mind-raised, #171f30) !important;
+  border-color: var(--mind-border, rgb(190 207 235 / 0.16)) !important;
+}
+
+html[data-theme="light"] .main-stage .shared-fleet,
+html[data-theme="light"] .main-stage .shared-fleet .fleet-department {
+  background-color: var(--mind-elevated, #fff) !important;
+  border-color: var(--mind-border, rgb(40 57 86 / 0.14)) !important;
 }

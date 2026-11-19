@@ -448,13 +448,20 @@ export function FleetPanel({
   }
 
   if (mode === "agents") {
+    const paperclipLabel = paperclipSnapshot?.state === "connected"
+      ? "Runtime connected"
+      : paperclipSnapshot?.state === "loading"
+        ? "Checking runtime"
+        : paperclipSnapshot?.state === "not_configured"
+          ? "Runtime not configured"
+          : "Runtime unavailable";
     return (
       <section className="dense-card card-texture mx-4 mb-6 p-4 md:mx-6">
-        <h3 className="font-semibold">Agent directory</h3>
-        <p className="mt-1 text-sm text-muted">Templates are definitions, not running processes. Real hosted execution requires a connected agent runtime.</p>
+        <h3 className="font-semibold">Create and organise agents</h3>
+        <p className="mt-1 text-sm text-muted">Saved agents are definitions. They become operational only after a runtime is connected and a run is explicitly queued.</p>
         <div className="mt-3 grid min-w-0 gap-2 rounded-panel border border-line p-3" data-testid="paperclip-runtime-status">
           <div className="flex flex-wrap items-center justify-between gap-2">
-            <p className="font-semibold">Paperclip agent service</p>
+            <div><p className="font-semibold">Agent runtime</p><p className="mt-1 text-xs text-muted">Paperclip is checked separately from saved agents so an unavailable runtime never looks like an agent failure.</p></div>
             <button
               type="button"
               data-testid="paperclip-refresh"
@@ -465,6 +472,7 @@ export function FleetPanel({
               Refresh status
             </button>
           </div>
+          <span className={`runtime-status runtime-status--${paperclipSnapshot?.state ?? "loading"}`}>{paperclipLabel}</span>
           <p className="break-words text-sm text-muted" role="status">{paperclipSnapshot?.message ?? "Checking whether a real Paperclip service is available…"}</p>
           {paperclipSnapshot?.state === "connected" ? (
             <div className="grid gap-2 text-sm" data-testid="paperclip-live-agent-list">
@@ -484,13 +492,16 @@ export function FleetPanel({
             </div>
           ) : null}
         </div>
-        <div className="mt-3 flex flex-wrap gap-2">
+        <div className="mt-4">
+          <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted">Start from a template</p>
+          <div className="flex flex-wrap gap-2">
           {AGENT_TEMPLATES.map((template) => (
             <button key={template.name} type="button" className="dense-card inline-flex min-h-11 items-center gap-2 px-3 text-sm" onClick={() => runMutation(snapshotFleetMutationParams({ kind: "add_template", templateName: template.name }))}>
               <img src={botAvatarSrc(template.name)} alt="" className="bot-avatar-img size-8" />
               Add {template.name}
             </button>
           ))}
+          </div>
         </div>
         <div className="mt-4 rounded-panel border border-line p-3">
           <p className="font-semibold">Custom agent</p>
@@ -520,7 +531,8 @@ export function FleetPanel({
             Save agent
           </button>
         </div>
-        <ul className="mt-4 space-y-3">
+        <p className="mt-5 text-xs font-semibold uppercase tracking-wide text-muted">Saved agents</p>
+        <ul className="mt-2 space-y-3">
           {ws.agents.length === 0 && <li className="text-sm text-muted">No agents yet.</li>}
           {ws.agents.filter((agent) => !agent.archived).map((agent) => {
             const deployment = ws.deployments.find((item) => item.agentId === agent.id);

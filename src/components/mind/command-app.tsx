@@ -1258,7 +1258,7 @@ export function CommandApp() {
         if (!active) return;
         setGrokConfigured(status.grok === "configured");
         if (status.providers && typeof status.providers === "object") setLiveProviders(status.providers);
-        setGrok(status.grok === "configured" ? "Configured" : status.grok === "down" ? "Refused" : "Unavailable");
+        setGrok(status.grok === "configured" ? "Configured" : status.grok === "down" ? "Refused" : "Setup required");
         setStatusSignedIn(status.signedIn === true);
         setDatabaseConfigured(status.databaseBackend === "postgres");
         const mode = databaseMode(status.databaseBackend === "postgres" || status.databaseBackend === "refused" ? status.databaseBackend : "memory");
@@ -1273,7 +1273,7 @@ export function CommandApp() {
       })
       .catch(() => {
         if (!active) return;
-        setGrok("Unavailable");
+        setGrok("Status unavailable");
         setDatabasePill("Unknown");
         setDatabaseDetail("The status check did not finish.");
         setSystem("The status check did not finish.");
@@ -4489,8 +4489,19 @@ export function CommandApp() {
     setWs((prev) => pushAudit(prev, "rea_inspect", file.name, result.evidenceId ?? "no evidence id"));
   }
 
-  const headerState = ws.halted ? "Stopped" : grok === "Configured" ? "Grok configured" : grok;
-  const headerTone = ws.halted || grok === "Refused" || grok === "Unavailable" ? "text-danger border-danger/40" : "text-muted border-line";
+  const headerState = ws.halted ? "Stopped" : grok === "Configured" ? "Grok ready" : grok;
+  const headerDetail = ws.halted
+    ? "Emergency stop is on. New actions are blocked. Open Settings to review it."
+    : grok === "Configured"
+      ? "Grok is configured on the server. This does not verify a live reply."
+      : grok === "Setup required"
+        ? "No Grok server key is configured. Open Connected to review provider setup."
+        : grok === "Refused"
+          ? "The server refused the current Grok configuration. Open Connected for the recorded status."
+          : grok === "Checking"
+            ? "Checking the service configuration."
+            : "The status check did not finish. Open Connected to see what is known.";
+  const headerTone = ws.halted || grok === "Refused" || grok === "Status unavailable" ? "text-danger border-danger/40" : grok === "Setup required" ? "text-warn border-warn/40" : "text-muted border-line";
   const memories = ws.memories.filter((item) => {
     if (!showArchived && item.archived) return false;
     if (memoryTab === "mine" && item.scope !== "global") return false;
@@ -4765,10 +4776,16 @@ export function CommandApp() {
               </div>
             )}
           </div>
-          <span className={`hidden h-11 items-center gap-2 rounded-full border px-3 text-sm md:inline-flex glass-panel ${headerTone}`}>
+          <button
+            type="button"
+            className={`hidden h-11 items-center gap-2 rounded-full border px-3 text-sm md:inline-flex glass-panel ${headerTone}`}
+            title={headerDetail}
+            aria-label={`${headerState}. ${headerDetail}`}
+            onClick={() => { setView("connected"); setNavOpen(false); }}
+          >
             <img src="/brand/logos/grok.svg" alt="" width={16} height={16} className="size-4 rounded" />
             {headerState}
-          </span>
+          </button>
           <div className="hidden md:block">
             <ModelTierChip
               tier={modelTier}
