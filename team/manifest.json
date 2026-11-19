@@ -242,6 +242,23 @@
       "safety": "offline; does not execute scanned code"
     },
     {
+      "id": "visual.audit",
+      "agent": "rea",
+      "capabilities": [
+        "visual_regression_capture",
+        "accessibility_audit",
+        "css_debt_reporting"
+      ],
+      "status": "ready",
+      "entrypoint": "scripts/visual/audit.mjs",
+      "input_schema": {
+        "action": "audit|css-debt",
+        "base_url": "optional localhost URL for audit",
+        "timeout_seconds": "integer"
+      },
+      "safety": "Local-only visual inspection. Audit follows navigation-only controls and never submits forms, starts OAuth, calls providers/MCP, or mutates production data."
+    },
+    {
       "id": "gods-eyes",
       "agent": "gods-eyes",
       "capabilities": [

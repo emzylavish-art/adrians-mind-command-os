@@ -42,6 +42,17 @@ def tool_specs(manifest):
                 },
                 "additionalProperties": False,
             }
+        elif name == "visual.audit":
+            description = "Run a local-only visual QA report. audit follows safe navigation and runs screenshots/layout/axe checks against an explicit localhost HTTP app. css-debt inventories CSS complexity without loading a browser. It never submits forms or calls external providers."
+            schema = {
+                "type": "object",
+                "properties": {
+                    "action": {"type": "string", "enum": ["audit", "css-debt"]},
+                    "base_url": {"type": "string", "description": "Explicit http://127.0.0.1 or http://localhost app URL."},
+                    "timeout_seconds": {"type": "integer", "minimum": 1, "maximum": 300},
+                },
+                "additionalProperties": False,
+            }
         elif name == "security.scan":
             description = "Run offline heuristic static security review. Does not execute code or make network requests; human validation is required."
             schema = {

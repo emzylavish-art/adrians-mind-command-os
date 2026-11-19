@@ -2,9 +2,11 @@
 """Mind Command OS shared JSON task runner."""
 import argparse
 import json
+import os
 import subprocess
 import sys
 from pathlib import Path
+from urllib.parse import urlparse
 
 ROOT = Path(__file__).resolve().parents[1]
 MANIFEST = ROOT / "team" / "manifest.json"
@@ -78,6 +80,42 @@ def invoke(tool_id, payload, manifest):
                             limitations=["Notion request was not successful. Check token permissions and integration sharing."])
         return envelope("ready", result, ["tools/notion/controller.py"],
                         ["Notion access requires NOTION_API_KEY and page/database sharing. append-text is a write operation and only runs when explicitly requested."])
+
+    if tool_id == "visual.audit":
+        action = payload.get("action", "audit")
+        if action not in {"audit", "css-debt"}:
+            return envelope("blocked", limitations=["visual.audit action must be audit or css-debt."])
+        command = ["node", str(ROOT / "scripts" / "visual" / ("audit.mjs" if action == "audit" else "css-debt.mjs"))]
+        env = os.environ.copy()
+        if action == "audit":
+            base_url = payload.get("base_url", "http://127.0.0.1:8080/")
+            if not isinstance(base_url, str):
+                return envelope("blocked", limitations=["visual.audit base_url must be a string."])
+            parsed = urlparse(base_url)
+            if parsed.scheme != "http" or parsed.hostname not in {"127.0.0.1", "localhost"}:
+                return envelope("blocked", limitations=["visual.audit only accepts an explicit localhost HTTP URL."])
+            env["BASE_URL"] = base_url
+        try:
+            completed = subprocess.run(
+                command, cwd=ROOT, capture_output=True, text=True, env=env,
+                timeout=int(payload.get("timeout_seconds", 180)), check=False,
+            )
+        except (OSError, subprocess.TimeoutExpired) as exc:
+            return envelope("blocked", limitations=[f"Visual audit invocation failed: {type(exc).__name__}."])
+        try:
+            report = json.loads(completed.stdout.strip())
+        except json.JSONDecodeError:
+            return envelope(
+                "blocked", result=completed.stdout.strip() or None,
+                evidence=["scripts/visual"],
+                limitations=[completed.stderr.strip() or "Visual audit returned invalid JSON."],
+            )
+        if completed.returncode:
+            return envelope(
+                "blocked", result=report, evidence=["scripts/visual"],
+                limitations=[completed.stderr.strip() or "Visual audit found failures."],
+            )
+        return envelope("ready", report, ["scripts/visual"], ["Audit is local-only and its artifacts are ignored by Git."])
 
     if tool_id == "model.generate":
         provider = payload.get("provider", "auto")
