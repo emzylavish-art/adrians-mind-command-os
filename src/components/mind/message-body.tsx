@@ -31,7 +31,7 @@ function TextWithImages({
   let match: RegExpExecArray | null;
   const re = new RegExp(MD_IMAGE.source, "g");
   while ((match = re.exec(text)) !== null) {
-    if (match.index > last) nodes.push(text.slice(last, match.index));
+    if (match.index > last) nodes.push(<MarkdownProse key={`text-${last}`} text={text.slice(last, match.index)} />);
     const alt = match[1] || "image";
     const src = match[2]!;
     if (src.startsWith("data:image/") || /^https?:\/\//i.test(src)) {
@@ -50,8 +50,8 @@ function TextWithImages({
     }
     last = match.index + match[0].length;
   }
-  if (last < text.length) nodes.push(text.slice(last));
-  return <p className="whitespace-pre-wrap">{nodes}</p>;
+  if (last < text.length) nodes.push(<MarkdownProse key={`text-${last}`} text={text.slice(last)} />);
+  return <div className="space-y-2">{nodes}</div>;
 }
 
 export function MessageBody({

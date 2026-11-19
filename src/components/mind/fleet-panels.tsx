@@ -158,7 +158,7 @@ export function FleetPanel({
   const [gmailBoard, setGmailBoard] = useState<{ state: string; detail: string }>({ state: "Checking", detail: "Checking connection…" });
   const [jobName, setJobName] = useState("");
   const [scheduleBand, setScheduleBand] = useState<"jobs" | "new">("jobs");
-  const [jobZone, setJobZone] = useState("America/Chicago");
+  const [jobZone, setJobZone] = useState(() => Intl.DateTimeFormat().resolvedOptions().timeZone || "UTC");
   const [jobHour, setJobHour] = useState("");
   const [workerHealthState, setWorkerHealthState] = useState<WorkerHealthState>({ status: "loading" });
   const workerHealthInFlight = useRef(false);
@@ -740,7 +740,7 @@ export function FleetPanel({
             <input value={jobZone} onChange={(event) => setJobZone(event.target.value)} placeholder="America/Chicago" aria-label="Time zone" className="mt-1 min-h-11 w-full rounded-panel border border-line bg-surface px-3 text-sm" />
           </label>
           <label className="text-sm">Hour
-            <input value={jobHour} onChange={(event) => setJobHour(event.target.value)} placeholder="0-23" aria-label="Hour" className="mt-1 min-h-11 w-full rounded-panel border border-line bg-surface px-3 text-sm" />
+            <input type="number" min="0" max="23" step="1" value={jobHour} onChange={(event) => setJobHour(event.target.value)} placeholder="0-23" aria-label="Hour" className="mt-1 min-h-11 w-full rounded-panel border border-line bg-surface px-3 text-sm" />
           </label>
           <div className="flex items-end gap-2">
           <button

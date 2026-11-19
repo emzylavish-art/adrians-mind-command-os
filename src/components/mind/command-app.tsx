@@ -5752,7 +5752,7 @@ export function CommandApp() {
                   </button>
                 ))}
               </div>
-              <p className="mt-4 text-sm text-muted">{memoryTab === "project" ? "Project notes stay inside the project you pick." : memoryTab === "transfer" ? "Export is a JSON file with a hash. Import refuses a file whose hash does not match." : "Personal notes are global on this device. They are not used while memory is off."}</p>
+              <p className="mt-4 text-sm text-muted">{memoryTab === "project" ? "Project notes stay inside the project you pick." : memoryTab === "transfer" ? "Export is a JSON file with a hash. Import refuses a file whose hash does not match." : "Personal notes are global on this device. You can save and manage them here while chat use is off."}</p>
               {memoryTab === "transfer" && (
                 <div className="mt-3 flex flex-wrap gap-2">
                   <button type="button" className="min-h-11 rounded-panel bg-accent px-4 text-sm font-semibold text-white" onClick={() => void downloadArchive()}>Export archive</button>
@@ -5812,7 +5812,7 @@ export function CommandApp() {
                 </div>
               </div>
               <ul className="mt-4 space-y-2">
-                {memories.length === 0 && <li className="glow-card rounded-panel border border-line bg-surface p-6 text-center text-sm text-muted">No saved memory in this view. Nothing is stored while you leave memory off.</li>}
+                {memories.length === 0 && <li className="glow-card rounded-panel border border-line bg-surface p-6 text-center text-sm text-muted">{memoryQuery.trim() ? "No notes match your search." : "No saved notes in this view yet."}</li>}
                 {memories.map((item) => (
                   <li key={item.id} className="rounded-panel border border-line bg-surface p-3 text-sm">
                     {editId === item.id ? (
@@ -6172,7 +6172,7 @@ export function CommandApp() {
                     <ul className="mt-2 space-y-2">
                       {researchHistory.map((report) => (
                         <li key={report.id}>
-                          <button type="button" className="min-h-11 text-left text-sm text-accent" onClick={() => { setResearchText(report.question); setResearchNote(report.summary); setResearchCitations(report.citations); }}>
+                          <button type="button" className="min-h-11 text-left text-sm text-accent" onClick={() => { setResearchText(report.question); setResearchNote(report.summary); setResearchCitations(report.citations); setResearchBand("search"); }}>
                             {report.question} · {report.citations.length} sources
                           </button>
                         </li>
@@ -6255,12 +6255,13 @@ export function CommandApp() {
                           className="min-h-11 rounded-panel bg-accent px-3 text-sm font-semibold text-accent-ink"
                           onClick={() => setNotice(runSkill(ws, skill, enabledSkills[skill.id] !== false).text)}
                         >
-                          Run
+                          {skill.kind === "not-installed" ? "View setup" : "Run"}
                         </button>
                       </div>
                     </article>
                   );
                 })}
+                {(skillQuery.trim() ? searchSkills(skillQuery) : SKILLS).filter((skill) => skillBand === "device" ? skill.kind === "built-in" : skillBand === "installed" ? skill.kind === "installed" : skill.kind === "not-installed").length === 0 && <p className="rounded-panel border border-line p-4 text-sm text-muted">No skills match “{skillQuery.trim()}” in this group.</p>}
               </div>
               {skillStorageError && <p className="rounded-panel border border-danger/40 p-3 text-sm text-danger" role="alert">{skillStorageError}</p>}
               {notice && <p className="voice-copy rounded-panel border border-line bg-surface px-3 py-2 text-sm text-muted">{presentVoiceCopy(notice)}</p>}
@@ -6774,12 +6775,15 @@ export function CommandApp() {
         </Overlay>
       )}
       {projectOpen && (
-        <Overlay>
-          <h3 className="font-display text-2xl font-bold">Create project</h3>
-          <input value={projectName} onChange={(event) => setProjectName(event.target.value)} placeholder="Name" className="mt-3 min-h-11 w-full rounded-panel border border-line bg-bg px-3 text-sm" />
-          <textarea value={projectAbout} onChange={(event) => setProjectAbout(event.target.value)} placeholder="Description" rows={3} className="mt-2 w-full rounded-panel border border-line bg-bg px-3 py-2 text-sm" />
+        <Overlay labelledBy="create-project-title">
+          <h3 id="create-project-title" className="font-display text-2xl font-bold">Create project</h3>
+          <label className="mt-3 block text-sm font-medium" htmlFor="project-name">Project name <span className="text-danger">Required</span></label>
+          <input id="project-name" autoFocus value={projectName} onChange={(event) => { setProjectName(event.target.value); if (error === "Name the project.") setError(null); }} placeholder="Name" aria-describedby={error === "Name the project." ? "project-name-error" : undefined} className="mt-1 min-h-11 w-full rounded-panel border border-line bg-bg px-3 text-sm" />
+          {error === "Name the project." ? <p id="project-name-error" role="alert" className="mt-2 text-sm text-danger">Enter a project name before creating it.</p> : null}
+          <label className="mt-3 block text-sm font-medium" htmlFor="project-description">Description <span className="text-muted">Optional</span></label>
+          <textarea id="project-description" value={projectAbout} onChange={(event) => setProjectAbout(event.target.value)} placeholder="What belongs in this project?" rows={3} className="mt-1 w-full rounded-panel border border-line bg-bg px-3 py-2 text-sm" />
           <div className="mt-3 flex gap-2">
-            <button type="button" className="min-h-11 flex-1 rounded-panel border border-line" onClick={() => setProjectOpen(false)}>Cancel</button>
+            <button type="button" className="min-h-11 flex-1 rounded-panel border border-line" onClick={() => { setProjectName(""); setProjectAbout(""); setError(null); setProjectOpen(false); }}>Cancel</button>
             <button type="button" className="min-h-11 flex-1 rounded-panel bg-accent font-semibold text-accent-ink" onClick={saveProject}>Create</button>
           </div>
         </Overlay>
@@ -7056,9 +7060,9 @@ function StatusRow({
   );
 }
 
-function Overlay({ children }: { children: ReactNode }) {
+function Overlay({ children, labelledBy }: { children: ReactNode; labelledBy?: string }) {
   return (
-    <div className="overlay-backdrop fixed inset-0 z-40 grid place-items-end p-4 md:place-items-center" role="dialog" aria-modal="true">
+    <div className="overlay-backdrop fixed inset-0 z-40 grid place-items-end p-4 md:place-items-center" role="dialog" aria-modal="true" aria-labelledby={labelledBy}>
       <div className="overlay-panel w-full max-w-md rounded-[1.25rem] p-4">{children}</div>
     </div>
   );
