@@ -105,6 +105,6 @@ export function routeTask(text: unknown): DepartmentName {
   const input = textOf(text);
   const named = namedDepartment(input);
   const picked = named ?? keywordDepartment(input) ?? "Personal assistant";
-  if (picked === ORCHESTRATOR || !isDepartment(picked)) return "Personal assistant";
+  if (!isDepartment(picked)) return "Personal assistant";
   return picked;
 }

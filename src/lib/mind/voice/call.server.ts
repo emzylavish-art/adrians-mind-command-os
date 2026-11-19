@@ -16,14 +16,14 @@ function json(body: unknown, status = 200) {
   return new Response(JSON.stringify(body), { status, headers: { "content-type": "application/json; charset=utf-8", "cache-control": "no-store" } });
 }
 
-async function wavFromMpeg(bytes: Buffer): Promise<Buffer> {
+async function wavFromMpeg(bytes: Uint8Array): Promise<Uint8Array> {
   const dir = await mkdtemp(join(tmpdir(), "adrian-call-"));
   try {
     const input = join(dir, "caller.mp3");
     const output = join(dir, "caller.wav");
     await writeFile(input, bytes);
     await run("ffmpeg", ["-y", "-i", input, "-ar", "16000", "-ac", "1", output], { timeout: 20_000 });
-    return await readFile(output);
+    return new Uint8Array(await readFile(output));
   } finally {
     await rm(dir, { recursive: true, force: true });
   }
@@ -43,7 +43,7 @@ export async function handleVoiceCall(request: Request): Promise<Response> {
   if (!key) return json({ ok: false, error: "No voice key is configured. Nothing was spoken." }, 400);
   const caller = await speakWithFallback({ text: "Say only the word cedarline.", voiceId: "eve", xaiKey: key });
   if (!caller.ok) return json({ ok: false, error: caller.error }, 502);
-  let audio = Buffer.from(caller.audio, "base64");
+  let audio: Uint8Array = Buffer.from(caller.audio, "base64");
   let mime = "audio/mpeg";
   let filename = "caller.mp3";
   try {

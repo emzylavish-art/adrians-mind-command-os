@@ -1,7 +1,7 @@
 import { IMAGINE_MAX_N, checkImagineRateLimit, imagineRateLimitKey, mapImagineHttpError } from "./harden.ts";
 import { assertImagineSpendAllowed, getImagineSpendLedger } from "./spend-ledger.ts";
 import { fetchPinnedUrl, resolveAndPinUrl, type LookupFn } from "./ssrf.ts";
-import { resolveImageApiKey } from "./xai-key.ts";
+import { resolveImageApiKey, resolveXaiInferenceApiKey } from "./xai-key.ts";
 import { MAX_DATA_URL_CHARS, MAX_IMAGES_PER_TURN } from "./types.ts";
 import {
   GROK_IMAGINE_MODEL,

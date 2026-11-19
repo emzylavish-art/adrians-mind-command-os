@@ -76,6 +76,13 @@ html[data-theme="light"] .shell .gpt-home .masthead {
   color: var(--mind-copy) !important;
 }
 
+/* The greeting's accent is decorative but still carries readable text. Keep
+ * it on the semantic accent token in light mode instead of inheriting the
+ * neutral masthead copy color. */
+html[data-theme="light"] .gpt-home .masthead .text-accent {
+  color: var(--mind-accent) !important;
+}
+
 .gpt-home .masthead .text-muted,
 .gpt-home .gpt-starters > p,
 .gpt-home .composer-notice {

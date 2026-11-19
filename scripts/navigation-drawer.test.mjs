@@ -33,7 +33,7 @@ describe("mobile workspace drawer", () => {
   });
 
   it("makes the background shell and mobile navigation inert while modal is open", () => {
-    assert.match(app, /<div className="main-stage[^>]*inert=\{navOpen\}/);
+    assert.match(app, /<main className="main-stage[^>]*inert=\{navOpen\}/);
     assert.match(app, /<nav inert=\{navOpen\}[^>]*aria-label="Primary"/);
     assert.match(app, /aria-modal=\{navOpen \? true : undefined\}/);
   });
@@ -54,7 +54,7 @@ describe("composer send guards", () => {
   });
 
   it("disables Chat send with no text or attachments", () => {
-    assert.match(app, /disabled=\{busy \|\| halted \|\| !active \|\| \(!draft\.trim\(\) && pendingImages\.length === 0 && !stagedName\)\}/);
+    assert.match(app, /disabled=\{busy \|\| halted \|\| \(!draft\.trim\(\) && pendingImages\.length === 0 && !stagedName\)\}/);
   });
 });
 

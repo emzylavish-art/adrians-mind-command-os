@@ -229,7 +229,7 @@ export function EveWorkbench({
         <header className="page-hero flex flex-col gap-4 p-4 md:flex-row md:items-center md:justify-between md:p-6">
           <div className="flex min-w-0 flex-col items-stretch gap-4 sm:flex-row sm:items-center">
             <div hidden={eveBand !== "talk" && eveBand !== "figure"}>
-            <EveTurn state={askBusy ? "listening" : askReply ? "speaking" : "idle"} expression={expression} spoken={askReply} framing="full" projection={heard} className="eve-stage-panel" />
+            <EveTurn state={askBusy ? "listening" : askReply ? "speaking" : "idle"} expression={expression} spoken={askReply ?? undefined} framing="full" projection={heard ?? undefined} className="eve-stage-panel" />
             </div>
             <div className="min-w-0">
               <p className="text-xs font-semibold uppercase tracking-[0.18em] text-muted">Adrian Core · Intelligence</p>
@@ -442,7 +442,7 @@ export function EveWorkbench({
             <section className="rounded-panel border border-line bg-surface p-4">
               <h2 className="flex items-center gap-2 font-semibold"><Bot className="size-5" /> Digital human</h2>
               <p className="mt-1 text-xs text-muted">{roster.femaleFilled} of {roster.femaleFilled + roster.femaleOpen} female identities filled. {roster.maleFilled} of {roster.maleOpen} male identities filled. Same Adrian Core. No extra permissions.</p>
-              <EveTurn state={askBusy ? "listening" : askReply ? "speaking" : "idle"} expression={expression} spoken={askReply} framing={framing} projection={heard} />
+              <EveTurn state={askBusy ? "listening" : askReply ? "speaking" : "idle"} expression={expression} spoken={askReply ?? undefined} framing={framing} projection={heard ?? undefined} />
               <div className="mt-3 flex flex-wrap gap-2" role="group" aria-label="Avatar framing">
                 {(["full", "upper", "face", "compact"] as AvatarFraming[]).map((mode) => (
                   <button key={mode} type="button" className={"min-h-11 rounded-panel border px-3 text-xs " + (framing === mode ? "border-accent bg-accent/10" : "border-line")} onClick={() => { setFraming(mode); writeStoredFraming(mode); }}>{mode}</button>

@@ -2376,6 +2376,13 @@ html[data-theme="light"] .composer-mic-dictation {
 .composer-speak-live[data-live-voice="listening"] .composer-speak-live__bars i,
 .composer-speak-live[data-live-voice="user-speaking"] .composer-speak-live__bars i,
 .composer-speak-live[data-live-voice="assistant-speaking"] .composer-speak-live__bars i {
+  animation: composer-speak-breathe 0.85s ease-in-out infinite alternate;
+}
+
+@keyframes composer-speak-breathe {
+  from { opacity: 0.58; transform: scaleY(0.58); }
+  to { opacity: 1; transform: scaleY(1); }
+}
 
 /* Map existing tip composer controls toward Grok row */
 @media (max-width: 767.98px) {
@@ -3023,7 +3030,7 @@ aside .text-xs.text-muted,
   letter-spacing: 0.01em;
 }
 
-}}
+}
 
 /* —— Cycle 32 / item 1+3 harden: fixed mobile composer dock (sticky fails under overflow) —— */
 @media (max-width: 767.98px) {
@@ -5988,6 +5995,11 @@ aside .text-accent:not(.logo-mark),
 .voice-mode-badge .text-accent,
 [data-testid="voice-controls"] .text-accent {
   color: #e8ecf5 !important;
+}
+/* The light masthead sits on a white hero surface; keep its accent readable
+   after the global mono accent rule above. */
+html[data-theme="light"] .masthead .text-accent {
+  color: #5b3df5 !important;
 }
 .main-stage .bg-accent\/15,
 .main-stage .bg-accent\/20,

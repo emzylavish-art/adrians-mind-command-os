@@ -13,7 +13,8 @@ export const Route = createFileRoute("/api/mind/receipts")({
       POST: async ({ request }) => {
         const same = assertSameOrigin(request);
         if (!same.ok) return json({ ok: false, error: same.error }, 403);
-        const userId = await requireUserId(request);
+        const bearer = request.headers.get("authorization")?.replace(/^Bearer\s+/i, "") || undefined;
+        const userId = await requireUserId(bearer);
         const body = (await request.json().catch(() => ({}))) as { operation?: string; state?: string; action?: string; detail?: string };
         if (body.operation === "list") {
           const receipts = await listReceipts(userId);

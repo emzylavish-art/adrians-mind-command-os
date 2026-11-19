@@ -247,13 +247,14 @@ export function BuildWorkspace(props: {
       return;
     }
     const result = await runFileOperation("write", name, "") as { path?: string } | null;
-    if (!result?.path) return;
+    const createdPath = result?.path;
+    if (!createdPath) return;
     setNewFileName("");
-    setTabs((prev) => prev.includes(result.path) ? prev : [...prev, result.path]);
-    setBuffers((prev) => ({ ...prev, [result.path]: { draft: "", saved: "" } }));
-    setSelectedFile(result.path);
+    setTabs((prev) => prev.includes(createdPath) ? prev : [...prev, createdPath]);
+    setBuffers((prev) => ({ ...prev, [createdPath]: { draft: "", saved: "" } }));
+    setSelectedFile(createdPath);
     setPanel("editor");
-    setFileNotice(`Created ${result.path}. Type in the editor, then save.`);
+    setFileNotice(`Created ${createdPath}. Type in the editor, then save.`);
   }
 
   async function saveFile() {

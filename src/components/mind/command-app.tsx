@@ -6489,7 +6489,7 @@ export function CommandApp() {
                 </div>
               </div>
               <nav className="intelligence-main settings-index" aria-label="Settings sections" hidden={settingsPane !== null}>
-                {[
+                {([
                   { group: "Account", items: [
                     ["security", "Security and login", "Sign in to connect services", () => { window.location.assign("/login"); }],
                     ["keys", "Safe keys", "Open a saved key and copy it", () => setSettingsPane("keys")],
@@ -6516,12 +6516,12 @@ export function CommandApp() {
                     ["activity", "Activity", "What this device recorded", () => { setView("activity"); setNavOpen(false); }],
                     ["help", "Help", "How the controls behave", () => { setView("help"); setNavOpen(false); }],
                   ]},
-                ].map((section) => (
+                ] as const).map((section) => (
                   <section key={section.group} className="intelligence-group" aria-label={section.group}>
                     <h3>{section.group}</h3>
                     {section.items.map(([id, label, detail, open]) => (
                       <button key={id} type="button" onClick={open}>
-                        <img src={`/brand/marks/${id === "dashboard" ? "general" : id}.png`} alt="" width={28} height={28} />
+                        <img src={`/brand/marks/${id}.png`} alt="" width={28} height={28} />
                         <span>
                           <strong>{label}</strong>
                           <small>{detail}</small>

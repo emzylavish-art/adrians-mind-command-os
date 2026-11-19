@@ -272,16 +272,23 @@ function sendLive(handle: LiveHandle, method: string, params: JsonObject): Promi
       clearTimeout(timer);
       resolve(message);
     });
-    handle.child.stdin.write(`${JSON.stringify({ jsonrpc: "2.0", id, method, params })}\n`);
+    const stdin = handle.child.stdin;
+    if (!stdin || stdin.destroyed) {
+      clearTimeout(timer);
+      handle.pending.delete(id);
+      resolve({ error: { message: "The coding process is not accepting requests." } });
+      return;
+    }
+    stdin.write(`${JSON.stringify({ jsonrpc: "2.0", id, method, params })}\n`);
   });
 }
 
 function attachLive(handle: LiveHandle) {
   const reply = (id: unknown, result: unknown) => {
-    handle.child.stdin.write(`${JSON.stringify({ jsonrpc: "2.0", id, result })}\n`);
+    handle.child.stdin?.write(`${JSON.stringify({ jsonrpc: "2.0", id, result })}\n`);
   };
   const fail = (id: unknown, message: string) => {
-    handle.child.stdin.write(`${JSON.stringify({ jsonrpc: "2.0", id, error: { code: -32603, message } })}\n`);
+    handle.child.stdin?.write(`${JSON.stringify({ jsonrpc: "2.0", id, error: { code: -32603, message } })}\n`);
   };
   handle.child.on("exit", () => closeLive(handle));
   handle.child.on("error", () => closeLive(handle));
@@ -319,7 +326,8 @@ function attachLive(handle: LiveHandle) {
             mkdirSync(dirname(target), { recursive: true });
             writeFileSync(target, params.content);
             const savedPath = relative(handle.cwd, target);
-            if (!process.env.DATABASE_URL) void import("../persist.ts").then((mod) => mod.saveWorkspaceFile("dev-user", savedPath, params.content)).catch(() => undefined);
+            const content = params.content;
+            if (!process.env.DATABASE_URL && typeof content === "string") void import("../persist.ts").then((mod) => mod.saveWorkspaceFile("dev-user", savedPath, content)).catch(() => undefined);
             reply(message.id, {});
           }
         } else {
@@ -358,9 +366,7 @@ async function openLiveSession(cwd: string, resumeSessionId?: string, mode?: Cod
   }
   const command = adrianBuildCommand();
   const child = spawn(process.execPath, [command, "acp"], { cwd, env: adrianBuildEnv(), stdio: ["pipe", "pipe", "pipe"] });
-  const handle: LiveHandle = { child, cwd, pid: child.pid || 0, nextId: 1, buffer: "", output: "", pending: new Map(), mode, closed: false, queue: Promise.resolve() };
-  handle.calls = [];
-  handle.stderr = "";
+  const handle: LiveHandle = { child, cwd, pid: child.pid || 0, nextId: 1, buffer: "", output: "", pending: new Map(), mode, closed: false, queue: Promise.resolve(), calls: [], stderr: "" };
   handle.child.stderr?.on("data", (chunk: Buffer) => {
     handle.stderr = publicError(`${handle.stderr}${chunk.toString("utf8")}`).slice(-400);
   });
@@ -387,16 +393,21 @@ async function openLiveSession(cwd: string, resumeSessionId?: string, mode?: Cod
   return { handle, sessionId, reused: false };
 }
 
-function mcpServersFor(cwd: string): { name: string; command?: string; args?: string[]; type?: "http"; url?: string }[] {
+type HostedMcpServer =
+  | { name: string; command: string; args: string[] }
+  | { type: "http"; name: string; url: string };
+
+function mcpServersFor(cwd: string): HostedMcpServer[] {
   const file = `${cwd}/.mcp.json`;
   if (!existsSync(file)) return [];
   try {
     const parsed = JSON.parse(readFileSync(file, "utf8")) as { mcpServers?: Record<string, { command?: string; args?: string[]; url?: string }> };
-    return Object.entries(parsed.mcpServers || {}).flatMap(([name, server]) => {
-      if (server.command) return [{ name, command: server.command, args: server.args || [] }];
-      if (server.url?.startsWith("https://")) return [{ type: "http" as const, name, url: server.url }];
-      return [];
-    });
+    const servers: HostedMcpServer[] = [];
+    for (const [name, server] of Object.entries(parsed.mcpServers || {})) {
+      if (server.command) servers.push({ name, command: server.command, args: server.args || [] });
+      else if (server.url?.startsWith("https://")) servers.push({ type: "http", name, url: server.url });
+    }
+    return servers;
   } catch {
     return [];
   }

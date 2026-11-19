@@ -103,7 +103,7 @@ export function AnswerTabs({
       {tab === "links" ? (
         links.length ? <ul className="space-y-1">{links.map((href) => <li key={href}><a className="text-accent" href={href} target="_blank" rel="noreferrer">{href}</a></li>)}</ul> : <p className="text-sm text-muted">No links were returned with this answer.</p>
       ) : tab === "images" ? (
-        pictures.length ? pictures.map((image, index) => <InlineImage key={`${image.dataUrl}-${index}`} src={image.dataUrl} alt={image.name || `Image ${index + 1}`} onEditImagine={onEditImagine} onSave={onSaveImage} onDownload={onDownloadImage} />) : <p className="text-sm text-muted">No images were returned with this answer.</p>
+        pictures.some((image) => Boolean(image.dataUrl)) ? pictures.map((image, index) => image.dataUrl ? <InlineImage key={`${image.dataUrl}-${index}`} src={image.dataUrl} alt={image.name || `Image ${index + 1}`} onEditImagine={onEditImagine} onSave={onSaveImage} onDownload={onDownloadImage} /> : null) : <p className="text-sm text-muted">No images were returned with this answer.</p>
       ) : (
         <AnswerBody text={text} images={images} onEditImagine={onEditImagine} onSaveImage={onSaveImage} onDownloadImage={onDownloadImage} onFailure={onFailure} />
       )}
