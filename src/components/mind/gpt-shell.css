@@ -56,6 +56,13 @@ html[data-theme="light"] .gpt-rail nav a.nav-item {
   overflow: hidden !important;
 }
 
+/* Keep the blue Chat launcher readable against its saturated background. */
+.gpt-rail-foot .gpt-chat-pill,
+.gpt-rail-foot .gpt-chat-pill * {
+  color: #fff !important;
+  -webkit-text-fill-color: #fff !important;
+}
+
 .eve-avatar {
   display: grid;
   justify-items: center;
@@ -1902,6 +1909,13 @@ form.thread-composer {
   }
 }
 
+/* Final contrast guard for the persistent Chat launcher. */
+.gpt-rail-foot .gpt-chat-pill,
+.gpt-rail-foot .gpt-chat-pill * {
+  color: #fff !important;
+  -webkit-text-fill-color: #fff !important;
+}
+
 .page-shell .solid-form,
 .page-shell .research-panel {
   background-color: #141416 !important;
@@ -2626,6 +2640,13 @@ form.thread-composer {
 }
 [data-testid="chat-right-rail"] {
   display: none !important;
+}
+
+/* Final contrast guard for the persistent Chat launcher. */
+.gpt-rail-foot .gpt-chat-pill,
+.gpt-rail-foot .gpt-chat-pill * {
+  color: #fff !important;
+  -webkit-text-fill-color: #fff !important;
 }
 
 .thread-shell section.flex.min-w-0.flex-1.flex-col {

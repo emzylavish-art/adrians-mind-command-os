@@ -15,7 +15,7 @@ type Start = {
 };
 
 const OFFICIAL = [
-  { id: "kimi-datasource", name: "Datasource", mark: "Ds", color: "#2f6bff", description: "Market, news, company, and legal lookups.", action: "key" as const },
+  { id: "kimi-datasource", name: "Datasource", mark: "Ds", color: "#2457c8", description: "Market, news, company, and legal lookups.", action: "key" as const },
   { id: "kimi-webbridge", name: "Browser", mark: "Br", color: "#f4b400", description: "Drive the browser you already use.", action: "link" as const, href: "https://chromewebstore.google.com/detail/kimi-webbridge/fldmhceldgbpfpkbgopacenieobmligc" },
   { id: "kimi-computer-use", name: "Computer", mark: "Pc", color: "#34a853", description: "Desktop control for the computer you choose.", action: "link" as const, href: "https://cdn.kimi.com/kimi-computer-use-windows/latest/kimi-cu-win-plugin.zip" },
   { id: "superpowers", name: "Superpowers", mark: "Sp", color: "#d97757", description: "Planning, debugging, and delivery workflows.", action: "link" as const, href: "https://github.com/obra/superpowers" },
@@ -25,6 +25,7 @@ const OFFICIAL = [
 ] as const;
 
 const ADDED_KEY = "adrian-added-plugins";
+const DARK_MARK_TEXT = new Set(["kimi-datasource"]);
 
 export function KimiDeviceConnect() {
   const [mode, setMode] = useState<"oauth" | "key">("oauth");
@@ -121,7 +122,7 @@ export function KimiDeviceConnect() {
           return (
             <article key={plugin.id} className="plugin-link">
               <div className="plugin-link__main">
-                {"image" in plugin ? <img className="service-mark" src={plugin.image} alt="" width={28} height={28} /> : <span className="service-mark" style={{ background: plugin.color, color: "#fff" }} aria-hidden="true">{plugin.mark}</span>}
+                {"image" in plugin ? <img className="service-mark" src={plugin.image} alt="" width={28} height={28} /> : <span className="service-mark" style={{ background: plugin.color, color: DARK_MARK_TEXT.has(plugin.id) ? "#fff" : "#111827" }} aria-hidden="true">{plugin.mark}</span>}
                 <div className="min-w-0">
                   {"href" in plugin && plugin.href ? <a className="inline-flex min-h-11 items-center font-semibold underline" href={plugin.href} target="_blank" rel="noreferrer">{plugin.name}</a> : <p className="font-semibold">{plugin.name}</p>}
                   <p className="text-sm text-muted">{plugin.description}</p>

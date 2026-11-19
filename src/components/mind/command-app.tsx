@@ -4677,7 +4677,8 @@ export function CommandApp() {
         </div>
       </aside>
 
-      <div className="main-stage page-enter flex min-h-0 min-w-0 flex-1 flex-col pb-36 md:pb-36" inert={navOpen}>
+      <main className="main-stage page-enter flex min-h-0 min-w-0 flex-1 flex-col pb-36 md:pb-36" inert={navOpen}>
+        <h1 className="sr-only">Adrian’s Mind OS</h1>
         <header className="topbar flex items-center gap-2 px-3 py-3 md:gap-3 md:px-5">
          <button type="button" className="grid size-11 shrink-0 place-items-center rounded-panel border border-line md:hidden" aria-label="Open menu" onClick={openNav}>
            <Menu className="size-4" />
@@ -4688,7 +4689,7 @@ export function CommandApp() {
               className="surface-switch__button"
               aria-expanded={surfaceMenu}
               aria-haspopup="menu"
-              aria-label="Switch between Chat, Build, Intelligence, and EVE"
+              aria-label={`Current surface: ${TITLES[view] ?? "Chat"}. Switch between Chat, Build, Intelligence, and EVE`}
               onClick={() => setSurfaceMenu((open) => !open)}
             >
               <img className="adrian-mark" src="/brand/logo-mark.jpg" alt="" width={28} height={28} />
@@ -4827,7 +4828,7 @@ export function CommandApp() {
           <button
             type="button"
             className="flex h-11 min-h-11 items-center gap-2 rounded-full border border-line px-2"
-            aria-label="Account menu"
+            aria-label="Account menu for Adrian"
             aria-expanded={accountOpen}
             aria-controls="account-panel"
             onClick={() => {
@@ -6696,7 +6697,7 @@ export function CommandApp() {
             </section>
           )}
         </div>
-      </div>
+      </main>
 
       <input
         ref={fileRef}

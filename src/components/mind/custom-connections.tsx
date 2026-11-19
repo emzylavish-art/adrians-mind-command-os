@@ -64,18 +64,18 @@ export function CustomConnections({ halted }: { halted: boolean }) {
         }}
       >
         <input value={label} onChange={(event) => setLabel(event.target.value)} placeholder="Label" className="min-h-11 w-full rounded-panel border border-line bg-bg px-3 text-sm" />
-        <select value={kind} onChange={(event) => setKind(event.target.value === "http" ? "http" : "mcp")} className="mt-2 min-h-11 w-full rounded-panel border border-line bg-bg px-3 text-sm">
+        <select aria-label="Connection type" value={kind} onChange={(event) => setKind(event.target.value === "http" ? "http" : "mcp")} className="mt-2 min-h-11 w-full rounded-panel border border-line bg-bg px-3 text-sm">
           <option value="mcp">Remote MCP</option>
           <option value="http">Custom HTTP</option>
         </select>
         {kind === "http" ? (
-          <select value={method} onChange={(event) => setMethod(event.target.value === "POST" ? "POST" : "GET")} className="mt-2 min-h-11 w-full rounded-panel border border-line bg-bg px-3 text-sm">
+          <select aria-label="HTTP method" value={method} onChange={(event) => setMethod(event.target.value === "POST" ? "POST" : "GET")} className="mt-2 min-h-11 w-full rounded-panel border border-line bg-bg px-3 text-sm">
             <option value="GET">GET read</option>
             <option value="POST">POST (requires confirm)</option>
           </select>
         ) : null}
         <input value={url} onChange={(event) => setUrl(event.target.value)} placeholder="https://example.com/mcp" className="mt-2 min-h-11 w-full rounded-panel border border-line bg-bg px-3 text-sm" />
-        <select value={auth} onChange={(event) => setAuth(event.target.value === "bearer" ? "bearer" : "none")} className="mt-2 min-h-11 w-full rounded-panel border border-line bg-bg px-3 text-sm">
+        <select aria-label="Authentication" value={auth} onChange={(event) => setAuth(event.target.value === "bearer" ? "bearer" : "none")} className="mt-2 min-h-11 w-full rounded-panel border border-line bg-bg px-3 text-sm">
           <option value="none">No auth</option>
           <option value="bearer">Bearer token on the server</option>
         </select>

@@ -7082,3 +7082,20 @@ details.intelligence-group > summary {
   min-height: 2.75rem;
   align-items: center;
 }
+
+aside.rail .gpt-rail-foot .gpt-chat-pill,
+aside.rail .gpt-rail-foot .gpt-chat-pill * {
+  color: #fff !important;
+  -webkit-text-fill-color: #fff !important;
+}
+
+aside.rail .gpt-rail-foot .gpt-chat-pill {
+  background: #2457c8 !important;
+}
+
+.gpt-chat-pill svg,
+.gpt-chat-pill span {
+  color: #fff !important;
+  fill: currentColor;
+  stroke: currentColor;
+}
