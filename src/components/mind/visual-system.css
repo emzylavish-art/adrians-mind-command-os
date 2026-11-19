@@ -1,0 +1,248 @@
+/*
+ * Visual-system guardrails
+ *
+ * This intentionally lives after the legacy shell styles.  It gives the
+ * shared command, chat and settings surfaces one semantic palette instead of
+ * allowing old, hard-coded dark values to leak into light mode.
+ */
+:root {
+  --mind-canvas: #070b14;
+  --mind-elevated: #101725;
+  --mind-raised: #171f30;
+  --mind-copy: #f4f7ff;
+  --mind-muted: #aab5c9;
+  --mind-border: rgb(190 207 235 / 0.16);
+  --mind-accent: #9c8cff;
+  --mind-accent-ink: #0b0d14;
+  --mind-focus: rgb(156 140 255 / 0.62);
+  --mind-shadow: 0 18px 48px rgb(0 0 0 / 0.28);
+}
+
+html[data-theme="light"] {
+  --mind-canvas: #f5f7fc;
+  --mind-elevated: #ffffff;
+  --mind-raised: #edf1f8;
+  --mind-copy: #172033;
+  --mind-muted: #52617a;
+  --mind-border: rgb(40 57 86 / 0.14);
+  --mind-accent: #5d47d8;
+  --mind-accent-ink: #ffffff;
+  --mind-focus: rgb(93 71 216 / 0.56);
+  --mind-shadow: 0 18px 48px rgb(37 52 78 / 0.10);
+}
+
+/* Command is the most frequently seen screen: make it a deliberate landing
+ * surface, not an isolated black rectangle in light mode. */
+.gpt-home {
+  background:
+    radial-gradient(70% 54% at 84% 0%, rgb(124 92 255 / 0.18), transparent 64%),
+    radial-gradient(46% 42% at 7% 100%, rgb(45 212 191 / 0.09), transparent 66%),
+    var(--mind-canvas) !important;
+  color: var(--mind-copy) !important;
+}
+
+html[data-theme="light"] .gpt-home {
+  background:
+    radial-gradient(62% 48% at 88% 0%, rgb(109 77 255 / 0.13), transparent 66%),
+    radial-gradient(48% 46% at 5% 100%, rgb(14 165 233 / 0.10), transparent 66%),
+    var(--mind-canvas) !important;
+}
+
+.gpt-home .masthead,
+.gpt-home .floating-composer,
+.gpt-home [data-composer="floating"] {
+  color: var(--mind-copy) !important;
+}
+
+.gpt-home .masthead {
+  width: min(100%, 52rem);
+  margin-inline: auto;
+  padding: 0 !important;
+  background: transparent !important;
+  border: 0 !important;
+  box-shadow: none !important;
+}
+
+html[data-theme="light"] .shell .gpt-home .masthead {
+  padding: 1rem 1.125rem !important;
+  border: 1px solid var(--mind-border) !important;
+  border-radius: 1.1rem;
+  background: color-mix(in srgb, var(--mind-elevated) 90%, transparent) !important;
+  box-shadow: 0 10px 28px rgb(37 52 78 / 0.07) !important;
+}
+
+.gpt-home .masthead h1,
+.gpt-home .masthead .text-accent {
+  color: var(--mind-copy) !important;
+}
+
+.gpt-home .masthead .text-muted,
+.gpt-home .gpt-starters > p,
+.gpt-home .composer-notice {
+  color: var(--mind-muted) !important;
+}
+
+.gpt-starters {
+  width: min(100%, 52rem);
+  margin: 0.75rem auto 1.25rem !important;
+  gap: 0.35rem;
+}
+
+.gpt-starters button {
+  min-height: 2.9rem;
+  padding: 0.45rem 0.6rem;
+  border-radius: 0.75rem;
+  color: var(--mind-copy) !important;
+  transition: background-color 160ms ease, transform 160ms ease;
+}
+
+.gpt-starters button:hover {
+  background: rgb(255 255 255 / 0.08) !important;
+  transform: translateX(2px);
+}
+
+html[data-theme="light"] .gpt-starters button:hover {
+  background: rgb(93 71 216 / 0.08) !important;
+}
+
+.gpt-home form {
+  width: min(100%, 52rem);
+  margin-inline: auto;
+  border-color: var(--mind-border) !important;
+  background: color-mix(in srgb, var(--mind-elevated) 92%, transparent) !important;
+  box-shadow: var(--mind-shadow);
+}
+
+.gpt-home textarea,
+.gpt-home textarea::placeholder {
+  color: var(--mind-copy) !important;
+  opacity: 1;
+}
+
+.gpt-home textarea::placeholder { color: var(--mind-muted) !important; }
+
+.gpt-home .composer-send,
+.gpt-home .gpt-voice,
+.shell .gpt-home button.gpt-voice {
+  background: var(--mind-accent) !important;
+  color: var(--mind-accent-ink) !important;
+}
+
+/* Legacy shell rules used fixed #121214 and #141416 surfaces.  These are
+ * the places that made the light theme visibly break. */
+html[data-theme="light"] .thread-chat-settings,
+html[data-theme="light"] .main-stage form.thread-composer.floating-composer.command-card.composer-dock,
+html[data-theme="light"] [data-testid="chat-right-rail"] .glass-panel,
+html[data-theme="light"] .page-shell .solid-form,
+html[data-theme="light"] .page-shell .research-panel,
+html[data-theme="light"] .solid-form ul {
+  background-color: var(--mind-elevated) !important;
+  color: var(--mind-copy) !important;
+  border-color: var(--mind-border) !important;
+  box-shadow: var(--mind-shadow);
+}
+
+/* Settings is a grouped navigation screen.  Its legacy rules paint every
+ * group #141416, which is why it was still dark after choosing light mode. */
+html[data-theme="light"] .main-stage .page-shell.mx-auto,
+html[data-theme="light"] .main-stage .settings-card,
+html[data-theme="light"] #settings-pages,
+html[data-theme="light"] #settings-general,
+html[data-theme="light"] .intelligence-group {
+  background: var(--mind-elevated) !important;
+  color: var(--mind-copy) !important;
+  border-color: var(--mind-border) !important;
+  box-shadow: 0 8px 24px rgb(37 52 78 / 0.06);
+}
+
+html[data-theme="light"] .shell .page-shell .page-hero,
+html[data-theme="light"] .settings-index {
+  background: transparent !important;
+  color: var(--mind-copy) !important;
+  border-color: transparent !important;
+  box-shadow: none !important;
+}
+
+html[data-theme="light"] .intelligence-group h3,
+html[data-theme="light"] .settings-index button,
+html[data-theme="light"] .settings-index button strong {
+  color: var(--mind-copy) !important;
+}
+
+html[data-theme="light"] .settings-index button {
+  border-bottom-color: var(--mind-border) !important;
+}
+
+html[data-theme="light"] .settings-index button small,
+html[data-theme="light"] .settings-index button::after {
+  color: var(--mind-muted) !important;
+}
+
+html[data-theme="light"] .settings-index button:hover {
+  background: rgb(93 71 216 / 0.06) !important;
+}
+
+html[data-theme="light"] .thread-chat-settings summary,
+html[data-theme="light"] .thread-chat-settings label,
+html[data-theme="light"] .thread-chat-settings select,
+html[data-theme="light"] .thread-chat-settings textarea {
+  color: var(--mind-copy) !important;
+}
+
+/* A reply is reading material.  Keep it comfortably legible, constrained,
+ * and visually separate from its metadata and controls. */
+.thread-shell article {
+  max-width: 58rem !important;
+  margin-inline: auto;
+  padding: 1rem 1.125rem !important;
+  line-height: 1.65;
+}
+
+.thread-shell article > :not(.mt-2) {
+  font-size: 0.975rem;
+}
+
+.thread-shell article > p.text-xs,
+.thread-shell article .text-xs {
+  font-size: 0.75rem;
+  line-height: 1.35;
+}
+
+.thread-shell .min-h-0.flex-1.overflow-auto {
+  scroll-padding-block: 1rem;
+}
+
+html[data-theme="light"] .thread-shell article {
+  background: var(--mind-elevated) !important;
+  border-color: var(--mind-border) !important;
+  box-shadow: 0 8px 24px rgb(37 52 78 / 0.07) !important;
+}
+
+/* The app uses a high density of icon-only controls; make focus consistently
+ * visible in both themes without changing their actions or product logic. */
+.shell :is(button, a, input, textarea, select, summary):focus-visible {
+  outline: 2px solid var(--mind-focus) !important;
+  outline-offset: 2px;
+  box-shadow: 0 0 0 4px color-mix(in srgb, var(--mind-focus) 25%, transparent) !important;
+}
+
+@media (max-width: 767.98px) {
+  .gpt-home {
+    min-height: calc(100dvh - 3.75rem) !important;
+    justify-content: flex-end !important;
+    padding: 1rem !important;
+  }
+
+  .gpt-home .masthead { margin-bottom: 0.25rem; }
+
+  .gpt-starters {
+    margin-block: 0.5rem 0.75rem !important;
+  }
+
+  .gpt-starters button { min-height: 2.75rem; }
+
+  .thread-shell article {
+    padding: 0.875rem 0.95rem !important;
+    font-size: 0.96rem;
+  }
+}

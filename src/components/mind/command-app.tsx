@@ -4,6 +4,7 @@ import "./command-drawer-nav.css";
 import "./command-search.css";
 import "./command-voice-mode.css";
 import "./gpt-shell.css";
+import "./visual-system.css";
 import { getBearerToken } from "@/lib/auth/client";
 import { loadMcpWithHttpFallback } from "@/lib/mind/mcp-list-http";
 import { getRecentChats } from "@/lib/mind/recent-chats";
