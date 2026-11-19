@@ -6314,6 +6314,82 @@ html[data-theme="light"] [role="menu"] {
   color: #0a0d14 !important;
 }
 
+/* —— Interaction lanes: header menus stay inside the viewport and never stack together —— */
+.topbar {
+  position: relative;
+  z-index: 60;
+  isolation: isolate;
+}
+.surface-menu,
+.command-palette,
+#alerts-panel,
+#account-panel {
+  max-width: min(32rem, calc(100vw - 1.5rem));
+  max-height: min(70dvh, 32rem);
+  overflow: auto;
+  overscroll-behavior: contain;
+}
+.surface-menu,
+.command-palette {
+  scrollbar-width: thin;
+}
+#alerts-panel,
+#account-panel {
+  position: relative;
+  z-index: 45;
+}
+.surface-menu {
+  right: auto;
+}
+html[data-theme="light"] aside.rail {
+  color: var(--color-fg);
+}
+html[data-theme="light"] aside.rail .text-muted,
+html[data-theme="light"] aside.rail .meta-label {
+  color: #475569 !important;
+}
+html[data-theme="light"] aside.rail.gpt-rail .gpt-rail-head > p {
+  color: #111318 !important;
+}
+html[data-theme="light"] aside.rail.gpt-rail nav button,
+html[data-theme="light"] aside.rail.gpt-rail nav a.nav-item {
+  color: #111318 !important;
+}
+html[data-theme="light"] .surface-switch__button {
+  background: #ffffff;
+  border-color: #cbd5e1;
+  color: #0a0d14;
+}
+html[data-theme="light"] .surface-menu {
+  background: #ffffff;
+  border-color: #cbd5e1;
+  color: #0a0d14;
+  box-shadow: 0 18px 48px rgb(15 23 42 / 0.16);
+}
+html[data-theme="light"] .surface-menu button span:last-child {
+  color: #475569;
+}
+html[data-theme="light"] .topbar .command-search input.input-glow {
+  background: #ffffff !important;
+  border-color: #cbd5e1 !important;
+  color: #0a0d14 !important;
+}
+html[data-theme="light"] .command-search > .text-muted {
+  color: #475569 !important;
+}
+@media (max-width: 767px) {
+  .surface-menu {
+    min-width: min(16rem, calc(100vw - 1.5rem));
+  }
+  .command-palette {
+    width: min(100%, calc(100vw - 1.5rem));
+  }
+  #alerts-panel,
+  #account-panel {
+    margin-inline: 0.75rem;
+  }
+}
+
 /* —— Evolution c85: hover / active / selected / disabled — Grok/ChatGPT mono —— */
 /* List rows & dense cards */
 .main-stage .dense-card,
@@ -7098,4 +7174,252 @@ aside.rail .gpt-rail-foot .gpt-chat-pill {
   color: #fff !important;
   fill: currentColor;
   stroke: currentColor;
+}
+
+/* Final light-mode parity for surfaces whose legacy shell rules used dark
+   literals. Keep the same hierarchy, but restore readable text and controls. */
+html[data-theme="light"] .main-stage .page-shell .page-hero,
+html[data-theme="light"] .main-stage .page-shell .rounded-panel.border.border-line.bg-surface,
+html[data-theme="light"] .main-stage .page-shell .dense-card,
+html[data-theme="light"] .main-stage .page-shell .empty-state,
+html[data-theme="light"] .main-stage .page-shell .build-panel,
+html[data-theme="light"] .main-stage .page-shell .build-panel__next,
+html[data-theme="light"] .main-stage .page-shell .build-panel li,
+html[data-theme="light"] .main-stage .page-shell .explore-panel,
+html[data-theme="light"] .main-stage .page-shell .explore-panel li,
+html[data-theme="light"] [data-testid="owner-flow"],
+html[data-theme="light"] [data-testid="owner-flow"] .rounded-panel,
+html[data-theme="light"] [data-testid="eve-workbench"] header.page-hero,
+html[data-theme="light"] [data-testid="eve-workbench"] .rounded-panel.border.border-line.bg-surface {
+  background: #ffffff !important;
+  background-image: none !important;
+  border-color: #d5dbe8 !important;
+  color: #0a0d14 !important;
+}
+html[data-theme="light"] .main-stage .page-shell .build-panel button,
+html[data-theme="light"] .main-stage .page-shell .build-panel input,
+html[data-theme="light"] .main-stage .page-shell .explore-panel button,
+html[data-theme="light"] .main-stage .page-shell .explore-panel input,
+html[data-theme="light"] [data-testid="owner-flow"] button,
+html[data-theme="light"] [data-testid="owner-flow"] input {
+  background: #f8fafc !important;
+  border-color: #cbd5e1 !important;
+  color: #0a0d14 !important;
+}
+html[data-theme="light"] .main-stage .page-shell .text-muted,
+html[data-theme="light"] [data-testid="owner-flow"] .text-muted,
+html[data-theme="light"] [data-testid="eve-workbench"] .text-muted {
+  color: #475569 !important;
+}
+html[data-theme="light"] .main-stage .page-shell .nav-item-active {
+  background: #e2e8f0 !important;
+  color: #0a0d14 !important;
+}
+html[data-theme="light"] [data-testid="build-workspace"] > .page-hero button {
+  background: #ffffff !important;
+  border-color: #cbd5e1 !important;
+  color: #0a0d14 !important;
+}
+html[data-theme="light"] aside.rail.gpt-rail nav button.nav-item-active,
+html[data-theme="light"] aside.rail.gpt-rail nav a.nav-item-active {
+  background: #e2e8f0 !important;
+  color: #0a0d14 !important;
+}
+html[data-theme="light"] [data-testid="owner-flow"] li,
+html[data-theme="light"] [data-testid="owner-flow"] [data-testid^="owner-action-"],
+html[data-theme="light"] [data-testid="owner-flow"] [data-testid^="desktop-action-"] {
+  background: #ffffff !important;
+  background-image: none !important;
+  border-color: #d5dbe8 !important;
+  color: #0a0d14 !important;
+}
+html[data-theme="light"] [data-testid="owner-flow"] li .text-muted,
+html[data-theme="light"] [data-testid="owner-flow"] li .text-xs {
+  color: #475569 !important;
+}
+html[data-theme="light"] [data-testid="owner-flow"] .text-emerald-300 {
+  color: #047857 !important;
+}
+html[data-theme="light"] [data-testid="owner-flow"] .text-rose-300 {
+  color: #b91c1c !important;
+}
+html[data-theme="light"] .main-stage section.rounded-panel.border.border-line.bg-surface[data-testid="owner-flow"],
+html[data-theme="light"] .main-stage [data-testid="owner-flow"] .rounded-panel.border.border-line,
+html[data-theme="light"] .main-stage [data-testid="owner-flow"] .rounded-panel.border.border-line[data-testid^="owner-action-"],
+html[data-theme="light"] .main-stage [data-testid="owner-flow"] .rounded-panel.border.border-line[data-testid^="desktop-action-"] {
+  background: #ffffff !important;
+  background-color: #ffffff !important;
+  background-image: none !important;
+  border-color: #d5dbe8 !important;
+  color: #0a0d14 !important;
+}
+html[data-theme="light"] .main-stage input.rounded-panel.border.border-line,
+html[data-theme="light"] .main-stage textarea.rounded-panel.border.border-line,
+html[data-theme="light"] .main-stage select.rounded-panel.border.border-line {
+  background-color: #ffffff !important;
+  color: #0a0d14 !important;
+  border-color: #cbd5e1 !important;
+}
+html[data-theme="light"] .main-stage .intelligence-group,
+html[data-theme="light"] .main-stage .intelligence-group .rounded-panel,
+html[data-theme="light"] [data-testid="human-code"] .human-code-composer label {
+  background: #ffffff !important;
+  background-color: #ffffff !important;
+  background-image: none !important;
+  border-color: #d5dbe8 !important;
+  color: #0a0d14 !important;
+}
+html[data-theme="light"] .main-stage .intelligence-group h3 {
+  color: #0f172a !important;
+}
+html[data-theme="light"] .shell .main-stage .page-shell .empty-state,
+html[data-theme="light"] .shell .main-stage .page-shell .dense-card,
+html[data-theme="light"] .shell .main-stage .page-shell article.rounded-panel,
+html[data-theme="light"] .shell .main-stage .page-shell .glow-card,
+html[data-theme="light"] .shell .main-stage .page-shell .library-list,
+html[data-theme="light"] .shell .main-stage .page-shell .rounded-panel.border.border-line.bg-surface {
+  background: #ffffff !important;
+  background-color: #ffffff !important;
+  background-image: none !important;
+  border-color: #d5dbe8 !important;
+  color: #0a0d14 !important;
+}
+html[data-theme="light"] .shell .main-stage .page-hero,
+html[data-theme="light"] #owner-projects > article,
+html[data-theme="light"] #owner-library > .library-list,
+html[data-theme="light"] #owner-library > div,
+html[data-theme="light"] #owner-library li.empty-state,
+html[data-theme="light"] #owner-skills > .skill-card,
+html[data-theme="light"] #owner-tools,
+html[data-theme="light"] .owner-fold {
+  background: #ffffff !important;
+  background-color: #ffffff !important;
+  background-image: none !important;
+  border-color: #d5dbe8 !important;
+  color: #0a0d14 !important;
+}
+html[data-theme="light"] .shell .main-stage .card-texture {
+  background: #ffffff !important;
+  background-color: #ffffff !important;
+  background-image: none !important;
+  border-color: #d5dbe8 !important;
+  color: #0a0d14 !important;
+}
+html[data-theme="light"] .shell .main-stage .runtime-status--not_configured {
+  color: #92400e !important;
+}
+html[data-theme="light"] .shell .main-stage .page-shell .empty-state p,
+html[data-theme="light"] .shell .main-stage .page-shell .dense-card p,
+html[data-theme="light"] .shell .main-stage .page-shell .library-list .text-muted {
+  color: #475569 !important;
+}
+html[data-theme="light"] .shell .main-stage [role="tab"],
+html[data-theme="light"] .shell .main-stage [role="tablist"] button {
+  background: #f8fafc !important;
+  border-color: #cbd5e1 !important;
+  color: #0f172a !important;
+}
+html[data-theme="light"] .shell .main-stage [role="tab"][aria-selected="true"],
+html[data-theme="light"] .shell .main-stage [role="tab"][aria-pressed="true"] {
+  background: #e2e8f0 !important;
+  color: #0a0d14 !important;
+}
+html[data-theme="light"] .shell .main-stage .bg-accent.text-accent-ink {
+  background: #111827 !important;
+  color: #ffffff !important;
+}
+html[data-theme="light"] .shell [data-testid="kimi-connection"] button[role="tab"],
+html[data-theme="light"] .shell [data-testid="kimi-connection"] .plugin-link,
+html[data-theme="light"] .shell [data-testid="kimi-connection"] .plugin-link :is(a, p, span) {
+  background: #ffffff !important;
+  border-color: #d5dbe8 !important;
+  color: #0a0d14 !important;
+}
+html[data-theme="light"] .shell [data-testid="kimi-connection"] button[role="tab"][aria-selected="true"] {
+  background: #e2e8f0 !important;
+}
+html[data-theme="light"] .shell .main-stage [data-testid="kimi-connection"] button[role="tab"],
+html[data-theme="light"] .shell .main-stage [data-testid="kimi-connection"] .plugin-link,
+html[data-theme="light"] .shell .main-stage [data-testid="kimi-connection"] .plugin-link :is(a, p, span) {
+  background: #ffffff !important;
+  background-color: #ffffff !important;
+  border-color: #d5dbe8 !important;
+  color: #0a0d14 !important;
+}
+html[data-theme="light"] .shell .main-stage section[aria-label="Not connected"] > button {
+  background: #ffffff !important;
+  background-color: #ffffff !important;
+  border-color: #cbd5e1 !important;
+  color: #0a0d14 !important;
+}
+html[data-theme="light"] .shell .main-stage section[aria-label="Not connected"] > button.min-h-11.rounded-panel.border.border-line {
+  background: #ffffff !important;
+  background-color: #ffffff !important;
+  color: #0a0d14 !important;
+}
+html[data-theme="light"] #owner-skills .skill-card button,
+html[data-theme="light"] #owner-skills article button {
+  background: #ffffff !important;
+  border-color: #cbd5e1 !important;
+  color: #0a0d14 !important;
+}
+html[data-theme="light"] .shell[data-view="help"] .page-shell button.text-left.min-h-14 {
+  background: #ffffff !important;
+  background-color: #ffffff !important;
+  border-color: #d5dbe8 !important;
+  color: #0a0d14 !important;
+}
+html[data-theme="light"] .shell .main-stage .page-shell button.text-left.min-h-14 {
+  background: #ffffff !important;
+  background-color: #ffffff !important;
+  border-color: #d5dbe8 !important;
+  color: #0a0d14 !important;
+}
+html[data-theme="light"] #owner-help > button {
+  background: #ffffff !important;
+  background-color: #ffffff !important;
+  border-color: #d5dbe8 !important;
+  color: #0a0d14 !important;
+}
+html[data-theme="light"] #owner-scheduled,
+html[data-theme="light"] #owner-scheduled .empty-state,
+html[data-theme="light"] #owner-activity,
+html[data-theme="light"] #owner-activity .empty-state {
+  background: #ffffff !important;
+  background-color: #ffffff !important;
+  background-image: none !important;
+  border-color: #d5dbe8 !important;
+  color: #0a0d14 !important;
+}
+html[data-theme="light"] #owner-scheduled .empty-state .text-muted,
+html[data-theme="light"] #owner-activity .empty-state .text-muted {
+  color: #475569 !important;
+}
+html[data-theme="light"] .shell[data-view="scheduled"] .page-shell .empty-state {
+  background: #ffffff !important;
+  background-color: #ffffff !important;
+  background-image: none !important;
+  border-color: #d5dbe8 !important;
+  color: #0a0d14 !important;
+}
+html[data-theme="light"] .shell .main-stage.main-stage .page-shell .empty-state,
+html[data-theme="light"] .shell[data-view="scheduled"] .main-stage.main-stage .page-shell .empty-state,
+html[data-theme="light"] .shell[data-view="activity"] .main-stage.main-stage .page-shell .empty-state {
+  background: #ffffff !important;
+  background-color: #ffffff !important;
+  background-image: none !important;
+  border-color: #d5dbe8 !important;
+  color: #0a0d14 !important;
+}
+html[data-theme="light"] .shell .min-h-0.flex-1.overflow-auto .page-shell ul.mt-3.space-y-1 > li.empty-state,
+html[data-theme="light"] .shell .min-h-0.flex-1.overflow-auto .page-shell ul.mt-4.space-y-2 > li.empty-state,
+html[data-theme="light"] .shell .min-h-0.flex-1.overflow-auto .page-shell .empty-state {
+  background: #ffffff !important;
+  background-color: #ffffff !important;
+  background-image: none !important;
+  border-color: #d5dbe8 !important;
+  color: #0a0d14 !important;
+}
+html[data-theme="light"] .shell[data-view="help"] .page-shell button.text-left.min-h-14 .text-muted {
+  color: #475569 !important;
 }

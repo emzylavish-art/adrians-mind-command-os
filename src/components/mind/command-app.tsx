@@ -744,13 +744,22 @@ export function CommandApp() {
   }, [navOpen]);
   const openNav = (event: ReactMouseEvent<HTMLButtonElement>) => {
     navTriggerRef.current = event.currentTarget;
+    closeMenus();
     setNavOpen(true);
   };
   const closeNavFromBackdrop = (event: ReactMouseEvent<HTMLElement>) => {
     if (event.target === event.currentTarget) setNavOpen(false);
   };
   const [railCollapsed, setRailCollapsed] = useState(false);
-  const [theme, setTheme] = useState<"dark" | "light" | "system">("dark");
+  const [theme, setTheme] = useState<"dark" | "light" | "system">(() => {
+    if (typeof window === "undefined") return "dark";
+    try {
+      const stored = window.localStorage.getItem("amcos.theme.v1");
+      return stored === "light" || stored === "dark" || stored === "system" ? stored : "dark";
+    } catch {
+      return "dark";
+    }
+  });
   const [commandMode, setCommandMode] = useState<CommandMode>("ask");
   const [defaultPersonalityId, setDefaultPersonalityId] = useState<PersonalityId>("assistant");
   const [activeId, setActiveId] = useState<string | null>(null);
@@ -1434,6 +1443,7 @@ export function CommandApp() {
     const onKey = (event: KeyboardEvent) => {
       if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === "k") {
         event.preventDefault();
+        closeMenus("palette");
         setPaletteOpen(true);
         searchRef.current?.focus();
       }
@@ -1449,7 +1459,8 @@ export function CommandApp() {
           closeVoiceOverlayRef.current();
           return;
         }
-        setPaletteOpen(false);
+        closeMenus();
+        setNavOpen(false);
       }
       if (matchesVoiceToggleShortcut(event) && shouldToggleVoiceShortcut(event, document)) {
         event.preventDefault();
@@ -1499,14 +1510,6 @@ export function CommandApp() {
 
   useEffect(() => {
     try {
-      const stored = localStorage.getItem("amcos.theme.v1");
-      if (stored === "light" || stored === "dark" || stored === "system") setTheme(stored);
-    } catch {
-      /* a private browser can refuse storage */
-    }
-  }, []);
-  useEffect(() => {
-    try {
       const stored = JSON.parse(localStorage.getItem("amcos.research.v1") || "[]") as { id: string; question: string; summary: string; citations: { title: string; url: string }[]; at: string }[];
       if (Array.isArray(stored)) setResearchHistory(stored.slice(0, 8));
     } catch {
@@ -1538,11 +1541,16 @@ export function CommandApp() {
     [query, ws],
   );
 
-  function closeMenus() {
-    setBellOpen(false);
-    setAccountOpen(false);
+  type ChromeMenu = "palette" | "surface" | "bell" | "account";
+
+  function closeMenus(keep?: ChromeMenu) {
+    if (keep !== "palette") setPaletteOpen(false);
+    if (keep !== "surface") setSurfaceMenu(false);
+    if (keep !== "bell") setBellOpen(false);
+    if (keep !== "account") setAccountOpen(false);
     setContextOpen(false);
     setToolsOpen(false);
+    setNavOpen(false);
   }
 
   function openPaletteHit(hit: (typeof hits)[number]) {
@@ -4083,6 +4091,7 @@ export function CommandApp() {
   }
 
   function openSpeakStage() {
+    closeMenus();
     clearOverlayFlag();
     setSpeakStageOpen(true);
   }
@@ -4690,7 +4699,11 @@ export function CommandApp() {
               aria-expanded={surfaceMenu}
               aria-haspopup="menu"
               aria-label={`Current surface: ${TITLES[view] ?? "Chat"}. Switch between Chat, Build, Intelligence, and EVE`}
-              onClick={() => setSurfaceMenu((open) => !open)}
+              onClick={() => {
+                const next = !surfaceMenu;
+                closeMenus("surface");
+                setSurfaceMenu(next);
+              }}
             >
               <img className="adrian-mark" src="/brand/logo-mark.jpg" alt="" width={28} height={28} />
               <span>{TITLES[view] ?? "Chat"}</span>
@@ -4730,9 +4743,13 @@ export function CommandApp() {
               onChange={(event) => {
                 setQuery(event.target.value);
                 setPaletteIndex(0);
+                closeMenus("palette");
                 setPaletteOpen(true);
               }}
-              onFocus={() => setPaletteOpen(true)}
+              onFocus={() => {
+                closeMenus("palette");
+                setPaletteOpen(true);
+              }}
               onKeyDown={onPaletteKeyDown}
               placeholder="Search or jump…"
               className="input-glow h-11 w-full rounded-panel border border-line bg-surface/80 pr-14 pl-10 text-sm backdrop-blur"
@@ -4819,8 +4836,9 @@ export function CommandApp() {
             aria-controls="alerts-panel"
             data-testid="alerts-toggle"
             onClick={() => {
-              setBellOpen((open) => !open);
-              setAccountOpen(false);
+              const next = !bellOpen;
+              closeMenus("bell");
+              setBellOpen(next);
             }}
           >
             <Bell className="size-4" aria-hidden="true" />
@@ -4832,8 +4850,9 @@ export function CommandApp() {
             aria-expanded={accountOpen}
             aria-controls="account-panel"
             onClick={() => {
-              setAccountOpen((open) => !open);
-              setBellOpen(false);
+              const next = !accountOpen;
+              closeMenus("account");
+              setAccountOpen(next);
             }}
           >
             <img src="/brand/marks/account.png" alt="" width={32} height={32} className="size-8 rounded-full object-cover" />
@@ -5157,7 +5176,15 @@ export function CommandApp() {
                     <button type="button" className="inline-flex min-h-11 items-center gap-2 rounded-panel border border-line px-3 text-sm" onClick={() => imageInputRef.current?.click()}>
                       <Image className="size-4" /> Image
                     </button>
-                    <details className="composer-more">
+                    <details
+                      className="composer-more"
+                      onToggle={(event) => {
+                        if (event.currentTarget.open) {
+                          setContextOpen(false);
+                          setToolsOpen(false);
+                        }
+                      }}
+                    >
                       <summary>More</summary>
                       <div className="mt-2 flex flex-wrap gap-2">
                     <button type="button" className="inline-flex min-h-11 items-center gap-2 rounded-panel border border-line px-3 text-sm" onClick={() => setCameraOpen(true)}>
@@ -5203,10 +5230,10 @@ export function CommandApp() {
                     >
                       <Wrench className="size-4" /> Tools
                     </button>
-                    <button type="button" className="inline-flex min-h-11 items-center gap-2 rounded-panel border border-line px-3 text-sm" onClick={() => setView("agents")}>
+                    <button type="button" className="inline-flex min-h-11 items-center gap-2 rounded-panel border border-line px-3 text-sm" onClick={() => { setContextOpen(false); setToolsOpen(false); setView("agents"); }}>
                       <Bot className="size-4" /> Agents
                     </button>
-                    <button type="button" className="inline-flex min-h-11 items-center gap-2 rounded-panel border border-line px-3 text-sm" onClick={() => setProjectOpen(true)}>
+                    <button type="button" className="inline-flex min-h-11 items-center gap-2 rounded-panel border border-line px-3 text-sm" onClick={() => { setContextOpen(false); setToolsOpen(false); setProjectOpen(true); }}>
                       <Folder className="size-4" /> Projects
                     </button>
                       </div>
@@ -5714,7 +5741,7 @@ export function CommandApp() {
                   </button>
                 </div>
               </div>
-              <div className="mt-4 flex gap-2 overflow-x-auto">
+              <div className="mt-4 flex flex-wrap gap-2">
                 {([
                   ["mine", "My Memory"],
                   ["project", "Project Memory"],

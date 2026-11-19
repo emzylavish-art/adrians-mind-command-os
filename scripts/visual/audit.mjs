@@ -116,6 +116,12 @@ try {
     const context = await browser.newContext({ viewport: { width: viewport.width, height: viewport.height }, isMobile: viewport.isMobile });
     for (const theme of themes) {
       const page = await context.newPage();
+      // Seed the app's persisted theme before React mounts. Mutating only the
+      // data attribute after mount can be overwritten by the theme effect and
+      // produces false light-mode failures on route changes.
+      await page.addInitScript((nextTheme) => {
+        window.localStorage.setItem("amcos.theme.v1", nextTheme);
+      }, theme);
       await page.goto(baseUrl, { waitUntil: "domcontentloaded", timeout: 45_000 });
       await page.waitForTimeout(1_000);
       await page.evaluate((nextTheme) => { document.documentElement.dataset.theme = nextTheme; }, theme);

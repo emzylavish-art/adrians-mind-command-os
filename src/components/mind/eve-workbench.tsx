@@ -224,7 +224,7 @@ export function EveWorkbench({
   const heard = projectFromSpeech(ask);
 
   return (
-    <main className="h-full min-h-0 overflow-auto p-4 md:p-6" data-testid="eve-workbench">
+    <section className="h-full min-h-0 overflow-auto p-4 md:p-6" data-testid="eve-workbench" aria-labelledby="eve-workbench-title">
       <div className="mx-auto flex max-w-[1500px] flex-col gap-4">
         <header className="page-hero flex flex-col gap-4 p-4 md:flex-row md:items-center md:justify-between md:p-6">
           <div className="flex min-w-0 flex-col items-stretch gap-4 sm:flex-row sm:items-center">
@@ -233,7 +233,7 @@ export function EveWorkbench({
             </div>
             <div className="min-w-0">
               <p className="text-xs font-semibold uppercase tracking-[0.18em] text-muted">Adrian Core · Intelligence</p>
-              <h1 className="font-display text-3xl font-bold md:text-4xl">EVE</h1>
+              <h1 id="eve-workbench-title" className="font-display text-3xl font-bold md:text-4xl">EVE</h1>
               <p className="mt-1 text-sm text-muted">Talk to EVE here. This is the person, not the Speak overlay. She is AI.</p>
             </div>
           </div>
@@ -577,6 +577,6 @@ export function EveWorkbench({
           </div>
         </section>
       </div>
-    </main>
+    </section>
   );
 }
