@@ -182,6 +182,43 @@ html[data-theme="light"] .settings-index button:hover {
   background: rgb(93 71 216 / 0.06) !important;
 }
 
+/* The plugin directory is intentionally divided into Connected, Build links,
+ * and Not connected.  Its nested Kimi card had retained a dark texture in
+ * light mode, visually collapsing that hierarchy back into a mixed theme. */
+html[data-theme="light"] [data-testid="kimi-connection"] section[aria-label="Plugins"] {
+  background: var(--mind-raised) !important;
+  background-image: none !important;
+  border-color: var(--mind-border) !important;
+  color: var(--mind-copy) !important;
+}
+
+html[data-theme="light"] [data-testid="kimi-connection"] .plugin-link {
+  background: var(--mind-elevated) !important;
+  border-color: var(--mind-border) !important;
+  color: var(--mind-copy) !important;
+}
+
+html[data-theme="light"] [data-testid="kimi-connection"] .plugin-link :is(a, p, span) {
+  color: inherit;
+}
+
+html[data-theme="light"] [data-testid="kimi-connection"] .plugin-link .text-muted,
+html[data-theme="light"] [data-testid="kimi-connection"] section[aria-label="Plugins"] > .text-muted {
+  color: var(--mind-muted) !important;
+}
+
+html[data-theme="light"] .shell [data-testid="kimi-connection"] button[role="tab"] {
+  background: var(--mind-elevated) !important;
+  border-color: var(--mind-border) !important;
+  color: var(--mind-copy) !important;
+}
+
+html[data-theme="light"] .shell [data-testid="kimi-connection"] button[role="tab"][aria-selected="true"] {
+  background: var(--mind-accent) !important;
+  border-color: var(--mind-accent) !important;
+  color: var(--mind-accent-ink) !important;
+}
+
 html[data-theme="light"] .thread-chat-settings summary,
 html[data-theme="light"] .thread-chat-settings label,
 html[data-theme="light"] .thread-chat-settings select,
@@ -224,6 +261,43 @@ html[data-theme="light"] .thread-shell article {
   outline: 2px solid var(--mind-focus) !important;
   outline-offset: 2px;
   box-shadow: 0 0 0 4px color-mix(in srgb, var(--mind-focus) 25%, transparent) !important;
+}
+
+.provider-identity {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  min-height: 3.75rem;
+  padding: 0.75rem;
+  border: 1px solid var(--mind-border);
+  border-radius: 0.9rem;
+  background: color-mix(in srgb, var(--mind-elevated) 86%, transparent);
+}
+
+.provider-identity > img {
+  width: 1.75rem;
+  height: 1.75rem;
+  flex: 0 0 auto;
+  object-fit: contain;
+}
+
+.provider-identity__custom {
+  display: grid;
+  width: 1.75rem;
+  height: 1.75rem;
+  place-items: center;
+  border: 1px solid var(--mind-border);
+  border-radius: 0.45rem;
+  background: var(--mind-raised);
+  color: var(--mind-muted);
+  font-size: 0.62rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+}
+
+html[data-theme="light"] .provider-identity {
+  background: var(--mind-raised);
+  color: var(--mind-copy);
 }
 
 @media (max-width: 767.98px) {

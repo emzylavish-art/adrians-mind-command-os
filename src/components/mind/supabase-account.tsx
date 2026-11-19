@@ -77,19 +77,14 @@ export function SupabaseAccountControls({
 
   if (!configured) return null;
 
-  const initial = (email?.[0] ?? "?").toUpperCase();
-
   return (
     <div
       className="mt-3 space-y-3 border-t border-line pt-3"
       data-testid="supabase-account"
     >
       <div className="flex items-start gap-3">
-        <span
-          className="grid size-9 shrink-0 place-items-center rounded-full border border-line bg-surface-2 text-xs font-semibold text-fg"
-          aria-hidden="true"
-        >
-          {email ? initial : "—"}
+        <span className="grid size-9 shrink-0 place-items-center rounded-full border border-line bg-surface-2" aria-hidden="true">
+          <img src="/brand/logos/supabase.svg" alt="" width={20} height={20} className="size-5 text-[#3ecf8e]" />
         </span>
         <div className="min-w-0 flex-1">
           <p className="text-[11px] font-medium uppercase tracking-[0.12em] text-muted">

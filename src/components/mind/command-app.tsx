@@ -421,7 +421,7 @@ const CAPABILITY_MARK: Record<string, string> = {
   "chat.local": "computer",
   policy: "safety",
   memory: "memory",
-  supabase: "datasource",
+  supabase: "supabase",
   rea: "tools",
   pc: "computer",
   research: "research",
@@ -452,6 +452,7 @@ const PRODUCT_LOGO: Record<string, string> = {
   notion: "/brand/logos/notion.svg",
   github: "/brand/logos/github.svg",
   mcp: "/brand/logos/mcp.svg",
+  supabase: "/brand/logos/supabase.svg",
 };
 
 function productMark(name: string) {

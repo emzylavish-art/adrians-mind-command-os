@@ -14,6 +14,24 @@ const PRESETS: Record<ProviderKind, string> = {
   compatible: "",
 };
 
+const PROVIDER_LOGOS: Partial<Record<ProviderKind, string>> = {
+  openai: "/brand/logos/openai.svg",
+  xai: "/brand/logos/grok.svg",
+  openrouter: "/brand/logos/openrouter.svg",
+  anthropic: "/brand/logos/claude.svg",
+  gemini: "/brand/logos/gemini.svg",
+};
+
+function providerLogo(label: string) {
+  const name = label.toLowerCase();
+  if (name.includes("openrouter")) return PROVIDER_LOGOS.openrouter;
+  if (name.includes("anthropic") || name.includes("claude")) return PROVIDER_LOGOS.anthropic;
+  if (name.includes("gemini")) return PROVIDER_LOGOS.gemini;
+  if (name.includes("xai") || name.includes("grok")) return PROVIDER_LOGOS.xai;
+  if (name.includes("openai")) return PROVIDER_LOGOS.openai;
+  return null;
+}
+
 async function api(action: Record<string, unknown> | null): Promise<Record<string, unknown>> {
   const token = getBearerToken();
   const response = await fetch("/api/mind/providers", {
@@ -77,6 +95,10 @@ export function AiProviderConnections({ onChange }: { onChange?: (rows: PublicRo
     <section id="owner-api-connect" className="settings-card rounded-panel p-4 text-sm" aria-label="Custom AI API providers" data-testid="custom-ai-providers">
       <h3 className="font-semibold">Custom AI APIs and models</h3>
       <p className="mt-1 text-muted">Connect OpenAI-compatible, Anthropic or Gemini APIs, discover supported models, then choose a model from chat. Your key is encrypted on the server. Some providers require a manually entered model ID.</p>
+      <div className="provider-identity mt-4" aria-live="polite">
+        {PROVIDER_LOGOS[kind] ? <img src={PROVIDER_LOGOS[kind]} alt="" width={28} height={28} /> : <span className="provider-identity__custom" aria-hidden="true">API</span>}
+        <div><p className="font-semibold">{label || "Custom API"}</p><p className="text-xs text-muted">Select a provider, then add only the credentials you intend to use.</p></div>
+      </div>
       <form className="mt-4 grid gap-3 md:grid-cols-2" onSubmit={(event) => {
         event.preventDefault();
         void run({ action: "save", label, baseUrl, apiKey, model: initialModel }, "Provider saved. You can refresh its models without using chat credits.");
@@ -122,7 +144,7 @@ export function AiProviderConnections({ onChange }: { onChange?: (rows: PublicRo
         {rows.map((row) => (
           <article key={row.id} className="rounded-panel border border-line p-3">
             <div className="flex flex-wrap justify-between gap-2">
-              <div><p className="font-semibold">{row.label}</p><p className="text-xs text-muted">{row.host} · {row.status} · {row.models.length} model(s)</p></div>
+              <div className="flex min-w-0 items-start gap-3">{providerLogo(row.label) ? <img className="size-7 shrink-0 rounded" src={providerLogo(row.label)!} alt="" width={28} height={28} /> : <span className="provider-identity__custom shrink-0" aria-hidden="true">API</span>}<div><p className="font-semibold">{row.label}</p><p className="text-xs text-muted">{row.host} · {row.status} · {row.models.length} model(s)</p></div></div>
               <div className="flex gap-2">
                 <button type="button" disabled={loading} onClick={() => void run({ action: "discover", id: row.id }, "Model catalogue refreshed.")} className="rounded-panel border border-line px-3 py-2">Refresh models</button>
                 <button type="button" disabled={loading} onClick={() => {
