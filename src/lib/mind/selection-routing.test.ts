@@ -60,7 +60,7 @@ describe("unwired providers and OpenAI fallback", () => {
     }
   });
 
-  it("sends OpenAI only when exactly one Astra/Sol/Luna route uses the key fallback", () => {
+  it("sends OpenAI through its own adapter without substituting another route", () => {
     const none = resolveOpenAiFallback([route({ id: "sol", state: "needs-config", missing: ["SOL_API_KEY", "OPENAI_API_KEY"] })]);
     assert.equal(none.ok, false);
     const sol = route({
@@ -83,8 +83,9 @@ describe("unwired providers and OpenAI fallback", () => {
     const gate = gateTurn({ ...base, provider: "openai" }, [sol], true);
     assert.equal(gate.ok, true);
     if (gate.ok) {
-      assert.equal(gate.logicRoute, "sol");
-      assert.match(gate.note ?? "", /OPENAI_API_KEY/);
+      assert.equal(gate.provider, "openai");
+      assert.equal(gate.logicRoute, null);
+      assert.match(gate.note ?? "", /OpenAI adapter/);
       const body = chatTurnBody({
         text: "hi",
         memory: "off",
@@ -97,8 +98,8 @@ describe("unwired providers and OpenAI fallback", () => {
         orchestrator: gate.orchestrator,
         images: [],
       });
-      assert.equal(body.logicRoute, "sol");
-      assert.equal(body.provider, "sol");
+      assert.equal(body.logicRoute, undefined);
+      assert.equal(body.provider, "openai");
     }
   });
 

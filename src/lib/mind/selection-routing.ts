@@ -86,7 +86,7 @@ export function legacyProviderOption(id: string, grokConfigured: boolean | null)
       id,
       label: "OpenAI",
       enabled: true,
-      reason: "No standalone OpenAI adapter. Send uses Astra, Sol, or Luna only when provider.status reports an OPENAI_API_KEY fallback.",
+      reason: "Configured path. Send uses the OpenAI adapter. The key is not displayed.",
     };
   }
   if (isUnwiredProvider(id)) {
@@ -212,15 +212,13 @@ export function gateTurn(selection: TurnSelection, routes: LogicRoutePublic[], g
     };
   }
   if (selection.provider === "openai") {
-    const resolved = resolveOpenAiFallback(routes);
-    if (!resolved.ok) return { ok: false, error: resolved.error, failureAction: "setup", missing: ["OPENAI_API_KEY"] };
     return {
       ok: true,
-      provider: resolved.route,
-      logicRoute: resolved.route,
+      provider: "openai",
+      logicRoute: null,
       modelTier: selection.modelTier,
       orchestrator,
-      note: resolved.note,
+      note: "This turn uses the OpenAI adapter. The key is not displayed.",
       failureAction: "retry",
     };
   }
