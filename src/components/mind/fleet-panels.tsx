@@ -160,6 +160,7 @@ export function FleetPanel({
   const [scheduleBand, setScheduleBand] = useState<"jobs" | "new">("jobs");
   const [jobZone, setJobZone] = useState(() => Intl.DateTimeFormat().resolvedOptions().timeZone || "UTC");
   const [jobHour, setJobHour] = useState("");
+  const [scheduleAgentId, setScheduleAgentId] = useState("");
   const [workerHealthState, setWorkerHealthState] = useState<WorkerHealthState>({ status: "loading" });
   const workerHealthInFlight = useRef(false);
   const workerHealthGeneration = useRef(0);
@@ -581,6 +582,7 @@ export function FleetPanel({
           <button
             type="button"
             className="min-h-11 rounded-panel bg-accent px-4 text-sm font-semibold text-accent-ink"
+            disabled={!scheduleAgentId && !active?.id}
             onClick={() => {
               if (!active) {
                 runMutation(snapshotFleetMutationParams({ kind: "enqueue_no_agent", goal }));
@@ -622,11 +624,13 @@ export function FleetPanel({
                 ))}
               </ul>
               <div className="mt-2 flex flex-wrap gap-2">
-                <button type="button" className="min-h-11 rounded-panel border border-line px-3" onClick={() => setWs((prev) => pauseRun(prev, run.id))}>Pause</button>
-                <button type="button" className="min-h-11 rounded-panel border border-line px-3" onClick={() => setWs((prev) => resumeRun(prev, run.id))}>Resume</button>
-                <button type="button" className="min-h-11 rounded-panel border border-line px-3" onClick={() => setWs((prev) => cancelRun(prev, run.id))}>Stop run</button>
-                <button type="button" className="min-h-11 rounded-panel border border-line px-3" onClick={() => setWs((prev) => approveRunAction(prev, run.id, "browser"))}>Approve browser</button>
-                <button type="button" className="min-h-11 rounded-panel border border-line px-3" onClick={() => setWs((prev) => approveRunAction(prev, run.id, "gmail_send"))}>Approve send</button>
+                {(run.state === "queued" || run.state === "running") ? <button type="button" className="min-h-11 rounded-panel border border-line px-3" onClick={() => setWs((prev) => pauseRun(prev, run.id))}>Pause</button> : null}
+                {run.state === "paused" ? <button type="button" className="min-h-11 rounded-panel border border-line px-3" onClick={() => setWs((prev) => resumeRun(prev, run.id))}>Resume</button> : null}
+                {!["completed", "failed", "canceled"].includes(run.state) ? <button type="button" className="min-h-11 rounded-panel border border-line px-3" onClick={() => setWs((prev) => cancelRun(prev, run.id))}>Stop run</button> : null}
+                {run.state === "waiting_approval" ? <>
+                  {run.plan.some((step) => step.tool === "browser") ? <button type="button" className="min-h-11 rounded-panel border border-line px-3" onClick={() => setWs((prev) => approveRunAction(prev, run.id, "browser"))}>Approve browser</button> : null}
+                  {run.plan.some((step) => step.tool === "gmail_send") ? <button type="button" className="min-h-11 rounded-panel border border-line px-3" onClick={() => setWs((prev) => approveRunAction(prev, run.id, "gmail_send"))}>Approve send</button> : null}
+                </> : null}
               </div>
             </li>
           ))}
@@ -742,6 +746,12 @@ export function FleetPanel({
           <label className="text-sm">Hour
             <input type="number" min="0" max="23" step="1" value={jobHour} onChange={(event) => setJobHour(event.target.value)} placeholder="0-23" aria-label="Hour" className="mt-1 min-h-11 w-full rounded-panel border border-line bg-surface px-3 text-sm" />
           </label>
+          <label className="text-sm">Agent
+            <select aria-label="Schedule agent" value={scheduleAgentId} onChange={(event) => setScheduleAgentId(event.target.value)} className="mt-1 min-h-11 w-full rounded-panel border border-line bg-surface px-3 text-sm">
+              <option value="">Choose an agent</option>
+              {ws.agents.filter((agent) => !agent.archived).map((agent) => <option key={agent.id} value={agent.id}>{agent.name}</option>)}
+            </select>
+          </label>
           <div className="flex items-end gap-2">
           <button
             type="button"
@@ -751,7 +761,7 @@ export function FleetPanel({
               runMutation(snapshotFleetMutationParams({
                 kind: "add_schedule",
                 name: jobName,
-                agentId: active?.id ?? null,
+                agentId: scheduleAgentId || active?.id || null,
                 intervalMinutes: 1440,
                 timeZone: jobZone || "UTC",
                 clockHour: hour != null && Number.isFinite(hour) ? hour : null,
@@ -761,6 +771,7 @@ export function FleetPanel({
           >
             Add daily job
           </button>
+          {!scheduleAgentId && !active?.id ? <p className="text-xs text-muted">Choose an agent before saving this job.</p> : null}
           </div>
         </div>
         </div>
@@ -777,7 +788,7 @@ export function FleetPanel({
           {ws.schedules.map((job) => (
             <li key={job.id} className="dense-card p-3 text-sm">
               <p className="font-semibold">{job.name}</p>
-              <p className="mt-1 text-sm text-muted">{job.enabled ? "On." : "Off."} {job.clockHour == null ? (job.intervalMinutes === 1440 ? "Runs once a day. Add an hour to choose the time." : `Runs every ${job.intervalMinutes} minutes.`) : `Runs daily at ${String(job.clockHour).padStart(2, "0")}:${String(job.clockMinute ?? 0).padStart(2, "0")} ${job.timeZone || "UTC"}.`}</p>
+              <p className="mt-1 text-sm text-muted">{job.enabled ? "On." : "Off."} {job.clockHour == null ? (job.intervalMinutes === 1440 ? "Runs once a day. Add an hour to choose the time." : `Runs every ${job.intervalMinutes} minutes.`) : `Runs daily at ${String(job.clockHour).padStart(2, "0")}:${String(job.clockMinute ?? 0).padStart(2, "0")} ${job.timeZone || "UTC"}.`} Agent: {ws.agents.find((agent) => agent.id === job.agentId)?.name || "Needs an agent"}.</p>
               <p className="text-sm text-muted">Next run {job.nextRunAt}. Last run {job.lastRunAt ?? "never"}. {job.lastError || "No error."}</p>
               <button type="button" className="mt-2 min-h-11 rounded-panel border border-line px-3 text-sm" onClick={() => setWs((prev) => setScheduleEnabled(prev, job.id, !job.enabled))}>{job.enabled ? "Turn off" : "Turn on"}</button>
             </li>
