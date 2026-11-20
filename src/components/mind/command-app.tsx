@@ -898,6 +898,7 @@ export function CommandApp() {
   const [lastModelUsed, setLastModelUsed] = useState<string | null>(null);
   const [failoverPolicy, setFailoverPolicy] = useState<"none" | "grok">("none");
  const [researchCitations, setResearchCitations] = useState<{ title: string; url: string }[]>([]);
+  const [researchReportQuestion, setResearchReportQuestion] = useState("");
   const [researchHistory, setResearchHistory] = useState<{ id: string; question: string; summary: string; citations: { title: string; url: string }[]; at: string }[]>([]);
   const [agentGoal, setAgentGoal] = useState("");
   const [agentBusy, setAgentBusy] = useState(false);
@@ -1810,6 +1811,7 @@ export function CommandApp() {
       const result = await searchWeb({ data: { query } });
       setBusy(false);
       setResearchCitations(result.citations);
+      setResearchReportQuestion(query);
       if (!result.ok) {
         const message = result.error;
         const retry = () => {
@@ -5784,7 +5786,8 @@ export function CommandApp() {
                   <p className="mt-3 text-xs text-muted">This size is the note text on this device. It is not a cloud quota.</p>
                 </div>
                 <div className="grid gap-2">
-                <textarea value={memoryText} onChange={(event) => setMemoryText(event.target.value)} placeholder="Write a note you want kept" rows={2} className="rounded-panel border border-line bg-surface px-3 py-2 text-sm" />
+                <textarea value={memoryText} maxLength={2000} onChange={(event) => setMemoryText(event.target.value)} placeholder="Write a note you want kept" rows={2} aria-describedby="memory-text-count" className="rounded-panel border border-line bg-surface px-3 py-2 text-sm" />
+                <p id="memory-text-count" className="text-xs text-muted">{memoryText.length.toLocaleString()} / 2,000 characters</p>
                 <div className="flex flex-wrap gap-2">
                   <select aria-label="Memory scope" value={memoryScope} onChange={(event) => setMemoryScope(event.target.value as MemoryScope)} className="min-h-11 rounded-panel border border-line bg-surface px-3 text-sm">
                     <option value="global">Global</option>
@@ -5802,6 +5805,7 @@ export function CommandApp() {
                   <button
                     type="button"
                     className="min-h-11 rounded-panel bg-accent px-4 text-sm font-semibold text-accent-ink"
+                    disabled={!memoryText.trim()}
                     onClick={() => {
                       if (memoryScope === "project" && !memoryProject) {
                         setError("Pick a project for a project note.");
@@ -6181,7 +6185,12 @@ export function CommandApp() {
                   </ul>
                 )}
                 {researchNote && researchCitations.length > 0 ? (
-                  <button type="button" className="mt-3 min-h-11 rounded-panel border border-line px-3 text-sm" onClick={() => { setDraft(`Follow up on this research:\n${researchText}\n\n${researchNote}`); setView("chat"); setNavOpen(false); }}>Ask a follow-up in Chat</button>
+                  <button type="button" className="mt-3 min-h-11 rounded-panel border border-line px-3 text-sm" onClick={() => {
+                    const sources = researchCitations.filter((item) => /^https?:\/\//i.test(item.url)).map((item) => `${item.title}: ${item.url}`).join("\n");
+                    setDraft(`Follow-up question: ${researchText}\n\nResearch report for: ${researchReportQuestion || researchText}\n${researchNote}\n\nSources:\n${sources}`);
+                    setView("chat");
+                    setNavOpen(false);
+                  }}>Ask a follow-up in Chat</button>
                 ) : null}
                 {researchHistory.length > 0 && (
                   <div className="mt-4">
@@ -6189,7 +6198,7 @@ export function CommandApp() {
                     <ul className="mt-2 space-y-2">
                       {researchHistory.map((report) => (
                         <li key={report.id}>
-                          <button type="button" className="min-h-11 text-left text-sm text-accent" onClick={() => { setResearchText(report.question); setResearchNote(report.summary); setResearchCitations(report.citations); setResearchBand("search"); }}>
+                          <button type="button" className="min-h-11 text-left text-sm text-accent" onClick={() => { setResearchText(report.question); setResearchReportQuestion(report.question); setResearchNote(report.summary); setResearchCitations(report.citations); setResearchBand("search"); }}>
                             {report.question} · {report.citations.length} sources
                           </button>
                         </li>
