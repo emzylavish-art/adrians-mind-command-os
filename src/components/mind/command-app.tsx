@@ -1555,6 +1555,10 @@ export function CommandApp() {
 
   function openPaletteHit(hit: (typeof hits)[number]) {
     if (hit.view === "chat" && hit.ref) setActiveId(hit.ref);
+    if (hit.view === "files" && hit.ref) {
+      setOpenFileId(hit.ref);
+      setLibraryBand("preview");
+    }
     setView(hit.view);
     setQuery("");
     setPaletteIndex(0);
@@ -3137,6 +3141,18 @@ export function CommandApp() {
       return;
     }
     const stagedFile = { name: file.name, text: text.slice(0, 40000) };
+    if (view === "files") {
+      const savedId = crypto.randomUUID();
+      setWs((prev) => {
+        return addLocalFile(prev, { id: savedId, name: stagedFile.name, text: stagedFile.text, projectId: projectChoice || null });
+      });
+      setOpenFileId(savedId);
+      setLibraryBand("preview");
+      setNotice(text.length > stagedFile.text.length
+        ? `Saved the first ${stagedFile.text.length.toLocaleString()} characters of “${file.name}” to Library.`
+        : `Saved “${file.name}” to Library.`);
+      return;
+    }
     setStaged(stagedFile);
     setError(null);
     if (inspectNext.current) {
@@ -5632,7 +5648,7 @@ export function CommandApp() {
                     <p className="text-sm text-muted">Records on this device. Oak Bridge and BridgePoint stay outside this app.</p>
                   </div>
                 </div>
-                <button type="button" className="inline-flex min-h-11 items-center gap-2 rounded-panel bg-accent px-4 text-sm font-semibold text-white" onClick={() => setProjectOpen(true)}>
+                <button id="new-project-button" type="button" className="inline-flex min-h-11 items-center gap-2 rounded-panel bg-accent px-4 text-sm font-semibold text-white" onClick={() => setProjectOpen(true)}>
                   <Plus className="size-4" /> New Project
                 </button>
               </div>
@@ -5830,16 +5846,17 @@ export function CommandApp() {
                       <button
                         type="button"
                         className="min-h-11 rounded-panel border border-line px-3"
-                        onClick={() =>
+                        onClick={() => {
+                          const action = item.archived ? "restored" : "archived";
                           setWs((prev) =>
                             pushAudit(
                               { ...prev, memories: prev.memories.map((note) => (note.id === item.id ? { ...note, archived: !note.archived, updatedAt: new Date().toISOString() } : note)) },
                               "archive_memory",
                               item.id,
-                              "toggled",
+                              action,
                             ),
-                          )
-                        }
+                          );
+                        }}
                       >
                         {item.archived ? "Restore" : "Archive"}
                       </button>
@@ -6415,10 +6432,10 @@ export function CommandApp() {
                     <p className="text-sm text-muted">Actions you take will appear here.</p>
                   </li>
                 )}
-                {ws.audit.filter((entry) => `${humanAction(entry.action)} ${entry.result}`.toLowerCase().includes(activityQuery.trim().toLowerCase())).length === 0 && ws.audit.length > 0 && (
+                {ws.audit.filter((entry) => `${humanAction(entry.action)} ${entry.result} ${entry.target}`.toLowerCase().includes(activityQuery.trim().toLowerCase())).length === 0 && ws.audit.length > 0 && (
                   <li className="text-sm text-muted">No events match that filter.</li>
                 )}
-                {ws.audit.filter((entry) => `${humanAction(entry.action)} ${entry.result}`.toLowerCase().includes(activityQuery.trim().toLowerCase())).map((entry) => (
+                {ws.audit.filter((entry) => `${humanAction(entry.action)} ${entry.result} ${entry.target}`.toLowerCase().includes(activityQuery.trim().toLowerCase())).map((entry) => (
                   <li
                     key={entry.id}
                     id={`audit-${entry.id}`}
@@ -6775,7 +6792,7 @@ export function CommandApp() {
         </Overlay>
       )}
       {projectOpen && (
-        <Overlay labelledBy="create-project-title">
+        <Overlay labelledBy="create-project-title" onDismiss={() => { setProjectName(""); setProjectAbout(""); setError(null); setProjectOpen(false); window.setTimeout(() => document.getElementById("new-project-button")?.focus(), 0); }}>
           <h3 id="create-project-title" className="font-display text-2xl font-bold">Create project</h3>
           <label className="mt-3 block text-sm font-medium" htmlFor="project-name">Project name <span className="text-danger">Required</span></label>
           <input id="project-name" autoFocus value={projectName} onChange={(event) => { setProjectName(event.target.value); if (error === "Name the project.") setError(null); }} placeholder="Name" aria-describedby={error === "Name the project." ? "project-name-error" : undefined} className="mt-1 min-h-11 w-full rounded-panel border border-line bg-bg px-3 text-sm" />
@@ -6783,7 +6800,7 @@ export function CommandApp() {
           <label className="mt-3 block text-sm font-medium" htmlFor="project-description">Description <span className="text-muted">Optional</span></label>
           <textarea id="project-description" value={projectAbout} onChange={(event) => setProjectAbout(event.target.value)} placeholder="What belongs in this project?" rows={3} className="mt-1 w-full rounded-panel border border-line bg-bg px-3 py-2 text-sm" />
           <div className="mt-3 flex gap-2">
-            <button type="button" className="min-h-11 flex-1 rounded-panel border border-line" onClick={() => { setProjectName(""); setProjectAbout(""); setError(null); setProjectOpen(false); }}>Cancel</button>
+            <button type="button" className="min-h-11 flex-1 rounded-panel border border-line" onClick={() => { setProjectName(""); setProjectAbout(""); setError(null); setProjectOpen(false); window.setTimeout(() => document.getElementById("new-project-button")?.focus(), 0); }}>Cancel</button>
             <button type="button" className="min-h-11 flex-1 rounded-panel bg-accent font-semibold text-accent-ink" onClick={saveProject}>Create</button>
           </div>
         </Overlay>
@@ -7060,9 +7077,18 @@ function StatusRow({
   );
 }
 
-function Overlay({ children, labelledBy }: { children: ReactNode; labelledBy?: string }) {
+function Overlay({ children, labelledBy, onDismiss }: { children: ReactNode; labelledBy?: string; onDismiss?: () => void }) {
   return (
-    <div className="overlay-backdrop fixed inset-0 z-40 grid place-items-end p-4 md:place-items-center" role="dialog" aria-modal="true" aria-labelledby={labelledBy}>
+    <div className="overlay-backdrop fixed inset-0 z-40 grid place-items-end p-4 md:place-items-center" role="dialog" aria-modal="true" aria-labelledby={labelledBy} onKeyDown={(event) => {
+      if (event.key === "Escape" && onDismiss) { event.preventDefault(); onDismiss(); return; }
+      if (event.key !== "Tab") return;
+      const targets = [...event.currentTarget.querySelectorAll<HTMLElement>('button:not([disabled]), input:not([disabled]), textarea:not([disabled]), select:not([disabled]), [tabindex]:not([tabindex="-1"])')].filter((element) => element.offsetParent !== null);
+      if (targets.length === 0) return;
+      const first = targets[0]!;
+      const last = targets.at(-1)!;
+      if (event.shiftKey && document.activeElement === first) { event.preventDefault(); last.focus(); }
+      else if (!event.shiftKey && document.activeElement === last) { event.preventDefault(); first.focus(); }
+    }}>
       <div className="overlay-panel w-full max-w-md rounded-[1.25rem] p-4">{children}</div>
     </div>
   );

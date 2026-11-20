@@ -15,12 +15,12 @@ type SafeKeysPanelProps = {
   onCopy?: (id: string) => Promise<string | null>;
 };
 
-async function copyThroughServer(id: string): Promise<string | null> {
+async function copyThroughServer(id: string): Promise<{ value: string | null; error: string | null }> {
   try {
     const result = await copyOwnerKeyFn({ data: { id } });
-    return result.ok ? result.value : null;
+    return result.ok ? { value: result.value, error: null } : { value: null, error: result.error };
   } catch {
-    return null;
+    return { value: null, error: "The key could not be copied. Check this browser's clipboard permission." };
   }
 }
 
@@ -28,7 +28,7 @@ async function copyThroughServer(id: string): Promise<string | null> {
 export function SafeKeysPanel({ slots, onCopy }: SafeKeysPanelProps = {}) {
   const [loaded, setLoaded] = useState<SafeKeySlot[]>(slots ?? []);
   const [copiedId, setCopiedId] = useState<string | null>(null);
-  const [copyFailed, setCopyFailed] = useState(false);
+  const [copyError, setCopyError] = useState<string | null>(null);
 
   useEffect(() => {
     if (slots) {
@@ -48,18 +48,18 @@ export function SafeKeysPanel({ slots, onCopy }: SafeKeysPanelProps = {}) {
 
   async function copySlot(id: string) {
     setCopiedId(null);
-    setCopyFailed(false);
-    const read = onCopy ?? copyThroughServer;
-    const secret = await read(id);
+    setCopyError(null);
+    const response = onCopy ? { value: await onCopy(id), error: null } : await copyThroughServer(id);
+    const secret = response.value;
     if (!secret) {
-      setCopyFailed(true);
+      setCopyError(response.error || "The key is not available to copy.");
       return;
     }
     try {
       await navigator.clipboard.writeText(secret);
       setCopiedId(id);
     } catch {
-      setCopyFailed(true);
+      setCopyError("The browser blocked clipboard access. Allow clipboard permission and try again.");
     }
   }
 
@@ -97,7 +97,7 @@ export function SafeKeysPanel({ slots, onCopy }: SafeKeysPanelProps = {}) {
             </li>
           ))}
         </ul>
-        {copyFailed ? <p className="mt-2 text-xs text-muted">Copy is unavailable.</p> : null}
+        {copyError ? <p className="mt-2 text-xs text-muted" role="status">{copyError}</p> : null}
       </div>
       <ul className="divide-y divide-line/70">
         {loaded.length > 0 ? null : SAFE_KEY_CAPABILITIES.map((capability) => (

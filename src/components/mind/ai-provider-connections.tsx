@@ -48,6 +48,7 @@ async function api(action: Record<string, unknown> | null): Promise<Record<strin
 /** Account-owned, server-encrypted API configurations. Never echoes or stores secret input. */
 export function AiProviderConnections({ onChange }: { onChange?: (rows: PublicRow[]) => void }) {
   const [rows, setRows] = useState<PublicRow[]>([]);
+  const [loadedOnce, setLoadedOnce] = useState(false);
   const [kind, setKind] = useState<ProviderKind>("openai");
   const [label, setLabel] = useState("OpenAI");
   const [baseUrl, setBaseUrl] = useState(PRESETS.openai);
@@ -60,9 +61,14 @@ export function AiProviderConnections({ onChange }: { onChange?: (rows: PublicRo
     const data = await api(null);
     const next = Array.isArray(data.providers) ? data.providers as PublicRow[] : [];
     setRows(next);
+    setLoadedOnce(true);
     onChange?.(next);
   };
-  useEffect(() => { void load().catch(() => setNotice("Sign in to load your saved AI providers.")); }, []);
+  useEffect(() => {
+    void load().catch((error) => {
+      setNotice(error instanceof Error ? error.message : "Saved AI providers could not be loaded.");
+    });
+  }, []);
   useEffect(() => {
     const open = (event: Event) => {
       const name = (event as CustomEvent<{ name?: string }>).detail?.name;
@@ -144,7 +150,7 @@ export function AiProviderConnections({ onChange }: { onChange?: (rows: PublicRo
         {rows.map((row) => (
           <article key={row.id} className="rounded-panel border border-line p-3">
             <div className="flex flex-wrap justify-between gap-2">
-              <div className="flex min-w-0 items-start gap-3">{providerLogo(row.label) ? <img className="size-7 shrink-0 rounded" src={providerLogo(row.label)!} alt="" width={28} height={28} /> : <span className="provider-identity__custom shrink-0" aria-hidden="true">API</span>}<div><p className="font-semibold">{row.label}</p><p className="text-xs text-muted">{row.host} · {row.status} · {row.models.length} model(s)</p></div></div>
+              <div className="flex min-w-0 items-start gap-3">{providerLogo(`${row.label} ${row.host}`) ? <img className="size-7 shrink-0 rounded" src={providerLogo(`${row.label} ${row.host}`)!} alt="" width={28} height={28} /> : <span className="provider-identity__custom shrink-0" aria-hidden="true">API</span>}<div><p className="font-semibold">{row.label}</p><p className="text-xs text-muted">{row.host} · {row.status} · {row.models.length} model(s)</p></div></div>
               <div className="flex gap-2">
                 <button type="button" disabled={loading} onClick={() => void run({ action: "discover", id: row.id }, "Model catalogue refreshed.")} className="rounded-panel border border-line px-3 py-2">Refresh models</button>
                 <button type="button" disabled={loading} onClick={() => {
@@ -164,7 +170,7 @@ export function AiProviderConnections({ onChange }: { onChange?: (rows: PublicRo
             </form>
           </article>
         ))}
-        {rows.length === 0 && <p className="text-xs text-muted">No custom AI API is saved yet.</p>}
+        {loadedOnce && rows.length === 0 && <p className="text-xs text-muted">No custom AI API is saved yet.</p>}
       </div>
     </section>
   );

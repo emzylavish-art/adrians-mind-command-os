@@ -453,12 +453,12 @@ export function pushUsage(ws: Workspace, entry: Omit<UsageEntry, "kind">): Works
 
 export function addLocalFile(
   ws: Workspace,
-  input: { name: string; text: string; projectId: string | null },
+  input: { id?: string; name: string; text: string; projectId: string | null },
 ): Workspace {
   const text = input.text.slice(0, 40000);
   if (!text.trim()) return ws;
   const file: LocalFile = {
-    id: crypto.randomUUID(),
+    id: input.id || crypto.randomUUID(),
     name: input.name.trim().slice(0, 120) || "untitled.txt",
     text,
     bytes: new TextEncoder().encode(text).length,
