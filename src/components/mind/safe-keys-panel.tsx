@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { SAFE_KEY_CAPABILITIES, SAFE_KEY_STATUS } from "@/lib/mind/safe-keys";
+import { SAFE_KEY_CAPABILITIES, safeKeyStatus } from "@/lib/mind/safe-keys";
 import { copyOwnerKeyFn, listOwnerKeySlotsFn } from "@/lib/mind/owner-keys-fns";
 
 export type SafeKeySlot = {
@@ -13,6 +13,7 @@ export type SafeKeySlot = {
 type SafeKeysPanelProps = {
   slots?: SafeKeySlot[];
   onCopy?: (id: string) => Promise<string | null>;
+  openAiConfigured?: boolean;
 };
 
 async function copyThroughServer(id: string): Promise<{ value: string | null; error: string | null }> {
@@ -25,7 +26,7 @@ async function copyThroughServer(id: string): Promise<{ value: string | null; er
 }
 
 /** Capability inventory plus local owner-key copy. Full secret values are never rendered. */
-export function SafeKeysPanel({ slots, onCopy }: SafeKeysPanelProps = {}) {
+export function SafeKeysPanel({ slots, onCopy, openAiConfigured = false }: SafeKeysPanelProps = {}) {
   const [loaded, setLoaded] = useState<SafeKeySlot[]>(slots ?? []);
   const [copiedId, setCopiedId] = useState<string | null>(null);
   const [copyError, setCopyError] = useState<{ id: string; message: string } | null>(null);
@@ -124,8 +125,8 @@ export function SafeKeysPanel({ slots, onCopy }: SafeKeysPanelProps = {}) {
         {status !== "ready" || loaded.length > 0 ? null : SAFE_KEY_CAPABILITIES.map((capability) => (
           <li key={capability.id} className="flex min-h-14 items-center justify-between gap-4 py-2" data-testid={`safe-key-${capability.id}`}>
             <span className="min-w-0 text-sm font-medium">{capability.name}</span>
-            <span className="shrink-0 rounded-full border border-line px-2.5 py-1 text-xs text-muted" aria-label={`${capability.name}: ${SAFE_KEY_STATUS}`}>
-              {SAFE_KEY_STATUS}
+            <span className="shrink-0 rounded-full border border-line px-2.5 py-1 text-xs text-muted" aria-label={`${capability.name}: ${safeKeyStatus(capability.id, { openai: openAiConfigured })}`}>
+              {safeKeyStatus(capability.id, { openai: openAiConfigured })}
             </span>
           </li>
         ))}

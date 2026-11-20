@@ -98,6 +98,7 @@ export function legacyProviderOption(id: string, grokConfigured: boolean | null)
 export function providerBoardCards(input: {
   grokConfigured: boolean | null;
   logicRoutes: LogicRoutePublic[];
+  openAiKeyPresent?: boolean;
 }): { name: string; state: string; detail: string }[] {
   const grok =
     input.grokConfigured === true
@@ -106,6 +107,7 @@ export function providerBoardCards(input: {
         ? { name: "Grok", state: "Needs config", detail: "Needs XAI_API_KEY. Nothing is sent." }
         : { name: "Grok", state: "Checking", detail: "Grok status has not finished." };
   const openAiRoutes = input.logicRoutes.filter((item) => item.credentialFallback === "OPENAI_API_KEY" && item.ready);
+  const openAiKeyPresent = input.openAiKeyPresent === true;
   const openai =
     openAiRoutes.length > 0
       ? {
@@ -113,6 +115,12 @@ export function providerBoardCards(input: {
           state: "Configured",
           detail: `OPENAI_API_KEY is the credential fallback for ${openAiRoutes.map((item) => item.label).join(", ")}. This is not a standalone OpenAI adapter and not Connected.`,
         }
+      : openAiKeyPresent
+        ? {
+            name: "OpenAI",
+            state: "Configured",
+            detail: "OPENAI_API_KEY is present on this machine. The key is not displayed. A chat connection still requires the provider route to report ready.",
+          }
       : {
           name: "OpenAI",
           state: "Needs config",

@@ -8,5 +8,17 @@ export const SAFE_KEY_CAPABILITIES = [
   { id: "gpt", name: "GPT" },
 ];
 
-/** No authenticated secure-storage status API has been verified, so do not imply configured state. */
+export function safeKeyStatus(
+  capabilityId: string,
+  configured: Record<string, boolean> = {},
+): string {
+  if (capabilityId === "gpt" || capabilityId === "chat") {
+    return configured.openai
+      ? "Configured — key hidden"
+      : "Missing — OpenAI key is not configured";
+  }
+  return "Not connected — configuration unavailable";
+}
+
+/** Backward-compatible fallback when a caller has not selected a capability. */
 export const SAFE_KEY_STATUS = "Not connected — configuration unavailable";
