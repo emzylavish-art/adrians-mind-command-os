@@ -405,7 +405,7 @@ function Login() {
           >
             <p className="text-sm leading-relaxed text-danger">{banner}</p>
             <div className="flex shrink-0 flex-wrap items-center gap-2">
-              <button
+              {bannerKind && bannerKind !== "auth_error" && <button
                 type="button"
                 className="inline-flex min-h-11 shrink-0 items-center rounded-panel border border-line bg-surface px-3 text-xs font-medium text-fg transition-colors hover:bg-surface-2 disabled:opacity-60"
                 data-testid="login-error-retry"
@@ -413,7 +413,7 @@ function Login() {
                 onClick={() => retryLastOauth()}
               >
                 Retry
-              </button>
+              </button>}
               <button
                 type="button"
                 className="inline-flex min-h-11 shrink-0 items-center rounded-panel border border-line bg-surface px-3 text-xs font-medium text-fg transition-colors hover:bg-surface-2"

@@ -11,6 +11,7 @@ import { mkdirSync, writeFileSync } from "node:fs";
 import { resolve } from "node:path";
 import AxeBuilder from "@axe-core/playwright";
 import { chromium } from "playwright";
+import { isolateWorkspace } from "./isolate-workspace.mjs";
 
 const baseUrl = process.env.BASE_URL ?? "http://127.0.0.1:8080/";
 const artifactDir = resolve(process.env.VISUAL_ARTIFACT_DIR ?? "artifacts/visual-audit");
@@ -88,6 +89,7 @@ async function auditState(page, viewportName, theme, label, report) {
         impact: violation.impact,
         help: violation.help,
         nodes: violation.nodes.length,
+        targets: violation.nodes.map((node) => node.target),
       })),
     },
   });
@@ -113,7 +115,8 @@ try {
   for (const viewport of viewports) {
     // axe opens an isolated helper page while it evaluates the document, so it
     // requires a BrowserContext rather than browser.newPage().
-    const context = await browser.newContext({ viewport: { width: viewport.width, height: viewport.height }, isMobile: viewport.isMobile });
+    const context = await browser.newContext({ viewport: { width: viewport.width, height: viewport.height }, isMobile: viewport.isMobile, serviceWorkers: "block" });
+    if (["127.0.0.1", "localhost"].includes(new URL(baseUrl).hostname)) await isolateWorkspace(context, baseUrl);
     for (const theme of themes) {
       const page = await context.newPage();
       // Seed the app's persisted theme before React mounts. Mutating only the

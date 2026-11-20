@@ -1,6 +1,6 @@
 import { decide } from "./policy.ts";
 import { runLocalPlan, type LocalTool } from "./local-tools.ts";
-import { nextClock } from "./schedule-clock.ts";
+import { nextClock, zoneIsValid } from "./schedule-clock.ts";
 import type { Workspace } from "./types.ts";
 
 export const FLEET_TOOLS = [
@@ -452,9 +452,17 @@ export function addAgentFromTemplate(ws: Workspace, templateName: string, now?: 
   return { ok: true, agent, ws: { ...ws, agents: [agent, ...ws.agents] } };
 }
 
+export type BotDraft = {
+  name: string;
+  instructions: string;
+  tools: FleetTool[];
+  description?: string;
+  projectId?: string | null;
+};
+
 export function addCustomAgent(
   ws: Workspace,
-  input: { name: string; instructions: string; tools: FleetTool[] },
+  input: BotDraft,
   now?: string,
 ): { ok: true; ws: Workspace; agent: AgentDefinition } | { ok: false; error: string } {
   const name = input.name.trim().slice(0, 80);
@@ -465,12 +473,12 @@ export function addCustomAgent(
   const agent: AgentDefinition = {
     id: nid("agent"),
     name,
-    description: "Custom agent. It only runs the tools you selected. Unavailable tools wait instead of pretending to finish.",
+    description: input.description?.trim().slice(0, 400) || "Custom bot",
     role: "custom",
     instructions: input.instructions.trim().slice(0, 2000),
     version: 1,
     tools,
-    projectId: null,
+    projectId: ws.projects.some((project) => project.id === input.projectId) ? input.projectId! : null,
     memory: "off",
     maxSteps: Math.min(8, Math.max(1, tools.length)),
     approval: tools.some((tool) => tool === "browser" || tool === "gmail_send") ? "ask" : "automatic",
@@ -479,6 +487,29 @@ export function addCustomAgent(
     updatedAt: at,
   };
   return { ok: true, agent, ws: { ...ws, agents: [agent, ...ws.agents] } };
+}
+
+export function editBot(ws: Workspace, id: string, draft: BotDraft): ReturnType<typeof addCustomAgent> {
+  const original = ws.agents.find((agent) => agent.id === id && !agent.archived);
+  if (!original) return { ok: false, error: "This bot is no longer available." };
+  if (ws.runs.some((run) => run.agentId === id && !TERMINAL.has(run.state))) {
+    return { ok: false, error: "Finish or stop this bot’s open runs before changing its configuration." };
+  }
+  const checked = addCustomAgent(ws, draft);
+  if (!checked.ok) return checked;
+  const agent = {
+    ...original,
+    name: checked.agent.name,
+    description: checked.agent.description,
+    instructions: checked.agent.instructions,
+    tools: checked.agent.tools,
+    projectId: checked.agent.projectId,
+    approval: original.approval === "ask" ? "ask" as const : checked.agent.approval,
+    maxSteps: checked.agent.maxSteps,
+    updatedAt: checked.agent.updatedAt,
+    version: original.version + 1,
+  };
+  return { ok: true, agent, ws: { ...ws, agents: ws.agents.map((item) => item.id === id ? agent : item) } };
 }
 
 export function togglePin(ws: Workspace, kind: FleetPin["kind"], ref: string): Workspace {
@@ -518,6 +549,9 @@ export function gmailConnectAttempt(): { ok: false; error: string } {
 export function addSchedule(ws: Workspace, name: string, agentId: string | null, intervalMinutes: number, now?: string, timeZone = "UTC", clockHour: number | null = null, clockMinute = 0): { ok: true; ws: Workspace } | { ok: false; error: string } {
   const title = name.trim().slice(0, 80);
   if (!title) return { ok: false, error: "Name the schedule." };
+  if (clockHour != null && (!Number.isInteger(clockHour) || clockHour < 0 || clockHour > 23)) return { ok: false, error: "Enter a whole hour from 0 to 23." };
+  if (clockHour != null && !zoneIsValid(timeZone)) return { ok: false, error: "Enter a valid time zone." };
+  if (agentId && !ws.agents.some((agent) => agent.id === agentId && !agent.archived)) return { ok: false, error: "Choose an active bot." };
   const at = stamp(now);
   const minutes = Math.min(10_080, Math.max(5, intervalMinutes || 1440));
   const hour = clockHour == null ? null : Math.min(23, Math.max(0, Math.floor(clockHour)));
@@ -651,9 +685,10 @@ export function tickFleet(ws: Workspace, env: TickEnv): Workspace {
     if (run.leaseUntil && run.leaseUntil > at && run.workerId && run.workerId !== env.workerId) return run;
     processed += 1;
     const agent = fleet.agents.find((item) => item.id === run.agentId);
-    if (!agent) {
-      event(fleet, run.id, at, "failed", "The agent definition is gone.");
-      return finish(run, "failed", at, "The agent definition is gone.");
+    if (!agent || agent.archived) {
+      const reason = agent ? "This bot was archived before the run could finish." : "The agent definition is gone.";
+      event(fleet, run.id, at, "failed", reason);
+      return finish(run, "failed", at, reason);
     }
     const claimed = { ...run, state: "running" as const, workerId: env.workerId, leaseUntil: new Date(Date.parse(at) + 30_000).toISOString(), updatedAt: at };
     const tool = agent.tools[claimed.step];
@@ -710,7 +745,13 @@ export function tickFleet(ws: Workspace, env: TickEnv): Workspace {
     }
     if (LOCAL.has(tool)) {
       const local = tool as LocalTool;
-      const executed = runLocalPlan(ws, [{ id: local, tool: local, query: claimed.goal }], { autonomy: "automatic", halted: false, tokens: {} });
+      const scope = agent.projectId ? {
+        ...ws,
+        projects: ws.projects.filter((project) => project.id === agent.projectId),
+        chats: ws.chats.filter((chat) => chat.projectId === agent.projectId),
+        memories: ws.memories.filter((note) => note.projectId === agent.projectId),
+      } : ws;
+      const executed = runLocalPlan(scope, [{ id: local, tool: local, query: claimed.goal }], { autonomy: "automatic", halted: false, tokens: {} });
       const detail = executed.lines.join(" ").slice(0, 500);
       event(fleet, claimed.id, at, executed.ok ? "tool_result" : "failed", detail);
       if (!executed.ok) return finish(claimed, "failed", at, detail);

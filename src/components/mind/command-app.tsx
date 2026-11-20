@@ -1,5 +1,5 @@
 import { lazy, Suspense, useEffect, useMemo, useRef, useState, type KeyboardEvent as ReactKeyboardEvent, type MouseEvent as ReactMouseEvent, type ReactNode, useSyncExternalStore } from "react";
-import { Link } from "@tanstack/react-router";
+import { Link, useRouter } from "@tanstack/react-router";
 import "./command-drawer-nav.css";
 import "./command-search.css";
 import "./command-voice-mode.css";
@@ -52,7 +52,6 @@ import { REQUIREMENTS, requirementCounts } from "@/lib/mind/requirements";
 import { consumeMindTurn, shouldStoreReply, STOPPED_REPLY } from "@/lib/mind/live-turn";
 import { analyzeImageFile, createVoiceClientSecret, mcpCommand, mcpList, mcpRemove, mcpRegistryList, mcpRegistryToggle, mcpSave, mindStatus, notionCommand, notionDisconnect, notionStatus, recordAgentExecution, searchWeb, setExecutionHalt, speakText } from "@/lib/mind/server";
 import { SafeKeysPanel } from "@/components/mind/safe-keys-panel";
-import { copyOwnerKeyFn } from "@/lib/mind/owner-keys-fns";
 import { AiProviderConnections } from "@/components/mind/ai-provider-connections";
 import type { PublicAiProvider } from "@/lib/mind/ai-provider-config.server";
 import { VoiceWaveform } from "@/components/mind/voice-waveform";
@@ -162,7 +161,7 @@ import {
 } from "@/lib/mind/voice/spam-guard";
 import { buildVoiceChatTurn } from "@/lib/mind/voice/voice-chat-turn";
 import { routeVoiceModeTranscript } from "@/lib/mind/voice/transcript-routing";
-import type { Chat, MemoryScope, Msg, Workspace } from "@/lib/mind/types";
+import type { Chat, Msg, Workspace } from "@/lib/mind/types";
 import { ServiceBoard } from "@/components/mind/service-board";
 import { EveWorkbench } from "@/components/mind/eve-workbench";
 import { FleetPanel } from "@/components/mind/fleet-panels";
@@ -226,7 +225,7 @@ import { COMPOSER_MODES, effortForModelTier, effortModelTier, loadComposerEffort
 import { planRouting, readRatings, readRoutingMode, readRoutingPanel, ROUTING_MODE_LABEL, saveRating, writeRoutingMode, writeRoutingPanel, type ResponseRating, type RoutingMode } from "@/lib/mind/routing-modes";
 import { canSend } from "@/lib/mind/send-gate";
 import { saveFailureMessage } from "@/lib/mind/save-error";
-import { resetAppearance, resetVoice } from "@/lib/mind/settings-reset";
+import { resetVoice } from "@/lib/mind/settings-reset";
 import {
   DEFAULT_VOICE_SETTINGS,
   loadVoiceSettings,
@@ -264,6 +263,7 @@ import {
   addMemory,
   addProject,
   createChat,
+  openBotChat,
   loadWorkspace,
   memoriesForChat,
   mergeWorkspace,
@@ -663,7 +663,43 @@ export function CommandApp() {
   const account = useCurrentUser();
   const loopback = typeof window !== "undefined" && (window.location.hostname === "127.0.0.1" || window.location.hostname === "localhost");
   const { ws, setWs, ready, syncNote, serverHeld, saveError, retrySave } = useMindWorkspace(account?.id ?? (loopback ? "dev-user" : null), account?.primaryEmail ?? null);
-  const [view, setView] = useState<View>("command");
+  const router = useRouter();
+  const [view, setViewState] = useState<View>("command");
+  function setView(next: View) {
+    setViewState(next);
+    const url = new URL(window.location.href);
+    const previous = url.searchParams.get("section") ?? "command";
+    if (previous === next) return;
+    if (next === "command") url.searchParams.delete("section");
+    else url.searchParams.set("section", next);
+    router.history.push(url.pathname + url.search + url.hash);
+  }
+  useEffect(() => {
+    const applyLocation = () => {
+      const value = new URLSearchParams(window.location.search).get("section");
+      setViewState(value && Object.hasOwn(TITLES, value) ? value as View : "command");
+    };
+    applyLocation();
+    window.addEventListener("popstate", applyLocation);
+    return () => window.removeEventListener("popstate", applyLocation);
+  }, []);
+  const [imagineEdit, setImagineEdit] = useState<{ image: string; text: string; returnFocus: HTMLElement | null } | null>(null);
+  const [imagineEditError, setImagineEditError] = useState<string | null>(null);
+  const [researchPending, setResearchPending] = useState(false);
+  const researchFlight = useRef(false);
+  const [libraryProjectId, setLibraryProjectId] = useState<string | null>(null);
+  const [botDestinationId, setBotDestinationId] = useState("");
+  const [focusRunId, setFocusRunId] = useState<string | null>(null);
+  const [cardFocus, setCardFocus] = useState<{ id: string } | null>(null);
+  useEffect(() => {
+    if (!cardFocus) return;
+    const frame = requestAnimationFrame(() => {
+      const card = document.getElementById(cardFocus.id);
+      card?.focus({ preventScroll: true });
+      card?.scrollIntoView({ block: "nearest" });
+    });
+    return () => cancelAnimationFrame(frame);
+  }, [cardFocus, view]);
   const [homeAction, setHomeAction] = useState<"ask" | "image" | "video" | "write" | "search">("ask");
   const [settingsPane, setSettingsPane] = useState<null | "general" | "connections" | "voice" | "pages" | "data" | "safety" | "keys">(null);
   const [query, setQuery] = useState("");
@@ -913,10 +949,10 @@ export function CommandApp() {
   const [temporary, setTemporary] = useState(false);
   const [projectChoice, setProjectChoice] = useState("");
   const [memoryText, setMemoryText] = useState("");
-  const [memoryScope, setMemoryScope] = useState<MemoryScope>("global");
   const [memoryProject, setMemoryProject] = useState("");
   const [memoryQuery, setMemoryQuery] = useState("");
   const [memoryTab, setMemoryTab] = useState<"mine" | "project" | "transfer">("mine");
+  const memoryScope = memoryTab === "project" ? "project" : "global";
   const [researchText, setResearchText] = useState("");
   const [researchBand, setResearchBand] = useState<"search" | "saved" | "files">("search");
   const [researchNote, setResearchNote] = useState<string | null>(null);
@@ -934,7 +970,16 @@ export function CommandApp() {
   const [projectAbout, setProjectAbout] = useState("");
   const [projectOpen, setProjectOpen] = useState(false);
   const [includeTemporary, setIncludeTemporary] = useState(false);
-  const [importPreview, setImportPreview] = useState<{ workspace: Workspace; chats: number; memories: number; projects: number } | null>(null);
+  const [importPreview, setImportPreview] = useState<{ workspace: Workspace; name: string } | null>(null);
+  const importCounts = importPreview ? ([
+    ["chats", "Chats"], ["memories", "Notes"], ["projects", "Projects"], ["files", "Files"], ["agents", "Bots"], ["runs", "Runs"], ["schedules", "Schedules"],
+  ] as const).map(([key, label]) => {
+    const current = new Set(ws[key].map((item) => item.id));
+    const incoming = importPreview.workspace[key];
+    return { label, current: current.size, incoming: incoming.length, overlap: incoming.filter((item) => current.has(item.id)).length };
+  }) : [];
+  const [importChecking, setImportChecking] = useState(false);
+  const [importStatus, setImportStatus] = useState("");
   const [importError, setImportError] = useState<string | null>(null);
   const [staged, setStaged] = useState<Staged | null>(null);
   const [pendingImages, setPendingImages] = useState<ImageAttachment[]>([]);
@@ -1013,25 +1058,19 @@ export function CommandApp() {
     const stored = loadWorkspace(window.localStorage);
     const agent = stored.agents.find((item) => item.id === agentId && !item.archived) ?? ws.agents.find((item) => item.id === agentId && !item.archived);
     clearPersonaSelection(window.localStorage);
-    window.history.replaceState({}, "", "/");
+    const url = new URL(window.location.href);
+    url.searchParams.delete("mode");
+    url.searchParams.delete("agentId");
+    router.history.replace(url.pathname + url.search + url.hash);
     if (!agent) {
       setNotice("That persona was not found on this device. Nothing was opened.");
       return;
     }
-    const made = createChat(ws, {
-      memory: agent.memory,
-      autonomy: agent.approval,
-      temporary: false,
-      projectId: agent.projectId,
-      personalityId: "custom",
-      customPersonality: agent.instructions,
-    });
-    const chat = { ...made.chat, title: agent.name };
-    setWs((prev) => {
-      const base = prev.agents.some((item) => item.id === agent.id) ? prev : stored;
-      return { ...base, chats: [chat, ...base.chats.filter((item) => item.id !== chat.id)] };
-    });
-    setActiveId(chat.id);
+    const base = ws.agents.some((item) => item.id === agent.id) ? ws : stored;
+    const opened = openBotChat(base, agent.id);
+    if (!opened) return;
+    if (opened.ws !== ws) setWs(() => opened.ws);
+    setActiveId(opened.chat.id);
     setView("chat");
     setNotice(`${agent.name} is open in Chat.`);
   }, [ready, ws, setWs]);
@@ -1229,6 +1268,8 @@ export function CommandApp() {
   const [skillQuery, setSkillQuery] = useState("");
   const [skillBand, setSkillBand] = useState<"device" | "installed" | "missing">("device");
   const [enabledSkills, setEnabledSkills] = useState<Record<string, boolean>>({});
+  const [skillNoteQuery, setSkillNoteQuery] = useState("");
+  const [skillResult, setSkillResult] = useState<{ id: string; text: string } | null>(null);
   const [skillStorageError, setSkillStorageError] = useState("");
   const searchRef = useRef<HTMLInputElement>(null);
   const fileRef = useRef<HTMLInputElement>(null);
@@ -1519,13 +1560,20 @@ export function CommandApp() {
   }, []);
 
   useEffect(() => {
-    const dark = theme === "dark" || (theme === "system" && window.matchMedia("(prefers-color-scheme: dark)").matches);
-    document.documentElement.dataset.theme = dark ? "dark" : "light";
+    const device = window.matchMedia("(prefers-color-scheme: dark)");
+    const apply = () => {
+      const dark = theme === "dark" || (theme === "system" && device.matches);
+      document.documentElement.dataset.theme = dark ? "dark" : "light";
+      document.documentElement.style.colorScheme = dark ? "dark" : "light";
+    };
+    apply();
+    if (theme === "system") device.addEventListener("change", apply);
     try {
       localStorage.setItem("amcos.theme.v1", theme);
     } catch {
       /* a private browser can refuse storage */
     }
+    return () => device.removeEventListener("change", apply);
   }, [theme]);
 
   const hits = useMemo(
@@ -1555,8 +1603,14 @@ export function CommandApp() {
   }
 
   function openPaletteHit(hit: (typeof hits)[number]) {
+    setFocusRunId(hit.view === "runs" && hit.ref ? hit.ref : null);
+    if (hit.ref && (hit.view === "agents" || hit.view === "projects" || hit.view === "runs")) {
+      const kind = hit.view === "agents" ? "bot" : hit.view === "projects" ? "project" : "run";
+      setCardFocus({ id: `${kind}-${hit.ref}` });
+    } else setCardFocus(null);
     if (hit.view === "chat" && hit.ref) setActiveId(hit.ref);
     if (hit.view === "files" && hit.ref) {
+      setLibraryProjectId(null);
       setOpenFileId(hit.ref);
       setLibraryBand("preview");
     }
@@ -2217,8 +2271,11 @@ export function CommandApp() {
       setError(revised.error);
       return;
     }
-    setWs(revised.ws);
-    void deliver(revised.chat, revised.text, revised.ws, true, snapshotImages(toImageAttachments(revised.images)));
+    const branch = { ...revised.chat, id: crypto.randomUUID(), title: `${active.title.slice(0, 68)} (edited)`, messages: revised.chat.messages.map((msg) => ({ ...msg, id: crypto.randomUUID() })) };
+    const source = { ...wsRef.current, chats: [branch, ...wsRef.current.chats] };
+    setWs(() => source);
+    setActiveId(branch.id);
+    void deliver(branch, revised.text, source, true, snapshotImages(toImageAttachments(revised.images)));
   }
 
   function regenerate() {
@@ -2394,29 +2451,29 @@ export function CommandApp() {
     await deliverPlanned(made.chat, full, { ...ws, chats: [made.chat, ...ws.chats] }, images);
   }
 
-  async function startResearch() {
+  async function startResearch(question = researchText) {
+    const query = question.trim();
+    if (!query || researchFlight.current) return;
     if (wsRef.current.halted) {
-      const query = researchText;
       reportEmergencyStop("search", () => {
-        setResearchText(query);
-        void startResearch();
+        void startResearch(query);
       });
       return;
     }
-    setResearchCitations([]);
-    const query = researchText;
+    researchFlight.current = true;
+    setResearchPending(true);
     try {
       const result = await searchWeb({ data: { query } });
       setError(null);
-      setResearchCitations(result.citations);
-      setResearchNote(result.ok ? (result.summary || "") : result.error);
       setWs((prev) => pushAudit(prev, result.configured && result.ok ? "research_result" : "research_refused", "search", result.ok ? `${result.citations.length} sources` : "no citation"));
       if (!result.ok) {
         reportFailure(result.error || "Research refused. No citations were created.", "research_failed", "search", () => {
-          setResearchText(query);
-          void startResearch();
+          void startResearch(query);
         });
       } else {
+        setResearchReportQuestion(query);
+        setResearchCitations(result.citations);
+        setResearchNote(result.summary || "");
         const report = { id: crypto.randomUUID(), question: query, summary: result.summary || "", citations: result.citations, at: new Date().toISOString() };
         setResearchHistory((current) => {
           const next = [report, ...current].slice(0, 8);
@@ -2426,13 +2483,13 @@ export function CommandApp() {
         clearFailure();
       }
     } catch (caught) {
-      setResearchCitations([]);
       const message = caught instanceof Error ? caught.message : "The search did not run. No citations were created.";
-      setResearchNote(message);
       reportFailure(message, "research_failed", "search", () => {
-        setResearchText(query);
-        void startResearch();
+        void startResearch(query);
       });
+    } finally {
+      researchFlight.current = false;
+      setResearchPending(false);
     }
   }
 
@@ -2896,25 +2953,35 @@ export function CommandApp() {
     }
   }
 
-  async function runImagineEdit(imageDataUrl: string, promptRaw?: string, opts?: { retry?: boolean }) {
+  function openImagineEditor(image: string) {
+    if (!image.startsWith("data:image/")) return;
+    setImagineEditError(null);
+    setImagineEdit({ image, text: "", returnFocus: document.activeElement instanceof HTMLElement ? document.activeElement : null });
+  }
+
+  function closeImagineEditor() {
+    const focus = imagineEdit?.returnFocus;
+    setImagineEdit(null);
+    setImagineEditError(null);
+    requestAnimationFrame(() => focus?.focus());
+  }
+
+  async function runImagineEdit(imageDataUrl: string, promptRaw: string) {
     if (imagineInFlight.current || busy) return;
-    const prompt = (promptRaw ?? draft).trim();
+    const prompt = promptRaw.trim();
     if (!prompt) {
-      setError("Write an edit instruction in the composer, then press Edit with Imagine.");
+      setImagineEditError("Describe the edit you want to generate.");
       return;
     }
     if (!imageDataUrl.startsWith("data:image/")) {
-      setError("Edit with Imagine only works on images kept as data URLs in this chat.");
+      setImagineEditError("Choose an image stored directly in this chat.");
       return;
     }
     if (shouldBlockForEmergencyStop(wsRef.current.halted)) {
-      reportEmergencyStop("imagine:edit", () => {
-        void runImagineEdit(imageDataUrl, prompt, opts);
-      });
+      setImagineEditError("The emergency stop is active. Close this dialog to clear the stop, then reopen the editor.");
       return;
     }
-    if (!opts?.retry) setDraft("");
-    setError(null);
+    setImagineEditError(null);
     setBusy(true);
     const token = getBearerToken();
     const prefix = previewPathPrefix(window.location.hostname, window.location.pathname) ?? "";
@@ -2943,11 +3010,8 @@ export function CommandApp() {
           imageDataUrl,
           n: 1,
         });
-        const params = imagineRetryParams(failure);
-        reportFailure(failure.message, failure.kind, failure.target, () => {
-          if (!params.imageDataUrl) return;
-          void runImagineEdit(params.imageDataUrl, params.prompt, { retry: true });
-        });
+        setImagineEditError(failure.message);
+        setWs((previous) => pushAudit(previous, failure.kind, failure.target, failure.message));
         return;
       }
       const images: ImageAttachment[] = payload.images.map((image, index) => ({
@@ -2955,10 +3019,11 @@ export function CommandApp() {
         name: image.name || `imagine-edit-${index + 1}.jpg`,
         mime: image.mime,
       }));
-      setPendingImages(images);
-      setNotice(`Edited with ${payload.model || "grok-imagine-image"}. Staged for Send / Agent.`);
+      if (!active) setPendingImages((previous) => [...previous, ...images].slice(0, 4));
+      closeImagineEditor();
+      setNotice(`Edited with ${payload.model || "grok-imagine-image"}. ${active ? "Added to this chat." : "Staged for Send / Agent."}`);
       clearFailure();
-      if (active && !opts?.retry) {
+      if (active) {
         const chatId = active.id;
         setWs((prev) => ({
           ...prev,
@@ -2987,30 +3052,6 @@ export function CommandApp() {
               : item,
           ),
         }));
-      } else if (active) {
-        const chatId = active.id;
-        const model = payload.model || "grok-imagine-image";
-        setWs((prev) => ({
-          ...prev,
-          chats: prev.chats.map((item) =>
-            item.id === chatId
-              ? {
-                  ...item,
-                  messages: [
-                    ...item.messages,
-                    {
-                      id: crypto.randomUUID(),
-                      role: "assistant" as const,
-                      content: `Edited with ${model}.`,
-                      at: new Date().toISOString(),
-                      model,
-                      images: images.map((image) => ({ dataUrl: image.dataUrl, name: image.name })),
-                    },
-                  ],
-                }
-              : item,
-          ),
-        }));
       }
     } catch (caught) {
       const normalized = normalizeClientFailureMessage(caught);
@@ -3021,11 +3062,8 @@ export function CommandApp() {
         imageDataUrl,
         n: 1,
       });
-      const params = imagineRetryParams(failure);
-      reportFailure(failure.message, failure.kind, failure.target, () => {
-        if (!params.imageDataUrl) return;
-        void runImagineEdit(params.imageDataUrl, params.prompt, { retry: true });
-      });
+      setImagineEditError(failure.message);
+      setWs((previous) => pushAudit(previous, failure.kind, failure.target, failure.message));
     } finally {
       imagineInFlight.current = false;
       setBusy(false);
@@ -3114,6 +3152,8 @@ export function CommandApp() {
   }
 
   async function onPicked(file: File) {
+    setNotice(null);
+    setError(null);
     if (/\.(png|jpe?g|gif|webp)$/i.test(file.name) || (file.type || "").startsWith("image/")) {
       await addImageAttachment(file);
       return;
@@ -3126,33 +3166,32 @@ export function CommandApp() {
       setError("HEIC is not supported here. Convert to JPEG or PNG first.");
       return;
     }
-    if (file.name.toLowerCase().endsWith(".pdf") || file.type === "application/pdf") {
-      const extracted = await extractPdfText(new Uint8Array(await file.arrayBuffer()));
-      if (!extracted.ok) {
-        setError(extracted.error);
-        return;
-      }
-      const stagedFile = { name: file.name, text: extracted.text };
-      setStaged(stagedFile);
-      setNotice(`Extracted ${extracted.text.length} characters from “${file.name}”. ${extracted.pages || "No"} page marker${extracted.pages === 1 ? "" : "s"} were found. This is the file text, not a model summary.`);
+    const isPdf = file.name.toLowerCase().endsWith(".pdf") || file.type === "application/pdf";
+    const pdf = isPdf ? await extractPdfText(new Uint8Array(await file.arrayBuffer())) : null;
+    if (pdf && !pdf.ok) {
+      setError(pdf.error);
       return;
     }
-    const text = await file.text();
+    const text = pdf ? pdf.text : await file.text();
     if (!text.trim() || text.includes("\u0000")) {
       setError("Only text files can be read here. Nothing was uploaded.");
       return;
     }
     const stagedFile = { name: file.name, text: text.slice(0, 40000) };
+    const partial = pdf?.partial || text.length > stagedFile.text.length;
     if (view === "files") {
+      if (wsRef.current.files.length >= 40) {
+        setError("Library holds 40 text copies. Remove an existing copy before uploading another.");
+        return;
+      }
       const savedId = crypto.randomUUID();
       setWs((prev) => {
-        return addLocalFile(prev, { id: savedId, name: stagedFile.name, text: stagedFile.text, projectId: projectChoice || null });
+        return addLocalFile(prev, { id: savedId, name: stagedFile.name, text, partial, projectId: libraryProjectId || projectChoice || null });
       });
       setOpenFileId(savedId);
       setLibraryBand("preview");
-      setNotice(text.length > stagedFile.text.length
-        ? `Saved the first ${stagedFile.text.length.toLocaleString()} characters of “${file.name}” to Library.`
-        : `Saved “${file.name}” to Library.`);
+      const savedCopy = partial ? `a partial text copy of “${file.name}”` : pdf ? `extracted text from “${file.name}”` : `“${file.name}”`;
+      setNotice(`Saved ${savedCopy} to Library.`);
       return;
     }
     setStaged(stagedFile);
@@ -3163,7 +3202,7 @@ export function CommandApp() {
       await inspectWithRea(stagedFile, destination);
       return;
     }
-    setNotice(`“${file.name}” is staged on this device. Press Send to include it, or Analyze File to run REA.`);
+    setNotice(`“${file.name}” is staged${partial ? " as a partial text copy" : pdf ? " as extracted text" : ""}. Press Send to include it, or Analyze File to run REA.`);
   }
 
   async function downloadArchive() {
@@ -3179,19 +3218,22 @@ export function CommandApp() {
   }
 
   async function onImportFile(file: File) {
+    setImportChecking(true);
+    setImportStatus("");
     setImportError(null);
-    const opened = await unpackWorkspace(await file.text());
-    if (!opened.ok) {
-      setImportPreview(null);
-      setImportError(opened.error);
-      return;
+    setImportPreview(null);
+    try {
+      const opened = await unpackWorkspace(await file.text());
+      if (!opened.ok) {
+        setImportError(opened.error);
+        return;
+      }
+      setImportPreview({ workspace: opened.workspace, name: file.name });
+    } catch {
+      setImportError("This archive could not be read. Choose another file to try again.");
+    } finally {
+      setImportChecking(false);
     }
-    setImportPreview({
-      workspace: opened.workspace,
-      chats: opened.counts.chats,
-      memories: opened.counts.memories,
-      projects: opened.counts.projects,
-    });
   }
 
   async function toggleStop() {
@@ -3391,6 +3433,23 @@ export function CommandApp() {
     );
     setActiveId(made.chat.id);
     setView("chat");
+  }
+
+  function openSavedBotChat(agentId: string, newThread = false) {
+    const current = wsRef.current;
+    const opened = openBotChat(current, agentId, newThread);
+    if (!opened) return;
+    if (opened.ws !== current) setWs(() => opened.ws);
+    setActiveId(opened.chat.id);
+    setChatProjectId(null);
+    setView("chat");
+    closeMenus();
+  }
+
+  function openBotDestination(agentId: string, target: "runs" | "scheduled") {
+    setBotDestinationId(agentId);
+    setView(target);
+    closeMenus();
   }
 
   function openHumanCode() {
@@ -4536,7 +4595,7 @@ export function CommandApp() {
     if (memoryTab === "project" && memoryProject && item.projectId !== memoryProject) return false;
     return item.text.toLowerCase().includes(memoryQuery.trim().toLowerCase());
   });
-  const memoryBytes = ws.memories.reduce((sum, item) => sum + item.text.length, 0);
+  const memoryBytes = ws.memories.reduce((sum, item) => sum + new TextEncoder().encode(item.text).length, 0);
   const mcpBoard =
     mcpSavedListState.status === "loading"
       ? { state: "Checking", detail: "Loading MCP servers…" }
@@ -4644,7 +4703,7 @@ export function CommandApp() {
               {ws.pins.map((pin) => {
                 const label =
                   pin.kind === "agent"
-                    ? ws.agents.find((agent) => agent.id === pin.ref)?.name
+                    ? ws.agents.find((agent) => agent.id === pin.ref && !agent.archived)?.name
                     : pin.kind === "chat"
                       ? ws.chats.find((chat) => chat.id === pin.ref)?.title
                       : pin.kind === "project"
@@ -4660,9 +4719,11 @@ export function CommandApp() {
                       if (pin.kind === "chat") {
                         setActiveId(pin.ref);
                         setView(isIntelligenceThread(ws.chats.find((chat) => chat.id === pin.ref)?.customPersonality) ? "code" : "chat");
-                      } else if (pin.kind === "agent") setView("agents");
-                      else if (pin.kind === "project") setView("projects");
-                      else setView("files");
+                      } else if (pin.kind === "agent" || pin.kind === "project") {
+                        setCardFocus({ id: `${pin.kind === "agent" ? "bot" : "project"}-${pin.ref}` });
+                        setView(pin.kind === "agent" ? "agents" : "projects");
+                      }
+                      else { setOpenFileId(pin.ref); setLibraryProjectId(null); setLibraryBand("preview"); setView("files"); }
                       setNavOpen(false);
                     }}
                   >
@@ -4881,12 +4942,14 @@ export function CommandApp() {
           <div id="alerts-panel" className="border-b border-line bg-surface px-4 py-3 text-sm" data-testid="alerts-panel" role="region" aria-label="Alerts">
             <p className="font-semibold">Alerts</p>
             {ws.halted && <p className="mt-1 text-danger">Emergency stop is on. Sending and approvals are blocked.</p>}
-            {ws.audit.length === 0 && !ws.halted && <p className="mt-1 text-muted">No alerts.</p>}
+            {!ws.halted && <p className="mt-1 text-muted">No active alerts.</p>}
+            {ws.audit.length > 0 && <p className="mt-3 text-xs font-semibold">Recent activity</p>}
             {ws.audit.slice(0, 4).map((entry) => (
               <p key={entry.id} className="mt-1 text-muted">
                 {humanAction(entry.action)} · {stamp(entry.at)}
               </p>
             ))}
+            {ws.audit.length > 0 && <button type="button" className="min-h-11 text-sm text-accent" onClick={() => { setView("activity"); closeMenus(); }}>View activity</button>}
           </div>
         )}
         {accountOpen && (
@@ -5083,20 +5146,20 @@ export function CommandApp() {
               </div>
              <div className="gpt-starters">
                <p className="mb-1 text-xs uppercase tracking-wide text-muted">Start</p>
-               <button type="button" aria-pressed={homeAction === "image"} onClick={() => { setHomeAction("image"); setCommandMode("ask"); setDraft(""); }}>
+               <button type="button" aria-pressed={homeAction === "image"} onClick={() => { setHomeAction("image"); setCommandMode("ask"); }}>
                  <Image className="size-5" /> Create an image
                </button>
-               <button type="button" aria-pressed={homeAction === "video"} onClick={() => { setHomeAction("video"); setCommandMode("ask"); setDraft(""); }}>
+               <button type="button" aria-pressed={homeAction === "video"} onClick={() => { setHomeAction("video"); setCommandMode("ask"); }}>
                  <Video className="size-5" /> Create a video
                </button>
-                <button type="button" aria-pressed={homeAction === "write"} onClick={() => { setHomeAction("write"); setCommandMode("build"); setDraft(""); }}>
+                <button type="button" aria-pressed={homeAction === "write"} onClick={() => { setHomeAction("write"); setCommandMode("build"); }}>
                   <FileText className="size-5" /> Write or edit
                 </button>
-                <button type="button" aria-pressed={homeAction === "search"} onClick={() => { setHomeAction("search"); setCommandMode("research"); setDraft(""); }}>
+                <button type="button" aria-pressed={homeAction === "search"} onClick={() => { setHomeAction("search"); setCommandMode("research"); }}>
                   <Search className="size-5" /> Search the web
                 </button>
               </div>
-              {homeAction !== "ask" ? <p className="gpt-starters text-sm text-muted">{homeAction === "image" ? "Image. Describe it, then send." : homeAction === "video" ? "Video. Describe it, then send. A short clip takes about a minute." : homeAction === "write" ? "Write. Say what to change, then send." : "Search. Type the question, then send."}</p> : null}
+              {homeAction !== "ask" && <button type="button" className="min-h-11 px-3 text-sm text-muted" onClick={() => { setHomeAction("ask"); setCommandMode("ask"); }}>Clear mode · Back to Chat</button>}
 
               <section className="floating-composer command-card composer-dock rounded-panel p-3 md:p-4" data-composer="floating">
                 <details className="composer-advanced">
@@ -5176,16 +5239,16 @@ export function CommandApp() {
                     className="input-glow w-full resize-none rounded-[1.1rem] border border-line/80 bg-bg/70 px-3 py-3 text-sm"
                   />
                   {error && !error.includes("Notion status") ? (
-                    <p className="composer-error" role="alert">
+                    <p className="composer-error attachment-feedback" role="alert">
                       {error}{" "}
                       {error.includes("Sign in") ? <Link to="/login">Sign in</Link> : null}
                     </p>
                   ) : null}
                   {notice ? (
-                    <p className="composer-notice mt-2 text-sm text-muted" role="status" data-testid="composer-notice">{presentVoiceCopy(notice)}</p>
+                    <p className="composer-notice attachment-feedback mt-2 text-sm text-muted" role="status" data-testid="composer-notice">{presentVoiceCopy(notice)}</p>
                   ) : null}
                   {staged && (
-                    <p className="mt-2 text-xs text-muted">Staged: {staged.name}. It stays in this browser and is sent only if you press Send.</p>
+                    <div className="attachment-feedback flex flex-wrap items-center gap-2 text-xs text-muted"><span>Attached: {staged.name}</span><button type="button" className="min-h-11 text-accent" onClick={() => { setStaged(null); setNotice(null); }}>Remove attachment</button></div>
                   )}
                   <div className="composer-toolbar mt-2 flex flex-wrap items-center gap-2">
                     <button type="button" className="inline-flex min-h-11 items-center gap-2 rounded-panel border border-line bg-white/5 px-3 text-sm" onClick={() => fileRef.current?.click()}>
@@ -5225,7 +5288,7 @@ export function CommandApp() {
                     >
                       Imagine
                     </button>
-                    <AttachmentChips images={pendingImages} onRemove={(index) => setPendingImages((prev) => prev.filter((_, i) => i !== index))} onEditImagine={(image) => void runImagineEdit(image.dataUrl)} />
+                    <AttachmentChips images={pendingImages} onRemove={(index) => setPendingImages((prev) => prev.filter((_, i) => i !== index))} onEditImagine={(image) => openImagineEditor(image.dataUrl)} />
                     <button
                       type="button"
                       className="inline-flex min-h-11 items-center gap-2 rounded-panel border border-line px-3 text-sm"
@@ -5310,7 +5373,7 @@ export function CommandApp() {
                     </label>
                     <label className="mt-3 flex items-start gap-2">
                       <input type="checkbox" checked={temporary} onChange={(event) => setTemporary(event.target.checked)} />
-                      Temporary chat. Export skips it unless you include temporary chats. This is not the same as memory off.
+                      Exclude from workspace archive by default. The chat stays in history and can still be downloaded on its own.
                     </label>
                     <p className="mt-2 text-xs text-muted">
                       {memoryChoice === "off"
@@ -5578,7 +5641,7 @@ export function CommandApp() {
                 const prompt = viaCmd !== null ? viaCmd : draft.trim();
                 void runImagine(prompt || undefined, active);
               }}
-              onEditImagine={(src) => void runImagineEdit(src)}
+              onEditImagine={openImagineEditor}
               onSaveImage={(src, alt) => saveImageToComposer(src, alt)}
               onDownloadImage={(src, alt) => downloadImageDataUrl(src, alt)}
               onAddImageFile={(file) => void addImageAttachment(file)}
@@ -5671,7 +5734,7 @@ export function CommandApp() {
                   const notes = ws.memories.filter((item) => item.projectId === project.id && !item.archived).length;
                   const files = ws.files.filter((file) => file.projectId === project.id).length;
                   return (
-                    <article key={project.id} className="dense-card card-texture p-4">
+                    <article key={project.id} id={`project-${project.id}`} tabIndex={-1} className="dense-card card-texture p-4">
                       <div className="flex items-start gap-3">
                         <span className="grid size-11 place-items-center rounded-2xl bg-accent/15 text-accent"><Folder className="size-5" /></span>
                         <div className="min-w-0 flex-1">
@@ -5682,11 +5745,11 @@ export function CommandApp() {
                           <p className="text-sm text-muted">{project.description || "No description yet."}</p>
                         </div>
                       </div>
-                      <p className="mt-3 text-xs text-muted">Updated {stamp(project.createdAt)} · {chats} chats · {notes} notes · {files} files</p>
+                      <p className="mt-3 text-xs text-muted">Created {stamp(project.createdAt)} · {chats} {chats === 1 ? "chat" : "chats"} · {notes} {notes === 1 ? "note" : "notes"} · {files} {files === 1 ? "file" : "files"}</p>
                       <div className="mt-3 flex flex-wrap gap-2">
                         <button type="button" className="min-h-11 rounded-panel bg-accent px-3 text-sm text-white" onClick={() => { setChatProjectId(project.id); setProjectChoice(project.id); setActiveId(ws.chats.find((chat) => chat.projectId === project.id)?.id ?? null); setView("chat"); }}>Open chats</button>
-                        <button type="button" className="min-h-11 rounded-panel border border-line px-3 text-sm" onClick={() => { setMemoryTab("project"); setMemoryProject(project.id); setMemoryScope("project"); setView("memory"); }}>Notes</button>
-                        <button type="button" className="min-h-11 rounded-panel border border-line px-3 text-sm" onClick={() => setView("files")}>Files</button>
+                        <button type="button" className="min-h-11 rounded-panel border border-line px-3 text-sm" onClick={() => { setMemoryTab("project"); setMemoryProject(project.id); setView("memory"); }}>Notes</button>
+                        <button type="button" className="min-h-11 rounded-panel border border-line px-3 text-sm" onClick={() => { setLibraryProjectId(project.id); setLibraryBand("files"); setView("files"); }}>Files</button>
                         <button
                           type="button"
                           className="min-h-11 rounded-panel border border-line px-3 text-sm"
@@ -5765,7 +5828,7 @@ export function CommandApp() {
                   ["project", "Project Memory"],
                   ["transfer", "Imports & Exports"],
                 ] as const).map(([id, label]) => (
-                  <button key={id} type="button" onClick={() => { setMemoryTab(id); if (id === "project") setMemoryScope("project"); if (id === "mine") setMemoryScope("global"); }} className={`min-h-11 shrink-0 rounded-panel px-4 text-sm ${memoryTab === id ? "bg-accent text-white" : "border border-line text-muted"}`}>
+                  <button key={id} type="button" aria-pressed={memoryTab === id} onClick={() => setMemoryTab(id)} className={`min-h-11 shrink-0 rounded-panel px-4 text-sm ${memoryTab === id ? "bg-accent text-accent-ink" : "border border-line text-muted"}`}>
                     {label}
                   </button>
                 ))}
@@ -5774,25 +5837,24 @@ export function CommandApp() {
               {memoryTab === "transfer" && (
                 <div className="mt-3 flex flex-wrap gap-2">
                   <button type="button" className="min-h-11 rounded-panel bg-accent px-4 text-sm font-semibold text-white" onClick={() => void downloadArchive()}>Export archive</button>
-                  <button type="button" className="min-h-11 rounded-panel border border-line px-4 text-sm" onClick={() => setView("settings")}>Import on Settings</button>
+                  <button type="button" className="min-h-11 rounded-panel border border-line px-4 text-sm" onClick={() => { setSettingsPane("data"); setView("settings"); }}>Open import settings</button>
                 </div>
               )}
+              {memoryTab !== "transfer" && <>
               <div className="mt-4 grid gap-3 md:grid-cols-[16rem_1fr]">
                 <div className="glow-card rounded-panel border border-line bg-surface p-4 text-sm">
-                  <p className="font-semibold">Memory overview</p>
+                <p className="font-semibold">Memory overview</p>
                   <p className="mt-3 flex justify-between"><span className="text-muted">Status</span><span className={memoryChoice === "on" ? "text-ok" : "text-danger"}>{memoryChoice === "on" ? "ON" : "OFF"}</span></p>
-                  <p className="mt-2 flex justify-between"><span className="text-muted">Stored items</span><span>{ws.memories.filter((item) => !item.archived).length}</span></p>
+                  <p className="mt-2 flex justify-between"><span className="text-muted">Active notes</span><span>{ws.memories.filter((item) => !item.archived).length}</span></p>
+                  <p className="mt-2 flex justify-between"><span className="text-muted">Archived notes</span><span>{ws.memories.filter((item) => item.archived).length}</span></p>
                   <p className="mt-2 flex justify-between"><span className="text-muted">Text size</span><span>{formatBytes(memoryBytes)}</span></p>
                   <p className="mt-3 text-xs text-muted">This size is the note text on this device. It is not a cloud quota.</p>
                 </div>
                 <div className="grid gap-2">
-                <textarea value={memoryText} maxLength={2000} onChange={(event) => setMemoryText(event.target.value)} placeholder="Write a note you want kept" rows={2} aria-describedby="memory-text-count" className="rounded-panel border border-line bg-surface px-3 py-2 text-sm" />
+                <label className="text-sm font-medium" htmlFor="memory-new-note">New note</label>
+                <textarea id="memory-new-note" value={memoryText} maxLength={2000} onChange={(event) => setMemoryText(event.target.value)} placeholder="Write a note you want kept" rows={2} aria-describedby="memory-text-count" className="rounded-panel border border-line bg-surface px-3 py-2 text-sm" />
                 <p id="memory-text-count" className="text-xs text-muted">{memoryText.length.toLocaleString()} / 2,000 characters</p>
                 <div className="flex flex-wrap gap-2">
-                  <select aria-label="Memory scope" value={memoryScope} onChange={(event) => setMemoryScope(event.target.value as MemoryScope)} className="min-h-11 rounded-panel border border-line bg-surface px-3 text-sm">
-                    <option value="global">Global</option>
-                    <option value="project">Project</option>
-                  </select>
                   {memoryScope === "project" && (
                     <select aria-label="Memory project" value={memoryProject} onChange={(event) => setMemoryProject(event.target.value)} className="min-h-11 rounded-panel border border-line bg-surface px-3 text-sm">
                       <option value="">Choose project</option>
@@ -5813,7 +5875,7 @@ export function CommandApp() {
                       }
                       setWs((prev) =>
                         pushAudit(
-                          addMemory(prev, { scope: memoryScope, text: memoryText, source: "owner", projectId: memoryProject || null, chatId: null }),
+                          addMemory(prev, { scope: memoryScope, text: memoryText, source: "owner", projectId: memoryScope === "project" ? memoryProject || null : null, chatId: null }),
                           "save_memory",
                           "memory",
                           memoryScope,
@@ -5836,14 +5898,14 @@ export function CommandApp() {
                 {memories.map((item) => (
                   <li key={item.id} className="rounded-panel border border-line bg-surface p-3 text-sm">
                     {editId === item.id ? (
-                      <textarea value={editText} onChange={(event) => setEditText(event.target.value)} className="min-h-20 w-full bg-transparent" />
+                      <label className="block text-sm">Edit note<textarea maxLength={2000} value={editText} onChange={(event) => setEditText(event.target.value)} className="min-h-20 w-full bg-transparent" /><span className="text-xs text-muted">{editText.length}/2000</span></label>
                     ) : (
                       <p className="whitespace-pre-wrap">{item.text}</p>
                     )}
                     <p className="mt-1 text-xs text-muted">{item.scope}{item.scope === "project" ? (ws.projects.some((project) => project.id === item.projectId) ? "" : " · project removed, note kept") : ""} · {stamp(item.updatedAt)}{item.archived ? " · archived" : ""}</p>
                     <div className="mt-2 flex flex-wrap gap-2">
                       {editId === item.id ? (
-                        <button type="button" className="min-h-11 rounded-panel border border-line px-3" onClick={() => { setWs((prev) => pushAudit(reviseMemory(prev, item.id, editText), "save_memory", item.id, "revised")); setEditId(null); }}>Save edit</button>
+                        <button type="button" disabled={!editText.trim()} className="min-h-11 rounded-panel border border-line px-3" onClick={() => { setWs((prev) => pushAudit(reviseMemory(prev, item.id, editText), "save_memory", item.id, "revised")); setEditId(null); }}>Save edit</button>
                       ) : (
                         <button type="button" className="min-h-11 rounded-panel border border-line px-3" onClick={() => { setEditId(item.id); setEditText(item.text); }}>Edit</button>
                       )}
@@ -5879,6 +5941,7 @@ export function CommandApp() {
                   </li>
                 ))}
               </ul>
+              </>}
             </section>
           )}
 
@@ -5887,10 +5950,14 @@ export function CommandApp() {
             <div className="page-hero mx-4 mt-4 flex items-center gap-3 md:mx-6">
               <img src="/brand/marks/bots.png" alt="" className="size-8 rounded-lg" />
               <div>
-                <h2 className="font-display text-3xl font-bold">Agents</h2>
-                <p className="text-sm text-muted">Run lookup reads this device. Run planner asks Grok and can only read projects, chats, and notes.</p>
+                <h2 className="font-display text-3xl font-bold">Bots &amp; agents</h2>
+                <p className="text-sm text-muted">Save instructions once and use the bot in Chat, Runs, or Scheduled.</p>
               </div>
             </div>
+            <FleetPanel mode="agents" ws={ws} setWs={setWs} onBotChat={openSavedBotChat}
+              onBotRun={(id) => openBotDestination(id, "runs")} onBotSchedule={(id) => openBotDestination(id, "scheduled")} />
+            <details className="bot-builder-card mx-4 mb-6 p-3 md:mx-6">
+            <summary className="min-h-11 cursor-pointer px-1 py-2 font-semibold">Workspace tools and diagnostics</summary>
             <SharedFleet />
             <ReaPanel
               title="Agents"
@@ -5910,7 +5977,7 @@ export function CommandApp() {
             >
               <p className="font-semibold">Workspace lookup</p>
               <p className="mt-1 text-sm text-muted">Three local steps, in order. You approve them before they run. Stop blocks them.</p>
-              <input value={lookupQuery} onChange={(event) => setLookupQuery(event.target.value)} placeholder="Word to find in notes" className="mt-3 min-h-11 w-full rounded-panel border border-line bg-bg px-3 text-sm" />
+              <input aria-label="Word to find in notes" value={lookupQuery} onChange={(event) => setLookupQuery(event.target.value)} placeholder="Word to find in notes" className="mt-3 min-h-11 w-full rounded-panel border border-line bg-bg px-3 text-sm" />
               <button type="submit" className="mt-3 min-h-11 rounded-panel bg-accent px-4 text-sm font-semibold text-accent-ink disabled:opacity-50" disabled={ws.halted || !lookupQuery.trim()}>Run lookup</button>
             </form>
             <form
@@ -5922,9 +5989,9 @@ export function CommandApp() {
             >
               <p className="font-semibold">Bounded planner</p>
               <p className="mt-1 text-sm text-muted">Grok may call only three local reads: projects, chats, and notes. It stops after four steps or twenty seconds. It cannot use a shell, the network, or files. A live tool call was not verified in the last test. Run spends a model request.</p>
-              <textarea value={agentGoal} onChange={(event) => setAgentGoal(event.target.value)} placeholder="What should the planner look up?" rows={3} className="mt-3 w-full rounded-panel border border-line bg-bg px-3 py-2 text-sm" />
+              <textarea aria-label="Planner goal" value={agentGoal} onChange={(event) => setAgentGoal(event.target.value)} placeholder="What should the planner look up?" rows={3} className="mt-3 w-full rounded-panel border border-line bg-bg px-3 py-2 text-sm" />
               <div className="mt-3 flex flex-wrap gap-2">
-                <button type="submit" className="min-h-11 rounded-panel bg-accent px-4 text-sm font-semibold text-accent-ink disabled:opacity-50" disabled={ws.halted || agentBusy}>Run planner</button>
+                <button type="submit" className="min-h-11 rounded-panel bg-accent px-4 text-sm font-semibold text-accent-ink disabled:opacity-50" disabled={ws.halted || agentBusy || !agentGoal.trim()}>Run planner</button>
                 <button
                   type="button"
                   className="min-h-11 rounded-panel border border-line px-4 text-sm disabled:opacity-50"
@@ -5941,7 +6008,7 @@ export function CommandApp() {
               {agentImages.length > 0 && (
                 <div className="mt-3 space-y-2">
                   {agentImages.map((image, index) => (
-                    <InlineImage key={`${image.name ?? "imagine"}-${index}`} src={image.dataUrl} alt={image.name ?? `Generated ${index + 1}`} onEditImagine={(src) => void runImagineEdit(src)} onSave={(src, alt) => saveImageToComposer(src, alt)} onDownload={(src, alt) => downloadImageDataUrl(src, alt)} />
+                    <InlineImage key={`${image.name ?? "imagine"}-${index}`} src={image.dataUrl} alt={image.name ?? `Generated ${index + 1}`} onEditImagine={openImagineEditor} onSave={(src, alt) => saveImageToComposer(src, alt)} onDownload={(src, alt) => downloadImageDataUrl(src, alt)} />
                   ))}
                 </div>
               )}
@@ -5954,10 +6021,10 @@ export function CommandApp() {
               )}
             </form>
             </section>
-            <FleetPanel mode="agents" ws={ws} setWs={setWs} />
+            </details>
             </>
           )}
-          {view === "runs" && <FleetPanel mode="runs" ws={ws} setWs={setWs} />}
+          {view === "runs" && <FleetPanel key="runs" mode="runs" ws={ws} setWs={setWs} initialAgentId={botDestinationId} focusRunId={focusRunId} />}
           {view === "connected" && (
             <section className="page-shell">
               <div className="page-hero mb-4 flex items-center gap-3"><img src="/brand/marks/plugins.png" alt="" className="size-8 rounded-lg" /><div><h2 className="font-display text-3xl font-bold">Connected</h2><p className="text-sm text-muted">Setup explains what is missing. A service is connected only after the server says so.</p></div></div>
@@ -6051,10 +6118,10 @@ export function CommandApp() {
               >
                 <h3 className="font-semibold">MCP server</h3>
                 <p className="mt-1 text-sm text-muted">The token stays on the server. Connected means the server answered initialize and tools/list.</p>
-                <input value={mcpLabel} onChange={(event) => setMcpLabel(event.target.value)} placeholder="Label" className="mt-3 min-h-11 w-full rounded-panel border border-line bg-bg px-3 text-sm" />
-                <input value={mcpUrl} onChange={(event) => setMcpUrl(event.target.value)} placeholder="Paste the HTTPS address of your MCP server" aria-label="MCP server address" className="mt-2 min-h-11 w-full rounded-panel border border-line bg-bg px-3 text-sm" />
-                <input value={mcpToken} onChange={(event) => setMcpToken(event.target.value)} type="password" placeholder="Token, optional" autoComplete="off" className="mt-2 min-h-11 w-full rounded-panel border border-line bg-bg px-3 text-sm" />
-                <button type="submit" className="mt-3 min-h-11 rounded-panel bg-accent px-4 text-sm font-semibold text-accent-ink" disabled={ws.halted || mcpMutationBusy || !mcpUrl.trim()}>Test and save</button>
+                <label className="mt-3 block text-sm">Connection name<input value={mcpLabel} onChange={(event) => setMcpLabel(event.target.value)} className="mt-1 min-h-11 w-full rounded-panel border border-line bg-bg px-3" /></label>
+                <label className="mt-3 block text-sm">Server URL<input type="url" required pattern="https://.+" title="Enter an HTTPS URL" value={mcpUrl} onChange={(event) => setMcpUrl(event.target.value)} placeholder="https://example.com/mcp" aria-label="MCP server address" className="mt-1 min-h-11 w-full rounded-panel border border-line bg-bg px-3" /></label>
+                <label className="mt-3 block text-sm">Access token (optional)<input value={mcpToken} onChange={(event) => setMcpToken(event.target.value)} type="password" autoComplete="off" className="mt-1 min-h-11 w-full rounded-panel border border-line bg-bg px-3" /></label>
+                <button type="submit" className="mt-3 min-h-11 rounded-panel bg-accent px-4 text-sm font-semibold text-accent-ink" disabled={ws.halted || mcpMutationBusy || !mcpUrl.trim()}>{mcpMutationBusy ? "Checking connection…" : "Test and save"}</button>
                 <ul className="mt-3 space-y-2">
                   {mcpSavedListState.status === "ready" && mcpServers.map((server) => (
                     <li key={server.id} className="rounded-panel border border-line px-3 py-2 text-sm">
@@ -6113,7 +6180,7 @@ export function CommandApp() {
               </details>
             </section>
           )}
-          {view === "scheduled" && <FleetPanel mode="scheduled" ws={ws} setWs={setWs} />}
+          {view === "scheduled" && <FleetPanel key="scheduled" mode="scheduled" ws={ws} setWs={setWs} initialAgentId={botDestinationId} />}
           {view === "tools" && <FleetPanel mode="tools" ws={ws} setWs={setWs} onFailure={(message, retry, surface) => reportFailure(message, surface === "mcp" ? "mcp_tool_failed" : "open_page_failed", surface === "mcp" ? "mcp:tools" : "browser", retry)} />}
           {view === "build" && (
             <section className="page-shell">
@@ -6164,16 +6231,13 @@ export function CommandApp() {
                 <div hidden={researchBand !== "search"}>
                 <label className="text-sm" htmlFor="research-question">Question</label>
                 <textarea id="research-question" value={researchText} onChange={(event) => setResearchText(event.target.value)} placeholder="What do you want to research?" rows={3} className="input-glow mt-2 w-full rounded-panel border border-line bg-bg px-3 py-2 text-sm" />
-                <button type="button" className="mt-3 min-h-11 rounded-panel bg-accent px-4 text-sm font-semibold text-white disabled:opacity-50" disabled={ws.halted} onClick={startResearch}>
-                  Start research
+                <button type="button" className="mt-3 min-h-11 rounded-panel bg-accent px-4 text-sm font-semibold text-accent-ink disabled:opacity-50" disabled={ws.halted || researchPending || !researchText.trim()} onClick={() => void startResearch()}>
+                  {researchPending ? "Searching…" : "Start research"}
                 </button>
+                {researchReportQuestion && <h3 className="mt-3 font-semibold">{researchReportQuestion}</h3>}
                 {researchNote ? <p className="mt-3 text-sm text-muted">{researchNote}</p> : null}
                 {researchCitations.length === 0 && !researchNote ? (
-                  <div className="empty-state mt-4">
-                    <img src="/empty/empty-search.svg" alt="" />
-                    <p className="font-semibold">No citations yet</p>
-                    <p className="text-sm text-muted">Type a question, then press Start research.</p>
-                  </div>
+                  <p className="mt-3 text-sm text-muted">Reports and their sources appear here after a search.</p>
                 ) : null}
                 {researchCitations.length > 0 && (
                   <ul className="mt-3 space-y-2 text-sm">
@@ -6187,7 +6251,7 @@ export function CommandApp() {
                 {researchNote && researchCitations.length > 0 ? (
                   <button type="button" className="mt-3 min-h-11 rounded-panel border border-line px-3 text-sm" onClick={() => {
                     const sources = researchCitations.filter((item) => /^https?:\/\//i.test(item.url)).map((item) => `${item.title}: ${item.url}`).join("\n");
-                    setDraft(`Follow-up question: ${researchText}\n\nResearch report for: ${researchReportQuestion || researchText}\n${researchNote}\n\nSources:\n${sources}`);
+                    setDraft(`Research report for: ${researchReportQuestion || researchText}\n${researchNote}\n\nSources:\n${sources}\n\nFollow-up question: `);
                     setView("chat");
                     setNavOpen(false);
                   }}>Ask a follow-up in Chat</button>
@@ -6198,7 +6262,7 @@ export function CommandApp() {
                     <ul className="mt-2 space-y-2">
                       {researchHistory.map((report) => (
                         <li key={report.id}>
-                          <button type="button" className="min-h-11 text-left text-sm text-accent" onClick={() => { setResearchText(report.question); setResearchReportQuestion(report.question); setResearchNote(report.summary); setResearchCitations(report.citations); setResearchBand("search"); }}>
+                          <button type="button" disabled={researchPending} className="min-h-11 text-left text-sm text-accent" onClick={() => { setResearchText(report.question); setResearchReportQuestion(report.question); setResearchNote(report.summary); setResearchCitations(report.citations); setResearchBand("search"); }}>
                             {report.question} · {report.citations.length} sources
                           </button>
                         </li>
@@ -6257,6 +6321,7 @@ export function CommandApp() {
                       </div>
                       <p className="mt-2 text-sm">{skill.description}</p>
                       <p className="mt-1 text-sm text-muted">{skill.needs}</p>
+                      {skill.tool === "search_notes" && <label className="mt-2 block text-sm">Words to find<input value={skillNoteQuery} onChange={(event) => setSkillNoteQuery(event.target.value)} className="mt-1 block min-h-11 w-full rounded-panel border border-line bg-bg px-3" /></label>}
                       <div className="mt-3 flex gap-2">
                         {skill.kind !== "not-installed" ? (
                           <button
@@ -6276,14 +6341,17 @@ export function CommandApp() {
                             {on ? "Turn off" : "Turn on"}
                           </button>
                         ) : null}
-                        <button
+                        {skill.kind !== "not-installed" && <button
                           type="button"
+                          disabled={!on || (skill.tool === "search_notes" && !skillNoteQuery.trim())}
                           className="min-h-11 rounded-panel bg-accent px-3 text-sm font-semibold text-accent-ink"
-                          onClick={() => setNotice(runSkill(ws, skill, enabledSkills[skill.id] !== false).text)}
+                          onClick={() => setSkillResult({ id: skill.id, text: runSkill(ws, skill, on, skillNoteQuery).text })}
                         >
-                          {skill.kind === "not-installed" ? "View setup" : "Run"}
-                        </button>
+                          Run
+                        </button>}
+                        {skill.id === "notion" && <button type="button" className="min-h-11 text-sm text-accent" onClick={() => setView("connected")}>Open connections</button>}
                       </div>
+                      {skillResult?.id === skill.id && <p role="status" className="mt-2 whitespace-pre-wrap break-words rounded-panel border border-line p-3 text-sm">{skillResult.text}</p>}
                     </article>
                   );
                 })}
@@ -6303,15 +6371,17 @@ export function CommandApp() {
                   <img src="/brand/marks/library.png" alt="" className="size-8 rounded-lg" />
                   <div>
                     <h2 className="font-display text-3xl font-bold">Library</h2>
-                    <p className="text-sm text-muted">Text, markdown, CSV, and JSON are read as text. PDF text can be extracted when attached. Images attached on Command are decoded for Grok vision and Imagine — they are not OCR’d into Library text copies.</p>
+                  <p className="text-sm text-muted">Read saved text, Markdown, CSV, JSON, and text extracted from PDFs.</p>
                   </div>
                 </div>
                 <div className="flex flex-wrap gap-2">
-                  <button type="button" className="min-h-11 rounded-panel bg-accent px-4 text-sm font-semibold text-white" onClick={() => fileRef.current?.click()}>Upload text</button>
+                  <button type="button" className="min-h-11 rounded-panel bg-accent px-4 text-sm font-semibold text-accent-ink" onClick={() => fileRef.current?.click()}>Upload file</button>
                   {driveConnected ? <button type="button" className="min-h-11 rounded-panel border border-line px-4 text-sm" onClick={() => setCloudPickerOpen(true)}>Browse Drive</button> : null}
                 </div>
               </div>
               <div id="owner-library">
+                {error && <p role="alert" className="mb-2 text-sm text-danger">{error}</p>}
+                {notice && <p role="status" className="mb-2 text-sm text-muted">{notice}</p>}
                 <nav className="mb-3 flex flex-wrap gap-2" aria-label="Library groups">
                   {([
                     ["files", "Files"],
@@ -6325,15 +6395,16 @@ export function CommandApp() {
                   <p className="font-semibold">Text copies</p>
                   <p className="mt-2 text-xs text-muted">These are the words you attached, not the original file and not a cloud drive.</p>
                   <ul className="mt-3 space-y-1">
-                    {ws.files.length === 0 && (
+                    {libraryProjectId && <li className="flex flex-wrap items-center gap-3"><span>Project: {ws.projects.find((project) => project.id === libraryProjectId)?.name ?? "Unnamed project"}</span><button type="button" onClick={() => setLibraryProjectId(null)} className="min-h-11 text-accent">All files</button></li>}
+                    {!ws.files.some((file) => !libraryProjectId || file.projectId === libraryProjectId) && (
                       <li className="empty-state py-6">
                         <img src="/empty/empty-folder.svg" alt="" />
                         <p className="text-muted">No files yet.</p>
                       </li>
                     )}
-                    {ws.files.map((file) => (
+                    {ws.files.filter((file) => !libraryProjectId || file.projectId === libraryProjectId).map((file) => (
                       <li key={file.id}>
-                        <button type="button" onClick={() => setOpenFileId(file.id)} className={`dense-row min-h-11 w-full px-2 text-left ${openFileId === file.id ? "tile-active bg-accent text-accent-ink" : ""}`}>
+                        <button type="button" onClick={() => { setOpenFileId(file.id); setLibraryBand("preview"); }} className={`dense-row min-h-11 w-full px-2 text-left ${openFileId === file.id ? "tile-active bg-accent text-accent-ink" : ""}`}>
                           {file.name}
                         </button>
                       </li>
@@ -6345,14 +6416,15 @@ export function CommandApp() {
                     <div className="empty-state">
                       <img src="/empty/empty-folder.svg" alt="" />
                       <p className="font-semibold">Select a file</p>
-                      <p className="text-muted">Upload text from the button above, or attach a file on Command.</p>
+                      <p className="text-muted">Upload a file, or choose a saved text copy in Files.</p>
                     </div>
                   )}
                   {ws.files.filter((file) => file.id === openFileId).map((file) => (
                     <div key={file.id}>
                       <p className="font-semibold">{file.name}</p>
+                      {file.partial && <p className="text-sm text-muted">Partial text copy. Keep the original for the full contents.</p>}
                       <p className="text-xs text-muted">{formatBytes(file.bytes)} · {stamp(file.createdAt)} · {describeFile(file.name, file.text).summary}</p>
-                      <pre className="mt-3 max-h-80 overflow-auto whitespace-pre-wrap rounded-panel bg-bg p-3 text-sm">{file.text}</pre>
+                      <pre tabIndex={0} aria-label="File text" className="mt-3 max-h-[60dvh] overflow-auto break-words whitespace-pre-wrap rounded-panel bg-bg p-3 text-sm">{file.text}</pre>
                       <div className="mt-3 flex flex-wrap gap-2">
                         <button type="button" className="min-h-11 rounded-panel border border-line px-3" onClick={() => void inspectWithRea({ name: file.name, text: file.text }, "research")}>Inspect text with REA</button>
                         <button
@@ -6428,7 +6500,7 @@ export function CommandApp() {
                   <img src="/brand/marks/activity.png" alt="" className="size-8 rounded-lg" />
                   <div>
                     <h2 className="font-display text-3xl font-bold">Activity</h2>
-                    <p className="text-sm text-muted">Only actions this app actually recorded. Nothing is filled in to look busy.</p>
+                    <p className="text-sm text-muted">Recent workspace activity · up to 200 recorded events</p>
                   </div>
                 </div>
               </div>
@@ -6452,7 +6524,8 @@ export function CommandApp() {
                   >
                     <div>
                       <p className="font-semibold">{humanAction(entry.action)}</p>
-                      <p className="text-muted">{entry.result}</p>
+                      <p className="break-words text-muted">{entry.result}</p>
+                      {entry.target && <p className="break-all text-xs text-muted">Reference: {entry.target}</p>}
                     </div>
                     <p className="text-xs text-muted">{stamp(entry.at)}</p>
                   </li>
@@ -6479,7 +6552,10 @@ export function CommandApp() {
                 className="input-glow min-h-11 w-full rounded-panel border border-line bg-surface/80 px-3 text-sm"
               />
               <div id="owner-help">
-                {[
+                {helpQuery.trim() && <button type="button" className="mb-2 min-h-11 text-sm text-accent" onClick={() => setHelpQuery("")}>Clear search</button>}
+                {(() => {
+                  const topics = [
+                  { id: "keys", label: "Copy a saved API key", detail: "Copy my key, token, or credential. Owner key copying is available on the local device.", mark: "/brand/marks/settings.png", open: () => { setSettingsPane("keys"); setView("settings"); } },
                   { id: "chat", label: "Send a chat", detail: "Type in the field and press Enter, or press the blue button. An empty field opens Speak.", mark: "/brand/marks/chat.png", open: () => setView("command") },
                   { id: "speak", label: "Speak", detail: "Opens the call screen with camera, screen share, mute, and end.", mark: "/brand/marks/speak.png", open: openSpeakStage },
                   { id: "settings", label: "Settings", detail: "Theme, voice, connections, and the pages that stay off the short sidebar.", mark: "/brand/marks/settings.png", open: () => setView("settings") },
@@ -6490,7 +6566,9 @@ export function CommandApp() {
                   { id: "build", label: "Build", detail: "Adrian Build workspace. A task can edit the hosted workspace, or a paired computer when one is connected.", mark: "/brand/marks/build.png", open: () => setView("build") },
                   { id: "explore", label: "Explore", detail: "Filter local templates, save one, then open it in Chat.", mark: "/brand/marks/explore.png", open: () => window.location.assign("/explore") },
                   { id: "dashboard", label: "Dashboard", detail: "Opens the workspace map inside this app.", mark: "/brand/marks/general.png", open: () => setView("dashboard") },
-                ].filter((item) => `${item.label} ${item.detail}`.toLowerCase().includes(helpQuery.trim().toLowerCase())).map((item) => (
+                  ].filter((item) => helpQuery.toLowerCase().trim().split(/\s+/).every((word) => `${item.label} ${item.detail}`.toLowerCase().includes(word)));
+                  if (topics.length === 0) return <p className="mt-2 text-sm text-muted" role="status">No help topics match this search. Try “key,” “Library,” or “chat.”</p>;
+                  return topics.map((item) => (
                   <button key={item.id} type="button" className="flex min-h-14 w-full items-center gap-3 px-3 text-left text-sm hover:bg-white/5" onClick={() => { item.open(); setNavOpen(false); }}>
                     <img src={item.mark} alt="" width={28} height={28} className="size-7 rounded-lg" />
                     <span className="min-w-0 flex-1">
@@ -6499,7 +6577,8 @@ export function CommandApp() {
                     </span>
                     <span className="text-muted" aria-hidden="true">›</span>
                   </button>
-                ))}
+                  ));
+                })()}
               </div>
             </section>
           )}
@@ -6571,37 +6650,27 @@ export function CommandApp() {
                     {(["dark", "light", "system"] as const).map((choice) => {
                       const label = choice === "dark" ? "Dark" : choice === "light" ? "Light" : "System";
                       return (
-                      <button key={choice} type="button" className={`min-h-11 rounded-panel border px-3 ${theme === choice ? "border-accent bg-accent text-accent-ink tile-active" : "border-line"}`} onClick={() => setTheme(choice)}>
-                        {label}
+                      <button key={choice} type="button" aria-pressed={theme === choice} className={`min-h-11 rounded-panel border px-3 ${theme === choice ? "border-accent bg-accent text-accent-ink tile-active" : "border-line"}`} onClick={() => setTheme(choice)}>
+                        {theme === choice && <span aria-hidden="true">✓ </span>}{label}
                       </button>
                     );})}
                   </div>
-                </div>
-                <div className="settings-row">
-                  <div>
-                    <p className="font-semibold">Provider failover</p>
-                    <p className="text-muted">{failoverPolicy === "none" ? "Off. A failed provider is not replaced." : "On. A failed provider can switch to Grok, and the switch is recorded."}</p>
-                  </div>
-                  <button type="button" role="switch" aria-checked={failoverPolicy === "grok"} className={`min-h-11 rounded-panel border px-3 ${failoverPolicy === "grok" ? "border-accent bg-accent text-accent-ink" : "border-line"}`} onClick={() => setFailoverPolicy((current) => (current === "grok" ? "none" : "grok"))}>
-                    {failoverPolicy === "grok" ? "On" : "Off"}
-                  </button>
                 </div>
                 <button
                   type="button"
                   data-testid="settings-reset-appearance"
                   className="mt-3 min-h-11 rounded-panel border border-line px-3 text-sm"
                   onClick={() => {
-                    resetAppearance(localStorage);
                     setTheme("dark");
-                    setFailoverPolicy("none");
-                    setNotice("Appearance reset to Dark and failover Off. Voice was not changed.");
+                    setNotice("Theme reset to Dark.");
                   }}
                 >
-                  Reset to defaults
+                  Reset theme
                 </button>
-                <p data-testid="settings-reset-appearance-status" className="mt-2 text-muted">Documented defaults: Dark, failover Off.</p>
+                <p data-testid="settings-reset-appearance-status" className="mt-2 text-muted">Default theme: Dark.</p>
               </div>
-              <div className="settings-card rounded-panel p-4 text-sm hidden">
+              <div id="settings-connections" hidden={settingsPane !== "connections"} className="space-y-4">
+              <div className="settings-card rounded-panel p-4 text-sm">
                 <p className="font-semibold">Provider failover</p>
                 <p className="mt-1 text-muted">
                   {failoverPolicy === "none"
@@ -6619,25 +6688,15 @@ export function CommandApp() {
                   <span className={`h-6 w-11 rounded-full ${failoverPolicy === "grok" ? "bg-accent-ink/30" : "bg-line"}`} />
                 </button>
               </div>
-              <div id="settings-connections" hidden={settingsPane !== "connections"} className="space-y-4">
                 <AiProviderConnections onChange={setCustomAiProviders} />
                 <button type="button" className="min-h-11 rounded-panel border border-line px-3 text-sm" onClick={() => setSettingsPane("keys")}>Open Safe keys</button>
                 <button type="button" className="min-h-11 rounded-panel border border-line px-3 text-sm" onClick={() => setView("connected")}>Open connections</button>
               </div>
               <div id="settings-keys" hidden={settingsPane !== "keys"} className="space-y-4">
-                <SafeKeysPanel
-                  onCopy={async (id) => {
-                    try {
-                      const result = await copyOwnerKeyFn({ data: { id } });
-                      return result.ok ? result.value : null;
-                    } catch {
-                      return null;
-                    }
-                  }}
-                />
+                <SafeKeysPanel />
               </div>
               <div id="settings-voice" hidden={settingsPane !== "voice"}>
-                <VoiceSettingsBlock />
+                <VoiceSettingsBlock onReset={() => applyVoiceChoice(DEFAULT_XAI_VOICE)} />
                 <SpeakPanel />
               </div>
               <div id="settings-data" hidden={settingsPane !== "data"} className="space-y-4">
@@ -6675,24 +6734,12 @@ export function CommandApp() {
                           if (message) reportFailure(message, "database_write_failed", "server-copy", run);
                         });
                     };
-                    run();
+                    requestProtected("overwrite", "server-copy", "Replace server copy", "The server copy will be replaced with the chats, notes, and files in this browser. Export a workspace archive first if you want a separate copy of this browser’s data.", "Replace server copy", run);
                   }}
                 >
                   Save this browser copy over the server copy
                 </button>
               )}
-              </div>
-              <div id="settings-safety" hidden={settingsPane !== "safety"} className="space-y-4">
-              <div className="settings-card rounded-panel p-4 text-sm">
-              <button
-                type="button"
-                className="inline-flex min-h-11 items-center gap-2 rounded-panel border border-line px-3 text-sm font-semibold"
-                onClick={() => void toggleStop()}
-              >
-                <Square className="size-4" /> {ws.halted ? "Clear emergency stop" : "Emergency stop"}
-              </button>
-              <p className="mt-2 text-muted">Stops new sends on this page and on the server. It is not the same as stopping one reply.</p>
-              </div>
               <div className="settings-card rounded-panel p-4">
                 <p className="font-semibold">Archive</p>
                 <label className="mt-2 flex items-start gap-2 text-sm">
@@ -6707,19 +6754,31 @@ export function CommandApp() {
                   <input
                     type="file"
                     accept="application/json"
+                    disabled={importChecking}
                     className="mt-1 block w-full text-sm"
                     onChange={(event) => {
                       const file = event.target.files?.[0];
+                      event.target.value = "";
                       if (file) void onImportFile(file);
                     }}
                   />
                 </label>
-                {importError && <p className="mt-2 text-sm text-danger">{importError}</p>}
+                {importChecking && <p role="status" className="mt-2 text-sm text-muted">Checking archive…</p>}
+                {importError && <p role="alert" className="mt-2 text-sm text-danger">{importError}</p>}
+                {importStatus && <p role="status" className="mt-2 text-sm">{importStatus}</p>}
                 {importPreview && (
                   <div className="mt-3 text-sm">
-                    <p>{importPreview.chats} chats · {importPreview.memories} notes · {importPreview.projects} projects. Hash matched.</p>
-                    <div className="mt-2 flex gap-2">
-                      <button type="button" className="min-h-11 rounded-panel border border-line px-3" onClick={() => { setWs((prev) => pushAudit(mergeWorkspace(prev, importPreview.workspace), "import_merge", "archive", "merged")); setImportPreview(null); }}>
+                    <p className="break-all font-semibold">{importPreview.name}</p>
+                    <p className="mt-1 text-muted">Integrity check passed. Review the record counts before applying this archive.</p>
+                    <table className="my-3 w-full text-left text-xs">
+                      <thead><tr><th scope="col">Record</th><th scope="col">This device</th><th scope="col">Archive</th><th scope="col">Match</th></tr></thead>
+                      <tbody>
+                        {importCounts.map((row) => <tr className="border-t border-line" key={row.label}><th className="py-2" scope="row">{row.label}</th><td>{row.current}</td><td>{row.incoming}</td><td>{row.overlap}</td></tr>)}
+                      </tbody>
+                    </table>
+                    <p className="mt-1 text-muted">Merge updates matching IDs and adds new records. Replace applies the archive to the browser copy.</p>
+                    <div className="mt-2 flex flex-wrap gap-2">
+                      <button type="button" className="min-h-11 rounded-panel border border-line px-3" onClick={() => requestProtected("overwrite", "import-merge", "Merge this archive", "Records with matching IDs are replaced by the versions from this archive.", "Merge archive", () => { setWs((prev) => pushAudit(mergeWorkspace(prev, importPreview.workspace), "import_merge", "archive", "merged")); setImportPreview(null); setImportStatus("Archive merged with this workspace."); })}>
                         Merge
                       </button>
                       <button
@@ -6727,17 +6786,27 @@ export function CommandApp() {
                         className="min-h-11 rounded-panel border border-line px-3"
                         onClick={() =>
                           requestProtected("overwrite", `import-replace:${importPreview.workspace.version}`, "Replace this workspace", "Current chats, notes, projects, and files are replaced by the archive.", "Approve replace", () => {
-                            setWs(() => pushAudit(importPreview.workspace, "import_replace", "archive", "replaced"));
+                            setWs((prev) => pushAudit({ ...importPreview.workspace, halted: prev.halted || importPreview.workspace.halted }, "import_replace", "archive", "replaced"));
                             setImportPreview(null);
+                            setImportStatus("Workspace replaced with the archive.");
                           })
                         }
                       >
                         Replace
                       </button>
+                      <button type="button" className="min-h-11 rounded-panel border border-line px-3" onClick={() => setImportPreview(null)}>Cancel preview</button>
                     </div>
                   </div>
                 )}
               </div>
+              </div>
+              <div id="settings-safety" hidden={settingsPane !== "safety"} className="space-y-4">
+                <div className="settings-card rounded-panel p-4 text-sm">
+                  <button type="button" className="inline-flex min-h-11 items-center gap-2 rounded-panel border border-line px-3 text-sm font-semibold" onClick={() => void toggleStop()}>
+                    <Square className="size-4" /> {ws.halted ? "Clear emergency stop" : "Emergency stop"}
+                  </button>
+                  <p className="mt-2 text-muted">Stops new sends on this page and on the server.</p>
+                </div>
               <div className="settings-card rounded-panel p-4 text-sm">
                 <p className="font-semibold">Requirement record</p>
                 <p className="mt-1 text-muted">Verified {counts.verified} · In the app {counts.implemented} · Blocked {counts.blocked} · Planned {counts.planned} · Deferred {counts.deferred}</p>
@@ -6752,16 +6821,30 @@ export function CommandApp() {
           )}
         </div>
       </main>
+      {imagineEdit && (
+        <Overlay labelledBy="imagine-edit-title" onDismiss={() => { if (!busy) closeImagineEditor(); }}>
+          <form className="space-y-3" onSubmit={(event) => { event.preventDefault(); void runImagineEdit(imagineEdit.image, imagineEdit.text); }}>
+            <h2 id="imagine-edit-title" className="text-lg font-semibold">Edit image with Imagine</h2>
+            <img src={imagineEdit.image} alt="Selected image" className="max-h-40 w-full rounded-panel object-contain" />
+            <label className="block text-sm">Describe the edit<textarea autoFocus rows={3} value={imagineEdit.text} onChange={(event) => { setImagineEdit({ ...imagineEdit, text: event.target.value }); setImagineEditError(null); }} className="mt-1 w-full rounded-panel border border-line bg-bg p-2" /></label>
+            {imagineEditError && <p role="alert" className="text-sm text-danger">{imagineEditError}</p>}
+            <div className="flex flex-wrap gap-2">
+              <button type="submit" disabled={busy || !imagineEdit.text.trim()} className="min-h-11 rounded-panel bg-accent px-3 text-sm text-accent-ink">{busy ? "Generating…" : "Generate edit"}</button>
+              <button type="button" disabled={busy} onClick={closeImagineEditor} className="min-h-11 rounded-panel border border-line px-3 text-sm">Cancel edit</button>
+            </div>
+          </form>
+        </Overlay>
+      )}
 
       <input
         ref={fileRef}
         type="file"
-        accept=".txt,.md,.json,.csv,.pdf,.png,.jpg,.jpeg,.gif,.webp,.js,.ts,.mjs,text/plain,application/pdf,image/*"
+        accept={view === "files" ? ".txt,.md,.json,.csv,.pdf,.js,.ts,.mjs,text/plain,application/pdf" : ".txt,.md,.json,.csv,.pdf,.png,.jpg,.jpeg,.gif,.webp,.js,.ts,.mjs,text/plain,application/pdf,image/*"}
         className="hidden"
         onChange={(event) => {
           const file = event.target.files?.[0];
           event.target.value = "";
-          if (file) void onPicked(file);
+          if (file) void onPicked(file).catch(() => setError("Couldn’t read this file. Choose another file to try again."));
         }}
       />
       <input
@@ -7384,10 +7467,10 @@ function ChatPane({
               <button type="button" className="text-accent" onClick={onClearProject}>Show all chats</button>
             </p>
           )}
-          <input value={filter} onChange={(event) => setFilter(event.target.value)} placeholder="Search conversations" className="min-h-11 w-full rounded-panel border border-line bg-bg px-3 text-sm" aria-label="Search conversations" />
+          <input value={filter} onChange={(event) => setFilter(event.target.value)} placeholder="Filter by chat title" className="min-h-11 w-full rounded-panel border border-line bg-bg px-3 text-sm" aria-label="Search conversations" />
         </div>
         <div className="min-h-0 flex-1 space-y-3 overflow-auto px-3 pb-3">
-          {groups.length === 0 && <p className="text-sm text-muted">{scoped.length === 0 ? (projectName ? `No chats for ${projectName} yet.` : "No conversations yet.") : "No conversations match."}</p>}
+          {groups.length === 0 && <p className="text-sm text-muted">{scoped.length === 0 ? (projectName ? `No chats for ${projectName} yet.` : "No conversations yet.") : "No titles match. Use workspace search to find message text."}</p>}
           {groups.map((group) => (
             <div key={group.label}>
               <p className="px-1 text-xs text-muted">{group.label}</p>
@@ -7407,7 +7490,7 @@ function ChatPane({
           <h2 className="font-display text-3xl font-bold">{active?.title || "AI Chat"}</h2>
            {active && !renaming && (
              <div className="flex gap-3">
-               <button type="button" className="min-h-11 text-sm text-accent" onClick={onExport}>Export chat</button>
+               <button type="button" className="min-h-11 text-sm text-accent" onClick={onExport}>Download transcript (JSON)</button>
                <button type="button" className="min-h-11 text-sm text-accent" onClick={() => { setTitleDraft(active.title); setRenaming(true); }}>Rename</button>
              </div>
            )}
@@ -7415,17 +7498,23 @@ function ChatPane({
           {active && customPersonality.trim() ? <p className="mt-1 text-sm text-muted">{active.title} is open in Chat. Its saved instructions are used for the next reply.</p> : null}
           {renaming && (
             <form
-              className="mt-2 flex gap-2"
+              data-chat-rename
+              className="mt-2 flex flex-wrap gap-2"
+              onKeyDown={(event) => { if (event.key === "Escape") { event.preventDefault(); setRenaming(false); } }}
               onSubmit={(event) => {
                 event.preventDefault();
+                if (!titleDraft.trim()) return;
                 onRename(titleDraft);
                 setRenaming(false);
               }}
             >
-              <input value={titleDraft} onChange={(event) => setTitleDraft(event.target.value)} className="min-h-11 flex-1 rounded-panel border border-line bg-bg px-3 text-sm" aria-label="Chat name" />
-              <button type="submit" className="min-h-11 rounded-panel bg-accent px-3 text-sm font-semibold text-accent-ink">Save</button>
+              <input autoFocus required maxLength={80} value={titleDraft} onChange={(event) => setTitleDraft(event.target.value)} className="min-h-11 flex-1 rounded-panel border border-line bg-bg px-3 text-sm" aria-label="Chat name" />
+              <button type="submit" disabled={!titleDraft.trim()} className="min-h-11 rounded-panel bg-accent px-3 text-sm font-semibold text-accent-ink">Save</button>
+              <button type="button" className="min-h-11 rounded-panel border border-line px-3 text-sm" onClick={() => setRenaming(false)}>Cancel</button>
             </form>
           )}
+          {active?.temporary && <div className="text-xs text-muted">Excluded from workspace archives by default</div>}
+          {active?.messages.some((message) => message.images?.some((image) => !image.dataUrl)) && <div className="text-xs text-muted">Some images are unavailable. Their references will be included in the transcript.</div>}
          <details className="thread-chat-settings">
            <summary>Chat settings</summary>
             <p className="text-sm text-muted">Only a configured provider can be selected. Another provider is not substituted.</p>
@@ -7487,9 +7576,9 @@ function ChatPane({
                   }}
                 >
                   <textarea value={editDraft} onChange={(event) => setEditDraft(event.target.value)} rows={3} className="w-full rounded-panel border border-line bg-bg px-3 py-2 text-sm" />
-                  <p className="mt-1 text-xs text-muted">Saving replaces this message and removes every reply after it, then sends it again.</p>
+                  <p className="mt-1 text-xs text-muted">This starts a new conversation from this message. Your original conversation stays intact.</p>
                   <div className="mt-2 flex gap-2">
-                    <button type="submit" className="min-h-11 rounded-panel bg-accent px-3 text-sm font-semibold text-accent-ink">Save and send</button>
+                    <button type="submit" className="min-h-11 rounded-panel bg-accent px-3 text-sm font-semibold text-accent-ink" disabled={!editDraft.trim() || busy}>Send as new branch</button>
                     <button type="button" className="min-h-11 px-3 text-sm" onClick={() => setEditingId(null)}>Cancel</button>
                   </div>
                 </form>
@@ -7523,13 +7612,15 @@ function ChatPane({
                   </>
                 )}
                 {msg.role === "assistant" && (
-                  <span className="flex flex-wrap items-center gap-1 text-xs text-muted">
+                  <span role="group" aria-label="Rate this reply" className="flex flex-wrap items-center gap-1 text-xs text-muted">
                     Rate
                     {([1, 2, 3, 4, 5] as const).map((score) => (
                       <button
                         key={score}
                         type="button"
-                        className={`min-h-11 min-w-11 ${ratings.find((item) => item.messageId === msg.id)?.score === score ? "text-accent" : ""}`}
+                        aria-label={`${score} out of 5`}
+                        aria-pressed={ratings.find((item) => item.messageId === msg.id)?.score === score}
+                        className={`min-h-11 min-w-11 rounded-panel ${ratings.find((item) => item.messageId === msg.id)?.score === score ? "border border-accent bg-accent/15 font-semibold text-accent" : ""}`}
                         onClick={() => onRate(msg.id, score, msg.model ?? null)}
                       >
                         {score}
@@ -7682,7 +7773,12 @@ function ChatPane({
            <button type="button" className="inline-flex min-h-11 items-center gap-2 rounded-panel border border-line/80 bg-white/5 px-3 text-sm" onClick={onAttachImage} aria-label="Upload an image">
              <Image className="size-4" /> Image
            </button>
-            <details className="composer-more">
+            <details className="composer-more" onKeyDown={(event) => {
+              if (event.key !== "Escape" || !event.currentTarget.open) return;
+              event.stopPropagation();
+              event.currentTarget.open = false;
+              event.currentTarget.querySelector("summary")?.focus();
+            }}>
               <summary>More</summary>
               <div className="composer-more__menu">
                 <button type="button" className="inline-flex min-h-11 items-center gap-2 rounded-panel border border-line/80 bg-white/5 px-3 text-sm" onClick={onAttachImage}>
@@ -8001,7 +8097,7 @@ const VOICE_SPEEDS: { id: VoiceSpeed; label: string }[] = [
   { id: "fast", label: "Fast" },
 ];
 
-function VoiceSettingsBlock() {
+function VoiceSettingsBlock({ onReset }: { onReset: () => void }) {
   const [settings, setSettings] = useState<VoiceSettings>(DEFAULT_VOICE_SETTINGS);
   useEffect(() => {
     const storage = typeof localStorage === "undefined" ? null : localStorage;
@@ -8070,11 +8166,12 @@ function VoiceSettingsBlock() {
           const storage = typeof localStorage === "undefined" ? null : localStorage;
           resetVoice(storage);
           setSettings({ ...DEFAULT_VOICE_SETTINGS });
+          onReset();
         }}
       >
         Reset to defaults
       </button>
-      <p data-testid="settings-reset-voice-status" className="mt-2 text-muted">Documented defaults: Eve, Adrian, default activation, normal pace. Appearance is not changed.</p>
+      <p data-testid="settings-reset-voice-status" className="mt-2 text-muted">Defaults are Eve, Adrian, default activation, and normal pace.</p>
     </div>
   );
 }

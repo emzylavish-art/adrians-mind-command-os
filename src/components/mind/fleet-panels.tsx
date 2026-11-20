@@ -1,4 +1,6 @@
 import { useEffect, useRef, useState } from "react";
+import { BotBuilder } from "@/components/mind/bot-builder";
+import { zoneIsValid } from "@/lib/mind/schedule-clock";
 import { getBearerToken } from "@/lib/auth/client";
 import { loadMcpWithHttpFallback } from "@/lib/mind/mcp-list-http";
 import { inspectWebPage, mcpRegistryCall, mcpRegistryList, mcpRegistryToggle, mcpRegistryTools, mindStatus, paperclipStatus, workerHealth } from "@/lib/mind/server";
@@ -136,6 +138,11 @@ export function FleetPanel({
   logicRoutes = [],
   providerChoice,
   onSelectProvider,
+  initialAgentId = "",
+  focusRunId,
+  onBotChat,
+  onBotRun,
+  onBotSchedule,
 }: {
   mode: "agents" | "runs" | "connected" | "scheduled" | "tools";
   ws: Workspace;
@@ -144,23 +151,31 @@ export function FleetPanel({
   logicRoutes?: LogicRoutePublic[];
   providerChoice?: string;
   onSelectProvider?: (id: string) => void;
+  initialAgentId?: string;
+  focusRunId?: string | null;
+  onBotChat?: (id: string, newThread?: boolean) => void;
+  onBotRun?: (id: string) => void;
+  onBotSchedule?: (id: string) => void;
 }) {
   const [note, setNote] = useState<string | null>(null);
   const [toolReadId, setToolReadId] = useState<string | null>(null);
   const [toolRead, setToolRead] = useState<string | null>(null);
   const [mutationState, setMutationState] = useState<FleetMutationActionState>({ status: "idle" });
   const [goal, setGoal] = useState("");
-  const [agentId, setAgentId] = useState("");
+  const [runFilter, setRunFilter] = useState<"all" | "attention">("all");
+  const [showAllRuns, setShowAllRuns] = useState(false);
+  const [agentId, setAgentId] = useState(initialAgentId);
   const [mailLabel, setMailLabel] = useState("");
   const [mailAddress, setMailAddress] = useState("");
   const [connectionLabel, setConnectionLabel] = useState("");
   const [provider, setProvider] = useState<string>(providerChoice ?? "openai");
   const [gmailBoard, setGmailBoard] = useState<{ state: string; detail: string }>({ state: "Checking", detail: "Checking connection…" });
   const [jobName, setJobName] = useState("");
-  const [scheduleBand, setScheduleBand] = useState<"jobs" | "new">("jobs");
+  const [scheduleBand, setScheduleBand] = useState<"jobs" | "new">(initialAgentId ? "new" : "jobs");
   const [jobZone, setJobZone] = useState(() => Intl.DateTimeFormat().resolvedOptions().timeZone || "UTC");
   const [jobHour, setJobHour] = useState("");
-  const [scheduleAgentId, setScheduleAgentId] = useState("");
+  const [scheduleAgentId, setScheduleAgentId] = useState(initialAgentId);
+  const [scheduleError, setScheduleError] = useState("");
   const [workerHealthState, setWorkerHealthState] = useState<WorkerHealthState>({ status: "loading" });
   const workerHealthInFlight = useRef(false);
   const workerHealthGeneration = useRef(0);
@@ -311,10 +326,7 @@ export function FleetPanel({
     return () => { paperclipAttempt.current += 1; };
   }, [mode]);
 
-  const [customName, setCustomName] = useState("");
-  const [customInstructions, setCustomInstructions] = useState("");
-  const [customTools, setCustomTools] = useState<FleetTool[]>(["list_projects"]);
-  const active = ws.agents.find((agent) => agent.id === agentId && !agent.archived) ?? ws.agents.find((agent) => !agent.archived) ?? null;
+  const active = ws.agents.find((agent) => agent.id === agentId && !agent.archived) ?? null;
 
   /** One workerHealth probe: loading → ready (offline/local detail) or error banner. Timeout + stale guard. */
   function loadWorkerHealth() {
@@ -458,12 +470,25 @@ export function FleetPanel({
           ? "Runtime not configured"
           : "Runtime unavailable";
     return (
-      <section className="dense-card card-texture mx-4 mb-6 p-4 md:mx-6">
-        <h3 className="font-semibold">Create and organise agents</h3>
-        <p className="mt-1 text-sm text-muted">Saved agents are definitions. They become operational only after a runtime is connected and a run is explicitly queued.</p>
+      <section className="fleet-bots mx-4 mb-6 space-y-4 md:mx-6">
+        <BotBuilder ws={ws} setWs={setWs} onChat={onBotChat} onRun={onBotRun} onSchedule={onBotSchedule}
+          onDeploy={(agentId, target) => runMutation(snapshotFleetMutationParams({ kind: "deploy", agentId, target }))}
+          onPin={(id) => setWs((prev) => togglePin(prev, "agent", id))} />
+        <details className="bot-builder-card px-4 py-1">
+          <summary className="min-h-11 cursor-pointer py-2 font-semibold">Start from a template</summary>
+          <img src="/brand/bot-template-studio.webp" alt="" width={960} height={320} loading="lazy" className="mb-3 h-28 w-full rounded-panel object-cover" />
+          <div className="mb-3 grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
+            {AGENT_TEMPLATES.map((template) => (
+              <button key={template.name} type="button" className="inline-flex min-h-11 items-center gap-2 rounded-panel border border-line px-3 py-1 text-left text-sm" onClick={() => runMutation(snapshotFleetMutationParams({ kind: "add_template", templateName: template.name }))}>
+                <img src={botAvatarSrc(template.name)} alt="" className="bot-avatar-img size-8 shrink-0" />
+                Add {template.name}
+              </button>
+            ))}
+          </div>
+        </details>
         <div className="mt-3 grid min-w-0 gap-2 rounded-panel border border-line p-3" data-testid="paperclip-runtime-status">
           <div className="flex flex-wrap items-center justify-between gap-2">
-            <div><p className="font-semibold">Agent runtime</p><p className="mt-1 text-xs text-muted">Paperclip is checked separately from saved agents so an unavailable runtime never looks like an agent failure.</p></div>
+            <div><p className="font-semibold">Paperclip runtime</p><p className="mt-1 text-xs text-muted">External agent and run status. Browser worker tools run locally from Runs.</p></div>
             <button
               type="button"
               data-testid="paperclip-refresh"
@@ -494,71 +519,6 @@ export function FleetPanel({
             </div>
           ) : null}
         </div>
-        <div className="mt-4">
-          <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted">Start from a template</p>
-          <div className="flex flex-wrap gap-2">
-          {AGENT_TEMPLATES.map((template) => (
-            <button key={template.name} type="button" className="dense-card inline-flex min-h-11 items-center gap-2 px-3 text-sm" onClick={() => runMutation(snapshotFleetMutationParams({ kind: "add_template", templateName: template.name }))}>
-              <img src={botAvatarSrc(template.name)} alt="" className="bot-avatar-img size-8" />
-              Add {template.name}
-            </button>
-          ))}
-          </div>
-        </div>
-        <div className="mt-4 rounded-panel border border-line p-3">
-          <p className="font-semibold">Custom agent</p>
-          <p className="mt-1 text-sm text-muted">Selected tools that are not configured wait. They do not report success.</p>
-          <input value={customName} onChange={(event) => setCustomName(event.target.value)} placeholder="Agent name" className="mt-2 min-h-11 w-full rounded-panel border border-line bg-bg px-3 text-sm" />
-          <textarea value={customInstructions} onChange={(event) => setCustomInstructions(event.target.value)} placeholder="Instructions" rows={3} className="mt-2 w-full rounded-panel border border-line bg-bg px-3 py-2 text-sm" />
-          <div className="mt-2 flex flex-wrap gap-2">
-            {FLEET_TOOLS.map((tool) => {
-              const on = customTools.includes(tool);
-              return (
-                <button
-                  key={tool}
-                  type="button"
-                  className={`min-h-11 rounded-panel border px-3 text-sm ${on ? "border-accent bg-accent text-accent-ink" : "border-line"}`}
-                  onClick={() => setCustomTools((current) => (current.includes(tool) ? current.filter((item) => item !== tool) : [...current, tool]))}
-                >
-                  {tool}
-                </button>
-              );
-            })}
-          </div>
-          <button
-            type="button"
-            className="mt-3 min-h-11 rounded-panel bg-accent px-4 text-sm font-semibold text-accent-ink"
-            onClick={() => runMutation(snapshotFleetMutationParams({ kind: "add_custom", name: customName, instructions: customInstructions, tools: customTools }))}
-          >
-            Save agent
-          </button>
-        </div>
-        <p className="mt-5 text-xs font-semibold uppercase tracking-wide text-muted">Saved agents</p>
-        <ul className="mt-2 space-y-3">
-          {ws.agents.length === 0 && <li className="text-sm text-muted">No agents yet.</li>}
-          {ws.agents.filter((agent) => !agent.archived).map((agent) => {
-            const deployment = ws.deployments.find((item) => item.agentId === agent.id);
-            return (
-              <li key={agent.id} className="glow-card rounded-panel border border-line/80 p-3 text-sm">
-                <div className="flex items-start gap-3">
-                  <img src={botAvatarSrc(agent.name)} alt="" className="bot-avatar-img" />
-                  <div className="min-w-0 flex-1">
-                <p className="font-semibold">{agent.name}</p>
-                <p className="text-muted">{agent.description}</p>
-                <p className="mt-1 text-xs text-muted">Tools: {agent.tools.join(", ") || "none"}. Version {agent.version}. {deployment ? `${deployment.target} · ${deployment.state}` : "Not deployed"}.</p>
-                {deployment?.error ? <p className="text-xs text-danger" role="status">{deployment.error}</p> : null}
-                  </div>
-                </div>
-                <div className="mt-2 flex flex-wrap gap-2">
-                  <button type="button" className="min-h-11 rounded-panel border border-line px-3" onClick={() => runMutation(snapshotFleetMutationParams({ kind: "deploy", agentId: agent.id, target: "local-worker" }))}>Arm local worker</button>
-                  <button type="button" className="min-h-11 rounded-panel border border-line px-3" onClick={() => runMutation(snapshotFleetMutationParams({ kind: "deploy", agentId: agent.id, target: "hosted-worker" }))}>Record hosted target</button>
-                  <button type="button" className="min-h-11 rounded-panel border border-line px-3" onClick={() => setWs((prev) => togglePin(prev, "agent", agent.id))}>Pin</button>
-                  <button type="button" className="min-h-11 rounded-panel border border-line px-3" onClick={() => setWs((prev) => ({ ...prev, agents: prev.agents.map((item) => (item.id === agent.id ? { ...item, archived: true } : item)) }))}>Archive</button>
-                </div>
-              </li>
-            );
-          })}
-        </ul>
         {mutationBanner()}
         {note && mutationState.status !== "error" ? <p className="mt-3 text-sm text-muted">{note}</p> : null}
       </section>
@@ -566,30 +526,34 @@ export function FleetPanel({
   }
 
   if (mode === "runs") {
+    const needsAttention = ws.runs.filter((run) => run.state === "waiting_approval" || run.state === "waiting_external" || run.state === "failed");
+    const ordered = runFilter === "attention" ? needsAttention : ws.runs;
+    const selected = ws.runs.find((run) => run.id === focusRunId);
+    const runs = selected ? [selected, ...ordered.filter((run) => run.id !== selected.id)] : ordered;
     return (
       <section className="page-shell">
         <div className="page-hero mb-4">
         <h2 className="font-display text-3xl font-bold">Agent runs</h2>
         <p className="text-sm text-muted">Events come from the local worker. This does not call a model, send mail, or invent browser screenshots.</p>
         </div>
-        <div className="mt-4 flex flex-wrap gap-2">
-          <select aria-label="Choose agent" value={active?.id ?? ""} onChange={(event) => setAgentId(event.target.value)} className="min-h-11 rounded-panel border border-line bg-surface px-3 text-sm">
+        <div className="mt-4 grid gap-2 sm:grid-cols-[minmax(10rem,1fr)_minmax(12rem,2fr)]">
+          <label className="grid gap-1 text-sm">Bot<select aria-label="Choose agent" value={active?.id ?? ""} onChange={(event) => setAgentId(event.target.value)} className="min-h-11 min-w-0 rounded-panel border border-line bg-surface px-3 text-sm">
             <option value="">Choose agent</option>
             {ws.agents.filter((agent) => !agent.archived).map((agent) => (
               <option key={agent.id} value={agent.id}>{agent.name}</option>
             ))}
-          </select>
-          <input value={goal} onChange={(event) => setGoal(event.target.value)} placeholder="What should this run do?" className="min-h-11 min-w-0 flex-1 rounded-panel border border-line bg-surface px-3 text-sm" />
+          </select></label>
+          <label className="grid gap-1 text-sm">Task<input value={goal} onChange={(event) => setGoal(event.target.value)} placeholder="What should this run do?" className="min-h-11 min-w-0 rounded-panel border border-line bg-surface px-3 text-sm" /></label>
           <button
             type="button"
             className="min-h-11 rounded-panel bg-accent px-4 text-sm font-semibold text-accent-ink"
-            disabled={!scheduleAgentId && !active?.id}
+            disabled={ws.halted || !active || !goal.trim()}
             onClick={() => {
               if (!active) {
                 runMutation(snapshotFleetMutationParams({ kind: "enqueue_no_agent", goal }));
                 return;
               }
-              runMutation(snapshotFleetMutationParams({ kind: "enqueue", agentId: active.id, goal }));
+              if (runMutation(snapshotFleetMutationParams({ kind: "enqueue", agentId: active.id, goal }))) setGoal("");
             }}
           >
             Queue run
@@ -604,6 +568,10 @@ export function FleetPanel({
         </div>
         {mutationBanner()}
         {note && mutationState.status !== "error" ? <p className="mt-3 text-sm text-muted">{note}</p> : null}
+        <div className="mt-4 flex flex-wrap gap-2" aria-label="Run filters" role="group">
+          <button type="button" aria-pressed={runFilter === "all"} className="min-h-11 rounded-panel border border-line px-3 text-sm" onClick={() => setRunFilter("all")}>All runs ({ws.runs.length})</button>
+          <button type="button" aria-pressed={runFilter === "attention"} className="min-h-11 rounded-panel border border-line px-3 text-sm" onClick={() => setRunFilter("attention")}>Needs attention ({needsAttention.length})</button>
+        </div>
         <ul className="mt-4 space-y-3">
           {ws.runs.length === 0 && (
             <li className="empty-state">
@@ -612,18 +580,22 @@ export function FleetPanel({
               <p className="text-sm text-muted">Queue a run, then press Run worker once.</p>
             </li>
           )}
-          {ws.runs.slice(0, 20).map((run) => (
-            <li key={run.id} className="rounded-panel border border-line bg-surface p-3 text-sm">
-              <p className="font-semibold">{ws.agents.find((agent) => agent.id === run.agentId)?.name ?? "Agent"} · {run.state}</p>
-              <p className="text-muted">{run.goal}</p>
+          {runs.length === 0 && ws.runs.length > 0 && <li className="text-sm text-muted">No runs need attention.</li>}
+          {(showAllRuns ? runs : runs.slice(0, 20)).map((run) => {
+            const events = ws.runEvents.filter((item) => item.runId === run.id);
+            return (
+            <li key={run.id} id={`run-${run.id}`} tabIndex={-1} className={`rounded-panel border bg-surface p-3 text-sm ${run.id === focusRunId ? "border-accent" : "border-line"}`}>
+              <p className="break-words font-semibold">{run.goal}</p>
+              <p className="text-muted">{ws.agents.find((agent) => agent.id === run.agentId)?.name ?? "Agent"} · {run.state.replaceAll("_", " ")}</p>
               {run.plan.length > 0 && <p className="mt-1 text-xs text-muted">Plan: {run.plan.map((step) => step.tool).join(" → ")}. Missing tools wait. They are not marked done.</p>}
               {run.result ? <p className="mt-1 whitespace-pre-wrap">{run.result}</p> : null}
               {run.error ? <p className="mt-1 text-danger">{run.error}</p> : null}
-              <ul className="mt-2 space-y-1 text-xs text-muted">
-                {ws.runEvents.filter((item) => item.runId === run.id).slice(0, 6).map((item) => (
-                  <li key={item.id}>{item.kind}: {item.detail}</li>
-                ))}
-              </ul>
+              {events.length > 0 && <details className="mt-2">
+                <summary className="min-h-11 cursor-pointer py-2 text-sm">History · {events.length} events</summary>
+                <ul className="space-y-1 text-xs text-muted">
+                  {events.map((item) => <li key={item.id} className="break-words"><time dateTime={item.at}>{new Date(item.at).toLocaleString()}</time> · {item.kind.replaceAll("_", " ")} · {item.detail}</li>)}
+                </ul>
+              </details>}
               <div className="mt-2 flex flex-wrap gap-2">
                 {(run.state === "queued" || run.state === "running") ? <button type="button" className="min-h-11 rounded-panel border border-line px-3" onClick={() => setWs((prev) => pauseRun(prev, run.id))}>Pause</button> : null}
                 {run.state === "paused" ? <button type="button" className="min-h-11 rounded-panel border border-line px-3" onClick={() => setWs((prev) => resumeRun(prev, run.id))}>Resume</button> : null}
@@ -634,8 +606,9 @@ export function FleetPanel({
                 </> : null}
               </div>
             </li>
-          ))}
+          ); })}
         </ul>
+        {runs.length > 20 && <button type="button" aria-expanded={showAllRuns} className="mt-3 min-h-11 rounded-panel border border-line px-3 text-sm" onClick={() => setShowAllRuns(!showAllRuns)}>{showAllRuns ? "Show fewer runs" : "Show older runs"}</button>}
       </section>
     );
   }
@@ -757,16 +730,27 @@ export function FleetPanel({
           <button
             type="button"
             className="min-h-11 rounded-panel bg-accent px-4 text-sm font-semibold text-accent-ink"
-            disabled={!scheduleAgentId && !active?.id}
+            disabled={ws.halted || !scheduleAgentId}
             onClick={() => {
-              const hour = jobHour.trim() === "" ? null : Number(jobHour);
+              const hour = Number(jobHour);
+              if (!jobName.trim()) { setScheduleError("Enter a job name."); return; }
+              if (!jobHour.trim() || !Number.isInteger(hour) || hour < 0 || hour > 23) {
+                setScheduleError("Enter a whole hour from 0 to 23.");
+                return;
+              }
+              if (!zoneIsValid(jobZone.trim())) { setScheduleError("Enter a valid time zone, such as America/New_York."); return; }
+              if (!ws.agents.some((agent) => agent.id === scheduleAgentId && !agent.archived)) {
+                setScheduleError("Choose an active bot.");
+                return;
+              }
+              setScheduleError("");
               const saved = runMutation(snapshotFleetMutationParams({
                 kind: "add_schedule",
                 name: jobName,
-                agentId: scheduleAgentId || active?.id || null,
+                agentId: scheduleAgentId,
                 intervalMinutes: 1440,
-                timeZone: jobZone || "UTC",
-                clockHour: hour != null && Number.isFinite(hour) ? hour : null,
+                timeZone: jobZone.trim(),
+                clockHour: hour,
                 clockMinute: 0,
               }));
               if (saved) {
@@ -779,8 +763,9 @@ export function FleetPanel({
           >
             Add daily job
           </button>
-          {!scheduleAgentId && !active?.id ? <p className="text-xs text-muted">Choose an agent before saving this job.</p> : null}
+          {!scheduleAgentId ? <p className="text-xs text-muted">Choose an agent before saving this job.</p> : null}
           </div>
+          {scheduleError && <p role="alert" className="text-sm text-danger">{scheduleError}</p>}
         </div>
         </div>
         <div hidden={scheduleBand !== "jobs"}>
@@ -793,14 +778,28 @@ export function FleetPanel({
               <p className="text-sm text-muted">Add a daily job to queue local work.</p>
             </li>
           )}
-          {ws.schedules.map((job) => (
+          {ws.schedules.map((job) => {
+            const bot = ws.agents.find((agent) => agent.id === job.agentId);
+            const blocked = !bot || bot.archived;
+            return (
             <li key={job.id} className="dense-card p-3 text-sm">
               <p className="font-semibold">{job.name}</p>
-              <p className="mt-1 text-sm text-muted">{job.enabled ? "On." : "Off."} {job.clockHour == null ? (job.intervalMinutes === 1440 ? "Runs once a day. Add an hour to choose the time." : `Runs every ${job.intervalMinutes} minutes.`) : `Runs daily at ${String(job.clockHour).padStart(2, "0")}:${String(job.clockMinute ?? 0).padStart(2, "0")} ${job.timeZone || "UTC"}.`} Agent: {ws.agents.find((agent) => agent.id === job.agentId)?.name || "Needs an agent"}.</p>
-              <p className="text-sm text-muted">Next run {job.nextRunAt}. Last run {job.lastRunAt ?? "never"}. {job.lastError || "No error."}</p>
-              <button type="button" className="mt-2 min-h-11 rounded-panel border border-line px-3 text-sm" onClick={() => setWs((prev) => setScheduleEnabled(prev, job.id, !job.enabled))}>{job.enabled ? "Turn off" : "Turn on"}</button>
+              <p className="mt-1 text-sm text-muted">{job.enabled ? (blocked ? "Blocked" : "On") : "Off"} · {bot?.name ?? "No bot assigned"}</p>
+              <p className="text-sm text-muted">{job.clockHour == null ? `Every ${job.intervalMinutes} minutes` : `Daily at ${String(job.clockHour).padStart(2, "0")}:${String(job.clockMinute ?? 0).padStart(2, "0")} ${job.timeZone || "UTC"}`}</p>
+              {blocked ? <p className="text-sm text-danger">{bot?.archived ? "Agent archived" : "Agent unavailable"}</p> : <p className="text-sm text-muted">Next due <time dateTime={job.nextRunAt}>{new Date(job.nextRunAt).toLocaleString()}</time></p>}
+              {job.lastError && <p className="text-sm text-danger">{job.lastError}</p>}
+              {blocked && <label className="mt-2 block text-sm">Reassign bot
+                <select value="" className="ml-2 min-h-11 max-w-full rounded-panel border border-line bg-surface px-2" onChange={(event) => {
+                  const id = event.target.value;
+                  setWs((prev) => ({ ...prev, schedules: prev.schedules.map((item) => item.id === job.id ? { ...item, agentId: id, lastError: "" } : item) }));
+                }}>
+                  <option value="" disabled>Choose an agent</option>
+                  {ws.agents.filter((agent) => !agent.archived).map((agent) => <option key={agent.id} value={agent.id}>{agent.name}</option>)}
+                </select>
+              </label>}
+              <button type="button" disabled={!job.enabled && blocked} className="mt-2 min-h-11 rounded-panel border border-line px-3 text-sm" onClick={() => setWs((prev) => setScheduleEnabled(prev, job.id, !job.enabled))}>{job.enabled ? "Turn off" : "Turn on"}</button>
             </li>
-          ))}
+          ); })}
         </ul>
         {mutationBanner()}
         {note && mutationState.status !== "error" ? <p className="mt-3 text-sm text-muted">{note}</p> : null}

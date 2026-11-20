@@ -149,8 +149,7 @@ export function listOwnerKeySlots(env: EnvBag = process.env): OwnerKeySlot[] {
 }
 
 function hostIsLocal(host: string): boolean {
-  const value = host.trim().toLowerCase();
-  return value.startsWith("127.0.0.1") || value.startsWith("localhost");
+  return /^(?:127\.0\.0\.1|localhost)(?::\d{1,5})?$/i.test(host.trim());
 }
 
 async function incomingRequestHost(): Promise<string | null> {
@@ -176,10 +175,11 @@ async function incomingRequestHost(): Promise<string | null> {
 
 /**
  * Return one owner key for a local clipboard copy.
- * Refuses unless the incoming request host starts with 127.0.0.1 or localhost.
+ * Refuses hosted Vercel requests and requires an exact loopback host.
  * If getRequest is unavailable or throws, this refuses. Never logs the value.
  */
 export async function copyOwnerKey(id: string, env: EnvBag = process.env): Promise<CopyOwnerKeyResult> {
+  if (process.env.VERCEL === "1") return { ok: false, error: "Copy is only available on this machine." };
   const host = await incomingRequestHost();
   if (!host || !hostIsLocal(host)) {
     return { ok: false, error: "Copy is only available on this machine." };

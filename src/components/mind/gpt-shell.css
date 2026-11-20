@@ -1865,8 +1865,14 @@ form.thread-composer {
     overflow: hidden;
   }
   .thread-shell .chat-head > p,
-  .thread-shell .chat-head .mt-2.flex {
+  .thread-shell .chat-head .mt-2.flex:not([data-chat-rename]) {
     display: none !important;
+  }
+  .thread-shell .chat-head [data-chat-rename] {
+    display: flex !important;
+  }
+  .thread-shell .chat-head [data-chat-rename] input {
+    min-width: 9rem;
   }
   .thread-shell form.thread-composer {
     flex: 0 0 auto;
@@ -2467,6 +2473,17 @@ form.thread-composer {
   display: none !important;
 }
 
+html[data-theme="light"] .shell .topbar > button[aria-label="Alerts"],
+html[data-theme="light"] .shell .topbar > button[aria-label="Open menu"] {
+  color: #26354b !important;
+}
+
+.attachment-feedback {
+  grid-column: 1 / -1;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
 .provider-group .text-xs,
 .rail-pack .text-xs {
   display: -webkit-box;
@@ -2642,6 +2659,51 @@ form.thread-composer {
 }
 [data-testid="chat-right-rail"] {
   display: none !important;
+}
+
+.fleet-bots {
+  color: var(--color-fg);
+}
+
+.bot-builder-card {
+  min-inline-size: 0;
+  border: 1px solid var(--color-line);
+  border-radius: var(--radius-panel);
+  background: var(--color-surface);
+}
+
+.shell .main-stage .fleet-bots .bot-control {
+  border-color: var(--color-line) !important;
+  background: var(--color-surface) !important;
+  color: var(--color-fg) !important;
+  -webkit-text-fill-color: currentColor !important;
+  box-shadow: none !important;
+}
+
+.shell .main-stage .fleet-bots .bot-control--primary {
+  border-color: var(--color-accent) !important;
+  background: var(--color-accent) !important;
+  color: var(--color-accent-ink) !important;
+}
+
+.fleet-bots .bot-control:not(:disabled):hover {
+  filter: brightness(0.92);
+}
+
+.fleet-bots .bot-control:disabled {
+  opacity: 0.55;
+}
+
+html[data-theme="light"] .shell[data-view="scheduled"] .main-stage button.rounded-panel.border.border-line {
+  color: var(--color-fg) !important;
+  -webkit-text-fill-color: currentColor !important;
+}
+
+.fleet-bots button:focus-visible,
+.fleet-bots summary:focus-visible,
+.bot-builder :is(input, textarea, select):focus-visible {
+  outline: 2px solid var(--color-glow);
+  outline-offset: 2px;
 }
 
 /* Final contrast guard for the persistent Chat launcher. */

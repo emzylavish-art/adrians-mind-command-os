@@ -76,6 +76,8 @@ export function AiProviderConnections({ onChange }: { onChange?: (rows: PublicRo
       const next = name ? kindByName[name] : undefined;
       if (!next) return;
       setKind(next);
+      setApiKey("");
+      setInitialModel("");
       setBaseUrl(PRESETS[next]);
       setLabel(next === "openrouter" ? "OpenRouter" : next === "openai" ? "OpenAI" : next === "anthropic" ? "Anthropic" : "Gemini");
       window.setTimeout(() => document.getElementById("owner-api-key")?.focus(), 50);
@@ -90,7 +92,13 @@ export function AiProviderConnections({ onChange }: { onChange?: (rows: PublicRo
     try {
       const data = await api(action);
       if (action.action === "save") setApiKey("");
-      await load();
+      try {
+        await load();
+      } catch {
+        setLoadedOnce(false);
+        setNotice(`${success} Couldn’t refresh your connections.`);
+        return;
+      }
       const provider = data.provider as PublicRow | undefined;
       setNotice(provider?.lastError ? success + " " + provider.lastError : success);
     } catch (error) {
@@ -114,6 +122,8 @@ export function AiProviderConnections({ onChange }: { onChange?: (rows: PublicRo
           <select value={kind} className="min-h-11 rounded-panel border border-line bg-bg px-3" onChange={(event) => {
             const next = event.target.value as ProviderKind;
             setKind(next);
+            setApiKey("");
+            setInitialModel("");
             setBaseUrl(PRESETS[next]);
             setLabel(next === "xai" ? "xAI" : next === "openrouter" ? "OpenRouter" : next === "openai" ? "OpenAI" : next === "anthropic" ? "Anthropic" : next === "gemini" ? "Gemini" : "Custom API");
           }}>
@@ -131,7 +141,7 @@ export function AiProviderConnections({ onChange }: { onChange?: (rows: PublicRo
         </label>
         <label className="grid gap-1 md:col-span-2">
           <span>HTTPS API base URL</span>
-          <input required type="url" value={baseUrl} onChange={(event) => setBaseUrl(event.target.value)} placeholder="https://api.example.com/v1" className="min-h-11 rounded-panel border border-line bg-bg px-3" />
+          <input required type="url" value={baseUrl} onChange={(event) => { setBaseUrl(event.target.value); setApiKey(""); setInitialModel(""); }} placeholder="https://api.example.com/v1" className="min-h-11 rounded-panel border border-line bg-bg px-3" />
         </label>
         <label className="grid gap-1">
           <span>API key</span>
@@ -146,6 +156,7 @@ export function AiProviderConnections({ onChange }: { onChange?: (rows: PublicRo
         </button>
       </form>
       <p className="mt-3 text-xs text-muted" role="status">{notice}</p>
+      {!loadedOnce && <button type="button" disabled={loading} className="mt-2 min-h-11 rounded-panel border border-line px-3" onClick={() => void load().then(() => setNotice("Connections refreshed.")).catch((error) => setNotice(error.message))}>Retry refresh</button>}
       <div className="mt-4 space-y-3">
         {rows.map((row) => (
           <article key={row.id} className="rounded-panel border border-line p-3">
@@ -159,8 +170,12 @@ export function AiProviderConnections({ onChange }: { onChange?: (rows: PublicRo
               </div>
             </div>
             {row.lastError && <p role="status" className="mt-2 text-xs text-muted">{row.lastError}</p>}
-            <p className="mt-2 text-xs text-muted">Default model: {row.defaultModel || "Select a model after discovery"}</p>
-            {row.models.length > 0 && <div className="mt-2 flex flex-wrap gap-1">{row.models.slice(0, 30).map((id) => <span key={id} className="rounded-panel border border-line px-2 py-1 text-xs">{id}</span>)}</div>}
+            {row.models.length > 0 && <label className="mt-3 block text-sm">Default model
+              <select disabled={loading} value={row.defaultModel || ""} className="mt-1 block min-h-11 w-full rounded-panel border border-line bg-bg px-2" onChange={(event) => void run({ action: "model", id: row.id, model: event.target.value }, "Default model updated.")}>
+                <option value="" disabled>Choose a model</option>
+                {[...new Set([...(row.defaultModel ? [row.defaultModel] : []), ...row.models])].map((id) => <option key={id} value={id}>{id}</option>)}
+              </select>
+            </label>}
             <form className="mt-3 flex gap-2" onSubmit={(event) => {
               event.preventDefault();
               void run({ action: "model", id: row.id, model: manual[row.id] || "" }, "Model added and selected.");

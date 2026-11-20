@@ -1,4 +1,4 @@
-export type PdfText = { ok: boolean; text: string; pages: number; error: string };
+export type PdfText = { ok: boolean; text: string; pages: number; error: string; partial?: boolean };
 
 function latin1(bytes: Uint8Array): string {
   let out = "";
@@ -33,18 +33,19 @@ function stringsFrom(content: string): string[] {
 
 async function inflate(data: Uint8Array): Promise<Uint8Array | null> {
   try {
-    const stream = new DecompressionStream("deflate");
-    const writer = stream.writable.getWriter();
-    const reader = stream.readable.getReader();
-    await writer.write(data as BufferSource);
-    await writer.close();
+    const reader = new Blob([data as BlobPart]).stream().pipeThrough(new DecompressionStream("deflate")).getReader();
     const chunks: Uint8Array[] = [];
+    let size = 0;
     while (true) {
       const step = await reader.read();
       if (step.done) break;
+      size += step.value.length;
+      if (size > 2_000_000) {
+        await reader.cancel();
+        return null;
+      }
       if (step.value) chunks.push(step.value);
     }
-    const size = chunks.reduce((sum, chunk) => sum + chunk.length, 0);
     const out = new Uint8Array(size);
     let offset = 0;
     for (const chunk of chunks) {
@@ -62,6 +63,7 @@ export async function extractPdfText(bytes: Uint8Array): Promise<PdfText> {
   if (!source.includes("%PDF")) return { ok: false, text: "", pages: 0, error: "That file is not a PDF. Nothing was extracted." };
   const pages = source.match(/\/Type\s*\/Page(?!s)/g)?.length ?? 0;
   const parts: string[] = [];
+  let skippedStream = false;
   const streams = source.matchAll(/stream\r?\n([\s\S]*?)endstream/g);
   for (const match of streams) {
     const raw = match[1] ?? "";
@@ -69,12 +71,13 @@ export async function extractPdfText(bytes: Uint8Array): Promise<PdfText> {
     let content = raw;
     if (before.includes("/FlateDecode")) {
       const inflated = await inflate(Uint8Array.from(raw, (char) => char.charCodeAt(0)));
-      if (!inflated) continue;
+      if (!inflated) { skippedStream = true; continue; }
       content = latin1(inflated);
     }
     parts.push(...stringsFrom(content));
   }
-  const text = parts.join(" ").replace(/\s+/g, " ").trim().slice(0, 40000);
+  const extracted = parts.join(" ").replace(/\s+/g, " ").trim();
+  const text = extracted.slice(0, 40000);
   if (!text) return { ok: false, text: "", pages, error: pages ? "No text operators were found. OCR is not configured, so a scanned page was not read. Nothing was invented." : "No text was found in this PDF. Nothing was invented." };
-  return { ok: true, text, pages, error: "" };
+  return { ok: true, text, pages, error: "", ...(skippedStream || text.length < extracted.length ? { partial: true } : {}) };
 }

@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useRef } from "react";
 import { isSafeImageSrc, sanitizeMediaLabel } from "@/lib/mind/media";
 
 export const AMCOS_IMAGE_DRAG_TYPE = "application/x-amcos-image";
@@ -18,7 +18,8 @@ export function InlineImage({
   onDownload?: (src: string, alt: string) => void;
   onUseAsAgentInput?: (src: string, alt: string) => void;
 }) {
-  const [open, setOpen] = useState(false);
+  const viewer = useRef<HTMLDialogElement>(null);
+  const trigger = useRef<HTMLButtonElement>(null);
   const safeSrc = isSafeImageSrc(src) ? src : null;
   const safeAlt = sanitizeMediaLabel(alt) || "image";
   if (!safeSrc) {
@@ -30,7 +31,8 @@ export function InlineImage({
         <button
           type="button"
           className="block max-w-full overflow-hidden rounded-panel border border-line"
-          onClick={() => setOpen(true)}
+          ref={trigger}
+          onClick={() => viewer.current?.showModal()}
           aria-label={`Enlarge ${safeAlt}`}
           draggable={safeSrc.startsWith("data:image/")}
           onDragStart={(event) => {
@@ -65,20 +67,14 @@ export function InlineImage({
           )}
         </div>
       </div>
-      {open && (
-        <div
-          className="fixed inset-0 z-50 grid place-items-center bg-black/70 p-4"
-          role="dialog"
-          aria-modal="true"
-          aria-label={safeAlt}
-          onClick={() => setOpen(false)}
-          onKeyDown={(event) => {
-            if (event.key === "Escape") setOpen(false);
-          }}
-        >
-          <img src={safeSrc} alt={safeAlt} className="max-h-[90vh] max-w-[90vw] object-contain" />
+      <dialog ref={viewer} aria-label={safeAlt} className="fixed inset-0 m-auto max-h-[94dvh] max-w-[94vw] rounded-panel bg-surface p-3 text-fg backdrop:bg-black/80"
+        onClose={() => trigger.current?.focus()}>
+        <div className="mb-2 flex min-w-0 items-center justify-between gap-2">
+          <span className="min-w-0 break-words text-sm">{safeAlt}</span>
+          <button type="button" className="min-h-11 shrink-0 rounded-panel border border-line px-3 text-sm" onClick={() => viewer.current?.close()}>Close image</button>
         </div>
-      )}
+        <img src={safeSrc} alt={safeAlt} className="max-h-[76dvh] w-full max-w-[88vw] object-contain" loading="lazy" />
+      </dialog>
     </>
   );
 }

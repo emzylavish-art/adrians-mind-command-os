@@ -30,13 +30,13 @@ export function searchSkills(query: string): Skill[] {
   return SKILLS.filter((skill) => `${skill.name} ${skill.description} ${skill.needs}`.toLowerCase().includes(needle));
 }
 
-export function runSkill(ws: Workspace, skill: Skill, enabled: boolean): { ok: boolean; text: string } {
+export function runSkill(ws: Workspace, skill: Skill, enabled: boolean, query?: string): { ok: boolean; text: string } {
   if (skill.kind === "installed") {
     if (!enabled) return { ok: false, text: `${skill.name} is turned off. Nothing was run.` };
     return { ok: true, text: skill.output };
   }
   if (skill.kind !== "built-in" || !skill.tool) return { ok: false, text: skill.needs };
   if (!enabled) return { ok: false, text: `${skill.name} is turned off. Nothing was run.` };
-  const result = runLocalPlan(ws, [{ id: skill.tool, tool: skill.tool }], { autonomy: "automatic", halted: ws.halted, tokens: {} });
+  const result = runLocalPlan(ws, [{ id: skill.tool, tool: skill.tool, query }], { autonomy: "automatic", halted: ws.halted, tokens: {} });
   return { ok: result.ok, text: result.lines.join("\n") || "No result." };
 }

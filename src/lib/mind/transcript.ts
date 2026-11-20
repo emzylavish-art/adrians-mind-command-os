@@ -89,6 +89,7 @@ export function exportChat(ws: Workspace, chatId: string): { filename: string; j
         content: msg.content,
         at: msg.at,
         model: msg.model ?? null,
+        ...(msg.videoUrl ? { videoUrl: msg.videoUrl } : {}),
         images: msg.images
           ?.map((image) => ({
             dataUrl: image.dataUrl,

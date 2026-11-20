@@ -79,7 +79,7 @@ export function BuildWorkspace(props: {
   onStopRecording?: () => void;
 } = {}) {
   const [companion, setCompanion] = useState<CompanionState>({});
-  const [band, setBand] = useState<"actions" | "files" | "message" | "editor">("actions");
+  const [band, setBand] = useState<"actions" | "files" | "message" | "editor">("message");
   const [prompt, setPrompt] = useState("");
   const [cwd, setCwd] = useState("");
   const [job, setJob] = useState<BuildJob | null>(null);
@@ -606,7 +606,7 @@ export function BuildWorkspace(props: {
           {([
             ["actions", "Actions"],
             ["files", "Workspace"],
-            ["message", "Message"],
+            ["message", "Task"],
             ["editor", "Editor"],
           ] as const).map(([id, label]) => (
             <button key={id} type="button" className={`min-h-11 rounded-panel border px-3 text-sm ${band === id ? "border-accent bg-accent text-accent-ink" : "border-line"}`} aria-pressed={band === id} onClick={() => setBand(id)}>{label}</button>
@@ -687,8 +687,8 @@ export function BuildWorkspace(props: {
           ] as const).map(([item, label, sentence]) => (
             <button key={item} type="button" title={sentence} onClick={() => setMode(item)} className={`min-h-11 rounded-panel border px-3 text-sm ${mode === item ? "border-accent" : "border-line"}`} aria-pressed={mode === item}>{label}</button>
           ))}
-          <button type="submit" disabled={loading || Boolean(active)} className="inline-flex min-h-11 items-center gap-2 rounded-panel bg-accent px-4 text-sm font-semibold text-accent-ink disabled:cursor-not-allowed disabled:opacity-50">
-            <Send className="size-4" aria-hidden="true" /> {loading ? "Queueing…" : active ? "Task running…" : "Run build"}
+          <button type="submit" disabled={loading || Boolean(active) || !prompt.trim()} className="inline-flex min-h-11 items-center gap-2 rounded-panel bg-accent px-4 text-sm font-semibold text-accent-ink disabled:cursor-not-allowed disabled:opacity-50">
+            <Send className="size-4" aria-hidden="true" /> {loading ? "Queueing…" : active ? "Task running…" : mode === "plan" ? "Ask Build" : mode === "default" ? "Start edit" : "Run build"}
           </button>
           <span className="text-xs text-muted">{mode === "plan" ? "Ask explains only. No file is changed." : mode === "default" ? "Edit can change files in this workspace." : "Run can change files and use tools in this workspace."}</span>
         </div>

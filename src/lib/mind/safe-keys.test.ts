@@ -15,7 +15,7 @@ describe("Safe Keys capability inventory", () => {
     assert.doesNotMatch(SAFE_KEY_STATUS, /configured/i);
   });
   it("allows copy controls but does not embed a literal key or secret input", async () => {
-    const panel = await readFile("/home/ubuntu/adrians-mind-command-os/src/components/mind/safe-keys-panel.tsx", "utf8");
+    const panel = await readFile(new URL("../../components/mind/safe-keys-panel.tsx", import.meta.url), "utf8");
     assert.doesNotMatch(panel, /<input|<textarea|type=["']password/i);
     assert.doesNotMatch(panel, /xai-/);
     assert.match(panel, /SAFE_KEY_CAPABILITIES/);

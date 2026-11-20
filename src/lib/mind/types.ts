@@ -44,6 +44,7 @@ export type Retrieval = { at: string; ids: string[] };
 
 export type Chat = {
   id: string;
+  agentId?: string;
   title: string;
   memory: "off" | "on";
   temporary: boolean;
@@ -103,6 +104,7 @@ export type LocalFile = {
   name: string;
   text: string;
   bytes: number;
+  partial?: boolean;
   projectId: string | null;
   createdAt: string;
 };

@@ -1,4 +1,4 @@
-import { useState, type ReactNode } from "react";
+import { useId, useState, type ReactNode } from "react";
 import { splitBlocks } from "@/lib/mind/blocks";
 import { InlineImage } from "@/components/mind/media/inline-image";
 import { MarkdownProse } from "@/components/mind/markdown-prose";
@@ -88,25 +88,51 @@ export function AnswerTabs({
   onDownloadImage?: (src: string, alt: string) => void;
   onFailure?: (message: string, retry: () => void) => void;
 }) {
-  const [tab, setTab] = useState<"answer" | "links" | "images">("answer");
-  const links = Array.from(text.matchAll(/https?:\/\/[^\s)>\]]+/g)).map((match) => match[0].replace(/[.,;]+$/, ""));
+  const tabs = ["answer", "links", "images"] as const;
+  const [tab, setTab] = useState<(typeof tabs)[number]>("answer");
+  const id = useId();
+  const destinations = new Map<string, string>();
+  for (const block of splitBlocks(text)) {
+    if (block.kind !== "text") continue;
+    const body = block.text.replace(MD_IMAGE, "").replace(/`[^`]*`/g, "");
+    const prose = body.replace(/\[([^\]]+)\]\((https?:\/\/[^\s)]+)\)/g, (_, label: string, url: string) => {
+      destinations.set(url, label);
+      return "";
+    });
+    for (const [raw] of prose.matchAll(/https?:\/\/[^\s)>\]]+/g)) {
+      const url = raw.replace(/[.,;]+$/, "");
+      if (!destinations.has(url)) destinations.set(url, url);
+    }
+  }
+  const links = [...destinations.entries()];
   const pictures = images ?? [];
   return (
     <div data-testid="answer-tabs">
-      <div className="mb-2 flex flex-wrap gap-2" role="tablist" aria-label="Answer, links, and images">
-        {(["answer", "links", "images"] as const).map((item) => (
-          <button key={item} type="button" role="tab" aria-selected={tab === item} className={`min-h-11 rounded-panel border px-3 text-xs ${tab === item ? "border-accent" : "border-line text-muted"}`} onClick={() => setTab(item)}>
+      <div className="mb-2 flex flex-wrap gap-2" role="tablist" aria-label="Answer, links, and images" onKeyDown={(event) => {
+        const index = tabs.indexOf(tab);
+        const next = event.key === "ArrowLeft" ? (index + tabs.length - 1) % tabs.length
+          : event.key === "ArrowRight" ? (index + 1) % tabs.length
+          : event.key === "Home" ? 0 : event.key === "End" ? tabs.length - 1 : -1;
+        if (next < 0) return;
+        event.preventDefault();
+        setTab(tabs[next]);
+        event.currentTarget.querySelectorAll<HTMLButtonElement>("[role=tab]")[next]?.focus();
+      }}>
+        {tabs.map((item) => (
+          <button key={item} id={`${id}-${item}`} type="button" role="tab" aria-selected={tab === item} aria-controls={`${id}-panel`} tabIndex={tab === item ? 0 : -1} className={`min-h-11 rounded-panel border px-3 text-xs ${tab === item ? "border-accent" : "border-line text-muted"}`} onClick={() => setTab(item)}>
             {item === "answer" ? "Answer" : item === "links" ? `Links${links.length ? ` ${links.length}` : ""}` : `Images${pictures.length ? ` ${pictures.length}` : ""}`}
           </button>
         ))}
       </div>
+      <div id={`${id}-panel`} role="tabpanel" aria-labelledby={`${id}-${tab}`} tabIndex={0}>
       {tab === "links" ? (
-        links.length ? <ul className="space-y-1">{links.map((href) => <li key={href}><a className="text-accent" href={href} target="_blank" rel="noreferrer">{href}</a></li>)}</ul> : <p className="text-sm text-muted">No links were returned with this answer.</p>
+        links.length ? <ul className="space-y-1">{links.map(([href, label]) => <li key={href}><a className="break-all text-accent underline" href={href} target="_blank" rel="noreferrer">{label}</a></li>)}</ul> : <p className="text-sm text-muted">No links were returned with this answer.</p>
       ) : tab === "images" ? (
-        pictures.some((image) => Boolean(image.dataUrl)) ? pictures.map((image, index) => image.dataUrl ? <InlineImage key={`${image.dataUrl}-${index}`} src={image.dataUrl} alt={image.name || `Image ${index + 1}`} onEditImagine={onEditImagine} onSave={onSaveImage} onDownload={onDownloadImage} /> : null) : <p className="text-sm text-muted">No images were returned with this answer.</p>
+        pictures.length ? pictures.map((image, index) => image.dataUrl ? <InlineImage key={index} src={image.dataUrl} alt={image.name || `Image ${index + 1}`} onEditImagine={onEditImagine} onSave={onSaveImage} onDownload={onDownloadImage} /> : <p key={index} className="break-words text-sm text-muted">{image.name || `Image ${index + 1}`} is unavailable on this device.</p>) : <p className="text-sm text-muted">No images were returned with this answer.</p>
       ) : (
         <AnswerBody text={text} images={images} onEditImagine={onEditImagine} onSaveImage={onSaveImage} onDownloadImage={onDownloadImage} onFailure={onFailure} />
       )}
+      </div>
     </div>
   );
 }
@@ -168,7 +194,7 @@ function AnswerBody({
       )}
       {blocks.map((block, index) =>
         block.kind === "code" ? (
-          <pre key={index} className="overflow-x-auto rounded-panel bg-bg p-3 text-xs">
+          <div key={index} className="min-w-0 rounded-panel bg-bg p-3 text-xs">
             <div className="mb-1 flex items-center justify-between gap-2">
               <p className="text-muted">{block.lang || "code"}</p>
               <button
@@ -180,14 +206,14 @@ function AnswerBody({
                 {copied === index ? "Copied" : "Copy code"}
               </button>
             </div>
-            <code>{block.code}</code>
+            <pre tabIndex={0} aria-label={`${block.lang || "Code"} snippet`} className="overflow-x-auto"><code>{block.code}</code></pre>
             {copyState.status === "error" && copyState.params.blockIndex === index ? (
               <CopyCodeFailureBanner
                 state={copyState}
                 onRetry={onceRetry(() => copyBlock(copyState.params.blockIndex, copyState.params.code)) ?? (() => undefined)}
               />
             ) : null}
-          </pre>
+          </div>
         ) : HAS_MARKDOWN_IMAGE.test(block.text) ? (
           <TextWithImages
             key={index}

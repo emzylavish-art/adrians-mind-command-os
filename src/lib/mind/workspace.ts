@@ -185,11 +185,12 @@ function normalizeChat(row: unknown): Chat | null {
   return {
     id: str(row.id),
     title: str(row.title, "New session").slice(0, 80),
+    ...(typeof row.agentId === "string" && row.agentId ? { agentId: row.agentId } : {}),
     memory,
     temporary: row.temporary === true,
     autonomy,
     personalityId: resolvePersonalityId(row.personalityId),
-    customPersonality: normalizeCustomPersonality(row.customPersonality),
+    customPersonality: typeof row.customPersonality === "string" ? row.customPersonality.slice(0, 800) : "",
     projectId: typeof row.projectId === "string" ? row.projectId : null,
     messages,
     retrievalLog,
@@ -204,6 +205,7 @@ function normalizeFile(row: unknown): LocalFile | null {
     name: str(row.name, "untitled.txt").slice(0, 120),
     text,
     bytes: typeof row.bytes === "number" ? row.bytes : text.length,
+    ...(row.partial === true || row.text.length > text.length ? { partial: true } : {}),
     projectId: typeof row.projectId === "string" ? row.projectId : null,
     createdAt: str(row.createdAt, new Date(0).toISOString()),
   };
@@ -299,6 +301,24 @@ export function createChat(
   return { ws: { ...ws, chats: [chat, ...ws.chats] }, chat };
 }
 
+/** Open the latest bot conversation unless the owner explicitly starts another. */
+export function openBotChat(ws: Workspace, agentId: string, newThread = false): { ws: Workspace; chat: Chat } | null {
+  const agent = ws.agents.find((item) => item.id === agentId && !item.archived);
+  if (!agent) return null;
+  const existing = !newThread && ws.chats.find((chat) => chat.agentId === agentId);
+  if (existing) return { ws, chat: existing };
+  const { chat } = createChat(ws, {
+    memory: agent.memory,
+    autonomy: agent.approval,
+    temporary: false,
+    projectId: agent.projectId,
+    personalityId: "custom",
+    customPersonality: agent.instructions,
+  });
+  const linked = { ...chat, title: agent.name, agentId };
+  return { ws: { ...ws, chats: [linked, ...ws.chats] }, chat: linked };
+}
+
 export function updateChatPersonality(ws: Workspace, chatId: string, personalityId: unknown): Workspace {
   const next = resolvePersonalityId(personalityId);
   if (!chatId || !ws.chats.some((chat) => chat.id === chatId)) return ws;
@@ -309,7 +329,7 @@ export function updateChatPersonality(ws: Workspace, chatId: string, personality
 }
 
 export function updateChatCustomPersonality(ws: Workspace, chatId: string, customPersonality: unknown): Workspace {
-  const next = normalizeCustomPersonality(customPersonality);
+  const next = typeof customPersonality === "string" ? customPersonality.slice(0, 800) : "";
   if (!chatId || !ws.chats.some((chat) => chat.id === chatId)) return ws;
   return {
     ...ws,
@@ -453,7 +473,7 @@ export function pushUsage(ws: Workspace, entry: Omit<UsageEntry, "kind">): Works
 
 export function addLocalFile(
   ws: Workspace,
-  input: { id?: string; name: string; text: string; projectId: string | null },
+  input: { id?: string; name: string; text: string; partial?: boolean; projectId: string | null },
 ): Workspace {
   const text = input.text.slice(0, 40000);
   if (!text.trim()) return ws;
@@ -462,6 +482,7 @@ export function addLocalFile(
     name: input.name.trim().slice(0, 120) || "untitled.txt",
     text,
     bytes: new TextEncoder().encode(text).length,
+    ...(input.partial || input.text.length > text.length ? { partial: true } : {}),
     projectId: input.projectId,
     createdAt: new Date().toISOString(),
   };

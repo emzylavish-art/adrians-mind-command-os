@@ -1,0 +1,167 @@
+import { useState } from "react";
+import { addCustomAgent, editBot, toolCatalog, type AgentDefinition, type BotDraft } from "@/lib/mind/fleet";
+import { MAX_CUSTOM_PERSONALITY_CHARS } from "@/lib/mind/personalities";
+import type { Workspace } from "@/lib/mind/types";
+
+const fields = "mt-1 min-h-11 w-full rounded-panel border border-line bg-bg px-3 py-2 text-sm";
+const secondary = "bot-control min-h-11 rounded-panel border px-3 text-sm";
+const primary = "bot-control bot-control--primary min-h-11 rounded-panel border px-4 text-sm font-semibold";
+const blank = (): BotDraft => ({ name: "", description: "", instructions: "", tools: ["list_projects"], projectId: null });
+
+export function BotBuilder({ ws, setWs, onChat, onRun, onSchedule, onDeploy, onPin }: {
+  ws: Workspace;
+  setWs: (update: (prev: Workspace) => Workspace) => void;
+  onChat?: (id: string, newThread?: boolean) => void;
+  onRun?: (id: string) => void;
+  onSchedule?: (id: string) => void;
+  onDeploy: (id: string, target: "local-worker" | "hosted-worker") => void;
+  onPin: (id: string) => void;
+}) {
+  const [draft, setDraft] = useState<BotDraft | null>(null);
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [status, setStatus] = useState("");
+  const [error, setError] = useState("");
+  const [checked, setChecked] = useState(false);
+  const [archiveId, setArchiveId] = useState<string | null>(null);
+  const [showArchived, setShowArchived] = useState(false);
+  const tools = toolCatalog();
+  const active = ws.agents.filter((bot) => !bot.archived);
+  const archived = ws.agents.filter((bot) => bot.archived);
+
+  function start(bot?: AgentDefinition, duplicate = false) {
+    setEditingId(bot && !duplicate ? bot.id : null);
+    setDraft(bot ? {
+      name: duplicate ? `${bot.name.slice(0, 75)} copy` : bot.name,
+      description: bot.description,
+      instructions: bot.instructions,
+      tools: [...bot.tools],
+      projectId: bot.projectId,
+    } : blank());
+    setError("");
+    setChecked(false);
+  }
+
+  function change(patch: Partial<BotDraft>) {
+    setDraft((current) => current && { ...current, ...patch });
+    setChecked(false);
+    setError("");
+  }
+
+  function save() {
+    if (!draft) return;
+    const result = editingId ? editBot(ws, editingId, draft) : addCustomAgent(ws, draft);
+    if (!result.ok) {
+      setError(result.error);
+      return;
+    }
+    setWs((prev) => ({
+      ...prev,
+      agents: editingId ? prev.agents.map((bot) => bot.id === editingId ? result.agent : bot) : [result.agent, ...prev.agents],
+    }));
+    setStatus(`${result.agent.name} saved.`);
+    setDraft(null);
+  }
+
+  function setArchived(bot: AgentDefinition, value: boolean) {
+    setWs((prev) => ({
+      ...prev,
+      agents: prev.agents.map((item) => item.id === bot.id ? { ...item, archived: value, updatedAt: new Date().toISOString() } : item),
+    }));
+    setArchiveId(null);
+    setStatus(`${bot.name} ${value ? "archived" : "restored"}.`);
+  }
+
+  return (
+    <section aria-labelledby="bot-builder-title" className="bot-builder space-y-4">
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <h3 id="bot-builder-title" className="font-display text-xl font-semibold">Your bots</h3>
+        {!draft && <button className={primary} type="button" onClick={() => start()}>Create bot</button>}
+      </div>
+      {status && <p role="status" className="text-sm text-fg">{status}</p>}
+      {draft && (
+        <form aria-label={editingId ? "Edit bot" : "Create bot"} className="bot-builder-card space-y-4 p-4" onSubmit={(event) => { event.preventDefault(); save(); }}>
+          <fieldset className="space-y-3">
+            <legend className="font-semibold">Identity and instructions</legend>
+            <label className="block text-sm">Bot name<input required maxLength={80} value={draft.name} autoFocus onChange={(event) => change({ name: event.target.value })} className={fields} /></label>
+            <label className="block text-sm">Purpose <span className="text-muted">(optional)</span><input maxLength={400} value={draft.description} onChange={(event) => change({ description: event.target.value })} className={fields} /></label>
+            <label className="block text-sm">Instructions<textarea aria-describedby="bot-instruction-limit" maxLength={MAX_CUSTOM_PERSONALITY_CHARS} rows={4} value={draft.instructions} onChange={(event) => change({ instructions: event.target.value })} className={fields} /></label>
+            <p id="bot-instruction-limit" className="text-xs text-muted">{draft.instructions.length} / {MAX_CUSTOM_PERSONALITY_CHARS} characters in a bot conversation.</p>
+          </fieldset>
+          <label className="block text-sm">Project context
+            <select value={draft.projectId ?? ""} onChange={(event) => change({ projectId: event.target.value || null })} className={fields}>
+              <option value="">No project</option>
+              {ws.projects.map((project) => <option key={project.id} value={project.id}>{project.name}</option>)}
+            </select>
+            <span className="mt-1 block text-xs text-muted">Picking a project scopes local run reads to that project.</span>
+          </label>
+          <fieldset className="space-y-2">
+            <legend className="font-semibold">Run capabilities</legend>
+            <p className="text-sm text-muted">These tools apply to queued runs. Bot conversations use Chat’s selected model.</p>
+            <div className="grid gap-2 sm:grid-cols-2">
+              {tools.map((tool) => (
+                <label key={tool.id} className="flex min-h-11 items-start gap-3 rounded-panel border border-line p-3 text-sm">
+                  <input type="checkbox" checked={draft.tools.includes(tool.id)} onChange={(event) => change({ tools: event.target.checked ? [...draft.tools, tool.id] : draft.tools.filter((id) => id !== tool.id) })} />
+                  <span className="min-w-0"><span className="block font-medium">{tool.name}</span><span className="block text-xs text-muted">{tool.reason}</span></span>
+                </label>
+              ))}
+            </div>
+          </fieldset>
+          {checked && <p role="status" className="text-sm text-muted">{draft.tools.length} selected · {tools.filter((tool) => draft.tools.includes(tool.id) && tool.available).length} available in the local worker. This check does not run the bot.</p>}
+          {error && <p role="alert" className="text-sm text-danger">{error}</p>}
+          <div className="flex flex-wrap gap-2">
+            <button type="submit" className={primary} disabled={!draft.name.trim() || !draft.tools.length || draft.instructions.length > MAX_CUSTOM_PERSONALITY_CHARS}>Save bot</button>
+            <button type="button" className={secondary} onClick={() => setChecked(true)}>Check capabilities</button>
+            <button type="button" className={secondary} onClick={() => setDraft(null)}>Cancel</button>
+          </div>
+        </form>
+      )}
+      {active.length === 0 && <p className="text-sm text-muted">Create a bot or start from a template.</p>}
+      <ul className="grid gap-3 lg:grid-cols-2">
+        {active.map((bot) => {
+          const scheduled = ws.schedules.filter((job) => job.agentId === bot.id && job.enabled).length;
+          const deployment = ws.deployments.find((item) => item.agentId === bot.id && item.agentVersion === bot.version);
+          return <li key={bot.id} id={`bot-${bot.id}`} tabIndex={-1} className="bot-builder-card min-w-0 space-y-3 p-4">
+            <div className="flex items-start gap-3">
+              <img src="/brand/marks/bots.png" alt="" width={32} height={32} className="shrink-0 rounded-lg" />
+              <div className="min-w-0">
+                <h4 className="break-words font-semibold">{bot.name}</h4>
+                <p className="break-words text-sm text-muted">{bot.description}</p>
+                <p className="mt-1 text-xs text-muted">Version {bot.version} · {bot.tools.length} run tools{scheduled > 0 ? ` · ${scheduled} enabled schedules` : ""}</p>
+              </div>
+            </div>
+            <div className="flex flex-wrap gap-2">
+              {onChat && <button type="button" className={primary} onClick={() => onChat(bot.id)}>Open chat</button>}
+              {onRun && <button type="button" className={secondary} onClick={() => onRun(bot.id)}>Run task</button>}
+              {onSchedule && <button type="button" className={secondary} onClick={() => onSchedule(bot.id)}>Schedule</button>}
+            </div>
+            <details>
+              <summary className="flex min-h-11 cursor-pointer items-center text-sm">Manage {bot.name}</summary>
+              <div className="flex flex-wrap gap-2">
+                {onChat && <button type="button" className={secondary} onClick={() => onChat(bot.id, true)}>New conversation</button>}
+                <button type="button" className={secondary} onClick={() => start(bot)}>Edit bot</button>
+                <button type="button" className={secondary} onClick={() => start(bot, true)}>Duplicate</button>
+                <button type="button" className={secondary} onClick={() => onPin(bot.id)}>{ws.pins.some((pin) => pin.kind === "agent" && pin.ref === bot.id) ? "Unpin" : "Pin"}</button>
+                <button type="button" className={secondary} onClick={() => onDeploy(bot.id, "local-worker")}>Arm local worker</button>
+                <button type="button" className={secondary} onClick={() => onDeploy(bot.id, "hosted-worker")}>Record hosted target</button>
+                <button type="button" className={secondary} onClick={() => setArchiveId(bot.id)}>Archive</button>
+              </div>
+              <p className="mt-2 text-xs text-muted">{deployment ? `${deployment.target} · ${deployment.state}${deployment.error ? ` · ${deployment.error}` : ""}` : "No worker target recorded for this version."}</p>
+              <p className="mt-1 text-xs text-muted">Instruction changes apply to new conversations. Existing conversations keep their own settings.</p>
+              {archiveId === bot.id && <div className="mt-2 space-y-2 text-sm">
+                <p>{scheduled ? `${scheduled} enabled schedule(s) will be blocked while this bot is archived.` : "This bot will be hidden from active bots."} Existing conversations and run history are kept.</p>
+                <div className="flex flex-wrap gap-2">
+                  <button type="button" className={secondary} onClick={() => setArchived(bot, true)}>Confirm archive</button>
+                  <button type="button" className={secondary} onClick={() => setArchiveId(null)}>Cancel archive</button>
+                </div>
+              </div>}
+            </details>
+          </li>;
+        })}
+      </ul>
+      {archived.length > 0 && <>
+        <button type="button" className={secondary} aria-expanded={showArchived} onClick={() => setShowArchived(!showArchived)}>{showArchived ? "Hide archived" : `Archived bots (${archived.length})`}</button>
+        {showArchived && <ul className="space-y-2">{archived.map((bot) => <li key={bot.id} className="flex flex-wrap items-center gap-3 text-sm"><span>{bot.name}</span><button type="button" className={secondary} onClick={() => setArchived(bot, false)}>Restore {bot.name}</button></li>)}</ul>}
+      </>}
+    </section>
+  );
+}

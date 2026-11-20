@@ -99,17 +99,15 @@ export function PersonaDirectoryView({
 
   return (
     <section className="page-shell" data-testid="persona-directory">
-      <div className="page-hero mb-4">
+      <div className="mb-4">
         <div className="mb-3 flex items-center gap-3">
           <img src="/brand/logo-mark.jpg" alt="" className="logo-mark size-10 rounded-2xl object-cover" />
           <div>
-            <p className="meta-label">Explore</p>
-            <h1 className="font-display text-3xl font-bold">Persona directory</h1>
+            <h2 className="font-display text-xl font-bold">Persona directory</h2>
           </div>
         </div>
         <p className="text-sm text-muted">
-          Browse local agent templates and saved bots. Cards are never presented as live remote Poe or Character.AI
-          personas. Selecting one saves a local agent and opens Chat with that agent's saved instructions.
+          Browse templates and saved bots. Selecting one opens Chat with that agent's saved instructions.
         </p>
       </div>
 
@@ -127,11 +125,10 @@ export function PersonaDirectoryView({
         </a>
       </div>
 
-      <div className="mb-4 flex flex-wrap gap-2" role="tablist" aria-label="Persona categories">
+      <div className="mb-4 flex flex-wrap gap-2" role="group" aria-label="Persona categories">
         <button
           type="button"
-          role="tab"
-          aria-selected={category === "all"}
+          aria-pressed={category === "all"}
           className={`min-h-11 rounded-panel border px-3 text-sm ${category === "all" ? "border-fg bg-surface-2" : "border-line"}`}
           onClick={() => setCategory("all")}
         >
@@ -144,8 +141,7 @@ export function PersonaDirectoryView({
             <button
               key={item.id}
               type="button"
-              role="tab"
-              aria-selected={on}
+              aria-pressed={on}
               className={`min-h-11 rounded-panel border px-3 text-sm ${on ? "border-fg bg-surface-2" : "border-line"}`}
               onClick={() => setCategory(item.id)}
               data-testid={`persona-cat-${item.id}`}
@@ -165,7 +161,7 @@ export function PersonaDirectoryView({
 
       {empty ? (
         <div className="dense-card rounded-panel border border-line p-4 text-sm text-muted" data-testid="persona-empty">
-          {empty}
+          {query.trim() ? <><p>No results for “{query.trim()}” in this category.</p><button type="button" className="min-h-11 text-accent" onClick={() => setQuery("")}>Clear search</button> <button type="button" className="min-h-11 text-accent" onClick={() => setCategory("all")}>Search all categories</button></> : empty}
         </div>
       ) : (
         <ul className="grid gap-3 md:grid-cols-2 xl:grid-cols-3" data-testid="persona-grid">
