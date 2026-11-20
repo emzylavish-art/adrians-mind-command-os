@@ -33,7 +33,7 @@ type SourceId = (typeof SOURCES)[number]["id"];
 type SortId = (typeof SORTS)[number]["id"];
 
 const DEFAULT_NEXT =
-  "Next: type a name in Search personas, press Official, then press Save and open Chat on that template. That writes a local agent and opens Chat. It does not start a remote bot, and the selected-agent handoff is not yet verified.";
+  "Next: type a name in Search personas, press Official, then press Save and open Chat on that template. That writes a local agent and opens Chat with its saved instructions. It does not start a remote bot.";
 
 function readKey(key: string): string | null {
   try {
@@ -87,7 +87,7 @@ function readPins(known: Set<string>): string[] {
 
 function openStep(card: PersonaCard): string {
   const shelf = card.source === "saved" ? "My agents" : "Official";
-  return `Next: type “${card.name}” in Search personas, press ${shelf}, then press Save and open Chat on ${card.name}. That stores the local agent and opens Chat. It does not start a remote bot, and the selected-agent handoff is not yet verified.`;
+  return `Next: type “${card.name}” in Search personas, press ${shelf}, then press Save and open Chat on ${card.name}. That stores the local agent and opens Chat with its saved instructions. It does not start a remote bot.`;
 }
 
 function compareCards(sort: SortId) {

@@ -428,11 +428,12 @@ export function FleetPanel({
       setNote(null);
       const retry = onceFleetMutationRetry(() => runMutation(result.params));
       if (retry) onFailure?.(result.message, retry);
-      return;
+      return false;
     }
     setMutationState({ status: "idle" });
     setWs(() => result.ws);
     setNote(null);
+    return true;
   }
 
   function mutationBanner() {
@@ -756,9 +757,10 @@ export function FleetPanel({
           <button
             type="button"
             className="min-h-11 rounded-panel bg-accent px-4 text-sm font-semibold text-accent-ink"
+            disabled={!scheduleAgentId && !active?.id}
             onClick={() => {
               const hour = jobHour.trim() === "" ? null : Number(jobHour);
-              runMutation(snapshotFleetMutationParams({
+              const saved = runMutation(snapshotFleetMutationParams({
                 kind: "add_schedule",
                 name: jobName,
                 agentId: scheduleAgentId || active?.id || null,
@@ -767,6 +769,12 @@ export function FleetPanel({
                 clockHour: hour != null && Number.isFinite(hour) ? hour : null,
                 clockMinute: 0,
               }));
+              if (saved) {
+                setJobName("");
+                setJobHour("");
+                setScheduleAgentId("");
+                setScheduleBand("jobs");
+              }
             }}
           >
             Add daily job

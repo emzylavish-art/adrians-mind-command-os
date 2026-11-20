@@ -57,7 +57,7 @@ describe("integration persona directory survives merge", () => {
     assert.match(directoryUi, /persistPersonaOpen\(window\.localStorage, result\.ws, result\.selection\)/);
     assert.match(directoryUi, /if \(!persisted\.ok\)/);
     assert.match(directoryUi, /Nothing was opened/);
-    assert.match(directoryUi, /selected-agent handoff is not yet verified/);
+    assert.match(directoryUi, /opens Chat with that agent's saved instructions/);
     assert.doesNotMatch(exploreRoute, /localStorage\.setItem|window\.setTimeout/);
   });
 

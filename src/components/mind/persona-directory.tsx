@@ -88,7 +88,7 @@ export function PersonaDirectoryView({
     latestWorkspace.current = result.ws;
     setWs(() => result.ws);
     setNote(
-      `Saved ${result.selection.agentName} locally. Opening Chat; the selected-agent handoff is not yet verified.`,
+      `Saved ${result.selection.agentName} locally. Opening Chat with this agent's saved instructions.`,
     );
     if (onOpened) {
       onOpened(result.href, card);
@@ -109,7 +109,7 @@ export function PersonaDirectoryView({
         </div>
         <p className="text-sm text-muted">
           Browse local agent templates and saved bots. Cards are never presented as live remote Poe or Character.AI
-          personas. Selecting one saves a local agent and opens Chat; the selected-agent handoff is not yet verified.
+          personas. Selecting one saves a local agent and opens Chat with that agent's saved instructions.
         </p>
       </div>
 
