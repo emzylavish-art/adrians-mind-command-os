@@ -19,7 +19,7 @@ export function HandyDictation() {
   const [phase, setPhase] = useState<Phase>("idle");
   const [label, setLabel] = useState("");
   const [levels, setLevels] = useState<number[]>(handyLiveLevels(0));
-  const [note, setNote] = useState("Detection is Handy Whisper Flow. Speak is the call.");
+  const [note, setNote] = useState("Mic types into the field. Translator translates. Speak is the call.");
   const [target, setTarget] = useState("es");
   const [actionsOpen, setActionsOpen] = useState(false);
   const [translation, setTranslation] = useState("");
@@ -98,7 +98,7 @@ export function HandyDictation() {
   async function start() {
     setPhase("speak");
     setEngine("");
-    setNote(label ? `Detection is listening in ${label}. This is not Speak.` : "Detection is listening. This is not Speak.");
+    setNote(label ? `Mic is listening in ${label}. This is not Speak and it is not translated.` : "Mic is listening. This is not Speak and it is not translated.");
     field.current?.focus();
     try {
       await liveSession().start();
@@ -115,7 +115,7 @@ export function HandyDictation() {
     }
     const live = session.current;
     if (!live || live.getState().phase === "idle") {
-      setNote("Press Detection and speak first. Nothing was saved.");
+      setNote("Press Mic and speak first. Nothing was saved.");
       return;
     }
     try {
@@ -169,8 +169,11 @@ export function HandyDictation() {
       onPointerLeave={(event) => window.clearTimeout(Number(event.currentTarget.dataset.hold))}
       onPointerCancel={(event) => window.clearTimeout(Number(event.currentTarget.dataset.hold))}
     >
-      <button type="button" className="min-h-11 rounded-panel border border-line px-3 text-sm" data-testid="handy-mic" aria-label="Detection" title="Detection is Handy Whisper Flow. This is not Speak." onClick={() => void start()}>
-        Detection
+      <button type="button" className="min-h-11 rounded-panel border border-line px-3 text-sm" data-testid="handy-mic" aria-label="Mic" title="Mic types into the field. This is not Speak." onClick={() => void start()}>
+        Mic
+      </button>
+      <button type="button" className="min-h-11 rounded-panel border border-line px-3 text-sm" data-testid="translator-open" aria-label="Translator" title="Translator translates. It does not open Speak." onClick={() => setActionsOpen(true)}>
+        Translator
       </button>
       {phase === "speak" || phase === "saved" ? (
         <span className="inline-flex items-end gap-1" data-testid="handy-wave" data-live="true" aria-label="Speech is live">
@@ -186,7 +189,7 @@ export function HandyDictation() {
       <p className="min-w-0 flex-1 basis-full whitespace-normal text-xs leading-5 text-muted sm:basis-auto" data-testid="handy-note" title={note}>{note}</p>
       {translation ? <p className="text-sm" data-testid="voice-translation">{translation}</p> : null}
       {actionsOpen ? (
-        <ActionOverlay label="Actions for dictation" title="Dictation" onClose={() => setActionsOpen(false)}>
+        <ActionOverlay label="Translator" title="Translator" onClose={() => setActionsOpen(false)}>
           <button type="button" className="flex min-h-11 w-full items-center rounded-2xl px-3 text-left text-sm" data-testid="handy-mark" onClick={() => { setActionsOpen(false); void mark(); }}>
             Mark
           </button>

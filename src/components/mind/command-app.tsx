@@ -680,6 +680,28 @@ function keepComposerInside() {
   keepBannerClear();
   keepGuideAboveBar();
   keepStartRowInside();
+  showVoiceWords();
+}
+
+function showVoiceWords() {
+  document.querySelectorAll(".composer-send, button[aria-label='Speak'], button[aria-label='Mic'], button[aria-label='Translator']").forEach((node) => {
+    if (!(node instanceof HTMLElement)) return;
+    node.style.setProperty("display", "inline-flex", "important");
+    node.style.setProperty("align-items", "center", "important");
+    node.style.setProperty("justify-content", "center", "important");
+    node.style.setProperty("gap", "0.35rem", "important");
+    node.style.setProperty("width", "auto", "important");
+    node.style.setProperty("min-width", "max-content", "important");
+    node.style.setProperty("max-width", "100%", "important");
+    node.style.setProperty("height", "auto", "important");
+    node.style.setProperty("min-height", "2.75rem", "important");
+    node.style.setProperty("max-height", "none", "important");
+    node.style.setProperty("padding", "0 0.75rem", "important");
+    node.style.setProperty("font-size", "0.875rem", "important");
+    node.style.setProperty("line-height", "1.2", "important");
+    node.style.setProperty("white-space", "nowrap", "important");
+    node.style.setProperty("overflow", "visible", "important");
+  });
 }
 
 function keepStartRowInside() {
@@ -697,6 +719,9 @@ function keepStartRowInside() {
   }
   const buttons = [...starters.querySelectorAll("button")];
   for (const button of buttons) button.style.removeProperty("margin-top");
+  starters.querySelectorAll("p").forEach((node) => {
+    if (node instanceof HTMLElement) node.style.removeProperty("margin-top");
+  });
   const first = buttons[0];
   let pull = 0;
   if (first) {
@@ -712,9 +737,42 @@ function keepStartRowInside() {
     const box = button.getBoundingClientRect();
     return box.top - pull < limit - 1 && box.bottom - pull > limit + 1;
   });
-  if (!clipped || clipped === first) return;
-  const push = Math.ceil(limit - (clipped.getBoundingClientRect().top - pull)) + 4;
-  if (push > 1) clipped.style.setProperty("margin-top", `${push}px`, "important");
+  if (clipped && clipped !== first) {
+    const push = Math.ceil(limit - (clipped.getBoundingClientRect().top - pull)) + 4;
+    if (push > 1) clipped.style.setProperty("margin-top", `${push}px`, "important");
+  }
+  const cover = bar instanceof HTMLElement ? bar.getBoundingClientRect().top : limit + 8;
+  for (const button of buttons) {
+    const box = button.getBoundingClientRect();
+    if (box.height < 8 || !(box.top < cover - 1 && box.bottom > cover + 1)) continue;
+    const current = Number.parseFloat(button.style.marginTop || "0") || 0;
+    const push = Math.ceil(cover - box.top) + 8;
+    if (push > 1) button.style.setProperty("margin-top", `${current + push}px`, "important");
+  }
+  const form = document.querySelector(".gpt-home form");
+  const floor = form instanceof HTMLElement ? form.getBoundingClientRect().bottom + 8 : scrollBox.top;
+  for (const label of starters.querySelectorAll("p")) {
+    if (!(label instanceof HTMLElement)) continue;
+    const box = label.getBoundingClientRect();
+    if (box.height < 8 || !(box.top < cover - 1 && box.bottom > cover + 1)) continue;
+    const need = Math.ceil(box.bottom - (cover - 8));
+    const room = Math.floor(box.top - floor);
+    if (need > 1 && room >= need) {
+      const current = Number.parseFloat(starters.style.marginTop || "0") || 0;
+      starters.style.setProperty("margin-top", `${current - need}px`, "important");
+      continue;
+    }
+    const current = Number.parseFloat(label.style.marginTop || "0") || 0;
+    const push = Math.ceil(cover - box.top) + 8;
+    if (push > 1) label.style.setProperty("margin-top", `${current + push}px`, "important");
+  }
+  for (const button of buttons) {
+    const box = button.getBoundingClientRect();
+    if (box.height < 8 || !(box.top < cover - 1 && box.bottom > cover + 1)) continue;
+    const current = Number.parseFloat(button.style.marginTop || "0") || 0;
+    const push = Math.ceil(cover - box.top) + 8;
+    if (push > 1) button.style.setProperty("margin-top", `${current + push}px`, "important");
+  }
 }
 
 function scrollWithoutCoveringGreeting(scroller: HTMLElement, delta: number) {
@@ -5993,12 +6051,12 @@ export function CommandApp() {
 
           <button
             type="button"
-            className="grid size-11 min-h-11 min-w-11 shrink-0 place-items-center rounded-full border border-line bg-white/5"
+            className="inline-flex h-11 min-h-11 shrink-0 items-center gap-1 rounded-full border border-line bg-white/5 px-3 text-sm"
             aria-label="Speak"
             title="Speak is the call. It does not type into the field."
             onClick={openSpeakStage}
           >
-            <Volume2 className="size-4" />
+            <Volume2 className="size-4" /> Speak
           </button>
           <button
             type="button"
@@ -6434,15 +6492,12 @@ export function CommandApp() {
                     <button type="submit" disabled={busy || ws.halted || (!draft.trim() && pendingImages.length === 0 && !staged)} className="composer-send inline-flex min-h-11 items-center gap-2 rounded-panel bg-accent px-4 text-sm font-semibold text-accent-ink disabled:opacity-50">
                       <Send className="size-4" /> {busy ? "Sending" : "Send"}
                     </button>
-                    {draft.trim() || pendingImages.length > 0 || staged ? (
-                      <button type="submit" className="gpt-voice grid size-11 place-items-center rounded-full bg-[#2f6bff] text-white" aria-label="Send">
-                        <Send className="size-4" />
-                      </button>
-                    ) : (
-                      <button type="button" className="gpt-voice grid size-11 place-items-center rounded-full bg-[#2f6bff] text-white" aria-label="Speak" title="Speak is the call. It does not type into the field." onPointerDown={(event) => { event.preventDefault(); openSpeakStage(); }} onClick={openSpeakStage}>
-                        <Volume2 className="size-4" />
-                      </button>
-                    )}
+                    <button type="button" className="composer-mic-dictate inline-flex min-h-11 items-center gap-2 rounded-full border border-line px-3 text-sm" data-testid="composer-mic-dictate" aria-label="Mic" title="Mic types into the field. It does not open Speak." onClick={onDictationMic}>
+                      <Mic className="size-4" /> Mic
+                    </button>
+                    <button type="button" className="gpt-voice inline-flex min-h-11 items-center gap-2 rounded-full bg-[#2f6bff] px-3 text-sm text-white" aria-label="Speak" title="Speak is the call. It does not type into the field." onPointerDown={(event) => { event.preventDefault(); openSpeakStage(); }} onClick={openSpeakStage}>
+                      <Volume2 className="size-4" /> Speak
+                    </button>
                   </div>
                 </form>
                 {contextOpen && (
@@ -6574,7 +6629,7 @@ export function CommandApp() {
                 <Panel title="System Status" action="Details" onAction={() => setView("integrations")}>
                   <StatusRow icon={Database} name="Memory" detail={memoryChoice === "on" ? "On for the next command" : "Off for the next command"} pill={memoryChoice === "on" ? "On" : "Off"} tone={memoryChoice === "on" ? "ok" : "muted"} />
                   <StatusRow icon={Database} name="Database" detail={databaseDetail} pill={databasePill} tone={databasePill === "Refused" ? "danger" : "muted"} />
-                  <StatusRow icon={Bot} name="Voice" detail="Detection is Handy Whisper Flow. Speak is the call. They are not the same." pill={speakStageOpen ? "Speak" : "Detection"} tone="muted" />
+                  <StatusRow icon={Bot} name="Voice" detail="Mic types into the field. Translator translates. Speak is the call." pill={speakStageOpen ? "Speak" : "Mic"} tone="muted" />
                   <StatusRow icon={Bot} name="REA" detail="CLI from GitHub runs. Native engines are not installed." pill="Partial" tone="muted" />
                   <StatusRow icon={Square} name="HP" detail="Local device integration" pill="Not paired" tone="danger" />
                   <p className="mt-3 text-xs text-muted">Grok: {grok}. Checked {stamp(checkedAt) || checkedAt}. {system}</p>
@@ -6683,6 +6738,7 @@ export function CommandApp() {
               }}
               onNew={openChat}
               onSpeak={(text, messageId) => void speak(text, messageId ?? "")}
+              onOpenSpeak={openSpeakStage}
               onOpenBuild={(text) => {
                 sessionStorage.setItem("adrian-build-draft", text.slice(0, 4000));
                 setView("build");
@@ -8476,6 +8532,7 @@ function ChatPane({
   onSave,
   onNew,
   onSpeak,
+  onOpenSpeak,
   onOpenBuild,
   onOpenHuman,
   onListen,
@@ -8582,6 +8639,7 @@ function ChatPane({
   onSave: (content: string) => void;
   onNew: () => void;
   onSpeak: (text: string, messageId?: string) => void;
+  onOpenSpeak?: () => void;
   onOpenBuild: (text: string) => void;
   onOpenHuman: (text: string) => void;
   onListen: () => void;
@@ -9068,6 +9126,12 @@ function ChatPane({
             </button></div>
             
             <button type="submit" disabled={halted || (busy ? !draft.trim() : (!draft.trim() && pendingImages.length === 0 && !stagedName))} className="composer-send min-h-11 rounded-panel bg-accent px-4 text-sm font-semibold text-accent-ink disabled:opacity-50">{busy ? "Cue" : "Send"}</button>
+            <button type="button" className="composer-mic-dictate inline-flex min-h-11 items-center gap-2 rounded-full border border-line px-3 text-sm" data-testid="composer-mic-dictate" aria-label="Mic" title="Mic types into the field. It does not open Speak." onClick={onDictationMic}>
+              <Mic className="size-4" /> Mic
+            </button>
+            <button type="button" className="gpt-voice inline-flex min-h-11 items-center gap-2 rounded-full bg-[#2f6bff] px-3 text-sm text-white" aria-label="Speak" title="Speak is the call. It does not type into the field." onClick={() => onOpenSpeak?.()}>
+              <Volume2 className="size-4" /> Speak
+            </button>
           </div>
           <div className="composer-voice-chrome" data-testid="composer-voice-chrome" hidden aria-hidden="true">
             <p className="text-xs text-muted" role="status">{chromeNote}</p>
@@ -9229,12 +9293,12 @@ function ChatPane({
           <p className="text-xs text-muted">On this device · Memory {memoryChoice}</p>
         </section>
         <div className={`voice-zone-rail ${speaking ? "is-live" : ""}`} aria-label="Voice controls">
-          <button type="button" className="focus-ring grid size-11 place-items-center rounded-full border border-line/80" onClick={onListen} aria-label={voiceMicAriaLabel(voiceListening)}>
-            <Mic className="size-4" />
+          <button type="button" className="inline-flex min-h-11 items-center gap-2 rounded-full border border-line/80 px-3 text-sm" onClick={onDictationMic} aria-label="Mic" title="Mic types into the field. It does not open Speak.">
+            <Mic className="size-4" /> Mic
           </button>
           <span className="waveform" aria-hidden="true"><span /><span /><span /><span /><span /></span>
-          <button type="button" className="focus-ring grid size-11 place-items-center rounded-full border border-line/80" disabled={!lastReply || speaking} onClick={() => lastReply && onSpeak(lastReply.content, lastReply.id)} aria-label="Speak">
-            <Volume2 className="size-4" />
+          <button type="button" className="inline-flex min-h-11 items-center gap-2 rounded-full border border-line/80 px-3 text-sm" onClick={() => onOpenSpeak?.()} aria-label="Speak" title="Speak is the call. It does not type into the field.">
+            <Volume2 className="size-4" /> Speak
           </button>
         </div>
       </aside>
