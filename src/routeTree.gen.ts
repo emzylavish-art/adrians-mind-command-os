@@ -15,6 +15,7 @@ import { Route as ExploreRouteImport } from './routes/explore'
 import { Route as LoginRouteImport } from './routes/login'
 import { Route as MemoryRouteImport } from './routes/memory'
 import { Route as PersonasRouteImport } from './routes/personas'
+import { Route as UnauthorizedRouteImport } from './routes/unauthorized'
 import { Route as AuthCallbackRouteImport } from './routes/auth/callback'
 import { Route as ApiAuthSplatRouteImport } from './routes/api/auth/$'
 import { Route as ApiMindAgentRouteImport } from './routes/api/mind/agent'
@@ -112,6 +113,11 @@ const MemoryRoute = MemoryRouteImport.update({
 const PersonasRoute = PersonasRouteImport.update({
   id: '/personas',
   path: '/personas',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const UnauthorizedRoute = UnauthorizedRouteImport.update({
+  id: '/unauthorized',
+  path: '/unauthorized',
   getParentRoute: () => rootRouteImport,
 } as any)
 const AuthCallbackRoute = AuthCallbackRouteImport.update({
@@ -472,6 +478,7 @@ export interface FileRoutesByFullPath {
   '/login': typeof LoginRoute
   '/memory': typeof MemoryRoute
   '/personas': typeof PersonasRoute
+  '/unauthorized': typeof UnauthorizedRoute
   '/auth/callback': typeof AuthCallbackRoute
   '/api/auth/$': typeof ApiAuthSplatRoute
   '/api/mind/agent': typeof ApiMindAgentRoute
@@ -548,6 +555,7 @@ export interface FileRoutesByTo {
   '/login': typeof LoginRoute
   '/memory': typeof MemoryRoute
   '/personas': typeof PersonasRoute
+  '/unauthorized': typeof UnauthorizedRoute
   '/auth/callback': typeof AuthCallbackRoute
   '/api/auth/$': typeof ApiAuthSplatRoute
   '/api/mind/agent': typeof ApiMindAgentRoute
@@ -625,6 +633,7 @@ export interface FileRoutesById {
   '/login': typeof LoginRoute
   '/memory': typeof MemoryRoute
   '/personas': typeof PersonasRoute
+  '/unauthorized': typeof UnauthorizedRoute
   '/auth/callback': typeof AuthCallbackRoute
   '/api/auth/$': typeof ApiAuthSplatRoute
   '/api/mind/agent': typeof ApiMindAgentRoute
@@ -703,6 +712,7 @@ export interface FileRouteTypes {
     | '/login'
     | '/memory'
     | '/personas'
+    | '/unauthorized'
     | '/auth/callback'
     | '/api/auth/$'
     | '/api/mind/agent'
@@ -779,6 +789,7 @@ export interface FileRouteTypes {
     | '/login'
     | '/memory'
     | '/personas'
+    | '/unauthorized'
     | '/auth/callback'
     | '/api/auth/$'
     | '/api/mind/agent'
@@ -855,6 +866,7 @@ export interface FileRouteTypes {
     | '/login'
     | '/memory'
     | '/personas'
+    | '/unauthorized'
     | '/auth/callback'
     | '/api/auth/$'
     | '/api/mind/agent'
@@ -932,6 +944,7 @@ export interface RootRouteChildren {
   LoginRoute: typeof LoginRoute
   MemoryRoute: typeof MemoryRoute
   PersonasRoute: typeof PersonasRoute
+  UnauthorizedRoute: typeof UnauthorizedRoute
   AuthCallbackRoute: typeof AuthCallbackRoute
   ApiAuthSplatRoute: typeof ApiAuthSplatRoute
   ApiMindAgentRoute: typeof ApiMindAgentRoute
@@ -1044,6 +1057,13 @@ declare module '@tanstack/react-router' {
       path: '/personas'
       fullPath: '/personas'
       preLoaderRoute: typeof PersonasRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/unauthorized': {
+      id: '/unauthorized'
+      path: '/unauthorized'
+      fullPath: '/unauthorized'
+      preLoaderRoute: typeof UnauthorizedRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/auth/callback': {
@@ -1532,6 +1552,7 @@ const rootRouteChildren: RootRouteChildren = {
   LoginRoute: LoginRoute,
   MemoryRoute: MemoryRoute,
   PersonasRoute: PersonasRoute,
+  UnauthorizedRoute: UnauthorizedRoute,
   AuthCallbackRoute: AuthCallbackRoute,
   ApiAuthSplatRoute: ApiAuthSplatRoute,
   ApiMindAgentRoute: ApiMindAgentRoute,
