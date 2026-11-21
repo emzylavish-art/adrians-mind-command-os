@@ -9,6 +9,7 @@ import {
 } from "@/lib/mind/model-tiers";
 import { readTierOutcome } from "@/lib/mind/model-tier-memory";
 import { LOGIC_ROUTES, activePickerLabel, logicMenuState, type LogicRouteId, type LogicRoutePublic } from "@/lib/mind/logic-routes";
+import { finishMenu } from "@/components/mind/menu-material";
 
 export type ModelTierChipProps = {
   tier: ModelTier;
@@ -22,6 +23,7 @@ export type ModelTierChipProps = {
   logicRoute?: LogicRouteId | null;
   logicRoutes?: LogicRoutePublic[];
   onChooseLogic?: (route: LogicRouteId) => void;
+  presentation?: "menu" | "rows";
 };
 
 /**
@@ -38,6 +40,7 @@ export function ModelTierChip({
   logicRoute = null,
   logicRoutes = [],
   onChooseLogic,
+  presentation = "menu",
 }: ModelTierChipProps) {
   const [open, setOpen] = useState(false);
   const rootRef = useRef<HTMLDivElement | null>(null);
@@ -56,9 +59,8 @@ export function ModelTierChip({
       ? "Auto picks Fast, Expert, Heavy, or Build from the prompt. After a turn, the chip shows which model answered."
       : `Mode ${tier} selects a fixed Grok model for the next send.`);
 
-
   useEffect(() => {
-    if (!open) return;
+    if (!open || presentation === "rows") return;
     const onDoc = (event: MouseEvent) => {
       if (!rootRef.current?.contains(event.target as Node)) setOpen(false);
     };
@@ -71,7 +73,61 @@ export function ModelTierChip({
       document.removeEventListener("mousedown", onDoc);
       window.removeEventListener("keydown", onKey);
     };
-  }, [open]);
+  }, [open, presentation]);
+
+  const choices = (
+    <>
+      {MODEL_TIERS.map((item) => (
+        <button
+          key={item}
+          type="button"
+          role="menuitemradio"
+          aria-checked={logicRoute == null && tier === item}
+          className={`flex min-h-11 w-full items-center rounded-xl px-3 text-left text-sm ${logicRoute == null && tier === item ? "bg-white/10" : ""}`}
+          onClick={() => {
+            onChoose(selectModelTier(item));
+            setOpen(false);
+          }}
+        >
+          {item}
+        </button>
+      ))}
+      {LOGIC_ROUTES.filter((id) => {
+        const view = logicRoutes.find((item) => item.id === id);
+        return Boolean(view?.ready && !view.credentialFallback);
+      }).map((id) => {
+        const view = logicRoutes.find((item) => item.id === id);
+        const menu = logicMenuState(view, id);
+        const selected = logicRoute === id;
+        return (
+          <button
+            key={id}
+            type="button"
+            role="menuitemradio"
+            aria-checked={selected}
+            aria-disabled={!menu.selectable}
+            disabled={!menu.selectable}
+            data-testid={`logic-route-${id}`}
+            data-state={view?.state ?? "unknown"}
+            title={menu.detail}
+            className={`flex min-h-11 w-full flex-col items-start rounded-xl px-3 py-2 text-left text-sm ${selected ? "bg-white/10" : ""} ${menu.selectable ? "" : "cursor-not-allowed opacity-70"}`}
+            onClick={() => {
+              if (!menu.selectable) return;
+              onChooseLogic?.(id);
+              setOpen(false);
+            }}
+          >
+            <span>{menu.label}{view ? ` · ${view.state}` : ""}</span>
+            <span className="text-[11px] opacity-80">{menu.detail}</span>
+          </button>
+        );
+      })}
+    </>
+  );
+
+  if (presentation === "rows") {
+    return <div role="group" aria-label={`Model mode ${label}. ${reasonText}`}>{choices}</div>;
+  }
 
   return (
     <div ref={rootRef} className={`relative ${className}`.trim()}>
@@ -89,53 +145,9 @@ export function ModelTierChip({
         <ChevronDown className="size-3.5 opacity-70" />
       </button>
       {open && (
-        <div id={menuId} className="absolute right-0 z-40 mt-2 w-80 rounded-panel border border-line bg-surface p-2 shadow-lg" role="menu">
-          <p className="px-2 pb-2 text-[10px] font-semibold tracking-[0.16em] text-muted">MODEL</p>
-          {MODEL_TIERS.map((item) => (
-            <button
-              key={item}
-              type="button"
-              role="menuitemradio"
-              aria-checked={logicRoute == null && tier === item}
-              className={`flex min-h-11 w-full items-center rounded-xl px-3 text-left text-sm ${logicRoute == null && tier === item ? "bg-accent text-accent-ink" : "text-muted hover:bg-surface-2"}`}
-              onClick={() => {
-                onChoose(selectModelTier(item));
-                setOpen(false);
-              }}
-            >
-              {item}
-            </button>
-          ))}
-          {LOGIC_ROUTES.filter((id) => {
-            const view = logicRoutes.find((item) => item.id === id);
-            return Boolean(view?.ready && !view.credentialFallback);
-          }).map((id) => {
-            const view = logicRoutes.find((item) => item.id === id);
-            const menu = logicMenuState(view, id);
-            const selected = logicRoute === id;
-            return (
-              <button
-                key={id}
-                type="button"
-                role="menuitemradio"
-                aria-checked={selected}
-                aria-disabled={!menu.selectable}
-                disabled={!menu.selectable}
-                data-testid={`logic-route-${id}`}
-                data-state={view?.state ?? "unknown"}
-                title={menu.detail}
-                className={`flex min-h-11 w-full flex-col items-start rounded-xl px-3 py-2 text-left text-sm ${selected ? "bg-accent text-accent-ink" : "text-muted"} ${menu.selectable ? "hover:bg-surface-2" : "cursor-not-allowed opacity-70"}`}
-                onClick={() => {
-                  if (!menu.selectable) return;
-                  onChooseLogic?.(id);
-                  setOpen(false);
-                }}
-              >
-                <span>{menu.label}{view ? ` · ${view.state}` : ""}</span>
-                <span className="text-[11px] opacity-80">{menu.detail}</span>
-              </button>
-            );
-          })}
+        <div id={menuId} ref={finishMenu} className="absolute right-0 z-40 mt-2 w-80" role="menu" aria-label="Model">
+          <p className="px-3 pb-1 pt-1 text-[11px] font-semibold uppercase tracking-[0.14em] text-muted">Model</p>
+          {choices}
         </div>
       )}
     </div>

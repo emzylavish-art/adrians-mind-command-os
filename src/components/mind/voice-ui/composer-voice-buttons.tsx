@@ -11,6 +11,7 @@
 
 import type { ReactNode } from "react";
 import type { LiveSpeakState } from "./live-speak-control";
+import { finishMenu } from "@/components/mind/menu-material";
 
 export type ComposerDictationState = "idle" | "recording";
 
@@ -180,6 +181,7 @@ export function ComposerBar(props: ComposerBarProps) {
                 {props.modelMenuOpen ? (
                   <ul
                     className="composer-bar__model-menu"
+                    ref={finishMenu}
                     role="menu"
                     aria-label="Model"
                     data-testid="composer-bar-model-menu"

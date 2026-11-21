@@ -35,7 +35,7 @@ export function ConversationSections<T extends Row>({
   const openMenu = (title: string, ids: string[]) => setMenu({ title, ids });
   const chosen = menu ? chats.filter((chat) => menu.ids.includes(chat.id)) : [];
   return (
-    <div className="space-y-3" data-testid="conversation-sections">
+    <div className="w-full space-y-3" data-testid="conversation-sections">
       {groups.map((group) => (
         <section key={group.label} className="adrian-layer rounded-panel border border-line p-2" aria-label={`${group.label} conversations`}>
           <div className="flex items-center justify-between gap-2 px-1">

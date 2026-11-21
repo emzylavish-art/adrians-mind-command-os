@@ -34,6 +34,7 @@ import {
 } from "./frame-capture";
 import { shouldCloseSettingsOnEscape } from "./settings-popover";
 import "./mobile-nav-clearance.css";
+import { finishMenu } from "@/components/mind/menu-material";
 
 export type LiveVoiceBarProps = {
   isOverlayMicOpen: () => boolean;
@@ -434,7 +435,7 @@ export function LiveVoiceBar(props: LiveVoiceBarProps) {
                       <span className="composer-bar__plus-glyph" aria-hidden="true" />
                     </button>
                     {attachOpen ? (
-                      <ul className="live-voice-bar__plus-menu absolute bottom-12 left-0 z-50 min-w-[12rem] rounded-2xl border border-white/10 bg-zinc-900 p-1 shadow-2xl" role="menu" aria-label="Add media">
+                      <ul ref={finishMenu} className="live-voice-bar__plus-menu absolute bottom-12 left-0 z-50 min-w-[12rem]" role="menu" aria-label="Add media">
                         {(["camera", "photo", "video", "files"] as const).map((id) => (
                           <li key={id} role="none">
                             <button
@@ -607,7 +608,7 @@ export function LiveVoiceBar(props: LiveVoiceBarProps) {
             <span className="lvb-ico lvb-ico--plus" aria-hidden="true" />
           </button>
           {attachOpen ? (
-            <ul className="live-voice-bar__plus-menu" role="menu" aria-label="Add media">
+            <ul ref={finishMenu} className="live-voice-bar__plus-menu" role="menu" aria-label="Add media">
               {(["camera", "photo", "video", "files"] as const).map((id) => (
                 <li key={id} role="none">
                   <button

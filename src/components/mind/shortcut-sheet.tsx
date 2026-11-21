@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { shortcutGroupsForSheet, type ShortcutGroup } from "@/components/mind/shortcuts-catalog";
+import { finishMenu, MenuMotion } from "@/components/mind/menu-material";
 
 export function ShortcutSheet(props: {
   open: boolean;
@@ -15,13 +16,21 @@ export function ShortcutSheet(props: {
       className="shortcut-sheet-shell"
       data-testid="shortcut-sheet"
       role="dialog"
-      aria-modal="true"
+      aria-modal="false"
       aria-label="Keyboard shortcuts"
+      ref={(node) => {
+        node?.style.setProperty("position", "fixed", "important");
+        node?.style.setProperty("inset", "0", "important");
+        node?.style.setProperty("z-index", "80", "important");
+        node?.style.setProperty("background", "transparent", "important");
+        node?.style.setProperty("backdrop-filter", "none", "important");
+      }}
       onClick={(event) => {
         if (event.target === event.currentTarget) props.onClose();
       }}
     >
-      <div className="shortcut-sheet-panel">
+      <MenuMotion />
+      <div className="shortcut-sheet-panel" ref={finishMenu} style={{ position: "fixed", top: 72, right: 16, width: "min(24rem, calc(100vw - 24px))" }}>
         <header className="shortcut-sheet-header">
           <div>
             <p className="shortcut-sheet-kicker">Keyboard</p>

@@ -213,6 +213,7 @@ import {
 import { describeFile } from "@/lib/mind/files-read";
 import { extractPdfText } from "@/lib/mind/pdf-text";
 import { ModelTierChip } from "@/components/mind/model-tier-chip";
+import { AnchoredCard, MenuGroup, MenuMotion, finishMenu } from "@/components/mind/menu-material";
 import { MODEL_TIERS, type ConcreteModelTier, type ModelTier } from "@/lib/mind/model-tiers";
 import { chosenProvider, failover, providerChoicesWithKeys } from "@/lib/mind/providers";
 import { emitFailure, mountFailure, surfaceForReport } from "@/lib/mind/failure-mount";
@@ -368,6 +369,10 @@ function pinPageScroller(node: HTMLDivElement | null) {
   node.style.setProperty("position", "relative", "important");
   node.style.setProperty("flex", "1 1 auto", "important");
   node.style.setProperty("min-height", "0", "important");
+  node.style.setProperty("overflow-y", "auto", "important");
+  const bar = document.querySelector("[data-testid='handy-dictation']");
+  const gap = bar instanceof HTMLElement ? Math.ceil(bar.getBoundingClientRect().height) + 16 : 72;
+  node.style.setProperty("padding-bottom", `${gap}px`, "important");
 }
 function showRailLabel(node: HTMLElement | null) {
   node?.style.setProperty("display", "block", "important");
@@ -389,6 +394,21 @@ function liftHomeComposer(node: HTMLElement | null) {
 }
 function liftHomeStack(node: HTMLElement | null) {
   node?.style.setProperty("justify-content", "flex-start", "important");
+  if (!(node instanceof HTMLElement)) return;
+  node.style.setProperty("width", "100%", "important");
+  node.style.setProperty("max-width", "none", "important");
+  const masthead = node.querySelector(".masthead");
+  if (masthead instanceof HTMLElement) {
+    masthead.style.setProperty("width", "100%", "important");
+    masthead.style.setProperty("max-width", "none", "important");
+    masthead.style.setProperty("align-self", "stretch", "important");
+  }
+  node.querySelectorAll(".masthead, .masthead > div, [aria-label='Recent'], [data-testid='conversation-sections'], [data-testid='conversation-sections'] section").forEach((child) => {
+    if (child instanceof HTMLElement) {
+      child.style.setProperty("width", "100%", "important");
+      child.style.setProperty("max-width", "none", "important");
+    }
+  });
 }
 function stackLibrary(node: HTMLElement | null) {
   node?.style.setProperty("grid-template-columns", "minmax(0, 1fr)", "important");
@@ -1050,8 +1070,23 @@ export function CommandApp() {
       return;
     }
     navWasOpenRef.current = true;
-    const previous = document.body.style.overflow;
-    document.body.style.overflow = "hidden";
+    const drawer = navDrawerRef.current;
+    const phone = window.matchMedia("(max-width: 767px)").matches;
+    if (drawer && phone) {
+      const light = document.documentElement.dataset.theme === "light";
+      const reduce = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+      drawer.style.setProperty("inset", "0 auto 0 0", "important");
+      drawer.style.setProperty("width", "min(18.5rem, 84vw)", "important");
+      drawer.style.setProperty("height", "100dvh", "important");
+      drawer.style.setProperty("background", light ? "#f7f7f8" : "#161618", "important");
+      drawer.style.setProperty("color", light ? "#18181b" : "#fafafa", "important");
+      drawer.style.setProperty("border-radius", "0 22px 22px 0", "important");
+      drawer.style.setProperty("box-shadow", "18px 0 48px rgba(0, 0, 0, 0.38)", "important");
+      drawer.style.setProperty("z-index", "200", "important");
+      if (!reduce) drawer.style.setProperty("animation", "adrian-drawer-in 240ms cubic-bezier(0.22, 1, 0.36, 1)", "important");
+      const stage = document.querySelector(".main-stage");
+      if (stage instanceof HTMLElement) stage.style.setProperty("visibility", "visible", "important");
+    }
     navCloseRef.current?.focus();
     const onDrawerKeyDown = (event: KeyboardEvent) => {
       if (event.key === "Escape") {
@@ -1088,7 +1123,16 @@ export function CommandApp() {
     desktop.addEventListener("change", closeAtDesktop);
     document.addEventListener("keydown", onDrawerKeyDown, true);
     return () => {
-      document.body.style.overflow = previous;
+      drawer?.style.removeProperty("inset");
+      drawer?.style.removeProperty("width");
+      drawer?.style.removeProperty("height");
+      drawer?.style.removeProperty("background");
+      drawer?.style.removeProperty("color");
+      drawer?.style.removeProperty("border-radius");
+      drawer?.style.removeProperty("box-shadow");
+      drawer?.style.removeProperty("animation");
+      const stage = document.querySelector(".main-stage");
+      if (stage instanceof HTMLElement) stage.style.removeProperty("visibility");
       desktop.removeEventListener("change", closeAtDesktop);
       document.removeEventListener("keydown", onDrawerKeyDown, true);
     };
@@ -1192,6 +1236,12 @@ export function CommandApp() {
     setNotice(blob ? "Recording stopped in this tab. It cannot continue after the browser is closed." : "Recording was already stopped.");
   }
   const [surfaceMenu, setSurfaceMenu] = useState(false);
+  const [controlsOpen, setControlsOpen] = useState(false);
+  const [surfaceAnchor, setSurfaceAnchor] = useState<DOMRect | null>(null);
+  const [controlsAnchor, setControlsAnchor] = useState<DOMRect | null>(null);
+  const [modelRowsOpen, setModelRowsOpen] = useState(false);
+  const [alertAnchor, setAlertAnchor] = useState<DOMRect | null>(null);
+  const [accountAnchor, setAccountAnchor] = useState<DOMRect | null>(null);
   const [helpQuery, setHelpQuery] = useState("");
   const overlayOpenRef = useRef(false);
   overlayOpenRef.current = voiceOverlayOpen;
@@ -2037,13 +2087,14 @@ export function CommandApp() {
     [query, ws],
   );
 
-  type ChromeMenu = "palette" | "surface" | "bell" | "account";
+  type ChromeMenu = "palette" | "surface" | "bell" | "account" | "controls";
 
   function closeMenus(keep?: ChromeMenu) {
     if (keep !== "palette") setPaletteOpen(false);
     if (keep !== "surface") setSurfaceMenu(false);
     if (keep !== "bell") setBellOpen(false);
     if (keep !== "account") setAccountOpen(false);
+    if (keep !== "controls") setControlsOpen(false);
     setContextOpen(false);
     setToolsOpen(false);
     setNavOpen(false);
@@ -5299,7 +5350,9 @@ export function CommandApp() {
 
   return (
     <div className="shell flex h-dvh flex-col bg-bg text-fg md:flex-row" data-view={view} data-search={paletteOpen ? "open" : "closed"}>
-      <aside ref={(node) => { navDrawerRef.current = node; pinRailFrame(node); }} onMouseDown={closeNavFromBackdrop} role={navOpen ? "dialog" : undefined} aria-modal={navOpen ? true : undefined} aria-label={navOpen ? "Workspace navigation" : undefined} className={`rail gpt-rail ${navOpen ? "nav-drawer-open flex" : "hidden"} fixed inset-0 z-40 w-full flex-col overflow-hidden md:static md:flex md:h-dvh ${railCollapsed ? "md:w-[4.5rem]" : "md:w-72"} md:shrink-0`}>
+      <MenuMotion />
+      {navOpen ? <button type="button" className="fixed inset-0 md:hidden" aria-label="Close menu" style={{ zIndex: 150, background: "transparent" }} onClick={() => setNavOpen(false)} /> : null}
+      <aside ref={(node) => { navDrawerRef.current = node; pinRailFrame(node); }} onMouseDown={closeNavFromBackdrop} role={navOpen ? "dialog" : undefined} aria-modal={navOpen ? false : undefined} aria-label={navOpen ? "Workspace navigation" : undefined} className={`rail gpt-rail ${navOpen ? "nav-drawer-open flex" : "hidden"} fixed inset-0 z-40 w-full flex-col overflow-hidden md:static md:flex md:h-dvh ${railCollapsed ? "md:w-[4.5rem]" : "md:w-72"} md:shrink-0`}>
         <div className="gpt-rail-head flex items-center gap-3 px-4 py-4">
           {!railCollapsed && (
             <p className="flex min-w-0 flex-1 items-center gap-2 text-2xl font-semibold tracking-tight">
@@ -5477,22 +5530,23 @@ export function CommandApp() {
         </div>
       </aside>
 
-      <main ref={pinMainColumn} className="main-stage page-enter flex min-h-0 min-w-0 flex-1 flex-col pb-36 md:pb-36" inert={navOpen}>
+      <main ref={pinMainColumn} className="main-stage page-enter flex min-h-0 min-w-0 flex-1 flex-col" inert={navOpen}>
         <h1 className="sr-only">Adrian’s Mind OS</h1>
-        <header className="topbar flex flex-wrap items-center gap-2 px-3 py-3 md:gap-3 md:px-5">
+        <header className="topbar flex flex-nowrap items-center gap-2 px-3 py-3 md:gap-3 md:px-5" ref={(node) => node?.style.setProperty("overflow", "visible", "important")}>
          <button type="button" className="grid size-11 shrink-0 place-items-center rounded-panel border border-line md:hidden" aria-label="Open menu" onClick={openNav}>
            <Menu className="size-4" />
          </button>
-          <div className="surface-switch relative">
+          <div className="surface-switch relative shrink-0">
             <button
               type="button"
-              className="surface-switch__button"
+              className="surface-switch__button shrink-0 whitespace-nowrap"
               aria-expanded={surfaceMenu}
               aria-haspopup="menu"
               aria-label={`Current surface: ${TITLES[view] ?? "Chat"}. Switch between Chat, Build, Intelligence, and EVE`}
-              onClick={() => {
+              onClick={(event) => {
                 const next = !surfaceMenu;
                 closeMenus("surface");
+                setSurfaceAnchor(event.currentTarget.getBoundingClientRect());
                 setSurfaceMenu(next);
               }}
             >
@@ -5501,30 +5555,29 @@ export function CommandApp() {
               <span aria-hidden="true">▾</span>
             </button>
             {surfaceMenu ? (
-              <div className="surface-menu" role="menu">
-                {([
-                  ["command", "Chat", "Conversation"],
-                  ["build", "Build", "Coding workspace"],
-                  ["code", "Intelligence", "Coding conversation"],
-                  ["intelligence", "EVE", "Intelligence layer"],
-                ] as const).map(([id, label, detail]) => (
-                  <button
-                    key={id}
-                    type="button"
-                    role="menuitem"
-                    className={view === id || (id === "command" && view === "chat") ? "is-on" : ""}
-                    onClick={() => { setView(id); setSurfaceMenu(false); setNavOpen(false); }}
-                  >
-                    <span>{label}</span>
-                    <span>{detail}</span>
-                  </button>
-                ))}
-              </div>
+              <AnchoredCard anchor={surfaceAnchor} label="Places" onClose={() => setSurfaceMenu(false)} testId="surface-menu" width={280} align="start">
+                <MenuGroup label="Places" first>
+                  {([
+                    ["command", "Chat", "Conversation"],
+                    ["build", "Build", "Coding workspace"],
+                    ["code", "Intelligence", "Coding conversation"],
+                    ["intelligence", "EVE", "Intelligence layer"],
+                  ] as const).map(([id, label, detail]) => (
+                    <button
+                      key={id}
+                      type="button"
+                      role="menuitem"
+                      className={`flex min-h-11 w-full flex-col items-start justify-center rounded-2xl px-3 text-left ${view === id || (id === "command" && view === "chat") ? "bg-white/10" : ""}`}
+                      onClick={() => { setView(id); setSurfaceMenu(false); setNavOpen(false); }}
+                    >
+                      <span className="text-sm">{label}</span>
+                      <span className="text-xs text-muted">{detail}</span>
+                    </button>
+                  ))}
+                </MenuGroup>
+              </AnchoredCard>
             ) : null}
           </div>
-          <span className="header-voice-mode inline-flex items-center gap-1 rounded-full border border-line px-3" aria-label="Voice route Direct">
-            Direct
-          </span>
           <div className="command-search relative min-w-0 flex-1">
             <Search className="pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2 text-muted" />
             <input
@@ -5554,8 +5607,9 @@ export function CommandApp() {
             />
             <span className="pointer-events-none absolute top-1/2 right-3 -translate-y-1/2 text-xs text-muted">⌘K</span>
             {paletteOpen && (
-              <div id="command-palette" className="command-palette floating-menu absolute z-30 mt-2 max-h-80 w-full overflow-auto p-2" role="listbox" aria-label="Search results">
-                {hits.length === 0 && <p className="px-2 py-3 text-sm text-muted">No matches.</p>}
+              <div id="command-palette" ref={finishMenu} className="command-palette floating-menu absolute z-30 mt-2 w-full" role="listbox" aria-label="Search results">
+                <p className="px-3 pb-1 pt-1 text-[11px] font-semibold uppercase tracking-[0.14em] text-muted">Results</p>
+                {hits.length === 0 && <p className="px-3 py-3 text-sm text-muted">No matches.</p>}
                 {hits.map((hit, index) => {
                   const kind = hit.meta === "Chat" ? "chat" : hit.meta === "Agent" ? "agent" : hit.meta === "Project" ? "project" : hit.meta === "File" ? "file" : null;
                   const active = hits.length > 0 && index === Math.min(Math.max(paletteIndex, 0), hits.length - 1);
@@ -5597,74 +5651,129 @@ export function CommandApp() {
               </div>
             )}
           </div>
-          <button
-            type="button"
-            className="hidden min-h-11 shrink-0 rounded-panel border border-line px-3 text-sm md:inline-flex md:items-center"
-            onClick={() => {
-              const search = writeShareSearch(window.location.search, shareWriteForView(view, {
-                chat: activeId,
-                project: shareProjectId,
-                file: openFileId,
-                bot: shareBotId,
-              }), Object.keys(TITLES));
-              const url = `${window.location.origin}${window.location.pathname}${search}${window.location.hash}`;
-              void navigator.clipboard?.writeText(url).then(
-                () => setNotice("Link copied. It opens this item on a device that already has it."),
-                () => setNotice("Clipboard copy was blocked. The address bar has the link."),
-              );
-            }}
-          >
-            Copy link
-          </button>
-          <button
-            type="button"
-            className={`hidden h-11 items-center gap-2 rounded-full border px-3 text-sm md:inline-flex glass-panel ${headerTone}`}
-            title={headerDetail}
-            aria-label={`${headerState}. ${headerDetail}`}
-            onClick={() => { setView("connected"); setNavOpen(false); }}
-          >
-            <img src="/brand/logos/grok.svg" alt="" width={16} height={16} className="size-4 rounded" />
-            {headerState}
-          </button>
-          <div className="hidden md:block">
-            <ModelTierChip
-              tier={modelTier}
-              onChoose={chooseModelTier}
-              lastResolved={lastResolvedTier}
-              lastModel={lastModelUsed}
-              logicRoute={logicRoute}
-              logicRoutes={logicRoutes}
-              onChooseLogic={(route) => {
-                setLogicRoute(route);
-                setProviderChoice(route);
+          <div className="surface-switch relative shrink-0" data-testid="header-controls">
+            <button
+              type="button"
+              className="surface-switch__button shrink-0 whitespace-nowrap"
+              aria-expanded={controlsOpen}
+              aria-haspopup="menu"
+              aria-label="Open controls"
+              onClick={(event) => {
+                const next = !controlsOpen;
+                closeMenus("controls");
+                setControlsAnchor(event.currentTarget.getBoundingClientRect());
+                setControlsOpen(next);
               }}
-            />
+            >
+              <span>Controls</span>
+              <span aria-hidden="true">▾</span>
+            </button>
+            {controlsOpen ? (
+              <AnchoredCard anchor={controlsAnchor} label="Controls" onClose={() => setControlsOpen(false)} testId="controls-menu" width={320} align="end">
+                <MenuGroup label="Share" first>
+                  <button
+                    type="button"
+                    role="menuitem"
+                    className="flex min-h-11 w-full flex-col items-start justify-center rounded-2xl px-3 text-left"
+                    onClick={() => {
+                      const search = writeShareSearch(window.location.search, shareWriteForView(view, {
+                        chat: activeId,
+                        project: shareProjectId,
+                        file: openFileId,
+                        bot: shareBotId,
+                      }), Object.keys(TITLES));
+                      const url = `${window.location.origin}${window.location.pathname}${search}${window.location.hash}`;
+                      void navigator.clipboard?.writeText(url).then(
+                        () => setNotice("Link copied. It opens this item on a device that already has it."),
+                        () => setNotice("Clipboard copy was blocked. The address bar has the link."),
+                      );
+                      setControlsOpen(false);
+                    }}
+                  >
+                    <span className="text-sm">Copy link</span>
+                    <span className="text-xs text-muted">Share this page</span>
+                  </button>
+                </MenuGroup>
+                <MenuGroup label="Connection">
+                  <p className="flex min-h-11 flex-col justify-center rounded-2xl px-3 text-left" aria-label="Voice route Direct">
+                    <span className="text-sm">Direct</span>
+                    <span className="text-xs text-muted">Voice route</span>
+                  </p>
+                  <button
+                    type="button"
+                    role="menuitem"
+                    className="flex min-h-11 w-full flex-col items-start justify-center rounded-2xl px-3 text-left"
+                    title={headerDetail}
+                    aria-label={`${headerState}. ${headerDetail}`}
+                    onClick={() => { setView("connected"); setControlsOpen(false); setNavOpen(false); }}
+                  >
+                    <span className="inline-flex items-center gap-2 text-sm"><img src="/brand/logos/grok.svg" alt="" width={16} height={16} className="size-4 rounded" />{headerState}</span>
+                    <span className="text-xs text-muted">Connected services</span>
+                  </button>
+                </MenuGroup>
+                <MenuGroup label="Model">
+                  <button
+                    type="button"
+                    className="flex min-h-11 w-full items-center justify-between rounded-2xl px-3 text-left text-sm"
+                    aria-expanded={modelRowsOpen}
+                    onClick={() => setModelRowsOpen((value) => !value)}
+                  >
+                    <span>{modelTier}</span>
+                    <span aria-hidden="true">{modelRowsOpen ? "‹" : "›"}</span>
+                  </button>
+                  {modelRowsOpen ? (
+                    <ModelTierChip
+                      presentation="rows"
+                      tier={modelTier}
+                      onChoose={chooseModelTier}
+                      lastResolved={lastResolvedTier}
+                      lastModel={lastModelUsed}
+                      logicRoute={logicRoute}
+                      logicRoutes={logicRoutes}
+                      onChooseLogic={(route) => {
+                        setLogicRoute(route);
+                        setProviderChoice(route);
+                      }}
+                    />
+                  ) : null}
+                </MenuGroup>
+                <MenuGroup label="Work">
+                  <button
+                    type="button"
+                    role="menuitem"
+                    aria-pressed={composerEffort === "orchestrator"}
+                    className="flex min-h-11 w-full items-center justify-between rounded-2xl px-3 text-left text-sm"
+                    onClick={() => chooseComposerEffort(composerEffort === "orchestrator" ? "auto" : "orchestrator")}
+                  >
+                    <span>Orchestrator</span>
+                    <span className="text-xs text-muted">{composerEffort === "orchestrator" ? "On" : "Off"}</span>
+                  </button>
+                  {composerEffort === "orchestrator" ? (
+                    <div className="grid" data-testid="orchestrator-models">
+                      {consultModules.filter((item) => item.connected).length === 0 ? <span className="px-3 py-2 text-xs text-muted">No model is connected right now.</span> : null}
+                      {consultModules.filter((item) => item.connected).map((item) => (
+                        <button
+                          key={item.id}
+                          type="button"
+                          role="menuitem"
+                          data-testid="consult-model"
+                          aria-pressed={consultModel === item.id}
+                          className="flex min-h-11 w-full items-center justify-between rounded-2xl px-3 text-left text-sm"
+                          onClick={() => chooseConsultModel(item.id)}
+                        >
+                          <span>{item.label}</span>
+                          <span className="text-xs text-muted">Consult</span>
+                        </button>
+                      ))}
+                    </div>
+                  ) : null}
+                </MenuGroup>
+                <MenuGroup label="Install">
+                  <a role="menuitem" className="flex min-h-11 items-center rounded-2xl px-3 text-sm" href="/downloads/AdriansMind-Setup.exe" download data-testid="header-download-installer">Download installer</a>
+                </MenuGroup>
+              </AnchoredCard>
+            ) : null}
           </div>
-          <button
-            type="button"
-            className="hidden h-11 items-center gap-2 rounded-full border px-3 text-sm md:inline-flex"
-            aria-pressed={composerEffort === "orchestrator"}
-            onClick={() => chooseComposerEffort(composerEffort === "orchestrator" ? "auto" : "orchestrator")}
-          >
-            Orchestrator
-          </button>
-          {composerEffort === "orchestrator" ? (
-            <div className="hidden items-center gap-2 md:flex" data-testid="orchestrator-models">
-              {consultModules.filter((item) => item.connected).length === 0 ? <span className="text-xs text-muted">No model is connected right now.</span> : null}
-              {consultModules.filter((item) => item.connected).map((item) => (
-                <button
-                  key={item.id}
-                  type="button"
-                  data-testid="consult-model"
-                  aria-pressed={consultModel === item.id}
-                  className="h-11 rounded-full border px-3 text-sm"
-                  onClick={() => chooseConsultModel(item.id)}
-                >
-                  {item.label}
-                </button>
-              ))}
-            </div>
-          ) : null}
 
           <button
             type="button"
@@ -5682,9 +5791,10 @@ export function CommandApp() {
             aria-expanded={bellOpen}
             aria-controls="alerts-panel"
             data-testid="alerts-toggle"
-            onClick={() => {
+            onClick={(event) => {
               const next = !bellOpen;
               closeMenus("bell");
+              setAlertAnchor(event.currentTarget.getBoundingClientRect());
               setBellOpen(next);
             }}
           >
@@ -5696,9 +5806,10 @@ export function CommandApp() {
             aria-label="Account menu for Adrian"
             aria-expanded={accountOpen}
             aria-controls="account-panel"
-            onClick={() => {
+            onClick={(event) => {
               const next = !accountOpen;
               closeMenus("account");
+              setAccountAnchor(event.currentTarget.getBoundingClientRect());
               setAccountOpen(next);
             }}
           >
@@ -5707,43 +5818,43 @@ export function CommandApp() {
           </button>
         </header>
         {bellOpen && (
-          <div id="alerts-panel" className="border-b border-line bg-surface px-4 py-3 text-sm" data-testid="alerts-panel" role="region" aria-label="Alerts">
-            <p className="font-semibold">Alerts</p>
-            {ws.halted && <p className="mt-1 text-danger">Emergency stop is on. Sending and approvals are blocked.</p>}
-            {!ws.halted && <p className="mt-1 text-muted">No active alerts.</p>}
-            {ws.audit.length > 0 && <p className="mt-3 text-xs font-semibold">Recent activity</p>}
-            {ws.audit.slice(0, 4).map((entry) => (
-              <p key={entry.id} className="mt-1 text-muted">
-                {humanAction(entry.action)} · {stamp(entry.at)}
-              </p>
-            ))}
-            {ws.audit.length > 0 && <button type="button" className="min-h-11 text-sm text-accent" onClick={() => { setView("activity"); closeMenus(); }}>View activity</button>}
-          </div>
+          <AnchoredCard anchor={alertAnchor} label="Alerts" onClose={() => setBellOpen(false)} testId="alerts-panel" width={300} align="end">
+            <MenuGroup label="Status" first>
+              {ws.halted ? <p className="px-3 py-2 text-sm text-danger">Emergency stop is on. Sending and approvals are blocked.</p> : <p className="px-3 py-2 text-sm text-muted">No active alerts.</p>}
+            </MenuGroup>
+            <MenuGroup label="Recent">
+              {ws.audit.length === 0 ? <p className="px-3 py-2 text-sm text-muted">Nothing recorded yet.</p> : null}
+              {ws.audit.slice(0, 4).map((entry) => (
+                <p key={entry.id} className="px-3 py-2 text-sm text-muted">
+                  {humanAction(entry.action)} · {stamp(entry.at)}
+                </p>
+              ))}
+              {ws.audit.length > 0 ? <button type="button" className="flex min-h-11 w-full items-center rounded-2xl px-3 text-left text-sm" onClick={() => { setView("activity"); closeMenus(); }}>View activity</button> : null}
+            </MenuGroup>
+          </AnchoredCard>
         )}
         {accountOpen && (
-          <div id="account-panel" className="border-b border-line bg-surface px-4 py-3 text-sm" role="region" aria-label="Account">
-            <p className="font-semibold">Adrian (Personal)</p>
-            <UserButton />
-            <SupabaseAccountControls />
-            <SignedOut>
-              <Link to="/login" className="mt-2 inline-flex min-h-11 items-center text-accent">
-                Sign in
-              </Link>
-            </SignedOut>
-            <p className="text-muted">This menu is not an account switcher. No second workspace exists.</p>
-            <div className="mt-2 flex flex-wrap gap-2">
-              <button type="button" className="min-h-11 rounded-panel border border-line px-3" onClick={() => setView("settings")}>
+          <AnchoredCard anchor={accountAnchor} label="Account" onClose={() => setAccountOpen(false)} testId="account-panel" width={320} align="end">
+            <MenuGroup label="Account" first>
+              <p className="px-3 py-1 text-sm font-semibold">Adrian (Personal)</p>
+              <p className="px-3 pb-2 text-xs text-muted">This menu is not an account switcher. No second workspace exists.</p>
+              <UserButton />
+              <SupabaseAccountControls />
+              <SignedOut>
+                <Link to="/login" className="flex min-h-11 items-center rounded-2xl px-3 text-sm">
+                  Sign in
+                </Link>
+              </SignedOut>
+            </MenuGroup>
+            <MenuGroup label="Safety">
+              <button type="button" className="flex min-h-11 w-full items-center rounded-2xl px-3 text-left text-sm" onClick={() => { setView("settings"); closeMenus(); }}>
                 Settings
               </button>
-              <button
-                type="button"
-                className="min-h-11 rounded-panel border border-line px-3"
-                onClick={() => void toggleStop()}
-              >
+              <button type="button" className="flex min-h-11 w-full items-center rounded-2xl px-3 text-left text-sm" onClick={() => void toggleStop()}>
                 {ws.halted ? "Clear stop" : "Emergency stop"}
               </button>
-            </div>
-          </div>
+            </MenuGroup>
+          </AnchoredCard>
         )}
         {ws.halted && (
           <div className="banner-error mx-3 mt-2 flex flex-wrap items-center justify-between gap-2 px-4 py-2 md:mx-5">
@@ -5893,16 +6004,16 @@ export function CommandApp() {
           )}
           {view === "command" && (
            <div ref={liftHomeStack} className="gpt-home mx-auto flex min-h-full w-full max-w-none flex-col justify-start gap-4 p-4 md:p-6" style={{ justifyContent: "flex-start" }}>
-              <div className="masthead flex items-center gap-3">
-                <div className="flex flex-wrap items-end justify-between gap-3">
-                  <div>
+              <div className="masthead flex w-full items-center gap-3">
+                <div className="flex w-full flex-wrap items-end justify-between gap-3">
+                  <div className="w-full min-w-0">
                     <h1 className="font-display text-3xl font-bold md:text-4xl">
                       {now ? greeting(now) : "Hello"}, <span className="text-accent">Adrian</span>
                     </h1>
                     <p className="text-sm text-muted">Ask, build, or connect. The rest lives in Settings.</p>
                     <ModuleSuggestions draft={draft} onPick={pickModule} />
                     {ws.chats.length > 0 ? (
-                      <div className="mt-3" aria-label="Recent">
+                      <div className="mt-3 w-full" aria-label="Recent">
                         <p className="mb-2 text-xs uppercase tracking-wide text-muted">Recent</p>
                         <ConversationSections
                           chats={getRecentChats(ws.chats, 6)}
@@ -7996,7 +8107,10 @@ function StatusRow({
 
 function Overlay({ children, labelledBy, onDismiss }: { children: ReactNode; labelledBy?: string; onDismiss?: () => void }) {
   return (
-    <div className="overlay-backdrop fixed inset-0 z-40 grid place-items-end p-4 md:place-items-center" role="dialog" aria-modal="true" aria-labelledby={labelledBy} onKeyDown={(event) => {
+    <div className="overlay-backdrop fixed inset-0 z-40 grid place-items-end p-4 md:place-items-center" role="dialog" aria-modal="false" aria-labelledby={labelledBy} ref={(node) => {
+      node?.style.setProperty("background", "transparent", "important");
+      node?.style.setProperty("backdrop-filter", "none", "important");
+    }} onKeyDown={(event) => {
       if (event.key === "Escape" && onDismiss) { event.preventDefault(); onDismiss(); return; }
       if (event.key !== "Tab") return;
       const targets = [...event.currentTarget.querySelectorAll<HTMLElement>('button:not([disabled]), input:not([disabled]), textarea:not([disabled]), select:not([disabled]), [tabindex]:not([tabindex="-1"])')].filter((element) => element.offsetParent !== null);
@@ -8006,7 +8120,7 @@ function Overlay({ children, labelledBy, onDismiss }: { children: ReactNode; lab
       if (event.shiftKey && document.activeElement === first) { event.preventDefault(); last.focus(); }
       else if (!event.shiftKey && document.activeElement === last) { event.preventDefault(); first.focus(); }
     }}>
-      <div className="overlay-panel w-full max-w-md rounded-[1.25rem] p-4">{children}</div>
+      <div ref={finishMenu} className="overlay-panel w-full max-w-md">{children}</div>
     </div>
   );
 }

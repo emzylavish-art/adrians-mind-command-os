@@ -8,6 +8,7 @@
 
 import type { ReactNode } from "react";
 import type { LiveSpeakState } from "./live-speak-control";
+import { finishMenu } from "@/components/mind/menu-material";
 
 export type { LiveSpeakState };
 
@@ -138,7 +139,7 @@ export function LiveVoiceBar(props: LiveVoiceBarProps) {
             <span className="lvb-ico lvb-ico--plus" aria-hidden="true" />
           </button>
           {props.plusOpen ? (
-            <ul className="live-voice-bar__plus-menu" role="menu" aria-label="Add media">
+            <ul ref={finishMenu} className="live-voice-bar__plus-menu" role="menu" aria-label="Add media">
               {PLUS_ITEMS.map((item) => (
                 <li key={item.id} role="none">
                   <button

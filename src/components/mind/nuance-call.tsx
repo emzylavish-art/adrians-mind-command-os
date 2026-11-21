@@ -269,10 +269,10 @@ export function NuanceCallCard(props: { halted: boolean }) {
   const emma = personas.find((item) => item.id === "emma");
 
   return (
-    <section className="intelligence-group" aria-label="Video call" data-testid="nuance-call">
+    <section className="intelligence-group rounded-panel border border-line bg-surface p-4" aria-label="Video call" data-testid="nuance-call">
       <h3>Video call</h3>
       <p className="text-sm text-muted">Sonia, Sam, and Mira can join a face-to-face call. Each one is an AI. This does not replay an unshared conversation.</p>
-      <video ref={videoRef} data-testid="nuance-video" autoPlay playsInline style={{ width: "100%", maxHeight: "24rem", marginTop: "0.75rem", background: "#07080c", borderRadius: "0.75rem" }} />
+      <video ref={videoRef} data-testid="nuance-video" autoPlay playsInline style={{ width: "100%", maxHeight: "12rem", marginTop: "0.75rem", background: "#07080c", borderRadius: "0.75rem" }} />
       <audio ref={audioRef} autoPlay />
       <p className="mt-2 text-sm" role="status" data-testid="nuance-status">{props.halted ? "Emergency stop is on. The video call stays off." : status}</p>
       <p className="mt-1 text-sm" data-testid="nuance-mic">{mic}</p>
@@ -301,11 +301,14 @@ export function NuanceCallCard(props: { halted: boolean }) {
           <button type="button" className="min-h-11 rounded-panel bg-accent px-4 text-sm font-semibold text-accent-ink disabled:opacity-50" data-testid="nuance-start" disabled={props.halted || !configured} onClick={() => void start()}>Start video call</button>
         )}
       </div>
-      <form className="mt-4" aria-label="Nuance key" onSubmit={(event) => { event.preventDefault(); void saveKey(); }}>
+      <details className="mt-4 rounded-panel border border-line p-3">
+        <summary className="min-h-11 cursor-pointer text-sm">Key</summary>
+      <form className="mt-2" aria-label="Nuance key" onSubmit={(event) => { event.preventDefault(); void saveKey(); }}>
         <label className="text-sm" htmlFor="nuance-key">Nuance API key</label>
         <input id="nuance-key" type="password" autoComplete="off" aria-label="Nuance API key" value={keyDraft} onChange={(event) => setKeyDraft(event.target.value)} placeholder="Paste a new key" className="mt-2 min-h-11 w-full rounded-panel border border-line bg-transparent px-3 text-sm" />
         <button type="submit" className="mt-2 min-h-11 rounded-panel border border-line px-3 text-sm" data-testid="nuance-save-key">Save key</button>
       </form>
+      </details>
     </section>
   );
 }
