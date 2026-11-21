@@ -3,11 +3,11 @@ import { describe, it } from "node:test";
 import { effortForModelTier, effortModelTier, loadComposerEffort, resolveSendPath, saveComposerEffort } from "./composer-modes.ts";
 
 describe("composer modes", () => {
-  it("keeps text send on Direct until a paired computer can run Orchestrator", () => {
+  it("sends Orchestrator through the selected model instead of staying on Direct", () => {
     const resolved = resolveSendPath("orchestrator");
-    assert.equal(resolved.path, "blocked-orchestrator");
-    assert.equal(resolved.badge, "Direct");
-    assert.match(resolved.notice ?? "", /Direct/i);
+    assert.equal(resolved.path, "orchestrator");
+    assert.equal(resolved.badge, "Orchestrator");
+    assert.equal(resolved.notice, null);
   });
 
   it("maps Auto to Direct", () => {

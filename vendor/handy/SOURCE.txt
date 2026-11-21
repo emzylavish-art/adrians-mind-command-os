@@ -1,0 +1,3 @@
+Handy recording overlay and license are copied from https://github.com/cjpais/handy
+License: MIT. The desktop app is not running in this browser. The live wave uses Handy's bar formula.
+This is dictation, not Speak, and it does not use Google voice detection.

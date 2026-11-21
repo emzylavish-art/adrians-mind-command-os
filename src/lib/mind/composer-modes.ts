@@ -25,18 +25,17 @@ export const COMPOSER_MODES: ComposerMode[] = [
   {
     id: "orchestrator",
     label: "Orchestrator",
-    detail: "Uses the existing Orchestrator route when a computer is paired.",
-    wired: false,
-    notice: "Text send stays on Direct. Orchestrator runs only when a computer is paired.",
+    detail: "The selected model checks which other modules are connected right now and takes their help. Helpers are not told the purpose.",
+    wired: true,
   },
 ];
 
-export type SendPath = "direct" | "blocked-orchestrator";
+export type SendPath = "direct" | "orchestrator";
 
 export function resolveSendPath(mode: ComposerModeId): { path: SendPath; badge: "Direct" | "Orchestrator"; notice: string | null } {
   const found = COMPOSER_MODES.find((item) => item.id === mode) ?? COMPOSER_MODES[0];
-  if (found.id === "orchestrator" && !found.wired) {
-    return { path: "blocked-orchestrator", badge: "Direct", notice: found.notice ?? null };
+  if (found.id === "orchestrator" && found.wired) {
+    return { path: "orchestrator", badge: "Orchestrator", notice: null };
   }
   return { path: "direct", badge: "Direct", notice: null };
 }

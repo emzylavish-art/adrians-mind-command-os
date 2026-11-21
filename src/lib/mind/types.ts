@@ -1,4 +1,6 @@
 import type { PersonalityId } from "./personalities/index.ts";
+import type { BotProvider } from "./bot-model.ts";
+import type { ModelTier } from "./model-tiers.ts";
 
 import type {
   AgentDefinition,
@@ -45,6 +47,9 @@ export type Retrieval = { at: string; ids: string[] };
 export type Chat = {
   id: string;
   agentId?: string;
+  botProvider?: BotProvider;
+  botTier?: ModelTier;
+  botKnowledge?: string;
   title: string;
   memory: "off" | "on";
   temporary: boolean;
@@ -54,6 +59,8 @@ export type Chat = {
   projectId: string | null;
   messages: Msg[];
   retrievalLog: Retrieval[];
+  favorite?: boolean;
+  archived?: boolean;
 };
 
 export type MemoryScope = "global" | "project" | "chat";

@@ -38,11 +38,7 @@ function ServiceMark({ name }: { name: string }) {
     Claude: "/brand/logos/claude.svg",
     Gemini: "/brand/logos/gemini.svg",
     OpenRouter: "/brand/logos/openrouter.svg",
-    "Web search": "/brand/marks/search.png",
-    "Image and video": "/brand/marks/media.png",
-    Voice: "/brand/marks/voice.png",
     MCP: "/brand/logos/mcp.svg",
-    "Local computer": "/brand/marks/computer.png",
   };
   const marks: Record<string, { bg: string; fg: string; letter: string }> = {
     Gmail: { bg: "#EA4335", fg: "#fff", letter: "M" },

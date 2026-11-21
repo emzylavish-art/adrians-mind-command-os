@@ -8,6 +8,7 @@ import { providerWireProtocol, modelDiscoveryHeaders, buildProviderChatRequest, 
 import { getSql, type Sql } from "../db.ts";
 import { connectorTokenSecretStatus, encryptSecret, decryptSecret } from "./connectors/crypto.ts";
 import { isLocalHostname, isPrivateAddressLiteral, pinnedHttpFetch, resolveAndPinMcpHostname } from "./mcp/http-dns-pin.ts";
+import { rankCatalogModels, validCatalogModelId } from "./provider-catalog.ts";
 
 export type PublicAiProvider = {
   id: string;
@@ -32,7 +33,7 @@ type StoredProvider = {
 };
 
 function validModelId(value: string): boolean {
-  return value.length > 0 && value.length <= 150 && /^[A-Za-z0-9][A-Za-z0-9_.:/@-]*$/.test(value);
+  return validCatalogModelId(value);
 }
 
 function baseUrl(raw: string): { ok: true; value: string; host: string } | { ok: false; error: string } {
@@ -59,7 +60,7 @@ function asModels(value: unknown): string[] {
     try { models = JSON.parse(models); } catch { models = []; }
   }
   return Array.isArray(models)
-    ? [...new Set(models.filter((v): v is string => typeof v === "string" && validModelId(v)))].slice(0, 120)
+    ? [...new Set(models.filter((v): v is string => typeof v === "string" && validModelId(v)))]
     : [];
 }
 
@@ -160,7 +161,8 @@ export async function setAiProviderModel(userId: string, id: string, model: stri
   const sql = await getSql();
   const row = (await rows(sql, userId)).find((item) => item.id === id);
   if (!row) return { ok: false, error: "Provider not found for this account." };
-  const models = [next, ...asModels(row.models).filter((item) => item !== next)].slice(0, 120);
+  const current = asModels(row.models);
+  const models = current.includes(next) ? current : [next, ...current];
   await sql.query(
     "update mind_ai_providers set default_model = $3, models = $4::jsonb, status = 'configured', last_error = '', updated_at = now() where user_id = $1 and id = $2",
     [userId, id, next, JSON.stringify(models)],
@@ -184,7 +186,7 @@ async function requestProvider(
     signal: AbortSignal.timeout(25000),
   });
   const text = await response.text();
-  if (text.length > 1_000_000) throw new Error("The provider response exceeded the allowed size.");
+  if (text.length > 8_000_000) throw new Error("The provider response exceeded the allowed size.");
   return { status: response.status, text, requestId: response.headers.get("x-request-id") };
 }
 
@@ -218,11 +220,10 @@ export async function discoverAiModels(userId: string, id: string):
       status = res.status === 402 || res.status === 429 ? "quota_or_rate_limited" : "unavailable";
     } else {
       const body = JSON.parse(res.text) as { data?: Array<{ id?: unknown }>; models?: Array<{ id?: unknown; name?: unknown } | string> };
-      const found = Array.isArray(body.data) ? body.data.map((m) => m.id) :
-        Array.isArray(body.models) ? body.models.map((m) => typeof m === "string" ? m : m.id ?? m.name) : [];
-      const parsed = asModels(found);
+      const found = Array.isArray(body.data) ? body.data : Array.isArray(body.models) ? body.models : [];
+      const parsed = rankCatalogModels(found);
       if (parsed.length) {
-        models = row.default_model && !parsed.includes(row.default_model) ? [row.default_model, ...parsed].slice(0, 120) : parsed;
+        models = parsed;
         status = "catalogued";
       } else {
         lastError = "The API did not expose a compatible model catalogue. Your manually configured model remains available.";
@@ -231,7 +232,7 @@ export async function discoverAiModels(userId: string, id: string):
   } catch {
     lastError = "Model discovery could not complete. The saved model ID remains available for manual use.";
   }
-  const defaultModel = row.default_model || models[0] || "";
+  const defaultModel = row.default_model && models.includes(row.default_model) ? row.default_model : models[0] || "";
   await sql.query(
     "update mind_ai_providers set base_url = $3, default_model = $4, models = $5::jsonb, status = $6, last_error = $7, updated_at = now() where user_id = $1 and id = $2",
     [userId, id, requestRow.base_url, defaultModel, JSON.stringify(models), status, lastError],

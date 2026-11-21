@@ -63,7 +63,7 @@ function AuthCard({ children }: { children: ReactNode }) {
 function AuthBrand({ title, subtitle }: { title: string; subtitle?: string }) {
   return (
     <header className="flex flex-col gap-3">
-      <img src="/brand/marks/adrian.png" alt="" width={44} height={44} className="size-11 rounded-2xl" />
+      <img src="/brand/logo-mark.jpg" alt="" width={44} height={44} className="size-11 rounded-2xl" />
       <Suspense fallback={null}>
         <LazyMonoMotion className="mt-1" />
       </Suspense>

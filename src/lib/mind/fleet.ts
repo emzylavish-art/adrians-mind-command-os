@@ -1,6 +1,9 @@
 import { decide } from "./policy.ts";
 import { runLocalPlan, type LocalTool } from "./local-tools.ts";
 import { nextClock, zoneIsValid } from "./schedule-clock.ts";
+import { normalizeBotModel, type BotProvider } from "./bot-model.ts";
+import { normalizeBotKnowledge } from "./bot-model.ts";
+import type { ModelTier } from "./model-tiers.ts";
 import type { Workspace } from "./types.ts";
 
 export const FLEET_TOOLS = [
@@ -42,6 +45,9 @@ export type AgentDefinition = {
   archived: boolean;
   createdAt: string;
   updatedAt: string;
+  chatProvider?: BotProvider | null;
+  chatTier?: ModelTier | null;
+  knowledge?: string;
 };
 
 export type DeploymentRecord = {
@@ -287,6 +293,8 @@ export function readFleet(input: unknown): FleetShape {
         archived: row.archived === true,
         createdAt: typeof row.createdAt === "string" ? row.createdAt : stamp(),
         updatedAt: typeof row.updatedAt === "string" ? row.updatedAt : stamp(),
+        ...normalizeBotModel(row),
+        knowledge: normalizeBotKnowledge(row.knowledge).knowledge,
       });
     }
   }
@@ -458,6 +466,9 @@ export type BotDraft = {
   tools: FleetTool[];
   description?: string;
   projectId?: string | null;
+  chatProvider?: BotProvider | null;
+  chatTier?: ModelTier | null;
+  knowledge?: string;
 };
 
 export function addCustomAgent(
@@ -470,6 +481,8 @@ export function addCustomAgent(
   const tools = toolList(input.tools);
   if (tools.length === 0) return { ok: false, error: "Choose at least one tool." };
   const at = stamp(now);
+  const knowledge = normalizeBotKnowledge(input.knowledge);
+  if (knowledge.rejected) return { ok: false, error: knowledge.rejected };
   const agent: AgentDefinition = {
     id: nid("agent"),
     name,
@@ -485,6 +498,8 @@ export function addCustomAgent(
     archived: false,
     createdAt: at,
     updatedAt: at,
+    ...normalizeBotModel(input),
+    knowledge: knowledge.knowledge,
   };
   return { ok: true, agent, ws: { ...ws, agents: [agent, ...ws.agents] } };
 }
@@ -504,6 +519,9 @@ export function editBot(ws: Workspace, id: string, draft: BotDraft): ReturnType<
     instructions: checked.agent.instructions,
     tools: checked.agent.tools,
     projectId: checked.agent.projectId,
+    chatProvider: checked.agent.chatProvider ?? null,
+    chatTier: checked.agent.chatTier ?? null,
+    knowledge: checked.agent.knowledge ?? "",
     approval: original.approval === "ask" ? "ask" as const : checked.agent.approval,
     maxSteps: checked.agent.maxSteps,
     updatedAt: checked.agent.updatedAt,

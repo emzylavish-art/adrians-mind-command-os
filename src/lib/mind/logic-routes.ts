@@ -5,6 +5,7 @@
  */
 
 import type { ModelTier } from "./model-tiers.ts";
+import { normalizeBotKnowledge } from "./bot-model.ts";
 
 export type { ModelTier };
 
@@ -192,7 +193,7 @@ export type StoredSelection = {
 const STORED_PROVIDERS = new Set(["grok", "openai", "anthropic", "gemini", "openrouter", "ollama", "astra", "sol", "luna"]);
 
 export function readStoredProvider(raw: string | null): string {
-  return raw && (STORED_PROVIDERS.has(raw) || /^custom:[0-9a-f-]{36}:[A-Za-z0-9%_.:/@-]{1,300}$/i.test(raw)) ? raw : "grok";
+  return raw && (STORED_PROVIDERS.has(raw) || /^custom:[0-9a-f-]{36}:[~A-Za-z0-9%_.:/@-]{1,300}$/i.test(raw)) ? raw : "grok";
 }
 
 export function readSelection(storage: Pick<Storage, "getItem"> | null | undefined): StoredSelection {
@@ -326,12 +327,16 @@ export type ChatTurnBodyInput = {
   halted: boolean;
   history: unknown[];
   memoryContext: unknown[];
+  botKnowledge?: unknown;
   provider: string;
   personalityId?: string;
   customPersonality?: string;
   modelTier: ModelTier;
   logicRoute: LogicRouteId | null;
-  orchestrator?: "grok" | "astra" | null;
+  orchestrator?: string | null;
+  composerMode?: string;
+  identity?: string;
+  consult?: { available: string[]; helpers: { id: string; request: string }[]; purpose: string } | null;
   images: unknown[];
 };
 
@@ -343,12 +348,16 @@ export function chatTurnBody(input: ChatTurnBodyInput): Record<string, unknown> 
     halted: input.halted,
     history: input.history,
     memoryContext: input.memoryContext,
+    ...(normalizeBotKnowledge(input.botKnowledge).knowledge ? { botKnowledge: normalizeBotKnowledge(input.botKnowledge).knowledge } : {}),
     personalityId: input.personalityId ?? "assistant",
     customPersonality: input.customPersonality ?? "",
     provider: input.logicRoute ?? input.provider,
     modelTier: input.modelTier,
     ...(input.logicRoute ? { logicRoute: input.logicRoute } : {}),
     ...(input.orchestrator ? { orchestrator: input.orchestrator } : {}),
+    ...(input.composerMode ? { composerMode: input.composerMode } : {}),
+    ...(input.identity ? { identity: input.identity } : {}),
+    ...(input.consult ? { consult: input.consult } : {}),
     images: input.images,
   };
 }

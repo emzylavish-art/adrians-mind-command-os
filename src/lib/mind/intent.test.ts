@@ -41,6 +41,9 @@ describe("command intent", () => {
     const found = interpretCommand("Ask my Documents bot to read the notes", agents);
     assert.equal(found.kind, "bot");
     if (found.kind === "bot") assert.equal(found.agentId, "a1");
+    const created = interpretCommand("create a bot named Harbor", agents, "agent");
+    assert.equal(created.kind, "create_bot");
+    if (created.kind === "create_bot") assert.equal(created.name, "Harbor");
     const missing = interpretCommand("Ask my Notion bot to update the page", agents);
     assert.equal(missing.kind, "bot_missing");
     const none = interpretCommand("Ask the Harbor agent to look", agents);

@@ -447,6 +447,63 @@ export const createVoiceClientSecret = createServerFn({ method: "POST" })
     const { mintRealtimeClientSecret } = await import("./voice/client-secret");
     return mintRealtimeClientSecret({});
   });
+
+/** Whisper Flow STT. The key stays on the server. Browser speech is not this path. */
+export const transcribeDictation = createServerFn({ method: "POST" })
+  .middleware([authMiddleware])
+  .validator((input: { audioBase64: string; mime?: string; filename?: string }) => input)
+  .handler(async ({ data, context }) => {
+    const { validateTranscribeAudioInput, decodeAudioBase64 } = await import("./voice/voice-input");
+    const parsed = validateTranscribeAudioInput(data);
+    if (!parsed.ok) return { ok: false as const, error: parsed.error };
+    const decoded = decodeAudioBase64(parsed.audioBase64);
+    if (!decoded.ok) return { ok: false as const, error: decoded.error };
+    const { haltIsOn } = await import("./halt.server");
+    if (await haltIsOn(context.userId)) {
+      return { ok: false as const, error: "Emergency stop is on. Nothing was transcribed." };
+    }
+    if (!allowMindRequest("stt", context.userId, 20)) {
+      return { ok: false as const, error: "Too many speech-to-text requests. Wait a minute." };
+    }
+    const { transcribeWhisperFlowAudio } = await import("./whisper-flow/provider");
+    const result = await transcribeWhisperFlowAudio({
+      bytes: new Uint8Array(decoded.bytes),
+      mime: parsed.mime,
+      filename: parsed.filename,
+    });
+    if (!result.ok) return { ok: false as const, error: result.error };
+    return { ok: true as const, text: result.text, provider: result.provider ?? "xai" };
+  });
+
+/** Optional polish after the local text is already inserted. It does not replace that text by itself. */
+export const refineDictationOptional = createServerFn({ method: "POST" })
+  .middleware([authMiddleware])
+  .validator((input: { text: string; enabled?: boolean }) => input)
+  .handler(async ({ data, context }) => {
+    if (data.enabled === false) {
+      return { ok: false as const, skipped: true as const, error: "Optional LLM refinement is turned off. Local refinement was kept." };
+    }
+    const text = typeof data.text === "string" ? data.text.trim().slice(0, 2000) : "";
+    if (!text) return { ok: false as const, skipped: true as const, error: "Nothing to refine." };
+    if (!allowMindRequest("stt_refine", context.userId, 10)) {
+      return { ok: false as const, skipped: true as const, error: "Too many refine requests. Local text was kept." };
+    }
+    const key = resolveXaiInferenceApiKey(process.env);
+    if (!key.ok) {
+      return {
+        ok: false as const,
+        skipped: true as const,
+        error: "No chat model key is configured for optional refinement. Local refinement was kept.",
+      };
+    }
+    const { polishDictationWithXai } = await import("./whisper-flow/llm-refine");
+    const polished = await polishDictationWithXai({ text, apiKey: key.key });
+    if (!polished.ok) {
+      return { ok: false as const, skipped: true as const, error: polished.error };
+    }
+    return { ok: true as const, text: polished.text, skipped: false as const };
+  });
+
 /**
  * MCP server list for Tools. Soft-auth: always calls getSessionUser (Supabase
  * HttpOnly cookies first, then Better Auth) via resolveMcpListUserId — same

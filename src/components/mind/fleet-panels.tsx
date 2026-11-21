@@ -143,6 +143,8 @@ export function FleetPanel({
   onBotChat,
   onBotRun,
   onBotSchedule,
+  onBotSelect,
+  focusBotId,
 }: {
   mode: "agents" | "runs" | "connected" | "scheduled" | "tools";
   ws: Workspace;
@@ -156,6 +158,8 @@ export function FleetPanel({
   onBotChat?: (id: string, newThread?: boolean) => void;
   onBotRun?: (id: string) => void;
   onBotSchedule?: (id: string) => void;
+  onBotSelect?: (id: string) => void;
+  focusBotId?: string | null;
 }) {
   const [note, setNote] = useState<string | null>(null);
   const [toolReadId, setToolReadId] = useState<string | null>(null);
@@ -472,6 +476,7 @@ export function FleetPanel({
     return (
       <section className="fleet-bots mx-4 mb-6 space-y-4 md:mx-6">
         <BotBuilder ws={ws} setWs={setWs} onChat={onBotChat} onRun={onBotRun} onSchedule={onBotSchedule}
+          onSelect={onBotSelect} focusBotId={focusBotId}
           onDeploy={(agentId, target) => runMutation(snapshotFleetMutationParams({ kind: "deploy", agentId, target }))}
           onPin={(id) => setWs((prev) => togglePin(prev, "agent", id))} />
         <details className="bot-builder-card px-4 py-1">
@@ -687,7 +692,7 @@ export function FleetPanel({
     return (
       <section className="page-shell">
         <div className="page-hero mb-4 flex items-center gap-3">
-          <img src="/brand/marks/scheduled.png" alt="" className="size-8 rounded-lg" />
+          <img src="/brand/logo-mark.jpg" alt="" className="size-8 rounded-lg" />
           <div>
             <h2 className="font-display text-3xl font-bold">Scheduled</h2>
             <p className="text-sm text-muted">Jobs wait on this device. Nothing runs until you start it.</p>
@@ -813,7 +818,7 @@ export function FleetPanel({
     <section className="page-shell">
       <div className="page-hero mb-4">
         <div className="flex items-center gap-3">
-          <img src="/brand/marks/tools.png" alt="" className="size-8 rounded-lg" />
+          <img src="/brand/logo-mark.jpg" alt="" className="size-8 rounded-lg" />
           <div>
             <h2 className="font-display text-3xl font-bold">Tools</h2>
             <p className="text-sm text-muted">Local reads run in the worker. Page inspect uses the browser driver only when you press Open page. Image, video, and model calls are not made here.</p>

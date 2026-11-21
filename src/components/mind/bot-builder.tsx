@@ -1,5 +1,8 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { addCustomAgent, editBot, toolCatalog, type AgentDefinition, type BotDraft } from "@/lib/mind/fleet";
+import { BOT_PROVIDERS } from "@/lib/mind/bot-model";
+import { normalizeBotKnowledge } from "@/lib/mind/bot-model";
+import { MODEL_TIERS } from "@/lib/mind/model-tiers";
 import { MAX_CUSTOM_PERSONALITY_CHARS } from "@/lib/mind/personalities";
 import type { Workspace } from "@/lib/mind/types";
 
@@ -8,12 +11,14 @@ const secondary = "bot-control min-h-11 rounded-panel border px-3 text-sm";
 const primary = "bot-control bot-control--primary min-h-11 rounded-panel border px-4 text-sm font-semibold";
 const blank = (): BotDraft => ({ name: "", description: "", instructions: "", tools: ["list_projects"], projectId: null });
 
-export function BotBuilder({ ws, setWs, onChat, onRun, onSchedule, onDeploy, onPin }: {
+export function BotBuilder({ ws, setWs, onChat, onRun, onSchedule, onSelect, focusBotId, onDeploy, onPin }: {
   ws: Workspace;
   setWs: (update: (prev: Workspace) => Workspace) => void;
   onChat?: (id: string, newThread?: boolean) => void;
   onRun?: (id: string) => void;
   onSchedule?: (id: string) => void;
+  onSelect?: (id: string) => void;
+  focusBotId?: string | null;
   onDeploy: (id: string, target: "local-worker" | "hosted-worker") => void;
   onPin: (id: string) => void;
 }) {
@@ -24,6 +29,9 @@ export function BotBuilder({ ws, setWs, onChat, onRun, onSchedule, onDeploy, onP
   const [checked, setChecked] = useState(false);
   const [archiveId, setArchiveId] = useState<string | null>(null);
   const [showArchived, setShowArchived] = useState(false);
+  useEffect(() => {
+    if (focusBotId && ws.agents.some((bot) => bot.id === focusBotId && bot.archived)) setShowArchived(true);
+  }, [focusBotId, ws.agents]);
   const tools = toolCatalog();
   const active = ws.agents.filter((bot) => !bot.archived);
   const archived = ws.agents.filter((bot) => bot.archived);
@@ -36,6 +44,9 @@ export function BotBuilder({ ws, setWs, onChat, onRun, onSchedule, onDeploy, onP
       instructions: bot.instructions,
       tools: [...bot.tools],
       projectId: bot.projectId,
+      chatProvider: bot.chatProvider ?? null,
+      chatTier: bot.chatTier ?? null,
+      knowledge: bot.knowledge ?? "",
     } : blank());
     setError("");
     setChecked(false);
@@ -94,9 +105,47 @@ export function BotBuilder({ ws, setWs, onChat, onRun, onSchedule, onDeploy, onP
             </select>
             <span className="mt-1 block text-xs text-muted">Picking a project scopes local run reads to that project.</span>
           </label>
+          <label className="block text-sm">Chat provider
+            <select aria-label="Chat provider" value={draft.chatProvider ?? ""} onChange={(event) => change({ chatProvider: (BOT_PROVIDERS as readonly string[]).includes(event.target.value) ? event.target.value as BotDraft["chatProvider"] : null })} className={fields}>
+              <option value="">Use Chat’s selected provider</option>
+              {BOT_PROVIDERS.map((id) => <option key={id} value={id}>{id}</option>)}
+            </select>
+          </label>
+          <label className="block text-sm">Chat tier
+            <select aria-label="Chat tier" value={draft.chatTier ?? ""} onChange={(event) => change({ chatTier: (MODEL_TIERS as readonly string[]).includes(event.target.value) ? event.target.value as BotDraft["chatTier"] : null })} className={fields}>
+              <option value="">Use Chat’s selected tier</option>
+              {MODEL_TIERS.map((tier) => <option key={tier} value={tier}>{tier}</option>)}
+            </select>
+            <span className="mt-1 block text-xs text-muted">A saved choice applies to a new conversation. An existing conversation keeps its own.</span>
+          </label>
+          <label className="block text-sm">Knowledge note
+            <textarea aria-label="Knowledge note" rows={3} maxLength={4000} value={draft.knowledge ?? ""} onChange={(event) => change({ knowledge: event.target.value })} className={fields} />
+            <span className="mt-1 block text-xs text-muted">A text note is copied into a new chat. A key-shaped note is not saved. An existing chat is not changed.</span>
+          </label>
+          <label className="block text-sm">Load a text file
+            <input aria-label="Load a text file" type="file" accept="text/plain,.txt,.md" className={fields} onChange={(event) => {
+              const file = event.target.files?.[0];
+              event.target.value = "";
+              if (!file) return;
+              const named = /\.(txt|md)$/i.test(file.name);
+              const typed = !file.type || file.type === "text/plain" || file.type === "text/markdown" || file.type === "text/x-markdown";
+              if (!named || !typed || file.size > 4000) {
+                setError("Only a small text file can be loaded. Nothing was saved.");
+                return;
+              }
+              void file.text().then((text) => {
+                const checked = normalizeBotKnowledge(text);
+                if (checked.rejected) {
+                  setError(checked.rejected);
+                  return;
+                }
+                change({ knowledge: checked.knowledge });
+              });
+            }} />
+          </label>
           <fieldset className="space-y-2">
             <legend className="font-semibold">Run capabilities</legend>
-            <p className="text-sm text-muted">These tools apply to queued runs. Bot conversations use Chat’s selected model.</p>
+            <p className="text-sm text-muted">These tools apply to queued runs. They do not change the chat provider.</p>
             <div className="grid gap-2 sm:grid-cols-2">
               {tools.map((tool) => (
                 <label key={tool.id} className="flex min-h-11 items-start gap-3 rounded-panel border border-line p-3 text-sm">
@@ -121,12 +170,17 @@ export function BotBuilder({ ws, setWs, onChat, onRun, onSchedule, onDeploy, onP
           const scheduled = ws.schedules.filter((job) => job.agentId === bot.id && job.enabled).length;
           const deployment = ws.deployments.find((item) => item.agentId === bot.id && item.agentVersion === bot.version);
           return <li key={bot.id} id={`bot-${bot.id}`} tabIndex={-1} className="bot-builder-card min-w-0 space-y-3 p-4">
-            <div className="flex items-start gap-3">
-              <img src="/brand/marks/bots.png" alt="" width={32} height={32} className="shrink-0 rounded-lg" />
+            <div className="flex items-start gap-3" onClick={(event) => {
+              if ((event.target as HTMLElement).closest("button, summary, input, a, label")) return;
+              onSelect?.(bot.id);
+            }}>
+              <img src="/brand/logo-mark.jpg" alt="" width={32} height={32} className="shrink-0 rounded-lg" />
               <div className="min-w-0">
                 <h4 className="break-words font-semibold">{bot.name}</h4>
                 <p className="break-words text-sm text-muted">{bot.description}</p>
                 <p className="mt-1 text-xs text-muted">Version {bot.version} · {bot.tools.length} run tools{scheduled > 0 ? ` · ${scheduled} enabled schedules` : ""}</p>
+                <p className="mt-1 text-xs text-muted">{bot.chatProvider || bot.chatTier ? `New chats use ${bot.chatProvider ?? "Chat’s provider"} · ${bot.chatTier ?? "Chat’s tier"}` : "New chats use Chat’s selected model."}</p>
+                {bot.knowledge ? <p className="mt-1 text-xs text-muted">New chats copy this note.</p> : null}
               </div>
             </div>
             <div className="flex flex-wrap gap-2">
@@ -160,7 +214,7 @@ export function BotBuilder({ ws, setWs, onChat, onRun, onSchedule, onDeploy, onP
       </ul>
       {archived.length > 0 && <>
         <button type="button" className={secondary} aria-expanded={showArchived} onClick={() => setShowArchived(!showArchived)}>{showArchived ? "Hide archived" : `Archived bots (${archived.length})`}</button>
-        {showArchived && <ul className="space-y-2">{archived.map((bot) => <li key={bot.id} className="flex flex-wrap items-center gap-3 text-sm"><span>{bot.name}</span><button type="button" className={secondary} onClick={() => setArchived(bot, false)}>Restore {bot.name}</button></li>)}</ul>}
+        {showArchived && <ul className="space-y-2">{archived.map((bot) => <li key={bot.id} id={`bot-${bot.id}`} className="flex flex-wrap items-center gap-3 text-sm"><span>{bot.name}</span><button type="button" className={secondary} onClick={() => setArchived(bot, false)}>Restore {bot.name}</button></li>)}</ul>}
       </>}
     </section>
   );

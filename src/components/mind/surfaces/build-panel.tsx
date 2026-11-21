@@ -199,7 +199,7 @@ export function BuildPanel() {
     <section className="build-panel" aria-labelledby="build-panel-title" data-testid="build-panel">
       <style>{PANEL_CSS}</style>
       <header className="build-panel__head">
-        <h1 id="build-panel-title"><img src="/brand/marks/build.png" alt="" width="32" height="32" />Build</h1>
+        <h1 id="build-panel-title"><img src="/brand/logo-mark.jpg" alt="" width="32" height="32" />Build</h1>
         <p>Set the target and scope, keep a short task list, and follow the exact next step before a file or command runs.</p>
       </header>
 

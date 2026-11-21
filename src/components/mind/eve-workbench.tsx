@@ -230,7 +230,7 @@ export function EveWorkbench({
         <header className="page-hero flex flex-col gap-4 p-4 md:flex-row md:items-center md:justify-between md:p-6">
           <div className="flex min-w-0 flex-col items-stretch gap-4 sm:flex-row sm:items-center">
             <div hidden={eveBand !== "talk" && eveBand !== "figure"}>
-            <EveTurn state={askBusy ? "listening" : askReply ? "speaking" : "idle"} expression={expression} spoken={askReply ?? undefined} framing="full" projection={heard ?? undefined} className="eve-stage-panel" />
+            <EveTurn state={askBusy ? "listening" : askReply ? "speaking" : "idle"} expression={expression} spoken={askReply ?? undefined} framing={framing} projection={heard ?? undefined} className="eve-stage-panel" showHead />
             </div>
             <div className="min-w-0">
               <p className="text-xs font-semibold uppercase tracking-[0.18em] text-muted">Adrian Core · Intelligence</p>
@@ -262,7 +262,7 @@ export function EveWorkbench({
             <button key={id} type="button" className={`min-h-11 rounded-panel border px-3 text-sm ${eveBand === id ? "border-accent bg-accent text-accent-ink" : "border-line"}`} aria-pressed={eveBand === id} onClick={() => setEveBand(id)}>{label}</button>
           ))}
         </nav>
-        <div hidden={eveBand !== "video"}>
+        <div hidden={eveBand !== "video" && eveBand !== "figure" && eveBand !== "talk"}>
           <NuanceCallCard halted={workspace.halted === true} />
         </div>
 
@@ -477,7 +477,7 @@ export function EveWorkbench({
                   </button>
                 ))}
               </div>
-              <p className="mt-3 text-xs text-muted">The figure is an original 3D body in the page. The face is EVE's photograph on that head, and the mouth follows speech. It is not a purchased face rig. Full-body framing shows the modeled body. A licensed GLB was not added.</p>
+              <p className="mt-3 text-xs text-muted">The generated figure is not shown. Emma's Nuance video is the paid face. While that API face is reserved, the face panel uses the MIT TalkingHead sample. It is not a new generated person.</p>
             </section>
 
             <section className="rounded-panel border border-line bg-surface p-4">

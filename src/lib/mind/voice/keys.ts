@@ -33,14 +33,16 @@ export function resolveVoiceApiKey(env: Record<string, string | undefined> = pro
   const legacy = env.VOICE_API_KEY?.trim();
   if (legacy) return legacy;
   const fromFile = readVoiceSecretsFile(secretsPath);
-  const fromLocal = fromFile ?? readVoiceSecretsFile(LOCAL_VOICE_SECRETS_PATH);
   if (fromFile) {
     env.XAI_VOICE_API_KEY = fromFile;
     return fromFile;
   }
-  if (fromLocal) {
-    env.XAI_VOICE_API_KEY = fromLocal;
-    return fromLocal;
+  if (secretsPath === XAI_VOICE_SECRETS_PATH) {
+    const fromLocal = readVoiceSecretsFile(LOCAL_VOICE_SECRETS_PATH);
+    if (fromLocal) {
+      env.XAI_VOICE_API_KEY = fromLocal;
+      return fromLocal;
+    }
   }
   const chatKey = env.XAI_API_KEY?.trim();
   const management = env.XAI_MANAGEMENT_KEY?.trim();

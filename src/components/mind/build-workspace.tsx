@@ -4,6 +4,7 @@ import { KimiPhase4Panel } from "@/components/mind/kimi-phase4-panel";
 import { GitReview, type GitReport } from "@/components/mind/git-review";
 import { CodeIde } from "@/components/mind/code-ide";
 import { OwnerFlow } from "@/components/mind/owner-flow";
+import { ActionOverlay } from "@/components/mind/conversation-menu";
 import { chatTurnBody } from "@/lib/mind/logic-routes";
 import { consumeMindTurn } from "@/lib/mind/live-turn";
 
@@ -85,6 +86,7 @@ export function BuildWorkspace(props: {
   const [job, setJob] = useState<BuildJob | null>(null);
   const [events, setEvents] = useState<BuildEvent[]>([]);
   const [loading, setLoading] = useState(false);
+  const [rowMenu, setRowMenu] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const [plan, setPlan] = useState("");
   const [planModel, setPlanModel] = useState("");
@@ -581,7 +583,7 @@ export function BuildWorkspace(props: {
       <div className="page-hero">
         <div className="flex flex-wrap items-start justify-between gap-4">
           <div className="flex items-center gap-3">
-            <img src="/brand/marks/build.png" alt="" className="size-8 rounded-lg" />
+            <img src="/brand/logo-mark.jpg" alt="" className="size-8 rounded-lg" />
             <div>
               <h2 className="font-display text-3xl font-bold">Adrian Build</h2>
               <p className="text-sm text-muted">Adrian Build runs here with the saved Grok key. Type a task and press Run build, or open a file and type in the editor.</p>
@@ -628,18 +630,28 @@ export function BuildWorkspace(props: {
       <section className="intelligence-group" aria-label="Workspace" hidden={band !== "files"}>
         <h3>Workspace</h3>
         {projects.length === 0 ? <p className="text-sm text-muted">No workspace is registered yet. Registering stores the label and path for this account. It does not prove the path is reachable.</p> : projects.map((project) => (
-          <div key={project.id} className="grid gap-2 text-sm">
-            <span className="min-w-0 break-all">{project.label} · {project.cwd || "no path"}</span>
-            <button type="button" className="min-h-11 rounded-panel border border-line px-3 text-sm" onClick={() => { setCwd(project.cwd); setNotice(`Opened ${project.label}. File access still requires the runtime that owns this path.`); }}>Open</button>
-            <button type="button" className="min-h-11 rounded-panel border border-line px-3 text-sm" onClick={() => void archiveRegisteredProject(project.id)}>Archive</button>
-          </div>
+          <button key={project.id} type="button" className="min-h-11 rounded-panel border border-line px-3 text-left text-sm" onPointerDown={(event) => { event.currentTarget.dataset.held = "0"; const timer = window.setTimeout(() => { event.currentTarget.dataset.held = "1"; setRowMenu(project.id); }, 550); event.currentTarget.dataset.hold = String(timer); }} onPointerUp={(event) => window.clearTimeout(Number(event.currentTarget.dataset.hold))} onPointerLeave={(event) => window.clearTimeout(Number(event.currentTarget.dataset.hold))} onClick={(event) => { if (event.currentTarget.dataset.held === "1") { event.currentTarget.dataset.held = "0"; return; } setCwd(project.cwd); setNotice(`Opened ${project.label}. File access still requires the runtime that owns this path.`); }}>
+            {project.label} · {project.cwd || "no path"}
+          </button>
         ))}
+        {rowMenu && projects.some((project) => project.id === rowMenu) ? (
+          <ActionOverlay label="Actions for workspace" title={projects.find((project) => project.id === rowMenu)?.label || "Workspace"} onClose={() => setRowMenu(null)}>
+            <button type="button" className="flex min-h-11 w-full items-center rounded-2xl px-3 text-left text-sm" onClick={() => { const id = rowMenu; setRowMenu(null); void archiveRegisteredProject(id); }}>Archive</button>
+          </ActionOverlay>
+        ) : null}
         {sessions.length === 0 ? <p className="text-sm text-muted">No saved session names yet.</p> : sessions.filter((session) => !session.archived).map((session) => (
-          <form key={session.jobId} className="flex flex-wrap items-center gap-2" onSubmit={(event) => { event.preventDefault(); const data = new FormData(event.currentTarget); void renameSession(session.jobId, String(data.get("name") || "")); }}>
-            <input name="name" defaultValue={session.name} aria-label={`Rename session ${session.name}`} className="min-h-11 min-w-40 flex-1 rounded-panel border border-line bg-transparent px-3 text-sm" />
-            <button type="submit" className="min-h-11 rounded-panel border border-line px-3 text-sm">Rename</button>
-          </form>
+          <button key={session.jobId} type="button" className="min-h-11 rounded-panel border border-line px-3 text-left text-sm" onPointerDown={(event) => { const timer = window.setTimeout(() => setRowMenu(`session:${session.jobId}`), 550); event.currentTarget.dataset.hold = String(timer); }} onPointerUp={(event) => window.clearTimeout(Number(event.currentTarget.dataset.hold))} onPointerLeave={(event) => window.clearTimeout(Number(event.currentTarget.dataset.hold))}>
+            {session.name}
+          </button>
         ))}
+        {rowMenu?.startsWith("session:") ? (
+          <ActionOverlay label="Actions for session" title={sessions.find((session) => session.jobId === rowMenu.slice(8))?.name || "Session"} onClose={() => setRowMenu(null)}>
+            <form className="grid gap-2 p-2" onSubmit={(event) => { event.preventDefault(); const data = new FormData(event.currentTarget); void renameSession(rowMenu.slice(8), String(data.get("name") || "")); setRowMenu(null); }}>
+              <input name="name" defaultValue={sessions.find((session) => session.jobId === rowMenu.slice(8))?.name || ""} aria-label={`Rename session ${sessions.find((session) => session.jobId === rowMenu.slice(8))?.name || ""}`} className="min-h-11 rounded-panel border border-line bg-transparent px-3 text-sm" />
+              <button type="submit" className="min-h-11 rounded-panel bg-accent text-sm font-semibold text-accent-ink">Save name</button>
+            </form>
+          </ActionOverlay>
+        ) : null}
       </section>
 
       {workspaceFiles.length ? (

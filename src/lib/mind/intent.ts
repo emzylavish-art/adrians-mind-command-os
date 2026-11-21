@@ -1,3 +1,5 @@
+import { parseCreateBot } from "./speak-bot.ts";
+
 export type CommandMode = "ask" | "research" | "agent" | "build";
 
 export type CommandIntent =
@@ -9,6 +11,7 @@ export type CommandIntent =
   | { kind: "skill" }
   | { kind: "local"; tool: "list_projects" | "list_chats" | "search_notes" | "list_schedules" | "run_due_schedules" }
   | { kind: "bot"; agentId: string; agentName: string; goal: string }
+  | { kind: "create_bot"; name: string; goal: string }
   | { kind: "bot_missing"; reply: string };
 
 const REPLIES = {
@@ -27,6 +30,8 @@ export function interpretCommand(
   const raw = text.trim();
   const lower = raw.toLowerCase();
   if (!raw) return { kind: "chat" };
+  const created = parseCreateBot(raw);
+  if (created) return { kind: "create_bot", name: created.name, goal: created.goal };
 
   if (/\b(gmail|inbox|my emails|send an email|draft an email|check email)\b/.test(lower)) {
     return { kind: "blocked", area: "gmail", reply: REPLIES.gmail };

@@ -1,0 +1,7 @@
+Sokuji is the voice translator. It is not dictation and it is not Speak.
+https://github.com/kizuna-ai-lab/sokuji
+License: AGPL-3.0
+Offline translation model: https://github.com/Helsinki-NLP/Opus-MT (MIT code, CC-BY 4.0 weights)
+
+The SamirPaul real-time translator was rejected because it calls Google.
+The Opus-MT weights are not loaded in this browser. No Google host is called.

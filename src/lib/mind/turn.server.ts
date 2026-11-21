@@ -9,6 +9,8 @@ import type { HistoryInputMessage } from "./media/history";
 import { allowedModelIds, resolveModelTier, type ResolvedModelTier } from "./model-tiers";
 import { assertLiveProvider } from "./providers";
 import { callConfiguredProvider, httpStatusForProviderSelection, selectProvider } from "./provider-call";
+import { configuredProviders } from "./provider-call";
+import { ADRIAN_MIND_IDENTITY, builtinModules, collectConsultHelp, customModules, orchestratorInstruction, planModelConsult } from "./model-consult.ts";
 import { buildRelayModelBody, relayModelStream } from "./relay";
 import { CHAT_TIMEOUT_REPLY, chatTurnTimeoutMs } from "./turn-timeouts";
 import { decideFetchSite } from "./request-guard";
@@ -19,6 +21,7 @@ import { LOGIC_ROUTE_LABEL, resolveRequestedRoute, toAdapterMessages, type Logic
 import { inspectLogicRoutes, runLogicRoute } from "./logic-route-adapter.server.ts";
 import { parseCustomProviderChoice, executeCustomChat } from "./ai-provider-config.server.ts";
 import { personalityInstruction } from "./personalities/index.ts";
+import { botKnowledgeLine } from "./bot-model.ts";
 
 /** Default Expert model id — kept for status/docs; live turns use resolveModelTier. */
 export const MIND_MODEL = "grok-4.5";
@@ -44,6 +47,9 @@ export type TurnBody = {
   images?: unknown;
   /** Optional explicit note to persist with this turn (owner-scoped). */
   saveMemory?: unknown;
+  botKnowledge?: unknown;
+  composerMode?: unknown;
+  orchestrator?: unknown;
 };
 
 function isHistory(item: unknown): item is HistoryInputMessage {
@@ -69,6 +75,10 @@ function envCheck() {
 }
 
 export async function prepareMindTurn(userId: string, data: TurnBody) {
+  return prepareMindTurnWithHelp(userId, data, "");
+}
+
+export async function prepareMindTurnWithHelp(userId: string, data: TurnBody, consultHelp = "") {
   const { haltIsOn } = await import("./halt.server");
   if ((await haltIsOn(userId)) || data.halted === true) {
     return { ok: false as const, error: "Emergency stop is on. No new action can run." };
@@ -103,6 +113,8 @@ export async function prepareMindTurn(userId: string, data: TurnBody) {
     images,
     personalityId: data.personalityId,
     customPersonality: data.customPersonality,
+    botKnowledge: data.botKnowledge,
+    consultHelp,
   });
   if (!assembled.ok) return { ok: false as const, error: assembled.error };
   const tier = resolveModelTier(data.modelTier, text || "image", process.env);
@@ -226,7 +238,7 @@ async function handleLogicTurn(userId: string, data: TurnBody, route: LogicRoute
   if (!memory) return json({ ok: false, error: "Memory setting is invalid." }, 400);
   const gate = envCheck();
   if (!gate.ok) return json({ ok: false, error: gate.error });
-  const assembled = assembleTurn({ memory, history, text, memoryContext, images: [], personalityId: data.personalityId, customPersonality: data.customPersonality });
+  const assembled = assembleTurn({ memory, history, text, memoryContext, images: [], personalityId: data.personalityId, customPersonality: data.customPersonality, botKnowledge: data.botKnowledge });
   if (!assembled.ok) return json({ ok: false, error: assembled.error }, 400);
   const flat = toAdapterMessages(assembled.messages);
   if (!flat.ok) return json({ ok: false, error: flat.error }, 400);
@@ -282,7 +294,27 @@ export async function handleMindTurn(request: Request): Promise<Response> {
   }
   const read = await readJsonObjectBody(request, MAX_BODY);
   if (!read.ok) return json({ ok: false, error: read.error }, read.status);
-  const body = read.body as TurnBody;
+  let body = read.body as TurnBody;
+  let consultHelp = "";
+  if (body.composerMode === "orchestrator") {
+    const asked = typeof body.text === "string" ? body.text.trim() : "";
+    const orchestrator = typeof body.orchestrator === "string" && body.orchestrator
+      ? body.orchestrator
+      : typeof body.provider === "string" ? body.provider : "";
+    const modules = await modulesConnectedNow(userId);
+    const planned = planModelConsult({ orchestrator, modules, question: asked });
+    if (!planned.ok) return json({ ok: false, error: planned.error, provider: orchestrator }, 400);
+    if (sanitizeAttachments(body.images).length && planned.plan.orchestrator !== "grok") {
+      return json({
+        ok: false,
+        error: "That connected model cannot see images in this app. Remove the images or choose a connected model that can. Another model was not substituted.",
+        provider: planned.plan.orchestrator,
+      }, 400);
+    }
+    const help = await collectConsultHelp(planned.plan, (id, requestText) => askConnectedModule(userId, id, requestText));
+    consultHelp = orchestratorInstruction(planned.plan, help);
+    body = { ...body, provider: planned.plan.orchestrator, logicRoute: undefined };
+  }
   const tierField = parseModelTierField(body.modelTier);
   if (!tierField.ok) return json({ ok: false, error: tierField.error }, 400);
   const logicField = resolveRequestedRoute({ logicRoute: body.logicRoute, provider: body.provider });
@@ -305,7 +337,7 @@ export async function handleMindTurn(request: Request): Promise<Response> {
     if (!sized.ok) return json(sized, 400);
     const gate = envCheck();
     if (!gate.ok) return json({ ok: false, error: gate.error }, 503);
-    const assembled = assembleTurn({ memory, history, text, memoryContext, images: [], personalityId: body.personalityId, customPersonality: body.customPersonality });
+    const assembled = assembleTurn({ memory, history, text, memoryContext, images: [], personalityId: body.personalityId, customPersonality: body.customPersonality, botKnowledge: body.botKnowledge, consultHelp });
     if (!assembled.ok) return json({ ok: false, error: assembled.error }, 400);
     const formatted = toAdapterMessages(assembled.messages);
     if (!formatted.ok) return json({ ok: false, error: formatted.error }, 400);
@@ -364,7 +396,7 @@ export async function handleMindTurn(request: Request): Promise<Response> {
       id: selected.id,
       key,
       prompt: typeof body.text === "string" ? body.text : "",
-      systemPrompt: personalityInstruction(body.personalityId, body.customPersonality),
+      systemPrompt: [ADRIAN_MIND_IDENTITY, personalityInstruction(body.personalityId, body.customPersonality), botKnowledgeLine(body.botKnowledge), consultHelp].filter(Boolean).join(" "),
       history,
       fetch: globalThis.fetch,
     });
@@ -375,7 +407,7 @@ export async function handleMindTurn(request: Request): Promise<Response> {
       "\n\nevent: done\ndata: " + JSON.stringify(done) + "\n\n";
     return new Response(stream, { headers: { "content-type": "text/event-stream", "cache-control": "no-store" } });
   }
-  const prepared = await prepareMindTurn(userId, body);
+  const prepared = await prepareMindTurnWithHelp(userId, body, consultHelp);
   if (!prepared.ok) return json(prepared);
   if (!allowedModelIds(process.env).has(prepared.model)) {
     return json({ ok: false, error: "That model is not available. Another provider is not substituted." });
@@ -454,3 +486,73 @@ function sseChatDone(chat: { text: string; model: string; provider: string }, us
 
 /** Exported for scripts/tests that build a multimodal Direct turn without the HTTP handler. */
 export type { ImageAttachment };
+
+async function modulesConnectedNow(userId: string) {
+  const modules = builtinModules({
+    grokConfigured: resolveXaiInferenceApiKey(process.env).ok,
+    providers: configuredProviders(process.env),
+  });
+  try {
+    const { listAiProviders } = await import("./ai-provider-config.server.ts");
+    const saved = await listAiProviders(userId);
+    modules.push(...customModules(saved.map((item) => ({
+      id: item.id,
+      label: item.label,
+      models: item.models,
+      hasKey: item.hasKey,
+    }))));
+  } catch {
+    /* A disconnected custom list is not invented. */
+  }
+  return modules;
+}
+
+async function askConnectedModule(userId: string, id: string, requestText: string): Promise<{ ok: boolean; text: string }> {
+  if (id.startsWith("custom:")) {
+    const chosen = parseCustomProviderChoice(id);
+    if (!chosen.ok) return { ok: false, text: "" };
+    const result = await executeCustomChat(userId, chosen, [
+      { role: "system", content: ADRIAN_MIND_IDENTITY },
+      { role: "user", content: requestText },
+    ]);
+    return result.ok ? { ok: true, text: result.text } : { ok: false, text: "" };
+  }
+  if (id === "grok") {
+    const keyed = resolveXaiInferenceApiKey(process.env);
+    if (!keyed.ok) return { ok: false, text: "" };
+    try {
+      const res = await fetch("https://api.x.ai/v1/chat/completions", {
+        method: "POST",
+        signal: AbortSignal.timeout(20_000),
+        headers: { "content-type": "application/json", authorization: `Bearer ${keyed.key}` },
+        body: JSON.stringify({
+          model: "grok-4.5",
+          messages: [
+            { role: "system", content: ADRIAN_MIND_IDENTITY },
+            { role: "user", content: requestText },
+          ],
+          max_tokens: 400,
+          stream: false,
+        }),
+      });
+      if (!res.ok) return { ok: false, text: "" };
+      const parsed = readModelPayload(await res.text());
+      return parsed.text ? { ok: true, text: parsed.text } : { ok: false, text: "" };
+    } catch {
+      return { ok: false, text: "" };
+    }
+  }
+  const selected = selectProvider(id, process.env);
+  if (!selected.ok || selected.id === "grok") return { ok: false, text: "" };
+  const keyName = selected.id === "openai" ? "OPENAI_API_KEY" : selected.id === "anthropic" ? "ANTHROPIC_API_KEY" : selected.id === "gemini" ? "GEMINI_API_KEY" : "OPENROUTER_API_KEY";
+  const key = process.env[keyName] ?? "";
+  if (!key) return { ok: false, text: "" };
+  const called = await callConfiguredProvider({
+    id: selected.id,
+    key,
+    prompt: requestText,
+    systemPrompt: ADRIAN_MIND_IDENTITY,
+    fetch: globalThis.fetch,
+  });
+  return called.ok ? { ok: true, text: called.text } : { ok: false, text: "" };
+}

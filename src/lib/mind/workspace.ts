@@ -1,4 +1,6 @@
 import { emptyFleet, readFleet } from "./fleet.ts";
+import { normalizeBotModel } from "./bot-model.ts";
+import { normalizeBotKnowledge } from "./bot-model.ts";
 import { DEFAULT_PERSONALITY_ID, normalizeCustomPersonality, resolvePersonalityId } from "./personalities/index.ts";
 import type {
   AuditEntry,
@@ -186,6 +188,7 @@ function normalizeChat(row: unknown): Chat | null {
     id: str(row.id),
     title: str(row.title, "New session").slice(0, 80),
     ...(typeof row.agentId === "string" && row.agentId ? { agentId: row.agentId } : {}),
+    ...chatBotModel(row),
     memory,
     temporary: row.temporary === true,
     autonomy,
@@ -194,6 +197,8 @@ function normalizeChat(row: unknown): Chat | null {
     projectId: typeof row.projectId === "string" ? row.projectId : null,
     messages,
     retrievalLog,
+    ...(row.favorite === true ? { favorite: true as const } : {}),
+    ...(row.archived === true ? { archived: true as const } : {}),
   };
 }
 
@@ -316,7 +321,22 @@ export function openBotChat(ws: Workspace, agentId: string, newThread = false): 
     customPersonality: agent.instructions,
   });
   const linked = { ...chat, title: agent.name, agentId };
+  const model = normalizeBotModel(agent);
+  if (model.chatProvider) linked.botProvider = model.chatProvider;
+  if (model.chatTier) linked.botTier = model.chatTier;
+  const knowledge = normalizeBotKnowledge(agent.knowledge).knowledge;
+  if (knowledge) linked.botKnowledge = knowledge;
   return { ws: { ...ws, chats: [linked, ...ws.chats] }, chat: linked };
+}
+
+function chatBotModel(row: Record<string, unknown>) {
+  const model = normalizeBotModel({ chatProvider: row.botProvider, chatTier: row.botTier });
+  const knowledge = normalizeBotKnowledge(row.botKnowledge).knowledge;
+  return {
+    ...(model.chatProvider ? { botProvider: model.chatProvider } : {}),
+    ...(model.chatTier ? { botTier: model.chatTier } : {}),
+    ...(knowledge ? { botKnowledge: knowledge } : {}),
+  };
 }
 
 export function updateChatPersonality(ws: Workspace, chatId: string, personalityId: unknown): Workspace {

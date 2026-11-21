@@ -1,4 +1,6 @@
 import type { MemoryNote } from "./types";
+import { botKnowledgeLine } from "./bot-model.ts";
+import { ADRIAN_MIND_IDENTITY } from "./model-consult.ts";
 import { personalityInstruction } from "./personalities/index.ts";
 import { packageChatContent, sanitizeAttachments, type ChatContent, type ImageAttachment } from "./media/index.ts";
 import { buildHistoryMessages, type HistoryInputMessage } from "./media/history.ts";
@@ -11,6 +13,8 @@ export function assembleTurn(input: {
   images?: ImageAttachment[];
   personalityId?: unknown;
   customPersonality?: unknown;
+  botKnowledge?: unknown;
+  consultHelp?: string;
 }):
   | { ok: false; error: string }
   | {
@@ -35,6 +39,7 @@ export function assembleTurn(input: {
             .join("\n")}`;
   const images = sanitizeAttachments(input.images ?? []);
   const userContent = packageChatContent(input.text, images);
+  const knowledgeLine = botKnowledgeLine(input.botKnowledge);
   if (images.length > 0 && typeof userContent === "string") {
     return { ok: false, error: "Those image attachments could not be packaged." };
   }
@@ -44,9 +49,9 @@ export function assembleTurn(input: {
     usedIds: notes.map((note) => note.id),
     messages: [
       {
-        role: "system",
-        content: `You are Adrian's Mind in Direct mode. ${memoryLine} ${personalityInstruction(input.personalityId, input.customPersonality)} Do not claim tools, agents, or other models ran.`,
-      },
+      role: "system",
+      content: `${ADRIAN_MIND_IDENTITY} ${memoryLine}${knowledgeLine ? ` ${knowledgeLine}` : ""} ${personalityInstruction(input.personalityId, input.customPersonality)} ${input.consultHelp?.trim() ? input.consultHelp.trim() : "Do not claim tools, agents, or other models ran."}`,
+    },
       ...historyMessages,
       { role: "user", content: userContent },
     ],

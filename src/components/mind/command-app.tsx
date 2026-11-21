@@ -8,6 +8,12 @@ import "./visual-system.css";
 import { getBearerToken } from "@/lib/auth/client";
 import { loadMcpWithHttpFallback } from "@/lib/mind/mcp-list-http";
 import { getRecentChats } from "@/lib/mind/recent-chats";
+import { ConversationSections } from "@/components/mind/conversation-sections";
+import { ActionOverlay, ActionsButton } from "@/components/mind/conversation-menu";
+import { applyArchive, applyFavorite, applyProject, applyRename, conversationSharePath, quoteIntoNewChat, scheduleConversation, type ConversationAction } from "@/lib/mind/conversation-actions";
+import { conversationSection, HIDDEN_SETTINGS_SECTIONS_KEY, hideSection, readHiddenSections, removeConversations, restoreSection } from "@/lib/mind/conversation-sections";
+import { resolveShare, sameShareLocation, shareMissLabel, shareWriteDropsMissing, shareWriteForView, writeShareSearch } from "@/lib/mind/app-location";
+import { routeForBotChat } from "@/lib/mind/bot-model";
 import { SignedOut, UserButton } from "@/lib/auth/gates";
 import { SupabaseAccountControls } from "@/components/mind/supabase-account";
 import {
@@ -34,6 +40,7 @@ import {
   Video,
   CalendarClock,
   CircleHelp,
+  Compass,
   Link2,
   Network,
   ListTree,
@@ -92,6 +99,7 @@ import { type SpeakRetryParams } from "@/lib/mind/voice/speak-action";
 import { runMountedSpeak } from "@/lib/mind/voice/speak-click";
 import { speakCanRetry } from "@/lib/mind/voice/speak-failures";
 import { interruptMessageSpeak } from "@/lib/mind/voice/speak-control";
+import { replyVoiceForTurn, shouldSpeakTranscriptAgain } from "@/lib/mind/voice/one-voice";
 import { withSessionTimeout } from "@/lib/mind/voice/session-timeout";
 import { clampSpeakText, sanitizeVoiceTranscript } from "@/lib/mind/voice/limits";
 import { createListenGuard, resolveListenAction } from "@/lib/mind/voice/listen-guard";
@@ -174,9 +182,14 @@ import { AttachmentChips } from "@/components/mind/media/attachment-chips";
 import { CameraCapture } from "@/components/mind/media/camera-capture";
 import { CloudPicker, type CloudPickerAttach } from "@/components/mind/media/cloud-picker";
 import { InlineImage } from "@/components/mind/media/inline-image";
+import { ChatMediaGallery } from "@/components/mind/media/chat-media-gallery";
+import { explainRejectedImageFile } from "@/components/mind/media/accept-image-files";
+import { listChatGalleryImages } from "@/lib/mind/media/chat-gallery";
 import { fileToDownscaledDataUrl } from "@/components/mind/media/downscale";
 import { historyTextForImages, parseImagineCommand, toImageAttachments, type ImageAttachment } from "@/lib/mind/media";
 import { haltFleet, enqueueRun, runDueSchedules, togglePin } from "@/lib/mind/fleet";
+import { tickFleet } from "@/lib/mind/fleet";
+import { createBotFromSpeech, parseCreateBot } from "@/lib/mind/speak-bot";
 import { interpretCommand, type CommandMode } from "@/lib/mind/intent";
 import { paletteHits } from "@/lib/mind/palette";
 import { paletteKeyAction } from "@/lib/mind/palette-keys";
@@ -218,12 +231,18 @@ import {
 } from "@/lib/mind/logic-routes";
 import { runSkill, searchSkills, SKILLS } from "@/lib/mind/skills";
 import LocalSkillsTools from "@/components/mind/local-skills-tools";
+import { HandyDictation } from "@/components/mind/handy-dictation";
+import { ModuleSuggestions } from "@/components/mind/module-suggestions";
+import { type ModuleSuggestion } from "@/lib/intent/module-suggestions";
+import { refreshSkills } from "@/lib/mind/skill-refresh";
 import { exportChat, prepareRegenerate, prepareRetry, renameChat, reviseUserTurn } from "@/lib/mind/transcript";
 import { useMindWorkspace } from "@/lib/mind/use-mind-workspace";
 import { useCurrentUser } from "@/lib/auth/use-current-user";
 import { COMPOSER_MODES, effortForModelTier, effortModelTier, loadComposerEffort, resolveSendPath, saveComposerEffort, type ComposerModeId } from "@/lib/mind/composer-modes";
+import { ADRIAN_MIND_IDENTITY, builtinModules, customModules, loadConsultModel, planModelConsult, saveConsultModel, type ConsultModule } from "@/lib/mind/model-consult";
 import { planRouting, readRatings, readRoutingMode, readRoutingPanel, ROUTING_MODE_LABEL, saveRating, writeRoutingMode, writeRoutingPanel, type ResponseRating, type RoutingMode } from "@/lib/mind/routing-modes";
 import { canSend } from "@/lib/mind/send-gate";
+import { cueMessage, dropCued, restoreCue, takeNextCue, type CuedMessage } from "@/lib/mind/message-cue";
 import { saveFailureMessage } from "@/lib/mind/save-error";
 import { resetVoice } from "@/lib/mind/settings-reset";
 import {
@@ -314,36 +333,335 @@ const EXTERNAL = [
   {
     name: "Oak Bridge Capital",
     detail: "Separate product. This app does not open, edit, or store it.",
-    mark: "/brand/marks/oak-bridge.png",
+    mark: "/brand/logo-mark.jpg",
   },
   {
     name: "BridgePoint",
     detail: "Separate product. This app does not open, edit, or store it.",
-    mark: "/brand/marks/bridgepoint.png",
+    mark: "/brand/logo-mark.jpg",
   },
 ];
 
 type Staged = { name: string; text: string };
 
-const NAV_ICON_SRC: Partial<Record<View, string>> = {
-  files: "/brand/marks/library.png",
-  projects: "/brand/marks/projects.png",
-  connected: "/brand/marks/plugins.png",
-  scheduled: "/brand/marks/scheduled.png",
-  build: "/brand/marks/build.png",
-  research: "/brand/marks/research.png",
-  intelligence: "/brand/marks/eve.png",
-  agents: "/brand/marks/bots.png",
-  runs: "/brand/marks/runs.png",
-  tools: "/brand/marks/tools.png",
-  skills: "/brand/marks/skills.png",
-  memory: "/brand/marks/memory.png",
-  activity: "/brand/marks/activity.png",
-  help: "/brand/marks/help.png",
-  integrations: "/brand/marks/integrations.png",
-  settings: "/brand/marks/settings.png",
-};
+function pinRailScroll(node: HTMLElement | null) {
+  node?.style.setProperty("overflow-x", "hidden", "important");
+  node?.style.setProperty("overflow-y", "auto", "important");
+  node?.style.setProperty("min-height", "0", "important");
+  node?.style.setProperty("flex", "1 1 auto", "important");
+}
+function pinRailFrame(node: HTMLElement | null) {
+  if (!node) return;
+  node.style.setProperty("flex-direction", "column", "important");
+  node.style.setProperty("min-height", "0", "important");
+  node.style.setProperty("overflow", "hidden", "important");
+}
+function pinMainColumn(node: HTMLElement | null) {
+  if (!node) return;
+  node.style.setProperty("display", "flex", "important");
+  node.style.setProperty("flex-direction", "column", "important");
+  node.style.setProperty("min-height", "0", "important");
+  node.style.setProperty("overflow", "hidden", "important");
+}
+function pinPageScroller(node: HTMLDivElement | null) {
+  if (!node) return;
+  node.style.setProperty("position", "relative", "important");
+  node.style.setProperty("flex", "1 1 auto", "important");
+  node.style.setProperty("min-height", "0", "important");
+}
+function showRailLabel(node: HTMLElement | null) {
+  node?.style.setProperty("display", "block", "important");
+}
+function liftHomeComposer(node: HTMLElement | null) {
+  if (!node) return;
+  node.style.setProperty("position", "relative", "important");
+  node.style.setProperty("bottom", "auto", "important");
+  node.style.setProperty("left", "0", "important");
+  node.style.setProperty("right", "auto", "important");
+  node.style.setProperty("z-index", "1", "important");
+  node.style.setProperty("width", "100%", "important");
+  node.style.setProperty("max-width", "100%", "important");
+  node.style.setProperty("min-width", "0", "important");
+  node.style.setProperty("overflow", "hidden", "important");
+  node.style.setProperty("transform", "none", "important");
+  node.style.setProperty("box-sizing", "border-box", "important");
+  keepComposerInside();
+}
+function liftHomeStack(node: HTMLElement | null) {
+  node?.style.setProperty("justify-content", "flex-start", "important");
+}
+function stackLibrary(node: HTMLElement | null) {
+  node?.style.setProperty("grid-template-columns", "minmax(0, 1fr)", "important");
+}
+function keepGroupRow(node: HTMLElement | null) {
+  if (!node) return;
+  node.style.setProperty("align-self", "start", "important");
+  node.style.setProperty("align-items", "flex-start", "important");
+  node.style.setProperty("height", "auto", "important");
+}
 
+function showLatestReply() {
+  const scroller = document.querySelector(".thread-shell .flex.min-w-0.flex-1.flex-col > .min-h-0.flex-1");
+  if (!(scroller instanceof HTMLElement)) return;
+  scroller.style.setProperty("padding-bottom", "12px", "important");
+  const phone = window.matchMedia("(max-width: 767px)").matches;
+  const title = document.querySelector(".thread-shell h2");
+  if (title instanceof HTMLElement && phone) {
+    title.style.setProperty("font-size", "1.35rem", "important");
+    title.style.setProperty("line-height", "1.25", "important");
+  }
+  const last = scroller.querySelector("article:last-of-type");
+  if (!(last instanceof HTMLElement)) return;
+  const top = last.getBoundingClientRect().top - scroller.getBoundingClientRect().top + scroller.scrollTop;
+  scroller.scrollTop = Math.max(0, top - 8);
+}
+
+function keepCueClear() {
+  const shell = document.querySelector(".thread-shell");
+  const section = document.querySelector(".thread-shell > section");
+  const scroller = document.querySelector(".thread-shell section > .min-h-0.flex-1");
+  const cue = document.querySelector("[data-testid='message-cue']");
+  const page = shell?.parentElement;
+  if (page instanceof HTMLElement) {
+    page.style.setProperty("display", "flex", "important");
+    page.style.setProperty("flex-direction", "column", "important");
+  }
+  if (shell instanceof HTMLElement) {
+    shell.style.setProperty("flex", "1 1 auto", "important");
+    shell.style.setProperty("height", "auto", "important");
+    shell.style.setProperty("min-height", "0", "important");
+  }
+  if (section instanceof HTMLElement) {
+    section.style.setProperty("display", "grid", "important");
+    section.style.setProperty("grid-template-rows", "auto minmax(0, 1fr) auto", "important");
+    section.style.setProperty("min-height", "0", "important");
+    section.style.setProperty("overflow", "hidden", "important");
+  }
+  if (scroller instanceof HTMLElement) {
+    scroller.style.setProperty("min-height", "0", "important");
+    scroller.style.setProperty("overflow", "auto", "important");
+  }
+  if (cue instanceof HTMLElement) {
+    cue.style.setProperty("position", "relative", "important");
+    cue.style.setProperty("z-index", "2", "important");
+    cue.style.setProperty("background", "#121214", "important");
+    cue.style.setProperty("margin", "0 0.75rem 0.75rem", "important");
+  }
+}
+
+function keepComposerInside() {
+  const home = document.querySelector(".gpt-home");
+  if (home instanceof HTMLElement) {
+    home.style.setProperty("width", "100%", "important");
+    home.style.setProperty("max-width", "100%", "important");
+    home.style.setProperty("min-width", "0", "important");
+    home.style.setProperty("overflow-x", "hidden", "important");
+    home.style.setProperty("box-sizing", "border-box", "important");
+    home.style.setProperty("height", "auto", "important");
+    const masthead = home.querySelector(".masthead");
+    if (masthead instanceof HTMLElement) {
+      masthead.style.setProperty("display", "flex", "important");
+      masthead.style.setProperty("flex-direction", "column", "important");
+      masthead.style.setProperty("align-items", "stretch", "important");
+      masthead.style.setProperty("height", "auto", "important");
+      masthead.style.setProperty("min-height", "min-content", "important");
+      masthead.style.setProperty("flex", "0 0 auto", "important");
+      masthead.style.setProperty("overflow", "visible", "important");
+      masthead.style.setProperty("width", "100%", "important");
+    }
+    if (home.parentElement instanceof HTMLElement) {
+      home.parentElement.style.setProperty("overflow-x", "hidden", "important");
+      home.parentElement.scrollLeft = 0;
+    }
+  }
+  document.querySelectorAll(".gpt-home form, form.thread-composer, section.composer-dock, [data-composer='floating']").forEach((node) => {
+    if (!(node instanceof HTMLElement)) return;
+    node.style.setProperty("position", "relative", "important");
+    node.style.setProperty("left", "0", "important");
+    node.style.setProperty("right", "auto", "important");
+    node.style.setProperty("transform", "none", "important");
+    node.style.setProperty("width", "100%", "important");
+    node.style.setProperty("max-width", "100%", "important");
+    node.style.setProperty("min-width", "0", "important");
+    node.style.setProperty("margin-left", "0", "important");
+    node.style.setProperty("box-sizing", "border-box", "important");
+    node.style.setProperty("overflow", "visible", "important");
+  });
+  document.querySelectorAll(".gpt-home form, form.thread-composer").forEach((node) => {
+    if (!(node instanceof HTMLElement)) return;
+    node.style.setProperty("display", "flex", "important");
+    node.style.setProperty("flex-direction", "column", "important");
+    node.style.setProperty("align-items", "stretch", "important");
+    node.style.setProperty("gap", "0.45rem", "important");
+  });
+  document.querySelectorAll(".composer-toolbar").forEach((node) => {
+    if (!(node instanceof HTMLElement)) return;
+    node.style.setProperty("display", "flex", "important");
+    node.style.setProperty("flex-wrap", "wrap", "important");
+    node.style.setProperty("align-items", "center", "important");
+    node.style.setProperty("width", "100%", "important");
+    node.style.setProperty("max-width", "100%", "important");
+    node.style.setProperty("min-width", "0", "important");
+    node.style.setProperty("height", "auto", "important");
+    node.style.setProperty("max-height", "none", "important");
+    node.style.setProperty("align-content", "flex-start", "important");
+    node.style.setProperty("overflow", "visible", "important");
+    node.style.setProperty("position", "relative", "important");
+    node.style.setProperty("left", "0", "important");
+    node.style.setProperty("box-sizing", "border-box", "important");
+    node.style.setProperty("order", "2", "important");
+  });
+  document.querySelectorAll("[data-testid='composer-mic-dictate']").forEach((node) => {
+    if (!(node instanceof HTMLElement)) return;
+    node.style.setProperty("position", "relative", "important");
+    node.style.setProperty("inset", "auto", "important");
+    node.style.setProperty("transform", "none", "important");
+    node.style.setProperty("margin", "0", "important");
+  });
+  document.querySelectorAll(".gpt-home textarea, form.thread-composer input, form.thread-composer textarea").forEach((node) => {
+    if (!(node instanceof HTMLElement)) return;
+    node.style.setProperty("order", "1", "important");
+    node.style.setProperty("width", "100%", "important");
+    node.style.setProperty("max-width", "100%", "important");
+    node.style.setProperty("min-width", "0", "important");
+    node.style.setProperty("flex", "0 1 auto", "important");
+    node.style.setProperty("box-sizing", "border-box", "important");
+  });
+  document.querySelectorAll("[data-testid='composer-effort']").forEach((node) => {
+    if (!(node instanceof HTMLElement)) return;
+    node.style.setProperty("width", "100%", "important");
+    node.style.setProperty("max-width", "100%", "important");
+    node.style.setProperty("min-width", "0", "important");
+    node.style.setProperty("height", "auto", "important");
+    node.style.setProperty("max-height", "none", "important");
+    node.style.setProperty("flex", "1 1 100%", "important");
+    node.style.setProperty("overflow", "visible", "important");
+    node.style.setProperty("box-sizing", "border-box", "important");
+  });
+  document.querySelectorAll("[data-testid='composer-effort'] .flex").forEach((node) => {
+    if (!(node instanceof HTMLElement)) return;
+    node.style.setProperty("flex-wrap", "wrap", "important");
+    node.style.setProperty("width", "100%", "important");
+    node.style.setProperty("max-width", "100%", "important");
+    node.style.setProperty("min-width", "0", "important");
+    node.style.setProperty("height", "auto", "important");
+    node.style.setProperty("max-height", "none", "important");
+    node.style.setProperty("overflow", "visible", "important");
+  });
+  document.querySelectorAll("[data-testid='composer-effort'] p").forEach((node) => {
+    if (!(node instanceof HTMLElement)) return;
+    node.style.setProperty("position", "relative", "important");
+    node.style.setProperty("clear", "both", "important");
+    node.style.setProperty("width", "100%", "important");
+    node.style.setProperty("max-width", "100%", "important");
+    node.style.setProperty("margin", "0.35rem 0 0", "important");
+  });
+  document.querySelectorAll(".composer-toolbar > button, .composer-toolbar > label, .composer-toolbar > details").forEach((node) => {
+    if (!(node instanceof HTMLElement)) return;
+    node.style.setProperty("max-width", "100%", "important");
+    node.style.setProperty("min-width", "max-content", "important");
+    node.style.setProperty("flex", "0 0 auto", "important");
+    node.style.setProperty("width", "auto", "important");
+    node.style.setProperty("height", "auto", "important");
+    node.style.setProperty("min-height", "2.75rem", "important");
+    node.style.setProperty("font-size", "0.85rem", "important");
+    node.style.setProperty("overflow", "visible", "important");
+    if (window.matchMedia("(max-width: 767px)").matches) node.style.removeProperty("display");
+    else node.style.setProperty("display", "inline-flex", "important");
+    node.style.setProperty("align-items", "center", "important");
+    node.style.setProperty("white-space", "nowrap", "important");
+  });
+  document.querySelectorAll("[data-testid='composer-mic-dictate'], .composer-send, .gpt-voice").forEach((node) => {
+    if (!(node instanceof HTMLElement)) return;
+    node.style.setProperty("display", "inline-flex", "important");
+  });
+  document.querySelectorAll(".gpt-home .composer-toolbar > button:first-child").forEach((node) => {
+    if (!(node instanceof HTMLElement)) return;
+    node.style.setProperty("display", "inline-flex", "important");
+    node.style.setProperty("width", "max-content", "important");
+    node.style.setProperty("min-width", "max-content", "important");
+    node.style.setProperty("height", "auto", "important");
+    node.style.setProperty("padding", "0 0.7rem", "important");
+    node.style.setProperty("line-height", "1.2", "important");
+    node.style.setProperty("overflow", "visible", "important");
+    node.style.setProperty("font-size", "0.85rem", "important");
+  });
+  document.querySelectorAll("[data-testid='composer-effort'] button, [data-testid='composer-effort'] span").forEach((node) => {
+    if (!(node instanceof HTMLElement)) return;
+    node.style.setProperty("width", "auto", "important");
+    node.style.setProperty("height", "auto", "important");
+    node.style.setProperty("min-height", "2.25rem", "important");
+    node.style.setProperty("max-width", "100%", "important");
+    node.style.setProperty("overflow", "visible", "important");
+    node.style.setProperty("font-size", "0.8rem", "important");
+    node.style.setProperty("display", "inline-flex", "important");
+    node.style.setProperty("align-items", "center", "important");
+    node.style.setProperty("white-space", "nowrap", "important");
+    node.style.setProperty("padding", "0 0.65rem", "important");
+  });
+  const homeForm = document.querySelector(".gpt-home form");
+  const scroller = home instanceof HTMLElement ? home.parentElement : null;
+  if (homeForm instanceof HTMLElement && scroller instanceof HTMLElement) {
+    homeForm.style.setProperty("height", "auto", "important");
+    homeForm.style.setProperty("max-height", "none", "important");
+    homeForm.style.setProperty("overflow", "visible", "important");
+    const formBox = homeForm.getBoundingClientRect();
+    const scrollBox = scroller.getBoundingClientRect();
+    if (formBox.bottom > scrollBox.bottom - 8) scroller.scrollTop += formBox.bottom - scrollBox.bottom + 12;
+    if (homeForm.getBoundingClientRect().top < scrollBox.top + 8) scroller.scrollTop -= scrollBox.top + 8 - homeForm.getBoundingClientRect().top;
+    const dictate = homeForm.querySelector("[data-testid='composer-mic-dictate']");
+    if (dictate instanceof HTMLElement) {
+      const box = dictate.getBoundingClientRect();
+      const limit = scroller.getBoundingClientRect().bottom - 8;
+      if (box.bottom > limit) scroller.scrollTop += box.bottom - limit + 12;
+    }
+  }
+  const phone = window.matchMedia("(max-width: 767px)").matches;
+  const handy = document.querySelector("[data-testid='handy-dictation']");
+  const dock = document.querySelector(".gpt-home [data-composer='floating']");
+  if (phone && handy instanceof HTMLElement && dock instanceof HTMLElement) {
+    const handyHeight = Math.ceil(handy.getBoundingClientRect().height);
+    if (handyHeight >= 44) {
+      document.querySelectorAll(".gpt-home [data-testid='composer-effort']").forEach((node) => {
+        if (node instanceof HTMLElement) node.style.setProperty("display", "none", "important");
+      });
+      const gap = Math.ceil(window.innerHeight - handy.getBoundingClientRect().top) + 8;
+      dock.style.setProperty("position", "fixed", "important");
+      dock.style.setProperty("left", "0.75rem", "important");
+      dock.style.setProperty("right", "0.75rem", "important");
+      dock.style.setProperty("width", "auto", "important");
+      dock.style.setProperty("max-width", "calc(100vw - 1.5rem)", "important");
+      dock.style.setProperty("bottom", `${gap}px`, "important");
+      dock.style.setProperty("top", "auto", "important");
+      dock.style.setProperty("margin", "0", "important");
+      dock.style.setProperty("z-index", "6", "important");
+      dock.style.setProperty("overflow", "visible", "important");
+      const button = dock.querySelector("[data-testid='composer-mic-dictate']");
+      if (button instanceof HTMLElement) button.style.setProperty("z-index", "7", "important");
+    }
+  }
+  liftDictateIntoView();
+}
+
+function liftDictateIntoView() {
+  const button = document.querySelector(".gpt-home [data-testid='composer-mic-dictate']");
+  const handy = document.querySelector("[data-testid='handy-dictation']");
+  if (!(button instanceof HTMLElement) || !(handy instanceof HTMLElement)) return;
+  const limit = handy.getBoundingClientRect().top - 8;
+  let box = button.getBoundingClientRect();
+  if (box.bottom <= limit) return;
+  let node = button.parentElement;
+  while (node) {
+    const style = getComputedStyle(node);
+    const scrolls = style.overflowY === "auto" || style.overflowY === "scroll";
+    if (scrolls && node.scrollHeight > node.clientHeight + 1) {
+      node.scrollTop += box.bottom - limit + 4;
+      box = button.getBoundingClientRect();
+      if (box.bottom <= limit) return;
+    }
+    node = node.parentElement;
+  }
+}
 
 const NAV_GROUPS: { label: string; items: { id: View; label: string; icon: typeof Home }[] }[] = [
   {
@@ -453,10 +771,18 @@ const PRODUCT_LOGO: Record<string, string> = {
   github: "/brand/logos/github.svg",
   mcp: "/brand/logos/mcp.svg",
   supabase: "/brand/logos/supabase.svg",
+  drive: "/brand/logos/drive.svg",
+  calendar: "/brand/logos/calendar.svg",
+  slack: "/brand/logos/slack.svg",
+  youtube: "/brand/logos/youtube.svg",
+  docs: "/brand/logos/docs.svg",
 };
 
 function productMark(name: string) {
-  return PRODUCT_LOGO[name] ?? `/brand/marks/${name}.png`;
+  return PRODUCT_LOGO[name] ?? "/brand/logo-mark.jpg";
+}
+function markTile(src: string) {
+  return /\/(github|openai|mcp)\.svg$/.test(src) ? { background: "#fff", padding: 3 } : undefined;
 }
 
 const CAPABILITY_PAGE: Partial<Record<string, View>> = {
@@ -665,24 +991,11 @@ export function CommandApp() {
   const { ws, setWs, ready, syncNote, serverHeld, saveError, retrySave } = useMindWorkspace(account?.id ?? (loopback ? "dev-user" : null), account?.primaryEmail ?? null);
   const router = useRouter();
   const [view, setViewState] = useState<View>("command");
+  const applyingLocation = useRef(false);
+  const locationHistory = useRef<"push" | "replace">("push");
   function setView(next: View) {
     setViewState(next);
-    const url = new URL(window.location.href);
-    const previous = url.searchParams.get("section") ?? "command";
-    if (previous === next) return;
-    if (next === "command") url.searchParams.delete("section");
-    else url.searchParams.set("section", next);
-    router.history.push(url.pathname + url.search + url.hash);
   }
-  useEffect(() => {
-    const applyLocation = () => {
-      const value = new URLSearchParams(window.location.search).get("section");
-      setViewState(value && Object.hasOwn(TITLES, value) ? value as View : "command");
-    };
-    applyLocation();
-    window.addEventListener("popstate", applyLocation);
-    return () => window.removeEventListener("popstate", applyLocation);
-  }, []);
   const [imagineEdit, setImagineEdit] = useState<{ image: string; text: string; returnFocus: HTMLElement | null } | null>(null);
   const [imagineEditError, setImagineEditError] = useState<string | null>(null);
   const [researchPending, setResearchPending] = useState(false);
@@ -702,6 +1015,8 @@ export function CommandApp() {
   }, [cardFocus, view]);
   const [homeAction, setHomeAction] = useState<"ask" | "image" | "video" | "write" | "search">("ask");
   const [settingsPane, setSettingsPane] = useState<null | "general" | "connections" | "voice" | "pages" | "data" | "safety" | "keys">(null);
+  const [hiddenSettings, setHiddenSettings] = useState<string[]>([]);
+  const [settingsMenu, setSettingsMenu] = useState<string | null>(null);
   const [query, setQuery] = useState("");
   const [paletteOpen, setPaletteOpen] = useState(false);
   const [paletteIndex, setPaletteIndex] = useState(0);
@@ -901,6 +1216,9 @@ export function CommandApp() {
   const cancelDictationRef = useRef<(announce?: boolean) => void>(() => undefined);
   const turnGen = useRef(0);
   const turnInFlight = useRef(false);
+  const deliverStoredUser = useRef(false);
+  const cueRef = useRef<CuedMessage[]>([]);
+  const [cued, setCued] = useState<CuedMessage[]>([]);
   const imagineInFlight = useRef(false);
   const videoInFlight = useRef(false);
   const mcpInFlight = useRef(false);
@@ -915,6 +1233,8 @@ export function CommandApp() {
   const [focusAuditId, setFocusAuditId] = useState<string | null>(null);
   const wsRef = useRef(ws);
   wsRef.current = ws;
+  const activeIdRef = useRef(activeId);
+  activeIdRef.current = activeId;
   const [grok, setGrok] = useState("Checking");
   const [databasePill, setDatabasePill] = useState("Checking");
   const [databaseDetail, setDatabaseDetail] = useState("The status check has not finished.");
@@ -927,6 +1247,7 @@ export function CommandApp() {
   const [logicRoute, setLogicRoute] = useState<LogicRouteId | null>(null);
   const [logicRoutes, setLogicRoutes] = useState<LogicRoutePublic[]>([]);
   const [composerEffort, setComposerEffort] = useState<ComposerModeId>("auto");
+  const [consultModel, setConsultModel] = useState("");
   const [routingMode, setRoutingMode] = useState<RoutingMode>("A");
   const [routingPanel, setRoutingPanel] = useState<LogicRouteId[]>([]);
   const [ratings, setRatings] = useState<ResponseRating[]>([]);
@@ -960,9 +1281,12 @@ export function CommandApp() {
   const [chatProjectId, setChatProjectId] = useState<string | null>(null);
   const [activityQuery, setActivityQuery] = useState("");
   const [openFileId, setOpenFileId] = useState<string | null>(null);
+  const [shareProjectId, setShareProjectId] = useState<string | null>(null);
+  const [shareBotId, setShareBotId] = useState<string | null>(null);
   const [libraryBand, setLibraryBand] = useState<"files" | "preview" | "media">("files");
   const [showArchived, setShowArchived] = useState(false);
   const [editId, setEditId] = useState<string | null>(null);
+  const [noteMenu, setNoteMenu] = useState<string | null>(null);
   const [editText, setEditText] = useState("");
   const [pending, setPending] = useState<Pending | null>(null);
   const [armMemory, setArmMemory] = useState<string | null>(null);
@@ -1046,6 +1370,63 @@ export function CommandApp() {
     voiceChoiceRef.current = choice;
     setVoiceChoice(choice);
   }, []);
+
+  useEffect(() => {
+    if (!ready || typeof window === "undefined") return;
+    const known = Object.keys(TITLES);
+    const applyLocation = () => {
+      const params = new URLSearchParams(window.location.search);
+      if (params.get("mode") === "agent" && params.get("agentId")) return;
+      applyingLocation.current = true;
+      locationHistory.current = "replace";
+      const resolved = resolveShare(window.location.search, wsRef.current, known);
+      setViewState(resolved.view as View);
+      setActiveId(resolved.chatId);
+      setShareProjectId(resolved.projectId);
+      setShareBotId(resolved.botId);
+      if (resolved.fileId) {
+        setOpenFileId(resolved.fileId);
+        setLibraryBand("preview");
+        setLibraryProjectId(null);
+      } else {
+        setOpenFileId(null);
+        if (resolved.view === "files") setLibraryBand("files");
+      }
+      if (resolved.focusId) setCardFocus({ id: resolved.focusId });
+      if (resolved.missing.length) setNotice(shareMissLabel(resolved.missing));
+      else if (resolved.botArchived) setNotice("That bot is archived on this device. Its history was kept.");
+      requestAnimationFrame(() => {
+        applyingLocation.current = false;
+      });
+    };
+    applyLocation();
+    window.addEventListener("popstate", applyLocation);
+    return () => window.removeEventListener("popstate", applyLocation);
+  }, [ready]);
+
+  useEffect(() => {
+    if (!ready || applyingLocation.current || typeof window === "undefined") return;
+    const nextWrite = shareWriteForView(view, {
+      chat: activeId,
+      project: shareProjectId,
+      file: openFileId,
+      bot: shareBotId,
+    });
+    if (shareWriteDropsMissing(window.location.search, nextWrite, wsRef.current, Object.keys(TITLES))) {
+      locationHistory.current = "push";
+      return;
+    }
+    const search = writeShareSearch(window.location.search, nextWrite, Object.keys(TITLES));
+    if (sameShareLocation(window.location.pathname, window.location.hash, window.location.search, search)) {
+      locationHistory.current = "push";
+      return;
+    }
+    const next = window.location.pathname + search + window.location.hash;
+    const mode = locationHistory.current;
+    locationHistory.current = "push";
+    if (mode === "replace") router.history.replace(next);
+    else router.history.push(next);
+  }, [ready, view, activeId, shareProjectId, openFileId, shareBotId, router]);
 
   const personaHandoffDone = useRef(false);
   useEffect(() => {
@@ -1158,6 +1539,23 @@ export function CommandApp() {
     if (mode === "build") setView("build");
   }
 
+  const consultModules = useMemo<ConsultModule[]>(() => [
+    ...builtinModules({ grokConfigured, providers: liveProviders }),
+    ...customModules(customAiProviders.map((item) => ({ id: item.id, label: item.label, models: item.models, hasKey: item.hasKey }))),
+  ], [grokConfigured, liveProviders, customAiProviders]);
+
+  useEffect(() => {
+    const storage = typeof localStorage === "undefined" ? null : localStorage;
+    const next = loadConsultModel(storage, consultModules);
+    setConsultModel((current) => (consultModules.some((item) => item.connected && item.id === current) ? current : next));
+  }, [consultModules]);
+
+  function chooseConsultModel(id: string) {
+    const storage = typeof localStorage === "undefined" ? null : localStorage;
+    saveConsultModel(storage, id);
+    setConsultModel(id);
+  }
+
   function chooseModelTier(tier: ModelTier) {
     setLogicRoute(null);
     if (isLogicRouteId(providerChoice)) setProviderChoice("grok");
@@ -1230,14 +1628,25 @@ export function CommandApp() {
       setVoiceOverlayOpen(false);
       setOverlayPhase("idle");
     };
+    const claimOneVoice = () => {
+      window.speechSynthesis?.cancel();
+      voiceSession.current?.interruptPlayback();
+      interruptMessageSpeak({
+        sharedAudio: sharedAudioOutput,
+        abortSpeak: speakAbortRef.current,
+        speechSynthesis: window.speechSynthesis,
+      });
+    };
     const onVisibility = () => {
       if (document.visibilityState === "hidden") releaseVoice();
     };
     document.addEventListener("visibilitychange", onVisibility);
     window.addEventListener("pagehide", releaseVoice);
+    window.addEventListener("adrian-one-voice", claimOneVoice);
     return () => {
       document.removeEventListener("visibilitychange", onVisibility);
       window.removeEventListener("pagehide", releaseVoice);
+      window.removeEventListener("adrian-one-voice", claimOneVoice);
       releaseVoice();
     };
   }, []);
@@ -1266,6 +1675,7 @@ export function CommandApp() {
   const [mcpUrl, setMcpUrl] = useState("");
   const [mcpToken, setMcpToken] = useState("");
   const [skillQuery, setSkillQuery] = useState("");
+  const [skillRefresh, setSkillRefresh] = useState<ReturnType<typeof refreshSkills> | null>(null);
   const [skillBand, setSkillBand] = useState<"device" | "installed" | "missing">("device");
   const [enabledSkills, setEnabledSkills] = useState<Record<string, boolean>>({});
   const [skillNoteQuery, setSkillNoteQuery] = useState("");
@@ -1286,10 +1696,32 @@ export function CommandApp() {
   }, [focusAuditId, view, ws.audit]);
 
   useEffect(() => {
+    if (view !== "skills") return;
+    setSkillRefresh(refreshSkills());
+  }, [view]);
+
+  useEffect(() => {
     if (view !== "chat") return;
-    const scroller = document.querySelector(".thread-shell .flex.min-w-0.flex-1.flex-col > .min-h-0.flex-1");
-    if (scroller instanceof HTMLElement) scroller.scrollTop = scroller.scrollHeight;
-  }, [view, active?.id, active?.messages.length]);
+    showLatestReply();
+    keepCueClear();
+    keepComposerInside();
+  }, [view, active?.id, active?.messages.length, busy, cued.length]);
+
+  useEffect(() => {
+    keepComposerInside();
+    const fit = () => keepComposerInside();
+    const observer = new ResizeObserver(fit);
+    document.querySelectorAll(".gpt-home [data-composer='floating'], [data-testid='handy-dictation'], .gpt-home").forEach((node) => observer.observe(node));
+    window.addEventListener("resize", fit);
+    document.addEventListener("focusin", fit);
+    const frame = window.requestAnimationFrame(() => window.requestAnimationFrame(fit));
+    return () => {
+      window.cancelAnimationFrame(frame);
+      observer.disconnect();
+      window.removeEventListener("resize", fit);
+      document.removeEventListener("focusin", fit);
+    };
+  }, [view]);
 
   const timelineRunning = useMemo(() => timelineCounts(toolTimeline).running, [toolTimeline]);
   useEffect(() => {
@@ -1482,6 +1914,21 @@ export function CommandApp() {
   }, []);
 
   useEffect(() => {
+    const step = () => {
+      const current = wsRef.current;
+      if (current.halted) return;
+      const now = new Date().toISOString();
+      const due = current.schedules.some((job) => job.enabled && job.nextRunAt <= now);
+      const queued = current.runs.some((run) => run.state === "queued" || run.state === "running");
+      if (!due && !queued) return;
+      const next = tickFleet(runDueSchedules(current, now), { now, workerId: "browser-worker" });
+      setWs(next);
+    };
+    const id = window.setInterval(step, 15000);
+    return () => window.clearInterval(id);
+  }, []);
+
+  useEffect(() => {
     const onKey = (event: KeyboardEvent) => {
       if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === "k") {
         event.preventDefault();
@@ -1609,6 +2056,8 @@ export function CommandApp() {
       setCardFocus({ id: `${kind}-${hit.ref}` });
     } else setCardFocus(null);
     if (hit.view === "chat" && hit.ref) setActiveId(hit.ref);
+    if (hit.view === "projects" && hit.ref) setShareProjectId(hit.ref);
+    if (hit.view === "agents" && hit.ref) setShareBotId(hit.ref);
     if (hit.view === "files" && hit.ref) {
       setLibraryProjectId(null);
       setOpenFileId(hit.ref);
@@ -1659,6 +2108,102 @@ export function CommandApp() {
     }
     setPending({ id, kind, label, detail, confirm, run });
   }
+
+  function deleteSavedChats(ids: string[], label: string) {
+    const unique = [...new Set(ids)];
+    if (unique.length === 0) return;
+    requestProtected("delete", `delete-chats:${unique.slice().sort().join(",")}`, label, "The transcripts are removed from this browser. Saved notes stay until you delete them.", "Approve delete", () => {
+      setWs((prev) => pushAudit(removeConversations(prev, unique), "delete_chat", unique[0] ?? "chat", unique.length === 1 ? "approved" : `${unique.length} removed`));
+      setActiveId((current) => (current && unique.includes(current) ? null : current));
+      setNavOpen(false);
+    });
+  }
+
+  function runConversationAction(action: ConversationAction, ids: string[], extra?: { projectId?: string | null; title?: string }) {
+    const targets = wsRef.current.chats.filter((chat) => ids.includes(chat.id));
+    if (targets.length === 0) return;
+    if (action === "delete") {
+      deleteSavedChats(ids, ids.length === 1 ? `Delete “${shownChatTitle(targets[0]!)}”` : `Delete ${targets.length} conversations`);
+      return;
+    }
+    if (action === "copy") {
+      const text = targets.map((chat) => `${window.location.origin}${window.location.pathname}${conversationSharePath(chat.id, Object.keys(TITLES))}`).join("\n");
+      void navigator.clipboard?.writeText(text).then(
+        () => setNotice(targets.length === 1 ? "Link copied. It opens this conversation on a device that already has it." : "Links copied."),
+        () => setNotice("Clipboard copy was blocked."),
+      );
+      return;
+    }
+    if (action === "files") {
+      setLibraryProjectId(targets.find((chat) => chat.projectId)?.projectId ?? null);
+      setLibraryBand("files");
+      setView("files");
+      setNavOpen(false);
+      setNotice(targets.some((chat) => chat.projectId) ? "Library is showing files for that project." : "This conversation has no project files. Library shows every text copy on this device.");
+      return;
+    }
+    if (action === "scheduled") {
+      const name = targets.length === 1 ? shownChatTitle(targets[0]!) : extra?.title || targets[0]!.title;
+      const result = scheduleConversation(wsRef.current, name);
+      if (result.error) {
+        setError(result.error);
+        return;
+      }
+      setWs(pushAudit(result.ws, "schedule_chat", targets[0]!.id, result.created ? "saved off" : "already scheduled"));
+      setView("scheduled");
+      setNavOpen(false);
+      setNotice(result.created ? "The schedule is saved and off. Nothing runs until you turn it on." : "That schedule is already saved. Nothing new was added.");
+      return;
+    }
+    if (action === "pin") {
+      const allPinned = targets.every((chat) => wsRef.current.pins.some((pin) => pin.kind === "chat" && pin.ref === chat.id));
+      setWs((prev) => targets.reduce((next, chat) => {
+        const isPinned = next.pins.some((pin) => pin.kind === "chat" && pin.ref === chat.id);
+        return allPinned || !isPinned ? togglePin(next, "chat", chat.id) : next;
+      }, prev));
+      setNotice(allPinned ? "Unpinned." : "Pinned.");
+      return;
+    }
+    if (action === "favorite") {
+      const favorite = targets.some((chat) => chat.favorite !== true);
+      setWs((prev) => pushAudit(applyFavorite(prev, ids, favorite), "favorite_chat", ids[0] ?? "chat", favorite ? "on" : "off"));
+      return;
+    }
+    if (action === "archive") {
+      const archived = targets.some((chat) => chat.archived !== true);
+      setWs((prev) => pushAudit(applyArchive(prev, ids, archived), "archive_chat", ids[0] ?? "chat", archived ? "archived" : "restored"));
+      if (archived && activeId && ids.includes(activeId)) setActiveId(null);
+      return;
+    }
+    if (action === "project") {
+      setWs((prev) => pushAudit(applyProject(prev, ids, extra?.projectId ?? null), "assign_project", ids[0] ?? "chat", extra?.projectId || "cleared"));
+      setNotice(extra?.projectId ? "Added to the project." : "Removed from the project.");
+      return;
+    }
+    if (action === "rename") {
+      const next = applyRename(wsRef.current, ids, extra?.title || "");
+      if (!next) {
+        setError("Name the conversation.");
+        return;
+      }
+      setWs(pushAudit(next, "rename_chat", ids[0] ?? "chat", extra?.title?.trim() || "renamed"));
+      return;
+    }
+    const opened = quoteIntoNewChat(wsRef.current, targets[0]!);
+    setWs(pushAudit(opened.ws, "quote_chat", targets[0]!.id, "new task"));
+    setActiveId(opened.chatId);
+    setView("chat");
+    setNavOpen(false);
+  }
+
+  function rememberHiddenSettings(next: string[]) {
+    setHiddenSettings(next);
+    localStorage.setItem(HIDDEN_SETTINGS_SECTIONS_KEY, JSON.stringify(next));
+  }
+
+  useEffect(() => {
+    setHiddenSettings(readHiddenSections(localStorage.getItem(HIDDEN_SETTINGS_SECTIONS_KEY)));
+  }, []);
 
   function confirmPending() {
     if (!pending) return;
@@ -1842,6 +2387,12 @@ export function CommandApp() {
       );
       return true;
     }
+    if (intent.kind === "create_bot") {
+      const made = createBotFromSpeech(source, text);
+      recordToolTurn(chat, text, made.ok ? made.reply : made.error, made.ok ? () => made.ws : undefined);
+      if (made.ok) setNotice(made.reply);
+      return true;
+    }
     if (intent.kind === "notion") {
       void askNotion(chat, text);
       return true;
@@ -2011,9 +2562,12 @@ export function CommandApp() {
       });
       return null;
     }
+    const botRoute = routeForBotChat(chat, { provider: providerChoice, modelTier });
+    const selectedProvider = botRoute.provider;
+    const selectedTier = botRoute.modelTier;
     const activeLogic = options && "logicRoute" in options
       ? options.logicRoute ?? null
-      : logicRoute ?? (isLogicRouteId(providerChoice) ? providerChoice : null);
+      : botRoute.fromBot ? null : logicRoute ?? (isLogicRouteId(selectedProvider) ? selectedProvider : null);
     if (activeLogic) {
       const view = logicRoutes.find((item) => item.id === activeLogic);
       if (!view?.ready) {
@@ -2025,17 +2579,27 @@ export function CommandApp() {
         return null;
       }
     }
-    const isCustomProvider = providerChoice.startsWith("custom:") && !activeLogic;
-    const otherReady = !activeLogic && !isCustomProvider && providerChoice !== "grok" && liveProviders[providerChoice as "openai" | "anthropic" | "gemini" | "openrouter"] === true;
-    let routed = chosenProvider(activeLogic || isCustomProvider ? "grok" : providerChoice, isCustomProvider ? true : grokConfigured);
+    const isCustomProvider = selectedProvider.startsWith("custom:") && !activeLogic;
+    const otherReady = !activeLogic && !isCustomProvider && selectedProvider !== "grok" && liveProviders[selectedProvider as "openai" | "anthropic" | "gemini" | "openrouter"] === true;
+    let routed = chosenProvider(activeLogic || isCustomProvider ? "grok" : selectedProvider, isCustomProvider ? true : grokConfigured);
     if (!otherReady && !activeLogic && !isCustomProvider && !routed.ok) {
-      const switched = failover(providerChoice, grokConfigured === true, failoverPolicy);
+      const switched = failover(selectedProvider, grokConfigured === true, failoverPolicy);
       if (switched.provider === "grok") {
         routed = chosenProvider("grok", grokConfigured);
         if (routed.ok) setNotice(switched.note);
       }
     }
-    if (!otherReady && !activeLogic && !isCustomProvider && !routed.ok) {
+    const orchestrating = resolveSendPath(composerEffort).path === "orchestrator";
+    const consultPlan = orchestrating
+      ? planModelConsult({ orchestrator: consultModel, modules: consultModules, question: text })
+      : null;
+    if (consultPlan && !consultPlan.ok) {
+      reportFailure(consultPlan.error, "model_unavailable", "provider", () => {
+        void deliver(chat, text, wsRef.current, resume, snapped);
+      });
+      return null;
+    }
+    if (!orchestrating && !otherReady && !activeLogic && !isCustomProvider && !routed.ok) {
       reportFailure(routed.error, "model_unavailable", "provider", () => {
         void deliver(chat, text, wsRef.current, resume, snapped);
       });
@@ -2061,6 +2625,7 @@ export function CommandApp() {
     };
     const title = resume || messages.length > 0 ? chat.title : text.replace(/\s+/g, " ").slice(0, 48);
     if (!resume && !options?.skipUserMessage) {
+      deliverStoredUser.current = true;
       const displayText = historyTextForImages(text, snapped);
       const userMsg = {
         id: crypto.randomUUID(),
@@ -2109,10 +2674,24 @@ export function CommandApp() {
               ?.filter((image) => typeof image.dataUrl === "string" && image.dataUrl.startsWith("data:image/"))
               .map((image) => ({ dataUrl: image.dataUrl!, name: image.name })),
           })),
-          memoryContext: [...(options?.accessNotes ?? []), ...memoriesForChat(source, chat).map((item) => ({ id: item.id, text: item.text }))].slice(0, 12),
-          provider: activeLogic ?? (isCustomProvider || otherReady ? providerChoice : (routed.ok ? routed.id : providerChoice)),
-          modelTier,
-          logicRoute: activeLogic,
+          memoryContext: [
+            ...(options?.accessNotes ?? []),
+            ...memoriesForChat(source, chat).map((item) => ({ id: item.id, text: item.text })),
+          ].slice(0, 12),
+          botKnowledge: chat.botKnowledge ?? "",
+          provider: consultPlan && consultPlan.ok
+            ? consultPlan.plan.orchestrator
+            : activeLogic ?? (isCustomProvider || otherReady ? selectedProvider : (routed.ok ? routed.id : selectedProvider)),
+          modelTier: selectedTier,
+          logicRoute: consultPlan && consultPlan.ok ? null : activeLogic,
+          orchestrator: consultPlan && consultPlan.ok ? consultPlan.plan.orchestrator : null,
+          composerMode: orchestrating ? "orchestrator" : undefined,
+          identity: ADRIAN_MIND_IDENTITY,
+          consult: consultPlan && consultPlan.ok ? {
+            available: consultPlan.plan.available,
+            helpers: consultPlan.plan.helpers,
+            purpose: consultPlan.plan.purpose,
+          } : null,
           images: snapped.map((image) => ({ dataUrl: image.dataUrl, name: image.name })),
           personalityId: chat.personalityId ?? "assistant",
           customPersonality: chat.customPersonality ?? "",
@@ -2342,25 +2921,27 @@ export function CommandApp() {
     });
   }
 
-  async function deliverPlanned(chat: Chat, full: string, source: Workspace, images: ImageAttachment[]): Promise<void> {
+  async function deliverPlanned(chat: Chat, full: string, source: Workspace, images: ImageAttachment[]): Promise<boolean> {
+    deliverStoredUser.current = false;
     const primary = logicRoute ?? (isLogicRouteId(providerChoice) ? providerChoice : null);
     const seats = logicRoutes.map((item) => ({ id: item.id, label: item.label, ready: item.ready, reason: item.reason }));
     const plan = planRouting({ mode: routingMode, primary, seats, panel: routingPanel });
     if (!plan.ok) {
       setError(plan.reason);
-      return;
+      return false;
     }
     setNotice(plan.note);
     for (let index = 0; index < plan.calls.length; index += 1) {
       const call = plan.calls[index];
-      if (!call) return;
+      if (!call) return false;
       const textOut = await deliver(chat, full, index === 0 ? source : wsRef.current, false, images, {
         ...(call.route ? { logicRoute: call.route } : {}),
         skipUserMessage: index > 0,
         isolateOutputs: index > 0,
       });
-      if (textOut == null) return;
+      if (textOut == null) return false;
     }
+    return true;
   }
 
   async function sendCommand() {
@@ -2440,6 +3021,10 @@ export function CommandApp() {
       return;
     }
     setActiveId(made.chat.id);
+    activeIdRef.current = made.chat.id;
+    if (!wsRef.current.chats.some((item) => item.id === made.chat.id)) {
+      wsRef.current = { ...wsRef.current, chats: [made.chat, ...wsRef.current.chats] };
+    }
     setView("chat");
     setWs((prev) => {
       let next = { ...prev, chats: [made.chat, ...prev.chats] };
@@ -2448,7 +3033,8 @@ export function CommandApp() {
     });
     const effortPath = resolveSendPath(composerEffort);
     if (effortPath.notice) setNotice(effortPath.notice);
-    await deliverPlanned(made.chat, full, { ...ws, chats: [made.chat, ...ws.chats] }, images);
+    const finished = await deliverPlanned(made.chat, full, { ...ws, chats: [made.chat, ...ws.chats] }, images);
+    if (finished) await releaseNextCue();
   }
 
   async function startResearch(question = researchText) {
@@ -2562,16 +3148,54 @@ export function CommandApp() {
     }
   }
 
-  async function sendInChat() {
-    if (busy || turnInFlight.current) return;
+  function rememberCue(next: CuedMessage[]) {
+    cueRef.current = next;
+    setCued(next);
+  }
+
+  async function releaseNextCue() {
+    if (wsRef.current.halted || turnInFlight.current) return;
+    const wanted = activeIdRef.current;
+    const chat = wanted
+      ? wsRef.current.chats.find((item) => item.id === wanted) ?? null
+      : wsRef.current.chats[0] ?? null;
+    if (!chat) return;
+    const held = takeNextCue(cueRef.current);
+    if (!held.next) return;
+    rememberCue(held.queue);
+    setView("chat");
+    const finished = await deliverPlanned(chat, held.next.text, wsRef.current, []);
+    if (!finished && !deliverStoredUser.current) {
+      rememberCue(restoreCue(cueRef.current, held.next));
+      setNotice("The next line stayed in the cue. Nothing was sent.");
+      return;
+    }
+    if (finished) await releaseNextCue();
+  }
+
+  async function sendInChat(queuedText?: string) {
+    const sendingQueued = typeof queuedText === "string";
+    if ((busy || turnInFlight.current) && !sendingQueued) {
+      if (!draft.trim()) return;
+      const result = cueMessage(cueRef.current, draft, crypto.randomUUID());
+      if (result.error) {
+        setError(result.error);
+        return;
+      }
+      rememberCue(result.queue);
+      setDraft("");
+      setError(null);
+      setNotice("Cued. It sends after this reply.");
+      return;
+    }
     if (!active) {
       void sendCommand();
       return;
     }
-    const text = draft.trim();
-    const images = snapshotImages(pendingImages);
-    const file = staged;
-    const gate = canSend({ halted: wsRef.current.halted, busy });
+    const text = (sendingQueued ? queuedText : draft).trim();
+    const images = sendingQueued ? [] : snapshotImages(pendingImages);
+    const file = sendingQueued ? null : staged;
+    const gate = canSend({ halted: wsRef.current.halted, busy: sendingQueued ? false : busy });
     if (!gate.ok) {
       if (wsRef.current.halted) {
         reportEmergencyStop(active.id, () => {
@@ -2625,14 +3249,17 @@ export function CommandApp() {
     }
     const attached = file ? `\n\nAttached file ${file.name}:\n${file.text.slice(0, 6000)}` : "";
     const full = `${text || (images.length ? "Describe the attached image." : "Read the attached file.")}${attached}`.slice(0, 8000);
-    setDraft("");
-    setStaged(null);
-    setPendingImages([]);
+    if (!sendingQueued) {
+      setDraft("");
+      setStaged(null);
+      setPendingImages([]);
+    }
     const source = ws;
     const action = voiceNext.current ? "voice" as const : "chat" as const;
     voiceNext.current = false;
     if (settleIntent(active, full, source, action)) {
       if (file) setWs((prev) => addLocalFile(prev, { name: file.name, text: file.text, projectId: active.projectId }));
+      await releaseNextCue();
       return;
     }
     if (file) {
@@ -2640,7 +3267,8 @@ export function CommandApp() {
     }
     const effortPath = resolveSendPath(composerEffort);
     if (effortPath.notice) setNotice(effortPath.notice);
-    await deliverPlanned(active, full, ws, images);
+    const finished = await deliverPlanned(active, full, ws, images);
+    if (finished) await releaseNextCue();
   }
 
   async function runImagine(promptRaw?: string, targetChat: Chat | null = active, opts?: { retry?: boolean }) {
@@ -3121,6 +3749,12 @@ export function CommandApp() {
   }
 
   async function addImageAttachment(file: File) {
+    const rejected = explainRejectedImageFile(file);
+    if (rejected) {
+      setError(rejected);
+      setNotice(null);
+      return;
+    }
     try {
       const scaled = await fileToDownscaledDataUrl(file);
       setPendingImages((prev) => {
@@ -3578,6 +4212,14 @@ export function CommandApp() {
       setWs((prev) => pushAudit({ ...prev, chats: [made.chat, ...prev.chats] }, "create_chat", made.chat.id, "speak"));
     }
     const spokenStyle = speakStylePersonality(typeof localStorage === "undefined" ? null : localStorage.getItem("adrian-speak-style"));
+    if (parseCreateBot(transcript)) {
+      const made = createBotFromSpeech(source, transcript);
+      if (!made.ok) return { ok: false as const, error: made.error };
+      setWs(made.ws);
+      setNotice(made.reply);
+      if (speakStageOpenRef.current) setSpeakCall((current) => ({ ...current, heard: transcript, reply: made.reply, error: "" }));
+      return { ok: true as const, text: made.reply };
+    }
     const reply = await deliver({ ...chat, personalityId: spokenStyle, memory: "on" }, transcript, source, false, [], { accessNotes: eveAccessNotes(source) });
     if (!reply) return { ok: false as const, error: "The chat turn failed. Nothing was spoken." };
     return { ok: true as const, text: reply };
@@ -3646,6 +4288,8 @@ export function CommandApp() {
           return spoken;
         },
         play: async (audio) => {
+          window.speechSynthesis?.cancel();
+          voiceSession.current?.interruptPlayback();
           const pace = localStorage.getItem("adrian-speak-rate");
           const volume = Number(localStorage.getItem("adrian-speak-volume"));
           await sharedAudioOutput.playMpegBase64(audio, {
@@ -3769,6 +4413,19 @@ export function CommandApp() {
       return;
     }
     const text = sanitized.text;
+    if (parseCreateBot(text)) {
+      const made = createBotFromSpeech(wsRef.current, text);
+      if (!made.ok) {
+        setNotice(made.error);
+        if (speakStageOpenRef.current) setSpeakCall((current) => ({ ...current, heard: text, error: made.error }));
+        return;
+      }
+      setWs(made.ws);
+      setNotice(made.reply);
+      if (speakStageOpenRef.current) setSpeakCall((current) => ({ ...current, heard: text, reply: made.reply, error: "" }));
+      speakOnOpenSession(made.reply);
+      return;
+    }
     if (overlayOpenRef.current) {
       const routed = routeVoiceModeTranscript(text);
       setVoiceLiveTranscript(clampLiveTranscript(routed.overlayTranscript));
@@ -3782,6 +4439,8 @@ export function CommandApp() {
       setNotice(`Voice transcript ready (${voiceModeRef.current === "orchestrator" ? "Orchestrator" : "Direct"}).`);
     }
     if (voiceModeRef.current === "orchestrator") {
+      window.speechSynthesis?.cancel();
+      voiceSession.current?.interruptPlayback();
       setBusy(true);
       const conducted = await runOllamaConductor(text, {
         baseUrl: (typeof localStorage !== "undefined" && localStorage.getItem("amcos.ollama.base")) || undefined,
@@ -3824,6 +4483,17 @@ export function CommandApp() {
       speakOnOpenSession(conducted.text);
       return;
       }
+    }
+    const liveVoice = replyVoiceForTurn({
+      liveSessionOpen: Boolean(voiceSession.current?.isOpen),
+      mode: "direct",
+      placingCall: false,
+    });
+    if (!shouldSpeakTranscriptAgain(liveVoice)) {
+      appendLiveVoiceUser(text);
+      setNotice("Heard you. This turn uses one voice.");
+      if (overlayOpenRef.current) setOverlayNotice("Heard you. This turn uses one voice.");
+      return;
     }
     if (!active) {
       setNotice("Open or create a chat so Direct mode can send the transcript to the selected model.");
@@ -4077,12 +4747,7 @@ export function CommandApp() {
   }
 
   function onDictationMic() {
-    if (dictationRef.current.phase === "recording") {
-      void finishServerDictation();
-      return;
-    }
-    if (dictationRef.current.phase === "transcribing") return;
-    void startServerDictation();
+    window.dispatchEvent(new CustomEvent("adrian:handy-mic"));
   }
 
   async function startServerDictation() {
@@ -4171,6 +4836,30 @@ export function CommandApp() {
     closeMenus();
     clearOverlayFlag();
     setSpeakStageOpen(true);
+  }
+
+  function pickModule(item: ModuleSuggestion) {
+    if (item.action === "speak") {
+      openSpeakStage();
+      return;
+    }
+    if (item.action === "dictate") {
+      onDictationMic();
+      return;
+    }
+    if (item.action === "model" && item.tier && (MODEL_TIERS as readonly string[]).includes(item.tier)) {
+      chooseModelTier(item.tier as ModelTier);
+      setNotice(`Model set to ${item.tier}. No call was started.`);
+      return;
+    }
+    const views = new Set<string>([
+      "command", "intelligence", "chat", "projects", "memory", "agents", "runs", "research", "files",
+      "connected", "tools", "build", "code", "scheduled", "integrations", "activity", "help", "skills", "settings",
+    ]);
+    if (item.action === "view" && item.view && views.has(item.view)) {
+      setView(item.view as View);
+      setNavOpen(false);
+    }
   }
 
   function closeSpeakStage() {
@@ -4610,7 +5299,7 @@ export function CommandApp() {
 
   return (
     <div className="shell flex h-dvh flex-col bg-bg text-fg md:flex-row" data-view={view} data-search={paletteOpen ? "open" : "closed"}>
-      <aside ref={navDrawerRef} onMouseDown={closeNavFromBackdrop} role={navOpen ? "dialog" : undefined} aria-modal={navOpen ? true : undefined} aria-label={navOpen ? "Workspace navigation" : undefined} className={`rail gpt-rail ${navOpen ? "nav-drawer-open flex" : "hidden"} fixed inset-0 z-40 w-full flex-col md:static md:flex md:h-dvh ${railCollapsed ? "md:w-[4.5rem]" : "md:w-72"} md:shrink-0`}>
+      <aside ref={(node) => { navDrawerRef.current = node; pinRailFrame(node); }} onMouseDown={closeNavFromBackdrop} role={navOpen ? "dialog" : undefined} aria-modal={navOpen ? true : undefined} aria-label={navOpen ? "Workspace navigation" : undefined} className={`rail gpt-rail ${navOpen ? "nav-drawer-open flex" : "hidden"} fixed inset-0 z-40 w-full flex-col overflow-hidden md:static md:flex md:h-dvh ${railCollapsed ? "md:w-[4.5rem]" : "md:w-72"} md:shrink-0`}>
         <div className="gpt-rail-head flex items-center gap-3 px-4 py-4">
           {!railCollapsed && (
             <p className="flex min-w-0 flex-1 items-center gap-2 text-2xl font-semibold tracking-tight">
@@ -4637,10 +5326,10 @@ export function CommandApp() {
             <PanelLeft className="size-4" />
           </button>
         </div>
-        <nav className="flex-1 overflow-hidden px-3 pb-3">
+        <nav ref={pinRailScroll} className="min-h-0 flex-1 overflow-y-auto px-3 pb-3" data-testid="workspace-nav" style={{ overflowY: "auto", minHeight: 0 }}>
           {NAV_GROUPS.map((group) => (
             <div key={group.label} className="mb-4">
-              {!railCollapsed && <p className="meta-label px-3 pb-2">{group.label}</p>}
+              {!railCollapsed && <p ref={showRailLabel} className="meta-label px-3 pb-2">{group.label}</p>}
               <div className="space-y-1">
                 {group.items.map((item, itemIndex) => {
                   const Icon = item.icon;
@@ -4659,7 +5348,7 @@ export function CommandApp() {
                       }}
                       className={`nav-item flex min-h-11 w-full items-center gap-3 rounded-2xl px-3 text-sm font-medium ${on ? "nav-item-active" : "text-muted hover:bg-white/5"} ${railCollapsed ? "justify-center px-0" : ""}`}
                     >
-                      {NAV_ICON_SRC[item.id] ? <img className="service-mark" src={NAV_ICON_SRC[item.id]} alt="" width={22} height={22} /> : <Icon className="size-4 shrink-0 opacity-90" />}
+                      <Icon className="size-4 shrink-0 opacity-90" />
                       {!railCollapsed && item.label}
                     </button>
                   );
@@ -4674,29 +5363,52 @@ export function CommandApp() {
             className={`nav-item flex min-h-11 items-center gap-3 rounded-2xl px-3 text-sm font-medium text-muted ${railCollapsed ? "justify-center" : ""}`}
             onClick={() => setNavOpen(false)}
           >
-            <img className="service-mark" src="/brand/marks/explore.png" alt="" width={22} height={22} />
+            <Compass className="size-4 shrink-0 opacity-90" />
             {!railCollapsed && "Explore"}
           </Link>
           {!railCollapsed && (
             <details className="nav-more mt-3">
               <summary>More</summary>
               <div className="space-y-1">
-                {MORE_NAV.map((item) => (
+                {MORE_NAV.map((item) => {
+                  const Icon = item.icon;
+                  return (
                   <button
                     key={item.id}
                     type="button"
                     className={`nav-item flex min-h-11 w-full items-center gap-3 rounded-2xl px-3 text-sm font-medium ${view === item.id ? "nav-item-active" : "text-muted"}`}
                     onClick={() => { setView(item.id); setNavOpen(false); }}
                   >
-                    {NAV_ICON_SRC[item.id] ? <img className="service-mark" src={NAV_ICON_SRC[item.id]} alt="" width={22} height={22} /> : null}
+                    <Icon className="size-4 shrink-0 opacity-90" />
                     {item.label}
                   </button>
-                ))}
+                  );
+                })}
               </div>
             </details>
           )}
           <Link to="/dashboard" data-testid="nav-route-dashboard" className="nav-route-link sr-only">Dashboard</Link>
           {!railCollapsed && <div className="mx-3 my-3 border-t border-white/10" />}
+          {!railCollapsed && ws.chats.length > 0 && (
+            <div className="mb-4" data-testid="sidebar-recent">
+              <p className="px-3 pb-2 text-xs font-medium text-muted">Recent conversations</p>
+              <ConversationSections
+                chats={ws.chats}
+                activeId={activeId}
+                titleFor={shownChatTitle}
+                projects={ws.projects.map((project) => ({ id: project.id, name: project.name }))}
+                pinnedIds={ws.pins.filter((pin) => pin.kind === "chat").map((pin) => pin.ref)}
+                scheduledNames={ws.schedules.map((job) => job.name)}
+                onOpen={(id) => {
+                  setActiveId(id);
+                  setView(isIntelligenceThread(ws.chats.find((chat) => chat.id === id)?.customPersonality) ? "code" : "chat");
+                  setNavOpen(false);
+                }}
+                onAction={runConversationAction}
+                extras={(ids) => (ids.length === 1 && ids[0] === activeId ? [{ label: "Download transcript", onPick: exportActive }] : [])}
+              />
+            </div>
+          )}
           {ws.pins.length > 0 && !railCollapsed && (
             <div className="mb-3">
               <p className="px-3 pb-1 text-xs font-medium text-muted">Pinned</p>
@@ -4760,14 +5472,14 @@ export function CommandApp() {
               closeMenus();
             }}
           >
-            <img src="/brand/marks/settings.png" alt="" width={28} height={28} className="size-7 rounded-full object-cover" />
+            <Settings className="size-4" />
           </button>
         </div>
       </aside>
 
-      <main className="main-stage page-enter flex min-h-0 min-w-0 flex-1 flex-col pb-36 md:pb-36" inert={navOpen}>
+      <main ref={pinMainColumn} className="main-stage page-enter flex min-h-0 min-w-0 flex-1 flex-col pb-36 md:pb-36" inert={navOpen}>
         <h1 className="sr-only">Adrian’s Mind OS</h1>
-        <header className="topbar flex items-center gap-2 px-3 py-3 md:gap-3 md:px-5">
+        <header className="topbar flex flex-wrap items-center gap-2 px-3 py-3 md:gap-3 md:px-5">
          <button type="button" className="grid size-11 shrink-0 place-items-center rounded-panel border border-line md:hidden" aria-label="Open menu" onClick={openNav}>
            <Menu className="size-4" />
          </button>
@@ -4810,8 +5522,7 @@ export function CommandApp() {
               </div>
             ) : null}
           </div>
-          <span className="header-voice-mode inline-flex items-center gap-1" aria-label="Voice route Direct">
-            <img src="/brand/marks/direct.png" alt="" width={16} height={16} className="size-4 rounded" />
+          <span className="header-voice-mode inline-flex items-center gap-1 rounded-full border border-line px-3" aria-label="Voice route Direct">
             Direct
           </span>
           <div className="command-search relative min-w-0 flex-1">
@@ -4849,7 +5560,7 @@ export function CommandApp() {
                   const kind = hit.meta === "Chat" ? "chat" : hit.meta === "Agent" ? "agent" : hit.meta === "Project" ? "project" : hit.meta === "File" ? "file" : null;
                   const active = hits.length > 0 && index === Math.min(Math.max(paletteIndex, 0), hits.length - 1);
                   return (
-                    <div key={hit.key} className="flex items-center gap-1">
+                    <div key={hit.key}>
                       <button
                         type="button"
                         id={`palette-hit-${hit.key}`}
@@ -4857,22 +5568,54 @@ export function CommandApp() {
                         aria-selected={active}
                         className={`palette-option flex min-h-11 min-w-0 flex-1 items-center justify-between gap-3 rounded-panel px-2 text-left text-sm${active ? " palette-option-active" : ""}`}
                         onMouseEnter={() => setPaletteIndex(index)}
-                        onClick={() => openPaletteHit(hit)}
+                        onPointerDown={(event) => {
+                          if (!kind || !hit.ref) return;
+                          event.currentTarget.dataset.held = "0";
+                          const timer = window.setTimeout(() => {
+                            event.currentTarget.dataset.held = "1";
+                            setWs((prev) => togglePin(prev, kind, hit.ref));
+                          }, 550);
+                          event.currentTarget.dataset.hold = String(timer);
+                        }}
+                        onPointerUp={(event) => window.clearTimeout(Number(event.currentTarget.dataset.hold))}
+                        onPointerLeave={(event) => window.clearTimeout(Number(event.currentTarget.dataset.hold))}
+                        onPointerCancel={(event) => window.clearTimeout(Number(event.currentTarget.dataset.hold))}
+                        onClick={(event) => {
+                          if (event.currentTarget.dataset.held === "1") {
+                            event.currentTarget.dataset.held = "0";
+                            return;
+                          }
+                          openPaletteHit(hit);
+                        }}
                       >
                         <span className="truncate">{hit.label}</span>
                         <span className="text-xs text-muted">{hit.meta}</span>
                       </button>
-                      {kind && hit.ref && (
-                        <button type="button" className="grid size-11 shrink-0 place-items-center rounded-panel text-muted" aria-label={`Pin ${hit.label}`} onClick={() => setWs((prev) => togglePin(prev, kind, hit.ref))}>
-                          <Pin className="size-4" />
-                        </button>
-                      )}
                     </div>
                   );
                 })}
               </div>
             )}
           </div>
+          <button
+            type="button"
+            className="hidden min-h-11 shrink-0 rounded-panel border border-line px-3 text-sm md:inline-flex md:items-center"
+            onClick={() => {
+              const search = writeShareSearch(window.location.search, shareWriteForView(view, {
+                chat: activeId,
+                project: shareProjectId,
+                file: openFileId,
+                bot: shareBotId,
+              }), Object.keys(TITLES));
+              const url = `${window.location.origin}${window.location.pathname}${search}${window.location.hash}`;
+              void navigator.clipboard?.writeText(url).then(
+                () => setNotice("Link copied. It opens this item on a device that already has it."),
+                () => setNotice("Clipboard copy was blocked. The address bar has the link."),
+              );
+            }}
+          >
+            Copy link
+          </button>
           <button
             type="button"
             className={`hidden h-11 items-center gap-2 rounded-full border px-3 text-sm md:inline-flex glass-panel ${headerTone}`}
@@ -4897,6 +5640,31 @@ export function CommandApp() {
               }}
             />
           </div>
+          <button
+            type="button"
+            className="hidden h-11 items-center gap-2 rounded-full border px-3 text-sm md:inline-flex"
+            aria-pressed={composerEffort === "orchestrator"}
+            onClick={() => chooseComposerEffort(composerEffort === "orchestrator" ? "auto" : "orchestrator")}
+          >
+            Orchestrator
+          </button>
+          {composerEffort === "orchestrator" ? (
+            <div className="hidden items-center gap-2 md:flex" data-testid="orchestrator-models">
+              {consultModules.filter((item) => item.connected).length === 0 ? <span className="text-xs text-muted">No model is connected right now.</span> : null}
+              {consultModules.filter((item) => item.connected).map((item) => (
+                <button
+                  key={item.id}
+                  type="button"
+                  data-testid="consult-model"
+                  aria-pressed={consultModel === item.id}
+                  className="h-11 rounded-full border px-3 text-sm"
+                  onClick={() => chooseConsultModel(item.id)}
+                >
+                  {item.label}
+                </button>
+              ))}
+            </div>
+          ) : null}
 
           <button
             type="button"
@@ -4905,7 +5673,7 @@ export function CommandApp() {
             title="Speak"
             onClick={openSpeakStage}
           >
-            <img src="/brand/marks/speak.png" alt="" width={22} height={22} className="size-5 rounded" />
+            <Volume2 className="size-4" />
           </button>
           <button
             type="button"
@@ -4934,7 +5702,7 @@ export function CommandApp() {
               setAccountOpen(next);
             }}
           >
-            <img src="/brand/marks/account.png" alt="" width={32} height={32} className="size-8 rounded-full object-cover" />
+            <img src="/brand/logo-mark.jpg" alt="" width={32} height={32} className="size-8 rounded-full object-cover" />
             <span className="hidden text-sm md:inline">Adrian</span>
           </button>
         </header>
@@ -5062,7 +5830,10 @@ export function CommandApp() {
           </div>
         )}
 
-        <div ref={pageScrollRef} className={`min-h-0 flex-1 ${view === "chat" || view === "dashboard" || view === "intelligence" ? "overflow-hidden" : "overflow-auto pb-24"}`}>
+        {notice && (notice.startsWith("This link points at") || notice.startsWith("That bot is archived") || notice.startsWith("Link copied") || notice.startsWith("Clipboard copy")) ? (
+          <p role="status" data-testid="share-notice" className="mx-3 mb-2 rounded-panel border border-line px-3 py-2 text-sm text-muted">{notice}</p>
+        ) : null}
+        <div ref={(node) => { pageScrollRef.current = node; pinPageScroller(node); }} className={`min-h-0 flex-1 ${view === "chat" || view === "dashboard" || view === "intelligence" ? "overflow-hidden" : "overflow-auto pb-24"}`}>
           {view === "intelligence" && (
             <EveWorkbench
               workspace={ws}
@@ -5121,7 +5892,7 @@ export function CommandApp() {
             </div>
           )}
           {view === "command" && (
-           <div className="gpt-home mx-auto flex min-h-full w-full max-w-none flex-col justify-end gap-4 p-4 md:p-6">
+           <div ref={liftHomeStack} className="gpt-home mx-auto flex min-h-full w-full max-w-none flex-col justify-start gap-4 p-4 md:p-6" style={{ justifyContent: "flex-start" }}>
               <div className="masthead flex items-center gap-3">
                 <div className="flex flex-wrap items-end justify-between gap-3">
                   <div>
@@ -5129,16 +5900,21 @@ export function CommandApp() {
                       {now ? greeting(now) : "Hello"}, <span className="text-accent">Adrian</span>
                     </h1>
                     <p className="text-sm text-muted">Ask, build, or connect. The rest lives in Settings.</p>
+                    <ModuleSuggestions draft={draft} onPick={pickModule} />
                     {ws.chats.length > 0 ? (
                       <div className="mt-3" aria-label="Recent">
                         <p className="mb-2 text-xs uppercase tracking-wide text-muted">Recent</p>
-                        <div className="flex flex-wrap gap-2">
-                        {ws.chats.filter((chat, index, list) => list.findIndex((item) => shownChatTitle(item) === shownChatTitle(chat)) === index).slice(0, 4).map((chat) => (
-                          <button key={chat.id} type="button" className="inline-flex min-h-11 max-w-full items-center truncate rounded-panel border border-line px-3 text-sm" onClick={() => { setActiveId(chat.id); setView("chat"); }}>
-                            {shownChatTitle(chat)}
-                          </button>
-                        ))}
-                        </div>
+                        <ConversationSections
+                          chats={getRecentChats(ws.chats, 6)}
+                          activeId={activeId}
+                          titleFor={shownChatTitle}
+                          projects={ws.projects.map((project) => ({ id: project.id, name: project.name }))}
+                          pinnedIds={ws.pins.filter((pin) => pin.kind === "chat").map((pin) => pin.ref)}
+                          scheduledNames={ws.schedules.map((job) => job.name)}
+                         onOpen={(id) => { setActiveId(id); setView("chat"); }}
+                         onAction={runConversationAction}
+                         extras={(ids) => (ids.length === 1 && ids[0] === activeId ? [{ label: "Download transcript", onPick: exportActive }] : [])}
+                       />
                       </div>
                     ) : null}
                   </div>
@@ -5161,7 +5937,7 @@ export function CommandApp() {
               </div>
               {homeAction !== "ask" && <button type="button" className="min-h-11 px-3 text-sm text-muted" onClick={() => { setHomeAction("ask"); setCommandMode("ask"); }}>Clear mode · Back to Chat</button>}
 
-              <section className="floating-composer command-card composer-dock rounded-panel p-3 md:p-4" data-composer="floating">
+              <section ref={liftHomeComposer} className="floating-composer command-card composer-dock rounded-panel p-3 md:p-4" data-composer="floating">
                 <details className="composer-advanced">
                   <summary>Controls</summary>
                 <div className="mt-2 flex flex-wrap items-center gap-2">
@@ -5251,12 +6027,6 @@ export function CommandApp() {
                     <div className="attachment-feedback flex flex-wrap items-center gap-2 text-xs text-muted"><span>Attached: {staged.name}</span><button type="button" className="min-h-11 text-accent" onClick={() => { setStaged(null); setNotice(null); }}>Remove attachment</button></div>
                   )}
                   <div className="composer-toolbar mt-2 flex flex-wrap items-center gap-2">
-                    <button type="button" className="inline-flex min-h-11 items-center gap-2 rounded-panel border border-line bg-white/5 px-3 text-sm" onClick={() => fileRef.current?.click()}>
-                      <Paperclip className="size-4" /> Attach
-                    </button>
-                    <button type="button" className="inline-flex min-h-11 items-center gap-2 rounded-panel border border-line px-3 text-sm" onClick={() => imageInputRef.current?.click()}>
-                      <Image className="size-4" /> Image
-                    </button>
                     <details
                       className="composer-more"
                       onToggle={(event) => {
@@ -5268,6 +6038,12 @@ export function CommandApp() {
                     >
                       <summary>More</summary>
                       <div className="mt-2 flex flex-wrap gap-2">
+                    <button type="button" className="inline-flex min-h-11 items-center gap-2 rounded-panel border border-line px-3 text-sm" onClick={() => fileRef.current?.click()}>
+                      <Paperclip className="size-4" /> Attach
+                    </button>
+                    <button type="button" className="inline-flex min-h-11 items-center gap-2 rounded-panel border border-line px-3 text-sm" onClick={() => imageInputRef.current?.click()}>
+                      <Image className="size-4" /> Image
+                    </button>
                     <button type="button" className="inline-flex min-h-11 items-center gap-2 rounded-panel border border-line px-3 text-sm" onClick={() => setCameraOpen(true)}>
                       <Camera className="size-4" /> Camera
                     </button>
@@ -5317,6 +6093,13 @@ export function CommandApp() {
                     <button type="button" className="inline-flex min-h-11 items-center gap-2 rounded-panel border border-line px-3 text-sm" onClick={() => { setContextOpen(false); setToolsOpen(false); setProjectOpen(true); }}>
                       <Folder className="size-4" /> Projects
                     </button>
+                    <ComposerEffortControl mode={composerEffort} onChoose={chooseComposerEffort} consultModules={consultModules} consultModel={consultModel} onConsultModel={chooseConsultModel} />
+                    <label className="inline-flex min-h-11 items-center gap-2 text-xs text-muted">
+                      Style
+                      <select aria-label="Conversation style" value={defaultPersonalityId} onChange={(event) => setDefaultPersonalityId(event.target.value as PersonalityId)} className="min-h-11 rounded-panel border border-line bg-transparent px-2 text-sm text-fg">
+                        {CONVERSATIONAL_PERSONALITIES.map((profile) => <option key={profile.id} value={profile.id}>{profile.label}</option>)}
+                      </select>
+                    </label>
                       </div>
                     </details>
                     <div className="legacy-composer-voice"><VoiceLevelMeter level={voiceLevel} listening={voiceListening} className="mr-1" /><BrowserDictationControl
@@ -5334,13 +6117,6 @@ export function CommandApp() {
                       {voiceListening ? <Square className="size-4" /> : <Mic className="size-4" />}
                     </button></div>
 
-                    <ComposerEffortControl mode={composerEffort} onChoose={chooseComposerEffort} />
-                    <label className="inline-flex min-h-11 items-center gap-2 text-xs text-muted">
-                      Style
-                      <select aria-label="Conversation style" value={defaultPersonalityId} onChange={(event) => setDefaultPersonalityId(event.target.value as PersonalityId)} className="min-h-11 rounded-panel border border-line bg-transparent px-2 text-sm text-fg">
-                        {CONVERSATIONAL_PERSONALITIES.map((profile) => <option key={profile.id} value={profile.id}>{profile.label}</option>)}
-                      </select>
-                    </label>
                     <button type="submit" disabled={busy || ws.halted || (!draft.trim() && pendingImages.length === 0 && !staged)} className="composer-send inline-flex min-h-11 items-center gap-2 rounded-panel bg-accent px-4 text-sm font-semibold text-accent-ink disabled:opacity-50">
                       <Send className="size-4" /> {busy ? "Sending" : "Send"}
                     </button>
@@ -5538,10 +6314,15 @@ export function CommandApp() {
               halted={ws.halted}
               draft={draft}
               error={error}
+              notice={notice}
               setDraft={setDraft}
+              onPickModule={pickModule}
               onPick={(id) => setActiveId(id)}
               onSend={() => void sendInChat()}
-              onStop={stopReply}
+              cue={cued}
+             onDropCue={(id) => rememberCue(dropCued(cueRef.current, id))}
+              onReleaseCue={() => void releaseNextCue()}
+             onStop={stopReply}
               onRename={renameActive}
               onEdit={editMessage}
               onRegenerate={regenerate}
@@ -5550,10 +6331,16 @@ export function CommandApp() {
               onDelete={() => {
                 if (!active) return;
                 requestProtected("delete", `delete-chat:${active.id}`, `Delete “${active.title}”`, "The transcript is removed. Saved notes stay until you delete them.", "Approve delete", () => {
-                  setWs((prev) => pushAudit({ ...prev, chats: prev.chats.filter((chat) => chat.id !== active.id) }, "delete_chat", active.id, "approved"));
+                  setWs((prev) => pushAudit(removeConversations(prev, [active.id]), "delete_chat", active.id, "approved"));
                   setActiveId(null);
                 });
               }}
+              onDeleteChat={(id, title) => deleteSavedChats([id], `Delete “${title}”`)}
+              onDeleteSection={(label, ids) => deleteSavedChats(ids, `Delete ${label}`)}
+              projects={ws.projects.map((project) => ({ id: project.id, name: project.name }))}
+              pinnedIds={ws.pins.filter((pin) => pin.kind === "chat").map((pin) => pin.ref)}
+              scheduledNames={ws.schedules.map((job) => job.name)}
+              onConversationAction={runConversationAction}
               onSave={(content) => {
                 if (!active || active.memory !== "on") {
                   setError("Memory is off for this chat, so the note was not saved.");
@@ -5622,6 +6409,9 @@ export function CommandApp() {
               }}
               composerEffort={composerEffort}
               onComposerEffort={chooseComposerEffort}
+              consultModules={consultModules}
+              consultModel={consultModel}
+              onConsultModel={chooseConsultModel}
               routingMode={routingMode}
               onRoutingMode={chooseRoutingMode}
               routingPanel={routingPanel}
@@ -5707,7 +6497,7 @@ export function CommandApp() {
             <section className="page-shell">
               <div className="page-hero mb-4 flex flex-wrap items-center justify-between gap-3">
                 <div className="flex items-center gap-3">
-                  <img src="/brand/marks/projects.png" alt="" className="size-10 rounded-xl" />
+                  <img src="/brand/logo-mark.jpg" alt="" className="size-10 rounded-xl" />
                   <div>
                     <h2 className="font-display text-3xl font-bold">Projects</h2>
                     <p className="text-sm text-muted">Records on this device. Oak Bridge and BridgePoint stay outside this app.</p>
@@ -5734,7 +6524,11 @@ export function CommandApp() {
                   const notes = ws.memories.filter((item) => item.projectId === project.id && !item.archived).length;
                   const files = ws.files.filter((file) => file.projectId === project.id).length;
                   return (
-                    <article key={project.id} id={`project-${project.id}`} tabIndex={-1} className="dense-card card-texture p-4">
+                    <article key={project.id} id={`project-${project.id}`} tabIndex={-1} className="dense-card card-texture p-4" onClick={(event) => {
+                      if ((event.target as HTMLElement).closest("button, a")) return;
+                      setShareProjectId(project.id);
+                      setCardFocus({ id: `project-${project.id}` });
+                    }}>
                       <div className="flex items-start gap-3">
                         <span className="grid size-11 place-items-center rounded-2xl bg-accent/15 text-accent"><Folder className="size-5" /></span>
                         <div className="min-w-0 flex-1">
@@ -5800,7 +6594,7 @@ export function CommandApp() {
             <section className="page-shell p-4 md:p-6">
               <div className="page-hero">
                 <div className="flex items-center gap-3">
-                  <img src="/brand/marks/memory.png" alt="" className="size-8 rounded-lg" />
+                  <img src="/brand/logo-mark.jpg" alt="" className="size-8 rounded-lg" />
                   <div>
                     <h2 className="font-display text-3xl font-bold">Memory</h2>
                     <p className="text-sm text-muted">Notes you chose to keep. They stay in this browser, not a remote database.</p>
@@ -5809,7 +6603,7 @@ export function CommandApp() {
               </div>
               <div className={`glow-card mt-4 grid gap-4 rounded-panel border p-4 md:grid-cols-2 ${memoryChoice === "on" ? "border-ok/40" : "border-danger/40"}`}>
                 <div className="flex items-center gap-3">
-                  <img src="/brand/marks/memory.png" alt="" className="size-12 rounded-2xl" />
+                  <img src="/brand/logo-mark.jpg" alt="" className="size-12 rounded-2xl" />
                   <div>
                     <p className="font-semibold">Memory: <span className={memoryChoice === "on" ? "text-ok" : "text-danger"}>{memoryChoice === "on" ? "ON" : "OFF"}</span></p>
                     <p className="text-sm text-muted">{memoryChoice === "on" ? "The next command can read notes in its scope. Existing chats stay off until you enable them there." : "A memory-off chat cannot read or save notes."}</p>
@@ -5896,51 +6690,47 @@ export function CommandApp() {
               <ul className="mt-4 space-y-2">
                 {memories.length === 0 && <li className="glow-card rounded-panel border border-line bg-surface p-6 text-center text-sm text-muted">{memoryQuery.trim() ? "No notes match your search." : "No saved notes in this view yet."}</li>}
                 {memories.map((item) => (
-                  <li key={item.id} className="rounded-panel border border-line bg-surface p-3 text-sm">
+                  <li
+                    key={item.id}
+                    className="rounded-panel border border-line bg-surface p-3 text-sm"
+                    onPointerDown={(event) => {
+                      if ((event.target as HTMLElement).closest("button, textarea, input")) return;
+                      const timer = window.setTimeout(() => setNoteMenu(item.id), 550);
+                      event.currentTarget.dataset.hold = String(timer);
+                    }}
+                    onPointerUp={(event) => window.clearTimeout(Number(event.currentTarget.dataset.hold))}
+                    onPointerLeave={(event) => window.clearTimeout(Number(event.currentTarget.dataset.hold))}
+                    onPointerCancel={(event) => window.clearTimeout(Number(event.currentTarget.dataset.hold))}
+                  >
                     {editId === item.id ? (
                       <label className="block text-sm">Edit note<textarea maxLength={2000} value={editText} onChange={(event) => setEditText(event.target.value)} className="min-h-20 w-full bg-transparent" /><span className="text-xs text-muted">{editText.length}/2000</span></label>
                     ) : (
                       <p className="whitespace-pre-wrap">{item.text}</p>
                     )}
-                    <p className="mt-1 text-xs text-muted">{item.scope}{item.scope === "project" ? (ws.projects.some((project) => project.id === item.projectId) ? "" : " · project removed, note kept") : ""} · {stamp(item.updatedAt)}{item.archived ? " · archived" : ""}</p>
-                    <div className="mt-2 flex flex-wrap gap-2">
-                      {editId === item.id ? (
-                        <button type="button" disabled={!editText.trim()} className="min-h-11 rounded-panel border border-line px-3" onClick={() => { setWs((prev) => pushAudit(reviseMemory(prev, item.id, editText), "save_memory", item.id, "revised")); setEditId(null); }}>Save edit</button>
-                      ) : (
-                        <button type="button" className="min-h-11 rounded-panel border border-line px-3" onClick={() => { setEditId(item.id); setEditText(item.text); }}>Edit</button>
-                      )}
-                      <button
-                        type="button"
-                        className="min-h-11 rounded-panel border border-line px-3"
-                        onClick={() => {
-                          const action = item.archived ? "restored" : "archived";
-                          setWs((prev) =>
-                            pushAudit(
-                              { ...prev, memories: prev.memories.map((note) => (note.id === item.id ? { ...note, archived: !note.archived, updatedAt: new Date().toISOString() } : note)) },
-                              "archive_memory",
-                              item.id,
-                              action,
-                            ),
-                          );
-                        }}
-                      >
-                        {item.archived ? "Restore" : "Archive"}
-                      </button>
-                      <button
-                        type="button"
-                        className="min-h-11 rounded-panel border border-line px-3"
-                        onClick={() =>
-                          requestProtected("delete", `delete-memory:${item.id}`, "Delete this note", "The current text and its versions are removed from this browser.", "Approve delete", () => {
-                            setWs((prev) => pushAudit({ ...prev, memories: prev.memories.filter((note) => note.id !== item.id) }, "delete_memory", item.id, "approved"));
-                          })
-                        }
-                      >
-                        Delete
-                      </button>
-                    </div>
+                    <p className="mt-1 text-xs text-muted">{item.scope}{item.scope === "project" ? (ws.projects.some((project) => project.id === item.projectId) ? "" : " · project removed, note kept") : ""} · {stamp(item.updatedAt)}{item.archived ? " · archived" : ""} · Hold for actions</p>
+                    {editId === item.id ? <button type="button" disabled={!editText.trim()} className="mt-2 min-h-11 rounded-panel border border-line px-3" onClick={() => { setWs((prev) => pushAudit(reviseMemory(prev, item.id, editText), "save_memory", item.id, "revised")); setEditId(null); }}>Save edit</button> : null}
                   </li>
                 ))}
               </ul>
+              {noteMenu && memories.some((item) => item.id === noteMenu) ? (
+                <ActionOverlay label="Actions for note" title="Note" onClose={() => setNoteMenu(null)}>
+                  <button type="button" className="flex min-h-11 w-full items-center rounded-2xl px-3 text-left text-sm" onClick={() => { const item = memories.find((note) => note.id === noteMenu); if (!item) return; setEditId(item.id); setEditText(item.text); setNoteMenu(null); }}>Edit</button>
+                  <button type="button" className="flex min-h-11 w-full items-center rounded-2xl px-3 text-left text-sm" onClick={() => {
+                    const item = memories.find((note) => note.id === noteMenu);
+                    if (!item) return;
+                    const action = item.archived ? "restored" : "archived";
+                    setWs((prev) => pushAudit({ ...prev, memories: prev.memories.map((note) => (note.id === item.id ? { ...note, archived: !note.archived, updatedAt: new Date().toISOString() } : note)) }, "archive_memory", item.id, action));
+                    setNoteMenu(null);
+                  }}>{memories.find((note) => note.id === noteMenu)?.archived ? "Restore" : "Archive"}</button>
+                  <button type="button" className="flex min-h-11 w-full items-center rounded-2xl px-3 text-left text-sm" style={{ color: "rgb(248 113 113)" }} onClick={() => {
+                    const id = noteMenu;
+                    setNoteMenu(null);
+                    requestProtected("delete", `delete-memory:${id}`, "Delete this note", "The current text and its versions are removed from this browser.", "Approve delete", () => {
+                      setWs((prev) => pushAudit({ ...prev, memories: prev.memories.filter((note) => note.id !== id) }, "delete_memory", id, "approved"));
+                    });
+                  }}>Delete</button>
+                </ActionOverlay>
+              ) : null}
               </>}
             </section>
           )}
@@ -5948,14 +6738,16 @@ export function CommandApp() {
           {view === "agents" && (
             <>
             <div className="page-hero mx-4 mt-4 flex items-center gap-3 md:mx-6">
-              <img src="/brand/marks/bots.png" alt="" className="size-8 rounded-lg" />
+              <img src="/brand/logo-mark.jpg" alt="" className="size-8 rounded-lg" />
               <div>
                 <h2 className="font-display text-3xl font-bold">Bots &amp; agents</h2>
                 <p className="text-sm text-muted">Save instructions once and use the bot in Chat, Runs, or Scheduled.</p>
               </div>
             </div>
             <FleetPanel mode="agents" ws={ws} setWs={setWs} onBotChat={openSavedBotChat}
-              onBotRun={(id) => openBotDestination(id, "runs")} onBotSchedule={(id) => openBotDestination(id, "scheduled")} />
+              onBotRun={(id) => openBotDestination(id, "runs")} onBotSchedule={(id) => openBotDestination(id, "scheduled")}
+              focusBotId={shareBotId}
+              onBotSelect={(id) => { setShareBotId(id); setCardFocus({ id: `bot-${id}` }); }} />
             <details className="bot-builder-card mx-4 mb-6 p-3 md:mx-6">
             <summary className="min-h-11 cursor-pointer px-1 py-2 font-semibold">Workspace tools and diagnostics</summary>
             <SharedFleet />
@@ -6027,7 +6819,7 @@ export function CommandApp() {
           {view === "runs" && <FleetPanel key="runs" mode="runs" ws={ws} setWs={setWs} initialAgentId={botDestinationId} focusRunId={focusRunId} />}
           {view === "connected" && (
             <section className="page-shell">
-              <div className="page-hero mb-4 flex items-center gap-3"><img src="/brand/marks/plugins.png" alt="" className="size-8 rounded-lg" /><div><h2 className="font-display text-3xl font-bold">Connected</h2><p className="text-sm text-muted">Setup explains what is missing. A service is connected only after the server says so.</p></div></div>
+              <div className="page-hero mb-4 flex items-center gap-3"><img src="/brand/logo-mark.jpg" alt="" className="size-8 rounded-lg" /><div><h2 className="font-display text-3xl font-bold">Connected</h2><p className="text-sm text-muted">Setup explains what is missing. A service is connected only after the server says so.</p></div></div>
               {statusSignedIn === false ? <div className="sign-in-summary" role="status">Sign in to check your connections. <Link to="/login">Sign in</Link></div> : null}
               <ServiceBoard
                 grokConfigured={grokConfigured === true}
@@ -6205,13 +6997,14 @@ export function CommandApp() {
               onOpen={(id) => { setActiveId(id); setView("code"); }}
               onSend={(id, text, image) => void sendHumanCode(id, text, image)}
               onBuild={(text) => { if (activeId) sessionStorage.setItem("adrian-human-return", activeId); sessionStorage.setItem("adrian-build-draft", text.slice(0, 4000)); setView("build"); setNavOpen(false); }}
+              halted={ws.halted}
             />
           )}
           {view === "research" && (
             <section className="page-shell">
               <div className="page-hero card-texture">
                 <div className="flex items-center gap-3">
-                  <img src="/brand/marks/research.png" alt="" className="size-8 rounded-lg" />
+                  <img src="/brand/logo-mark.jpg" alt="" className="size-8 rounded-lg" />
                   <div>
                     <h2 className="font-display text-3xl font-bold">Research</h2>
                     <p className="text-sm text-muted">Search uses the Grok key saved on this computer. Citations appear only when the search returns real links.</p>
@@ -6290,14 +7083,16 @@ export function CommandApp() {
           <section className={view === "skills" ? "page-shell space-y-4" : "hidden"}>
               <div className="page-hero">
                 <div className="flex items-center gap-3">
-                  <img src="/brand/marks/skills.png" alt="" className="size-8 rounded-lg" />
+                  <img src="/brand/logo-mark.jpg" alt="" className="size-8 rounded-lg" />
                   <div>
                     <h2 className="font-display text-3xl font-bold">Skills</h2>
                     <p className="text-sm text-muted">Built-in skills read this device. Not installed means the outside service is not connected.</p>
                   </div>
                 </div>
+                <button type="button" className="min-h-11 rounded-panel border border-line px-3 text-sm" data-testid="skill-refresh" data-asked-permission="false" onClick={() => setSkillRefresh(refreshSkills())}>Refresh</button>
               </div>
-              <input value={skillQuery} onChange={(event) => setSkillQuery(event.target.value)} placeholder="Search skills" className="min-h-11 w-full rounded-panel border border-line bg-surface px-3 text-sm" />
+              {skillRefresh ? <p className="text-sm text-muted" data-testid="skill-refresh-status" data-asked-permission={String(skillRefresh.askedPermission)}>{skillRefresh.count} skills refreshed. Permission was not asked.</p> : null}
+              <input value={skillQuery} onChange={(event) => setSkillQuery(event.target.value)} placeholder="Search skills" aria-label="Search skills" className="min-h-11 w-full rounded-panel border border-line bg-surface px-3 text-sm" />
               <nav className="flex flex-wrap gap-2" aria-label="Skill groups">
                 {([
                   ["device", "On this device"],
@@ -6314,7 +7109,7 @@ export function CommandApp() {
                     <article key={skill.id} className="skill-card">
                       <div className="flex items-start justify-between gap-3">
                         <div className="flex min-w-0 items-center gap-3">
-                          <img src={productMark(SKILL_MARK[skill.id] ?? "skills")} alt="" className="size-8 shrink-0 rounded-lg" />
+                          <img src={productMark(SKILL_MARK[skill.id] ?? "skills")} alt="" className="size-8 shrink-0 rounded-lg object-contain" style={markTile(productMark(SKILL_MARK[skill.id] ?? "skills"))} />
                           <h3 className="font-semibold">{skill.name}</h3>
                         </div>
                         <span className="rounded-full border border-line px-2 py-0.5 text-xs text-muted">{skill.kind === "not-installed" ? "Not installed" : skill.kind === "installed" ? (on ? "Installed" : "Off") : (on ? "On" : "Off")}</span>
@@ -6368,7 +7163,7 @@ export function CommandApp() {
             <section className="page-shell">
               <div className="page-hero mb-4 flex flex-wrap items-center justify-between gap-3">
                 <div className="flex items-center gap-3">
-                  <img src="/brand/marks/library.png" alt="" className="size-8 rounded-lg" />
+                  <img src="/brand/logo-mark.jpg" alt="" className="size-8 rounded-lg" />
                   <div>
                     <h2 className="font-display text-3xl font-bold">Library</h2>
                   <p className="text-sm text-muted">Read saved text, Markdown, CSV, JSON, and text extracted from PDFs.</p>
@@ -6379,10 +7174,10 @@ export function CommandApp() {
                   {driveConnected ? <button type="button" className="min-h-11 rounded-panel border border-line px-4 text-sm" onClick={() => setCloudPickerOpen(true)}>Browse Drive</button> : null}
                 </div>
               </div>
-              <div id="owner-library">
+              <div id="owner-library" ref={stackLibrary}>
                 {error && <p role="alert" className="mb-2 text-sm text-danger">{error}</p>}
                 {notice && <p role="status" className="mb-2 text-sm text-muted">{notice}</p>}
-                <nav className="mb-3 flex flex-wrap gap-2" aria-label="Library groups">
+                <nav ref={keepGroupRow} className="mb-3 flex flex-wrap gap-2" aria-label="Library groups">
                   {([
                     ["files", "Files"],
                     ["preview", "Preview"],
@@ -6445,12 +7240,21 @@ export function CommandApp() {
                   ))}
                 </div>
                 <div className="dense-card p-4 text-sm" hidden={libraryBand !== "media"} data-testid="library-media">
-                  <p className="font-semibold">HyperFrames export</p>
-                  <p className="mt-2 text-xs text-muted">This is the local render already counted: 60 of 60 frames, 2.0 seconds, 30 fps, 1280 by 720. HyperFrames 0.9.52 wrote it. The app can play this file. It does not render a new sequence from this page.</p>
-                  <video className="mt-3 w-full max-w-full rounded-panel bg-black" controls preload="metadata" src="/media/hyperframes/one-sequence.mp4">
-                    <a href="/media/hyperframes/one-sequence.mp4">Open the export</a>
-                  </video>
-                  <p className="mt-3 text-xs text-muted">Closeout still needs a publisher certificate and signtool or osslsigncode, a paired Windows PC, the Notion page ID, and the Stage 0 phrase. Those values were not given. This export does not supply them.</p>
+                  <p className="font-semibold">Chat images</p>
+                  <p className="mt-1 text-xs text-muted">Grouped from saved chats. A picture is listed only when its image data is already in the chat.</p>
+                  {(["attached", "camera", "generated"] as const).map((kind) => {
+                    const items = ws.chats.flatMap((chat) => listChatGalleryImages(chat.messages).filter((item) => item.kind === kind));
+                    return (
+                      <div key={kind} className="mt-3" data-testid={`library-media-${kind}`}>
+                        <p className="text-xs uppercase tracking-wide text-muted">{kind} · {items.length}</p>
+                        {items.length === 0 ? <p className="text-sm text-muted">None saved in this browser.</p> : (
+                          <div className="mt-2 flex flex-wrap gap-2">
+                            {items.map((item) => <img key={item.key} src={item.src} alt={item.name} className="size-16 rounded-panel border border-line object-cover" />)}
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
                 </div>
               </div>
             </section>
@@ -6459,7 +7263,7 @@ export function CommandApp() {
             <section className="page-shell">
               <div className="page-hero">
                 <div className="flex items-center gap-3">
-                  <img src="/brand/marks/integrations.png" alt="" className="size-8 rounded-lg" />
+                  <img src="/brand/logo-mark.jpg" alt="" className="size-8 rounded-lg" />
                   <div>
                     <h2 className="font-display text-3xl font-bold">Integrations</h2>
                     <p className="text-xs text-muted">Last check {stamp(checkedAt) || checkedAt}. Green means that behavior was verified here. Configured means a key or setting exists and a live call was not verified.</p>
@@ -6474,7 +7278,7 @@ export function CommandApp() {
                     <article key={item.id} className="integration-card">
                       <div className="flex items-start justify-between gap-3">
                         <div className="flex min-w-0 items-center gap-3">
-                          <img src={productMark(CAPABILITY_MARK[item.id] ?? "integrations")} alt="" className="size-8 shrink-0 rounded-lg" />
+                          <img src={productMark(CAPABILITY_MARK[item.id] ?? "integrations")} alt="" className="size-8 shrink-0 rounded-lg object-contain" style={markTile(productMark(CAPABILITY_MARK[item.id] ?? "integrations"))} />
                           <h3 className="text-sm font-semibold">{item.name}</h3>
                         </div>
                         <span className={`rounded-full border px-2 py-0.5 text-xs ${live ? "border-ok/40 text-ok" : item.status === "blocked" || item.status === "paid_required" ? "border-danger/40 text-danger" : "border-line text-muted"}`}>
@@ -6497,7 +7301,7 @@ export function CommandApp() {
             <section className="page-shell">
               <div className="page-hero">
                 <div className="flex items-center gap-3">
-                  <img src="/brand/marks/activity.png" alt="" className="size-8 rounded-lg" />
+                  <img src="/brand/logo-mark.jpg" alt="" className="size-8 rounded-lg" />
                   <div>
                     <h2 className="font-display text-3xl font-bold">Activity</h2>
                     <p className="text-sm text-muted">Recent workspace activity · up to 200 recorded events</p>
@@ -6537,7 +7341,7 @@ export function CommandApp() {
             <section className="page-shell mx-auto w-full max-w-none space-y-4">
               <div className="page-hero">
                 <div className="flex items-center gap-3">
-                  <img src="/brand/marks/help.png" alt="" className="size-8 rounded-lg" />
+                  <img src="/brand/logo-mark.jpg" alt="" className="size-8 rounded-lg" />
                   <div>
                     <h2 className="font-display text-3xl font-bold">Help</h2>
                     <p className="text-sm text-muted">Pick a row. It opens that part of the app. Nothing here pretends a service is connected.</p>
@@ -6551,25 +7355,25 @@ export function CommandApp() {
                 aria-label="Search help"
                 className="input-glow min-h-11 w-full rounded-panel border border-line bg-surface/80 px-3 text-sm"
               />
-              <div id="owner-help">
+              <div id="owner-help" className="adrian-layer grid gap-2">
                 {helpQuery.trim() && <button type="button" className="mb-2 min-h-11 text-sm text-accent" onClick={() => setHelpQuery("")}>Clear search</button>}
                 {(() => {
                   const topics = [
-                  { id: "keys", label: "Copy a saved API key", detail: "Copy my key, token, or credential. Owner key copying is available on the local device.", mark: "/brand/marks/settings.png", open: () => { setSettingsPane("keys"); setView("settings"); } },
-                  { id: "chat", label: "Send a chat", detail: "Type in the field and press Enter, or press the blue button. An empty field opens Speak.", mark: "/brand/marks/chat.png", open: () => setView("command") },
-                  { id: "speak", label: "Speak", detail: "Opens the call screen with camera, screen share, mute, and end.", mark: "/brand/marks/speak.png", open: openSpeakStage },
-                  { id: "settings", label: "Settings", detail: "Theme, voice, connections, and the pages that stay off the short sidebar.", mark: "/brand/marks/settings.png", open: () => setView("settings") },
-                  { id: "plugins", label: "Plugins", detail: "Catalog and connection marks. Opening a row does not connect the service.", mark: "/brand/marks/plugins.png", open: () => setView("connected") },
-                  { id: "library", label: "Library", detail: "Text copies in this browser. Upload text or open a file you already attached.", mark: "/brand/marks/library.png", open: () => setView("files") },
-                  { id: "projects", label: "Projects", detail: "Records on this device. Open chats or notes from a project card.", mark: "/brand/marks/projects.png", open: () => setView("projects") },
-                  { id: "scheduled", label: "Scheduled", detail: "Jobs that wait for a time. Nothing runs until you start it.", mark: "/brand/marks/scheduled.png", open: () => setView("scheduled") },
-                  { id: "build", label: "Build", detail: "Adrian Build workspace. A task can edit the hosted workspace, or a paired computer when one is connected.", mark: "/brand/marks/build.png", open: () => setView("build") },
-                  { id: "explore", label: "Explore", detail: "Filter local templates, save one, then open it in Chat.", mark: "/brand/marks/explore.png", open: () => window.location.assign("/explore") },
-                  { id: "dashboard", label: "Dashboard", detail: "Opens the workspace map inside this app.", mark: "/brand/marks/general.png", open: () => setView("dashboard") },
+                  { id: "keys", label: "Copy a saved API key", detail: "Copy my key, token, or credential. Owner key copying is available on the local device.", mark: "/brand/logo-mark.jpg", open: () => { setSettingsPane("keys"); setView("settings"); } },
+                  { id: "chat", label: "Send a chat", detail: "Type in the field and press Enter, or press the blue button. An empty field opens Speak.", mark: "/brand/logo-mark.jpg", open: () => setView("command") },
+                  { id: "speak", label: "Speak", detail: "Opens the call screen with camera, screen share, mute, and end.", mark: "/brand/logo-mark.jpg", open: openSpeakStage },
+                  { id: "settings", label: "Settings", detail: "Theme, voice, connections, and the pages that stay off the short sidebar.", mark: "/brand/logo-mark.jpg", open: () => setView("settings") },
+                  { id: "plugins", label: "Plugins", detail: "Catalog and connection marks. Opening a row does not connect the service.", mark: "/brand/logo-mark.jpg", open: () => setView("connected") },
+                  { id: "library", label: "Library", detail: "Text copies in this browser. Upload text or open a file you already attached.", mark: "/brand/logo-mark.jpg", open: () => setView("files") },
+                  { id: "projects", label: "Projects", detail: "Records on this device. Open chats or notes from a project card.", mark: "/brand/logo-mark.jpg", open: () => setView("projects") },
+                  { id: "scheduled", label: "Scheduled", detail: "Jobs that wait for a time. Nothing runs until you start it.", mark: "/brand/logo-mark.jpg", open: () => setView("scheduled") },
+                  { id: "build", label: "Build", detail: "Adrian Build workspace. A task can edit the hosted workspace, or a paired computer when one is connected.", mark: "/brand/logo-mark.jpg", open: () => setView("build") },
+                  { id: "explore", label: "Explore", detail: "Filter local templates, save one, then open it in Chat.", mark: "/brand/logo-mark.jpg", open: () => window.location.assign("/explore") },
+                  { id: "dashboard", label: "Dashboard", detail: "Opens the workspace map inside this app.", mark: "/brand/logo-mark.jpg", open: () => setView("dashboard") },
                   ].filter((item) => helpQuery.toLowerCase().trim().split(/\s+/).every((word) => `${item.label} ${item.detail}`.toLowerCase().includes(word)));
                   if (topics.length === 0) return <p className="mt-2 text-sm text-muted" role="status">No help topics match this search. Try “key,” “Library,” or “chat.”</p>;
                   return topics.map((item) => (
-                  <button key={item.id} type="button" className="flex min-h-14 w-full items-center gap-3 px-3 text-left text-sm hover:bg-white/5" onClick={() => { item.open(); setNavOpen(false); }}>
+                  <button key={item.id} type="button" className="adrian-row flex min-h-14 w-full items-center gap-3 rounded-2xl border border-line px-3 text-left text-sm" onClick={() => { item.open(); setNavOpen(false); }}>
                     <img src={item.mark} alt="" width={28} height={28} className="size-7 rounded-lg" />
                     <span className="min-w-0 flex-1">
                       <span className="block font-medium">{item.label}</span>
@@ -6587,14 +7391,14 @@ export function CommandApp() {
             <section className="page-shell intelligence-main mx-auto w-full max-w-none">
               <div className="page-hero">
                 <div className="flex items-center gap-3">
-                  <img src="/brand/marks/settings.png" alt="" className="size-8 rounded-lg" />
+                  <img src="/brand/logo-mark.jpg" alt="" className="size-8 rounded-lg" />
                   <div>
                     <h2 className="font-display text-3xl font-bold">Settings</h2>
                     <p className="text-sm text-muted">Preferences stay in this browser. Open a group to reach its pages.</p>
                   </div>
                 </div>
               </div>
-              <nav className="intelligence-main settings-index" aria-label="Settings sections" hidden={settingsPane !== null}>
+              <nav className="intelligence-main space-y-3" aria-label="Settings sections" hidden={settingsPane !== null}>
                 {([
                   { group: "Account", items: [
                     ["security", "Security and login", "Sign in to connect services", () => { window.location.assign("/login"); }],
@@ -6622,21 +7426,41 @@ export function CommandApp() {
                     ["activity", "Activity", "What this device recorded", () => { setView("activity"); setNavOpen(false); }],
                     ["help", "Help", "How the controls behave", () => { setView("help"); setNavOpen(false); }],
                   ]},
-                ] as const).map((section) => (
-                  <section key={section.group} className="intelligence-group" aria-label={section.group}>
-                    <h3>{section.group}</h3>
+                ] as const).filter((section) => !hiddenSettings.includes(section.group)).map((section) => (
+                  <section key={section.group} className="adrian-layer intelligence-group" aria-label={section.group}>
+                    <div className="mb-2 flex items-center justify-between gap-2">
+                      <h3 className="min-w-0">{section.group}</h3>
+                      <ActionsButton label={`${section.group} section`} onOpen={() => setSettingsMenu(section.group)} />
+                    </div>
+                    <div className="settings-index">
                     {section.items.map(([id, label, detail, open]) => (
-                      <button key={id} type="button" onClick={open}>
-                        <img src={`/brand/marks/${id}.png`} alt="" width={28} height={28} />
+                      <button key={id} type="button" className="adrian-row" onClick={open}>
+                        <img src={`/brand/logo-mark.jpg`} alt="" width={28} height={28} />
                         <span>
                           <strong>{label}</strong>
                           <small>{detail}</small>
                         </span>
                       </button>
                     ))}
+                    </div>
                   </section>
                 ))}
+                {hiddenSettings.length > 0 && (
+                  <section className="adrian-layer intelligence-group" aria-label="Removed sections">
+                    <h3>Removed sections</h3>
+                    <div className="grid gap-2">
+                      {hiddenSettings.map((name) => (
+                        <button key={name} type="button" className="adrian-row min-h-11 rounded-2xl border border-line px-3 text-left text-sm" onClick={() => rememberHiddenSettings(restoreSection(hiddenSettings, name))}>Restore {name}</button>
+                      ))}
+                    </div>
+                  </section>
+                )}
               </nav>
+              {settingsMenu && (
+                <ActionOverlay label={`Actions for ${settingsMenu} section`} title={settingsMenu} onClose={() => setSettingsMenu(null)}>
+                  <button type="button" className="flex min-h-11 w-full items-center rounded-2xl px-3 text-left text-sm" style={{ color: "rgb(248 113 113)" }} onClick={() => { rememberHiddenSettings(hideSection(hiddenSettings, settingsMenu)); setSettingsMenu(null); }}>Delete section</button>
+                </ActionOverlay>
+              )}
               {settingsPane && (
                 <button type="button" className="text-sm text-muted" onClick={() => setSettingsPane(null)}>Back</button>
               )}
@@ -6820,6 +7644,7 @@ export function CommandApp() {
             </section>
           )}
         </div>
+        <HandyDictation />
       </main>
       {imagineEdit && (
         <Overlay labelledBy="imagine-edit-title" onDismiss={() => { if (!busy) closeImagineEditor(); }}>
@@ -7245,9 +8070,14 @@ function ChatPane({
   halted,
   draft,
   error,
+  notice,
   setDraft,
+  onPickModule,
   onPick,
   onSend,
+  cue,
+  onDropCue,
+  onReleaseCue,
   onStop,
   onRename,
   onEdit,
@@ -7255,6 +8085,12 @@ function ChatPane({
   onRetry,
   onExport,
   onDelete,
+  onDeleteChat,
+  onDeleteSection,
+  projects = [],
+  pinnedIds = [],
+  scheduledNames = [],
+  onConversationAction,
   onSave,
   onNew,
   onSpeak,
@@ -7286,6 +8122,9 @@ function ChatPane({
   onComposerMode,
   composerEffort,
   onComposerEffort,
+  consultModules,
+  consultModel,
+  onConsultModel,
   routingMode,
   onRoutingMode,
   routingPanel,
@@ -7337,9 +8176,14 @@ function ChatPane({
   halted: boolean;
   draft: string;
   error: string | null;
+  notice: string | null;
   setDraft: (value: string) => void;
+  onPickModule?: (item: ModuleSuggestion) => void;
   onPick: (id: string) => void;
   onSend: () => void;
+  cue: CuedMessage[];
+  onDropCue: (id: string) => void;
+  onReleaseCue: () => void;
   onStop: () => void;
   onRename: (title: string) => void;
   onEdit: (messageId: string, text: string) => void;
@@ -7347,6 +8191,12 @@ function ChatPane({
   onRetry: () => void;
   onExport: () => void;
   onDelete: () => void;
+  onDeleteChat?: (id: string, title: string) => void;
+  onDeleteSection?: (label: string, ids: string[]) => void;
+  projects?: { id: string; name: string }[];
+  pinnedIds?: string[];
+  scheduledNames?: string[];
+  onConversationAction?: (action: ConversationAction, ids: string[], extra?: { projectId?: string | null; title?: string }) => void;
   onSave: (content: string) => void;
   onNew: () => void;
   onSpeak: (text: string, messageId?: string) => void;
@@ -7378,6 +8228,9 @@ function ChatPane({
   onComposerMode: (mode: Autonomy) => void;
   composerEffort: ComposerModeId;
   onComposerEffort: (mode: ComposerModeId) => void;
+  consultModules?: ConsultModule[];
+  consultModel?: string;
+  onConsultModel?: (id: string) => void;
   routingMode: RoutingMode;
   onRoutingMode: (mode: RoutingMode) => void;
   routingPanel: LogicRouteId[];
@@ -7418,8 +8271,6 @@ function ChatPane({
   const [filter, setFilter] = useState("");
   const [tools, setTools] = useState(false);
   const [context, setContext] = useState(false);
-  const [renaming, setRenaming] = useState(false);
-  const [titleDraft, setTitleDraft] = useState("");
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editDraft, setEditDraft] = useState("");
   const [copiedId, setCopiedId] = useState<string | null>(null);
@@ -7430,7 +8281,6 @@ function ChatPane({
   const [previewModel, setPreviewModel] = useState<ComposerModelId>("heavy");
   const [previewModelOpen, setPreviewModelOpen] = useState(false);
   useEffect(() => {
-    setRenaming(false);
     setEditingId(null);
   }, [active?.id]);
   useEffect(() => {
@@ -7471,48 +8321,24 @@ function ChatPane({
         </div>
         <div className="min-h-0 flex-1 space-y-3 overflow-auto px-3 pb-3">
           {groups.length === 0 && <p className="text-sm text-muted">{scoped.length === 0 ? (projectName ? `No chats for ${projectName} yet.` : "No conversations yet.") : "No titles match. Use workspace search to find message text."}</p>}
-          {groups.map((group) => (
-            <div key={group.label}>
-              <p className="px-1 text-xs text-muted">{group.label}</p>
-              {group.items.map((chat) => (
-                <button key={chat.id} type="button" onClick={() => onPick(chat.id)} className={`mt-1 flex min-h-11 w-full items-center justify-between rounded-panel px-3 text-left text-sm ${active?.id === chat.id ? "bg-accent text-accent-ink" : ""}`}>
-                  <span className="truncate">{chat.title}</span>
-                  <span className="ml-2 shrink-0 text-xs opacity-70">{chatStamp(chat)}</span>
-                </button>
-              ))}
-            </div>
-          ))}
+          {onConversationAction && (
+            <ConversationSections
+              chats={visible}
+              activeId={active?.id}
+              projects={projects}
+              pinnedIds={pinnedIds}
+              scheduledNames={scheduledNames}
+              onOpen={onPick}
+              onAction={onConversationAction}
+              extras={(ids) => (active && ids.length === 1 && ids[0] === active.id ? [{ label: "Download transcript", onPick: onExport }] : [])}
+            />
+          )}
         </div>
       </aside>
       <section className="flex min-w-0 flex-1 flex-col">
         <div className="chat-head px-4 pt-4">
-         <div className="flex flex-wrap items-end justify-between gap-2">
           <h2 className="font-display text-3xl font-bold">{active?.title || "AI Chat"}</h2>
-           {active && !renaming && (
-             <div className="flex gap-3">
-               <button type="button" className="min-h-11 text-sm text-accent" onClick={onExport}>Download transcript (JSON)</button>
-               <button type="button" className="min-h-11 text-sm text-accent" onClick={() => { setTitleDraft(active.title); setRenaming(true); }}>Rename</button>
-             </div>
-           )}
-         </div>
-          {active && customPersonality.trim() ? <p className="mt-1 text-sm text-muted">{active.title} is open in Chat. Its saved instructions are used for the next reply.</p> : null}
-          {renaming && (
-            <form
-              data-chat-rename
-              className="mt-2 flex flex-wrap gap-2"
-              onKeyDown={(event) => { if (event.key === "Escape") { event.preventDefault(); setRenaming(false); } }}
-              onSubmit={(event) => {
-                event.preventDefault();
-                if (!titleDraft.trim()) return;
-                onRename(titleDraft);
-                setRenaming(false);
-              }}
-            >
-              <input autoFocus required maxLength={80} value={titleDraft} onChange={(event) => setTitleDraft(event.target.value)} className="min-h-11 flex-1 rounded-panel border border-line bg-bg px-3 text-sm" aria-label="Chat name" />
-              <button type="submit" disabled={!titleDraft.trim()} className="min-h-11 rounded-panel bg-accent px-3 text-sm font-semibold text-accent-ink">Save</button>
-              <button type="button" className="min-h-11 rounded-panel border border-line px-3 text-sm" onClick={() => setRenaming(false)}>Cancel</button>
-            </form>
-          )}
+         {active && customPersonality.trim() ? <p className="mt-1 text-sm text-muted">{active.title} is open in Chat. Its saved instructions are used for the next reply.</p> : null}
           {active?.temporary && <div className="text-xs text-muted">Excluded from workspace archives by default</div>}
           {active?.messages.some((message) => message.images?.some((image) => !image.dataUrl)) && <div className="text-xs text-muted">Some images are unavailable. Their references will be included in the transcript.</div>}
          <details className="thread-chat-settings">
@@ -7557,9 +8383,13 @@ function ChatPane({
           </details>
         </div>
         <div className="min-h-0 flex-1 space-y-3 overflow-auto p-4">
+          <ChatMediaGallery messages={active?.messages} onUseInComposer={onSaveImage} onEditImagine={onEditImagine} onDownload={onDownloadImage} />
           {(!active || active.messages.length === 0) && !busy && (
             <div className="grid min-h-64 place-items-center text-center">
-              <ChatEmptyHero />
+              <ChatEmptyHero
+                title={active?.botProvider || active?.botTier ? `${active.botProvider ?? "Chat’s provider"} · ${active.botTier ?? "Chat’s tier"}` : undefined}
+                subtitle={active?.agentId ? "This conversation belongs to the bot." : undefined}
+              />
             </div>
           )}
           {active?.messages.map((msg) => {
@@ -7714,6 +8544,31 @@ function ChatPane({
           )}
           <div className="flex items-center gap-2"><VoiceLevelMeter level={voiceLevel} listening={voiceListening} /></div>
         </div>
+        {cue.length > 0 ? (
+          <div className="rounded-panel border border-line p-2" data-testid="message-cue">
+            <p className="text-xs uppercase tracking-wide text-muted">Next</p>
+            <ol className="space-y-1">
+              {cue.map((item, index) => (
+                <li
+                  key={item.id}
+                  className="min-w-0"
+                  data-testid="cued-message"
+                  onPointerDown={(event) => {
+                    const timer = window.setTimeout(() => onDropCue(item.id), 550);
+                    event.currentTarget.dataset.hold = String(timer);
+                  }}
+                  onPointerUp={(event) => window.clearTimeout(Number(event.currentTarget.dataset.hold))}
+                  onPointerLeave={(event) => window.clearTimeout(Number(event.currentTarget.dataset.hold))}
+                  onPointerCancel={(event) => window.clearTimeout(Number(event.currentTarget.dataset.hold))}
+                >
+                  <span className="block break-words text-sm">{index + 1}. {item.text}</span>
+                </li>
+              ))}
+            </ol>
+            {notice ? <p className="mt-1 text-sm text-muted" role="status" data-testid="cue-notice">{notice}</p> : null}
+            {!busy ? <button type="button" className="mt-1 min-h-11 px-2 text-sm text-accent" onClick={onReleaseCue}>Send next</button> : null}
+          </div>
+        ) : null}
         <form
           className="floating-composer command-card composer-dock thread-composer m-3 p-3" data-composer="floating"
           onSubmit={(event) => {
@@ -7729,6 +8584,7 @@ function ChatPane({
             for (const file of files.slice(0, 4)) onAddImageFile(file);
           }}
         >
+          {onPickModule ? <ModuleSuggestions draft={draft} onPick={onPickModule} /> : null}
           <input
             value={draft}
             onChange={(event) => setDraft(event.target.value)}
@@ -7748,15 +8604,17 @@ function ChatPane({
                 if (file) onAddImageFile(file);
               }
             }}
-            placeholder={`Message (${modelTier})...`}
+            placeholder={`Message (${active?.botTier ?? modelTier})...`}
             aria-label="Message"
             className="input-glow min-h-11 w-full rounded-xl bg-transparent px-1 text-sm outline-none"
           />
+          {active?.botKnowledge ? <p className="mt-1 text-xs text-muted">This chat sends its copied bot note. Saved memory stays off.</p> : null}
+          {active?.botProvider || active?.botTier ? <p className="mt-1 text-xs text-muted">This chat uses {active.botProvider ?? "Chat’s provider"} · {active.botTier ?? "Chat’s tier"}. The picker above is not changed.</p> : null}
           <AttachmentChips images={pendingImages} onRemove={onRemoveImage} onEditImagine={(image) => onEditImagine(image.dataUrl)} />
           {stagedName && <p className="text-xs text-muted">Staged: {stagedName}. Send includes it. Analyze runs REA on it.</p>}
           {context && (
             <p className="mt-2 text-xs text-muted">
-              Memory is {memoryChoice}. {memoryChoice === "off" ? "This chat cannot read or save notes." : "This chat can read notes in its scope."} Mode is {mode === "ask" ? "Ask" : "Automatic"}. Deletes still ask you.
+              Memory is {memoryChoice}. {memoryChoice === "off" ? (active?.botKnowledge ? "Saved memory stays off. This chat still sends its copied bot note and does not read other notes." : "This chat cannot read or save notes.") : "This chat can read notes in its scope."} Mode is {mode === "ask" ? "Ask" : "Automatic"}. Deletes still ask you.
             </p>
           )}
           {tools && (
@@ -7767,12 +8625,6 @@ function ChatPane({
             </div>
           )}
           <div className="composer-toolbar mt-2 flex flex-wrap items-center gap-2">
-           <button type="button" className="inline-flex min-h-11 items-center gap-2 rounded-panel border border-line/80 bg-white/5 px-3 text-sm" onClick={onAttach}>
-             <Paperclip className="size-4" /> Attach
-           </button>
-           <button type="button" className="inline-flex min-h-11 items-center gap-2 rounded-panel border border-line/80 bg-white/5 px-3 text-sm" onClick={onAttachImage} aria-label="Upload an image">
-             <Image className="size-4" /> Image
-           </button>
             <details className="composer-more" onKeyDown={(event) => {
               if (event.key !== "Escape" || !event.currentTarget.open) return;
               event.stopPropagation();
@@ -7781,6 +8633,9 @@ function ChatPane({
             }}>
               <summary>More</summary>
               <div className="composer-more__menu">
+                <button type="button" className="inline-flex min-h-11 items-center gap-2 rounded-panel border border-line/80 bg-white/5 px-3 text-sm" onClick={onAttach}>
+                  <Paperclip className="size-4" /> Attach
+                </button>
                 <button type="button" className="inline-flex min-h-11 items-center gap-2 rounded-panel border border-line/80 bg-white/5 px-3 text-sm" onClick={onAttachImage}>
                   <Image className="size-4" /> Image
                 </button>
@@ -7799,7 +8654,7 @@ function ChatPane({
                 <button type="button" className="min-h-11 rounded-panel border border-line/80 bg-white/5 px-3 text-sm" onClick={() => { setContext(false); setTools((open) => !open); document.querySelectorAll("details.composer-more[open]").forEach((node) => node.removeAttribute("open")); }}>Tools</button>
                 <button type="button" className="min-h-11 rounded-panel border border-line/80 bg-white/5 px-3 text-sm" onClick={onDelete} disabled={!active}>Delete</button>
                 <button type="button" className="min-h-11 rounded-panel border border-line/80 bg-white/5 px-3 text-sm" onClick={() => onMemoryChange(memoryChoice === "on" ? "off" : "on")} disabled={!active || busy || halted} aria-label={memoryChoice === "on" ? "Memory on for this chat" : "Don't use memory for this chat"}>{memoryChoice === "on" ? "Memory on" : "Memory off"}</button>
-                <ComposerEffortControl mode={composerEffort} onChoose={onComposerEffort} />
+                <ComposerEffortControl mode={composerEffort} onChoose={onComposerEffort} consultModules={consultModules} consultModel={consultModel} onConsultModel={onConsultModel} />
                 <label className="inline-flex min-h-11 items-center gap-2 text-xs text-muted">
                   Style
                   <select aria-label="Conversation style" value={personalityId} disabled={!active || busy} onChange={(event) => onPersonalityChange(event.target.value as PersonalityId)} className="min-h-11 rounded-panel border border-line bg-transparent px-2 text-sm text-fg">
@@ -7830,7 +8685,7 @@ function ChatPane({
               {speaking ? "Reading" : "Read aloud"}
             </button></div>
             
-            <button type="submit" disabled={busy || halted || (!draft.trim() && pendingImages.length === 0 && !stagedName)} className="composer-send min-h-11 rounded-panel bg-accent px-4 text-sm font-semibold text-accent-ink disabled:opacity-50">Send</button>
+            <button type="submit" disabled={halted || (busy ? !draft.trim() : (!draft.trim() && pendingImages.length === 0 && !stagedName))} className="composer-send min-h-11 rounded-panel bg-accent px-4 text-sm font-semibold text-accent-ink disabled:opacity-50">{busy ? "Cue" : "Send"}</button>
           </div>
           <div className="composer-voice-chrome" data-testid="composer-voice-chrome" hidden aria-hidden="true">
             <p className="text-xs text-muted" role="status">{chromeNote}</p>
@@ -8047,12 +8902,19 @@ function RoutingModeControl({
 function ComposerEffortControl({
   mode,
   onChoose,
+  consultModules = [],
+  consultModel = "",
+  onConsultModel,
 }: {
   mode: ComposerModeId;
   onChoose: (mode: ComposerModeId) => void;
+  consultModules?: ConsultModule[];
+  consultModel?: string;
+  onConsultModel?: (id: string) => void;
 }) {
   const resolved = resolveSendPath(mode);
   const current = COMPOSER_MODES.find((item) => item.id === mode) ?? COMPOSER_MODES[0];
+  const connected = consultModules.filter((item) => item.connected);
   return (
     <div className="composer-effort" data-testid="composer-effort">
       <div className="flex flex-wrap items-center gap-2">
@@ -8074,6 +8936,24 @@ function ComposerEffortControl({
         {current?.detail}
         {resolved.notice ? ` ${resolved.notice}` : ""}
       </p>
+      {mode === "orchestrator" ? (
+        <div className="mt-2 flex flex-wrap items-center gap-2" data-testid="orchestrator-models">
+          <span className="text-xs text-muted">Orchestrator model</span>
+          {connected.length === 0 ? <span className="text-xs text-muted">No model is connected right now. Connect one, then choose it.</span> : null}
+          {connected.map((item) => (
+            <button
+              key={item.id}
+              type="button"
+              data-testid="consult-model"
+              aria-pressed={consultModel === item.id}
+              className={`min-h-11 rounded-full px-3 text-sm ${consultModel === item.id ? "bg-accent text-accent-ink tile-active" : "border border-line/80 bg-white/5 text-muted"}`}
+              onClick={() => onConsultModel?.(item.id)}
+            >
+              {item.label}
+            </button>
+          ))}
+        </div>
+      ) : null}
     </div>
   );
 }
@@ -8241,7 +9121,9 @@ function ProviderPicker({
           <summary className="flex items-center gap-2">
             {PRODUCT_LOGO[group.title.toLowerCase()] ? <img src={PRODUCT_LOGO[group.title.toLowerCase()]} alt="" width={16} height={16} className="size-4 rounded" /> : null}
             {group.title}
+            {group.title === "Saved" ? <span className="text-xs text-muted">{group.items.length} models</span> : null}
           </summary>
+          <div className={group.title === "Saved" ? "max-h-64 overflow-y-auto" : undefined} style={group.title === "Saved" ? { overflowX: "hidden" } : undefined}>
           {group.items.map((item) => (
             <label key={item.id} className={`flex items-start gap-2 rounded-xl px-2 py-2 text-sm ${choice === item.id ? "model-option-active" : ""} ${!item.enabled ? "opacity-60" : ""}`}>
               <input type="radio" name={name} className="mt-1" checked={choice === item.id} disabled={!item.enabled} onChange={() => { if (item.enabled) onChoose(item.id); }} />
@@ -8252,6 +9134,7 @@ function ProviderPicker({
               </span>
             </label>
           ))}
+          </div>
         </details>
       ))}
     </div>
@@ -8259,17 +9142,7 @@ function ProviderPicker({
 }
 
 function chatBucket(chat: Chat) {
-  const iso = chat.messages[0]?.at;
-  if (!iso) return "Today";
-  const day = new Date(iso);
-  day.setHours(0, 0, 0, 0);
-  const start = new Date();
-  start.setHours(0, 0, 0, 0);
-  const diff = (start.getTime() - day.getTime()) / 86_400_000;
-  if (diff < 1) return "Today";
-  if (diff < 2) return "Yesterday";
-  if (diff < 7) return "This week";
-  return "Earlier";
+  return conversationSection(chat);
 }
 
 function chatStamp(chat: Chat) {

@@ -1,0 +1,4 @@
+TalkingHead modules and the brunette.glb sample are copied from https://github.com/met4citizen/TalkingHead
+License: MIT, Copyright (c) 2023-2024 Mika Suominen. See LICENSE.
+The sample is the project avatar, not a person generated for Adrian OS.
+Emma remains the Nuance video face. This sample is only the fallback while that API face cannot be drawn.

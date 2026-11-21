@@ -390,7 +390,7 @@ export function LiveVoiceBar(props: LiveVoiceBarProps) {
   );
 
   if (!inCall && props.compactIdle) {
-    return <div className="live-voice-compact-entry" data-testid="live-voice-compact-entry"><button type="button" onClick={props.onCompactSpeak} className="live-voice-compact-entry__button inline-flex items-center gap-2"><img src="/brand/marks/speak.png" alt="" width={18} height={18} className="size-4 rounded" />Speak</button></div>;
+    return <div className="live-voice-compact-entry" data-testid="live-voice-compact-entry"><button type="button" onClick={props.onCompactSpeak} className="live-voice-compact-entry__button inline-flex items-center gap-2"><img src="/brand/logo-mark.jpg" alt="" width={18} height={18} className="size-4 rounded" />Speak</button></div>;
   }
 
   if (!inCall) {

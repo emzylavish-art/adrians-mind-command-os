@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { AudioLines, Camera, Mic, MicOff, MonitorUp, PhoneOff, Plus, Settings, Volume2, VolumeX, X } from "lucide-react";
 import { openCameraStream, openScreenStream } from "@/components/mind/live-voice-bar/frame-capture";
+import { sharedAudioOutput } from "@/lib/mind/voice/audio-output";
 import {
   readStoredVoiceChoice,
   voiceDisplayName,
@@ -361,8 +362,12 @@ export function SpeakStage(props: {
       setReply(body.reply);
       setNotice(`Spoken: ${body.reply}`);
       if (body.audio && !speakerMuted) {
+        window.speechSynthesis?.cancel();
+        sharedAudioOutput.interrupt();
+        window.dispatchEvent(new Event("adrian-one-voice"));
         const audio = new Audio(`data:audio/mpeg;base64,${body.audio}`);
         callAudioRef.current = audio;
+        audio.setAttribute("data-speak-call", "true");
         audio.setAttribute("data-testid", "call-audio");
         document.body.appendChild(audio);
         audio.volume = volume / 100;
@@ -395,19 +400,19 @@ export function SpeakStage(props: {
       <section className="speak-system" data-testid="speak-system" style={{ position: "relative", zIndex: 2, width: "min(100%, 28rem)", color: "#f4f4f5", textAlign: "center" }}>
         <p>System call</p>
         <h2 style={{ fontSize: "1.35rem", fontWeight: 700 }}>Speak talks to the system.</h2>
-        <p style={{ marginTop: "0.4rem", color: "#d4d4d8" }}>The saved face is here. The live stage stays on Intelligence. EVE cannot press the emergency stop. EVE can press Clear.</p>
+        <p style={{ marginTop: "0.4rem", color: "#d4d4d8" }}>Emma's video is the face on Intelligence. This call does not show the generated figure. EVE cannot press the emergency stop. EVE can press Clear.</p>
         <div style={{ display: "flex", justifyContent: "center", gap: "0.5rem", marginTop: "0.8rem" }}>
           <button type="button" data-testid="speak-emergency-stop" onClick={() => cutSpeechRef.current("owner")} style={{ minHeight: "2.75rem", border: "1px solid #fb7185", borderRadius: "0.75rem", padding: "0 0.9rem", color: "#fecdd3", background: "transparent" }}>Emergency stop</button>
           <button type="button" data-testid="speak-clear-stop" onClick={() => clearStop()} style={{ minHeight: "2.75rem", border: "1px solid #86efac", borderRadius: "0.75rem", padding: "0 0.9rem", color: "#bbf7d0", background: "transparent" }}>Clear stop</button>
         </div>
         <p data-testid="speak-speech-cut" role="status">{notice?.startsWith("Speech cut") || notice?.startsWith("EVE cleared") ? notice : props.halted ? "Emergency stop is on. EVE can press Clear." : "Only you can press the emergency stop. EVE can press Clear."}</p>
       </section>
-      <img src="/brand/eve-idle.jpg" alt="EVE" width="160" height="208" data-testid="speak-face" style={{ position: "relative", width: "8rem", height: "10rem", objectFit: "cover", borderRadius: "1rem", zIndex: 2 }} />
+      <p data-testid="speak-face" style={{ position: "relative", zIndex: 2, color: "#d4d4d8" }}>Generated figure removed. Press Speak once. Mute is beside it.</p>
       <video ref={videoRef} className={source === "none" ? "is-hidden" : source} playsInline muted autoPlay />
       <div className="speak-call__status">
         <AudioLines aria-hidden="true" />
         <p role="status" data-testid="speak-status">{reply ? `Spoken: ${reply}` : status}</p>
-        <button type="button" className="speak-call__place" disabled={calling || props.halted || speechCutRef.current} onClick={() => void placeCall()}>{calling ? "Calling…" : "Place call"}</button>
+        <button type="button" className="speak-call__place" data-testid="speak-once" disabled={calling || props.halted || speechCutRef.current} onClick={() => void placeCall()}>{calling ? "Speaking…" : "Speak"}</button>
       </div>
       {callTranscript ? <p className="speak-call__transcript" data-testid="speak-reply">{callTranscript}</p> : reply || props.spoken || props.callError ? <p className="speak-call__transcript" data-testid="speak-reply">{props.callError || reply || props.spoken}</p> : null}
       {!callTranscript && showTranscript && transcript ? <p className="speak-call__transcript" data-testid="speak-transcript">{transcript}</p> : null}

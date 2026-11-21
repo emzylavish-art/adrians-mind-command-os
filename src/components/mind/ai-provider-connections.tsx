@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { ActionOverlay } from "@/components/mind/conversation-menu";
 import { getBearerToken } from "@/lib/auth/client";
 import type { PublicAiProvider } from "@/lib/mind/ai-provider-config.server";
 
@@ -56,6 +57,7 @@ export function AiProviderConnections({ onChange }: { onChange?: (rows: PublicRo
   const [initialModel, setInitialModel] = useState("");
   const [manual, setManual] = useState<Record<string, string>>({});
   const [loading, setLoading] = useState(false);
+  const [rowMenu, setRowMenu] = useState<string | null>(null);
   const [notice, setNotice] = useState("API keys are encrypted on the server. Adding a provider never makes a paid inference request.");
   const load = async () => {
     const data = await api(null);
@@ -106,7 +108,7 @@ export function AiProviderConnections({ onChange }: { onChange?: (rows: PublicRo
     } finally { setLoading(false); }
   }
   return (
-    <section id="owner-api-connect" className="settings-card rounded-panel p-4 text-sm" aria-label="Custom AI API providers" data-testid="custom-ai-providers">
+    <section id="owner-api-connect" className="settings-card adrian-layer rounded-panel p-4 text-sm" aria-label="Custom AI API providers" data-testid="custom-ai-providers">
       <h3 className="font-semibold">Custom AI APIs and models</h3>
       <p className="mt-1 text-muted">Connect OpenAI-compatible, Anthropic or Gemini APIs, discover supported models, then choose a model from chat. Your key is encrypted on the server. Some providers require a manually entered model ID.</p>
       <div className="provider-identity mt-4" aria-live="polite">
@@ -159,16 +161,19 @@ export function AiProviderConnections({ onChange }: { onChange?: (rows: PublicRo
       {!loadedOnce && <button type="button" disabled={loading} className="mt-2 min-h-11 rounded-panel border border-line px-3" onClick={() => void load().then(() => setNotice("Connections refreshed.")).catch((error) => setNotice(error.message))}>Retry refresh</button>}
       <div className="mt-4 space-y-3">
         {rows.map((row) => (
-          <article key={row.id} className="rounded-panel border border-line p-3">
-            <div className="flex flex-wrap justify-between gap-2">
-              <div className="flex min-w-0 items-start gap-3">{providerLogo(`${row.label} ${row.host}`) ? <img className="size-7 shrink-0 rounded" src={providerLogo(`${row.label} ${row.host}`)!} alt="" width={28} height={28} /> : <span className="provider-identity__custom shrink-0" aria-hidden="true">API</span>}<div><p className="font-semibold">{row.label}</p><p className="text-xs text-muted">{row.host} · {row.status} · {row.models.length} model(s)</p></div></div>
-              <div className="flex gap-2">
-                <button type="button" disabled={loading} onClick={() => void run({ action: "discover", id: row.id }, "Model catalogue refreshed.")} className="rounded-panel border border-line px-3 py-2">Refresh models</button>
-                <button type="button" disabled={loading} onClick={() => {
-                  if (confirm("Remove this AI API connection?")) void run({ action: "delete", id: row.id }, "Connection removed.");
-                }} className="rounded-panel border border-line px-3 py-2">Remove</button>
-              </div>
-            </div>
+          <article
+            key={row.id}
+            className="adrian-layer rounded-panel border border-line p-3"
+            onPointerDown={(event) => {
+              if ((event.target as HTMLElement).closest("button, select, input")) return;
+              const timer = window.setTimeout(() => setRowMenu(row.id), 550);
+              event.currentTarget.dataset.hold = String(timer);
+            }}
+            onPointerUp={(event) => window.clearTimeout(Number(event.currentTarget.dataset.hold))}
+            onPointerLeave={(event) => window.clearTimeout(Number(event.currentTarget.dataset.hold))}
+            onPointerCancel={(event) => window.clearTimeout(Number(event.currentTarget.dataset.hold))}
+          >
+            <div className="flex min-w-0 items-start gap-3">{providerLogo(`${row.label} ${row.host}`) ? <img className="size-7 shrink-0 rounded" src={providerLogo(`${row.label} ${row.host}`)!} alt="" width={28} height={28} /> : <span className="provider-identity__custom shrink-0" aria-hidden="true">API</span>}<div><p className="font-semibold">{row.label}</p><p className="text-xs text-muted">{row.host} · {row.status} · {row.models.length} model(s) · Hold for actions</p></div></div>
             {row.lastError && <p role="status" className="mt-2 text-xs text-muted">{row.lastError}</p>}
             {row.models.length > 0 && <label className="mt-3 block text-sm">Default model
               <select disabled={loading} value={row.defaultModel || ""} className="mt-1 block min-h-11 w-full rounded-panel border border-line bg-bg px-2" onChange={(event) => void run({ action: "model", id: row.id, model: event.target.value }, "Default model updated.")}>
@@ -176,6 +181,27 @@ export function AiProviderConnections({ onChange }: { onChange?: (rows: PublicRo
                 {[...new Set([...(row.defaultModel ? [row.defaultModel] : []), ...row.models])].map((id) => <option key={id} value={id}>{id}</option>)}
               </select>
             </label>}
+            {row.models.length > 0 && (
+              <div className="mt-3">
+                <p className="text-xs text-muted">{row.models.length} models. Free text models are first. The list is not shortened.</p>
+                <ul aria-label={row.label + " models"} className="mt-2 grid max-h-64 gap-2 overflow-y-auto p-1" style={{ overflowX: "hidden" }}>
+                  {row.models.map((id, index) => (
+                    <li key={id}>
+                      <button
+                        type="button"
+                        className="adrian-row flex min-h-11 w-full items-center gap-3 rounded-2xl border border-line px-3 text-left text-xs"
+                        aria-pressed={row.defaultModel === id}
+                        onClick={() => void run({ action: "model", id: row.id, model: id }, "Default model updated.")}
+                      >
+                        <span aria-hidden="true" className="grid size-7 shrink-0 place-items-center rounded-full bg-surface text-[0.7rem]">{index + 1}</span>
+                        <span className="min-w-0 flex-1 break-all">{id}</span>
+                        {id.endsWith(":free") ? <span className="shrink-0 rounded-full border border-line px-2 py-1">free</span> : null}
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
             <form className="mt-3 flex gap-2" onSubmit={(event) => {
               event.preventDefault();
               void run({ action: "model", id: row.id, model: manual[row.id] || "" }, "Model added and selected.");
@@ -185,6 +211,12 @@ export function AiProviderConnections({ onChange }: { onChange?: (rows: PublicRo
             </form>
           </article>
         ))}
+        {rowMenu && rows.some((row) => row.id === rowMenu) ? (
+          <ActionOverlay label={`Actions for ${rows.find((row) => row.id === rowMenu)?.label || "connection"}`} title={rows.find((row) => row.id === rowMenu)?.label || "Connection"} onClose={() => setRowMenu(null)}>
+            <button type="button" disabled={loading} className="flex min-h-11 w-full items-center rounded-2xl px-3 text-left text-sm" onClick={() => { const id = rowMenu; setRowMenu(null); void run({ action: "discover", id }, "Model catalogue refreshed."); }}>Refresh models</button>
+            <button type="button" disabled={loading} className="flex min-h-11 w-full items-center rounded-2xl px-3 text-left text-sm" style={{ color: "rgb(248 113 113)" }} onClick={() => { const id = rowMenu; setRowMenu(null); if (confirm("Remove this AI API connection?")) void run({ action: "delete", id }, "Connection removed."); }}>Remove</button>
+          </ActionOverlay>
+        ) : null}
         {loadedOnce && rows.length === 0 && <p className="text-xs text-muted">No custom AI API is saved yet.</p>}
       </div>
     </section>
