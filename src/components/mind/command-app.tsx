@@ -283,6 +283,7 @@ import {
   addLocalFile,
   addMemory,
   addProject,
+  clearedBrowserCopy,
   createChat,
   openBotChat,
   loadWorkspace,
@@ -1012,7 +1013,7 @@ function shownChatTitle(chat: { title?: string; messages?: { role: string; conte
 export function CommandApp() {
   const account = useCurrentUser();
   const loopback = typeof window !== "undefined" && (window.location.hostname === "127.0.0.1" || window.location.hostname === "localhost");
-  const { ws, setWs, ready, syncNote, serverHeld, saveError, retrySave } = useMindWorkspace(account?.id ?? (loopback ? "dev-user" : null), account?.primaryEmail ?? null);
+  const { ws, setWs, ready, syncNote, serverHeld, saveError, retrySave, clearStoredCopy } = useMindWorkspace(account?.id ?? (loopback ? "dev-user" : null), account?.primaryEmail ?? null);
   const router = useRouter();
   const [view, setViewState] = useState<View>("command");
   const applyingLocation = useRef(false);
@@ -1039,6 +1040,8 @@ export function CommandApp() {
   }, [cardFocus, view]);
   const [homeAction, setHomeAction] = useState<"ask" | "image" | "video" | "write" | "search">("ask");
   const [settingsPane, setSettingsPane] = useState<null | "general" | "connections" | "voice" | "pages" | "data" | "safety" | "keys">(null);
+  const [wipeAsk, setWipeAsk] = useState(false);
+  const [wipeStatus, setWipeStatus] = useState<string | null>(null);
   const [hiddenSettings, setHiddenSettings] = useState<string[]>([]);
   const [settingsMenu, setSettingsMenu] = useState<string | null>(null);
   const [query, setQuery] = useState("");
@@ -7742,6 +7745,14 @@ export function CommandApp() {
                   </div>
                 )}
               </div>
+              <div className="settings-card rounded-panel p-4 text-sm">
+                <p className="font-semibold">Clear this browser</p>
+                <p className="mt-1 text-muted">Removes chats, notes, projects, files, and bots stored in this browser. The sign-in account, connected keys, and emergency stop stay. A paired computer is not deleted.</p>
+                <button type="button" data-testid="wipe-browser-copy" className="mt-3 min-h-11 rounded-panel border border-line px-3 text-sm" onClick={() => setWipeAsk(true)}>
+                  Clear browser copy
+                </button>
+                {wipeStatus ? <p data-testid="wipe-browser-status" role="status" className="mt-2 text-sm">{wipeStatus}</p> : null}
+              </div>
               </div>
               <div id="settings-safety" hidden={settingsPane !== "safety"} className="space-y-4">
                 <div className="settings-card rounded-panel p-4 text-sm">
@@ -7859,6 +7870,35 @@ export function CommandApp() {
           <div className="mt-3 flex gap-2">
             <button type="button" className="min-h-11 flex-1 rounded-panel border border-line" onClick={() => setPending(null)}>Deny</button>
             <button type="button" className="min-h-11 flex-1 rounded-panel bg-accent font-semibold text-accent-ink" onClick={confirmPending}>{pending.confirm}</button>
+          </div>
+        </Overlay>
+      )}
+      {wipeAsk && (
+        <Overlay labelledBy="wipe-browser-title" onDismiss={() => setWipeAsk(false)}>
+          <h3 id="wipe-browser-title" className="font-display text-2xl font-bold">Clear this browser copy?</h3>
+          <p className="mt-2 text-sm text-muted">Chats, notes, projects, files, and bots in this browser are removed. If this browser can reach its server copy, that copy of the same records is replaced. The sign-in account, connected keys, and emergency stop stay. A paired computer is not deleted.</p>
+          <div className="mt-3 flex gap-2">
+            <button type="button" className="min-h-11 flex-1 rounded-panel border border-line" onClick={() => setWipeAsk(false)}>Keep data</button>
+            <button
+              type="button"
+              data-testid="confirm-wipe-browser"
+              className="min-h-11 flex-1 rounded-panel bg-accent font-semibold text-accent-ink"
+              onClick={() => {
+                const next = clearedBrowserCopy(wsRef.current);
+                setWipeAsk(false);
+                setActiveId(null);
+                setWipeStatus("Clearing this browser copy…");
+                void clearStoredCopy(next).then((saved) => {
+                  const message = saved
+                    ? "This browser copy was cleared. The server copy of these records was replaced. The sign-in account, connected keys, and emergency stop were not deleted."
+                    : "This browser copy was cleared. The server copy was not replaced. The sign-in account, connected keys, and emergency stop were not deleted.";
+                  setWipeStatus(message);
+                  setNotice(message);
+                });
+              }}
+            >
+              Clear browser copy
+            </button>
           </div>
         </Overlay>
       )}

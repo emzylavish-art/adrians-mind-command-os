@@ -147,7 +147,7 @@ export function HandyDictation() {
   return (
     <div
       ref={pinRow}
-      className="flex w-full shrink-0 flex-nowrap items-center gap-2 border-t border-line px-3 py-2"
+      className="flex w-full shrink-0 flex-wrap items-center gap-2 border-t border-line px-3 py-2"
       style={{ position: "relative", zIndex: 4, flex: "0 0 auto", background: light ? "#f7f7f8" : "#07080c", color: light ? "#18181b" : "#fafafa" }}
       data-testid="handy-dictation"
       data-phase={phase}
@@ -183,7 +183,7 @@ export function HandyDictation() {
         </span>
       ) : null}
       {phase === "speak" || phase === "saved" ? <strong data-testid="handy-speak-sign">Speak</strong> : null}
-      <p className="min-w-0 flex-1 truncate text-xs text-muted" data-testid="handy-note">{note}</p>
+      <p className="min-w-0 flex-1 basis-full whitespace-normal text-xs leading-5 text-muted sm:basis-auto" data-testid="handy-note" title={note}>{note}</p>
       {translation ? <p className="text-sm" data-testid="voice-translation">{translation}</p> : null}
       {actionsOpen ? (
         <ActionOverlay label="Actions for dictation" title="Dictation" onClose={() => setActionsOpen(false)}>

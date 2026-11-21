@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { compactWorkspaceImages, createIndexedDbBlobStore, hydrateWorkspaceImages } from "./media/blob-store";
+import { MEDIA_BLOB_DB } from "./media/blob-store";
 import { loadMindCopy, saveMindCopy } from "./server";
 import { chooseServerSync } from "./sync";
 import type { Workspace } from "./types";
@@ -27,9 +28,11 @@ export function useMindWorkspace(userId: string | null = "dev-user", email: stri
   const latest = useRef(ws);
   const blobStore = useRef(createIndexedDbBlobStore());
   latest.current = ws;
+  const persistGen = useRef(0);
 
   useEffect(() => {
     let cancel = false;
+    const loadGen = persistGen.current;
     void (async () => {
       const localRaw = userId ? loadWorkspaceForAccount(localStorage, userId, email) : emptyWorkspace();
       let local = localRaw;
@@ -38,15 +41,16 @@ export function useMindWorkspace(userId: string | null = "dev-user", email: stri
       } catch {
         local = localRaw;
       }
-      if (cancel) return;
+      if (cancel || loadGen !== persistGen.current) return;
       local = mergeStoredAgents(local, localRaw);
       setWs(local);
       setReady(true);
       try {
         const result = await loadMindCopy();
-        if (cancel || !result.ok) {
+        if (cancel || loadGen !== persistGen.current) return;
+        if (!result.ok) {
           followServer.current = false;
-          if (!cancel) setSyncNote("Browser copy only. The server copy was not read. Nothing was deleted.");
+          setSyncNote("Browser copy only. The server copy was not read. Nothing was deleted.");
           return;
         }
         const choice = chooseServerSync(hasContent(local), Boolean(result.workspace && hasContent(result.workspace)));
@@ -58,12 +62,13 @@ export function useMindWorkspace(userId: string | null = "dev-user", email: stri
           } catch {
             /* keep raw */
           }
-          if (cancel) return;
+          if (cancel || loadGen !== persistGen.current) return;
           savedJson.current = JSON.stringify(result.workspace);
           setWs(mergeStoredAgents(serverWs, localRaw));
           setSyncNote("Loaded the server copy because this browser was empty. It is still not cloud backup.");
           return;
         }
+        if (loadGen !== persistGen.current) return;
         if (choice === "upload-local") {
           followServer.current = true;
           savedJson.current = JSON.stringify(local);
@@ -84,8 +89,9 @@ export function useMindWorkspace(userId: string | null = "dev-user", email: stri
         savedJson.current = JSON.stringify(local);
         setSyncNote("Nothing is stored yet. This is not cloud backup.");
       } catch {
+        if (cancel || loadGen !== persistGen.current) return;
         followServer.current = false;
-        if (!cancel) setSyncNote("Browser copy only. Sign in may be required before a server copy can be saved.");
+        setSyncNote("Browser copy only. Sign in may be required before a server copy can be saved.");
       }
     })();
     return () => {
@@ -97,17 +103,20 @@ export function useMindWorkspace(userId: string | null = "dev-user", email: stri
     if (!ready) return;
     let cancelled = false;
     const write = () => {
+      const gen = persistGen.current;
       void (async () => {
         let persisted = ws;
-        const stored = userId ? loadWorkspaceForAccount(localStorage, userId, email) : emptyWorkspace();
-        const missingAgents = stored.agents.filter((agent) => !persisted.agents.some((item) => item.id === agent.id));
-        if (missingAgents.length > 0) persisted = { ...persisted, agents: [...persisted.agents, ...missingAgents] };
+        if (gen === persistGen.current) {
+          const stored = userId ? loadWorkspaceForAccount(localStorage, userId, email) : emptyWorkspace();
+          const missingAgents = stored.agents.filter((agent) => !persisted.agents.some((item) => item.id === agent.id));
+          if (missingAgents.length > 0) persisted = { ...persisted, agents: [...persisted.agents, ...missingAgents] };
+        }
         try {
           persisted = (await compactWorkspaceImages(persisted, blobStore.current)) as Workspace;
         } catch {
           persisted = persisted;
         }
-        if (cancelled) return;
+        if (cancelled || gen !== persistGen.current) return;
         if (!userId) return;
         localStorage.setItem(accountWorkspaceKey(userId), JSON.stringify(persisted));
         if (userId === "dev-user") localStorage.setItem(WORKSPACE_KEY, JSON.stringify(persisted));
@@ -178,5 +187,43 @@ export function useMindWorkspace(userId: string | null = "dev-user", email: stri
     setSaveError(null);
   }
 
-  return { ws, ready, setWs, syncNote, serverHeld, publishServerCopy, saveError, retrySave, clearSaveError };
+  async function clearStoredCopy(next: Workspace): Promise<boolean> {
+    persistGen.current += 1;
+    latest.current = next;
+    if (userId) {
+      const packed = JSON.stringify(next);
+      localStorage.setItem(accountWorkspaceKey(userId), packed);
+      if (userId === "dev-user") localStorage.setItem(WORKSPACE_KEY, packed);
+    }
+    setWs(next);
+    if (typeof indexedDB !== "undefined") {
+      try {
+        indexedDB.deleteDatabase(MEDIA_BLOB_DB);
+      } catch {
+        /* Image leftovers are not shown once the workspace list is empty. */
+      }
+    }
+    try {
+      const result = await saveMindCopy({ data: { workspace: next } });
+      const message = saveFailureMessage(result);
+      if (!message) {
+        followServer.current = true;
+        savedJson.current = JSON.stringify(next);
+        setServerHeld(false);
+        setSaveError(null);
+        setSyncNote("This browser copy was cleared. The server copy of these records was replaced. The sign-in account was not deleted.");
+        return true;
+      }
+      setSaveError(message);
+      setSyncNote("This browser copy was cleared. The server copy was not replaced. The sign-in account was not deleted.");
+      return false;
+    } catch {
+      const message = saveFailureMessage({ ok: false }) ?? SAVE_FAIL;
+      setSaveError(message);
+      setSyncNote("This browser copy was cleared. The server copy was not replaced. The sign-in account was not deleted.");
+      return false;
+    }
+  }
+
+  return { ws, ready, setWs, syncNote, serverHeld, publishServerCopy, saveError, retrySave, clearSaveError, clearStoredCopy };
 }

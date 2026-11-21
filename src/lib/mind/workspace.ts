@@ -51,6 +51,16 @@ export function emptyWorkspace(): Workspace {
   return { version: 1, halted: false, chats: [], memories: [], projects: [], files: [], usage: [], audit: [], ...emptyFleet() };
 }
 
+/** Clears chats, notes, projects, files, and bots. The emergency stop stays as it was. */
+export function clearedBrowserCopy(prev: Workspace): Workspace {
+  return pushAudit(
+    { ...emptyWorkspace(), halted: prev.halted },
+    "wipe_browser",
+    "workspace",
+    "cleared",
+  );
+}
+
 function isRecord(value: unknown): value is Record<string, unknown> {
   return !!value && typeof value === "object" && !Array.isArray(value);
 }

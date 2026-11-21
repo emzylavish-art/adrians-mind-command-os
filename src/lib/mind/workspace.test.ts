@@ -6,6 +6,7 @@ import {
   createChat,
   deleteMemory,
   emptyWorkspace,
+  clearedBrowserCopy,
   memoriesForChat,
   mergeWorkspace,
   normalizeWorkspace,
@@ -141,5 +142,24 @@ describe("workspace memory", () => {
     assert.equal(ws.memories.length, 0);
     ws = deleteMemory(ws, "missing");
     assert.equal(ws.memories.length, 0);
+  });
+
+  it("clears the browser copy and keeps the emergency stop", () => {
+    const created = createChat({ ...emptyWorkspace(), halted: true }, {
+      memory: "off",
+      autonomy: "ask",
+      temporary: false,
+      projectId: null,
+    });
+    const cleared = clearedBrowserCopy({
+      ...created.ws,
+      agents: [{ id: "bot-1", name: "Harbor" } as never],
+      files: [{ id: "file-1" } as never],
+    });
+    assert.equal(cleared.halted, true);
+    assert.equal(cleared.chats.length, 0);
+    assert.equal(cleared.files.length, 0);
+    assert.equal(cleared.agents.length, 0);
+    assert.equal(cleared.audit[0]?.action, "wipe_browser");
   });
 });
