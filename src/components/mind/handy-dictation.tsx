@@ -131,7 +131,7 @@ export function HandyDictation() {
   function translate() {
     const text = field.current?.value.trim() || "";
     const result = translateVoice(text, target);
-    setTranslation(result.text || result.note);
+    setTranslation(result.text || "");
     setNote(result.note);
   }
 

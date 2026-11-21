@@ -415,6 +415,8 @@ export function createWhisperSession(handlers: WhisperSessionHandlers): WhisperS
 
   async function start() {
     if (state.phase !== "idle" && state.phase !== "error") return;
+    userStopped = false;
+    paused = false;
     target = captureInsertTarget();
     dispatch({ type: "start" });
     await startSttFallback("Dictation is Handy Whisper. Speak was not opened.");
