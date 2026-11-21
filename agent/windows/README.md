@@ -21,19 +21,11 @@ The second command should wait for ACP JSON-RPC input without printing a banner.
 
 ## Install
 
-1. On the signed-in dashboard, mint a one-time pairing code with `POST /api/mind/pairing/code`.
-2. Copy this `agent/windows` directory to the Windows machine or run the installer from a trusted checkout.
-3. From PowerShell, run:
+1. On the signed-in site, open Build and press Mint pairing code. The code looks like `ABCD-EFGH` and expires in five minutes.
+2. Run `AdriansMind-Setup.exe`. Paste the code. The dashboard field is already `https://adrians-mind.vercel.app`.
+3. The installer copies these scripts, then runs `Pair-Now.ps1`, which calls `Install-MindAgent.ps1`. Leave the code blank only to install the files and pair later from Start menu, Adrian's Mind, Pair this PC.
 
-```powershell
-powershell -NoProfile -ExecutionPolicy Bypass -File .\Install-MindAgent.ps1 `
-  -DashboardUrl "https://YOUR_DASHBOARD" `
-  -PairingCode "ABCD-EFGH" `
-  -KimiPath "kimi" `
-  -NodePath "node"
-```
-
-The installer performs the signed handshake, stores the token and local keypair under `%LOCALAPPDATA%\MindCommandAgent`, verifies the signed Companion manifest, creates `%USERPROFILE%\MindWorkspace`, and registers a current-user Startup entry named `MindCommandLocalAgent`.
+The companion install performs the signed handshake, stores the token and local keypair under `%LOCALAPPDATA%\MindCommandAgent`, verifies the signed Companion manifest, creates `%USERPROFILE%\MindWorkspace`, and registers a current-user Startup entry named `MindCommandLocalAgent`. Node.js 20 and the `kimi` command are not inside this file. If either is missing, pairing can still finish and later PC jobs report that they cannot run.
 
 The dashboard’s local Companion card should become Connected after the first heartbeat. The Companion polls for typed jobs every five seconds.
 
