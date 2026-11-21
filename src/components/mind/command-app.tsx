@@ -6204,21 +6204,6 @@ export function CommandApp() {
                   </div>
                 </div>
               </div>
-             <div className="gpt-starters">
-               <p className="mb-1 text-xs uppercase tracking-wide text-muted">Start</p>
-               <button type="button" aria-pressed={homeAction === "image"} onClick={() => { setHomeAction("image"); setCommandMode("ask"); }}>
-                 <Image className="size-5" /> Create an image
-               </button>
-               <button type="button" aria-pressed={homeAction === "video"} onClick={() => { setHomeAction("video"); setCommandMode("ask"); }}>
-                 <Video className="size-5" /> Create a video
-               </button>
-                <button type="button" aria-pressed={homeAction === "write"} onClick={() => { setHomeAction("write"); setCommandMode("build"); }}>
-                  <FileText className="size-5" /> Write or edit
-                </button>
-                <button type="button" aria-pressed={homeAction === "search"} onClick={() => { setHomeAction("search"); setCommandMode("research"); }}>
-                  <Search className="size-5" /> Search the web
-                </button>
-              </div>
               {homeAction !== "ask" && <button type="button" className="min-h-11 px-3 text-sm text-muted" onClick={() => { setHomeAction("ask"); setCommandMode("ask"); }}>Clear mode · Back to Chat</button>}
 
               <FirstSteps state={guide} onChange={persistGuide} onOpen={openGuide} />
@@ -6492,6 +6477,21 @@ export function CommandApp() {
                 )}
               </section>
 
+              <div className="gpt-starters">
+                <p className="mb-1 text-xs uppercase tracking-wide text-muted">Start</p>
+                <button type="button" aria-pressed={homeAction === "image"} onClick={() => { setHomeAction("image"); setCommandMode("ask"); }}>
+                  <Image className="size-5" /> Create an image
+                </button>
+                <button type="button" aria-pressed={homeAction === "video"} onClick={() => { setHomeAction("video"); setCommandMode("ask"); }}>
+                  <Video className="size-5" /> Create a video
+                </button>
+                <button type="button" aria-pressed={homeAction === "write"} onClick={() => { setHomeAction("write"); setCommandMode("build"); }}>
+                  <FileText className="size-5" /> Write or edit
+                </button>
+                <button type="button" aria-pressed={homeAction === "search"} onClick={() => { setHomeAction("search"); setCommandMode("research"); }}>
+                  <Search className="size-5" /> Search the web
+                </button>
+              </div>
               <div className="flex flex-wrap gap-2 pb-1">
                 <button type="button" className="suggestion-chip" onClick={() => setDraft("Summarize my projects on this device")}>Summarize my projects</button>
                 <button type="button" className="suggestion-chip" onClick={() => setDraft("What can Run worker do right now?")}>What can the worker do?</button>
