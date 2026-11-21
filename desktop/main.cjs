@@ -1,5 +1,6 @@
 const { app, BrowserWindow } = require("electron");
 const { spawn } = require("node:child_process");
+const { existsSync } = require("node:fs");
 const http = require("node:http");
 const path = require("node:path");
 
@@ -9,6 +10,11 @@ const HOST = "127.0.0.1";
 function serverRoot() {
   if (app.isPackaged) return path.join(process.resourcesPath, "app-server");
   return path.join(__dirname, "app-server");
+}
+
+function missingRuntime(root) {
+  return ["server/index.mjs", "server/_libs/pglite.data", "server/_libs/pglite.wasm", "server/_libs/initdb.wasm"]
+    .filter((rel) => !existsSync(path.join(root, rel)));
 }
 
 function waitForServer(url, child) {
@@ -60,6 +66,12 @@ function startServer() {
 }
 
 app.whenReady().then(async () => {
+  const missing = missingRuntime(serverRoot());
+  if (missing.length > 0) {
+    const window = new BrowserWindow({ width: 720, height: 240, title: "Adrian's Mind", autoHideMenuBar: true });
+    window.loadURL(`data:text/plain,${encodeURIComponent("Adrian's Mind is missing " + missing.join(", ") + ".")}`);
+    return;
+  }
   const child = startServer();
   app.on("before-quit", () => {
     if (!child.killed) child.kill();

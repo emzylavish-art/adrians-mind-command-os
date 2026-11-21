@@ -14,6 +14,10 @@ dist/
 .DS_Store
 .data/
 
+# The Windows installer is over GitHub's 100 MB file limit. The preview serves
+# the local file. Production redirects this path to the GitHub release.
+public/downloads/*.exe
+
 # Local orchestration state: kill switch, logs, computer files
 team/state/
 

@@ -20,6 +20,18 @@ describe("production build and migration contract", () => {
     assert.ok(compile >= 0 && migration > compile && assets > migration);
   });
 
+  it("the desktop package copies the embedded database files and production does not serve the tiny installer stub", () => {
+    const vercel = readJson("vercel.json");
+    const copy = readFileSync(new URL("./copy-pglite-assets.mjs", import.meta.url), "utf8");
+    assert.match(copy, /desktop\/app-server\/server\/_libs/);
+    assert.match(copy, /pglite\.data/);
+    const download = vercel.redirects.find((rule) => rule.source === "/downloads/AdriansMind-Setup.exe");
+    assert.equal(
+      download?.destination,
+      "https://github.com/emzylavish-art/adrians-mind-command-os/releases/download/desktop-installer/AdriansMind-Setup.exe",
+    );
+  });
+
   it("production migrations and app Postgres access share the pinned CA helper", () => {
     const migrator = readFileSync(new URL("./migrate.mjs", import.meta.url), "utf8");
     const appPool = readFileSync(new URL("../src/lib/auth/pg-pool.ts", import.meta.url), "utf8");
