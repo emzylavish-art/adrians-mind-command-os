@@ -13,6 +13,7 @@ import type { Workspace } from "@/lib/mind/types";
 import { APPROVABLE_TODAY, BLOCKED_CONTROL, decideComputerAction } from "@/lib/mind/computer-control";
 import { projectFromSpeech } from "@/lib/mind/eve-projection";
 import { OwnerFlow } from "@/components/mind/owner-flow";
+import { NuanceCallCard } from "@/components/mind/nuance-call";
 
 function stamp(value: string): string {
   const parsed = Date.parse(value);
@@ -110,7 +111,7 @@ export function EveWorkbench({
   const [serverNote, setServerNote] = useState<string | null>(null);
   const [serverBusy, setServerBusy] = useState(false);
   const [ask, setAsk] = useState("");
-  const [eveBand, setEveBand] = useState<"talk" | "status" | "pairing" | "tasks" | "figure" | "records">("talk");
+  const [eveBand, setEveBand] = useState<"talk" | "video" | "status" | "pairing" | "tasks" | "figure" | "records">("talk");
   const [askBusy, setAskBusy] = useState(false);
   const [askReply, setAskReply] = useState<string | null>(null);
   const [receipts, setReceipts] = useState<Array<{ id: string; state: string; action: string; detail: string }>>([]);
@@ -251,6 +252,7 @@ export function EveWorkbench({
         <nav className="flex flex-wrap gap-2" aria-label="EVE groups">
           {([
             ["talk", "Talk"],
+            ["video", "Video"],
             ["status", "Status"],
             ["pairing", "Pairing"],
             ["tasks", "Tasks"],
@@ -260,6 +262,9 @@ export function EveWorkbench({
             <button key={id} type="button" className={`min-h-11 rounded-panel border px-3 text-sm ${eveBand === id ? "border-accent bg-accent text-accent-ink" : "border-line"}`} aria-pressed={eveBand === id} onClick={() => setEveBand(id)}>{label}</button>
           ))}
         </nav>
+        <div hidden={eveBand !== "video"}>
+          <NuanceCallCard halted={workspace.halted === true} />
+        </div>
 
         <section className="rounded-panel border border-line bg-surface p-4" data-testid="eve-talk" hidden={eveBand !== "talk"}>
           <div className="flex flex-wrap items-center justify-between gap-3">

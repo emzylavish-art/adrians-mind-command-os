@@ -49,6 +49,8 @@ import { Route as ApiMindMcpCallRouteImport } from './routes/api/mind/mcp/call'
 import { Route as ApiMindMcpServersRouteImport } from './routes/api/mind/mcp/servers'
 import { Route as ApiMindMcpToolsRouteImport } from './routes/api/mind/mcp/tools'
 import { Route as ApiMindMediaGenerateRouteImport } from './routes/api/mind/media/generate'
+import { Route as ApiMindNuanceKeyRouteImport } from './routes/api/mind/nuance/key'
+import { Route as ApiMindNuanceSessionRouteImport } from './routes/api/mind/nuance/session'
 import { Route as ApiMindPairingActionRouteImport } from './routes/api/mind/pairing/action'
 import { Route as ApiMindPairingCodeRouteImport } from './routes/api/mind/pairing/code'
 import { Route as ApiMindPairingHandshakeRouteImport } from './routes/api/mind/pairing/handshake'
@@ -283,6 +285,16 @@ const ApiMindMediaGenerateRoute = ApiMindMediaGenerateRouteImport.update({
   path: '/api/mind/media/generate',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ApiMindNuanceKeyRoute = ApiMindNuanceKeyRouteImport.update({
+  id: '/api/mind/nuance/key',
+  path: '/api/mind/nuance/key',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ApiMindNuanceSessionRoute = ApiMindNuanceSessionRouteImport.update({
+  id: '/api/mind/nuance/session',
+  path: '/api/mind/nuance/session',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const ApiMindPairingActionRoute = ApiMindPairingActionRouteImport.update({
   id: '/api/mind/pairing/action',
   path: '/api/mind/pairing/action',
@@ -494,6 +506,8 @@ export interface FileRoutesByFullPath {
   '/api/mind/mcp/servers': typeof ApiMindMcpServersRoute
   '/api/mind/mcp/tools': typeof ApiMindMcpToolsRoute
   '/api/mind/media/generate': typeof ApiMindMediaGenerateRoute
+  '/api/mind/nuance/key': typeof ApiMindNuanceKeyRoute
+  '/api/mind/nuance/session': typeof ApiMindNuanceSessionRoute
   '/api/mind/pairing/action': typeof ApiMindPairingActionRoute
   '/api/mind/pairing/code': typeof ApiMindPairingCodeRoute
   '/api/mind/pairing/handshake': typeof ApiMindPairingHandshakeRoute
@@ -568,6 +582,8 @@ export interface FileRoutesByTo {
   '/api/mind/mcp/servers': typeof ApiMindMcpServersRoute
   '/api/mind/mcp/tools': typeof ApiMindMcpToolsRoute
   '/api/mind/media/generate': typeof ApiMindMediaGenerateRoute
+  '/api/mind/nuance/key': typeof ApiMindNuanceKeyRoute
+  '/api/mind/nuance/session': typeof ApiMindNuanceSessionRoute
   '/api/mind/pairing/action': typeof ApiMindPairingActionRoute
   '/api/mind/pairing/code': typeof ApiMindPairingCodeRoute
   '/api/mind/pairing/handshake': typeof ApiMindPairingHandshakeRoute
@@ -643,6 +659,8 @@ export interface FileRoutesById {
   '/api/mind/mcp/servers': typeof ApiMindMcpServersRoute
   '/api/mind/mcp/tools': typeof ApiMindMcpToolsRoute
   '/api/mind/media/generate': typeof ApiMindMediaGenerateRoute
+  '/api/mind/nuance/key': typeof ApiMindNuanceKeyRoute
+  '/api/mind/nuance/session': typeof ApiMindNuanceSessionRoute
   '/api/mind/pairing/action': typeof ApiMindPairingActionRoute
   '/api/mind/pairing/code': typeof ApiMindPairingCodeRoute
   '/api/mind/pairing/handshake': typeof ApiMindPairingHandshakeRoute
@@ -719,6 +737,8 @@ export interface FileRouteTypes {
     | '/api/mind/mcp/servers'
     | '/api/mind/mcp/tools'
     | '/api/mind/media/generate'
+    | '/api/mind/nuance/key'
+    | '/api/mind/nuance/session'
     | '/api/mind/pairing/action'
     | '/api/mind/pairing/code'
     | '/api/mind/pairing/handshake'
@@ -793,6 +813,8 @@ export interface FileRouteTypes {
     | '/api/mind/mcp/servers'
     | '/api/mind/mcp/tools'
     | '/api/mind/media/generate'
+    | '/api/mind/nuance/key'
+    | '/api/mind/nuance/session'
     | '/api/mind/pairing/action'
     | '/api/mind/pairing/code'
     | '/api/mind/pairing/handshake'
@@ -867,6 +889,8 @@ export interface FileRouteTypes {
     | '/api/mind/mcp/servers'
     | '/api/mind/mcp/tools'
     | '/api/mind/media/generate'
+    | '/api/mind/nuance/key'
+    | '/api/mind/nuance/session'
     | '/api/mind/pairing/action'
     | '/api/mind/pairing/code'
     | '/api/mind/pairing/handshake'
@@ -942,6 +966,8 @@ export interface RootRouteChildren {
   ApiMindMcpServersRoute: typeof ApiMindMcpServersRoute
   ApiMindMcpToolsRoute: typeof ApiMindMcpToolsRoute
   ApiMindMediaGenerateRoute: typeof ApiMindMediaGenerateRoute
+  ApiMindNuanceKeyRoute: typeof ApiMindNuanceKeyRoute
+  ApiMindNuanceSessionRoute: typeof ApiMindNuanceSessionRoute
   ApiMindPairingActionRoute: typeof ApiMindPairingActionRoute
   ApiMindPairingCodeRoute: typeof ApiMindPairingCodeRoute
   ApiMindPairingHandshakeRoute: typeof ApiMindPairingHandshakeRoute
@@ -1258,6 +1284,20 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApiMindMediaGenerateRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/api/mind/nuance/key': {
+      id: '/api/mind/nuance/key'
+      path: '/api/mind/nuance/key'
+      fullPath: '/api/mind/nuance/key'
+      preLoaderRoute: typeof ApiMindNuanceKeyRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/mind/nuance/session': {
+      id: '/api/mind/nuance/session'
+      path: '/api/mind/nuance/session'
+      fullPath: '/api/mind/nuance/session'
+      preLoaderRoute: typeof ApiMindNuanceSessionRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/api/mind/pairing/action': {
       id: '/api/mind/pairing/action'
       path: '/api/mind/pairing/action'
@@ -1526,6 +1566,8 @@ const rootRouteChildren: RootRouteChildren = {
   ApiMindMcpServersRoute: ApiMindMcpServersRoute,
   ApiMindMcpToolsRoute: ApiMindMcpToolsRoute,
   ApiMindMediaGenerateRoute: ApiMindMediaGenerateRoute,
+  ApiMindNuanceKeyRoute: ApiMindNuanceKeyRoute,
+  ApiMindNuanceSessionRoute: ApiMindNuanceSessionRoute,
   ApiMindPairingActionRoute: ApiMindPairingActionRoute,
   ApiMindPairingCodeRoute: ApiMindPairingCodeRoute,
   ApiMindPairingHandshakeRoute: ApiMindPairingHandshakeRoute,

@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { NuanceCallCard } from "./nuance-call";
 
 export const HUMAN_CODE_NOTE = "Intelligence. This thread discusses code. File edits go to Build and are not claimed until Build reports them.";
 
@@ -26,6 +27,7 @@ export function HumanCodePanel(props: {
   onOpen: (id: string) => void;
   onSend: (id: string, text: string, image?: { dataUrl: string; name: string }) => void;
   onBuild: (text: string) => void;
+  halted?: boolean;
 }) {
   const [draft, setDraft] = useState("");
   const [fontSize, setFontSize] = useState(15);
@@ -130,6 +132,7 @@ export function HumanCodePanel(props: {
           </ul>
         </aside>
         <div className="intelligence-main">
+          <NuanceCallCard halted={props.halted === true} />
           <section className="intelligence-group" aria-label="Discussion">
             <h3>Discussion</h3>
             <div className="max-h-80 space-y-3 overflow-auto" style={{ fontSize, whiteSpace: wrap ? "pre-wrap" : "pre", overflowX: wrap ? "hidden" : "auto" }}>
