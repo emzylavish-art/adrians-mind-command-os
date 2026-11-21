@@ -66,6 +66,7 @@ import { VoiceLevelMeter } from "@/components/mind/voice-level-meter";
 import { VoiceLiveTranscript } from "@/components/mind/voice-live-transcript";
 import { VoicePicker } from "@/components/mind/voice-picker";
 import { LiveVoiceBar } from "@/components/mind/live-voice-bar";
+import { VoiceCloningStudioPage } from "@/components/mind/voice-cloning-studio/voice-cloning-studio";
 import { DictationPill } from "@/components/mind/dictation-pill";
 import { VoiceModeOverlay, type VoiceOverlayPhase } from "@/components/mind/voice-mode-overlay";
 import { SpeakStage } from "@/components/mind/speak-stage";
@@ -318,6 +319,7 @@ type View =
   | "activity"
   | "help"
   | "skills"
+  | "voice"
   | "settings"
   | "dashboard";
 
@@ -708,6 +710,7 @@ const MORE_NAV: { id: View; label: string; icon: typeof Home }[] = [
   { id: "agents", label: "Bots", icon: Bot },
   { id: "tools", label: "Tools", icon: Wrench },
   { id: "skills", label: "Skills", icon: Zap },
+  { id: "voice", label: "Voice clone", icon: Volume2 },
   { id: "runs", label: "Runs", icon: Activity },
   { id: "memory", label: "Memory", icon: Database },
   { id: "activity", label: "Activity", icon: Activity },
@@ -731,6 +734,7 @@ const TITLES: Record<View, string> = {
   connected: "Connected",
   tools: "Tools",
   skills: "Skills",
+  voice: "Voice clone",
   scheduled: "Scheduled",
   integrations: "Integrations",
   activity: "Activity",
@@ -4906,6 +4910,7 @@ export function CommandApp() {
     const views = new Set<string>([
       "command", "intelligence", "chat", "projects", "memory", "agents", "runs", "research", "files",
       "connected", "tools", "build", "code", "scheduled", "integrations", "activity", "help", "skills", "settings",
+      "voice",
     ]);
     if (item.action === "view" && item.view && views.has(item.view)) {
       setView(item.view as View);
@@ -5431,6 +5436,7 @@ export function CommandApp() {
                     type="button"
                     className={`nav-item flex min-h-11 w-full items-center gap-3 rounded-2xl px-3 text-sm font-medium ${view === item.id ? "nav-item-active" : "text-muted"}`}
                     onClick={() => { setView(item.id); setNavOpen(false); }}
+                    data-testid={item.id === "voice" ? "nav-voice-clone" : undefined}
                   >
                     <Icon className="size-4 shrink-0 opacity-90" />
                     {item.label}
@@ -7191,6 +7197,7 @@ export function CommandApp() {
               </div>
             </section>
           )}
+          {view === "voice" ? <VoiceCloningStudioPage onBack={() => { setView("command"); setNavOpen(false); }} /> : null}
           <section className={view === "skills" ? "page-shell space-y-4" : "hidden"}>
               <div className="page-hero">
                 <div className="flex items-center gap-3">
@@ -7533,6 +7540,7 @@ export function CommandApp() {
                     ["scheduled", "Scheduled", "Jobs that wait for a time", () => { setView("scheduled"); setNavOpen(false); }],
                     ["tools", "Tools", "What this app can call", () => { setView("tools"); setNavOpen(false); }],
                     ["skills", "Skills", "Installed abilities", () => { setView("skills"); setNavOpen(false); }],
+                    ["voice", "Voice clone", "Authorized profiles. Not Speak and not dictation.", () => { setView("voice"); setNavOpen(false); }],
                     ["memory", "Memory", "Notes you chose to keep", () => { setView("memory"); setNavOpen(false); }],
                     ["activity", "Activity", "What this device recorded", () => { setView("activity"); setNavOpen(false); }],
                     ["help", "Help", "How the controls behave", () => { setView("help"); setNavOpen(false); }],

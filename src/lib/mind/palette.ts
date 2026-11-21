@@ -11,6 +11,7 @@ export const PALETTE_DESTINATIONS = [
   { id: "connected", label: "Connected" },
   { id: "tools", label: "Tools" },
   { id: "skills", label: "Skills" },
+  { id: "voice", label: "Voice clone", aliases: ["voice cloning", "clone"] },
   { id: "scheduled", label: "Scheduled" },
   { id: "memory", label: "Memory" },
   { id: "activity", label: "Activity" },
