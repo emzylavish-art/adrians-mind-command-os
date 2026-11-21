@@ -64,6 +64,15 @@ ${row}[aria-pressed="true"] {
 
 export function applyAppleMotion(doc: Document) {
   doc.documentElement.dataset.adrianMotion = "apple";
+  writeMotionStyle(doc);
+}
+
+export function applyMotionChoice(doc: Document, choice: MotionChoice) {
+  doc.documentElement.dataset.adrianMotion = choice === "reduce" ? "reduce" : "apple";
+  writeMotionStyle(doc);
+}
+
+function writeMotionStyle(doc: Document) {
   let node = doc.getElementById(APPLE_MOTION_STYLE_ID);
   if (!node) {
     node = doc.createElement("style");
@@ -71,4 +80,11 @@ export function applyAppleMotion(doc: Document) {
     doc.head.appendChild(node);
   }
   node.textContent = appleMotionCss();
+}
+export const MOTION_KEY = "amcos.motion.v1";
+export type MotionChoice = "smooth" | "reduce";
+
+export function readMotionChoice(raw: string | null, systemReduce = false): MotionChoice {
+  if (raw === "smooth" || raw === "reduce") return raw;
+  return systemReduce ? "reduce" : "smooth";
 }

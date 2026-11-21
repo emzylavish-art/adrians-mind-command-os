@@ -19,6 +19,7 @@ import {
   type LoginCallbackFailureKind,
   type LoginProviderId,
 } from "@/lib/auth/login-providers";
+import { SignInGuide } from "@/components/mind/first-steps";
 
 const LazyMonoMotion = lazy(() =>
   import("@/components/mind/motion/MonoMotionGraphic").then((m) => ({ default: m.MonoMotionGraphic })),
@@ -345,6 +346,7 @@ function Login() {
           title={mode === "sign-in" ? "Sign in" : "Create account"}
           subtitle="Grok, voice, REA, and the server copy run only for the signed-in owner."
         />
+        <SignInGuide />
 
         {!supabaseConfigured ? (
           <div

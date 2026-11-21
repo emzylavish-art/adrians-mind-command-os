@@ -31,7 +31,7 @@ export function MenuMotion() {
 export function finishMenu(node: HTMLElement | null) {
   if (!node) return;
   const light = document.documentElement.dataset.theme === "light";
-  const reduce = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+  const reduce = window.matchMedia("(prefers-reduced-motion: reduce)").matches || document.documentElement.dataset.adrianMotion === "reduce";
   node.classList.add("adrian-menu");
   node.dataset.menuMaterial = "lifted";
   node.style.setProperty("opacity", "1", "important");

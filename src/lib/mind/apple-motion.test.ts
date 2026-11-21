@@ -26,4 +26,13 @@ describe("appleMotionCss", () => {
     assert.match(css, /transition: none !important/);
     assert.match(css, /animation: none !important/);
   });
+
+  it("keeps a stored choice ahead of the device default", () => {
+    assert.equal(readMotionChoice(null, false), "smooth");
+    assert.equal(readMotionChoice(null, true), "reduce");
+    assert.equal(readMotionChoice("reduce", false), "reduce");
+    assert.equal(readMotionChoice("smooth", true), "smooth");
+    assert.equal(readMotionChoice("paper", true), "reduce");
+  });
 });
+import { readMotionChoice } from "./apple-motion.ts";

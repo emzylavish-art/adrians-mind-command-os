@@ -247,6 +247,9 @@ import { canSend } from "@/lib/mind/send-gate";
 import { cueMessage, dropCued, restoreCue, takeNextCue, type CuedMessage } from "@/lib/mind/message-cue";
 import { saveFailureMessage } from "@/lib/mind/save-error";
 import { resetVoice } from "@/lib/mind/settings-reset";
+import { FirstSteps } from "@/components/mind/first-steps";
+import { applyMotionChoice, MOTION_KEY, readMotionChoice, type MotionChoice } from "@/lib/mind/apple-motion";
+import { FIRST_STEPS_KEY, readFirstSteps, reopenFirstSteps, type FirstStepId, type FirstStepsState } from "@/lib/mind/first-steps";
 import {
   DEFAULT_VOICE_SETTINGS,
   loadVoiceSettings,
@@ -664,6 +667,33 @@ function keepComposerInside() {
     }
   }
   liftDictateIntoView();
+  keepGuideClear();
+}
+
+function keepGuideClear() {
+  const guide = document.querySelector("[data-testid='first-steps']");
+  const dock = document.querySelector(".gpt-home [data-composer='floating']");
+  if (!(guide instanceof HTMLElement) || !(dock instanceof HTMLElement)) return;
+  if (!window.matchMedia("(max-width: 767px)").matches) return;
+  dock.style.setProperty("position", "relative", "important");
+  dock.style.setProperty("inset", "auto", "important");
+  dock.style.setProperty("left", "auto", "important");
+  dock.style.setProperty("right", "auto", "important");
+  dock.style.setProperty("top", "auto", "important");
+  dock.style.setProperty("bottom", "auto", "important");
+  dock.style.setProperty("width", "100%", "important");
+  dock.style.setProperty("max-width", "100%", "important");
+  dock.style.setProperty("z-index", "1", "important");
+  dock.style.setProperty("transform", "none", "important");
+  dock.style.setProperty("margin", "0", "important");
+  const handy = document.querySelector("[data-testid='handy-dictation']");
+  const scroller = [...document.querySelectorAll(".overflow-auto")].find((node) => node instanceof HTMLElement && node.contains(guide) && node.scrollHeight > node.clientHeight + 8);
+  if (!(scroller instanceof HTMLElement)) return;
+  const limit = handy instanceof HTMLElement ? handy.getBoundingClientRect().top - 8 : window.innerHeight - 8;
+  const covered = dock.getBoundingClientRect().bottom - limit;
+  if (covered > 1) scroller.scrollTop += Math.ceil(covered);
+  const hidden = 8 - guide.getBoundingClientRect().top;
+  if (hidden > 1) scroller.scrollTop -= Math.ceil(hidden);
 }
 
 function liftDictateIntoView() {
@@ -1162,6 +1192,15 @@ export function CommandApp() {
       return "dark";
     }
   });
+  const [motionChoice, setMotionChoice] = useState<MotionChoice>(() => {
+    if (typeof window === "undefined") return "smooth";
+    try {
+      return readMotionChoice(window.localStorage.getItem(MOTION_KEY), window.matchMedia("(prefers-reduced-motion: reduce)").matches);
+    } catch {
+      return "smooth";
+    }
+  });
+  const [guide, setGuide] = useState<FirstStepsState>({ step: 0, dismissed: false });
   const [commandMode, setCommandMode] = useState<CommandMode>("ask");
   const [defaultPersonalityId, setDefaultPersonalityId] = useState<PersonalityId>("assistant");
   const [activeId, setActiveId] = useState<string | null>(null);
@@ -1768,17 +1807,21 @@ export function CommandApp() {
     keepComposerInside();
     const fit = () => keepComposerInside();
     const observer = new ResizeObserver(fit);
-    document.querySelectorAll(".gpt-home [data-composer='floating'], [data-testid='handy-dictation'], .gpt-home").forEach((node) => observer.observe(node));
+    document.querySelectorAll(".gpt-home [data-composer='floating'], [data-testid='handy-dictation'], [data-testid='first-steps'], .gpt-home").forEach((node) => observer.observe(node));
+    const onFocus = (event: FocusEvent) => {
+      if (event.target instanceof Element && event.target.closest("[data-testid='first-steps']")) return;
+      fit();
+    };
     window.addEventListener("resize", fit);
-    document.addEventListener("focusin", fit);
+    document.addEventListener("focusin", onFocus);
     const frame = window.requestAnimationFrame(() => window.requestAnimationFrame(fit));
     return () => {
       window.cancelAnimationFrame(frame);
       observer.disconnect();
       window.removeEventListener("resize", fit);
-      document.removeEventListener("focusin", fit);
+      document.removeEventListener("focusin", onFocus);
     };
-  }, [view]);
+  }, [view, guide.dismissed, guide.step]);
 
   const timelineRunning = useMemo(() => timelineCounts(toolTimeline).running, [toolTimeline]);
   useEffect(() => {
@@ -2079,6 +2122,56 @@ export function CommandApp() {
     }
     return () => device.removeEventListener("change", apply);
   }, [theme]);
+
+  useEffect(() => {
+    applyMotionChoice(document, motionChoice);
+  }, [motionChoice]);
+
+  useEffect(() => {
+    try {
+      setGuide(readFirstSteps(localStorage.getItem(FIRST_STEPS_KEY)));
+    } catch {
+      /* a private browser can refuse storage */
+    }
+  }, []);
+
+  const persistGuide = (next: FirstStepsState) => {
+    setGuide(next);
+    try {
+      localStorage.setItem(FIRST_STEPS_KEY, JSON.stringify(next));
+    } catch {
+      /* a private browser can refuse storage */
+    }
+  };
+
+  const chooseMotion = (choice: MotionChoice) => {
+    setMotionChoice(choice);
+    try {
+      localStorage.setItem(MOTION_KEY, choice);
+    } catch {
+      /* a private browser can refuse storage */
+    }
+    window.dispatchEvent(new Event("amcos-motion"));
+  };
+
+  const openGuide = (id: FirstStepId) => {
+    if (id === "ask") {
+      setView("command");
+      requestAnimationFrame(() => document.querySelector<HTMLTextAreaElement>("[data-testid='home-command']")?.focus());
+      return;
+    }
+    if (id === "speak") {
+      openSpeakStage();
+      return;
+    }
+    if (id === "settings") {
+      setSettingsPane(null);
+      setView("settings");
+      setNavOpen(false);
+      return;
+    }
+    window.location.assign("/login");
+  };
 
   const hits = useMemo(
     () =>
@@ -6057,6 +6150,7 @@ export function CommandApp() {
               </div>
               {homeAction !== "ask" && <button type="button" className="min-h-11 px-3 text-sm text-muted" onClick={() => { setHomeAction("ask"); setCommandMode("ask"); }}>Clear mode · Back to Chat</button>}
 
+              <FirstSteps state={guide} onChange={persistGuide} onOpen={openGuide} />
               <section ref={liftHomeComposer} className="floating-composer command-card composer-dock rounded-panel p-3 md:p-4" data-composer="floating">
                 <details className="composer-advanced">
                   <summary>Controls</summary>
@@ -6131,6 +6225,7 @@ export function CommandApp() {
                     }}
                     placeholder={homeAction === "image" ? "Describe the image" : homeAction === "video" ? "Describe the video" : homeAction === "write" ? "What should I write or edit?" : homeAction === "search" ? "Search the web" : "Ask Adrian"}
                     aria-label="Command"
+                    data-testid="home-command"
                     rows={3}
                     className="input-glow w-full resize-none rounded-[1.1rem] border border-line/80 bg-bg/70 px-3 py-3 text-sm"
                   />
@@ -7522,13 +7617,14 @@ export function CommandApp() {
               <nav className="intelligence-main space-y-3" aria-label="Settings sections" hidden={settingsPane !== null}>
                 {([
                   { group: "Account", items: [
-                    ["security", "Security and login", "Sign in to connect services", () => { window.location.assign("/login"); }],
+                    ["sign-in", "Sign in", "Keep this account’s own copy", () => { window.location.assign("/login"); }],
+                    ["sign-up", "Sign up", "A new account starts empty", () => { window.location.assign("/login?mode=sign-up"); }],
                     ["keys", "Safe keys", "Open a saved key and copy it", () => setSettingsPane("keys")],
                     ["data", "Data", "What stays in this browser", () => setSettingsPane("data")],
                     ["safety", "Safety", "Stops and confirmations", () => setSettingsPane("safety")],
                   ]},
                   { group: "Preferences", items: [
-                    ["general", "Appearance", "Dark, light, or follow this device", () => setSettingsPane("general")],
+                    ["general", "Appearance", "Dark, light, motion, or follow this device", () => setSettingsPane("general")],
                     ["voice", "Voice", "Speak voice and pace", () => setSettingsPane("voice")],
                   ]},
                   { group: "Personalization", items: [
@@ -7614,6 +7710,19 @@ export function CommandApp() {
                   Reset theme
                 </button>
                 <p data-testid="settings-reset-appearance-status" className="mt-2 text-muted">Default theme: Dark.</p>
+                <div className="settings-row mt-4">
+                  <div>
+                    <p className="font-semibold">Motion</p>
+                    <p className="text-muted">Smooth uses the same easing on controls. Reduce turns that movement off in this browser. A device that asks for less motion still wins.</p>
+                  </div>
+                  <div className="flex flex-wrap gap-2">
+                    <button type="button" aria-pressed={motionChoice === "smooth"} data-testid="settings-motion-smooth" className={`min-h-11 rounded-panel border px-3 ${motionChoice === "smooth" ? "border-accent bg-accent text-accent-ink tile-active" : "border-line"}`} onClick={() => chooseMotion("smooth")}>Smooth</button>
+                    <button type="button" aria-pressed={motionChoice === "reduce"} data-testid="settings-motion-reduce" className={`min-h-11 rounded-panel border px-3 ${motionChoice === "reduce" ? "border-accent bg-accent text-accent-ink tile-active" : "border-line"}`} onClick={() => chooseMotion("reduce")}>Reduce</button>
+                  </div>
+                </div>
+                <button type="button" data-testid="settings-show-steps" className="mt-3 min-h-11 rounded-panel border border-line px-3 text-sm" onClick={() => { persistGuide(reopenFirstSteps()); setSettingsPane(null); setView("command"); setNavOpen(false); }}>
+                  Show first steps
+                </button>
               </div>
               <div id="settings-connections" hidden={settingsPane !== "connections"} className="space-y-4">
               <div className="settings-card rounded-panel p-4 text-sm">
