@@ -3,6 +3,34 @@ export const HANDY_ENGINE_SOURCE = "https://github.com/handy-computer/transcribe
 export const HANDY_WHISPER_URL = "http://127.0.0.1:4196/handy-stt";
 export const HANDY_WAVE_BARS = 9;
 
+export async function detectWithHandy(
+  audioBase64: string,
+  fetchImpl: typeof fetch = fetch,
+): Promise<{ ok: true; text: string; provider: "handy" } | { ok: false; error: string }> {
+  if (!audioBase64.trim()) return { ok: false, error: "No audio was recorded. Nothing was transcribed." };
+  let audio: ArrayBuffer;
+  try {
+    const raw = Uint8Array.from(atob(audioBase64), (char) => char.charCodeAt(0));
+    audio = new ArrayBuffer(raw.byteLength);
+    new Uint8Array(audio).set(raw);
+  } catch {
+    return { ok: false, error: "The recording could not be read. Nothing was transcribed." };
+  }
+  try {
+    const response = await fetchImpl(HANDY_WHISPER_URL, {
+      method: "POST",
+      headers: { "content-type": "application/octet-stream" },
+      body: audio,
+    });
+    const body = await response.json() as { ok?: boolean; text?: string; error?: string };
+    const text = body.text?.trim() ?? "";
+    if (!response.ok || !body.ok || !text) return { ok: false, error: body.error || "Handy heard no words." };
+    return { ok: true, text, provider: "handy" };
+  } catch {
+    return { ok: false, error: "Handy Whisper Flow is not running. Nothing was transcribed." };
+  }
+}
+
 /** Bar height from Handy's RecordingOverlay. Not a Google detector. */
 export function handyBarHeight(level: number): number {
   const value = Math.max(0, Math.min(1, level));

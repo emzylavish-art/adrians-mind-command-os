@@ -407,7 +407,7 @@ export function SpeakStage(props: {
         </div>
         <p data-testid="speak-speech-cut" role="status">{notice?.startsWith("Speech cut") || notice?.startsWith("EVE cleared") ? notice : props.halted ? "Emergency stop is on. EVE can press Clear." : "Only you can press the emergency stop. EVE can press Clear."}</p>
       </section>
-      <p data-testid="speak-face" style={{ position: "relative", zIndex: 2, color: "#d4d4d8" }}>Generated figure removed. Press Speak once. Mute is beside it.</p>
+      <p data-testid="speak-face" style={{ position: "relative", zIndex: 2, color: "#d4d4d8" }}>Generated figure removed. Press Speak once. Mute is beside it. Detection is Handy Whisper Flow. This button is Speak.</p>
       <video ref={videoRef} className={source === "none" ? "is-hidden" : source} playsInline muted autoPlay />
       <div className="speak-call__status">
         <AudioLines aria-hidden="true" />

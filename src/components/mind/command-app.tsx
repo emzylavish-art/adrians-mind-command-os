@@ -234,6 +234,7 @@ import {
 import { runSkill, searchSkills, SKILLS } from "@/lib/mind/skills";
 import LocalSkillsTools from "@/components/mind/local-skills-tools";
 import { HandyDictation } from "@/components/mind/handy-dictation";
+import { detectWithHandy } from "@/lib/mind/handy-dictation";
 import { ModuleSuggestions } from "@/components/mind/module-suggestions";
 import { type ModuleSuggestion } from "@/lib/intent/module-suggestions";
 import { refreshSkills } from "@/lib/mind/skill-refresh";
@@ -4513,6 +4514,11 @@ export function CommandApp() {
       deps: {
         capture: () => captureSpeakUtterance({ maxMs: 6000, signal: abort.signal }),
         transcribe: async (audioBase64) => {
+          const detected = await detectWithHandy(audioBase64);
+          if (detected.ok) {
+            setNotice("Handy Whisper Flow detected this. Speak is the call.");
+            return { ok: true, text: detected.text, provider: "handy" };
+          }
           const prefix = previewPathPrefix(window.location.hostname, window.location.pathname) ?? "";
           const token = getBearerToken();
           const response = await fetch(`${prefix}/api/mind/voice/stt`, {
@@ -6568,7 +6574,7 @@ export function CommandApp() {
                 <Panel title="System Status" action="Details" onAction={() => setView("integrations")}>
                   <StatusRow icon={Database} name="Memory" detail={memoryChoice === "on" ? "On for the next command" : "Off for the next command"} pill={memoryChoice === "on" ? "On" : "Off"} tone={memoryChoice === "on" ? "ok" : "muted"} />
                   <StatusRow icon={Database} name="Database" detail={databaseDetail} pill={databasePill} tone={databasePill === "Refused" ? "danger" : "muted"} />
-                  <StatusRow icon={Bot} name="Voice" detail="Dictate types into the field. Speak is the call. They are not the same." pill={speakStageOpen ? "Speak" : "Dictate"} tone="muted" />
+                  <StatusRow icon={Bot} name="Voice" detail="Detection is Handy Whisper Flow. Speak is the call. They are not the same." pill={speakStageOpen ? "Speak" : "Detection"} tone="muted" />
                   <StatusRow icon={Bot} name="REA" detail="CLI from GitHub runs. Native engines are not installed." pill="Partial" tone="muted" />
                   <StatusRow icon={Square} name="HP" detail="Local device integration" pill="Not paired" tone="danger" />
                   <p className="mt-3 text-xs text-muted">Grok: {grok}. Checked {stamp(checkedAt) || checkedAt}. {system}</p>

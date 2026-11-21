@@ -19,7 +19,7 @@ export function HandyDictation() {
   const [phase, setPhase] = useState<Phase>("idle");
   const [label, setLabel] = useState("");
   const [levels, setLevels] = useState<number[]>(handyLiveLevels(0));
-  const [note, setNote] = useState("Dictate types into the field. Speak is the call.");
+  const [note, setNote] = useState("Detection is Handy Whisper Flow. Speak is the call.");
   const [target, setTarget] = useState("es");
   const [actionsOpen, setActionsOpen] = useState(false);
   const [translation, setTranslation] = useState("");
@@ -98,7 +98,7 @@ export function HandyDictation() {
   async function start() {
     setPhase("speak");
     setEngine("");
-    setNote(label ? `Dictate into ${label}. This is not the call.` : "Dictate into the field. This is not the call.");
+    setNote(label ? `Detection is listening in ${label}. This is not Speak.` : "Detection is listening. This is not Speak.");
     field.current?.focus();
     try {
       await liveSession().start();
@@ -115,7 +115,7 @@ export function HandyDictation() {
     }
     const live = session.current;
     if (!live || live.getState().phase === "idle") {
-      setNote("Press Dictate and speak first. Nothing was saved.");
+      setNote("Press Detection and speak first. Nothing was saved.");
       return;
     }
     try {
@@ -169,8 +169,8 @@ export function HandyDictation() {
       onPointerLeave={(event) => window.clearTimeout(Number(event.currentTarget.dataset.hold))}
       onPointerCancel={(event) => window.clearTimeout(Number(event.currentTarget.dataset.hold))}
     >
-      <button type="button" className="min-h-11 rounded-panel border border-line px-3 text-sm" data-testid="handy-mic" aria-label="Dictate" title="Dictate types into the field. This is not Speak." onClick={() => void start()}>
-        Dictate
+      <button type="button" className="min-h-11 rounded-panel border border-line px-3 text-sm" data-testid="handy-mic" aria-label="Detection" title="Detection is Handy Whisper Flow. This is not Speak." onClick={() => void start()}>
+        Detection
       </button>
       {phase === "speak" || phase === "saved" ? (
         <span className="inline-flex items-end gap-1" data-testid="handy-wave" data-live="true" aria-label="Speech is live">

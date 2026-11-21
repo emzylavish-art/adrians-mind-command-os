@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { HANDY_SOURCE, HANDY_WAVE_BARS, HANDY_WHISPER_URL, handyBarHeight, handyLiveLevels } from "./handy-dictation.ts";
+import { HANDY_SOURCE, HANDY_WAVE_BARS, HANDY_WHISPER_URL, detectWithHandy, handyBarHeight, handyLiveLevels } from "./handy-dictation.ts";
 import { refreshSkills } from "./skill-refresh.ts";
 import { REJECTED_GOOGLE_TRANSLATOR, SOKUJI_SOURCE, translateVoice, voiceHostAllowed } from "./voice-translator.ts";
 
@@ -24,4 +24,17 @@ test("Handy dictation uses the project wave and does not ask to refresh skills",
   assert.equal(translated.text, "hola");
   assert.equal(voiceHostAllowed("https://translate.google.com/translate"), false);
   assert.equal(voiceHostAllowed(REJECTED_GOOGLE_TRANSLATOR), true);
+});
+
+test("Speak detection asks Handy Whisper Flow and does not invent words", async () => {
+  const calls: string[] = [];
+  const heard = await detectWithHandy(btoa("audio"), (async (url: string) => {
+    calls.push(url);
+    return new Response(JSON.stringify({ ok: true, text: "hello from handy" }), { status: 200 });
+  }) as typeof fetch);
+  assert.deepEqual(calls, [HANDY_WHISPER_URL]);
+  assert.equal(heard.ok && heard.provider, "handy");
+  assert.equal(heard.ok && heard.text, "hello from handy");
+  const missed = await detectWithHandy("", fetch);
+  assert.equal(missed.ok, false);
 });
