@@ -633,13 +633,21 @@ function keepComposerInside() {
     homeForm.style.setProperty("overflow", "visible", "important");
     const formBox = homeForm.getBoundingClientRect();
     const scrollBox = scroller.getBoundingClientRect();
-    if (formBox.bottom > scrollBox.bottom - 8) scroller.scrollTop += formBox.bottom - scrollBox.bottom + 12;
-    if (homeForm.getBoundingClientRect().top < scrollBox.top + 8) scroller.scrollTop -= scrollBox.top + 8 - homeForm.getBoundingClientRect().top;
+    if (formBox.bottom > scrollBox.bottom - 8) {
+      const delta = formBox.bottom - scrollBox.bottom + 12;
+      scrollWithoutCoveringGreeting(scroller, delta);
+    }
+    if (homeForm.getBoundingClientRect().top < scrollBox.top + 8) {
+      const delta = homeForm.getBoundingClientRect().top - (scrollBox.top + 8);
+      scrollWithoutCoveringGreeting(scroller, delta);
+    }
     const dictate = homeForm.querySelector("[data-testid='composer-mic-dictate']");
     if (dictate instanceof HTMLElement) {
       const box = dictate.getBoundingClientRect();
       const limit = scroller.getBoundingClientRect().bottom - 8;
-      if (box.bottom > limit) scroller.scrollTop += box.bottom - limit + 12;
+      if (box.bottom > limit) {
+        scrollWithoutCoveringGreeting(scroller, box.bottom - limit + 12);
+      }
     }
   }
   const phone = window.matchMedia("(max-width: 767px)").matches;
@@ -668,6 +676,58 @@ function keepComposerInside() {
   }
   liftDictateIntoView();
   keepGuideClear();
+  keepBannerClear();
+  keepGuideAboveBar();
+}
+
+function scrollWithoutCoveringGreeting(scroller: HTMLElement, delta: number) {
+  if (delta === 0) return;
+  if (delta > 0 && scroller.contains(document.querySelector(".gpt-home h1"))) {
+    const heading = document.querySelector(".gpt-home h1");
+    const banner = document.querySelector(".banner-error");
+    if (heading instanceof HTMLElement && banner instanceof HTMLElement) {
+      const room = heading.getBoundingClientRect().top - (banner.getBoundingClientRect().bottom + 8);
+      if (room <= 1) return;
+      delta = Math.min(delta, Math.floor(room));
+    }
+  }
+  scroller.scrollTop += delta;
+}
+
+function keepBannerClear() {
+  const heading = document.querySelector(".gpt-home h1");
+  const banner = document.querySelector(".banner-error");
+  if (!(heading instanceof HTMLElement) || !(banner instanceof HTMLElement)) return;
+  const scroller = heading.closest(".overflow-auto") ?? heading.closest(".gpt-home")?.parentElement;
+  if (!(scroller instanceof HTMLElement)) return;
+  const overlap = banner.getBoundingClientRect().bottom + 8 - heading.getBoundingClientRect().top;
+  if (overlap <= 1) return;
+  scroller.scrollTop = Math.max(0, scroller.scrollTop - Math.ceil(overlap));
+}
+
+function keepGuideAboveBar() {
+  const guide = document.querySelector("[data-testid='first-steps']");
+  if (!(guide instanceof HTMLElement)) return;
+  const dock = document.querySelector(".gpt-home [data-composer='floating']");
+  const handy = document.querySelector("[data-testid='handy-dictation']");
+  const limits: number[] = [];
+  if (dock instanceof HTMLElement) limits.push(dock.getBoundingClientRect().top);
+  if (handy instanceof HTMLElement) limits.push(handy.getBoundingClientRect().top);
+  if (limits.length === 0) return;
+  const limit = Math.min(...limits) - 8;
+  const applied = Number.parseFloat(guide.style.marginTop || "0") || 0;
+  const naturalBottom = guide.getBoundingClientRect().bottom - applied;
+  let pull = naturalBottom - limit > 1 ? Math.ceil(naturalBottom - limit) : 0;
+  const heading = document.querySelector(".gpt-home h1");
+  if (heading instanceof HTMLElement && pull > 0) {
+    const naturalTop = guide.getBoundingClientRect().top - applied;
+    const room = naturalTop - (heading.getBoundingClientRect().bottom + 8);
+    pull = Math.max(0, Math.min(pull, Math.floor(room)));
+  }
+  const next = pull > 0 ? `-${pull}px` : "";
+  if ((guide.style.marginTop || "") === next) return;
+  if (next) guide.style.setProperty("margin-top", next, "important");
+  else guide.style.removeProperty("margin-top");
 }
 
 function keepGuideClear() {
@@ -691,7 +751,7 @@ function keepGuideClear() {
   if (!(scroller instanceof HTMLElement)) return;
   const limit = handy instanceof HTMLElement ? handy.getBoundingClientRect().top - 8 : window.innerHeight - 8;
   const covered = dock.getBoundingClientRect().bottom - limit;
-  if (covered > 1) scroller.scrollTop += Math.ceil(covered);
+  if (covered > 1) scrollWithoutCoveringGreeting(scroller, Math.ceil(covered));
   const hidden = 8 - guide.getBoundingClientRect().top;
   if (hidden > 1) scroller.scrollTop -= Math.ceil(hidden);
 }
@@ -708,7 +768,7 @@ function liftDictateIntoView() {
     const style = getComputedStyle(node);
     const scrolls = style.overflowY === "auto" || style.overflowY === "scroll";
     if (scrolls && node.scrollHeight > node.clientHeight + 1) {
-      node.scrollTop += box.bottom - limit + 4;
+      scrollWithoutCoveringGreeting(node, box.bottom - limit + 4);
       box = button.getBoundingClientRect();
       if (box.bottom <= limit) return;
     }
@@ -1807,7 +1867,7 @@ export function CommandApp() {
     keepComposerInside();
     const fit = () => keepComposerInside();
     const observer = new ResizeObserver(fit);
-    document.querySelectorAll(".gpt-home [data-composer='floating'], [data-testid='handy-dictation'], [data-testid='first-steps'], .gpt-home").forEach((node) => observer.observe(node));
+    document.querySelectorAll(".gpt-home [data-composer='floating'], [data-testid='handy-dictation'], [data-testid='first-steps'], .gpt-home, .banner-error").forEach((node) => observer.observe(node));
     const onFocus = (event: FocusEvent) => {
       if (event.target instanceof Element && event.target.closest("[data-testid='first-steps']")) return;
       fit();
@@ -1815,13 +1875,24 @@ export function CommandApp() {
     window.addEventListener("resize", fit);
     document.addEventListener("focusin", onFocus);
     const frame = window.requestAnimationFrame(() => window.requestAnimationFrame(fit));
+    let retries = 0;
+    const retry = window.setInterval(() => {
+      keepBannerClear();
+      keepGuideAboveBar();
+      retries += 1;
+      const heading = document.querySelector(".gpt-home h1");
+      const banner = document.querySelector(".banner-error");
+      const clear = banner instanceof HTMLElement && heading instanceof HTMLElement && heading.getBoundingClientRect().top >= banner.getBoundingClientRect().bottom + 8;
+      if (clear || retries > 24) window.clearInterval(retry);
+    }, 50);
     return () => {
       window.cancelAnimationFrame(frame);
+      window.clearInterval(retry);
       observer.disconnect();
       window.removeEventListener("resize", fit);
       document.removeEventListener("focusin", onFocus);
     };
-  }, [view, guide.dismissed, guide.step]);
+  }, [view, guide.dismissed, guide.step, ws.halted]);
 
   const timelineRunning = useMemo(() => timelineCounts(toolTimeline).running, [toolTimeline]);
   useEffect(() => {
