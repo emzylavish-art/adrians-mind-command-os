@@ -1,0 +1,49 @@
+{
+  "name": "adrians-mind",
+  "productName": "Adrian's Mind",
+  "version": "0.9.0",
+  "private": true,
+  "main": "main.cjs",
+  "description": "Adrian's Mind on Windows. The package contains the product, including Build. It does not include a separate Kimi program.",
+  "author": "emzylavish-art",
+  "build": {
+    "appId": "art.emzylavish.adrians-mind",
+    "productName": "Adrian's Mind",
+    "asar": true,
+    "files": [
+      "main.cjs"
+    ],
+    "extraResources": [
+      {
+        "from": "app-server",
+        "to": "app-server"
+      }
+    ],
+    "win": {
+      "target": [
+        {
+          "target": "nsis",
+          "arch": [
+            "x64"
+          ]
+        }
+      ],
+      "signAndEditExecutable": false
+    },
+    "nsis": {
+      "oneClick": true,
+      "perMachine": false,
+      "allowToChangeInstallationDirectory": false,
+      "artifactName": "AdriansMind-Setup.${ext}",
+      "shortcutName": "Adrian's Mind",
+      "uninstallDisplayName": "Adrian's Mind"
+    },
+    "directories": {
+      "output": "dist"
+    }
+  },
+  "devDependencies": {
+    "electron": "^33.4.11",
+    "electron-builder": "^25.1.8"
+  }
+}

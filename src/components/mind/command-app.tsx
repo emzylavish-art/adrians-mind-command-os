@@ -6042,8 +6042,8 @@ export function CommandApp() {
                   ) : null}
                 </MenuGroup>
                 <MenuGroup label="Install">
-                  <a role="menuitem" className="flex min-h-11 items-center rounded-2xl px-3 text-sm" href="/downloads/AdriansMind-Setup.exe" download data-testid="header-download-installer">Download installer</a>
-                  <p className="px-3 pb-2 text-xs text-muted" data-testid="installer-note">Unsigned. Current user only. It does not control the mouse, keyboard, or browser.</p>
+                  <a role="menuitem" className="flex min-h-11 items-center rounded-2xl px-3 text-sm" href="/downloads/AdriansMind-Setup.exe" download data-testid="header-download-installer">Download Adrian's Mind</a>
+                  <p className="px-3 pb-2 text-xs text-muted" data-testid="installer-note">Unsigned Windows app. It contains this product, including Build. It does not control the mouse, keyboard, or browser.</p>
                 </MenuGroup>
               </AnchoredCard>
             ) : null}

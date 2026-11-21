@@ -77,10 +77,10 @@ export function OwnerFlow(props: {
     <section className="rounded-panel border border-line bg-surface p-4 md:p-5" data-testid="owner-flow" aria-label="Windows pairing">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
-          <p className="text-xs uppercase tracking-wide text-muted">Windows pairing</p>
-          <h2 className="mt-1 text-lg font-semibold">Installer ready</h2>
-          <p className="mt-1 max-w-2xl text-sm text-muted" data-testid="windows-installer-ready">The Windows installer is a local download. It is not deployed. Hosted actions stay in this site. Desktop actions stay off until that installer is on your PC and the computer is paired.</p>
-          <a className="mt-3 inline-flex min-h-11 items-center rounded-panel bg-accent px-3 text-sm font-semibold text-accent-ink" href={INSTALLER_HREF} download data-testid="download-installer">Download installer</a>
+          <p className="text-xs uppercase tracking-wide text-muted">Windows software</p>
+          <h2 className="mt-1 text-lg font-semibold">Download Adrian's Mind</h2>
+          <p className="mt-1 max-w-2xl text-sm text-muted" data-testid="windows-installer-ready">This download is the Windows app. It contains the same product, including Build. It does not include a separate Kimi program. It is unsigned. It does not control the mouse, keyboard, or browser.</p>
+          <a className="mt-3 inline-flex min-h-11 items-center rounded-panel bg-accent px-3 text-sm font-semibold text-accent-ink" href={INSTALLER_HREF} download data-testid="download-installer">Download Adrian's Mind</a>
         </div>
         <div className="flex flex-wrap gap-2">
           <button type="button" className="inline-flex min-h-11 items-center rounded-panel border border-line px-3 text-sm" onClick={props.onOpenSpeak} data-testid="owner-flow-speak">Open Speak</button>
