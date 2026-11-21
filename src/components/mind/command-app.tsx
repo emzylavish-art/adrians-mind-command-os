@@ -678,6 +678,23 @@ function keepComposerInside() {
   keepGuideClear();
   keepBannerClear();
   keepGuideAboveBar();
+  keepStartRowInside();
+}
+
+function keepStartRowInside() {
+  const starters = document.querySelector(".gpt-home .gpt-starters");
+  const scroller = starters instanceof HTMLElement ? starters.closest(".overflow-auto") : null;
+  if (!(starters instanceof HTMLElement) || !(scroller instanceof HTMLElement)) return;
+  starters.style.setProperty("margin-top", "0.5rem", "important");
+  starters.style.setProperty("margin-bottom", "0.5rem", "important");
+  const limit = scroller.getBoundingClientRect().bottom - 8;
+  const buttons = [...starters.querySelectorAll("button")];
+  const clipped = buttons.find((button) => button instanceof HTMLElement && button.getBoundingClientRect().top < limit && button.getBoundingClientRect().bottom > limit);
+  if (!(clipped instanceof HTMLElement)) return;
+  const send = document.querySelector(".gpt-home .composer-send");
+  const room = send instanceof HTMLElement ? starters.getBoundingClientRect().top - send.getBoundingClientRect().bottom - 8 : 0;
+  const pull = Math.min(Math.ceil(clipped.getBoundingClientRect().bottom - limit), Math.floor(room));
+  if (pull > 1) starters.style.setProperty("margin-top", `${-pull}px`, "important");
 }
 
 function scrollWithoutCoveringGreeting(scroller: HTMLElement, delta: number) {
