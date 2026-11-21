@@ -687,14 +687,33 @@ function keepStartRowInside() {
   if (!(starters instanceof HTMLElement) || !(scroller instanceof HTMLElement)) return;
   starters.style.setProperty("margin-top", "0.5rem", "important");
   starters.style.setProperty("margin-bottom", "0.5rem", "important");
-  const limit = scroller.getBoundingClientRect().bottom - 8;
+  const scrollBox = scroller.getBoundingClientRect();
+  const bar = document.querySelector("[data-testid='handy-dictation']");
+  let limit = scrollBox.bottom - 8;
+  if (bar instanceof HTMLElement) {
+    const barTop = bar.getBoundingClientRect().top;
+    if (barTop > scrollBox.top && barTop < scrollBox.bottom) limit = Math.min(limit, barTop - 8);
+  }
   const buttons = [...starters.querySelectorAll("button")];
-  const clipped = buttons.find((button) => button instanceof HTMLElement && button.getBoundingClientRect().top < limit && button.getBoundingClientRect().bottom > limit);
-  if (!(clipped instanceof HTMLElement)) return;
-  const send = document.querySelector(".gpt-home .composer-send");
-  const room = send instanceof HTMLElement ? starters.getBoundingClientRect().top - send.getBoundingClientRect().bottom - 8 : 0;
-  const pull = Math.min(Math.ceil(clipped.getBoundingClientRect().bottom - limit), Math.floor(room));
-  if (pull > 1) starters.style.setProperty("margin-top", `${-pull}px`, "important");
+  for (const button of buttons) button.style.removeProperty("margin-top");
+  const first = buttons[0];
+  let pull = 0;
+  if (first) {
+    const box = first.getBoundingClientRect();
+    if (box.top < limit - 1 && box.bottom > limit + 1) {
+      const send = document.querySelector(".gpt-home .composer-send");
+      const room = send instanceof HTMLElement ? starters.getBoundingClientRect().top - send.getBoundingClientRect().bottom - 8 : 0;
+      pull = Math.min(Math.ceil(box.bottom - limit), Math.floor(Math.max(0, room)));
+      if (pull > 1) starters.style.setProperty("margin-top", `${-pull}px`, "important");
+    }
+  }
+  const clipped = buttons.find((button) => {
+    const box = button.getBoundingClientRect();
+    return box.top - pull < limit - 1 && box.bottom - pull > limit + 1;
+  });
+  if (!clipped || clipped === first) return;
+  const push = Math.ceil(limit - (clipped.getBoundingClientRect().top - pull)) + 4;
+  if (push > 1) clipped.style.setProperty("margin-top", `${push}px`, "important");
 }
 
 function scrollWithoutCoveringGreeting(scroller: HTMLElement, delta: number) {
@@ -5960,6 +5979,7 @@ export function CommandApp() {
                 </MenuGroup>
                 <MenuGroup label="Install">
                   <a role="menuitem" className="flex min-h-11 items-center rounded-2xl px-3 text-sm" href="/downloads/AdriansMind-Setup.exe" download data-testid="header-download-installer">Download installer</a>
+                  <p className="px-3 pb-2 text-xs text-muted" data-testid="installer-note">Unsigned. Current user only. It does not control the mouse, keyboard, or browser.</p>
                 </MenuGroup>
               </AnchoredCard>
             ) : null}
