@@ -19,7 +19,7 @@ export function HandyDictation() {
   const [phase, setPhase] = useState<Phase>("idle");
   const [label, setLabel] = useState("");
   const [levels, setLevels] = useState<number[]>(handyLiveLevels(0));
-  const [note, setNote] = useState("Dictation is Handy Whisper. Translation is Sokuji. Speak is separate.");
+  const [note, setNote] = useState("Dictate types into the field. Speak is the call.");
   const [target, setTarget] = useState("es");
   const [actionsOpen, setActionsOpen] = useState(false);
   const [translation, setTranslation] = useState("");
@@ -98,7 +98,7 @@ export function HandyDictation() {
   async function start() {
     setPhase("speak");
     setEngine("");
-    setNote(label ? `Speak into ${label}. This is dictation, not Speak.` : "Speak. This is dictation, not Speak.");
+    setNote(label ? `Dictate into ${label}. This is not the call.` : "Dictate into the field. This is not the call.");
     field.current?.focus();
     try {
       await liveSession().start();
@@ -115,7 +115,7 @@ export function HandyDictation() {
     }
     const live = session.current;
     if (!live || live.getState().phase === "idle") {
-      setNote("Press Microphone and speak first. Nothing was saved.");
+      setNote("Press Dictate and speak first. Nothing was saved.");
       return;
     }
     try {
@@ -169,8 +169,8 @@ export function HandyDictation() {
       onPointerLeave={(event) => window.clearTimeout(Number(event.currentTarget.dataset.hold))}
       onPointerCancel={(event) => window.clearTimeout(Number(event.currentTarget.dataset.hold))}
     >
-      <button type="button" className="min-h-11 rounded-panel border border-line px-3 text-sm" data-testid="handy-mic" onClick={() => void start()}>
-        Microphone
+      <button type="button" className="min-h-11 rounded-panel border border-line px-3 text-sm" data-testid="handy-mic" aria-label="Dictate" title="Dictate types into the field. This is not Speak." onClick={() => void start()}>
+        Dictate
       </button>
       {phase === "speak" || phase === "saved" ? (
         <span className="inline-flex items-end gap-1" data-testid="handy-wave" data-live="true" aria-label="Speech is live">
@@ -182,7 +182,7 @@ export function HandyDictation() {
           ))}
         </span>
       ) : null}
-      {phase === "speak" || phase === "saved" ? <strong data-testid="handy-speak-sign">Speak</strong> : null}
+      {phase === "speak" || phase === "saved" ? <strong data-testid="handy-speak-sign">Listening</strong> : null}
       <p className="min-w-0 flex-1 basis-full whitespace-normal text-xs leading-5 text-muted sm:basis-auto" data-testid="handy-note" title={note}>{note}</p>
       {translation ? <p className="text-sm" data-testid="voice-translation">{translation}</p> : null}
       {actionsOpen ? (

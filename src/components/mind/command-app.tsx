@@ -5989,7 +5989,7 @@ export function CommandApp() {
             type="button"
             className="grid size-11 min-h-11 min-w-11 shrink-0 place-items-center rounded-full border border-line bg-white/5"
             aria-label="Speak"
-            title="Speak"
+            title="Speak is the call. It does not type into the field."
             onClick={openSpeakStage}
           >
             <Volume2 className="size-4" />
@@ -6428,15 +6428,12 @@ export function CommandApp() {
                     <button type="submit" disabled={busy || ws.halted || (!draft.trim() && pendingImages.length === 0 && !staged)} className="composer-send inline-flex min-h-11 items-center gap-2 rounded-panel bg-accent px-4 text-sm font-semibold text-accent-ink disabled:opacity-50">
                       <Send className="size-4" /> {busy ? "Sending" : "Send"}
                     </button>
-                    <button type="button" className="composer-mic-dictate inline-flex min-h-11 items-center gap-2 rounded-full border border-line px-3 text-sm" data-testid="composer-mic-dictate" aria-label="Dictate" onClick={onDictationMic}>
-                      <Mic className="size-4" /> Dictate
-                    </button>
                     {draft.trim() || pendingImages.length > 0 || staged ? (
                       <button type="submit" className="gpt-voice grid size-11 place-items-center rounded-full bg-[#2f6bff] text-white" aria-label="Send">
                         <Send className="size-4" />
                       </button>
                     ) : (
-                      <button type="button" className="gpt-voice grid size-11 place-items-center rounded-full bg-[#2f6bff] text-white" aria-label="Speak" onPointerDown={(event) => { event.preventDefault(); openSpeakStage(); }} onClick={openSpeakStage}>
+                      <button type="button" className="gpt-voice grid size-11 place-items-center rounded-full bg-[#2f6bff] text-white" aria-label="Speak" title="Speak is the call. It does not type into the field." onPointerDown={(event) => { event.preventDefault(); openSpeakStage(); }} onClick={openSpeakStage}>
                         <Volume2 className="size-4" />
                       </button>
                     )}
@@ -6571,7 +6568,7 @@ export function CommandApp() {
                 <Panel title="System Status" action="Details" onAction={() => setView("integrations")}>
                   <StatusRow icon={Database} name="Memory" detail={memoryChoice === "on" ? "On for the next command" : "Off for the next command"} pill={memoryChoice === "on" ? "On" : "Off"} tone={memoryChoice === "on" ? "ok" : "muted"} />
                   <StatusRow icon={Database} name="Database" detail={databaseDetail} pill={databasePill} tone={databasePill === "Refused" ? "danger" : "muted"} />
-                  <StatusRow icon={Bot} name="Voice" detail="Dictate uses browser speech and inserts text. It is not a realtime session. Voice mode opens the realtime session." pill={voiceOverlayOpen ? "Voice mode" : "Browser speech"} tone="muted" />
+                  <StatusRow icon={Bot} name="Voice" detail="Dictate types into the field. Speak is the call. They are not the same." pill={speakStageOpen ? "Speak" : "Dictate"} tone="muted" />
                   <StatusRow icon={Bot} name="REA" detail="CLI from GitHub runs. Native engines are not installed." pill="Partial" tone="muted" />
                   <StatusRow icon={Square} name="HP" detail="Local device integration" pill="Not paired" tone="danger" />
                   <p className="mt-3 text-xs text-muted">Grok: {grok}. Checked {stamp(checkedAt) || checkedAt}. {system}</p>
