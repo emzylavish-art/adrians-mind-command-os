@@ -19,6 +19,7 @@ import { Route as UnauthorizedRouteImport } from './routes/unauthorized'
 import { Route as AuthCallbackRouteImport } from './routes/auth/callback'
 import { Route as ApiAuthSplatRouteImport } from './routes/api/auth/$'
 import { Route as ApiMindAgentRouteImport } from './routes/api/mind/agent'
+import { Route as ApiMindDesktopUpdateRouteImport } from './routes/api/mind/desktop-update'
 import { Route as ApiMindProvidersRouteImport } from './routes/api/mind/providers'
 import { Route as ApiMindReceiptsRouteImport } from './routes/api/mind/receipts'
 import { Route as ApiMindTurnRouteImport } from './routes/api/mind/turn'
@@ -133,6 +134,11 @@ const ApiAuthSplatRoute = ApiAuthSplatRouteImport.update({
 const ApiMindAgentRoute = ApiMindAgentRouteImport.update({
   id: '/api/mind/agent',
   path: '/api/mind/agent',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ApiMindDesktopUpdateRoute = ApiMindDesktopUpdateRouteImport.update({
+  id: '/api/mind/desktop-update',
+  path: '/api/mind/desktop-update',
   getParentRoute: () => rootRouteImport,
 } as any)
 const ApiMindProvidersRoute = ApiMindProvidersRouteImport.update({
@@ -482,6 +488,7 @@ export interface FileRoutesByFullPath {
   '/auth/callback': typeof AuthCallbackRoute
   '/api/auth/$': typeof ApiAuthSplatRoute
   '/api/mind/agent': typeof ApiMindAgentRoute
+  '/api/mind/desktop-update': typeof ApiMindDesktopUpdateRoute
   '/api/mind/providers': typeof ApiMindProvidersRoute
   '/api/mind/receipts': typeof ApiMindReceiptsRoute
   '/api/mind/turn': typeof ApiMindTurnRoute
@@ -559,6 +566,7 @@ export interface FileRoutesByTo {
   '/auth/callback': typeof AuthCallbackRoute
   '/api/auth/$': typeof ApiAuthSplatRoute
   '/api/mind/agent': typeof ApiMindAgentRoute
+  '/api/mind/desktop-update': typeof ApiMindDesktopUpdateRoute
   '/api/mind/providers': typeof ApiMindProvidersRoute
   '/api/mind/receipts': typeof ApiMindReceiptsRoute
   '/api/mind/turn': typeof ApiMindTurnRoute
@@ -637,6 +645,7 @@ export interface FileRoutesById {
   '/auth/callback': typeof AuthCallbackRoute
   '/api/auth/$': typeof ApiAuthSplatRoute
   '/api/mind/agent': typeof ApiMindAgentRoute
+  '/api/mind/desktop-update': typeof ApiMindDesktopUpdateRoute
   '/api/mind/providers': typeof ApiMindProvidersRoute
   '/api/mind/receipts': typeof ApiMindReceiptsRoute
   '/api/mind/turn': typeof ApiMindTurnRoute
@@ -716,6 +725,7 @@ export interface FileRouteTypes {
     | '/auth/callback'
     | '/api/auth/$'
     | '/api/mind/agent'
+    | '/api/mind/desktop-update'
     | '/api/mind/providers'
     | '/api/mind/receipts'
     | '/api/mind/turn'
@@ -793,6 +803,7 @@ export interface FileRouteTypes {
     | '/auth/callback'
     | '/api/auth/$'
     | '/api/mind/agent'
+    | '/api/mind/desktop-update'
     | '/api/mind/providers'
     | '/api/mind/receipts'
     | '/api/mind/turn'
@@ -870,6 +881,7 @@ export interface FileRouteTypes {
     | '/auth/callback'
     | '/api/auth/$'
     | '/api/mind/agent'
+    | '/api/mind/desktop-update'
     | '/api/mind/providers'
     | '/api/mind/receipts'
     | '/api/mind/turn'
@@ -948,6 +960,7 @@ export interface RootRouteChildren {
   AuthCallbackRoute: typeof AuthCallbackRoute
   ApiAuthSplatRoute: typeof ApiAuthSplatRoute
   ApiMindAgentRoute: typeof ApiMindAgentRoute
+  ApiMindDesktopUpdateRoute: typeof ApiMindDesktopUpdateRoute
   ApiMindProvidersRoute: typeof ApiMindProvidersRoute
   ApiMindReceiptsRoute: typeof ApiMindReceiptsRoute
   ApiMindTurnRoute: typeof ApiMindTurnRoute
@@ -1085,6 +1098,13 @@ declare module '@tanstack/react-router' {
       path: '/api/mind/agent'
       fullPath: '/api/mind/agent'
       preLoaderRoute: typeof ApiMindAgentRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/mind/desktop-update': {
+      id: '/api/mind/desktop-update'
+      path: '/api/mind/desktop-update'
+      fullPath: '/api/mind/desktop-update'
+      preLoaderRoute: typeof ApiMindDesktopUpdateRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/api/mind/providers': {
@@ -1556,6 +1576,7 @@ const rootRouteChildren: RootRouteChildren = {
   AuthCallbackRoute: AuthCallbackRoute,
   ApiAuthSplatRoute: ApiAuthSplatRoute,
   ApiMindAgentRoute: ApiMindAgentRoute,
+  ApiMindDesktopUpdateRoute: ApiMindDesktopUpdateRoute,
   ApiMindProvidersRoute: ApiMindProvidersRoute,
   ApiMindReceiptsRoute: ApiMindReceiptsRoute,
   ApiMindTurnRoute: ApiMindTurnRoute,
