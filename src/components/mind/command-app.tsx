@@ -218,7 +218,7 @@ import { ModelTierChip } from "@/components/mind/model-tier-chip";
 import { AnchoredCard, MenuCluster, MenuGroup, MenuMotion, MenuShelf, finishMenu, menuChip, pinComposerMenu, pinShelf } from "@/components/mind/menu-material";
 import { MODEL_TIERS, type ConcreteModelTier, type ModelTier } from "@/lib/mind/model-tiers";
 import { chosenProvider, failover, providerChoicesWithKeys } from "@/lib/mind/providers";
-import { catalogModuleChoices } from "@/lib/mind/provider-catalog";
+import { discoveredCapabilities, mcpToolCallText } from "@/lib/mind/provider-catalog";
 import { emitFailure, mountFailure, surfaceForReport } from "@/lib/mind/failure-mount";
 import { useMcpFailureMount, type McpReportedOutcome } from "./use-mcp-failure-mount";
 import { routeFailureAction, type RouteFailureAction } from "@/lib/mind/route-failure";
@@ -1653,7 +1653,6 @@ export function CommandApp() {
   const [providerChoice, setProviderChoice] = useState("grok");
   const [customAiProviders, setCustomAiProviders] = useState<PublicAiProvider[]>([]);
   const customAiChoices = customAiProviders.flatMap((item) => item.models.map((model) => ({ id: `custom:${item.id}:${encodeURIComponent(model)}`, label: `${item.label}: ${model}`, enabled: true, reason: `Custom API at ${item.host}. Requires usable API credit.` })));
-  const catalogModels = catalogModuleChoices(customAiProviders);
   const [modelTier, setModelTier] = useState<ModelTier>("Auto");
   const [logicRoute, setLogicRoute] = useState<LogicRouteId | null>(null);
   const [logicRoutes, setLogicRoutes] = useState<LogicRoutePublic[]>([]);
@@ -2079,6 +2078,8 @@ export function CommandApp() {
   const [notionPages, setNotionPages] = useState<{ id: string; title: string; url: string }[]>([]);
   const [notionNote, setNotionNote] = useState<string | null>(null);
   const [mcpServers, setMcpServers] = useState<SavedMcpServer[]>([]);
+  const discovered = discoveredCapabilities({ models: customAiProviders, mcp: mcpServers });
+  const catalogModels = discovered.map((item) => ({ id: item.id, label: item.label }));
   const [mcpRegistry, setMcpRegistry] = useState<{ id: string; label: string; kind: string; enabled: boolean }[]>([]);
   const [mcpRegistryListState, setMcpRegistryListState] = useState<McpListState>({ status: "loading" });
   const [mcpSavedListState, setMcpSavedListState] = useState<McpListState>({ status: "loading" });
@@ -3072,6 +3073,20 @@ export function CommandApp() {
     const botRoute = routeForBotChat(chat, { provider: providerChoice, modelTier });
     const selectedProvider = botRoute.provider;
     const selectedTier = botRoute.modelTier;
+    if (selectedProvider.startsWith("mcp:")) {
+      const chosen = discovered.find((item) => item.id === selectedProvider);
+      if (!chosen?.usable) {
+        reportFailure(chosen?.reason || "That MCP tool is not connected. Nothing was called and Grok was not substituted.", "model_unavailable", "mcp", null, "setup");
+        return null;
+      }
+      const call = mcpToolCallText(selectedProvider, text);
+      if (!call.ok) {
+        reportFailure(call.error, "mcp_tool_failed", "mcp", null, "setup");
+        return null;
+      }
+      void askMcp(chat, call.text);
+      return null;
+    }
     const activeLogic = options && "logicRoute" in options
       ? options.logicRoute ?? null
       : botRoute.fromBot ? null : logicRoute ?? (isLogicRouteId(selectedProvider) ? selectedProvider : null);
@@ -7140,7 +7155,7 @@ export function CommandApp() {
                 setView("agents");
                 void checkRea();
               }}
-              providerChoices={[...providerChoicesWithKeys(grokConfigured, lastModelUsed, liveProviders), ...customAiChoices]}
+              providerChoices={[...providerChoicesWithKeys(grokConfigured, lastModelUsed, liveProviders), ...discovered.map((item) => ({ id: item.id, label: item.label, enabled: item.usable, reason: item.reason }))]}
               providerChoice={providerChoice}
               onProvider={(id) => {
                 if (isLogicRouteId(id)) {
@@ -7614,6 +7629,15 @@ export function CommandApp() {
                       <span className="font-semibold">{server.label}</span>
                       <span className="ml-2 text-muted">{server.host} · {server.state}</span>
                       <p className="text-muted">{server.error || server.tools.map((tool) => tool.name).join(", ") || "No tools returned."}</p>
+                      <ul className="mt-2 space-y-1">
+                        {server.tools.map((tool) => (
+                          <li key={tool.name}>
+                            <button type="button" className="min-h-11 w-full rounded-panel border border-line px-3 text-left text-xs" onClick={() => { setLogicRoute(null); setProviderChoice(`mcp:${server.id}:${encodeURIComponent(tool.name)}`); setView("chat"); }}>
+                              {tool.name} · Use in chat
+                            </button>
+                          </li>
+                        ))}
+                      </ul>
                       <button
                         type="button"
                         className="mt-2 min-h-11 rounded-panel border border-line px-3"
@@ -9901,7 +9925,7 @@ function ProviderPicker({
     if (item.id === "ollama" || label.includes("local")) return "Local";
     if (label.includes("orchestrat")) return "Orchestrator";
     if (item.id === "openai" || label.includes("gpt") || label.includes("astra") || label.includes("sol") || label.includes("luna")) return "Frontier";
-    if (item.id.startsWith("custom:")) return "Saved";
+    if (item.id.startsWith("custom:") || item.id.startsWith("mcp:")) return "Saved";
     return "Other";
   };
   const visible = [

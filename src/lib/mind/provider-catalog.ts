@@ -60,3 +60,55 @@ export function catalogModuleChoices(rows: { id: string; label: string; models: 
   }
   return out;
 }
+
+export type DiscoveredCapability = {
+  id: string;
+  label: string;
+  kind: "model" | "mcp-tool";
+  usable: boolean;
+  reason: string;
+};
+
+const TOOL_NAME = /^[A-Za-z0-9_-]{1,80}$/;
+
+/** Models and MCP tools from a connection, with nothing dropped for being the wrong kind. */
+export function discoveredCapabilities(input: {
+  models: { id: string; label: string; models: string[] }[];
+  mcp: { id: string; label: string; state: string; tools: { name: string; description?: string }[] }[];
+}): DiscoveredCapability[] {
+  const models = catalogModuleChoices(input.models).map((item) => ({
+    ...item,
+    kind: "model" as const,
+    usable: true,
+    reason: "Discovered model. It sends to that API and is not substituted with Grok.",
+  }));
+  const tools: DiscoveredCapability[] = [];
+  const seen = new Set<string>();
+  for (const server of input.mcp) {
+    if (!server.id) continue;
+    for (const tool of server.tools) {
+      if (!TOOL_NAME.test(tool.name) || seen.has(`${server.id}:${tool.name}`)) continue;
+      seen.add(`${server.id}:${tool.name}`);
+      const usable = server.state === "connected";
+      tools.push({
+        id: `mcp:${server.id}:${encodeURIComponent(tool.name)}`,
+        label: `${server.label}: ${tool.name}`,
+        kind: "mcp-tool",
+        usable,
+        reason: usable
+          ? (tool.description || "Discovered MCP tool. Selecting it calls this tool. It is not sent to Grok.")
+          : "This tool was listed, but the server has not answered. Nothing is called and Grok is not substituted.",
+      });
+    }
+  }
+  return [...models, ...tools];
+}
+
+export function mcpToolCallText(choice: string, text: string): { ok: true; text: string } | { ok: false; error: string } {
+  const match = /^mcp:[0-9a-f-]{36}:([^:]{1,240})$/i.exec(choice);
+  if (!match) return { ok: false, error: "That is not a discovered MCP tool. Nothing was called." };
+  let name = "";
+  try { name = decodeURIComponent(match[1]); } catch { return { ok: false, error: "That tool name could not be read. Nothing was called." }; }
+  if (!TOOL_NAME.test(name)) return { ok: false, error: "That tool name is not usable. Nothing was called." };
+  return { ok: true, text: `call mcp tool ${name} ${text.trim()}`.trim() };
+}
