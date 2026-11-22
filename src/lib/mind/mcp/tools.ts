@@ -91,7 +91,7 @@ export async function notionReadPage(input: {
   ownerId?: string;
   fetch?: NotionFetch;
 }): Promise<ToolResult> {
-  const token = input.token ?? await resolveNotionTokenPersistent(input.ownerId) ?? notionTokenFromEnv();
+  const token = input.token ?? await resolveNotionTokenPersistent(input.ownerId);
   if (!token) {
     return {
       ok: false,
@@ -116,7 +116,7 @@ export async function notionAppendSection(input: {
   ownerId?: string;
   fetch?: NotionFetch;
 }): Promise<ToolResult> {
-  const token = input.token ?? await resolveNotionTokenPersistent(input.ownerId) ?? notionTokenFromEnv();
+  const token = input.token ?? await resolveNotionTokenPersistent(input.ownerId);
   if (!token) {
     return {
       ok: false,

@@ -12,6 +12,7 @@ const execFileAsync = promisify(execFile);
 const FILE_INTENT = /\b(my files|my desktop|list (my )?(files|desktop)|open my (files|desktop)|go to my files)\b/i;
 const MOUSE_INTENT = /\b(move the mouse|move my mouse|click|control my (pc|computer))\b/i;
 const TYPE_INTENT = /\btype\s+"([^"]{1,200})"/i;
+const DICTATION_INTENT = /\binsert dictation at cursor:\s*([\s\S]{1,20000})/i;
 const READ_INTENT = /\bread file\s+([A-Za-z0-9._ /-]+)/i;
 const WRITE_INTENT = /\bwrite file\s+([A-Za-z0-9._ /-]+):\s*([\s\S]{1,20000})/i;
 const FOLDER_INTENT = /\bmake folder\s+([A-Za-z0-9._ -]+)/i;
@@ -70,6 +71,7 @@ export async function runAdrianPc(input: {
   const wantsFiles = FILE_INTENT.test(text);
   const wantsMouse = MOUSE_INTENT.test(text) && !CLICK_INTENT.test(text);
   const typed = text.match(TYPE_INTENT);
+  const dictated = text.match(DICTATION_INTENT);
   const readName = text.match(READ_INTENT);
   const writeMatch = text.match(WRITE_INTENT);
   const folder = text.match(FOLDER_INTENT);
@@ -80,7 +82,7 @@ export async function runAdrianPc(input: {
   const app = text.match(APP_INTENT);
   const windows = text.match(WINDOW_INTENT);
   const extra = RIGHT_CLICK.test(text) || DOUBLE_CLICK.test(text) || SCROLL.test(text) || DRAG.test(text) || WINDOW_ACTION.test(text) || MONITORS.test(text) || A11Y.test(text) || FIND_BUTTON.test(text) || VISION.test(text) || WORKER.test(text);
-  if (!wantsFiles && !wantsMouse && !typed && !readName && !writeMatch && !folder && !command && !click && !wantsScreen && !browser && !app && !windows && !extra) return { ran: false, output: "" };
+  if (!wantsFiles && !wantsMouse && !typed && !dictated && !readName && !writeMatch && !folder && !command && !click && !wantsScreen && !browser && !app && !windows && !extra) return { ran: false, output: "" };
 
   const root = path.resolve(input.root || path.join(os.homedir(), "Desktop"));
   const platform = input.platform || process.platform;
@@ -95,6 +97,12 @@ export async function runAdrianPc(input: {
   }
   if (typed) {
     lines.push(await typeText(platform, typed[1]));
+  }
+  if (dictated) {
+    const typedResult = await typeText(platform, dictated[1].trim());
+    lines.push(typedResult.startsWith("Adrian typed")
+      ? "Inserted the dictation at the focused Windows cursor. Nothing was sent."
+      : `The words were kept and nothing was sent: ${dictated[1].trim()}`);
   }
   if (readName) lines.push(await readOwnerFile(root, readName[1].trim()));
   if (writeMatch) lines.push(await writeOwnerFile(root, writeMatch[1].trim(), writeMatch[2]));

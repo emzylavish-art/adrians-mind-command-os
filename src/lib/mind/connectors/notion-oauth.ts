@@ -78,7 +78,7 @@ export async function resolveNotionTokenPersistent(
       : getAccessToken(ownerId, "notion");
     if (oauth) return oauth;
   }
-  return env.NOTION_TOKEN?.trim() || env.NOTION_API_KEY?.trim() || undefined;
+  return undefined;
 }
 
 /** Prefer OAuth-stored token, then env integration token. Legacy local-test helper. */
@@ -87,5 +87,5 @@ export function resolveNotionToken(ownerId: string | undefined, env: NodeJS.Proc
     const oauth = getAccessToken(ownerId, "notion");
     if (oauth) return oauth;
   }
-  return env.NOTION_TOKEN?.trim() || env.NOTION_API_KEY?.trim() || undefined;
+  return undefined;
 }

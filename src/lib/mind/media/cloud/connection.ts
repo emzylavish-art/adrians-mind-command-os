@@ -60,9 +60,6 @@ export async function resolveCloudAccessToken(
       error: `OneDrive browse is stubbed until MCP Integration adds an OneDrive connection record. ${SERVICE_BOARD_HINT}`,
     };
   }
-  const envKey = env.MIND_GOOGLE_DRIVE_TOKEN?.trim();
-  if (envKey) return { ok: true, token: envKey };
-
   if (hasDurableOAuthStore()) {
     const token = await getDurableAccessToken(ownerId, "google_drive");
     if (token) return { ok: true, token };
@@ -102,14 +99,6 @@ export function cloudConnectionStatus(
       source,
       state: "unsupported",
       detail: `OneDrive is stubbed. ${SERVICE_BOARD_HINT}`,
-    };
-  }
-  if (env.MIND_GOOGLE_DRIVE_TOKEN?.trim()) {
-    return {
-      source,
-      state: "connected",
-      detail: "Google Drive token present on the server (MIND_GOOGLE_DRIVE_TOKEN). Browse is enabled. Prefer an MCP OAuth connection record when available.",
-      accountLabel: "env-token",
     };
   }
   const record = readCloudConnectionRecord(ownerId, source);

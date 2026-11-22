@@ -33,6 +33,7 @@ export type Msg = {
   content: string;
   at: string;
   model?: string;
+  kind?: "error";
   /** Inline image attachments shown in the bubble and sent on the originating turn. */
   images?: MsgImage[];
   /** Set when this assistant turn's SSE done reported a real memory save. */
