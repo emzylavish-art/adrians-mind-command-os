@@ -1,26 +1,18 @@
-# One installer
+# Bundle
 
-There is one file: `/home/ubuntu/Downloads/AdriansMind-Setup-Full.exe`. It was updated in place. It was not rebuilt, signed, published, or deployed to Vercel.
+The existing installer was upgraded in place. It was not rebuilt.
 
-## In that file
+- File: `/home/ubuntu/Downloads/AdriansMind-Setup-Full.exe`
+- Size: 6395184297 bytes
+- SHA-256: `662838a053e15b91ffc3c12e4e5d764c01befbb96e49a244fe2d7aac0945c476`
+- Source build: 8
+- Packed listener: listens, local commands first, ordinary chat through grok-4.3
+- Proven here: `Say ready.` returned `grok-4.3: Ready.`
 
-The packed sidecar now has the local commands, the Windows one-match button path, screenshot reading through grok-4.3 when a screen and `XAI_API_KEY` exist, and the GitHub tool replies for restic and OpenSCAD. A missing binary refuses. A missing capture does not invent a reading.
+## Unpublished
 
-On this machine, restic created one temporary snapshot and OpenSCAD wrote one STL. Neither action ran on the HP EliteBook.
+The public feed is still build 7. This new file is not on that feed and is not on the GitHub release. The old hash `e88ff2205540742bd5d9ee75be09e9938e522a00ce0f0514af6c5da14a2d0550` must not be republished.
 
-## Not finished, and not bundled as working
+There is no public download link for this exact file yet. A first-time website download still points at the old release parts until the new parts are published. That publish, and the Vercel production move, wait for the owner.
 
-A GitHub repository does not complete these. They stay refused:
-
-- Bank, card, merchant, invoice source, and refund provider.
-- Booking, government office, contact outreach.
-- External identity network, trust network, and agent marketplace.
-- Headset, room controller, sensor, wearable, and neural input. None was simulated.
-- LibreTranslate is the translation tool. It is not installed, so no text was translated.
-- A second person was not contacted and was not invented.
-- A worker after the app closes still does not start.
-- Linux still refuses click and `look at my screen`.
-
-The public update feed is still build 7. Source `LOCAL_BUILD` is 8. Those numbers are not the same, and the feed was not published. The old installer hash is still refused. The Windows app and the iPhone were not launched.
-
-The packed `server/index.mjs` now listens. On this machine, `GET /` returned 200, `list tools` returned the local tool reply, and `Say ready.` returned `grok-4.3: Ready.` with model `grok-4.3`. The page shell loads the existing client assets. It is not the original server renderer. The HP EliteBook was not launched. Bank and invoice work was left alone.
+The HP EliteBook and iPhone were not launched. Signing was not applied.
