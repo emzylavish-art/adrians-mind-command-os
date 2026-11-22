@@ -32,6 +32,7 @@ import {
   MicOff,
   Paperclip,
   Camera,
+  ChevronDown,
   Plus,
   Search,
   Send,
@@ -269,6 +270,7 @@ import {
   HONEST_FAILURE_MESSAGES,
   imageGenerationFailure,
   imagineRetryParams,
+  imageRetryPlan,
   mcpToolFailure,
   normalizeClientFailureMessage,
   type HonestFailureKind,
@@ -433,17 +435,9 @@ function keepGroupRow(node: HTMLElement | null) {
 function showLatestReply() {
   const scroller = document.querySelector(".thread-shell .flex.min-w-0.flex-1.flex-col > .min-h-0.flex-1");
   if (!(scroller instanceof HTMLElement)) return;
-  scroller.style.setProperty("padding-bottom", "12px", "important");
-  const phone = window.matchMedia("(max-width: 767px)").matches;
-  const title = document.querySelector(".thread-shell h2");
-  if (title instanceof HTMLElement && phone) {
-    title.style.setProperty("font-size", "1.35rem", "important");
-    title.style.setProperty("line-height", "1.25", "important");
-  }
-  const last = scroller.querySelector("article:last-of-type");
-  if (!(last instanceof HTMLElement)) return;
-  const top = last.getBoundingClientRect().top - scroller.getBoundingClientRect().top + scroller.scrollTop;
-  scroller.scrollTop = Math.max(0, top - 8);
+  const distance = scroller.scrollHeight - scroller.scrollTop - scroller.clientHeight;
+  if (distance > 96) return;
+  scroller.scrollTop = scroller.scrollHeight;
 }
 
 function keepCueClear() {
@@ -633,7 +627,7 @@ function keepComposerInside() {
     if (window.matchMedia("(max-width: 767px)").matches) node.style.removeProperty("display");
     else node.style.setProperty("display", "inline-flex", "important");
     node.style.setProperty("align-items", "center", "important");
-    node.style.setProperty("white-space", "nowrap", "important");
+    node.style.setProperty("white-space", "normal", "important");
   });
   document.querySelectorAll("[data-testid='composer-mic-dictate'], .composer-send, .gpt-voice").forEach((node) => {
     if (!(node instanceof HTMLElement)) return;
@@ -725,95 +719,27 @@ function keepComposerInside() {
    document.querySelectorAll("form.thread-composer").forEach((node) => {
      if (!(node instanceof HTMLElement)) return;
      const column = node.closest("section");
-     const shell = node.closest(".thread-shell");
-      const stage = node.closest(".main-stage");
-     const topbar = stage?.querySelector(".topbar");
-     const search = stage?.querySelector("input[placeholder='Search or jump…']");
-     const searchBottom = search instanceof HTMLElement ? search.getBoundingClientRect().bottom : 0;
-     const stageTop = stage instanceof HTMLElement ? stage.getBoundingClientRect().top : 0;
-      const controls = [...document.querySelectorAll(".topbar button, .topbar a, .topbar summary")].filter((item) => item instanceof HTMLElement && item.getBoundingClientRect().height > 8);
-      const controlBottom = controls.reduce((lowest, item) => Math.max(lowest, item.getBoundingClientRect().bottom), 0);
-      const top = Math.max(8, Math.ceil((controlBottom || searchBottom) - stageTop) + 4);
-     if (shell instanceof HTMLElement) {
-       shell.style.setProperty("position", "fixed", "important");
-        shell.style.setProperty("left", "0px", "important");
-       shell.style.setProperty("right", "0px", "important");
-       shell.style.setProperty("top", `${top}px`, "important");
-       shell.style.setProperty("bottom", "0px", "important");
-       shell.style.setProperty("width", "auto", "important");
-        shell.style.setProperty("max-width", "none", "important");
-        shell.style.setProperty("height", `${Math.max(240, window.innerHeight - top)}px`, "important");
-        shell.style.setProperty("overflow", "hidden", "important");
-        shell.style.setProperty("margin", "0", "important");
-        shell.style.setProperty("z-index", "5", "important");
-      }
-      if (column instanceof HTMLElement) {
-        column.style.setProperty("position", "absolute", "important");
-        column.style.setProperty("inset", "0", "important");
-        column.style.setProperty("width", "100%", "important");
-        column.style.setProperty("height", "100%", "important");
-        column.style.setProperty("min-height", "0", "important");
-      }
-     node.style.setProperty("position", "absolute", "important");
-     node.style.setProperty("left", "0px", "important");
-     node.style.setProperty("right", "0px", "important");
-      node.style.setProperty("width", "auto", "important");
-     node.style.setProperty("max-width", "none", "important");
-     node.style.setProperty("bottom", "0px", "important");
-      node.style.setProperty("margin", "0", "important");
-      node.style.setProperty("padding", "0.55rem 0.75rem 0px", "important");
-      node.style.setProperty("border-radius", "0", "important");
-      node.style.setProperty("box-sizing", "border-box", "important");
-     const formHeight = Math.ceil(node.getBoundingClientRect().height || 120);
-      if (stage instanceof HTMLElement) stage.style.setProperty("transform", "none", "important");
-     node.style.setProperty("position", "fixed", "important");
-     node.style.setProperty("left", "0px", "important");
-     node.style.setProperty("right", "0px", "important");
-     node.style.setProperty("bottom", "0px", "important");
-     node.style.setProperty("width", "100%", "important");
-     node.style.setProperty("z-index", "40", "important");
-      const guesses = document.querySelector(".shell[data-view='chat'] .next-guesses");
-      const guessHeight = guesses instanceof HTMLElement ? Math.ceil(guesses.getBoundingClientRect().height) + 8 : 0;
-     const thread = column?.querySelector(":scope > .overflow-auto");
-     if (thread instanceof HTMLElement) {
-       const head = column?.querySelector(":scope > .chat-head");
-       if (head instanceof HTMLElement) head.style.setProperty("display", "none", "important");
-       thread.style.setProperty("position", "absolute", "important");
-       thread.style.setProperty("left", "0px", "important");
-       thread.style.setProperty("right", "0px", "important");
-       thread.style.setProperty("top", "0px", "important");
-       thread.style.setProperty("bottom", `${formHeight + guessHeight}px`, "important");
-       thread.style.setProperty("width", "100%", "important");
-       thread.style.setProperty("max-width", "none", "important");
-       thread.style.setProperty("height", "auto", "important");
-       thread.style.setProperty("overflow-y", "auto", "important");
-       thread.style.setProperty("padding", "0.75rem", "important");
-     }
-      if (guesses instanceof HTMLElement && column instanceof HTMLElement) {
-        guesses.style.setProperty("position", "absolute", "important");
-        guesses.style.setProperty("left", "0.75rem", "important");
-        guesses.style.setProperty("right", "0.75rem", "important");
-        guesses.style.setProperty("width", "auto", "important");
-        guesses.style.setProperty("bottom", `${formHeight + 4}px`, "important");
-        guesses.style.setProperty("z-index", "6", "important");
-        guesses.style.setProperty("display", "flex", "important");
-        guesses.style.setProperty("flex-wrap", "wrap", "important");
-        guesses.style.setProperty("gap", "0.4rem", "important");
-        guesses.style.setProperty("background", "transparent", "important");
-       guesses.style.setProperty("pointer-events", "auto", "important");
-     }
-    });
-    document.querySelectorAll("form.thread-composer").forEach((node) => {
-      if (!(node instanceof HTMLElement)) return;
-      const column = node.closest("section");
+    const shell = node.closest(".thread-shell");
+    if (shell instanceof HTMLElement) {
+      shell.style.setProperty("position", "relative", "important");
+      shell.style.setProperty("width", "100%", "important");
+      shell.style.setProperty("max-width", "100%", "important");
+    }
+    node.style.setProperty("position", "relative", "important");
+      node.style.setProperty("left", "auto", "important");
+      node.style.setProperty("right", "auto", "important");
+      node.style.setProperty("bottom", "auto", "important");
+      node.style.setProperty("width", "100%", "important");
+      node.style.setProperty("max-width", "100%", "important");
+      node.style.setProperty("transform", "none", "important");
       const thread = column?.querySelector(":scope > .overflow-auto");
-      const guesses = document.querySelector(".shell[data-view='chat'] .next-guesses");
-      if (!(column instanceof HTMLElement) || !(thread instanceof HTMLElement)) return;
-      const columnBox = column.getBoundingClientRect();
-      const limit = guesses instanceof HTMLElement ? guesses.getBoundingClientRect().top : node.getBoundingClientRect().top;
-     const bottom = Math.max(0, Math.ceil(columnBox.bottom - limit) + 8);
-      thread.style.setProperty("bottom", `${bottom + 28}px`, "important");
-     thread.style.setProperty("overflow", "auto", "important");
+      if (thread instanceof HTMLElement) {
+        thread.style.setProperty("position", "relative", "important");
+        thread.style.setProperty("width", "100%", "important");
+        thread.style.setProperty("max-width", "100%", "important");
+        thread.style.setProperty("overflow-x", "hidden", "important");
+        thread.style.setProperty("overflow-y", "auto", "important");
+      }
     });
     let clear = document.getElementById("chat-no-overlap");
     if (!clear) {
@@ -821,7 +747,7 @@ function keepComposerInside() {
       clear.id = "chat-no-overlap";
       document.head.appendChild(clear);
     }
-    clear.textContent = ".shell[data-view='chat'] .main-stage{transform:none !important}.shell[data-view='chat'] .next-guesses{background:transparent !important;padding:0.35rem 0 !important}.shell[data-view='chat'] .thread-shell article{margin-bottom:0.85rem;background:transparent !important;border:0 !important;box-shadow:none !important;border-radius:0 !important}.shell[data-view='light'] .thread-shell,.shell[data-theme='light'] .thread-shell{color:#111 !important}";
+        clear.textContent = ".shell[data-view='chat'] form.thread-composer,.shell[data-view='chat'] .thread-shell section,.shell[data-view='chat'] .next-guesses{position:relative !important;left:auto !important;right:auto !important;bottom:auto !important;width:100% !important;max-width:100% !important;transform:none !important}";
   }
 }
 
@@ -1027,12 +953,12 @@ const NAV_GROUPS: { label: string; items: { id: View; label: string; icon: typeo
 ];
 
 const MORE_NAV: { id: View; label: string; icon: typeof Home }[] = [
-  { id: "intelligence", label: "EVE", icon: Bot },
+  { id: "intelligence", label: "Intelligence Layer", icon: Bot },
   { id: "agents", label: "Bots", icon: Bot },
   { id: "tools", label: "Tools", icon: Wrench },
   { id: "skills", label: "Skills", icon: Zap },
   { id: "voice", label: "Voice clone", icon: Volume2 },
-  { id: "runs", label: "Runs", icon: Activity },
+  { id: "runs", label: "Runs", icon: CalendarClock },
   { id: "memory", label: "Memory", icon: Database },
   { id: "activity", label: "Activity", icon: Activity },
   { id: "help", label: "Help", icon: CircleHelp },
@@ -1053,7 +979,7 @@ const NAV_MARKS: Record<string, string> = {
   tools: "/brand/marks/tools.png",
   skills: "/brand/marks/skills.png",
   voice: "/brand/marks/voice.png",
-  runs: "/brand/marks/activity.png",
+  runs: "/brand/marks/calendar.png",
   memory: "/brand/marks/memory.png",
   activity: "/brand/marks/activity.png",
   help: "/brand/marks/help.png",
@@ -1065,7 +991,7 @@ function navMark(id: string): string {
 
 const TITLES: Record<View, string> = {
   command: "Chat",
-  intelligence: "EVE / Intelligence",
+  intelligence: "Intelligence Layer",
   chat: "Thread",
   projects: "Projects",
   memory: "Memory",
@@ -1513,7 +1439,10 @@ export function CommandApp() {
       return "smooth";
     }
   });
-  const [guide, setGuide] = useState<FirstStepsState>({ step: 0, dismissed: false });
+  const [guide, setGuide] = useState<FirstStepsState>(() => {
+    if (typeof window === "undefined") return { step: 0, dismissed: true };
+    try { return readFirstSteps(localStorage.getItem(FIRST_STEPS_KEY)); } catch { return { step: 0, dismissed: true }; }
+  });
   const [commandMode, setCommandMode] = useState<CommandMode>("ask");
   const [defaultPersonalityId, setDefaultPersonalityId] = useState<PersonalityId>("assistant");
   const [activeId, setActiveId] = useState<string | null>(null);
@@ -1545,6 +1474,7 @@ export function CommandApp() {
   const dictationRecRef = useRef<BrowserSpeechRec | null>(null);
   const serverDictationRef = useRef<DictationRecorder | null>(null);
   const dictationBufferRef = useRef("");
+  const dictationBaseRef = useRef<string | null>(null);
   const userStoppedDictationRef = useRef(false);
   const [dictationElapsed, setDictationElapsed] = useState(0);
   const [dictationLevel, setDictationLevel] = useState(0);
@@ -1599,6 +1529,7 @@ export function CommandApp() {
   const [surfaceAnchor, setSurfaceAnchor] = useState<DOMRect | null>(null);
   const [controlsAnchor, setControlsAnchor] = useState<DOMRect | null>(null);
   const [navMoreOpen, setNavMoreOpen] = useState(false);
+  const [navMoreHold, setNavMoreHold] = useState(false);
   const [navMoreAnchor, setNavMoreAnchor] = useState<DOMRect | null>(null);
   const [modelRowsOpen, setModelRowsOpen] = useState(false);
   const [alertAnchor, setAlertAnchor] = useState<DOMRect | null>(null);
@@ -1731,7 +1662,7 @@ export function CommandApp() {
   const [toolsOpen, setToolsOpen] = useState(false);
   const [accountOpen, setAccountOpen] = useState(false);
   const [bellOpen, setBellOpen] = useState(false);
-  const [now, setNow] = useState<Date | null>(null);
+  const [now, setNow] = useState<Date | null>(() => (typeof window === "undefined" ? null : new Date()));
   const [speaking, setSpeaking] = useState(false);
 
   useEffect(() => {
@@ -2138,16 +2069,23 @@ export function CommandApp() {
   }, [focusAuditId, view, ws.audit]);
 
   useEffect(() => {
+    if (navMoreOpen) {
+      setNavMoreHold(true);
+      return;
+    }
+    const id = window.setTimeout(() => setNavMoreHold(false), 150);
+    return () => window.clearTimeout(id);
+  }, [navMoreOpen]);
+  useEffect(() => {
     if (view !== "skills") return;
     setSkillRefresh(refreshSkills());
   }, [view]);
 
   useEffect(() => {
     if (view !== "chat") return;
-    showLatestReply();
     keepCueClear();
     keepComposerInside();
-  }, [view, active?.id, active?.messages.length, busy, cued.length]);
+  }, [view, active?.id]);
 
   useEffect(() => {
     keepComposerInside();
@@ -3440,6 +3378,11 @@ export function CommandApp() {
 
   function retryLast() {
     if (!active || busy || turnInFlight.current) return;
+    const imageRetry = imageRetryPlan(active.messages, active.id);
+    if (imageRetry) {
+      void runImagine(imageRetry.prompt, active, { retry: true });
+      return;
+    }
     if (shouldBlockForEmergencyStop(wsRef.current.halted)) {
       reportEmergencyStop(active.id, () => retryLast());
       return;
@@ -3903,11 +3846,6 @@ export function CommandApp() {
       }));
     }
     const rememberImagineFailure = (failure: ReturnType<typeof imageGenerationFailure>) => {
-      const params = imagineRetryParams(failure);
-      reportFailure(failure.message, failure.kind, failure.target, () => {
-        const again = wsRef.current.chats.find((item) => item.id === chatId) ?? chat;
-        void runImagine(params.prompt, again, { retry: true });
-      });
       setWs((prev) => ({
         ...prev,
         chats: prev.chats.map((item) =>
@@ -3919,7 +3857,8 @@ export function CommandApp() {
                   {
                     id: crypto.randomUUID(),
                     role: "assistant" as const,
-                    content: failure.message,
+                    kind: "error" as const,
+                    content: "Couldn't create the image. Nothing was saved. Try again, or edit your prompt.",
                     at: new Date().toISOString(),
                   },
                 ],
@@ -3927,6 +3866,7 @@ export function CommandApp() {
             : item,
         ),
       }));
+      setWs((prev) => pushAudit(prev, "image_generation_failed", chatId, failure.message));
     };
     imagineInFlight.current = true;
     try {
@@ -3993,13 +3933,6 @@ export function CommandApp() {
     } catch (caught) {
       const normalized = normalizeClientFailureMessage(caught);
       const kind = classifyHonestFailure(normalized);
-      if (kind === "auth_required" || kind === "forbidden_cross_site" || kind === "rate_limited") {
-        reportFailure(normalized, honestFailureAuditAction(kind), `imagine:${chatId}`, () => {
-          const again = wsRef.current.chats.find((item) => item.id === chatId) ?? chat;
-          void runImagine(prompt, again, { retry: true });
-        });
-        return;
-      }
       rememberImagineFailure(
         imageGenerationFailure({
           mode: "generate",
@@ -5183,7 +5116,9 @@ export function CommandApp() {
     const prev = { ...dictationRef.current, draft: draftRef.current };
     let next = reduceDictation(prev, action);
     if (action.type === "stop_inserted") {
-      next = { ...next, draft: appendDictationText(draftRef.current, action.text) };
+      const base = dictationBaseRef.current ?? draftRef.current;
+      next = { ...next, draft: appendDictationText(base, action.text) };
+      dictationBaseRef.current = null;
     }
     dictationRef.current = next;
     setDictation(next);
@@ -5302,6 +5237,11 @@ export function CommandApp() {
       }
       dictationBufferRef.current = `${finalText} ${interim}`.trim();
       if (dictationBufferRef.current) {
+        const next = appendDictationText(dictationBaseRef.current ?? "", dictationBufferRef.current);
+        if (next !== draftRef.current) {
+          draftRef.current = next;
+          setDraft(next);
+        }
         setDictationLevel(0.45);
         commitDictation({ type: "level", level: 0.45 }, false);
       }
@@ -5312,9 +5252,17 @@ export function CommandApp() {
       userStoppedDictationRef.current = true;
       dictationRecRef.current = null;
       setDictationLevel(0);
+      if (code === "service-not-allowed" || code === "network" || code === "audio-capture") {
+        dictationRef.current = { ...dictationRef.current, phase: "idle" };
+        setDictation((current) => ({ ...current, phase: "idle" }));
+        void startServerDictation();
+        return;
+      }
       commitDictation({
         type: "stop_error",
-        message: "Browser speech failed. Nothing was inserted. This is not a realtime voice provider.",
+        message: code === "not-allowed"
+          ? "Microphone permission was denied. Nothing was inserted. Speak was not opened."
+          : "Browser speech failed. Nothing was inserted. Speak was not opened.",
       });
     };
     rec.onend = () => {
@@ -5325,18 +5273,27 @@ export function CommandApp() {
     dictationRecRef.current = rec;
     try {
       rec.start();
+      dictationBaseRef.current = draftRef.current;
+      setNotice("Listening. Words appear in the field as they are recognised. Send stays separate.");
     } catch {
       dictationRecRef.current = null;
       setDictationLevel(0);
-      commitDictation({
-        type: "stop_error",
-        message: "Browser speech could not start. Nothing was transcribed. This is not a realtime voice provider.",
-      });
+      dictationRef.current = { ...dictationRef.current, phase: "idle" };
+      setDictation((current) => ({ ...current, phase: "idle" }));
+      void startServerDictation();
     }
   }
 
   function onDictationMic() {
-    window.dispatchEvent(new CustomEvent("adrian:handy-mic"));
+    if (serverDictationRef.current) {
+      void finishServerDictation();
+      return;
+    }
+    if (dictationRecRef.current || dictationRef.current.phase === "recording") {
+      stopBrowserDictation();
+      return;
+    }
+    startBrowserDictation();
   }
 
   async function startServerDictation() {
@@ -5353,14 +5310,15 @@ export function CommandApp() {
       serverDictationRef.current = recorder;
       await recorder.start();
       commitDictation({ type: "start" });
-      setNotice("Listening. Press the mic again to insert the words. Send is separate.");
+      dictationBaseRef.current = draftRef.current;
+      setNotice("This browser has no live speech recognition. Speak, then press Mic again. Words are inserted only after transcription. Nothing is sent.");
     } catch {
       serverDictationRef.current = null;
       commitDictation({
         type: "stop_error",
         message: "This browser could not record. Nothing was transcribed.",
       });
-      setNotice("This browser could not record. Nothing was transcribed. Nothing was sent.");
+      setNotice("This browser could not record. Nothing was transcribed. Nothing was sent. Speak was not opened.");
     }
   }
 
@@ -5909,10 +5867,10 @@ export function CommandApp() {
               window.setTimeout(() => searchRef.current?.focus(), 0);
             }}
           >
-            <Search className="size-4" />
+            <Search size={20} strokeWidth={1.75} />
           </button>
           <button ref={navCloseRef} type="button" className="grid size-11 place-items-center rounded-full bg-white/8 md:hidden" aria-label="Close menu" onClick={() => setNavOpen(false)}>
-            <span className="text-lg">×</span>
+            <span className="icon-x" aria-hidden="true" />
           </button>
           <button type="button" className="hidden size-11 place-items-center rounded-full bg-white/8 md:grid" aria-label={railCollapsed ? "Expand sidebar" : "Collapse sidebar"} onClick={() => setRailCollapsed((value) => !value)}>
             <PanelLeft className="size-4" />
@@ -6000,8 +5958,8 @@ export function CommandApp() {
             >
               More
             </button>
-            {navMoreOpen ? (
-              <AnchoredCard anchor={navMoreAnchor} label="More" onClose={() => setNavMoreOpen(false)} testId="nav-more-panel" width={640} align="start">
+            {navMoreHold ? (
+              <AnchoredCard anchor={navMoreAnchor} label="More" onClose={() => setNavMoreOpen(false)} testId="nav-more-panel" width={640} align="start" phase={navMoreOpen ? "open" : "close"}>
               <MenuShelf width="100%" testId="nav-more-shelf">
                 {([
                   ["People", ["intelligence", "agents", "voice"]],
@@ -6021,7 +5979,7 @@ export function CommandApp() {
                           onClick={() => { setView(item.id); setNavMoreOpen(false); setNavOpen(false); }}
                           data-testid={item.id === "voice" ? "nav-voice-clone" : undefined}
                         >
-                          <img className="service-mark size-5 shrink-0 rounded-md object-cover" src={navMark(item.id)} alt="" width={22} height={22} />
+                          <span className="icon-tile" aria-hidden="true"><item.icon size={20} strokeWidth={1.75} /></span>
                           {item.label}
                         </button>
                       );
@@ -6171,7 +6129,7 @@ export function CommandApp() {
                   <MenuCluster label="Make">
                     {([
                       ["build", "Build", "Coding workspace"],
-                      ["intelligence", "EVE", "Intelligence layer"],
+                      ["intelligence", "Intelligence Layer", "Emma appears only here"],
                     ] as const).map(([id, label, detail]) => (
                       <button
                         key={id}
@@ -6278,7 +6236,7 @@ export function CommandApp() {
               }}
             >
               <span>Controls</span>
-              <span aria-hidden="true">▾</span>
+              <ChevronDown size={16} strokeWidth={1.75} aria-hidden="true" />
             </button>
             {view === "chat" ? (
               <button
@@ -6292,6 +6250,7 @@ export function CommandApp() {
                 }}
               >
                 <span>Chat settings</span>
+                <ChevronDown size={16} strokeWidth={1.75} aria-hidden="true" />
               </button>
             ) : null}
             {controlsOpen ? (
@@ -6513,7 +6472,7 @@ export function CommandApp() {
             data-testid="failure-banner"
             data-failure-kind={failure.kind ?? "unknown"}
           >
-            <p className="text-sm text-danger">{failure.message}</p>
+            <p className="error-focus text-danger">{failure.message}</p>
             <div className="flex flex-wrap gap-2">
               {failure.action === "setup" ? (
                 <button
@@ -6541,7 +6500,7 @@ export function CommandApp() {
               <button
                 type="button"
                 data-testid="failure-view-log"
-                className="inline-flex min-h-11 items-center justify-center rounded-panel border border-danger/40 px-4 text-sm text-danger"
+                className="chat-button chat-button--ghost"
                 onClick={() => {
                   setView("activity");
                   setFocusAuditId(failure.auditId);
@@ -6554,7 +6513,7 @@ export function CommandApp() {
               <button
                 type="button"
                 data-testid="failure-dismiss"
-                className="inline-flex min-h-11 items-center justify-center rounded-panel border border-line px-4 text-sm"
+                className="chat-button chat-button--ghost"
                 onClick={() => clearFailure()}
               >
                 Dismiss
@@ -6576,7 +6535,7 @@ export function CommandApp() {
             </button>
           </div>
         ) : null}
-        {statusSignedIn !== true && typeof window !== "undefined" && window.location.hostname !== "127.0.0.1" && window.location.hostname !== "localhost" && (
+        {statusSignedIn === false && typeof window !== "undefined" && window.location.hostname !== "127.0.0.1" && window.location.hostname !== "localhost" && (
           <div className="signed-out-entry sign-in-strip" data-testid="signed-out-entry" role="status">
             <span>Sign in to use voice and connected services.</span>
             <Link to="/login" className="signed-out-entry__link">Sign in</Link>
@@ -6673,8 +6632,6 @@ export function CommandApp() {
                   </div>
                 </div>
               </div>
-              {homeAction !== "ask" && <button type="button" className="min-h-11 px-3 text-sm text-muted" onClick={() => { setHomeAction("ask"); setCommandMode("ask"); }}>Clear mode · Back to Chat</button>}
-
               <FirstSteps state={guide} onChange={persistGuide} onOpen={openGuide} />
               <section ref={liftHomeComposer} className="floating-composer command-card composer-dock rounded-panel p-3 md:p-4" data-composer="floating">
                 <details className="composer-advanced">
@@ -6722,7 +6679,12 @@ export function CommandApp() {
                     void sendCommand();
                   }}
                 >
-                  <div className="composer-modes mb-2">
+                 <div className="composer-modes mb-2">
+                   {homeAction !== "ask" ? (
+                     <button type="button" className="chat-button chat-button--secondary" data-testid="mode-chip" onClick={() => { setHomeAction("ask"); setCommandMode("ask"); }}>
+                       {homeAction === "image" ? "Image" : homeAction === "video" ? "Video" : homeAction === "write" ? "Write" : "Search"} ×
+                     </button>
+                   ) : null}
                     {([
                       ["ask", "Ask"],
                       ["research", "Research"],
@@ -6874,13 +6836,21 @@ export function CommandApp() {
                     </button></div>
 
                     <button type="submit" disabled={busy || ws.halted || (!draft.trim() && pendingImages.length === 0 && !staged)} className="composer-send inline-flex min-h-11 items-center gap-2 rounded-panel bg-accent px-4 text-sm font-semibold text-accent-ink disabled:opacity-50">
-                      <Send className="size-4" /> {busy ? "Sending" : "Send"}
+                      <Send size={20} strokeWidth={1.75} /> {busy ? "Sending" : "Send"}
                     </button>
                     <button type="button" className="composer-mic-dictate inline-flex min-h-11 items-center gap-2 rounded-full border border-line px-3 text-sm" data-testid="composer-mic-dictate" aria-label="Mic" title="Mic types into the field. It does not open Speak." onClick={onDictationMic}>
                       <Mic className="size-4" /> Mic
                     </button>
+                    {dictation.phase !== "idle" ? (
+                      <button type="button" className="inline-flex min-h-11 items-center rounded-full border border-line px-3 text-sm" data-testid="dictation-done" aria-label="Done" title="Insert the words at the cursor. Nothing is sent." onClick={onDictationMic}>
+                        ✓
+                      </button>
+                    ) : null}
                     <button type="button" className="gpt-voice inline-flex min-h-11 items-center gap-2 rounded-full bg-[#2f6bff] px-3 text-sm text-white" aria-label="Speak" title="Speak is the call. It does not type into the field." onPointerDown={(event) => { event.preventDefault(); openSpeakStage(); }} onClick={openSpeakStage}>
                       <Volume2 className="size-4" /> Speak
+                    </button>
+                    <button type="button" className="inline-flex min-h-11 items-center gap-2 rounded-full border border-line px-3 text-sm" aria-label="Dictation" title="Open the desktop dictation companion" onClick={() => { void fetch("http://127.0.0.1:4198/summon", { method: "POST" }).then((response) => { if (!response.ok) setNotice("The dictation companion is not running. It starts with the installed desktop app, not this website."); }).catch(() => setNotice("The dictation companion is not running on this computer. It is part of the installed desktop app, not this website.")); }}>
+                      Dictation
                     </button>
                   </div>
                 </form>
@@ -9238,7 +9208,7 @@ function ChatPane({
           {active?.messages.map((msg) => {
             const last = active.messages.at(-1);
             return (
-            <article key={msg.id} className="w-full max-w-none px-1 py-2 text-sm">
+            <article key={msg.id} className={`turn w-full max-w-none px-1 py-2 text-sm ${msg.role === "user" ? "turn-user" : "turn-assistant"}`}>
               <p className="mb-1 text-xs text-muted">{msg.role === "user" ? "You" : msg.model || "Grok 4.5"} · {stamp(msg.at)}</p>
               {editingId === msg.id ? (
                 <form
@@ -9262,6 +9232,14 @@ function ChatPane({
                 </>
               )}
               <div className="mt-2 flex flex-wrap items-center gap-2" role="toolbar" aria-label="Reply actions">
+                {msg.kind === "error" ? (
+                  <>
+                    <button type="button" className="min-h-11 rounded-full px-3 text-xs" onClick={onRetry}>Retry</button>
+                    <button type="button" className="min-h-11 rounded-full px-3 text-xs" onClick={onViewAudit}>View log</button>
+                    <button type="button" className="min-h-11 rounded-full px-3 text-xs" onClick={(event) => event.currentTarget.closest("article")?.setAttribute("hidden", "")}>Dismiss</button>
+                  </>
+                ) : null}
+                {msg.kind === "error" ? null : <>
                 <button
                   type="button"
                   className="min-h-11 rounded-full px-3 text-xs"
@@ -9274,8 +9252,8 @@ function ChatPane({
                   {copiedId === msg.id ? "Copied" : "Copy"}
                 </button>
                 {msg.role === "assistant" && (
-                  <button type="button" className="min-h-11 rounded-full px-3 text-xs" onClick={() => (speaking ? onStopSpeak?.() : onSpeak(msg.content, msg.id))}>
-                    {replyActions({ role: "assistant", busy: false, speaking, hasSources: replyHasSources(msg.content) }).includes("stop-playback") ? "Stop" : "Read aloud"}
+                  <button type="button" className="chat-button chat-button--ghost" onClick={() => (speaking ? onStopSpeak?.() : onSpeak(msg.content, msg.id))}>
+                    <Volume2 size={20} strokeWidth={1.75} /> {replyActions({ role: "assistant", busy: false, speaking, hasSources: replyHasSources(msg.content) }).includes("stop-playback") ? "Stop" : "Read aloud"}
                   </button>
                 )}
                 {msg.role === "assistant" && last?.id === msg.id && (
@@ -9285,7 +9263,7 @@ function ChatPane({
                 )}
                 {msg.role === "assistant" && (
                   <details className="relative">
-                    <summary className="min-h-11 cursor-pointer list-none rounded-full px-3 text-xs">More</summary>
+                    <summary className="chat-button chat-button--ghost" aria-label="More">⋯</summary>
                     <div className="absolute bottom-12 left-0 z-20 flex min-w-44 flex-col rounded-2xl border border-line bg-bg p-1">
                       <button type="button" className="min-h-11 px-3 text-left text-xs" onClick={() => onOpenBuild(msg.content)}>Open in Build</button>
                       <button type="button" className="min-h-11 px-3 text-left text-xs" onClick={() => onOpenHuman(msg.content)}>Open in Intelligence</button>
@@ -9293,23 +9271,6 @@ function ChatPane({
                       <p className="px-3 py-2 text-xs">Type list capabilities. Device actions are not verified until the PC or phone runs them.</p>
                     </div>
                   </details>
-                )}
-                {msg.role === "assistant" && (
-                  <span role="group" aria-label="Rate this reply" className="flex flex-wrap items-center gap-1 text-xs text-muted">
-                    Rate
-                    {([1, 2, 3, 4, 5] as const).map((score) => (
-                      <button
-                        key={score}
-                        type="button"
-                        aria-label={`${score} out of 5`}
-                        aria-pressed={ratings.find((item) => item.messageId === msg.id)?.score === score}
-                        className={`min-h-11 min-w-11 rounded-panel ${ratings.find((item) => item.messageId === msg.id)?.score === score ? "border border-accent bg-accent/15 font-semibold text-accent" : ""}`}
-                        onClick={() => onRate(msg.id, score, msg.model ?? null)}
-                      >
-                        {score}
-                      </button>
-                    ))}
-                  </span>
                 )}
                 {msg.role === "user" && (
                   <button
@@ -9327,6 +9288,7 @@ function ChatPane({
                 {msg.role === "user" && active.memory === "on" && (
                   <button type="button" className="min-h-11 text-xs text-accent" onClick={() => onSave(msg.content)}>Save as chat memory</button>
                 )}
+                </>}
               </div>
               {msg.role === "assistant" && msg.memorySaved === true ? (
                 <div className="mt-2">
@@ -9372,27 +9334,21 @@ function ChatPane({
             </div>
           )}
           {busy && liveText && (
-            <article className="w-full max-w-none rounded-panel border border-line bg-surface px-3 py-2 text-sm">
+            <article className="turn turn-assistant w-full max-w-none px-1 py-2 text-sm">
               <p className="mb-1 text-xs text-muted">{modelTier} · writing</p>
               <p className="whitespace-pre-wrap">{liveText}</p>
             </article>
           )}
           {busy && !liveText && toolTimeline.length === 0 && (
-            <div className="w-full max-w-none space-y-2 rounded-panel border border-line/70 bg-surface/80 p-3" aria-live="polite">
+            <div className="turn turn-assistant w-full max-w-none space-y-2 px-1 py-2" aria-live="polite">
               <p className="text-xs text-muted">{active?.messages.at(-1)?.content.startsWith("/video") ? "Rendering the video." : active?.messages.at(-1)?.content.startsWith("/imagine") ? "Creating the image." : "Waiting for Grok."}</p>
               <div className="skeleton h-3" style={{ width: "75%" }} />
               <div className="skeleton h-3" style={{ width: "50%" }} />
               <div className="skeleton h-3" style={{ width: "66%" }} />
+              <button type="button" className="chat-pill min-h-11 border border-line px-3 text-sm" data-testid="stop-reply" onClick={onStop}>Stop this reply</button>
             </div>
           )}
-          {busy && (
-            <button type="button" className="min-h-11 text-sm text-danger" onClick={onStop}>Stop this reply</button>
-          )}
-          {error && <p className="voice-copy text-sm text-danger">{presentVoiceCopy(error)}</p>}
-          {error && active?.messages.at(-1)?.role === "user" && (
-            <button type="button" className="min-h-11 text-sm text-accent" disabled={busy || halted} onClick={onRetry}>Retry</button>
-          )}
-          <div className="flex items-center gap-2"><VoiceLevelMeter level={voiceLevel} listening={voiceListening} /></div>
+          {voiceListening ? <div className="flex items-center gap-2"><VoiceLevelMeter level={voiceLevel} listening={voiceListening} /></div> : null}
         </div>
         {cue.length > 0 ? (
           <div className="rounded-panel border border-line p-2" data-testid="message-cue">
@@ -9423,7 +9379,7 @@ function ChatPane({
           <div className="next-guesses flex gap-2 overflow-x-auto px-3 pb-1" data-testid="next-guesses">
             <button type="button" className="suggestion-chip shrink-0" onClick={() => setDraft("Go deeper on that")}>Go deeper</button>
             <button type="button" className="suggestion-chip shrink-0" onClick={() => setDraft("Make that shorter")}>Make it shorter</button>
-            <button type="button" className="suggestion-chip shrink-0" onClick={() => setDraft("Turn that into an image")}>Turn that into an image</button>
+            {lastReply?.kind === "error" || lastReply?.content.startsWith("/imagine") ? null : <button type="button" className="suggestion-chip shrink-0" onClick={() => setDraft("Turn that into an image")}>Turn that into an image</button>}
           </div>
         ) : null}
         <form
@@ -9556,7 +9512,7 @@ function ChatPane({
               {speaking ? "Stop" : "Read aloud"}
             </button></div>
             
-            <button type="submit" disabled={halted || (busy ? !draft.trim() : (!draft.trim() && pendingImages.length === 0 && !stagedName))} className="composer-send min-h-11 rounded-panel bg-accent px-4 text-sm font-semibold text-accent-ink disabled:opacity-50">{busy ? "Cue" : "Send"}</button>
+            <button type={busy ? "button" : "submit"} onClick={busy ? onStop : undefined} disabled={halted || (!busy && !draft.trim() && pendingImages.length === 0 && !stagedName)} className="composer-send min-h-11 min-w-16 rounded-panel bg-accent px-4 text-sm font-semibold text-accent-ink disabled:opacity-50">{busy ? "Stop" : "Send"}</button>
             <button type="button" className="composer-mic-dictate inline-flex min-h-11 items-center gap-2 rounded-full border border-line px-3 text-sm" data-testid="composer-mic-dictate" aria-label="Mic" title="Mic types into the field. It does not open Speak." onClick={onDictationMic}>
               <Mic className="size-4" /> Mic
             </button>

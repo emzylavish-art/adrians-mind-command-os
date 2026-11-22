@@ -119,7 +119,7 @@ export function AnswerTabs({
         event.currentTarget.querySelectorAll<HTMLButtonElement>("[role=tab]")[next]?.focus();
       }}>
         {tabs.map((item) => (
-          <button key={item} id={`${id}-${item}`} type="button" role="tab" aria-selected={tab === item} aria-controls={`${id}-panel`} tabIndex={tab === item ? 0 : -1} className={`min-h-11 rounded-panel border px-3 text-xs ${tab === item ? "border-accent" : "border-line text-muted"}`} onClick={() => setTab(item)}>
+          <button key={item} id={`${id}-${item}`} type="button" role="tab" aria-selected={tab === item} aria-controls={`${id}-panel`} tabIndex={tab === item ? 0 : -1} className={`chat-button chat-button--secondary${tab === item ? " is-selected" : ""}`} disabled={item === "links" ? links.length === 0 : item === "images" ? pictures.length === 0 : false} aria-disabled={item === "links" ? links.length === 0 : item === "images" ? pictures.length === 0 : undefined} onClick={() => setTab(item)}>
             {item === "answer" ? "Answer" : item === "links" ? `Links${links.length ? ` ${links.length}` : ""}` : `Images${pictures.length ? ` ${pictures.length}` : ""}`}
           </button>
         ))}

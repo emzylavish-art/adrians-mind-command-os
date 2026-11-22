@@ -683,3 +683,13 @@ export function imagineRetryParams(failure: Pick<ImageGenerationFailure, "mode" 
     ...(failure.mode === "edit" && failure.imageDataUrl ? { imageDataUrl: failure.imageDataUrl } : {}),
   };
 }
+
+export function imageRetryPlan(
+  messages: { role: string; kind?: string; content: string }[],
+  chatId: string,
+): { chatId: string; prompt: string; newChat: false } | null {
+  const last = messages.at(-1);
+  const user = [...messages].reverse().find((message) => message.role === "user");
+  if (last?.kind !== "error" || !user?.content.startsWith("/imagine")) return null;
+  return { chatId, prompt: user.content.replace(/^\/imagine\s*/, "").trim(), newChat: false };
+}

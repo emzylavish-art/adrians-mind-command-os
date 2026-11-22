@@ -1,4 +1,5 @@
 const { app, BrowserWindow } = require("electron");
+const { clipboard, globalShortcut } = require("electron");
 const { spawn } = require("node:child_process");
 const { createHash } = require("node:crypto");
 const { createWriteStream, existsSync, mkdirSync, rmSync } = require("node:fs");
@@ -17,6 +18,7 @@ const {
   hashesMatch,
   isAllowedDownloadUrl,
 } = require("./cloud-update.cjs");
+const { startCompanion } = require("./dictation-companion.cjs");
 
 const PORT = "41731";
 const HOST = "127.0.0.1";
@@ -282,6 +284,19 @@ app.whenReady().then(async () => {
   } catch (error) {
     window.loadURL(`data:text/plain,${encodeURIComponent(String(error.message || error))}`);
   }
+  const companion = startCompanion({
+    electron: { BrowserWindow, globalShortcut },
+    clipboard,
+    page: path.join(__dirname, "dictation-widget.html"),
+    onExit: () => app.quit(),
+  });
+  window.on("close", (event) => {
+    if (companion) {
+      event.preventDefault();
+      window.hide();
+    }
+  });
+  app.on("before-quit", () => companion.close());
 });
 
-app.on("window-all-closed", () => app.quit());
+app.on("window-all-closed", () => undefined);

@@ -1,0 +1,83 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>Dictation</title>
+  <style>
+    body { margin: 0; font: 14px/1.4 system-ui, sans-serif; background: #111; color: #fafafa; }
+    header { -webkit-app-region: drag; display: flex; justify-content: space-between; padding: 8px 10px; }
+    button, select { -webkit-app-region: no-drag; min-height: 36px; border-radius: 999px; border: 1px solid #3f3f46; background: transparent; color: inherit; }
+    main { display: flex; gap: 8px; padding: 0 10px 10px; align-items: center; }
+    p { margin: 0 10px 10px; color: #a1a1aa; font-size: 12px; }
+  </style>
+</head>
+<body>
+  <header>
+    <strong>Dictation</strong>
+    <span>
+      <button type="button" id="pin" aria-label="Pin">Pin</button>
+      <button type="button" id="hide" aria-label="Hide">Hide</button>
+      <button type="button" id="exit" aria-label="Exit dictation">Exit</button>
+    </span>
+  </header>
+  <main>
+    <button type="button" id="mic" aria-label="Microphone">Mic</button>
+    <button type="button" id="done" aria-label="Done">✓</button>
+    <button type="button" id="cancel" aria-label="Cancel">Cancel</button>
+    <select id="mic-device" aria-label="Microphone"></select>
+  </main>
+  <p id="note">Speak, then press Done. Nothing is sent.</p>
+  <script>
+    const note = document.getElementById("note");
+    let recorder = null;
+    let chunks = [];
+    let text = "";
+    async function devices() {
+      const list = await navigator.mediaDevices.enumerateDevices().catch(() => []);
+      const select = document.getElementById("mic-device");
+      for (const device of list.filter((item) => item.kind === "audioinput")) {
+        const option = document.createElement("option");
+        option.value = device.deviceId;
+        option.textContent = device.label || "Microphone";
+        select.append(option);
+      }
+    }
+    document.getElementById("mic").onclick = async () => {
+      chunks = [];
+      text = "";
+      const deviceId = document.getElementById("mic-device").value;
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: deviceId ? { deviceId } : true });
+      recorder = new MediaRecorder(stream);
+      recorder.ondataavailable = (event) => { if (event.data.size) chunks.push(event.data); };
+      recorder.start();
+      note.textContent = "Recording. Press Done to insert. Nothing is sent.";
+    };
+    document.getElementById("done").onclick = async () => {
+      if (recorder && recorder.state !== "inactive") {
+        await new Promise((resolve) => { recorder.onstop = resolve; recorder.stop(); });
+        recorder.stream.getTracks().forEach((track) => track.stop());
+      }
+      const blob = new Blob(chunks);
+      if (blob.size >= 32) {
+        const response = await fetch("http://127.0.0.1:4196/handy-stt", { method: "POST", body: blob }).catch(() => null);
+        const body = response ? await response.json().catch(() => ({})) : {};
+        text = body.text || "";
+      }
+      const done = await fetch("http://127.0.0.1:4198/done", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ text }) });
+      const result = await done.json();
+      note.textContent = result.note || "Nothing was inserted.";
+    };
+    document.getElementById("cancel").onclick = async () => {
+      if (recorder && recorder.state !== "inactive") recorder.stop();
+      recorder?.stream.getTracks().forEach((track) => track.stop());
+      chunks = [];
+      text = "";
+      await fetch("http://127.0.0.1:4198/cancel", { method: "POST" });
+      note.textContent = "Cancelled. The recording was discarded.";
+    };
+    document.getElementById("hide").onclick = () => window.close();
+    document.getElementById("exit").onclick = () => fetch("http://127.0.0.1:4198/exit", { method: "POST" });
+    devices();
+  </script>
+</body>
+</html>

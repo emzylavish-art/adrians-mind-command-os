@@ -419,7 +419,16 @@ export function createWhisperSession(handlers: WhisperSessionHandlers): WhisperS
     paused = false;
     target = captureInsertTarget();
     dispatch({ type: "start" });
-    await startSttFallback("Dictation is Handy Whisper. Speak was not opened.");
+    const Ctor = handlers.speechCtor?.() ?? null;
+    if (Ctor) {
+      try {
+        startBrowser(Ctor);
+        return;
+      } catch {
+        stopBrowser();
+      }
+    }
+    await startSttFallback("Browser speech is unavailable. Trying server transcription. Speak was not opened.");
   }
 
   function pause() {

@@ -137,7 +137,11 @@ html[data-theme="light"] .gpt-rail nav a.nav-item {
     display: none !important;
   }
   .shell[data-view="command"] [data-testid="failure-banner"] {
-    display: none !important;
+    position: static !important;
+    display: flex !important;
+    width: 100% !important;
+    max-width: 100% !important;
+    inset: auto !important;
   }
   .main-stage {
     padding-bottom: 0.5rem !important;
@@ -1545,14 +1549,6 @@ img.service-mark.on-tile {
   }
 }
 
-.gpt-home .composer-send:disabled {
-  display: none !important;
-}
-
-.gpt-home .composer-send {
-  display: none !important;
-}
-
 .settings-index {
   display: flex;
   flex-direction: column;
@@ -2741,8 +2737,17 @@ html[data-theme="light"] .shell .topbar > button[aria-label="Open menu"] {
   padding: 0 0.75rem;
   font-size: 0.9rem;
 }
+.nav-more > :not(summary) {
+  overflow: hidden;
+  max-height: 32rem;
+  opacity: 1;
+  transition: max-height 180ms ease-out, opacity 180ms ease-out;
+}
 .nav-more:not([open]) > :not(summary) {
-  display: none;
+  max-height: 0;
+  opacity: 0;
+  pointer-events: none;
+  transition: max-height 150ms ease-in, opacity 150ms ease-in;
 }
 [data-testid="chat-right-rail"] {
   display: none !important;
@@ -3036,8 +3041,17 @@ header.page-hero nav {
   padding: 0 0.75rem;
   font-size: 0.9rem;
 }
+.nav-more > :not(summary) {
+  overflow: hidden;
+  max-height: 32rem;
+  opacity: 1;
+  transition: max-height 180ms ease-out, opacity 180ms ease-out;
+}
 .nav-more:not([open]) > :not(summary) {
-  display: none;
+  max-height: 0;
+  opacity: 0;
+  pointer-events: none;
+  transition: max-height 150ms ease-in, opacity 150ms ease-in;
 }
 [data-testid="chat-right-rail"] {
   display: none !important;
@@ -3144,19 +3158,21 @@ html:not([data-theme="light"]) .thread-chat-settings[open] {
   display: none !important;
 }
 .shell[data-view="chat"] form.thread-composer {
-  position: fixed !important;
-  left: 0.5rem;
-  right: 0.5rem;
-  bottom: calc(0.4rem + env(safe-area-inset-bottom));
-  z-index: 12;
+  position: relative !important;
+  left: auto;
+  right: auto;
+  bottom: auto;
+  width: 100%;
+  max-width: 100%;
   margin: 0 !important;
 }
 .shell[data-view="chat"] .next-guesses {
-  position: fixed;
-  left: 0.5rem;
-  right: 0.5rem;
-  bottom: calc(7.2rem + env(safe-area-inset-bottom));
-  z-index: 12;
+  position: relative;
+  left: auto;
+  right: auto;
+  bottom: auto;
+  width: 100%;
+  max-width: 100%;
 }
 @media (min-width: 768px) {
   .shell[data-view="chat"] form.thread-composer,
@@ -3167,3 +3183,330 @@ html:not([data-theme="light"]) .thread-chat-settings[open] {
 
 .shell[data-view="chat"] nav.fixed.bottom-0 { display: none !important; }
 .shell[data-view="chat"] form.thread-composer { bottom: 0 !important; margin: 0 !important; }
+
+@media (max-width: 430px) {
+  .shell textarea, .shell input, .shell select { font-size: 16px; }
+  aside.rail.nav-drawer-open { background: #000 !important; }
+  html, body, .shell, .main-stage, .gpt-home, .thread-shell {
+    max-width: 100%;
+    overflow-x: hidden;
+  }
+  .shell *, .gpt-home *, .thread-shell * {
+    min-width: 0;
+    box-sizing: border-box;
+  }
+  [data-testid="failure-banner"],
+  [data-testid="save-retry"],
+  .signed-out-entry,
+  .composer-error,
+  .voice-copy {
+    position: static !important;
+    inset: auto !important;
+    display: flex;
+    flex-wrap: wrap;
+    width: 100%;
+    max-width: 100%;
+    overflow-wrap: anywhere;
+  }
+  .thread-shell article,
+  .thread-shell [role="toolbar"],
+  [aria-label="Rate this reply"] {
+    display: flex;
+    flex-wrap: wrap;
+    width: 100%;
+    max-width: 100%;
+    gap: 0.35rem;
+  }
+  [aria-label="Rate this reply"] button {
+    width: 2.75rem;
+    height: 2.75rem;
+    min-width: 2.75rem;
+    min-height: 2.75rem;
+  }
+  .gpt-home form,
+  .thread-composer {
+    display: flex;
+    flex-wrap: wrap;
+    width: 100%;
+    max-width: 100%;
+  }
+  .gpt-home textarea,
+  .thread-composer textarea {
+    flex: 1 1 100%;
+    width: 100% !important;
+    max-width: 100%;
+  }
+  .shell[data-view="chat"] .next-guesses {
+    position: static;
+    left: auto;
+    right: auto;
+    bottom: auto;
+  }
+}
+
+/* chat-spacing-2026: gutter and type only. No color or copy changes. */
+@media (max-width: 430px) {
+  .shell[data-view="chat"] .topbar,
+  .thread-shell .chat-head,
+  .thread-shell section > .min-h-0.flex-1,
+  .thread-shell form.thread-composer,
+  .gpt-home,
+  .gpt-home [data-composer="floating"],
+  [data-testid="failure-banner"],
+  [data-testid="start-shelf"] {
+    width: 100% !important;
+    max-width: 100% !important;
+    margin-left: 0 !important;
+    margin-right: 0 !important;
+    padding-left: 16px !important;
+    padding-right: 16px !important;
+    box-sizing: border-box;
+  }
+  .thread-shell article,
+  .thread-shell [role="toolbar"],
+  .suggestion-chip {
+    margin-left: 0 !important;
+    margin-right: 0 !important;
+  }
+  .thread-shell article {
+    padding-left: 12px !important;
+    padding-right: 0 !important;
+    font-size: 16px;
+    line-height: 1.45;
+  }
+  .shell[data-view="chat"] .topbar {
+    height: 56px;
+    min-height: 56px;
+    max-height: 56px;
+    flex-wrap: nowrap !important;
+    gap: 8px !important;
+    padding-top: 8px !important;
+    padding-bottom: 8px !important;
+    overflow: hidden;
+  }
+  .surface-switch,
+  [data-testid="header-controls"] {
+    display: inline-flex;
+    flex-wrap: nowrap;
+    gap: 8px;
+    min-width: 0;
+  }
+  .surface-switch__button,
+  .suggestion-chip,
+  .chat-pill,
+  .gpt-home .composer-toolbar > button,
+  .thread-shell form.thread-composer button {
+    min-height: 40px;
+    padding-left: 14px !important;
+    padding-right: 14px !important;
+    border-radius: 999px !important;
+    font-size: 14px;
+    line-height: 1.2;
+  }
+  .gpt-home .composer-toolbar > button,
+  .thread-shell form.thread-composer button[aria-label] {
+    width: 40px;
+    padding-left: 12px !important;
+    padding-right: 12px !important;
+  }
+  .thread-shell .chat-head h2,
+  .gpt-home h1 {
+    font-size: 22px;
+    letter-spacing: -0.01em;
+    line-height: 1.2;
+  }
+  .thread-shell .text-xs,
+  .gpt-home .text-xs {
+    font-size: 12px;
+  }
+  .gpt-starters {
+    display: grid !important;
+    grid-template-columns: 1fr 1fr;
+    gap: 8px !important;
+  }
+  .gpt-starters > p { grid-column: 1 / -1; }
+  .gpt-starters > button {
+    width: 100%;
+    min-height: 40px;
+    border-radius: 999px;
+  }
+  .thread-shell form.thread-composer,
+  .gpt-home form {
+    gap: 8px !important;
+    padding-top: 12px !important;
+    padding-bottom: calc(12px + env(safe-area-inset-bottom)) !important;
+    border-radius: 16px !important;
+  }
+  .gpt-home textarea,
+  .thread-composer textarea {
+    min-height: 44px !important;
+    height: auto;
+    padding: 10px 16px !important;
+    line-height: 24px !important;
+    font-size: 16px !important;
+  }
+  .thread-shell form.thread-composer {
+    max-height: none;
+  }
+}
+@media (max-width: 360px) {
+  [data-testid="open-chat-settings"] span {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip: rect(0 0 0 0);
+  }
+}
+
+/* chat-button-2026: states only. Brand colors are not redefined. */
+.chat-button,
+.shell[data-view="chat"] .composer-toolbar > button,
+.shell[data-view="chat"] .composer-toolbar > summary,
+.gpt-home .composer-toolbar > button,
+.gpt-starters > button,
+.suggestion-chip,
+.surface-switch__button {
+  border-radius: 999px;
+  min-height: 40px;
+  transition: background-color 80ms ease-out, transform 80ms ease-out;
+}
+.chat-button:focus-visible,
+.shell[data-view="chat"] button:focus-visible,
+.shell[data-view="chat"] summary:focus-visible,
+.gpt-home textarea:focus-visible,
+.thread-composer textarea:focus-visible {
+  outline: 2px solid var(--color-accent, #2f6bff);
+  outline-offset: 2px;
+  border-radius: inherit;
+}
+.chat-button:active,
+.shell[data-view="chat"] button:active,
+.gpt-starters > button:active {
+  transform: scale(0.98);
+}
+.chat-button.is-selected,
+.chat-button[aria-selected="true"],
+.chat-button[aria-pressed="true"],
+.gpt-voice[aria-pressed="true"],
+button[aria-pressed="true"] {
+  box-shadow: inset 0 0 0 2px var(--color-accent, #2f6bff);
+}
+.chat-button:disabled,
+.shell[data-view="chat"] button:disabled,
+.composer-send:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+  box-shadow: none;
+}
+.gpt-home .composer-send,
+.gpt-home .composer-send:disabled,
+.thread-shell .composer-send {
+  display: inline-flex !important;
+  order: 99;
+  margin-left: auto;
+}
+.composer-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+@media (pointer: coarse) {
+  .shell[data-view="chat"] button:hover,
+  .gpt-home button:hover { background-image: none; }
+}
+.composer-mic-dictate { order: 97; }
+.gpt-voice { order: 98; }
+
+/* chat-icons-2026 */
+.icon-tile {
+  display: grid;
+  width: 28px;
+  height: 28px;
+  place-items: center;
+  border: 1px solid currentColor;
+  border-radius: 8px;
+  color: inherit;
+}
+.icon-tile svg,
+.composer-send svg,
+.shell[data-view="chat"] button svg,
+.gpt-home button svg {
+  width: 20px;
+  height: 20px;
+  stroke-width: 1.75;
+  color: currentColor;
+  stroke: currentColor;
+}
+.composer-send,
+.composer-send svg {
+  color: inherit;
+}
+.icon-x {
+  width: 20px;
+  height: 20px;
+  background: linear-gradient(currentColor, currentColor), linear-gradient(currentColor, currentColor);
+  background-position: center;
+  background-size: 20px 1.75px, 1.75px 20px;
+  background-repeat: no-repeat;
+  transform: rotate(45deg);
+}
+
+/* chat-hierarchy-2026 */
+.shell[data-view="chat"] .topbar .surface-switch__button,
+[data-testid="header-controls"] .surface-switch__button,
+[data-testid="open-chat-settings"] {
+  background: transparent !important;
+  border-color: transparent !important;
+  font-weight: 500;
+  box-shadow: none;
+}
+.turn-user {
+  border-radius: 16px;
+  background: rgb(255 255 255 / 0.06);
+  padding: 12px 16px !important;
+}
+.turn-assistant {
+  background: transparent;
+  border: 0;
+  box-shadow: none;
+}
+.error-focus {
+  font-size: 18px;
+  font-weight: 650;
+  line-height: 1.4;
+}
+.gpt-home [data-composer="floating"],
+.thread-shell form.thread-composer {
+  border: 1px solid rgb(255 255 255 / 0.16) !important;
+  background: #1c1c1e !important;
+  box-shadow: 0 8px 24px rgb(0 0 0 / 0.28);
+}
+.composer-send:disabled {
+  opacity: 0.35 !important;
+}
+.suggestion-chip,
+[data-testid="answer-tabs"] .chat-button {
+  background: transparent;
+  border-color: transparent;
+}
+
+/* chat-first-paint-2026 */
+.gpt-home {
+  justify-content: flex-start !important;
+  align-content: start !important;
+}
+.gpt-starters {
+  min-height: 96px;
+}
+.gpt-starters > button {
+  display: inline-flex !important;
+}
+.composer-toolbar,
+.gpt-home .composer-toolbar {
+  min-height: 48px;
+}
+.shell[data-view="chat"] .topbar .surface-switch__button span,
+[data-testid="open-chat-settings"] span {
+  white-space: nowrap;
+}

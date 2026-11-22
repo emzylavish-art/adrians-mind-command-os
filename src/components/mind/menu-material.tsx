@@ -8,6 +8,10 @@ export function MenuMotion() {
         from { transform: translateY(8px) scale(0.96); }
         to { transform: none; }
       }
+      @keyframes adrian-menu-out {
+        from { opacity: 1; transform: none; }
+        to { opacity: 0; transform: translateY(8px); }
+      }
       @keyframes adrian-drawer-in {
         from { opacity: 0.72; transform: translateX(-16px); }
         to { opacity: 1; transform: none; }
@@ -28,13 +32,14 @@ export function MenuMotion() {
   );
 }
 
-export function finishMenu(node: HTMLElement | null) {
+export function finishMenu(node: HTMLElement | null, phase: "open" | "close" = "open") {
   if (!node) return;
   const light = document.documentElement.dataset.theme === "light";
   const reduce = window.matchMedia("(prefers-reduced-motion: reduce)").matches || document.documentElement.dataset.adrianMotion === "reduce";
   node.classList.add("adrian-menu");
   node.dataset.menuMaterial = "lifted";
-  node.style.setProperty("opacity", "1", "important");
+  node.dataset.menuPhase = phase;
+  if (phase !== "close") node.style.setProperty("opacity", "1", "important");
   node.style.setProperty("background-color", light ? "#f4f4f5" : "#1c1c1e", "important");
   node.style.setProperty("background-image", "none", "important");
   node.style.setProperty("backdrop-filter", "none", "important");
@@ -48,7 +53,10 @@ export function finishMenu(node: HTMLElement | null) {
   node.style.setProperty("padding", "8px", "important");
   if (!reduce && node.dataset.menuAnimated !== "1") {
     node.dataset.menuAnimated = "1";
-    node.style.setProperty("animation", "adrian-menu-in 220ms cubic-bezier(0.22, 1, 0.36, 1)", "important");
+    node.style.setProperty("animation", "adrian-menu-in 180ms ease-out", "important");
+  }
+  if (!reduce && phase === "close") {
+    node.style.setProperty("animation", "adrian-menu-out 150ms ease-in", "important");
   }
 }
 
@@ -304,6 +312,7 @@ export function AnchoredCard({
   width = 320,
   align = "end",
   catcher = true,
+  phase = "open",
 }: {
   anchor: DOMRect | null;
   label: string;
@@ -313,19 +322,20 @@ export function AnchoredCard({
   width?: number;
   align?: "start" | "end";
   catcher?: boolean;
+  phase?: "open" | "close";
 }) {
   const panel = useRef<HTMLDivElement>(null);
   useEffect(() => {
     const node = panel.current;
     if (!node) return;
-    finishMenu(node);
+    finishMenu(node, phase);
     if (anchor) placeNear(node, anchor, width, align);
     const onKey = (event: KeyboardEvent) => {
       if (event.key === "Escape") onClose();
     };
     document.addEventListener("keydown", onKey);
     return () => document.removeEventListener("keydown", onKey);
-  }, [anchor, align, onClose, width, children]);
+  }, [anchor, align, onClose, width, children, phase]);
   if (typeof document === "undefined") return null;
   const light = document.documentElement.dataset.theme === "light";
   const card = (
@@ -337,6 +347,7 @@ export function AnchoredCard({
       id={testId}
       data-testid={testId}
       className="adrian-menu"
+      data-menu-phase={phase}
       style={{
         position: "fixed",
         zIndex: 1201,

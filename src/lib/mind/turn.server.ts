@@ -318,7 +318,11 @@ export async function handleMindTurn(request: Request): Promise<Response> {
     }
   }
   if (typeof body.text === "string") {
-    ensureLocalCapabilityFile(path.join(process.cwd(), ".data", "local-capabilities.json"));
+    try {
+      if (!process.env.VERCEL) ensureLocalCapabilityFile(path.join(process.cwd(), ".data", "local-capabilities.json"));
+    } catch {
+      /* A read-only disk must not stop the model call. */
+    }
     const local = runLocalCommand(body.text);
     if (local) {
       const done = { text: local, model: "adrian-local", provider: "Adrian", usage: null, usedIds: [], requestId: null };

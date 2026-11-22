@@ -2,14 +2,14 @@ import { useEffect, useRef, useState } from "react";
 import { ActionOverlay } from "@/components/mind/conversation-menu";
 import {
   HANDY_SOURCE,
-  HANDY_WHISPER_URL,
   fieldLabel,
   handyBarHeight,
-  handyLiveLevels,
+  insertTranscript,
   isTypingField,
 } from "@/lib/mind/handy-dictation";
 import { createWhisperSession, type WhisperSession } from "@/lib/mind/whisper-flow/session";
 import { SOKUJI_SOURCE, TRANSLATOR_TARGETS, translateVoice } from "@/lib/mind/voice-translator";
+import { finishDictation } from "@/lib/mind/system-dictation";
 
 type Phase = "idle" | "speak" | "saved";
 
@@ -59,73 +59,83 @@ export function HandyDictation() {
   }, []);
 
   useEffect(() => {
-    if (phase !== "speak") return;
-    const id = window.setInterval(() => {
-      setLevels(handyLiveLevels(Date.now()));
-    }, 120);
-    return () => {
-      window.clearInterval(id);
-    };
+    if (phase !== "speak") setLevels(Array.from({ length: 9 }, () => 0.08));
   }, [phase]);
 
   function liveSession() {
     if (session.current) return session.current;
     session.current = createWhisperSession({
-      speechCtor: () => null,
+      speechCtor: () => {
+        const host = window as Window & {
+          SpeechRecognition?: new () => SpeechRecognition;
+          webkitSpeechRecognition?: new () => SpeechRecognition;
+        };
+        return host.SpeechRecognition ?? host.webkitSpeechRecognition ?? null;
+      },
       onState: (next) => {
-        if (next.level > 0) setLevels(handyLiveLevels(next.level * 12));
+        if (next.level > 0) setLevels(Array.from({ length: 9 }, (_, index) => Math.max(0.08, Math.min(1, next.level * (0.55 + (index % 3) * 0.15)))));
         if (next.phase === "listening" || next.phase === "transcribing") setPhase("speak");
+        else if (next.phase === "idle" || next.phase === "error") setPhase("idle");
         if (next.error) setNote(next.error);
       },
+      onInserted: (text) => {
+        const current = field.current;
+        if (!current || !text.trim()) return;
+        current.focus();
+        insertTranscript(current, text);
+        setNote(`Words are in ${fieldLabel(current)}. Press Send yourself. Speak was not opened.`);
+      },
       transcribe: async (input) => {
-        const bytes = Uint8Array.from(atob(input.audioBase64), (char) => char.charCodeAt(0));
-        const response = await fetch(HANDY_WHISPER_URL, {
+        const response = await fetch("/api/mind/voice/stt", {
           method: "POST",
-          headers: { "content-type": input.mime || "application/octet-stream" },
-          body: bytes,
+          credentials: "same-origin",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({
+            audioBase64: input.audioBase64,
+            mime: input.mime || "audio/webm",
+            filename: (input.mime || "").includes("mp4") ? "dictation.m4a" : "dictation.webm",
+          }),
         });
         const body = await response.json() as { ok?: boolean; text?: string; engine?: string; error?: string };
         const text = body.text?.trim() ?? "";
         if (!response.ok || !body.ok || !text) {
-          return { ok: false, error: body.error || "Whisper heard no words. Nothing was sent to Google." };
+          return { ok: false, error: body.error || "Nothing was transcribed. Nothing was sent." };
         }
-        setEngine(body.engine || "transcribe.cpp");
-        return { ok: true, text, provider: "handy" };
+        setEngine(body.engine || "server-stt");
+        return { ok: true, text, provider: "server" };
       },
     });
     return session.current;
   }
 
   async function start() {
-    setPhase("speak");
     setEngine("");
-    setNote(label ? `Mic is listening in ${label}. This is not Speak and it is not translated.` : "Mic is listening. This is not Speak and it is not translated.");
+    setNote("Opening the microphone. Nothing is sent until words are recognised.");
     field.current?.focus();
     try {
       await liveSession().start();
     } catch {
-      setNote("This browser could not open the microphone. Nothing was sent to Google.");
+      setPhase("idle");
+      setNote("This browser could not open the microphone. Nothing was transcribed.");
     }
   }
 
   async function mark() {
-    const current = field.current;
-    if (!current) {
-      setNote("Focus a typing field first. Nothing was saved.");
-      return;
-    }
+    const current = field.current && document.contains(field.current) ? field.current : null;
     const live = session.current;
     if (!live || live.getState().phase === "idle") {
-      setNote("Press Mic and speak first. Nothing was saved.");
+      setNote("Press Mic and speak first. Nothing was inserted.");
       return;
     }
     try {
-      current.focus();
       await live.stop();
+      const transcript = current?.value.trim() || "";
+      const decision = finishDictation({ transcript, hasFocusedField: Boolean(current && isTypingField(current)) });
+      if (decision.inserted && current && !current.value.includes(decision.transcript)) insertTranscript(current, decision.transcript);
       setPhase("saved");
-      setNote(`Saved into ${fieldLabel(current)} from Handy Whisper. Speak was not opened.`);
+      setNote(decision.note);
     } catch {
-      setNote("Handy Whisper is not running on this machine. Nothing was sent to Google.");
+      setNote("Dictation could not finish. Nothing was inserted and nothing was sent.");
     }
   }
 
@@ -187,8 +197,11 @@ export function HandyDictation() {
       onPointerLeave={(event) => window.clearTimeout(Number(event.currentTarget.dataset.hold))}
       onPointerCancel={(event) => window.clearTimeout(Number(event.currentTarget.dataset.hold))}
     >
-      <button type="button" className="min-h-11 rounded-full border border-line px-3 text-sm" data-testid="handy-cancel" onClick={() => { session.current?.cancel(); setPhase("idle"); setActionsOpen(false); }}>
+      <button type="button" className="min-h-11 rounded-full border border-line px-3 text-sm" data-testid="handy-cancel" onClick={() => { session.current?.cancel(); setPhase("idle"); setActionsOpen(false); setNote("Cancelled. The recording was discarded. Text already in the field was kept."); }}>
         Cancel
+      </button>
+      <button type="button" className="min-h-11 rounded-full border border-line px-3 text-sm" data-testid="dictation-done" aria-label="Done" title="Finish recording and insert the words at the cursor. Nothing is sent." onClick={() => { void mark(); }}>
+        ✓
       </button>
       {phase === "speak" || phase === "saved" ? (
         <span className="inline-flex items-end gap-1" data-testid="handy-wave" data-live="true" aria-label="Speech is live">

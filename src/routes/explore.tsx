@@ -1,4 +1,4 @@
-import { createFileRoute } from "@tanstack/react-router";
+import { createFileRoute, Link } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import { PersonaDirectoryView } from "@/components/mind/persona-directory";
 import { emptyWorkspace, loadWorkspace } from "@/lib/mind/workspace";
@@ -22,12 +22,12 @@ function ExplorePage() {
   if (!ready) {
     return (
       <main className="min-h-screen bg-bg p-6 text-fg">
-        <a
-          href="/"
+          <Link
+          to="/"
           className="inline-flex min-h-11 items-center justify-center rounded-panel border border-line px-4 text-sm"
         >
           Back to Chat
-        </a>
+        </Link>
         <p className="mt-4 text-sm text-muted">Loading local workspace…</p>
       </main>
     );

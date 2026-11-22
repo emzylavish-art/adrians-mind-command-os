@@ -1,4 +1,5 @@
 import { useMemo, useRef, useState } from "react";
+import { Link, useNavigate } from "@tanstack/react-router";
 import {
   PERSONA_CATEGORIES,
   buildPersonaDirectory,
@@ -39,6 +40,7 @@ export function PersonaDirectoryView({
   const [category, setCategory] = useState<PersonaCategoryId | "all">("official");
   const [query, setQuery] = useState("");
   const [note, setNote] = useState<string | null>(null);
+  const navigate = useNavigate();
   const latestWorkspace = useRef(ws);
   latestWorkspace.current = ws;
 
@@ -92,8 +94,8 @@ export function PersonaDirectoryView({
     );
     if (onOpened) {
       onOpened(result.href, card);
-    } else if (typeof window !== "undefined") {
-      window.location.assign(result.href);
+    } else {
+      void navigate({ href: result.href });
     }
   }
 
@@ -120,9 +122,9 @@ export function PersonaDirectoryView({
           className="min-h-11 w-full flex-1 rounded-panel border border-line bg-bg px-3 text-sm"
           data-testid="persona-search"
         />
-        <a href="/" className="inline-flex min-h-11 items-center justify-center rounded-panel border border-line px-4 text-sm">
+        <Link to="/" className="inline-flex min-h-11 items-center justify-center rounded-panel border border-line px-4 text-sm">
           Back to Chat
-        </a>
+        </Link>
       </div>
 
       <div className="mb-4 flex flex-wrap gap-2" role="group" aria-label="Persona categories">
