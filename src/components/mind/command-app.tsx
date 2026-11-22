@@ -5700,6 +5700,24 @@ export function CommandApp() {
             <Compass className="size-4 shrink-0 opacity-90" />
             {!railCollapsed && "Explore"}
           </Link>
+          <Link
+            to="/research"
+            data-testid="nav-route-research"
+            className={`nav-item flex min-h-11 items-center gap-3 rounded-2xl px-3 text-sm font-medium text-muted ${railCollapsed ? "justify-center" : ""}`}
+            onClick={() => setNavOpen(false)}
+          >
+            <img className="service-mark" src="/brand/marks/explore.png" alt="" width={22} height={22} />
+            {!railCollapsed && "Research"}
+          </Link>
+          <Link
+            to="/social"
+            data-testid="nav-route-social"
+            className={`nav-item flex min-h-11 items-center gap-3 rounded-2xl px-3 text-sm font-medium text-muted ${railCollapsed ? "justify-center" : ""}`}
+            onClick={() => setNavOpen(false)}
+          >
+            <img className="service-mark" src="/brand/marks/plugins.png" alt="" width={22} height={22} />
+            {!railCollapsed && "Social"}
+          </Link>
           {!railCollapsed && (
             <>
             <button
@@ -7832,10 +7850,13 @@ export function CommandApp() {
                   { id: "build", label: "Build", detail: "Adrian Build workspace. A task can edit the hosted workspace, or a paired computer when one is connected.", mark: "/brand/logo-mark.jpg", open: () => setView("build") },
                   { id: "explore", label: "Explore", detail: "Filter local templates, save one, then open it in Chat.", mark: "/brand/logo-mark.jpg", open: () => window.location.assign("/explore") },
                   { id: "dashboard", label: "Dashboard", detail: "Opens the workspace map inside this app.", mark: "/brand/logo-mark.jpg", open: () => setView("dashboard") },
+                  { id: "research", label: "Research", detail: "Opens the free-first research website.", mark: "/brand/logo-mark.jpg", open: () => window.location.assign("/research") },
+                  { id: "social", label: "Social", detail: "Opens the Adrian Social panel. Not connected until the PC service answers.", mark: "/brand/logo-mark.jpg", open: () => window.location.assign("/social") },
                   ].filter((item) => helpQuery.toLowerCase().trim().split(/\s+/).every((word) => `${item.label} ${item.detail}`.toLowerCase().includes(word)));
                   if (topics.length === 0) return <p className="mt-2 text-sm text-muted" role="status">No help topics match this search. Try “key,” “Library,” or “chat.”</p>;
                   return topics.map((item) => (
                   <button key={item.id} type="button" className="adrian-row flex min-h-14 w-full items-center gap-3 rounded-2xl border border-line px-3 text-left text-sm" onClick={() => { item.open(); setNavOpen(false); }}>
+
                     <img src={item.mark} alt="" width={28} height={28} className="size-7 rounded-lg" />
                     <span className="min-w-0 flex-1">
                       <span className="block font-medium">{item.label}</span>

@@ -15,6 +15,8 @@ import { Route as ExploreRouteImport } from './routes/explore'
 import { Route as LoginRouteImport } from './routes/login'
 import { Route as MemoryRouteImport } from './routes/memory'
 import { Route as PersonasRouteImport } from './routes/personas'
+import { Route as ResearchRouteImport } from './routes/research'
+import { Route as SocialRouteImport } from './routes/social'
 import { Route as UnauthorizedRouteImport } from './routes/unauthorized'
 import { Route as AuthCallbackRouteImport } from './routes/auth/callback'
 import { Route as ApiAuthSplatRouteImport } from './routes/api/auth/$'
@@ -114,6 +116,16 @@ const MemoryRoute = MemoryRouteImport.update({
 const PersonasRoute = PersonasRouteImport.update({
   id: '/personas',
   path: '/personas',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ResearchRoute = ResearchRouteImport.update({
+  id: '/research',
+  path: '/research',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const SocialRoute = SocialRouteImport.update({
+  id: '/social',
+  path: '/social',
   getParentRoute: () => rootRouteImport,
 } as any)
 const UnauthorizedRoute = UnauthorizedRouteImport.update({
@@ -484,6 +496,8 @@ export interface FileRoutesByFullPath {
   '/login': typeof LoginRoute
   '/memory': typeof MemoryRoute
   '/personas': typeof PersonasRoute
+  '/research': typeof ResearchRoute
+  '/social': typeof SocialRoute
   '/unauthorized': typeof UnauthorizedRoute
   '/auth/callback': typeof AuthCallbackRoute
   '/api/auth/$': typeof ApiAuthSplatRoute
@@ -562,6 +576,8 @@ export interface FileRoutesByTo {
   '/login': typeof LoginRoute
   '/memory': typeof MemoryRoute
   '/personas': typeof PersonasRoute
+  '/research': typeof ResearchRoute
+  '/social': typeof SocialRoute
   '/unauthorized': typeof UnauthorizedRoute
   '/auth/callback': typeof AuthCallbackRoute
   '/api/auth/$': typeof ApiAuthSplatRoute
@@ -641,6 +657,8 @@ export interface FileRoutesById {
   '/login': typeof LoginRoute
   '/memory': typeof MemoryRoute
   '/personas': typeof PersonasRoute
+  '/research': typeof ResearchRoute
+  '/social': typeof SocialRoute
   '/unauthorized': typeof UnauthorizedRoute
   '/auth/callback': typeof AuthCallbackRoute
   '/api/auth/$': typeof ApiAuthSplatRoute
@@ -721,6 +739,8 @@ export interface FileRouteTypes {
     | '/login'
     | '/memory'
     | '/personas'
+    | '/research'
+    | '/social'
     | '/unauthorized'
     | '/auth/callback'
     | '/api/auth/$'
@@ -799,6 +819,8 @@ export interface FileRouteTypes {
     | '/login'
     | '/memory'
     | '/personas'
+    | '/research'
+    | '/social'
     | '/unauthorized'
     | '/auth/callback'
     | '/api/auth/$'
@@ -877,6 +899,8 @@ export interface FileRouteTypes {
     | '/login'
     | '/memory'
     | '/personas'
+    | '/research'
+    | '/social'
     | '/unauthorized'
     | '/auth/callback'
     | '/api/auth/$'
@@ -956,6 +980,8 @@ export interface RootRouteChildren {
   LoginRoute: typeof LoginRoute
   MemoryRoute: typeof MemoryRoute
   PersonasRoute: typeof PersonasRoute
+  ResearchRoute: typeof ResearchRoute
+  SocialRoute: typeof SocialRoute
   UnauthorizedRoute: typeof UnauthorizedRoute
   AuthCallbackRoute: typeof AuthCallbackRoute
   ApiAuthSplatRoute: typeof ApiAuthSplatRoute
@@ -1070,6 +1096,20 @@ declare module '@tanstack/react-router' {
       path: '/personas'
       fullPath: '/personas'
       preLoaderRoute: typeof PersonasRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/research': {
+      id: '/research'
+      path: '/research'
+      fullPath: '/research'
+      preLoaderRoute: typeof ResearchRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/social': {
+      id: '/social'
+      path: '/social'
+      fullPath: '/social'
+      preLoaderRoute: typeof SocialRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/unauthorized': {
@@ -1572,6 +1612,8 @@ const rootRouteChildren: RootRouteChildren = {
   LoginRoute: LoginRoute,
   MemoryRoute: MemoryRoute,
   PersonasRoute: PersonasRoute,
+  ResearchRoute: ResearchRoute,
+  SocialRoute: SocialRoute,
   UnauthorizedRoute: UnauthorizedRoute,
   AuthCallbackRoute: AuthCallbackRoute,
   ApiAuthSplatRoute: ApiAuthSplatRoute,
@@ -1646,12 +1688,3 @@ const rootRouteChildren: RootRouteChildren = {
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
   ._addFileTypes<FileRouteTypes>()
-
-import type { getRouter } from './router.tsx'
-import type { createStart } from '@tanstack/react-start'
-declare module '@tanstack/react-start' {
-  interface Register {
-    ssr: true
-    router: Awaited<ReturnType<typeof getRouter>>
-  }
-}
