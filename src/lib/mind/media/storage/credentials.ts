@@ -2,6 +2,7 @@ import { createHash } from "node:crypto";
 import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import type { StorageService } from "./types.ts";
+import { localDataPath } from "../../../local-data.ts";
 
 /**
  * Credential resolver for storage rotation.
@@ -18,7 +19,7 @@ type ConnectionRecord = {
   connectedAt?: string;
 };
 
-let connectorDirectory = join(process.cwd(), ".data", "mind-connectors");
+let connectorDirectory = localDataPath("mind-connectors");
 
 export function setStorageConnectorDirectory(next: string) {
   connectorDirectory = next;

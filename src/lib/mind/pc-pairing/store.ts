@@ -1,6 +1,7 @@
 import { createHash, randomBytes, timingSafeEqual } from "node:crypto";
 import { mkdirSync, readFileSync, writeFileSync, existsSync, readdirSync, unlinkSync } from "node:fs";
 import { join } from "node:path";
+import { localDataPath } from "../../local-data.ts";
 
 export type PairedAgent = {
   id: string;
@@ -35,7 +36,7 @@ export type PcJobEvent = {
   createdAt: string;
 };
 
-let directory = join(process.cwd(), ".data", "mind-pc-pairing");
+let directory = localDataPath("mind-pc-pairing");
 
 export function setPcPairingDirectory(next: string) {
   directory = next;

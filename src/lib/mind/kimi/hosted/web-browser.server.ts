@@ -3,6 +3,7 @@ import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { adrianBuildCommand, adrianBuildEnv, packageLabel } from "./acp-client.ts";
 import { ensureCodingSearchBridge } from "./coding-search-bridge.server.ts";
+import { localDataPath } from "../../../local-data.ts";
 
 const PORT = 58631;
 
@@ -33,7 +34,7 @@ function releasePort(port: number) {
 }
 
 function tokenFor(env: NodeJS.ProcessEnv): string {
-  const home = env.KIMI_CODE_HOME || join(process.cwd(), ".data", "adrian-build-home");
+  const home = env.KIMI_CODE_HOME || localDataPath("adrian-build-home");
   return readFileSync(`${home}/server.token`, "utf8").trim();
 }
 

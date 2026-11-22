@@ -1,6 +1,7 @@
 import { createHash, randomUUID } from "node:crypto";
 import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
+import { localDataPath } from "../local-data.ts";
 
 export type McpTool = { name: string; description: string };
 
@@ -22,7 +23,7 @@ type FetchLike = (url: string, init?: RequestInit) => Promise<{
   text: () => Promise<string>;
 }>;
 
-let directory = join(process.cwd(), ".data", "mind-mcp");
+let directory = localDataPath("mind-mcp");
 
 export function setMcpDirectory(next: string) {
   directory = next;

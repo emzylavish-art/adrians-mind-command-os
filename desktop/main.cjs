@@ -50,11 +50,13 @@ function waitForServer(url, child) {
 function startServer() {
   const root = serverRoot();
   const entry = path.join(root, "server", "index.mjs");
+  const dataRoot = path.join(app.getPath("userData"), "data");
   return spawn(process.execPath, [entry], {
     cwd: root,
     env: {
       ...process.env,
       ELECTRON_RUN_AS_NODE: "1",
+      ADRIAN_DATA_DIR: dataRoot,
       HOST,
       PORT,
       NITRO_HOST: HOST,

@@ -1,6 +1,7 @@
 import { mkdirSync, readFileSync, renameSync, writeFileSync, existsSync } from "node:fs";
 import { join } from "node:path";
 import { randomBytes } from "node:crypto";
+import { localDataPath } from "../../local-data.ts";
 
 export type PairingCodeRecord = {
   id: string;
@@ -56,7 +57,7 @@ export type PairingStore = {
   handshakeAttempts: HandshakeAttempt[];
 };
 
-let directory = join(process.cwd(), ".data", "mind-pairing");
+let directory = localDataPath("mind-pairing");
 
 export function setPairingStoreDirectory(next: string) {
   directory = next;

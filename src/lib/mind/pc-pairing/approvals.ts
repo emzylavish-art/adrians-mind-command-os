@@ -1,6 +1,7 @@
 import { createHash, randomBytes, timingSafeEqual } from "node:crypto";
 import { mkdirSync, readFileSync, writeFileSync, unlinkSync, existsSync, readdirSync } from "node:fs";
 import { join, resolve, relative, sep, isAbsolute } from "node:path";
+import { localDataPath } from "../../local-data.ts";
 
 export const PC_APPROVAL_TTL_MS = 3 * 60 * 1000;
 export const PC_APPROVAL_ID_PATTERN = /^[A-Za-z0-9_-]{24,64}$/;
@@ -33,7 +34,7 @@ export type PcApprovalPublic = {
   status: PcApprovalStatus;
 };
 
-let directory = join(process.cwd(), ".data", "mind-pc-approvals");
+let directory = localDataPath("mind-pc-approvals");
 
 export function setPcApprovalDirectory(next: string) {
   directory = next;

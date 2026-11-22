@@ -2,6 +2,7 @@ import { randomBytes } from "node:crypto";
 import { mkdirSync, readFileSync, readdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { encryptSecret } from "../connectors/crypto.ts";
+import { localDataPath } from "../../local-data.ts";
 
 export type BuildProject = {
   id: string;
@@ -40,7 +41,7 @@ type ProviderRecord = BuildProviderPublic & { ownerId: string; keyCiphertext?: s
 
 type AuditRecord = { id: string; ownerId: string; action: string; detail: string; createdAt: string };
 
-let directory = join(process.cwd(), ".data", "mind-build");
+let directory = localDataPath("mind-build");
 
 export function setBuildDirectory(next: string) {
   directory = next;
@@ -73,7 +74,7 @@ function id() {
 const LEGACY_WORKSPACE = "/tmp/adrian-build-workspace";
 
 function durableWorkspace() {
-  return process.env.ADRIAN_BUILD_WORKSPACE || join(process.cwd(), ".data", "adrian-build-workspace");
+  return process.env.ADRIAN_BUILD_WORKSPACE || localDataPath("adrian-build-workspace");
 }
 
 function rewriteLegacy(project: BuildProject): BuildProject {

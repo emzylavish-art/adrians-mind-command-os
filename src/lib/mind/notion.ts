@@ -1,6 +1,7 @@
 import { createHash } from "node:crypto";
 import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
+import { localDataPath } from "../local-data.ts";
 
 export const NOTION_SETUP =
   "Notion is not connected. Set NOTION_TOKEN on the server to an internal integration secret, then share the pages with that integration. Nothing was searched or updated. The secret is not shown here.";
@@ -28,7 +29,7 @@ export type NotionTurn = {
 
 type FetchLike = (url: string, init?: RequestInit) => Promise<{ ok: boolean; status: number; json: () => Promise<unknown> }>;
 
-let directory = join(process.cwd(), ".data", "mind-notion");
+let directory = localDataPath("mind-notion");
 
 export function setNotionPrefDirectory(next: string) {
   directory = next;

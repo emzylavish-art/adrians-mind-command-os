@@ -2,6 +2,7 @@ import { createHash, randomBytes } from "node:crypto";
 import { mkdirSync, readFileSync, writeFileSync, unlinkSync, existsSync, readdirSync, renameSync } from "node:fs";
 import { join, resolve, relative, sep, isAbsolute } from "node:path";
 import { decryptSecret, encryptSecret } from "./crypto.ts";
+import { localDataPath } from "../../local-data.ts";
 
 export const CONNECTOR_IDS = [
   "notion",
@@ -62,7 +63,7 @@ export type PendingOAuth = {
   scopes?: string;
 };
 
-let directory = join(process.cwd(), ".data", "mind-connectors");
+let directory = localDataPath("mind-connectors");
 
 export function setConnectorDirectory(next: string) {
   directory = next;

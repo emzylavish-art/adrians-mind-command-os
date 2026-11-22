@@ -4,6 +4,7 @@ import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { postgresPool } from "./auth/pg-pool.ts";
 import { resolveDatabaseUrl } from "./env.server.ts";
+import { localDataPath } from "./local-data.ts";
 
 /** Which database backend is active. */
 export type DbSource = "neon" | "pglite";
@@ -149,7 +150,7 @@ async function createPgliteSql(): Promise<Sql> {
     // the process, but never collide on the same PGLite files across workers.
     const dataDir = process.env.NODE_TEST_CONTEXT
       ? join(tmpdir(), "adrians-mind-pglite-test-" + process.pid)
-      : join(process.cwd(), ".data", "pglite");
+      : localDataPath("pglite");
     mkdirSync(dataDir, { recursive: true });
     const pg = new PGlite({
       dataDir,

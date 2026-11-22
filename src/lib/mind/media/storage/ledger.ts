@@ -10,6 +10,7 @@ import {
 } from "node:fs";
 import { dirname, join } from "node:path";
 import type { StorageService } from "./types.ts";
+import { localDataPath } from "../../../local-data.ts";
 
 /**
  * Local usage ledger — fallback when live quota APIs are unavailable.
@@ -33,7 +34,7 @@ function accountKey(service: StorageService, accountEmail: string) {
   return `${service}::${accountEmail.toLowerCase()}`;
 }
 
-let ledgerPath = join(process.cwd(), ".data", "media-storage-ledger.json");
+let ledgerPath = localDataPath("media-storage-ledger.json");
 
 export function setStorageLedgerPath(next: string) {
   ledgerPath = next;

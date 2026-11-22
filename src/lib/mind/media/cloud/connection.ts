@@ -8,8 +8,9 @@ import {
   type CloudSource,
 } from "./types.ts";
 import { getDurableAccessToken, hasDurableOAuthStore, readDurableConnection } from "../../connectors/durable-oauth.server.ts";
+import { localDataPath } from "../../../local-data.ts";
 
-let directory = join(process.cwd(), ".data", "mind-connectors");
+let directory = localDataPath("mind-connectors");
 
 export function setCloudConnectorDirectory(next: string) {
   directory = next;

@@ -8,6 +8,7 @@ import {
   type StorageAccountsFile,
   type StorageService,
 } from "./types.ts";
+import { localDataPath } from "../../../local-data.ts";
 
 const DEFAULT_ACCOUNTS: StorageAccountConfig[] = [
   {
@@ -33,7 +34,7 @@ const DEFAULT_ACCOUNTS: StorageAccountConfig[] = [
   },
 ];
 
-let configPath = join(process.cwd(), ".data", "media-storage-accounts.json");
+let configPath = localDataPath("media-storage-accounts.json");
 
 export function setStorageAccountsConfigPath(next: string) {
   configPath = next;

@@ -13,6 +13,7 @@ import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { connectorTokenSecretStatus, decryptSecret, encryptSecret } from "../connectors/crypto.ts";
 import { resolveDatabaseUrl } from "../../env.server.ts";
+import { localDataPath } from "../../local-data.ts";
 
 export type RegistryDb = {
   query<T = Record<string, unknown>>(text: string, params?: unknown[]): Promise<T[]>;
@@ -100,7 +101,7 @@ function withBuiltin(servers: RegistryRecord[]): RegistryRecord[] {
 }
 
 function legacyPath(userId: string): string | null {
-  const directory = legacyDirectory ?? join(process.cwd(), ".data", "mind-mcp-registry");
+  const directory = legacyDirectory ?? localDataPath("mind-mcp-registry");
   return join(directory, `${createHash("sha256").update(userId).digest("hex")}.json`);
 }
 
@@ -117,7 +118,7 @@ export function readLegacyRegistryFile(userId: string): { present: boolean; serv
 }
 
 function connectedLegacyPath(userId: string) {
-  const directory = connectedLegacyDirectory ?? join(process.cwd(), ".data", "mind-mcp");
+  const directory = connectedLegacyDirectory ?? localDataPath("mind-mcp");
   return join(directory, `${createHash("sha256").update(userId).digest("hex")}.json`);
 }
 

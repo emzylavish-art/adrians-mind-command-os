@@ -5,6 +5,7 @@
 import { existsSync, mkdirSync, readFileSync, renameSync, unlinkSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import type { ConsentChallenge, ConsentRecord, VoiceProfile } from "./types.ts";
+import { localDataPath } from "../../local-data.ts";
 
 export type VoiceCloningStoreData = {
   profiles: VoiceProfile[];
@@ -12,7 +13,7 @@ export type VoiceCloningStoreData = {
   challenges: Array<ConsentChallenge & { userId: string; consumedAt: string | null }>;
 };
 
-const DEFAULT_DIR = join(process.cwd(), ".data", "voice-cloning");
+const DEFAULT_DIR = localDataPath("voice-cloning");
 
 function emptyData(): VoiceCloningStoreData {
   return { profiles: [], consents: [], challenges: [] };

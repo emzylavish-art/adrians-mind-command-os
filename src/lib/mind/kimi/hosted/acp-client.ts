@@ -6,6 +6,7 @@ import { resolveXaiInferenceApiKey } from "../../media/xai-key.ts";
 import { installCodingExtensions } from "./coding-extensions.server.ts";
 import { codingSearchUrl } from "./coding-search-bridge.server.ts";
 import { ADRIAN_OS_BUILDER_ORDER } from "../../adrian-os-skill.ts";
+import { localDataPath } from "../../../local-data.ts";
 
 export type KimiProbe = {
   status: "session_created" | "authentication_required" | "failed" | "not_configured";
@@ -55,7 +56,7 @@ export function packageLabel(command: string): string {
 
 export function adrianBuildEnv(): NodeJS.ProcessEnv {
   const key = resolveXaiInferenceApiKey();
-  const home = process.env.KIMI_CODE_HOME || join(process.cwd(), ".data", "adrian-build-home");
+  const home = process.env.KIMI_CODE_HOME || localDataPath("adrian-build-home");
   mkdirSync(home, { recursive: true });
   mkdirSync(adrianHostedWorkspace(), { recursive: true });
   installCodingExtensions(home, codingSearchUrl());
@@ -94,7 +95,7 @@ export function adrianBuildCommand(env: NodeJS.ProcessEnv = process.env): string
 }
 
 export function adrianHostedWorkspace(): string {
-  const dir = resolve(process.env.ADRIAN_BUILD_WORKSPACE || join(process.cwd(), ".data", "adrian-build-workspace"));
+  const dir = resolve(process.env.ADRIAN_BUILD_WORKSPACE || localDataPath("adrian-build-workspace"));
   mkdirSync(dir, { recursive: true });
   const legacy = "/tmp/adrian-build-workspace";
   if (dir !== legacy && existsSync(legacy) && readdirSync(dir).length === 0) {

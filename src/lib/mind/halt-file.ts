@@ -1,8 +1,9 @@
 import { createHash } from "node:crypto";
 import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
+import { localDataPath } from "../local-data.ts";
 
-let directory = join(process.cwd(), ".data", "mind-halt");
+let directory = localDataPath("mind-halt");
 
 export function setHaltDirectory(next: string) {
   directory = next;
