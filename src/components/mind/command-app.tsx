@@ -241,6 +241,7 @@ import { ModuleSuggestions } from "@/components/mind/module-suggestions";
 import { type ModuleSuggestion } from "@/lib/intent/module-suggestions";
 import { refreshSkills } from "@/lib/mind/skill-refresh";
 import { exportChat, prepareRegenerate, prepareRetry, renameChat, reviseUserTurn } from "@/lib/mind/transcript";
+import { replyActions, replyHasSources } from "@/lib/mind/reply-actions";
 import { useMindWorkspace } from "@/lib/mind/use-mind-workspace";
 import { useCurrentUser } from "@/lib/auth/use-current-user";
 import { COMPOSER_MODES, effortForModelTier, effortModelTier, loadComposerEffort, resolveSendPath, saveComposerEffort, type ComposerModeId } from "@/lib/mind/composer-modes";
@@ -274,7 +275,7 @@ import {
 } from "@/lib/mind/failure-states";
 import { eveAccessNotes } from "@/lib/mind/eve-access";
 import { createTaskRecorder, recordingEndsWithDocument } from "@/lib/mind/task-recording";
-import { decideComputerAction } from "@/lib/mind/computer-control";
+import { decideComputerAction, spokenPcCommand } from "@/lib/mind/computer-control";
 import {
   commandSendPlan,
   historyForDeliver,
@@ -1622,6 +1623,7 @@ export function CommandApp() {
   const stageTimerRef = useRef(0);
   const stageGenRef = useRef(0);
   const voiceActiveRef = useRef(false);
+  const desktopActedRef = useRef(new Set<string>());
   const closeVoiceOverlayRef = useRef<() => void>(() => undefined);
   const cancelDictationRef = useRef<(announce?: boolean) => void>(() => undefined);
   const turnGen = useRef(0);
@@ -1654,6 +1656,7 @@ export function CommandApp() {
   const [customAiProviders, setCustomAiProviders] = useState<PublicAiProvider[]>([]);
   const customAiChoices = customAiProviders.flatMap((item) => item.models.map((model) => ({ id: `custom:${item.id}:${encodeURIComponent(model)}`, label: `${item.label}: ${model}`, enabled: true, reason: `Custom API at ${item.host}. Requires usable API credit.` })));
   const [modelTier, setModelTier] = useState<ModelTier>("Auto");
+  const [grokModel, setGrokModel] = useState<string | null>(null);
   const [logicRoute, setLogicRoute] = useState<LogicRouteId | null>(null);
   const [logicRoutes, setLogicRoutes] = useState<LogicRoutePublic[]>([]);
   const [composerEffort, setComposerEffort] = useState<ComposerModeId>("auto");
@@ -1972,6 +1975,7 @@ export function CommandApp() {
 
   function chooseModelTier(tier: ModelTier) {
     setLogicRoute(null);
+    setGrokModel(null);
     if (isLogicRouteId(providerChoice)) setProviderChoice("grok");
     setModelTier(tier);
     const effort = effortForModelTier(tier);
@@ -2092,7 +2096,7 @@ export function CommandApp() {
       { id: "gpt-wrapper", label: "GPT wrapper", connected: true },
     ],
   });
-  const catalogModels = discovered.map((item) => ({ id: item.id, label: item.label }));
+  const catalogModels = discovered.filter((item) => item.usable).map((item) => ({ id: item.id, label: item.label }));
   const [mcpRegistry, setMcpRegistry] = useState<{ id: string; label: string; kind: string; enabled: boolean }[]>([]);
   const [mcpRegistryListState, setMcpRegistryListState] = useState<McpListState>({ status: "loading" });
   const [mcpSavedListState, setMcpSavedListState] = useState<McpListState>({ status: "loading" });
@@ -2371,6 +2375,11 @@ export function CommandApp() {
       const due = current.schedules.some((job) => job.enabled && job.nextRunAt <= now);
       const queued = current.runs.some((run) => run.state === "queued" || run.state === "running");
       if (!due && !queued) return;
+      for (const run of current.runs) {
+        if (run.state !== "queued" || desktopActedRef.current.has(run.id) || !spokenPcCommand(run.goal)) continue;
+        desktopActedRef.current.add(run.id);
+        void fetch("/api/mind/pc/status", { method: "POST", credentials: "include", headers: { "content-type": "application/json" }, body: JSON.stringify({ text: run.goal }) });
+      }
       const next = tickFleet(runDueSchedules(current, now), { now, workerId: "browser-worker" });
       setWs(next);
     };
@@ -3236,6 +3245,7 @@ export function CommandApp() {
             ? consultPlan.plan.orchestrator
             : activeLogic ?? (isCustomProvider || otherReady || routedRunner ? selectedProvider : (routed.ok ? routed.id : selectedProvider)),
           modelTier: selectedTier,
+          requestedModel: grokModel,
           logicRoute: consultPlan && consultPlan.ok ? null : activeLogic,
           orchestrator: consultPlan && consultPlan.ok ? consultPlan.plan.orchestrator : null,
           composerMode: orchestrating ? "orchestrator" : undefined,
@@ -4977,11 +4987,16 @@ export function CommandApp() {
     }
     const text = sanitized.text;
     if (parseCreateBot(text)) {
-      const made = createBotFromSpeech(wsRef.current, text);
+      const made = createBotFromSpeech(source, text);
       if (!made.ok) {
         setNotice(made.error);
         if (speakStageOpenRef.current) setSpeakCall((current) => ({ ...current, heard: text, error: made.error }));
         return;
+      }
+      if (spokenPcCommand(text)) {
+        const acted = await fetch("/api/mind/pc/status", { method: "POST", credentials: "include", headers: { "content-type": "application/json" }, body: JSON.stringify({ text }) }).then((response) => response.json()).catch(() => null) as { output?: string; error?: string } | null;
+        const extra = acted?.output || acted?.error || "";
+        made.reply = extra ? `${made.reply} ${extra}` : made.reply;
       }
       setWs(made.ws);
       setNotice(made.reply);
@@ -5059,6 +5074,14 @@ export function CommandApp() {
       return;
     }
     if (!active) {
+      if (spokenPcCommand(text)) {
+        const acted = await fetch("/api/mind/pc/status", { method: "POST", credentials: "include", headers: { "content-type": "application/json" }, body: JSON.stringify({ text }) }).then((response) => response.json()).catch(() => null) as { output?: string; error?: string } | null;
+        const message = acted?.output || acted?.error || "The installed app did not run that PC action.";
+        setNotice(message);
+        if (speakStageOpenRef.current) setSpeakCall((current) => ({ ...current, heard: text, reply: message, error: "" }));
+        speakOnOpenSession(message);
+        return;
+      }
       setNotice("Open or create a chat so Direct mode can send the transcript to the selected model.");
       if (overlayOpenRef.current) {
         setOverlayNotice("Open or create a chat so Direct mode can send the transcript to the selected model.");
@@ -6322,7 +6345,7 @@ export function CommandApp() {
                     aria-expanded={modelRowsOpen}
                     onClick={() => setModelRowsOpen((value) => !value)}
                   >
-                    <span>{modelTier}</span>
+                    <span>{grokModel ?? modelTier}</span>
                     <span aria-hidden="true">{modelRowsOpen ? "‹" : "›"}</span>
                   </button>
                   {modelRowsOpen ? (
@@ -6330,6 +6353,12 @@ export function CommandApp() {
                       presentation="rows"
                       tier={modelTier}
                       onChoose={chooseModelTier}
+                      grokModel={grokModel}
+                      onChooseGrokModel={(model) => {
+                        setLogicRoute(null);
+                        setProviderChoice("grok");
+                        setGrokModel(model);
+                      }}
                       lastResolved={lastResolvedTier}
                       lastModel={lastModelUsed}
                       logicRoute={logicRoute}
@@ -6355,7 +6384,7 @@ export function CommandApp() {
                   </button>
                   {composerEffort === "orchestrator" ? (
                     <div className="flex w-full flex-wrap gap-1" data-testid="orchestrator-models">
-                      {consultModules.map((item) => (
+                      {consultModules.filter((item) => item.connected).map((item) => (
                         <button
                           key={item.id}
                           type="button"
@@ -6367,7 +6396,7 @@ export function CommandApp() {
                           onClick={() => chooseConsultModel(item.id)}
                         >
                           <span>{item.label}</span>
-                          <span className="text-xs text-muted">{item.connected ? "Ready" : "Key missing"}</span>
+                          <span className="text-xs text-muted">Ready</span>
                         </button>
                       ))}
                     </div>
@@ -9242,12 +9271,12 @@ function ChatPane({
                 </button>
                 {msg.role === "assistant" && (
                   <button type="button" className="min-h-11 rounded-full px-3 text-xs" onClick={() => (speaking ? onStopSpeak?.() : onSpeak(msg.content, msg.id))}>
-                    {speaking ? "Stop" : "Read aloud"}
+                    {replyActions({ role: "assistant", busy: false, speaking, hasSources: replyHasSources(msg.content) }).includes("stop-playback") ? "Stop" : "Read aloud"}
                   </button>
                 )}
                 {msg.role === "assistant" && last?.id === msg.id && (
                   <button type="button" className="min-h-11 rounded-full px-3 text-xs" onClick={busy ? onStop : onRegenerate} disabled={halted}>
-                    {busy ? "Stop generating" : "Regenerate"}
+                    {replyActions({ role: "assistant", busy, speaking: false, hasSources: replyHasSources(msg.content) }).includes("stop-generating") ? "Stop generating" : "Regenerate"}
                   </button>
                 )}
                 {msg.role === "assistant" && (
@@ -9256,6 +9285,8 @@ function ChatPane({
                     <div className="absolute bottom-12 left-0 z-20 flex min-w-44 flex-col rounded-2xl border border-line bg-bg p-1">
                       <button type="button" className="min-h-11 px-3 text-left text-xs" onClick={() => onOpenBuild(msg.content)}>Open in Build</button>
                       <button type="button" className="min-h-11 px-3 text-left text-xs" onClick={() => onOpenHuman(msg.content)}>Open in Intelligence</button>
+                      {replyHasSources(msg.content) ? <p className="px-3 py-2 text-xs">Sources: {msg.content.match(/https?:\/\/\S+/g)?.join(" ")}</p> : null}
+                      <p className="px-3 py-2 text-xs">Type list capabilities. Device actions are not verified until the PC or phone runs them.</p>
                     </div>
                   </details>
                 )}
@@ -9956,12 +9987,8 @@ function ProviderPicker({
   };
   const visible = [
     ...choices,
-    ...logicRoutes.map((route) => ({ id: route.id, label: route.label, enabled: route.ready, reason: route.reason })),
-    { id: "openrouter", label: "OpenRouter", enabled: true, reason: choices.find((item) => item.id === "openrouter")?.reason || "Selectable. It sends only when an OpenRouter key is connected. No key is connected in this preview." },
-    { id: "nemotron", label: "Nemotron", enabled: true, reason: "Selectable free OpenRouter model. It does not send until OpenRouter is connected. It is not substituted with Grok." },
-    { id: "ollama", label: "Local model", enabled: true, reason: "Selectable. It sends only when the local runner answers. It is not substituted with Grok." },
-    { id: "orchestrator", label: "Orchestrator", enabled: true, reason: "Use the selected frontier or local model as the direct model, or let the orchestrator choose." },
-  ].filter((item, index, all) => all.findIndex((other) => other.id === item.id) === index);
+    ...logicRoutes.filter((route) => route.ready).map((route) => ({ id: route.id, label: route.label, enabled: true, reason: route.reason })),
+  ].filter((item, index, all) => item.enabled && all.findIndex((other) => other.id === item.id) === index);
   const groups = ["Grok", "Frontier", "OpenRouter", "Local", "Orchestrator", "Other", "Saved"].map((title) => ({
     title,
     items: visible.filter((item) => groupOf(item) === title),

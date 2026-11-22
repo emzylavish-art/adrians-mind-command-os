@@ -12,6 +12,10 @@ export const BLOCKED_CONTROL = ["mouse", "keyboard", "browser pointer", "microph
 
 const PC_INTENT = /\b(mouse|cursor|keyboard|click my|type on my pc|type on my computer|control my (pc|computer|browser|windows)|move the mouse|press (the |my )?keys)\b/i;
 
+export function spokenPcCommand(text: string): boolean {
+  return /\b(my files|my desktop|read file|write file|make folder|run command|click\s+\d+|right-click\s+\d+|double-click\s+\d+|scroll\s+(?:up|down)|drag\s+\d+|type\s+"|move the mouse|control my (pc|computer)|look at my screen|drive the screen|open my browser|launch app|list windows|minimize window|maximize window|close window|list monitors|read accessibility|find button|understand (?:the )?screenshot|keep working after close)\b/i.test(text);
+}
+
 export type ComputerDecision = {
   kind: "none" | "refused" | "proposal";
   message: string;
