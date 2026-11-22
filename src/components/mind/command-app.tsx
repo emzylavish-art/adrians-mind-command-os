@@ -3085,17 +3085,14 @@ export function CommandApp() {
       }
     }
     const isCustomProvider = selectedProvider.startsWith("custom:") && !activeLogic;
-    if (!activeLogic && !isCustomProvider && (selectedProvider === "openrouter" || selectedProvider === "nemotron") && liveProviders.openrouter !== true) {
+    const routedRunner = !activeLogic && !isCustomProvider && (selectedProvider === "openrouter" || selectedProvider === "nemotron" || selectedProvider === "ollama");
+    if (routedRunner && (selectedProvider === "openrouter" || selectedProvider === "nemotron") && liveProviders.openrouter !== true) {
       reportFailure("OpenRouter is selected, but no OpenRouter key is connected. Nothing was sent and Grok was not substituted.", "model_unavailable", "provider", null, "setup");
-      return null;
-    }
-    if (!activeLogic && selectedProvider === "ollama") {
-      reportFailure("Local model is selected, but no local runner is reachable from this preview. Nothing was sent and Grok was not substituted.", "model_unavailable", "provider", null, "setup");
       return null;
     }
     const otherReady = !activeLogic && !isCustomProvider && selectedProvider !== "grok" && liveProviders[selectedProvider as "openai" | "anthropic" | "gemini" | "openrouter"] === true;
     let routed = chosenProvider(activeLogic || isCustomProvider ? "grok" : selectedProvider, isCustomProvider ? true : grokConfigured);
-    if (!otherReady && !activeLogic && !isCustomProvider && !routed.ok) {
+    if (!routedRunner && !otherReady && !activeLogic && !isCustomProvider && !routed.ok) {
       const switched = failover(selectedProvider, grokConfigured === true, failoverPolicy);
       if (switched.provider === "grok") {
         routed = chosenProvider("grok", grokConfigured);
@@ -3112,7 +3109,7 @@ export function CommandApp() {
       });
       return null;
     }
-    if (!orchestrating && !otherReady && !activeLogic && !isCustomProvider && !routed.ok) {
+    if (!orchestrating && !routedRunner && !otherReady && !activeLogic && !isCustomProvider && !routed.ok) {
       reportFailure(routed.error, "model_unavailable", "provider", () => {
         void deliver(chat, text, wsRef.current, resume, snapped);
       });
@@ -3194,7 +3191,7 @@ export function CommandApp() {
           botKnowledge: chat.botKnowledge ?? "",
           provider: consultPlan && consultPlan.ok
             ? consultPlan.plan.orchestrator
-            : activeLogic ?? (isCustomProvider || otherReady ? selectedProvider : (routed.ok ? routed.id : selectedProvider)),
+            : activeLogic ?? (isCustomProvider || otherReady || routedRunner ? selectedProvider : (routed.ok ? routed.id : selectedProvider)),
           modelTier: selectedTier,
           logicRoute: consultPlan && consultPlan.ok ? null : activeLogic,
           orchestrator: consultPlan && consultPlan.ok ? consultPlan.plan.orchestrator : null,

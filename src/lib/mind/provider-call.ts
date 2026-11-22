@@ -122,3 +122,51 @@ export function httpStatusForProviderSelection(error: string): 400 | 503 {
   if (/not configured|No .+ key is configured/i.test(error)) return 503;
   return 400;
 }
+
+export const NEMOTRON_MODEL = "nvidia/nemotron-nano-9b-v2:free";
+
+/** Sends the selected model to its own runner. Never substitutes Grok. */
+export async function routeSelectedModel(input: {
+  id: string;
+  prompt: string;
+  env: Record<string, string | undefined>;
+  fetch: FetchLike;
+}): Promise<{ ok: boolean; text: string; error: string; model: string }> {
+  const prompt = input.prompt.trim();
+  if (!prompt) return { ok: false, text: "", error: "Write a message first. Nothing was sent.", model: input.id };
+  if (input.id === "nemotron" || input.id === "openrouter") {
+    const key = input.env.OPENROUTER_API_KEY;
+    if (!key) return { ok: false, text: "", error: "OpenRouter is selected, but no OpenRouter key is connected. Nothing was sent and Grok was not substituted.", model: input.id };
+    const model = input.id === "nemotron" ? NEMOTRON_MODEL : (input.env.OPENROUTER_MODEL || "openrouter/auto");
+    const called = await callConfiguredProvider({
+      id: "openrouter",
+      key,
+      prompt,
+      fetch: async (url, init) => {
+        const body = JSON.parse(String(init?.body ?? "{}")) as { model?: string };
+        body.model = model;
+        return input.fetch(url, { ...init, body: JSON.stringify(body) });
+      },
+    });
+    return { ...called, model };
+  }
+  if (input.id === "ollama") {
+    const url = input.env.LOCAL_MODEL_URL;
+    if (!url) return { ok: false, text: "", error: "Local model is selected, but no local runner is reachable. Nothing was sent and Grok was not substituted.", model: "ollama" };
+    let response: Awaited<ReturnType<FetchLike>>;
+    try {
+      response = await input.fetch(url, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ model: input.env.OLLAMA_MODEL || "local", prompt }) });
+    } catch {
+      return { ok: false, text: "", error: "Local model runner could not be reached. Nothing was substituted.", model: "ollama" };
+    }
+    if (!response.ok) return { ok: false, text: "", error: "Local model runner returned HTTP " + response.status + ". Nothing was substituted.", model: "ollama" };
+    try {
+      const json = JSON.parse(await response.text()) as { text?: unknown };
+      const text = typeof json.text === "string" ? json.text.trim() : "";
+      return text ? { ok: true, text, error: "", model: "ollama" } : { ok: false, text: "", error: "Local model runner returned no text. Nothing was substituted.", model: "ollama" };
+    } catch {
+      return { ok: false, text: "", error: "Local model runner returned an unreadable response.", model: "ollama" };
+    }
+  }
+  return { ok: false, text: "", error: "That model is not a routed runner. Nothing was substituted.", model: input.id };
+}

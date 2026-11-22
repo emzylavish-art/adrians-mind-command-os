@@ -8,7 +8,7 @@ import { resolveXaiInferenceApiKey } from "./xai-adapter";
 import type { HistoryInputMessage } from "./media/history";
 import { allowedModelIds, resolveModelTier, type ResolvedModelTier } from "./model-tiers";
 import { assertLiveProvider } from "./providers";
-import { callConfiguredProvider, httpStatusForProviderSelection, selectProvider } from "./provider-call";
+import { callConfiguredProvider, httpStatusForProviderSelection, routeSelectedModel, selectProvider } from "./provider-call";
 import { configuredProviders } from "./provider-call";
 import { ADRIAN_MIND_IDENTITY, builtinModules, collectConsultHelp, customModules, orchestratorInstruction, planModelConsult } from "./model-consult.ts";
 import { buildRelayModelBody, relayModelStream } from "./relay";
@@ -364,6 +364,18 @@ export async function handleMindTurn(request: Request): Promise<Response> {
     });
   }
   const selected = selectProvider(body.provider, process.env);
+  if (requestedProvider === "nemotron" || requestedProvider === "ollama" || requestedProvider === "openrouter") {
+    const routed = await routeSelectedModel({
+      id: requestedProvider,
+      prompt: typeof body.text === "string" ? body.text : "",
+      env: process.env,
+      fetch: globalThis.fetch,
+    });
+    if (!routed.ok) return json({ ok: false, error: routed.error, provider: requestedProvider });
+    const done = { text: routed.text, model: routed.model, provider: requestedProvider, usage: null, usedIds: [], requestId: null };
+    const stream = "event: delta\ndata: " + JSON.stringify({ text: routed.text }) + "\n\nevent: done\ndata: " + JSON.stringify(done) + "\n\n";
+    return new Response(stream, { headers: { "content-type": "text/event-stream", "cache-control": "no-store" } });
+  }
   if (!selected.ok) {
     // If images somehow accompany a failed non-Grok selection, still prefer cannot-see copy.
     if (pendingImages.length > 0 && requestedProvider !== "grok") {
