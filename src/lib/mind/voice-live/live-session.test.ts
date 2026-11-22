@@ -299,4 +299,41 @@ describe("LiveVoiceSession", () => {
     session.end();
     setLiveVoiceOccupied(false);
   });
+
+  it("returns to listening after a spoken reply without a second start", async () => {
+    setLiveVoiceOccupied(false);
+    const phases: string[] = [];
+    let created: FakeSocket | undefined;
+    let starts = 0;
+    const session = new LiveVoiceSession(
+      { onState: (state) => phases.push(state.phase) },
+      {
+        mintSecret: async () => ({ ok: true, value: "ephemeral", expiresAt: Date.now() + 60_000 }),
+        isOverlayMicOpen: () => false,
+        getMode: () => "direct",
+        getVoiceId: () => "eve",
+        probeMic: okProbe,
+        skipMic: true,
+        socketFactory: () => {
+          starts += 1;
+          created = new FakeSocket();
+          queueMicrotask(() => created?.openNow());
+          return created;
+        },
+      },
+    );
+    await session.start();
+    assert.equal(starts, 1);
+    created!.emitMessage({ type: "input_audio_buffer.speech_started" });
+    created!.emitMessage({ type: "input_audio_buffer.speech_stopped" });
+    created!.emitMessage({ type: "conversation.item.input_audio_transcription.completed", transcript: "make a cup" });
+    created!.emitMessage({ type: "response.output_audio.delta", delta: "AAAA" });
+    created!.emitMessage({ type: "response.done" });
+    assert.equal(session.state.phase, "listening");
+    assert.equal(starts, 1);
+    assert.ok(phases.includes("assistant_speaking"));
+    assert.equal(phases.at(-1), "listening");
+    session.end();
+    setLiveVoiceOccupied(false);
+  });
 });

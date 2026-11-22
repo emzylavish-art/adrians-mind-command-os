@@ -342,12 +342,12 @@ const EXTERNAL = [
   {
     name: "Oak Bridge Capital",
     detail: "Separate product. This app does not open, edit, or store it.",
-    mark: "/brand/logo-mark.jpg",
+    mark: "/brand/marks/oak-bridge.png",
   },
   {
     name: "BridgePoint",
     detail: "Separate product. This app does not open, edit, or store it.",
-    mark: "/brand/logo-mark.jpg",
+    mark: "/brand/marks/bridgepoint.png",
   },
 ];
 
@@ -5880,7 +5880,7 @@ export function CommandApp() {
             className={`nav-item flex min-h-11 items-center gap-3 rounded-2xl px-3 text-sm font-medium text-muted ${railCollapsed ? "justify-center" : ""}`}
             onClick={() => setNavOpen(false)}
           >
-            <img className="service-mark size-5 rounded-md object-cover" src="/brand/logo-mark.jpg" alt="" width={22} height={22} />
+            <img className="service-mark size-5 rounded-md object-cover" src="/apps/social/assets/mark.jpg" alt="" width={22} height={22} />
             {!railCollapsed && "Social"}
           </Link>
           <Link
@@ -5889,7 +5889,7 @@ export function CommandApp() {
             className={`nav-item flex min-h-11 items-center gap-3 rounded-2xl px-3 text-sm font-medium text-muted ${railCollapsed ? "justify-center" : ""}`}
             onClick={() => setNavOpen(false)}
           >
-            <img className="service-mark size-5 rounded-md object-cover" src="/brand/logo-mark.jpg" alt="" width={22} height={22} />
+            <img className="service-mark size-5 rounded-md object-cover" src="/brand/marks/gpt-wrapper.svg" alt="" width={22} height={22} />
             {!railCollapsed && "GPT wrapper"}
           </Link>
           {!railCollapsed && (
@@ -8042,8 +8042,8 @@ export function CommandApp() {
                   { id: "explore", label: "Explore", detail: "Filter local templates, save one, then open it in Chat.", mark: "/brand/logo-mark.jpg", open: () => window.location.assign("/explore") },
                   { id: "dashboard", label: "Dashboard", detail: "Opens the workspace map inside this app.", mark: "/brand/logo-mark.jpg", open: () => setView("dashboard") },
                   { id: "research", label: "Research", detail: "Opens the free-first research website.", mark: "/brand/logo-mark.jpg", open: () => window.location.assign("/research") },
-                  { id: "social", label: "Social", detail: "Adrian Social runs inside this software.", mark: "/brand/logo-mark.jpg", open: () => window.location.assign("/social") },
-                  { id: "gpt-wrapper", label: "GPT wrapper", detail: "The GPT wrapper runs inside this software.", mark: "/brand/logo-mark.jpg", open: () => window.location.assign("/gpt-wrapper") },
+                  { id: "social", label: "Social", detail: "Adrian Social runs inside this software.", mark: "/apps/social/assets/mark.jpg", open: () => window.location.assign("/social") },
+                  { id: "gpt-wrapper", label: "GPT wrapper", detail: "The GPT wrapper runs inside this software.", mark: "/brand/marks/gpt-wrapper.svg", open: () => window.location.assign("/gpt-wrapper") },
                   ].filter((item) => helpQuery.toLowerCase().trim().split(/\s+/).every((word) => `${item.label} ${item.detail}`.toLowerCase().includes(word)));
                   if (topics.length === 0) return <p className="mt-2 text-sm text-muted" role="status">No help topics match this search. Try “key,” “Library,” or “chat.”</p>;
                   return topics.map((item) => (
