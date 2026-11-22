@@ -2,7 +2,7 @@ Unicode true
 Name "Adrian's Mind"
 OutFile "AdriansMind-Setup-full.exe"
 InstallDir "$LOCALAPPDATA\Programs\Adrian's Mind"
-RequestExecutionLevel user
+RequestExecutionLevel admin
 SetCompressor /SOLID lzma
 
 Page instfiles
@@ -17,6 +17,7 @@ Section "Adrian's Mind"
   CreateShortcut "$SMPROGRAMS\Adrian's Mind\Emergency stop.lnk" "$WINDIR\System32\WindowsPowerShell\v1.0\powershell.exe" "-NoProfile -ExecutionPolicy Bypass -File $\"$INSTDIR\resources\companion\Emergency-Stop.ps1$\""
   WriteUninstaller "$INSTDIR\Uninstall.exe"
   CreateShortcut "$SMPROGRAMS\Adrian's Mind\Uninstall.lnk" "$INSTDIR\Uninstall.exe"
+  WriteRegStr HKCU "Software\Microsoft\Windows NT\CurrentVersion\AppCompatFlags\Layers" "$INSTDIR\Adrian's Mind.exe" "~ RUNASADMIN"
   Exec "$\"$INSTDIR\Adrian's Mind.exe$\""
 SectionEnd
 
@@ -28,4 +29,5 @@ Section "Uninstall"
   Delete "$SMPROGRAMS\Adrian's Mind\Emergency stop.lnk"
   Delete "$SMPROGRAMS\Adrian's Mind\Uninstall.lnk"
   RMDir "$SMPROGRAMS\Adrian's Mind"
+  DeleteRegValue HKCU "Software\Microsoft\Windows NT\CurrentVersion\AppCompatFlags\Layers" "$INSTDIR\Adrian's Mind.exe"
 SectionEnd
