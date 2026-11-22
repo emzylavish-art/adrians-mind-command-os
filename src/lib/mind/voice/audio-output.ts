@@ -116,6 +116,16 @@ export class SharedAudioOutput {
 
   async playMpegBase64(b64: string, options?: { rate?: number; volume?: number }) {
     this.stopped = false;
+    if (typeof document !== "undefined") {
+      document.querySelectorAll("audio").forEach((element) => {
+        try {
+          element.pause();
+        } catch {
+          /* another player already stopped */
+        }
+      });
+    }
+    if (typeof window !== "undefined") window.speechSynthesis?.cancel();
     const bytes = decodeBase64(b64);
     const copy = new Uint8Array(bytes.byteLength);
     copy.set(bytes);

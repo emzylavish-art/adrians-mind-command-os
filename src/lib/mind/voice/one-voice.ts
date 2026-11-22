@@ -8,7 +8,7 @@ export function replyVoiceForTurn(input: {
   placingCall: boolean;
 }): ReplyVoice {
   if (input.placingCall) return "call";
-  if (input.liveSessionOpen && input.mode !== "orchestrator") return "live";
+  if (input.liveSessionOpen) return "live";
   return "model";
 }
 

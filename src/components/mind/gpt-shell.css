@@ -1911,6 +1911,50 @@ form.thread-composer {
     margin-inline: 0.5rem !important;
     box-sizing: border-box;
   }
+  .thread-shell {
+    height: 100%;
+    min-height: 0;
+  }
+  .thread-shell > aside {
+    display: none !important;
+  }
+  .thread-shell > section {
+    display: flex;
+    flex: 1 1 auto;
+    flex-direction: column;
+    height: 100%;
+    min-height: 0;
+    overflow: hidden;
+  }
+  .thread-shell .chat-head {
+    flex: 0 0 auto;
+    padding: 0.35rem 0.75rem 0.15rem;
+  }
+  .thread-shell .chat-head h2 {
+    font-size: 1.05rem;
+    line-height: 1.2;
+  }
+  .thread-shell .chat-head > :not(h2) {
+    display: none !important;
+  }
+  .thread-shell section > .min-h-0.flex-1 {
+    flex: 1 1 auto;
+    min-height: 0;
+    overflow-y: auto !important;
+    -webkit-overflow-scrolling: touch;
+    padding-bottom: 0.75rem;
+  }
+  .thread-shell form.thread-composer {
+    position: sticky;
+    bottom: var(--kb, 0px);
+    z-index: 4;
+    flex: 0 0 auto;
+    max-height: 7.25rem;
+    margin-bottom: calc(0.35rem + env(safe-area-inset-bottom) + var(--kb, 0px)) !important;
+  }
+  .gpt-home [data-composer="floating"] {
+    bottom: calc(max(0.75rem, env(safe-area-inset-bottom)) + var(--kb, 0px));
+  }
   .thread-shell .composer-toolbar button {
     font-size: 0.75rem !important;
     padding-inline: 0.5rem !important;

@@ -14,10 +14,10 @@ test("a placed call is the only voice", () => {
   assert.equal(shouldSpeakTranscriptAgain(voice), false);
 });
 
-test("orchestrator still speaks its one conducted reply", () => {
+test("a live orchestrator turn does not add a second model voice", () => {
   const voice = replyVoiceForTurn({ liveSessionOpen: true, mode: "orchestrator", placingCall: false });
-  assert.equal(voice, "model");
-  assert.equal(shouldSpeakTranscriptAgain(voice), true);
+  assert.equal(voice, "live");
+  assert.equal(shouldSpeakTranscriptAgain(voice), false);
 });
 
 test("a closed session uses the model voice once", () => {

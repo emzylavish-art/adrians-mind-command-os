@@ -1901,10 +1901,20 @@ export function CommandApp() {
     document.addEventListener("visibilitychange", onVisibility);
     window.addEventListener("pagehide", releaseVoice);
     window.addEventListener("adrian-one-voice", claimOneVoice);
+    const liftKeyboard = () => {
+      const viewport = window.visualViewport;
+      const inset = viewport ? Math.max(0, window.innerHeight - viewport.height - viewport.offsetTop) : 0;
+      document.documentElement.style.setProperty("--kb", `${Math.round(inset)}px`);
+    };
+    liftKeyboard();
+    window.visualViewport?.addEventListener("resize", liftKeyboard);
+    window.visualViewport?.addEventListener("scroll", liftKeyboard);
     return () => {
       document.removeEventListener("visibilitychange", onVisibility);
       window.removeEventListener("pagehide", releaseVoice);
       window.removeEventListener("adrian-one-voice", claimOneVoice);
+      window.visualViewport?.removeEventListener("resize", liftKeyboard);
+      window.visualViewport?.removeEventListener("scroll", liftKeyboard);
       releaseVoice();
     };
   }, []);
@@ -4811,7 +4821,7 @@ export function CommandApp() {
           );
         }
       }
-      speakOnOpenSession(conducted.text);
+      if (!voiceSession.current?.isOpen) speakOnOpenSession(conducted.text);
       return;
       }
     }
