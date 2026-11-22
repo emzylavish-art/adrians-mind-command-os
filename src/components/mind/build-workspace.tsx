@@ -571,8 +571,9 @@ export function BuildWorkspace(props: {
   function speakResult() {
     const text = assistantText || job?.output || "";
     if (!text || typeof window === "undefined" || !window.speechSynthesis) { setNotice("Speech output is not available in this browser."); return; }
-    window.speechSynthesis.cancel();
-    const utterance = new SpeechSynthesisUtterance(text.slice(0, 1_000));
+   window.speechSynthesis.cancel();
+    window.dispatchEvent(new Event("adrian-one-voice"));
+   const utterance = new SpeechSynthesisUtterance(text.slice(0, 1_000));
     const pace = localStorage.getItem("adrian-speak-rate");
     utterance.rate = pace === "slow" ? 0.85 : pace === "brisk" ? 1.15 : 1;
     window.speechSynthesis.speak(utterance);

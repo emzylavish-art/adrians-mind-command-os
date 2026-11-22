@@ -182,6 +182,7 @@ export function SpeakPanel() {
       return;
     }
     window.speechSynthesis.cancel();
+    window.dispatchEvent(new Event("adrian-one-voice"));
     const utterance = new SpeechSynthesisUtterance(sample);
     utterance.rate = playback;
     window.speechSynthesis.speak(utterance);

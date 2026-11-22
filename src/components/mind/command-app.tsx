@@ -799,7 +799,7 @@ function keepComposerInside() {
 }
 
 function showVoiceWords() {
-  document.querySelectorAll(".composer-send, button[aria-label='Speak'], button[aria-label='Mic'], button[aria-label='Translator']").forEach((node) => {
+  document.querySelectorAll(".composer-send, button[aria-label='Speak'], button[aria-label='Mic']").forEach((node) => {
     if (!(node instanceof HTMLElement)) return;
     node.style.setProperty("display", "inline-flex", "important");
     node.style.setProperty("align-items", "center", "important");
@@ -9332,11 +9332,11 @@ function ChatPane({
           }}
         >
           {onPickModule && (!active || active.messages.length === 0) ? <ModuleSuggestions draft={draft} onPick={onPickModule} /> : null}
-          <input
+          <textarea
             value={draft}
             onChange={(event) => setDraft(event.target.value)}
             onKeyDown={(event) => {
-              if (event.key === "Enter") {
+              if (event.key === "Enter" && !event.shiftKey) {
                 event.preventDefault();
                 event.currentTarget.form?.requestSubmit();
               }
@@ -9353,7 +9353,8 @@ function ChatPane({
             }}
             placeholder={`Message (${active?.botTier ?? modelTier})...`}
             aria-label="Message"
-            className="input-glow min-h-11 w-full rounded-xl bg-transparent px-1 text-sm outline-none"
+            rows={2}
+            className="input-glow min-h-11 w-full resize-none rounded-xl bg-transparent px-1 text-sm outline-none"
           />
           {active?.botKnowledge ? <p className="mt-1 text-xs text-muted">This chat sends its copied bot note. Saved memory stays off.</p> : null}
           {active?.botProvider || active?.botTier ? <p className="mt-1 text-xs text-muted">This chat uses {active.botProvider ?? "Chat’s provider"} · {active.botTier ?? "Chat’s tier"}. The picker above is not changed.</p> : null}
