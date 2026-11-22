@@ -145,6 +145,7 @@ export function FleetPanel({
   onBotSchedule,
   onBotSelect,
   focusBotId,
+  catalogModels = [],
 }: {
   mode: "agents" | "runs" | "connected" | "scheduled" | "tools";
   ws: Workspace;
@@ -160,6 +161,7 @@ export function FleetPanel({
   onBotSchedule?: (id: string) => void;
   onBotSelect?: (id: string) => void;
   focusBotId?: string | null;
+  catalogModels?: { id: string; label: string }[];
 }) {
   const [note, setNote] = useState<string | null>(null);
   const [toolReadId, setToolReadId] = useState<string | null>(null);
@@ -475,7 +477,7 @@ export function FleetPanel({
           : "Runtime unavailable";
     return (
       <section className="fleet-bots mx-4 mb-6 space-y-4 md:mx-6">
-        <BotBuilder ws={ws} setWs={setWs} onChat={onBotChat} onRun={onBotRun} onSchedule={onBotSchedule}
+        <BotBuilder ws={ws} setWs={setWs} onChat={onBotChat} onRun={onBotRun} onSchedule={onBotSchedule} catalogModels={catalogModels}
           onSelect={onBotSelect} focusBotId={focusBotId}
           onDeploy={(agentId, target) => runMutation(snapshotFleetMutationParams({ kind: "deploy", agentId, target }))}
           onPin={(id) => setWs((prev) => togglePin(prev, "agent", id))} />
@@ -647,6 +649,7 @@ export function FleetPanel({
               );
             })}
             <option value="nemotron">Nemotron · needs OpenRouter</option>
+            {catalogModels.map((item) => <option key={item.id} value={item.id}>{item.label}</option>)}
           </select>
           <input value={connectionLabel} onChange={(event) => setConnectionLabel(event.target.value)} placeholder="Connection name" className="min-h-11 rounded-panel border border-line bg-surface px-3 text-sm" />
           <button

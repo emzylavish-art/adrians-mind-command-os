@@ -45,7 +45,7 @@ export type AgentDefinition = {
   archived: boolean;
   createdAt: string;
   updatedAt: string;
-  chatProvider?: BotProvider | null;
+  chatProvider?: string | null;
   chatTier?: ModelTier | null;
   knowledge?: string;
 };
@@ -466,7 +466,7 @@ export type BotDraft = {
   tools: FleetTool[];
   description?: string;
   projectId?: string | null;
-  chatProvider?: BotProvider | null;
+  chatProvider?: string | null;
   chatTier?: ModelTier | null;
   knowledge?: string;
 };

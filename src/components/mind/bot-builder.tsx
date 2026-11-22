@@ -11,16 +11,17 @@ const secondary = "bot-control min-h-11 rounded-panel border px-3 text-sm";
 const primary = "bot-control bot-control--primary min-h-11 rounded-panel border px-4 text-sm font-semibold";
 const blank = (): BotDraft => ({ name: "", description: "", instructions: "", tools: ["list_projects"], projectId: null });
 
-export function BotBuilder({ ws, setWs, onChat, onRun, onSchedule, onSelect, focusBotId, onDeploy, onPin }: {
+export function BotBuilder({ ws, setWs, onChat, onRun, onSchedule, onSelect, focusBotId, onDeploy, onPin, catalogModels = [] }: {
   ws: Workspace;
-  setWs: (update: (prev: Workspace) => Workspace) => void;
-  onChat?: (id: string, newThread?: boolean) => void;
-  onRun?: (id: string) => void;
-  onSchedule?: (id: string) => void;
+  setWs: (fn: (prev: Workspace) => Workspace) => void;
+  onChat: (id: string, newThread?: boolean) => void;
+  onRun: (id: string) => void;
+  onSchedule: (id: string) => void;
   onSelect?: (id: string) => void;
   focusBotId?: string | null;
-  onDeploy: (id: string, target: "local-worker" | "hosted-worker") => void;
-  onPin: (id: string) => void;
+  onDeploy?: (id: string) => void;
+  onPin?: (id: string) => void;
+  catalogModels?: { id: string; label: string }[];
 }) {
   const [draft, setDraft] = useState<BotDraft | null>(null);
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -109,11 +110,15 @@ export function BotBuilder({ ws, setWs, onChat, onRun, onSchedule, onSelect, foc
             <span className="mt-1 block text-xs text-muted">Picking a project scopes local run reads to that project.</span>
           </label>
           <label className="block text-sm">Chat provider
-            <select aria-label="Chat provider" value={draft.chatProvider ?? ""} onChange={(event) => change({ chatProvider: (["nemotron", "ollama", ...BOT_PROVIDERS] as readonly string[]).includes(event.target.value) ? event.target.value as BotDraft["chatProvider"] : null })} className={fields}>
+            <select aria-label="Chat provider" value={draft.chatProvider ?? ""} onChange={(event) => {
+              const allowed = ["nemotron", "ollama", ...BOT_PROVIDERS, ...catalogModels.map((item) => item.id)];
+              change({ chatProvider: allowed.includes(event.target.value) ? event.target.value as BotDraft["chatProvider"] : null });
+            }} className={fields}>
               <option value="">Use Chat’s selected provider</option>
               {BOT_PROVIDERS.map((id) => <option key={id} value={id}>{id}</option>)}
               <option value="nemotron">Nemotron</option>
               <option value="ollama">Local model</option>
+              {catalogModels.map((item) => <option key={item.id} value={item.id}>{item.label}</option>)}
             </select>
           </label>
           <label className="block text-sm">Chat tier

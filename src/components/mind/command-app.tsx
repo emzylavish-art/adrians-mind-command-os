@@ -218,6 +218,7 @@ import { ModelTierChip } from "@/components/mind/model-tier-chip";
 import { AnchoredCard, MenuCluster, MenuGroup, MenuMotion, MenuShelf, finishMenu, menuChip, pinComposerMenu, pinShelf } from "@/components/mind/menu-material";
 import { MODEL_TIERS, type ConcreteModelTier, type ModelTier } from "@/lib/mind/model-tiers";
 import { chosenProvider, failover, providerChoicesWithKeys } from "@/lib/mind/providers";
+import { catalogModuleChoices } from "@/lib/mind/provider-catalog";
 import { emitFailure, mountFailure, surfaceForReport } from "@/lib/mind/failure-mount";
 import { useMcpFailureMount, type McpReportedOutcome } from "./use-mcp-failure-mount";
 import { routeFailureAction, type RouteFailureAction } from "@/lib/mind/route-failure";
@@ -1652,6 +1653,7 @@ export function CommandApp() {
   const [providerChoice, setProviderChoice] = useState("grok");
   const [customAiProviders, setCustomAiProviders] = useState<PublicAiProvider[]>([]);
   const customAiChoices = customAiProviders.flatMap((item) => item.models.map((model) => ({ id: `custom:${item.id}:${encodeURIComponent(model)}`, label: `${item.label}: ${model}`, enabled: true, reason: `Custom API at ${item.host}. Requires usable API credit.` })));
+  const catalogModels = catalogModuleChoices(customAiProviders);
   const [modelTier, setModelTier] = useState<ModelTier>("Auto");
   const [logicRoute, setLogicRoute] = useState<LogicRouteId | null>(null);
   const [logicRoutes, setLogicRoutes] = useState<LogicRoutePublic[]>([]);
@@ -7436,7 +7438,7 @@ export function CommandApp() {
                 <p className="text-sm text-muted">Save instructions once and use the bot in Chat, Runs, or Scheduled.</p>
               </div>
             </div>
-            <FleetPanel mode="agents" ws={ws} setWs={setWs} onBotChat={openSavedBotChat}
+            <FleetPanel mode="agents" catalogModels={catalogModels} ws={ws} setWs={setWs} onBotChat={openSavedBotChat}
               onBotRun={(id) => openBotDestination(id, "runs")} onBotSchedule={(id) => openBotDestination(id, "scheduled")}
               focusBotId={shareBotId}
               onBotSelect={(id) => { setShareBotId(id); setCardFocus({ id: `bot-${id}` }); }} />
@@ -7637,12 +7639,13 @@ export function CommandApp() {
               {notice && <p className="voice-copy rounded-panel border border-line bg-surface px-3 py-2 text-sm text-muted">{presentVoiceCopy(notice)}</p>}
               <details className="intelligence-group">
                 <summary className="cursor-pointer text-sm font-semibold">API keys</summary>
-              <AiProviderConnections onChange={setCustomAiProviders} />
+              <AiProviderConnections onChange={setCustomAiProviders} onUseModel={(id) => { setLogicRoute(null); setProviderChoice(id); setView("chat"); }} />
               </details>
               <details className="intelligence-group">
                 <summary className="cursor-pointer text-sm font-semibold">Provider routes</summary>
               <FleetPanel
                 mode="connected"
+                catalogModels={catalogModels}
                 ws={ws}
                 setWs={setWs}
                 logicRoutes={logicRoutes}
@@ -8224,7 +8227,7 @@ export function CommandApp() {
                   <span className={`h-6 w-11 rounded-full ${failoverPolicy === "grok" ? "bg-accent-ink/30" : "bg-line"}`} />
                 </button>
               </div>
-                <AiProviderConnections onChange={setCustomAiProviders} />
+                <AiProviderConnections onChange={setCustomAiProviders} onUseModel={(id) => { setLogicRoute(null); setProviderChoice(id); setView("chat"); }} />
                 <button type="button" className="min-h-11 rounded-panel border border-line px-3 text-sm" onClick={() => setSettingsPane("keys")}>Open Safe keys</button>
                 <button type="button" className="min-h-11 rounded-panel border border-line px-3 text-sm" onClick={() => setView("connected")}>Open connections</button>
               </div>

@@ -43,3 +43,20 @@ export function rankCatalogModels(found: unknown): string[] {
   ranked.sort((a, b) => Number(b.freeText) - Number(a.freeText) || a.index - b.index);
   return ranked.map((item) => item.id);
 }
+
+/** Every valid model from a connected API becomes its own selectable module. */
+export function catalogModuleChoices(rows: { id: string; label: string; models: string[] }[]): { id: string; label: string }[] {
+  const out: { id: string; label: string }[] = [];
+  const seen = new Set<string>();
+  for (const row of rows) {
+    if (!row.id) continue;
+    for (const model of row.models) {
+      if (!validCatalogModelId(model)) continue;
+      const id = `custom:${row.id}:${encodeURIComponent(model)}`;
+      if (seen.has(id)) continue;
+      seen.add(id);
+      out.push({ id, label: `${row.label}: ${model}` });
+    }
+  }
+  return out;
+}

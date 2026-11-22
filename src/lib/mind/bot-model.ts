@@ -4,15 +4,16 @@ export const BOT_PROVIDERS = ["grok", "openai", "anthropic", "gemini", "openrout
 export type BotProvider = (typeof BOT_PROVIDERS)[number];
 
 export type BotModel = {
-  chatProvider: BotProvider | null;
+  chatProvider: string | null;
   chatTier: ModelTier | null;
 };
 
 export function normalizeBotModel(input: { chatProvider?: unknown; chatTier?: unknown } | null | undefined): BotModel {
   const provider = input?.chatProvider;
   const tier = input?.chatTier;
+  const catalog = typeof provider === "string" && /^custom:[0-9a-f-]{36}:.{1,300}$/i.test(provider);
   return {
-    chatProvider: typeof provider === "string" && (BOT_PROVIDERS as readonly string[]).includes(provider) ? provider as BotProvider : null,
+    chatProvider: typeof provider === "string" && ((BOT_PROVIDERS as readonly string[]).includes(provider) || catalog) ? provider : null,
     chatTier: isModelTier(tier) ? tier : null,
   };
 }

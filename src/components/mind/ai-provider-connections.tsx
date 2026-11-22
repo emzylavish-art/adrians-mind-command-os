@@ -47,7 +47,7 @@ async function api(action: Record<string, unknown> | null): Promise<Record<strin
 }
 
 /** Account-owned, server-encrypted API configurations. Never echoes or stores secret input. */
-export function AiProviderConnections({ onChange }: { onChange?: (rows: PublicRow[]) => void }) {
+export function AiProviderConnections({ onChange, onUseModel }: { onChange?: (rows: PublicRow[]) => void; onUseModel?: (choice: string) => void }) {
   const [rows, setRows] = useState<PublicRow[]>([]);
   const [loadedOnce, setLoadedOnce] = useState(false);
   const [kind, setKind] = useState<ProviderKind>("openai");
@@ -196,6 +196,7 @@ export function AiProviderConnections({ onChange }: { onChange?: (rows: PublicRo
                         <span aria-hidden="true" className="grid size-7 shrink-0 place-items-center rounded-full bg-surface text-[0.7rem]">{index + 1}</span>
                         <span className="min-w-0 flex-1 break-all">{id}</span>
                         {id.endsWith(":free") ? <span className="shrink-0 rounded-full border border-line px-2 py-1">free</span> : null}
+                        <span className="shrink-0 rounded-full border border-line px-2 py-1" onClick={(event) => { event.stopPropagation(); onUseModel?.(`custom:${row.id}:${encodeURIComponent(id)}`); }}>Use in chat</span>
                       </button>
                     </li>
                   ))}
