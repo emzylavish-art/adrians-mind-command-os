@@ -11,7 +11,7 @@
 
 import type { ReactNode } from "react";
 import type { LiveSpeakState } from "./live-speak-control";
-import { finishMenu } from "@/components/mind/menu-material";
+import { finishMenu, pinShelf } from "@/components/mind/menu-material";
 
 export type ComposerDictationState = "idle" | "recording";
 
@@ -181,7 +181,7 @@ export function ComposerBar(props: ComposerBarProps) {
                 {props.modelMenuOpen ? (
                   <ul
                     className="composer-bar__model-menu"
-                    ref={finishMenu}
+                    ref={(node) => { finishMenu(node); pinShelf(node, "min(24rem, calc(100vw - 1.5rem))"); }}
                     role="menu"
                     aria-label="Model"
                     data-testid="composer-bar-model-menu"
@@ -189,7 +189,7 @@ export function ComposerBar(props: ComposerBarProps) {
                     {COMPOSER_MODEL_OPTIONS.map((opt) => {
                       const selected = opt.id === model;
                       return (
-                        <li key={opt.id} role="none">
+                        <li key={opt.id} role="none" style={{ display: "flex", flex: "1 1 10rem", minWidth: "9rem", maxWidth: "100%" }}>
                           <button
                             type="button"
                             role="menuitemradio"

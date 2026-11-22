@@ -83,7 +83,8 @@ export function ModelTierChip({
           type="button"
           role="menuitemradio"
           aria-checked={logicRoute == null && tier === item}
-          className={`flex min-h-11 w-full items-center rounded-xl px-3 text-left text-sm ${logicRoute == null && tier === item ? "bg-white/10" : ""}`}
+          className={`flex min-h-11 items-center rounded-xl px-3 text-left text-sm ${logicRoute == null && tier === item ? "bg-white/10" : ""}`}
+          style={{ flex: "1 1 7.5rem", width: "auto", maxWidth: "100%", minWidth: "7.25rem" }}
           onClick={() => {
             onChoose(selectModelTier(item));
             setOpen(false);
@@ -110,7 +111,8 @@ export function ModelTierChip({
             data-testid={`logic-route-${id}`}
             data-state={view?.state ?? "unknown"}
             title={menu.detail}
-            className={`flex min-h-11 w-full flex-col items-start rounded-xl px-3 py-2 text-left text-sm ${selected ? "bg-white/10" : ""} ${menu.selectable ? "" : "cursor-not-allowed opacity-70"}`}
+            className={`flex min-h-11 flex-col items-start rounded-xl px-3 py-2 text-left text-sm ${selected ? "bg-white/10" : ""} ${menu.selectable ? "" : "cursor-not-allowed opacity-70"}`}
+            style={{ flex: "1 1 9rem", width: "auto", maxWidth: "100%", minWidth: "8rem" }}
             onClick={() => {
               if (!menu.selectable) return;
               onChooseLogic?.(id);
@@ -126,7 +128,7 @@ export function ModelTierChip({
   );
 
   if (presentation === "rows") {
-    return <div role="group" aria-label={`Model mode ${label}. ${reasonText}`}>{choices}</div>;
+    return <div role="group" aria-label={`Model mode ${label}. ${reasonText}`} style={{ display: "flex", flexWrap: "wrap", gap: "0.35rem", width: "100%" }}>{choices}</div>;
   }
 
   return (
@@ -145,9 +147,9 @@ export function ModelTierChip({
         <ChevronDown className="size-3.5 opacity-70" />
       </button>
       {open && (
-        <div id={menuId} ref={finishMenu} className="absolute right-0 z-40 mt-2 w-80" role="menu" aria-label="Model">
-          <p className="px-3 pb-1 pt-1 text-[11px] font-semibold uppercase tracking-[0.14em] text-muted">Model</p>
-          {choices}
+        <div id={menuId} ref={(node) => { finishMenu(node); if (node) { node.style.setProperty("display", "flex", "important"); node.style.setProperty("flex-wrap", "wrap", "important"); node.style.setProperty("gap", "0.35rem", "important"); node.style.setProperty("width", "min(28rem, calc(100vw - 1.5rem))", "important"); node.style.setProperty("max-width", "min(28rem, calc(100vw - 1.5rem))", "important"); } }} className="absolute right-0 z-40 mt-2" role="menu" aria-label="Model">
+          <p className="px-3 pb-1 pt-1 text-[11px] font-semibold uppercase tracking-[0.14em] text-muted" style={{ flex: "1 1 100%" }}>Model</p>
+          <div style={{ display: "flex", flexWrap: "wrap", gap: "0.35rem", width: "100%" }}>{choices}</div>
         </div>
       )}
     </div>

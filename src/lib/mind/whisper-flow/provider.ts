@@ -1,14 +1,15 @@
 /**
  * Server-side STT provider selection for Whisper Flow.
- * Prefers xAI STT (existing). Optional OpenAI Whisper when OPENAI_API_KEY is set
- * and provider preference is "openai" or xAI key is missing.
+ * The Mic path uses the local Handy Whisper engine and does not require an OpenAI key.
+ * A cloud key is only a fallback when that engine is down and a key is already present.
  * Never logs key values.
  */
 
 import { transcribeWavBytes, type SttResult } from "../voice/stt.ts";
 import { resolveVoiceApiKey, XAI_VOICE_SECRETS_PATH } from "../voice/keys.ts";
+import { HANDY_WHISPER_URL } from "../handy-dictation.ts";
 
-export type SttProviderId = "xai" | "openai";
+export type SttProviderId = "handy" | "xai" | "openai";
 
 export function resolveOpenAiApiKey(
   env: Record<string, string | undefined> = process.env,
@@ -44,6 +45,33 @@ export function selectSttProvider(
 
 const OPENAI_WHISPER_URL = "https://api.openai.com/v1/audio/transcriptions";
 const OPENAI_WHISPER_MODEL = "whisper-1";
+
+export async function transcribeWithHandy(
+  bytes: Uint8Array,
+  mime?: string,
+): Promise<SttResult & { provider: "handy" }> {
+  if (!bytes.length) {
+    return { ok: false, error: "No audio was recorded. Nothing was transcribed.", provider: "handy" };
+  }
+  try {
+    const copy = new Uint8Array(bytes.byteLength);
+    copy.set(bytes);
+    const response = await fetch(HANDY_WHISPER_URL, {
+      method: "POST",
+      headers: { "content-type": mime || "application/octet-stream" },
+      body: new Blob([copy]),
+      signal: AbortSignal.timeout(120_000),
+    });
+    const body = await response.json() as { ok?: boolean; text?: string; error?: string };
+    const text = body.text?.trim() ?? "";
+    if (!response.ok || !body.ok || !text) {
+      return { ok: false, error: body.error || "Handy heard no words. Nothing was transcribed.", provider: "handy" };
+    }
+    return { ok: true, text, duration: null, provider: "handy" };
+  } catch {
+    return { ok: false, error: "Handy Whisper is not running on this machine. Nothing was sent to OpenAI.", provider: "handy" };
+  }
+}
 
 export async function transcribeWithOpenAiWhisper(input: {
   bytes: Uint8Array;
@@ -102,6 +130,13 @@ export async function transcribeWhisperFlowAudio(input: {
   secretsPath?: string;
 }): Promise<SttResult & { provider?: SttProviderId }> {
   const secretsPath = input.secretsPath ?? XAI_VOICE_SECRETS_PATH;
+  const explicitCloud = input.prefer === "openai" || input.prefer === "xai" || Boolean(input.fetchImpl);
+  if (!explicitCloud) {
+    const handy = await transcribeWithHandy(input.bytes, input.mime);
+    if (handy.ok) return { ok: true, text: handy.text, duration: handy.duration, provider: "handy" };
+    const selected = selectSttProvider(input.env ?? process.env, input.prefer, secretsPath);
+    if (!selected.provider) return { ok: false, error: handy.error };
+  }
   const selected = selectSttProvider(input.env ?? process.env, input.prefer, secretsPath);
   if (!selected.provider) return { ok: false, error: selected.error };
   if (selected.provider === "openai") {

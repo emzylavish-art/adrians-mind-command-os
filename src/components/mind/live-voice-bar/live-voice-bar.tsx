@@ -34,7 +34,7 @@ import {
 } from "./frame-capture";
 import { shouldCloseSettingsOnEscape } from "./settings-popover";
 import "./mobile-nav-clearance.css";
-import { finishMenu } from "@/components/mind/menu-material";
+import { finishMenu, pinShelf } from "@/components/mind/menu-material";
 
 export type LiveVoiceBarProps = {
   isOverlayMicOpen: () => boolean;
@@ -435,13 +435,14 @@ export function LiveVoiceBar(props: LiveVoiceBarProps) {
                       <span className="composer-bar__plus-glyph" aria-hidden="true" />
                     </button>
                     {attachOpen ? (
-                      <ul ref={finishMenu} className="live-voice-bar__plus-menu absolute bottom-12 left-0 z-50 min-w-[12rem]" role="menu" aria-label="Add media">
+                      <ul ref={(node) => { finishMenu(node); pinShelf(node, "min(22rem, calc(100vw - 1.5rem))"); }} className="live-voice-bar__plus-menu absolute bottom-12 left-0 z-50" role="menu" aria-label="Add media">
                         {(["camera", "photo", "video", "files"] as const).map((id) => (
-                          <li key={id} role="none">
+                          <li key={id} role="none" style={{ display: "flex", flex: "1 1 6.5rem", minWidth: "6.5rem", maxWidth: "100%" }}>
                             <button
                               type="button"
                               role="menuitem"
-                              className="live-voice-bar__plus-item flex w-full px-3 py-2 text-left text-sm"
+                              className="live-voice-bar__plus-item flex px-3 py-2 text-left text-sm"
+                              style={{ width: "100%" }}
                               data-testid={`live-voice-bar-attach-${id}`}
                               onClick={() => void onPlusItem(id)}
                             >
@@ -608,13 +609,14 @@ export function LiveVoiceBar(props: LiveVoiceBarProps) {
             <span className="lvb-ico lvb-ico--plus" aria-hidden="true" />
           </button>
           {attachOpen ? (
-            <ul ref={finishMenu} className="live-voice-bar__plus-menu" role="menu" aria-label="Add media">
+            <ul ref={(node) => { finishMenu(node); pinShelf(node, "min(22rem, calc(100vw - 1.5rem))"); }} className="live-voice-bar__plus-menu" role="menu" aria-label="Add media">
               {(["camera", "photo", "video", "files"] as const).map((id) => (
-                <li key={id} role="none">
+                <li key={id} role="none" style={{ display: "flex", flex: "1 1 6.5rem", minWidth: "6.5rem", maxWidth: "100%" }}>
                   <button
                     type="button"
                     role="menuitem"
                     className="live-voice-bar__plus-item"
+                    style={{ width: "100%" }}
                     data-testid={`live-voice-bar-attach-${id}`}
                     onClick={() => void onPlusItem(id)}
                   >

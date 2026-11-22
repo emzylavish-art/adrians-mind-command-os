@@ -1,8 +1,9 @@
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
 import test from "node:test";
 import { HANDY_SOURCE, HANDY_WAVE_BARS, HANDY_WHISPER_URL, detectWithHandy, handyBarHeight, handyLiveLevels } from "./handy-dictation.ts";
 import { refreshSkills } from "./skill-refresh.ts";
-import { REJECTED_GOOGLE_TRANSLATOR, SOKUJI_SOURCE, translateVoice, voiceHostAllowed } from "./voice-translator.ts";
+import { OPUS_MT_URL, REJECTED_GOOGLE_TRANSLATOR, SOKUJI_SOURCE, translateVoice, voiceHostAllowed } from "./voice-translator.ts";
 
 test("Handy dictation uses the project wave and does not ask to refresh skills", () => {
   assert.equal(HANDY_SOURCE, "https://github.com/cjpais/handy");
@@ -15,26 +16,43 @@ test("Handy dictation uses the project wave and does not ask to refresh skills",
   assert.equal(refreshed.askedPermission, false);
   assert.ok(refreshed.count > 0);
   assert.equal(refreshed.refreshedAt, "2026-11-21T00:00:00.000Z");
-  const translated = translateVoice("hello", "es");
-  assert.equal(translated.engine, "sokuji");
-  assert.equal(translated.model, "opus-mt");
-  assert.equal(translated.source, SOKUJI_SOURCE);
-  assert.equal(translated.google, false);
-  assert.equal(translated.weightsLoaded, false);
-  assert.equal(translated.text, "hola");
   assert.equal(voiceHostAllowed("https://translate.google.com/translate"), false);
   assert.equal(voiceHostAllowed(REJECTED_GOOGLE_TRANSLATOR), true);
 });
 
-test("Speak detection asks Handy Whisper Flow and does not invent words", async () => {
-  const calls: string[] = [];
-  const heard = await detectWithHandy(btoa("audio"), (async (url: string) => {
-    calls.push(url);
-    return new Response(JSON.stringify({ ok: true, text: "hello from handy" }), { status: 200 });
+test("Opus-MT reports loaded weights for a sentence that is not a test phrase", async () => {
+  const translated = await translateVoice("The harbor opens at dawn", "es", (async () => new Response(JSON.stringify({
+    ok: true,
+    weightsLoaded: true,
+    text: "El puerto se abre al amanecer",
+    pair: "Xenova/opus-mt-en-es",
+    note: "Translated by Xenova/opus-mt-en-es. Nothing was sent to Google.",
+  }), { status: 200 })) as typeof fetch);
+  assert.equal(translated.engine, "sokuji");
+  assert.equal(translated.model, "opus-mt");
+  assert.equal(translated.source, SOKUJI_SOURCE);
+  assert.equal(translated.google, false);
+  assert.equal(translated.weightsLoaded, true);
+  assert.equal(translated.text, "El puerto se abre al amanecer");
+  assert.equal(translated.pair, "Xenova/opus-mt-en-es");
+  assert.equal(translated.note.includes("not loaded"), false);
+  const down = await translateVoice("The harbor opens at dawn", "fr", (async () => {
+    throw new Error("down");
   }) as typeof fetch);
-  assert.deepEqual(calls, [HANDY_WHISPER_URL]);
-  assert.equal(heard.ok && heard.provider, "handy");
-  assert.equal(heard.ok && heard.text, "hello from handy");
+  assert.equal(down.weightsLoaded, false);
+  assert.equal(down.text, null);
+  assert.equal(OPUS_MT_URL, "http://127.0.0.1:4197/opus-mt");
+});
+
+test("Speak detection asks the loaded Handy engine and does not invent words", async () => {
+  const audio = readFileSync("/tmp/handy-engine/harbor.wav").toString("base64");
+  const heard = await detectWithHandy(audio);
+  assert.equal(heard.ok, true);
+  if (heard.ok) {
+    assert.equal(heard.provider, "handy");
+    assert.match(heard.text, /harbor/i);
+    assert.notEqual(heard.text, "hello from handy");
+  }
   const missed = await detectWithHandy("", fetch);
   assert.equal(missed.ok, false);
 });

@@ -214,7 +214,7 @@ import {
 import { describeFile } from "@/lib/mind/files-read";
 import { extractPdfText } from "@/lib/mind/pdf-text";
 import { ModelTierChip } from "@/components/mind/model-tier-chip";
-import { AnchoredCard, MenuGroup, MenuMotion, finishMenu } from "@/components/mind/menu-material";
+import { AnchoredCard, MenuCluster, MenuGroup, MenuMotion, MenuShelf, finishMenu, menuChip, pinShelf } from "@/components/mind/menu-material";
 import { MODEL_TIERS, type ConcreteModelTier, type ModelTier } from "@/lib/mind/model-tiers";
 import { chosenProvider, failover, providerChoicesWithKeys } from "@/lib/mind/providers";
 import { emitFailure, mountFailure, surfaceForReport } from "@/lib/mind/failure-mount";
@@ -1440,6 +1440,8 @@ export function CommandApp() {
   const [controlsOpen, setControlsOpen] = useState(false);
   const [surfaceAnchor, setSurfaceAnchor] = useState<DOMRect | null>(null);
   const [controlsAnchor, setControlsAnchor] = useState<DOMRect | null>(null);
+  const [navMoreOpen, setNavMoreOpen] = useState(false);
+  const [navMoreAnchor, setNavMoreAnchor] = useState<DOMRect | null>(null);
   const [modelRowsOpen, setModelRowsOpen] = useState(false);
   const [alertAnchor, setAlertAnchor] = useState<DOMRect | null>(null);
   const [accountAnchor, setAccountAnchor] = useState<DOMRect | null>(null);
@@ -2353,7 +2355,7 @@ export function CommandApp() {
     [query, ws],
   );
 
-  type ChromeMenu = "palette" | "surface" | "bell" | "account" | "controls";
+  type ChromeMenu = "palette" | "surface" | "bell" | "account" | "controls" | "nav";
 
   function closeMenus(keep?: ChromeMenu) {
     if (keep !== "palette") setPaletteOpen(false);
@@ -2361,6 +2363,8 @@ export function CommandApp() {
     if (keep !== "bell") setBellOpen(false);
     if (keep !== "account") setAccountOpen(false);
     if (keep !== "controls") setControlsOpen(false);
+    if (keep !== "nav") setNavMoreOpen(false);
+    document.querySelectorAll("details.composer-more[open]").forEach((node) => node.removeAttribute("open"));
     setContextOpen(false);
     setToolsOpen(false);
     setNavOpen(false);
@@ -5692,26 +5696,54 @@ export function CommandApp() {
             {!railCollapsed && "Explore"}
           </Link>
           {!railCollapsed && (
-            <details className="nav-more mt-3">
-              <summary>More</summary>
-              <div className="space-y-1">
-                {MORE_NAV.map((item) => {
-                  const Icon = item.icon;
-                  return (
-                  <button
-                    key={item.id}
-                    type="button"
-                    className={`nav-item flex min-h-11 w-full items-center gap-3 rounded-2xl px-3 text-sm font-medium ${view === item.id ? "nav-item-active" : "text-muted"}`}
-                    onClick={() => { setView(item.id); setNavOpen(false); }}
-                    data-testid={item.id === "voice" ? "nav-voice-clone" : undefined}
-                  >
-                    <Icon className="size-4 shrink-0 opacity-90" />
-                    {item.label}
-                  </button>
-                  );
-                })}
-              </div>
-            </details>
+            <>
+            <button
+              type="button"
+              className="nav-item mt-3 flex min-h-11 w-full items-center rounded-2xl px-3 text-left text-sm font-medium text-muted"
+              aria-expanded={navMoreOpen}
+              aria-haspopup="menu"
+              onClick={(event) => {
+                const next = !navMoreOpen;
+                closeMenus("nav");
+                setNavMoreAnchor(event.currentTarget.getBoundingClientRect());
+                setNavMoreOpen(next);
+              }}
+            >
+              More
+            </button>
+            {navMoreOpen ? (
+              <AnchoredCard anchor={navMoreAnchor} label="More" onClose={() => setNavMoreOpen(false)} testId="nav-more-panel" width={640} align="start">
+              <MenuShelf width="100%" testId="nav-more-shelf">
+                {([
+                  ["People", ["intelligence", "agents", "voice"]],
+                  ["Work", ["tools", "skills", "runs"]],
+                  ["Record", ["memory", "activity", "help"]],
+                ] as const).map(([label, ids]) => (
+                  <MenuCluster key={label} label={label}>
+                    {ids.map((id) => {
+                      const item = MORE_NAV.find((entry) => entry.id === id);
+                      if (!item) return null;
+                      const Icon = item.icon;
+                      return (
+                        <button
+                          key={item.id}
+                          type="button"
+                          className={`nav-item flex min-h-11 items-center gap-2 rounded-2xl px-3 text-sm font-medium ${view === item.id ? "nav-item-active" : "text-muted"}`}
+                          style={menuChip}
+                          onClick={() => { setView(item.id); setNavMoreOpen(false); setNavOpen(false); }}
+                          data-testid={item.id === "voice" ? "nav-voice-clone" : undefined}
+                        >
+                          <Icon className="size-4 shrink-0 opacity-90" />
+                          {item.label}
+                        </button>
+                      );
+                    })}
+                  </MenuCluster>
+                ))}
+              </MenuShelf>
+              </AnchoredCard>
+            ) : null}
+            </>
           )}
           <Link to="/dashboard" data-testid="nav-route-dashboard" className="nav-route-link sr-only">Dashboard</Link>
           {!railCollapsed && <div className="mx-3 my-3 border-t border-white/10" />}
@@ -5828,26 +5860,45 @@ export function CommandApp() {
               <span aria-hidden="true">▾</span>
             </button>
             {surfaceMenu ? (
-              <AnchoredCard anchor={surfaceAnchor} label="Places" onClose={() => setSurfaceMenu(false)} testId="surface-menu" width={280} align="start">
-                <MenuGroup label="Places" first>
-                  {([
-                    ["command", "Chat", "Conversation"],
-                    ["build", "Build", "Coding workspace"],
-                    ["code", "Intelligence", "Coding conversation"],
-                    ["intelligence", "EVE", "Intelligence layer"],
-                  ] as const).map(([id, label, detail]) => (
-                    <button
-                      key={id}
-                      type="button"
-                      role="menuitem"
-                      className={`flex min-h-11 w-full flex-col items-start justify-center rounded-2xl px-3 text-left ${view === id || (id === "command" && view === "chat") ? "bg-white/10" : ""}`}
-                      onClick={() => { setView(id); setSurfaceMenu(false); setNavOpen(false); }}
-                    >
-                      <span className="text-sm">{label}</span>
-                      <span className="text-xs text-muted">{detail}</span>
-                    </button>
-                  ))}
-                </MenuGroup>
+              <AnchoredCard anchor={surfaceAnchor} label="Places" onClose={() => setSurfaceMenu(false)} testId="surface-menu" width={440} align="start">
+                <MenuShelf width="100%" testId="places-shelf">
+                  <MenuCluster label="Talk">
+                    {([
+                      ["command", "Chat", "Conversation"],
+                      ["code", "Intelligence", "Coding conversation"],
+                    ] as const).map(([id, label, detail]) => (
+                      <button
+                        key={id}
+                        type="button"
+                        role="menuitem"
+                        className={`flex min-h-11 flex-col items-start justify-center rounded-2xl px-3 text-left ${view === id || (id === "command" && view === "chat") ? "bg-white/10" : ""}`}
+                        style={menuChip}
+                        onClick={() => { setView(id); setSurfaceMenu(false); setNavOpen(false); }}
+                      >
+                        <span className="text-sm">{label}</span>
+                        <span className="text-xs text-muted">{detail}</span>
+                      </button>
+                    ))}
+                  </MenuCluster>
+                  <MenuCluster label="Make">
+                    {([
+                      ["build", "Build", "Coding workspace"],
+                      ["intelligence", "EVE", "Intelligence layer"],
+                    ] as const).map(([id, label, detail]) => (
+                      <button
+                        key={id}
+                        type="button"
+                        role="menuitem"
+                        className={`flex min-h-11 flex-col items-start justify-center rounded-2xl px-3 text-left ${view === id ? "bg-white/10" : ""}`}
+                        style={menuChip}
+                        onClick={() => { setView(id); setSurfaceMenu(false); setNavOpen(false); }}
+                      >
+                        <span className="text-sm">{label}</span>
+                        <span className="text-xs text-muted">{detail}</span>
+                      </button>
+                    ))}
+                  </MenuCluster>
+                </MenuShelf>
               </AnchoredCard>
             ) : null}
           </div>
@@ -5942,12 +5993,14 @@ export function CommandApp() {
               <span aria-hidden="true">▾</span>
             </button>
             {controlsOpen ? (
-              <AnchoredCard anchor={controlsAnchor} label="Controls" onClose={() => setControlsOpen(false)} testId="controls-menu" width={320} align="end">
-                <MenuGroup label="Share" first>
+              <AnchoredCard anchor={controlsAnchor} label="Controls" onClose={() => setControlsOpen(false)} testId="controls-menu" width={640} align="start">
+                <MenuShelf width="100%" testId="controls-shelf">
+                <MenuCluster label="Share">
                   <button
                     type="button"
                     role="menuitem"
-                    className="flex min-h-11 w-full flex-col items-start justify-center rounded-2xl px-3 text-left"
+                    className="flex min-h-11 flex-col items-start justify-center rounded-2xl px-3 text-left"
+                    style={menuChip}
                     onClick={() => {
                       const search = writeShareSearch(window.location.search, shareWriteForView(view, {
                         chat: activeId,
@@ -5966,16 +6019,17 @@ export function CommandApp() {
                     <span className="text-sm">Copy link</span>
                     <span className="text-xs text-muted">Share this page</span>
                   </button>
-                </MenuGroup>
-                <MenuGroup label="Connection">
-                  <p className="flex min-h-11 flex-col justify-center rounded-2xl px-3 text-left" aria-label="Voice route Direct">
+                </MenuCluster>
+                <MenuCluster label="Connection">
+                  <p className="flex min-h-11 flex-col justify-center rounded-2xl px-3 text-left" style={menuChip} aria-label="Voice route Direct">
                     <span className="text-sm">Direct</span>
                     <span className="text-xs text-muted">Voice route</span>
                   </p>
                   <button
                     type="button"
                     role="menuitem"
-                    className="flex min-h-11 w-full flex-col items-start justify-center rounded-2xl px-3 text-left"
+                    className="flex min-h-11 flex-col items-start justify-center rounded-2xl px-3 text-left"
+                    style={menuChip}
                     title={headerDetail}
                     aria-label={`${headerState}. ${headerDetail}`}
                     onClick={() => { setView("connected"); setControlsOpen(false); setNavOpen(false); }}
@@ -5983,11 +6037,12 @@ export function CommandApp() {
                     <span className="inline-flex items-center gap-2 text-sm"><img src="/brand/logos/grok.svg" alt="" width={16} height={16} className="size-4 rounded" />{headerState}</span>
                     <span className="text-xs text-muted">Connected services</span>
                   </button>
-                </MenuGroup>
-                <MenuGroup label="Model">
+                </MenuCluster>
+                <MenuCluster label="Model" wide>
                   <button
                     type="button"
-                    className="flex min-h-11 w-full items-center justify-between rounded-2xl px-3 text-left text-sm"
+                    className="flex min-h-11 items-center justify-between rounded-2xl px-3 text-left text-sm"
+                    style={menuChip}
                     aria-expanded={modelRowsOpen}
                     onClick={() => setModelRowsOpen((value) => !value)}
                   >
@@ -6009,20 +6064,21 @@ export function CommandApp() {
                       }}
                     />
                   ) : null}
-                </MenuGroup>
-                <MenuGroup label="Work">
+                </MenuCluster>
+                <MenuCluster label="Work">
                   <button
                     type="button"
                     role="menuitem"
                     aria-pressed={composerEffort === "orchestrator"}
-                    className="flex min-h-11 w-full items-center justify-between rounded-2xl px-3 text-left text-sm"
+                    className="flex min-h-11 items-center justify-between rounded-2xl px-3 text-left text-sm"
+                    style={menuChip}
                     onClick={() => chooseComposerEffort(composerEffort === "orchestrator" ? "auto" : "orchestrator")}
                   >
                     <span>Orchestrator</span>
                     <span className="text-xs text-muted">{composerEffort === "orchestrator" ? "On" : "Off"}</span>
                   </button>
                   {composerEffort === "orchestrator" ? (
-                    <div className="grid" data-testid="orchestrator-models">
+                    <div className="flex w-full flex-wrap gap-1" data-testid="orchestrator-models">
                       {consultModules.filter((item) => item.connected).length === 0 ? <span className="px-3 py-2 text-xs text-muted">No model is connected right now.</span> : null}
                       {consultModules.filter((item) => item.connected).map((item) => (
                         <button
@@ -6031,7 +6087,8 @@ export function CommandApp() {
                           role="menuitem"
                           data-testid="consult-model"
                           aria-pressed={consultModel === item.id}
-                          className="flex min-h-11 w-full items-center justify-between rounded-2xl px-3 text-left text-sm"
+                          className="flex min-h-11 items-center justify-between rounded-2xl px-3 text-left text-sm"
+                          style={menuChip}
                           onClick={() => chooseConsultModel(item.id)}
                         >
                           <span>{item.label}</span>
@@ -6040,11 +6097,12 @@ export function CommandApp() {
                       ))}
                     </div>
                   ) : null}
-                </MenuGroup>
-                <MenuGroup label="Install">
-                  <a role="menuitem" className="flex min-h-11 items-center rounded-2xl px-3 text-sm" href="/downloads/AdriansMind-Setup.exe" download data-testid="header-download-installer">Download Adrian's Mind</a>
+                </MenuCluster>
+                <MenuCluster label="Install" wide>
+                  <a role="menuitem" className="flex min-h-11 items-center rounded-2xl px-3 text-sm" style={menuChip} href="/downloads/AdriansMind-Setup.exe" download data-testid="header-download-installer">Download Adrian's Mind</a>
                   <p className="px-3 pb-2 text-xs text-muted" data-testid="installer-note">Unsigned Windows app. It contains this product, including Build. It does not control the mouse, keyboard, or browser.</p>
-                </MenuGroup>
+                </MenuCluster>
+                </MenuShelf>
               </AnchoredCard>
             ) : null}
           </div>
@@ -6108,26 +6166,28 @@ export function CommandApp() {
           </AnchoredCard>
         )}
         {accountOpen && (
-          <AnchoredCard anchor={accountAnchor} label="Account" onClose={() => setAccountOpen(false)} testId="account-panel" width={320} align="end">
-            <MenuGroup label="Account" first>
+          <AnchoredCard anchor={accountAnchor} label="Account" onClose={() => setAccountOpen(false)} testId="account-panel" width={440} align="end">
+            <MenuShelf width="100%" testId="account-shelf">
+            <MenuCluster label="Account" wide>
               <p className="px-3 py-1 text-sm font-semibold">Adrian (Personal)</p>
               <p className="px-3 pb-2 text-xs text-muted">This menu is not an account switcher. No second workspace exists.</p>
               <UserButton />
               <SupabaseAccountControls />
               <SignedOut>
-                <Link to="/login" className="flex min-h-11 items-center rounded-2xl px-3 text-sm">
+                <Link to="/login" className="flex min-h-11 items-center rounded-2xl px-3 text-sm" style={menuChip}>
                   Sign in
                 </Link>
               </SignedOut>
-            </MenuGroup>
-            <MenuGroup label="Safety">
-              <button type="button" className="flex min-h-11 w-full items-center rounded-2xl px-3 text-left text-sm" onClick={() => { setView("settings"); closeMenus(); }}>
+            </MenuCluster>
+            <MenuCluster label="Safety">
+              <button type="button" className="flex min-h-11 items-center rounded-2xl px-3 text-left text-sm" style={menuChip} onClick={() => { setView("settings"); closeMenus(); }}>
                 Settings
               </button>
-              <button type="button" className="flex min-h-11 w-full items-center rounded-2xl px-3 text-left text-sm" onClick={() => void toggleStop()}>
+              <button type="button" className="flex min-h-11 items-center rounded-2xl px-3 text-left text-sm" style={menuChip} onClick={() => void toggleStop()}>
                 {ws.halted ? "Clear stop" : "Emergency stop"}
               </button>
-            </MenuGroup>
+            </MenuCluster>
+            </MenuShelf>
           </AnchoredCard>
         )}
         {ws.halted && (
@@ -6402,6 +6462,8 @@ export function CommandApp() {
                     <details
                       className="composer-more"
                       onToggle={(event) => {
+                        const menu = event.currentTarget.querySelector("[data-testid='home-composer-more-menu']");
+                        if (event.currentTarget.open && menu instanceof HTMLElement) pinShelf(menu);
                         if (event.currentTarget.open) {
                           setContextOpen(false);
                           setToolsOpen(false);
@@ -6409,69 +6471,80 @@ export function CommandApp() {
                       }}
                     >
                       <summary>More</summary>
-                      <div className="mt-2 flex flex-wrap gap-2">
-                    <button type="button" className="inline-flex min-h-11 items-center gap-2 rounded-panel border border-line px-3 text-sm" onClick={() => fileRef.current?.click()}>
-                      <Paperclip className="size-4" /> Attach
-                    </button>
-                    <button type="button" className="inline-flex min-h-11 items-center gap-2 rounded-panel border border-line px-3 text-sm" onClick={() => imageInputRef.current?.click()}>
-                      <Image className="size-4" /> Image
-                    </button>
-                    <button type="button" className="inline-flex min-h-11 items-center gap-2 rounded-panel border border-line px-3 text-sm" onClick={() => setCameraOpen(true)}>
-                      <Camera className="size-4" /> Camera
-                    </button>
-                    {driveConnected ? (
-                      <button type="button" className="inline-flex min-h-11 items-center gap-2 rounded-panel border border-line px-3 text-sm" onClick={() => setCloudPickerOpen(true)}>
-                        Drive
-                      </button>
-                    ) : null}
-                    <button
-                      type="button"
-                      className="inline-flex min-h-11 items-center gap-2 rounded-panel border border-line px-3 text-sm"
-                      disabled={busy || ws.halted}
-                      onClick={() => {
-                        const viaCmd = parseImagineCommand(draft);
-                        const prompt = viaCmd !== null ? viaCmd : draft.trim();
-                        void runImagine(prompt || undefined, null);
-                      }}
-                    >
-                      Imagine
-                    </button>
-                    <AttachmentChips images={pendingImages} onRemove={(index) => setPendingImages((prev) => prev.filter((_, i) => i !== index))} onEditImagine={(image) => openImagineEditor(image.dataUrl)} />
-                    <button
-                      type="button"
-                      className="inline-flex min-h-11 items-center gap-2 rounded-panel border border-line px-3 text-sm"
-                      onClick={() => {
-                        setToolsOpen(false);
-                        setContextOpen((open) => !open);
-                        document.querySelectorAll("details.composer-more[open]").forEach((node) => node.removeAttribute("open"));
-                      }}
-                    >
-                      <Database className="size-4" /> Add Context
-                    </button>
-                    <button
-                      type="button"
-                      className="inline-flex min-h-11 items-center gap-2 rounded-panel border border-line px-3 text-sm"
-                      onClick={() => {
-                        setContextOpen(false);
-                        setToolsOpen((open) => !open);
-                        document.querySelectorAll("details.composer-more[open]").forEach((node) => node.removeAttribute("open"));
-                      }}
-                    >
-                      <Wrench className="size-4" /> Tools
-                    </button>
-                    <button type="button" className="inline-flex min-h-11 items-center gap-2 rounded-panel border border-line px-3 text-sm" onClick={() => { setContextOpen(false); setToolsOpen(false); setView("agents"); }}>
-                      <Bot className="size-4" /> Agents
-                    </button>
-                    <button type="button" className="inline-flex min-h-11 items-center gap-2 rounded-panel border border-line px-3 text-sm" onClick={() => { setContextOpen(false); setToolsOpen(false); setProjectOpen(true); }}>
-                      <Folder className="size-4" /> Projects
-                    </button>
-                    <ComposerEffortControl mode={composerEffort} onChoose={chooseComposerEffort} consultModules={consultModules} consultModel={consultModel} onConsultModel={chooseConsultModel} />
-                    <label className="inline-flex min-h-11 items-center gap-2 text-xs text-muted">
-                      Style
-                      <select aria-label="Conversation style" value={defaultPersonalityId} onChange={(event) => setDefaultPersonalityId(event.target.value as PersonalityId)} className="min-h-11 rounded-panel border border-line bg-transparent px-2 text-sm text-fg">
-                        {CONVERSATIONAL_PERSONALITIES.map((profile) => <option key={profile.id} value={profile.id}>{profile.label}</option>)}
-                      </select>
-                    </label>
+                      <div className="composer-more__menu" ref={(node) => pinShelf(node)} data-testid="home-composer-more-menu">
+                        <MenuCluster label="Files">
+                          <button type="button" className="inline-flex items-center gap-2 rounded-panel border border-line px-3 text-sm" style={menuChip} onClick={() => fileRef.current?.click()}>
+                            <Paperclip className="size-4" /> Attach
+                          </button>
+                          <button type="button" className="inline-flex items-center gap-2 rounded-panel border border-line px-3 text-sm" style={menuChip} onClick={() => imageInputRef.current?.click()}>
+                            <Image className="size-4" /> Image
+                          </button>
+                          <button type="button" className="inline-flex items-center gap-2 rounded-panel border border-line px-3 text-sm" style={menuChip} onClick={() => setCameraOpen(true)}>
+                            <Camera className="size-4" /> Camera
+                          </button>
+                          {driveConnected ? (
+                            <button type="button" className="inline-flex items-center gap-2 rounded-panel border border-line px-3 text-sm" style={menuChip} onClick={() => setCloudPickerOpen(true)}>
+                              Drive
+                            </button>
+                          ) : null}
+                        </MenuCluster>
+                        <MenuCluster label="Create">
+                          <button
+                            type="button"
+                            className="inline-flex items-center gap-2 rounded-panel border border-line px-3 text-sm"
+                            style={menuChip}
+                            disabled={busy || ws.halted}
+                            onClick={() => {
+                              const viaCmd = parseImagineCommand(draft);
+                              const prompt = viaCmd !== null ? viaCmd : draft.trim();
+                              void runImagine(prompt || undefined, null);
+                            }}
+                          >
+                            Imagine
+                          </button>
+                          <AttachmentChips images={pendingImages} onRemove={(index) => setPendingImages((prev) => prev.filter((_, i) => i !== index))} onEditImagine={(image) => openImagineEditor(image.dataUrl)} />
+                        </MenuCluster>
+                        <MenuCluster label="Workspace">
+                          <button
+                            type="button"
+                            className="inline-flex items-center gap-2 rounded-panel border border-line px-3 text-sm"
+                            style={menuChip}
+                            onClick={() => {
+                              setToolsOpen(false);
+                              setContextOpen((open) => !open);
+                              document.querySelectorAll("details.composer-more[open]").forEach((node) => node.removeAttribute("open"));
+                            }}
+                          >
+                            <Database className="size-4" /> Add Context
+                          </button>
+                          <button
+                            type="button"
+                            className="inline-flex items-center gap-2 rounded-panel border border-line px-3 text-sm"
+                            style={menuChip}
+                            onClick={() => {
+                              setContextOpen(false);
+                              setToolsOpen((open) => !open);
+                              document.querySelectorAll("details.composer-more[open]").forEach((node) => node.removeAttribute("open"));
+                            }}
+                          >
+                            <Wrench className="size-4" /> Tools
+                          </button>
+                          <button type="button" className="inline-flex items-center gap-2 rounded-panel border border-line px-3 text-sm" style={menuChip} onClick={() => { setContextOpen(false); setToolsOpen(false); setView("agents"); }}>
+                            <Bot className="size-4" /> Agents
+                          </button>
+                          <button type="button" className="inline-flex items-center gap-2 rounded-panel border border-line px-3 text-sm" style={menuChip} onClick={() => { setContextOpen(false); setToolsOpen(false); setProjectOpen(true); }}>
+                            <Folder className="size-4" /> Projects
+                          </button>
+                        </MenuCluster>
+                        <MenuCluster label="Chat" wide>
+                          <ComposerEffortControl mode={composerEffort} onChoose={chooseComposerEffort} consultModules={consultModules} consultModel={consultModel} onConsultModel={chooseConsultModel} />
+                          <label className="inline-flex min-h-11 items-center gap-2 text-xs text-muted" style={{ flex: "1 1 12rem", maxWidth: "100%" }}>
+                            Style
+                            <select aria-label="Conversation style" value={defaultPersonalityId} onChange={(event) => setDefaultPersonalityId(event.target.value as PersonalityId)} className="min-h-11 rounded-panel border border-line bg-transparent px-2 text-sm text-fg">
+                              {CONVERSATIONAL_PERSONALITIES.map((profile) => <option key={profile.id} value={profile.id}>{profile.label}</option>)}
+                            </select>
+                          </label>
+                        </MenuCluster>
                       </div>
                     </details>
                     <div className="legacy-composer-voice"><VoiceLevelMeter level={voiceLevel} listening={voiceListening} className="mr-1" /><BrowserDictationControl
@@ -6572,8 +6645,8 @@ export function CommandApp() {
                 )}
               </section>
 
-              <div className="gpt-starters">
-                <p className="mb-1 text-xs uppercase tracking-wide text-muted">Start</p>
+              <div className="gpt-starters" ref={(node) => pinShelf(node, "100%", false)} data-testid="start-shelf">
+                <p className="mb-1 text-xs uppercase tracking-wide text-muted" style={{ flex: "1 1 100%" }}>Start</p>
                 <button type="button" aria-pressed={homeAction === "image"} onClick={() => { setHomeAction("image"); setCommandMode("ask"); }}>
                   <Image className="size-5" /> Create an image
                 </button>
@@ -7817,9 +7890,9 @@ export function CommandApp() {
                       <h3 className="min-w-0">{section.group}</h3>
                       <ActionsButton label={`${section.group} section`} onOpen={() => setSettingsMenu(section.group)} />
                     </div>
-                    <div className="settings-index">
+                    <div className="settings-index" ref={(node) => pinShelf(node, "100%", false)}>
                     {section.items.map(([id, label, detail, open]) => (
-                      <button key={id} type="button" className="adrian-row" onClick={open}>
+                      <button key={id} type="button" className="adrian-row" style={{ ...menuChip, flex: "1 1 16rem", minWidth: "14rem" }} onClick={open}>
                         <img src={`/brand/logo-mark.jpg`} alt="" width={28} height={28} />
                         <span>
                           <strong>{label}</strong>
@@ -9058,9 +9131,11 @@ function ChatPane({
             </p>
           )}
           {tools && (
-            <div className="mt-2 space-y-1 rounded-panel border border-line bg-bg p-3 text-sm">
-              <button type="button" className="block min-h-11 text-left text-accent" onClick={onDoctor}>Run REA doctor</button>
-              <button type="button" className="block min-h-11 text-left text-accent" onClick={onAnalyze}>Inspect a file with REA</button>
+            <div className="mt-2 rounded-panel border border-line bg-bg p-3 text-sm">
+              <MenuCluster label="Inspect">
+                <button type="button" className="min-h-11 rounded-panel border border-line px-3 text-left text-sm" style={menuChip} onClick={onDoctor}>Run REA doctor</button>
+                <button type="button" className="min-h-11 rounded-panel border border-line px-3 text-left text-sm" style={menuChip} onClick={onAnalyze}>Inspect a file with REA</button>
+              </MenuCluster>
               <p className="text-xs text-muted">Chat stays on Grok. Imagine generates images via grok-imagine-image. Video is not called.</p>
             </div>
           )}
@@ -9070,37 +9145,48 @@ function ChatPane({
               event.stopPropagation();
               event.currentTarget.open = false;
               event.currentTarget.querySelector("summary")?.focus();
+            }} onToggle={(event) => {
+              const menu = event.currentTarget.querySelector("[data-testid='composer-more-menu']");
+              if (event.currentTarget.open && menu instanceof HTMLElement) pinShelf(menu);
             }}>
               <summary>More</summary>
-              <div className="composer-more__menu">
-                <button type="button" className="inline-flex min-h-11 items-center gap-2 rounded-panel border border-line/80 bg-white/5 px-3 text-sm" onClick={onAttach}>
-                  <Paperclip className="size-4" /> Attach
-                </button>
-                <button type="button" className="inline-flex min-h-11 items-center gap-2 rounded-panel border border-line/80 bg-white/5 px-3 text-sm" onClick={onAttachImage}>
-                  <Image className="size-4" /> Image
-                </button>
-                <button type="button" className="inline-flex min-h-11 items-center gap-2 rounded-panel border border-line/80 bg-white/5 px-3 text-sm" onClick={onOpenCamera}>
-                  <Camera className="size-4" /> Camera
-                </button>
-                {driveConnected ? (
-                  <button type="button" className="inline-flex min-h-11 items-center gap-2 rounded-panel border border-line/80 bg-white/5 px-3 text-sm" onClick={onOpenCloud}>
-                    Drive
+              <div className="composer-more__menu" ref={(node) => pinShelf(node)} data-testid="composer-more-menu">
+                <MenuCluster label="Files">
+                  <button type="button" className="inline-flex items-center gap-2 rounded-panel border border-line/80 bg-white/5 px-3 text-sm" style={menuChip} onClick={onAttach}>
+                    <Paperclip className="size-4" /> Attach
                   </button>
-                ) : null}
-                <button type="button" className="inline-flex min-h-11 items-center gap-2 rounded-panel border border-line/80 bg-white/5 px-3 text-sm" disabled={busy || halted} onClick={onImagine}>
-                  Imagine
-                </button>
-                <button type="button" className="min-h-11 rounded-panel border border-line/80 bg-white/5 px-3 text-sm" onClick={() => { setTools(false); setContext((open) => !open); document.querySelectorAll("details.composer-more[open]").forEach((node) => node.removeAttribute("open")); }}>Add Context</button>
-                <button type="button" className="min-h-11 rounded-panel border border-line/80 bg-white/5 px-3 text-sm" onClick={() => { setContext(false); setTools((open) => !open); document.querySelectorAll("details.composer-more[open]").forEach((node) => node.removeAttribute("open")); }}>Tools</button>
-                <button type="button" className="min-h-11 rounded-panel border border-line/80 bg-white/5 px-3 text-sm" onClick={onDelete} disabled={!active}>Delete</button>
-                <button type="button" className="min-h-11 rounded-panel border border-line/80 bg-white/5 px-3 text-sm" onClick={() => onMemoryChange(memoryChoice === "on" ? "off" : "on")} disabled={!active || busy || halted} aria-label={memoryChoice === "on" ? "Memory on for this chat" : "Don't use memory for this chat"}>{memoryChoice === "on" ? "Memory on" : "Memory off"}</button>
-                <ComposerEffortControl mode={composerEffort} onChoose={onComposerEffort} consultModules={consultModules} consultModel={consultModel} onConsultModel={onConsultModel} />
-                <label className="inline-flex min-h-11 items-center gap-2 text-xs text-muted">
-                  Style
-                  <select aria-label="Conversation style" value={personalityId} disabled={!active || busy} onChange={(event) => onPersonalityChange(event.target.value as PersonalityId)} className="min-h-11 rounded-panel border border-line bg-transparent px-2 text-sm text-fg">
-                    {CONVERSATIONAL_PERSONALITIES.map((profile) => <option key={profile.id} value={profile.id}>{profile.label}</option>)}
-                  </select>
-                </label>
+                  <button type="button" className="inline-flex items-center gap-2 rounded-panel border border-line/80 bg-white/5 px-3 text-sm" style={menuChip} onClick={onAttachImage}>
+                    <Image className="size-4" /> Image
+                  </button>
+                  <button type="button" className="inline-flex items-center gap-2 rounded-panel border border-line/80 bg-white/5 px-3 text-sm" style={menuChip} onClick={onOpenCamera}>
+                    <Camera className="size-4" /> Camera
+                  </button>
+                  {driveConnected ? (
+                    <button type="button" className="inline-flex items-center gap-2 rounded-panel border border-line/80 bg-white/5 px-3 text-sm" style={menuChip} onClick={onOpenCloud}>
+                      Drive
+                    </button>
+                  ) : null}
+                </MenuCluster>
+                <MenuCluster label="Create">
+                  <button type="button" className="inline-flex items-center gap-2 rounded-panel border border-line/80 bg-white/5 px-3 text-sm" style={menuChip} disabled={busy || halted} onClick={onImagine}>
+                    Imagine
+                  </button>
+                </MenuCluster>
+                <MenuCluster label="Workspace">
+                  <button type="button" className="min-h-11 rounded-panel border border-line/80 bg-white/5 px-3 text-sm" style={menuChip} onClick={() => { setTools(false); setContext((open) => !open); document.querySelectorAll("details.composer-more[open]").forEach((node) => node.removeAttribute("open")); }}>Add Context</button>
+                  <button type="button" className="min-h-11 rounded-panel border border-line/80 bg-white/5 px-3 text-sm" style={menuChip} onClick={() => { setContext(false); setTools((open) => !open); document.querySelectorAll("details.composer-more[open]").forEach((node) => node.removeAttribute("open")); }}>Tools</button>
+                </MenuCluster>
+                <MenuCluster label="Chat" wide>
+                  <button type="button" className="min-h-11 rounded-panel border border-line/80 bg-white/5 px-3 text-sm" style={menuChip} onClick={onDelete} disabled={!active}>Delete</button>
+                  <button type="button" className="min-h-11 rounded-panel border border-line/80 bg-white/5 px-3 text-sm" style={menuChip} onClick={() => onMemoryChange(memoryChoice === "on" ? "off" : "on")} disabled={!active || busy || halted} aria-label={memoryChoice === "on" ? "Memory on for this chat" : "Don't use memory for this chat"}>{memoryChoice === "on" ? "Memory on" : "Memory off"}</button>
+                  <ComposerEffortControl mode={composerEffort} onChoose={onComposerEffort} consultModules={consultModules} consultModel={consultModel} onConsultModel={onConsultModel} />
+                  <label className="inline-flex min-h-11 items-center gap-2 text-xs text-muted" style={{ flex: "1 1 12rem", maxWidth: "100%" }}>
+                    Style
+                    <select aria-label="Conversation style" value={personalityId} disabled={!active || busy} onChange={(event) => onPersonalityChange(event.target.value as PersonalityId)} className="min-h-11 rounded-panel border border-line bg-transparent px-2 text-sm text-fg">
+                      {CONVERSATIONAL_PERSONALITIES.map((profile) => <option key={profile.id} value={profile.id}>{profile.label}</option>)}
+                    </select>
+                  </label>
+                </MenuCluster>
               </div>
             </details>
             <div className="legacy-composer-voice"><VoiceLevelMeter level={voiceLevel} listening={voiceListening} />
@@ -9221,8 +9307,10 @@ function ChatPane({
         <details className="rail-pack">
           <summary>This chat</summary>
           <section className="glass-panel rounded-panel p-3">
-          <button type="button" onClick={() => onComposerMode("ask")} className={`mb-2 min-h-11 w-full rounded-panel px-3 text-left text-sm ${mode === "ask" ? "bg-accent text-accent-ink tile-active" : "bg-surface-2/80"}`}>Ask</button>
-          <button type="button" onClick={() => onComposerMode("automatic")} className={`min-h-11 w-full rounded-panel px-3 text-left text-sm ${mode === "automatic" ? "bg-accent text-accent-ink tile-active" : "bg-surface-2/80"}`}>Automatic</button>
+          <div className="flex flex-wrap gap-2">
+            <button type="button" onClick={() => onComposerMode("ask")} className={`min-h-11 rounded-panel px-3 text-left text-sm ${mode === "ask" ? "bg-accent text-accent-ink tile-active" : "bg-surface-2/80"}`} style={menuChip}>Ask</button>
+            <button type="button" onClick={() => onComposerMode("automatic")} className={`min-h-11 rounded-panel px-3 text-left text-sm ${mode === "automatic" ? "bg-accent text-accent-ink tile-active" : "bg-surface-2/80"}`} style={menuChip}>Automatic</button>
+          </div>
           </section>
           <section className="glass-panel rounded-panel p-3" data-testid="memory-chat-toggle-rail">
           <MemoryChatToggle memory={memoryChoice} onChange={onMemoryChange} disabled={!active || busy || halted} />
@@ -9378,7 +9466,7 @@ function ComposerEffortControl({
         ))}
         <span className="rounded-full border border-line px-2 py-0.5 text-xs text-muted">{resolved.badge}</span>
       </div>
-      <p className="mt-1 text-xs text-muted">
+      <p className="mt-1 text-xs text-muted" style={{ maxWidth: "100%", whiteSpace: "normal", overflowWrap: "anywhere" }}>
         {current?.detail}
         {resolved.notice ? ` ${resolved.notice}` : ""}
       </p>

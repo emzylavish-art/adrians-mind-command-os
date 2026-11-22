@@ -130,9 +130,14 @@ export function HandyDictation() {
 
   function translate() {
     const text = field.current?.value.trim() || "";
-    const result = translateVoice(text, target);
-    setTranslation(result.text || "");
-    setNote(result.note);
+    setNote("Translator is asking Opus-MT. Nothing is sent to Google.");
+    void translateVoice(text, target).then((result) => {
+      setTranslation(result.text || "");
+      setNote(result.note);
+    }).catch(() => {
+      setTranslation("");
+      setNote("Opus-MT is not running on this machine. Nothing was sent to Google.");
+    });
   }
 
   function pinRow(node: HTMLDivElement | null) {

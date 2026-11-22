@@ -1,4 +1,4 @@
-import { useEffect, useRef, type ReactNode } from "react";
+import { useEffect, useRef, type CSSProperties, type ReactNode } from "react";
 import { createPortal } from "react-dom";
 
 export function MenuMotion() {
@@ -62,6 +62,84 @@ export function MenuGroup({ label, first = false, children }: { label: string; f
   );
 }
 
+export const menuChip: CSSProperties = {
+  display: "inline-flex",
+  flex: "1 1 7.5rem",
+  alignItems: "center",
+  gap: "0.4rem",
+  width: "auto",
+  maxWidth: "100%",
+  minWidth: "6.5rem",
+  minHeight: "2.75rem",
+};
+
+export function pinShelf(node: HTMLElement | null, width = "min(36rem, calc(100vw - 1.25rem))", bound = true) {
+  if (!node) return;
+  node.dataset.menuShelf = "1";
+  node.style.setProperty("display", "flex", "important");
+  node.style.setProperty("flex-direction", "row", "important");
+  node.style.setProperty("flex-wrap", "wrap", "important");
+  node.style.setProperty("align-items", "flex-start", "important");
+  node.style.setProperty("align-content", "flex-start", "important");
+  node.style.setProperty("gap", "0.65rem", "important");
+  node.style.setProperty("width", width, "important");
+  node.style.setProperty("max-width", width, "important");
+  node.style.setProperty("min-width", "0", "important");
+  node.style.setProperty("box-sizing", "border-box", "important");
+  if (bound) {
+    node.style.setProperty("max-height", "min(70vh, 32rem)", "important");
+    node.style.setProperty("overflow", "auto", "important");
+  }
+  requestAnimationFrame(() => {
+    const box = node.getBoundingClientRect();
+    if (box.width < 8) return;
+    const margin = 8;
+    if (box.right > window.innerWidth - margin) {
+      const next = Math.max(180, Math.floor(window.innerWidth - margin - Math.max(box.left, margin)));
+      node.style.setProperty("width", `${next}px`, "important");
+      node.style.setProperty("max-width", `${next}px`, "important");
+    }
+  });
+}
+
+export function MenuShelf({
+  children,
+  width = "100%",
+  bound = false,
+  testId = "menu-shelf",
+}: {
+  children: ReactNode;
+  width?: string;
+  bound?: boolean;
+  testId?: string;
+}) {
+  return (
+    <div ref={(node) => pinShelf(node, width, bound)} data-testid={testId}>
+      {children}
+    </div>
+  );
+}
+
+export function MenuCluster({ label, wide = false, children }: { label: string; wide?: boolean; children: ReactNode }) {
+  return (
+    <section
+      aria-label={label}
+      data-menu-cluster={label}
+      style={{
+        display: "flex",
+        flex: wide ? "1 1 18rem" : "1 1 16rem",
+        flexDirection: "column",
+        gap: "0.35rem",
+        minWidth: "min(100%, 15rem)",
+        maxWidth: "100%",
+      }}
+    >
+      <p style={{ margin: 0, padding: "0.1rem 0.15rem 0", fontSize: "11px", fontWeight: 650, letterSpacing: "0.12em", textTransform: "uppercase", opacity: 0.62 }}>{label}</p>
+      <div style={{ display: "flex", flexWrap: "wrap", gap: "0.35rem", minWidth: 0, maxWidth: "100%" }}>{children}</div>
+    </section>
+  );
+}
+
 export function placeNear(card: HTMLElement, anchor: DOMRect, width = 320, align: "start" | "end" = "end") {
   const margin = 12;
   const w = Math.min(width, window.innerWidth - margin * 2);
@@ -113,6 +191,7 @@ export function AnchoredCard({
     return () => document.removeEventListener("keydown", onKey);
   }, [anchor, align, onClose, width, children]);
   if (typeof document === "undefined") return null;
+  const light = document.documentElement.dataset.theme === "light";
   const card = (
     <div
       ref={panel}
@@ -122,6 +201,20 @@ export function AnchoredCard({
       id={testId}
       data-testid={testId}
       className="adrian-menu"
+      style={{
+        position: "fixed",
+        zIndex: 1201,
+        width: `min(${width}px, calc(100vw - 24px))`,
+        maxWidth: "calc(100vw - 24px)",
+        backgroundColor: light ? "#f4f4f5" : "#1c1c1e",
+        color: light ? "#18181b" : "#fafafa",
+        border: light ? "1px solid rgba(0,0,0,0.08)" : "1px solid rgba(255,255,255,0.12)",
+        borderRadius: 22,
+        boxShadow: light ? "0 24px 60px rgba(15, 23, 42, 0.18)" : "0 28px 70px rgba(0,0,0,0.55)",
+        overflow: "auto",
+        maxHeight: "min(70vh, 32rem)",
+        padding: 8,
+      }}
       onMouseDown={(event) => event.stopPropagation()}
     >
       {children}

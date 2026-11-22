@@ -1,13 +1,13 @@
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { createPortal } from "react-dom";
 import { CONVERSATION_ACTIONS, type ConversationAction } from "@/lib/mind/conversation-actions";
-import { finishMenu, MenuMotion } from "@/components/mind/menu-material";
+import { finishMenu, MenuCluster, MenuMotion, MenuShelf, menuChip } from "@/components/mind/menu-material";
 
-const GROUPS: { ids: ConversationAction[] }[] = [
-  { ids: ["project"] },
-  { ids: ["copy", "rename", "files", "scheduled"] },
-  { ids: ["pin", "favorite", "archive", "quote"] },
-  { ids: ["delete"] },
+const GROUPS: { label: string; ids: ConversationAction[] }[] = [
+  { label: "Move", ids: ["project"] },
+  { label: "Edit", ids: ["copy", "rename", "files", "scheduled"] },
+  { label: "Keep", ids: ["pin", "favorite", "archive", "quote"] },
+  { label: "Remove", ids: ["delete"] },
 ];
 
 let anchorRect: DOMRect | null = null;
@@ -57,7 +57,7 @@ export function ActionsButton({ label, onOpen }: { label: string; onOpen: () => 
 
 function placeCard(card: HTMLElement) {
   const margin = 12;
-  const width = Math.min(340, window.innerWidth - margin * 2);
+  const width = Math.min(520, window.innerWidth - margin * 2);
   card.style.setProperty("width", `${width}px`, "important");
   const height = card.getBoundingClientRect().height || 360;
   const anchor = anchorRect;
@@ -176,10 +176,9 @@ export function ConversationMenu({
           <button type="submit" className="min-h-11 rounded-2xl bg-accent text-sm font-semibold text-accent-ink">Save name</button>
         </form>
       ) : (
-        <div>
-          {GROUPS.map((group, index) => (
-            <div key={group.ids.join("-")}>
-              {index > 0 ? <div className="mx-3 my-1 border-t border-line" data-testid="menu-line" /> : null}
+        <MenuShelf width="100%" testId="conversation-shelf">
+          {GROUPS.map((group) => (
+            <MenuCluster key={group.label} label={group.label} wide={group.label === "Edit" || group.label === "Keep"}>
               {group.ids.map((id) => {
                 const item = byId.get(id);
                 if (!item) return null;
@@ -187,8 +186,8 @@ export function ConversationMenu({
                   <button
                     key={item.id}
                     type="button"
-                    className="flex min-h-11 w-full items-center gap-3 rounded-2xl px-3 text-left text-sm"
-                    style={item.id === "delete" ? { color: "rgb(248 113 113)" } : undefined}
+                    className="flex min-h-11 items-center gap-3 rounded-2xl px-3 text-left text-sm"
+                    style={{ ...menuChip, ...(item.id === "delete" ? { color: "rgb(248 113 113)" } : {}) }}
                     onClick={() => {
                       if (item.id === "project") { setProjectOpen(true); return; }
                       if (item.id === "rename") { setRenaming(true); return; }
@@ -202,13 +201,13 @@ export function ConversationMenu({
                 );
               })}
               {group.ids.includes("quote") ? extras.map((extra) => (
-                <button key={extra.label} type="button" className="flex min-h-11 w-full items-center rounded-2xl px-3 text-left text-sm" onClick={() => { extra.onPick(); onClose(); }}>
+                <button key={extra.label} type="button" className="flex min-h-11 items-center rounded-2xl px-3 text-left text-sm" style={menuChip} onClick={() => { extra.onPick(); onClose(); }}>
                   {extra.label}
                 </button>
               )) : null}
-            </div>
+            </MenuCluster>
           ))}
-        </div>
+        </MenuShelf>
       )}
     </ActionOverlay>
   );

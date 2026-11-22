@@ -8,7 +8,7 @@
 
 import type { ReactNode } from "react";
 import type { LiveSpeakState } from "./live-speak-control";
-import { finishMenu } from "@/components/mind/menu-material";
+import { finishMenu, pinShelf } from "@/components/mind/menu-material";
 
 export type { LiveSpeakState };
 
@@ -139,13 +139,14 @@ export function LiveVoiceBar(props: LiveVoiceBarProps) {
             <span className="lvb-ico lvb-ico--plus" aria-hidden="true" />
           </button>
           {props.plusOpen ? (
-            <ul ref={finishMenu} className="live-voice-bar__plus-menu" role="menu" aria-label="Add media">
+            <ul ref={(node) => { finishMenu(node); pinShelf(node, "min(22rem, calc(100vw - 1.5rem))"); }} className="live-voice-bar__plus-menu" role="menu" aria-label="Add media">
               {PLUS_ITEMS.map((item) => (
-                <li key={item.id} role="none">
+                <li key={item.id} role="none" style={{ display: "flex", flex: "1 1 6.5rem", minWidth: "6.5rem", maxWidth: "100%" }}>
                   <button
                     type="button"
                     role="menuitem"
                     className="live-voice-bar__plus-item"
+                    style={{ width: "100%" }}
                     data-testid={`live-voice-bar-attach-${item.id}`}
                     onClick={() => props.onPlusItem?.(item.id)}
                   >
