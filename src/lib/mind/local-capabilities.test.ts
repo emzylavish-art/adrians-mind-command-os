@@ -18,7 +18,7 @@ describe("local capabilities", () => {
     assert.equal(JSON.parse(packed ?? "{}").goal, "list files");
     assert.match(runLocalCommand("check grant") ?? "", /revoked/);
     assert.match(runLocalCommand("dry run rename") ?? "", /Executed: false/);
-    assert.match(runLocalCommand("list capabilities") ?? "", /Not verified on a device/);
+    assert.match(runLocalCommand("list capabilities") ?? "", /Not verified on the HP EliteBook or iPhone/);
   });
 
   it("stores a note, refuses release without consent, then releases it", () => {

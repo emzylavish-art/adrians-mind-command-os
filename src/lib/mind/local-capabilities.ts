@@ -97,7 +97,7 @@ export function runLocalCommand(text: string): string | null {
   if (lower === "list capabilities") {
     return [
       "Available here: delegated grants, obligations, task envelope, dry-run reversibility, purchase refusal, wipe refusal, reply actions.",
-      "Not verified on a device: screen, mouse finding, headset, sensors, backup restore.",
+      "Not verified on the HP EliteBook or iPhone: screen, button search, headset, sensors, backup restore.",
     ].join(" ");
   }
   if (lower === "list obligations") {

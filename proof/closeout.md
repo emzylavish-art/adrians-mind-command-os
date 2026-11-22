@@ -21,4 +21,6 @@ A GitHub repository does not complete these. They stay refused:
 - A worker after the app closes still does not start.
 - Linux still refuses click and `look at my screen`.
 
-The public update feed is still build 7. The old installer hash is still refused. The Windows app and the iPhone were not launched.
+The public update feed is still build 7. Source `LOCAL_BUILD` is 8. Those numbers are not the same, and the feed was not published. The old installer hash is still refused. The Windows app and the iPhone were not launched.
+
+The packed `server/index.mjs` is a Vercel fetch handler. It does not listen on a port, and it does not name `turn.server-kmb61BT-.mjs`. The desktop starts that file. It was not replaced, because a guessed listener would not be the real server. That is an error, not a finished local app.
