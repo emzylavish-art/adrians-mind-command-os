@@ -30,8 +30,8 @@ export const publishedManifest = {
   version: LOCAL_VERSION,
   build: LOCAL_BUILD,
   download: INSTALLER_PATH,
-  sha256: "3cdb5417ea615331e9b744174678bc86df57a57c5da15351329b075dfa3be5d3",
-  size: 110196228,
+  sha256: "7399cbd35c3fe8491a9b29f2881f2df7bcfa2c386b2629277060e5660dacbd92",
+  size: 110204024,
 };
 
 export function isAllowedDownloadUrl(value: string, hop = 0): boolean {
