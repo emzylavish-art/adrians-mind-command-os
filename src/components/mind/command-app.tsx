@@ -7024,7 +7024,8 @@ export function CommandApp() {
                 );
               }}
               onNew={openChat}
-              onSpeak={(text, messageId) => void speak(text, messageId ?? "")}
+             onSpeak={(text, messageId) => void speak(text, messageId ?? "")}
+              onStopSpeak={interruptSpeakPlayback}
               onOpenSpeak={openSpeakStage}
               onOpenBuild={(text) => {
                 sessionStorage.setItem("adrian-build-draft", text.slice(0, 4000));
@@ -8822,8 +8823,9 @@ function ChatPane({
   onConversationAction,
   onSave,
   onNew,
-  onSpeak,
-  onOpenSpeak,
+ onSpeak,
+  onStopSpeak,
+ onOpenSpeak,
   onOpenBuild,
   onOpenHuman,
   onListen,
@@ -8929,8 +8931,9 @@ function ChatPane({
   onConversationAction?: (action: ConversationAction, ids: string[], extra?: { projectId?: string | null; title?: string }) => void;
   onSave: (content: string) => void;
   onNew: () => void;
-  onSpeak: (text: string, messageId?: string) => void;
-  onOpenSpeak?: () => void;
+ onSpeak: (text: string, messageId?: string) => void;
+  onStopSpeak?: () => void;
+ onOpenSpeak?: () => void;
   onOpenBuild: (text: string) => void;
   onOpenHuman: (text: string) => void;
   onListen: () => void;
@@ -9127,7 +9130,7 @@ function ChatPane({
           {active?.messages.map((msg) => {
             const last = active.messages.at(-1);
             return (
-            <article key={msg.id} className={`w-full max-w-none rounded-panel border border-line/70 px-3 py-2 text-sm shadow-[0_10px_28px_rgb(0_0_0/0.28)] ${msg.role === "user" ? "bg-surface-2/90" : "bg-surface/90 backdrop-blur"}`}>
+            <article key={msg.id} className="w-full max-w-none px-1 py-2 text-sm">
               <p className="mb-1 text-xs text-muted">{msg.role === "user" ? "You" : msg.model || "Grok 4.5"} · {stamp(msg.at)}</p>
               {editingId === msg.id ? (
                 <form
@@ -9150,10 +9153,10 @@ function ChatPane({
                   {msg.videoUrl ? <video className="owner-video mt-2" src={msg.videoUrl} controls playsInline preload="metadata" /> : null}
                 </>
               )}
-              <div className="mt-2 flex flex-wrap gap-3">
+              <div className="mt-2 flex flex-wrap items-center gap-2" role="toolbar" aria-label="Reply actions">
                 <button
                   type="button"
-                  className="min-h-11 text-xs text-accent"
+                  className="min-h-11 rounded-full px-3 text-xs"
                   onClick={() => {
                     void navigator.clipboard?.writeText(msg.content).then(() => {
                       setCopiedId(msg.id);
@@ -9163,15 +9166,23 @@ function ChatPane({
                   {copiedId === msg.id ? "Copied" : "Copy"}
                 </button>
                 {msg.role === "assistant" && (
-                  <button type="button" className="min-h-11 text-xs text-accent" onClick={() => onSpeak(msg.content, msg.id)} disabled={speaking}>
-                    {speaking ? "Speaking" : "Read aloud"}
+                  <button type="button" className="min-h-11 rounded-full px-3 text-xs" onClick={() => (speaking ? onStopSpeak?.() : onSpeak(msg.content, msg.id))}>
+                    {speaking ? "Stop" : "Read aloud"}
+                  </button>
+                )}
+                {msg.role === "assistant" && last?.id === msg.id && (
+                  <button type="button" className="min-h-11 rounded-full px-3 text-xs" onClick={busy ? onStop : onRegenerate} disabled={halted}>
+                    {busy ? "Stop generating" : "Regenerate"}
                   </button>
                 )}
                 {msg.role === "assistant" && (
-                  <>
-                    <button type="button" className="min-h-11 text-xs text-accent" onClick={() => onOpenBuild(msg.content)}>Open in Build</button>
-                    <button type="button" className="min-h-11 text-xs text-accent" onClick={() => onOpenHuman(msg.content)}>Open in Intelligence</button>
-                  </>
+                  <details className="relative">
+                    <summary className="min-h-11 cursor-pointer list-none rounded-full px-3 text-xs">More</summary>
+                    <div className="absolute bottom-12 left-0 z-20 flex min-w-44 flex-col rounded-2xl border border-line bg-bg p-1">
+                      <button type="button" className="min-h-11 px-3 text-left text-xs" onClick={() => onOpenBuild(msg.content)}>Open in Build</button>
+                      <button type="button" className="min-h-11 px-3 text-left text-xs" onClick={() => onOpenHuman(msg.content)}>Open in Intelligence</button>
+                    </div>
+                  </details>
                 )}
                 {msg.role === "assistant" && (
                   <span role="group" aria-label="Rate this reply" className="flex flex-wrap items-center gap-1 text-xs text-muted">
@@ -9189,9 +9200,6 @@ function ChatPane({
                       </button>
                     ))}
                   </span>
-                )}
-                {msg.role === "assistant" && last?.id === msg.id && (
-                  <button type="button" className="min-h-11 text-xs text-accent" onClick={onRegenerate} disabled={busy || halted}>Regenerate</button>
                 )}
                 {msg.role === "user" && (
                   <button
@@ -9306,7 +9314,6 @@ function ChatPane({
             <button type="button" className="suggestion-chip shrink-0" onClick={() => setDraft("Go deeper on that")}>Go deeper</button>
             <button type="button" className="suggestion-chip shrink-0" onClick={() => setDraft("Make that shorter")}>Make it shorter</button>
             <button type="button" className="suggestion-chip shrink-0" onClick={() => setDraft("Turn that into an image")}>Turn that into an image</button>
-            <button type="button" className="suggestion-chip shrink-0" disabled={speaking} onClick={() => onSpeak(lastReply.content, lastReply.id)}>Read aloud</button>
           </div>
         ) : null}
         <form
@@ -9434,8 +9441,8 @@ function ChatPane({
             <button type="button" className="grid size-11 place-items-center rounded-panel border border-line text-muted" onClick={onToggleMute} aria-label={voiceMuted ? "Unmute microphone" : "Mute microphone"} aria-pressed={voiceMuted} disabled={!voiceListening} data-testid="voice-mute-mobile">
               {voiceMuted ? <MicOff className="size-4" /> : <Mic className="size-4" />}
             </button>
-            <button type="button" className="min-h-11 rounded-panel border border-line/80 bg-white/5 px-3 text-sm" disabled={!lastReply || speaking} onClick={() => lastReply && onSpeak(lastReply.content, lastReply.id)}>
-              {speaking ? "Reading" : "Read aloud"}
+            <button type="button" className="min-h-11 rounded-panel border border-line/80 bg-white/5 px-3 text-sm" disabled={!lastReply && !speaking} onClick={() => (speaking ? onStopSpeak?.() : lastReply && onSpeak(lastReply.content, lastReply.id))}>
+              {speaking ? "Stop" : "Read aloud"}
             </button></div>
             
             <button type="submit" disabled={halted || (busy ? !draft.trim() : (!draft.trim() && pendingImages.length === 0 && !stagedName))} className="composer-send min-h-11 rounded-panel bg-accent px-4 text-sm font-semibold text-accent-ink disabled:opacity-50">{busy ? "Cue" : "Send"}</button>
