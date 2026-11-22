@@ -918,6 +918,10 @@ function keepBannerClear() {
 function keepGuideAboveBar() {
   const guide = document.querySelector("[data-testid='first-steps']");
   if (!(guide instanceof HTMLElement)) return;
+  if (!window.matchMedia("(max-width: 767px)").matches) {
+    guide.style.removeProperty("margin-top");
+    return;
+  }
   const dock = document.querySelector(".gpt-home [data-composer='floating']");
   const handy = document.querySelector("[data-testid='handy-dictation']");
   const limits: number[] = [];

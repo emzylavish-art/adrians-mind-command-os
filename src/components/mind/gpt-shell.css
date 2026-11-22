@@ -205,6 +205,17 @@ html[data-theme="light"] .gpt-rail nav a.nav-item {
   justify-content: flex-end;
 }
 
+@media (min-width: 768px) {
+  .gpt-home [aria-label="Recent"] {
+    display: none !important;
+  }
+}
+
+.gpt-home .masthead { order: 1; }
+.gpt-home [data-testid="first-steps"] { order: 2; position: relative; z-index: 1; }
+.gpt-home .gpt-starters { order: 3; }
+.gpt-home [data-composer="floating"] { order: 4; margin-top: auto; }
+
 .gpt-home > :not(.gpt-starters):not(.masthead):not([data-composer="floating"]) {
   display: none !important;
 }
