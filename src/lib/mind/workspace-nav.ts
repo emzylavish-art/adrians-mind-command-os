@@ -24,6 +24,12 @@ export const WORKSPACE_ROUTE_LINKS = [
     href: "/social",
     iconSrc: "/icons/systems.svg",
   },
+  {
+    id: "gpt-wrapper",
+    label: "GPT wrapper",
+    href: "/gpt-wrapper",
+    iconSrc: "/icons/systems.svg",
+  },
 ] as const;
 
 export type WorkspaceRouteLink = (typeof WORKSPACE_ROUTE_LINKS)[number];

@@ -504,11 +504,19 @@ function keepComposerInside() {
   }
   document.querySelectorAll(".gpt-home form, form.thread-composer, section.composer-dock, [data-composer='floating']").forEach((node) => {
     if (!(node instanceof HTMLElement)) return;
-    node.style.setProperty("position", "relative", "important");
-    node.style.setProperty("left", "0", "important");
-    node.style.setProperty("right", "auto", "important");
+    const inThread = node.classList.contains("thread-composer") && document.querySelector(".shell")?.getAttribute("data-view") === "chat";
+    const wide = window.innerWidth >= 768;
+    node.style.setProperty("position", inThread ? "fixed" : "relative", "important");
+    node.style.setProperty("left", inThread ? (wide ? "16.5rem" : "0") : "0", "important");
+    node.style.setProperty("right", inThread ? "0" : "auto", "important");
+    if (inThread) {
+      node.style.setProperty("bottom", "0", "important");
+      node.style.setProperty("margin", "0", "important");
+      node.style.setProperty("width", "auto", "important");
+      node.style.setProperty("z-index", "20", "important");
+    }
     node.style.setProperty("transform", "none", "important");
-    node.style.setProperty("width", "100%", "important");
+    if (!inThread) node.style.setProperty("width", "100%", "important");
     node.style.setProperty("max-width", "100%", "important");
     node.style.setProperty("min-width", "0", "important");
     node.style.setProperty("margin-left", "0", "important");
@@ -521,6 +529,16 @@ function keepComposerInside() {
     node.style.setProperty("flex-direction", "column", "important");
     node.style.setProperty("align-items", "stretch", "important");
     node.style.setProperty("gap", "0.45rem", "important");
+  });
+  document.querySelectorAll(".shell[data-view='chat'], .shell[data-view='chat'] .main-stage, .thread-shell, .thread-shell > section").forEach((node) => {
+    if (!(node instanceof HTMLElement)) return;
+    node.style.setProperty("min-height", "0", "important");
+    node.style.setProperty("height", "100%", "important");
+  });
+  document.querySelectorAll(".thread-shell section > .min-h-0.flex-1").forEach((node) => {
+    if (!(node instanceof HTMLElement)) return;
+    node.style.setProperty("flex", "1 1 auto", "important");
+    node.style.setProperty("padding-bottom", "7.5rem", "important");
   });
   document.querySelectorAll(".composer-toolbar").forEach((node) => {
     if (!(node instanceof HTMLElement)) return;
@@ -686,6 +704,98 @@ function keepComposerInside() {
   document.querySelectorAll(".composer-more__menu").forEach((node) => {
     if (node instanceof HTMLElement) pinComposerMenu(node);
   });
+  if (document.querySelector(".shell")?.getAttribute("data-view") === "chat") {
+   document.querySelectorAll("form.thread-composer").forEach((node) => {
+     if (!(node instanceof HTMLElement)) return;
+     const column = node.closest("section");
+     const shell = node.closest(".thread-shell");
+      const stage = node.closest(".main-stage");
+     const topbar = stage?.querySelector(".topbar");
+      const search = stage?.querySelector("input[placeholder='Search or jump…']");
+      const searchBottom = search instanceof HTMLElement ? search.getBoundingClientRect().bottom : 0;
+      const stageTop = stage instanceof HTMLElement ? stage.getBoundingClientRect().top : 0;
+      const top = Math.max(topbar instanceof HTMLElement ? Math.ceil(topbar.getBoundingClientRect().height) : 0, Math.ceil(searchBottom - stageTop));
+      if (shell instanceof HTMLElement) {
+        shell.style.setProperty("position", "fixed", "important");
+        shell.style.setProperty("left", "0px", "important");
+        shell.style.setProperty("right", "0px", "important");
+        shell.style.setProperty("top", `${top}px`, "important");
+        shell.style.setProperty("bottom", "0px", "important");
+        shell.style.setProperty("width", "100%", "important");
+        shell.style.setProperty("max-width", "none", "important");
+        shell.style.setProperty("height", "auto", "important");
+        shell.style.setProperty("margin", "0", "important");
+        shell.style.setProperty("z-index", "5", "important");
+      }
+      if (column instanceof HTMLElement) {
+        column.style.setProperty("position", "absolute", "important");
+        column.style.setProperty("inset", "0", "important");
+        column.style.setProperty("width", "100%", "important");
+        column.style.setProperty("height", "100%", "important");
+        column.style.setProperty("min-height", "0", "important");
+      }
+      node.style.setProperty("position", "absolute", "important");
+      node.style.setProperty("left", "0px", "important");
+      node.style.setProperty("right", "0px", "important");
+      node.style.setProperty("width", "100%", "important");
+      node.style.setProperty("max-width", "none", "important");
+      node.style.setProperty("bottom", "0px", "important");
+      node.style.setProperty("margin", "0", "important");
+      node.style.setProperty("padding", "0.55rem 0.75rem 0px", "important");
+      node.style.setProperty("border-radius", "0", "important");
+      node.style.setProperty("box-sizing", "border-box", "important");
+     const formHeight = Math.ceil(node.getBoundingClientRect().height || 120);
+      const guesses = document.querySelector(".shell[data-view='chat'] .next-guesses");
+      const guessHeight = guesses instanceof HTMLElement ? Math.ceil(guesses.getBoundingClientRect().height) + 8 : 0;
+     const thread = column?.querySelector(":scope > .overflow-auto");
+     if (thread instanceof HTMLElement) {
+       const head = column?.querySelector(":scope > .chat-head");
+       const headHeight = head instanceof HTMLElement ? Math.ceil(head.getBoundingClientRect().height) + 8 : 8;
+       thread.style.setProperty("position", "absolute", "important");
+       thread.style.setProperty("left", "0px", "important");
+       thread.style.setProperty("right", "0px", "important");
+       thread.style.setProperty("top", `${headHeight}px`, "important");
+       thread.style.setProperty("bottom", `${formHeight + guessHeight}px`, "important");
+       thread.style.setProperty("width", "100%", "important");
+       thread.style.setProperty("max-width", "none", "important");
+       thread.style.setProperty("height", "auto", "important");
+       thread.style.setProperty("overflow-y", "auto", "important");
+       thread.style.setProperty("padding", "0.75rem", "important");
+     }
+      if (guesses instanceof HTMLElement && column instanceof HTMLElement) {
+        guesses.style.setProperty("position", "absolute", "important");
+        guesses.style.setProperty("left", "0.75rem", "important");
+        guesses.style.setProperty("right", "0.75rem", "important");
+        guesses.style.setProperty("width", "auto", "important");
+        guesses.style.setProperty("bottom", `${formHeight + 4}px`, "important");
+        guesses.style.setProperty("z-index", "6", "important");
+        guesses.style.setProperty("display", "flex", "important");
+        guesses.style.setProperty("flex-wrap", "wrap", "important");
+        guesses.style.setProperty("gap", "0.4rem", "important");
+        guesses.style.setProperty("background", "transparent", "important");
+       guesses.style.setProperty("pointer-events", "auto", "important");
+     }
+    });
+    document.querySelectorAll("form.thread-composer").forEach((node) => {
+      if (!(node instanceof HTMLElement)) return;
+      const column = node.closest("section");
+      const thread = column?.querySelector(":scope > .overflow-auto");
+      const guesses = document.querySelector(".shell[data-view='chat'] .next-guesses");
+      if (!(column instanceof HTMLElement) || !(thread instanceof HTMLElement)) return;
+      const columnBox = column.getBoundingClientRect();
+      const limit = guesses instanceof HTMLElement ? guesses.getBoundingClientRect().top : node.getBoundingClientRect().top;
+     const bottom = Math.max(0, Math.ceil(columnBox.bottom - limit) + 8);
+      thread.style.setProperty("bottom", `${bottom + 28}px`, "important");
+     thread.style.setProperty("overflow", "auto", "important");
+    });
+    let clear = document.getElementById("chat-no-overlap");
+    if (!clear) {
+      clear = document.createElement("style");
+      clear.id = "chat-no-overlap";
+      document.head.appendChild(clear);
+    }
+    clear.textContent = ".shell[data-view='chat'] .main-stage{transform:none !important}.shell[data-view='chat'] .next-guesses{background:transparent !important;padding:0.35rem 0 !important}.shell[data-view='chat'] .thread-shell article{margin-bottom:0.85rem;background:transparent !important;border:0 !important;box-shadow:none !important;border-radius:0 !important}.shell[data-view='light'] .thread-shell,.shell[data-theme='light'] .thread-shell{color:#111 !important}";
+  }
 }
 
 function showVoiceWords() {
@@ -2632,6 +2742,24 @@ export function CommandApp() {
         },
       },
       {
+        id: "save_chat_skill",
+        confirm: false,
+        available: true,
+        unavailableReason: "",
+        run: (text) => {
+          try {
+            const xhr = new XMLHttpRequest();
+            xhr.open("POST", "/api/mind/skills", false);
+            xhr.setRequestHeader("content-type", "application/json");
+            xhr.send(JSON.stringify({ title: "from chat", body: text }));
+            const saved = JSON.parse(xhr.responseText) as { ok?: boolean; note?: string; error?: string };
+            return { ok: saved.ok !== false, text: saved.note || saved.error || "The skill was not saved." };
+          } catch {
+            return { ok: false, text: "The skill was not saved. Nothing was sent off this machine." };
+          }
+        },
+      },
+      {
         id: "list_schedules",
         confirm: false,
         available: true,
@@ -2677,8 +2805,8 @@ export function CommandApp() {
   function settleIntent(chat: Chat, text: string, source: Workspace, action: "chat" | "voice" = "chat"): boolean {
     const intent = interpretCommand(text, source.agents, commandMode);
     if (intent.kind === "chat") return false;
-    if (intent.kind === "local" || intent.kind === "skill") {
-      const toolId = intent.kind === "skill" ? "search_skills" : intent.tool;
+    if (intent.kind === "local" || intent.kind === "skill" || intent.kind === "save_skill") {
+      const toolId = intent.kind === "save_skill" ? "save_chat_skill" : intent.kind === "skill" ? "search_skills" : intent.tool;
       setToolTimeline([]);
       clearFailure();
       const turn = runAgentTurn({
@@ -3329,6 +3457,11 @@ export function CommandApp() {
         return;
       }
       await runImagine(imaginePrompt, null);
+      return;
+    }
+    const spokenImage = text.match(/^(?:please\s+)?(?:generate|draw|make|create)(?:\s+me)?(?:\s+an|\s+a)?\s+(?:image|picture|photo)(?:\s+of)?\s+(.+)$/i);
+    if (spokenImage?.[1]) {
+      await runImagine(spokenImage[1], null);
       return;
     }
     const plan = commandSendPlan({
@@ -5750,6 +5883,15 @@ export function CommandApp() {
             <img className="service-mark size-5 rounded-md object-cover" src="/brand/logo-mark.jpg" alt="" width={22} height={22} />
             {!railCollapsed && "Social"}
           </Link>
+          <Link
+            to="/gpt-wrapper"
+            data-testid="nav-route-gpt-wrapper"
+            className={`nav-item flex min-h-11 items-center gap-3 rounded-2xl px-3 text-sm font-medium text-muted ${railCollapsed ? "justify-center" : ""}`}
+            onClick={() => setNavOpen(false)}
+          >
+            <img className="service-mark size-5 rounded-md object-cover" src="/brand/logo-mark.jpg" alt="" width={22} height={22} />
+            {!railCollapsed && "GPT wrapper"}
+          </Link>
           {!railCollapsed && (
             <>
             <button
@@ -6046,6 +6188,20 @@ export function CommandApp() {
               <span>Controls</span>
               <span aria-hidden="true">▾</span>
             </button>
+            {view === "chat" ? (
+              <button
+                type="button"
+                className="surface-switch__button shrink-0 whitespace-nowrap"
+                data-testid="open-chat-settings"
+                aria-label="Chat settings"
+                onClick={() => {
+                  const node = document.querySelector(".thread-chat-settings");
+                  if (node instanceof HTMLDetailsElement) node.open = !node.open;
+                }}
+              >
+                <span>Chat settings</span>
+              </button>
+            ) : null}
             {controlsOpen ? (
               <AnchoredCard anchor={controlsAnchor} label="Controls" onClose={() => setControlsOpen(false)} testId="controls-menu" width={640} align="start">
                 <MenuShelf width="100%" testId="controls-shelf">
@@ -6599,6 +6755,9 @@ export function CommandApp() {
                               {CONVERSATIONAL_PERSONALITIES.map((profile) => <option key={profile.id} value={profile.id}>{profile.label}</option>)}
                             </select>
                           </label>
+                          <button type="button" className="inline-flex min-h-11 items-center gap-2 rounded-panel border border-line px-3 text-sm" style={menuChip} data-testid="translator-open" onClick={() => { document.querySelectorAll("details.composer-more[open]").forEach((node) => node.removeAttribute("open")); window.dispatchEvent(new CustomEvent("adrian:open-translator")); }}>
+                            Translate
+                          </button>
                         </MenuCluster>
                       </div>
                     </details>
@@ -7882,7 +8041,8 @@ export function CommandApp() {
                   { id: "explore", label: "Explore", detail: "Filter local templates, save one, then open it in Chat.", mark: "/brand/logo-mark.jpg", open: () => window.location.assign("/explore") },
                   { id: "dashboard", label: "Dashboard", detail: "Opens the workspace map inside this app.", mark: "/brand/logo-mark.jpg", open: () => setView("dashboard") },
                   { id: "research", label: "Research", detail: "Opens the free-first research website.", mark: "/brand/logo-mark.jpg", open: () => window.location.assign("/research") },
-                  { id: "social", label: "Social", detail: "Opens the Adrian Social panel. Not connected until the PC service answers.", mark: "/brand/logo-mark.jpg", open: () => window.location.assign("/social") },
+                  { id: "social", label: "Social", detail: "Adrian Social runs inside this software.", mark: "/brand/logo-mark.jpg", open: () => window.location.assign("/social") },
+                  { id: "gpt-wrapper", label: "GPT wrapper", detail: "The GPT wrapper runs inside this software.", mark: "/brand/logo-mark.jpg", open: () => window.location.assign("/gpt-wrapper") },
                   ].filter((item) => helpQuery.toLowerCase().trim().split(/\s+/).every((word) => `${item.label} ${item.detail}`.toLowerCase().includes(word)));
                   if (topics.length === 0) return <p className="mt-2 text-sm text-muted" role="status">No help topics match this search. Try “key,” “Library,” or “chat.”</p>;
                   return topics.map((item) => (
@@ -8875,7 +9035,7 @@ function ChatPane({
   const lastReply = [...(active?.messages ?? [])].reverse().find((msg) => msg.role === "assistant");
   return (
     <div className="thread-shell flex h-full min-h-0 flex-col xl:flex-row">
-      <aside className="flex max-h-72 shrink-0 flex-col border-b border-line xl:max-h-none xl:w-64 xl:border-r xl:border-b-0">
+      {!active?.messages.length ? <aside className="flex max-h-72 shrink-0 flex-col border-b border-line xl:max-h-none xl:w-64 xl:border-r xl:border-b-0" data-testid="thread-history">
         <div className="p-3">
           <button type="button" onClick={onNew} className="flex min-h-11 w-full items-center justify-center gap-2 rounded-panel bg-accent text-sm font-semibold text-accent-ink">
             <Plus className="size-4" /> New Chat
@@ -8906,8 +9066,9 @@ function ChatPane({
           )}
         </div>
       </aside>
+      : null}
       <section className="flex min-w-0 flex-1 flex-col">
-        <div className="chat-head px-4 pt-4">
+        <div className="chat-head px-4 pt-4" hidden={Boolean(active?.messages.length)}>
           <h2 className="font-display text-3xl font-bold">{active?.title || "AI Chat"}</h2>
          {active && customPersonality.trim() ? <p className="mt-1 text-sm text-muted">{active.title} is open in Chat. Its saved instructions are used for the next reply.</p> : null}
           {active?.temporary && <div className="text-xs text-muted">Excluded from workspace archives by default</div>}
@@ -9140,8 +9301,16 @@ function ChatPane({
             {!busy ? <button type="button" className="mt-1 min-h-11 px-2 text-sm text-accent" onClick={onReleaseCue}>Send next</button> : null}
           </div>
         ) : null}
+        {lastReply ? (
+          <div className="next-guesses flex gap-2 overflow-x-auto px-3 pb-1" data-testid="next-guesses">
+            <button type="button" className="suggestion-chip shrink-0" onClick={() => setDraft("Go deeper on that")}>Go deeper</button>
+            <button type="button" className="suggestion-chip shrink-0" onClick={() => setDraft("Make that shorter")}>Make it shorter</button>
+            <button type="button" className="suggestion-chip shrink-0" onClick={() => setDraft("Turn that into an image")}>Turn that into an image</button>
+            <button type="button" className="suggestion-chip shrink-0" disabled={speaking} onClick={() => onSpeak(lastReply.content, lastReply.id)}>Read aloud</button>
+          </div>
+        ) : null}
         <form
-          className="floating-composer command-card composer-dock thread-composer m-3 p-3" data-composer="floating"
+          className="floating-composer command-card composer-dock thread-composer p-3" data-composer="floating"
           onSubmit={(event) => {
             event.preventDefault();
             onSend();
@@ -9155,7 +9324,7 @@ function ChatPane({
             for (const file of files.slice(0, 4)) onAddImageFile(file);
           }}
         >
-          {onPickModule ? <ModuleSuggestions draft={draft} onPick={onPickModule} /> : null}
+          {onPickModule && (!active || active.messages.length === 0) ? <ModuleSuggestions draft={draft} onPick={onPickModule} /> : null}
           <input
             value={draft}
             onChange={(event) => setDraft(event.target.value)}

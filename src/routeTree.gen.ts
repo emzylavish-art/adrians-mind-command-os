@@ -12,6 +12,7 @@ import { Route as rootRouteImport } from './routes/__root'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as DashboardRouteImport } from './routes/dashboard'
 import { Route as ExploreRouteImport } from './routes/explore'
+import { Route as GptWrapperRouteImport } from './routes/gpt-wrapper'
 import { Route as LoginRouteImport } from './routes/login'
 import { Route as MemoryRouteImport } from './routes/memory'
 import { Route as PersonasRouteImport } from './routes/personas'
@@ -24,6 +25,7 @@ import { Route as ApiMindAgentRouteImport } from './routes/api/mind/agent'
 import { Route as ApiMindDesktopUpdateRouteImport } from './routes/api/mind/desktop-update'
 import { Route as ApiMindProvidersRouteImport } from './routes/api/mind/providers'
 import { Route as ApiMindReceiptsRouteImport } from './routes/api/mind/receipts'
+import { Route as ApiMindSkillsRouteImport } from './routes/api/mind/skills'
 import { Route as ApiMindTurnRouteImport } from './routes/api/mind/turn'
 import { Route as ApiMindBuildBrowserRouteImport } from './routes/api/mind/build/browser'
 import { Route as ApiMindBuildCancelRouteImport } from './routes/api/mind/build/cancel'
@@ -103,6 +105,11 @@ const ExploreRoute = ExploreRouteImport.update({
   path: '/explore',
   getParentRoute: () => rootRouteImport,
 } as any)
+const GptWrapperRoute = GptWrapperRouteImport.update({
+  id: '/gpt-wrapper',
+  path: '/gpt-wrapper',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const LoginRoute = LoginRouteImport.update({
   id: '/login',
   path: '/login',
@@ -161,6 +168,11 @@ const ApiMindProvidersRoute = ApiMindProvidersRouteImport.update({
 const ApiMindReceiptsRoute = ApiMindReceiptsRouteImport.update({
   id: '/api/mind/receipts',
   path: '/api/mind/receipts',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ApiMindSkillsRoute = ApiMindSkillsRouteImport.update({
+  id: '/api/mind/skills',
+  path: '/api/mind/skills',
   getParentRoute: () => rootRouteImport,
 } as any)
 const ApiMindTurnRoute = ApiMindTurnRouteImport.update({
@@ -493,6 +505,7 @@ export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/dashboard': typeof DashboardRoute
   '/explore': typeof ExploreRoute
+  '/gpt-wrapper': typeof GptWrapperRoute
   '/login': typeof LoginRoute
   '/memory': typeof MemoryRoute
   '/personas': typeof PersonasRoute
@@ -505,6 +518,7 @@ export interface FileRoutesByFullPath {
   '/api/mind/desktop-update': typeof ApiMindDesktopUpdateRoute
   '/api/mind/providers': typeof ApiMindProvidersRoute
   '/api/mind/receipts': typeof ApiMindReceiptsRoute
+  '/api/mind/skills': typeof ApiMindSkillsRoute
   '/api/mind/turn': typeof ApiMindTurnRoute
   '/api/mind/build/browser': typeof ApiMindBuildBrowserRoute
   '/api/mind/build/cancel': typeof ApiMindBuildCancelRoute
@@ -573,6 +587,7 @@ export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/dashboard': typeof DashboardRoute
   '/explore': typeof ExploreRoute
+  '/gpt-wrapper': typeof GptWrapperRoute
   '/login': typeof LoginRoute
   '/memory': typeof MemoryRoute
   '/personas': typeof PersonasRoute
@@ -585,6 +600,7 @@ export interface FileRoutesByTo {
   '/api/mind/desktop-update': typeof ApiMindDesktopUpdateRoute
   '/api/mind/providers': typeof ApiMindProvidersRoute
   '/api/mind/receipts': typeof ApiMindReceiptsRoute
+  '/api/mind/skills': typeof ApiMindSkillsRoute
   '/api/mind/turn': typeof ApiMindTurnRoute
   '/api/mind/build/browser': typeof ApiMindBuildBrowserRoute
   '/api/mind/build/cancel': typeof ApiMindBuildCancelRoute
@@ -654,6 +670,7 @@ export interface FileRoutesById {
   '/': typeof IndexRoute
   '/dashboard': typeof DashboardRoute
   '/explore': typeof ExploreRoute
+  '/gpt-wrapper': typeof GptWrapperRoute
   '/login': typeof LoginRoute
   '/memory': typeof MemoryRoute
   '/personas': typeof PersonasRoute
@@ -666,6 +683,7 @@ export interface FileRoutesById {
   '/api/mind/desktop-update': typeof ApiMindDesktopUpdateRoute
   '/api/mind/providers': typeof ApiMindProvidersRoute
   '/api/mind/receipts': typeof ApiMindReceiptsRoute
+  '/api/mind/skills': typeof ApiMindSkillsRoute
   '/api/mind/turn': typeof ApiMindTurnRoute
   '/api/mind/build/browser': typeof ApiMindBuildBrowserRoute
   '/api/mind/build/cancel': typeof ApiMindBuildCancelRoute
@@ -736,6 +754,7 @@ export interface FileRouteTypes {
     | '/'
     | '/dashboard'
     | '/explore'
+    | '/gpt-wrapper'
     | '/login'
     | '/memory'
     | '/personas'
@@ -748,6 +767,7 @@ export interface FileRouteTypes {
     | '/api/mind/desktop-update'
     | '/api/mind/providers'
     | '/api/mind/receipts'
+    | '/api/mind/skills'
     | '/api/mind/turn'
     | '/api/mind/build/browser'
     | '/api/mind/build/cancel'
@@ -816,6 +836,7 @@ export interface FileRouteTypes {
     | '/'
     | '/dashboard'
     | '/explore'
+    | '/gpt-wrapper'
     | '/login'
     | '/memory'
     | '/personas'
@@ -828,6 +849,7 @@ export interface FileRouteTypes {
     | '/api/mind/desktop-update'
     | '/api/mind/providers'
     | '/api/mind/receipts'
+    | '/api/mind/skills'
     | '/api/mind/turn'
     | '/api/mind/build/browser'
     | '/api/mind/build/cancel'
@@ -896,6 +918,7 @@ export interface FileRouteTypes {
     | '/'
     | '/dashboard'
     | '/explore'
+    | '/gpt-wrapper'
     | '/login'
     | '/memory'
     | '/personas'
@@ -908,6 +931,7 @@ export interface FileRouteTypes {
     | '/api/mind/desktop-update'
     | '/api/mind/providers'
     | '/api/mind/receipts'
+    | '/api/mind/skills'
     | '/api/mind/turn'
     | '/api/mind/build/browser'
     | '/api/mind/build/cancel'
@@ -977,6 +1001,7 @@ export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   DashboardRoute: typeof DashboardRoute
   ExploreRoute: typeof ExploreRoute
+  GptWrapperRoute: typeof GptWrapperRoute
   LoginRoute: typeof LoginRoute
   MemoryRoute: typeof MemoryRoute
   PersonasRoute: typeof PersonasRoute
@@ -989,6 +1014,7 @@ export interface RootRouteChildren {
   ApiMindDesktopUpdateRoute: typeof ApiMindDesktopUpdateRoute
   ApiMindProvidersRoute: typeof ApiMindProvidersRoute
   ApiMindReceiptsRoute: typeof ApiMindReceiptsRoute
+  ApiMindSkillsRoute: typeof ApiMindSkillsRoute
   ApiMindTurnRoute: typeof ApiMindTurnRoute
   ApiMindBuildBrowserRoute: typeof ApiMindBuildBrowserRoute
   ApiMindBuildCancelRoute: typeof ApiMindBuildCancelRoute
@@ -1077,6 +1103,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ExploreRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/gpt-wrapper': {
+      id: '/gpt-wrapper'
+      path: '/gpt-wrapper'
+      fullPath: '/gpt-wrapper'
+      preLoaderRoute: typeof GptWrapperRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/login': {
       id: '/login'
       path: '/login'
@@ -1159,6 +1192,13 @@ declare module '@tanstack/react-router' {
       path: '/api/mind/receipts'
       fullPath: '/api/mind/receipts'
       preLoaderRoute: typeof ApiMindReceiptsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/mind/skills': {
+      id: '/api/mind/skills'
+      path: '/api/mind/skills'
+      fullPath: '/api/mind/skills'
+      preLoaderRoute: typeof ApiMindSkillsRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/api/mind/turn': {
@@ -1609,6 +1649,7 @@ const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   DashboardRoute: DashboardRoute,
   ExploreRoute: ExploreRoute,
+  GptWrapperRoute: GptWrapperRoute,
   LoginRoute: LoginRoute,
   MemoryRoute: MemoryRoute,
   PersonasRoute: PersonasRoute,
@@ -1621,6 +1662,7 @@ const rootRouteChildren: RootRouteChildren = {
   ApiMindDesktopUpdateRoute: ApiMindDesktopUpdateRoute,
   ApiMindProvidersRoute: ApiMindProvidersRoute,
   ApiMindReceiptsRoute: ApiMindReceiptsRoute,
+  ApiMindSkillsRoute: ApiMindSkillsRoute,
   ApiMindTurnRoute: ApiMindTurnRoute,
   ApiMindBuildBrowserRoute: ApiMindBuildBrowserRoute,
   ApiMindBuildCancelRoute: ApiMindBuildCancelRoute,
@@ -1688,3 +1730,12 @@ const rootRouteChildren: RootRouteChildren = {
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
   ._addFileTypes<FileRouteTypes>()
+
+import type { getRouter } from './router.tsx'
+import type { createStart } from '@tanstack/react-start'
+declare module '@tanstack/react-start' {
+  interface Register {
+    ssr: true
+    router: Awaited<ReturnType<typeof getRouter>>
+  }
+}
