@@ -485,7 +485,12 @@ function keepComposerInside() {
     home.style.setProperty("min-width", "0", "important");
     home.style.setProperty("overflow-x", "hidden", "important");
     home.style.setProperty("box-sizing", "border-box", "important");
+    home.style.setProperty("display", "flex", "important");
+    home.style.setProperty("flex-direction", "column", "important");
+    home.style.setProperty("flex", "1 1 auto", "important");
     home.style.setProperty("height", "auto", "important");
+    home.style.setProperty("min-height", "100%", "important");
+    home.style.setProperty("justify-content", "flex-start", "important");
     const masthead = home.querySelector(".masthead");
     if (masthead instanceof HTMLElement) {
       masthead.style.setProperty("display", "flex", "important");
@@ -506,9 +511,19 @@ function keepComposerInside() {
     if (!(node instanceof HTMLElement)) return;
     const inThread = node.classList.contains("thread-composer") && document.querySelector(".shell")?.getAttribute("data-view") === "chat";
     const wide = window.innerWidth >= 768;
-    node.style.setProperty("position", inThread ? "fixed" : "relative", "important");
-    node.style.setProperty("left", inThread ? (wide ? "16.5rem" : "0") : "0", "important");
-    node.style.setProperty("right", inThread ? "0" : "auto", "important");
+    const pinPhone = !inThread && !wide && node.matches("[data-composer='floating']");
+    node.style.setProperty("position", inThread || pinPhone ? "fixed" : "relative", "important");
+    node.style.setProperty("left", inThread ? (wide ? "16.5rem" : "0") : pinPhone ? "0.75rem" : "0", "important");
+    node.style.setProperty("right", inThread || pinPhone ? (pinPhone ? "0.75rem" : "0") : "auto", "important");
+    if (pinPhone) {
+      node.style.setProperty("bottom", "0.75rem", "important");
+      node.style.setProperty("width", "auto", "important");
+      node.style.setProperty("max-width", "none", "important");
+      node.style.setProperty("z-index", "30", "important");
+    }
+    if (!inThread && wide && node.matches("[data-composer='floating']")) {
+      node.style.setProperty("margin-top", "auto", "important");
+    }
     if (inThread) {
       node.style.setProperty("bottom", "0", "important");
       node.style.setProperty("margin", "0", "important");
@@ -516,8 +531,8 @@ function keepComposerInside() {
       node.style.setProperty("z-index", "20", "important");
     }
     node.style.setProperty("transform", "none", "important");
-    if (!inThread) node.style.setProperty("width", "100%", "important");
-    node.style.setProperty("max-width", "100%", "important");
+    if (!inThread && !pinPhone) node.style.setProperty("width", "100%", "important");
+    if (!pinPhone) node.style.setProperty("max-width", "100%", "important");
     node.style.setProperty("min-width", "0", "important");
     node.style.setProperty("margin-left", "0", "important");
     node.style.setProperty("box-sizing", "border-box", "important");
@@ -949,17 +964,6 @@ function keepGuideClear() {
   const dock = document.querySelector(".gpt-home [data-composer='floating']");
   if (!(guide instanceof HTMLElement) || !(dock instanceof HTMLElement)) return;
   if (!window.matchMedia("(max-width: 767px)").matches) return;
-  dock.style.setProperty("position", "relative", "important");
-  dock.style.setProperty("inset", "auto", "important");
-  dock.style.setProperty("left", "auto", "important");
-  dock.style.setProperty("right", "auto", "important");
-  dock.style.setProperty("top", "auto", "important");
-  dock.style.setProperty("bottom", "auto", "important");
-  dock.style.setProperty("width", "100%", "important");
-  dock.style.setProperty("max-width", "100%", "important");
-  dock.style.setProperty("z-index", "1", "important");
-  dock.style.setProperty("transform", "none", "important");
-  dock.style.setProperty("margin", "0", "important");
   const handy = document.querySelector("[data-testid='handy-dictation']");
   const scroller = [...document.querySelectorAll(".overflow-auto")].find((node) => node instanceof HTMLElement && node.contains(guide) && node.scrollHeight > node.clientHeight + 8);
   if (!(scroller instanceof HTMLElement)) return;
