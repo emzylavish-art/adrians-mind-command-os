@@ -31,8 +31,12 @@ let storeFile: string | null = null;
 
 function persist(): void {
   if (!storeFile) return;
-  mkdirSync(path.dirname(storeFile), { recursive: true });
-  writeFileSync(storeFile, JSON.stringify({ nextId, obligations, notes, consents, grants, skills, workflows, crisis, language, textSize, approvals: [...approvals], adapters, tasks, sources, attempts, office, events: readInformationLog() }));
+  try {
+    mkdirSync(path.dirname(storeFile), { recursive: true });
+    writeFileSync(storeFile, JSON.stringify({ nextId, obligations, notes, consents, grants, skills, workflows, crisis, language, textSize, approvals: [...approvals], adapters, tasks, sources, attempts, office, events: readInformationLog() }));
+  } catch {
+    storeFile = null;
+  }
 }
 
 export function setLocalCapabilityFile(file: string): void {

@@ -29,7 +29,7 @@ test("injects before </head>", () => {
   const out = injectGrokPwaHead("<html><head><title>x</title></head><body></body></html>");
   assert.match(out, /rel="manifest"/);
   assert.match(out, /apple-touch-icon/);
-  assert.match(out, /grok-app-builder\/extensions\.js/);
+  assert.doesNotMatch(out, /grok-app-builder\/extensions\.js/);
   assert.ok(out.indexOf("manifest") < out.indexOf("</head>"));
 });
 
@@ -38,7 +38,7 @@ test("injects the extensions script without a project id", () => {
     appName: "Demo",
     projectId: "",
   });
-  assert.match(out, /src="https:\/\/grok\.com\/grok-app-builder\/extensions\.js" defer/);
+  assert.doesNotMatch(out, /grok-app-builder\/extensions\.js/);
   assert.doesNotMatch(out, /grok-project-id/);
   assert.doesNotMatch(out, /data-project-id/);
   assert.doesNotMatch(out, /property="grok:app_id"/);
@@ -50,7 +50,7 @@ test("injects project id on the script and meta when provided", () => {
     projectId: "proj-123",
   });
   assert.match(out, /name="grok-project-id" content="proj-123"/);
-  assert.match(out, /data-project-id="proj-123"/);
+  assert.doesNotMatch(out, /data-project-id="proj-123"/);
   assert.match(out, /property="grok:app_id" content="proj-123"/);
 });
 
@@ -430,7 +430,7 @@ test("does not duplicate the extensions script", () => {
   const once = injectGrokPwaHead("<html><head></head></html>", ctx);
   const twice = injectGrokPwaHead(once, ctx);
   assert.equal(once, twice);
-  assert.equal(twice.split("extensions.js").length - 1, 1);
+  assert.equal(twice.split("extensions.js").length - 1, 0);
 });
 
 test("is idempotent", () => {
@@ -548,4 +548,3 @@ test("vite plugin bakes og identity as a virtual module", () => {
   assert.match(plugin, /virtual:grok-og-identity/);
   assert.match(plugin, /snapshotOgIdentity/);
 });
-
