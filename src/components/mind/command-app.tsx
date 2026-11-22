@@ -1950,7 +1950,11 @@ export function CommandApp() {
   }
 
   const consultModules = useMemo<ConsultModule[]>(() => [
-    ...builtinModules({ grokConfigured, providers: liveProviders }),
+    ...builtinModules({
+      grokConfigured,
+      providers: liveProviders,
+      localRunner: typeof localStorage !== "undefined" && Boolean(localStorage.getItem("amcos.ollama.base")?.trim()),
+    }),
     ...customModules(customAiProviders.map((item) => ({ id: item.id, label: item.label, models: item.models, hasKey: item.hasKey }))),
   ], [grokConfigured, liveProviders, customAiProviders]);
 

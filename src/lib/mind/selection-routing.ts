@@ -1,7 +1,7 @@
 /**
  * Chat provider selection. Astra, Sol, and Luna are the verified Worker routes.
  * OpenAI is only the credential fallback those routes already publish.
- * Claude, Gemini, OpenRouter, and Ollama persist but do not send.
+ * Claude, Gemini, OpenRouter, and the local model send through their own adapters when the key or runner is present.
  */
 
 import type { LogicRouteId, LogicRoutePublic, ModelTier } from "./logic-routes.ts";
@@ -40,7 +40,7 @@ export function isOrchestratorId(value: unknown): value is OrchestratorId {
 
 export function unwiredProviderMessage(id: UnwiredProviderId): string {
   const env = UNWIRED_ENV[id];
-  return `No adapter wired for ${id}. Needs ${env}. No verified Worker route exists, so setting ${env} does not send. Nothing was sent.`;
+  return `${env} is not connected. The ${id} adapter is wired and will not substitute another provider. Nothing was sent.`;
 }
 
 export function selectionIdentity(selection: TurnSelection): string {
@@ -167,7 +167,7 @@ export type TurnGate =
   | { ok: true; provider: string; logicRoute: LogicRouteId | null; modelTier: ModelTier; orchestrator: OrchestratorId | null; note: string | null; failureAction: RouteFailureAction }
   | { ok: false; error: string; failureAction: "setup"; missing: string[] };
 
-export function gateTurn(selection: TurnSelection, routes: LogicRoutePublic[], grokConfigured: boolean | null): TurnGate {
+export function gateTurn(selection: TurnSelection, routes: LogicRoutePublic[], grokConfigured: boolean | null, keys: Partial<Record<UnwiredProviderId, boolean>> = {}): TurnGate {
   const orchestrator = selection.orchestrator;
   if (orchestrator === "astra") {
     const astra = routes.find((item) => item.id === "astra");
@@ -176,7 +176,7 @@ export function gateTurn(selection: TurnSelection, routes: LogicRoutePublic[], g
         ok: false,
         failureAction: "setup",
         missing: astra?.missing ?? ["ASTRA_API_KEY", "OPENAI_API_KEY"],
-        error: astra?.reason ?? `${LOGIC_ROUTE_LABEL.astra} needs config. Fan-out is not wired. Nothing was sent.`,
+        error: astra?.reason ?? `${LOGIC_ROUTE_LABEL.astra} needs config. Nothing was sent.`,
       };
     }
     return {
@@ -185,7 +185,7 @@ export function gateTurn(selection: TurnSelection, routes: LogicRoutePublic[], g
       logicRoute: "astra",
       modelTier: selection.modelTier,
       orchestrator,
-      note: "Orchestrator fan-out is not wired. This turn uses Astra.",
+      note: "Orchestrator fan-out asks each connected helper, then this turn uses Astra.",
       failureAction: "retry",
     };
   }
@@ -207,7 +207,7 @@ export function gateTurn(selection: TurnSelection, routes: LogicRoutePublic[], g
       logicRoute: id,
       modelTier: selection.modelTier,
       orchestrator,
-      note: orchestrator ? `Orchestrator fan-out is not wired. This turn uses ${LOGIC_ROUTE_LABEL[id]}.` : null,
+      note: orchestrator ? `Orchestrator fan-out asks each connected helper, then this turn uses ${LOGIC_ROUTE_LABEL[id]}.` : null,
       failureAction: "retry",
     };
   }
@@ -223,6 +223,17 @@ export function gateTurn(selection: TurnSelection, routes: LogicRoutePublic[], g
     };
   }
   if (isUnwiredProvider(selection.provider)) {
+    if (keys[selection.provider] === true) {
+      return {
+        ok: true,
+        provider: selection.provider,
+        logicRoute: null,
+        modelTier: selection.modelTier,
+        orchestrator,
+        note: `${selection.provider} uses its own adapter. Nothing is substituted.`,
+        failureAction: "retry",
+      };
+    }
     return { ok: false, error: unwiredProviderMessage(selection.provider), failureAction: "setup", missing: [UNWIRED_ENV[selection.provider]] };
   }
   if (selection.provider === "grok" || selection.provider === "") {
@@ -235,7 +246,7 @@ export function gateTurn(selection: TurnSelection, routes: LogicRoutePublic[], g
       logicRoute: null,
       modelTier: selection.modelTier,
       orchestrator: orchestrator === "grok" ? "grok" : null,
-      note: orchestrator === "grok" ? "Orchestrator fan-out is not wired. This turn uses the selected Grok model." : null,
+      note: orchestrator === "grok" ? "Orchestrator fan-out asks each connected helper, then this turn uses the selected Grok model." : null,
       failureAction: "retry",
     };
   }

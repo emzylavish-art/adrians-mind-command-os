@@ -104,11 +104,11 @@ export function discoveredCapabilities(input: {
   return [...models, ...tools];
 }
 
-export function mcpToolCallText(choice: string, text: string): { ok: true; text: string } | { ok: false; error: string } {
-  const match = /^mcp:[0-9a-f-]{36}:([^:]{1,240})$/i.exec(choice);
+export function mcpToolCallText(choice: string, text: string): { ok: true; text: string; serverId: string; tool: string } | { ok: false; error: string } {
+  const match = /^mcp:([0-9a-f-]{36}):([^:]{1,240})$/i.exec(choice);
   if (!match) return { ok: false, error: "That is not a discovered MCP tool. Nothing was called." };
   let name = "";
-  try { name = decodeURIComponent(match[1]); } catch { return { ok: false, error: "That tool name could not be read. Nothing was called." }; }
+  try { name = decodeURIComponent(match[2]); } catch { return { ok: false, error: "That tool name could not be read. Nothing was called." }; }
   if (!TOOL_NAME.test(name)) return { ok: false, error: "That tool name is not usable. Nothing was called." };
-  return { ok: true, text: `call mcp tool ${name} ${text.trim()}`.trim() };
+  return { ok: true, serverId: match[1], tool: name, text: `call mcp tool ${name} on server ${match[1]} ${text.trim()}`.trim() };
 }

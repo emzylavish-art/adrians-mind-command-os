@@ -188,11 +188,11 @@ export async function probeMcp(userId: string, id: string, fetchImpl: FetchLike)
   return toPublic(server);
 }
 
-export function parseMcpIntent(text: string): { action: "list" } | { action: "call"; tool: string; args: string } | { action: "unclear" } {
+export function parseMcpIntent(text: string): { action: "list" } | { action: "call"; tool: string; args: string; serverId?: string } | { action: "unclear" } {
   const lower = text.toLowerCase();
   if (!/\bmcp\b/.test(lower)) return { action: "unclear" };
-  const call = text.match(/\b(?:call|use|run)\b[\s\S]{0,40}\bmcp\b[\s\S]{0,20}\btool\s+([A-Za-z0-9_-]+)\s*([\s\S]*)/i);
-  if (call?.[1]) return { action: "call", tool: call[1].slice(0, 80), args: (call[2] ?? "").trim().slice(0, 1500) };
+  const call = text.match(/\b(?:call|use|run)\b[\s\S]{0,40}\bmcp\b[\s\S]{0,20}\btool\s+([A-Za-z0-9_-]+)(?:\s+on server\s+([0-9a-f-]{36}))?\s*([\s\S]*)/i);
+  if (call?.[1]) return { action: "call", tool: call[1].slice(0, 80), serverId: call[2], args: (call[3] ?? "").trim().slice(0, 1500) };
   if (/\b(list|show|what)\b/.test(lower)) return { action: "list" };
   return { action: "unclear" };
 }
@@ -224,7 +224,12 @@ export async function runMcpTurn(input: {
       error: failed[0]?.error ?? (names.length ? "" : "The server connected and returned no tools."),
     };
   }
-  const target = servers.find((server) => server.state === "connected") ?? servers[0];
+  const target = intent.serverId
+    ? servers.find((server) => server.id === intent.serverId)
+    : servers.find((server) => server.state === "connected") ?? servers[0];
+  if (intent.serverId && !target) {
+    return { ok: false, needsConfirmation: false, servers: servers.map(toPublic), text: "", error: "That MCP server is not saved. Nothing was called and another server was not substituted." };
+  }
   if (!target) return { ok: false, needsConfirmation: false, servers: [], text: "", error: "No MCP server is saved. Nothing was called." };
   if (!input.confirmed) {
     return { ok: false, needsConfirmation: true, servers: [toPublic(target)], text: "", error: `Call “${intent.tool}” on ${target.label} only after you confirm. Nothing was called.` };

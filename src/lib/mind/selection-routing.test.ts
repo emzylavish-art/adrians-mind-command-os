@@ -45,18 +45,20 @@ describe("routeFailureAction", () => {
 });
 
 describe("unwired providers and OpenAI fallback", () => {
-  it("persists Claude, Gemini, OpenRouter, and Ollama but does not route them", () => {
+  it("routes Claude, Gemini, OpenRouter, and Ollama only when their key or runner is present", () => {
     for (const id of ["anthropic", "gemini", "openrouter", "ollama"] as const) {
       const option = legacyProviderOption(id, true);
       assert.equal(option.enabled, true);
-      const gate = gateTurn({ ...base, provider: id }, [], true);
-      assert.equal(gate.ok, false);
-      if (!gate.ok) {
-        assert.equal(gate.failureAction, "setup");
-        assert.match(gate.error, /No adapter wired/);
-        assert.match(gate.error, new RegExp(gate.missing[0] ?? "missing"));
-        assert.equal(gate.error.includes("substituted"), false);
+      const missing = gateTurn({ ...base, provider: id }, [], true);
+      assert.equal(missing.ok, false);
+      if (!missing.ok) {
+        assert.equal(missing.failureAction, "setup");
+        assert.match(missing.error, /is not connected/);
+        assert.equal(missing.error.includes("substituted"), false);
       }
+      const gate = gateTurn({ ...base, provider: id }, [], true, { [id]: true });
+      assert.equal(gate.ok, true);
+      if (gate.ok) assert.equal(gate.provider, id);
     }
   });
 

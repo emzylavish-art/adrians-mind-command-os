@@ -27,7 +27,7 @@ test("MCP tools sit in the same discovery list and a selected tool is called by 
   });
   assert.deepEqual(found.map((item) => item.kind), ["model", "mcp-tool", "mcp-tool"]);
   const call = mcpToolCallText(found[1].id, "notes.txt");
-  assert.equal(call.ok && call.text, "call mcp tool read_file notes.txt");
+  assert.equal(call.ok && call.text, "call mcp tool read_file on server bbbbbbbb-bbbb-cccc-dddd-eeeeeeeeeeee notes.txt");
   const gated = discoveredCapabilities({ models: [], mcp: [{ id: "bbbbbbbb-bbbb-cccc-dddd-eeeeeeeeeeee", label: "Files", state: "failed", tools: [{ name: "read_file" }] }] });
   assert.equal(gated[0].usable, false);
 });

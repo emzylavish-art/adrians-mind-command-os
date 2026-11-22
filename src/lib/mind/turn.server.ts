@@ -503,6 +503,7 @@ async function modulesConnectedNow(userId: string) {
   const modules = builtinModules({
     grokConfigured: resolveXaiInferenceApiKey(process.env).ok,
     providers: configuredProviders(process.env),
+    localRunner: Boolean(process.env.LOCAL_MODEL_URL),
   });
   try {
     const { listAiProviders } = await import("./ai-provider-config.server.ts");

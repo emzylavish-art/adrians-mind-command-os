@@ -29,6 +29,7 @@ const MODEL_ID = /^[~A-Za-z0-9][~A-Za-z0-9_.:/@-]{0,149}$/;
 export function builtinModules(input: {
   grokConfigured: boolean | null;
   providers?: Partial<Record<Exclude<BuiltinConsultId, "grok">, boolean>>;
+  localRunner?: boolean;
 }): ConsultModule[] {
   const keys = input.providers ?? {};
   return [
@@ -38,7 +39,7 @@ export function builtinModules(input: {
     { id: "gemini", label: "Gemini", connected: keys.gemini === true },
     { id: "openrouter", label: "OpenRouter", connected: keys.openrouter === true },
     { id: "nemotron", label: "Nemotron", connected: keys.openrouter === true },
-    { id: "ollama", label: "Local model", connected: false },
+    { id: "ollama", label: "Local model", connected: input.localRunner === true },
   ];
 }
 
