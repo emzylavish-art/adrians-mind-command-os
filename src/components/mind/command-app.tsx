@@ -1654,7 +1654,10 @@ export function CommandApp() {
   const [liveProviders, setLiveProviders] = useState<Partial<Record<"openai" | "anthropic" | "gemini" | "openrouter", boolean>>>({});
   const [providerChoice, setProviderChoice] = useState("grok");
   const [customAiProviders, setCustomAiProviders] = useState<PublicAiProvider[]>([]);
-  const customAiChoices = customAiProviders.flatMap((item) => item.models.map((model) => ({ id: `custom:${item.id}:${encodeURIComponent(model)}`, label: `${item.label}: ${model}`, enabled: true, reason: `Custom API at ${item.host}. Requires usable API credit.` })));
+  const customAiChoices = customAiProviders.filter((item) => item.hasKey).flatMap((item) => {
+    const models = item.models.length ? item.models : [item.defaultModel || item.label];
+    return models.filter(Boolean).map((model) => ({ id: `custom:${item.id}:${encodeURIComponent(model)}`, label: `${item.label}: ${model}`, enabled: true, reason: `Saved connection at ${item.host}.` }));
+  });
   const [modelTier, setModelTier] = useState<ModelTier>("Auto");
   const [grokModel, setGrokModel] = useState<string | null>(null);
   const [logicRoute, setLogicRoute] = useState<LogicRouteId | null>(null);
@@ -7211,6 +7214,7 @@ export function CommandApp() {
                 void checkRea();
               }}
               providerChoices={[...providerChoicesWithKeys(grokConfigured, lastModelUsed, liveProviders), ...discovered.map((item) => ({ id: item.id, label: item.label, enabled: item.usable, reason: item.reason }))]}
+              providerChoices={[...providerChoicesWithKeys(grokConfigured, lastModelUsed, liveProviders), ...customAiChoices, ...discovered.map((item) => ({ id: item.id, label: item.label, enabled: item.usable, reason: item.reason }))]}
               providerChoice={providerChoice}
               onProvider={(id) => {
                 if (isLogicRouteId(id)) {
