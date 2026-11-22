@@ -7,6 +7,7 @@ import { hashBody, packTask, readInformationLog, recordInformation, registerAdap
 import type { FrontierAdapter } from "./frontier-2031.ts";
 import { dryRun } from "./reversibility.ts";
 import { blueprintReply, type AttemptRecord, type PackedTaskRecord, type SourceRecord } from "./blueprint-surface.ts";
+import { runGitHubTool } from "./github-tools.ts";
 
 export type Obligation = { id: string; text: string; executed: false };
 
@@ -91,6 +92,8 @@ export function resetLocalCapabilities(): void {
 export function runLocalCommand(text: string): string | null {
   const raw = text.trim();
   const lower = raw.toLowerCase();
+  const tool = runGitHubTool(raw);
+  if (tool) return tool;
   if (lower === "list capabilities") {
     return [
       "Available here: delegated grants, obligations, task envelope, dry-run reversibility, purchase refusal, wipe refusal, reply actions.",
