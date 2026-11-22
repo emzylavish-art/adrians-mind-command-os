@@ -7,7 +7,7 @@ import { hashBody, packTask, readInformationLog, recordInformation, registerAdap
 import type { FrontierAdapter } from "./frontier-2031.ts";
 import { dryRun } from "./reversibility.ts";
 import { blueprintReply, type AttemptRecord, type PackedTaskRecord, type SourceRecord } from "./blueprint-surface.ts";
-import { runGitHubTool } from "./github-tools.ts";
+import { detectLocalDevices, runGitHubTool } from "./github-tools.ts";
 
 export type Obligation = { id: string; text: string; executed: false };
 
@@ -26,12 +26,13 @@ const grants: AuthorityGrant[] = [];
 const tasks: PackedTaskRecord[] = [];
 const sources: SourceRecord[] = [];
 const attempts: AttemptRecord[] = [];
+const office: { id: string; kind: string; text: string }[] = [];
 let storeFile: string | null = null;
 
 function persist(): void {
   if (!storeFile) return;
   mkdirSync(path.dirname(storeFile), { recursive: true });
-  writeFileSync(storeFile, JSON.stringify({ nextId, obligations, notes, consents, grants, skills, workflows, crisis, language, textSize, approvals: [...approvals], adapters, tasks, sources, attempts, events: readInformationLog() }));
+  writeFileSync(storeFile, JSON.stringify({ nextId, obligations, notes, consents, grants, skills, workflows, crisis, language, textSize, approvals: [...approvals], adapters, tasks, sources, attempts, office, events: readInformationLog() }));
 }
 
 export function setLocalCapabilityFile(file: string): void {
@@ -48,7 +49,7 @@ export function ensureLocalCapabilityFile(file: string): void {
 
 export function reloadLocalCapabilities(): void {
   if (!storeFile) return;
-  const saved = JSON.parse(readFileSync(storeFile, "utf8")) as { nextId: number; obligations: Obligation[]; notes: typeof notes; consents: Consent[]; grants: AuthorityGrant[]; skills?: string[]; workflows?: string[]; crisis?: boolean; language?: string; textSize?: string; approvals?: string[]; adapters?: FrontierAdapter[]; tasks?: PackedTaskRecord[]; sources?: SourceRecord[]; attempts?: AttemptRecord[]; events?: InformationEvent[] };
+  const saved = JSON.parse(readFileSync(storeFile, "utf8")) as { nextId: number; obligations: Obligation[]; notes: typeof notes; consents: Consent[]; grants: AuthorityGrant[]; skills?: string[]; workflows?: string[]; crisis?: boolean; language?: string; textSize?: string; approvals?: string[]; adapters?: FrontierAdapter[]; tasks?: PackedTaskRecord[]; sources?: SourceRecord[]; attempts?: AttemptRecord[]; office?: { id: string; kind: string; text: string }[]; events?: InformationEvent[] };
   nextId = saved.nextId;
   obligations.splice(0, obligations.length, ...saved.obligations);
   notes.splice(0, notes.length, ...saved.notes);
@@ -65,6 +66,7 @@ export function reloadLocalCapabilities(): void {
   tasks.splice(0, tasks.length, ...(saved.tasks ?? []));
   sources.splice(0, sources.length, ...(saved.sources ?? []));
   attempts.splice(0, attempts.length, ...(saved.attempts ?? []));
+  office.splice(0, office.length, ...(saved.office ?? []));
   replaceInformationLog(saved.events ?? []);
   for (const adapter of adapters) registerAdapter(adapter);
 }
@@ -85,6 +87,7 @@ export function resetLocalCapabilities(): void {
   tasks.length = 0;
   sources.length = 0;
   attempts.length = 0;
+  office.length = 0;
   replaceInformationLog([]);
   persist();
 }
@@ -215,10 +218,20 @@ export function runLocalCommand(text: string): string | null {
   if (approval) {
     approvals.add(approval[1].trim().toLowerCase());
     persist();
-    return approvals.has("adrian") && approvals.has("other")
-      ? "Both names are recorded. Nothing was sent."
-      : `Recorded ${approval[1].trim()}. Waiting for every required person.`;
+    return approvals.size >= 2
+      ? `Both names are recorded: ${[...approvals].join(", ")}. Nothing was sent.`
+      : `Recorded ${approval[1].trim()}. Waiting for a second named person. None was invented.`;
   }
+  const officeMatch = raw.match(/^(draft invoice|request refund|draft booking|draft outreach|record identity|add service)\s+(.{1,180})$/i);
+  if (officeMatch) {
+    const kind = officeMatch[1].toLowerCase();
+    const item = { id: `f${nextId++}`, kind, text: officeMatch[2].trim() };
+    office.push(item);
+    persist();
+    return `${item.id} recorded as ${kind}: ${item.text}. Nothing was paid, booked, filed, or sent.`;
+  }
+  if (lower === "list office") return office.length ? office.map((item) => `${item.id} ${item.kind}: ${item.text}`).join("; ") : "No office records are stored.";
+  if (lower === "check devices") return detectLocalDevices();
   if (lower === "list approvals") return approvals.size ? [...approvals].join(", ") : "No approvals are recorded.";
   if (lower === "list workflows") return workflows.length ? workflows.join("; ") : "No workflows are saved.";
   if (lower === "show preferences") return `Language ${language}. Text size ${textSize}. Hash check ${hashBody("adrian")}.`;

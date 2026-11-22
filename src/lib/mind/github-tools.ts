@@ -81,6 +81,34 @@ export function runGitHubTool(text: string, root = path.join(os.tmpdir(), "adria
   if (lower === "list tools") return listGitHubTools();
   if (lower === "backup folder") return backupWithRestic(root);
   if (lower === "make model") return makeCubeWithOpenScad(root);
-  if (lower.startsWith("translate ")) return "LibreTranslate is not installed. No text was translated. https://github.com/LibreTranslate/LibreTranslate";
+  const translated = text.trim().match(/^translate\s+(.{1,180})\s+to\s+([A-Za-z]+)$/i);
+  if (translated) return translateWithArgos(translated[1].trim(), translated[2].trim());
   return null;
+}
+
+const LANGUAGE_CODES: Record<string, string> = { spanish: "es", french: "fr", german: "de", portuguese: "pt", english: "en" };
+
+export function translateWithArgos(text: string, language: string): string {
+  const code = LANGUAGE_CODES[language.toLowerCase()];
+  if (!code) return `No installed language package was selected for ${language}. Nothing was translated.`;
+  const python = existsSync("/tmp/argos-venv/bin/python") ? "/tmp/argos-venv/bin/python" : "python3";
+  const script = `import argostranslate.translate as t\nprint(t.translate(${JSON.stringify(text)}, "en", ${JSON.stringify(code)}))`;
+  try {
+    const output = execFileSync(python, ["-c", script], { encoding: "utf8", timeout: 30_000 }).trim();
+    return output ? `Translated to ${language}: ${output}` : "The translator returned nothing. Nothing was invented.";
+  } catch {
+    return "Argos Translate is not installed on this computer. No text was translated. https://github.com/LibreTranslate/LibreTranslate";
+  }
+}
+
+export function detectLocalDevices(): string {
+  const found: string[] = [];
+  if (process.platform === "linux") {
+    try {
+      const listed = execFileSync("bash", ["-lc", "ls /dev/video* /dev/snd 2>/dev/null | head"], { encoding: "utf8" }).trim();
+      if (listed) found.push(listed.replace(/\s+/g, " "));
+    } catch { /* no device node answered */ }
+  }
+  if (!found.length) return "No headset, room controller, sensor, wearable, or neural device answered. None was simulated.";
+  return `Device nodes answered: ${found.join("; ")}. No neural reading was taken. None was simulated.`;
 }
