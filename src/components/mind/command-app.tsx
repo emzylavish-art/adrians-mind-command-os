@@ -1439,10 +1439,7 @@ export function CommandApp() {
       return "smooth";
     }
   });
-  const [guide, setGuide] = useState<FirstStepsState>(() => {
-    if (typeof window === "undefined") return { step: 0, dismissed: true };
-    try { return readFirstSteps(localStorage.getItem(FIRST_STEPS_KEY)); } catch { return { step: 0, dismissed: true }; }
-  });
+  const [guide, setGuide] = useState<FirstStepsState>({ step: 0, dismissed: false });
   const [commandMode, setCommandMode] = useState<CommandMode>("ask");
   const [defaultPersonalityId, setDefaultPersonalityId] = useState<PersonalityId>("assistant");
   const [activeId, setActiveId] = useState<string | null>(null);
@@ -1662,7 +1659,8 @@ export function CommandApp() {
   const [toolsOpen, setToolsOpen] = useState(false);
   const [accountOpen, setAccountOpen] = useState(false);
   const [bellOpen, setBellOpen] = useState(false);
-  const [now, setNow] = useState<Date | null>(() => (typeof window === "undefined" ? null : new Date()));
+  const [now, setNow] = useState<Date | null>(null);
+  const greet = typeof document !== "undefined" && document.querySelector("[data-greeting]")?.getAttribute("data-greeting") || greeting(now ?? new Date());
   const [speaking, setSpeaking] = useState(false);
 
   useEffect(() => {
@@ -6381,7 +6379,7 @@ export function CommandApp() {
             title="Speak is the call. It does not type into the field."
             onClick={openSpeakStage}
           >
-            <Volume2 className="size-4" /> Speak
+            <Volume2 className="size-4" /> <span className="header-speak-label">Speak</span>
           </button>
           <button
             type="button"
@@ -6609,7 +6607,7 @@ export function CommandApp() {
                 <div className="flex w-full flex-wrap items-end justify-between gap-3">
                   <div className="w-full min-w-0">
                     <h1 className="font-display text-3xl font-bold md:text-4xl">
-                      {now ? greeting(now) : "Hello"}, <span className="text-accent">Adrian</span>
+                      <span data-greeting={greet}>{greet}</span>, <span className="text-accent">Adrian</span>
                     </h1>
                     <p className="text-sm text-muted">Ask, build, or connect. The rest lives in Settings.</p>
                     <ModuleSuggestions draft={draft} onPick={pickModule} />
