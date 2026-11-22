@@ -1,6 +1,6 @@
 import { isModelTier, type ModelTier } from "./model-tiers.ts";
 
-export const BOT_PROVIDERS = ["grok", "openai", "anthropic", "gemini", "openrouter"] as const;
+export const BOT_PROVIDERS = ["grok", "openai", "anthropic", "gemini", "openrouter", "nemotron", "ollama"] as const;
 export type BotProvider = (typeof BOT_PROVIDERS)[number];
 
 export type BotModel = {

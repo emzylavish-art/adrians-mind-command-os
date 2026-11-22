@@ -109,9 +109,11 @@ export function BotBuilder({ ws, setWs, onChat, onRun, onSchedule, onSelect, foc
             <span className="mt-1 block text-xs text-muted">Picking a project scopes local run reads to that project.</span>
           </label>
           <label className="block text-sm">Chat provider
-            <select aria-label="Chat provider" value={draft.chatProvider ?? ""} onChange={(event) => change({ chatProvider: (BOT_PROVIDERS as readonly string[]).includes(event.target.value) ? event.target.value as BotDraft["chatProvider"] : null })} className={fields}>
+            <select aria-label="Chat provider" value={draft.chatProvider ?? ""} onChange={(event) => change({ chatProvider: (["nemotron", "ollama", ...BOT_PROVIDERS] as readonly string[]).includes(event.target.value) ? event.target.value as BotDraft["chatProvider"] : null })} className={fields}>
               <option value="">Use Chat’s selected provider</option>
               {BOT_PROVIDERS.map((id) => <option key={id} value={id}>{id}</option>)}
+              <option value="nemotron">Nemotron</option>
+              <option value="ollama">Local model</option>
             </select>
           </label>
           <label className="block text-sm">Chat tier

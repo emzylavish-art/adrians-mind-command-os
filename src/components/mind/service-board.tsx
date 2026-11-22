@@ -74,7 +74,9 @@ const SERVICES: Service[] = [
   { name: "OpenAI", state: "Not configured", detail: "No API key. A chat subscription is not used." },
   { name: "Claude", state: "Not configured", detail: "No API key. Nothing is sent to Anthropic." },
   { name: "Gemini", state: "Not configured", detail: "No API key. Nothing is sent to Google." },
-  { name: "OpenRouter", state: "Not configured", detail: "No API key." },
+  { name: "OpenRouter", state: "Selectable", detail: "Shown in Controls, bots, and the orchestrator. It sends only when a key is connected. Grok is not substituted." },
+  { name: "Nemotron", state: "Selectable", detail: "Free OpenRouter model. It appears in Controls, bots, and the orchestrator. It sends only when OpenRouter is connected." },
+  { name: "Local model", state: "Selectable", detail: "Appears in Controls, bots, and the orchestrator. It sends only when a local runner answers. Grok is not substituted." },
   { name: "Web search", state: "Not configured", detail: "No search endpoint. No citations are created." },
   { name: "Image and video", state: "Ready when the server key is set", detail: "Ask in chat with /imagine. The server uses the Grok image model. Nothing is generated until you ask." },
   { name: "Voice", state: "Not configured", detail: "No speech key and no Grok model key. Nothing was started." },
@@ -128,7 +130,7 @@ export function ServiceBoard({
   const [note, setNote] = useState<{ name: string; text: string } | null>(null);
   const [oauthActionState, setOauthActionState] = useState<OauthBoardActionState>({ status: "idle" });
   const [mcpStorage, setMcpStorage] = useState<{ state: "checking" | "ready" | "error"; detail: string } | null>(null);
-  const [showWaiting, setShowWaiting] = useState(false);
+  const [showWaiting, setShowWaiting] = useState(true);
   const [catalogQuery, setCatalogQuery] = useState("");
   const inFlight = useRef<Set<string>>(new Set());
 
@@ -307,7 +309,7 @@ export function ServiceBoard({
     if (name === "Gmail" || name === "Slack") return "Communication";
     if (name === "Notion" || name === "Google Drive" || name === "Google Docs" || name === "Google Calendar") return "Productivity";
     if (name === "GitHub" || name === "Local computer") return "Developer";
-    if (name === "OpenAI" || name === "Claude" || name === "Gemini" || name === "OpenRouter") return "Models";
+    if (name === "OpenAI" || name === "Claude" || name === "Gemini" || name === "OpenRouter" || name === "Nemotron" || name === "Local model") return "Models";
     if (name === "YouTube" || name === "Web search" || name === "Image and video") return "Research and media";
     if (name === "MCP") return "Custom MCP";
     return "Other";

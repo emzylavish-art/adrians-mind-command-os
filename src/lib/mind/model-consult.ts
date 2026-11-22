@@ -37,6 +37,8 @@ export function builtinModules(input: {
     { id: "anthropic", label: "Claude", connected: keys.anthropic === true },
     { id: "gemini", label: "Gemini", connected: keys.gemini === true },
     { id: "openrouter", label: "OpenRouter", connected: keys.openrouter === true },
+    { id: "nemotron", label: "Nemotron", connected: keys.openrouter === true },
+    { id: "ollama", label: "Local model", connected: false },
   ];
 }
 

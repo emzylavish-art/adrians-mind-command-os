@@ -726,10 +726,12 @@ function keepComposerInside() {
      const shell = node.closest(".thread-shell");
       const stage = node.closest(".main-stage");
      const topbar = stage?.querySelector(".topbar");
-      const search = stage?.querySelector("input[placeholder='Search or jump…']");
-      const searchBottom = search instanceof HTMLElement ? search.getBoundingClientRect().bottom : 0;
-      const stageTop = stage instanceof HTMLElement ? stage.getBoundingClientRect().top : 0;
-      const top = Math.max(topbar instanceof HTMLElement ? Math.ceil(topbar.getBoundingClientRect().height) : 0, Math.ceil(searchBottom - stageTop));
+     const search = stage?.querySelector("input[placeholder='Search or jump…']");
+     const searchBottom = search instanceof HTMLElement ? search.getBoundingClientRect().bottom : 0;
+     const stageTop = stage instanceof HTMLElement ? stage.getBoundingClientRect().top : 0;
+      const controls = [...document.querySelectorAll(".topbar button, .topbar a, .topbar summary")].filter((item) => item instanceof HTMLElement && item.getBoundingClientRect().height > 8);
+      const controlBottom = controls.reduce((lowest, item) => Math.max(lowest, item.getBoundingClientRect().bottom), 0);
+      const top = Math.max(8, Math.ceil((controlBottom || searchBottom) - stageTop) + 4);
      if (shell instanceof HTMLElement) {
        shell.style.setProperty("position", "fixed", "important");
         shell.style.setProperty("left", "0px", "important");
@@ -773,11 +775,11 @@ function keepComposerInside() {
      const thread = column?.querySelector(":scope > .overflow-auto");
      if (thread instanceof HTMLElement) {
        const head = column?.querySelector(":scope > .chat-head");
-       const headHeight = head instanceof HTMLElement ? Math.ceil(head.getBoundingClientRect().height) + 8 : 8;
+       if (head instanceof HTMLElement) head.style.setProperty("display", "none", "important");
        thread.style.setProperty("position", "absolute", "important");
        thread.style.setProperty("left", "0px", "important");
        thread.style.setProperty("right", "0px", "important");
-       thread.style.setProperty("top", `${headHeight}px`, "important");
+       thread.style.setProperty("top", "0px", "important");
        thread.style.setProperty("bottom", `${formHeight + guessHeight}px`, "important");
        thread.style.setProperty("width", "100%", "important");
        thread.style.setProperty("max-width", "none", "important");
@@ -1953,8 +1955,8 @@ export function CommandApp() {
 
   useEffect(() => {
     const storage = typeof localStorage === "undefined" ? null : localStorage;
-    const next = loadConsultModel(storage, consultModules);
-    setConsultModel((current) => (consultModules.some((item) => item.connected && item.id === current) ? current : next));
+   const next = loadConsultModel(storage, consultModules);
+    setConsultModel((current) => (consultModules.some((item) => item.id === current) ? current : next));
   }, [consultModules]);
 
   function chooseConsultModel(id: string) {
@@ -3083,6 +3085,14 @@ export function CommandApp() {
       }
     }
     const isCustomProvider = selectedProvider.startsWith("custom:") && !activeLogic;
+    if (!activeLogic && !isCustomProvider && (selectedProvider === "openrouter" || selectedProvider === "nemotron") && liveProviders.openrouter !== true) {
+      reportFailure("OpenRouter is selected, but no OpenRouter key is connected. Nothing was sent and Grok was not substituted.", "model_unavailable", "provider", null, "setup");
+      return null;
+    }
+    if (!activeLogic && selectedProvider === "ollama") {
+      reportFailure("Local model is selected, but no local runner is reachable from this preview. Nothing was sent and Grok was not substituted.", "model_unavailable", "provider", null, "setup");
+      return null;
+    }
     const otherReady = !activeLogic && !isCustomProvider && selectedProvider !== "grok" && liveProviders[selectedProvider as "openai" | "anthropic" | "gemini" | "openrouter"] === true;
     let routed = chosenProvider(activeLogic || isCustomProvider ? "grok" : selectedProvider, isCustomProvider ? true : grokConfigured);
     if (!otherReady && !activeLogic && !isCustomProvider && !routed.ok) {
@@ -6305,8 +6315,7 @@ export function CommandApp() {
                   </button>
                   {composerEffort === "orchestrator" ? (
                     <div className="flex w-full flex-wrap gap-1" data-testid="orchestrator-models">
-                      {consultModules.filter((item) => item.connected).length === 0 ? <span className="px-3 py-2 text-xs text-muted">No model is connected right now.</span> : null}
-                      {consultModules.filter((item) => item.connected).map((item) => (
+                      {consultModules.map((item) => (
                         <button
                           key={item.id}
                           type="button"
@@ -6318,7 +6327,7 @@ export function CommandApp() {
                           onClick={() => chooseConsultModel(item.id)}
                         >
                           <span>{item.label}</span>
-                          <span className="text-xs text-muted">Consult</span>
+                          <span className="text-xs text-muted">{item.connected ? "Ready" : "Key missing"}</span>
                         </button>
                       ))}
                     </div>
@@ -9888,13 +9897,24 @@ function ProviderPicker({
   const groupOf = (item: { id: string; label: string }) => {
     const label = item.label.toLowerCase();
     if (item.id === "grok" || label.startsWith("grok")) return "Grok";
-    if (item.id === "openai" || label.includes("gpt") || label.includes("astra") || label.includes("sol") || label.includes("luna")) return "OpenAI";
+    if (item.id === "openrouter" || label.includes("nemotron") || label.includes("openrouter")) return "OpenRouter";
+    if (item.id === "ollama" || label.includes("local")) return "Local";
+    if (label.includes("orchestrat")) return "Orchestrator";
+    if (item.id === "openai" || label.includes("gpt") || label.includes("astra") || label.includes("sol") || label.includes("luna")) return "Frontier";
     if (item.id.startsWith("custom:")) return "Saved";
     return "Other";
   };
-  const groups = ["Grok", "OpenAI", "Other", "Saved"].map((title) => ({
+  const visible = [
+    ...choices,
+    ...logicRoutes.map((route) => ({ id: route.id, label: route.label, enabled: route.ready, reason: route.reason })),
+    { id: "openrouter", label: "OpenRouter", enabled: true, reason: choices.find((item) => item.id === "openrouter")?.reason || "Selectable. It sends only when an OpenRouter key is connected. No key is connected in this preview." },
+    { id: "nemotron", label: "Nemotron", enabled: true, reason: "Selectable free OpenRouter model. It does not send until OpenRouter is connected. It is not substituted with Grok." },
+    { id: "ollama", label: "Local model", enabled: true, reason: "Selectable. It sends only when the local runner answers. It is not substituted with Grok." },
+    { id: "orchestrator", label: "Orchestrator", enabled: true, reason: "Use the selected frontier or local model as the direct model, or let the orchestrator choose." },
+  ].filter((item, index, all) => all.findIndex((other) => other.id === item.id) === index);
+  const groups = ["Grok", "Frontier", "OpenRouter", "Local", "Orchestrator", "Other", "Saved"].map((title) => ({
     title,
-    items: choices.filter((item) => groupOf(item) === title && item.enabled),
+    items: visible.filter((item) => groupOf(item) === title),
   })).filter((group) => group.items.length > 0);
   const selected = choices.find((item) => item.id === choice);
   return (

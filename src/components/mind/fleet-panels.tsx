@@ -637,22 +637,25 @@ export function FleetPanel({
             className="min-h-11 rounded-panel border border-line bg-surface px-3 text-sm"
           >
             {["grok", "openai", "anthropic", "gemini", "openrouter", "ollama", ...LOGIC_ROUTES].map((item) => {
+              const label = item === "openrouter" ? "OpenRouter" : item === "ollama" ? "Local model" : item === "grok" ? "Grok" : item;
               const route = logicRoutes.find((row) => row.id === item);
               const menu = route ? logicMenuState(route, route.id) : null;
               return (
                 <option key={item} value={item} disabled={menu ? !menu.selectable : false}>
-                  {menu ? `${menu.label} · ${route?.state}` : item}
+                  {menu ? `${menu.label} · ${route?.state}` : label}
                 </option>
               );
             })}
+            <option value="nemotron">Nemotron · needs OpenRouter</option>
           </select>
           <input value={connectionLabel} onChange={(event) => setConnectionLabel(event.target.value)} placeholder="Connection name" className="min-h-11 rounded-panel border border-line bg-surface px-3 text-sm" />
           <button
             type="button"
             className="min-h-11 rounded-panel bg-accent px-4 text-sm font-semibold text-accent-ink"
             onClick={() => {
-              const stored = provider === "grok" || provider === "openai" || provider === "anthropic" || provider === "gemini" || provider === "openrouter" || provider === "ollama" ? provider : null;
-              if (stored) runMutation(snapshotFleetMutationParams({ kind: "add_connection", provider: stored, label: connectionLabel }));
+              const stored = provider === "nemotron" ? "openrouter" : provider === "grok" || provider === "openai" || provider === "anthropic" || provider === "gemini" || provider === "openrouter" || provider === "ollama" ? provider : null;
+              const label = provider === "nemotron" && !connectionLabel.trim() ? "Nemotron" : connectionLabel;
+              if (stored) runMutation(snapshotFleetMutationParams({ kind: "add_connection", provider: stored, label }));
               else {
                 onSelectProvider?.(provider);
                 setNote("That route is selected for chat. It is not stored as an API key.");

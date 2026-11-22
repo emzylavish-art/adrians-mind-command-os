@@ -806,11 +806,24 @@ html.eve-call-open body > *:not([data-testid="speak-stage"]) {
 }
 
 .speak-call__transcript {
-  max-width: 22rem;
-  margin: 0;
+  width: min(100% - 1.5rem, 52rem);
+  max-width: none;
+  margin: 0 auto;
   color: #d4d4d8;
   text-align: center;
   white-space: pre-wrap;
+}
+
+.speak-stage {
+  display: flex !important;
+  flex-direction: column !important;
+  align-items: stretch !important;
+  justify-content: space-between !important;
+}
+
+.speak-system {
+  width: min(100%, 52rem) !important;
+  flex: 1 1 auto;
 }
 
 .speak-call__pills,
