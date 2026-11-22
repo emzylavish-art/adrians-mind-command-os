@@ -23,4 +23,4 @@ A GitHub repository does not complete these. They stay refused:
 
 The public update feed is still build 7. Source `LOCAL_BUILD` is 8. Those numbers are not the same, and the feed was not published. The old installer hash is still refused. The Windows app and the iPhone were not launched.
 
-The packed `server/index.mjs` now listens. On this machine, `GET /` returned 200 and `POST /api/mind/turn` with `list tools` returned the local tool reply. That page shell loads the existing client assets. It is not the original server renderer, and a non-local chat message returns no invented model reply. The HP EliteBook was not launched.
+The packed `server/index.mjs` now listens. On this machine, `GET /` returned 200, `list tools` returned the local tool reply, and `Say ready.` returned `grok-4.3: Ready.` with model `grok-4.3`. The page shell loads the existing client assets. It is not the original server renderer. The HP EliteBook was not launched. Bank and invoice work was left alone.
