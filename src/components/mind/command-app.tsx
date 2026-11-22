@@ -910,6 +910,29 @@ const MORE_NAV: { id: View; label: string; icon: typeof Home }[] = [
 
 const NAV = NAV_GROUPS.flatMap((group) => group.items);
 
+const NAV_MARKS: Record<string, string> = {
+  build: "/brand/marks/build.png",
+  code: "/brand/marks/chat.png",
+  research: "/brand/marks/research.png",
+  projects: "/brand/marks/projects.png",
+  files: "/brand/marks/library.png",
+  connected: "/brand/marks/plugins.png",
+  scheduled: "/brand/marks/scheduled.png",
+  intelligence: "/brand/marks/eve.png",
+  agents: "/brand/marks/bots.png",
+  tools: "/brand/marks/tools.png",
+  skills: "/brand/marks/skills.png",
+  voice: "/brand/marks/voice.png",
+  runs: "/brand/marks/activity.png",
+  memory: "/brand/marks/memory.png",
+  activity: "/brand/marks/activity.png",
+  help: "/brand/marks/help.png",
+};
+
+function navMark(id: string): string {
+  return NAV_MARKS[id] ?? "/brand/logo-mark.jpg";
+}
+
 const TITLES: Record<View, string> = {
   command: "Chat",
   intelligence: "EVE / Intelligence",
@@ -5676,7 +5699,6 @@ export function CommandApp() {
               {!railCollapsed && <p ref={showRailLabel} className="meta-label px-3 pb-2">{group.label}</p>}
               <div className="space-y-1">
                 {group.items.map((item, itemIndex) => {
-                  const Icon = item.icon;
                   const on = view === item.id;
                   const button = (
                     <button
@@ -5692,7 +5714,7 @@ export function CommandApp() {
                       }}
                       className={`nav-item flex min-h-11 w-full items-center gap-3 rounded-2xl px-3 text-sm font-medium ${on ? "nav-item-active" : "text-muted hover:bg-white/5"} ${railCollapsed ? "justify-center px-0" : ""}`}
                     >
-                      <Icon className="size-4 shrink-0 opacity-90" />
+                      <img className="service-mark size-5 shrink-0 rounded-md object-cover" src={navMark(item.id)} alt="" width={22} height={22} />
                       {!railCollapsed && item.label}
                     </button>
                   );
@@ -5707,7 +5729,7 @@ export function CommandApp() {
             className={`nav-item flex min-h-11 items-center gap-3 rounded-2xl px-3 text-sm font-medium text-muted ${railCollapsed ? "justify-center" : ""}`}
             onClick={() => setNavOpen(false)}
           >
-            <Compass className="size-4 shrink-0 opacity-90" />
+            <img className="service-mark size-5 rounded-md object-cover" src="/brand/marks/explore.png" alt="" width={22} height={22} />
             {!railCollapsed && "Explore"}
           </Link>
           <Link
@@ -5716,7 +5738,7 @@ export function CommandApp() {
             className={`nav-item flex min-h-11 items-center gap-3 rounded-2xl px-3 text-sm font-medium text-muted ${railCollapsed ? "justify-center" : ""}`}
             onClick={() => setNavOpen(false)}
           >
-            <img className="service-mark" src="/brand/marks/explore.png" alt="" width={22} height={22} />
+            <img className="service-mark size-5 rounded-md object-cover" src="/brand/marks/research.png" alt="" width={22} height={22} />
             {!railCollapsed && "Research"}
           </Link>
           <Link
@@ -5725,7 +5747,7 @@ export function CommandApp() {
             className={`nav-item flex min-h-11 items-center gap-3 rounded-2xl px-3 text-sm font-medium text-muted ${railCollapsed ? "justify-center" : ""}`}
             onClick={() => setNavOpen(false)}
           >
-            <img className="service-mark" src="/brand/marks/plugins.png" alt="" width={22} height={22} />
+            <img className="service-mark size-5 rounded-md object-cover" src="/brand/logo-mark.jpg" alt="" width={22} height={22} />
             {!railCollapsed && "Social"}
           </Link>
           {!railCollapsed && (
@@ -5756,7 +5778,6 @@ export function CommandApp() {
                     {ids.map((id) => {
                       const item = MORE_NAV.find((entry) => entry.id === id);
                       if (!item) return null;
-                      const Icon = item.icon;
                       return (
                         <button
                           key={item.id}
@@ -5766,7 +5787,7 @@ export function CommandApp() {
                           onClick={() => { setView(item.id); setNavMoreOpen(false); setNavOpen(false); }}
                           data-testid={item.id === "voice" ? "nav-voice-clone" : undefined}
                         >
-                          <Icon className="size-4 shrink-0 opacity-90" />
+                          <img className="service-mark size-5 shrink-0 rounded-md object-cover" src={navMark(item.id)} alt="" width={22} height={22} />
                           {item.label}
                         </button>
                       );

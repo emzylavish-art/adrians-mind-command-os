@@ -76,7 +76,7 @@ const SERVICES: Service[] = [
   { name: "Gemini", state: "Not configured", detail: "No API key. Nothing is sent to Google." },
   { name: "OpenRouter", state: "Not configured", detail: "No API key." },
   { name: "Web search", state: "Not configured", detail: "No search endpoint. No citations are created." },
-  { name: "Image and video", state: "Not called", detail: "Paid generation is not run from this app." },
+  { name: "Image and video", state: "Ready when the server key is set", detail: "Ask in chat with /imagine. The server uses the Grok image model. Nothing is generated until you ask." },
   { name: "Voice", state: "Not configured", detail: "No speech key and no Grok model key. Nothing was started." },
   { name: "MCP", state: "Not connected", detail: "No MCP server has answered a handshake. Nothing is called." },
   { name: "Local computer", state: "Not paired", detail: "No HP laptop or phone is paired. No files are changed." },
