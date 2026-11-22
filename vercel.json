@@ -9,7 +9,12 @@
     },
     {
       "source": "/downloads/AdriansMind-Setup.exe",
-      "destination": "https://github.com/emzylavish-art/adrians-mind-live/releases/download/desktop-installer/AdriansMind-Setup.exe",
+      "destination": "https://github.com/emzylavish-art/adrians-mind-command-os/releases/tag/desktop-installer",
+      "permanent": false
+    },
+    {
+      "source": "/downloads/AdriansMind-Setup-Full.exe",
+      "destination": "https://github.com/emzylavish-art/adrians-mind-command-os/releases/tag/desktop-installer",
       "permanent": false
     }
   ],

@@ -53,7 +53,8 @@ test("a missing or unsigned manifest does not install or load a page", () => {
 
 test("download hosts are pinned and redirects cannot choose the window", () => {
   assert.equal(isAllowedDownloadUrl(`${CLOUD_ORIGIN}/downloads/AdriansMind-Setup.exe`), true);
-  assert.equal(isAllowedDownloadUrl("https://github.com/emzylavish-art/adrians-mind-command-os/releases/download/desktop-installer/AdriansMind-Setup.exe"), true);
+  assert.equal(isAllowedDownloadUrl("https://github.com/emzylavish-art/adrians-mind-command-os/releases/download/desktop-installer/AdriansMind-Setup-Full.exe.part00"), true);
+  assert.equal(isAllowedDownloadUrl("https://github.com/emzylavish-art/adrians-mind-command-os/releases/download/desktop-installer/AdriansMind-Setup.exe"), false);
   assert.equal(isAllowedDownloadUrl(PUBLIC_INSTALLER), true);
   assert.equal(isAllowedDownloadUrl("https://release-assets.githubusercontent.com/file"), false);
   assert.equal(isAllowedDownloadUrl("https://release-assets.githubusercontent.com/file", 1), true);
@@ -112,7 +113,7 @@ test("an engine-sized installer can install and a file at the release limit cann
 test("the future site download points at the public installer and not a private token", () => {
   const vercel = JSON.parse(readFileSync(join(root, "vercel.json"), "utf8"));
   const redirect = vercel.redirects.find((item: { source?: string }) => item.source === "/downloads/AdriansMind-Setup.exe");
-  assert.equal(redirect.destination, PUBLIC_INSTALLER);
+  assert.match(redirect.destination, /releases\/tag\/desktop-installer/);
   assert.equal(JSON.stringify(vercel).includes("ghp_"), false);
 });
 

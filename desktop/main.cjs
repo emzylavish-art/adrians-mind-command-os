@@ -13,6 +13,7 @@ const {
   UPDATE_PATH,
   chooseCloud,
   decideUpdate,
+  decideFullUpdate,
   hashesMatch,
   isAllowedDownloadUrl,
 } = require("./cloud-update.cjs");
@@ -134,7 +135,7 @@ async function readCloud() {
   return chooseCloud(vercel, published);
 }
 
-async function downloadVerified(url, sha256, size) {
+async function downloadVerified(url, sha256, size, destName = "AdriansMind-Setup.exe") {
   let current = url;
   for (let hop = 0; hop < 4; hop += 1) {
     if (!isAllowedDownloadUrl(current, hop)) return null;
@@ -150,7 +151,7 @@ async function downloadVerified(url, sha256, size) {
     if (declared !== size) return null;
     const dir = path.join(app.getPath("temp"), "adrians-mind-update");
     mkdirSync(dir, { recursive: true });
-    const file = path.join(dir, "AdriansMind-Setup.exe");
+    const file = path.join(dir, destName);
     const part = `${file}.part`;
     const hash = createHash("sha256");
     let written = 0;
@@ -193,6 +194,57 @@ async function checkCloud(window) {
     remote = await readCloud();
   } catch {
     remote = null;
+  }
+  const fullDecision = decideFullUpdate(LOCAL_BUILD, remote);
+  if (fullDecision.action === "full-install" && fullDecision.fullPackage) {
+    const pack = fullDecision.fullPackage;
+    const dir = path.join(app.getPath("temp"), "adrians-mind-full-update");
+    mkdirSync(dir, { recursive: true });
+    const parts = [];
+    let done = 0;
+    for (const part of pack.parts) {
+      const got = await downloadVerified(part.url, part.sha256, part.size, part.name).catch(() => null);
+      if (!got) return;
+      parts.push(got);
+      done += part.size;
+      console.log(`[full-update] ${done}/${pack.size} ${part.name}`);
+    }
+    const finalPath = path.join(dir, pack.finalName);
+    const { createReadStream } = require("node:fs");
+    await new Promise((resolve, reject) => {
+      const ws = createWriteStream(finalPath);
+      ws.on("error", reject);
+      (async () => {
+        try {
+          for (const partPath of parts) {
+            await new Promise((res, rej) => {
+              const rs = createReadStream(partPath);
+              rs.on("error", rej);
+              rs.on("end", res);
+              rs.pipe(ws, { end: false });
+            });
+          }
+          ws.end();
+          ws.on("finish", resolve);
+        } catch (error) {
+          reject(error);
+        }
+      })();
+    });
+    const hash = createHash("sha256");
+    await new Promise((resolve, reject) => {
+      const rs = createReadStream(finalPath);
+      rs.on("data", (chunk) => hash.update(chunk));
+      rs.on("error", reject);
+      rs.on("end", resolve);
+    });
+    const stat = require("node:fs").statSync(finalPath);
+    if (stat.size !== pack.size || !hashesMatch(pack.sha256, hash.digest("hex"))) {
+      rmSync(finalPath, { force: true });
+      return;
+    }
+    if (launchInstaller(finalPath)) app.quit();
+    return;
   }
   const decision = decideUpdate(LOCAL_BUILD, remote);
   if (decision.action !== "install" || !decision.url || !remote) return;
