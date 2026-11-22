@@ -1,6 +1,50 @@
 # Adrian's Mind Command OS
 
-Private source for Adrian's Mind Command OS. This repository is the implementation home for the owner-controlled command center and its AI agent/tool runtime. It is not Oak Bridge or BridgePoint, and those projects are not used as its database.
+Source for Adrian's Mind Command OS. This repository is the implementation home for the owner-controlled command center and its AI agent/tool runtime. It is not Oak Bridge or BridgePoint, and those projects are not used as its database.
+
+## Windows installer
+
+There is one product: `AdriansMind-Setup-Full.exe`. The old thin installer is retired. GitHub cannot host one 6 GB file, so the release is four parts. Download all four, join them, then check the hash before you install.
+
+Release: https://github.com/emzylavish-art/adrians-mind-command-os/releases/tag/desktop-installer
+
+Site download: https://adrians-mind.vercel.app/downloads/AdriansMind-Setup.exe
+
+Download these files from that release:
+
+- `AdriansMind-Setup-Full.exe.part00`
+- `AdriansMind-Setup-Full.exe.part01`
+- `AdriansMind-Setup-Full.exe.part02`
+- `AdriansMind-Setup-Full.exe.part03`
+
+Put them in the same folder. On Windows, join them in that order:
+
+```bat
+cmd /c copy /b AdriansMind-Setup-Full.exe.part00+AdriansMind-Setup-Full.exe.part01+AdriansMind-Setup-Full.exe.part02+AdriansMind-Setup-Full.exe.part03 AdriansMind-Setup-Full.exe
+```
+
+The joined file must be 6,389,066,607 bytes. Its SHA-256 must start with `e88ff220` and match the full hash exactly:
+
+```text
+e88ff2205540742bd5d9ee75be09e9938e522a00ce0f0514af6c5da14a2d0550
+```
+
+Check it in PowerShell:
+
+```powershell
+Get-FileHash .\AdriansMind-Setup-Full.exe -Algorithm SHA256
+```
+
+If the hash does not match, do not install. Download the parts again. Do not mix this file with any older thin `AdriansMind-Setup.exe`.
+
+Part hashes:
+
+| Part | Bytes | SHA-256 |
+| --- | ---: | --- |
+| part00 | 1992294400 | 6981d9d2f71aeaf0ee8513ae41cb597a9aa0b38db16bad4d04746ef6783d4391 |
+| part01 | 1992294400 | 4a5707ea3ff877079905308895a826b0dcaa5cce30353296e7c36972405c23d0 |
+| part02 | 1992294400 | 68737294d7b9f4db44717196f1841b2c91f1dae918c1725dda75a2740958d7ac |
+| part03 | 412183407 | ba4642adb7618c8ff25979584093849c3477facaf0508e6e39f8b20ffb2f0870 |
 
 ## AI team and callable tools
 
