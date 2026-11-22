@@ -3,7 +3,7 @@ export const UPDATE_PATH = "/api/mind/desktop-update";
 export const INSTALLER_PATH = "/downloads/AdriansMind-Setup.exe";
 export const PUBLIC_FEED = "https://raw.githubusercontent.com/emzylavish-art/adrians-mind-live/main/desktop-update.json";
 export const PUBLIC_INSTALLER = "https://github.com/emzylavish-art/adrians-mind-live/releases/download/desktop-installer/AdriansMind-Setup.exe";
-export const LOCAL_BUILD = 1;
+export const LOCAL_BUILD = 2;
 export const LOCAL_VERSION = "0.9.0";
 
 const GITHUB_ASSETS = new Set([
@@ -30,8 +30,8 @@ export const publishedManifest = {
   version: LOCAL_VERSION,
   build: LOCAL_BUILD,
   download: INSTALLER_PATH,
-  sha256: "7a18f18887352247b2af8e64ba6b836866e089c90a42a6860e28135362751eb2",
-  size: 110319784,
+  sha256: "85d13ea835f8de13cf64b065db74b67c4eba92dc345763f3d4b83beebdafe7f8",
+  size: 597932744,
 };
 
 export function isAllowedDownloadUrl(value: string, hop = 0): boolean {
@@ -65,7 +65,7 @@ export function validHash(value: unknown): value is string {
 }
 
 export function validSize(value: unknown): value is number {
-  return Number.isInteger(value) && (value as number) > 0 && (value as number) < 500_000_000;
+  return Number.isInteger(value) && (value as number) > 0 && (value as number) < 2_000_000_000;
 }
 
 export function hashesMatch(expected: string, actual: string): boolean {

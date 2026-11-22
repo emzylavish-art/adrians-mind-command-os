@@ -19,6 +19,42 @@ const {
 
 const PORT = "41731";
 const HOST = "127.0.0.1";
+const engineChildren = [];
+
+function engineRoot() {
+  if (app.isPackaged) return path.join(process.resourcesPath, "engines");
+  return path.join(__dirname, "engines");
+}
+
+function startEngines() {
+  if (process.platform !== "win32") return;
+  const root = engineRoot();
+  const node = path.join(root, "node.exe");
+  const required = ["node.exe", "ffmpeg.exe", "transcribe-cli.exe", "handy-server.mjs", "opus-server.mjs"];
+  if (required.some((name) => !existsSync(path.join(root, name)))) return;
+  const shared = {
+    ...process.env,
+    ADRIAN_ENGINE_ROOT: root,
+    ADRIAN_TRANSCRIBE: path.join(root, "transcribe-cli.exe"),
+    ADRIAN_FFMPEG: path.join(root, "ffmpeg.exe"),
+    ADRIAN_WHISPER_MODEL: path.join(root, "models", "whisper-tiny.en-Q8_0.gguf"),
+    ADRIAN_OPUS_CACHE: path.join(root, "opus-cache"),
+  };
+  for (const script of ["handy-server.mjs", "opus-server.mjs"]) {
+    engineChildren.push(spawn(node, [path.join(root, script)], {
+      cwd: root,
+      env: shared,
+      windowsHide: true,
+      stdio: "ignore",
+    }));
+  }
+}
+
+function stopEngines() {
+  for (const child of engineChildren) {
+    if (!child.killed) child.kill();
+  }
+}
 
 function serverRoot() {
   if (app.isPackaged) return path.join(process.resourcesPath, "app-server");
@@ -102,7 +138,7 @@ async function downloadVerified(url, sha256, size) {
   let current = url;
   for (let hop = 0; hop < 4; hop += 1) {
     if (!isAllowedDownloadUrl(current, hop)) return null;
-    const response = await fetch(current, { redirect: "manual", signal: AbortSignal.timeout(120000) });
+    const response = await fetch(current, { redirect: "manual", signal: AbortSignal.timeout(1800000) });
     if (response.status >= 300 && response.status < 400) {
       const next = response.headers.get("location");
       if (!next) return null;
@@ -173,8 +209,10 @@ app.whenReady().then(async () => {
     return;
   }
   const child = startServer();
+  startEngines();
   app.on("before-quit", () => {
     if (!child.killed) child.kill();
+    stopEngines();
   });
   const window = new BrowserWindow({
     width: 1280,

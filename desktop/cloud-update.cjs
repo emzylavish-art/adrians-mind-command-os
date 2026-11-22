@@ -3,7 +3,7 @@ const UPDATE_PATH = "/api/mind/desktop-update";
 const INSTALLER_PATH = "/downloads/AdriansMind-Setup.exe";
 const PUBLIC_FEED = "https://raw.githubusercontent.com/emzylavish-art/adrians-mind-live/main/desktop-update.json";
 const PUBLIC_INSTALLER = "https://github.com/emzylavish-art/adrians-mind-live/releases/download/desktop-installer/AdriansMind-Setup.exe";
-const LOCAL_BUILD = 1;
+const LOCAL_BUILD = 2;
 const LOCAL_VERSION = "0.9.0";
 const GITHUB_ASSETS = new Set([
   "/emzylavish-art/adrians-mind-command-os/releases/download/desktop-installer/AdriansMind-Setup.exe",
@@ -46,7 +46,7 @@ function validHash(value) {
 }
 
 function validSize(value) {
-  return Number.isInteger(value) && value > 0 && value < 500_000_000;
+  return Number.isInteger(value) && value > 0 && value < 2_000_000_000;
 }
 
 function hashesMatch(expected, actual) {

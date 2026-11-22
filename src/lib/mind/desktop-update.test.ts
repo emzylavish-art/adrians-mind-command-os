@@ -96,8 +96,19 @@ test("the launcher pins the same host and does not embed a token", () => {
   assert.equal(rules.includes("github_pat_"), false);
   assert.equal(cjs.LOCAL_BUILD, LOCAL_BUILD);
   assert.equal(cjs.CLOUD_ORIGIN, CLOUD_ORIGIN);
+  assert.match(launcher, /process\.platform !== "win32"/);
+  assert.match(launcher, /node\.exe/);
+  assert.match(launcher, /resourcesPath/);
+  assert.equal(launcher.includes("ELECTRON_RUN_AS_NODE"), true);
 });
 
+test("an engine-sized installer can install and a file at the release limit cannot", () => {
+  assert.equal(decideUpdate(1, { ...remote, size: 600_000_000 }).action, "install");
+  assert.equal(cjs.validSize(600_000_000), true);
+  assert.equal(cjs.validSize(500_000_000), true);
+  assert.equal(decideUpdate(1, { ...remote, size: 2_000_000_000 }).action, "switch");
+  assert.equal(cjs.validSize(2_000_000_000), false);
+});
 test("the future site download points at the public installer and not a private token", () => {
   const vercel = JSON.parse(readFileSync(join(root, "vercel.json"), "utf8"));
   const redirect = vercel.redirects.find((item: { source?: string }) => item.source === "/downloads/AdriansMind-Setup.exe");
