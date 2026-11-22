@@ -1,0 +1,3 @@
+qwen2.5-0.5b-instruct-q4_k_m.gguf sha256:
+74a4da8c9fdbcd15bd1f6d01d621410d31c6fc00986f5eb687824e7b93d7a9db  /tmp/adrian-visual-handoff/desktop/engines/local-model/models/qwen2.5-0.5b-instruct-q4_k_m.gguf
+Place qwen2.5-0.5b-instruct-q4_k_m.gguf here (or use full installer).
