@@ -3001,6 +3001,17 @@ header.page-hero nav {
 }
 
 /* light-readability-2026 */
+@media (prefers-reduced-motion: reduce) {
+  .shell *,
+  .shell *::before,
+  .shell *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
 html[data-theme="light"] .shell,
 html[data-theme="light"] .shell :where(p, span, label, li, h1, h2, h3, h4, a, button, summary, small, strong, div, td, th, option) {
   color: #000 !important;
