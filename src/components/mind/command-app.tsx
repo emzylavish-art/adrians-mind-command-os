@@ -730,15 +730,16 @@ function keepComposerInside() {
       const searchBottom = search instanceof HTMLElement ? search.getBoundingClientRect().bottom : 0;
       const stageTop = stage instanceof HTMLElement ? stage.getBoundingClientRect().top : 0;
       const top = Math.max(topbar instanceof HTMLElement ? Math.ceil(topbar.getBoundingClientRect().height) : 0, Math.ceil(searchBottom - stageTop));
-      if (shell instanceof HTMLElement) {
-        shell.style.setProperty("position", "fixed", "important");
+     if (shell instanceof HTMLElement) {
+       shell.style.setProperty("position", "fixed", "important");
         shell.style.setProperty("left", "0px", "important");
-        shell.style.setProperty("right", "0px", "important");
-        shell.style.setProperty("top", `${top}px`, "important");
-        shell.style.setProperty("bottom", "0px", "important");
-        shell.style.setProperty("width", "100%", "important");
+       shell.style.setProperty("right", "0px", "important");
+       shell.style.setProperty("top", `${top}px`, "important");
+       shell.style.setProperty("bottom", "0px", "important");
+       shell.style.setProperty("width", "auto", "important");
         shell.style.setProperty("max-width", "none", "important");
-        shell.style.setProperty("height", "auto", "important");
+        shell.style.setProperty("height", `${Math.max(240, window.innerHeight - top)}px`, "important");
+        shell.style.setProperty("overflow", "hidden", "important");
         shell.style.setProperty("margin", "0", "important");
         shell.style.setProperty("z-index", "5", "important");
       }
@@ -749,17 +750,24 @@ function keepComposerInside() {
         column.style.setProperty("height", "100%", "important");
         column.style.setProperty("min-height", "0", "important");
       }
-      node.style.setProperty("position", "absolute", "important");
-      node.style.setProperty("left", "0px", "important");
-      node.style.setProperty("right", "0px", "important");
-      node.style.setProperty("width", "100%", "important");
-      node.style.setProperty("max-width", "none", "important");
-      node.style.setProperty("bottom", "0px", "important");
+     node.style.setProperty("position", "absolute", "important");
+     node.style.setProperty("left", "0px", "important");
+     node.style.setProperty("right", "0px", "important");
+      node.style.setProperty("width", "auto", "important");
+     node.style.setProperty("max-width", "none", "important");
+     node.style.setProperty("bottom", "0px", "important");
       node.style.setProperty("margin", "0", "important");
       node.style.setProperty("padding", "0.55rem 0.75rem 0px", "important");
       node.style.setProperty("border-radius", "0", "important");
       node.style.setProperty("box-sizing", "border-box", "important");
      const formHeight = Math.ceil(node.getBoundingClientRect().height || 120);
+      if (stage instanceof HTMLElement) stage.style.setProperty("transform", "none", "important");
+     node.style.setProperty("position", "fixed", "important");
+     node.style.setProperty("left", "0px", "important");
+     node.style.setProperty("right", "0px", "important");
+     node.style.setProperty("bottom", "0px", "important");
+     node.style.setProperty("width", "100%", "important");
+     node.style.setProperty("z-index", "40", "important");
       const guesses = document.querySelector(".shell[data-view='chat'] .next-guesses");
       const guessHeight = guesses instanceof HTMLElement ? Math.ceil(guesses.getBoundingClientRect().height) + 8 : 0;
      const thread = column?.querySelector(":scope > .overflow-auto");
