@@ -64,7 +64,7 @@ export function catalogModuleChoices(rows: { id: string; label: string; models: 
 export type DiscoveredCapability = {
   id: string;
   label: string;
-  kind: "model" | "mcp-tool";
+  kind: "model" | "mcp-tool" | "service";
   usable: boolean;
   reason: string;
 };
@@ -75,6 +75,7 @@ const TOOL_NAME = /^[A-Za-z0-9_-]{1,80}$/;
 export function discoveredCapabilities(input: {
   models: { id: string; label: string; models: string[] }[];
   mcp: { id: string; label: string; state: string; tools: { name: string; description?: string }[] }[];
+  services?: { id: string; label: string; connected: boolean }[];
 }): DiscoveredCapability[] {
   const models = catalogModuleChoices(input.models).map((item) => ({
     ...item,
@@ -101,7 +102,26 @@ export function discoveredCapabilities(input: {
       });
     }
   }
-  return [...models, ...tools];
+  return [...models, ...tools, ...serviceCapabilities(input.services ?? [])];
+}
+
+export function serviceCapabilities(rows: { id: string; label: string; connected: boolean }[]): DiscoveredCapability[] {
+  const out: DiscoveredCapability[] = [];
+  const seen = new Set<string>();
+  for (const row of rows) {
+    if (!row.id || seen.has(row.id)) continue;
+    seen.add(row.id);
+    out.push({
+      id: `service:${row.id}`,
+      label: row.label,
+      kind: "service",
+      usable: row.connected,
+      reason: row.connected
+        ? `${row.label} is connected. Selecting it opens that service. It is not sent to Grok.`
+        : `${row.label} is not connected. Nothing was sent and Grok was not substituted.`,
+    });
+  }
+  return out;
 }
 
 export function mcpToolCallText(choice: string, text: string): { ok: true; text: string; serverId: string; tool: string } | { ok: false; error: string } {

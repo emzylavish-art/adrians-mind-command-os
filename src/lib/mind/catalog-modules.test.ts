@@ -24,8 +24,11 @@ test("MCP tools sit in the same discovery list and a selected tool is called by 
   const found = discoveredCapabilities({
     models: [{ id: "aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee", label: "Future API", models: ["one"] }],
     mcp: [{ id: "bbbbbbbb-bbbb-cccc-dddd-eeeeeeeeeeee", label: "Files", state: "connected", tools: [{ name: "read_file", description: "Read a file" }, { name: "write_file" }] }],
+    services: [{ id: "notion", label: "Notion", connected: false }, { id: "social", label: "Adrian Social", connected: true }],
   });
-  assert.deepEqual(found.map((item) => item.kind), ["model", "mcp-tool", "mcp-tool"]);
+  assert.deepEqual(found.map((item) => item.kind), ["model", "mcp-tool", "mcp-tool", "service", "service"]);
+  assert.equal(found.find((item) => item.id === "service:notion")?.usable, false);
+  assert.equal(found.find((item) => item.id === "service:social")?.usable, true);
   const call = mcpToolCallText(found[1].id, "notes.txt");
   assert.equal(call.ok && call.text, "call mcp tool read_file on server bbbbbbbb-bbbb-cccc-dddd-eeeeeeeeeeee notes.txt");
   const gated = discoveredCapabilities({ models: [], mcp: [{ id: "bbbbbbbb-bbbb-cccc-dddd-eeeeeeeeeeee", label: "Files", state: "failed", tools: [{ name: "read_file" }] }] });

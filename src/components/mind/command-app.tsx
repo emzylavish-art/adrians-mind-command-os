@@ -2082,7 +2082,16 @@ export function CommandApp() {
   const [notionPages, setNotionPages] = useState<{ id: string; title: string; url: string }[]>([]);
   const [notionNote, setNotionNote] = useState<string | null>(null);
   const [mcpServers, setMcpServers] = useState<SavedMcpServer[]>([]);
-  const discovered = discoveredCapabilities({ models: customAiProviders, mcp: mcpServers });
+  const discovered = discoveredCapabilities({
+    models: customAiProviders,
+    mcp: mcpServers,
+    services: [
+      { id: "notion", label: "Notion", connected: notion?.state === "connected" },
+      { id: "drive", label: "Google Drive", connected: driveConnected },
+      { id: "social", label: "Adrian Social", connected: true },
+      { id: "gpt-wrapper", label: "GPT wrapper", connected: true },
+    ],
+  });
   const catalogModels = discovered.map((item) => ({ id: item.id, label: item.label }));
   const [mcpRegistry, setMcpRegistry] = useState<{ id: string; label: string; kind: string; enabled: boolean }[]>([]);
   const [mcpRegistryListState, setMcpRegistryListState] = useState<McpListState>({ status: "loading" });
@@ -3089,6 +3098,19 @@ export function CommandApp() {
         return null;
       }
       void askMcp(chat, call.text);
+      return null;
+    }
+    if (selectedProvider.startsWith("service:")) {
+      const chosen = discovered.find((item) => item.id === selectedProvider);
+      if (!chosen?.usable) {
+        reportFailure(chosen?.reason || "That service is not connected. Nothing was sent and Grok was not substituted.", "model_unavailable", "provider", null, "setup");
+        return null;
+      }
+      const name = selectedProvider.slice("service:".length);
+      if (name === "social") window.location.assign("/social");
+      else if (name === "gpt-wrapper") window.location.assign("/gpt-wrapper");
+      else if (name === "drive") setCloudPickerOpen(true);
+      else if (name === "notion") setView("connected");
       return null;
     }
     const activeLogic = options && "logicRoute" in options
@@ -9929,7 +9951,7 @@ function ProviderPicker({
     if (item.id === "ollama" || label.includes("local")) return "Local";
     if (label.includes("orchestrat")) return "Orchestrator";
     if (item.id === "openai" || label.includes("gpt") || label.includes("astra") || label.includes("sol") || label.includes("luna")) return "Frontier";
-    if (item.id.startsWith("custom:") || item.id.startsWith("mcp:")) return "Saved";
+    if (item.id.startsWith("custom:") || item.id.startsWith("mcp:") || item.id.startsWith("service:")) return "Saved";
     return "Other";
   };
   const visible = [

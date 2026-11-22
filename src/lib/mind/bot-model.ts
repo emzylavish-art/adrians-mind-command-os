@@ -13,8 +13,9 @@ export function normalizeBotModel(input: { chatProvider?: unknown; chatTier?: un
   const tier = input?.chatTier;
   const catalog = typeof provider === "string" && /^custom:[0-9a-f-]{36}:.{1,300}$/i.test(provider);
   const tool = typeof provider === "string" && /^mcp:[0-9a-f-]{36}:[A-Za-z0-9_%-]{1,240}$/i.test(provider);
+  const service = typeof provider === "string" && /^service:[a-z0-9-]{1,40}$/i.test(provider);
   return {
-    chatProvider: typeof provider === "string" && ((BOT_PROVIDERS as readonly string[]).includes(provider) || catalog || tool) ? provider : null,
+    chatProvider: typeof provider === "string" && ((BOT_PROVIDERS as readonly string[]).includes(provider) || catalog || tool || service) ? provider : null,
     chatTier: isModelTier(tier) ? tier : null,
   };
 }
