@@ -26,7 +26,8 @@ export function TalkingHeadFace({ framing = "upper" }: { framing?: string }) {
     let stopped = false;
     void (async () => {
       try {
-        const mod = await import("talkinghead") as { TalkingHead: new (node: HTMLElement, options?: Record<string, unknown>) => TalkingHeadInstance };
+        const spec = "talkinghead";
+        const mod = await import(/* @vite-ignore */ spec) as { TalkingHead: new (node: HTMLElement, options?: Record<string, unknown>) => TalkingHeadInstance };
         if (stopped) return;
         const instance = new mod.TalkingHead(mount, {
           lipsyncModules: [],

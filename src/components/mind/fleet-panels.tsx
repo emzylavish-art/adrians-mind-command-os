@@ -493,7 +493,7 @@ export function FleetPanel({
         </details>
         <div className="mt-3 grid min-w-0 gap-2 rounded-panel border border-line p-3" data-testid="paperclip-runtime-status">
           <div className="flex flex-wrap items-center justify-between gap-2">
-            <div><p className="font-semibold">Paperclip runtime</p><p className="mt-1 text-xs text-muted">External agent and run status. Browser worker tools run locally from Runs.</p></div>
+            <div><p className="font-semibold">Paperclip runtime, optional</p><p className="mt-1 text-xs text-muted">Not required. Adrian-owned bots are saved on this device. This card only checks an external service.</p></div>
             <button
               type="button"
               data-testid="paperclip-refresh"

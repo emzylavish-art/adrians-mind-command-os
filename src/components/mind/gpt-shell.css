@@ -774,7 +774,7 @@ html.eve-call-open body > *:not([data-testid="speak-stage"]) {
   border-radius: 999px;
   background: #f5f5f5;
   color: #111;
-  font-weight: 650;
+  font-weight: 700;
   padding: 0 0.8rem;
 }
 
@@ -1054,7 +1054,7 @@ html.eve-call-open body > *:not([data-testid="speak-stage"]) {
     border-radius: 8px;
     background: #f5f5f5;
     color: #111;
-    font-weight: 650;
+    font-weight: 700;
   }
   .main-stage .code-ide-status button:disabled {
     opacity: 0.5;
@@ -1076,7 +1076,7 @@ html.eve-call-open body > *:not([data-testid="speak-stage"]) {
     border-radius: 8px;
     background: #f5f5f5;
     color: #111;
-    font-weight: 650;
+    font-weight: 700;
     padding: 0 0.7rem;
   }
   .main-stage .code-ide-results {
@@ -1198,7 +1198,7 @@ html.eve-call-open body > *:not([data-testid="speak-stage"]) {
 .intelligence-group h3 {
   margin: 0 0 0.55rem;
   font-size: 0.72rem;
-  font-weight: 650;
+  font-weight: 700;
   letter-spacing: 0.08em;
   text-transform: uppercase;
   color: #a1a1aa;
@@ -1532,7 +1532,7 @@ img.service-mark.on-tile {
   padding: 0.75rem 1rem 0.2rem;
   color: #a1a1aa;
   font-size: 0.78rem;
-  font-weight: 650;
+  font-weight: 700;
   letter-spacing: 0;
   text-transform: none;
 }
@@ -1545,7 +1545,7 @@ img.service-mark.on-tile {
   padding: 0.75rem 1rem;
   color: #f5f5f5;
   font-size: 0.95rem;
-  font-weight: 650;
+  font-weight: 700;
   cursor: pointer;
   list-style: none;
 }
@@ -1611,7 +1611,7 @@ img.service-mark.on-tile {
 
 .settings-index button strong {
   font-size: 0.98rem;
-  font-weight: 650;
+  font-weight: 700;
   white-space: normal;
   overflow: visible;
 }
@@ -1803,7 +1803,7 @@ img.service-mark.on-tile {
   align-items: center;
   min-height: 2.6rem;
   cursor: pointer;
-  font-weight: 650;
+  font-weight: 700;
 }
 
 .thread-chat-settings:not([open]) > :not(summary) {
@@ -2508,7 +2508,7 @@ form.thread-composer {
   align-items: center;
   min-height: 2.6rem;
   cursor: pointer;
-  font-weight: 650;
+  font-weight: 700;
 }
 
 .provider-group:not([open]) > :not(summary),
@@ -2655,7 +2655,7 @@ html[data-theme="light"] .shell .topbar > button[aria-label="Open menu"] {
   background: #171717;
   padding: 0.2rem 0.7rem 0.2rem 0.25rem;
   font-size: 0.95rem;
-  font-weight: 650;
+  font-weight: 700;
 }
 .surface-switch { position: relative; z-index: 70; }
 .surface-menu {
@@ -2954,7 +2954,7 @@ header.page-hero nav {
   background: #171717;
   padding: 0.2rem 0.7rem 0.2rem 0.25rem;
   font-size: 0.95rem;
-  font-weight: 650;
+  font-weight: 700;
 }
 .surface-menu {
   position: absolute;
@@ -2999,3 +2999,117 @@ header.page-hero nav {
 [data-testid="chat-right-rail"] {
   display: none !important;
 }
+
+/* light-readability-2026 */
+html[data-theme="light"] .shell,
+html[data-theme="light"] .shell :where(p, span, label, li, h1, h2, h3, h4, a, button, summary, small, strong, div, td, th, option) {
+  color: #000 !important;
+  -webkit-text-fill-color: #000 !important;
+  font-weight: 700;
+}
+html[data-theme="light"] .shell :where(input, textarea, select) {
+  color: #000 !important;
+  -webkit-text-fill-color: #000 !important;
+  font-weight: 600;
+}
+html[data-theme="light"] .shell :where(input, textarea)::placeholder {
+  color: #222 !important;
+  -webkit-text-fill-color: #222 !important;
+  opacity: 1;
+}
+html[data-theme="light"] .shell :where(.bg-accent, .gpt-voice, .composer-send),
+html[data-theme="light"] .shell :where(.bg-accent, .gpt-voice, .composer-send) :where(*) {
+  color: #fff !important;
+  -webkit-text-fill-color: #fff !important;
+}
+html[data-theme="light"] .text-muted,
+html[data-theme="light"] .shell .text-muted {
+  color: #111 !important;
+  -webkit-text-fill-color: #111 !important;
+  font-weight: 600;
+}
+[data-testid="handy-dictation"][data-phase="idle"] {
+  display: none !important;
+}
+
+/* chat-stage-2026 */
+.thread-shell > aside { display: none !important; }
+.thread-shell > section { flex: 1 1 auto !important; width: 100% !important; }
+
+.thread-chat-settings,
+.thread-mobile-tools {
+  display: none;
+}
+.thread-chat-settings[open] {
+  display: block;
+  position: fixed;
+  z-index: 40;
+  top: 4.5rem;
+  left: 0.75rem;
+  right: 0.75rem;
+  max-height: min(60vh, 28rem);
+  overflow: auto;
+  border-radius: 1rem;
+  padding: 0.75rem;
+  background: #fff;
+  color: #000;
+  box-shadow: 0 16px 40px rgb(0 0 0 / 0.18);
+}
+html:not([data-theme="light"]) .thread-chat-settings[open] {
+  background: #111318;
+  color: #fafafa;
+}
+.thread-shell,
+.thread-shell > section {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  height: 100%;
+}
+.thread-shell section > .min-h-0.flex-1 {
+  flex: 1 1 auto;
+  min-height: 0;
+}
+.thread-shell form.thread-composer {
+  position: sticky;
+  bottom: 0;
+  margin-top: auto;
+  z-index: 6;
+}
+.thread-shell .legacy-composer-voice,
+.thread-shell .composer-voice-chrome {
+  display: none !important;
+}
+.next-guesses {
+  flex: 0 0 auto;
+}
+
+/* chat-bottom-2026 */
+.thread-chat-settings:not([open]),
+.thread-chat-settings:not([open]) > summary {
+  display: none !important;
+}
+.shell[data-view="chat"] form.thread-composer {
+  position: fixed !important;
+  left: 0.5rem;
+  right: 0.5rem;
+  bottom: calc(0.4rem + env(safe-area-inset-bottom));
+  z-index: 12;
+  margin: 0 !important;
+}
+.shell[data-view="chat"] .next-guesses {
+  position: fixed;
+  left: 0.5rem;
+  right: 0.5rem;
+  bottom: calc(7.2rem + env(safe-area-inset-bottom));
+  z-index: 12;
+}
+@media (min-width: 768px) {
+  .shell[data-view="chat"] form.thread-composer,
+  .shell[data-view="chat"] .next-guesses {
+    left: 17rem;
+  }
+}
+
+.shell[data-view="chat"] nav.fixed.bottom-0 { display: none !important; }
+.shell[data-view="chat"] form.thread-composer { bottom: 0 !important; margin: 0 !important; }

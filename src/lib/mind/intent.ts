@@ -9,6 +9,7 @@ export type CommandIntent =
   | { kind: "notion" }
   | { kind: "mcp" }
   | { kind: "skill" }
+  | { kind: "save_skill" }
   | { kind: "local"; tool: "list_projects" | "list_chats" | "search_notes" | "list_schedules" | "run_due_schedules" }
   | { kind: "bot"; agentId: string; agentName: string; goal: string }
   | { kind: "create_bot"; name: string; goal: string }
@@ -60,6 +61,7 @@ export function interpretCommand(
 
   if (/\bnotion\b/.test(lower)) return { kind: "notion" };
   if (/\bmcp\b/.test(lower)) return { kind: "mcp" };
+  if (/turn (this|that) into a reusable skill/.test(lower) || /make this a reusable skill/.test(lower)) return { kind: "save_skill" };
   if (/\bskills?\b/.test(lower)) return { kind: "skill" };
 
   if (mode === "agent") {

@@ -29,6 +29,7 @@ export function BotBuilder({ ws, setWs, onChat, onRun, onSchedule, onSelect, foc
   const [checked, setChecked] = useState(false);
   const [archiveId, setArchiveId] = useState<string | null>(null);
   const [showArchived, setShowArchived] = useState(false);
+  const [telegram, setTelegram] = useState("");
   useEffect(() => {
     if (focusBotId && ws.agents.some((bot) => bot.id === focusBotId && bot.archived)) setShowArchived(true);
   }, [focusBotId, ws.agents]);
@@ -88,6 +89,7 @@ export function BotBuilder({ ws, setWs, onChat, onRun, onSchedule, onSelect, foc
         <h3 id="bot-builder-title" className="font-display text-xl font-semibold">Your bots</h3>
         {!draft && <button className={primary} type="button" onClick={() => start()}>Create bot</button>}
       </div>
+      <p data-testid="owned-bot-note" className="text-sm">Create bot saves an Adrian-owned bot on this device. It does not need Paperclip. Telegram is a name until you paste that bot’s token. Nothing is sent before that.</p>
       {status && <p role="status" className="text-sm text-fg">{status}</p>}
       {draft && (
         <form aria-label={editingId ? "Edit bot" : "Create bot"} className="bot-builder-card space-y-4 p-4" onSubmit={(event) => { event.preventDefault(); save(); }}>
@@ -95,6 +97,7 @@ export function BotBuilder({ ws, setWs, onChat, onRun, onSchedule, onSelect, foc
             <legend className="font-semibold">Identity and instructions</legend>
             <label className="block text-sm">Bot name<input required maxLength={80} value={draft.name} autoFocus onChange={(event) => change({ name: event.target.value })} className={fields} /></label>
             <label className="block text-sm">Purpose <span className="text-muted">(optional)</span><input maxLength={400} value={draft.description} onChange={(event) => change({ description: event.target.value })} className={fields} /></label>
+            <label className="block text-sm">Telegram username <span className="text-muted">(optional)</span><input aria-label="Telegram bot username" maxLength={64} value={telegram} onChange={(event) => setTelegram(event.target.value)} placeholder="@yourbot" className={fields} /></label>
             <label className="block text-sm">Instructions<textarea aria-describedby="bot-instruction-limit" maxLength={MAX_CUSTOM_PERSONALITY_CHARS} rows={4} value={draft.instructions} onChange={(event) => change({ instructions: event.target.value })} className={fields} /></label>
             <p id="bot-instruction-limit" className="text-xs text-muted">{draft.instructions.length} / {MAX_CUSTOM_PERSONALITY_CHARS} characters in a bot conversation.</p>
           </fieldset>

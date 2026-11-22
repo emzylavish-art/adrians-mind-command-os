@@ -20,7 +20,8 @@ export function HandyDictation() {
   const [label, setLabel] = useState("");
   const [levels, setLevels] = useState<number[]>(handyLiveLevels(0));
   const [note, setNote] = useState("Mic types into the field. Translator translates. Speak is the call.");
-  const [target, setTarget] = useState("es");
+  const [target, setTarget] = useState("en");
+  const [languageQuery, setLanguageQuery] = useState("");
   const [actionsOpen, setActionsOpen] = useState(false);
   const [translation, setTranslation] = useState("");
   const [engine, setEngine] = useState("");
@@ -142,18 +143,30 @@ export function HandyDictation() {
 
   function pinRow(node: HTMLDivElement | null) {
     if (!node) return;
-    node.style.setProperty("position", "relative", "important");
+    node.style.setProperty("position", "fixed", "important");
     node.style.setProperty("z-index", "4", "important");
-    node.style.setProperty("flex", "0 0 auto", "important");
+    node.style.setProperty("left", "50%", "important");
+    node.style.setProperty("bottom", "5.5rem", "important");
+    node.style.setProperty("transform", "translateX(-50%)", "important");
+    node.style.setProperty("width", "auto", "important");
+    node.style.setProperty("max-width", "min(22rem, calc(100% - 1.5rem))", "important");
     node.style.setProperty("background", light ? "#f7f7f8" : "#07080c", "important");
     node.style.setProperty("color", light ? "#18181b" : "#fafafa", "important");
   }
 
+  useEffect(() => {
+    const open = () => setActionsOpen(true);
+    window.addEventListener("adrian:open-translator", open);
+    return () => window.removeEventListener("adrian:open-translator", open);
+  }, []);
+
+  if (phase === "idle" && !actionsOpen) return null;
+
   return (
     <div
       ref={pinRow}
-      className="flex w-full shrink-0 flex-wrap items-center gap-2 border-t border-line px-3 py-2"
-      style={{ position: "relative", zIndex: 4, flex: "0 0 auto", background: light ? "#f7f7f8" : "#07080c", color: light ? "#18181b" : "#fafafa" }}
+      className="flex w-auto flex-wrap items-center gap-2 rounded-3xl border border-line px-3 py-2 shadow-lg"
+      style={{ position: "fixed", zIndex: 30, left: "50%", bottom: "5.5rem", transform: "translateX(-50%)", width: "auto", maxWidth: "min(22rem, calc(100% - 1.5rem))", background: light ? "#f7f7f8" : "#07080c", color: light ? "#000" : "#fafafa" }}
       data-testid="handy-dictation"
       data-phase={phase}
       data-field={label}
@@ -174,11 +187,8 @@ export function HandyDictation() {
       onPointerLeave={(event) => window.clearTimeout(Number(event.currentTarget.dataset.hold))}
       onPointerCancel={(event) => window.clearTimeout(Number(event.currentTarget.dataset.hold))}
     >
-      <button type="button" className="min-h-11 rounded-panel border border-line px-3 text-sm" data-testid="handy-mic" aria-label="Mic" title="Mic types into the field. This is not Speak." onClick={() => void start()}>
-        Mic
-      </button>
-      <button type="button" className="min-h-11 rounded-panel border border-line px-3 text-sm" data-testid="translator-open" aria-label="Translator" title="Translator translates. It does not open Speak." onClick={() => setActionsOpen(true)}>
-        Translator
+      <button type="button" className="min-h-11 rounded-full border border-line px-3 text-sm" data-testid="handy-cancel" onClick={() => { session.current?.cancel(); setPhase("idle"); setActionsOpen(false); }}>
+        Cancel
       </button>
       {phase === "speak" || phase === "saved" ? (
         <span className="inline-flex items-end gap-1" data-testid="handy-wave" data-live="true" aria-label="Speech is live">
@@ -200,9 +210,13 @@ export function HandyDictation() {
           </button>
           <label className="flex min-h-11 items-center justify-between gap-2 px-3 text-sm">
             Translate to
-            <select aria-label="Translation language" data-testid="voice-language" value={target} onChange={(event) => setTarget(event.target.value)} className="min-h-11 rounded-panel border border-line bg-transparent px-2">
-              {TRANSLATOR_TARGETS.map((item) => <option key={item.id} value={item.id}>{item.label}</option>)}
+            <select aria-label="Translation language" data-testid="voice-language" value={target} onChange={(event) => setTarget(event.target.value)} className="min-h-11 max-w-[60%] rounded-panel border border-line bg-transparent px-2">
+              {TRANSLATOR_TARGETS.filter((item) => `${item.label} ${item.id}`.toLowerCase().includes(languageQuery.trim().toLowerCase())).map((item) => <option key={item.id} value={item.id}>{item.label}</option>)}
             </select>
+          </label>
+          <label className="flex min-h-11 items-center gap-2 px-3 text-sm">
+            Find a language
+            <input aria-label="Find a language" data-testid="voice-language-search" value={languageQuery} onChange={(event) => setLanguageQuery(event.target.value)} className="min-h-11 flex-1 rounded-panel border border-line bg-transparent px-2" placeholder="English, Yoruba, Chinese" />
           </label>
           <button type="button" className="flex min-h-11 w-full items-center rounded-2xl px-3 text-left text-sm" data-testid="voice-translate" data-engine="sokuji" data-model="opus-mt" data-google="false" onClick={() => { setActionsOpen(false); translate(); }}>
             Translate

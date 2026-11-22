@@ -40,7 +40,7 @@ const CATALOG = toolCatalog();
 const CATALOG_BY_ID = new Map(CATALOG.map((item) => [item.id, item]));
 
 const DEFAULT_NEXT =
-  "Next: in Agent directory, press Add Personal assistant. That stores the template on this device. It does not start a process. Press Refresh status before treating any hosted bot as listed.";
+  "Next: save an Adrian-owned bot on this page. Paperclip is optional and is not required. Telegram waits until you paste that bot’s token.";
 
 function readKey(key: string): string | null {
   try {
@@ -57,6 +57,47 @@ function writeKey(key: string, value: string): boolean {
   } catch {
     return false;
   }
+}
+
+function OwnedBots() {
+  const [name, setName] = useState("");
+  const [telegram, setTelegram] = useState("");
+  const [note, setNote] = useState("This bot belongs to Adrian’s Mind. Paperclip is not used.");
+  return (
+    <form
+      className="agents-panel__group"
+      data-testid="owned-bot"
+      onSubmit={(event) => {
+        event.preventDefault();
+        const botName = name.trim();
+        if (!botName) {
+          setNote("Name the bot first. Nothing was saved.");
+          return;
+        }
+        const row = { name: botName, telegram: telegram.trim(), source: "adrian", paperclip: false, at: new Date().toISOString() };
+        const current = readKey("adrian-owned-bots");
+        const list = current ? JSON.parse(current) as unknown[] : [];
+        list.unshift(row);
+        const ok = writeKey("adrian-owned-bots", JSON.stringify(list.slice(0, 40)));
+        setNote(ok
+          ? `${botName} is saved on this device. It does not use Paperclip. Telegram is not contacted until you paste that bot’s token.`
+          : "This browser blocked the save. The bot was not stored.");
+        setName("");
+        setTelegram("");
+      }}
+    >
+      <p className="font-semibold">Adrian-owned bot</p>
+      <p className="text-sm text-muted">Create a bot here. It runs as part of Adrian’s Mind, not as a Paperclip subscription.</p>
+      <label className="mt-2 block text-sm">Bot name
+        <input aria-label="Owned bot name" value={name} onChange={(event) => setName(event.target.value)} className="mt-1 min-h-11 w-full rounded-panel border border-line bg-transparent px-3" />
+      </label>
+      <label className="mt-2 block text-sm">Telegram username
+        <input aria-label="Telegram bot username" value={telegram} onChange={(event) => setTelegram(event.target.value)} placeholder="@yourbot" className="mt-1 min-h-11 w-full rounded-panel border border-line bg-transparent px-3" />
+      </label>
+      <button type="submit" className="mt-2 min-h-11 rounded-panel border border-line px-3 text-sm">Save owned bot</button>
+      <p className="mt-2 text-sm" role="status">{note}</p>
+    </form>
+  );
 }
 
 function isSource(value: string | null): value is SourceId {
@@ -285,6 +326,7 @@ export function AgentsPanel() {
         <h1 id="agents-panel-title">Agents</h1>
         <p>Filter the templates and saved agents on this device, then follow the exact control to press on this page.</p>
       </header>
+      <OwnedBots />
 
       <p className="agents-panel__next" role="status">
         {next}
@@ -339,7 +381,7 @@ export function AgentsPanel() {
           type="button"
           onClick={() =>
             setNext(
-              "Next: press Refresh status under Paperclip agent service. A hosted bot is listed only when that service answers. If it says no instance is authorised, or that status could not be loaded, no agents were marked as running.",
+              "Next: an Adrian-owned bot does not need Paperclip. Press Refresh status only if you also use that optional service. A hosted listing appears only when that service answers.",
             )
           }
         >

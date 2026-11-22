@@ -18,6 +18,7 @@ export function confirmationKey(userId: string, sessionId: string, toolId: strin
 
 export function selectTool(text: string): string | null {
   const lower = text.toLowerCase();
+  if (/turn (this|that) into a reusable skill/.test(lower) || /make this a reusable skill/.test(lower)) return "save_chat_skill";
   if (/\brun due schedules\b/.test(lower)) return "run_due_schedules";
   if (/\b(list|show)\s+(my\s+)?schedules\b/.test(lower)) return "list_schedules";
   if (/\b(list|show)\s+(my\s+)?projects\b/.test(lower)) return "list_projects";
