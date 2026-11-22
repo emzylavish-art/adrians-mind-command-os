@@ -2,6 +2,7 @@ import { useEffect, useId, useRef, useState } from "react";
 import { ChevronDown } from "lucide-react";
 import {
   MODEL_TIERS,
+  CONNECTED_GROK_MODELS,
   chipLabelForTier,
   selectModelTier,
   type ConcreteModelTier,
@@ -23,6 +24,8 @@ export type ModelTierChipProps = {
   logicRoute?: LogicRouteId | null;
   logicRoutes?: LogicRoutePublic[];
   onChooseLogic?: (route: LogicRouteId) => void;
+  grokModel?: string | null;
+  onChooseGrokModel?: (model: string) => void;
   presentation?: "menu" | "rows";
 };
 
@@ -40,6 +43,8 @@ export function ModelTierChip({
   logicRoute = null,
   logicRoutes = [],
   onChooseLogic,
+  grokModel = null,
+  onChooseGrokModel,
   presentation = "menu",
 }: ModelTierChipProps) {
   const [open, setOpen] = useState(false);
@@ -93,6 +98,22 @@ export function ModelTierChip({
           {item}
         </button>
       ))}
+      {onChooseGrokModel ? CONNECTED_GROK_MODELS.map((model) => (
+        <button
+          key={model}
+          type="button"
+          role="menuitemradio"
+          aria-checked={grokModel === model}
+          data-testid={`grok-model-${model}`}
+          className={`flex min-h-11 items-center rounded-xl px-3 text-left text-sm ${grokModel === model ? "bg-white/10" : ""}`}
+          onClick={() => {
+            onChooseGrokModel(model);
+            setOpen(false);
+          }}
+        >
+          {model}
+        </button>
+      )) : null}
       {LOGIC_ROUTES.filter((id) => {
         const view = logicRoutes.find((item) => item.id === id);
         return Boolean(view?.ready && !view.credentialFallback);

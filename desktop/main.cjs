@@ -107,6 +107,7 @@ function startServer() {
       ...process.env,
       ELECTRON_RUN_AS_NODE: "1",
       ADRIAN_DATA_DIR: dataRoot,
+      ADRIAN_PC: "1",
       HOST,
       PORT,
       NITRO_HOST: HOST,

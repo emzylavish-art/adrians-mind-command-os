@@ -332,6 +332,7 @@ export type ChatTurnBodyInput = {
   personalityId?: string;
   customPersonality?: string;
   modelTier: ModelTier;
+  requestedModel?: string | null;
   logicRoute: LogicRouteId | null;
   orchestrator?: string | null;
   composerMode?: string;
@@ -353,6 +354,7 @@ export function chatTurnBody(input: ChatTurnBodyInput): Record<string, unknown> 
     customPersonality: input.customPersonality ?? "",
     provider: input.logicRoute ?? input.provider,
     modelTier: input.modelTier,
+    ...(input.requestedModel ? { requestedModel: input.requestedModel } : {}),
     ...(input.logicRoute ? { logicRoute: input.logicRoute } : {}),
     ...(input.orchestrator ? { orchestrator: input.orchestrator } : {}),
     ...(input.composerMode ? { composerMode: input.composerMode } : {}),

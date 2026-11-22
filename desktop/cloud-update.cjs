@@ -3,7 +3,7 @@ const UPDATE_PATH = "/api/mind/desktop-update";
 const INSTALLER_PATH = "/downloads/AdriansMind-Setup.exe";
 const PUBLIC_FEED = "https://raw.githubusercontent.com/emzylavish-art/adrians-mind-live/main/desktop-update.json";
 const PUBLIC_INSTALLER = "https://github.com/emzylavish-art/adrians-mind-command-os/releases/download/desktop-installer/AdriansMind-Setup-Full.exe.part00";
-const LOCAL_BUILD = 3;
+const LOCAL_BUILD = 8;
 const LOCAL_VERSION = "0.9.1";
 const GITHUB_ASSETS = new Set([
   "/emzylavish-art/adrians-mind-command-os/releases/download/desktop-installer/AdriansMind-Setup-Full.exe.part00",
@@ -85,10 +85,12 @@ function isFullPackageSpec(value) {
 
 function decideFullUpdate(localBuild, remote) {
   if (!Number.isInteger(localBuild)) return { action: "stay", reason: "local-missing" };
-  const pack = remote && remote.fullPackage ? remote.fullPackage : FULL_PACKAGE;
   const remoteBuild = remote && Number.isInteger(remote.build) ? remote.build : LOCAL_BUILD;
   if (remoteBuild <= localBuild) return { action: "stay", reason: "not-newer" };
+  const pack = remote && remote.fullPackage ? remote.fullPackage : null;
+  if (!pack) return { action: "stay", reason: "full-missing" };
   if (!isFullPackageSpec(pack)) return { action: "stay", reason: "full-invalid" };
+  if (pack.sha256 === FULL_PACKAGE.sha256) return { action: "stay", reason: "same-file" };
   return { action: "full-install", reason: "verified-full-parts", fullPackage: pack };
 }
 

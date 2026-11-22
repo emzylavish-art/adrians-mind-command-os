@@ -74,9 +74,9 @@ const SERVICES: Service[] = [
   { name: "OpenAI", state: "Not configured", detail: "No API key. A chat subscription is not used." },
   { name: "Claude", state: "Not configured", detail: "No API key. Nothing is sent to Anthropic." },
   { name: "Gemini", state: "Not configured", detail: "No API key. Nothing is sent to Google." },
-  { name: "OpenRouter", state: "Selectable", detail: "Shown in Controls, bots, and the orchestrator. It sends only when a key is connected. Grok is not substituted." },
-  { name: "Nemotron", state: "Selectable", detail: "Free OpenRouter model. It appears in Controls, bots, and the orchestrator. It sends only when OpenRouter is connected." },
-  { name: "Local model", state: "Selectable", detail: "Appears in Controls, bots, and the orchestrator. It sends only when a local runner answers. Grok is not substituted." },
+  { name: "OpenRouter", state: "Not connected", detail: "No OpenRouter key is on this server. It is not shown in the model selector." },
+  { name: "Nemotron", state: "Not connected", detail: "Nemotron needs an OpenRouter key. It is not shown in the model selector." },
+  { name: "Local model", state: "Not connected", detail: "No local runner is configured. It is not shown in the model selector." },
   { name: "Web search", state: "Not configured", detail: "No search endpoint. No citations are created." },
   { name: "Image and video", state: "Ready when the server key is set", detail: "Ask in chat with /imagine. The server uses the Grok image model. Nothing is generated until you ask." },
   { name: "Voice", state: "Not configured", detail: "No speech key and no Grok model key. Nothing was started." },
@@ -130,7 +130,7 @@ export function ServiceBoard({
   const [note, setNote] = useState<{ name: string; text: string } | null>(null);
   const [oauthActionState, setOauthActionState] = useState<OauthBoardActionState>({ status: "idle" });
   const [mcpStorage, setMcpStorage] = useState<{ state: "checking" | "ready" | "error"; detail: string } | null>(null);
-  const [showWaiting, setShowWaiting] = useState(true);
+  const [showWaiting, setShowWaiting] = useState(false);
   const [catalogQuery, setCatalogQuery] = useState("");
   const inFlight = useRef<Set<string>>(new Set());
 

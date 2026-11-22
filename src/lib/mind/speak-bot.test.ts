@@ -15,7 +15,7 @@ describe("createBotFromSpeech", () => {
     assert.equal(made.ws.deployments[0]?.target, "local-worker");
     assert.equal(made.ws.runs[0]?.state, "queued");
     assert.match(made.reply, /connected to Speak and Intelligence/);
-    assert.match(made.reply, /does not keep running after the tab closes/);
+    assert.match(made.reply, /does not keep running after the app closes/);
     assert.equal(made.reply.includes(BOT_STAYS_WHILE_OPEN), true);
   });
 

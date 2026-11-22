@@ -15,9 +15,6 @@ type Start = {
 };
 
 const OFFICIAL = [
-  { id: "kimi-datasource", name: "Datasource", mark: "Ds", image: "", color: "#2457c8", description: "Market, news, company, and legal lookups.", action: "key" as const },
-  { id: "kimi-webbridge", name: "Browser", mark: "Br", image: "", color: "#f4b400", description: "Drive the browser you already use.", action: "link" as const, href: "https://chromewebstore.google.com/detail/kimi-webbridge/fldmhceldgbpfpkbgopacenieobmligc" },
-  { id: "kimi-computer-use", name: "Computer", mark: "Pc", image: "", color: "#34a853", description: "Desktop control for the computer you choose.", action: "link" as const, href: "https://cdn.kimi.com/kimi-computer-use-windows/latest/kimi-cu-win-plugin.zip" },
   { id: "superpowers", name: "Superpowers", mark: "Sp", image: "", color: "#d97757", description: "Planning, debugging, and delivery workflows.", action: "link" as const, href: "https://github.com/obra/superpowers" },
   { id: "vercel-plugin", name: "Vercel", mark: "Vc", image: "/brand/logos/vercel.svg", color: "#111111", description: "Deploy skills and conventions.", action: "link" as const, href: "https://github.com/vercel/vercel-plugin" },
   { id: "modern-web-guidance", name: "Web guidance", mark: "Wb", image: "", color: "#1a73e8", description: "Web platform and browser guidance.", action: "link" as const, href: "https://github.com/GoogleChrome/modern-web-guidance" },
@@ -116,7 +113,7 @@ export function KimiDeviceConnect() {
         ))}
       </div>
       <div className="mt-3 grid gap-2" aria-label="Adrian plugins">
-        {(tab === "installed" ? OFFICIAL.filter((plugin) => added.includes(plugin.id)) : tab === "official" ? OFFICIAL.filter((plugin) => plugin.id.startsWith("kimi")) : tab === "curated" ? OFFICIAL.filter((plugin) => !plugin.id.startsWith("kimi")) : []).map((plugin) => {
+        {(tab === "installed" ? OFFICIAL.filter((plugin) => added.includes(plugin.id)) : tab === "official" ? [] : tab === "curated" ? OFFICIAL : []).map((plugin) => {
           const on = added.includes(plugin.id);
           return (
             <article key={plugin.id} className="plugin-link">

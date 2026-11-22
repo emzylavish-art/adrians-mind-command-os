@@ -3,7 +3,7 @@ export const UPDATE_PATH = "/api/mind/desktop-update";
 export const INSTALLER_PATH = "/downloads/AdriansMind-Setup.exe";
 export const PUBLIC_FEED = "https://raw.githubusercontent.com/emzylavish-art/adrians-mind-live/main/desktop-update.json";
 export const PUBLIC_INSTALLER = "https://github.com/emzylavish-art/adrians-mind-command-os/releases/download/desktop-installer/AdriansMind-Setup-Full.exe.part00";
-export const LOCAL_BUILD = 3;
+export const LOCAL_BUILD = 8;
 export const LOCAL_VERSION = "0.9.1";
 
 const GITHUB_ASSETS = new Set([
@@ -210,13 +210,15 @@ export function isFullPackageSpec(value: unknown): boolean {
 
 export function decideFullUpdate(localBuild: number, remote: unknown): { action: "stay" | "full-install"; reason: string; fullPackage?: typeof FULL_PACKAGE } {
   if (!Number.isInteger(localBuild)) return { action: "stay", reason: "local-missing" };
-  const pack = remote && typeof remote === "object" && (remote as { fullPackage?: unknown }).fullPackage
-    ? (remote as { fullPackage: unknown }).fullPackage
-    : FULL_PACKAGE;
   const remoteBuild = remote && typeof remote === "object" && Number.isInteger((remote as { build?: unknown }).build)
     ? (remote as { build: number }).build
     : LOCAL_BUILD;
   if (remoteBuild <= localBuild) return { action: "stay", reason: "not-newer" };
+  const pack = remote && typeof remote === "object" && (remote as { fullPackage?: unknown }).fullPackage
+    ? (remote as { fullPackage: unknown }).fullPackage
+    : null;
+  if (!pack) return { action: "stay", reason: "full-missing" };
   if (!isFullPackageSpec(pack)) return { action: "stay", reason: "full-invalid" };
+  if ((pack as { sha256?: unknown }).sha256 === FULL_PACKAGE.sha256) return { action: "stay", reason: "same-file" };
   return { action: "full-install", reason: "verified-full-parts", fullPackage: pack as typeof FULL_PACKAGE };
 }

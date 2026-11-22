@@ -6,11 +6,16 @@ import { sanitizeAttachments, type ImageAttachment } from "./media";
 import type { ChatContent } from "./media/types";
 import { resolveXaiInferenceApiKey } from "./xai-adapter";
 import type { HistoryInputMessage } from "./media/history";
-import { allowedModelIds, resolveModelTier, type ResolvedModelTier } from "./model-tiers";
+import { allowedModelIds, isConnectedGrokModel, resolveModelTier, type ResolvedModelTier } from "./model-tiers";
 import { assertLiveProvider } from "./providers";
 import { callConfiguredProvider, httpStatusForProviderSelection, routeSelectedModel, selectProvider } from "./provider-call";
 import { configuredProviders } from "./provider-call";
 import { ADRIAN_MIND_IDENTITY, builtinModules, collectConsultHelp, customModules, orchestratorInstruction, planModelConsult } from "./model-consult.ts";
+import { adrianPcEnabled, runAdrianPc } from "./adrian-pc.server.ts";
+import { consequentialSpeechRefusal } from "./frontier-2031.ts";
+import { destructiveSpeechRefusal } from "./reversibility.ts";
+import { ensureLocalCapabilityFile, runLocalCommand } from "./local-capabilities.ts";
+import path from "node:path";
 import { buildRelayModelBody, relayModelStream } from "./relay";
 import { CHAT_TIMEOUT_REPLY, chatTurnTimeoutMs } from "./turn-timeouts";
 import { decideFetchSite } from "./request-guard";
@@ -41,6 +46,8 @@ export type TurnBody = {
   customPersonality?: unknown;
   /** UI picker: Auto | Fast | Expert | Heavy | Build */
   modelTier?: unknown;
+  /** A live xAI model id. Used only when it is in the connected Grok list. */
+  requestedModel?: unknown;
   /** Astra, Sol, or Luna. When set, this route is used instead of the Grok tier. */
   logicRoute?: unknown;
   /** Optional image attachments (data-URLs) for multimodal Direct turns. */
@@ -83,6 +90,11 @@ export async function prepareMindTurnWithHelp(userId: string, data: TurnBody, co
   if ((await haltIsOn(userId)) || data.halted === true) {
     return { ok: false as const, error: "Emergency stop is on. No new action can run." };
   }
+  const spoken = typeof data.text === "string" ? data.text : "";
+  const refused = consequentialSpeechRefusal(spoken);
+  if (refused) return { ok: false as const, error: refused };
+  const destructive = destructiveSpeechRefusal(spoken);
+  if (destructive) return { ok: false as const, error: destructive };
   // Body-field validation before rate limit so malformed/empty turns get honest 400s
   // and do not consume a chat token. (HTTP JSON body guard already ran in handleMindTurn.)
   const tierField = parseModelTierField(data.modelTier);
@@ -118,6 +130,8 @@ export async function prepareMindTurnWithHelp(userId: string, data: TurnBody, co
   });
   if (!assembled.ok) return { ok: false as const, error: assembled.error };
   const tier = resolveModelTier(data.modelTier, text || "image", process.env);
+  const requested = isConnectedGrokModel(data.requestedModel) ? data.requestedModel : null;
+  if (requested) tier.model = requested;
   const saveMemoryText = typeof data.saveMemory === "string" ? data.saveMemory : "";
   return {
     ok: true as const,
@@ -295,6 +309,23 @@ export async function handleMindTurn(request: Request): Promise<Response> {
   const read = await readJsonObjectBody(request, MAX_BODY);
   if (!read.ok) return json({ ok: false, error: read.error }, read.status);
   let body = read.body as TurnBody;
+  if (adrianPcEnabled() && typeof body.text === "string" && body.text.trim()) {
+    const { haltIsOn } = await import("./halt.server.ts");
+    const halted = body.halted === true || await haltIsOn(userId);
+    const pc = await runAdrianPc({ text: body.text, halted });
+    if (pc.ran) {
+      body = { ...body, text: `${body.text}\n\nAdrian PC result: ${pc.output}` };
+    }
+  }
+  if (typeof body.text === "string") {
+    ensureLocalCapabilityFile(path.join(process.cwd(), ".data", "local-capabilities.json"));
+    const local = runLocalCommand(body.text);
+    if (local) {
+      const done = { text: local, model: "adrian-local", provider: "Adrian", usage: null, usedIds: [], requestId: null };
+      const stream = `event: delta\ndata: ${JSON.stringify({ text: local })}\n\nevent: done\ndata: ${JSON.stringify(done)}\n\n`;
+      return new Response(stream, { headers: { "content-type": "text/event-stream", "cache-control": "no-store" } });
+    }
+  }
   let consultHelp = "";
   if (body.composerMode === "orchestrator") {
     const asked = typeof body.text === "string" ? body.text.trim() : "";

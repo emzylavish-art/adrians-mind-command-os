@@ -638,8 +638,8 @@ export function FleetPanel({
             }}
             className="min-h-11 rounded-panel border border-line bg-surface px-3 text-sm"
           >
-            {["grok", "openai", "anthropic", "gemini", "openrouter", "ollama", ...LOGIC_ROUTES].map((item) => {
-              const label = item === "openrouter" ? "OpenRouter" : item === "ollama" ? "Local model" : item === "grok" ? "Grok" : item;
+            {["grok"].map((item) => {
+              const label = "Grok";
               const route = logicRoutes.find((row) => row.id === item);
               const menu = route ? logicMenuState(route, route.id) : null;
               return (
@@ -648,7 +648,6 @@ export function FleetPanel({
                 </option>
               );
             })}
-            <option value="nemotron">Nemotron · needs OpenRouter</option>
             {catalogModels.map((item) => <option key={item.id} value={item.id}>{item.label}</option>)}
           </select>
           <input value={connectionLabel} onChange={(event) => setConnectionLabel(event.target.value)} placeholder="Connection name" className="min-h-11 rounded-panel border border-line bg-surface px-3 text-sm" />

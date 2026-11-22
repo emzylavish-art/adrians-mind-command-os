@@ -6,6 +6,11 @@
 
 export const MODEL_TIERS = ["Auto", "Fast", "Expert", "Heavy", "Build"] as const;
 export type ModelTier = (typeof MODEL_TIERS)[number];
+/** Chat models returned by the live xAI key. Image and video models stay out of chat. */
+export const CONNECTED_GROK_MODELS = ["grok-4.3", "grok-4.5", "grok-4.6", "grok-4.7"] as const;
+export function isConnectedGrokModel(value: unknown): value is (typeof CONNECTED_GROK_MODELS)[number] {
+  return typeof value === "string" && (CONNECTED_GROK_MODELS as readonly string[]).includes(value);
+}
 export type ConcreteModelTier = Exclude<ModelTier, "Auto">;
 
 export type ModelRequestParams = {
@@ -219,7 +224,7 @@ export function modelTierCatalog(env: Record<string, string | undefined> = {}) {
 /** Known allowed model ids for this app (defaults + any env override values). */
 export function allowedModelIds(env: Record<string, string | undefined> = {}): Set<string> {
   const models = parseModelTierEnv(env);
-  return new Set(Object.values(models));
+  return new Set([...Object.values(models), ...CONNECTED_GROK_MODELS]);
 }
 
 

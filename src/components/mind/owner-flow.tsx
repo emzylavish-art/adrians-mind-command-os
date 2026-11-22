@@ -79,7 +79,7 @@ export function OwnerFlow(props: {
         <div>
           <p className="text-xs uppercase tracking-wide text-muted">Windows software</p>
           <h2 className="mt-1 text-lg font-semibold">Download Adrian's Mind</h2>
-          <p className="mt-1 max-w-2xl text-sm text-muted" data-testid="windows-installer-ready">This download is the Windows app. It contains the same product, including Build. It does not include a separate Kimi program. It is unsigned. It does not control the mouse, keyboard, or browser.</p>
+          <p className="mt-1 max-w-2xl text-sm text-muted" data-testid="windows-installer-ready">This download is the Windows app. It is Adrian's Mind, not a separate Kimi program. The installed app can list Desktop files and ask Windows to move the pointer or type. This website cannot. It is unsigned.</p>
           <a className="mt-3 inline-flex min-h-11 items-center rounded-panel bg-accent px-3 text-sm font-semibold text-accent-ink" href={INSTALLER_HREF} download data-testid="download-installer">Download Adrian's Mind</a>
         </div>
         <div className="flex flex-wrap gap-2">

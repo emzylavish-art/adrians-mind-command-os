@@ -4,7 +4,7 @@ import type { Workspace } from "./types.ts";
 const SAFE_TOOLS: FleetTool[] = ["list_projects", "list_chats", "search_notes"];
 
 export const BOT_STAYS_WHILE_OPEN =
-  "This bot is saved and queued. It steps on this device while this page is open. It does not keep running after the tab closes, and it does not run on a computer that is not paired.";
+  "This bot is saved in Adrian's Mind and does not need Paperclip. It steps while this app is open. On the installed PC it can work on the Desktop when you ask. It does not keep running after the app closes.";
 
 export function parseCreateBot(text: string): { name: string; goal: string } | null {
   const raw = text.trim();
@@ -48,7 +48,7 @@ export function createBotFromSpeech(
   const made = addCustomAgent(ws, {
     name: parsed.name,
     description: "Created from Speak or Intelligence. Local tools only.",
-    instructions: "You were born inside Adrian's Mind. Work from local notes, chats, and projects. Do not use a secret, do not press the emergency stop, and do not control a computer.",
+    instructions: "You were born inside Adrian's Mind. You are Adrian. Work from local notes, chats, and projects. On the installed PC you may list, read, write, and run a command on the Desktop when the owner asks. Do not use a secret and do not press the emergency stop.",
     tools: SAFE_TOOLS,
     knowledge: "",
   }, now);
