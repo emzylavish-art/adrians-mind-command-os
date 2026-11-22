@@ -1,0 +1,113 @@
+{
+  "version": 1,
+  "safety": {
+    "never_deletes": true,
+    "never_sends": true,
+    "never_deploys": true,
+    "never_commits": true,
+    "proposals_only": true,
+    "review_folder": "review/"
+  },
+  "groups": {
+    "file_disk": [
+      "file-classify",
+      "file-folder-propose",
+      "file-normalize-names",
+      "file-dedupe",
+      "broken-extension",
+      "disk-alert",
+      "stale-files"
+    ],
+    "logs_health": [
+      "log-digest",
+      "deploy-flags",
+      "cpu-hogs",
+      "service-health",
+      "night-check",
+      "heartbeat-ping"
+    ],
+    "text": [
+      "text-summary",
+      "todo-backlog",
+      "timestamp-normalize",
+      "strip-nav-noise",
+      "language-detect",
+      "sentiment-score",
+      "log-line-dedupe",
+      "url-validate",
+      "format-roundtrip",
+      "text-diff"
+    ],
+    "code": [
+      "sort-imports",
+      "unused-imports",
+      "syntax-prebuild",
+      "conventional-commit-draft",
+      "changelog-draft",
+      "test-case-suggest",
+      "secret-scan",
+      "package-venv-crosscheck",
+      "endpoint-docs",
+      "jsdoc-stub"
+    ],
+    "data_config": [
+      "json-yaml-validate",
+      "env-var-confirm",
+      "csv-json-roundtrip",
+      "contact-normalize",
+      "schema-drift",
+      "missing-required-fields",
+      "merge-duplicate-contacts",
+      "watchlist-dedupe",
+      "port-in-use",
+      "hash-manifest-backup"
+    ],
+    "comms": [
+      "draft-reply-tone",
+      "voice-note-bullets",
+      "short-translate",
+      "grammar-proof",
+      "extract-action-items",
+      "email-subject-lines",
+      "collapse-thread",
+      "message-triage"
+    ],
+    "routing": [
+      "classify-difficulty",
+      "model-route",
+      "morning-queue",
+      "cost-latency-log",
+      "automation-propose",
+      "auto-file-errors",
+      "daily-briefing"
+    ],
+    "system_improver": [
+      "failure-pattern-memory",
+      "manus-repeat-flag",
+      "skill-usage-audit",
+      "convention-diff",
+      "notion-automation-mine",
+      "cost-rebalance"
+    ],
+    "safety_extras": [
+      "rate-limit-preempt",
+      "doc-freshness",
+      "backup-verify"
+    ],
+    "later_five_plus": [
+      "time-awareness",
+      "energy-sensing",
+      "network-sensing",
+      "local-checkpoints",
+      "credential-age",
+      "paste-pattern",
+      "session-continuity",
+      "cross-project-correlate",
+      "quiet-hours",
+      "hardware-sensing",
+      "swappable-model-status"
+    ]
+  },
+  "blueprints_readonly": true,
+  "notes": "54+ named obligations. Propose/queue/draft/flag/summarize only."
+}

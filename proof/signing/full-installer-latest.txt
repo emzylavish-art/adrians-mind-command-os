@@ -1,0 +1,11 @@
+AdriansMind-Setup-Full.exe (Windows PE 7z SFX GUI)
+e88ff2205540742bd5d9ee75be09e9938e522a00ce0f0514af6c5da14a2d0550  /home/ubuntu/Downloads/AdriansMind-Setup-Full.exe
+size=6389066607
+AdriansMind-Full-Package.7z
+da7d4194cd09220b56925348f86448c4ecdc17d1ce9c0102896ac136293c10b7  /home/ubuntu/Downloads/AdriansMind-Full-Package.7z
+Qwen 0.5B Q4 included under AdriansMind/resources/engines/local-model/models/
+Jeff weights under AdriansMind/resources/models/jeff/
+Autostart: resources/install-helpers/Register-Autostart.ps1
+Local runner: 127.0.0.1:9400
+file: /home/ubuntu/Downloads/AdriansMind-Setup-Full.exe: PE32 executable (GUI) Intel 80386, for MS Windows, 5 sections
+Note: Authenticode sign of 6GB PE failed (osslsigncode too large / key decode). Thin Setup.exe remains previously signed. Windows SmartScreen may warn on full SFX until EV cert.
