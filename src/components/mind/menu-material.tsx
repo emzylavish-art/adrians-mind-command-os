@@ -127,17 +127,153 @@ export function MenuCluster({ label, wide = false, children }: { label: string; 
       data-menu-cluster={label}
       style={{
         display: "flex",
-        flex: wide ? "1 1 18rem" : "1 1 16rem",
-        flexDirection: "column",
+        flex: wide ? "1 1 100%" : "1 1 auto",
+        flexDirection: "row",
+        flexWrap: "wrap",
+        alignItems: "center",
         gap: "0.35rem",
-        minWidth: "min(100%, 15rem)",
+        minWidth: 0,
         maxWidth: "100%",
       }}
     >
-      <p style={{ margin: 0, padding: "0.1rem 0.15rem 0", fontSize: "11px", fontWeight: 650, letterSpacing: "0.12em", textTransform: "uppercase", opacity: 0.62 }}>{label}</p>
-      <div style={{ display: "flex", flexWrap: "wrap", gap: "0.35rem", minWidth: 0, maxWidth: "100%" }}>{children}</div>
+      <p style={{ margin: 0, padding: "0.15rem 0.35rem", fontSize: "11px", fontWeight: 650, letterSpacing: "0.12em", textTransform: "uppercase", opacity: 0.62 }}>{label}</p>
+      {children}
     </section>
   );
+}
+
+export function pinComposerMenu(menu: HTMLElement | null) {
+  if (!menu) return;
+  const details = menu.closest("details");
+  const open = details instanceof HTMLDetailsElement && details.open;
+  if (!open) {
+    menu.style.removeProperty("display");
+    menu.style.removeProperty("position");
+    menu.style.removeProperty("max-height");
+    const form = menu.closest("form");
+    if (form instanceof HTMLElement) {
+      form.style.removeProperty("max-height");
+      form.style.removeProperty("height");
+      form.style.removeProperty("min-height");
+      form.style.removeProperty("top");
+      form.style.removeProperty("bottom");
+      form.style.removeProperty("overflow");
+    }
+    const shell = menu.closest(".thread-shell");
+    const section = menu.closest(".thread-shell > section");
+    if (shell instanceof HTMLElement) {
+      shell.style.removeProperty("height");
+      shell.style.removeProperty("max-height");
+      shell.style.removeProperty("min-height");
+    }
+    if (section instanceof HTMLElement) section.style.removeProperty("height");
+    if (details instanceof HTMLElement && !details.closest(".gpt-home")) {
+      details.style.setProperty("display", "inline-flex", "important");
+      details.style.setProperty("flex-direction", "row", "important");
+      details.style.setProperty("width", "auto", "important");
+      details.style.setProperty("max-width", "100%", "important");
+      details.style.setProperty("flex", "0 0 auto", "important");
+      details.style.setProperty("white-space", "nowrap", "important");
+    }
+    return;
+  }
+  const form = menu.closest("form");
+  if (form instanceof HTMLElement) {
+    form.style.setProperty("max-height", "none", "important");
+    form.style.setProperty("height", "auto", "important");
+    form.style.setProperty("min-height", "min-content", "important");
+    form.style.setProperty("top", "auto", "important");
+    form.style.setProperty("bottom", "auto", "important");
+    form.style.setProperty("overflow", "visible", "important");
+  }
+  const section = menu.closest(".thread-shell > section") ?? menu.closest("section");
+  if (section instanceof HTMLElement) {
+    section.style.setProperty("grid-template-rows", "auto minmax(0, 1fr) auto", "important");
+    section.style.setProperty("align-items", "stretch", "important");
+    section.style.setProperty("height", "100%", "important");
+    section.style.setProperty("min-height", "0", "important");
+  }
+  const shell = menu.closest(".thread-shell");
+  const stage = shell?.parentElement;
+  if (shell instanceof HTMLElement && stage instanceof HTMLElement) {
+    const chrome = document.querySelector("[data-testid='handy-dictation']");
+    const chromeTop = chrome instanceof HTMLElement ? chrome.getBoundingClientRect().top : window.innerHeight;
+    const room = Math.max(0, Math.floor(chromeTop - stage.getBoundingClientRect().top - 8));
+    shell.style.setProperty("height", `${room}px`, "important");
+    shell.style.setProperty("max-height", `${room}px`, "important");
+    shell.style.setProperty("min-height", "0", "important");
+  }
+  const toolbar = menu.closest(".composer-toolbar");
+  if (toolbar instanceof HTMLElement) {
+    toolbar.style.setProperty("display", "flex", "important");
+    toolbar.style.setProperty("flex-wrap", "wrap", "important");
+    toolbar.style.setProperty("align-items", "flex-start", "important");
+    toolbar.style.setProperty("align-content", "flex-start", "important");
+    toolbar.style.setProperty("width", "100%", "important");
+    toolbar.style.setProperty("max-width", "100%", "important");
+    toolbar.style.setProperty("height", "auto", "important");
+    toolbar.style.setProperty("max-height", "none", "important");
+    toolbar.style.setProperty("overflow", "visible", "important");
+  }
+  if (details instanceof HTMLElement) {
+    details.style.setProperty("display", "flex", "important");
+    details.style.setProperty("flex-direction", "column", "important");
+    details.style.setProperty("align-items", "stretch", "important");
+    details.style.setProperty("width", "100%", "important");
+    details.style.setProperty("max-width", "100%", "important");
+    details.style.setProperty("min-width", "0", "important");
+    details.style.setProperty("flex", "1 1 100%", "important");
+    details.style.setProperty("white-space", "normal", "important");
+    details.style.setProperty("height", "auto", "important");
+    details.style.setProperty("position", "static", "important");
+    details.style.setProperty("overflow", "visible", "important");
+  }
+  finishMenu(menu);
+  menu.style.setProperty("position", "static", "important");
+  menu.style.setProperty("inset", "auto", "important");
+  menu.style.setProperty("left", "auto", "important");
+  menu.style.setProperty("right", "auto", "important");
+  menu.style.setProperty("top", "auto", "important");
+  menu.style.setProperty("bottom", "auto", "important");
+  menu.style.setProperty("display", "flex", "important");
+  menu.style.setProperty("flex-direction", "row", "important");
+  menu.style.setProperty("flex-wrap", "wrap", "important");
+  menu.style.setProperty("align-items", "center", "important");
+  menu.style.setProperty("align-content", "flex-start", "important");
+  menu.style.setProperty("width", "100%", "important");
+  menu.style.setProperty("max-width", "100%", "important");
+  menu.style.setProperty("min-width", "0", "important");
+  menu.style.setProperty("z-index", "1", "important");
+  menu.style.setProperty("margin", "0.35rem 0 0", "important");
+  menu.style.setProperty("box-sizing", "border-box", "important");
+  menu.querySelectorAll("section, button, label, select").forEach((node) => {
+    if (!(node instanceof HTMLElement)) return;
+    node.style.setProperty("flex", "0 1 auto", "important");
+    node.style.setProperty("width", "auto", "important");
+    node.style.setProperty("max-width", "100%", "important");
+  });
+  const limit = Math.min(window.innerHeight - 8, (section?.getBoundingClientRect().bottom ?? window.innerHeight) - 8);
+  const formBox = form instanceof HTMLElement ? form.getBoundingClientRect() : menu.getBoundingClientRect();
+  if (formBox.bottom > limit) {
+    const menuBox = menu.getBoundingClientRect();
+    const next = Math.max(120, Math.floor(menuBox.height - (formBox.bottom - limit)));
+    menu.style.setProperty("max-height", `${next}px`, "important");
+    menu.style.setProperty("overflow-y", "auto", "important");
+  } else {
+    menu.style.setProperty("max-height", "none", "important");
+    menu.style.setProperty("overflow", "visible", "important");
+  }
+  const shown = menu.getBoundingClientRect();
+  const chips = [...menu.querySelectorAll("button, label, select")].filter((node): node is HTMLElement => node instanceof HTMLElement && node.getBoundingClientRect().height > 8);
+  const fitting = chips.filter((node) => node.getBoundingClientRect().bottom <= shown.bottom + 1);
+  if (fitting.length > 0 && fitting.length < chips.length) {
+    const edge = Math.max(...fitting.map((node) => node.getBoundingClientRect().bottom));
+    const next = Math.max(88, Math.floor(edge - shown.top + 8));
+    if (next < shown.height - 1) {
+      menu.style.setProperty("max-height", `${next}px`, "important");
+      menu.style.setProperty("overflow-y", "auto", "important");
+    }
+  }
 }
 
 export function placeNear(card: HTMLElement, anchor: DOMRect, width = 320, align: "start" | "end" = "end") {

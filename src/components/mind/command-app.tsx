@@ -214,7 +214,7 @@ import {
 import { describeFile } from "@/lib/mind/files-read";
 import { extractPdfText } from "@/lib/mind/pdf-text";
 import { ModelTierChip } from "@/components/mind/model-tier-chip";
-import { AnchoredCard, MenuCluster, MenuGroup, MenuMotion, MenuShelf, finishMenu, menuChip, pinShelf } from "@/components/mind/menu-material";
+import { AnchoredCard, MenuCluster, MenuGroup, MenuMotion, MenuShelf, finishMenu, menuChip, pinComposerMenu, pinShelf } from "@/components/mind/menu-material";
 import { MODEL_TIERS, type ConcreteModelTier, type ModelTier } from "@/lib/mind/model-tiers";
 import { chosenProvider, failover, providerChoicesWithKeys } from "@/lib/mind/providers";
 import { emitFailure, mountFailure, surfaceForReport } from "@/lib/mind/failure-mount";
@@ -585,6 +585,7 @@ function keepComposerInside() {
   });
   document.querySelectorAll(".composer-toolbar > button, .composer-toolbar > label, .composer-toolbar > details").forEach((node) => {
     if (!(node instanceof HTMLElement)) return;
+    if (node instanceof HTMLDetailsElement && node.classList.contains("composer-more") && node.open) return;
     node.style.setProperty("max-width", "100%", "important");
     node.style.setProperty("min-width", "max-content", "important");
     node.style.setProperty("flex", "0 0 auto", "important");
@@ -681,6 +682,9 @@ function keepComposerInside() {
   keepGuideAboveBar();
   keepStartRowInside();
   showVoiceWords();
+  document.querySelectorAll(".composer-more__menu").forEach((node) => {
+    if (node instanceof HTMLElement) pinComposerMenu(node);
+  });
 }
 
 function showVoiceWords() {
@@ -6463,7 +6467,7 @@ export function CommandApp() {
                       className="composer-more"
                       onToggle={(event) => {
                         const menu = event.currentTarget.querySelector("[data-testid='home-composer-more-menu']");
-                        if (event.currentTarget.open && menu instanceof HTMLElement) pinShelf(menu);
+                        if (menu instanceof HTMLElement) pinComposerMenu(menu);
                         if (event.currentTarget.open) {
                           setContextOpen(false);
                           setToolsOpen(false);
@@ -6471,7 +6475,7 @@ export function CommandApp() {
                       }}
                     >
                       <summary>More</summary>
-                      <div className="composer-more__menu" ref={(node) => pinShelf(node)} data-testid="home-composer-more-menu">
+                      <div className="composer-more__menu" ref={(node) => pinComposerMenu(node)} data-testid="home-composer-more-menu">
                         <MenuCluster label="Files">
                           <button type="button" className="inline-flex items-center gap-2 rounded-panel border border-line px-3 text-sm" style={menuChip} onClick={() => fileRef.current?.click()}>
                             <Paperclip className="size-4" /> Attach
@@ -9147,10 +9151,10 @@ function ChatPane({
               event.currentTarget.querySelector("summary")?.focus();
             }} onToggle={(event) => {
               const menu = event.currentTarget.querySelector("[data-testid='composer-more-menu']");
-              if (event.currentTarget.open && menu instanceof HTMLElement) pinShelf(menu);
+              if (menu instanceof HTMLElement) pinComposerMenu(menu);
             }}>
               <summary>More</summary>
-              <div className="composer-more__menu" ref={(node) => pinShelf(node)} data-testid="composer-more-menu">
+              <div className="composer-more__menu" ref={(node) => pinComposerMenu(node)} data-testid="composer-more-menu">
                 <MenuCluster label="Files">
                   <button type="button" className="inline-flex items-center gap-2 rounded-panel border border-line/80 bg-white/5 px-3 text-sm" style={menuChip} onClick={onAttach}>
                     <Paperclip className="size-4" /> Attach
