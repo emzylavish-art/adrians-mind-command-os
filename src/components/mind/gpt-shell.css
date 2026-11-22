@@ -205,6 +205,17 @@ html[data-theme="light"] .gpt-rail nav a.nav-item {
   justify-content: flex-end;
 }
 
+.main-stage:has(.gpt-home) {
+  display: flex;
+  flex-direction: column;
+  min-height: 100%;
+}
+
+.main-stage > .gpt-home {
+  flex: 1 1 auto;
+  min-height: 100%;
+}
+
 @media (min-width: 768px) {
   .gpt-home [aria-label="Recent"] {
     display: none !important;
