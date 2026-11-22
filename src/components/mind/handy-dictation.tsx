@@ -4,6 +4,7 @@ import {
   HANDY_SOURCE,
   fieldLabel,
   handyBarHeight,
+  handyLiveLevels,
   insertTranscript,
   isTypingField,
 } from "@/lib/mind/handy-dictation";
