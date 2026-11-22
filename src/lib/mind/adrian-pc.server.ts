@@ -5,6 +5,7 @@ import path from "node:path";
 import { promisify } from "node:util";
 import { consequentialSpeechRefusal } from "./frontier-2031.ts";
 import { destructiveSpeechRefusal } from "./reversibility.ts";
+import { resolveXaiInferenceApiKey } from "./media/xai-key.ts";
 
 const execFileAsync = promisify(execFile);
 
@@ -35,6 +36,13 @@ export function adrianPcEnabled(env: NodeJS.ProcessEnv = process.env): boolean {
   return env.ADRIAN_PC === "1";
 }
 
+export function buttonMatchDecision(names: string[]): { click: boolean; output: string } {
+  const matches = names.map((name) => name.trim()).filter(Boolean);
+  if (matches.length === 0) return { click: false, output: "No button matched. Nothing was clicked." };
+  if (matches.length > 1) return { click: false, output: `${matches.length} buttons matched. Nothing was clicked.` };
+  return { click: true, output: `Exactly one button matched: ${matches[0]}.` };
+}
+
 function insideRoot(root: string, target: string): string | null {
   const resolvedRoot = path.resolve(root);
   const resolved = path.resolve(target);
@@ -47,6 +55,10 @@ export async function runAdrianPc(input: {
   halted: boolean;
   root?: string;
   platform?: NodeJS.Platform;
+  findButtons?: (name: string) => Promise<string[]>;
+  clickButton?: (name: string) => Promise<boolean>;
+  captureScreen?: () => Promise<Buffer | null>;
+  readImage?: (png: Buffer) => Promise<string>;
 }): Promise<{ ran: boolean; output: string }> {
   const text = input.text.trim();
   if (!text) return { ran: false, output: "" };
@@ -93,14 +105,86 @@ export async function runAdrianPc(input: {
   if (browser) lines.push(await openBrowser(platform, browser[1]));
   if (app) lines.push(await launchApp(platform, app[1].trim()));
   if (windows) lines.push(await windowsCommand(platform, windows[2]));
-  if (extra) lines.push(await extraPc(text, platform));
+  if (FIND_BUTTON.test(text)) lines.push(await findNamedButton(text, platform, input.findButtons, input.clickButton));
+  if (VISION.test(text)) lines.push(await understandScreenshot(platform, input.captureScreen, input.readImage));
+  if (extra && !FIND_BUTTON.test(text) && !VISION.test(text)) lines.push(await extraPc(text, platform));
   return { ran: true, output: lines.join("\n") };
+}
+
+async function findNamedButton(
+  text: string,
+  platform: NodeJS.Platform,
+  findButtons?: (name: string) => Promise<string[]>,
+  clickButton?: (name: string) => Promise<boolean>,
+): Promise<string> {
+  const wanted = text.match(FIND_BUTTON)?.[1]?.trim() ?? "";
+  if (platform !== "win32" && !findButtons) return "This computer is not Windows. The button was not clicked.";
+  const names = findButtons ? await findButtons(wanted) : await windowsFindButtons(wanted);
+  const decision = buttonMatchDecision(names);
+  if (!decision.click) return decision.output;
+  const clicked = clickButton ? await clickButton(names[0] ?? wanted) : await windowsInvokeButton(names[0] ?? wanted);
+  return clicked ? `${decision.output} Adrian clicked it.` : `${decision.output} Windows did not click it.`;
+}
+
+async function understandScreenshot(
+  platform: NodeJS.Platform,
+  captureScreen?: () => Promise<Buffer | null>,
+  readImage?: (png: Buffer) => Promise<string>,
+): Promise<string> {
+  const png = captureScreen ? await captureScreen() : await captureScreenPng(platform);
+  if (!png || png.length < 32) return "The screen was not captured. No vision model was called.";
+  if (readImage) {
+    const text = (await readImage(png)).trim();
+    return text ? `Vision reading: ${text}` : "The vision model returned no reading. Nothing was invented.";
+  }
+  const key = resolveXaiInferenceApiKey();
+  if (!key) return "The screen was captured. No connected vision key was found. Nothing was invented.";
+  return readScreenshotWithGrok(png, key);
+}
+
+export async function readScreenshotWithGrok(png: Buffer, apiKey: string, model = "grok-4.3"): Promise<string> {
+  const body = {
+    model,
+    input: [{
+      role: "user",
+      content: [
+        { type: "input_image", image_url: `data:image/png;base64,${png.toString("base64")}` },
+        { type: "input_text", text: "Describe only what is visible in this screenshot. Do not guess hidden content." },
+      ],
+    }],
+  };
+  let response: Response;
+  try {
+    response = await fetch("https://api.x.ai/v1/responses", {
+      method: "POST",
+      headers: { authorization: `Bearer ${apiKey}`, "content-type": "application/json" },
+      body: JSON.stringify(body),
+    });
+  } catch {
+    return "The screen was captured. The connected vision model could not be reached. Nothing was invented.";
+  }
+  const raw = await response.text();
+  if (!response.ok) {
+    if (model === "grok-4.3" && /image|vision|unsupported|invalid/i.test(raw)) return readScreenshotWithGrok(png, apiKey, "grok-4.7");
+    return `The screen was captured. ${model} returned ${response.status}. Nothing was invented.`;
+  }
+  const text = extractModelText(raw);
+  return text ? `Vision reading from ${model}: ${text}` : `The screen was captured. ${model} returned no reading. Nothing was invented.`;
+}
+
+function extractModelText(raw: string): string {
+  try {
+    const parsed = JSON.parse(raw) as { output?: Array<{ content?: Array<{ text?: string }> }>; choices?: Array<{ message?: { content?: string } }> };
+    const parts = (parsed.output ?? []).flatMap((item) => item.content ?? []).map((part) => part.text ?? "").filter(Boolean);
+    if (parts.length) return parts.join(" ").slice(0, 2000);
+    return String(parsed.choices?.[0]?.message?.content ?? "").slice(0, 2000);
+  } catch {
+    return "";
+  }
 }
 
 async function extraPc(text: string, platform: NodeJS.Platform): Promise<string> {
   if (WORKER.test(text)) return "No worker stays up after the app closes. Nothing was started.";
-  if (VISION.test(text)) return "The screenshot was not understood. No vision model read it.";
-  if (FIND_BUTTON.test(text)) return "No accessibility tree answered. The button was not clicked.";
   if (platform !== "win32") return "This computer is not Windows. Nothing was clicked, dragged, closed, or captured.";
   if (A11Y.test(text)) return windowsAccessibility();
   if (MONITORS.test(text)) {
@@ -176,6 +260,46 @@ async function windowsAccessibility(): Promise<string> {
     return text.startsWith("root=") ? `Windows accessibility root: ${text.slice(5) || "unnamed"}. No button was clicked.` : "Windows accessibility did not answer. Nothing was clicked.";
   } catch {
     return "Windows accessibility did not answer. Nothing was clicked.";
+  }
+}
+
+async function windowsFindButtons(name: string): Promise<string[]> {
+  const script = `Add-Type -AssemblyName UIAutomationClient; $root=[System.Windows.Automation.AutomationElement]::RootElement; $cond=New-Object System.Windows.Automation.PropertyCondition([System.Windows.Automation.AutomationElement]::ControlTypeProperty, [System.Windows.Automation.ControlType]::Button); $all=$root.FindAll([System.Windows.Automation.TreeScope]::Descendants, $cond); $hits=@(); foreach ($b in $all) { if ($b.Current.Name -eq ${JSON.stringify(name)}) { $hits += $b.Current.Name } }; $hits -join "\`n"`;
+  try {
+    const { stdout } = await execFileAsync("powershell.exe", ["-NoProfile", "-Command", script], { timeout: 15000, windowsHide: true });
+    return String(stdout || "").split(/\r?\n/).map((line) => line.trim()).filter(Boolean);
+  } catch {
+    return [];
+  }
+}
+
+async function windowsInvokeButton(name: string): Promise<boolean> {
+  const script = `Add-Type -AssemblyName UIAutomationClient; $root=[System.Windows.Automation.AutomationElement]::RootElement; $cond=New-Object System.Windows.Automation.PropertyCondition([System.Windows.Automation.AutomationElement]::ControlTypeProperty, [System.Windows.Automation.ControlType]::Button); $all=$root.FindAll([System.Windows.Automation.TreeScope]::Descendants, $cond); $hits=@($all | Where-Object { $_.Current.Name -eq ${JSON.stringify(name)} }); if ($hits.Count -ne 1) { 'refused' } else { $hits[0].GetCurrentPattern([System.Windows.Automation.InvokePattern]::Pattern).Invoke(); 'clicked' }`;
+  try {
+    const { stdout } = await execFileAsync("powershell.exe", ["-NoProfile", "-Command", script], { timeout: 15000, windowsHide: true });
+    return String(stdout || "").includes("clicked");
+  } catch {
+    return false;
+  }
+}
+
+async function captureScreenPng(platform: NodeJS.Platform): Promise<Buffer | null> {
+  const shot = path.join(os.tmpdir(), "adrian-screen.png");
+  if (platform === "win32") {
+    const script = `Add-Type -AssemblyName System.Windows.Forms; Add-Type -AssemblyName System.Drawing; $bounds=[System.Windows.Forms.Screen]::PrimaryScreen.Bounds; $bitmap=New-Object System.Drawing.Bitmap $bounds.Width, $bounds.Height; $graphics=[System.Drawing.Graphics]::FromImage($bitmap); $graphics.CopyFromScreen($bounds.Location, [System.Drawing.Point]::Empty, $bounds.Size); $bitmap.Save(${JSON.stringify(shot)}); $graphics.Dispose(); $bitmap.Dispose()`;
+    try {
+      await execFileAsync("powershell.exe", ["-NoProfile", "-Command", script], { timeout: 15000, windowsHide: true });
+      return await readFile(shot);
+    } catch {
+      return null;
+    }
+  }
+  if (!process.env.DISPLAY) return null;
+  try {
+    await execFileAsync("ffmpeg", ["-y", "-f", "x11grab", "-video_size", "1280x720", "-i", process.env.DISPLAY, "-frames:v", "1", shot], { timeout: 15000 });
+    return await readFile(shot);
+  } catch {
+    return null;
   }
 }
 

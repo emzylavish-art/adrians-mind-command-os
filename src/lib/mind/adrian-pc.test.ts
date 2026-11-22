@@ -65,9 +65,49 @@ describe("Adrian PC", () => {
     assert.match(right.output, /not Windows/);
     const button = await runAdrianPc({ text: "find button Save", halted: false, platform: "linux" });
     assert.match(button.output, /not clicked/);
-    const vision = await runAdrianPc({ text: "understand the screenshot", halted: false, platform: "linux" });
-    assert.match(vision.output, /not understood/);
+    const vision = await runAdrianPc({ text: "understand the screenshot", halted: false, platform: "linux", captureScreen: async () => null });
+    assert.match(vision.output, /not captured/);
+    assert.doesNotMatch(vision.output, /Vision reading/);
     const worker = await runAdrianPc({ text: "keep working after close", halted: false, platform: "linux" });
     assert.match(worker.output, /Nothing was started/);
+  });
+
+  it("clicks a named button only when exactly one match exists", async () => {
+    const none = await runAdrianPc({ text: "find button Save", halted: false, platform: "win32", findButtons: async () => [] });
+    assert.match(none.output, /No button matched/);
+    assert.match(none.output, /Nothing was clicked/);
+    const many = await runAdrianPc({ text: "find button Save", halted: false, platform: "win32", findButtons: async () => ["Save", "Save"] });
+    assert.match(many.output, /2 buttons matched/);
+    assert.match(many.output, /Nothing was clicked/);
+    let clicked = "";
+    const one = await runAdrianPc({
+      text: "find button Save",
+      halted: false,
+      platform: "win32",
+      findButtons: async () => ["Save"],
+      clickButton: async (name) => { clicked = name; return true; },
+    });
+    assert.equal(clicked, "Save");
+    assert.match(one.output, /Exactly one button matched/);
+    assert.match(one.output, /clicked it/);
+  });
+
+  it("returns the vision model reading and does not invent one", async () => {
+    const empty = await runAdrianPc({
+      text: "understand the screenshot",
+      halted: false,
+      platform: "linux",
+      captureScreen: async () => Buffer.from("not-a-real-png-but-long-enough-bytes"),
+      readImage: async () => "   ",
+    });
+    assert.match(empty.output, /no reading/);
+    const read = await runAdrianPc({
+      text: "understand the screenshot",
+      halted: false,
+      platform: "linux",
+      captureScreen: async () => Buffer.from("png-bytes-long-enough-for-the-gate"),
+      readImage: async () => "A browser dialog titled Open xdg-open is visible.",
+    });
+    assert.match(read.output, /Vision reading: A browser dialog/);
   });
 });
