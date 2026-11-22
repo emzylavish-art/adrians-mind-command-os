@@ -1,9 +1,14 @@
 const CLOUD_ORIGIN = "https://adrians-mind.vercel.app";
 const UPDATE_PATH = "/api/mind/desktop-update";
 const INSTALLER_PATH = "/downloads/AdriansMind-Setup.exe";
+const PUBLIC_FEED = "https://raw.githubusercontent.com/emzylavish-art/adrians-mind-live/main/desktop-update.json";
+const PUBLIC_INSTALLER = "https://github.com/emzylavish-art/adrians-mind-live/releases/download/desktop-installer/AdriansMind-Setup.exe";
 const LOCAL_BUILD = 1;
 const LOCAL_VERSION = "0.9.0";
-const GITHUB_ASSET = "/emzylavish-art/adrians-mind-command-os/releases/download/desktop-installer/AdriansMind-Setup.exe";
+const GITHUB_ASSETS = new Set([
+  "/emzylavish-art/adrians-mind-command-os/releases/download/desktop-installer/AdriansMind-Setup.exe",
+  "/emzylavish-art/adrians-mind-live/releases/download/desktop-installer/AdriansMind-Setup.exe",
+]);
 const ASSET_HOSTS = new Set([
   "release-assets.githubusercontent.com",
   "objects.githubusercontent.com",
@@ -22,7 +27,7 @@ function isAllowedDownloadUrl(value, hop = 0) {
   if (url.port !== "") return false;
   const host = url.hostname.toLowerCase();
   if (host === "adrians-mind.vercel.app") return url.pathname === INSTALLER_PATH;
-  if (host === "github.com") return url.pathname === GITHUB_ASSET;
+  if (host === "github.com") return GITHUB_ASSETS.has(url.pathname);
   return hop > 0 && ASSET_HOSTS.has(host);
 }
 
@@ -65,6 +70,17 @@ function decideUpdate(localBuild, remote) {
   return { action: "switch", reason: "newer-without-verified-file", switchUrl: `${CLOUD_ORIGIN}/` };
 }
 
+function isManifest(value) {
+  return Boolean(value) && typeof value === "object" && !Array.isArray(value) && value.product === "adrians-mind" && Number.isInteger(value.build);
+}
+
+function chooseCloud(vercel, published) {
+  const feeds = [vercel, published].filter(isManifest);
+  if (feeds.length === 0) return null;
+  const newest = Math.max(...feeds.map((feed) => feed.build));
+  return feeds.find((feed) => feed === vercel && feed.build === newest) || feeds.find((feed) => feed.build === newest) || null;
+}
+
 function updateNote(localBuild, remote, decision) {
   const remoteBuild = remote && typeof remote === "object" && Number.isInteger(remote.build) ? remote.build : null;
   if (decision.reason === "cloud-missing") {
@@ -86,6 +102,8 @@ module.exports = {
   CLOUD_ORIGIN,
   UPDATE_PATH,
   INSTALLER_PATH,
+  PUBLIC_FEED,
+  PUBLIC_INSTALLER,
   LOCAL_BUILD,
   LOCAL_VERSION,
   isAllowedDownloadUrl,
@@ -94,5 +112,6 @@ module.exports = {
   validSize,
   hashesMatch,
   decideUpdate,
+  chooseCloud,
   updateNote,
 };

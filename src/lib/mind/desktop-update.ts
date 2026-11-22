@@ -1,10 +1,15 @@
 export const CLOUD_ORIGIN = "https://adrians-mind.vercel.app";
 export const UPDATE_PATH = "/api/mind/desktop-update";
 export const INSTALLER_PATH = "/downloads/AdriansMind-Setup.exe";
+export const PUBLIC_FEED = "https://raw.githubusercontent.com/emzylavish-art/adrians-mind-live/main/desktop-update.json";
+export const PUBLIC_INSTALLER = "https://github.com/emzylavish-art/adrians-mind-live/releases/download/desktop-installer/AdriansMind-Setup.exe";
 export const LOCAL_BUILD = 1;
 export const LOCAL_VERSION = "0.9.0";
 
-const GITHUB_ASSET = "/emzylavish-art/adrians-mind-command-os/releases/download/desktop-installer/AdriansMind-Setup.exe";
+const GITHUB_ASSETS = new Set([
+  "/emzylavish-art/adrians-mind-command-os/releases/download/desktop-installer/AdriansMind-Setup.exe",
+  "/emzylavish-art/adrians-mind-live/releases/download/desktop-installer/AdriansMind-Setup.exe",
+]);
 const ASSET_HOSTS = new Set([
   "release-assets.githubusercontent.com",
   "objects.githubusercontent.com",
@@ -25,8 +30,8 @@ export const publishedManifest = {
   version: LOCAL_VERSION,
   build: LOCAL_BUILD,
   download: INSTALLER_PATH,
-  sha256: "8153344566e6b55970e95ed8e8e8484596927d09d6f84baf5798e5dbfb898b7d",
-  size: 110234339,
+  sha256: "3cdb5417ea615331e9b744174678bc86df57a57c5da15351329b075dfa3be5d3",
+  size: 110196228,
 };
 
 export function isAllowedDownloadUrl(value: string, hop = 0): boolean {
@@ -41,7 +46,7 @@ export function isAllowedDownloadUrl(value: string, hop = 0): boolean {
   if (url.port !== "") return false;
   const host = url.hostname.toLowerCase();
   if (host === "adrians-mind.vercel.app") return url.pathname === INSTALLER_PATH;
-  if (host === "github.com") return url.pathname === GITHUB_ASSET;
+  if (host === "github.com") return GITHUB_ASSETS.has(url.pathname);
   return hop > 0 && ASSET_HOSTS.has(host);
 }
 
@@ -88,6 +93,19 @@ export function decideUpdate(localBuild: number, remote: unknown): UpdateDecisio
   return { action: "switch", reason: "newer-without-verified-file", switchUrl: `${CLOUD_ORIGIN}/` };
 }
 
+export function isManifest(value: unknown): value is { product: "adrians-mind"; build: number } {
+  return Boolean(value) && typeof value === "object" && !Array.isArray(value)
+    && (value as { product?: unknown }).product === "adrians-mind"
+    && Number.isInteger((value as { build?: unknown }).build);
+}
+
+export function chooseCloud(vercel: unknown, published: unknown): unknown {
+  const feeds = [vercel, published].filter(isManifest);
+  if (feeds.length === 0) return null;
+  const newest = Math.max(...feeds.map((feed) => feed.build));
+  return feeds.find((feed) => feed === vercel && feed.build === newest) ?? feeds.find((feed) => feed.build === newest) ?? null;
+}
+
 export function updateNote(localBuild: number, remote: unknown, decision: UpdateDecision): string {
   const remoteBuild = remote && typeof remote === "object" && Number.isInteger((remote as { build?: unknown }).build)
     ? (remote as { build: number }).build
@@ -121,19 +139,24 @@ export function publicManifest(source: Partial<typeof publishedManifest> = publi
 }
 
 export async function readCloudManifest(fetcher: typeof fetch = fetch): Promise<unknown> {
+  const vercel = await readFeed(fetcher, `${CLOUD_ORIGIN}${UPDATE_PATH}`, false);
+  const published = await readFeed(fetcher, PUBLIC_FEED, true);
+  return chooseCloud(vercel, published);
+}
+
+async function readFeed(fetcher: typeof fetch, url: string, allowPlain: boolean): Promise<unknown> {
   try {
-    const response = await fetcher(`${CLOUD_ORIGIN}${UPDATE_PATH}`, {
-      redirect: "error",
+    const response = await fetcher(url, {
+      redirect: allowPlain ? "follow" : "error",
       headers: { accept: "application/json" },
       signal: AbortSignal.timeout(8000),
     });
     if (!response.ok) return null;
     const type = response.headers.get("content-type") || "";
-    if (!type.includes("json")) return null;
-    const body = await response.json();
-    if (!body || typeof body !== "object" || Array.isArray(body)) return null;
+    if (!allowPlain && !type.includes("json")) return null;
+    const body = type.includes("json") ? await response.json() : JSON.parse(await response.text());
+    if (!isManifest(body)) return null;
     const record = body as Record<string, unknown>;
-    if (record.product !== "adrians-mind" || !Number.isInteger(record.build)) return null;
     return {
       product: "adrians-mind",
       version: typeof record.version === "string" ? record.version.slice(0, 32) : "",

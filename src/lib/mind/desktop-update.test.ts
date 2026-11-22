@@ -7,6 +7,8 @@ import { fileURLToPath } from "node:url";
 import {
   CLOUD_ORIGIN,
   LOCAL_BUILD,
+  PUBLIC_INSTALLER,
+  chooseCloud,
   decideUpdate,
   hashesMatch,
   isAllowedDownloadUrl,
@@ -52,6 +54,7 @@ test("a missing or unsigned manifest does not install or load a page", () => {
 test("download hosts are pinned and redirects cannot choose the window", () => {
   assert.equal(isAllowedDownloadUrl(`${CLOUD_ORIGIN}/downloads/AdriansMind-Setup.exe`), true);
   assert.equal(isAllowedDownloadUrl("https://github.com/emzylavish-art/adrians-mind-command-os/releases/download/desktop-installer/AdriansMind-Setup.exe"), true);
+  assert.equal(isAllowedDownloadUrl(PUBLIC_INSTALLER), true);
   assert.equal(isAllowedDownloadUrl("https://release-assets.githubusercontent.com/file"), false);
   assert.equal(isAllowedDownloadUrl("https://release-assets.githubusercontent.com/file", 1), true);
   for (const blocked of [
@@ -93,4 +96,22 @@ test("the launcher pins the same host and does not embed a token", () => {
   assert.equal(rules.includes("github_pat_"), false);
   assert.equal(cjs.LOCAL_BUILD, LOCAL_BUILD);
   assert.equal(cjs.CLOUD_ORIGIN, CLOUD_ORIGIN);
+});
+
+test("the future site download points at the public installer and not a private token", () => {
+  const vercel = JSON.parse(readFileSync(join(root, "vercel.json"), "utf8"));
+  const redirect = vercel.redirects.find((item: { source?: string }) => item.source === "/downloads/AdriansMind-Setup.exe");
+  assert.equal(redirect.destination, PUBLIC_INSTALLER);
+  assert.equal(JSON.stringify(vercel).includes("ghp_"), false);
+});
+
+test("a missing live feed can use the public file, and an equal build stays pinned", () => {
+  const published = { ...remote, build: 2, download: PUBLIC_INSTALLER };
+  assert.equal(chooseCloud(null, published), published);
+  assert.equal(cjs.chooseCloud(null, published).build, 2);
+  const same = { ...remote, build: 1 };
+  assert.equal(chooseCloud(same, published), published);
+  assert.equal(chooseCloud(same, { ...same }), same);
+  assert.equal(decideUpdate(1, published).action, "install");
+  assert.equal(decideUpdate(1, published).url, PUBLIC_INSTALLER);
 });

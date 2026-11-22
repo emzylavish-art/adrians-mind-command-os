@@ -9,7 +9,9 @@ const path = require("node:path");
 const {
   CLOUD_ORIGIN,
   LOCAL_BUILD,
+  PUBLIC_FEED,
   UPDATE_PATH,
+  chooseCloud,
   decideUpdate,
   hashesMatch,
   isAllowedDownloadUrl,
@@ -79,15 +81,21 @@ function startServer() {
 }
 
 async function readCloud() {
-  const response = await fetch(`${CLOUD_ORIGIN}${UPDATE_PATH}`, {
-    redirect: "error",
-    headers: { accept: "application/json" },
-    signal: AbortSignal.timeout(8000),
-  });
-  if (!response.ok) return null;
-  const type = response.headers.get("content-type") || "";
-  if (!type.includes("json")) return null;
-  return response.json();
+  async function readOne(url, allowPlain) {
+    const response = await fetch(url, {
+      redirect: allowPlain ? "follow" : "error",
+      headers: { accept: "application/json" },
+      signal: AbortSignal.timeout(8000),
+    });
+    if (!response.ok) return null;
+    const type = response.headers.get("content-type") || "";
+    if (!allowPlain && !type.includes("json")) return null;
+    const body = type.includes("json") ? await response.json() : JSON.parse(await response.text());
+    return body;
+  }
+  const vercel = await readOne(`${CLOUD_ORIGIN}${UPDATE_PATH}`, false).catch(() => null);
+  const published = await readOne(PUBLIC_FEED, true).catch(() => null);
+  return chooseCloud(vercel, published);
 }
 
 async function downloadVerified(url, sha256, size) {
