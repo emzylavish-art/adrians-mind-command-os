@@ -1,6 +1,6 @@
 export const HEARTBEAT_MS = 30000;
 export const MISSED_HEARTBEATS = 2;
-export const SURVIVABLE = ["email-queue", "message-triage"];
+export const SURVIVABLE = ["email-queue", "message-triage", "critical-notification"];
 
 export function freshHandoff() {
   return {
