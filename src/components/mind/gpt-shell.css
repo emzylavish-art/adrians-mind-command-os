@@ -1693,12 +1693,11 @@ img.service-mark.on-tile {
 }
 
 .shell .sign-in-strip {
-  position: static !important;
-  top: auto !important;
-  right: auto !important;
-  bottom: auto !important;
-  left: auto !important;
-  z-index: auto !important;
+  position: absolute !important;
+  top: 56px !important;
+  right: 16px !important;
+  left: 16px !important;
+  z-index: 20 !important;
   width: auto !important;
   max-width: none !important;
   margin: 0 !important;

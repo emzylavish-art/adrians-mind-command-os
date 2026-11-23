@@ -6091,7 +6091,7 @@ export function CommandApp() {
               className="surface-switch__button shrink-0 whitespace-nowrap"
               aria-expanded={surfaceMenu}
               aria-haspopup="menu"
-              aria-label={`Current surface: ${TITLES[view] ?? "Chat"}. Switch between Chat, Build, Intelligence, and EVE`}
+              aria-label={`Current surface: ${TITLES[view] ?? "Chat"}. Switch between Chat, Build, and Intelligence Layer`}
               onClick={(event) => {
                 const next = !surfaceMenu;
                 closeMenus("surface");
