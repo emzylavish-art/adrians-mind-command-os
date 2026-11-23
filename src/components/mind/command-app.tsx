@@ -6533,13 +6533,6 @@ export function CommandApp() {
             </button>
           </div>
         ) : null}
-        {statusSignedIn === false && typeof window !== "undefined" && window.location.hostname !== "127.0.0.1" && window.location.hostname !== "localhost" && (
-          <div className="signed-out-entry sign-in-strip" data-testid="signed-out-entry" role="status">
-            <span>Sign in to use voice and connected services.</span>
-            <Link to="/login" className="signed-out-entry__link">Sign in</Link>
-          </div>
-        )}
-
         {notice && (notice.startsWith("This link points at") || notice.startsWith("That bot is archived") || notice.startsWith("Link copied") || notice.startsWith("Clipboard copy")) ? (
           <p role="status" data-testid="share-notice" className="mx-3 mb-2 rounded-panel border border-line px-3 py-2 text-sm text-muted">{notice}</p>
         ) : null}
