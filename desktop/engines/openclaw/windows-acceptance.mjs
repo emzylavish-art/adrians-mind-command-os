@@ -1,4 +1,5 @@
 import { createHash } from "node:crypto";
+import { execFileSync } from "node:child_process";
 import { mkdtempSync, readFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
@@ -13,9 +14,32 @@ function line(status, name, detail) {
 
 export function checkBoot(env) {
   if (env.platform !== "win32") return line("FAIL", "boot", "Run this on the Windows PC. This machine cannot start the service.");
-  if (!env.taskRegistered) return line("FAIL", "boot", "Register-Autostart.ps1 has not registered OpenClaw. It did not start at login.");
+  if (!env.taskRegistered) return line("FAIL", "boot", "AdriansMind-OpenClaw is not registered. The login task from Register-Autostart.ps1 was not found.");
   if (!env.processRunning) return line("FAIL", "boot", "The OpenClaw process is not running after login.");
   return line("PASS", "boot", "OpenClaw is registered and running after login.");
+}
+
+export function readBootProbe(text) {
+  const taskRegistered = typeof text === "string" && text.includes("AdriansMind-OpenClaw");
+  const processRunning = typeof text === "string" && /openclaw/i.test(text) && /node/i.test(text);
+  return { taskRegistered, processRunning };
+}
+
+export function readWindowsBoot(platform = process.platform) {
+  if (platform !== "win32") return { taskRegistered: false, processRunning: false };
+  let taskText = "";
+  let processText = "";
+  try {
+    taskText = execFileSync("schtasks", ["/Query", "/TN", "AdriansMind-OpenClaw", "/FO", "LIST"], { encoding: "utf8" });
+  } catch {
+    taskText = "";
+  }
+  try {
+    processText = execFileSync("powershell", ["-NoProfile", "-Command", "Get-Process node | Select-Object -ExpandProperty Path"], { encoding: "utf8" });
+  } catch {
+    processText = "";
+  }
+  return readBootProbe(`${taskText}\n${processText}`);
 }
 
 export function checkApproval(dirs) {
@@ -71,11 +95,12 @@ export function runChecks(env) {
 
 if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
   const root = mkdtempSync(path.join(tmpdir(), "openclaw-accept-"));
+  const boot = readWindowsBoot(process.platform);
   const checks = runChecks({
     platform: process.platform,
     root,
-    taskRegistered: false,
-    processRunning: false,
+    taskRegistered: boot.taskRegistered,
+    processRunning: boot.processRunning,
     paperclipRunning: false,
     runnerRunning: false,
     tradingLoopRunning: false,
