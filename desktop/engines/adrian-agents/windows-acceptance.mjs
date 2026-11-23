@@ -14,14 +14,14 @@ function line(status, name, detail) {
 
 export function checkBoot(env) {
   if (env.platform !== "win32") return line("FAIL", "boot", "Run this on the Windows PC. This machine cannot start the service.");
-  if (!env.taskRegistered) return line("FAIL", "boot", "AdriansMind-OpenClaw is not registered. The login task from Register-Autostart.ps1 was not found.");
-  if (!env.processRunning) return line("FAIL", "boot", "The OpenClaw process is not running after login.");
-  return line("PASS", "boot", "OpenClaw is registered and running after login.");
+  if (!env.taskRegistered) return line("FAIL", "boot", "AdriansMind-Agents is not registered. The login task from Register-Autostart.ps1 was not found.");
+  if (!env.processRunning) return line("FAIL", "boot", "The Adrian agents process is not running after login.");
+  return line("PASS", "boot", "Adrian agents is registered and running after login.");
 }
 
 export function readBootProbe(text) {
-  const taskRegistered = typeof text === "string" && text.includes("AdriansMind-OpenClaw");
-  const processRunning = typeof text === "string" && /openclaw/i.test(text) && /node/i.test(text);
+  const taskRegistered = typeof text === "string" && text.includes("AdriansMind-Agents");
+  const processRunning = typeof text === "string" && /adrian-agents/i.test(text) && /node/i.test(text);
   return { taskRegistered, processRunning };
 }
 
@@ -30,7 +30,7 @@ export function readWindowsBoot(platform = process.platform) {
   let taskText = "";
   let processText = "";
   try {
-    taskText = execFileSync("schtasks", ["/Query", "/TN", "AdriansMind-OpenClaw", "/FO", "LIST"], { encoding: "utf8" });
+    taskText = execFileSync("schtasks", ["/Query", "/TN", "AdriansMind-Agents", "/FO", "LIST"], { encoding: "utf8" });
   } catch {
     taskText = "";
   }
@@ -60,7 +60,7 @@ export function checkBrainSwap(dirs, codeBefore) {
 }
 
 export function checkCoexistence(env) {
-  if (!portAllowed(8787) || portAllowed(9400)) return line("FAIL", "coexistence", "OpenClaw port 8787 must stay clear of the Mind OS ports.");
+  if (!portAllowed(8787) || portAllowed(9400)) return line("FAIL", "coexistence", "Adrian agents port 8787 must stay clear of the Mind OS ports.");
   if (env.workerThreads > 2 || env.memoryCeilingMb > 1024) return line("FAIL", "coexistence", "The cap is above 2 threads or 1024 MB.");
   const missing = [];
   if (!env.paperclipRunning) missing.push("Paperclip");
@@ -68,7 +68,7 @@ export function checkCoexistence(env) {
   if (!env.tradingLoopRunning) missing.push("trading loop");
   if (env.platform !== "win32" || missing.length > 0) {
     const which = missing.length > 0 ? missing.join(", ") : "Paperclip, local runner, trading loop";
-    return line("BLOCKED", "coexistence", `${which} was not running. This is not an OpenClaw failure.`);
+    return line("BLOCKED", "coexistence", `${which} was not running. This is not an Adrian agents failure.`);
   }
   return line("PASS", "coexistence", "The caps hold and Paperclip, the local runner, and the trading loop were still running.");
 }
@@ -94,7 +94,7 @@ export function runChecks(env) {
 }
 
 if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
-  const root = mkdtempSync(path.join(tmpdir(), "openclaw-accept-"));
+  const root = mkdtempSync(path.join(tmpdir(), "adrian-agents-accept-"));
   const boot = readWindowsBoot(process.platform);
   const checks = runChecks({
     platform: process.platform,

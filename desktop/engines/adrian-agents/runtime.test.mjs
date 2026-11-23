@@ -6,7 +6,7 @@ import test from "node:test";
 import { allowCommand, backoffMs, bindAdmin, enqueue, ensureLayout, finishJob, health, inboundMessage, logLine, paperclipTask, portAllowed, proposeSend, remember, reviewProposal, sandboxPath, setBrain, wipeMemory, writeEnvFile } from "./runtime.mjs";
 
 test("keys stay in a user-only env file and out of logs", () => {
-  const dirs = ensureLayout(mkdtempSync(path.join(tmpdir(), "openclaw-")));
+  const dirs = ensureLayout(mkdtempSync(path.join(tmpdir(), "adrian-agents-")));
   const env = writeEnvFile(dirs.envFile, { TELEGRAM_TOKEN: "secret-token-value" });
   assert.equal(statSync(env.path).mode & 0o777, 0o600);
   assert.equal(logLine(dirs, "desk", "error", "token=secret-token-value").refused, "Secrets are not written to logs.");
@@ -15,7 +15,7 @@ test("keys stay in a user-only env file and out of logs", () => {
 });
 
 test("queue, memory, sandbox, and health follow the runner convention", () => {
-  const dirs = ensureLayout(mkdtempSync(path.join(tmpdir(), "openclaw-")));
+  const dirs = ensureLayout(mkdtempSync(path.join(tmpdir(), "adrian-agents-")));
   const memory = remember(dirs, "desk", "telegram", "thread-1", "hello");
   assert.equal(JSON.parse(readFileSync(memory, "utf8"))[0].text, "hello");
   wipeMemory(memory);
@@ -32,7 +32,7 @@ test("queue, memory, sandbox, and health follow the runner convention", () => {
   assert.equal(status.queueDepth, 0);
   const review = reviewProposal("desk", "Draft only.");
   writeFileSync(path.join(dirs.output, "review.md"), review.body);
-  assert.match(review.file, /openclaw-desk\.md$/);
+  assert.match(review.file, /adrian-agents-desk\.md$/);
   assert.equal(setBrain(dirs.brainFile, { baseUrl: "https://example.test/v1", model: "connected-model", key: "secret" }).refused, "The key stays in the env file.");
   assert.equal(setBrain(dirs.brainFile, { baseUrl: "https://example.test/v1", model: "connected-model", keyEnv: "BRAIN_KEY" }).model, "connected-model");
   assert.equal(proposeSend(dirs, "desk", "telegram", "hello").sent, false);

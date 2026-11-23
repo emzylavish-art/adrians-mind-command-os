@@ -1,7 +1,7 @@
 import { chmodSync, mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import path from "node:path";
 
-export const ROOT = "desktop/engines/openclaw";
+export const ROOT = "desktop/engines/adrian-agents";
 export const REVIEW = "desktop/engines/local-model/review";
 export const MIND_PORTS = new Set([8765, 8766, 9222, 9400]);
 
@@ -15,7 +15,7 @@ export function layout(root) {
     skills: path.join(root, "skills"),
     jobs: path.join(root, "jobs"),
     workspaces: path.join(root, "workspaces"),
-    envFile: path.join(root, "openclaw.env"),
+    envFile: path.join(root, "adrian-agents.env"),
     brainFile: path.join(root, "brain.json"),
   };
 }
@@ -144,7 +144,7 @@ export function health(dirs, started) {
 
 export function reviewProposal(botId, text) {
   const at = new Date().toISOString().replace(/[:.]/g, "-");
-  return { folder: REVIEW, file: `${at}-openclaw-${botId}.md`, body: `# OpenClaw proposal\n\n- at: ${new Date().toISOString()}\n- bot: ${botId}\n\n${text}\n` };
+  return { folder: REVIEW, file: `${at}-adrian-agents-${botId}.md`, body: `# Adrian's Mind proposal\n\n- at: ${new Date().toISOString()}\n- bot: ${botId}\n\n${text}\n` };
 }
 
 export function restartNote(botId, reason) {

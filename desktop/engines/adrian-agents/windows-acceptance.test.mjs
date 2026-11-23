@@ -8,7 +8,7 @@ import { checkBoot, readBootProbe, runChecks } from "./windows-acceptance.mjs";
 test("the script passes only the checks it can see and fails the Windows-only ones", () => {
   const checks = runChecks({
     platform: "linux",
-    root: mkdtempSync(path.join(tmpdir(), "openclaw-accept-")),
+    root: mkdtempSync(path.join(tmpdir(), "adrian-agents-accept-")),
     taskRegistered: false,
     processRunning: false,
     paperclipRunning: false,
@@ -27,7 +27,7 @@ test("the script passes only the checks it can see and fails the Windows-only on
 });
 
 test("boot passes only when the login task and process are both present", () => {
-  const probe = readBootProbe("TaskName: AdriansMind-OpenClaw\nnode.exe openclaw");
+  const probe = readBootProbe("TaskName: AdriansMind-Agents\nnode.exe adrian-agents");
   assert.equal(probe.taskRegistered, true);
   assert.equal(probe.processRunning, true);
   assert.equal(checkBoot({ platform: "win32", ...probe }).status, "PASS");

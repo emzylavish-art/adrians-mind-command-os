@@ -3,19 +3,19 @@
 #
 # 1. Open PowerShell as the user who logs in. Do not use a different account.
 # 2. From the installed app folder, run:
-#    powershell -ExecutionPolicy Bypass -File .\desktop\engines\openclaw\Register-Autostart.ps1
+#    powershell -ExecutionPolicy Bypass -File .\desktop\engines\adrian-agents\Register-Autostart.ps1
 # 3. Confirm the task exists:
-#    schtasks /Query /TN "AdriansMind-OpenClaw" /FO LIST
+#    schtasks /Query /TN "AdriansMind-Agents" /FO LIST
 # 4. Sign out and sign back in. Do not start the process by hand.
 # 5. Confirm the process is running:
-#    Get-Process node | Where-Object { $_.Path -like "*openclaw*" }
+#    Get-Process node | Where-Object { $_.Path -like "*adrian-agents*" }
 #
-# The task starts node desktop/engines/openclaw/runtime.mjs at login. It does not send messages.
+# The task starts node desktop/engines/adrian-agents/runtime.mjs at login. It does not send messages.
 
 $ErrorActionPreference = "Stop"
 $root = Resolve-Path (Join-Path $PSScriptRoot "..\..\..")
 $node = (Get-Command node).Source
 $script = Join-Path $PSScriptRoot "runtime.mjs"
 $action = "cmd /c `"`"$node`" `"$script`"`""
-schtasks /Create /TN "AdriansMind-OpenClaw" /SC ONLOGON /RL LIMITED /F /TR $action
-Write-Output "Registered AdriansMind-OpenClaw for this user at logon."
+schtasks /Create /TN "AdriansMind-Agents" /SC ONLOGON /RL LIMITED /F /TR $action
+Write-Output "Registered AdriansMind-Agents for this user at logon."
