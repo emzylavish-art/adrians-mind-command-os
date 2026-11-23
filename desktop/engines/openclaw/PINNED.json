@@ -1,0 +1,6 @@
+{
+  "name": "openclaw",
+  "pinnedCommit": "2e53b77f4918287e5e08b7aaa26f0e49d3096448",
+  "floatingLatest": false,
+  "note": "Upgrade by changing this pin, rebuilding, and restarting. Do not track latest."
+}
