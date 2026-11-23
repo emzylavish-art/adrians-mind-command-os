@@ -1,7 +1,7 @@
 import { compareAndSet, freshOwnership, heartbeat, missed, renewLease, telegramNotice, watchdog } from "./failover.mjs";
 
 export function readRelayEnv(env = process.env) {
-  const url = env.SUPABASE_URL || "";
+  const url = env.SUPABASE_URL || env.VITE_SUPABASE_URL || env.NEXT_PUBLIC_SUPABASE_URL || "";
   const key = env.SUPABASE_SERVICE_ROLE_KEY || "";
   const allowed = env.ADRIAN_TELEGRAM_USER_ID || "";
   if (!url || !key) return { refused: "Supabase is not configured. Outbound stays stopped." };

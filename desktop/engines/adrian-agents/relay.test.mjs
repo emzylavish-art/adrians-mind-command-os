@@ -7,6 +7,7 @@ test("a missing Supabase key stops the PC", async () => {
   assert.equal(result.stopped, true);
   assert.match(result.refused, /not configured/);
   assert.equal(readRelayEnv({}).refused.includes("Supabase"), true);
+  assert.equal(readRelayEnv({ VITE_SUPABASE_URL: "https://example.supabase.co", SUPABASE_SERVICE_ROLE_KEY: "secret" }).refused, undefined);
 });
 
 test("a configured relay renews the lease and Telegram stays a human notice", async () => {
