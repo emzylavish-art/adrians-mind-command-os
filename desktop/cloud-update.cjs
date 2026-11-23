@@ -1,3 +1,4 @@
+const crypto = require("crypto");
 const CLOUD_ORIGIN = "https://adrians-mind.vercel.app";
 const UPDATE_PATH = "/api/mind/desktop-update";
 const INSTALLER_PATH = "/downloads/AdriansMind-Setup.exe";
@@ -5,6 +6,8 @@ const PUBLIC_FEED = "https://raw.githubusercontent.com/emzylavish-art/adrians-mi
 const PUBLIC_INSTALLER = "https://github.com/emzylavish-art/adrians-mind-command-os/releases/download/desktop-installer/AdriansMind-Setup-Full.exe.part00";
 const LOCAL_BUILD = 9;
 const LOCAL_VERSION = "0.9.1";
+const PAYLOAD_HASH_MARK = "\nADRIAN_PAYLOAD_SHA256=";
+const PAYLOAD_HASH_TAIL = "\n";
 const GITHUB_ASSETS = new Set([
   "/emzylavish-art/adrians-mind-command-os/releases/download/desktop-installer/AdriansMind-Setup-Full.exe.part00",
   "/emzylavish-art/adrians-mind-command-os/releases/download/desktop-installer/AdriansMind-Setup-Full.exe.part01",
@@ -58,13 +61,14 @@ function validFullSize(value) {
 
 const FULL_PACKAGE = {
   finalName: "AdriansMind-Setup-Full.exe",
-  sha256: "7674b423f38e1c73d645387644604d654d52838e8f5784e24196c873b26d31d7",
-  size: 6397884393,
+  sha256: "6fd040d29a7e4e4ce1fb58e8f7d550ded2f6054ea4b5a061761c7038f4a4b90e",
+  payloadSha256: "e4f5476dfd223cbc5518aa7ac97f7a52a22c2b7d9c8aa7d61bccd951a35423d1",
+  size: 6398360607,
   parts: [
-    { name: "AdriansMind-Setup-Full.exe.part00", sha256: "368155b092ed03d5b50bfb7842470b08698972b84ebb58bcefcdbde608dad9c5", size: 1992294400, url: "https://github.com/emzylavish-art/adrians-mind-command-os/releases/download/desktop-installer/AdriansMind-Setup-Full.exe.part00" },
+    { name: "AdriansMind-Setup-Full.exe.part00", sha256: "c7e04666109f16b1e3207d70890af201d2b039eace0aa74a28e5934d70a2fe1d", size: 1992294400, url: "https://github.com/emzylavish-art/adrians-mind-command-os/releases/download/desktop-installer/AdriansMind-Setup-Full.exe.part00" },
     { name: "AdriansMind-Setup-Full.exe.part01", sha256: "f29d223edeee8b832b28b8f40f7171de64dd8226e48c48bd58b25700cb352749", size: 1992294400, url: "https://github.com/emzylavish-art/adrians-mind-command-os/releases/download/desktop-installer/AdriansMind-Setup-Full.exe.part01" },
     { name: "AdriansMind-Setup-Full.exe.part02", sha256: "0b201ccb5c002a580fe287406fb9c11490d7df2e9b38e9d62ab01d06c7b85425", size: 1992294400, url: "https://github.com/emzylavish-art/adrians-mind-command-os/releases/download/desktop-installer/AdriansMind-Setup-Full.exe.part02" },
-    { name: "AdriansMind-Setup-Full.exe.part03", sha256: "4a19265906044a3bf8f09993aea57856b7600375a696d3bc1077453ecff5cd2d", size: 421001193, url: "https://github.com/emzylavish-art/adrians-mind-command-os/releases/download/desktop-installer/AdriansMind-Setup-Full.exe.part03" },
+    { name: "AdriansMind-Setup-Full.exe.part03", sha256: "ea682d56ce4182bfa4dea2880b8b27cac86295e13adcd219096a20d5d63b16fe", size: 421477407, url: "https://github.com/emzylavish-art/adrians-mind-command-os/releases/download/desktop-installer/AdriansMind-Setup-Full.exe.part03" },
   ],
 };
 
@@ -99,6 +103,36 @@ function hashesMatch(expected, actual) {
   let diff = 0;
   for (let i = 0; i < expected.length; i += 1) diff |= expected.charCodeAt(i) ^ actual.charCodeAt(i);
   return diff === 0;
+}
+
+
+function payloadHashField(buffer) {
+  const mark = Buffer.from(PAYLOAD_HASH_MARK);
+  const at = buffer.lastIndexOf(mark);
+  if (at < 0) return null;
+  const start = at + mark.length;
+  const end = start + 64;
+  if (end + PAYLOAD_HASH_TAIL.length > buffer.length) return null;
+  if (buffer.subarray(end, end + PAYLOAD_HASH_TAIL.length).toString() !== PAYLOAD_HASH_TAIL) return null;
+  const stored = buffer.subarray(start, end).toString("ascii");
+  if (!validHash(stored)) return null;
+  return { payloadEnd: at, stored };
+}
+
+function hashInstallerPayload(buffer) {
+  const field = payloadHashField(buffer);
+  const end = field ? field.payloadEnd : buffer.length;
+  return crypto.createHash("sha256").update(buffer.subarray(0, end)).digest("hex");
+}
+
+function readPackedPayloadHash(buffer) {
+  const field = payloadHashField(buffer);
+  return field ? field.stored : null;
+}
+
+function packedPayloadRecordMatches(buffer) {
+  const stored = readPackedPayloadHash(buffer);
+  return Boolean(stored) && hashesMatch(stored, hashInstallerPayload(buffer));
 }
 
 function decideUpdate(localBuild, remote) {
@@ -160,6 +194,10 @@ module.exports = {
   isFullPackageSpec,
   decideFullUpdate,
   hashesMatch,
+  PAYLOAD_HASH_MARK,
+  hashInstallerPayload,
+  readPackedPayloadHash,
+  packedPayloadRecordMatches,
   decideUpdate,
   chooseCloud,
   updateNote,

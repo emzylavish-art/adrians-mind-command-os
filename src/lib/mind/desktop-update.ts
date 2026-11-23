@@ -33,9 +33,10 @@ export const publishedManifest = {
   version: LOCAL_VERSION,
   build: LOCAL_BUILD,
   download: INSTALLER_PATH,
-  sha256: "7674b423f38e1c73d645387644604d654d52838e8f5784e24196c873b26d31d7",
-  size: 6397884393,
+  sha256: "6fd040d29a7e4e4ce1fb58e8f7d550ded2f6054ea4b5a061761c7038f4a4b90e",
+  size: 6398360607,
   channel: "full",
+  payloadSha256: "e4f5476dfd223cbc5518aa7ac97f7a52a22c2b7d9c8aa7d61bccd951a35423d1",
 };
 
 export function isAllowedDownloadUrl(value: string, hop = 0): boolean {
@@ -133,6 +134,8 @@ export function updateNote(localBuild: number, remote: unknown, decision: Update
   return `The live site is build ${remoteBuild}. This PC stays open so local chats remain visible. The program is not replaced until a verified installer can be downloaded.`;
 }
 
+const PAYLOAD_SHA256 = "e4f5476dfd223cbc5518aa7ac97f7a52a22c2b7d9c8aa7d61bccd951a35423d1";
+
 export function publicManifest(source: Partial<typeof publishedManifest> = publishedManifest) {
   const build = Number.isInteger(source.build) ? source.build as number : LOCAL_BUILD;
   return {
@@ -141,6 +144,7 @@ export function publicManifest(source: Partial<typeof publishedManifest> = publi
     build,
     download: INSTALLER_PATH,
     sha256: validHash(source.sha256) ? source.sha256 : "",
+    payloadSha256: PAYLOAD_SHA256,
     size: validFullSize(source.size) ? source.size : (validSize(source.size) ? source.size : 0),
     cloud: CLOUD_ORIGIN,
     fullPackage: FULL_PACKAGE,
@@ -181,13 +185,14 @@ async function readFeed(fetcher: typeof fetch, url: string, allowPlain: boolean)
 
 export const FULL_PACKAGE = {
   finalName: "AdriansMind-Setup-Full.exe",
-  sha256: "7674b423f38e1c73d645387644604d654d52838e8f5784e24196c873b26d31d7",
-  size: 6397884393,
+  sha256: "6fd040d29a7e4e4ce1fb58e8f7d550ded2f6054ea4b5a061761c7038f4a4b90e",
+  payloadSha256: PAYLOAD_SHA256,
+  size: 6398360607,
   parts: [
-    { name: "AdriansMind-Setup-Full.exe.part00", sha256: "368155b092ed03d5b50bfb7842470b08698972b84ebb58bcefcdbde608dad9c5", size: 1992294400, url: "https://github.com/emzylavish-art/adrians-mind-command-os/releases/download/desktop-installer/AdriansMind-Setup-Full.exe.part00" },
+    { name: "AdriansMind-Setup-Full.exe.part00", sha256: "c7e04666109f16b1e3207d70890af201d2b039eace0aa74a28e5934d70a2fe1d", size: 1992294400, url: "https://github.com/emzylavish-art/adrians-mind-command-os/releases/download/desktop-installer/AdriansMind-Setup-Full.exe.part00" },
     { name: "AdriansMind-Setup-Full.exe.part01", sha256: "f29d223edeee8b832b28b8f40f7171de64dd8226e48c48bd58b25700cb352749", size: 1992294400, url: "https://github.com/emzylavish-art/adrians-mind-command-os/releases/download/desktop-installer/AdriansMind-Setup-Full.exe.part01" },
     { name: "AdriansMind-Setup-Full.exe.part02", sha256: "0b201ccb5c002a580fe287406fb9c11490d7df2e9b38e9d62ab01d06c7b85425", size: 1992294400, url: "https://github.com/emzylavish-art/adrians-mind-command-os/releases/download/desktop-installer/AdriansMind-Setup-Full.exe.part02" },
-    { name: "AdriansMind-Setup-Full.exe.part03", sha256: "4a19265906044a3bf8f09993aea57856b7600375a696d3bc1077453ecff5cd2d", size: 421001193, url: "https://github.com/emzylavish-art/adrians-mind-command-os/releases/download/desktop-installer/AdriansMind-Setup-Full.exe.part03" },
+    { name: "AdriansMind-Setup-Full.exe.part03", sha256: "ea682d56ce4182bfa4dea2880b8b27cac86295e13adcd219096a20d5d63b16fe", size: 421477407, url: "https://github.com/emzylavish-art/adrians-mind-command-os/releases/download/desktop-installer/AdriansMind-Setup-Full.exe.part03" },
   ],
 } as const;
 
