@@ -23,10 +23,10 @@ Put them in the same folder. On Windows, join them in that order:
 cmd /c copy /b AdriansMind-Setup-Full.exe.part00+AdriansMind-Setup-Full.exe.part01+AdriansMind-Setup-Full.exe.part02+AdriansMind-Setup-Full.exe.part03 AdriansMind-Setup-Full.exe
 ```
 
-The joined file must be 6,389,066,607 bytes. Its SHA-256 must start with `e88ff220` and match the full hash exactly:
+The joined file must be 6,397,884,393 bytes. Its SHA-256 must start with `7674b423` and match the full hash exactly:
 
 ```text
-e88ff2205540742bd5d9ee75be09e9938e522a00ce0f0514af6c5da14a2d0550
+7674b423f38e1c73d645387644604d654d52838e8f5784e24196c873b26d31d7
 ```
 
 Check it in PowerShell:
