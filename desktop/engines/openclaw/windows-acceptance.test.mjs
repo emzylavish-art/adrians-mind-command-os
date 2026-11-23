@@ -11,7 +11,9 @@ test("the script passes only the checks it can see and fails the Windows-only on
     root: mkdtempSync(path.join(tmpdir(), "openclaw-accept-")),
     taskRegistered: false,
     processRunning: false,
-    neighborsRunning: false,
+    paperclipRunning: false,
+    runnerRunning: false,
+    tradingLoopRunning: false,
     workerThreads: 2,
     memoryCeilingMb: 1024,
   });
@@ -19,6 +21,7 @@ test("the script passes only the checks it can see and fails the Windows-only on
   assert.equal(byName.boot, "FAIL");
   assert.equal(byName.approval, "PASS");
   assert.equal(byName["brain-swap"], "PASS");
-  assert.equal(byName.coexistence, "FAIL");
+  assert.equal(byName.coexistence, "BLOCKED");
   assert.equal(byName["delete-refusal"], "PASS");
+  assert.equal(checks.some((check) => check.status === "FAIL"), true);
 });

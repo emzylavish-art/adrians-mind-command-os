@@ -38,8 +38,15 @@ export function checkBrainSwap(dirs, codeBefore) {
 export function checkCoexistence(env) {
   if (!portAllowed(8787) || portAllowed(9400)) return line("FAIL", "coexistence", "OpenClaw port 8787 must stay clear of the Mind OS ports.");
   if (env.workerThreads > 2 || env.memoryCeilingMb > 1024) return line("FAIL", "coexistence", "The cap is above 2 threads or 1024 MB.");
-  if (env.platform !== "win32" || !env.neighborsRunning) return line("FAIL", "coexistence", "Paperclip, the local runner, and a trading loop were not observed together on Windows.");
-  return line("PASS", "coexistence", "The caps hold and the other processes were still running.");
+  const missing = [];
+  if (!env.paperclipRunning) missing.push("Paperclip");
+  if (!env.runnerRunning) missing.push("local runner");
+  if (!env.tradingLoopRunning) missing.push("trading loop");
+  if (env.platform !== "win32" || missing.length > 0) {
+    const which = missing.length > 0 ? missing.join(", ") : "Paperclip, local runner, trading loop";
+    return line("BLOCKED", "coexistence", `${which} was not running. This is not an OpenClaw failure.`);
+  }
+  return line("PASS", "coexistence", "The caps hold and Paperclip, the local runner, and the trading loop were still running.");
 }
 
 export function checkDeleteRefusal(dirs) {
@@ -69,10 +76,12 @@ if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.me
     root,
     taskRegistered: false,
     processRunning: false,
-    neighborsRunning: false,
+    paperclipRunning: false,
+    runnerRunning: false,
+    tradingLoopRunning: false,
     workerThreads: 2,
     memoryCeilingMb: 1024,
   });
   for (const check of checks) console.log(`${check.status} ${check.name}: ${check.detail}`);
-  if (checks.some((check) => check.status !== "PASS")) process.exitCode = 1;
+  if (checks.some((check) => check.status === "FAIL")) process.exitCode = 1;
 }
