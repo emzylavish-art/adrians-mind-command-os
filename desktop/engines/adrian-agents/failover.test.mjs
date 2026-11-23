@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { beforeSharedSend, claimTask, finishInFlight, freshHandoff, missed, pcObservePhone, phoneObservePc, reclaim, wakeSignal, HEARTBEAT_MS } from "./failover.mjs";
+import { beforeSharedSend, claimTask, finishInFlight, freshHandoff, irreversibleAction, missed, pcObservePhone, phoneObservePc, reclaim, wakeSignal, HEARTBEAT_MS } from "./failover.mjs";
 
 test("two missed heartbeats promote the phone and the PC stays primary when the phone is quiet", () => {
   const now = 100000;
@@ -25,4 +25,5 @@ test("an in-flight task is not reclaimed or sent twice", () => {
   state = finishInFlight(sent);
   assert.equal(reclaim(state, 130000).owner, "pc");
   assert.equal(wakeSignal().executes, false);
+  assert.match(irreversibleAction("send", false).refused, /review folder/);
 });

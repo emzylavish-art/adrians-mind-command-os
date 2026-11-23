@@ -61,3 +61,9 @@ export function beforeSharedSend(state, actor, id) {
 export function wakeSignal() {
   return { pipe: "telegram-notification-only", executes: false, relay: "push", phoneIsServer: false };
 }
+
+export function irreversibleAction(kind, approved) {
+  if (approved !== true) return { refused: "That action waits in the review folder. It is not sent, deleted, deployed, or committed." };
+  if (!["send", "delete", "deploy", "commit"].includes(kind)) return { refused: "That action is not an approved shared action." };
+  return { review: true, kind };
+}
