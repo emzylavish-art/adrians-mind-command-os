@@ -11,30 +11,66 @@ export type OpenClawBot = {
 
 export type OpenClawStatus = {
   role: "parallel-worker";
+  board: "paperclip";
   touchesMindOs: false;
   service: "not-running" | "running";
   port: number | null;
+  startsAfter: "mind-os-engines";
+  cpuPriority: "below-mind-os";
+  workerThreads: number;
+  memoryCeilingMb: number;
+  pollIntervalMs: number;
   bots: OpenClawBot[];
   skills: string[];
   memory: "local-database";
   awakeRequirement: "Windows must stay awake on AC. This machine cannot set that.";
 };
 
+const MIND_PORTS = new Set([8765, 8766, 9222, 9400]);
+const DEFAULT_PORT = 8787;
+const DEFAULT_THREADS = 2;
+const DEFAULT_MEMORY_MB = 1024;
+const DEFAULT_POLL_MS = 15000;
+
 const bots: OpenClawBot[] = [];
 const skills: string[] = [];
 let service: OpenClawStatus["service"] = "not-running";
 let port: number | null = null;
+let workerThreads = DEFAULT_THREADS;
+let memoryCeilingMb = DEFAULT_MEMORY_MB;
+let pollIntervalMs = DEFAULT_POLL_MS;
 
 export function resetOpenClawRuntime(): void {
   bots.length = 0;
   skills.length = 0;
   service = "not-running";
   port = null;
+  workerThreads = DEFAULT_THREADS;
+  memoryCeilingMb = DEFAULT_MEMORY_MB;
+  pollIntervalMs = DEFAULT_POLL_MS;
+}
+
+export function configureOpenClawLimits(input: { port: number; workerThreads: number; memoryCeilingMb: number; pollIntervalMs: number }): { ok: true } | { refused: string } {
+  if (MIND_PORTS.has(input.port)) return { refused: "OpenClaw cannot use a Mind OS port." };
+  if (!Number.isInteger(input.port) || input.port < 1024 || input.port > 65535) return { refused: "OpenClaw needs its own port." };
+  if (!Number.isInteger(input.workerThreads) || input.workerThreads < 1 || input.workerThreads > 2) return { refused: "OpenClaw worker threads stay at 1 or 2." };
+  if (!Number.isInteger(input.memoryCeilingMb) || input.memoryCeilingMb < 256 || input.memoryCeilingMb > 1024) return { refused: "OpenClaw memory stays at or under 1024 MB." };
+  if (!Number.isInteger(input.pollIntervalMs) || input.pollIntervalMs < 15000) return { refused: "OpenClaw polls no faster than every 15 seconds." };
+  port = input.port;
+  workerThreads = input.workerThreads;
+  memoryCeilingMb = input.memoryCeilingMb;
+  pollIntervalMs = input.pollIntervalMs;
+  return { ok: true };
 }
 
 export function noteOpenClawService(running: boolean, listenPort: number | null): void {
+  if (running && (listenPort === null || MIND_PORTS.has(listenPort))) {
+    service = "not-running";
+    port = null;
+    return;
+  }
   service = running ? "running" : "not-running";
-  port = running && Number.isInteger(listenPort) && (listenPort as number) > 0 ? listenPort : null;
+  port = running ? listenPort : null;
 }
 
 export function addOpenClawBot(input: { id: string; channel: OpenClawChannel; brain: OpenClawBrain; token: string }): OpenClawBot | { refused: string } {
@@ -65,9 +101,15 @@ export function openClawTurn(botId: string, message: string): { refused: string 
 export function openClawStatus(): OpenClawStatus {
   return {
     role: "parallel-worker",
+    board: "paperclip",
     touchesMindOs: false,
     service,
-    port,
+    port: service === "running" ? port : null,
+    startsAfter: "mind-os-engines",
+    cpuPriority: "below-mind-os",
+    workerThreads,
+    memoryCeilingMb,
+    pollIntervalMs,
     bots: bots.map((bot) => ({ ...bot })),
     skills: [...skills],
     memory: "local-database",
