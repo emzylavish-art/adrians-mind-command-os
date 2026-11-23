@@ -63,6 +63,14 @@ export function backoffMs(attempt) {
   return Math.min(30000, 1000 * 2 ** (attempt - 1));
 }
 
+export function inboundMessage(dirs, botId, text) {
+  const hostile = /\b(delete|rm\b|format|wipe)\b/i.test(text);
+  const line = logLine(dirs, botId, hostile ? "refused" : "inbound", hostile ? "untrusted destructive instruction" : "message accepted for approval");
+  if (line.refused) return line;
+  if (hostile) return { refused: "Untrusted channel text cannot delete files.", logged: line.file };
+  return proposeSend(dirs, botId, "inbound", "Draft only. Not sent.");
+}
+
 export function writeEnvFile(file, entries) {
   const lines = Object.entries(entries).map(([key, value]) => `${key}=${value}`);
   writeFileSync(file, `${lines.join("\n")}\n`, { mode: 0o600 });
