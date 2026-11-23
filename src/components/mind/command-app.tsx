@@ -6284,17 +6284,42 @@ export function CommandApp() {
                     <span className="text-sm">Direct</span>
                     <span className="text-xs text-muted">Voice route</span>
                   </p>
+                </MenuCluster>
+                <MenuCluster label="Use a module" wide>
+                  {consultModules.filter((item) => item.connected).length === 0 ? (
+                    <p className="px-3 text-xs text-muted">No module is connected. Nothing else is listed.</p>
+                  ) : consultModules.filter((item) => item.connected).map((item) => (
+                    <button
+                      key={item.id}
+                      type="button"
+                      role="menuitemradio"
+                      aria-checked={providerChoice === item.id}
+                      data-testid={`control-module-${item.id}`}
+                      className="flex min-h-11 items-center justify-between rounded-2xl px-3 text-left text-sm"
+                      style={menuChip}
+                      onClick={() => {
+                        setLogicRoute(null);
+                        setProviderChoice(item.id);
+                        setView("chat");
+                        setControlsOpen(false);
+                        setNavOpen(false);
+                      }}
+                    >
+                      <span>{item.label}</span>
+                      <span className="text-xs text-muted">{providerChoice === item.id ? "In use" : "Ready"}</span>
+                    </button>
+                  ))}
+                </MenuCluster>
+                <MenuCluster label="Add a service">
                   <button
                     type="button"
                     role="menuitem"
                     className="flex min-h-11 flex-col items-start justify-center rounded-2xl px-3 text-left"
                     style={menuChip}
-                    title={headerDetail}
-                    aria-label={`${headerState}. ${headerDetail}`}
                     onClick={() => { setView("connected"); setControlsOpen(false); setNavOpen(false); }}
                   >
-                    <span className="inline-flex items-center gap-2 text-sm"><img src="/brand/logos/grok.svg" alt="" width={16} height={16} className="size-4 rounded" />{headerState}</span>
-                    <span className="text-xs text-muted">Connected services</span>
+                    <span className="text-sm">Connect a new service</span>
+                    <span className="text-xs text-muted">This does not change the module in use</span>
                   </button>
                 </MenuCluster>
                 <MenuCluster label="Model" wide>
