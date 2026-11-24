@@ -381,8 +381,9 @@ export const setExecutionHalt = createServerFn({ method: "POST" })
 
 export const saveMindCopy = createServerFn({ method: "POST" })
   .middleware([authMiddleware])
-  .validator((input: { workspace: unknown }) => input)
+  .validator((input: { workspace: unknown; ownerId?: string }) => input)
   .handler(async ({ data, context }) => {
+    if (data.ownerId !== undefined && data.ownerId !== context.userId) return { ok: false as const, error: "The signed-in account changed. The workspace was not saved." };
     if (!allowMindRequest("save", context.userId, 20)) return { ok: false as const, error: "Too many saves. The browser copy was kept." };
     const { normalizeWorkspace } = await import("./workspace");
     const { snapshotTooLarge, writeSnapshot } = await import("./store");
@@ -399,7 +400,9 @@ export const saveMindCopy = createServerFn({ method: "POST" })
 
 export const loadMindCopy = createServerFn({ method: "POST" })
   .middleware([authMiddleware])
-  .handler(async ({ context }) => {
+  .validator((input?: { ownerId?: string }) => input)
+  .handler(async ({ data, context }) => {
+    if (data?.ownerId !== undefined && data.ownerId !== context.userId) return { ok: false as const, error: "The signed-in account changed. The workspace was not loaded." };
     const { readSnapshot } = await import("./store");
     const { getSql } = await import("../db");
     try {

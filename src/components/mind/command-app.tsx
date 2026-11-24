@@ -1907,9 +1907,8 @@ export function CommandApp() {
   }
 
   function chooseModelTier(tier: ModelTier) {
-    setLogicRoute(null);
+    useProviderInChat("grok");
     setGrokModel(null);
-    if (isLogicRouteId(providerChoice)) setProviderChoice("grok");
     setModelTier(tier);
     const effort = effortForModelTier(tier);
     if (effort) {
@@ -1923,11 +1922,11 @@ export function CommandApp() {
     chooseRoutingMode("A");
     setLogicRoute(isLogicRouteId(id) ? id : null);
     setProviderChoice(id);
-    if (active?.botProvider) {
+    if (active?.botProvider || active?.botTier) {
       // This conversation follows the explicit selection. Other bot threads keep their defaults.
       setWs((prev) => ({
         ...prev,
-        chats: prev.chats.map((chat) => chat.id === active.id ? { ...chat, botProvider: undefined } : chat),
+        chats: prev.chats.map((chat) => chat.id === active.id ? { ...chat, botProvider: undefined, botTier: undefined } : chat),
       }));
     }
     setView("chat");
@@ -6353,25 +6352,23 @@ export function CommandApp() {
                     <span>{controlsModelLabel}</span>
                     <span aria-hidden="true">{modelRowsOpen ? "‹" : "›"}</span>
                   </button>
-                  {modelRowsOpen ? (
+                  {modelRowsOpen && effectiveProvider !== "grok" ? (
+                    <ProviderPicker name="control-model" choices={providerOptions} choice={effectiveProvider} onChoose={useProviderInChat} logicRoutes={logicRoutes} />
+                  ) : modelRowsOpen ? (
                     <ModelTierChip
                       presentation="rows"
                       tier={modelTier}
                       onChoose={chooseModelTier}
                       grokModel={grokModel}
                       onChooseGrokModel={(model) => {
-                        setLogicRoute(null);
-                        setProviderChoice("grok");
+                        useProviderInChat("grok");
                         setGrokModel(model);
                       }}
                       lastResolved={lastResolvedTier}
                       lastModel={lastModelUsed}
                       logicRoute={logicRoute}
                       logicRoutes={logicRoutes}
-                      onChooseLogic={(route) => {
-                        setLogicRoute(route);
-                        setProviderChoice(route);
-                      }}
+                      onChooseLogic={useProviderInChat}
                     />
                   ) : null}
                 </MenuCluster>
@@ -7220,7 +7217,7 @@ export function CommandApp() {
                 void checkRea();
               }}
               providerChoices={providerOptions}
-              providerChoice={providerChoice}
+              providerChoice={effectiveProvider}
               onProvider={(id) => {
                 if (isLogicRouteId(id)) {
                   const view = logicRoutes.find((item) => item.id === id);
@@ -7232,10 +7229,7 @@ export function CommandApp() {
               onModelTier={chooseModelTier}
               logicRoute={logicRoute}
               logicRoutes={logicRoutes}
-              onChooseLogic={(route) => {
-                setLogicRoute(route);
-                setProviderChoice(route);
-              }}
+              onChooseLogic={useProviderInChat}
               toolTimeline={toolTimeline}
               timelineNowMs={timelineTickMs || Date.now()}
               agentActivity={agentActivityFromTimeline(toolTimeline)}
@@ -9227,7 +9221,7 @@ function ChatPane({
             <summary className="min-h-11 cursor-pointer text-sm">Provider</summary>
             <ProviderPicker name="mind-provider-mobile" choices={choices} choice={providerChoice} onChoose={onProvider} logicRoutes={logicRoutes} grokVerified={grokVerified} />
             <div className="mt-3">
-              <ModelTierPicker name="mind-tier-mobile" tier={modelTier} onChoose={onModelTier} logicRoute={logicRoute} logicRoutes={logicRoutes} onChooseLogic={onChooseLogic} />
+              {routeId === "grok" && <ModelTierPicker name="mind-tier-mobile" tier={modelTier} onChoose={onModelTier} logicRoute={logicRoute} logicRoutes={logicRoutes} onChooseLogic={onChooseLogic} />}
             </div>
           </details>
         </div>
@@ -9638,7 +9632,7 @@ function ChatPane({
         <details className="rail-pack">
           <summary>Mode</summary>
           <section className="glass-panel rounded-panel p-3">
-            <ModelTierPicker name="mind-tier-side" tier={modelTier} onChoose={onModelTier} logicRoute={logicRoute} logicRoutes={logicRoutes} onChooseLogic={onChooseLogic} />
+            {routeId === "grok" && <ModelTierPicker name="mind-tier-side" tier={modelTier} onChoose={onModelTier} logicRoute={logicRoute} logicRoutes={logicRoutes} onChooseLogic={onChooseLogic} />}
           </section>
         </details>
         <details className="rail-pack">
@@ -9971,37 +9965,36 @@ function ProviderPicker({
   logicRoutes?: LogicRoutePublic[];
   grokVerified?: boolean;
 }) {
-  const groupOf = (item: { id: string; label: string }) => {
-    const label = item.label.toLowerCase();
-    if (item.id === "grok" || label.startsWith("grok")) return "Grok";
-    if (item.id === "openrouter" || label.includes("nemotron") || label.includes("openrouter")) return "OpenRouter";
-    if (item.id === "ollama" || label.includes("local")) return "Local";
-    if (label.includes("orchestrat")) return "Orchestrator";
-    if (item.id === "openai" || label.includes("gpt") || label.includes("astra") || label.includes("sol") || label.includes("luna")) return "Frontier";
-    if (item.id.startsWith("custom:") || item.id.startsWith("mcp:") || item.id.startsWith("service:")) return "Saved";
-    return "Other";
-  };
   const visible = [
     ...choices,
     ...logicRoutes.filter((route) => route.ready).map((route) => ({ id: route.id, label: route.label, enabled: true, reason: route.reason })),
-  ].filter((item, index, all) => item.enabled && all.findIndex((other) => other.id === item.id) === index);
-  const groups = ["Grok", "Frontier", "OpenRouter", "Local", "Orchestrator", "Other", "Saved"].map((title) => ({
-    title,
-    items: visible.filter((item) => groupOf(item) === title),
-  })).filter((group) => group.items.length > 0);
-  const selected = choices.find((item) => item.id === choice);
+  ];
+  const seen = new Set<string>();
+  const groups = new Map<string, { title: string; items: typeof choices }>();
+  for (const item of visible) {
+    if (!item.enabled || seen.has(item.id)) continue;
+    seen.add(item.id);
+    const [kind, source] = item.id.split(":");
+    const external = kind === "custom" || kind === "mcp";
+    const groupId = external ? `${kind}:${source}` : kind === "service" ? "services" : item.id;
+    const title = external ? item.label.split(": ")[0] : kind === "service" ? "Connected services" : item.label;
+    const group = groups.get(groupId) ?? { title, items: [] };
+    group.items.push(item);
+    groups.set(groupId, group);
+  }
+  const selected = visible.find((item) => item.id === choice);
   return (
     <div className="provider-pack">
       <p className="text-sm font-semibold">Providers</p>
       <p className="mt-1 text-xs text-muted">{selected ? selected.label : "Choose a provider"}</p>
-      {groups.map((group) => (
-        <details key={group.title} className="provider-group" open={group.items.some((item) => item.id === choice) || undefined}>
+      {Array.from(groups, ([groupId, group]) => (
+        <details key={groupId} className="provider-group" open={group.items.some((item) => item.id === choice) || undefined}>
           <summary className="flex items-center gap-2">
             {PRODUCT_LOGO[group.title.toLowerCase()] ? <img src={PRODUCT_LOGO[group.title.toLowerCase()]} alt="" width={16} height={16} className="size-4 rounded" /> : null}
             {group.title}
-            {group.title === "Saved" ? <span className="text-xs text-muted">{group.items.length} models</span> : null}
+            {groupId.startsWith("custom:") ? <span className="text-xs text-muted">{group.items.length} {group.items.length === 1 ? "model" : "models"}</span> : null}
           </summary>
-          <div className={group.title === "Saved" ? "max-h-64 overflow-y-auto" : undefined} style={group.title === "Saved" ? { overflowX: "hidden" } : undefined}>
+          <div className="max-h-64 overflow-y-auto overflow-x-hidden">
           {group.items.map((item) => (
             <label key={item.id} className={`flex items-start gap-2 rounded-xl px-2 py-2 text-sm ${choice === item.id ? "model-option-active" : ""} ${!item.enabled ? "opacity-60" : ""}`}>
               <input type="radio" name={name} className="mt-1" checked={choice === item.id} disabled={!item.enabled} onChange={() => { if (item.enabled) onChoose(item.id); }} />

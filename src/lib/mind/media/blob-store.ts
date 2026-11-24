@@ -58,13 +58,13 @@ export function createMemoryBlobStore(seed: Record<string, string> = {}): MediaB
   };
 }
 
-function openDb(): Promise<IDBDatabase> {
+function openDb(name: string): Promise<IDBDatabase> {
   return new Promise((resolve, reject) => {
     if (typeof indexedDB === "undefined") {
       reject(new Error("IndexedDB is not available."));
       return;
     }
-    const req = indexedDB.open(MEDIA_BLOB_DB, 1);
+    const req = indexedDB.open(name, 1);
     req.onupgradeneeded = () => {
       const db = req.result;
       if (!db.objectStoreNames.contains(MEDIA_BLOB_STORE)) db.createObjectStore(MEDIA_BLOB_STORE);
@@ -74,10 +74,10 @@ function openDb(): Promise<IDBDatabase> {
   });
 }
 
-export function createIndexedDbBlobStore(): MediaBlobStore {
+export function createIndexedDbBlobStore(name = MEDIA_BLOB_DB): MediaBlobStore {
   return {
     async put(id, dataUrl) {
-      const db = await openDb();
+      const db = await openDb(name);
       await new Promise<void>((resolve, reject) => {
         const tx = db.transaction(MEDIA_BLOB_STORE, "readwrite");
         tx.objectStore(MEDIA_BLOB_STORE).put(dataUrl, id);
@@ -87,7 +87,7 @@ export function createIndexedDbBlobStore(): MediaBlobStore {
       db.close();
     },
     async get(id) {
-      const db = await openDb();
+      const db = await openDb(name);
       const value = await new Promise<string | undefined>((resolve, reject) => {
         const tx = db.transaction(MEDIA_BLOB_STORE, "readonly");
         const req = tx.objectStore(MEDIA_BLOB_STORE).get(id);
@@ -98,7 +98,7 @@ export function createIndexedDbBlobStore(): MediaBlobStore {
       return value;
     },
     async delete(id) {
-      const db = await openDb();
+      const db = await openDb(name);
       await new Promise<void>((resolve, reject) => {
         const tx = db.transaction(MEDIA_BLOB_STORE, "readwrite");
         tx.objectStore(MEDIA_BLOB_STORE).delete(id);
@@ -106,6 +106,22 @@ export function createIndexedDbBlobStore(): MediaBlobStore {
         tx.onerror = () => reject(tx.error ?? new Error("IndexedDB delete failed."));
       });
       db.close();
+    },
+  };
+}
+
+/** New attachments live in the account database. Existing snapshots can still resolve legacy IDs. */
+export function accountImageStore(owner: string | null) {
+  const name = MEDIA_BLOB_DB + ".owner." + encodeURIComponent(owner ?? "");
+  const scoped = createIndexedDbBlobStore(name);
+  const legacy = createIndexedDbBlobStore();
+  return {
+    put: scoped.put,
+    async get(id: string) {
+      return (await scoped.get(id)) ?? (await legacy.get(id));
+    },
+    clear() {
+      if (typeof indexedDB !== "undefined") indexedDB.deleteDatabase(name);
     },
   };
 }
