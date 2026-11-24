@@ -7,9 +7,15 @@ const css = readFileSync(new URL("../../styles.css", import.meta.url), "utf8");
 const login = readFileSync(new URL("../../routes/login.tsx", import.meta.url), "utf8");
 
 describe("visual polish contract", () => {
-  it("gives both composers a single scrollable toolbar and a pinned send control", () => {
-    assert.equal((app.match(/composer-toolbar/g) ?? []).length, 2);
-    assert.equal((app.match(/composer-send/g) ?? []).length, 2);
+  it("keeps one toolbar and send control in each composer, with compact layout rules", () => {
+    const forms = app.match(/<form\b[\s\S]*?<\/form>/g) ?? [];
+    for (const name of ["Command", "Message"]) {
+      const composers = forms.filter((form) => form.includes(`aria-label="${name}"`));
+      assert.equal(composers.length, 1, name);
+      const [composer] = composers;
+      assert.equal((composer.match(/className="composer-toolbar\b/g) ?? []).length, 1, name);
+      assert.equal((composer.match(/className="composer-send\b/g) ?? []).length, 1, name);
+    }
     assert.match(css, /Visual polish lane[\s\S]*\.composer-toolbar \{[\s\S]*flex-wrap:\s*nowrap/);
     assert.match(css, /Visual polish lane[\s\S]*\.composer-send \{[\s\S]*position:\s*sticky/);
   });

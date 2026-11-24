@@ -24,7 +24,6 @@ const OFFICIAL = [
 const ADDED_KEY = "adrian-added-plugins";
 
 export function KimiDeviceConnect() {
-  const [mode, setMode] = useState<"oauth" | "key">("oauth");
   const [notice, setNotice] = useState("Build uses the saved Grok key. There is no separate coding login.");
   const [userCode, setUserCode] = useState("");
   const [url, setUrl] = useState("");
@@ -50,14 +49,7 @@ export function KimiDeviceConnect() {
   function addPlugin(plugin: (typeof OFFICIAL)[number]) {
     if (!added.includes(plugin.id)) remember([...added, plugin.id]);
     setTab("custom");
-    if (plugin.action === "key") {
-      setMode("key");
-      setNotice(`${plugin.name} is on Adrian. Paste the key below. It stays on the server and is not shown again.`);
-      window.setTimeout(() => document.getElementById("kimi-api-key")?.focus(), 80);
-      return;
-    }
     if (plugin.action === "mcp") {
-      setMode("oauth");
       setNotice(`${plugin.name} is on Adrian. Paste its MCP address below, then press Connect MCP.`);
       window.setTimeout(() => document.getElementById("kimi-mcp-url")?.focus(), 80);
       return;
@@ -120,7 +112,7 @@ export function KimiDeviceConnect() {
               <div className="plugin-link__main">
                 {plugin.image.endsWith(".svg") ? <img className="service-mark" src={plugin.image} alt="" width={28} height={28} /> : <span className="service-mark" style={{ background: plugin.color, color: "#fff" }} aria-hidden="true">{plugin.mark}</span>}
                 <div className="min-w-0">
-                  {"href" in plugin && plugin.href ? <a className="inline-flex min-h-11 items-center font-semibold underline" href={plugin.href} target="_blank" rel="noreferrer">{plugin.name}</a> : <p className="font-semibold">{plugin.name}</p>}
+                  <a className="inline-flex min-h-11 items-center font-semibold underline" href={plugin.href} target="_blank" rel="noreferrer">{plugin.name}</a>
                   <p className="text-sm text-muted">{plugin.description}</p>
                 </div>
               </div>

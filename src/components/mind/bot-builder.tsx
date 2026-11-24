@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { addCustomAgent, editBot, toolCatalog, type AgentDefinition, type BotDraft } from "@/lib/mind/fleet";
+import { addCustomAgent, editBot, toolCatalog, type AgentDefinition, type DeploymentRecord, type BotDraft } from "@/lib/mind/fleet";
 import { BOT_PROVIDERS } from "@/lib/mind/bot-model";
 import { normalizeBotKnowledge } from "@/lib/mind/bot-model";
 import { MODEL_TIERS } from "@/lib/mind/model-tiers";
@@ -14,12 +14,12 @@ const blank = (): BotDraft => ({ name: "", description: "", instructions: "", to
 export function BotBuilder({ ws, setWs, onChat, onRun, onSchedule, onSelect, focusBotId, onDeploy, onPin, catalogModels = [] }: {
   ws: Workspace;
   setWs: (fn: (prev: Workspace) => Workspace) => void;
-  onChat: (id: string, newThread?: boolean) => void;
-  onRun: (id: string) => void;
-  onSchedule: (id: string) => void;
+  onChat?: (id: string, newThread?: boolean) => void;
+  onRun?: (id: string) => void;
+  onSchedule?: (id: string) => void;
   onSelect?: (id: string) => void;
   focusBotId?: string | null;
-  onDeploy?: (id: string) => void;
+  onDeploy?: (id: string, target: DeploymentRecord["target"]) => void;
   onPin?: (id: string) => void;
   catalogModels?: { id: string; label: string }[];
 }) {
@@ -204,9 +204,9 @@ export function BotBuilder({ ws, setWs, onChat, onRun, onSchedule, onSelect, foc
                 {onChat && <button type="button" className={secondary} onClick={() => onChat(bot.id, true)}>New conversation</button>}
                 <button type="button" className={secondary} onClick={() => start(bot)}>Edit bot</button>
                 <button type="button" className={secondary} onClick={() => start(bot, true)}>Duplicate</button>
-                <button type="button" className={secondary} onClick={() => onPin(bot.id)}>{ws.pins.some((pin) => pin.kind === "agent" && pin.ref === bot.id) ? "Unpin" : "Pin"}</button>
-                <button type="button" className={secondary} onClick={() => onDeploy(bot.id, "local-worker")}>Arm local worker</button>
-                <button type="button" className={secondary} onClick={() => onDeploy(bot.id, "hosted-worker")}>Record hosted target</button>
+                {onPin && <button type="button" className={secondary} onClick={() => onPin(bot.id)}>{ws.pins.some((pin) => pin.kind === "agent" && pin.ref === bot.id) ? "Unpin" : "Pin"}</button>}
+                {onDeploy && <button type="button" className={secondary} onClick={() => onDeploy(bot.id, "local-worker")}>Arm local worker</button>}
+                {onDeploy && <button type="button" className={secondary} onClick={() => onDeploy(bot.id, "hosted-worker")}>Record hosted target</button>}
                 <button type="button" className={secondary} onClick={() => setArchiveId(bot.id)}>Archive</button>
               </div>
               <p className="mt-2 text-xs text-muted">{deployment ? `${deployment.target} · ${deployment.state}${deployment.error ? ` · ${deployment.error}` : ""}` : "No worker target recorded for this version."}</p>

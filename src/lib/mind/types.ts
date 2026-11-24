@@ -1,5 +1,5 @@
 import type { PersonalityId } from "./personalities/index.ts";
-import type { BotProvider } from "./bot-model.ts";
+import type { BotModel } from "./bot-model.ts";
 import type { ModelTier } from "./model-tiers.ts";
 
 import type {
@@ -48,7 +48,7 @@ export type Retrieval = { at: string; ids: string[] };
 export type Chat = {
   id: string;
   agentId?: string;
-  botProvider?: BotProvider;
+  botProvider?: NonNullable<BotModel["chatProvider"]>;
   botTier?: ModelTier;
   botKnowledge?: string;
   title: string;

@@ -384,7 +384,7 @@ function pinPageScroller(node: HTMLDivElement | null) {
   node.style.setProperty("overflow-y", "auto", "important");
   const bar = document.querySelector("[data-testid='handy-dictation']");
   const gap = bar instanceof HTMLElement ? Math.ceil(bar.getBoundingClientRect().height) + 16 : 72;
-  node.style.setProperty("padding-bottom", `${gap}px`, "important");
+  node.style.setProperty("padding-bottom", `var(--page-scroll-bottom, ${gap}px)`, "important");
 }
 function showRailLabel(node: HTMLElement | null) {
   node?.style.setProperty("display", "block", "important");
@@ -1346,6 +1346,8 @@ export function CommandApp() {
       return;
     }
     navWasOpenRef.current = true;
+    const previous = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
     const drawer = navDrawerRef.current;
     const phone = window.matchMedia("(max-width: 767px)").matches;
     if (drawer && phone) {
@@ -1399,6 +1401,8 @@ export function CommandApp() {
     desktop.addEventListener("change", closeAtDesktop);
     document.addEventListener("keydown", onDrawerKeyDown, true);
     return () => {
+      document.body.style.overflow = previous;
+      drawer?.style.removeProperty("z-index");
       drawer?.style.removeProperty("inset");
       drawer?.style.removeProperty("width");
       drawer?.style.removeProperty("height");
@@ -4921,7 +4925,7 @@ export function CommandApp() {
     }
     const text = sanitized.text;
     if (parseCreateBot(text)) {
-      const made = createBotFromSpeech(source, text);
+      const made = createBotFromSpeech(wsRef.current, text);
       if (!made.ok) {
         setNotice(made.error);
         if (speakStageOpenRef.current) setSpeakCall((current) => ({ ...current, heard: text, error: made.error }));
@@ -5847,7 +5851,7 @@ export function CommandApp() {
     <div className="shell flex h-dvh flex-col bg-bg text-fg md:flex-row" data-view={view} data-search={paletteOpen ? "open" : "closed"}>
       <MenuMotion />
       {navOpen ? <button type="button" className="fixed inset-0 md:hidden" aria-label="Close menu" style={{ zIndex: 150, background: "transparent" }} onClick={() => setNavOpen(false)} /> : null}
-      <aside ref={(node) => { navDrawerRef.current = node; pinRailFrame(node); }} onMouseDown={closeNavFromBackdrop} role={navOpen ? "dialog" : undefined} aria-modal={navOpen ? false : undefined} aria-label={navOpen ? "Workspace navigation" : undefined} className={`rail gpt-rail ${navOpen ? "nav-drawer-open flex" : "hidden"} fixed inset-0 z-40 w-full flex-col overflow-hidden md:static md:flex md:h-dvh ${railCollapsed ? "md:w-[4.5rem]" : "md:w-72"} md:shrink-0`}>
+      <aside ref={(node) => { navDrawerRef.current = node; pinRailFrame(node); }} onMouseDown={closeNavFromBackdrop} role={navOpen ? "dialog" : undefined} aria-modal={navOpen ? true : undefined} aria-label={navOpen ? "Workspace navigation" : undefined} className={`rail gpt-rail ${navOpen ? "nav-drawer-open flex" : "hidden"} fixed inset-0 z-40 w-full flex-col overflow-hidden md:static md:flex md:h-dvh ${railCollapsed ? "md:w-[4.5rem]" : "md:w-72"} md:shrink-0`}>
         <div className="gpt-rail-head flex items-center gap-3 px-4 py-4">
           {!railCollapsed && (
             <p className="flex min-w-0 flex-1 items-center gap-2 text-2xl font-semibold tracking-tight">
@@ -7199,7 +7203,6 @@ export function CommandApp() {
                 setView("agents");
                 void checkRea();
               }}
-              providerChoices={[...providerChoicesWithKeys(grokConfigured, lastModelUsed, liveProviders), ...discovered.map((item) => ({ id: item.id, label: item.label, enabled: item.usable, reason: item.reason }))]}
               providerChoices={[...providerChoicesWithKeys(grokConfigured, lastModelUsed, liveProviders), ...customAiChoices, ...discovered.map((item) => ({ id: item.id, label: item.label, enabled: item.usable, reason: item.reason }))]}
               providerChoice={providerChoice}
               onProvider={(id) => {
@@ -9094,7 +9097,7 @@ function ChatPane({
   recentTasks: ReturnType<typeof recentTasksFromAudit>;
   connectedServices: ReturnType<typeof connectedServicesRail>;
   systemStatus: ReturnType<typeof systemStatusRail>;
-  onViewAudit: (auditId: string) => void;
+  onViewAudit: (auditId: string | null) => void;
 }) {
   const [filter, setFilter] = useState("");
   const [tools, setTools] = useState(false);
@@ -9251,7 +9254,7 @@ function ChatPane({
                 {msg.kind === "error" ? (
                   <>
                     <button type="button" className="min-h-11 rounded-full px-3 text-xs" onClick={onRetry}>Retry</button>
-                    <button type="button" className="min-h-11 rounded-full px-3 text-xs" onClick={onViewAudit}>View log</button>
+                    <button type="button" className="min-h-11 rounded-full px-3 text-xs" onClick={() => onViewAudit(null)}>View log</button>
                     <button type="button" className="min-h-11 rounded-full px-3 text-xs" onClick={(event) => event.currentTarget.closest("article")?.setAttribute("hidden", "")}>Dismiss</button>
                   </>
                 ) : null}

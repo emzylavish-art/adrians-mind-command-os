@@ -85,7 +85,9 @@ describe("integration persona directory survives merge", () => {
 
   it("does not drop sibling lane markers in command-app while adding explore", () => {
     for (const needle of [
-      'header-voice-mode',
+      'data-testid="open-voice-mode"',
+      'onClick={onOpenVoiceMode}',
+      'onClick={() => void openVoiceOverlay()}',
       'data-testid="failure-banner"',
       'data-testid="executing-tools"',
       "ModelTierChip",

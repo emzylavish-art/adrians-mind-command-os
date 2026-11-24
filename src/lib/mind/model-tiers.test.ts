@@ -101,9 +101,12 @@ describe("Auto routing", () => {
     const base = allowedModelIds({});
     assert.ok(base.has("grok-4.5"));
     assert.ok(base.has("grok-4.7"));
-    const custom = allowedModelIds({ MIND_MODEL_EXPERT: "custom-expert" });
+    const custom = allowedModelIds({ MIND_MODEL_EXPERT: "custom-expert", MIND_MODEL_BUILD: "custom-build" });
     assert.ok(custom.has("custom-expert"));
-    assert.equal(custom.has("grok-4.5"), false);
+    assert.ok(custom.has("custom-build"));
+    assert.ok(custom.has("grok-4.5"), "explicitly selectable chat models survive a tier override");
+    assert.equal(custom.has("grok-build-0.1"), false, "an overridden tier-only default is removed");
+    assert.equal(custom.has("unknown-model"), false);
   });
 });
 
