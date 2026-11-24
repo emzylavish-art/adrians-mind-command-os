@@ -169,8 +169,9 @@ export function NodeDetailPanel({
         })
       : null;
 
+  const visible = open && Boolean(bot || notionPage);
   return (
-    <aside className={`dash3d-side ${open && (bot || notionPage) ? "is-open" : ""}`} aria-hidden={!open} data-testid="node-detail">
+    <aside className={`dash3d-side ${visible ? "is-open" : ""}`} aria-hidden={!visible} inert={!visible} data-testid="node-detail">
       <div className="dash3d-glass">
         <button type="button" className="dash3d-side-close" onClick={onClose} aria-label="Close details">
           ×

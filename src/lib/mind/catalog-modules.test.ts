@@ -22,7 +22,7 @@ test("a discovered model can be saved on a bot and an unknown string cannot", ()
 
 test("MCP tools sit in the same discovery list and a selected tool is called by name", () => {
   const found = discoveredCapabilities({
-    models: [{ id: "aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee", label: "Future API", models: ["one"] }],
+    models: [{ id: "aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee", label: "Future API", models: ["one"], hasKey: true, status: "catalogued" }],
     mcp: [{ id: "bbbbbbbb-bbbb-cccc-dddd-eeeeeeeeeeee", label: "Files", state: "connected", tools: [{ name: "read_file", description: "Read a file" }, { name: "write_file" }] }],
     services: [{ id: "notion", label: "Notion", connected: false }, { id: "social", label: "Adrian Social", connected: true }],
   });
@@ -33,4 +33,17 @@ test("MCP tools sit in the same discovery list and a selected tool is called by 
   assert.equal(call.ok && call.text, "call mcp tool read_file on server bbbbbbbb-bbbb-cccc-dddd-eeeeeeeeeeee notes.txt");
   const gated = discoveredCapabilities({ models: [], mcp: [{ id: "bbbbbbbb-bbbb-cccc-dddd-eeeeeeeeeeee", label: "Files", state: "failed", tools: [{ name: "read_file" }] }] });
   assert.equal(gated[0].usable, false);
+});
+
+
+test("saved models require a credential and a usable provider state", () => {
+  for (const status of ["configured", "catalogued", "awaiting_discovery", "unavailable", "credentials_rejected", "quota_or_rate_limited", "unknown"]) {
+    for (const hasKey of [false, true]) {
+      const [choice] = discoveredCapabilities({
+        models: [{ id: "saved", label: "Desk", models: ["chat"], status, hasKey }],
+        mcp: [],
+      });
+      assert.equal(choice.usable, hasKey && (status === "configured" || status === "catalogued"), status);
+    }
+  }
 });

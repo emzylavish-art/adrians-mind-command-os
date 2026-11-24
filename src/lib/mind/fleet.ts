@@ -763,12 +763,12 @@ export function tickFleet(ws: Workspace, env: TickEnv): Workspace {
     }
     if (LOCAL.has(tool)) {
       const local = tool as LocalTool;
-      const scope = agent.projectId ? {
+      const scope = {
         ...ws,
-        projects: ws.projects.filter((project) => project.id === agent.projectId),
-        chats: ws.chats.filter((chat) => chat.projectId === agent.projectId),
-        memories: ws.memories.filter((note) => note.projectId === agent.projectId),
-      } : ws;
+        projects: agent.projectId ? ws.projects.filter((project) => project.id === agent.projectId) : ws.projects,
+        chats: agent.projectId ? ws.chats.filter((chat) => chat.projectId === agent.projectId) : ws.chats,
+        memories: agent.memory === "on" ? ws.memories.filter((note) => note.scope === "global" || (note.scope === "project" && !!agent.projectId && note.projectId === agent.projectId)) : [],
+      };
       const executed = runLocalPlan(scope, [{ id: local, tool: local, query: claimed.goal }], { autonomy: "automatic", halted: false, tokens: {} });
       const detail = executed.lines.join(" ").slice(0, 500);
       event(fleet, claimed.id, at, executed.ok ? "tool_result" : "failed", detail);

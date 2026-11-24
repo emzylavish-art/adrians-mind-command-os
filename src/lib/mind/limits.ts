@@ -75,6 +75,22 @@ export function consumeMindRateLimit(
   return result;
 }
 
+/** Share a single chat token across the helper and final calls of one HTTP turn. */
+export function createChatTurnPreflight(userId: string, isHalted: () => Promise<boolean>) {
+  let charged = false;
+  return async (): Promise<Response | null> => {
+    if (await isHalted()) {
+      return Response.json({ ok: false, error: "Emergency stop is on. Nothing was sent." }, { status: 403 });
+    }
+    if (!charged) {
+      const limit = consumeMindRateLimit("chat", userId, 12);
+      if (!limit.ok) return jsonRateLimited(CHAT_RATE_LIMIT_REPLY, limit.retryAfterSec);
+      charged = true;
+    }
+    return null;
+  };
+}
+
 /** Test-only: clear the process-wide rate-limit windows. */
 export function resetMindRateLimitsForTests(): void {
   windows.clear();

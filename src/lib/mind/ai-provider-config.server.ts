@@ -8,7 +8,7 @@ import { providerWireProtocol, modelDiscoveryHeaders, buildProviderChatRequest, 
 import { getSql, type Sql } from "../db.ts";
 import { connectorTokenSecretStatus, encryptSecret, decryptSecret } from "./connectors/crypto.ts";
 import { isLocalHostname, isPrivateAddressLiteral, pinnedHttpFetch, resolveAndPinMcpHostname } from "./mcp/http-dns-pin.ts";
-import { rankCatalogModels, validCatalogModelId } from "./provider-catalog.ts";
+import { customProviderBlockReason, isOpenRouterFreeModel, OPENROUTER_FREE_MODEL_REQUIRED, rankCatalogModels, validCatalogModelId } from "./provider-catalog.ts";
 
 export type PublicAiProvider = {
   id: string;
@@ -87,12 +87,13 @@ export function canonicalProviderBase(raw: string): string {
 function publicRow(row: StoredProvider): PublicAiProvider {
   let host = "";
   try { host = new URL(row.base_url).host; } catch { /* never expose a malformed URL */ }
+  const models = host === "openrouter.ai" ? asModels(row.models).filter(isOpenRouterFreeModel) : asModels(row.models);
   return {
     id: row.id,
     label: row.label,
     host,
-    defaultModel: row.default_model,
-    models: asModels(row.models),
+    defaultModel: models.includes(row.default_model) ? row.default_model : models[0] ?? "",
+    models,
     status: row.status,
     lastError: row.last_error,
     hasKey: Boolean(row.key_ciphertext),
@@ -125,6 +126,7 @@ export async function saveAiProvider(
     return { ok: false, error: "Enter a valid API key of at most 1500 characters." };
   }
   if (model && !validModelId(model)) return { ok: false, error: "The model ID contains unsupported characters." };
+  if (model && url.host === "openrouter.ai" && !isOpenRouterFreeModel(model)) return { ok: false, error: OPENROUTER_FREE_MODEL_REQUIRED };
   const secret = connectorTokenSecretStatus();
   if (!secret.ok) return { ok: false, error: "Credential encryption is not configured. Nothing was saved." };
   const record = {
@@ -161,13 +163,14 @@ export async function setAiProviderModel(userId: string, id: string, model: stri
   const sql = await getSql();
   const row = (await rows(sql, userId)).find((item) => item.id === id);
   if (!row) return { ok: false, error: "Provider not found for this account." };
+  if (publicRow(row).host === "openrouter.ai" && !isOpenRouterFreeModel(next)) return { ok: false, error: OPENROUTER_FREE_MODEL_REQUIRED };
   const current = asModels(row.models);
   const models = current.includes(next) ? current : [next, ...current];
-  await sql.query(
-    "update mind_ai_providers set default_model = $3, models = $4::jsonb, status = 'configured', last_error = '', updated_at = now() where user_id = $1 and id = $2",
+  const [updated] = await sql.query<StoredProvider>(
+    "update mind_ai_providers set default_model = $3, models = $4::jsonb, status = case when status = 'awaiting_discovery' then 'configured' else status end, updated_at = now() where user_id = $1 and id = $2 returning id, label, base_url, key_ciphertext, default_model, models, status, last_error",
     [userId, id, next, JSON.stringify(models)],
   );
-  return { ok: true, provider: publicRow({ ...row, default_model: next, models, status: "configured", last_error: "" }) };
+  return updated ? { ok: true, provider: publicRow(updated) } : { ok: false, error: "Provider not found for this account." };
 }
 
 async function requestProvider(
@@ -183,11 +186,17 @@ async function requestProvider(
   const response = await pinnedHttpFetch(url, pin.pinnedAddress, pin.hostname, {
     ...init,
     redirect: "manual",
-    signal: AbortSignal.timeout(25000),
+    signal: init.signal ? AbortSignal.any([init.signal, AbortSignal.timeout(25000)]) : AbortSignal.timeout(25000),
   });
   const text = await response.text();
   if (text.length > 8_000_000) throw new Error("The provider response exceeded the allowed size.");
   return { status: response.status, text, requestId: response.headers.get("x-request-id") };
+}
+
+function providerRestriction(status: number): string | null {
+  if (status === 401 || status === 403) return "credentials_rejected";
+  if (status === 402 || status === 429) return "quota_or_rate_limited";
+  return null;
 }
 
 function providerError(status: number): string {
@@ -207,7 +216,7 @@ export async function discoverAiModels(userId: string, id: string):
   if (!key) return { ok: false, error: "The saved provider credential could not be decrypted." };
   const canonical = canonicalProviderBase(row.base_url);
   const requestRow = canonical === row.base_url ? row : { ...row, base_url: canonical };
-  let status = "configured";
+  let status = row.status;
   let lastError = "";
   let models = asModels(row.models);
   try {
@@ -217,20 +226,28 @@ export async function discoverAiModels(userId: string, id: string):
     });
     if (res.status !== 200) {
       lastError = providerError(res.status);
-      status = res.status === 402 || res.status === 429 ? "quota_or_rate_limited" : "unavailable";
+      if ((res.status === 404 || res.status === 405) && models.length && row.status !== "credentials_rejected" && row.status !== "quota_or_rate_limited") {
+        status = "configured";
+        lastError = "Model listing is unsupported. The saved model can be tried manually; inference is unverified.";
+      } else {
+        status = providerRestriction(res.status) ?? "unavailable";
+      }
     } else {
       const body = JSON.parse(res.text) as { data?: Array<{ id?: unknown }>; models?: Array<{ id?: unknown; name?: unknown } | string> };
       const found = Array.isArray(body.data) ? body.data : Array.isArray(body.models) ? body.models : [];
-      const parsed = rankCatalogModels(found);
+      const ranked = rankCatalogModels(found);
+      const parsed = publicRow(requestRow).host === "openrouter.ai" ? ranked.filter(isOpenRouterFreeModel) : ranked;
       if (parsed.length) {
         models = parsed;
         status = "catalogued";
       } else {
-        lastError = "The API did not expose a compatible model catalogue. Your manually configured model remains available.";
+        status = models.length ? "configured" : "awaiting_discovery";
+        lastError = models.length ? "No models were listed. You can try the saved model manually." : "The API did not expose a compatible model catalogue.";
       }
     }
   } catch {
-    lastError = "Model discovery could not complete. The saved model ID remains available for manual use.";
+    if (status !== "credentials_rejected" && status !== "quota_or_rate_limited") status = "unavailable";
+    lastError = "Model discovery could not complete. Check the connection and refresh.";
   }
   const defaultModel = row.default_model && models.includes(row.default_model) ? row.default_model : models[0] || "";
   await sql.query(
@@ -240,45 +257,49 @@ export async function discoverAiModels(userId: string, id: string):
   return { ok: true, provider: publicRow({ ...requestRow, default_model: defaultModel, models, status, last_error: lastError }) };
 }
 
-export function parseCustomProviderChoice(value: unknown):
-  { ok: true; id: string; model: string } | { ok: false; error: string } {
-  if (typeof value !== "string" || !value.startsWith("custom:")) return { ok: false, error: "Not a custom provider selection." };
-  const match = /^custom:([0-9a-f-]{36}):(.{1,300})$/i.exec(value);
-  if (!match) return { ok: false, error: "Malformed custom provider selection." };
-  let model: string;
-  try { model = decodeURIComponent(match[2]); } catch { return { ok: false, error: "Invalid encoded model ID." }; }
-  if (!validModelId(model)) return { ok: false, error: "Invalid custom model ID." };
-  return { ok: true, id: match[1], model };
-}
+export { parseCustomProviderChoice } from "./provider-catalog.ts";
 
 export async function executeCustomChat(
   userId: string,
   selection: { id: string; model: string },
   messages: Array<{ role: "system" | "user" | "assistant"; content: string }>,
+  signal?: AbortSignal,
 ): Promise<
   { ok: true; text: string; model: string; provider: string; requestId: string | null; usage: { prompt_tokens?: number; completion_tokens?: number } | null } |
-  { ok: false; error: string }
+  { ok: false; error: string; httpStatus?: number }
 > {
   const sql = await getSql();
   const row = (await rows(sql, userId)).find((item) => item.id === selection.id);
   if (!row) return { ok: false, error: "Custom provider is not saved for this account." };
+  const blockReason = customProviderBlockReason({ status: row.status, hasKey: Boolean(row.key_ciphertext) });
+  if (blockReason) return { ok: false, error: blockReason };
   if (!asModels(row.models).includes(selection.model)) return { ok: false, error: "Model is not in the saved provider's catalogue." };
   const key = decryptSecret(row.key_ciphertext);
   if (!key) return { ok: false, error: "The saved provider credential could not be decrypted." };
   if (!messages.length || !messages.some((m) => m.role === "user")) return { ok: false, error: "No user message was supplied." };
   try {
     const kind = providerWireProtocol(row.base_url);
-    const request = buildProviderChatRequest(kind, key, selection.model, messages);
+    const freeOpenRouter = publicRow(row).host === "openrouter.ai";
+    if (freeOpenRouter && !isOpenRouterFreeModel(selection.model)) return { ok: false, error: OPENROUTER_FREE_MODEL_REQUIRED };
+    const request = buildProviderChatRequest(kind, key, selection.model, messages, freeOpenRouter);
     const res = await requestProvider(row, request.path, {
       method: "POST",
       headers: request.headers,
       body: request.body,
+      signal,
     });
-    if (res.status < 200 || res.status >= 300) return { ok: false, error: providerError(res.status) };
+    if (res.status < 200 || res.status >= 300) {
+      const error = providerError(res.status);
+      const restriction = providerRestriction(res.status);
+      if (restriction) {
+        await sql.query("update mind_ai_providers set status=$3,last_error=$4,updated_at=now() where user_id=$1 and id=$2", [userId, row.id, restriction, error]);
+      }
+      return { ok: false, error, httpStatus: res.status >= 400 && res.status < 500 ? res.status : undefined };
+    }
     const parsed = parseProviderText(kind, res.text);
     if (!parsed.ok) return parsed;
     return {
-      ok: true, text: parsed.text, model: selection.model, provider: row.label,
+      ok: true, text: parsed.text, model: parsed.model, provider: row.label,
       requestId: res.requestId, usage: parsed.usage,
     };
   } catch {

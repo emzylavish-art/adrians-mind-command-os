@@ -381,8 +381,12 @@ export const setExecutionHalt = createServerFn({ method: "POST" })
 
 export const saveMindCopy = createServerFn({ method: "POST" })
   .middleware([authMiddleware])
-  .validator((input: { workspace: unknown }) => input)
+  .validator((input: { workspace: unknown; ownerId?: string; expectedRevision?: string }) => input)
   .handler(async ({ data, context }) => {
+    if (data.ownerId !== undefined && data.ownerId !== context.userId) return { ok: false as const, error: "The signed-in account changed. The workspace was not saved." };
+    if (typeof data.expectedRevision !== "string" || !/^[a-f0-9]{64}$/.test(data.expectedRevision)) {
+      return { ok: false as const, error: "Reload the workspace before saving a server copy. Your browser copy was kept." };
+    }
     if (!allowMindRequest("save", context.userId, 20)) return { ok: false as const, error: "Too many saves. The browser copy was kept." };
     const { normalizeWorkspace } = await import("./workspace");
     const { snapshotTooLarge, writeSnapshot } = await import("./store");
@@ -390,22 +394,27 @@ export const saveMindCopy = createServerFn({ method: "POST" })
     const workspace = normalizeWorkspace(data.workspace);
     if (snapshotTooLarge(workspace)) return { ok: false as const, error: "This workspace is too large to copy to the server. The browser copy was kept." };
     try {
-      await writeSnapshot(await getSql(), context.userId, workspace);
+      const revision = await writeSnapshot(await getSql(), context.userId, workspace, data.expectedRevision);
+      if (!revision) {
+        return { ok: false as const, conflict: true as const, error: "The server copy changed in another session. Both copies were kept. Reload and review before replacing the server copy." };
+      }
+      return { ok: true as const, storage: "local-server" as const, revision };
     } catch {
       return { ok: false as const, error: "The server copy could not be saved. The browser copy was kept." };
     }
-    return { ok: true as const, storage: "local-server" as const };
   });
 
 export const loadMindCopy = createServerFn({ method: "POST" })
   .middleware([authMiddleware])
-  .handler(async ({ context }) => {
-    const { readSnapshot } = await import("./store");
+  .validator((input?: { ownerId?: string }) => input)
+  .handler(async ({ data, context }) => {
+    if (data?.ownerId !== undefined && data.ownerId !== context.userId) return { ok: false as const, error: "The signed-in account changed. The workspace was not loaded." };
+    const { readSnapshot, snapshotRevision } = await import("./store");
     const { getSql } = await import("../db");
     try {
       const payload = await readSnapshot(await getSql(), context.userId);
       const { normalizeWorkspace } = await import("./workspace");
-      return { ok: true as const, workspace: payload ? normalizeWorkspace(payload) : null };
+      return { ok: true as const, workspace: payload ? normalizeWorkspace(payload) : null, revision: snapshotRevision(payload) };
     } catch {
       return { ok: false as const, error: "The server copy could not be read. The browser copy was kept." };
     }
@@ -536,7 +545,7 @@ export const mcpRegistryList = createServerFn({ method: "GET" })
       gateIdentityEnabled: gateIdentityEnabled(),
       databaseConfigured: Boolean(resolveDatabaseUrl(process.env)),
       devUserId: DEV_USER_ID,
-      loopbackPreview: isLoopbackPreview(),
+      loopbackPreview: !context.bearerToken && isLoopbackPreview(),
     });
     if (!userId) {
       return buildMcpRegistryListPayload(null, []);

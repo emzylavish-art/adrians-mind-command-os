@@ -99,7 +99,7 @@ export function BuildingInteriorPanel({
   const botId = fly.buildingId?.startsWith("bot-") ? fly.buildingId.slice(4) : null;
   const botFallback = !p && botId ? (bots ?? []).find((b) => b.id === botId) : null;
   return (
-    <aside className={`dash3d-side dash3d-interior ${open ? "is-open" : ""}`} aria-hidden={!open} data-testid="interior-panel">
+    <aside className={`dash3d-side dash3d-interior ${open ? "is-open" : ""}`} aria-hidden={!open} inert={!open} data-testid="interior-panel">
       <div className="dash3d-glass">
         <button type="button" className="dash3d-side-close" onClick={onClose} aria-label="Leave building">
           ×

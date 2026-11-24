@@ -1,9 +1,8 @@
 import type { Sql } from "../db.ts";
 import type { ScheduleJob } from "./fleet.ts";
 import { nextClock } from "./schedule-clock.ts";
-import { writeSnapshot } from "./store.ts";
+import { updateOwnerWorkspace } from "./store.ts";
 import type { AuditEntry } from "./types.ts";
-import { normalizeWorkspace } from "./workspace.ts";
 
 export type WorkerPass = { owners: number; ran: number; skipped: number; failed: number; recovered: number };
 
@@ -46,28 +45,22 @@ export async function runWorkerPass(
   workerId: string,
   run: (job: ScheduleJob) => { ok: boolean; detail: string } = () => ({ ok: false, detail: "No schedule executor is configured. This job was not run." }),
 ): Promise<WorkerPass> {
-  const rows = await sql<{ user_id: string; payload: unknown }>`select user_id, payload from mind_snapshot`;
+  const rows = await sql<{ user_id: string }>`select user_id from mind_snapshot`;
   const summary: WorkerPass = { owners: rows.length, ran: 0, skipped: 0, failed: 0, recovered: 0 };
   for (const row of rows) {
-    const payload = typeof row.payload === "string" ? JSON.parse(row.payload) as unknown : row.payload;
-    const ws = normalizeWorkspace(payload);
-    const claim = claimSchedules(ws.schedules, now, workerId);
+    const claim = await updateOwnerWorkspace(sql, row.user_id, (current) => {
+      const result = claimSchedules(current.schedules, now, workerId);
+      return { result, workspace: result.claimed.length ? { ...current, schedules: result.jobs } : undefined };
+    });
     summary.skipped += claim.skipped.length;
     summary.recovered += claim.recovered.length;
     if (claim.claimed.length === 0) continue;
-    await writeSnapshot(sql, row.user_id, { ...ws, schedules: claim.jobs });
     const outcomes = new Map<string, { ok: boolean; detail: string }>();
     for (const id of claim.claimed) {
       const job = claim.jobs.find((item) => item.id === id);
       if (!job) continue;
       outcomes.set(id, run(job));
     }
-    const schedules = claim.jobs.map((job) => {
-      const outcome = outcomes.get(job.id);
-      if (!outcome) return job;
-      const failed = !outcome.ok;
-      return { ...job, nextRunAt: advance(job, now), lastRunAt: now, lastError: failed ? outcome.detail : "", lastStatus: failed ? "failed" as const : "ran" as const, leaseWorker: null, leaseUntil: null };
-    });
     const audit: AuditEntry[] = [...outcomes.entries()].map(([id, outcome]) => ({
       id: `audit-${leaseKey(row.user_id, id)}-${now}`,
       at: now,
@@ -75,7 +68,19 @@ export async function runWorkerPass(
       target: id,
       result: outcome.detail,
     }));
-    await writeSnapshot(sql, row.user_id, { ...ws, schedules, audit: [...audit, ...ws.audit].slice(0, 200) });
+    const leases = new Map(claim.jobs.map((job) => [job.id, job.leaseUntil]));
+    await updateOwnerWorkspace(sql, row.user_id, (current) => {
+      const completed = new Set<string>();
+      const schedules = current.schedules.map((job) => {
+        const outcome = outcomes.get(job.id);
+        if (!outcome || job.leaseWorker !== workerId || job.leaseUntil !== leases.get(job.id)) return job;
+        completed.add(job.id);
+        const failed = !outcome.ok;
+        return { ...job, nextRunAt: advance(job, now), lastRunAt: now, lastError: failed ? outcome.detail : "", lastStatus: failed ? "failed" as const : "ran" as const, leaseWorker: null, leaseUntil: null };
+      });
+      const entries = audit.filter((entry) => completed.has(entry.target));
+      return { result: undefined, workspace: entries.length ? { ...current, schedules, audit: [...entries, ...current.audit].slice(0, 200) } : undefined };
+    });
     for (const outcome of outcomes.values()) summary[outcome.ok ? "ran" : "failed"] += 1;
   }
   return summary;

@@ -28,6 +28,7 @@ function db(initial: { userId: string; ws: Workspace }[]) {
   const sql = (async (strings: TemplateStringsArray, ...values: unknown[]) => {
     const text = strings.join(" ");
     if (text.includes("select user_id")) return [...snaps.entries()].map(([user_id, payload]) => ({ user_id, payload }));
+    if (text.includes("select payload")) return [{ payload: snaps.get(String(values[0])) }];
     if (text.includes("insert into mind_snapshot")) snaps.set(String(values[0]), String(values[1]));
     return [];
   }) as Sql;

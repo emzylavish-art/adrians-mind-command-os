@@ -1,5 +1,7 @@
 /** Multi-model help for the selected orchestrator. Presence is checked at send time. */
 
+import { customProviderBlockReason, type ProviderAvailability } from "./provider-catalog.ts";
+
 export const ADRIAN_MIND_IDENTITY =
   "You were born inside Adrian's Mind. You are Adrian. Do not name yourself Grok, OpenAI, Claude, Gemini, Kimi, or any other vendor. Do not say which model or API produced the answer. Do not think of yourself as a model outside this platform.";
 
@@ -43,10 +45,10 @@ export function builtinModules(input: {
   ];
 }
 
-export function customModules(rows: { id: string; label: string; models: string[]; hasKey?: boolean }[]): ConsultModule[] {
+export function customModules(rows: ({ id: string; label: string; models: string[] } & ProviderAvailability)[]): ConsultModule[] {
   const out: ConsultModule[] = [];
   for (const row of rows) {
-    if (row.hasKey === false || !row.id) continue;
+    if (customProviderBlockReason(row) || !row.id) continue;
     for (const model of row.models) {
       if (!MODEL_ID.test(model)) continue;
       out.push({

@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { resolveDatabaseUrl, resolveMigrateDatabaseUrl } from "./database-url.mjs";
+import { resolveDatabaseUrl, resolveMigrateDatabaseUrl, supabaseDatabaseRef } from "./database-url.mjs";
 
 test("resolveDatabaseUrl prefers DATABASE_URL then POSTGRES_URL", () => {
   assert.equal(resolveDatabaseUrl({}), undefined);
@@ -9,6 +9,13 @@ test("resolveDatabaseUrl prefers DATABASE_URL then POSTGRES_URL", () => {
     resolveDatabaseUrl({ DATABASE_URL: "postgres://db", POSTGRES_URL: "postgres://pg" }),
     "postgres://db",
   );
+});
+
+test("identifies Supabase project across direct and pool connections", () => {
+  assert.equal(supabaseDatabaseRef("postgres://postgres@db.adrianfixture.supabase.co/postgres"), "adrianfixture");
+  assert.equal(supabaseDatabaseRef("postgres://postgres.adrianfixture@aws-0-use.pooler.supabase.com/postgres"), "adrianfixture");
+  assert.equal(supabaseDatabaseRef("postgres://postgres.other@postgres.example.test/postgres"), undefined);
+  assert.equal(supabaseDatabaseRef("bad input"), undefined);
 });
 
 test("resolveMigrateDatabaseUrl prefers the direct URL over pooled URLs", () => {

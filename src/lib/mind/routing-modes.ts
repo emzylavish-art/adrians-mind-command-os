@@ -165,9 +165,9 @@ export function isRatingScore(value: unknown): value is 1 | 2 | 3 | 4 | 5 {
   return value === 1 || value === 2 || value === 3 || value === 4 || value === 5;
 }
 
-export function readRatings(storage: Pick<Storage, "getItem"> | null | undefined): ResponseRating[] {
+export function readRatings(storage: Pick<Storage, "getItem"> | null | undefined, owner = "device:guest"): ResponseRating[] {
   try {
-    const raw = storage?.getItem(RATING_KEY);
+    const raw = storage?.getItem(RATING_KEY + "." + owner);
     if (!raw) return [];
     const parsed = JSON.parse(raw) as unknown;
     if (!Array.isArray(parsed)) return [];
@@ -182,10 +182,10 @@ export function readRatings(storage: Pick<Storage, "getItem"> | null | undefined
   }
 }
 
-export function saveRating(storage: Pick<Storage, "getItem" | "setItem"> | null | undefined, rating: ResponseRating): ResponseRating[] {
-  const next = [rating, ...readRatings(storage).filter((item) => item.messageId !== rating.messageId)].slice(0, 200);
+export function saveRating(storage: Pick<Storage, "getItem" | "setItem"> | null | undefined, rating: ResponseRating, owner = "device:guest"): ResponseRating[] {
+  const next = [rating, ...readRatings(storage, owner).filter((item) => item.messageId !== rating.messageId)].slice(0, 200);
   try {
-    storage?.setItem(RATING_KEY, JSON.stringify(next));
+    storage?.setItem(RATING_KEY + "." + owner, JSON.stringify(next));
   } catch {
     /* private mode */
   }

@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import type { MemoryItem, MemoryScope, Workspace } from "@/lib/mind/types";
 import { addMemory, deleteMemory, reviseMemory } from "@/lib/mind/workspace";
 import { MEMORY_TEXT_MAX } from "@/lib/mind/memory";
@@ -35,6 +35,7 @@ export function MemoryManagerView({
   onFailure?: (message: string, retry: () => void) => void;
 }) {
   const [query, setQuery] = useState("");
+  const searchInput = useRef<HTMLInputElement>(null);
   const [scope, setScope] = useState<MemoryScope>("global");
   const [draft, setDraft] = useState("");
   const [editId, setEditId] = useState<string | null>(null);
@@ -197,6 +198,7 @@ export function MemoryManagerView({
           onChange={(event) => setQuery(event.target.value)}
           placeholder="Search notes"
           aria-label="Search notes"
+          ref={searchInput}
           data-testid="memory-search"
           className="min-h-11 w-full rounded-panel border border-line bg-bg px-3 text-sm"
         />
@@ -207,7 +209,14 @@ export function MemoryManagerView({
           className="dense-card rounded-panel border border-line p-6 text-center text-sm text-muted"
           data-testid="memory-empty"
         >
-          No saved memory yet. Nothing is invented here — add a note above, or leave this empty until you save one.
+          {query.trim() && ws.memories.some((item) => !item.archived) ? (
+            <>
+              <p role="status">No notes match your search.</p>
+              <button type="button" className="mt-2 min-h-11 rounded-panel border border-line px-3" onClick={() => { setQuery(""); searchInput.current?.focus(); }}>Clear search</button>
+            </>
+          ) : (
+            <p>No saved notes yet. Add a note above to keep it in this workspace.</p>
+          )}
         </div>
       ) : (
         <ul className="space-y-2" data-testid="memory-list">

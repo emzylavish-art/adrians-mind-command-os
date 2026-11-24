@@ -1,3 +1,4 @@
+import { parseCustomProviderChoice } from "./provider-catalog.ts";
 import { isModelTier, type ModelTier } from "./model-tiers.ts";
 
 export const BOT_PROVIDERS = ["grok", "openai", "anthropic", "gemini", "openrouter", "nemotron", "ollama"] as const;
@@ -11,7 +12,7 @@ export type BotModel = {
 export function normalizeBotModel(input: { chatProvider?: unknown; chatTier?: unknown } | null | undefined): BotModel {
   const provider = input?.chatProvider;
   const tier = input?.chatTier;
-  const catalog = typeof provider === "string" && /^custom:[0-9a-f-]{36}:.{1,300}$/i.test(provider);
+  const catalog = parseCustomProviderChoice(provider).ok;
   const tool = typeof provider === "string" && /^mcp:[0-9a-f-]{36}:[A-Za-z0-9_%-]{1,240}$/i.test(provider);
   const service = typeof provider === "string" && /^service:[a-z0-9-]{1,40}$/i.test(provider);
   return {

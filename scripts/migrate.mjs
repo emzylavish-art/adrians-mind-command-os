@@ -17,8 +17,9 @@ import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
 import pg from "pg";
 import { pendingMigrations } from "./migration-plan.mjs";
-import { resolveMigrateDatabaseUrl } from "./database-url.mjs";
+import { resolveDatabaseUrl, resolveMigrateDatabaseUrl, supabaseDatabaseRef } from "./database-url.mjs";
 import { supabasePostgresPoolOptions } from "../src/lib/auth/postgres-ssl.mjs";
+import { guardMindEnv } from "../src/lib/mind/isolation.ts";
 
 // A Vercel Preview/Development build must never apply SQL against whichever
 // DATABASE_URL was inherited from the project configuration. Only the
@@ -35,6 +36,27 @@ if (!databaseUrl) {
     "[migrate] DATABASE_URL/POSTGRES_URL not set — skipping (the PGLite fallback migrates itself).",
   );
   process.exit(0);
+}
+
+const runtimeUrl = resolveDatabaseUrl(process.env);
+const mainDatabaseRef = runtimeUrl && supabaseDatabaseRef(runtimeUrl);
+const migrationDatabaseRef = supabaseDatabaseRef(databaseUrl);
+const declaredMindRef = process.env.MIND_SUPABASE_PROJECT_REF?.trim();
+for (const url of [runtimeUrl, databaseUrl]) {
+  const gate = guardMindEnv({
+    databaseUrl: url,
+    mindUrl: process.env.MIND_SUPABASE_URL,
+    mindRef: declaredMindRef,
+  });
+  if (!gate.ok) {
+    console.error("[migrate] refused a disallowed database configuration.");
+    process.exit(1);
+  }
+}
+if ((mainDatabaseRef && migrationDatabaseRef && mainDatabaseRef !== migrationDatabaseRef) ||
+    (declaredMindRef && migrationDatabaseRef && declaredMindRef !== migrationDatabaseRef)) {
+  console.error("[migrate] migration database does not match the configured Mind OS project.");
+  process.exit(1);
 }
 
 const migrationsDir = join(dirname(fileURLToPath(import.meta.url)), "..", "migrations");

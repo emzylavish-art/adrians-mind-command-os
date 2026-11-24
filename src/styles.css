@@ -1954,6 +1954,11 @@ aside span.grid.size-11.rounded-2xl {
   .main-stage {
     padding-bottom: 2.5rem !important;
   }
+  /* Desktop chat composers are in flow when the dictation bar is closed. */
+  .shell:is([data-view="command"], [data-view="chat"]) > .main-stage:not(:has([data-testid="handy-dictation"])) {
+    --page-scroll-bottom: 0px;
+    padding-bottom: env(safe-area-inset-bottom, 0px) !important;
+  }
 }
 html[data-theme="light"] .composer-dock,
 html[data-theme="light"] .command-card.composer-dock,
@@ -6704,7 +6709,7 @@ aside .max-w-\[14rem\].truncate {
 
 /* Preview phone layout: keep modal layers above all dock and navigation chrome. */
 .shell .overlay-backdrop,
-.shell [role="dialog"][aria-modal="true"] {
+.shell [role="dialog"][aria-modal="true"]:not(.nav-drawer-open) {
   z-index: 1000 !important;
   padding-bottom: max(1rem, env(safe-area-inset-bottom)) !important;
   padding-top: max(1rem, env(safe-area-inset-top)) !important;
@@ -6777,7 +6782,7 @@ aside .max-w-\[14rem\].truncate {
   .shell .live-voice-compact-entry { right: .75rem; bottom: calc(4.5rem + env(safe-area-inset-bottom)); z-index: 46; }
   .shell .rail.nav-drawer-open { z-index: 200 !important; height: 100dvh; padding-bottom: max(1rem, env(safe-area-inset-bottom)); overscroll-behavior: contain; }
   .shell .rail.nav-drawer-open > nav { min-height: 0; overscroll-behavior: contain; }
-  .shell .overlay-backdrop, .shell [role="dialog"][aria-modal="true"] { z-index: 1000 !important; }
+  .shell .overlay-backdrop, .shell [role="dialog"][aria-modal="true"]:not(.nav-drawer-open) { z-index: 1000 !important; }
 }
 
 .signed-out-entry { position: fixed; z-index: 49; left: 1rem; bottom: 1rem; display:flex; align-items:center; gap:.75rem; border:1px solid var(--color-line); border-radius:1rem; background:var(--color-surface); color:var(--color-fg); padding:.5rem .75rem; box-shadow:0 8px 24px #0006; font-size:.75rem; }
@@ -7434,4 +7439,69 @@ html[data-theme="light"] .shell .min-h-0.flex-1.overflow-auto .page-shell .empty
 }
 html[data-theme="light"] .shell[data-view="help"] .page-shell button.text-left.min-h-14 .text-muted {
   color: #475569 !important;
+}
+
+
+.controls-shelf {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 0.6rem;
+  padding: 0.2rem;
+}
+
+.controls-shelf > [data-menu-cluster] {
+  padding: 0.5rem;
+  border: 1px solid var(--color-line);
+  border-radius: 0.9rem;
+}
+
+.controls-shelf > [data-menu-cluster] > p:first-child {
+  flex: 1 0 100%;
+}
+
+.controls-shelf > [data-menu-cluster] > :is(button, a) {
+  overflow-wrap: anywhere;
+}
+
+@media (min-width: 600px) {
+  .controls-shelf {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .controls-shelf > :is([data-menu-cluster="Active model"], [data-menu-cluster="Use a module"], [data-menu-cluster="Install"]) {
+    grid-column: 1 / -1;
+  }
+}
+
+
+#mind-workspace #chat-thread .next-guesses {
+  display: flex;
+  gap: 0.5rem;
+  overflow-x: auto;
+}
+
+@media (max-width: 599px) {
+  .controls-shelf > [data-menu-cluster="Use a module"] > button {
+    flex-basis: 100% !important;
+  }
+
+  .controls-shelf > [data-menu-cluster="Use a module"] > button > :last-child {
+    flex-shrink: 0;
+    white-space: nowrap;
+  }
+
+  #mind-workspace #chat-thread .next-guesses {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 0.3rem;
+    max-height: none !important;
+    overflow: visible;
+  }
+
+  #mind-workspace #chat-thread .next-guesses .suggestion-chip {
+    min-width: 0;
+    justify-content: center;
+    padding-inline: 0.35rem;
+    text-align: center;
+  }
 }

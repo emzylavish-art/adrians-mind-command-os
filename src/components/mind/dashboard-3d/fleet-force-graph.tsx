@@ -391,6 +391,7 @@ export function FleetForceGraph({
       ref={mountRef}
       className="dash3d-canvas-wrap dash3d-force-host"
       data-testid="dash3d-force-host"
+      role="region"
       aria-label="Fleet 3D force graph"
     />
   );

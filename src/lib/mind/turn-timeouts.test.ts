@@ -17,7 +17,7 @@ describe("turn timeouts", () => {
     assert.equal(agentRunTimeoutMs({}), DEFAULT_AGENT_RUN_TIMEOUT_MS);
     assert.equal(DEFAULT_CHAT_TURN_TIMEOUT_MS, 30_000);
     assert.equal(DEFAULT_AGENT_RUN_TIMEOUT_MS, 45_000);
-    assert.match(CHAT_TIMEOUT_REPLY, /Timed out waiting for Grok/);
+    assert.match(CHAT_TIMEOUT_REPLY, /Timed out waiting for the model/);
     assert.match(AGENT_TIMEOUT_REPLY, /Timed out waiting for the planner/);
   });
 

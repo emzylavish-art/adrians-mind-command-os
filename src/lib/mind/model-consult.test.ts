@@ -15,8 +15,9 @@ describe("model consult", () => {
   it("checks which modules are connected at this moment and skips the rest", () => {
     const modules = [
       ...builtinModules({ grokConfigured: true, providers: { openai: true, anthropic: false } }),
-      ...customModules([{ id: "saved", label: "Desk", models: ["desk-model"], hasKey: true }]),
-      ...customModules([{ id: "gone", label: "Gone", models: ["old"], hasKey: false }]),
+      ...customModules([{ id: "saved", label: "Desk", models: ["desk-model"], hasKey: true, status: "configured" }]),
+      ...customModules([{ id: "limited", label: "Limited", models: ["old"], hasKey: true, status: "quota_or_rate_limited" }]),
+      ...customModules([{ id: "gone", label: "Gone", models: ["old"], hasKey: false, status: "catalogued" }]),
     ];
     const planned = planModelConsult({
       orchestrator: "openai",
@@ -59,8 +60,8 @@ describe("model consult", () => {
       if (id === "openrouter") return { ok: false, text: "" };
       return { ok: true, text: `${id} help` };
     });
-    assert.deepEqual(called, ["openai", "openrouter"]);
-    assert.deepEqual(help.map((item) => item.id), ["openai"]);
+    assert.deepEqual(called, ["openai", "openrouter", "nemotron"]);
+    assert.deepEqual(help.map((item) => item.id), ["openai", "nemotron"]);
     const instruction = orchestratorInstruction(planned.plan, help);
     assert.match(instruction, /born inside Adrian's Mind/);
     assert.match(instruction, /openrouter/);

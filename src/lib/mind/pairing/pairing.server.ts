@@ -1,3 +1,4 @@
+import { haltIsOn } from "../halt.server.ts";
 import { requireUserId, UnauthorizedError } from "../../auth/verify.server";
 import {
   mintPairingCode,
@@ -122,6 +123,7 @@ export async function handleSignAction(request: Request) {
     const found = findDeviceByToken(deviceToken);
     if (!found.ok) return json(found, 401);
     if (found.device.userId !== userId) return json({ ok: false, error: "Device does not belong to you." }, 403);
+    if (await haltIsOn(userId)) return json({ ok: false, error: "Emergency stop is on or unavailable. Action was not signed." }, 403);
     const kind = body.kind as DeviceActionKind;
     const signed = signDeviceAction({
       deviceToken,
@@ -147,6 +149,9 @@ export async function handleVerifyAction(request: Request) {
   const body = await readJson(request);
   const deviceToken = typeof body.token === "string" ? body.token : "";
   const action = body.action as Parameters<typeof verifyAndAuthorizeAction>[0]["action"];
+  const found = findDeviceByToken(deviceToken);
+  if (!found.ok) return json(found, 401);
+  if (await haltIsOn(found.device.userId)) return json({ ok: false, error: "Emergency stop is on or unavailable. Action was not authorized." }, 403);
   const result = verifyAndAuthorizeAction({
     deviceToken,
     action,

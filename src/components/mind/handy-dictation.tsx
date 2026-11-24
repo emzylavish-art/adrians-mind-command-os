@@ -8,7 +8,7 @@ import {
   insertTranscript,
   isTypingField,
 } from "@/lib/mind/handy-dictation";
-import { createWhisperSession, type WhisperSession } from "@/lib/mind/whisper-flow/session";
+import { createWhisperSession, type WhisperSession, type BrowserSpeechCtor } from "@/lib/mind/whisper-flow/session";
 import { SOKUJI_SOURCE, TRANSLATOR_TARGETS, translateVoice } from "@/lib/mind/voice-translator";
 import { finishDictation } from "@/lib/mind/system-dictation";
 
@@ -68,8 +68,8 @@ export function HandyDictation() {
     session.current = createWhisperSession({
       speechCtor: () => {
         const host = window as Window & {
-          SpeechRecognition?: new () => SpeechRecognition;
-          webkitSpeechRecognition?: new () => SpeechRecognition;
+          SpeechRecognition?: BrowserSpeechCtor;
+          webkitSpeechRecognition?: BrowserSpeechCtor;
         };
         return host.SpeechRecognition ?? host.webkitSpeechRecognition ?? null;
       },

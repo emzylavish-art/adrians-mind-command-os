@@ -6,7 +6,7 @@
  */
 import { getSql } from "../src/lib/db.ts";
 import { applyCorePass } from "../src/lib/mind/core-runtime.ts";
-import { readControl, readSnapshot, listSnapshotUserIds, writeSnapshot } from "../src/lib/mind/store.ts";
+import { readControl, readSnapshot, listSnapshotUserIds, snapshotRevision, writeSnapshot } from "../src/lib/mind/store.ts";
 import { normalizeWorkspace } from "../src/lib/mind/workspace.ts";
 
 const sql = await getSql();
@@ -28,7 +28,10 @@ for (const userId of ids) {
     now,
     workerId: "hosted-worker",
   });
-  await writeSnapshot(sql, userId, next.workspace);
+  if (!await writeSnapshot(sql, userId, next.workspace, snapshotRevision(raw))) {
+    skipped += 1;
+    continue;
+  }
   if (next.summary.halted) halted += 1;
   else advanced += 1;
 }

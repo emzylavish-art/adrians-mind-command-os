@@ -1,3 +1,4 @@
+import { haltIsOn } from "../halt.server.ts";
 import { requireUserId } from "@/lib/auth/verify.server";
 import { decideFetchSite } from "@/lib/mind/request-guard";
 import {
@@ -106,6 +107,8 @@ export async function handleImagineGenerate(request: Request): Promise<Response>
   // via meter.ownerId so custom execute paths cannot bypass.
 
   const record = body && typeof body === "object" ? (body as Record<string, unknown>) : {};
+  if (record.kind === "video" && record.action === "status") return handleOwnerVideo(record);
+  if (await haltIsOn(userId)) return json({ ok: false, error: "Emergency stop is on or unavailable. Generation was blocked." }, 403);
   if (record.kind === "video") return handleOwnerVideo(record);
   const normalized = normalizeImaginePrompt(record.prompt);
   if (!normalized.ok) return json({ ok: false, error: normalized.error }, 400);

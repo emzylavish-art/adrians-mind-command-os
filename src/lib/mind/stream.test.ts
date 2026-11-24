@@ -6,6 +6,7 @@ describe("model payload", () => {
   it("reads a normal JSON reply", () => {
     const parsed = readModelPayload(JSON.stringify({ choices: [{ message: { content: "Hello" } }], usage: { prompt_tokens: 3, completion_tokens: 1 } }));
     assert.equal(parsed.streamed, false);
+    assert.equal(parsed.model, "model unknown");
     assert.equal(parsed.text, "Hello");
     assert.equal(parsed.usage?.prompt_tokens, 3);
   });

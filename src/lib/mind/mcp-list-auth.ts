@@ -31,12 +31,8 @@ export function resolveMcpListUserId(input: {
   loopbackPreview?: boolean;
 }): string | null {
   const fromSession = input.sessionUser?.id?.trim() || "";
-  if (fromSession) return fromSession;
+  if (fromSession) return fromSession === input.devUserId ? null : fromSession;
   if (input.loopbackPreview && !input.databaseConfigured) return input.devUserId;
-  // Match requireUserId auth-off path: shared dev user only without a real DB.
-  if (!input.authConfigured && !input.gateIdentityEnabled && !input.databaseConfigured) {
-    return input.devUserId;
-  }
   return null;
 }
 

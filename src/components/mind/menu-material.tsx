@@ -1,4 +1,4 @@
-import { useEffect, useRef, type CSSProperties, type ReactNode } from "react";
+import { useEffect, useRef, type CSSProperties, type ReactNode, type RefObject } from "react";
 import { createPortal } from "react-dom";
 
 export function MenuMotion() {
@@ -150,151 +150,78 @@ export function MenuCluster({ label, wide = false, children }: { label: string; 
   );
 }
 
-export function pinComposerMenu(menu: HTMLElement | null) {
-  if (!menu) return;
-  const details = menu.closest("details");
-  const open = details instanceof HTMLDetailsElement && details.open;
-  if (!open) {
-    menu.style.removeProperty("display");
-    menu.style.removeProperty("position");
-    menu.style.removeProperty("max-height");
-    const form = menu.closest("form");
-    if (form instanceof HTMLElement) {
-      form.style.removeProperty("max-height");
-      form.style.removeProperty("height");
-      form.style.removeProperty("min-height");
-      form.style.removeProperty("top");
-      form.style.removeProperty("bottom");
-      form.style.removeProperty("overflow");
-    }
-    const shell = menu.closest(".thread-shell");
-    const section = menu.closest(".thread-shell > section");
-    if (shell instanceof HTMLElement) {
-      shell.style.removeProperty("height");
-      shell.style.removeProperty("max-height");
-      shell.style.removeProperty("min-height");
-    }
-    if (section instanceof HTMLElement) section.style.removeProperty("height");
-    if (details instanceof HTMLElement && !details.closest(".gpt-home")) {
-      details.style.setProperty("display", "inline-flex", "important");
-      details.style.setProperty("flex-direction", "row", "important");
-      details.style.setProperty("width", "auto", "important");
-      details.style.setProperty("max-width", "100%", "important");
-      details.style.setProperty("flex", "0 0 auto", "important");
-      details.style.setProperty("white-space", "nowrap", "important");
-    }
-    return;
-  }
-  const form = menu.closest("form");
-  if (form instanceof HTMLElement) {
-    form.style.setProperty("max-height", "none", "important");
-    form.style.setProperty("height", "auto", "important");
-    form.style.setProperty("min-height", "min-content", "important");
-    form.style.setProperty("top", "auto", "important");
-    form.style.setProperty("bottom", "auto", "important");
-    form.style.setProperty("overflow", "visible", "important");
-  }
-  const section = menu.closest(".thread-shell > section") ?? menu.closest("section");
-  if (section instanceof HTMLElement) {
-    section.style.setProperty("grid-template-rows", "auto minmax(0, 1fr) auto", "important");
-    section.style.setProperty("align-items", "stretch", "important");
-    section.style.setProperty("height", "100%", "important");
-    section.style.setProperty("min-height", "0", "important");
-  }
-  const shell = menu.closest(".thread-shell");
-  const stage = shell?.parentElement;
-  if (shell instanceof HTMLElement && stage instanceof HTMLElement) {
-    const chrome = document.querySelector("[data-testid='handy-dictation']");
-    const chromeTop = chrome instanceof HTMLElement ? chrome.getBoundingClientRect().top : window.innerHeight;
-    const room = Math.max(0, Math.floor(chromeTop - stage.getBoundingClientRect().top - 8));
-    shell.style.setProperty("height", `${room}px`, "important");
-    shell.style.setProperty("max-height", `${room}px`, "important");
-    shell.style.setProperty("min-height", "0", "important");
-  }
-  const toolbar = menu.closest(".composer-toolbar");
-  if (toolbar instanceof HTMLElement) {
-    toolbar.style.setProperty("display", "flex", "important");
-    toolbar.style.setProperty("flex-wrap", "wrap", "important");
-    toolbar.style.setProperty("align-items", "flex-start", "important");
-    toolbar.style.setProperty("align-content", "flex-start", "important");
-    toolbar.style.setProperty("width", "100%", "important");
-    toolbar.style.setProperty("max-width", "100%", "important");
-    toolbar.style.setProperty("height", "auto", "important");
-    toolbar.style.setProperty("max-height", "none", "important");
-    toolbar.style.setProperty("overflow", "visible", "important");
-  }
-  if (details instanceof HTMLElement) {
-    details.style.setProperty("display", "flex", "important");
-    details.style.setProperty("flex-direction", "column", "important");
-    details.style.setProperty("align-items", "stretch", "important");
-    details.style.setProperty("width", "100%", "important");
-    details.style.setProperty("max-width", "100%", "important");
-    details.style.setProperty("min-width", "0", "important");
-    details.style.setProperty("flex", "1 1 100%", "important");
-    details.style.setProperty("white-space", "normal", "important");
-    details.style.setProperty("height", "auto", "important");
-    details.style.setProperty("position", "static", "important");
-    details.style.setProperty("overflow", "visible", "important");
-  }
-  finishMenu(menu);
-  menu.style.setProperty("position", "static", "important");
-  menu.style.setProperty("inset", "auto", "important");
-  menu.style.setProperty("left", "auto", "important");
-  menu.style.setProperty("right", "auto", "important");
-  menu.style.setProperty("top", "auto", "important");
-  menu.style.setProperty("bottom", "auto", "important");
-  menu.style.setProperty("display", "flex", "important");
-  menu.style.setProperty("flex-direction", "row", "important");
-  menu.style.setProperty("flex-wrap", "wrap", "important");
-  menu.style.setProperty("align-items", "center", "important");
-  menu.style.setProperty("align-content", "flex-start", "important");
-  menu.style.setProperty("width", "100%", "important");
-  menu.style.setProperty("max-width", "100%", "important");
-  menu.style.setProperty("min-width", "0", "important");
-  menu.style.setProperty("z-index", "1", "important");
-  menu.style.setProperty("margin", "0.35rem 0 0", "important");
-  menu.style.setProperty("box-sizing", "border-box", "important");
-  menu.querySelectorAll("section, button, label, select").forEach((node) => {
-    if (!(node instanceof HTMLElement)) return;
-    node.style.setProperty("flex", "0 1 auto", "important");
-    node.style.setProperty("width", "auto", "important");
-    node.style.setProperty("max-width", "100%", "important");
-  });
-  const limit = Math.min(window.innerHeight - 8, (section?.getBoundingClientRect().bottom ?? window.innerHeight) - 8);
-  const formBox = form instanceof HTMLElement ? form.getBoundingClientRect() : menu.getBoundingClientRect();
-  if (formBox.bottom > limit) {
-    const menuBox = menu.getBoundingClientRect();
-    const next = Math.max(120, Math.floor(menuBox.height - (formBox.bottom - limit)));
-    menu.style.setProperty("max-height", `${next}px`, "important");
-    menu.style.setProperty("overflow-y", "auto", "important");
-  } else {
-    menu.style.setProperty("max-height", "none", "important");
-    menu.style.setProperty("overflow", "visible", "important");
-  }
-  const shown = menu.getBoundingClientRect();
-  const chips = [...menu.querySelectorAll("button, label, select")].filter((node): node is HTMLElement => node instanceof HTMLElement && node.getBoundingClientRect().height > 8);
-  const fitting = chips.filter((node) => node.getBoundingClientRect().bottom <= shown.bottom + 1);
-  if (fitting.length > 0 && fitting.length < chips.length) {
-    const edge = Math.max(...fitting.map((node) => node.getBoundingClientRect().bottom));
-    const next = Math.max(88, Math.floor(edge - shown.top + 8));
-    if (next < shown.height - 1) {
-      menu.style.setProperty("max-height", `${next}px`, "important");
-      menu.style.setProperty("overflow-y", "auto", "important");
-    }
-  }
+/** Keep the menu in the browser's top layer so a scrolling composer cannot clip it. */
+export function ComposerMore({ children, testId, onOpen }: { children: ReactNode; testId: string; onOpen?: () => void }) {
+  const trigger = useRef<HTMLDetailsElement>(null);
+  const panel = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    const details = trigger.current;
+    const menu = panel.current;
+    if (!details || !menu) return;
+    const position = () => {
+      if (!menu.matches(":popover-open")) return;
+      const summary = details.querySelector("summary")!;
+      const anchor = summary.getBoundingClientRect();
+      const viewport = window.visualViewport;
+      const height = viewport?.height ?? innerHeight;
+      const width = viewport?.width ?? innerWidth;
+      const gap = 8;
+      const panelWidth = Math.min(440, width - gap * 2);
+      const above = anchor.top - gap * 2;
+      const below = height - anchor.bottom - gap * 2;
+      const opensAbove = above >= below;
+      menu.style.setProperty("--menu-width", `${panelWidth}px`);
+      menu.style.setProperty("--menu-left", `${Math.max(gap, Math.min(anchor.left, width - panelWidth - gap))}px`);
+      menu.style.setProperty("--menu-height", `${Math.max(44, opensAbove ? above : below)}px`);
+      menu.style.setProperty("--menu-top", `${opensAbove ? Math.max(gap, anchor.top - menu.offsetHeight - gap) : anchor.bottom + gap}px`);
+    };
+    const sync = () => {
+      if (details.open) {
+        if (!menu.matches(":popover-open")) menu.showPopover();
+        position();
+      } else if (menu.matches(":popover-open")) menu.hidePopover();
+    };
+    const closeOutside = (event: PointerEvent) => {
+      if (details.open && !details.contains(event.target as Node)) details.open = false;
+    };
+    details.addEventListener("toggle", sync);
+    document.addEventListener("pointerdown", closeOutside);
+    window.addEventListener("resize", position);
+    window.visualViewport?.addEventListener("resize", position);
+    document.addEventListener("scroll", position, true);
+    return () => {
+      details.removeEventListener("toggle", sync);
+      document.removeEventListener("pointerdown", closeOutside);
+      window.removeEventListener("resize", position);
+      window.visualViewport?.removeEventListener("resize", position);
+      document.removeEventListener("scroll", position, true);
+    };
+  }, []);
+  return <details ref={trigger} className="composer-more" onToggle={(event) => {
+    if (event.target === event.currentTarget && event.currentTarget.open) onOpen?.();
+  }} onKeyDown={(event) => {
+    if (event.key !== "Escape" || !event.currentTarget.open) return;
+    event.stopPropagation();
+    event.currentTarget.open = false;
+    event.currentTarget.querySelector("summary")?.focus();
+  }}>
+    <summary>More</summary>
+    <div ref={panel} popover="manual" className="composer-more__menu" data-testid={testId}>{children}</div>
+  </details>;
 }
 
 export function placeNear(card: HTMLElement, anchor: DOMRect, width = 320, align: "start" | "end" = "end") {
   const margin = 12;
-  const w = Math.min(width, window.innerWidth - margin * 2);
+  const w = Math.min(width, Math.max(0, window.innerWidth - margin * 2));
   card.style.setProperty("position", "fixed", "important");
   card.style.setProperty("width", `${w}px`, "important");
   card.style.setProperty("z-index", "1201", "important");
   card.style.setProperty("margin", "0", "important");
-  const height = card.getBoundingClientRect().height || 240;
+  const height = card.offsetHeight || 240;
   let top = anchor.bottom + 8;
   let left = align === "start" ? anchor.left : anchor.right - w;
-  if (top + height > window.innerHeight - margin) top = Math.max(margin, anchor.top - height - 8);
+  if (top + height > window.innerHeight - margin) top = anchor.top - height - 8;
+  top = Math.max(margin, Math.min(top, window.innerHeight - height - margin));
   if (left < margin) left = margin;
   if (left + w > window.innerWidth - margin) left = window.innerWidth - w - margin;
   card.style.setProperty("top", `${top}px`, "important");
@@ -305,6 +232,7 @@ export function placeNear(card: HTMLElement, anchor: DOMRect, width = 320, align
 
 export function AnchoredCard({
   anchor,
+  trigger,
   label,
   onClose,
   children,
@@ -315,6 +243,7 @@ export function AnchoredCard({
   phase = "open",
 }: {
   anchor: DOMRect | null;
+  trigger?: RefObject<HTMLButtonElement | null>;
   label: string;
   onClose: () => void;
   children: ReactNode;
@@ -325,24 +254,63 @@ export function AnchoredCard({
   phase?: "open" | "close";
 }) {
   const panel = useRef<HTMLDivElement>(null);
+  const close = useRef(onClose);
+  close.current = onClose;
+
   useEffect(() => {
     const node = panel.current;
     if (!node) return;
     finishMenu(node, phase);
-    if (anchor) placeNear(node, anchor, width, align);
+    const position = () => {
+      const target = trigger?.current?.getBoundingClientRect() ?? anchor;
+      if (target) placeNear(node, target, width, align);
+    };
+    position();
+    const observer = trigger && typeof ResizeObserver !== "undefined" ? new ResizeObserver(position) : null;
+    observer?.observe(node);
+    if (trigger?.current) observer?.observe(trigger.current);
+    if (trigger) window.addEventListener("resize", position);
+    return () => {
+      observer?.disconnect();
+      if (trigger) window.removeEventListener("resize", position);
+    };
+  }, [anchor, align, width, trigger, phase]);
+
+  useEffect(() => {
+    const node = panel.current;
+    if (!node) return;
+    const opener = trigger?.current;
+    const focusables = () => Array.from(node.querySelectorAll<HTMLElement>("button:not([disabled]), a[href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex='0']"))
+      .filter((item) => item.getClientRects().length > 0);
+    if (opener) node.focus({ preventScroll: true });
     const onKey = (event: KeyboardEvent) => {
-      if (event.key === "Escape") onClose();
+      if (event.key === "Escape") {
+        if (opener) event.preventDefault();
+        close.current();
+      } else if (event.key === "Tab" && opener && !event.defaultPrevented) {
+        const items = focusables();
+        const current = document.activeElement;
+        const index = items.indexOf(current as HTMLElement);
+        if (index === -1 || (!event.shiftKey && index === items.length - 1) || (event.shiftKey && index === 0)) {
+          event.preventDefault();
+          (event.shiftKey ? items.at(-1) ?? node : items[0] ?? node).focus();
+        }
+      }
     };
     document.addEventListener("keydown", onKey);
-    return () => document.removeEventListener("keydown", onKey);
-  }, [anchor, align, onClose, width, children, phase]);
+    return () => {
+      document.removeEventListener("keydown", onKey);
+      if (opener?.isConnected) opener.focus({ preventScroll: true });
+    };
+  }, [trigger]);
   if (typeof document === "undefined") return null;
   const light = document.documentElement.dataset.theme === "light";
   const card = (
     <div
       ref={panel}
       role="dialog"
-      aria-modal="false"
+      aria-modal={trigger ? true : false}
+      tabIndex={trigger ? -1 : undefined}
       aria-label={label}
       id={testId}
       data-testid={testId}

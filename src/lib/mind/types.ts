@@ -1,5 +1,5 @@
 import type { PersonalityId } from "./personalities/index.ts";
-import type { BotProvider } from "./bot-model.ts";
+import type { BotModel } from "./bot-model.ts";
 import type { ModelTier } from "./model-tiers.ts";
 
 import type {
@@ -33,6 +33,9 @@ export type Msg = {
   content: string;
   at: string;
   model?: string;
+  provider?: string;
+  requestedModel?: string;
+  delivery?: "submitted" | "unconfirmed" | "stopped" | "failed";
   kind?: "error";
   /** Inline image attachments shown in the bubble and sent on the originating turn. */
   images?: MsgImage[];
@@ -48,7 +51,7 @@ export type Retrieval = { at: string; ids: string[] };
 export type Chat = {
   id: string;
   agentId?: string;
-  botProvider?: BotProvider;
+  botProvider?: NonNullable<BotModel["chatProvider"]>;
   botTier?: ModelTier;
   botKnowledge?: string;
   title: string;
@@ -122,6 +125,7 @@ export type Workspace = {
   halted: boolean;
   chats: Chat[];
   memories: MemoryItem[];
+  deletedMemoryIds?: string[];
   projects: Project[];
   files: LocalFile[];
   usage: UsageEntry[];

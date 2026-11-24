@@ -23,10 +23,10 @@ Put them in the same folder. On Windows, join them in that order:
 cmd /c copy /b AdriansMind-Setup-Full.exe.part00+AdriansMind-Setup-Full.exe.part01+AdriansMind-Setup-Full.exe.part02+AdriansMind-Setup-Full.exe.part03 AdriansMind-Setup-Full.exe
 ```
 
-The joined file must be 6,397,884,393 bytes. Its SHA-256 must start with `7674b423` and match the full hash exactly:
+The joined file must be 6,398,372,946 bytes. Check its full SHA-256 against the published release checksum:
 
 ```text
-7674b423f38e1c73d645387644604d654d52838e8f5784e24196c873b26d31d7
+69eb42349678734900d740fefce253abe5b8ad266915e5925872f133627a1f97
 ```
 
 Check it in PowerShell:
@@ -41,10 +41,10 @@ Part hashes:
 
 | Part | Bytes | SHA-256 |
 | --- | ---: | --- |
-| part00 | 1992294400 | 6981d9d2f71aeaf0ee8513ae41cb597a9aa0b38db16bad4d04746ef6783d4391 |
-| part01 | 1992294400 | 4a5707ea3ff877079905308895a826b0dcaa5cce30353296e7c36972405c23d0 |
-| part02 | 1992294400 | 68737294d7b9f4db44717196f1841b2c91f1dae918c1725dda75a2740958d7ac |
-| part03 | 412183407 | ba4642adb7618c8ff25979584093849c3477facaf0508e6e39f8b20ffb2f0870 |
+| part00 | 1992294400 | a6516a5c1038e62f234cc49d20912310876b472d7464512cb9eaff08d9aa8b70 |
+| part01 | 1992294400 | f29d223edeee8b832b28b8f40f7171de64dd8226e48c48bd58b25700cb352749 |
+| part02 | 1992294400 | 0b201ccb5c002a580fe287406fb9c11490d7df2e9b38e9d62ab01d06c7b85425 |
+| part03 | 421489746 | c4578967a26fdb810c577d496c085d47330d28e8210f13512ca5c45dddf52ed9 |
 
 ## AI team and callable tools
 

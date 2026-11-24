@@ -15,6 +15,7 @@ import type {
   Workspace,
 } from "./types";
 
+export const PROJECT_NAME_MAX = 80;
 export const WORKSPACE_KEY = "amcos.workspace.v1";
 const LEGACY_KEY = "amcos.chats.v1";
 const OWNER_EMAIL = "emzylavish@gmail.com";
@@ -22,8 +23,7 @@ const OWNER_EMAIL = "emzylavish@gmail.com";
 /** A real account never reads the shared preview key or another account's key. */
 export function accountWorkspaceKey(userId: string | null | undefined): string {
   if (!userId || userId === "dev-user") return WORKSPACE_KEY;
-  const safe = userId.replace(/[^a-zA-Z0-9_-]/g, "").slice(0, 80);
-  return `${WORKSPACE_KEY}.u.${safe || "account"}`;
+  return `${WORKSPACE_KEY}.u.${encodeURIComponent(userId)}`;
 }
 
 export function isPrimaryOwner(email: string | null | undefined): boolean {
@@ -33,12 +33,12 @@ export function isPrimaryOwner(email: string | null | undefined): boolean {
 export function loadWorkspaceForAccount(
   storage: Pick<Storage, "getItem">,
   userId: string | null | undefined,
-  email?: string | null,
+  verifiedEmail?: string | null,
 ): Workspace {
   if (!userId) return emptyWorkspace();
   const key = accountWorkspaceKey(userId);
   const current = storage.getItem(key);
-  const raw = current ?? (userId !== "dev-user" && isPrimaryOwner(email) ? storage.getItem(WORKSPACE_KEY) : null);
+  const raw = current ?? (userId !== "dev-user" && isPrimaryOwner(verifiedEmail) ? storage.getItem(WORKSPACE_KEY) : null);
   if (!raw) return emptyWorkspace();
   try {
     return normalizeWorkspace(JSON.parse(raw));
@@ -54,7 +54,7 @@ export function emptyWorkspace(): Workspace {
 /** Clears chats, notes, projects, files, and bots. The emergency stop stays as it was. */
 export function clearedBrowserCopy(prev: Workspace): Workspace {
   return pushAudit(
-    { ...emptyWorkspace(), halted: prev.halted },
+    { ...emptyWorkspace(), halted: prev.halted, deletedMemoryIds: [...new Set([...(prev.deletedMemoryIds ?? []), ...prev.memories.map((note) => note.id)])] },
     "wipe_browser",
     "workspace",
     "cleared",
@@ -70,13 +70,26 @@ function str(value: unknown, fallback = ""): string {
 }
 
 export function memoriesForChat(ws: Workspace, chat: Chat): MemoryItem[] {
-  if (chat.memory !== "on") return [];
+  if (chat.memory !== "on" || chat.temporary) return [];
   return ws.memories.filter((item) => {
     if (item.archived) return false;
     if (item.scope === "global") return true;
     if (item.scope === "project") return !!chat.projectId && item.projectId === chat.projectId;
     return item.scope === "chat" && item.chatId === chat.id;
   });
+}
+
+/** Data a conversational tool or voice assistant may read in this chat. */
+export function workspaceForChat(ws: Workspace, chat: Chat): Workspace {
+  const context = chat.memory === "on" && !chat.temporary;
+  return {
+    ...ws,
+    memories: memoriesForChat(ws, chat),
+    chats: context ? ws.chats.filter((row) => row.id === chat.id) : [],
+    projects: context ? ws.projects.filter((row) => row.id === chat.projectId) : [],
+    files: context && chat.projectId ? ws.files.filter((row) => row.projectId === chat.projectId) : [],
+    agents: [], connections: [], schedules: [],
+  };
 }
 
 export function canonical(value: unknown): string {
@@ -107,7 +120,7 @@ export function normalizeWorkspace(input: unknown): Workspace {
       if (!isRecord(row) || !str(row.id) || !str(row.name)) continue;
       base.projects.push({
         id: str(row.id),
-        name: str(row.name).slice(0, 80),
+        name: str(row.name).slice(0, PROJECT_NAME_MAX),
         description: str(row.description).slice(0, 400),
         createdAt: str(row.createdAt, new Date(0).toISOString()),
       });
@@ -119,10 +132,14 @@ export function normalizeWorkspace(input: unknown): Workspace {
       if (chat) base.chats.push(chat);
     }
   }
+  const deleted = new Set(Array.isArray(input.deletedMemoryIds)
+    ? input.deletedMemoryIds.filter((id): id is string => typeof id === "string" && id.length > 0)
+    : []);
+  if (deleted.size) base.deletedMemoryIds = [...deleted];
   if (Array.isArray(input.memories)) {
     for (const row of input.memories) {
       const item = normalizeMemory(row);
-      if (item) base.memories.push(item);
+      if (item && !deleted.has(item.id)) base.memories.push(item);
     }
   }
   if (Array.isArray(input.files)) {
@@ -177,6 +194,9 @@ function normalizeChat(row: unknown): Chat | null {
         content: msg.content,
         at: str(msg.at, new Date(0).toISOString()),
         model: typeof msg.model === "string" ? msg.model : undefined,
+        ...(typeof msg.provider === "string" && msg.provider.trim() ? { provider: msg.provider.trim() } : {}),
+        ...(typeof msg.requestedModel === "string" && msg.requestedModel.trim() ? { requestedModel: msg.requestedModel.trim().slice(0, 150) } : {}),
+        ...(msg.role === "user" && (msg.delivery === "submitted" || msg.delivery === "unconfirmed" || msg.delivery === "stopped" || msg.delivery === "failed") ? { delivery: msg.delivery } : {}),
         ...publicImages(msg.images),
         ...publicVideo(msg.videoUrl),
         ...(msg.memorySaved === true
@@ -217,7 +237,7 @@ function normalizeFile(row: unknown): LocalFile | null {
   const text = row.text.slice(0, 40000);
   return {
     id: str(row.id),
-    name: str(row.name, "untitled.txt").slice(0, 120),
+    name: str(row.name, "untitled.txt"),
     text,
     bytes: typeof row.bytes === "number" ? row.bytes : text.length,
     ...(row.partial === true || row.text.length > text.length ? { partial: true } : {}),
@@ -257,6 +277,7 @@ function publicVideo(value: unknown): { videoUrl: string } | Record<string, neve
 
 function normalizeMemory(row: unknown): MemoryItem | null {
   if (!isRecord(row) || !str(row.id) || typeof row.text !== "string" || !row.text.trim()) return null;
+  if (row.scope != null && !["chat", "project", "global"].includes(String(row.scope))) return null;
   const scope: MemoryScope = row.scope === "project" || row.scope === "chat" ? row.scope : "global";
   const versions = Array.isArray(row.versions)
     ? row.versions.flatMap((version) => {
@@ -390,8 +411,8 @@ export function addMemory(
 }
 
 export function deleteMemory(ws: Workspace, id: string): Workspace {
-  if (!id) return ws;
-  return { ...ws, memories: ws.memories.filter((item) => item.id !== id) };
+  if (!ws.memories.some((item) => item.id === id)) return ws;
+  return { ...ws, deletedMemoryIds: [...new Set([...(ws.deletedMemoryIds ?? []), id])], memories: ws.memories.filter((item) => item.id !== id) };
 }
 
 export function reviseMemory(ws: Workspace, id: string, text: string): Workspace {
@@ -458,6 +479,38 @@ export async function unpackWorkspace(raw: string): Promise<
   return { ok: true, workspace, counts: counts(workspace) };
 }
 
+export function mergeMemoryState(current: Workspace, incoming: Workspace): Pick<Workspace, "memories" | "deletedMemoryIds"> {
+  const deleted = new Set([...(current.deletedMemoryIds ?? []), ...(incoming.deletedMemoryIds ?? [])]);
+  const memories = new Map<string, MemoryItem>();
+  for (const note of [...current.memories, ...incoming.memories]) {
+    if (deleted.has(note.id)) continue;
+    const previous = memories.get(note.id);
+    if (!previous || note.updatedAt > previous.updatedAt ||
+        (note.updatedAt === previous.updatedAt && (note.versions.length > previous.versions.length ||
+          (note.versions.length === previous.versions.length && note.archived && !previous.archived)))) {
+      memories.set(note.id, note);
+    }
+  }
+  return { memories: [...memories.values()], ...(deleted.size ? { deletedMemoryIds: [...deleted] } : {}) };
+}
+
+/** Explicit replacement can restore forgotten content only as newly saved notes. */
+export function replaceFromArchive(current: Workspace, archive: Workspace): Workspace {
+  const deleted = new Set([...(current.deletedMemoryIds ?? []), ...(archive.deletedMemoryIds ?? [])]);
+  const incoming = new Set(archive.memories.map((note) => note.id));
+  for (const note of current.memories) if (!incoming.has(note.id)) deleted.add(note.id);
+  const now = new Date().toISOString();
+  const memories = archive.memories.map((note) => {
+    if (deleted.has(note.id)) return { ...note, id: crypto.randomUUID(), createdAt: now, updatedAt: now };
+    const previous = current.memories.find((item) => item.id === note.id);
+    if (previous && (previous.text !== note.text || previous.archived !== note.archived)) {
+      return { ...note, updatedAt: now, versions: [...previous.versions, { at: previous.updatedAt, text: previous.text }] };
+    }
+    return note;
+  });
+  return { ...archive, memories, deletedMemoryIds: [...deleted], halted: current.halted || archive.halted };
+}
+
 export function mergeWorkspace(current: Workspace, incoming: Workspace): Workspace {
   const byId = <T extends { id: string }>(rows: T[]) => new Map(rows.map((row) => [row.id, row]));
   const merge = <T extends { id: string }>(left: T[], right: T[]) => [...byId([...left, ...right]).values()];
@@ -465,7 +518,7 @@ export function mergeWorkspace(current: Workspace, incoming: Workspace): Workspa
     version: 1,
     halted: current.halted,
     chats: merge(current.chats, incoming.chats),
-    memories: merge(current.memories, incoming.memories),
+    ...mergeMemoryState(current, incoming),
     projects: merge(current.projects, incoming.projects),
     files: merge(current.files, incoming.files),
     usage: merge(current.usage, incoming.usage),
@@ -509,7 +562,7 @@ export function addLocalFile(
   if (!text.trim()) return ws;
   const file: LocalFile = {
     id: input.id || crypto.randomUUID(),
-    name: input.name.trim().slice(0, 120) || "untitled.txt",
+    name: input.name || "untitled.txt",
     text,
     bytes: new TextEncoder().encode(text).length,
     ...(input.partial || input.text.length > text.length ? { partial: true } : {}),
@@ -522,7 +575,7 @@ export function addLocalFile(
 export function addProject(ws: Workspace, name: string, description: string): { ws: Workspace; project: Project } {
   const project: Project = {
     id: crypto.randomUUID(),
-    name: name.trim().slice(0, 80) || "Untitled project",
+    name: name.trim().slice(0, PROJECT_NAME_MAX) || "Untitled project",
     description: description.trim().slice(0, 400),
     createdAt: new Date().toISOString(),
   };

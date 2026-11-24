@@ -1,3 +1,4 @@
+import { haltIsOn } from "@/lib/mind/halt.server";
 import { createFileRoute } from "@tanstack/react-router";
 import { claimNextJob, findAgentByToken, readJob } from "@/lib/mind/pc-pairing/store";
 
@@ -19,6 +20,9 @@ export const Route = createFileRoute("/api/mind/pc/jobs")({
           const job = readJob(requestedJobId);
           if (!job || job.agentId !== agent.id) return json({ ok: false, error: "Job not found." }, 404);
           return json({ ok: true, job: { id: job.id, kind: job.kind, status: job.status, error: job.error || "" } });
+        }
+        if (await haltIsOn(agent.ownerId)) {
+          return json({ ok: true, job: null, detail: "Emergency stop is on or unavailable. Job stayed queued." });
         }
         const job = claimNextJob(agent.id);
         if (!job) return json({ ok: true, job: null });

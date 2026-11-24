@@ -1,7 +1,7 @@
 import { getSql } from "../db";
 import { applyCorePass } from "./core-runtime";
 import { haltIsOn } from "./halt.server";
-import { readSnapshot, writeSnapshot } from "./store";
+import { readSnapshot, snapshotRevision, writeSnapshot } from "./store";
 import { normalizeWorkspace } from "./workspace";
 
 /** Advance the signed-in owner's saved server workspace by one real local pass. */
@@ -22,19 +22,16 @@ export async function runDurableCorePassForUser(userId: string) {
     return { ok: false as const, error: "No saved server workspace. Nothing ran. The browser copy was not changed." };
   }
   const workspace = normalizeWorkspace(raw);
-  let halted = workspace.halted;
-  try {
-    halted = halted || await haltIsOn(userId);
-  } catch {
-    halted = workspace.halted;
-  }
+  const halted = workspace.halted || await haltIsOn(userId);
   const next = applyCorePass({
     workspace: { ...workspace, halted },
     now: new Date().toISOString(),
     workerId: "hosted-worker",
   });
   try {
-    await writeSnapshot(sql, userId, next.workspace);
+    if (!await writeSnapshot(sql, userId, next.workspace, snapshotRevision(raw))) {
+      return { ok: false as const, error: "The server workspace changed during the pass. The newer copy was kept." };
+    }
   } catch {
     return { ok: false as const, error: "The server workspace could not be saved. The pass was not kept." };
   }

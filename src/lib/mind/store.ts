@@ -1,5 +1,8 @@
+import { createHash } from "node:crypto";
 import type { Sql } from "../db";
 import type { Workspace } from "./types";
+
+import { canonical, mergeMemoryState, normalizeWorkspace } from "./workspace.ts";
 
 const MAX_JSON = 1_500_000;
 
@@ -7,7 +10,37 @@ export function snapshotTooLarge(ws: Workspace): boolean {
   return JSON.stringify(ws).length > MAX_JSON;
 }
 
-export async function writeSnapshot(sql: Sql, userId: string, ws: Workspace): Promise<void> {
+async function withOwnerSnapshot<T>(sql: Sql, userId: string, fn: (tx: Sql, raw: unknown) => Promise<T>): Promise<T> {
+  if (!sql.transaction) return fn(sql, await readSnapshot(sql, userId));
+  return sql.transaction(async (tx) => {
+    // Create a lockable row even on the owner's first save. All snapshot writers use this lock.
+    await tx`insert into mind_snapshot (user_id, payload, updated_at) values (${userId}, '{}'::jsonb, now()) on conflict (user_id) do nothing`;
+    const rows = await tx<{ payload: unknown }>`select payload from mind_snapshot where user_id = ${userId} for update`;
+    return fn(tx, parsedPayload(rows[0]?.payload));
+  });
+}
+
+export function updateOwnerWorkspace<T>(sql: Sql, userId: string, change: (current: Workspace, raw: unknown) => { workspace?: Workspace; result: T }): Promise<T> {
+  return withOwnerSnapshot(sql, userId, async (tx, raw) => {
+    const { workspace, result } = change(normalizeWorkspace(raw), raw);
+    if (workspace) await persistSnapshot(tx, userId, workspace);
+    return result;
+  });
+}
+
+export function snapshotRevision(workspace: unknown): string {
+  return createHash("sha256").update(canonical(workspace ?? {})).digest("hex");
+}
+
+export function writeSnapshot(sql: Sql, userId: string, ws: Workspace, expectedRevision?: string): Promise<string | null> {
+  return updateOwnerWorkspace<string | null>(sql, userId, (current, raw) => {
+    if (expectedRevision !== undefined && snapshotRevision(raw) !== expectedRevision) return { result: null };
+    const workspace = { ...ws, ...mergeMemoryState(current, ws) };
+    return { workspace, result: snapshotRevision(workspace) };
+  });
+}
+
+async function persistSnapshot(sql: Sql, userId: string, ws: Workspace): Promise<void> {
   const payload = JSON.stringify(ws);
   await sql`delete from mind_project where user_id = ${userId}`;
   await sql`delete from mind_chat where user_id = ${userId}`;
@@ -66,9 +99,11 @@ export async function writeSnapshot(sql: Sql, userId: string, ws: Workspace): Pr
 
 export async function readSnapshot(sql: Sql, userId: string): Promise<unknown | null> {
   const rows = await sql<{ payload: unknown }>`select payload from mind_snapshot where user_id = ${userId}`;
-  const payload = rows[0]?.payload;
-  if (!payload) return null;
-  return typeof payload === "string" ? JSON.parse(payload) : payload;
+  return parsedPayload(rows[0]?.payload);
+}
+
+function parsedPayload(payload: unknown): unknown {
+  return typeof payload === "string" ? JSON.parse(payload) : payload ?? null;
 }
 
 export async function writeControl(sql: Sql, userId: string, halted: boolean): Promise<void> {

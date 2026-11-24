@@ -8,36 +8,70 @@ export function readRelayEnv(env = process.env) {
   return { url: url.replace(/\/$/, ""), key, allowed };
 }
 
+const readFailure = { refused: "The ownership row could not be read. Stop outbound." };
+const writeFailure = { refused: "The ownership change was not confirmed. Stop outbound." };
+
+function fromStorage(row) {
+  if (row?.id !== 1 || !["pc", "phone"].includes(row.owner) ||
+      !Number.isSafeInteger(row.epoch) || !Number.isSafeInteger(row.lease_expires) ||
+      !Number.isSafeInteger(row.flap_until) || typeof row.paused !== "boolean" ||
+      typeof row.going_down !== "boolean") return null;
+  return {
+    id: row.id, owner: row.owner, epoch: row.epoch, lease_expires: row.lease_expires,
+    flapUntil: row.flap_until, paused: row.paused, goingDown: row.going_down,
+  };
+}
+
 export async function readOwnership(fetchImpl, env) {
   const gate = readRelayEnv(env);
   if (gate.refused) return gate;
-  const response = await fetchImpl(`${gate.url}/rest/v1/mind_failover_ownership?id=eq.1&select=*`, {
-    headers: { apikey: gate.key, Authorization: `Bearer ${gate.key}` },
-  });
-  if (!response.ok) return { refused: "The ownership row could not be read. Stop outbound." };
-  const rows = await response.json();
-  return rows[0] || null;
+  try {
+    const response = await fetchImpl(`${gate.url}/rest/v1/mind_failover_ownership?id=eq.1&select=*`, {
+      headers: { apikey: gate.key, Authorization: `Bearer ${gate.key}` },
+    });
+    if (!response.ok) return readFailure;
+    const rows = await response.json();
+    if (!Array.isArray(rows) || rows.length > 1) return readFailure;
+    return rows.length ? fromStorage(rows[0]) ?? readFailure : null;
+  } catch {
+    return readFailure;
+  }
+}
+
+async function persistOwnership(fetchImpl, gate, current, expectedEpoch, next, now) {
+  const row = current ?? freshOwnership(now);
+  const updated = compareAndSet(row, expectedEpoch ?? row.epoch, next, now);
+  if (updated.refused) return updated;
+  const stored = {
+    owner: updated.owner, epoch: updated.epoch, lease_expires: updated.lease_expires,
+    flap_until: updated.flapUntil, paused: updated.paused, going_down: updated.goingDown ?? false,
+  };
+  // Existing rows are fenced in the mutation itself. Bootstrap competes on the primary key.
+  const predicate = current ? `?id=eq.1&epoch=eq.${current.epoch}&owner=eq.${current.owner}` : "";
+  try {
+    const response = await fetchImpl(`${gate.url}/rest/v1/mind_failover_ownership${predicate}`, {
+      method: current ? "PATCH" : "POST",
+      headers: {
+        apikey: gate.key, Authorization: `Bearer ${gate.key}`,
+        "Content-Type": "application/json", Prefer: "return=representation",
+      },
+      body: JSON.stringify(current ? stored : { id: 1, ...stored }),
+    });
+    if (!response.ok) return writeFailure;
+    const rows = await response.json();
+    if (!Array.isArray(rows) || rows.length !== 1) return writeFailure;
+    const confirmed = fromStorage(rows[0]);
+    if (!confirmed || Object.entries(stored).some(([key, value]) => rows[0][key] !== value)) return writeFailure;
+    return confirmed;
+  } catch {
+    return writeFailure;
+  }
 }
 
 export async function writeOwnership(fetchImpl, env, expectedEpoch, next, now) {
   const current = await readOwnership(fetchImpl, env);
-  if (current && current.refused) return current;
-  const row = current || freshOwnership(now);
-  const updated = compareAndSet(row, expectedEpoch ?? row.epoch, next, now);
-  if (updated.refused) return updated;
-  const gate = readRelayEnv(env);
-  const response = await fetchImpl(`${gate.url}/rest/v1/mind_failover_ownership?id=eq.1`, {
-    method: "POST",
-    headers: {
-      apikey: gate.key,
-      Authorization: `Bearer ${gate.key}`,
-      "Content-Type": "application/json",
-      Prefer: "resolution=merge-duplicates",
-    },
-    body: JSON.stringify({ id: 1, ...updated }),
-  });
-  if (!response.ok) return { refused: "The ownership row was not written. Stop outbound." };
-  return updated;
+  if (current?.refused) return current;
+  return persistOwnership(fetchImpl, readRelayEnv(env), current, expectedEpoch, next, now);
 }
 
 export async function pcBeat(fetchImpl, env, now, serverNow, health, goingDown = false) {
@@ -52,7 +86,7 @@ export async function pcBeat(fetchImpl, env, now, serverNow, health, goingDown =
   }
   const renewed = renewLease(row, "pc", now);
   if (renewed.stopped) return { ...renewed, beat };
-  const written = await writeOwnership(fetchImpl, env, row.epoch, { owner: "pc", lease_expires: now + 60000, goingDown }, now);
+  const written = await persistOwnership(fetchImpl, gate, current, row.epoch, { owner: "pc", lease_expires: now + 60000, goingDown }, now);
   if (written.refused) return { stopped: true, ...written, beat };
   return { stopped: false, beat, row: written };
 }

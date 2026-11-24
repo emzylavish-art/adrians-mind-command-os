@@ -1,14 +1,16 @@
 import assert from "node:assert/strict";
-import { mkdtempSync } from "node:fs";
+import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import test from "node:test";
-import { checkBoot, readBootProbe, runChecks } from "./windows-acceptance.mjs";
+import { checkBoot, checkCoexistence, readBootProbe, runChecks } from "./windows-acceptance.mjs";
 
-test("the script passes only the checks it can see and fails the Windows-only ones", () => {
+test("portable helper evidence leaves each installed acceptance check blocked", (t) => {
+  const root = mkdtempSync(path.join(tmpdir(), "adrian-agents-accept-"));
+  t.after(() => rmSync(root, { recursive: true, force: true }));
   const checks = runChecks({
     platform: "linux",
-    root: mkdtempSync(path.join(tmpdir(), "adrian-agents-accept-")),
+    root,
     taskRegistered: false,
     processRunning: false,
     paperclipRunning: false,
@@ -18,18 +20,32 @@ test("the script passes only the checks it can see and fails the Windows-only on
     memoryCeilingMb: 1024,
   });
   const byName = Object.fromEntries(checks.map((check) => [check.name, check.status]));
-  assert.equal(byName.boot, "FAIL");
-  assert.equal(byName.approval, "PASS");
-  assert.equal(byName["brain-swap"], "PASS");
-  assert.equal(byName.coexistence, "BLOCKED");
-  assert.equal(byName["delete-refusal"], "PASS");
-  assert.equal(checks.some((check) => check.status === "FAIL"), true);
+  assert.deepEqual(byName, {
+    boot: "BLOCKED",
+    approval: "BLOCKED",
+    "brain-swap": "BLOCKED",
+    coexistence: "BLOCKED",
+    "delete-refusal": "BLOCKED",
+  });
 });
 
-test("boot passes only when the login task and process are both present", () => {
-  const probe = readBootProbe("TaskName: AdriansMind-Agents\nnode.exe adrian-agents");
-  assert.equal(probe.taskRegistered, true);
-  assert.equal(probe.processRunning, true);
-  assert.equal(checkBoot({ platform: "win32", ...probe }).status, "PASS");
-  assert.equal(checkBoot({ platform: "linux", ...probe }).status, "FAIL");
+test("boot fails for missing components and requires job evidence beyond process presence", () => {
+  const runtime = String.raw`C:\Adrian Mind\desktop\engines\adrian-agents\runtime.mjs`;
+  const command = `"C:\\Program Files\\nodejs\\node.exe" "${runtime}"`;
+  const probe = readBootProbe(true, command, runtime);
+  assert.equal(checkBoot({ platform: "win32", ...probe }).status, "BLOCKED");
+  assert.equal(checkBoot({ platform: "linux", ...probe }).status, "BLOCKED");
+  assert.equal(checkBoot({ platform: "win32", ...readBootProbe(null, command, runtime) }).status, "BLOCKED");
+  assert.equal(checkBoot({ platform: "win32", ...readBootProbe(true, null, runtime) }).status, "BLOCKED");
+  for (const sample of ["node.exe", 'node.exe "C:\\other\\runtime.mjs"', command + ".old", ""]) {
+    assert.equal(checkBoot({ platform: "win32", ...readBootProbe(true, sample, runtime) }).status, "FAIL");
+  }
+  assert.equal(checkBoot({ platform: "win32", ...readBootProbe(false, command, runtime) }).status, "FAIL");
+});
+
+
+test("configuration limits and reported process presence do not prove measured coexistence", () => {
+  const env = { platform: "win32", paperclipRunning: true, runnerRunning: true, tradingLoopRunning: true, workerThreads: 2, memoryCeilingMb: 1024 };
+  assert.equal(checkCoexistence(env).status, "BLOCKED");
+  assert.equal(checkCoexistence({ ...env, workerThreads: 3 }).status, "FAIL");
 });

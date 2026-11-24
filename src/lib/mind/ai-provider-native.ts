@@ -3,11 +3,14 @@
  * All inputs are server-owned and credentials are never echoed into results.
  * Host and HTTPS/DNS validation happens in requestProvider() before dispatch.
  */
+import { reportedModel } from "./stream.ts";
+import { OPENROUTER_FREE_ROUTING } from "./provider-catalog.ts";
+
 export type AiWireProtocol = "openai" | "anthropic" | "gemini";
 export type TextTurn = { role: "system" | "user" | "assistant"; content: string };
 export type ProviderRequest = { path: string; headers: Record<string, string>; body: string };
 export type ParsedAnswer =
-  | { ok: true; text: string; usage: { prompt_tokens?: number; completion_tokens?: number } | null }
+  | { ok: true; text: string; model: string; usage: { prompt_tokens?: number; completion_tokens?: number } | null }
   | { ok: false; error: string };
 
 export function providerWireProtocol(baseUrl: string): AiWireProtocol {
@@ -27,7 +30,7 @@ export function modelDiscoveryHeaders(kind: AiWireProtocol, key: string): Record
 }
 
 export function buildProviderChatRequest(
-  kind: AiWireProtocol, key: string, model: string, turns: TextTurn[],
+  kind: AiWireProtocol, key: string, model: string, turns: TextTurn[], freeOpenRouter = false,
 ): ProviderRequest {
   const messages = turns.slice(-15);
   const systemText = messages.filter((m) => m.role === "system").map((m) => m.content).join("\n\n");
@@ -61,7 +64,7 @@ export function buildProviderChatRequest(
   return {
     path: "chat/completions",
     headers: { ...modelDiscoveryHeaders(kind, key), "content-type": "application/json" },
-    body: JSON.stringify({ model, messages, stream: false }),
+    body: JSON.stringify({ model, messages, stream: false, ...(freeOpenRouter ? { provider: OPENROUTER_FREE_ROUTING } : {}) }),
   };
 }
 
@@ -116,5 +119,5 @@ export function parseProviderText(kind: AiWireProtocol, raw: string): ParsedAnsw
     usage = usagePair(u.prompt_tokens, u.completion_tokens);
   }
   if (!text) return { ok: false, error: "The provider returned no assistant text." };
-  return { ok: true, text, usage };
+  return { ok: true, text, model: reportedModel(kind === "gemini" ? body.modelVersion : body.model), usage };
 }

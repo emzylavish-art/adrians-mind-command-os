@@ -1,7 +1,8 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { requireUserId } from "@/lib/auth/verify.server";
+import { requireUserId, UnauthorizedError } from "@/lib/auth/verify.server";
 import { assertSameOrigin } from "@/lib/mind/connectors/oauth-csrf";
 import { allowMindRequest } from "@/lib/mind/limits";
+import { readHaltState } from "@/lib/mind/halt.server";
 import {
   listAiProviders, saveAiProvider, deleteAiProvider, discoverAiModels, setAiProviderModel,
 } from "@/lib/mind/ai-provider-config.server";
@@ -25,8 +26,11 @@ export const Route = createFileRoute("/api/mind/providers")({
         try {
           const userId = await owner(request);
           return reply({ ok: true, providers: await listAiProviders(userId) });
-        } catch {
-          return reply({ ok: false, error: "Sign in or a working database connection is required." }, 503);
+        } catch (error) {
+          if (error instanceof UnauthorizedError) {
+            return reply({ ok: false, error: "Sign in is required." }, 401);
+          }
+          return reply({ ok: false, error: "Provider settings are unavailable. Try again shortly." }, 503);
         }
       },
       POST: async ({ request }) => {
@@ -47,6 +51,11 @@ export const Route = createFileRoute("/api/mind/providers")({
           data = parsed as Record<string, unknown>;
         } catch { return reply({ ok: false, error: "Invalid JSON input." }, 400); }
         try {
+          if (data.action === "save" || data.action === "discover") {
+            const halt = await readHaltState(userId);
+            if (halt === "unknown") return reply({ ok: false, error: "Emergency stop status is unavailable. Try again when storage is reachable." }, 503);
+            if (halt === "on") return reply({ ok: false, error: "Emergency stop is on. Model discovery is paused." }, 423);
+          }
           if (data.action === "save") {
             const saved = await saveAiProvider(userId, data);
             if (!saved.ok) return reply(saved, 400);

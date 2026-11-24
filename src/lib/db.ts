@@ -40,6 +40,7 @@ export interface Sql {
     text: string,
     params?: unknown[],
   ): Promise<T[]>;
+  transaction?: <T>(fn: (tx: Sql) => Promise<T>) => Promise<T>;
   /** Optional non-result exec (PGLite). */
   exec?: (text: string) => Promise<void>;
   /** Actual backend for this client (pglite_query uses this, not env sniffing). */
@@ -133,6 +134,17 @@ function createNeonSql(): Promise<Sql> {
         client.release();
       }
     };
+    sql.transaction = (fn) => sql.withExclusiveClient!(async (client) => {
+      await client.query("BEGIN");
+      try {
+        const result = await fn(toSql(client.query));
+        await client.query("COMMIT");
+        return result;
+      } catch (error) {
+        await client.query("ROLLBACK");
+        throw error;
+      }
+    });
     return sql;
   })().catch((err) => {
     globalRef.__pgSqlPromise__ = undefined;
@@ -224,6 +236,9 @@ async function createPgliteSql(): Promise<Sql> {
     const result = await pg.query<T>(text, params);
     return result.rows;
   });
+  sql.transaction = (fn) => pg.transaction((tx) =>
+    fn(toSql(async <T>(text: string, params: unknown[]) => (await tx.query<T>(text, params)).rows)),
+  );
   sql.engine = "pglite";
   sql.exec = async (text: string) => {
     await pg.exec(text);

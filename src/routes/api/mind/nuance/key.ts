@@ -11,22 +11,17 @@ function reply(data: unknown, status = 200): Response {
   });
 }
 
-function loopback(request: Request): boolean {
-  const host = (request.headers.get("host") ?? "").split(":")[0]?.toLowerCase();
-  return host === "127.0.0.1" || host === "localhost" || host === "::1";
-}
-
 export const Route = createFileRoute("/api/mind/nuance/key")({
   server: {
     handlers: {
       POST: async ({ request }) => {
         const origin = assertSameOrigin(request);
         if (!origin.ok) return reply({ ok: false, error: origin.error }, 403);
-        let user = "dev-user";
+        let user: string;
         try {
-          user = await requireUserId();
+          user = await requireUserId(request.headers.get("authorization")?.replace(/^Bearer\s+/i, "") || undefined);
         } catch {
-          if (!loopback(request)) return reply({ ok: false, error: "Sign in is required." }, 401);
+          return reply({ ok: false, error: "Sign in is required." }, 401);
         }
         if (!allowMindRequest("nuance_key", user, 5)) {
           return reply({ ok: false, error: "Too many key changes. Please wait." }, 429);

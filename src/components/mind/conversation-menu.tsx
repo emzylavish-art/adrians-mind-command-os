@@ -86,9 +86,14 @@ export function ActionOverlay({
   children: ReactNode;
 }) {
   const panel = useRef<HTMLDivElement>(null);
+  const opener = useRef<HTMLElement | null>(null);
   useEffect(() => {
     const node = panel.current;
     if (!node) return;
+    const focused = document.activeElement;
+    if (!opener.current && focused instanceof HTMLElement && focused !== document.body && !node.contains(focused)) {
+      opener.current = focused;
+    }
     const reduce = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
     finishMenu(node);
     if (reduce) node.style.removeProperty("animation");
@@ -96,7 +101,12 @@ export function ActionOverlay({
     placeCard(node);
     node.querySelector<HTMLElement>("button, input, select")?.focus();
     const onKey = (event: KeyboardEvent) => {
-      if (event.key === "Escape") onClose();
+      if (event.key !== "Escape" || !node.contains(document.activeElement)) return;
+      event.stopPropagation();
+      onClose();
+      requestAnimationFrame(() => {
+        if (opener.current?.isConnected) opener.current.focus({ preventScroll: true });
+      });
     };
     document.addEventListener("keydown", onKey);
     return () => document.removeEventListener("keydown", onKey);

@@ -1,3 +1,4 @@
+import { haltIsOn } from "../halt.server.ts";
 import { execFile } from "node:child_process";
 import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
@@ -39,6 +40,8 @@ export async function handleVoiceCall(request: Request): Promise<Response> {
   if (request.method !== "POST") return json({ ok: false, error: "Method not allowed." }, 405);
   const origin = assertSameOrigin(request);
   if (!origin.ok) return json({ ok: false, error: origin.error }, 403);
+  const stopped = () => json({ ok: false, error: "Emergency stop is on or unavailable. Voice call stopped." }, 403);
+  if (await haltIsOn(userId)) return stopped();
   const key = resolveVoiceApiKey();
   if (!key) return json({ ok: false, error: "No voice key is configured. Nothing was spoken." }, 400);
   const caller = await speakWithFallback({ text: "Say only the word cedarline.", voiceId: "eve", xaiKey: key });
@@ -53,9 +56,11 @@ export async function handleVoiceCall(request: Request): Promise<Response> {
   } catch {
     // The speech file can still be transcribed as mpeg when conversion is unavailable.
   }
+  if (await haltIsOn(userId)) return stopped();
   const heard = await transcribeWithFallback({ bytes: audio, xaiKey: key, filename, mime });
   if (!heard.ok) return json({ ok: false, error: heard.error }, 502);
   const chatKey = resolveXaiInferenceApiKey() || key;
+  if (await haltIsOn(userId)) return stopped();
   const chat = await directChatWithFallback({
     xaiKey: chatKey,
     xaiModel: "grok-4.20-0309-non-reasoning",
@@ -66,6 +71,7 @@ export async function handleVoiceCall(request: Request): Promise<Response> {
   });
   if (!chat.ok) return json({ ok: false, error: chat.error, heard: heard.text }, 502);
   const reply = chat.text.replace(/[^A-Za-z0-9-]/g, "").slice(0, 40) || chat.text.slice(0, 40);
+  if (await haltIsOn(userId)) return stopped();
   const spoken = await speakWithFallback({ text: reply, voiceId: "eve", xaiKey: key });
   if (!spoken.ok) return json({ ok: false, error: spoken.error, heard: heard.text, reply }, 502);
   await recordReceipt(userId, { state: "EXECUTED", action: "speak-call", detail: `Heard and spoke a reply. Provider ${spoken.provider}.` });

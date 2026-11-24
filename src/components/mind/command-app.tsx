@@ -1,4 +1,4 @@
-import { lazy, Suspense, useEffect, useMemo, useRef, useState, type KeyboardEvent as ReactKeyboardEvent, type MouseEvent as ReactMouseEvent, type ReactNode, useSyncExternalStore } from "react";
+import { lazy, Suspense, useEffect, useLayoutEffect, useMemo, useRef, useState, type KeyboardEvent as ReactKeyboardEvent, type MouseEvent as ReactMouseEvent, type ReactNode, useSyncExternalStore } from "react";
 import { Link, useRouter } from "@tanstack/react-router";
 import "./command-drawer-nav.css";
 import "./command-search.css";
@@ -59,6 +59,7 @@ import { reaDoctor, reaInspect } from "@/lib/mind/rea";
 import { CAPABILITIES, isVerifiedCapability, type CapabilityStatus } from "@/lib/mind/registry";
 import { REQUIREMENTS, requirementCounts } from "@/lib/mind/requirements";
 import { consumeMindTurn, shouldStoreReply, STOPPED_REPLY } from "@/lib/mind/live-turn";
+import { boundAbortSignal } from "@/lib/mind/turn-timeouts";
 import { analyzeImageFile, createVoiceClientSecret, mcpCommand, mcpList, mcpRemove, mcpRegistryList, mcpRegistryToggle, mcpSave, mindStatus, notionCommand, notionDisconnect, notionStatus, recordAgentExecution, searchWeb, setExecutionHalt, speakText } from "@/lib/mind/server";
 import { SafeKeysPanel } from "@/components/mind/safe-keys-panel";
 import { AiProviderConnections } from "@/components/mind/ai-provider-connections";
@@ -198,7 +199,7 @@ import { paletteHits } from "@/lib/mind/palette";
 import { paletteKeyAction } from "@/lib/mind/palette-keys";
 import { runLocalPlan } from "@/lib/mind/local-tools";
 import { greeting } from "@/lib/mind/greeting";
-import { relevantMemories } from "@/lib/mind/memory";
+import { rankMemories, relevantMemories } from "@/lib/mind/memory";
 import { databaseMode } from "@/lib/mind/persistence";
 import { runAgentTurn, type AgentTool, type ToolEvent } from "@/lib/mind/orchestrator";
 import {
@@ -216,7 +217,7 @@ import {
 import { describeFile } from "@/lib/mind/files-read";
 import { extractPdfText } from "@/lib/mind/pdf-text";
 import { ModelTierChip } from "@/components/mind/model-tier-chip";
-import { AnchoredCard, MenuCluster, MenuGroup, MenuMotion, MenuShelf, finishMenu, menuChip, pinComposerMenu, pinShelf } from "@/components/mind/menu-material";
+import { AnchoredCard, MenuCluster, MenuGroup, MenuMotion, MenuShelf, ComposerMore, finishMenu, menuChip, pinShelf } from "@/components/mind/menu-material";
 import { MODEL_TIERS, type ConcreteModelTier, type ModelTier } from "@/lib/mind/model-tiers";
 import { chosenProvider, failover, providerChoicesWithKeys } from "@/lib/mind/providers";
 import { discoveredCapabilities, mcpToolCallText } from "@/lib/mind/provider-catalog";
@@ -243,6 +244,7 @@ import { type ModuleSuggestion } from "@/lib/intent/module-suggestions";
 import { refreshSkills } from "@/lib/mind/skill-refresh";
 import { exportChat, prepareRegenerate, prepareRetry, renameChat, reviseUserTurn } from "@/lib/mind/transcript";
 import { replyActions, replyHasSources } from "@/lib/mind/reply-actions";
+import { useComposerDraft } from "@/lib/mind/use-composer-draft";
 import { useMindWorkspace } from "@/lib/mind/use-mind-workspace";
 import { useCurrentUser } from "@/lib/auth/use-current-user";
 import { COMPOSER_MODES, effortForModelTier, effortModelTier, loadComposerEffort, resolveSendPath, saveComposerEffort, type ComposerModeId } from "@/lib/mind/composer-modes";
@@ -289,8 +291,12 @@ import {
 import { McpListStatusRows, loadMcpList, onceListRetry, type McpListServer, type McpListState } from "@/lib/mind/mcp-list-state";
 import { previewPathPrefix } from "@/lib/preview-path-prefix";
 import {
+  PROJECT_NAME_MAX,
   addLocalFile,
   addMemory,
+  emptyWorkspace,
+  deleteMemory,
+  workspaceForChat,
   addProject,
   clearedBrowserCopy,
   createChat,
@@ -298,6 +304,7 @@ import {
   loadWorkspace,
   memoriesForChat,
   mergeWorkspace,
+  replaceFromArchive,
   packWorkspace,
   pushAudit,
   pushUsage,
@@ -342,18 +349,7 @@ type Pending = {
   run: () => void;
 };
 
-const EXTERNAL = [
-  {
-    name: "Oak Bridge Capital",
-    detail: "Separate product. This app does not open, edit, or store it.",
-    mark: "/brand/marks/oak-bridge.png",
-  },
-  {
-    name: "BridgePoint",
-    detail: "Separate product. This app does not open, edit, or store it.",
-    mark: "/brand/marks/bridgepoint.png",
-  },
-];
+const EMPTY_DRAFT_IMAGES: ImageAttachment[] = [];
 
 type Staged = { name: string; text: string };
 
@@ -384,554 +380,11 @@ function pinPageScroller(node: HTMLDivElement | null) {
   node.style.setProperty("overflow-y", "auto", "important");
   const bar = document.querySelector("[data-testid='handy-dictation']");
   const gap = bar instanceof HTMLElement ? Math.ceil(bar.getBoundingClientRect().height) + 16 : 72;
-  node.style.setProperty("padding-bottom", `${gap}px`, "important");
+  node.style.setProperty("padding-bottom", `var(--page-scroll-bottom, ${gap}px)`, "important");
 }
 function showRailLabel(node: HTMLElement | null) {
   node?.style.setProperty("display", "block", "important");
 }
-function liftHomeComposer(node: HTMLElement | null) {
-  if (!node) return;
-  node.style.setProperty("position", "relative", "important");
-  node.style.setProperty("bottom", "auto", "important");
-  node.style.setProperty("left", "0", "important");
-  node.style.setProperty("right", "auto", "important");
-  node.style.setProperty("z-index", "1", "important");
-  node.style.setProperty("width", "100%", "important");
-  node.style.setProperty("max-width", "100%", "important");
-  node.style.setProperty("min-width", "0", "important");
-  node.style.setProperty("overflow", "hidden", "important");
-  node.style.setProperty("transform", "none", "important");
-  node.style.setProperty("box-sizing", "border-box", "important");
-  keepComposerInside();
-}
-function liftHomeStack(node: HTMLElement | null) {
-  node?.style.setProperty("justify-content", "flex-start", "important");
-  if (!(node instanceof HTMLElement)) return;
-  node.style.setProperty("width", "100%", "important");
-  node.style.setProperty("max-width", "none", "important");
-  const masthead = node.querySelector(".masthead");
-  if (masthead instanceof HTMLElement) {
-    masthead.style.setProperty("width", "100%", "important");
-    masthead.style.setProperty("max-width", "none", "important");
-    masthead.style.setProperty("align-self", "stretch", "important");
-  }
-  node.querySelectorAll(".masthead, .masthead > div, [aria-label='Recent'], [data-testid='conversation-sections'], [data-testid='conversation-sections'] section").forEach((child) => {
-    if (child instanceof HTMLElement) {
-      child.style.setProperty("width", "100%", "important");
-      child.style.setProperty("max-width", "none", "important");
-    }
-  });
-}
-function stackLibrary(node: HTMLElement | null) {
-  node?.style.setProperty("grid-template-columns", "minmax(0, 1fr)", "important");
-}
-function keepGroupRow(node: HTMLElement | null) {
-  if (!node) return;
-  node.style.setProperty("align-self", "start", "important");
-  node.style.setProperty("align-items", "flex-start", "important");
-  node.style.setProperty("height", "auto", "important");
-}
-
-function showLatestReply() {
-  const scroller = document.querySelector(".thread-shell .flex.min-w-0.flex-1.flex-col > .min-h-0.flex-1");
-  if (!(scroller instanceof HTMLElement)) return;
-  const distance = scroller.scrollHeight - scroller.scrollTop - scroller.clientHeight;
-  if (distance > 96) return;
-  scroller.scrollTop = scroller.scrollHeight;
-}
-
-function keepCueClear() {
-  const shell = document.querySelector(".thread-shell");
-  const section = document.querySelector(".thread-shell > section");
-  const scroller = document.querySelector(".thread-shell section > .min-h-0.flex-1");
-  const cue = document.querySelector("[data-testid='message-cue']");
-  const page = shell?.parentElement;
-  if (page instanceof HTMLElement) {
-    page.style.setProperty("display", "flex", "important");
-    page.style.setProperty("flex-direction", "column", "important");
-  }
-  if (shell instanceof HTMLElement) {
-    shell.style.setProperty("flex", "1 1 auto", "important");
-    shell.style.setProperty("height", "auto", "important");
-    shell.style.setProperty("min-height", "0", "important");
-  }
-  if (section instanceof HTMLElement) {
-    section.style.setProperty("display", "grid", "important");
-    section.style.setProperty("grid-template-rows", "auto minmax(0, 1fr) auto", "important");
-    section.style.setProperty("min-height", "0", "important");
-    section.style.setProperty("overflow", "hidden", "important");
-  }
-  if (scroller instanceof HTMLElement) {
-    scroller.style.setProperty("min-height", "0", "important");
-    scroller.style.setProperty("overflow", "auto", "important");
-  }
-  if (cue instanceof HTMLElement) {
-    cue.style.setProperty("position", "relative", "important");
-    cue.style.setProperty("z-index", "2", "important");
-    cue.style.setProperty("background", "#121214", "important");
-    cue.style.setProperty("margin", "0 0.75rem 0.75rem", "important");
-  }
-}
-
-function keepComposerInside() {
-  const home = document.querySelector(".gpt-home");
-  if (home instanceof HTMLElement) {
-    home.style.setProperty("width", "100%", "important");
-    home.style.setProperty("max-width", "100%", "important");
-    home.style.setProperty("min-width", "0", "important");
-    home.style.setProperty("overflow-x", "hidden", "important");
-    home.style.setProperty("box-sizing", "border-box", "important");
-    home.style.setProperty("display", "flex", "important");
-    home.style.setProperty("flex-direction", "column", "important");
-    home.style.setProperty("flex", "1 1 auto", "important");
-    home.style.setProperty("height", "auto", "important");
-    home.style.setProperty("min-height", "100%", "important");
-    home.style.setProperty("justify-content", "flex-start", "important");
-    const masthead = home.querySelector(".masthead");
-    if (masthead instanceof HTMLElement) {
-      masthead.style.setProperty("display", "flex", "important");
-      masthead.style.setProperty("flex-direction", "column", "important");
-      masthead.style.setProperty("align-items", "stretch", "important");
-      masthead.style.setProperty("height", "auto", "important");
-      masthead.style.setProperty("min-height", "min-content", "important");
-      masthead.style.setProperty("flex", "0 0 auto", "important");
-      masthead.style.setProperty("overflow", "visible", "important");
-      masthead.style.setProperty("width", "100%", "important");
-    }
-    if (home.parentElement instanceof HTMLElement) {
-      home.parentElement.style.setProperty("overflow-x", "hidden", "important");
-      home.parentElement.scrollLeft = 0;
-    }
-  }
-  document.querySelectorAll(".gpt-home form, form.thread-composer, section.composer-dock, [data-composer='floating']").forEach((node) => {
-    if (!(node instanceof HTMLElement)) return;
-    const inThread = node.classList.contains("thread-composer") && document.querySelector(".shell")?.getAttribute("data-view") === "chat";
-    const wide = window.innerWidth >= 768;
-    const pinPhone = !inThread && !wide && node.matches("[data-composer='floating']");
-    node.style.setProperty("position", inThread || pinPhone ? "fixed" : "relative", "important");
-    node.style.setProperty("left", inThread ? (wide ? "16.5rem" : "0") : pinPhone ? "0.75rem" : "0", "important");
-    node.style.setProperty("right", inThread || pinPhone ? (pinPhone ? "0.75rem" : "0") : "auto", "important");
-    if (pinPhone) {
-      node.style.setProperty("bottom", "0.75rem", "important");
-      node.style.setProperty("width", "auto", "important");
-      node.style.setProperty("max-width", "none", "important");
-      node.style.setProperty("z-index", "30", "important");
-    }
-    if (!inThread && wide && node.matches("[data-composer='floating']")) {
-      node.style.setProperty("margin-top", "auto", "important");
-    }
-    if (inThread) {
-      node.style.setProperty("bottom", "0", "important");
-      node.style.setProperty("margin", "0", "important");
-      node.style.setProperty("width", "auto", "important");
-      node.style.setProperty("z-index", "20", "important");
-    }
-    node.style.setProperty("transform", "none", "important");
-    if (!inThread && !pinPhone) node.style.setProperty("width", "100%", "important");
-    if (!pinPhone) node.style.setProperty("max-width", "100%", "important");
-    node.style.setProperty("min-width", "0", "important");
-    node.style.setProperty("margin-left", "0", "important");
-    node.style.setProperty("box-sizing", "border-box", "important");
-    node.style.setProperty("overflow", "visible", "important");
-  });
-  document.querySelectorAll(".gpt-home form, form.thread-composer").forEach((node) => {
-    if (!(node instanceof HTMLElement)) return;
-    node.style.setProperty("display", "flex", "important");
-    node.style.setProperty("flex-direction", "column", "important");
-    node.style.setProperty("align-items", "stretch", "important");
-    node.style.setProperty("gap", "0.45rem", "important");
-  });
-  document.querySelectorAll(".shell[data-view='chat'], .shell[data-view='chat'] .main-stage, .thread-shell, .thread-shell > section").forEach((node) => {
-    if (!(node instanceof HTMLElement)) return;
-    node.style.setProperty("min-height", "0", "important");
-    node.style.setProperty("height", "100%", "important");
-  });
-  document.querySelectorAll(".thread-shell section > .min-h-0.flex-1").forEach((node) => {
-    if (!(node instanceof HTMLElement)) return;
-    node.style.setProperty("flex", "1 1 auto", "important");
-    node.style.setProperty("padding-bottom", "7.5rem", "important");
-  });
-  document.querySelectorAll(".composer-toolbar").forEach((node) => {
-    if (!(node instanceof HTMLElement)) return;
-    node.style.setProperty("display", "flex", "important");
-    node.style.setProperty("flex-wrap", "wrap", "important");
-    node.style.setProperty("align-items", "center", "important");
-    node.style.setProperty("width", "100%", "important");
-    node.style.setProperty("max-width", "100%", "important");
-    node.style.setProperty("min-width", "0", "important");
-    node.style.setProperty("height", "auto", "important");
-    node.style.setProperty("max-height", "none", "important");
-    node.style.setProperty("align-content", "flex-start", "important");
-    node.style.setProperty("overflow", "visible", "important");
-    node.style.setProperty("position", "relative", "important");
-    node.style.setProperty("left", "0", "important");
-    node.style.setProperty("box-sizing", "border-box", "important");
-    node.style.setProperty("order", "2", "important");
-  });
-  document.querySelectorAll("[data-testid='composer-mic-dictate']").forEach((node) => {
-    if (!(node instanceof HTMLElement)) return;
-    node.style.setProperty("position", "relative", "important");
-    node.style.setProperty("inset", "auto", "important");
-    node.style.setProperty("transform", "none", "important");
-    node.style.setProperty("margin", "0", "important");
-  });
-  document.querySelectorAll(".gpt-home textarea, form.thread-composer input, form.thread-composer textarea").forEach((node) => {
-    if (!(node instanceof HTMLElement)) return;
-    node.style.setProperty("order", "1", "important");
-    node.style.setProperty("width", "100%", "important");
-    node.style.setProperty("max-width", "100%", "important");
-    node.style.setProperty("min-width", "0", "important");
-    node.style.setProperty("flex", "0 1 auto", "important");
-    node.style.setProperty("box-sizing", "border-box", "important");
-  });
-  document.querySelectorAll("[data-testid='composer-effort']").forEach((node) => {
-    if (!(node instanceof HTMLElement)) return;
-    node.style.setProperty("width", "100%", "important");
-    node.style.setProperty("max-width", "100%", "important");
-    node.style.setProperty("min-width", "0", "important");
-    node.style.setProperty("height", "auto", "important");
-    node.style.setProperty("max-height", "none", "important");
-    node.style.setProperty("flex", "1 1 100%", "important");
-    node.style.setProperty("overflow", "visible", "important");
-    node.style.setProperty("box-sizing", "border-box", "important");
-  });
-  document.querySelectorAll("[data-testid='composer-effort'] .flex").forEach((node) => {
-    if (!(node instanceof HTMLElement)) return;
-    node.style.setProperty("flex-wrap", "wrap", "important");
-    node.style.setProperty("width", "100%", "important");
-    node.style.setProperty("max-width", "100%", "important");
-    node.style.setProperty("min-width", "0", "important");
-    node.style.setProperty("height", "auto", "important");
-    node.style.setProperty("max-height", "none", "important");
-    node.style.setProperty("overflow", "visible", "important");
-  });
-  document.querySelectorAll("[data-testid='composer-effort'] p").forEach((node) => {
-    if (!(node instanceof HTMLElement)) return;
-    node.style.setProperty("position", "relative", "important");
-    node.style.setProperty("clear", "both", "important");
-    node.style.setProperty("width", "100%", "important");
-    node.style.setProperty("max-width", "100%", "important");
-    node.style.setProperty("margin", "0.35rem 0 0", "important");
-  });
-  document.querySelectorAll(".composer-toolbar > button, .composer-toolbar > label, .composer-toolbar > details").forEach((node) => {
-    if (!(node instanceof HTMLElement)) return;
-    if (node instanceof HTMLDetailsElement && node.classList.contains("composer-more") && node.open) return;
-    node.style.setProperty("max-width", "100%", "important");
-    node.style.setProperty("min-width", "max-content", "important");
-    node.style.setProperty("flex", "0 0 auto", "important");
-    node.style.setProperty("width", "auto", "important");
-    node.style.setProperty("height", "auto", "important");
-    node.style.setProperty("min-height", "2.75rem", "important");
-    node.style.setProperty("font-size", "0.85rem", "important");
-    node.style.setProperty("overflow", "visible", "important");
-    if (window.matchMedia("(max-width: 767px)").matches) node.style.removeProperty("display");
-    else node.style.setProperty("display", "inline-flex", "important");
-    node.style.setProperty("align-items", "center", "important");
-    node.style.setProperty("white-space", "normal", "important");
-  });
-  document.querySelectorAll("[data-testid='composer-mic-dictate'], .composer-send, .gpt-voice").forEach((node) => {
-    if (!(node instanceof HTMLElement)) return;
-    node.style.setProperty("display", "inline-flex", "important");
-  });
-  document.querySelectorAll(".gpt-home .composer-toolbar > button:first-child").forEach((node) => {
-    if (!(node instanceof HTMLElement)) return;
-    node.style.setProperty("display", "inline-flex", "important");
-    node.style.setProperty("width", "max-content", "important");
-    node.style.setProperty("min-width", "max-content", "important");
-    node.style.setProperty("height", "auto", "important");
-    node.style.setProperty("padding", "0 0.7rem", "important");
-    node.style.setProperty("line-height", "1.2", "important");
-    node.style.setProperty("overflow", "visible", "important");
-    node.style.setProperty("font-size", "0.85rem", "important");
-  });
-  document.querySelectorAll("[data-testid='composer-effort'] button, [data-testid='composer-effort'] span").forEach((node) => {
-    if (!(node instanceof HTMLElement)) return;
-    node.style.setProperty("width", "auto", "important");
-    node.style.setProperty("height", "auto", "important");
-    node.style.setProperty("min-height", "2.25rem", "important");
-    node.style.setProperty("max-width", "100%", "important");
-    node.style.setProperty("overflow", "visible", "important");
-    node.style.setProperty("font-size", "0.8rem", "important");
-    node.style.setProperty("display", "inline-flex", "important");
-    node.style.setProperty("align-items", "center", "important");
-    node.style.setProperty("white-space", "nowrap", "important");
-    node.style.setProperty("padding", "0 0.65rem", "important");
-  });
-  const homeForm = document.querySelector(".gpt-home form");
-  const scroller = home instanceof HTMLElement ? home.parentElement : null;
-  if (homeForm instanceof HTMLElement && scroller instanceof HTMLElement) {
-    homeForm.style.setProperty("height", "auto", "important");
-    homeForm.style.setProperty("max-height", "none", "important");
-    homeForm.style.setProperty("overflow", "visible", "important");
-    const formBox = homeForm.getBoundingClientRect();
-    const scrollBox = scroller.getBoundingClientRect();
-    if (formBox.bottom > scrollBox.bottom - 8) {
-      const delta = formBox.bottom - scrollBox.bottom + 12;
-      scrollWithoutCoveringGreeting(scroller, delta);
-    }
-    if (homeForm.getBoundingClientRect().top < scrollBox.top + 8) {
-      const delta = homeForm.getBoundingClientRect().top - (scrollBox.top + 8);
-      scrollWithoutCoveringGreeting(scroller, delta);
-    }
-    const dictate = homeForm.querySelector("[data-testid='composer-mic-dictate']");
-    if (dictate instanceof HTMLElement) {
-      const box = dictate.getBoundingClientRect();
-      const limit = scroller.getBoundingClientRect().bottom - 8;
-      if (box.bottom > limit) {
-        scrollWithoutCoveringGreeting(scroller, box.bottom - limit + 12);
-      }
-    }
-  }
-  const phone = window.matchMedia("(max-width: 767px)").matches;
-  const handy = document.querySelector("[data-testid='handy-dictation']");
-  const dock = document.querySelector(".gpt-home [data-composer='floating']");
-  if (phone && handy instanceof HTMLElement && dock instanceof HTMLElement) {
-    const handyHeight = Math.ceil(handy.getBoundingClientRect().height);
-    if (handyHeight >= 44) {
-      document.querySelectorAll(".gpt-home [data-testid='composer-effort']").forEach((node) => {
-        if (node instanceof HTMLElement) node.style.setProperty("display", "none", "important");
-      });
-      const gap = Math.ceil(window.innerHeight - handy.getBoundingClientRect().top) + 8;
-      dock.style.setProperty("position", "fixed", "important");
-      dock.style.setProperty("left", "0.75rem", "important");
-      dock.style.setProperty("right", "0.75rem", "important");
-      dock.style.setProperty("width", "auto", "important");
-      dock.style.setProperty("max-width", "calc(100vw - 1.5rem)", "important");
-      dock.style.setProperty("bottom", `${gap}px`, "important");
-      dock.style.setProperty("top", "auto", "important");
-      dock.style.setProperty("margin", "0", "important");
-      dock.style.setProperty("z-index", "6", "important");
-      dock.style.setProperty("overflow", "visible", "important");
-      const button = dock.querySelector("[data-testid='composer-mic-dictate']");
-      if (button instanceof HTMLElement) button.style.setProperty("z-index", "7", "important");
-    }
-  }
-  liftDictateIntoView();
-  keepGuideClear();
-  keepBannerClear();
-  keepGuideAboveBar();
-  keepStartRowInside();
-  showVoiceWords();
-  document.querySelectorAll(".composer-more__menu").forEach((node) => {
-    if (node instanceof HTMLElement) pinComposerMenu(node);
-  });
-  if (document.querySelector(".shell")?.getAttribute("data-view") === "chat") {
-   document.querySelectorAll("form.thread-composer").forEach((node) => {
-     if (!(node instanceof HTMLElement)) return;
-     const column = node.closest("section");
-    const shell = node.closest(".thread-shell");
-    if (shell instanceof HTMLElement) {
-      shell.style.setProperty("position", "relative", "important");
-      shell.style.setProperty("width", "100%", "important");
-      shell.style.setProperty("max-width", "100%", "important");
-    }
-    node.style.setProperty("position", "relative", "important");
-      node.style.setProperty("left", "auto", "important");
-      node.style.setProperty("right", "auto", "important");
-      node.style.setProperty("bottom", "auto", "important");
-      node.style.setProperty("width", "100%", "important");
-      node.style.setProperty("max-width", "100%", "important");
-      node.style.setProperty("transform", "none", "important");
-      const thread = column?.querySelector(":scope > .overflow-auto");
-      if (thread instanceof HTMLElement) {
-        thread.style.setProperty("position", "relative", "important");
-        thread.style.setProperty("width", "100%", "important");
-        thread.style.setProperty("max-width", "100%", "important");
-        thread.style.setProperty("overflow-x", "hidden", "important");
-        thread.style.setProperty("overflow-y", "auto", "important");
-      }
-    });
-    let clear = document.getElementById("chat-no-overlap");
-    if (!clear) {
-      clear = document.createElement("style");
-      clear.id = "chat-no-overlap";
-      document.head.appendChild(clear);
-    }
-        clear.textContent = ".shell[data-view='chat'] form.thread-composer,.shell[data-view='chat'] .thread-shell section,.shell[data-view='chat'] .next-guesses{position:relative !important;left:auto !important;right:auto !important;bottom:auto !important;width:100% !important;max-width:100% !important;transform:none !important}";
-  }
-}
-
-function showVoiceWords() {
-  document.querySelectorAll(".composer-send, button[aria-label='Speak'], button[aria-label='Mic']").forEach((node) => {
-    if (!(node instanceof HTMLElement)) return;
-    node.style.setProperty("display", "inline-flex", "important");
-    node.style.setProperty("align-items", "center", "important");
-    node.style.setProperty("justify-content", "center", "important");
-    node.style.setProperty("gap", "0.35rem", "important");
-    node.style.setProperty("width", "auto", "important");
-    node.style.setProperty("min-width", "max-content", "important");
-    node.style.setProperty("max-width", "100%", "important");
-    node.style.setProperty("height", "auto", "important");
-    node.style.setProperty("min-height", "2.75rem", "important");
-    node.style.setProperty("max-height", "none", "important");
-    node.style.setProperty("padding", "0 0.75rem", "important");
-    node.style.setProperty("font-size", "0.875rem", "important");
-    node.style.setProperty("line-height", "1.2", "important");
-    node.style.setProperty("white-space", "nowrap", "important");
-    node.style.setProperty("overflow", "visible", "important");
-  });
-}
-
-function keepStartRowInside() {
-  const starters = document.querySelector(".gpt-home .gpt-starters");
-  const scroller = starters instanceof HTMLElement ? starters.closest(".overflow-auto") : null;
-  if (!(starters instanceof HTMLElement) || !(scroller instanceof HTMLElement)) return;
-  starters.style.setProperty("margin-top", "0.5rem", "important");
-  starters.style.setProperty("margin-bottom", "0.5rem", "important");
-  const scrollBox = scroller.getBoundingClientRect();
-  const bar = document.querySelector("[data-testid='handy-dictation']");
-  let limit = scrollBox.bottom - 8;
-  if (bar instanceof HTMLElement) {
-    const barTop = bar.getBoundingClientRect().top;
-    if (barTop > scrollBox.top && barTop < scrollBox.bottom) limit = Math.min(limit, barTop - 8);
-  }
-  const buttons = [...starters.querySelectorAll("button")];
-  for (const button of buttons) button.style.removeProperty("margin-top");
-  starters.querySelectorAll("p").forEach((node) => {
-    if (node instanceof HTMLElement) node.style.removeProperty("margin-top");
-  });
-  const first = buttons[0];
-  let pull = 0;
-  if (first) {
-    const box = first.getBoundingClientRect();
-    if (box.top < limit - 1 && box.bottom > limit + 1) {
-      const send = document.querySelector(".gpt-home .composer-send");
-      const room = send instanceof HTMLElement ? starters.getBoundingClientRect().top - send.getBoundingClientRect().bottom - 8 : 0;
-      pull = Math.min(Math.ceil(box.bottom - limit), Math.floor(Math.max(0, room)));
-      if (pull > 1) starters.style.setProperty("margin-top", `${-pull}px`, "important");
-    }
-  }
-  const clipped = buttons.find((button) => {
-    const box = button.getBoundingClientRect();
-    return box.top - pull < limit - 1 && box.bottom - pull > limit + 1;
-  });
-  if (clipped && clipped !== first) {
-    const push = Math.ceil(limit - (clipped.getBoundingClientRect().top - pull)) + 4;
-    if (push > 1) clipped.style.setProperty("margin-top", `${push}px`, "important");
-  }
-  const cover = bar instanceof HTMLElement ? bar.getBoundingClientRect().top : limit + 8;
-  for (const button of buttons) {
-    const box = button.getBoundingClientRect();
-    if (box.height < 8 || !(box.top < cover - 1 && box.bottom > cover + 1)) continue;
-    const current = Number.parseFloat(button.style.marginTop || "0") || 0;
-    const push = Math.ceil(cover - box.top) + 8;
-    if (push > 1) button.style.setProperty("margin-top", `${current + push}px`, "important");
-  }
-  const form = document.querySelector(".gpt-home form");
-  const floor = form instanceof HTMLElement ? form.getBoundingClientRect().bottom + 8 : scrollBox.top;
-  for (const label of starters.querySelectorAll("p")) {
-    if (!(label instanceof HTMLElement)) continue;
-    const box = label.getBoundingClientRect();
-    if (box.height < 8 || !(box.top < cover - 1 && box.bottom > cover + 1)) continue;
-    const need = Math.ceil(box.bottom - (cover - 8));
-    const room = Math.floor(box.top - floor);
-    if (need > 1 && room >= need) {
-      const current = Number.parseFloat(starters.style.marginTop || "0") || 0;
-      starters.style.setProperty("margin-top", `${current - need}px`, "important");
-      continue;
-    }
-    const current = Number.parseFloat(label.style.marginTop || "0") || 0;
-    const push = Math.ceil(cover - box.top) + 8;
-    if (push > 1) label.style.setProperty("margin-top", `${current + push}px`, "important");
-  }
-  for (const button of buttons) {
-    const box = button.getBoundingClientRect();
-    if (box.height < 8 || !(box.top < cover - 1 && box.bottom > cover + 1)) continue;
-    const current = Number.parseFloat(button.style.marginTop || "0") || 0;
-    const push = Math.ceil(cover - box.top) + 8;
-    if (push > 1) button.style.setProperty("margin-top", `${current + push}px`, "important");
-  }
-}
-
-function scrollWithoutCoveringGreeting(scroller: HTMLElement, delta: number) {
-  if (delta === 0) return;
-  if (delta > 0 && scroller.contains(document.querySelector(".gpt-home h1"))) {
-    const heading = document.querySelector(".gpt-home h1");
-    const banner = document.querySelector(".banner-error");
-    if (heading instanceof HTMLElement && banner instanceof HTMLElement) {
-      const room = heading.getBoundingClientRect().top - (banner.getBoundingClientRect().bottom + 8);
-      if (room <= 1) return;
-      delta = Math.min(delta, Math.floor(room));
-    }
-  }
-  scroller.scrollTop += delta;
-}
-
-function keepBannerClear() {
-  const heading = document.querySelector(".gpt-home h1");
-  const banner = document.querySelector(".banner-error");
-  if (!(heading instanceof HTMLElement) || !(banner instanceof HTMLElement)) return;
-  const scroller = heading.closest(".overflow-auto") ?? heading.closest(".gpt-home")?.parentElement;
-  if (!(scroller instanceof HTMLElement)) return;
-  const overlap = banner.getBoundingClientRect().bottom + 8 - heading.getBoundingClientRect().top;
-  if (overlap <= 1) return;
-  scroller.scrollTop = Math.max(0, scroller.scrollTop - Math.ceil(overlap));
-}
-
-function keepGuideAboveBar() {
-  const guide = document.querySelector("[data-testid='first-steps']");
-  if (!(guide instanceof HTMLElement)) return;
-  if (!window.matchMedia("(max-width: 767px)").matches) {
-    guide.style.removeProperty("margin-top");
-    return;
-  }
-  const dock = document.querySelector(".gpt-home [data-composer='floating']");
-  const handy = document.querySelector("[data-testid='handy-dictation']");
-  const limits: number[] = [];
-  if (dock instanceof HTMLElement) limits.push(dock.getBoundingClientRect().top);
-  if (handy instanceof HTMLElement) limits.push(handy.getBoundingClientRect().top);
-  if (limits.length === 0) return;
-  const limit = Math.min(...limits) - 8;
-  const applied = Number.parseFloat(guide.style.marginTop || "0") || 0;
-  const naturalBottom = guide.getBoundingClientRect().bottom - applied;
-  let pull = naturalBottom - limit > 1 ? Math.ceil(naturalBottom - limit) : 0;
-  const heading = document.querySelector(".gpt-home h1");
-  if (heading instanceof HTMLElement && pull > 0) {
-    const naturalTop = guide.getBoundingClientRect().top - applied;
-    const room = naturalTop - (heading.getBoundingClientRect().bottom + 8);
-    pull = Math.max(0, Math.min(pull, Math.floor(room)));
-  }
-  const next = pull > 0 ? `-${pull}px` : "";
-  if ((guide.style.marginTop || "") === next) return;
-  if (next) guide.style.setProperty("margin-top", next, "important");
-  else guide.style.removeProperty("margin-top");
-}
-
-function keepGuideClear() {
-  const guide = document.querySelector("[data-testid='first-steps']");
-  const dock = document.querySelector(".gpt-home [data-composer='floating']");
-  if (!(guide instanceof HTMLElement) || !(dock instanceof HTMLElement)) return;
-  if (!window.matchMedia("(max-width: 767px)").matches) return;
-  const handy = document.querySelector("[data-testid='handy-dictation']");
-  const scroller = [...document.querySelectorAll(".overflow-auto")].find((node) => node instanceof HTMLElement && node.contains(guide) && node.scrollHeight > node.clientHeight + 8);
-  if (!(scroller instanceof HTMLElement)) return;
-  const limit = handy instanceof HTMLElement ? handy.getBoundingClientRect().top - 8 : window.innerHeight - 8;
-  const covered = dock.getBoundingClientRect().bottom - limit;
-  if (covered > 1) scrollWithoutCoveringGreeting(scroller, Math.ceil(covered));
-  const hidden = 8 - guide.getBoundingClientRect().top;
-  if (hidden > 1) scroller.scrollTop -= Math.ceil(hidden);
-}
-
-function liftDictateIntoView() {
-  const button = document.querySelector(".gpt-home [data-testid='composer-mic-dictate']");
-  const handy = document.querySelector("[data-testid='handy-dictation']");
-  if (!(button instanceof HTMLElement) || !(handy instanceof HTMLElement)) return;
-  const limit = handy.getBoundingClientRect().top - 8;
-  let box = button.getBoundingClientRect();
-  if (box.bottom <= limit) return;
-  let node = button.parentElement;
-  while (node) {
-    const style = getComputedStyle(node);
-    const scrolls = style.overflowY === "auto" || style.overflowY === "scroll";
-    if (scrolls && node.scrollHeight > node.clientHeight + 1) {
-      scrollWithoutCoveringGreeting(node, box.bottom - limit + 4);
-      box = button.getBoundingClientRect();
-      if (box.bottom <= limit) return;
-    }
-    node = node.parentElement;
-  }
-}
-
 const NAV_GROUPS: { label: string; items: { id: View; label: string; icon: typeof Home }[] }[] = [
   {
     label: "Work",
@@ -1282,7 +735,7 @@ function shownChatTitle(chat: { title?: string; messages?: { role: string; conte
 export function CommandApp() {
   const account = useCurrentUser();
   const loopback = typeof window !== "undefined" && (window.location.hostname === "127.0.0.1" || window.location.hostname === "localhost");
-  const { ws, setWs, ready, syncNote, serverHeld, saveError, retrySave, clearStoredCopy } = useMindWorkspace(account?.id ?? (loopback ? "dev-user" : null), account?.primaryEmail ?? null);
+  const { ws, setWs, ready, syncNote, serverHeld, saveError, retrySave, clearStoredCopy } = useMindWorkspace(account?.id ?? null, account?.emailVerified ? account.primaryEmail : null);
   const router = useRouter();
   const [view, setViewState] = useState<View>("command");
   const applyingLocation = useRef(false);
@@ -1346,6 +799,8 @@ export function CommandApp() {
       return;
     }
     navWasOpenRef.current = true;
+    const previous = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
     const drawer = navDrawerRef.current;
     const phone = window.matchMedia("(max-width: 767px)").matches;
     if (drawer && phone) {
@@ -1399,6 +854,8 @@ export function CommandApp() {
     desktop.addEventListener("change", closeAtDesktop);
     document.addEventListener("keydown", onDrawerKeyDown, true);
     return () => {
+      document.body.style.overflow = previous;
+      drawer?.style.removeProperty("z-index");
       drawer?.style.removeProperty("inset");
       drawer?.style.removeProperty("width");
       drawer?.style.removeProperty("height");
@@ -1443,7 +900,13 @@ export function CommandApp() {
   const [commandMode, setCommandMode] = useState<CommandMode>("ask");
   const [defaultPersonalityId, setDefaultPersonalityId] = useState<PersonalityId>("assistant");
   const [activeId, setActiveId] = useState<string | null>(null);
-  const [draft, setDraft] = useState("");
+  const [temporary, setTemporary] = useState(false);
+  const draftOwner = account?.id ?? (loopback ? "dev-user" : null);
+  const draftChat = view === "chat" && activeId ? ws.chats.find((item) => item.id === activeId) : null;
+  const draftPrivate = draftChat?.temporary ?? temporary;
+  const draftScope = JSON.stringify([draftOwner, draftChat?.id ?? "home", draftPrivate]);
+  const persistDraft = Boolean(draftOwner) && !draftPrivate;
+  const [draft, setDraft] = useComposerDraft(draftScope, "text", "", persistDraft);
   const [busy, setBusy] = useState(false);
   const [liveText, setLiveText] = useState("");
   const turnAbort = useRef<AbortController | null>(null);
@@ -1523,8 +986,23 @@ export function CommandApp() {
   }
   const [surfaceMenu, setSurfaceMenu] = useState(false);
   const [controlsOpen, setControlsOpen] = useState(false);
+  const [chatSettingsOpen, setChatSettingsOpen] = useState(false);
+  const chatSettingsTrigger = useRef<HTMLButtonElement>(null);
+  useEffect(() => {
+    if (view !== "chat") setChatSettingsOpen(false);
+  }, [view]);
+  useEffect(() => {
+    if (!chatSettingsOpen || view !== "chat") return;
+    const dismiss = (event: KeyboardEvent) => {
+      if (event.key !== "Escape" || event.defaultPrevented) return;
+      setChatSettingsOpen(false);
+      chatSettingsTrigger.current?.focus();
+    };
+    document.addEventListener("keydown", dismiss);
+    return () => document.removeEventListener("keydown", dismiss);
+  }, [view, chatSettingsOpen]);
   const [surfaceAnchor, setSurfaceAnchor] = useState<DOMRect | null>(null);
-  const [controlsAnchor, setControlsAnchor] = useState<DOMRect | null>(null);
+  const controlsTrigger = useRef<HTMLButtonElement>(null);
   const [navMoreOpen, setNavMoreOpen] = useState(false);
   const [navMoreHold, setNavMoreHold] = useState(false);
   const [navMoreAnchor, setNavMoreAnchor] = useState<DOMRect | null>(null);
@@ -1557,14 +1035,41 @@ export function CommandApp() {
   const turnGen = useRef(0);
   const turnInFlight = useRef(false);
   const deliverStoredUser = useRef(false);
-  const cueRef = useRef<CuedMessage[]>([]);
-  const [cued, setCued] = useState<CuedMessage[]>([]);
+  type QueuedChatMessage = CuedMessage & {
+    chatId: string;
+    ownerId: string;
+    dispatch: (chat: Chat, workspace: Workspace) => Promise<boolean>;
+  };
+  const turnOwner = useRef(draftOwner);
+  turnOwner.current = draftOwner;
+  const [turnChat, setTurnChat] = useState<{ ownerId: string | null; chatId: string } | null>(null);
+  const cueRef = useRef<QueuedChatMessage[]>([]);
+  const [cued, setCued] = useState<QueuedChatMessage[]>([]);
+  useEffect(() => {
+    return () => {
+      turnGen.current++;
+      turnAbort.current?.abort();
+      turnAbort.current = null;
+      turnInFlight.current = false;
+      cueRef.current = [];
+      setCued([]);
+      setBusy(false);
+      setLiveText("");
+      setTurnChat(null);
+      setFailure(null);
+    };
+  }, [draftOwner]);
   const imagineInFlight = useRef(false);
   const videoInFlight = useRef(false);
   const mcpInFlight = useRef(false);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
-  const [failure, setFailure] = useState<{ message: string; auditId: string; retry: (() => void) | null; kind: HonestFailureKind | null; action?: RouteFailureAction } | null>(null);
+  useEffect(() => {
+    const warn = () => setNotice("This draft is available in this tab only. Browser storage could not save the latest change for reload.");
+    window.addEventListener("adrian-draft-storage-full", warn);
+    return () => window.removeEventListener("adrian-draft-storage-full", warn);
+  }, []);
+  const [failure, setFailure] = useState<{ message: string; auditId: string; retry: (() => void) | null; kind: HonestFailureKind | null; action?: RouteFailureAction; chatId?: string } | null>(null);
   const reportFailureRef = useRef<(message: string, action: string, target: string, retry: (() => void) | null) => void>(() => undefined);
   const [toolTimeline, setToolTimeline] = useState<ToolTimelineRow[]>([]);
   const [timelineTickMs, setTimelineTickMs] = useState(0);
@@ -1573,19 +1078,14 @@ export function CommandApp() {
   const [focusAuditId, setFocusAuditId] = useState<string | null>(null);
   const wsRef = useRef(ws);
   wsRef.current = ws;
-  const activeIdRef = useRef(activeId);
-  activeIdRef.current = activeId;
   const [grok, setGrok] = useState("Checking");
   const [databasePill, setDatabasePill] = useState("Checking");
   const [databaseDetail, setDatabaseDetail] = useState("The status check has not finished.");
   const [grokConfigured, setGrokConfigured] = useState<boolean | null>(null);
   const [liveProviders, setLiveProviders] = useState<Partial<Record<"openai" | "anthropic" | "gemini" | "openrouter", boolean>>>({});
+  const [selectionLoaded, setSelectionLoaded] = useState(false);
   const [providerChoice, setProviderChoice] = useState("grok");
   const [customAiProviders, setCustomAiProviders] = useState<PublicAiProvider[]>([]);
-  const customAiChoices = customAiProviders.filter((item) => item.hasKey).flatMap((item) => {
-    const models = item.models.length ? item.models : [item.defaultModel || item.label];
-    return models.filter(Boolean).map((model) => ({ id: `custom:${item.id}:${encodeURIComponent(model)}`, label: `${item.label}: ${model}`, enabled: true, reason: `Saved connection at ${item.host}.` }));
-  });
   const [modelTier, setModelTier] = useState<ModelTier>("Auto");
   const [grokModel, setGrokModel] = useState<string | null>(null);
   const [logicRoute, setLogicRoute] = useState<LogicRouteId | null>(null);
@@ -1594,6 +1094,7 @@ export function CommandApp() {
   const [consultModel, setConsultModel] = useState("");
   const [routingMode, setRoutingMode] = useState<RoutingMode>("A");
   const [routingPanel, setRoutingPanel] = useState<LogicRouteId[]>([]);
+  const ratingOwner = account?.id ? "account:" + account.id : "device:guest";
   const [ratings, setRatings] = useState<ResponseRating[]>([]);
   const [lastResolvedTier, setLastResolvedTier] = useState<ConcreteModelTier | null>(null);
   const [lastModelUsed, setLastModelUsed] = useState<string | null>(null);
@@ -1611,7 +1112,6 @@ export function CommandApp() {
   const [checkedAt, setCheckedAt] = useState("");
   const [memoryChoice, setMemoryChoice] = useState<"off" | "on">("off");
   const [autonomy, setAutonomy] = useState<Autonomy>("ask");
-  const [temporary, setTemporary] = useState(false);
   const [projectChoice, setProjectChoice] = useState("");
   const [memoryText, setMemoryText] = useState("");
   const [memoryProject, setMemoryProject] = useState("");
@@ -1649,8 +1149,8 @@ export function CommandApp() {
   const [importChecking, setImportChecking] = useState(false);
   const [importStatus, setImportStatus] = useState("");
   const [importError, setImportError] = useState<string | null>(null);
-  const [staged, setStaged] = useState<Staged | null>(null);
-  const [pendingImages, setPendingImages] = useState<ImageAttachment[]>([]);
+  const [staged, setStaged] = useComposerDraft<Staged | null>(draftScope, "file", null, persistDraft);
+  const [pendingImages, setPendingImages] = useComposerDraft<ImageAttachment[]>(draftScope, "images", EMPTY_DRAFT_IMAGES, persistDraft);
   const [cameraOpen, setCameraOpen] = useState(false);
   const [cloudPickerOpen, setCloudPickerOpen] = useState(false);
   const [driveConnected, setDriveConnected] = useState(false);
@@ -1890,12 +1390,12 @@ export function CommandApp() {
       providers: liveProviders,
       localRunner: typeof localStorage !== "undefined" && Boolean(localStorage.getItem("amcos.ollama.base")?.trim()),
     }),
-    ...customModules(customAiProviders.map((item) => ({ id: item.id, label: item.label, models: item.models, hasKey: item.hasKey }))),
+    ...customModules(customAiProviders),
   ], [grokConfigured, liveProviders, customAiProviders]);
 
   useEffect(() => {
     const storage = typeof localStorage === "undefined" ? null : localStorage;
-   const next = loadConsultModel(storage, consultModules);
+    const next = loadConsultModel(storage, consultModules);
     setConsultModel((current) => (consultModules.some((item) => item.id === current) ? current : next));
   }, [consultModules]);
 
@@ -1906,15 +1406,32 @@ export function CommandApp() {
   }
 
   function chooseModelTier(tier: ModelTier) {
-    setLogicRoute(null);
+    useProviderInChat("grok");
     setGrokModel(null);
-    if (isLogicRouteId(providerChoice)) setProviderChoice("grok");
     setModelTier(tier);
     const effort = effortForModelTier(tier);
     if (effort) {
       saveComposerEffort(typeof localStorage === "undefined" ? null : localStorage, effort);
       setComposerEffort(effort);
     }
+  }
+
+  function useProviderInChat(id: string) {
+    if (id !== providerChoice) clearFailure();
+    if (composerEffort === "orchestrator" || composerEffort === "build") chooseComposerEffort("auto");
+    chooseRoutingMode("A");
+    setLogicRoute(isLogicRouteId(id) ? id : null);
+    setProviderChoice(id);
+    if (active?.botProvider || active?.botTier) {
+      // This conversation follows the explicit selection. Other bot threads keep their defaults.
+      setWs((prev) => ({
+        ...prev,
+        chats: prev.chats.map((chat) => chat.id === active.id ? { ...chat, botProvider: undefined, botTier: undefined } : chat),
+      }));
+    }
+    setView("chat");
+    setControlsOpen(false);
+    setNavOpen(false);
   }
 
   function chooseRoutingMode(mode: RoutingMode) {
@@ -1931,6 +1448,10 @@ export function CommandApp() {
     });
   }
 
+  useEffect(() => {
+    setRatings(readRatings(localStorage, ratingOwner));
+  }, [ratingOwner]);
+
   function rateReply(messageId: string, score: 1 | 2 | 3 | 4 | 5, model: string | null) {
     const next = saveRating(typeof localStorage === "undefined" ? null : localStorage, {
       messageId,
@@ -1938,7 +1459,8 @@ export function CommandApp() {
       model,
       mode: routingMode,
       at: new Date().toISOString(),
-    });
+    }, ratingOwner);
+
     setRatings(next);
   }
 
@@ -2024,8 +1546,8 @@ export function CommandApp() {
     services: [
       { id: "notion", label: "Notion", connected: notion?.state === "connected" },
       { id: "drive", label: "Google Drive", connected: driveConnected },
-      { id: "social", label: "Adrian Social", connected: true },
-      { id: "gpt-wrapper", label: "GPT wrapper", connected: true },
+      { id: "social", label: "Adrian Social", connected: false, opensWorkspace: true },
+      { id: "gpt-wrapper", label: "GPT wrapper", connected: false, opensWorkspace: true },
     ],
   });
   const catalogModels = discovered.filter((item) => item.usable).map((item) => ({ id: item.id, label: item.label }));
@@ -2058,6 +1580,17 @@ export function CommandApp() {
   const clearedStop = useRef(false);
   const counts = requirementCounts();
   const active = ws.chats.find((chat) => chat.id === activeId) ?? null;
+  const providerOptions = [
+    ...providerChoicesWithKeys(grokConfigured, null, liveProviders),
+    ...consultModules.filter((item) => item.id === "nemotron" || item.id === "ollama")
+      .map((item) => ({ id: item.id, label: item.label, enabled: item.connected, reason: "Sending checks runner availability." })),
+    ...discovered.map((item) => ({ id: item.id, label: item.label, enabled: item.usable, reason: item.reason })),
+  ];
+  const effectiveRoute = routeForBotChat(active, { provider: providerChoice, modelTier });
+  const effectiveProvider = effectiveRoute.fromBot ? effectiveRoute.provider : logicRoute ?? effectiveRoute.provider;
+  const controlsModelLabel = effectiveProvider === "grok" ? grokModel ?? effectiveRoute.modelTier
+    : providerOptions.find((option) => option.id === effectiveProvider)?.label
+      ?? logicRoutes.find((option) => option.id === effectiveProvider)?.label ?? "Selected module unavailable";
   const storedBytes = useMemo(() => new Blob([JSON.stringify(ws)]).size, [ws]);
 
   useEffect(() => {
@@ -2080,41 +1613,20 @@ export function CommandApp() {
   }, [view]);
 
   useEffect(() => {
-    if (view !== "chat") return;
-    keepCueClear();
-    keepComposerInside();
-  }, [view, active?.id]);
-
-  useEffect(() => {
-    keepComposerInside();
-    const fit = () => keepComposerInside();
-    const observer = new ResizeObserver(fit);
-    document.querySelectorAll(".gpt-home [data-composer='floating'], [data-testid='handy-dictation'], [data-testid='first-steps'], .gpt-home, .banner-error").forEach((node) => observer.observe(node));
-    const onFocus = (event: FocusEvent) => {
-      if (event.target instanceof Element && event.target.closest("[data-testid='first-steps']")) return;
-      fit();
-    };
-    window.addEventListener("resize", fit);
-    document.addEventListener("focusin", onFocus);
-    const frame = window.requestAnimationFrame(() => window.requestAnimationFrame(fit));
-    let retries = 0;
-    const retry = window.setInterval(() => {
-      keepBannerClear();
-      keepGuideAboveBar();
-      retries += 1;
-      const heading = document.querySelector(".gpt-home h1");
-      const banner = document.querySelector(".banner-error");
-      const clear = banner instanceof HTMLElement && heading instanceof HTMLElement && heading.getBoundingClientRect().top >= banner.getBoundingClientRect().bottom + 8;
-      if (clear || retries > 24) window.clearInterval(retry);
-    }, 50);
+    const viewport = window.visualViewport;
+    if (!viewport || (view !== "chat" && view !== "command")) return;
+    const root = document.documentElement;
+    function fitViewport() {
+      if (viewport && viewport.scale === 1) root.style.setProperty("--mind-visible-height", `${Math.round(viewport.height)}px`);
+      else root.style.removeProperty("--mind-visible-height");
+    }
+    fitViewport();
+    viewport.addEventListener("resize", fitViewport);
     return () => {
-      window.cancelAnimationFrame(frame);
-      window.clearInterval(retry);
-      observer.disconnect();
-      window.removeEventListener("resize", fit);
-      document.removeEventListener("focusin", onFocus);
+      viewport.removeEventListener("resize", fitViewport);
+      root.style.removeProperty("--mind-visible-height");
     };
-  }, [view, guide.dismissed, guide.step, ws.halted]);
+  }, [view]);
 
   const timelineRunning = useMemo(() => timelineCounts(toolTimeline).running, [toolTimeline]);
   useEffect(() => {
@@ -2271,33 +1783,29 @@ export function CommandApp() {
       const stored = readSelection(localStorage);
       setProviderChoice(stored.provider);
       setModelTier(stored.modelTier);
+      setGrokModel(stored.grokModel ?? null);
       setLogicRoute(stored.logicRoute);
       const fail = localStorage.getItem("amcos.failover.v1");
       if (fail === "grok" || fail === "none") setFailoverPolicy(fail);
       setRoutingMode(readRoutingMode(localStorage));
       setRoutingPanel(readRoutingPanel(localStorage));
-      setRatings(readRatings(localStorage));
+
     } catch {
       /* a private browser can refuse storage */
+    } finally {
+      setSelectionLoaded(true);
     }
   }, []);
 
   useEffect(() => {
-    writeSelection(localStorage, { provider: providerChoice, modelTier, logicRoute });
+    if (!selectionLoaded) return;
     try {
+      writeSelection(localStorage, { provider: providerChoice, modelTier, logicRoute, grokModel: grokModel ?? undefined });
       localStorage.setItem("amcos.failover.v1", failoverPolicy);
     } catch {
       /* a private browser can refuse storage */
     }
-  }, [providerChoice, modelTier, logicRoute, failoverPolicy]);
-
-  useEffect(() => {
-    if (logicRoutes.length === 0) return;
-    const stored = logicRoutes.find((item) => item.id === logicRoute || item.id === providerChoice);
-    if (!stored || (stored.ready && !stored.credentialFallback)) return;
-    setLogicRoute(null);
-    if (isLogicRouteId(providerChoice)) setProviderChoice("grok");
-  }, [logicRoutes, logicRoute, providerChoice]);
+  }, [selectionLoaded, providerChoice, modelTier, logicRoute, grokModel, failoverPolicy]);
 
   useEffect(() => {
     const tick = () => setNow(new Date());
@@ -2693,14 +2201,15 @@ export function CommandApp() {
     });
   }
 
-  function agentTools(source: Workspace): AgentTool[] {
+  function agentTools(source: Workspace, chat: Chat): AgentTool[] {
+    const scoped = workspaceForChat(source, chat);
     const local = (id: "list_projects" | "list_chats" | "search_notes"): AgentTool => ({
       id,
       confirm: false,
       available: true,
       unavailableReason: "",
       run: (text) => {
-        const result = runLocalPlan(source, [{ id, tool: id, query: text }], { autonomy: "automatic", halted: source.halted, tokens: {} });
+        const result = runLocalPlan(scoped, [{ id, tool: id, query: text }], { autonomy: "automatic", halted: source.halted, tokens: {} });
         return { ok: true, text: result.lines.join("\n") || "No result." };
       },
     });
@@ -2718,7 +2227,7 @@ export function CommandApp() {
           const usable = matches.filter((skill) => skill.kind !== "not-installed");
           const one = usable.length === 1 ? usable[0] : null;
           const reply = one
-            ? runSkill(source, one, enabledSkills[one.id] !== false).text
+            ? runSkill(scoped, one, enabledSkills[one.id] !== false).text
             : matches.map((skill) => `${skill.name} — ${skill.kind === "not-installed" ? "Not installed" : skill.kind === "installed" ? "Installed" : "Built-in"}. ${skill.needs}`).join("\n") || "No skill matches. Nothing was run.";
           return { ok: true, text: reply };
         },
@@ -2734,10 +2243,13 @@ export function CommandApp() {
             xhr.open("POST", "/api/mind/skills", false);
             xhr.setRequestHeader("content-type", "application/json");
             xhr.send(JSON.stringify({ title: "from chat", body: text }));
-            const saved = JSON.parse(xhr.responseText) as { ok?: boolean; note?: string; error?: string };
-            return { ok: saved.ok !== false, text: saved.note || saved.error || "The skill was not saved." };
+            const proposal = JSON.parse(xhr.responseText) as { ok?: boolean; note?: string; markdown?: string; error?: string };
+            if (!proposal.ok || !proposal.markdown) {
+              return { ok: false, text: proposal.error || "Could not prepare a skill proposal." };
+            }
+            return { ok: true, text: `${proposal.note ?? "Review this skill proposal"}\n\n${proposal.markdown}` };
           } catch {
-            return { ok: false, text: "The skill was not saved. Nothing was sent off this machine." };
+            return { ok: false, text: "Could not prepare a skill proposal. Try again." };
           }
         },
       },
@@ -2796,7 +2308,7 @@ export function CommandApp() {
         sessionId: chat.id,
         text,
         modality: "chat",
-        tools: agentTools(source),
+        tools: agentTools(source, chat),
         toolId,
         nowMs: Date.now(),
         onEvent: observeToolEvent,
@@ -2816,7 +2328,7 @@ export function CommandApp() {
               sessionId: chat.id,
               text,
               modality: "chat",
-              tools: agentTools(source),
+              tools: agentTools(source, chat),
               toolId,
               confirm: grantNow,
               nowMs: Date.now(),
@@ -2833,7 +2345,7 @@ export function CommandApp() {
         });
         return true;
       }
-      const notes = chat.memory === "on" ? relevantMemories(source.memories, text) : [];
+      const notes = relevantMemories(memoriesForChat(source, chat), text);
       const reply = notes.length ? `${turn.text}\n\nSaved note: ${notes.map((item) => item.text).join(" ")}` : turn.text;
       recordToolTurn(chat, text, reply, undefined, { tool: toolId, ok: turn.status === "completed", action });
       if (turn.status === "failed" || turn.status === "timed_out" || turn.status === "cancelled") {
@@ -3015,15 +2527,17 @@ export function CommandApp() {
     }
   }
 
+  type TurnRequest = { id: string; body: ReturnType<typeof chatTurnBody> };
+
   async function deliver(
     chat: Chat,
     text: string,
     source: Workspace,
     resume = false,
     images: ImageAttachment[] = [],
-    options?: { logicRoute?: LogicRouteId | null; skipUserMessage?: boolean; isolateOutputs?: boolean; accessNotes?: { id: string; text: string }[] },
+    options?: { logicRoute?: LogicRouteId | null; skipUserMessage?: boolean; isolateOutputs?: boolean; accessNotes?: { id: string; text: string }[]; request?: TurnRequest },
   ): Promise<string | null> {
-    if (turnInFlight.current) return null;
+    if (turnInFlight.current || turnOwner.current !== draftOwner) return null;
     const snapped = snapshotImages(images);
     if (shouldBlockForEmergencyStop(wsRef.current.halted, source.halted)) {
       reportEmergencyStop(chat.id, () => {
@@ -3084,7 +2598,7 @@ export function CommandApp() {
     const otherReady = !activeLogic && !isCustomProvider && selectedProvider !== "grok" && liveProviders[selectedProvider as "openai" | "anthropic" | "gemini" | "openrouter"] === true;
     let routed = chosenProvider(activeLogic || isCustomProvider ? "grok" : selectedProvider, isCustomProvider ? true : grokConfigured);
     if (!routedRunner && !otherReady && !activeLogic && !isCustomProvider && !routed.ok) {
-      const switched = failover(selectedProvider, grokConfigured === true, failoverPolicy);
+      const switched = failover(selectedProvider, grokConfigured === true, selectedProvider === "gemini" ? "none" : failoverPolicy);
       if (switched.provider === "grok") {
         routed = chosenProvider("grok", grokConfigured);
         if (routed.ok) setNotice(switched.note);
@@ -3117,22 +2631,25 @@ export function CommandApp() {
     const messages = selectRetryMessages(chat.messages, live);
     if (resume && messages.at(-1)?.role === "assistant") return null;
     const history = historyForDeliver(messages, resume);
-    const retryThisTurn = () => {
-      if (turnInFlight.current) return;
-      const liveNow = resolveChatMessages(wsRef.current.chats, chat.id, chat) as Msg[];
-      const chosen = selectRetryMessages(chat.messages, liveNow);
-      if (chosen.at(-1)?.role === "assistant") return;
-      void deliver(chat, text, wsRef.current, true, snapped);
-    };
     const title = resume || messages.length > 0 ? chat.title : text.replace(/\s+/g, " ").slice(0, 48);
-    if (!resume && !options?.skipUserMessage) {
+    const userMessageId = options?.skipUserMessage ? null : resume ? messages.at(-1)?.id ?? null : crypto.randomUUID();
+    const markDelivery = (delivery: Msg["delivery"]) => {
+      if (!userMessageId) return;
+      setWs((prev) => ({
+        ...prev,
+        chats: prev.chats.map((item) => item.id === chat.id
+          ? { ...item, messages: item.messages.map((message) => message.id === userMessageId ? { ...message, delivery } : message) }
+          : item),
+      }));
+    };
+    if (!resume && userMessageId) {
       deliverStoredUser.current = true;
-      const displayText = historyTextForImages(text, snapped);
-      const userMsg = {
-        id: crypto.randomUUID(),
-        role: "user" as const,
-        content: displayText,
+      const userMsg: Msg = {
+        id: userMessageId,
+        role: "user",
+        content: historyTextForImages(text, snapped),
         at: new Date().toISOString(),
+        delivery: "submitted",
         images: snapped.length ? snapped.map((image) => ({ dataUrl: image.dataUrl, name: image.name })) : undefined,
       };
       setWs((prev) => ({
@@ -3141,7 +2658,10 @@ export function CommandApp() {
           item.id === chat.id ? { ...item, title, messages: [...item.messages, userMsg] } : item,
         ),
       }));
+    } else if (resume) {
+      markDelivery("submitted");
     }
+    setTurnChat({ ownerId: draftOwner, chatId: chat.id });
     setBusy(true);
     setLiveText("");
     setError(null);
@@ -3151,22 +2671,16 @@ export function CommandApp() {
     const generation = ++turnGen.current;
     const controller = new AbortController();
     turnAbort.current = controller;
-    const timeout = AbortSignal.timeout(30_000);
-    const signal = typeof AbortSignal.any === "function" ? AbortSignal.any([controller.signal, timeout]) : timeout;
+    const { signal, cleanup: clearTurnTimeout } = boundAbortSignal(controller.signal, 30_000);
     const token = getBearerToken();
     const prefix = previewPathPrefix(window.location.hostname, window.location.pathname) ?? "";
     turnInFlight.current = true;
-    try {
-      const result = await consumeMindTurn({
-        url: `${prefix}/api/mind/turn`,
-        signal,
-        headers: {
-          "content-type": "application/json",
-          ...(token ? { Authorization: `Bearer ${token}` } : {}),
-        },
-        body: chatTurnBody({
+    const request: TurnRequest = options?.request ?? {
+      id: `${Date.now()}-${crypto.randomUUID()}`,
+      body: chatTurnBody({
+          chatId: chat.id,
           text,
-          memory: options?.accessNotes?.length ? "on" : chat.memory,
+          memory: chat.memory,
           halted: wsRef.current.halted,
           history: history.map((item) => ({
             role: item.role,
@@ -3177,14 +2691,14 @@ export function CommandApp() {
           })),
           memoryContext: [
             ...(options?.accessNotes ?? []),
-            ...memoriesForChat(source, chat).map((item) => ({ id: item.id, text: item.text })),
+            ...rankMemories(memoriesForChat(source, chat), text).map(({ item }) => ({ id: item.id, text: item.text })),
           ].slice(0, 12),
           botKnowledge: chat.botKnowledge ?? "",
           provider: consultPlan && consultPlan.ok
             ? consultPlan.plan.orchestrator
             : activeLogic ?? (isCustomProvider || otherReady || routedRunner ? selectedProvider : (routed.ok ? routed.id : selectedProvider)),
           modelTier: selectedTier,
-          requestedModel: grokModel,
+          requestedModel: selectedProvider === "grok" && !activeLogic && !consultPlan ? grokModel : null,
           logicRoute: consultPlan && consultPlan.ok ? null : activeLogic,
           orchestrator: consultPlan && consultPlan.ok ? consultPlan.plan.orchestrator : null,
           composerMode: orchestrating ? "orchestrator" : undefined,
@@ -3198,24 +2712,50 @@ export function CommandApp() {
           personalityId: chat.personalityId ?? "assistant",
           customPersonality: chat.customPersonality ?? "",
         }),
+    };
+    function reportTurnError(message: string, deliveryUncertain: boolean) {
+      const useOriginal = deliveryUncertain || options?.request !== undefined;
+      markDelivery(useOriginal ? "unconfirmed" : "failed");
+      const retry = () => {
+        if (turnInFlight.current || turnOwner.current !== draftOwner) return;
+        const thread = wsRef.current.chats.find((item) => item.id === chat.id);
+        if (!thread || thread.messages.at(-1)?.role === "assistant") return;
+        void deliver(thread, text, wsRef.current, true, snapped, {
+          ...options, request: useOriginal ? request : undefined,
+        });
+      };
+      const kind = classifyHonestFailure(message);
+      const description = useOriginal ? `${message} Retry uses the original send ID so the server can recognize an already received request.` : message;
+      reportFailure(description, kind ? honestFailureAuditAction(kind) : "chat_failed", chat.id, retry);
+      setFailure((current) => current ? { ...current, chatId: chat.id } : current);
+    }
+    try {
+      const result = await consumeMindTurn({
+        url: `${prefix}/api/mind/turn`,
+        signal,
+        headers: {
+          "x-mind-turn-id": request.id,
+          "content-type": "application/json",
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        },
+        body: request.body,
         onDelta: (chunk) => {
-          if (generation !== turnGen.current) return;
+          if (generation !== turnGen.current || turnOwner.current !== draftOwner) return;
           setLiveText((current) => current + chunk);
         },
       });
-      if (generation !== turnGen.current) return null;
+      if (generation !== turnGen.current || turnOwner.current !== draftOwner) return null;
       setBusy(false);
       setLiveText("");
       if (turnAbort.current === controller) turnAbort.current = null;
       if (result.ok && result.provider) setNotice(`${result.provider} answered.`);
       if (!shouldStoreReply(result)) {
-        const message = result.ok ? "Grok returned an empty reply." : result.error;
+        const message = result.ok ? "The provider returned an empty reply." : result.error;
         if (message === STOPPED_REPLY) {
-          setError(message);
+          markDelivery("stopped");
           return null;
         }
-        const kind = classifyHonestFailure(message);
-        reportFailure(message, kind ? honestFailureAuditAction(kind) : "chat_failed", chat.id, retryThisTurn);
+        reportTurnError(message, result.ok || result.deliveryUncertain === true);
         return null;
       }
       setWs((prev) => {
@@ -3226,13 +2766,15 @@ export function CommandApp() {
               ? {
                   ...item,
                   messages: [
-                    ...item.messages,
+                    ...item.messages.map((message) => message.id === userMessageId ? { ...message, delivery: undefined } : message),
                     {
                       id: crypto.randomUUID(),
                       role: "assistant" as const,
                       content: result.text,
                       at: new Date().toISOString(),
                       model: result.model,
+                      ...(result.provider ? { provider: result.provider } : {}),
+                      ...(result.requestedModel ? { requestedModel: result.requestedModel } : {}),
                       ...(result.memorySaved === true
                         ? {
                             memorySaved: true as const,
@@ -3285,20 +2827,23 @@ export function CommandApp() {
       });
       return result.text;
     } catch (caught) {
-      if (generation !== turnGen.current) return null;
+      if (generation !== turnGen.current || turnOwner.current !== draftOwner) return null;
       setBusy(false);
       setLiveText("");
       if (turnAbort.current === controller) turnAbort.current = null;
       if (controller.signal.aborted) {
-        setError(STOPPED_REPLY);
+        markDelivery("stopped");
         return null;
       }
       const message = normalizeClientFailureMessage(caught);
-      const kind = classifyHonestFailure(message);
-      reportFailure(message, kind ? honestFailureAuditAction(kind) : "chat_failed", chat.id, retryThisTurn);
+      reportTurnError(message, true);
       return null;
     } finally {
-      turnInFlight.current = false;
+      clearTurnTimeout();
+      if (generation === turnGen.current) {
+        turnInFlight.current = false;
+        setTurnChat(null);
+      }
     }
   }
 
@@ -3429,6 +2974,7 @@ export function CommandApp() {
   }
 
   async function deliverPlanned(chat: Chat, full: string, source: Workspace, images: ImageAttachment[]): Promise<boolean> {
+    if (turnOwner.current !== draftOwner) return false;
     deliverStoredUser.current = false;
     const primary = logicRoute ?? (isLogicRouteId(providerChoice) ? providerChoice : null);
     const seats = logicRoutes.map((item) => ({ id: item.id, label: item.label, ready: item.ready, reason: item.reason }));
@@ -3522,8 +3068,12 @@ export function CommandApp() {
       projectId: projectChoice || null,
       personalityId: defaultPersonalityId,
     });
-    const attached = file ? `\n\nAttached file ${file.name}:\n${file.text.slice(0, 6000)}` : "";
-    const full = `${text || (images.length ? "Describe the attached image." : "")}${attached}`.slice(0, 8000);
+    const attached = file ? `\n\nAttached file ${file.name}:\n${file.text}` : "";
+    const full = `${text || (images.length ? "Describe the attached image." : "")}${attached}`;
+    if (full.length > 8000) {
+      setError("The message and attached text exceed the 8,000-character limit. Shorten them before sending.");
+      return;
+    }
     setDraft("");
     setStaged(null);
     setPendingImages([]);
@@ -3533,7 +3083,6 @@ export function CommandApp() {
       return;
     }
     setActiveId(made.chat.id);
-    activeIdRef.current = made.chat.id;
     if (!wsRef.current.chats.some((item) => item.id === made.chat.id)) {
       wsRef.current = { ...wsRef.current, chats: [made.chat, ...wsRef.current.chats] };
     }
@@ -3546,6 +3095,11 @@ export function CommandApp() {
     const effortPath = resolveSendPath(composerEffort);
     if (effortPath.notice) setNotice(effortPath.notice);
     const finished = await deliverPlanned(made.chat, full, { ...ws, chats: [made.chat, ...ws.chats] }, images);
+    if (!finished && !deliverStoredUser.current) {
+      setDraft((current) => current || text);
+      if (file) setStaged((current) => current ?? file);
+      if (images.length) setPendingImages((current) => current.length ? current : images);
+    }
     if (finished) await releaseNextCue();
   }
 
@@ -3605,6 +3159,7 @@ export function CommandApp() {
     setAgentNote(null);
     setAgentLog([]);
     setAgentImages([]);
+    const plannerScope = active ? workspaceForChat(ws, active) : emptyWorkspace();
     const plannerImages = pendingImages;
     setPendingImages([]);
     const prefix = previewPathPrefix(window.location.hostname, window.location.pathname) ?? "";
@@ -3616,9 +3171,9 @@ export function CommandApp() {
         headers: { "content-type": "application/json", ...(token ? { authorization: `Bearer ${token}` } : {}) },
         body: JSON.stringify({
           goal,
-          projects: ws.projects.map((project) => project.name),
-          chats: ws.chats.map((chat) => chat.title),
-          notes: ws.memories.filter((note) => !note.archived).map((note) => note.text),
+          projects: plannerScope.projects.map((project) => project.name),
+          chats: plannerScope.chats.map((chat) => chat.title),
+          notes: plannerScope.memories.map((note) => note.text),
           modelTier,
           images: plannerImages.map((image) => ({ dataUrl: image.dataUrl, name: image.name })),
         }),
@@ -3660,36 +3215,48 @@ export function CommandApp() {
     }
   }
 
-  function rememberCue(next: CuedMessage[]) {
+  function rememberCue(next: QueuedChatMessage[]) {
     cueRef.current = next;
     setCued(next);
   }
 
-  async function releaseNextCue() {
-    if (wsRef.current.halted || turnInFlight.current) return;
-    const wanted = activeIdRef.current;
-    const chat = wanted
-      ? wsRef.current.chats.find((item) => item.id === wanted) ?? null
-      : wsRef.current.chats[0] ?? null;
-    if (!chat) return;
-    const held = takeNextCue(cueRef.current);
-    if (!held.next) return;
+  async function releaseNextCue(onlyChatId?: string) {
+    if (wsRef.current.halted || turnInFlight.current || !draftOwner || turnOwner.current !== draftOwner) return;
+    const held = takeNextCue(cueRef.current, (item) => item.ownerId === draftOwner && (!onlyChatId || item.chatId === onlyChatId));
+    const entry = held.next;
+    if (!entry) return;
     rememberCue(held.queue);
-    setView("chat");
-    const finished = await deliverPlanned(chat, held.next.text, wsRef.current, []);
-    if (!finished && !deliverStoredUser.current) {
-      rememberCue(restoreCue(cueRef.current, held.next));
-      setNotice("The next line stayed in the cue. Nothing was sent.");
+    const chat = wsRef.current.chats.find((item) => item.id === entry.chatId);
+    if (!chat) {
+      setNotice("A queued message was dropped because its conversation was removed.");
+      await releaseNextCue(onlyChatId);
       return;
     }
-    if (finished) await releaseNextCue();
+    const finished = await entry.dispatch(chat, wsRef.current);
+    if (turnOwner.current !== entry.ownerId) return;
+    if (!finished && !deliverStoredUser.current) {
+      rememberCue(restoreCue(cueRef.current, entry));
+      setNotice("The next message stayed queued in its conversation.");
+      return;
+    }
+    if (finished) await releaseNextCue(onlyChatId);
   }
 
-  async function sendInChat(queuedText?: string) {
-    const sendingQueued = typeof queuedText === "string";
-    if ((busy || turnInFlight.current) && !sendingQueued) {
-      if (!draft.trim()) return;
-      const result = cueMessage(cueRef.current, draft, crypto.randomUUID());
+  async function sendInChat() {
+    if (busy || turnInFlight.current) {
+      const text = draft.trim();
+      if (!active || !draftOwner || !text) return;
+      if (staged || pendingImages.length || parseImagineCommand(text) !== null) {
+        setError("Wait for the active reply before sending an attachment or an image request.");
+        return;
+      }
+      const result = cueMessage(cueRef.current, {
+        id: crypto.randomUUID(),
+        text,
+        chatId: active.id,
+        ownerId: draftOwner,
+        dispatch: (chat, source) => deliverPlanned(chat, text, source, []),
+      });
       if (result.error) {
         setError(result.error);
         return;
@@ -3697,17 +3264,17 @@ export function CommandApp() {
       rememberCue(result.queue);
       setDraft("");
       setError(null);
-      setNotice("Cued. It sends after this reply.");
+      setNotice("Queued. This message will send in this conversation.");
       return;
     }
     if (!active) {
       void sendCommand();
       return;
     }
-    const text = (sendingQueued ? queuedText : draft).trim();
-    const images = sendingQueued ? [] : snapshotImages(pendingImages);
-    const file = sendingQueued ? null : staged;
-    const gate = canSend({ halted: wsRef.current.halted, busy: sendingQueued ? false : busy });
+    const text = draft.trim();
+    const images = snapshotImages(pendingImages);
+    const file = staged;
+    const gate = canSend({ halted: wsRef.current.halted, busy });
     if (!gate.ok) {
       if (wsRef.current.halted) {
         reportEmergencyStop(active.id, () => {
@@ -3759,13 +3326,15 @@ export function CommandApp() {
       setError(chatPlan.reason);
       return;
     }
-    const attached = file ? `\n\nAttached file ${file.name}:\n${file.text.slice(0, 6000)}` : "";
-    const full = `${text || (images.length ? "Describe the attached image." : "Read the attached file.")}${attached}`.slice(0, 8000);
-    if (!sendingQueued) {
-      setDraft("");
-      setStaged(null);
-      setPendingImages([]);
+    const attached = file ? `\n\nAttached file ${file.name}:\n${file.text}` : "";
+    const full = `${text || (images.length ? "Describe the attached image." : "Read the attached file.")}${attached}`;
+    if (full.length > 8000) {
+      setError("The message and attached text exceed the 8,000-character limit. Shorten them before sending.");
+      return;
     }
+    setDraft("");
+    setStaged(null);
+    setPendingImages([]);
     const source = ws;
     const action = voiceNext.current ? "voice" as const : "chat" as const;
     voiceNext.current = false;
@@ -3780,6 +3349,11 @@ export function CommandApp() {
     const effortPath = resolveSendPath(composerEffort);
     if (effortPath.notice) setNotice(effortPath.notice);
     const finished = await deliverPlanned(active, full, ws, images);
+    if (!finished && !deliverStoredUser.current) {
+      setDraft((current) => current || text);
+      if (file) setStaged((current) => current ?? file);
+      if (images.length) setPendingImages((current) => current.length ? current : images);
+    }
     if (finished) await releaseNextCue();
   }
 
@@ -4722,7 +4296,7 @@ export function CommandApp() {
       if (speakStageOpenRef.current) setSpeakCall((current) => ({ ...current, heard: transcript, reply: made.reply, error: "" }));
       return { ok: true as const, text: made.reply };
     }
-    const reply = await deliver({ ...chat, personalityId: spokenStyle, memory: "on" }, transcript, source, false, [], { accessNotes: eveAccessNotes(source) });
+    const reply = await deliver({ ...chat, personalityId: spokenStyle }, transcript, source, false, [], { accessNotes: chat.memory === "on" && !chat.temporary ? eveAccessNotes(workspaceForChat(source, chat)) : [] });
     if (!reply) return { ok: false as const, error: "The chat turn failed. Nothing was spoken." };
     return { ok: true as const, text: reply };
   }
@@ -4921,7 +4495,7 @@ export function CommandApp() {
     }
     const text = sanitized.text;
     if (parseCreateBot(text)) {
-      const made = createBotFromSpeech(source, text);
+      const made = createBotFromSpeech(wsRef.current, text);
       if (!made.ok) {
         setNotice(made.error);
         if (speakStageOpenRef.current) setSpeakCall((current) => ({ ...current, heard: text, error: made.error }));
@@ -5844,15 +5418,15 @@ export function CommandApp() {
   const dictationDisabled = ws.halted || voiceListening || voiceOverlayOpen;
 
   return (
-    <div className="shell flex h-dvh flex-col bg-bg text-fg md:flex-row" data-view={view} data-search={paletteOpen ? "open" : "closed"}>
+    <div id="mind-workspace" className="shell flex h-dvh flex-col bg-bg text-fg md:flex-row" data-view={view} data-search={paletteOpen ? "open" : "closed"}>
       <MenuMotion />
       {navOpen ? <button type="button" className="fixed inset-0 md:hidden" aria-label="Close menu" style={{ zIndex: 150, background: "transparent" }} onClick={() => setNavOpen(false)} /> : null}
-      <aside ref={(node) => { navDrawerRef.current = node; pinRailFrame(node); }} onMouseDown={closeNavFromBackdrop} role={navOpen ? "dialog" : undefined} aria-modal={navOpen ? false : undefined} aria-label={navOpen ? "Workspace navigation" : undefined} className={`rail gpt-rail ${navOpen ? "nav-drawer-open flex" : "hidden"} fixed inset-0 z-40 w-full flex-col overflow-hidden md:static md:flex md:h-dvh ${railCollapsed ? "md:w-[4.5rem]" : "md:w-72"} md:shrink-0`}>
+      <aside ref={(node) => { navDrawerRef.current = node; pinRailFrame(node); }} onMouseDown={closeNavFromBackdrop} role={navOpen ? "dialog" : undefined} aria-modal={navOpen ? true : undefined} aria-label={navOpen ? "Workspace navigation" : undefined} className={`rail gpt-rail ${navOpen ? "nav-drawer-open flex" : "hidden"} fixed inset-0 z-40 w-full flex-col overflow-hidden md:static md:flex md:h-dvh ${railCollapsed ? "md:w-[4.5rem]" : "md:w-72"} md:shrink-0`}>
         <div className="gpt-rail-head flex items-center gap-3 px-4 py-4">
           {!railCollapsed && (
             <p className="flex min-w-0 flex-1 items-center gap-2 text-2xl font-semibold tracking-tight">
               <img className="service-mark adrian-mark" src="/brand/logo-mark.jpg" alt="" width={32} height={32} />
-              Adrian
+              <span className="truncate">Adrian</span>
             </p>
           )}
           <button
@@ -5925,6 +5499,7 @@ export function CommandApp() {
           <Link
             to="/social"
             data-testid="nav-route-social"
+            aria-label="Social"
             className={`nav-item flex min-h-11 items-center gap-3 rounded-2xl px-3 text-sm font-medium text-muted ${railCollapsed ? "justify-center" : ""}`}
             onClick={() => setNavOpen(false)}
           >
@@ -5934,6 +5509,7 @@ export function CommandApp() {
           <Link
             to="/gpt-wrapper"
             data-testid="nav-route-gpt-wrapper"
+            aria-label="GPT wrapper"
             className={`nav-item flex min-h-11 items-center gap-3 rounded-2xl px-3 text-sm font-medium text-muted ${railCollapsed ? "justify-center" : ""}`}
             onClick={() => setNavOpen(false)}
           >
@@ -6081,7 +5657,7 @@ export function CommandApp() {
 
       <main ref={pinMainColumn} className="main-stage page-enter flex min-h-0 min-w-0 flex-1 flex-col" inert={navOpen}>
         <h1 className="sr-only">Adrian’s Mind OS</h1>
-        <header className="topbar flex flex-nowrap items-center gap-2 px-3 py-3 md:gap-3 md:px-5" ref={(node) => node?.style.setProperty("overflow", "visible", "important")}>
+        <header className="topbar flex flex-nowrap items-center gap-2 px-3 py-3 md:gap-3 md:px-5" ref={(node) => { if (view !== "chat" && view !== "command") node?.style.setProperty("overflow", "visible", "important"); else node?.style.removeProperty("overflow"); }}>
          <button type="button" className="grid size-11 shrink-0 place-items-center rounded-panel border border-line md:hidden" aria-label="Open menu" onClick={openNav}>
            <Menu className="size-4" />
          </button>
@@ -6223,13 +5799,14 @@ export function CommandApp() {
             <button
               type="button"
               className="surface-switch__button shrink-0 whitespace-nowrap"
+              ref={controlsTrigger}
               aria-expanded={controlsOpen}
-              aria-haspopup="menu"
+              aria-haspopup="dialog"
+              aria-controls={controlsOpen ? "controls-menu" : undefined}
               aria-label="Open controls"
-              onClick={(event) => {
+              onClick={() => {
                 const next = !controlsOpen;
                 closeMenus("controls");
-                setControlsAnchor(event.currentTarget.getBoundingClientRect());
                 setControlsOpen(next);
               }}
             >
@@ -6241,19 +5818,114 @@ export function CommandApp() {
                 type="button"
                 className="surface-switch__button shrink-0 whitespace-nowrap"
                 data-testid="open-chat-settings"
+                ref={chatSettingsTrigger}
                 aria-label="Chat settings"
-                onClick={() => {
-                  const node = document.querySelector(".thread-chat-settings");
-                  if (node instanceof HTMLDetailsElement) node.open = !node.open;
-                }}
+                aria-controls="thread-chat-settings"
+                aria-expanded={chatSettingsOpen}
+                onClick={() => setChatSettingsOpen((open) => !open)}
               >
                 <span>Chat settings</span>
-                <ChevronDown size={16} strokeWidth={1.75} aria-hidden="true" />
+                <ChevronDown className="chat-settings-chevron" size={16} strokeWidth={1.75} aria-hidden="true" />
+                <Settings className="chat-settings-icon" size={17} strokeWidth={1.75} aria-hidden="true" />
               </button>
             ) : null}
             {controlsOpen ? (
-              <AnchoredCard anchor={controlsAnchor} label="Controls" onClose={() => setControlsOpen(false)} testId="controls-menu" width={640} align="start">
-                <MenuShelf width="100%" testId="controls-shelf">
+              <AnchoredCard anchor={null} trigger={controlsTrigger} label="Controls" onClose={() => setControlsOpen(false)} testId="controls-menu" width={640} align="start">
+                <div className="controls-shelf" data-testid="controls-shelf">
+                <MenuCluster label="Active model" wide>
+                  <button
+                    type="button"
+                    className="flex min-h-11 items-center justify-between rounded-2xl px-3 text-left text-sm"
+                    style={menuChip}
+                    aria-expanded={modelRowsOpen}
+                    onClick={() => setModelRowsOpen((value) => !value)}
+                  >
+                    <span className="min-w-0 break-words">{controlsModelLabel}</span>
+                    <span aria-hidden="true">{modelRowsOpen ? "‹" : "›"}</span>
+                  </button>
+                  {modelRowsOpen && effectiveProvider !== "grok" ? (
+                    <ProviderPicker name="control-model" choices={providerOptions} choice={effectiveProvider} onChoose={useProviderInChat} logicRoutes={logicRoutes} />
+                  ) : modelRowsOpen ? (
+                    <ModelTierChip
+                      presentation="rows"
+                      tier={modelTier}
+                      onChoose={chooseModelTier}
+                      grokModel={grokModel}
+                      onChooseGrokModel={(model) => {
+                        useProviderInChat("grok");
+                        setGrokModel(model);
+                      }}
+                      lastResolved={lastResolvedTier}
+                      lastModel={lastModelUsed}
+                      logicRoute={logicRoute}
+                      logicRoutes={logicRoutes}
+                      onChooseLogic={useProviderInChat}
+                    />
+                  ) : null}
+                </MenuCluster>
+                <MenuCluster label="Add a service">
+                  <button
+                    type="button"
+                    role="menuitem"
+                    className="flex min-h-11 flex-col items-start justify-center rounded-2xl px-3 text-left"
+                    style={menuChip}
+                    onClick={() => { setView("connected"); setControlsOpen(false); setNavOpen(false); }}
+                  >
+                    <span className="text-sm">Connect a new service</span>
+                    <span className="text-xs text-muted">This does not change the module in use</span>
+                  </button>
+                </MenuCluster>
+                <MenuCluster label="Use a module" wide>
+                  {consultModules.filter((item) => item.connected).length === 0 ? (
+                    <p className="px-3 text-xs text-muted">No model module is configured.</p>
+                  ) : consultModules.filter((item) => item.connected).map((item) => (
+                    <button
+                      key={item.id}
+                      type="button"
+                      role="menuitemradio"
+                      aria-checked={providerChoice === item.id}
+                      data-testid={`control-module-${item.id}`}
+                      className="flex min-h-11 items-center justify-between rounded-2xl px-3 text-left text-sm"
+                      style={menuChip}
+                      onClick={() => useProviderInChat(item.id)}
+                    >
+                      <span className="min-w-0 break-words">{item.label}</span>
+                      <span className="text-xs text-muted">{providerChoice === item.id ? "Selected" : "Configured"}</span>
+                    </button>
+                  ))}
+                </MenuCluster>
+                <MenuCluster label="Work">
+                  <button
+                    type="button"
+                    role="menuitem"
+                    aria-pressed={composerEffort === "orchestrator"}
+                    className="flex min-h-11 items-center justify-between rounded-2xl px-3 text-left text-sm"
+                    style={menuChip}
+                    onClick={() => chooseComposerEffort(composerEffort === "orchestrator" ? "auto" : "orchestrator")}
+                  >
+                    <span>Orchestrator</span>
+                    <span className="text-xs text-muted">{composerEffort === "orchestrator" ? "On" : "Off"}</span>
+                  </button>
+                  {composerEffort === "orchestrator" ? (
+                    <div className="flex w-full flex-wrap gap-1" data-testid="orchestrator-models">
+                      {consultModules.filter((item) => item.connected).map((item) => (
+                        <button
+                          key={item.id}
+                          type="button"
+                          role="menuitem"
+                          data-testid="consult-model"
+                          aria-pressed={consultModel === item.id}
+                          className="flex min-h-11 items-center justify-between rounded-2xl px-3 text-left text-sm"
+                          style={menuChip}
+                          onClick={() => chooseConsultModel(item.id)}
+                        >
+                          <span className="min-w-0 break-words">{item.label}</span>
+                          <span className="text-xs text-muted">Ready</span>
+                        </button>
+                      ))}
+                    </div>
+                  ) : null}
+                </MenuCluster>
                 <MenuCluster label="Share">
                   <button
                     type="button"
@@ -6285,114 +5957,12 @@ export function CommandApp() {
                     <span className="text-xs text-muted">Voice route</span>
                   </p>
                 </MenuCluster>
-                <MenuCluster label="Use a module" wide>
-                  {consultModules.filter((item) => item.connected).length === 0 ? (
-                    <p className="px-3 text-xs text-muted">No module is connected. Nothing else is listed.</p>
-                  ) : consultModules.filter((item) => item.connected).map((item) => (
-                    <button
-                      key={item.id}
-                      type="button"
-                      role="menuitemradio"
-                      aria-checked={providerChoice === item.id}
-                      data-testid={`control-module-${item.id}`}
-                      className="flex min-h-11 items-center justify-between rounded-2xl px-3 text-left text-sm"
-                      style={menuChip}
-                      onClick={() => {
-                        setLogicRoute(null);
-                        setProviderChoice(item.id);
-                        setView("chat");
-                        setControlsOpen(false);
-                        setNavOpen(false);
-                      }}
-                    >
-                      <span>{item.label}</span>
-                      <span className="text-xs text-muted">{providerChoice === item.id ? "In use" : "Ready"}</span>
-                    </button>
-                  ))}
-                </MenuCluster>
-                <MenuCluster label="Add a service">
-                  <button
-                    type="button"
-                    role="menuitem"
-                    className="flex min-h-11 flex-col items-start justify-center rounded-2xl px-3 text-left"
-                    style={menuChip}
-                    onClick={() => { setView("connected"); setControlsOpen(false); setNavOpen(false); }}
-                  >
-                    <span className="text-sm">Connect a new service</span>
-                    <span className="text-xs text-muted">This does not change the module in use</span>
-                  </button>
-                </MenuCluster>
-                <MenuCluster label="Model" wide>
-                  <button
-                    type="button"
-                    className="flex min-h-11 items-center justify-between rounded-2xl px-3 text-left text-sm"
-                    style={menuChip}
-                    aria-expanded={modelRowsOpen}
-                    onClick={() => setModelRowsOpen((value) => !value)}
-                  >
-                    <span>{grokModel ?? modelTier}</span>
-                    <span aria-hidden="true">{modelRowsOpen ? "‹" : "›"}</span>
-                  </button>
-                  {modelRowsOpen ? (
-                    <ModelTierChip
-                      presentation="rows"
-                      tier={modelTier}
-                      onChoose={chooseModelTier}
-                      grokModel={grokModel}
-                      onChooseGrokModel={(model) => {
-                        setLogicRoute(null);
-                        setProviderChoice("grok");
-                        setGrokModel(model);
-                      }}
-                      lastResolved={lastResolvedTier}
-                      lastModel={lastModelUsed}
-                      logicRoute={logicRoute}
-                      logicRoutes={logicRoutes}
-                      onChooseLogic={(route) => {
-                        setLogicRoute(route);
-                        setProviderChoice(route);
-                      }}
-                    />
-                  ) : null}
-                </MenuCluster>
-                <MenuCluster label="Work">
-                  <button
-                    type="button"
-                    role="menuitem"
-                    aria-pressed={composerEffort === "orchestrator"}
-                    className="flex min-h-11 items-center justify-between rounded-2xl px-3 text-left text-sm"
-                    style={menuChip}
-                    onClick={() => chooseComposerEffort(composerEffort === "orchestrator" ? "auto" : "orchestrator")}
-                  >
-                    <span>Orchestrator</span>
-                    <span className="text-xs text-muted">{composerEffort === "orchestrator" ? "On" : "Off"}</span>
-                  </button>
-                  {composerEffort === "orchestrator" ? (
-                    <div className="flex w-full flex-wrap gap-1" data-testid="orchestrator-models">
-                      {consultModules.filter((item) => item.connected).map((item) => (
-                        <button
-                          key={item.id}
-                          type="button"
-                          role="menuitem"
-                          data-testid="consult-model"
-                          aria-pressed={consultModel === item.id}
-                          className="flex min-h-11 items-center justify-between rounded-2xl px-3 text-left text-sm"
-                          style={menuChip}
-                          onClick={() => chooseConsultModel(item.id)}
-                        >
-                          <span>{item.label}</span>
-                          <span className="text-xs text-muted">Ready</span>
-                        </button>
-                      ))}
-                    </div>
-                  ) : null}
-                </MenuCluster>
                 <MenuCluster label="Install" wide>
                   <a role="menuitem" className="flex min-h-11 items-center rounded-2xl px-3 text-sm" style={menuChip} href="/downloads/AdriansMind-Setup.exe" download data-testid="header-download-installer">Download Adrian's Mind</a>
                   <p className="px-3 pb-2 text-xs text-muted" data-testid="installer-note">Unsigned Windows app. It contains this product, including Build. It does not control the mouse, keyboard, or browser.</p>
                   <DesktopUpdateNote />
                 </MenuCluster>
-                </MenuShelf>
+                </div>
               </AnchoredCard>
             ) : null}
           </div>
@@ -6488,7 +6058,7 @@ export function CommandApp() {
             </button>
           </div>
         )}
-        {failure && (
+        {failure && (!failure.chatId || (view === "chat" && active?.id === failure.chatId)) && (
           <div
             className="flex flex-wrap items-center justify-between gap-2 border-b border-danger/40 bg-danger/10 px-4 py-2"
             role="alert"
@@ -6620,14 +6190,19 @@ export function CommandApp() {
             </div>
           )}
           {view === "command" && (
-           <div ref={liftHomeStack} className="gpt-home mx-auto flex min-h-full w-full max-w-none flex-col justify-start gap-4 p-4 md:p-6" style={{ justifyContent: "flex-start" }}>
+           <div id="command-home" className="gpt-home mx-auto flex min-h-full w-full max-w-none flex-col justify-start gap-4 p-4 md:p-6" style={{ justifyContent: "flex-start" }}>
               <div className="masthead flex w-full items-center gap-3">
                 <div className="flex w-full flex-wrap items-end justify-between gap-3">
                   <div className="w-full min-w-0">
-                    <h1 className="font-display text-3xl font-bold md:text-4xl">
-                      <span data-greeting={greet}>{greet}</span>, <span className="text-accent">Adrian</span>
-                    </h1>
-                    <p className="text-sm text-muted">Ask, build, or connect. The rest lives in Settings.</p>
+                    <div className="home-greeting">
+                      <img src="/brand/logo-mark.jpg" alt="" width={52} height={52} />
+                      <div>
+                        <h1 className="font-display text-3xl font-bold md:text-4xl">
+                          <span data-greeting={greet}>{greet}</span>, <span className="text-accent">Adrian</span>
+                        </h1>
+                        <p className="text-sm text-muted">What would you like to work on?</p>
+                      </div>
+                    </div>
                     <ModuleSuggestions draft={draft} onPick={pickModule} />
                     {ws.chats.length > 0 ? (
                       <div className="mt-3 w-full" aria-label="Recent">
@@ -6648,8 +6223,7 @@ export function CommandApp() {
                   </div>
                 </div>
               </div>
-              <FirstSteps state={guide} onChange={persistGuide} onOpen={openGuide} />
-              <section ref={liftHomeComposer} className="floating-composer command-card composer-dock rounded-panel p-3 md:p-4" data-composer="floating">
+              <section className="floating-composer command-card composer-dock rounded-panel p-3 md:p-4" data-composer="floating">
                 <details className="composer-advanced">
                   <summary>Controls</summary>
                 <div className="mt-2 flex flex-wrap items-center gap-2">
@@ -6745,19 +6319,7 @@ export function CommandApp() {
                     <div className="attachment-feedback flex flex-wrap items-center gap-2 text-xs text-muted"><span>Attached: {staged.name}</span><button type="button" className="min-h-11 text-accent" onClick={() => { setStaged(null); setNotice(null); }}>Remove attachment</button></div>
                   )}
                   <div className="composer-toolbar mt-2 flex flex-wrap items-center gap-2">
-                    <details
-                      className="composer-more"
-                      onToggle={(event) => {
-                        const menu = event.currentTarget.querySelector("[data-testid='home-composer-more-menu']");
-                        if (menu instanceof HTMLElement) pinComposerMenu(menu);
-                        if (event.currentTarget.open) {
-                          setContextOpen(false);
-                          setToolsOpen(false);
-                        }
-                      }}
-                    >
-                      <summary>More</summary>
-                      <div className="composer-more__menu" ref={(node) => pinComposerMenu(node)} data-testid="home-composer-more-menu">
+                    <ComposerMore testId="home-composer-more-menu" onOpen={() => { setContextOpen(false); setToolsOpen(false); }}>
                         <MenuCluster label="Files">
                           <button type="button" className="inline-flex items-center gap-2 rounded-panel border border-line px-3 text-sm" style={menuChip} onClick={() => fileRef.current?.click()}>
                             <Paperclip className="size-4" /> Attach
@@ -6834,8 +6396,7 @@ export function CommandApp() {
                             Translate
                           </button>
                         </MenuCluster>
-                      </div>
-                    </details>
+                    </ComposerMore>
                     <div className="legacy-composer-voice"><VoiceLevelMeter level={voiceLevel} listening={voiceListening} className="mr-1" /><BrowserDictationControl
                       state={dictation.phase}
                       level={dictationLevel}
@@ -6896,7 +6457,7 @@ export function CommandApp() {
                 )}
                 {toolsOpen && (
                   <ul className="mt-3 space-y-2 rounded-panel border border-line bg-bg p-3 text-sm">
-                    <li>Grok 4.5 — available when you press Send. Speak reads a reply only when you press Speak.</li>
+                    <li>Press Send to use the selected chat route. Speak reads a reply only when you press Speak.</li>
                     <li className="text-muted">GPT, Claude, Gemini, OpenRouter — no keys stored.</li>
                     <li>REA — official CLI from github.com/morluto/rea. Doctor and file inspect run here. Native decompilers are not installed.</li>
                     <li className="text-muted">Web research runs only when a search provider is configured. Otherwise the check refuses and creates no citations.</li>
@@ -6942,8 +6503,7 @@ export function CommandApp() {
                 )}
               </section>
 
-              <div className="gpt-starters" ref={(node) => pinShelf(node, "100%", false)} data-testid="start-shelf">
-                <p className="mb-1 text-xs uppercase tracking-wide text-muted" style={{ flex: "1 1 100%" }}>Start</p>
+              <div className="gpt-starters" role="group" aria-label="Start a task" data-testid="start-shelf">
                 <button type="button" aria-pressed={homeAction === "image"} onClick={() => { setHomeAction("image"); setCommandMode("ask"); }}>
                   <Image className="size-5" /> Create an image
                 </button>
@@ -6957,6 +6517,7 @@ export function CommandApp() {
                   <Search className="size-5" /> Search the web
                 </button>
               </div>
+              <FirstSteps state={guide} onChange={persistGuide} onOpen={openGuide} />
               <div className="flex flex-wrap gap-2 pb-1">
                 <button type="button" className="suggestion-chip" onClick={() => setDraft("Summarize my projects on this device")}>Summarize my projects</button>
                 <button type="button" className="suggestion-chip" onClick={() => setDraft("What can Run worker do right now?")}>What can the worker do?</button>
@@ -7051,6 +6612,11 @@ export function CommandApp() {
 
           {view === "chat" && (
             <ChatPane
+              chatSettingsOpen={chatSettingsOpen}
+              onChatSettingsToggle={(open) => {
+                setChatSettingsOpen(open);
+                if (!open) chatSettingsTrigger.current?.focus({ preventScroll: true });
+              }}
               active={active}
               chats={ws.chats}
               personalityId={active?.personalityId ?? "assistant"}
@@ -7060,8 +6626,8 @@ export function CommandApp() {
               projectId={chatProjectId}
               projectName={ws.projects.find((project) => project.id === chatProjectId)?.name ?? null}
               onClearProject={() => setChatProjectId(null)}
-              busy={busy}
-              liveText={liveText}
+              busy={busy && (!turnChat || (turnChat.ownerId === draftOwner && turnChat.chatId === active?.id))}
+              liveText={turnChat && turnChat.chatId !== active?.id ? "" : liveText}
               halted={ws.halted}
               draft={draft}
               error={error}
@@ -7070,10 +6636,11 @@ export function CommandApp() {
               onPickModule={pickModule}
               onPick={(id) => setActiveId(id)}
               onSend={() => void sendInChat()}
-              cue={cued}
-             onDropCue={(id) => rememberCue(dropCued(cueRef.current, id))}
-              onReleaseCue={() => void releaseNextCue()}
-             onStop={stopReply}
+              cue={cued.filter((item) => item.ownerId === draftOwner && item.chatId === active?.id)}
+              onDropCue={(id) => rememberCue(dropCued(cueRef.current, id))}
+              onReleaseCue={() => { if (active) void releaseNextCue(active.id); }}
+              canStop={busy && turnChat?.ownerId === draftOwner && turnChat?.chatId === active?.id}
+              onStop={stopReply}
               onRename={renameActive}
               onEdit={editMessage}
               onRegenerate={regenerate}
@@ -7199,28 +6766,20 @@ export function CommandApp() {
                 setView("agents");
                 void checkRea();
               }}
-              providerChoices={[...providerChoicesWithKeys(grokConfigured, lastModelUsed, liveProviders), ...discovered.map((item) => ({ id: item.id, label: item.label, enabled: item.usable, reason: item.reason }))]}
-              providerChoices={[...providerChoicesWithKeys(grokConfigured, lastModelUsed, liveProviders), ...customAiChoices, ...discovered.map((item) => ({ id: item.id, label: item.label, enabled: item.usable, reason: item.reason }))]}
-              providerChoice={providerChoice}
+              providerChoices={providerOptions}
+              providerChoice={effectiveProvider}
               onProvider={(id) => {
                 if (isLogicRouteId(id)) {
                   const view = logicRoutes.find((item) => item.id === id);
                   if (!view?.ready) return;
-                  setLogicRoute(id);
-                  setProviderChoice(id);
-                  return;
                 }
-                setLogicRoute(null);
-                setProviderChoice(id);
+                useProviderInChat(id);
               }}
               modelTier={modelTier}
               onModelTier={chooseModelTier}
               logicRoute={logicRoute}
               logicRoutes={logicRoutes}
-              onChooseLogic={(route) => {
-                setLogicRoute(route);
-                setProviderChoice(route);
-              }}
+              onChooseLogic={useProviderInChat}
               toolTimeline={toolTimeline}
               timelineNowMs={timelineTickMs || Date.now()}
               agentActivity={agentActivityFromTimeline(toolTimeline)}
@@ -7254,16 +6813,15 @@ export function CommandApp() {
                   <img src="/brand/logo-mark.jpg" alt="" className="size-10 rounded-xl" />
                   <div>
                     <h2 className="font-display text-3xl font-bold">Projects</h2>
-                    <p className="text-sm text-muted">Records on this device. Oak Bridge and BridgePoint stay outside this app.</p>
+                    <p className="text-sm text-muted">Group this device’s chats, notes, and files by project.</p>
                   </div>
                 </div>
-                <button id="new-project-button" type="button" className="inline-flex min-h-11 items-center gap-2 rounded-panel bg-accent px-4 text-sm font-semibold text-white" onClick={() => setProjectOpen(true)}>
+                <button id="new-project-button" type="button" className="inline-flex min-h-11 items-center gap-2 rounded-panel bg-accent px-4 text-sm font-semibold text-accent-ink" onClick={() => setProjectOpen(true)}>
                   <Plus className="size-4" /> New Project
                 </button>
               </div>
               <div className="mt-4 flex flex-wrap gap-2">
-                <span className="rounded-panel bg-accent px-3 py-2 text-sm text-white">On this device ({ws.projects.length})</span>
-                <span className="rounded-panel border border-line px-3 py-2 text-sm text-muted">External (2) · unchanged</span>
+                <span className="project-count px-3 py-2 text-sm">On this device ({ws.projects.length})</span>
               </div>
               <div id="owner-projects">
                 {ws.projects.length === 0 && (
@@ -7295,7 +6853,7 @@ export function CommandApp() {
                       </div>
                       <p className="mt-3 text-xs text-muted">Created {stamp(project.createdAt)} · {chats} {chats === 1 ? "chat" : "chats"} · {notes} {notes === 1 ? "note" : "notes"} · {files} {files === 1 ? "file" : "files"}</p>
                       <div className="mt-3 flex flex-wrap gap-2">
-                        <button type="button" className="min-h-11 rounded-panel bg-accent px-3 text-sm text-white" onClick={() => { setChatProjectId(project.id); setProjectChoice(project.id); setActiveId(ws.chats.find((chat) => chat.projectId === project.id)?.id ?? null); setView("chat"); }}>Open chats</button>
+                        <button type="button" className="workspace-primary min-h-11 rounded-panel px-3 text-sm" onClick={() => { setChatProjectId(project.id); setProjectChoice(project.id); setActiveId(ws.chats.find((chat) => chat.projectId === project.id)?.id ?? null); setView("chat"); }}>Open chats</button>
                         <button type="button" className="min-h-11 rounded-panel border border-line px-3 text-sm" onClick={() => { setMemoryTab("project"); setMemoryProject(project.id); setView("memory"); }}>Notes</button>
                         <button type="button" className="min-h-11 rounded-panel border border-line px-3 text-sm" onClick={() => { setLibraryProjectId(project.id); setLibraryBand("files"); setView("files"); }}>Files</button>
                         <button
@@ -7325,21 +6883,6 @@ export function CommandApp() {
                     </article>
                   );
                 })}
-                {EXTERNAL.map((item) => (
-                  <article key={item.name} className="rounded-panel border border-line bg-surface p-4">
-                    <div className="flex items-start gap-3">
-                      <img src={item.mark} alt="" className="size-11 rounded-2xl" />
-                      <div>
-                        <div className="flex items-center gap-2">
-                          <h3 className="font-semibold">{item.name}</h3>
-                          <span className="rounded-full border border-line px-2 py-0.5 text-xs text-muted">External</span>
-                        </div>
-                        <p className="text-sm text-muted">{item.detail}</p>
-                      </div>
-                    </div>
-                    <p className="mt-3 text-xs text-muted">No tasks, files, or progress are read from that product.</p>
-                  </article>
-                ))}
               </div>
             </section>
           )}
@@ -7351,32 +6894,31 @@ export function CommandApp() {
                   <img src="/brand/logo-mark.jpg" alt="" className="size-8 rounded-lg" />
                   <div>
                     <h2 className="font-display text-3xl font-bold">Memory</h2>
-                    <p className="text-sm text-muted">Notes you chose to keep. They stay in this browser, not a remote database.</p>
+                    <p className="text-sm text-muted">Keep useful notes and choose when a chat can use them.</p>
                   </div>
                 </div>
               </div>
-              <div className={`glow-card mt-4 grid gap-4 rounded-panel border p-4 md:grid-cols-2 ${memoryChoice === "on" ? "border-ok/40" : "border-danger/40"}`}>
+              <div className="memory-permission-card mt-4 grid gap-3 rounded-panel border p-4 md:grid-cols-[1fr_auto]">
                 <div className="flex items-center gap-3">
-                  <img src="/brand/logo-mark.jpg" alt="" className="size-12 rounded-2xl" />
+                  <Database aria-hidden="true" className="memory-permission-icon" />
                   <div>
-                    <p className="font-semibold">Memory: <span className={memoryChoice === "on" ? "text-ok" : "text-danger"}>{memoryChoice === "on" ? "ON" : "OFF"}</span></p>
+                    <p className="font-semibold">Chat memory <span className={memoryChoice === "on" ? "text-ok" : "text-muted"}>{memoryChoice === "on" ? "on" : "off"}</span></p>
                     <p className="text-sm text-muted">{memoryChoice === "on" ? "The next command can read notes in its scope. Existing chats stay off until you enable them there." : "A memory-off chat cannot read or save notes."}</p>
                   </div>
                 </div>
-                <div className="flex items-center justify-between gap-3">
-                  <p className="text-sm text-muted">Enable it only when you want notes used in a later command. This does not copy old chats into memory.</p>
-                  <button type="button" className="min-h-11 shrink-0 rounded-panel bg-accent px-4 text-sm font-semibold text-white" onClick={() => memoryChoice === "on" ? setMemoryChoice("off") : setArmMemory("composer")}>
+                <div className="flex items-center">
+                  <button type="button" className="min-h-11 shrink-0 rounded-panel bg-accent px-4 text-sm font-semibold text-accent-ink" onClick={() => memoryChoice === "on" ? setMemoryChoice("off") : setArmMemory("composer")}>
                     {memoryChoice === "on" ? "Turn off" : "Enable Memory"}
                   </button>
                 </div>
               </div>
-              <div className="mt-4 flex flex-wrap gap-2">
+              <div className="workspace-tabs mt-4 flex flex-wrap gap-2" role="group" aria-label="Memory views">
                 {([
                   ["mine", "My Memory"],
                   ["project", "Project Memory"],
                   ["transfer", "Imports & Exports"],
                 ] as const).map(([id, label]) => (
-                  <button key={id} type="button" aria-pressed={memoryTab === id} onClick={() => setMemoryTab(id)} className={`min-h-11 shrink-0 rounded-panel px-4 text-sm ${memoryTab === id ? "bg-accent text-accent-ink" : "border border-line text-muted"}`}>
+                  <button key={id} type="button" aria-pressed={memoryTab === id} onClick={() => setMemoryTab(id)} className="min-h-11 rounded-panel px-4 text-sm">
                     {label}
                   </button>
                 ))}
@@ -7389,8 +6931,8 @@ export function CommandApp() {
                 </div>
               )}
               {memoryTab !== "transfer" && <>
-              <div className="mt-4 grid gap-3 md:grid-cols-[16rem_1fr]">
-                <div className="glow-card rounded-panel border border-line bg-surface p-4 text-sm">
+              <div className="memory-layout mt-4 grid gap-3 md:grid-cols-[16rem_1fr]">
+                <div className="memory-overview rounded-panel border border-line bg-surface p-4 text-sm">
                 <p className="font-semibold">Memory overview</p>
                   <p className="mt-3 flex justify-between"><span className="text-muted">Status</span><span className={memoryChoice === "on" ? "text-ok" : "text-danger"}>{memoryChoice === "on" ? "ON" : "OFF"}</span></p>
                   <p className="mt-2 flex justify-between"><span className="text-muted">Active notes</span><span>{ws.memories.filter((item) => !item.archived).length}</span></p>
@@ -7398,7 +6940,7 @@ export function CommandApp() {
                   <p className="mt-2 flex justify-between"><span className="text-muted">Text size</span><span>{formatBytes(memoryBytes)}</span></p>
                   <p className="mt-3 text-xs text-muted">This size is the note text on this device. It is not a cloud quota.</p>
                 </div>
-                <div className="grid gap-2">
+                <div className="memory-editor grid min-w-0 gap-2">
                 <label className="text-sm font-medium" htmlFor="memory-new-note">New note</label>
                 <textarea id="memory-new-note" value={memoryText} maxLength={2000} onChange={(event) => setMemoryText(event.target.value)} placeholder="Write a note you want kept" rows={2} aria-describedby="memory-text-count" className="rounded-panel border border-line bg-surface px-3 py-2 text-sm" />
                 <p id="memory-text-count" className="text-xs text-muted">{memoryText.length.toLocaleString()} / 2,000 characters</p>
@@ -7441,12 +6983,12 @@ export function CommandApp() {
                 </label>
                 </div>
               </div>
-              <ul className="mt-4 space-y-2">
+              <ul className="memory-notes mt-4 space-y-2" aria-label="Saved notes">
                 {memories.length === 0 && <li className="glow-card rounded-panel border border-line bg-surface p-6 text-center text-sm text-muted">{memoryQuery.trim() ? "No notes match your search." : "No saved notes in this view yet."}</li>}
                 {memories.map((item) => (
                   <li
                     key={item.id}
-                    className="rounded-panel border border-line bg-surface p-3 text-sm"
+                    className="memory-note rounded-panel border border-line bg-surface p-3 text-sm"
                     onPointerDown={(event) => {
                       if ((event.target as HTMLElement).closest("button, textarea, input")) return;
                       const timer = window.setTimeout(() => setNoteMenu(item.id), 550);
@@ -7459,9 +7001,10 @@ export function CommandApp() {
                     {editId === item.id ? (
                       <label className="block text-sm">Edit note<textarea maxLength={2000} value={editText} onChange={(event) => setEditText(event.target.value)} className="min-h-20 w-full bg-transparent" /><span className="text-xs text-muted">{editText.length}/2000</span></label>
                     ) : (
-                      <p className="whitespace-pre-wrap">{item.text}</p>
+                      <p className="memory-note-text whitespace-pre-wrap">{item.text}</p>
                     )}
-                    <p className="mt-1 text-xs text-muted">{item.scope}{item.scope === "project" ? (ws.projects.some((project) => project.id === item.projectId) ? "" : " · project removed, note kept") : ""} · {stamp(item.updatedAt)}{item.archived ? " · archived" : ""} · Hold for actions</p>
+                    <p className="memory-note-meta mt-1 text-xs text-muted">{item.scope}{item.scope === "project" ? (ws.projects.some((project) => project.id === item.projectId) ? "" : " · project removed, note kept") : ""} · {stamp(item.updatedAt)}{item.archived ? " · archived" : ""}</p>
+                    <div className="memory-note-actions"><ActionsButton label={`note: ${item.text.slice(0, 56)}`} onOpen={() => setNoteMenu(item.id)} /></div>
                     {editId === item.id ? <button type="button" disabled={!editText.trim()} className="mt-2 min-h-11 rounded-panel border border-line px-3" onClick={() => { setWs((prev) => pushAudit(reviseMemory(prev, item.id, editText), "save_memory", item.id, "revised")); setEditId(null); }}>Save edit</button> : null}
                   </li>
                 ))}
@@ -7480,7 +7023,7 @@ export function CommandApp() {
                     const id = noteMenu;
                     setNoteMenu(null);
                     requestProtected("delete", `delete-memory:${id}`, "Delete this note", "The current text and its versions are removed from this browser.", "Approve delete", () => {
-                      setWs((prev) => pushAudit({ ...prev, memories: prev.memories.filter((note) => note.id !== id) }, "delete_memory", id, "approved"));
+                      setWs((prev) => pushAudit(deleteMemory(prev, id), "delete_memory", id, "approved"));
                     });
                   }}>Delete</button>
                 </ActionOverlay>
@@ -7677,7 +7220,7 @@ export function CommandApp() {
                       <ul className="mt-2 space-y-1">
                         {server.tools.map((tool) => (
                           <li key={tool.name}>
-                            <button type="button" className="min-h-11 w-full rounded-panel border border-line px-3 text-left text-xs" onClick={() => { setLogicRoute(null); setProviderChoice(`mcp:${server.id}:${encodeURIComponent(tool.name)}`); setView("chat"); }}>
+                            <button type="button" className="min-h-11 w-full rounded-panel border border-line px-3 text-left text-xs" onClick={() => useProviderInChat(`mcp:${server.id}:${encodeURIComponent(tool.name)}`)}>
                               {tool.name} · Use in chat
                             </button>
                           </li>
@@ -7708,7 +7251,7 @@ export function CommandApp() {
               {notice && <p className="voice-copy rounded-panel border border-line bg-surface px-3 py-2 text-sm text-muted">{presentVoiceCopy(notice)}</p>}
               <details className="intelligence-group">
                 <summary className="cursor-pointer text-sm font-semibold">API keys</summary>
-              <AiProviderConnections onChange={setCustomAiProviders} onUseModel={(id) => { setLogicRoute(null); setProviderChoice(id); setView("chat"); }} />
+              <AiProviderConnections onChange={setCustomAiProviders} onUseModel={useProviderInChat} />
               </details>
               <details className="intelligence-group">
                 <summary className="cursor-pointer text-sm font-semibold">Provider routes</summary>
@@ -7775,14 +7318,14 @@ export function CommandApp() {
                   </div>
                 </div>
               </div>
-              <div className="solid-form mt-4">
-                <nav className="mb-3 flex flex-wrap gap-2" aria-label="Research page">
+              <div className="solid-form research-workbench mt-4">
+                <nav className="workspace-tabs mb-3 flex flex-wrap gap-2" aria-label="Research page">
                   {([
                     ["search", "Ask"],
                     ["saved", "Saved"],
                     ["files", "Files"],
                   ] as const).map(([id, label]) => (
-                    <button key={id} type="button" className={`min-h-11 rounded-panel border px-3 text-sm ${researchBand === id ? "border-accent bg-accent text-accent-ink" : "border-line"}`} aria-pressed={researchBand === id} onClick={() => setResearchBand(id)}>{label}</button>
+                    <button key={id} type="button" className="min-h-11 rounded-panel border px-3 text-sm" aria-pressed={researchBand === id} onClick={() => setResearchBand(id)}>{label}</button>
                   ))}
                 </nav>
                 <div hidden={researchBand !== "search"}>
@@ -7939,22 +7482,22 @@ export function CommandApp() {
                   {driveConnected ? <button type="button" className="min-h-11 rounded-panel border border-line px-4 text-sm" onClick={() => setCloudPickerOpen(true)}>Browse Drive</button> : null}
                 </div>
               </div>
-              <div id="owner-library" ref={stackLibrary}>
+              <div id="owner-library">
                 {error && <p role="alert" className="mb-2 text-sm text-danger">{error}</p>}
                 {notice && <p role="status" className="mb-2 text-sm text-muted">{notice}</p>}
-                <nav ref={keepGroupRow} className="mb-3 flex flex-wrap gap-2" aria-label="Library groups">
+                <nav className="workspace-tabs mb-3 flex flex-wrap gap-2" aria-label="Library groups">
                   {([
                     ["files", "Files"],
                     ["preview", "Preview"],
                     ["media", "Media"],
                   ] as const).map(([id, label]) => (
-                    <button key={id} type="button" className={`min-h-11 rounded-panel border px-3 text-sm ${libraryBand === id ? "border-accent bg-accent text-accent-ink" : "border-line"}`} aria-pressed={libraryBand === id} onClick={() => setLibraryBand(id)}>{label}</button>
+                    <button key={id} type="button" className="min-h-11 rounded-panel border px-3 text-sm" aria-pressed={libraryBand === id} onClick={() => setLibraryBand(id)}>{label}</button>
                   ))}
                 </nav>
                 <aside className="library-list text-sm" hidden={libraryBand !== "files"}>
                   <p className="font-semibold">Text copies</p>
-                  <p className="mt-2 text-xs text-muted">These are the words you attached, not the original file and not a cloud drive.</p>
-                  <ul className="mt-3 space-y-1">
+                  <p className="mt-2 text-xs text-muted">Read the saved text. Keep the original file for its full contents.</p>
+                  <ul className="library-text-copies mt-3">
                     {libraryProjectId && <li className="flex flex-wrap items-center gap-3"><span>Project: {ws.projects.find((project) => project.id === libraryProjectId)?.name ?? "Unnamed project"}</span><button type="button" onClick={() => setLibraryProjectId(null)} className="min-h-11 text-accent">All files</button></li>}
                     {!ws.files.some((file) => !libraryProjectId || file.projectId === libraryProjectId) && (
                       <li className="empty-state py-6">
@@ -7964,8 +7507,10 @@ export function CommandApp() {
                     )}
                     {ws.files.filter((file) => !libraryProjectId || file.projectId === libraryProjectId).map((file) => (
                       <li key={file.id}>
-                        <button type="button" onClick={() => { setOpenFileId(file.id); setLibraryBand("preview"); }} className={`dense-row min-h-11 w-full px-2 text-left ${openFileId === file.id ? "tile-active bg-accent text-accent-ink" : ""}`}>
-                          {file.name}
+                        <button type="button" aria-label={file.name} onClick={() => { setOpenFileId(file.id); setLibraryBand("preview"); }} className="library-file min-h-11 w-full text-left">
+                          <FileText aria-hidden="true" className="library-file-icon" />
+                          <span><strong>{file.name}</strong><small>{formatBytes(file.bytes)} · {stamp(file.createdAt)}</small></span>
+                          <span className="library-file-arrow" aria-hidden="true">›</span>
                         </button>
                       </li>
                     ))}
@@ -7981,7 +7526,7 @@ export function CommandApp() {
                   )}
                   {ws.files.filter((file) => file.id === openFileId).map((file) => (
                     <div key={file.id}>
-                      <p className="font-semibold">{file.name}</p>
+                      <p className="font-semibold [overflow-wrap:anywhere]">{file.name}</p>
                       {file.partial && <p className="text-sm text-muted">Partial text copy. Keep the original for the full contents.</p>}
                       <p className="text-xs text-muted">{formatBytes(file.bytes)} · {stamp(file.createdAt)} · {describeFile(file.name, file.text).summary}</p>
                       <pre tabIndex={0} aria-label="File text" className="mt-3 max-h-[60dvh] overflow-auto break-words whitespace-pre-wrap rounded-panel bg-bg p-3 text-sm">{file.text}</pre>
@@ -8203,10 +7748,9 @@ export function CommandApp() {
                       <h3 className="min-w-0">{section.group}</h3>
                       <ActionsButton label={`${section.group} section`} onOpen={() => setSettingsMenu(section.group)} />
                     </div>
-                    <div className="settings-index" ref={(node) => pinShelf(node, "100%", false)}>
+                    <div className="settings-index">
                     {section.items.map(([id, label, detail, open]) => (
-                      <button key={id} type="button" className="adrian-row" style={{ ...menuChip, flex: "1 1 16rem", minWidth: "14rem" }} onClick={open}>
-                        <img src={`/brand/logo-mark.jpg`} alt="" width={28} height={28} />
+                      <button key={id} type="button" className="adrian-row" onClick={open}>
                         <span>
                           <strong>{label}</strong>
                           <small>{detail}</small>
@@ -8296,7 +7840,7 @@ export function CommandApp() {
                   <span className={`h-6 w-11 rounded-full ${failoverPolicy === "grok" ? "bg-accent-ink/30" : "bg-line"}`} />
                 </button>
               </div>
-                <AiProviderConnections onChange={setCustomAiProviders} onUseModel={(id) => { setLogicRoute(null); setProviderChoice(id); setView("chat"); }} />
+                <AiProviderConnections onChange={setCustomAiProviders} onUseModel={useProviderInChat} />
                 <button type="button" className="min-h-11 rounded-panel border border-line px-3 text-sm" onClick={() => setSettingsPane("keys")}>Open Safe keys</button>
                 <button type="button" className="min-h-11 rounded-panel border border-line px-3 text-sm" onClick={() => setView("connected")}>Open connections</button>
               </div>
@@ -8386,7 +7930,7 @@ export function CommandApp() {
                     </table>
                     <p className="mt-1 text-muted">Merge updates matching IDs and adds new records. Replace applies the archive to the browser copy.</p>
                     <div className="mt-2 flex flex-wrap gap-2">
-                      <button type="button" className="min-h-11 rounded-panel border border-line px-3" onClick={() => requestProtected("overwrite", "import-merge", "Merge this archive", "Records with matching IDs are replaced by the versions from this archive.", "Merge archive", () => { setWs((prev) => pushAudit(mergeWorkspace(prev, importPreview.workspace), "import_merge", "archive", "merged")); setImportPreview(null); setImportStatus("Archive merged with this workspace."); })}>
+                      <button type="button" className="min-h-11 rounded-panel border border-line px-3" onClick={() => requestProtected("overwrite", "import-merge", "Merge this archive", "Merge records from the archive. For saved memory, corrections and deletions are preserved.", "Merge archive", () => { setWs((prev) => pushAudit(mergeWorkspace(prev, importPreview.workspace), "import_merge", "archive", "merged")); setImportPreview(null); setImportStatus("Archive merged with this workspace."); })}>
                         Merge
                       </button>
                       <button
@@ -8394,7 +7938,7 @@ export function CommandApp() {
                         className="min-h-11 rounded-panel border border-line px-3"
                         onClick={() =>
                           requestProtected("overwrite", `import-replace:${importPreview.workspace.version}`, "Replace this workspace", "Current chats, notes, projects, and files are replaced by the archive.", "Approve replace", () => {
-                            setWs((prev) => pushAudit({ ...importPreview.workspace, halted: prev.halted || importPreview.workspace.halted }, "import_replace", "archive", "replaced"));
+                            setWs((prev) => pushAudit(replaceFromArchive(prev, importPreview.workspace), "import_replace", "archive", "replaced"));
                             setImportPreview(null);
                             setImportStatus("Workspace replaced with the archive.");
                           })
@@ -8503,11 +8047,11 @@ export function CommandApp() {
       {projectOpen && (
         <Overlay labelledBy="create-project-title" onDismiss={() => { setProjectName(""); setProjectAbout(""); setError(null); setProjectOpen(false); window.setTimeout(() => document.getElementById("new-project-button")?.focus(), 0); }}>
           <h3 id="create-project-title" className="font-display text-2xl font-bold">Create project</h3>
-          <label className="mt-3 block text-sm font-medium" htmlFor="project-name">Project name <span className="text-danger">Required</span></label>
-          <input id="project-name" autoFocus value={projectName} onChange={(event) => { setProjectName(event.target.value); if (error === "Name the project.") setError(null); }} placeholder="Name" aria-describedby={error === "Name the project." ? "project-name-error" : undefined} className="mt-1 min-h-11 w-full rounded-panel border border-line bg-bg px-3 text-sm" />
+          <label className="mt-3 block text-sm font-medium" htmlFor="project-name">Project name <span className="text-muted">(required, up to {PROJECT_NAME_MAX} characters)</span></label>
+          <input id="project-name" autoFocus required maxLength={PROJECT_NAME_MAX} value={projectName} onChange={(event) => { setProjectName(event.target.value); if (error === "Name the project.") setError(null); }} placeholder="Name" aria-describedby={error === "Name the project." ? "project-name-error" : undefined} className="mt-1 min-h-11 w-full rounded-panel border border-line bg-bg px-3 text-sm" />
           {error === "Name the project." ? <p id="project-name-error" role="alert" className="mt-2 text-sm text-danger">Enter a project name before creating it.</p> : null}
-          <label className="mt-3 block text-sm font-medium" htmlFor="project-description">Description <span className="text-muted">Optional</span></label>
-          <textarea id="project-description" value={projectAbout} onChange={(event) => setProjectAbout(event.target.value)} placeholder="What belongs in this project?" rows={3} className="mt-1 w-full rounded-panel border border-line bg-bg px-3 py-2 text-sm" />
+          <label className="mt-3 block text-sm font-medium" htmlFor="project-description">Description <span className="text-muted">(optional, up to 400 characters)</span></label>
+          <textarea id="project-description" maxLength={400} value={projectAbout} onChange={(event) => setProjectAbout(event.target.value)} placeholder="What belongs in this project?" rows={3} className="mt-1 w-full rounded-panel border border-line bg-bg px-3 py-2 text-sm" />
           <div className="mt-3 flex gap-2">
             <button type="button" className="min-h-11 flex-1 rounded-panel border border-line" onClick={() => { setProjectName(""); setProjectAbout(""); setError(null); setProjectOpen(false); window.setTimeout(() => document.getElementById("new-project-button")?.focus(), 0); }}>Cancel</button>
             <button type="button" className="min-h-11 flex-1 rounded-panel bg-accent font-semibold text-accent-ink" onClick={saveProject}>Create</button>
@@ -8880,6 +8424,8 @@ function ReaPanel({
 }
 
 function ChatPane({
+  chatSettingsOpen,
+  onChatSettingsToggle,
   active,
   chats,
   personalityId,
@@ -8902,6 +8448,7 @@ function ChatPane({
   cue,
   onDropCue,
   onReleaseCue,
+  canStop,
   onStop,
   onRename,
   onEdit,
@@ -8988,6 +8535,8 @@ function ChatPane({
   systemStatus,
   onViewAudit,
 }: {
+  chatSettingsOpen: boolean;
+  onChatSettingsToggle: (open: boolean) => void;
   active: Chat | null;
   chats: Chat[];
   personalityId: PersonalityId;
@@ -9010,6 +8559,7 @@ function ChatPane({
   cue: CuedMessage[];
   onDropCue: (id: string) => void;
   onReleaseCue: () => void;
+  canStop: boolean;
   onStop: () => void;
   onRename: (title: string) => void;
   onEdit: (messageId: string, text: string) => void;
@@ -9094,7 +8644,7 @@ function ChatPane({
   recentTasks: ReturnType<typeof recentTasksFromAudit>;
   connectedServices: ReturnType<typeof connectedServicesRail>;
   systemStatus: ReturnType<typeof systemStatusRail>;
-  onViewAudit: (auditId: string) => void;
+  onViewAudit: (auditId: string | null) => void;
 }) {
   const [filter, setFilter] = useState("");
   const [tools, setTools] = useState(false);
@@ -9122,16 +8672,45 @@ function ChatPane({
   const markPreview = (control: string) => {
     setChromeNote(`${control} is preview only. No voice provider is connected.`);
   };
-  const grokVerified = Boolean(active?.messages.some((message) => message.role === "assistant" && typeof message.model === "string" && /grok/i.test(message.model)));
+  const grokVerified = Boolean(active?.messages.some((message) => message.role === "assistant" && /^(grok|xai)$/i.test(message.provider ?? "")));
+  const chatRoute = routeForBotChat(active, { provider: providerChoice, modelTier });
+  const routeId = chatRoute.fromBot ? chatRoute.provider : logicRoute ?? chatRoute.provider;
+  const routeLabel = choices.find((choice) => choice.id === routeId)?.label
+    ?? logicRoutes.find((route) => route.id === routeId)?.label
+    ?? "Selected module unavailable";
   const needle = filter.trim().toLowerCase();
   const scoped = projectId ? chats.filter((chat) => chat.projectId === projectId) : chats;
   const visible = needle ? scoped.filter((chat) => chat.title.toLowerCase().includes(needle)) : scoped;
   const groups = ["Today", "Yesterday", "This week", "Earlier"]
     .map((label) => ({ label, items: visible.filter((chat) => chatBucket(chat) === label) }))
     .filter((group) => group.items.length > 0);
+  const transcript = useRef<HTMLDivElement>(null);
+  const turns = useRef<HTMLDivElement>(null);
+  const following = useRef(true);
+  const previousScrollTop = useRef(0);
+  const [detached, setDetached] = useState(false);
+
+  useLayoutEffect(() => {
+    const pane = transcript.current;
+    const content = turns.current;
+    if (!pane || !content) return;
+    following.current = true;
+    setDetached(false);
+    function followTail() {
+      if (pane && following.current) {
+        pane.scrollTop = pane.scrollHeight;
+        previousScrollTop.current = pane.scrollTop;
+      }
+    }
+    followTail();
+    const observer = new ResizeObserver(followTail);
+    observer.observe(content);
+    observer.observe(pane);
+    return () => observer.disconnect();
+  }, [active?.id]);
   const lastReply = [...(active?.messages ?? [])].reverse().find((msg) => msg.role === "assistant");
   return (
-    <div className="thread-shell flex h-full min-h-0 flex-col xl:flex-row">
+    <div id="chat-thread" className="thread-shell flex h-full min-h-0 flex-col xl:flex-row">
       {!active?.messages.length ? <aside className="flex max-h-72 shrink-0 flex-col border-b border-line xl:max-h-none xl:w-64 xl:border-r xl:border-b-0" data-testid="thread-history">
         <div className="p-3">
           <button type="button" onClick={onNew} className="flex min-h-11 w-full items-center justify-center gap-2 rounded-panel bg-accent text-sm font-semibold text-accent-ink">
@@ -9170,7 +8749,15 @@ function ChatPane({
          {active && customPersonality.trim() ? <p className="mt-1 text-sm text-muted">{active.title} is open in Chat. Its saved instructions are used for the next reply.</p> : null}
           {active?.temporary && <div className="text-xs text-muted">Excluded from workspace archives by default</div>}
           {active?.messages.some((message) => message.images?.some((image) => !image.dataUrl)) && <div className="text-xs text-muted">Some images are unavailable. Their references will be included in the transcript.</div>}
-         <details className="thread-chat-settings">
+          <details className="thread-mobile-tools mt-3">
+            <summary className="min-h-11 cursor-pointer text-sm">Provider</summary>
+            <ProviderPicker name="mind-provider-mobile" choices={choices} choice={providerChoice} onChoose={onProvider} logicRoutes={logicRoutes} grokVerified={grokVerified} />
+            <div className="mt-3">
+              {routeId === "grok" && <ModelTierPicker name="mind-tier-mobile" tier={modelTier} onChoose={onModelTier} logicRoute={logicRoute} logicRoutes={logicRoutes} onChooseLogic={onChooseLogic} />}
+            </div>
+          </details>
+        </div>
+        <details id="thread-chat-settings" className="thread-chat-settings" open={chatSettingsOpen} onToggle={(event) => onChatSettingsToggle(event.currentTarget.open)}>
            <summary>Chat settings</summary>
             <p className="text-sm text-muted">Only a configured provider can be selected. Another provider is not substituted.</p>
            <div className="mt-2 flex flex-wrap items-center gap-2">
@@ -9202,21 +8789,24 @@ function ChatPane({
               <MemoryChatToggle memory={memoryChoice} onChange={onMemoryChange} disabled={busy || halted} />
             </div>
           )}
-          </details>
-          <details className="thread-mobile-tools mt-3">
-            <summary className="min-h-11 cursor-pointer text-sm">Provider</summary>
-            <ProviderPicker name="mind-provider-mobile" choices={choices} choice={providerChoice} onChoose={onProvider} logicRoutes={logicRoutes} grokVerified={grokVerified} />
-            <div className="mt-3">
-              <ModelTierPicker name="mind-tier-mobile" tier={modelTier} onChoose={onModelTier} logicRoute={logicRoute} logicRoutes={logicRoutes} onChooseLogic={onChooseLogic} />
-            </div>
-          </details>
-        </div>
-        <div className="min-h-0 flex-1 space-y-3 overflow-auto p-4">
+        </details>
+        <div ref={transcript} className="min-h-0 flex-1 overflow-auto p-4" onScroll={(event) => {
+          const pane = event.currentTarget;
+          const end = Math.max(0, pane.scrollHeight - pane.clientHeight);
+          const top = pane.scrollTop;
+          // Growing content can increase the distance from the tail before its resize callback.
+          // Only an actual upward scroll should detach a reader who was following.
+          if (end - top < 32) following.current = true;
+          else if (top < Math.min(previousScrollTop.current, end) - 1) following.current = false;
+          previousScrollTop.current = top;
+          setDetached(!following.current);
+        }}>
+          <div ref={turns} className="space-y-3">
           <ChatMediaGallery messages={active?.messages} onUseInComposer={onSaveImage} onEditImagine={onEditImagine} onDownload={onDownloadImage} />
           {(!active || active.messages.length === 0) && !busy && (
             <div className="grid min-h-64 place-items-center text-center">
               <ChatEmptyHero
-                title={active?.botProvider || active?.botTier ? `${active.botProvider ?? "Chat’s provider"} · ${active.botTier ?? "Chat’s tier"}` : undefined}
+                title={chatRoute.fromBot ? `${routeLabel} · ${chatRoute.modelTier}` : routeLabel}
                 subtitle={active?.agentId ? "This conversation belongs to the bot." : undefined}
               />
             </div>
@@ -9225,7 +8815,15 @@ function ChatPane({
             const last = active.messages.at(-1);
             return (
             <article key={msg.id} className={`turn w-full max-w-none px-1 py-2 text-sm ${msg.role === "user" ? "turn-user" : "turn-assistant"}`}>
-              <p className="mb-1 text-xs text-muted">{msg.role === "user" ? "You" : msg.model || "Grok 4.5"} · {stamp(msg.at)}</p>
+              <p className="mb-1 text-xs text-muted">{msg.role === "user" ? "You" : [msg.provider, msg.model].filter(Boolean).join(" · ") || "Assistant · model unreported"} · {stamp(msg.at)}</p>
+              {msg.requestedModel && msg.model !== msg.requestedModel && (
+                <p className="mb-1 break-words text-xs text-muted">Requested {msg.requestedModel}</p>
+              )}
+              {msg.delivery && !(busy && msg.delivery === "submitted" && last?.id === msg.id) && (
+                <p className="mb-1 text-xs text-muted" role="status">
+                  {msg.delivery === "stopped" ? STOPPED_REPLY : msg.delivery === "failed" ? "The provider did not complete this reply." : "No finished reply was saved. The provider may already have received this message."}
+                </p>
+              )}
               {editingId === msg.id ? (
                 <form
                   onSubmit={(event) => {
@@ -9251,7 +8849,7 @@ function ChatPane({
                 {msg.kind === "error" ? (
                   <>
                     <button type="button" className="min-h-11 rounded-full px-3 text-xs" onClick={onRetry}>Retry</button>
-                    <button type="button" className="min-h-11 rounded-full px-3 text-xs" onClick={onViewAudit}>View log</button>
+                    <button type="button" className="min-h-11 rounded-full px-3 text-xs" onClick={() => onViewAudit(null)}>View log</button>
                     <button type="button" className="min-h-11 rounded-full px-3 text-xs" onClick={(event) => event.currentTarget.closest("article")?.setAttribute("hidden", "")}>Dismiss</button>
                   </>
                 ) : null}
@@ -9273,8 +8871,8 @@ function ChatPane({
                   </button>
                 )}
                 {msg.role === "assistant" && last?.id === msg.id && (
-                  <button type="button" className="min-h-11 rounded-full px-3 text-xs" onClick={busy ? onStop : onRegenerate} disabled={halted}>
-                    {replyActions({ role: "assistant", busy, speaking: false, hasSources: replyHasSources(msg.content) }).includes("stop-generating") ? "Stop generating" : "Regenerate"}
+                  <button type="button" className="min-h-11 rounded-full px-3 text-xs" onClick={onRegenerate} disabled={busy || halted}>
+                    Regenerate
                   </button>
                 )}
                 {msg.role === "assistant" && (
@@ -9349,6 +8947,7 @@ function ChatPane({
               </ul>
             </div>
           )}
+          {error && <p className="rounded-panel border border-line bg-surface px-3 py-2 text-sm text-danger" role="status">{error}</p>}
           {busy && liveText && (
             <article className="turn turn-assistant w-full max-w-none px-1 py-2 text-sm">
               <p className="mb-1 text-xs text-muted">{modelTier} · writing</p>
@@ -9357,15 +8956,20 @@ function ChatPane({
           )}
           {busy && !liveText && toolTimeline.length === 0 && (
             <div className="turn turn-assistant w-full max-w-none space-y-2 px-1 py-2" aria-live="polite">
-              <p className="text-xs text-muted">{active?.messages.at(-1)?.content.startsWith("/video") ? "Rendering the video." : active?.messages.at(-1)?.content.startsWith("/imagine") ? "Creating the image." : "Waiting for Grok."}</p>
+              <p className="text-xs text-muted">{active?.messages.at(-1)?.content.startsWith("/video") ? "Rendering the video." : active?.messages.at(-1)?.content.startsWith("/imagine") ? "Creating the image." : "Waiting for the selected provider."}</p>
               <div className="skeleton h-3" style={{ width: "75%" }} />
               <div className="skeleton h-3" style={{ width: "50%" }} />
               <div className="skeleton h-3" style={{ width: "66%" }} />
-              <button type="button" className="chat-pill min-h-11 border border-line px-3 text-sm" data-testid="stop-reply" onClick={onStop}>Stop this reply</button>
             </div>
           )}
           {voiceListening ? <div className="flex items-center gap-2"><VoiceLevelMeter level={voiceLevel} listening={voiceListening} /></div> : null}
         </div>
+        </div>
+        {detached && <button type="button" className="jump-to-latest" onClick={() => {
+          following.current = true;
+          setDetached(false);
+          if (transcript.current) transcript.current.scrollTop = transcript.current.scrollHeight;
+        }}>Jump to latest</button>}
         {cue.length > 0 ? (
           <div className="rounded-panel border border-line p-2" data-testid="message-cue">
             <p className="text-xs uppercase tracking-wide text-muted">Next</p>
@@ -9392,10 +8996,10 @@ function ChatPane({
           </div>
         ) : null}
         {lastReply ? (
-          <div className="next-guesses flex gap-2 overflow-x-auto px-3 pb-1" data-testid="next-guesses">
+          <div className="next-guesses px-3 pb-1" data-testid="next-guesses">
             <button type="button" className="suggestion-chip shrink-0" onClick={() => setDraft("Go deeper on that")}>Go deeper</button>
             <button type="button" className="suggestion-chip shrink-0" onClick={() => setDraft("Make that shorter")}>Make it shorter</button>
-            {lastReply?.kind === "error" || lastReply?.content.startsWith("/imagine") ? null : <button type="button" className="suggestion-chip shrink-0" onClick={() => setDraft("Turn that into an image")}>Turn that into an image</button>}
+            {lastReply?.kind === "error" || lastReply?.content.startsWith("/imagine") ? null : <button type="button" className="suggestion-chip shrink-0" onClick={() => setDraft("Turn that into an image")}>Make an image</button>}
           </div>
         ) : null}
         <form
@@ -9413,6 +9017,12 @@ function ChatPane({
             for (const file of files.slice(0, 4)) onAddImageFile(file);
           }}
         >
+          {canStop && (
+            <div className="mb-2 flex justify-end">
+              <button type="button" className="chat-pill min-h-11 border border-line px-3 text-sm" data-testid="stop-reply" onClick={onStop}>Stop this reply</button>
+            </div>
+          )}
+          <div className="thread-draft">
           {onPickModule && (!active || active.messages.length === 0) ? <ModuleSuggestions draft={draft} onPick={onPickModule} /> : null}
           <textarea
             value={draft}
@@ -9456,18 +9066,9 @@ function ChatPane({
               <p className="text-xs text-muted">Chat stays on Grok. Imagine generates images via grok-imagine-image. Video is not called.</p>
             </div>
           )}
+          </div>
           <div className="composer-toolbar mt-2 flex flex-wrap items-center gap-2">
-            <details className="composer-more" onKeyDown={(event) => {
-              if (event.key !== "Escape" || !event.currentTarget.open) return;
-              event.stopPropagation();
-              event.currentTarget.open = false;
-              event.currentTarget.querySelector("summary")?.focus();
-            }} onToggle={(event) => {
-              const menu = event.currentTarget.querySelector("[data-testid='composer-more-menu']");
-              if (menu instanceof HTMLElement) pinComposerMenu(menu);
-            }}>
-              <summary>More</summary>
-              <div className="composer-more__menu" ref={(node) => pinComposerMenu(node)} data-testid="composer-more-menu">
+            <ComposerMore testId="composer-more-menu">
                 <MenuCluster label="Files">
                   <button type="button" className="inline-flex items-center gap-2 rounded-panel border border-line/80 bg-white/5 px-3 text-sm" style={menuChip} onClick={onAttach}>
                     <Paperclip className="size-4" /> Attach
@@ -9504,8 +9105,7 @@ function ChatPane({
                     </select>
                   </label>
                 </MenuCluster>
-              </div>
-            </details>
+            </ComposerMore>
             <div className="legacy-composer-voice"><VoiceLevelMeter level={voiceLevel} listening={voiceListening} />
             <BrowserDictationControl
               state={dictationState}
@@ -9618,7 +9218,7 @@ function ChatPane({
         <details className="rail-pack">
           <summary>Mode</summary>
           <section className="glass-panel rounded-panel p-3">
-            <ModelTierPicker name="mind-tier-side" tier={modelTier} onChoose={onModelTier} logicRoute={logicRoute} logicRoutes={logicRoutes} onChooseLogic={onChooseLogic} />
+            {routeId === "grok" && <ModelTierPicker name="mind-tier-side" tier={modelTier} onChoose={onModelTier} logicRoute={logicRoute} logicRoutes={logicRoutes} onChooseLogic={onChooseLogic} />}
           </section>
         </details>
         <details className="rail-pack">
@@ -9951,37 +9551,36 @@ function ProviderPicker({
   logicRoutes?: LogicRoutePublic[];
   grokVerified?: boolean;
 }) {
-  const groupOf = (item: { id: string; label: string }) => {
-    const label = item.label.toLowerCase();
-    if (item.id === "grok" || label.startsWith("grok")) return "Grok";
-    if (item.id === "openrouter" || label.includes("nemotron") || label.includes("openrouter")) return "OpenRouter";
-    if (item.id === "ollama" || label.includes("local")) return "Local";
-    if (label.includes("orchestrat")) return "Orchestrator";
-    if (item.id === "openai" || label.includes("gpt") || label.includes("astra") || label.includes("sol") || label.includes("luna")) return "Frontier";
-    if (item.id.startsWith("custom:") || item.id.startsWith("mcp:") || item.id.startsWith("service:")) return "Saved";
-    return "Other";
-  };
   const visible = [
     ...choices,
     ...logicRoutes.filter((route) => route.ready).map((route) => ({ id: route.id, label: route.label, enabled: true, reason: route.reason })),
-  ].filter((item, index, all) => item.enabled && all.findIndex((other) => other.id === item.id) === index);
-  const groups = ["Grok", "Frontier", "OpenRouter", "Local", "Orchestrator", "Other", "Saved"].map((title) => ({
-    title,
-    items: visible.filter((item) => groupOf(item) === title),
-  })).filter((group) => group.items.length > 0);
-  const selected = choices.find((item) => item.id === choice);
+  ];
+  const seen = new Set<string>();
+  const groups = new Map<string, { title: string; items: typeof choices }>();
+  for (const item of visible) {
+    if (!item.enabled || seen.has(item.id)) continue;
+    seen.add(item.id);
+    const [kind, source] = item.id.split(":");
+    const external = kind === "custom" || kind === "mcp";
+    const groupId = external ? `${kind}:${source}` : kind === "service" ? "services" : item.id;
+    const title = external ? item.label.split(": ")[0] : kind === "service" ? "Connected services" : item.label;
+    const group = groups.get(groupId) ?? { title, items: [] };
+    group.items.push(item);
+    groups.set(groupId, group);
+  }
+  const selected = visible.find((item) => item.id === choice);
   return (
     <div className="provider-pack">
       <p className="text-sm font-semibold">Providers</p>
       <p className="mt-1 text-xs text-muted">{selected ? selected.label : "Choose a provider"}</p>
-      {groups.map((group) => (
-        <details key={group.title} className="provider-group" open={group.items.some((item) => item.id === choice) || undefined}>
+      {Array.from(groups, ([groupId, group]) => (
+        <details key={groupId} className="provider-group" open={group.items.some((item) => item.id === choice) || undefined}>
           <summary className="flex items-center gap-2">
             {PRODUCT_LOGO[group.title.toLowerCase()] ? <img src={PRODUCT_LOGO[group.title.toLowerCase()]} alt="" width={16} height={16} className="size-4 rounded" /> : null}
             {group.title}
-            {group.title === "Saved" ? <span className="text-xs text-muted">{group.items.length} models</span> : null}
+            {groupId.startsWith("custom:") ? <span className="text-xs text-muted">{group.items.length} {group.items.length === 1 ? "model" : "models"}</span> : null}
           </summary>
-          <div className={group.title === "Saved" ? "max-h-64 overflow-y-auto" : undefined} style={group.title === "Saved" ? { overflowX: "hidden" } : undefined}>
+          <div className="max-h-64 overflow-y-auto overflow-x-hidden">
           {group.items.map((item) => (
             <label key={item.id} className={`flex items-start gap-2 rounded-xl px-2 py-2 text-sm ${choice === item.id ? "model-option-active" : ""} ${!item.enabled ? "opacity-60" : ""}`}>
               <input type="radio" name={name} className="mt-1" checked={choice === item.id} disabled={!item.enabled} onChange={() => { if (item.enabled) onChoose(item.id); }} />

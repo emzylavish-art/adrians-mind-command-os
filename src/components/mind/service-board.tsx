@@ -270,21 +270,19 @@ export function ServiceBoard({
       return (
         <>
           <section className="intelligence-group" aria-label="Connected" data-testid="connected-services">
-            <h3>Connected</h3>
-            <p className="mb-2 text-sm text-muted">Grok and Voice stay here. A connection is removed only when you press Disconnect.</p>
+            <h3>Saved connections</h3>
+            <p className="mb-2 text-sm text-muted">{connected.length ? "Check each service’s status before using it." : "No saved connections yet. Open the service catalog below to get started."}</p>
             <div id="owner-service-board" className="service-board plugin-links">
               {connected.map((service) => renderService(service))}
             </div>
           </section>
           <section className="intelligence-group" aria-label="Build links" data-testid="kimi-connection">
             <h3>Build links</h3>
-            <p className="mb-2 text-sm text-muted">These are the working plugin links. Adding one does not remove Grok or Voice.</p>
             <KimiDeviceConnect />
           </section>
           <section className="intelligence-group" aria-label="Not connected">
             <h3>Not connected</h3>
-            <p className="mb-2 text-sm text-muted">These stay hidden until you ask. Custom MCP is added in Build links, not mixed into the other groups.</p>
-            <button type="button" className="min-h-11 rounded-panel border border-line px-3 text-sm" onClick={() => setShowWaiting((open) => !open)}>
+            <button type="button" className="min-h-11 rounded-panel border border-line px-3 text-sm" aria-expanded={showWaiting} onClick={() => setShowWaiting((open) => !open)}>
               {showWaiting ? "Hide services that are not connected" : `Show ${waiting.length} services that are not connected`}
             </button>
             {showWaiting ? (

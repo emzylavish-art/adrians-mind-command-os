@@ -27,7 +27,7 @@ export function eveAccessNotes(workspace: AccessWorkspace): EveNote[] {
   const connections = (workspace.connections ?? []).slice(0, 8).map((item) => `${item.label || item.provider || "Connection"} ${item.status || "unknown"}`);
   const jobs = (workspace.schedules ?? workspace.jobs ?? []).slice(0, 6).map((item) => `${clip(item.name || "Job", 40)} ${item.enabled ? "on" : "off"}`);
   const brief = [
-    "EVE can read this workspace. Do not invent items that are not listed.",
+    "This summary covers only the visible context. Other records may exist outside its scope.",
     chats.length ? `Chats: ${chats.join(" | ")}` : "Chats: none saved.",
     projects.length ? `Projects: ${projects.join(", ")}` : "Projects: none saved.",
     files.length ? `Files: ${files.join(", ")}` : "Files: none saved.",

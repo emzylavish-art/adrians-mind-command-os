@@ -25,11 +25,12 @@ describe("production build and migration contract", () => {
     const copy = readFileSync(new URL("./copy-pglite-assets.mjs", import.meta.url), "utf8");
     assert.match(copy, /desktop\/app-server\/server\/_libs/);
     assert.match(copy, /pglite\.data/);
-    const download = vercel.redirects.find((rule) => rule.source === "/downloads/AdriansMind-Setup.exe");
-    assert.equal(
-      download?.destination,
-      "https://github.com/emzylavish-art/adrians-mind-command-os/releases/download/desktop-installer/AdriansMind-Setup.exe",
-    );
+    const manifest = readJson("public/desktop-update.json");
+    assert.equal(manifest.download, "https://github.com/emzylavish-art/adrians-mind-command-os/releases/tag/desktop-installer");
+    for (const path of ["/downloads/AdriansMind-Setup.exe", "/downloads/AdriansMind-Setup-Full.exe"]) {
+      const redirect = vercel.redirects.find((rule) => rule.source === path);
+      assert.equal(redirect?.destination, manifest.download);
+    }
   });
 
   it("production migrations and app Postgres access share the pinned CA helper", () => {
@@ -54,5 +55,21 @@ describe("production build and migration contract", () => {
       assert.equal(result.status, 0, result.stderr);
       assert.match(result.stdout, /non-production Vercel environment/);
     }
+  });
+
+  it("production rejects cross-project migration targets before dialing Postgres", () => {
+    const result = spawnSync(process.execPath, [fileURLToPath(new URL("./migrate.mjs", import.meta.url))], {
+      env: {
+        PATH: process.env.PATH,
+        VERCEL: "1",
+        VERCEL_ENV: "production",
+        DATABASE_URL: "postgresql://postgres.first@aws-0-test.pooler.supabase.com/postgres",
+        POSTGRES_URL_NON_POOLING: "postgresql://postgres@db.other.supabase.co/postgres",
+      },
+      encoding: "utf8",
+      timeout: 10_000,
+    });
+    assert.equal(result.status, 1);
+    assert.match(result.stderr, /migration database does not match/);
   });
 });

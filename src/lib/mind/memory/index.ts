@@ -1,4 +1,4 @@
-export { relevantMemories, voiceProviderStatus, safeToResume } from "./relevant.ts";
+export { rankMemories, relevantMemories, voiceProviderStatus, safeToResume } from "./relevant.ts";
 export { MEMORY_TEXT_MAX } from "./constants.ts";
 export { sanitizeMemoryText, isStorableMemoryText } from "./sanitize.ts";
 export {

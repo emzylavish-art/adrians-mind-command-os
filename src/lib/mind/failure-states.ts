@@ -174,6 +174,8 @@ const MODEL_UNAVAILABLE_MARKERS = [
   HONEST_FAILURE_MESSAGES.model_unconfigured,
   "No Grok key is configured",
   "Another provider is not substituted",
+  "The model service returned an empty reply",
+  "The model service could not be reached",
   "Grok returned an empty reply",
   "That provider is not known",
 ];
@@ -181,6 +183,7 @@ const MODEL_UNAVAILABLE_MARKERS = [
 const CHAT_TIMEOUT_MARKERS = [
   CHAT_TIMEOUT_REPLY,
   HONEST_FAILURE_MESSAGES.chat_timeout_stale,
+  "Timed out waiting for the model",
   "Timed out waiting for Grok",
   "Grok did not answer in time",
 ];

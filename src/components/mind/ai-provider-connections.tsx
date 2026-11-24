@@ -1,5 +1,6 @@
-import { useEffect, useState } from "react";
-import { ActionOverlay } from "@/components/mind/conversation-menu";
+import { useEffect, useRef, useState } from "react";
+import { ActionOverlay, rememberMenuAnchor } from "@/components/mind/conversation-menu";
+import { customProviderBlockReason } from "@/lib/mind/provider-catalog";
 import { getBearerToken } from "@/lib/auth/client";
 import type { PublicAiProvider } from "@/lib/mind/ai-provider-config.server";
 
@@ -58,6 +59,16 @@ export function AiProviderConnections({ onChange, onUseModel }: { onChange?: (ro
   const [manual, setManual] = useState<Record<string, string>>({});
   const [loading, setLoading] = useState(false);
   const [rowMenu, setRowMenu] = useState<string | null>(null);
+  const rowTrigger = useRef<HTMLButtonElement | null>(null);
+  function openRowMenu(id: string, button: HTMLButtonElement) {
+    rowTrigger.current = button;
+    rememberMenuAnchor(button);
+    setRowMenu(id);
+  }
+  function closeRowMenu() {
+    setRowMenu(null);
+    requestAnimationFrame(() => rowTrigger.current?.focus({ preventScroll: true }));
+  }
   const [notice, setNotice] = useState("API keys are encrypted on the server. Adding a provider never makes a paid inference request.");
   const load = async () => {
     const data = await api(null);
@@ -166,14 +177,23 @@ export function AiProviderConnections({ onChange, onUseModel }: { onChange?: (ro
             className="adrian-layer rounded-panel border border-line p-3"
             onPointerDown={(event) => {
               if ((event.target as HTMLElement).closest("button, select, input")) return;
-              const timer = window.setTimeout(() => setRowMenu(row.id), 550);
+              const button = event.currentTarget.querySelector<HTMLButtonElement>("[data-provider-actions]");
+              if (!button) return;
+              const timer = window.setTimeout(() => openRowMenu(row.id, button), 550);
               event.currentTarget.dataset.hold = String(timer);
             }}
             onPointerUp={(event) => window.clearTimeout(Number(event.currentTarget.dataset.hold))}
             onPointerLeave={(event) => window.clearTimeout(Number(event.currentTarget.dataset.hold))}
             onPointerCancel={(event) => window.clearTimeout(Number(event.currentTarget.dataset.hold))}
           >
-            <div className="flex min-w-0 items-start gap-3">{providerLogo(`${row.label} ${row.host}`) ? <img className="size-7 shrink-0 rounded" src={providerLogo(`${row.label} ${row.host}`)!} alt="" width={28} height={28} /> : <span className="provider-identity__custom shrink-0" aria-hidden="true">API</span>}<div><p className="font-semibold">{row.label}</p><p className="text-xs text-muted">{row.host} · {row.status} · {row.models.length} model(s) · Hold for actions</p></div></div>
+            <div className="flex min-w-0 flex-wrap items-start gap-3">
+              {providerLogo(`${row.label} ${row.host}`) ? <img className="size-7 shrink-0 rounded" src={providerLogo(`${row.label} ${row.host}`)!} alt="" width={28} height={28} /> : <span className="provider-identity__custom shrink-0" aria-hidden="true">API</span>}
+              <div className="min-w-0 flex-1 [overflow-wrap:anywhere]">
+                <p className="font-semibold">{row.label}</p>
+                <p className="text-xs text-muted">{row.host} · {row.status} · {row.models.length} model(s)</p>
+              </div>
+              <button type="button" data-provider-actions aria-label={`Actions for ${row.label}`} aria-haspopup="dialog" aria-expanded={rowMenu === row.id} className="min-h-11 shrink-0 rounded-panel border border-line px-3" onClick={(event) => openRowMenu(row.id, event.currentTarget)}>Actions</button>
+            </div>
             {row.lastError && <p role="status" className="mt-2 text-xs text-muted">{row.lastError}</p>}
             {row.models.length > 0 && <label className="mt-3 block text-sm">Default model
               <select disabled={loading} value={row.defaultModel || ""} className="mt-1 block min-h-11 w-full rounded-panel border border-line bg-bg px-2" onChange={(event) => void run({ action: "model", id: row.id, model: event.target.value }, "Default model updated.")}>
@@ -186,7 +206,7 @@ export function AiProviderConnections({ onChange, onUseModel }: { onChange?: (ro
                 <p className="text-xs text-muted">{row.models.length} models. Free text models are first. The list is not shortened.</p>
                 <ul aria-label={row.label + " models"} className="mt-2 grid max-h-64 gap-2 overflow-y-auto p-1" style={{ overflowX: "hidden" }}>
                   {row.models.map((id, index) => (
-                    <li key={id}>
+                    <li key={id} className="flex items-center gap-2">
                       <button
                         type="button"
                         className="adrian-row flex min-h-11 w-full items-center gap-3 rounded-2xl border border-line px-3 text-left text-xs"
@@ -196,8 +216,12 @@ export function AiProviderConnections({ onChange, onUseModel }: { onChange?: (ro
                         <span aria-hidden="true" className="grid size-7 shrink-0 place-items-center rounded-full bg-surface text-[0.7rem]">{index + 1}</span>
                         <span className="min-w-0 flex-1 break-all">{id}</span>
                         {id.endsWith(":free") ? <span className="shrink-0 rounded-full border border-line px-2 py-1">free</span> : null}
-                        <span className="shrink-0 rounded-full border border-line px-2 py-1" onClick={(event) => { event.stopPropagation(); onUseModel?.(`custom:${row.id}:${encodeURIComponent(id)}`); }}>Use in chat</span>
                       </button>
+                      {onUseModel && (
+                        <button type="button" className="min-h-11 shrink-0 rounded-panel border border-line px-3 text-xs" disabled={Boolean(customProviderBlockReason(row))} title={customProviderBlockReason(row) ?? undefined} aria-label={`Use ${row.label} ${id} in chat`} onClick={() => onUseModel(`custom:${row.id}:${encodeURIComponent(id)}`)}>
+                          Use in chat
+                        </button>
+                      )}
                     </li>
                   ))}
                 </ul>
@@ -213,9 +237,9 @@ export function AiProviderConnections({ onChange, onUseModel }: { onChange?: (ro
           </article>
         ))}
         {rowMenu && rows.some((row) => row.id === rowMenu) ? (
-          <ActionOverlay label={`Actions for ${rows.find((row) => row.id === rowMenu)?.label || "connection"}`} title={rows.find((row) => row.id === rowMenu)?.label || "Connection"} onClose={() => setRowMenu(null)}>
-            <button type="button" disabled={loading} className="flex min-h-11 w-full items-center rounded-2xl px-3 text-left text-sm" onClick={() => { const id = rowMenu; setRowMenu(null); void run({ action: "discover", id }, "Model catalogue refreshed."); }}>Refresh models</button>
-            <button type="button" disabled={loading} className="flex min-h-11 w-full items-center rounded-2xl px-3 text-left text-sm" style={{ color: "rgb(248 113 113)" }} onClick={() => { const id = rowMenu; setRowMenu(null); if (confirm("Remove this AI API connection?")) void run({ action: "delete", id }, "Connection removed."); }}>Remove</button>
+          <ActionOverlay label={`Actions for ${rows.find((row) => row.id === rowMenu)?.label || "connection"}`} title={rows.find((row) => row.id === rowMenu)?.label || "Connection"} onClose={closeRowMenu}>
+            <button type="button" disabled={loading} className="flex min-h-11 w-full items-center rounded-2xl px-3 text-left text-sm" onClick={() => { const id = rowMenu; closeRowMenu(); void run({ action: "discover", id }, "Model catalogue refreshed."); }}>Refresh models</button>
+            <button type="button" disabled={loading} className="flex min-h-11 w-full items-center rounded-2xl px-3 text-left text-sm" style={{ color: "rgb(248 113 113)" }} onClick={() => { const id = rowMenu; closeRowMenu(); if (confirm("Remove this AI API connection?")) void run({ action: "delete", id }, "Connection removed."); }}>Remove</button>
           </ActionOverlay>
         ) : null}
         {loadedOnce && rows.length === 0 && <p className="text-xs text-muted">No custom AI API is saved yet.</p>}

@@ -8,18 +8,20 @@ describe("selected model routing", () => {
     const result = await routeSelectedModel({
       id: "nemotron",
       prompt: "Name the routed model.",
+      history: [{ role: "assistant", content: "First response" }],
       env: { OPENROUTER_API_KEY: "test-openrouter-key" },
       fetch: async (url, init) => {
         urls.push(url);
-        const body = JSON.parse(String(init?.body ?? "{}")) as { model?: string };
+        const body = JSON.parse(String(init?.body ?? "{}")) as { model?: string; messages: { content: string }[] };
         assert.equal(body.model, NEMOTRON_MODEL);
+        assert.equal(body.messages[0]?.content, "First response");
         assert.match(String((init?.headers as Record<string, string>).authorization), /test-openrouter-key/);
-        return { ok: true, status: 200, text: async () => JSON.stringify({ choices: [{ message: { content: "Routed reply from Nemotron." } }] }) };
+        return { ok: true, status: 200, text: async () => JSON.stringify({ model: "upstream-nemotron-revision", choices: [{ message: { content: "Routed reply from Nemotron." } }] }) };
       },
     });
     assert.equal(result.ok, true);
     assert.equal(result.text, "Routed reply from Nemotron.");
-    assert.equal(result.model, NEMOTRON_MODEL);
+    assert.equal(result.model, "upstream-nemotron-revision");
     assert.equal(urls.length, 1);
     assert.match(urls[0], /openrouter.ai/);
     assert.equal(urls.some((url) => url.includes("x.ai")), false);
@@ -38,7 +40,7 @@ describe("selected model routing", () => {
     });
     assert.equal(result.ok, true);
     assert.equal(result.text, "Routed reply from the local model.");
-    assert.equal(result.model, "ollama");
+    assert.equal(result.model, "model unknown");
   });
 
   it("refuses a missing runner without substituting Grok", async () => {

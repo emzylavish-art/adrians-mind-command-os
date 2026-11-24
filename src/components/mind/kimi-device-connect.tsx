@@ -1,5 +1,4 @@
-import { useState } from "react";
-import { useEffect } from "react";
+import { useEffect, useId, useRef, useState } from "react";
 import { getBearerToken } from "@/lib/auth/client";
 
 type Start = {
@@ -14,7 +13,7 @@ type Start = {
   connection?: { label?: string; state?: string; error?: string };
 };
 
-const OFFICIAL = [
+const CURATED = [
   { id: "superpowers", name: "Superpowers", mark: "Sp", image: "", color: "#d97757", description: "Planning, debugging, and delivery workflows.", action: "link" as const, href: "https://github.com/obra/superpowers" },
   { id: "vercel-plugin", name: "Vercel", mark: "Vc", image: "/brand/logos/vercel.svg", color: "#111111", description: "Deploy skills and conventions.", action: "link" as const, href: "https://github.com/vercel/vercel-plugin" },
   { id: "modern-web-guidance", name: "Web guidance", mark: "Wb", image: "", color: "#1a73e8", description: "Web platform and browser guidance.", action: "link" as const, href: "https://github.com/GoogleChrome/modern-web-guidance" },
@@ -22,9 +21,10 @@ const OFFICIAL = [
 ] as const;
 
 const ADDED_KEY = "adrian-added-plugins";
+const PLUGIN_TABS = ["installed", "official", "curated", "custom"] as const;
 
 export function KimiDeviceConnect() {
-  const [mode, setMode] = useState<"oauth" | "key">("oauth");
+  const tabId = useId();
   const [notice, setNotice] = useState("Build uses the saved Grok key. There is no separate coding login.");
   const [userCode, setUserCode] = useState("");
   const [url, setUrl] = useState("");
@@ -33,6 +33,7 @@ export function KimiDeviceConnect() {
   const [plugins, setPlugins] = useState<{ id: string; name: string; description: string }[]>([]);
   const [busy, setBusy] = useState(false);
   const [added, setAdded] = useState<string[]>([]);
+  const curatedTab = useRef<HTMLButtonElement>(null);
   const [tab, setTab] = useState<"installed" | "official" | "curated" | "custom">("official");
 
   useEffect(() => {
@@ -47,17 +48,10 @@ export function KimiDeviceConnect() {
     localStorage.setItem(ADDED_KEY, JSON.stringify(next));
   }
 
-  function addPlugin(plugin: (typeof OFFICIAL)[number]) {
+  function addPlugin(plugin: (typeof CURATED)[number]) {
     if (!added.includes(plugin.id)) remember([...added, plugin.id]);
     setTab("custom");
-    if (plugin.action === "key") {
-      setMode("key");
-      setNotice(`${plugin.name} is on Adrian. Paste the key below. It stays on the server and is not shown again.`);
-      window.setTimeout(() => document.getElementById("kimi-api-key")?.focus(), 80);
-      return;
-    }
     if (plugin.action === "mcp") {
-      setMode("oauth");
       setNotice(`${plugin.name} is on Adrian. Paste its MCP address below, then press Connect MCP.`);
       window.setTimeout(() => document.getElementById("kimi-mcp-url")?.focus(), 80);
       return;
@@ -102,25 +96,37 @@ export function KimiDeviceConnect() {
   }
 
   return (
-    <section className="mt-6 rounded-panel border border-line p-3" aria-label="Plugins">
+    <section className="plugin-catalog rounded-panel border border-line p-3" aria-label="Plugins">
       <h3 className="font-semibold">Plugins</h3>
       <p className="mt-1 text-sm text-muted">{notice}</p>
-      <div className="mt-3 flex flex-wrap gap-1" role="tablist" aria-label="Plugin groups">
-        {(["installed", "official", "curated", "custom"] as const).map((item) => (
-          <button key={item} type="button" role="tab" aria-selected={tab === item} onClick={() => setTab(item)} className={"min-h-11 rounded-panel border px-3 text-sm capitalize " + (tab === item ? "border-accent bg-surface font-semibold" : "border-line")}>
+      <div className="workspace-tabs mt-3 flex flex-wrap gap-1" role="tablist" aria-label="Plugin groups" onKeyDown={(event) => {
+        const index = PLUGIN_TABS.indexOf(tab);
+        const last = PLUGIN_TABS.length - 1;
+        const next = event.key === "ArrowRight" ? (index + 1) % PLUGIN_TABS.length
+          : event.key === "ArrowLeft" ? (index + last) % PLUGIN_TABS.length
+          : event.key === "Home" ? 0
+          : event.key === "End" ? last : -1;
+        if (next < 0) return;
+        event.preventDefault();
+        setTab(PLUGIN_TABS[next]);
+        event.currentTarget.querySelectorAll<HTMLButtonElement>('[role="tab"]')[next]?.focus();
+      }}>
+        {PLUGIN_TABS.map((item) => (
+          <button key={item} id={`${tabId}-${item}`} ref={item === "curated" ? curatedTab : undefined} type="button" role="tab" aria-selected={tab === item} aria-controls={`${tabId}-panel`} tabIndex={tab === item ? 0 : -1} onClick={() => setTab(item)} className="min-h-11 rounded-panel border px-3 text-sm capitalize">
             {item}
           </button>
         ))}
       </div>
-      <div className="mt-3 grid gap-2" aria-label="Adrian plugins">
-        {(tab === "installed" ? OFFICIAL.filter((plugin) => added.includes(plugin.id)) : tab === "official" ? [] : tab === "curated" ? OFFICIAL : []).map((plugin) => {
+      <div id={`${tabId}-panel`} role="tabpanel" aria-labelledby={`${tabId}-${tab}`} tabIndex={0}>
+      <div className="mt-3 grid gap-2" role="group" aria-label="Adrian plugins">
+        {(tab === "installed" ? CURATED.filter((plugin) => added.includes(plugin.id)) : tab === "curated" ? CURATED : []).map((plugin) => {
           const on = added.includes(plugin.id);
           return (
             <article key={plugin.id} className="plugin-link">
               <div className="plugin-link__main">
                 {plugin.image.endsWith(".svg") ? <img className="service-mark" src={plugin.image} alt="" width={28} height={28} /> : <span className="service-mark" style={{ background: plugin.color, color: "#fff" }} aria-hidden="true">{plugin.mark}</span>}
                 <div className="min-w-0">
-                  {"href" in plugin && plugin.href ? <a className="inline-flex min-h-11 items-center font-semibold underline" href={plugin.href} target="_blank" rel="noreferrer">{plugin.name}</a> : <p className="font-semibold">{plugin.name}</p>}
+                  <a className="inline-flex min-h-11 items-center font-semibold underline" href={plugin.href} target="_blank" rel="noreferrer">{plugin.name}</a>
                   <p className="text-sm text-muted">{plugin.description}</p>
                 </div>
               </div>
@@ -132,15 +138,21 @@ export function KimiDeviceConnect() {
             </article>
           );
         })}
-        {tab === "installed" && added.length === 0 ? <p className="text-sm text-muted">Nothing is added yet. Open Official or Curated and press Add.</p> : null}
+        {(tab === "official" || (tab === "installed" && added.length === 0)) && (
+          <div className="plugin-empty">
+            <p className="text-sm text-muted">{tab === "official" ? "No official plugins are listed yet." : "No plugins added yet."}</p>
+            <button type="button" className="mt-2 min-h-11 rounded-panel border border-line px-3" onClick={() => { setTab("curated"); curatedTab.current?.focus(); }}>Browse curated plugins</button>
+          </div>
+        )}
       </div>
       {tab === "custom" ? <div>
       <p className="mt-3 text-sm text-muted">There is no separate coding login on this page. A coding task uses the Grok key already saved for Adrian.</p>
       <form className="mt-4 flex flex-wrap gap-2" onSubmit={(event) => { event.preventDefault(); void saveMcp(); }}>
-        <input id="kimi-mcp-url" value={mcpUrl} onChange={(event) => setMcpUrl(event.target.value)} placeholder="https://your-mcp.example/mcp" className="min-h-11 min-w-64 flex-1 rounded-panel border border-line bg-bg px-3 text-sm" />
+        <input id="kimi-mcp-url" aria-label="Custom plugin server URL" value={mcpUrl} onChange={(event) => setMcpUrl(event.target.value)} placeholder="https://your-mcp.example/mcp" className="min-h-11 min-w-0 flex-1 rounded-panel border border-line bg-bg px-3 text-sm" />
         <button type="submit" className="min-h-11 rounded-panel border border-line px-3 text-sm" disabled={busy}>Connect MCP</button>
       </form>
       </div> : null}
+      </div>
       {plugins.length > 0 ? (
         <ul className="mt-3 space-y-1 text-sm">
           {plugins.map((plugin) => <li key={plugin.id || plugin.name}>{plugin.name}{plugin.description ? `. ${plugin.description}` : ""}</li>)}

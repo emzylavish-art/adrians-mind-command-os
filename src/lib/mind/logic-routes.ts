@@ -4,8 +4,8 @@
  * names the selection, the payload, and the honest not-ready copy.
  */
 
-import type { ModelTier } from "./model-tiers.ts";
-import { normalizeBotKnowledge } from "./bot-model.ts";
+import { isConnectedGrokModel, type ModelTier } from "./model-tiers.ts";
+import { normalizeBotKnowledge, normalizeBotModel } from "./bot-model.ts";
 
 export type { ModelTier };
 
@@ -184,16 +184,18 @@ export function readinessFromProviderStatus(snapshot: ProviderStatusSnapshot): L
 
 export type StoredSelection = {
   provider: string;
+  grokModel?: string;
   personalityId?: string;
   customPersonality?: string;
   modelTier: ModelTier;
   logicRoute: LogicRouteId | null;
 };
 
-const STORED_PROVIDERS = new Set(["grok", "openai", "anthropic", "gemini", "openrouter", "ollama", "astra", "sol", "luna"]);
+const GROK_MODEL_STORAGE_KEY = "amcos.grokModel.v1";
 
 export function readStoredProvider(raw: string | null): string {
-  return raw && (STORED_PROVIDERS.has(raw) || /^custom:[0-9a-f-]{36}:[~A-Za-z0-9%_.:/@-]{1,300}$/i.test(raw)) ? raw : "grok";
+  if (isLogicRouteId(raw)) return raw;
+  return normalizeBotModel({ chatProvider: raw }).chatProvider ?? "grok";
 }
 
 export function readSelection(storage: Pick<Storage, "getItem"> | null | undefined): StoredSelection {
@@ -205,6 +207,10 @@ export function readSelection(storage: Pick<Storage, "getItem"> | null | undefin
     const tier = storage?.getItem(MODEL_TIER_STORAGE_KEY);
     if (tier === "Auto" || tier === "Fast" || tier === "Expert" || tier === "Heavy" || tier === "Build") modelTier = tier;
     logicRoute = readStoredLogicRoute(storage?.getItem(LOGIC_ROUTE_STORAGE_KEY) ?? null);
+    const grokModel = storage?.getItem(GROK_MODEL_STORAGE_KEY);
+    if (provider === "grok" && !logicRoute && isConnectedGrokModel(grokModel)) {
+      return { provider, modelTier, logicRoute, grokModel };
+    }
   } catch {
     /* private mode */
   }
@@ -216,6 +222,11 @@ export function writeSelection(storage: Pick<Storage, "setItem" | "removeItem"> 
   try {
     storage.setItem(PROVIDER_STORAGE_KEY, readStoredProvider(selection.provider));
     storage.setItem(MODEL_TIER_STORAGE_KEY, selection.modelTier);
+    if (selection.provider === "grok" && !selection.logicRoute && isConnectedGrokModel(selection.grokModel)) {
+      storage.setItem(GROK_MODEL_STORAGE_KEY, selection.grokModel);
+    } else {
+      storage.removeItem(GROK_MODEL_STORAGE_KEY);
+    }
     if (selection.logicRoute) storage.setItem(LOGIC_ROUTE_STORAGE_KEY, selection.logicRoute);
     else storage.removeItem(LOGIC_ROUTE_STORAGE_KEY);
   } catch {
@@ -322,6 +333,7 @@ export function activePickerLabel(input: {
 }
 
 export type ChatTurnBodyInput = {
+  chatId?: string;
   text: string;
   memory: "off" | "on";
   halted: boolean;
@@ -345,6 +357,7 @@ export type ChatTurnBodyInput = {
 export function chatTurnBody(input: ChatTurnBodyInput): Record<string, unknown> {
   return {
     text: input.text,
+    ...(input.chatId ? { chatId: input.chatId } : {}),
     memory: input.memory,
     halted: input.halted,
     history: input.history,

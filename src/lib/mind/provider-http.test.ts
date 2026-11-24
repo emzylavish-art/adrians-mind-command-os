@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { describe, it } from "node:test";
 import { httpStatusForProviderSelection, selectProvider } from "./provider-call.ts";
-import { CHAT_RATE_LIMIT_REPLY, consumeMindRateLimit, jsonRateLimited, resetMindRateLimitsForTests } from "./limits.ts";
+import { CHAT_RATE_LIMIT_REPLY, consumeMindRateLimit, createChatTurnPreflight, jsonRateLimited, resetMindRateLimitsForTests } from "./limits.ts";
 import { consumeMindTurn } from "./live-turn.ts";
 
 describe("provider selection HTTP status", () => {
@@ -47,13 +47,32 @@ describe("provider selection HTTP status", () => {
 });
 
 describe("non-Grok provider path rate limit", () => {
-  it("handleMindTurn non-grok branch calls consumeMindRateLimit", () => {
+  it("checks the request preflight before consulting helpers and dispatching direct providers", () => {
     const source = readFileSync(new URL("./turn.server.ts", import.meta.url), "utf8");
-    const idx = source.indexOf('selected.id !== "grok"');
-    assert.ok(idx > 0);
-    const slice = source.slice(idx, idx + 900);
-    assert.match(slice, /consumeMindRateLimit\(/);
-    assert.match(slice, /jsonRateLimited\(/);
+    for (const [branch, call] of [
+      ['if (body.composerMode === "orchestrator")', "await collectConsultHelp("],
+      ['if (requestedProvider === "nemotron"', "await routeSelectedModel("],
+      ['if (selected.id !== "grok")', "await callConfiguredProvider("],
+    ]) {
+      const start = source.indexOf(branch);
+      const dispatch = source.indexOf(call, start);
+      assert.ok(start >= 0 && dispatch > start);
+      assert.match(source.slice(start, dispatch), /const blocked = await preflight\(\);\s*if \(blocked\) return blocked;/);
+    }
+  });
+
+  it("charges once per turn, checks for a later stop and blocks the next turn over budget", async () => {
+    resetMindRateLimitsForTests();
+    const user = "orchestrated-turn";
+    for (let i = 0; i < 11; i++) assert.equal(consumeMindRateLimit("chat", user, 12).ok, true);
+    let halted = false;
+    const turn = createChatTurnPreflight(user, async () => halted);
+    assert.equal(await turn(), null);
+    assert.equal(await turn(), null);
+    const next = createChatTurnPreflight(user, async () => false);
+    assert.equal((await next())?.status, 429);
+    halted = true;
+    assert.equal((await turn())?.status, 403);
   });
 
   it("shared chat bucket blocks a non-Grok attempt after a burst", () => {

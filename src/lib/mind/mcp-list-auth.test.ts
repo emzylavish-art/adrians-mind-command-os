@@ -22,6 +22,13 @@ function mockGetSessionUser(input: {
 }
 
 describe("mcp soft-auth with mocked Supabase session", () => {
+  it("auth-off public or unrecognized environments cannot obtain the workstation identity", () => {
+    const off = { sessionUser: null, authConfigured: false, gateIdentityEnabled: false, databaseConfigured: false, devUserId: "dev-user" };
+    assert.equal(resolveMcpListUserId(off), null);
+    assert.equal(resolveMcpListUserId({ ...off, loopbackPreview: true }), "dev-user");
+    assert.equal(resolveMcpListUserId({ ...off, sessionUser: { id: "dev-user" } }), null);
+  });
+
   it("signed-in Supabase session returns ok plus servers", () => {
     const sessionUser = mockGetSessionUser({
       supabaseUser: { id: "sb-user-1", email: "owner@example.com" },

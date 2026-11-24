@@ -422,8 +422,23 @@ button:focus, button:focus-visible, input:focus, input:focus-visible, textarea:f
 </div>
 <script>
 const $ = (id) => document.getElementById(id);
-const store = localStorage;
-$("bridge").value = store.getItem("gpt_bridge_url") || "http://127.0.0.1:8000";
+// Hosted browser profiles can switch users. Keep hosted credentials in the open dashboard only.
+const sessionValues = new Map();
+const store = {
+  getItem(key) {
+    if (pageIsLocal()) {
+      try { return localStorage.getItem(key) || sessionValues.get(key); } catch { /* use the open dashboard */ }
+    }
+    return sessionValues.get(key);
+  },
+  setItem(key, value) {
+    sessionValues.set(key, value);
+    if (pageIsLocal()) {
+      try { localStorage.setItem(key, value); } catch { /* use the open dashboard */ }
+    }
+  },
+};
+$("bridge").value = store.getItem("gpt_bridge_url") || (pageIsLocal() ? "http://127.0.0.1:8000" : "");
 $("secret").value = store.getItem("gpt_bridge_secret") || "";
 $("token").value = store.getItem("gpt_bridge_token") || "";
 
@@ -443,12 +458,17 @@ function localhostTarget() {
   }
 }
 function pageIsLocal() {
-  return location.hostname === "127.0.0.1" || location.hostname === "localhost";
+  return ["127.0.0.1", "localhost", "[::1]"].includes(location.hostname) || location.protocol === "file:";
 }
 function paintReach() {
   showBase();
   $("openai-base").textContent = "http://127.0.0.1:8000/v1";
   $("openai-key").textContent = "local";
+  if (!base()) {
+    $("reach").textContent = "Enter the address of your bridge to connect for this open dashboard.";
+    paintMast("Not connected", "bad");
+    return;
+  }
   if (!pageIsLocal() && localhostTarget()) {
     $("reach").textContent = "This page is on the public web. It cannot call 127.0.0.1. Paste the tunnel https URL into Bridge URL, or use the buttons from http://127.0.0.1:8000/dashboard. Do not share that URL.";
     return;
@@ -488,6 +508,7 @@ function paintMast(text, mode) {
   chip.className = "pill " + mode;
 }
 async function call(path, options) {
+  if (!base()) throw new Error("Enter your bridge address first.");
   const response = await fetch(base() + path, { ...options, headers: headers() });
   const text = await response.text();
   let body = {};
@@ -591,6 +612,7 @@ function refreshControls() {
 }
 async function poll() {
   paintReach();
+  if (!base() || (!pageIsLocal() && localhostTarget())) return;
   try {
     const data = await call("/dashboard-data");
     misses = 0;
@@ -607,7 +629,7 @@ async function poll() {
     $("logged-in").textContent = "unknown";
     $("logged-in").className = "bad";
     setGuide("down");
-    if (misses === 2) notifyDown(err.message);
+    if (pageIsLocal() && misses === 2) void notifyDown(err.message).catch(show);
   }
 }
 async function notifyDown(reason) {
@@ -749,7 +771,7 @@ $("verify").onclick = () => {
 $("poll-telegram").onclick = () => call("/v1/telegram/poll", { method: "POST" }).then(paintTelegram).catch(show);
 paintReach();
 poll();
-loadAccounts();
+if (pageIsLocal()) loadAccounts();
 setInterval(poll, 5000);
 
 const panels = document.querySelectorAll(".panel");
