@@ -539,7 +539,7 @@ export const mcpRegistryList = createServerFn({ method: "GET" })
       gateIdentityEnabled: gateIdentityEnabled(),
       databaseConfigured: Boolean(resolveDatabaseUrl(process.env)),
       devUserId: DEV_USER_ID,
-      loopbackPreview: isLoopbackPreview(),
+      loopbackPreview: !context.bearerToken && isLoopbackPreview(),
     });
     if (!userId) {
       return buildMcpRegistryListPayload(null, []);

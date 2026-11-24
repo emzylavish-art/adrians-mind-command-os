@@ -16,17 +16,52 @@ describe("provider calls", () => {
     assert.equal(configuredProviders({}).openai, false);
     assert.equal(selectProvider("grok", {}).ok, true);
   });
+  it("delivers the full prompt and history and keeps a long vendor reply", async () => {
+    const prompt = "p".repeat(6000) + "!";
+    const history = "h".repeat(7000) + "?";
+    const reply = "r".repeat(6200) + ".";
+    for (const id of ["gemini", "openrouter"] as const) {
+      const result = await callConfiguredProvider({
+        id, key: "fixture", prompt, history: [{ role: "user", content: history }],
+        fetch: async (_url, init) => {
+          const body = JSON.parse(String(init?.body));
+          assert.deepEqual(id === "gemini" ? body.contents.map((row: { parts: { text: string }[] }) => row.parts[0].text) :
+            body.messages.map((row: { content: string }) => row.content), [history, prompt]);
+          const payload = id === "gemini" ? { candidates: [{ content: { parts: [{ text: reply }] } }] } : { choices: [{ message: { content: reply } }] };
+          return Response.json(payload);
+        },
+      });
+      assert.equal(result.text, reply);
+    }
+  });
+
+  it("forwards cancellation to the actual pending vendor fetch", async () => {
+    const controller = new AbortController();
+    let sawAbort = false;
+    const result = callConfiguredProvider({
+      id: "gemini", key: "fixture", prompt: "wait", signal: controller.signal,
+      fetch: (_url, init) => new Promise((_resolve, reject) => {
+        init?.signal?.addEventListener("abort", () => { sawAbort = true; reject(new Error("stopped")); });
+      }),
+    });
+    controller.abort();
+    assert.equal((await result).ok, false);
+    assert.ok(sawAbort);
+  });
+
   it("reports a rate limit without substituting", async () => {
     const result = await callConfiguredProvider({
       id: "anthropic", key: "test-key", prompt: "hello",
       fetch: async (url, init) => {
         assert.match(url, /anthropic/);
         assert.equal((init?.headers as Record<string, string>)["x-api-key"], "test-key");
-        return { ok: false, status: 429, text: async () => "" };
+        return { ok: false, status: 429, headers: new Headers({ "retry-after": "12" }), text: async () => "" };
       },
     });
     assert.equal(result.ok, false);
     assert.match(result.error, /rate limited/);
+    assert.equal(result.httpStatus, 429);
+    assert.equal(result.retryAfter, "12");
     assert.equal(result.text, "");
   });
   it("maps personality system instructions to each provider's native field", async () => {

@@ -1,5 +1,6 @@
 import { relevantMemories } from "./memory/index.ts";
 import { runAgentTurn, type AgentTool } from "./orchestrator.ts";
+import { memoriesForChat } from "./workspace.ts";
 import type { Workspace } from "./types.ts";
 
 export function applyAgentTurn(ws: Workspace, input: {
@@ -9,6 +10,7 @@ export function applyAgentTurn(ws: Workspace, input: {
   tools: AgentTool[];
   toolId?: string;
   now: string;
+  memory?: "on" | "off";
   memories?: { id: string; text: string; archived?: boolean }[];
   complete?: (prompt: string) => { ok: boolean; text: string; toolId?: string };
 }): {
@@ -17,7 +19,20 @@ export function applyAgentTurn(ws: Workspace, input: {
   finalText: string;
   run: { id: string; tool: string; action: string; ok: boolean; detail: string } | null;
 } {
-  const remembered = relevantMemories(input.memories ?? [], input.text);
+  const existing = ws.chats.find((chat) => chat.id === input.chatId);
+  const chat = existing ?? {
+    id: input.chatId,
+    title: input.text.replace(/\s+/g, " ").slice(0, 48),
+    memory: input.memory ?? "off",
+    temporary: false,
+    autonomy: "ask" as const,
+    projectId: null,
+    messages: [],
+    retrievalLog: [],
+  };
+
+  const allowedIds = new Set(input.memories?.map((note) => note.id) ?? []);
+  const remembered = relevantMemories(memoriesForChat(ws, chat).filter((note) => allowedIds.has(note.id)), input.text);
   const complete = input.complete
     ? (prompt: string) => input.complete!(remembered.length ? `Remembered:\n${remembered.map((item) => item.text).join("\n")}\n\n${prompt}` : prompt)
     : undefined;
@@ -37,17 +52,6 @@ export function applyAgentTurn(ws: Workspace, input: {
       : ws.audit;
     return { ws: { ...ws, audit }, status: turn.status, finalText: turn.text, run: null };
   }
-  const existing = ws.chats.find((chat) => chat.id === input.chatId);
-  const chat = existing ?? {
-    id: input.chatId,
-    title: input.text.replace(/\s+/g, " ").slice(0, 48),
-    memory: "off" as const,
-    temporary: false,
-    autonomy: "ask" as const,
-    projectId: null,
-    messages: [],
-    retrievalLog: [],
-  };
   const at = input.now;
   const messages = [
     ...chat.messages,

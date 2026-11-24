@@ -56,4 +56,20 @@ describe("production build and migration contract", () => {
       assert.match(result.stdout, /non-production Vercel environment/);
     }
   });
+
+  it("production rejects cross-project migration targets before dialing Postgres", () => {
+    const result = spawnSync(process.execPath, [fileURLToPath(new URL("./migrate.mjs", import.meta.url))], {
+      env: {
+        PATH: process.env.PATH,
+        VERCEL: "1",
+        VERCEL_ENV: "production",
+        DATABASE_URL: "postgresql://postgres.first@aws-0-test.pooler.supabase.com/postgres",
+        POSTGRES_URL_NON_POOLING: "postgresql://postgres@db.other.supabase.co/postgres",
+      },
+      encoding: "utf8",
+      timeout: 10_000,
+    });
+    assert.equal(result.status, 1);
+    assert.match(result.stderr, /migration database does not match/);
+  });
 });

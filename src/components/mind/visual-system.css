@@ -412,3 +412,214 @@ html[data-theme="light"] .provider-identity {
     font-size: 0.96rem;
   }
 }
+
+/* Home and Chat share one viewport. Only the transcript and oversized panels scroll. */
+#mind-workspace:is([data-view="chat"], [data-view="command"]) {
+  height: var(--mind-visible-height, 100dvh) !important;
+  min-height: 0 !important;
+  max-height: var(--mind-visible-height, 100dvh) !important;
+  overflow: hidden !important;
+}
+#mind-workspace:is([data-view="chat"], [data-view="command"]) .main-stage {
+  height: 100% !important;
+  padding-bottom: env(safe-area-inset-bottom) !important;
+}
+#mind-workspace:is([data-view="chat"], [data-view="command"]) .main-stage > .min-h-0.flex-1 {
+  --page-scroll-bottom: 0px;
+  padding-bottom: 0 !important;
+}
+#command-home {
+  display: flex !important;
+  flex-direction: column !important;
+  justify-content: flex-start !important;
+  min-height: 100% !important;
+  height: auto !important;
+  padding: clamp(12px, 2vw, 24px) !important;
+}
+#command-home .masthead { margin-top: 0 !important; }
+#command-home > .composer-dock,
+#chat-thread form.thread-composer {
+  position: relative !important;
+  inset: auto !important;
+  margin: 0 !important;
+  width: 100% !important;
+  max-width: 100% !important;
+  transform: none !important;
+}
+#command-home > .composer-dock { order: 2 !important; flex: 0 0 auto !important; }
+#command-home .gpt-starters { order: 3 !important; }
+#chat-thread,
+#chat-thread > section {
+  display: flex !important;
+  flex-direction: column !important;
+  height: 100% !important;
+  max-height: 100% !important;
+  min-height: 0 !important;
+  overflow: hidden !important;
+}
+#chat-thread > section > .overflow-auto {
+  flex: 1 1 0 !important;
+  min-height: 0 !important;
+  max-height: none !important;
+  padding-bottom: 12px !important;
+  overflow: auto !important;
+  overscroll-behavior: contain;
+}
+#chat-thread form.thread-composer,
+#command-home .composer-dock form {
+  display: flex !important;
+  flex-direction: column !important;
+  flex-wrap: nowrap !important;
+  align-items: stretch !important;
+  height: auto !important;
+  min-height: 0 !important;
+  gap: 4px;
+}
+#chat-thread form.thread-composer {
+  flex: 0 1 auto !important;
+  max-height: min(68%, 330px) !important;
+  padding: 6px 10px !important;
+  gap: 4px !important;
+  overflow: hidden !important;
+}
+#chat-thread .next-guesses {
+  position: static !important;
+  inset: auto !important;
+  flex: 0 0 auto !important;
+  height: auto !important;
+  max-height: 44px !important;
+}
+#chat-thread .jump-to-latest {
+  align-self: center;
+  flex: none;
+  border: 1px solid var(--mind-border);
+  border-radius: 999px;
+  padding: 4px 12px;
+  color: var(--mind-copy);
+  background: var(--mind-elevated);
+}
+:is(#chat-thread, #command-home) .composer-toolbar {
+  position: static !important;
+  display: flex !important;
+  flex: 0 0 auto !important;
+  flex-wrap: wrap !important;
+  justify-content: flex-start !important;
+  align-items: center !important;
+  width: 100% !important;
+  height: auto !important;
+  max-height: none !important;
+  overflow: visible !important;
+  gap: 4px !important;
+}
+:is(#chat-thread, #command-home) .composer-toolbar > :is(button, details) {
+  flex: 0 0 auto !important;
+  position: relative !important;
+  inset: auto !important;
+  width: auto !important;
+  margin: 0 !important;
+}
+:is(#chat-thread, #command-home) textarea {
+  width: 100% !important;
+  min-width: 0 !important;
+  flex: none !important;
+}
+:is(#chat-thread, #command-home) [aria-label="Attached images"] {
+  display: flex !important;
+  flex-wrap: wrap !important;
+  min-width: 0;
+}
+:is(#chat-thread, #command-home) [aria-label="Attached images"] li {
+  display: flex !important;
+  flex-wrap: wrap;
+  width: fit-content !important;
+  max-width: 100% !important;
+  min-width: 0 !important;
+}
+:is(#chat-thread, #command-home) [aria-label="Attached images"] li > span {
+  max-width: min(12ch, 30vw) !important;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+:is(#chat-thread, #command-home) .composer-more__menu:popover-open {
+  position: fixed !important;
+  inset: var(--menu-top, 8px) auto auto var(--menu-left, 8px) !important;
+  display: flex !important;
+  flex-direction: column !important;
+  flex-wrap: nowrap !important;
+  align-items: stretch !important;
+  width: var(--menu-width, 320px) !important;
+  height: auto !important;
+  min-height: 0 !important;
+  max-height: var(--menu-height, 50dvh) !important;
+  overflow: auto !important;
+  margin: 0 !important;
+  padding: 8px;
+  transform: none !important;
+  background: var(--mind-elevated) !important;
+  box-shadow: var(--mind-shadow);
+  overscroll-behavior: contain;
+}
+:is(#chat-thread, #command-home) .composer-more__menu > section { flex: none !important; }
+@media (min-width: 768px) {
+  #mind-workspace:is([data-view="command"], [data-view="chat"]) > .rail { max-width: 27vw !important; }
+}
+@media (max-height: 540px) {
+  #chat-thread .next-guesses { max-height: 36px !important; }
+}
+
+
+/* Leave a scrollable draft above the send row when attachments or larger type wrap. */
+#chat-thread .thread-draft {
+  min-height: 0;
+  min-width: 0;
+  flex: 1 1 auto;
+  overflow: auto;
+  overflow-wrap: anywhere;
+}
+#chat-thread .thread-draft textarea {
+  display: block !important;
+  margin: 0 !important;
+}
+:is(#command-home, #chat-thread) .composer-toolbar {
+  margin: 0 !important;
+  padding: 0 !important;
+}
+:is(#command-home, #chat-thread) .composer-toolbar > :is(.composer-send, .gpt-voice, .composer-mic-dictate),
+:is(#command-home, #chat-thread) .composer-toolbar > .composer-more > summary {
+  display: inline-flex !important;
+  align-items: center;
+  justify-content: center;
+  width: auto !important;
+  min-width: 0 !important;
+  min-height: 44px !important;
+  padding: 4px 8px !important;
+  gap: 4px;
+  white-space: nowrap !important;
+}
+:is(#command-home, #chat-thread) [aria-label="Attached images"] li button {
+  width: auto !important;
+  flex: 0 0 auto !important;
+  white-space: nowrap !important;
+  padding-inline: 5px !important;
+}
+#mind-workspace:is([data-view="command"], [data-view="chat"]) .topbar {
+  flex: 0 0 auto !important;
+  max-height: 24dvh !important;
+  min-height: 0 !important;
+  overflow: auto !important;
+}
+#mind-workspace:is([data-view="command"], [data-view="chat"]) [data-testid="failure-banner"] {
+  flex: 0 1 auto;
+  max-height: 20dvh;
+  overflow: auto;
+}
+:is(html, body):has(#mind-workspace:is([data-view="command"], [data-view="chat"])) {
+  position: relative;
+  height: 100% !important;
+  overflow: clip !important;
+}
+#command-home .composer-more { display: block !important; }
+#command-home .composer-toolbar { order: 3; }
+#command-home textarea { order: 0; }
+#command-home .composer-more__menu :is(.composer-effort, label:has(select)) { display: flex !important; }

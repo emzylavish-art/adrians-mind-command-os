@@ -333,6 +333,7 @@ export function activePickerLabel(input: {
 }
 
 export type ChatTurnBodyInput = {
+  chatId?: string;
   text: string;
   memory: "off" | "on";
   halted: boolean;
@@ -356,6 +357,7 @@ export type ChatTurnBodyInput = {
 export function chatTurnBody(input: ChatTurnBodyInput): Record<string, unknown> {
   return {
     text: input.text,
+    ...(input.chatId ? { chatId: input.chatId } : {}),
     memory: input.memory,
     halted: input.halted,
     history: input.history,

@@ -1,13 +1,40 @@
 import type { Sql } from "../db";
 import type { Workspace } from "./types";
 
+import { mergeMemoryState, normalizeWorkspace } from "./workspace.ts";
+
 const MAX_JSON = 1_500_000;
 
 export function snapshotTooLarge(ws: Workspace): boolean {
   return JSON.stringify(ws).length > MAX_JSON;
 }
 
-export async function writeSnapshot(sql: Sql, userId: string, ws: Workspace): Promise<void> {
+async function withOwnerSnapshot<T>(sql: Sql, userId: string, fn: (tx: Sql, current: Workspace) => Promise<T>): Promise<T> {
+  if (!sql.transaction) return fn(sql, normalizeWorkspace(await readSnapshot(sql, userId)));
+  return sql.transaction(async (tx) => {
+    // Create a lockable row even on the owner's first save. All snapshot writers use this lock.
+    await tx`insert into mind_snapshot (user_id, payload, updated_at) values (${userId}, '{}'::jsonb, now()) on conflict (user_id) do nothing`;
+    const rows = await tx<{ payload: unknown }>`select payload from mind_snapshot where user_id = ${userId} for update`;
+    return fn(tx, normalizeWorkspace(rows[0]?.payload));
+  });
+}
+
+export function updateOwnerWorkspace<T>(sql: Sql, userId: string, change: (current: Workspace) => { workspace?: Workspace; result: T }): Promise<T> {
+  return withOwnerSnapshot(sql, userId, async (tx, current) => {
+    const { workspace, result } = change(current);
+    if (workspace) await persistSnapshot(tx, userId, workspace);
+    return result;
+  });
+}
+
+export function writeSnapshot(sql: Sql, userId: string, ws: Workspace): Promise<void> {
+  return updateOwnerWorkspace(sql, userId, (current) => ({
+    workspace: { ...ws, ...mergeMemoryState(current, ws) },
+    result: undefined,
+  }));
+}
+
+async function persistSnapshot(sql: Sql, userId: string, ws: Workspace): Promise<void> {
   const payload = JSON.stringify(ws);
   await sql`delete from mind_project where user_id = ${userId}`;
   await sql`delete from mind_chat where user_id = ${userId}`;

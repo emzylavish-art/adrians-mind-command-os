@@ -1,3 +1,4 @@
+import { haltIsOn } from "@/lib/mind/halt.server";
 import { createFileRoute } from "@tanstack/react-router";
 import { requireUserId } from "@/lib/auth/verify.server";
 import { assertSameOrigin } from "@/lib/mind/connectors/oauth-csrf";
@@ -17,16 +18,10 @@ function reply(data: unknown, status = 200): Response {
   });
 }
 
-function loopback(request: Request): boolean {
-  const host = (request.headers.get("host") ?? "").split(":")[0]?.toLowerCase();
-  return host === "127.0.0.1" || host === "localhost" || host === "::1";
-}
-
 async function caller(request: Request): Promise<string | Response> {
   try {
-    return await requireUserId();
+    return await requireUserId(request.headers.get("authorization")?.replace(/^Bearer\s+/i, "") || undefined);
   } catch {
-    if (loopback(request)) return "dev-user";
     return reply({ ok: false, error: "Sign in is required." }, 401);
   }
 }
@@ -84,6 +79,7 @@ export const Route = createFileRoute("/api/mind/nuance/session")({
           }
           return reply({ ok: true, ended: active.ids.length });
         }
+        if (await haltIsOn(user)) return reply({ ok: false, error: "Emergency stop is on or unavailable. Session was not started." }, 403);
         const minted = await mintSavedNuanceSessionForPersona(user, camera, persona);
         if (!minted.ok) return reply({ ok: false, error: redactSecrets(minted.error) }, minted.status);
         return reply({ ok: true, token: minted.token, persona });

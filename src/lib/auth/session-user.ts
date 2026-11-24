@@ -22,3 +22,11 @@ export function pickSessionUser(input: {
   }
   return null;
 }
+
+/** Grant the anonymous workstation identity only in a local runtime without a shared DB. */
+export function localPreviewIdentityAllowed(host: string, env: NodeJS.ProcessEnv): boolean {
+  if (env.VERCEL || env.VERCEL_ENV || env.VERCEL_URL || env.GROK_PROJECT_ID ||
+      env.DATABASE_URL?.trim() || env.POSTGRES_URL?.trim()) return false;
+  if (env.ADRIAN_PC !== "1" && env.NODE_ENV !== "development" && env.NODE_ENV !== "test") return false;
+  return /^(?:localhost|127\.0\.0\.1|\[::1\])(?::[0-9]+)?$/i.test(host);
+}

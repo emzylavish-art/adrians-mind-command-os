@@ -2,7 +2,7 @@ import { createFileRoute } from "@tanstack/react-router";
 import { requireUserId } from "@/lib/auth/verify.server";
 import { listAgents, onlineAgents } from "@/lib/mind/pc-pairing/store";
 import { adrianPcEnabled, runAdrianPc } from "@/lib/mind/adrian-pc.server";
-import { haltIsOn } from "@/lib/mind/halt.server";
+import { haltIsOn, readHaltState } from "@/lib/mind/halt.server";
 
 function json(body: unknown, status = 200) {
   return new Response(JSON.stringify(body), { status, headers: { "content-type": "application/json" } });
@@ -25,6 +25,7 @@ export const Route = createFileRoute("/api/mind/pc/status")({
           const online = onlineAgents(userId).map((a) => a.id);
           return json({
             ok: true,
+            stopState: await readHaltState(userId),
             agents,
             onlineAgentIds: online,
             detail: online.length

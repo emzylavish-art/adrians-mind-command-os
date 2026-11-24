@@ -1,6 +1,9 @@
-import { mkdirSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
+import { readdirSync } from "node:fs";
 import { join } from "node:path";
 import { createFileRoute } from "@tanstack/react-router";
+import { requireUserId } from "@/lib/auth/verify.server";
+import { assertSameOrigin } from "@/lib/mind/connectors/oauth-csrf";
+import { readJsonObjectBody } from "@/lib/mind/request-body";
 
 const root = join(process.cwd(), "skills");
 
@@ -30,37 +33,44 @@ function listSkills() {
 export const Route = createFileRoute("/api/mind/skills")({
   server: {
     handlers: {
-      GET: async () => json({ skills: listSkills(), permission: "not-required" }),
+      GET: async () => {
+        try { await requireUserId(); }
+        catch { return json({ ok: false, error: "Sign in is required." }, 401); }
+        return json({ skills: listSkills() });
+      },
       POST: async ({ request }) => {
-        const body = await request.json().catch(() => ({})) as { title?: string; body?: string };
-        const title = (body.title || "from chat").trim().slice(0, 80);
-        const source = (body.body || "").slice(0, 8000);
-        if (/private key|BEGIN [A-Z ]*PRIVATE|sk-live|xai-|api[_-]?key\s*[:=]/i.test(source)) {
-          return json({ ok: false, error: "That text looks like a secret. It was not saved as a skill." }, 400);
+        const origin = assertSameOrigin(request);
+        if (!origin.ok) return json({ ok: false, error: origin.error }, 403);
+        try { await requireUserId(); }
+        catch { return json({ ok: false, error: "Sign in is required." }, 401); }
+        const result = await readJsonObjectBody(request, 32_000);
+        if (!result.ok) return json({ ok: false, error: result.error }, result.status);
+        const { title: rawTitle, body: rawSource } = result.body;
+        const title = typeof rawTitle === "string" ? rawTitle.replace(/[\r\n]+/g, " ").trim().slice(0, 80) : "From chat";
+        const source = typeof rawSource === "string" ? rawSource.trim() : "";
+        if (!source || source.length > 8000) {
+          return json({ ok: false, error: "Provide proposal text of 1 to 8,000 characters." }, 400);
+        }
+        if (/private key|BEGIN [A-Z ]*PRIVATE|sk-live|xai-|api[_-]?key\s*[:=]/i.test(title + "\n" + source)) {
+          return json({ ok: false, error: "Remove credentials before preparing a skill proposal." }, 400);
         }
         const name = slug(title);
-        const dir = join(root, name);
-        mkdirSync(dir, { recursive: true });
-        const file = [
+        const markdown = [
           "---",
           `name: ${name}`,
-          "description: Saved from chat. Load this skill without asking permission when the task matches.",
+          "description: Proposed from chat. Review the scope and behavior before installation.",
           "---",
           "",
-          `# ${title}`,
+          `# ${title || "From chat"}`,
           "",
-          "Saved from chat. Do the work. Do not ask permission to load this skill.",
-          "",
-          source || "No extra source text was attached.",
+          source,
           "",
         ].join("\n");
-        writeFileSync(join(dir, "SKILL.md"), file);
         return json({
           ok: true,
           name,
-          path: `skills/${name}/SKILL.md`,
-          connected: listSkills(),
-          note: `Saved skills/${name}/SKILL.md. It loads without a permission prompt. Connected skills: ${listSkills().length}.`,
+          markdown,
+          note: "Skill proposal prepared for review.",
         });
       },
     },

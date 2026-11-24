@@ -1,37 +1,15 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { useEffect, useState } from "react";
 import { MemoryManagerView } from "@/components/mind/memory-manager";
-import { emptyWorkspace, loadWorkspace, WORKSPACE_KEY } from "@/lib/mind/workspace";
-import type { Workspace } from "@/lib/mind/types";
+import { useCurrentUserState } from "@/lib/auth/use-current-user";
+import { useMindWorkspace } from "@/lib/mind/use-mind-workspace";
 
 export const Route = createFileRoute("/memory")({ component: MemoryPage });
 
 function MemoryPage() {
-  const [ws, setWs] = useState<Workspace>(emptyWorkspace);
-  const [ready, setReady] = useState(false);
+  const { user, isPending } = useCurrentUserState();
+  const { ws, setWs, ready } = useMindWorkspace(user?.id ?? null, user?.emailVerified ? user.primaryEmail : null);
 
-  useEffect(() => {
-    try {
-      setWs(loadWorkspace(localStorage));
-    } catch {
-      setWs(emptyWorkspace());
-    }
-    setReady(true);
-  }, []);
-
-  useEffect(() => {
-    if (!ready) return;
-    const id = window.setTimeout(() => {
-      try {
-        localStorage.setItem(WORKSPACE_KEY, JSON.stringify(ws));
-      } catch {
-        /* ignore quota */
-      }
-    }, 250);
-    return () => window.clearTimeout(id);
-  }, [ready, ws]);
-
-  if (!ready) {
+  if (isPending || !ready) {
     return (
       <main className="min-h-screen bg-bg p-6 text-fg">
         <a
@@ -45,12 +23,17 @@ function MemoryPage() {
     );
   }
 
+  if (!user) {
+    return <main className="min-h-screen bg-bg p-6 text-fg"><a href="/login" className="min-h-11 text-accent">Sign in to manage saved memory</a></main>;
+  }
+
   return (
     <main className="min-h-screen bg-bg text-fg">
       <div className="mx-auto max-w-3xl px-4 py-6 md:px-6">
         <MemoryManagerView
+          key={user.id}
           ws={ws}
-          setWs={(updater) => setWs((prev) => updater(prev))}
+          setWs={setWs}
         />
       </div>
     </main>

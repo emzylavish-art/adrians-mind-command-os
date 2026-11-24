@@ -1,7 +1,18 @@
-export function relevantMemories(items: { id: string; text: string; archived?: boolean }[], query: string) {
-  const words = query.toLowerCase().split(/[^a-z0-9]+/).filter((word) => word.length >= 4);
-  if (words.length === 0) return [];
-  return items.filter((item) => !item.archived && words.some((word) => item.text.toLowerCase().includes(word))).slice(0, 5);
+type Note = { id: string; text: string; archived?: boolean };
+
+/** Preserve ordinary preferences as fallback; move lexical evidence ahead of unrelated notes. */
+export function rankMemories<T extends Note>(items: T[], query: string) {
+  const words = new Set(query.toLowerCase().match(/[\p{L}\p{N}]{3,}/gu) ?? []);
+  return items.filter((item) => !item.archived).map((item) => {
+    const terms = new Set(item.text.toLowerCase().match(/[\p{L}\p{N}]{3,}/gu) ?? []);
+    let score = 0;
+    for (const word of words) if (terms.has(word)) score += word.length;
+    return { item, score };
+  }).sort((a, b) => b.score - a.score);
+}
+
+export function relevantMemories<T extends Note>(items: T[], query: string) {
+  return rankMemories(items, query).filter((hit) => hit.score > 0).slice(0, 5).map((hit) => hit.item);
 }
 
 export function voiceProviderStatus(voiceKey: string | undefined) {

@@ -123,6 +123,7 @@ export type Workspace = {
   halted: boolean;
   chats: Chat[];
   memories: MemoryItem[];
+  deletedMemoryIds?: string[];
   projects: Project[];
   files: LocalFile[];
   usage: UsageEntry[];

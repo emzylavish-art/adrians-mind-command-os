@@ -10,9 +10,9 @@ export const CHAT_TURN_TIMEOUT_MS = DEFAULT_CHAT_TURN_TIMEOUT_MS;
 /** @deprecated Prefer agentRunTimeoutMs() — kept as the documented default. */
 export const AGENT_RUN_TIMEOUT_MS = DEFAULT_AGENT_RUN_TIMEOUT_MS;
 
-export const CHAT_TIMEOUT_REPLY = "Timed out waiting for Grok. Nothing was saved as a success.";
+export const CHAT_TIMEOUT_REPLY = "Timed out waiting for the model. The provider may have processed this request. Sending again may repeat it.";
 /** Mid-stream drop / fetch failure — distinct from a turn timeout. */
-export const CHAT_DISCONNECT_REPLY = "Connection to the model dropped";
+export const CHAT_DISCONNECT_REPLY = "Connection to the model dropped. The provider may have processed this request. Sending again may repeat it.";
 export const AGENT_TIMEOUT_REPLY = "Timed out waiting for the planner. Nothing was marked finished.";
 
 function readBudgetMs(raw: string | undefined, fallback: number): number {

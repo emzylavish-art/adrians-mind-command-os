@@ -1,5 +1,5 @@
-import { createHash } from "node:crypto";
-import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { createHash, randomUUID } from "node:crypto";
+import { mkdirSync, readFileSync, renameSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { localDataPath } from "../local-data.ts";
 
@@ -16,13 +16,24 @@ function fileFor(userId: string) {
 export function readHaltFile(userId: string): { halted: boolean; ownerId: string | null } {
   try {
     const parsed = JSON.parse(readFileSync(fileFor(userId), "utf8")) as { halted?: boolean; ownerId?: string };
-    return { halted: parsed.halted === true, ownerId: typeof parsed.ownerId === "string" ? parsed.ownerId : null };
-  } catch {
-    return { halted: false, ownerId: null };
+    if (parsed?.ownerId !== userId || typeof parsed.halted !== "boolean") {
+      throw new Error("Unreadable emergency stop state.");
+    }
+    return { halted: parsed.halted, ownerId: userId };
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === "ENOENT") return { halted: false, ownerId: null };
+    throw error;
   }
 }
 
 export function writeHaltFile(userId: string, halted: boolean) {
   mkdirSync(directory, { recursive: true });
-  writeFileSync(fileFor(userId), JSON.stringify({ halted, ownerId: userId }));
+  const target = fileFor(userId);
+  const temporary = target + "." + randomUUID() + ".tmp";
+  try {
+    writeFileSync(temporary, JSON.stringify({ halted, ownerId: userId }), { mode: 0o600 });
+    renameSync(temporary, target);
+  } finally {
+    rmSync(temporary, { force: true });
+  }
 }

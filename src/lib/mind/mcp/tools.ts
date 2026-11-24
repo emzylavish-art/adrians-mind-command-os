@@ -213,9 +213,8 @@ export async function pcRunShell(input: {
     const haltedFn =
       input.isHalted ??
       (async (ownerId: string) => {
-        const { readHaltFile } = await import("../halt-file.ts");
-        const file = readHaltFile(ownerId);
-        return Boolean(file.ownerId && file.halted);
+        const { haltIsOn } = await import("../halt.server.ts");
+        return haltIsOn(ownerId);
       });
     if (await haltedFn(input.ownerId)) {
       return {

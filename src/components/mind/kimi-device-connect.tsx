@@ -1,5 +1,4 @@
-import { useState } from "react";
-import { useEffect } from "react";
+import { useEffect, useRef, useState } from "react";
 import { getBearerToken } from "@/lib/auth/client";
 
 type Start = {
@@ -14,7 +13,7 @@ type Start = {
   connection?: { label?: string; state?: string; error?: string };
 };
 
-const OFFICIAL = [
+const CURATED = [
   { id: "superpowers", name: "Superpowers", mark: "Sp", image: "", color: "#d97757", description: "Planning, debugging, and delivery workflows.", action: "link" as const, href: "https://github.com/obra/superpowers" },
   { id: "vercel-plugin", name: "Vercel", mark: "Vc", image: "/brand/logos/vercel.svg", color: "#111111", description: "Deploy skills and conventions.", action: "link" as const, href: "https://github.com/vercel/vercel-plugin" },
   { id: "modern-web-guidance", name: "Web guidance", mark: "Wb", image: "", color: "#1a73e8", description: "Web platform and browser guidance.", action: "link" as const, href: "https://github.com/GoogleChrome/modern-web-guidance" },
@@ -32,6 +31,7 @@ export function KimiDeviceConnect() {
   const [plugins, setPlugins] = useState<{ id: string; name: string; description: string }[]>([]);
   const [busy, setBusy] = useState(false);
   const [added, setAdded] = useState<string[]>([]);
+  const curatedTab = useRef<HTMLButtonElement>(null);
   const [tab, setTab] = useState<"installed" | "official" | "curated" | "custom">("official");
 
   useEffect(() => {
@@ -46,7 +46,7 @@ export function KimiDeviceConnect() {
     localStorage.setItem(ADDED_KEY, JSON.stringify(next));
   }
 
-  function addPlugin(plugin: (typeof OFFICIAL)[number]) {
+  function addPlugin(plugin: (typeof CURATED)[number]) {
     if (!added.includes(plugin.id)) remember([...added, plugin.id]);
     setTab("custom");
     if (plugin.action === "mcp") {
@@ -99,13 +99,13 @@ export function KimiDeviceConnect() {
       <p className="mt-1 text-sm text-muted">{notice}</p>
       <div className="mt-3 flex flex-wrap gap-1" role="tablist" aria-label="Plugin groups">
         {(["installed", "official", "curated", "custom"] as const).map((item) => (
-          <button key={item} type="button" role="tab" aria-selected={tab === item} onClick={() => setTab(item)} className={"min-h-11 rounded-panel border px-3 text-sm capitalize " + (tab === item ? "border-accent bg-surface font-semibold" : "border-line")}>
+          <button key={item} ref={item === "curated" ? curatedTab : undefined} type="button" role="tab" aria-selected={tab === item} onClick={() => setTab(item)} className={"min-h-11 rounded-panel border px-3 text-sm capitalize " + (tab === item ? "border-accent bg-surface font-semibold" : "border-line")}>
             {item}
           </button>
         ))}
       </div>
       <div className="mt-3 grid gap-2" role="group" aria-label="Adrian plugins">
-        {(tab === "installed" ? OFFICIAL.filter((plugin) => added.includes(plugin.id)) : tab === "official" ? [] : tab === "curated" ? OFFICIAL : []).map((plugin) => {
+        {(tab === "installed" ? CURATED.filter((plugin) => added.includes(plugin.id)) : tab === "curated" ? CURATED : []).map((plugin) => {
           const on = added.includes(plugin.id);
           return (
             <article key={plugin.id} className="plugin-link">
@@ -124,7 +124,12 @@ export function KimiDeviceConnect() {
             </article>
           );
         })}
-        {tab === "installed" && added.length === 0 ? <p className="text-sm text-muted">Nothing is added yet. Open Official or Curated and press Add.</p> : null}
+        {(tab === "official" || (tab === "installed" && added.length === 0)) && (
+          <div>
+            <p className="text-sm text-muted">{tab === "official" ? "No official plugins are listed yet." : "No plugins added yet."}</p>
+            <button type="button" className="mt-2 min-h-11 rounded-panel border border-line px-3" onClick={() => { setTab("curated"); curatedTab.current?.focus(); }}>Browse curated plugins</button>
+          </div>
+        )}
       </div>
       {tab === "custom" ? <div>
       <p className="mt-3 text-sm text-muted">There is no separate coding login on this page. A coding task uses the Grok key already saved for Adrian.</p>

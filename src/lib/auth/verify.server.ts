@@ -1,5 +1,5 @@
 import { getRequest } from "@tanstack/react-start/server";
-import { resolveDatabaseUrl } from "../env.server.ts";
+import { localPreviewIdentityAllowed } from "./session-user.ts";
 import { gateIdentityEnabled } from "./gate-identity.server";
 import { auth, authConfigured } from "./server";
 
@@ -13,21 +13,9 @@ import { auth, authConfigured } from "./server";
  * client-supplied user id — only the result of this verification.
  */
 
-/** True when a real database is configured server-side. */
-const databaseConfigured = Boolean(resolveDatabaseUrl(process.env));
-
-/** Re-export so callers can branch on it without importing `server.ts`. */
 export { authConfigured };
 
-if (databaseConfigured && !authConfigured) {
-  console.error(
-    "[auth] DATABASE_URL/POSTGRES_URL is set but auth is disabled (VITE_AUTH_ENABLED=false) " +
-      "— requireUserId() will reject every request (fail closed) rather than " +
-      "share one dev user on a real database.",
-  );
-}
-
-/** Dev fallback user id, used only when auth is disabled (VITE_AUTH_ENABLED=false). */
+/** Credential-free identity for a local development or packaged workstation. */
 export const DEV_USER_ID = "dev-user";
 
 /**
@@ -81,7 +69,9 @@ async function readBetterAuthSessionUser(
     headers = new Headers(request.headers);
     headers.set("Authorization", `Bearer ${bearerToken}`);
   }
-  const session = await auth.api.getSession({ headers });
+  // The UI can use the signed cache for rendering. Authority for server-side work
+  // must come from the current session record, including after revocation.
+  const session = await auth.api.getSession({ headers, query: { disableCookieCache: true } });
   if (!session?.user?.id) return null;
   return { id: session.user.id, email: session.user.email ?? null };
 }
@@ -104,35 +94,23 @@ export async function getSessionUser(
 /**
  * Resolve the current user id for a server function, or throw when unauthorized.
  * Prefer `authMiddleware` (`./middleware`), which calls this for you.
- * - Auth enabled -> the verified session user id; throws
- *   `UnauthorizedError` when signed out. Works in the sandbox preview too (real
- *   sign-in via the baked preview client).
- * - Auth disabled (`VITE_AUTH_ENABLED=false`) + `DATABASE_URL` set -> throw (fail
- *   closed): one shared dev user on a real database would let every visitor
- *   read/write everyone's rows.
- * - Auth disabled + no database -> the shared dev user id.
+ * Use a verified user whenever credentials are supplied. Only a local
+ * development or packaged PC process can grant a credential-free offline identity.
  */
 export async function requireUserId(bearerToken?: string): Promise<string> {
-  if (isLoopbackPreview() && !databaseConfigured) return DEV_USER_ID;
-  if (!authConfigured && !gateIdentityEnabled()) {
-    if (databaseConfigured) {
-      throw new Error(
-        "Auth is disabled (VITE_AUTH_ENABLED=false) but DATABASE_URL/POSTGRES_URL is set — " +
-          "refusing to fall back to the shared dev user against a real database.",
-      );
-    }
-    return DEV_USER_ID;
-  }
+  if (!bearerToken && isLoopbackPreview()) return DEV_USER_ID;
   const user = await getSessionUser(bearerToken);
-  if (!user) throw new UnauthorizedError();
+  if (!user || user.id === DEV_USER_ID) throw new UnauthorizedError();
   return user.id;
 }
 
-/** This computer's preview only. A public host still requires a real session. */
+/** This computer's preview only, with no session credential presented. */
 export function isLoopbackPreview(): boolean {
   try {
-    const host = (getRequest().headers.get("host") ?? "").split(":")[0]?.toLowerCase();
-    return host === "127.0.0.1" || host === "localhost" || host === "::1";
+    const headers = getRequest().headers;
+    if (headers.has("authorization") || headers.has("x-grok-identity")) return false;
+    if (/(?:^|;\s*)(?:__Host-grok-auth\.|sb-[^=;]*auth-token)/i.test(headers.get("cookie") ?? "")) return false;
+    return localPreviewIdentityAllowed(headers.get("host") ?? "", process.env);
   } catch {
     return false;
   }

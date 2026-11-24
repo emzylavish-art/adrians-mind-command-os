@@ -2,7 +2,7 @@ import { createFileRoute } from "@tanstack/react-router";
 import { requireUserId } from "@/lib/auth/verify.server";
 import { assertSameOrigin } from "@/lib/mind/connectors/oauth-csrf";
 import { consumePcApproval } from "@/lib/mind/pc-pairing/approvals";
-import { readHaltFile } from "@/lib/mind/halt-file";
+import { haltIsOn } from "@/lib/mind/halt.server";
 import { runOnPairedAgent } from "@/lib/mind/pc-pairing/run";
 
 function json(body: unknown, status = 200) {
@@ -19,8 +19,7 @@ export const Route = createFileRoute("/api/mind/pc/approve")({
           const authorization = request.headers.get("authorization");
           const bearer = authorization?.toLowerCase().startsWith("bearer ") ? authorization.slice(7).trim() : undefined;
           const userId = await requireUserId(bearer);
-          const halt = readHaltFile(userId);
-          if (halt.ownerId && halt.halted) {
+          if (await haltIsOn(userId)) {
             return json({ ok: false, error: "Emergency stop is on. Approval was not consumed. Nothing ran." }, 403);
           }
           const body = (await request.json().catch(() => ({}))) as {

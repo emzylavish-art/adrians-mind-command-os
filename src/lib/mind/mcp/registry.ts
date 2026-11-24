@@ -30,7 +30,7 @@ import {
   resolveAndPinMcpHostname,
   type DnsLookupFn,
 } from "./http-dns-pin.ts";
-import { readHaltFile } from "../halt-file.ts";
+import { haltIsOn } from "../halt.server.ts";
 
 export type McpServerKind = "builtin" | "http" | "command";
 
@@ -117,14 +117,9 @@ function timeoutField(value: unknown): number | undefined {
 export type StdioDeps = {
   /** Options forwarded to the stdio runner (timeouts, caps). */
   stdio?: StdioOptions;
-  /** Emergency-stop check. Defaults to the durable halt file. When halted, no stdio child is spawned. */
+  /** Emergency-stop check. Defaults to the authoritative stop state. When halted, no stdio child is spawned. */
   isHalted?: (userId: string) => Promise<boolean> | boolean;
 };
-
-function defaultIsHalted(userId: string): boolean {
-  const file = readHaltFile(userId);
-  return file.ownerId ? file.halted : false;
-}
 
 function stdioConfig(server: RegistryServer) {
   return {
@@ -478,18 +473,18 @@ export async function listRegistryTools(
       });
       continue;
     }
+    if (await (deps.isHalted ?? haltIsOn)(userId)) {
+      tools.push({
+        serverId: server.id,
+        serverLabel: server.label,
+        name: "(halted)",
+        description: "Emergency stop is on or unavailable. The server was not contacted.",
+        enabled: true,
+        status: "error",
+      });
+      continue;
+    }
     if (server.kind === "command") {
-      if (await (deps.isHalted ?? defaultIsHalted)(userId)) {
-        tools.push({
-          serverId: server.id,
-          serverLabel: server.label,
-          name: "(halted)",
-          description: "Emergency stop is on. The stdio server was not started.",
-          enabled: true,
-          status: "error",
-        });
-        continue;
-      }
       const { listStdioTools } = await import("./stdio.ts");
       const listed = await listStdioTools(stdioConfig(server), deps.stdio);
       if (listed.status !== "ok") {
@@ -643,6 +638,9 @@ export async function callRegistryTool(input: {
   if (server.secretUnreadable || (server.tokenEnc && !server.token)) {
     return { status: "error", ok: false, code: "missing_config", serverId: server.id, tool: input.tool, text: "The saved credential cannot be decrypted. Set CONNECTOR_TOKEN_SECRET and save the token again. Nothing was called.", transport: null, rpc: null };
   }
+  if (await (input.isHalted ?? haltIsOn)(input.userId)) {
+    return { status: "error", ok: false, serverId: server.id, tool: input.tool, text: "Emergency stop is on or unavailable. No MCP tool was called." };
+  }
   const args = input.args && typeof input.args === "object" ? input.args : {};
   if (server.kind === "builtin") {
     const result = await callBuiltin(input.tool, args, { getSql: input.getSql, ownerId: input.userId });
@@ -656,9 +654,6 @@ export async function callRegistryTool(input: {
     };
   }
   if (server.kind === "command") {
-    if (await (input.isHalted ?? defaultIsHalted)(input.userId)) {
-      return { status: "error", ok: false, serverId: server.id, tool: input.tool, text: "Emergency stop is on. No MCP tool was called." };
-    }
     const { callStdioTool } = await import("./stdio.ts");
     const result = await callStdioTool(stdioConfig(server), input.tool, args, input.stdio);
     return {

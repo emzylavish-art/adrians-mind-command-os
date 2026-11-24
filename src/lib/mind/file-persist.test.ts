@@ -60,6 +60,7 @@ describe("file database", () => {
         tools: [projects],
         toolId: "list_projects",
         now: "2026-04-01T12:00:00.000Z",
+        memory: "on",
         memories: ws.memories,
         complete: (prompt) => {
           assert.match(prompt, /pier depth is 12 feet/);
@@ -103,6 +104,7 @@ describe("file database", () => {
         tools: [projects],
         toolId: "list_projects",
         now: "2026-04-01T13:00:00.000Z",
+        memory: "on",
         memories: loaded.memories,
         complete: (prompt) => {
           assert.match(prompt, /14 feet/);
@@ -119,6 +121,7 @@ describe("file database", () => {
         tools: [projects],
         toolId: "list_projects",
         now: "2026-04-01T13:05:00.000Z",
+        memory: "on",
         memories: forgotten.memories,
         complete: (prompt) => {
           assert.doesNotMatch(prompt, /Remembered/);

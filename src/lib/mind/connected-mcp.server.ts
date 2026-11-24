@@ -5,7 +5,7 @@ import {
   type PublicConnection,
 } from "./custom-connection.ts";
 import { connectorTokenSecretStatus } from "./connectors/crypto.ts";
-import { readHaltFile } from "./halt-file.ts";
+import { haltIsOn } from "./halt.server.ts";
 import { parseMcpIntent, type McpPublic } from "./mcp.ts";
 import { loadRegistry, type RegistryDb } from "./mcp/registry-store.ts";
 import { removeRegistryServer } from "./mcp/registry.ts";
@@ -16,7 +16,7 @@ type ConnectionDeps = Parameters<typeof saveCustomConnection>[3];
 type Dependencies = ConnectionDeps & { isHalted?: (userId: string) => boolean | Promise<boolean> };
 
 async function halted(userId: string, deps: Dependencies): Promise<boolean> {
-  return deps.isHalted ? deps.isHalted(userId) : readHaltFile(userId).halted;
+  return (deps.isHalted ?? haltIsOn)(userId);
 }
 
 /** Deliberate legacy UI DTO: no URL, bearer, ciphertext or registry internals. */

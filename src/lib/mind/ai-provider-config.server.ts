@@ -183,7 +183,7 @@ async function requestProvider(
   const response = await pinnedHttpFetch(url, pin.pinnedAddress, pin.hostname, {
     ...init,
     redirect: "manual",
-    signal: AbortSignal.timeout(25000),
+    signal: init.signal ? AbortSignal.any([init.signal, AbortSignal.timeout(25000)]) : AbortSignal.timeout(25000),
   });
   const text = await response.text();
   if (text.length > 8_000_000) throw new Error("The provider response exceeded the allowed size.");
@@ -223,7 +223,12 @@ export async function discoverAiModels(userId: string, id: string):
     });
     if (res.status !== 200) {
       lastError = providerError(res.status);
-      status = providerRestriction(res.status) ?? "unavailable";
+      if ((res.status === 404 || res.status === 405) && models.length && row.status !== "credentials_rejected" && row.status !== "quota_or_rate_limited") {
+        status = "configured";
+        lastError = "Model listing is unsupported. The saved model can be tried manually; inference is unverified.";
+      } else {
+        status = providerRestriction(res.status) ?? "unavailable";
+      }
     } else {
       const body = JSON.parse(res.text) as { data?: Array<{ id?: unknown }>; models?: Array<{ id?: unknown; name?: unknown } | string> };
       const found = Array.isArray(body.data) ? body.data : Array.isArray(body.models) ? body.models : [];
@@ -237,6 +242,7 @@ export async function discoverAiModels(userId: string, id: string):
       }
     }
   } catch {
+    if (status !== "credentials_rejected" && status !== "quota_or_rate_limited") status = "unavailable";
     lastError = "Model discovery could not complete. Check the connection and refresh.";
   }
   const defaultModel = row.default_model && models.includes(row.default_model) ? row.default_model : models[0] || "";
@@ -253,6 +259,7 @@ export async function executeCustomChat(
   userId: string,
   selection: { id: string; model: string },
   messages: Array<{ role: "system" | "user" | "assistant"; content: string }>,
+  signal?: AbortSignal,
 ): Promise<
   { ok: true; text: string; model: string; provider: string; requestId: string | null; usage: { prompt_tokens?: number; completion_tokens?: number } | null } |
   { ok: false; error: string }
@@ -273,6 +280,7 @@ export async function executeCustomChat(
       method: "POST",
       headers: request.headers,
       body: request.body,
+      signal,
     });
     if (res.status < 200 || res.status >= 300) {
       const error = providerError(res.status);

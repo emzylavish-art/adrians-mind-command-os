@@ -4,16 +4,16 @@ import { createWorkspaceCheckpoint } from "./workspace-checkpoint";
 import { loadMindCopy, saveMindCopy } from "./server";
 import { chooseServerSync } from "./sync";
 import type { Workspace } from "./types";
-import { accountWorkspaceKey, emptyWorkspace, loadWorkspaceForAccount } from "./workspace";
+import { accountWorkspaceKey, emptyWorkspace, mergeMemoryState, loadWorkspaceForAccount } from "./workspace";
 import { SAVE_FAIL, saveFailureMessage } from "./save-error";
 
 function hasContent(ws: Workspace) {
-  return ws.chats.length + ws.memories.length + ws.projects.length + ws.files.length + ws.audit.length + ws.agents.length > 0;
+  return ws.chats.length + ws.memories.length + ws.projects.length + ws.files.length + (ws.deletedMemoryIds?.length ?? 0) + ws.audit.length + ws.agents.length > 0;
 }
 
-function mergeStoredAgents(ws: Workspace, stored: Workspace): Workspace {
+function reconcileStoredRecords(ws: Workspace, stored: Workspace): Workspace {
   const missing = stored.agents.filter((agent) => !ws.agents.some((item) => item.id === agent.id));
-  return missing.length > 0 ? { ...ws, agents: [...ws.agents, ...missing] } : ws;
+  return { ...ws, ...mergeMemoryState(ws, stored), agents: [...ws.agents, ...missing] };
 }
 
 
@@ -78,7 +78,7 @@ export function useMindWorkspace(userId: string | null = "dev-user", email: stri
         local = localRaw;
       }
       if (cancel || loadGen !== persistGen.current) return;
-      local = mergeStoredAgents(local, localRaw);
+      local = reconcileStoredRecords(local, localRaw);
       setLoaded({ scope, workspace: local });
       if (!userId) return;
       try {
@@ -100,6 +100,7 @@ export function useMindWorkspace(userId: string | null = "dev-user", email: stri
           }
           if (cancel || loadGen !== persistGen.current) return;
           if (latest.current !== scope.empty && hasContent(latest.current)) {
+            setWs((current) => ({ ...current, ...mergeMemoryState(current, serverWs) }));
             followServer.current = false;
             setServerHeld(true);
             setSyncNote("This browser kept its own copy. The server copy was not overwritten.");
@@ -107,7 +108,7 @@ export function useMindWorkspace(userId: string | null = "dev-user", email: stri
           }
           followServer.current = true;
           savedJson.current = JSON.stringify(result.workspace);
-          setWs((current) => hasContent(current) ? current : mergeStoredAgents(serverWs, localRaw));
+          setWs((current) => hasContent(current) ? current : reconcileStoredRecords(serverWs, localRaw));
           setSyncNote("Loaded the server copy because this browser was empty. It is still not cloud backup.");
           return;
         }
@@ -127,6 +128,10 @@ export function useMindWorkspace(userId: string | null = "dev-user", email: stri
           return;
         }
         if (choice === "keep-local") {
+          if (result.workspace) {
+            const server = result.workspace as Workspace;
+            setWs((current) => ({ ...current, ...mergeMemoryState(current, server) }));
+          }
           followServer.current = false;
           setServerHeld(true);
           setSyncNote("This browser kept its own copy. The server copy was not overwritten.");
@@ -147,6 +152,22 @@ export function useMindWorkspace(userId: string | null = "dev-user", email: stri
     };
   }, [userId, email, scope, setWs, saveForOwner]);
 
+  useEffect(() => {
+    if (!ready || !userId) return;
+    const reconcile = (event: StorageEvent) => {
+      if (event.key !== accountWorkspaceKey(userId) || event.storageArea !== localStorage) return;
+      const stored = loadWorkspaceForAccount(localStorage, userId, email);
+      setWs((current) => {
+        const next = mergeMemoryState(current, stored);
+        if (JSON.stringify(next.memories) === JSON.stringify(current.memories) &&
+            JSON.stringify(next.deletedMemoryIds ?? []) === JSON.stringify(current.deletedMemoryIds ?? [])) return current;
+        return { ...current, ...next };
+      });
+    };
+    window.addEventListener("storage", reconcile);
+    return () => window.removeEventListener("storage", reconcile);
+  }, [ready, userId, email, setWs]);
+
   const flushPending = useRef<(() => void) | null>(null);
   useLayoutEffect(() => () => { flushPending.current?.(); }, [scope]);
 
@@ -158,7 +179,7 @@ export function useMindWorkspace(userId: string | null = "dev-user", email: stri
     const write = (copy: Workspace) => {
       if (!current()) return;
       const stored = loadWorkspaceForAccount(localStorage, userId, email);
-      localStorage.setItem(accountWorkspaceKey(userId), JSON.stringify(mergeStoredAgents(copy, stored)));
+      localStorage.setItem(accountWorkspaceKey(userId), JSON.stringify(reconcileStoredRecords(copy, stored)));
     };
     const failure = () => {
       if (current()) setSaveError("This browser could not save the latest workspace. Its previous copy was kept.");

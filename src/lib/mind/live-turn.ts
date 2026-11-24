@@ -78,7 +78,7 @@ export async function consumeMindTurn(input: {
         ? "Sign in is required."
         : response.status === 429
           ? "Too many messages. Wait a minute and try again."
-          : "Grok could not be reached.";
+          : "The model service could not be reached.";
     try {
       const payload = (await response.json()) as { error?: string };
       if (typeof payload.error === "string" && payload.error.trim()) message = payload.error;
@@ -87,7 +87,7 @@ export async function consumeMindTurn(input: {
     }
     return { ok: false, error: message };
   }
-  if (!response.body) return { ok: false, error: "Grok returned an empty reply." };
+  if (!response.body) return { ok: false, error: "The model service returned an empty reply." };
   const reader = response.body.getReader();
   const decoder = new TextDecoder();
   let carry = "";
@@ -146,7 +146,7 @@ export async function consumeMindTurn(input: {
     }
   }
   if (input.signal.aborted || !finished || !finished.ok || !finished.text.trim()) {
-    return { ok: false, error: input.signal.aborted ? STOPPED_REPLY : "Grok closed the reply before it finished. Nothing was saved as a success." };
+    return { ok: false, error: input.signal.aborted ? STOPPED_REPLY : "The model connection closed before the reply finished. The provider may have processed this request. Sending again may repeat it." };
   }
   return finished;
 }

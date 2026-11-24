@@ -14,8 +14,8 @@ const MODELS: Record<OtherProvider, string> = {
 };
 export function configuredProviders(env: Record<string, string | undefined>): Record<OtherProvider, boolean> {
   return {
-    openai: Boolean(env.OPENAI_API_KEY), anthropic: Boolean(env.ANTHROPIC_API_KEY),
-    gemini: Boolean(env.GEMINI_API_KEY), openrouter: Boolean(env.OPENROUTER_API_KEY),
+    openai: Boolean(env.OPENAI_API_KEY?.trim()), anthropic: Boolean(env.ANTHROPIC_API_KEY?.trim()),
+    gemini: Boolean(env.GEMINI_API_KEY?.trim()), openrouter: Boolean(env.OPENROUTER_API_KEY?.trim()),
   };
 }
 export function selectProvider(id: unknown, env: Record<string, string | undefined>):
@@ -25,10 +25,10 @@ export function selectProvider(id: unknown, env: Record<string, string | undefin
   if (name !== "openai" && name !== "anthropic" && name !== "gemini" && name !== "openrouter") {
     return { ok: false, error: "That provider is not known. Another provider is not substituted." };
   }
-  if (!env[KEYS[name]]) return { ok: false, error: "No " + name + " key is configured. Another provider is not substituted." };
+  if (!env[KEYS[name]]?.trim()) return { ok: false, error: "No " + name + " key is configured. Another provider is not substituted." };
   return { ok: true, id: name, model: MODELS[name] };
 }
-type FetchLike = (url: string, init?: RequestInit) => Promise<{ ok: boolean; status: number; text: () => Promise<string> }>;
+type FetchLike = (url: string, init?: RequestInit) => Promise<{ ok: boolean; status: number; headers?: Pick<Headers, "get">; text: () => Promise<string> }>;
 function readableBlocks(value: unknown): string {
   if (typeof value === "string") return value;
   if (!Array.isArray(value)) return "";
@@ -57,7 +57,7 @@ function extractAssistantText(id: OtherProvider, json: Record<string, any>): str
     const parts = json.candidates?.[0]?.content?.parts;
     text = Array.isArray(parts) ? parts.map((p: { text?: unknown }) => typeof p?.text === "string" ? p.text : "").join("") : "";
   }
-  return text.trim().slice(0, 4000);
+  return text.trim();
 }
 export async function callConfiguredProvider(input: {
   id: OtherProvider;
@@ -65,16 +65,15 @@ export async function callConfiguredProvider(input: {
   prompt: string;
   systemPrompt?: string;
   history?: History[];
+  signal?: AbortSignal;
   fetch: FetchLike;
-}): Promise<{ ok: boolean; text: string; error: string; model?: string }> {
+}): Promise<{ ok: boolean; text: string; error: string; model?: string; httpStatus?: number; retryAfter?: string }> {
   if (!input.key) return { ok: false, text: "", error: "No " + input.id + " key is configured. Nothing was sent." };
-  const prompt = input.prompt.trim().slice(0, 4000);
+  const prompt = input.prompt.trim();
   if (!prompt) return { ok: false, text: "", error: "Write a message first." };
   const history = (input.history ?? [])
-    .filter((m) => (m.role === "user" || m.role === "assistant") && typeof m.content === "string")
-    .slice(-12)
-    .map((m) => ({ role: m.role, content: m.content.slice(0, 4000) }));
-  const systemPrompt = input.systemPrompt?.trim().slice(0, 5000);
+    .filter((m) => (m.role === "user" || m.role === "assistant") && typeof m.content === "string");
+  const systemPrompt = input.systemPrompt?.trim();
   const messages = [...history, { role: "user" as const, content: prompt }];
   const completionMessages = [
     ...(systemPrompt ? [{ role: "system" as const, content: systemPrompt }] : []),
@@ -108,16 +107,21 @@ export async function callConfiguredProvider(input: {
   const target = endpoints[input.id];
   let response: Awaited<ReturnType<FetchLike>>;
   try {
-    response = await input.fetch(target.url, { method: "POST", ...target.init, signal: AbortSignal.timeout(25_000) });
+    response = await input.fetch(target.url, { method: "POST", ...target.init, signal: input.signal ? AbortSignal.any([input.signal, AbortSignal.timeout(25_000)]) : AbortSignal.timeout(25_000) });
   } catch {
     return { ok: false, text: "", error: input.id + " could not be reached. Nothing was substituted." };
   }
-  if (response.status === 429) return { ok: false, text: "", error: input.id + " rate limited the request. Nothing was substituted." };
+  if (response.status === 429) {
+    const rawDelay = response.headers?.get("retry-after")?.trim();
+    const retryAfter = rawDelay && (/^\d{1,8}$/.test(rawDelay) || (rawDelay.length <= 40 && Number.isFinite(Date.parse(rawDelay)))) ? rawDelay : undefined;
+    return { ok: false, text: "", httpStatus: 429, retryAfter, error: input.id + " rate limited the request. Nothing was substituted." };
+  }
   if (response.status === 401 || response.status === 403) return { ok: false, text: "", error: input.id + " rejected the API key or account permissions." };
   if (!response.ok) return { ok: false, text: "", error: input.id + " returned HTTP " + response.status + ". Nothing was substituted." };
   try {
     const raw = await response.text();
-    const payload = raw.length <= 500_000 ? JSON.parse(raw) : null;
+    if (raw.length > 500_000) return { ok: false, text: "", error: input.id + " returned a response larger than the supported limit." };
+    const payload = JSON.parse(raw);
     const parsed = payload && typeof payload === "object" ? extractAssistantText(input.id, payload) : "";
     return parsed ? { ok: true, text: parsed, model: reportedModel(input.id === "gemini" ? payload.modelVersion : payload.model), error: "" } :
       { ok: false, text: "", error: input.id + " returned no assistant text or an unsupported response format." };
@@ -138,9 +142,11 @@ export async function routeSelectedModel(input: {
   id: string;
   prompt: string;
   env: Record<string, string | undefined>;
+  systemPrompt?: string;
   history?: History[];
+  signal?: AbortSignal;
   fetch: FetchLike;
-}): Promise<{ ok: boolean; text: string; error: string; model: string }> {
+}): Promise<{ ok: boolean; text: string; error: string; model: string; httpStatus?: number; retryAfter?: string }> {
   const prompt = input.prompt.trim();
   if (!prompt) return { ok: false, text: "", error: "Write a message first. Nothing was sent.", model: input.id };
   if (input.id === "nemotron" || input.id === "openrouter") {
@@ -151,7 +157,9 @@ export async function routeSelectedModel(input: {
       id: "openrouter",
       key,
       prompt,
+      systemPrompt: input.systemPrompt,
       history: input.history,
+      signal: input.signal,
       fetch: async (url, init) => {
         const body = JSON.parse(String(init?.body ?? "{}")) as { model?: string };
         body.model = model;
@@ -165,7 +173,7 @@ export async function routeSelectedModel(input: {
     if (!url) return { ok: false, text: "", error: "Local model is selected, but no local runner is reachable. Nothing was sent and Grok was not substituted.", model: "ollama" };
     let response: Awaited<ReturnType<FetchLike>>;
     try {
-      response = await input.fetch(url, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ model: input.env.OLLAMA_MODEL || "local", prompt }) });
+      response = await input.fetch(url, { method: "POST", signal: input.signal, headers: { "content-type": "application/json" }, body: JSON.stringify({ model: input.env.OLLAMA_MODEL || "local", prompt, ...(input.systemPrompt ? { system: input.systemPrompt } : {}) }) });
     } catch {
       return { ok: false, text: "", error: "Local model runner could not be reached. Nothing was substituted.", model: "ollama" };
     }

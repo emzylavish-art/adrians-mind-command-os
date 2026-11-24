@@ -1,4 +1,4 @@
-import { lazy, Suspense, useEffect, useMemo, useRef, useState, type KeyboardEvent as ReactKeyboardEvent, type MouseEvent as ReactMouseEvent, type ReactNode, useSyncExternalStore } from "react";
+import { lazy, Suspense, useEffect, useLayoutEffect, useMemo, useRef, useState, type KeyboardEvent as ReactKeyboardEvent, type MouseEvent as ReactMouseEvent, type ReactNode, useSyncExternalStore } from "react";
 import { Link, useRouter } from "@tanstack/react-router";
 import "./command-drawer-nav.css";
 import "./command-search.css";
@@ -198,7 +198,7 @@ import { paletteHits } from "@/lib/mind/palette";
 import { paletteKeyAction } from "@/lib/mind/palette-keys";
 import { runLocalPlan } from "@/lib/mind/local-tools";
 import { greeting } from "@/lib/mind/greeting";
-import { relevantMemories } from "@/lib/mind/memory";
+import { rankMemories, relevantMemories } from "@/lib/mind/memory";
 import { databaseMode } from "@/lib/mind/persistence";
 import { runAgentTurn, type AgentTool, type ToolEvent } from "@/lib/mind/orchestrator";
 import {
@@ -216,7 +216,7 @@ import {
 import { describeFile } from "@/lib/mind/files-read";
 import { extractPdfText } from "@/lib/mind/pdf-text";
 import { ModelTierChip } from "@/components/mind/model-tier-chip";
-import { AnchoredCard, MenuCluster, MenuGroup, MenuMotion, MenuShelf, finishMenu, menuChip, pinComposerMenu, pinShelf } from "@/components/mind/menu-material";
+import { AnchoredCard, MenuCluster, MenuGroup, MenuMotion, MenuShelf, ComposerMore, finishMenu, menuChip, pinShelf } from "@/components/mind/menu-material";
 import { MODEL_TIERS, type ConcreteModelTier, type ModelTier } from "@/lib/mind/model-tiers";
 import { chosenProvider, failover, providerChoicesWithKeys } from "@/lib/mind/providers";
 import { discoveredCapabilities, mcpToolCallText } from "@/lib/mind/provider-catalog";
@@ -243,6 +243,7 @@ import { type ModuleSuggestion } from "@/lib/intent/module-suggestions";
 import { refreshSkills } from "@/lib/mind/skill-refresh";
 import { exportChat, prepareRegenerate, prepareRetry, renameChat, reviseUserTurn } from "@/lib/mind/transcript";
 import { replyActions, replyHasSources } from "@/lib/mind/reply-actions";
+import { useComposerDraft } from "@/lib/mind/use-composer-draft";
 import { useMindWorkspace } from "@/lib/mind/use-mind-workspace";
 import { useCurrentUser } from "@/lib/auth/use-current-user";
 import { COMPOSER_MODES, effortForModelTier, effortModelTier, loadComposerEffort, resolveSendPath, saveComposerEffort, type ComposerModeId } from "@/lib/mind/composer-modes";
@@ -289,8 +290,12 @@ import {
 import { McpListStatusRows, loadMcpList, onceListRetry, type McpListServer, type McpListState } from "@/lib/mind/mcp-list-state";
 import { previewPathPrefix } from "@/lib/preview-path-prefix";
 import {
+  PROJECT_NAME_MAX,
   addLocalFile,
   addMemory,
+  emptyWorkspace,
+  deleteMemory,
+  workspaceForChat,
   addProject,
   clearedBrowserCopy,
   createChat,
@@ -298,6 +303,7 @@ import {
   loadWorkspace,
   memoriesForChat,
   mergeWorkspace,
+  replaceFromArchive,
   packWorkspace,
   pushAudit,
   pushUsage,
@@ -342,18 +348,7 @@ type Pending = {
   run: () => void;
 };
 
-const EXTERNAL = [
-  {
-    name: "Oak Bridge Capital",
-    detail: "Separate product. This app does not open, edit, or store it.",
-    mark: "/brand/marks/oak-bridge.png",
-  },
-  {
-    name: "BridgePoint",
-    detail: "Separate product. This app does not open, edit, or store it.",
-    mark: "/brand/marks/bridgepoint.png",
-  },
-];
+const EMPTY_DRAFT_IMAGES: ImageAttachment[] = [];
 
 type Staged = { name: string; text: string };
 
@@ -389,39 +384,6 @@ function pinPageScroller(node: HTMLDivElement | null) {
 function showRailLabel(node: HTMLElement | null) {
   node?.style.setProperty("display", "block", "important");
 }
-function liftHomeComposer(node: HTMLElement | null) {
-  if (!node) return;
-  node.style.setProperty("position", "relative", "important");
-  node.style.setProperty("bottom", "auto", "important");
-  node.style.setProperty("left", "0", "important");
-  node.style.setProperty("right", "auto", "important");
-  node.style.setProperty("z-index", "1", "important");
-  node.style.setProperty("width", "100%", "important");
-  node.style.setProperty("max-width", "100%", "important");
-  node.style.setProperty("min-width", "0", "important");
-  node.style.setProperty("overflow", "hidden", "important");
-  node.style.setProperty("transform", "none", "important");
-  node.style.setProperty("box-sizing", "border-box", "important");
-  keepComposerInside();
-}
-function liftHomeStack(node: HTMLElement | null) {
-  node?.style.setProperty("justify-content", "flex-start", "important");
-  if (!(node instanceof HTMLElement)) return;
-  node.style.setProperty("width", "100%", "important");
-  node.style.setProperty("max-width", "none", "important");
-  const masthead = node.querySelector(".masthead");
-  if (masthead instanceof HTMLElement) {
-    masthead.style.setProperty("width", "100%", "important");
-    masthead.style.setProperty("max-width", "none", "important");
-    masthead.style.setProperty("align-self", "stretch", "important");
-  }
-  node.querySelectorAll(".masthead, .masthead > div, [aria-label='Recent'], [data-testid='conversation-sections'], [data-testid='conversation-sections'] section").forEach((child) => {
-    if (child instanceof HTMLElement) {
-      child.style.setProperty("width", "100%", "important");
-      child.style.setProperty("max-width", "none", "important");
-    }
-  });
-}
 function stackLibrary(node: HTMLElement | null) {
   node?.style.setProperty("grid-template-columns", "minmax(0, 1fr)", "important");
 }
@@ -430,506 +392,6 @@ function keepGroupRow(node: HTMLElement | null) {
   node.style.setProperty("align-self", "start", "important");
   node.style.setProperty("align-items", "flex-start", "important");
   node.style.setProperty("height", "auto", "important");
-}
-
-function showLatestReply() {
-  const scroller = document.querySelector(".thread-shell .flex.min-w-0.flex-1.flex-col > .min-h-0.flex-1");
-  if (!(scroller instanceof HTMLElement)) return;
-  const distance = scroller.scrollHeight - scroller.scrollTop - scroller.clientHeight;
-  if (distance > 96) return;
-  scroller.scrollTop = scroller.scrollHeight;
-}
-
-function keepCueClear() {
-  const shell = document.querySelector(".thread-shell");
-  const section = document.querySelector(".thread-shell > section");
-  const scroller = document.querySelector(".thread-shell section > .min-h-0.flex-1");
-  const cue = document.querySelector("[data-testid='message-cue']");
-  const page = shell?.parentElement;
-  if (page instanceof HTMLElement) {
-    page.style.setProperty("display", "flex", "important");
-    page.style.setProperty("flex-direction", "column", "important");
-  }
-  if (shell instanceof HTMLElement) {
-    shell.style.setProperty("flex", "1 1 auto", "important");
-    shell.style.setProperty("height", "auto", "important");
-    shell.style.setProperty("min-height", "0", "important");
-  }
-  if (section instanceof HTMLElement) {
-    section.style.setProperty("display", "grid", "important");
-    section.style.setProperty("grid-template-rows", "auto minmax(0, 1fr) auto", "important");
-    section.style.setProperty("min-height", "0", "important");
-    section.style.setProperty("overflow", "hidden", "important");
-  }
-  if (scroller instanceof HTMLElement) {
-    scroller.style.setProperty("min-height", "0", "important");
-    scroller.style.setProperty("overflow", "auto", "important");
-  }
-  if (cue instanceof HTMLElement) {
-    cue.style.setProperty("position", "relative", "important");
-    cue.style.setProperty("z-index", "2", "important");
-    cue.style.setProperty("background", "#121214", "important");
-    cue.style.setProperty("margin", "0 0.75rem 0.75rem", "important");
-  }
-}
-
-function keepComposerInside() {
-  const home = document.querySelector(".gpt-home");
-  if (home instanceof HTMLElement) {
-    home.style.setProperty("width", "100%", "important");
-    home.style.setProperty("max-width", "100%", "important");
-    home.style.setProperty("min-width", "0", "important");
-    home.style.setProperty("overflow-x", "hidden", "important");
-    home.style.setProperty("box-sizing", "border-box", "important");
-    home.style.setProperty("display", "flex", "important");
-    home.style.setProperty("flex-direction", "column", "important");
-    home.style.setProperty("flex", "1 1 auto", "important");
-    home.style.setProperty("height", "auto", "important");
-    home.style.setProperty("min-height", "100%", "important");
-    home.style.setProperty("justify-content", "flex-start", "important");
-    const masthead = home.querySelector(".masthead");
-    if (masthead instanceof HTMLElement) {
-      masthead.style.setProperty("display", "flex", "important");
-      masthead.style.setProperty("flex-direction", "column", "important");
-      masthead.style.setProperty("align-items", "stretch", "important");
-      masthead.style.setProperty("height", "auto", "important");
-      masthead.style.setProperty("min-height", "min-content", "important");
-      masthead.style.setProperty("flex", "0 0 auto", "important");
-      masthead.style.setProperty("overflow", "visible", "important");
-      masthead.style.setProperty("width", "100%", "important");
-    }
-    if (home.parentElement instanceof HTMLElement) {
-      home.parentElement.style.setProperty("overflow-x", "hidden", "important");
-      home.parentElement.scrollLeft = 0;
-    }
-  }
-  document.querySelectorAll(".gpt-home form, form.thread-composer, section.composer-dock, [data-composer='floating']").forEach((node) => {
-    if (!(node instanceof HTMLElement)) return;
-    const inThread = node.classList.contains("thread-composer") && document.querySelector(".shell")?.getAttribute("data-view") === "chat";
-    const wide = window.innerWidth >= 768;
-    const pinPhone = !inThread && !wide && node.matches("[data-composer='floating']");
-    node.style.setProperty("position", inThread || pinPhone ? "fixed" : "relative", "important");
-    node.style.setProperty("left", inThread ? (wide ? "16.5rem" : "0") : pinPhone ? "0.75rem" : "0", "important");
-    node.style.setProperty("right", inThread || pinPhone ? (pinPhone ? "0.75rem" : "0") : "auto", "important");
-    if (pinPhone) {
-      node.style.setProperty("bottom", "0.75rem", "important");
-      node.style.setProperty("width", "auto", "important");
-      node.style.setProperty("max-width", "none", "important");
-      node.style.setProperty("z-index", "30", "important");
-    }
-    if (!inThread && wide && node.matches("[data-composer='floating']")) {
-      node.style.setProperty("margin-top", "auto", "important");
-    }
-    if (inThread) {
-      node.style.setProperty("bottom", "0", "important");
-      node.style.setProperty("margin", "0", "important");
-      node.style.setProperty("width", "auto", "important");
-      node.style.setProperty("z-index", "20", "important");
-    }
-    node.style.setProperty("transform", "none", "important");
-    if (!inThread && !pinPhone) node.style.setProperty("width", "100%", "important");
-    if (!pinPhone) node.style.setProperty("max-width", "100%", "important");
-    node.style.setProperty("min-width", "0", "important");
-    node.style.setProperty("margin-left", "0", "important");
-    node.style.setProperty("box-sizing", "border-box", "important");
-    node.style.setProperty("overflow", "visible", "important");
-  });
-  document.querySelectorAll(".gpt-home form, form.thread-composer").forEach((node) => {
-    if (!(node instanceof HTMLElement)) return;
-    node.style.setProperty("display", "flex", "important");
-    node.style.setProperty("flex-direction", "column", "important");
-    node.style.setProperty("align-items", "stretch", "important");
-    node.style.setProperty("gap", "0.45rem", "important");
-  });
-  document.querySelectorAll(".shell[data-view='chat'], .shell[data-view='chat'] .main-stage, .thread-shell, .thread-shell > section").forEach((node) => {
-    if (!(node instanceof HTMLElement)) return;
-    node.style.setProperty("min-height", "0", "important");
-    node.style.setProperty("height", "100%", "important");
-  });
-  document.querySelectorAll(".thread-shell section > .min-h-0.flex-1").forEach((node) => {
-    if (!(node instanceof HTMLElement)) return;
-    node.style.setProperty("flex", "1 1 auto", "important");
-    node.style.setProperty("padding-bottom", "7.5rem", "important");
-  });
-  document.querySelectorAll(".composer-toolbar").forEach((node) => {
-    if (!(node instanceof HTMLElement)) return;
-    node.style.setProperty("display", "flex", "important");
-    node.style.setProperty("flex-wrap", "wrap", "important");
-    node.style.setProperty("align-items", "center", "important");
-    node.style.setProperty("width", "100%", "important");
-    node.style.setProperty("max-width", "100%", "important");
-    node.style.setProperty("min-width", "0", "important");
-    node.style.setProperty("height", "auto", "important");
-    node.style.setProperty("max-height", "none", "important");
-    node.style.setProperty("align-content", "flex-start", "important");
-    node.style.setProperty("overflow", "visible", "important");
-    node.style.setProperty("position", "relative", "important");
-    node.style.setProperty("left", "0", "important");
-    node.style.setProperty("box-sizing", "border-box", "important");
-    node.style.setProperty("order", "2", "important");
-  });
-  document.querySelectorAll("[data-testid='composer-mic-dictate']").forEach((node) => {
-    if (!(node instanceof HTMLElement)) return;
-    node.style.setProperty("position", "relative", "important");
-    node.style.setProperty("inset", "auto", "important");
-    node.style.setProperty("transform", "none", "important");
-    node.style.setProperty("margin", "0", "important");
-  });
-  document.querySelectorAll(".gpt-home textarea, form.thread-composer input, form.thread-composer textarea").forEach((node) => {
-    if (!(node instanceof HTMLElement)) return;
-    node.style.setProperty("order", "1", "important");
-    node.style.setProperty("width", "100%", "important");
-    node.style.setProperty("max-width", "100%", "important");
-    node.style.setProperty("min-width", "0", "important");
-    node.style.setProperty("flex", "0 1 auto", "important");
-    node.style.setProperty("box-sizing", "border-box", "important");
-  });
-  document.querySelectorAll("[data-testid='composer-effort']").forEach((node) => {
-    if (!(node instanceof HTMLElement)) return;
-    node.style.setProperty("width", "100%", "important");
-    node.style.setProperty("max-width", "100%", "important");
-    node.style.setProperty("min-width", "0", "important");
-    node.style.setProperty("height", "auto", "important");
-    node.style.setProperty("max-height", "none", "important");
-    node.style.setProperty("flex", "1 1 100%", "important");
-    node.style.setProperty("overflow", "visible", "important");
-    node.style.setProperty("box-sizing", "border-box", "important");
-  });
-  document.querySelectorAll("[data-testid='composer-effort'] .flex").forEach((node) => {
-    if (!(node instanceof HTMLElement)) return;
-    node.style.setProperty("flex-wrap", "wrap", "important");
-    node.style.setProperty("width", "100%", "important");
-    node.style.setProperty("max-width", "100%", "important");
-    node.style.setProperty("min-width", "0", "important");
-    node.style.setProperty("height", "auto", "important");
-    node.style.setProperty("max-height", "none", "important");
-    node.style.setProperty("overflow", "visible", "important");
-  });
-  document.querySelectorAll("[data-testid='composer-effort'] p").forEach((node) => {
-    if (!(node instanceof HTMLElement)) return;
-    node.style.setProperty("position", "relative", "important");
-    node.style.setProperty("clear", "both", "important");
-    node.style.setProperty("width", "100%", "important");
-    node.style.setProperty("max-width", "100%", "important");
-    node.style.setProperty("margin", "0.35rem 0 0", "important");
-  });
-  document.querySelectorAll(".composer-toolbar > button, .composer-toolbar > label, .composer-toolbar > details").forEach((node) => {
-    if (!(node instanceof HTMLElement)) return;
-    if (node instanceof HTMLDetailsElement && node.classList.contains("composer-more") && node.open) return;
-    node.style.setProperty("max-width", "100%", "important");
-    node.style.setProperty("min-width", "max-content", "important");
-    node.style.setProperty("flex", "0 0 auto", "important");
-    node.style.setProperty("width", "auto", "important");
-    node.style.setProperty("height", "auto", "important");
-    node.style.setProperty("min-height", "2.75rem", "important");
-    node.style.setProperty("font-size", "0.85rem", "important");
-    node.style.setProperty("overflow", "visible", "important");
-    if (window.matchMedia("(max-width: 767px)").matches) node.style.removeProperty("display");
-    else node.style.setProperty("display", "inline-flex", "important");
-    node.style.setProperty("align-items", "center", "important");
-    node.style.setProperty("white-space", "normal", "important");
-  });
-  document.querySelectorAll("[data-testid='composer-mic-dictate'], .composer-send, .gpt-voice").forEach((node) => {
-    if (!(node instanceof HTMLElement)) return;
-    node.style.setProperty("display", "inline-flex", "important");
-  });
-  document.querySelectorAll(".gpt-home .composer-toolbar > button:first-child").forEach((node) => {
-    if (!(node instanceof HTMLElement)) return;
-    node.style.setProperty("display", "inline-flex", "important");
-    node.style.setProperty("width", "max-content", "important");
-    node.style.setProperty("min-width", "max-content", "important");
-    node.style.setProperty("height", "auto", "important");
-    node.style.setProperty("padding", "0 0.7rem", "important");
-    node.style.setProperty("line-height", "1.2", "important");
-    node.style.setProperty("overflow", "visible", "important");
-    node.style.setProperty("font-size", "0.85rem", "important");
-  });
-  document.querySelectorAll("[data-testid='composer-effort'] button, [data-testid='composer-effort'] span").forEach((node) => {
-    if (!(node instanceof HTMLElement)) return;
-    node.style.setProperty("width", "auto", "important");
-    node.style.setProperty("height", "auto", "important");
-    node.style.setProperty("min-height", "2.25rem", "important");
-    node.style.setProperty("max-width", "100%", "important");
-    node.style.setProperty("overflow", "visible", "important");
-    node.style.setProperty("font-size", "0.8rem", "important");
-    node.style.setProperty("display", "inline-flex", "important");
-    node.style.setProperty("align-items", "center", "important");
-    node.style.setProperty("white-space", "nowrap", "important");
-    node.style.setProperty("padding", "0 0.65rem", "important");
-  });
-  const homeForm = document.querySelector(".gpt-home form");
-  const scroller = home instanceof HTMLElement ? home.parentElement : null;
-  if (homeForm instanceof HTMLElement && scroller instanceof HTMLElement) {
-    homeForm.style.setProperty("height", "auto", "important");
-    homeForm.style.setProperty("max-height", "none", "important");
-    homeForm.style.setProperty("overflow", "visible", "important");
-    const formBox = homeForm.getBoundingClientRect();
-    const scrollBox = scroller.getBoundingClientRect();
-    if (formBox.bottom > scrollBox.bottom - 8) {
-      const delta = formBox.bottom - scrollBox.bottom + 12;
-      scrollWithoutCoveringGreeting(scroller, delta);
-    }
-    if (homeForm.getBoundingClientRect().top < scrollBox.top + 8) {
-      const delta = homeForm.getBoundingClientRect().top - (scrollBox.top + 8);
-      scrollWithoutCoveringGreeting(scroller, delta);
-    }
-    const dictate = homeForm.querySelector("[data-testid='composer-mic-dictate']");
-    if (dictate instanceof HTMLElement) {
-      const box = dictate.getBoundingClientRect();
-      const limit = scroller.getBoundingClientRect().bottom - 8;
-      if (box.bottom > limit) {
-        scrollWithoutCoveringGreeting(scroller, box.bottom - limit + 12);
-      }
-    }
-  }
-  const phone = window.matchMedia("(max-width: 767px)").matches;
-  const handy = document.querySelector("[data-testid='handy-dictation']");
-  const dock = document.querySelector(".gpt-home [data-composer='floating']");
-  if (phone && handy instanceof HTMLElement && dock instanceof HTMLElement) {
-    const handyHeight = Math.ceil(handy.getBoundingClientRect().height);
-    if (handyHeight >= 44) {
-      document.querySelectorAll(".gpt-home [data-testid='composer-effort']").forEach((node) => {
-        if (node instanceof HTMLElement) node.style.setProperty("display", "none", "important");
-      });
-      const gap = Math.ceil(window.innerHeight - handy.getBoundingClientRect().top) + 8;
-      dock.style.setProperty("position", "fixed", "important");
-      dock.style.setProperty("left", "0.75rem", "important");
-      dock.style.setProperty("right", "0.75rem", "important");
-      dock.style.setProperty("width", "auto", "important");
-      dock.style.setProperty("max-width", "calc(100vw - 1.5rem)", "important");
-      dock.style.setProperty("bottom", `${gap}px`, "important");
-      dock.style.setProperty("top", "auto", "important");
-      dock.style.setProperty("margin", "0", "important");
-      dock.style.setProperty("z-index", "6", "important");
-      dock.style.setProperty("overflow", "visible", "important");
-      const button = dock.querySelector("[data-testid='composer-mic-dictate']");
-      if (button instanceof HTMLElement) button.style.setProperty("z-index", "7", "important");
-    }
-  }
-  liftDictateIntoView();
-  keepGuideClear();
-  keepBannerClear();
-  keepGuideAboveBar();
-  keepStartRowInside();
-  showVoiceWords();
-  document.querySelectorAll(".composer-more__menu").forEach((node) => {
-    if (node instanceof HTMLElement) pinComposerMenu(node);
-  });
-  if (document.querySelector(".shell")?.getAttribute("data-view") === "chat") {
-   document.querySelectorAll("form.thread-composer").forEach((node) => {
-     if (!(node instanceof HTMLElement)) return;
-     const column = node.closest("section");
-    const shell = node.closest(".thread-shell");
-    if (shell instanceof HTMLElement) {
-      shell.style.setProperty("position", "relative", "important");
-      shell.style.setProperty("width", "100%", "important");
-      shell.style.setProperty("max-width", "100%", "important");
-    }
-    node.style.setProperty("position", "relative", "important");
-      node.style.setProperty("left", "auto", "important");
-      node.style.setProperty("right", "auto", "important");
-      node.style.setProperty("bottom", "auto", "important");
-      node.style.setProperty("width", "100%", "important");
-      node.style.setProperty("max-width", "100%", "important");
-      node.style.setProperty("transform", "none", "important");
-      const thread = column?.querySelector(":scope > .overflow-auto");
-      if (thread instanceof HTMLElement) {
-        thread.style.setProperty("position", "relative", "important");
-        thread.style.setProperty("width", "100%", "important");
-        thread.style.setProperty("max-width", "100%", "important");
-        thread.style.setProperty("overflow-x", "hidden", "important");
-        thread.style.setProperty("overflow-y", "auto", "important");
-      }
-    });
-    let clear = document.getElementById("chat-no-overlap");
-    if (!clear) {
-      clear = document.createElement("style");
-      clear.id = "chat-no-overlap";
-      document.head.appendChild(clear);
-    }
-        clear.textContent = ".shell[data-view='chat'] form.thread-composer,.shell[data-view='chat'] .thread-shell section,.shell[data-view='chat'] .next-guesses{position:relative !important;left:auto !important;right:auto !important;bottom:auto !important;width:100% !important;max-width:100% !important;transform:none !important}";
-  }
-}
-
-function showVoiceWords() {
-  document.querySelectorAll(".composer-send, button[aria-label='Speak'], button[aria-label='Mic']").forEach((node) => {
-    if (!(node instanceof HTMLElement)) return;
-    node.style.setProperty("display", "inline-flex", "important");
-    node.style.setProperty("align-items", "center", "important");
-    node.style.setProperty("justify-content", "center", "important");
-    node.style.setProperty("gap", "0.35rem", "important");
-    node.style.setProperty("width", "auto", "important");
-    node.style.setProperty("min-width", "max-content", "important");
-    node.style.setProperty("max-width", "100%", "important");
-    node.style.setProperty("height", "auto", "important");
-    node.style.setProperty("min-height", "2.75rem", "important");
-    node.style.setProperty("max-height", "none", "important");
-    node.style.setProperty("padding", "0 0.75rem", "important");
-    node.style.setProperty("font-size", "0.875rem", "important");
-    node.style.setProperty("line-height", "1.2", "important");
-    node.style.setProperty("white-space", "nowrap", "important");
-    node.style.setProperty("overflow", "visible", "important");
-  });
-}
-
-function keepStartRowInside() {
-  const starters = document.querySelector(".gpt-home .gpt-starters");
-  const scroller = starters instanceof HTMLElement ? starters.closest(".overflow-auto") : null;
-  if (!(starters instanceof HTMLElement) || !(scroller instanceof HTMLElement)) return;
-  starters.style.setProperty("margin-top", "0.5rem", "important");
-  starters.style.setProperty("margin-bottom", "0.5rem", "important");
-  const scrollBox = scroller.getBoundingClientRect();
-  const bar = document.querySelector("[data-testid='handy-dictation']");
-  let limit = scrollBox.bottom - 8;
-  if (bar instanceof HTMLElement) {
-    const barTop = bar.getBoundingClientRect().top;
-    if (barTop > scrollBox.top && barTop < scrollBox.bottom) limit = Math.min(limit, barTop - 8);
-  }
-  const buttons = [...starters.querySelectorAll("button")];
-  for (const button of buttons) button.style.removeProperty("margin-top");
-  starters.querySelectorAll("p").forEach((node) => {
-    if (node instanceof HTMLElement) node.style.removeProperty("margin-top");
-  });
-  const first = buttons[0];
-  let pull = 0;
-  if (first) {
-    const box = first.getBoundingClientRect();
-    if (box.top < limit - 1 && box.bottom > limit + 1) {
-      const send = document.querySelector(".gpt-home .composer-send");
-      const room = send instanceof HTMLElement ? starters.getBoundingClientRect().top - send.getBoundingClientRect().bottom - 8 : 0;
-      pull = Math.min(Math.ceil(box.bottom - limit), Math.floor(Math.max(0, room)));
-      if (pull > 1) starters.style.setProperty("margin-top", `${-pull}px`, "important");
-    }
-  }
-  const clipped = buttons.find((button) => {
-    const box = button.getBoundingClientRect();
-    return box.top - pull < limit - 1 && box.bottom - pull > limit + 1;
-  });
-  if (clipped && clipped !== first) {
-    const push = Math.ceil(limit - (clipped.getBoundingClientRect().top - pull)) + 4;
-    if (push > 1) clipped.style.setProperty("margin-top", `${push}px`, "important");
-  }
-  const cover = bar instanceof HTMLElement ? bar.getBoundingClientRect().top : limit + 8;
-  for (const button of buttons) {
-    const box = button.getBoundingClientRect();
-    if (box.height < 8 || !(box.top < cover - 1 && box.bottom > cover + 1)) continue;
-    const current = Number.parseFloat(button.style.marginTop || "0") || 0;
-    const push = Math.ceil(cover - box.top) + 8;
-    if (push > 1) button.style.setProperty("margin-top", `${current + push}px`, "important");
-  }
-  const form = document.querySelector(".gpt-home form");
-  const floor = form instanceof HTMLElement ? form.getBoundingClientRect().bottom + 8 : scrollBox.top;
-  for (const label of starters.querySelectorAll("p")) {
-    if (!(label instanceof HTMLElement)) continue;
-    const box = label.getBoundingClientRect();
-    if (box.height < 8 || !(box.top < cover - 1 && box.bottom > cover + 1)) continue;
-    const need = Math.ceil(box.bottom - (cover - 8));
-    const room = Math.floor(box.top - floor);
-    if (need > 1 && room >= need) {
-      const current = Number.parseFloat(starters.style.marginTop || "0") || 0;
-      starters.style.setProperty("margin-top", `${current - need}px`, "important");
-      continue;
-    }
-    const current = Number.parseFloat(label.style.marginTop || "0") || 0;
-    const push = Math.ceil(cover - box.top) + 8;
-    if (push > 1) label.style.setProperty("margin-top", `${current + push}px`, "important");
-  }
-  for (const button of buttons) {
-    const box = button.getBoundingClientRect();
-    if (box.height < 8 || !(box.top < cover - 1 && box.bottom > cover + 1)) continue;
-    const current = Number.parseFloat(button.style.marginTop || "0") || 0;
-    const push = Math.ceil(cover - box.top) + 8;
-    if (push > 1) button.style.setProperty("margin-top", `${current + push}px`, "important");
-  }
-}
-
-function scrollWithoutCoveringGreeting(scroller: HTMLElement, delta: number) {
-  if (delta === 0) return;
-  if (delta > 0 && scroller.contains(document.querySelector(".gpt-home h1"))) {
-    const heading = document.querySelector(".gpt-home h1");
-    const banner = document.querySelector(".banner-error");
-    if (heading instanceof HTMLElement && banner instanceof HTMLElement) {
-      const room = heading.getBoundingClientRect().top - (banner.getBoundingClientRect().bottom + 8);
-      if (room <= 1) return;
-      delta = Math.min(delta, Math.floor(room));
-    }
-  }
-  scroller.scrollTop += delta;
-}
-
-function keepBannerClear() {
-  const heading = document.querySelector(".gpt-home h1");
-  const banner = document.querySelector(".banner-error");
-  if (!(heading instanceof HTMLElement) || !(banner instanceof HTMLElement)) return;
-  const scroller = heading.closest(".overflow-auto") ?? heading.closest(".gpt-home")?.parentElement;
-  if (!(scroller instanceof HTMLElement)) return;
-  const overlap = banner.getBoundingClientRect().bottom + 8 - heading.getBoundingClientRect().top;
-  if (overlap <= 1) return;
-  scroller.scrollTop = Math.max(0, scroller.scrollTop - Math.ceil(overlap));
-}
-
-function keepGuideAboveBar() {
-  const guide = document.querySelector("[data-testid='first-steps']");
-  if (!(guide instanceof HTMLElement)) return;
-  if (!window.matchMedia("(max-width: 767px)").matches) {
-    guide.style.removeProperty("margin-top");
-    return;
-  }
-  const dock = document.querySelector(".gpt-home [data-composer='floating']");
-  const handy = document.querySelector("[data-testid='handy-dictation']");
-  const limits: number[] = [];
-  if (dock instanceof HTMLElement) limits.push(dock.getBoundingClientRect().top);
-  if (handy instanceof HTMLElement) limits.push(handy.getBoundingClientRect().top);
-  if (limits.length === 0) return;
-  const limit = Math.min(...limits) - 8;
-  const applied = Number.parseFloat(guide.style.marginTop || "0") || 0;
-  const naturalBottom = guide.getBoundingClientRect().bottom - applied;
-  let pull = naturalBottom - limit > 1 ? Math.ceil(naturalBottom - limit) : 0;
-  const heading = document.querySelector(".gpt-home h1");
-  if (heading instanceof HTMLElement && pull > 0) {
-    const naturalTop = guide.getBoundingClientRect().top - applied;
-    const room = naturalTop - (heading.getBoundingClientRect().bottom + 8);
-    pull = Math.max(0, Math.min(pull, Math.floor(room)));
-  }
-  const next = pull > 0 ? `-${pull}px` : "";
-  if ((guide.style.marginTop || "") === next) return;
-  if (next) guide.style.setProperty("margin-top", next, "important");
-  else guide.style.removeProperty("margin-top");
-}
-
-function keepGuideClear() {
-  const guide = document.querySelector("[data-testid='first-steps']");
-  const dock = document.querySelector(".gpt-home [data-composer='floating']");
-  if (!(guide instanceof HTMLElement) || !(dock instanceof HTMLElement)) return;
-  if (!window.matchMedia("(max-width: 767px)").matches) return;
-  const handy = document.querySelector("[data-testid='handy-dictation']");
-  const scroller = [...document.querySelectorAll(".overflow-auto")].find((node) => node instanceof HTMLElement && node.contains(guide) && node.scrollHeight > node.clientHeight + 8);
-  if (!(scroller instanceof HTMLElement)) return;
-  const limit = handy instanceof HTMLElement ? handy.getBoundingClientRect().top - 8 : window.innerHeight - 8;
-  const covered = dock.getBoundingClientRect().bottom - limit;
-  if (covered > 1) scrollWithoutCoveringGreeting(scroller, Math.ceil(covered));
-  const hidden = 8 - guide.getBoundingClientRect().top;
-  if (hidden > 1) scroller.scrollTop -= Math.ceil(hidden);
-}
-
-function liftDictateIntoView() {
-  const button = document.querySelector(".gpt-home [data-testid='composer-mic-dictate']");
-  const handy = document.querySelector("[data-testid='handy-dictation']");
-  if (!(button instanceof HTMLElement) || !(handy instanceof HTMLElement)) return;
-  const limit = handy.getBoundingClientRect().top - 8;
-  let box = button.getBoundingClientRect();
-  if (box.bottom <= limit) return;
-  let node = button.parentElement;
-  while (node) {
-    const style = getComputedStyle(node);
-    const scrolls = style.overflowY === "auto" || style.overflowY === "scroll";
-    if (scrolls && node.scrollHeight > node.clientHeight + 1) {
-      scrollWithoutCoveringGreeting(node, box.bottom - limit + 4);
-      box = button.getBoundingClientRect();
-      if (box.bottom <= limit) return;
-    }
-    node = node.parentElement;
-  }
 }
 
 const NAV_GROUPS: { label: string; items: { id: View; label: string; icon: typeof Home }[] }[] = [
@@ -1282,7 +744,7 @@ function shownChatTitle(chat: { title?: string; messages?: { role: string; conte
 export function CommandApp() {
   const account = useCurrentUser();
   const loopback = typeof window !== "undefined" && (window.location.hostname === "127.0.0.1" || window.location.hostname === "localhost");
-  const { ws, setWs, ready, syncNote, serverHeld, saveError, retrySave, clearStoredCopy } = useMindWorkspace(account?.id ?? (loopback ? "dev-user" : null), account?.primaryEmail ?? null);
+  const { ws, setWs, ready, syncNote, serverHeld, saveError, retrySave, clearStoredCopy } = useMindWorkspace(account?.id ?? null, account?.emailVerified ? account.primaryEmail : null);
   const router = useRouter();
   const [view, setViewState] = useState<View>("command");
   const applyingLocation = useRef(false);
@@ -1447,7 +909,13 @@ export function CommandApp() {
   const [commandMode, setCommandMode] = useState<CommandMode>("ask");
   const [defaultPersonalityId, setDefaultPersonalityId] = useState<PersonalityId>("assistant");
   const [activeId, setActiveId] = useState<string | null>(null);
-  const [draft, setDraft] = useState("");
+  const [temporary, setTemporary] = useState(false);
+  const draftOwner = account?.id ?? (loopback ? "dev-user" : null);
+  const draftChat = view === "chat" && activeId ? ws.chats.find((item) => item.id === activeId) : null;
+  const draftPrivate = draftChat?.temporary ?? temporary;
+  const draftScope = JSON.stringify([draftOwner, draftChat?.id ?? "home", draftPrivate]);
+  const persistDraft = Boolean(draftOwner) && !draftPrivate;
+  const [draft, setDraft] = useComposerDraft(draftScope, "text", "", persistDraft);
   const [busy, setBusy] = useState(false);
   const [liveText, setLiveText] = useState("");
   const turnAbort = useRef<AbortController | null>(null);
@@ -1527,6 +995,21 @@ export function CommandApp() {
   }
   const [surfaceMenu, setSurfaceMenu] = useState(false);
   const [controlsOpen, setControlsOpen] = useState(false);
+  const [chatSettingsOpen, setChatSettingsOpen] = useState(false);
+  const chatSettingsTrigger = useRef<HTMLButtonElement>(null);
+  useEffect(() => {
+    if (view !== "chat") setChatSettingsOpen(false);
+  }, [view]);
+  useEffect(() => {
+    if (!chatSettingsOpen || view !== "chat") return;
+    const dismiss = (event: KeyboardEvent) => {
+      if (event.key !== "Escape" || event.defaultPrevented) return;
+      setChatSettingsOpen(false);
+      chatSettingsTrigger.current?.focus();
+    };
+    document.addEventListener("keydown", dismiss);
+    return () => document.removeEventListener("keydown", dismiss);
+  }, [view, chatSettingsOpen]);
   const [surfaceAnchor, setSurfaceAnchor] = useState<DOMRect | null>(null);
   const [controlsAnchor, setControlsAnchor] = useState<DOMRect | null>(null);
   const [navMoreOpen, setNavMoreOpen] = useState(false);
@@ -1568,6 +1051,11 @@ export function CommandApp() {
   const mcpInFlight = useRef(false);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
+  useEffect(() => {
+    const warn = () => setNotice("This draft is available in this tab only. Browser storage could not save the latest change for reload.");
+    window.addEventListener("adrian-draft-storage-full", warn);
+    return () => window.removeEventListener("adrian-draft-storage-full", warn);
+  }, []);
   const [failure, setFailure] = useState<{ message: string; auditId: string; retry: (() => void) | null; kind: HonestFailureKind | null; action?: RouteFailureAction } | null>(null);
   const reportFailureRef = useRef<(message: string, action: string, target: string, retry: (() => void) | null) => void>(() => undefined);
   const [toolTimeline, setToolTimeline] = useState<ToolTimelineRow[]>([]);
@@ -1595,6 +1083,7 @@ export function CommandApp() {
   const [consultModel, setConsultModel] = useState("");
   const [routingMode, setRoutingMode] = useState<RoutingMode>("A");
   const [routingPanel, setRoutingPanel] = useState<LogicRouteId[]>([]);
+  const ratingOwner = account?.id ? "account:" + account.id : "device:guest";
   const [ratings, setRatings] = useState<ResponseRating[]>([]);
   const [lastResolvedTier, setLastResolvedTier] = useState<ConcreteModelTier | null>(null);
   const [lastModelUsed, setLastModelUsed] = useState<string | null>(null);
@@ -1612,7 +1101,6 @@ export function CommandApp() {
   const [checkedAt, setCheckedAt] = useState("");
   const [memoryChoice, setMemoryChoice] = useState<"off" | "on">("off");
   const [autonomy, setAutonomy] = useState<Autonomy>("ask");
-  const [temporary, setTemporary] = useState(false);
   const [projectChoice, setProjectChoice] = useState("");
   const [memoryText, setMemoryText] = useState("");
   const [memoryProject, setMemoryProject] = useState("");
@@ -1650,8 +1138,8 @@ export function CommandApp() {
   const [importChecking, setImportChecking] = useState(false);
   const [importStatus, setImportStatus] = useState("");
   const [importError, setImportError] = useState<string | null>(null);
-  const [staged, setStaged] = useState<Staged | null>(null);
-  const [pendingImages, setPendingImages] = useState<ImageAttachment[]>([]);
+  const [staged, setStaged] = useComposerDraft<Staged | null>(draftScope, "file", null, persistDraft);
+  const [pendingImages, setPendingImages] = useComposerDraft<ImageAttachment[]>(draftScope, "images", EMPTY_DRAFT_IMAGES, persistDraft);
   const [cameraOpen, setCameraOpen] = useState(false);
   const [cloudPickerOpen, setCloudPickerOpen] = useState(false);
   const [driveConnected, setDriveConnected] = useState(false);
@@ -1918,6 +1406,7 @@ export function CommandApp() {
   }
 
   function useProviderInChat(id: string) {
+    if (id !== providerChoice) clearFailure();
     if (composerEffort === "orchestrator" || composerEffort === "build") chooseComposerEffort("auto");
     chooseRoutingMode("A");
     setLogicRoute(isLogicRouteId(id) ? id : null);
@@ -1948,6 +1437,10 @@ export function CommandApp() {
     });
   }
 
+  useEffect(() => {
+    setRatings(readRatings(localStorage, ratingOwner));
+  }, [ratingOwner]);
+
   function rateReply(messageId: string, score: 1 | 2 | 3 | 4 | 5, model: string | null) {
     const next = saveRating(typeof localStorage === "undefined" ? null : localStorage, {
       messageId,
@@ -1955,7 +1448,8 @@ export function CommandApp() {
       model,
       mode: routingMode,
       at: new Date().toISOString(),
-    });
+    }, ratingOwner);
+
     setRatings(next);
   }
 
@@ -2108,41 +1602,20 @@ export function CommandApp() {
   }, [view]);
 
   useEffect(() => {
-    if (view !== "chat") return;
-    keepCueClear();
-    keepComposerInside();
-  }, [view, active?.id]);
-
-  useEffect(() => {
-    keepComposerInside();
-    const fit = () => keepComposerInside();
-    const observer = new ResizeObserver(fit);
-    document.querySelectorAll(".gpt-home [data-composer='floating'], [data-testid='handy-dictation'], [data-testid='first-steps'], .gpt-home, .banner-error").forEach((node) => observer.observe(node));
-    const onFocus = (event: FocusEvent) => {
-      if (event.target instanceof Element && event.target.closest("[data-testid='first-steps']")) return;
-      fit();
-    };
-    window.addEventListener("resize", fit);
-    document.addEventListener("focusin", onFocus);
-    const frame = window.requestAnimationFrame(() => window.requestAnimationFrame(fit));
-    let retries = 0;
-    const retry = window.setInterval(() => {
-      keepBannerClear();
-      keepGuideAboveBar();
-      retries += 1;
-      const heading = document.querySelector(".gpt-home h1");
-      const banner = document.querySelector(".banner-error");
-      const clear = banner instanceof HTMLElement && heading instanceof HTMLElement && heading.getBoundingClientRect().top >= banner.getBoundingClientRect().bottom + 8;
-      if (clear || retries > 24) window.clearInterval(retry);
-    }, 50);
+    const viewport = window.visualViewport;
+    if (!viewport || (view !== "chat" && view !== "command")) return;
+    const root = document.documentElement;
+    function fitViewport() {
+      if (viewport && viewport.scale === 1) root.style.setProperty("--mind-visible-height", `${Math.round(viewport.height)}px`);
+      else root.style.removeProperty("--mind-visible-height");
+    }
+    fitViewport();
+    viewport.addEventListener("resize", fitViewport);
     return () => {
-      window.cancelAnimationFrame(frame);
-      window.clearInterval(retry);
-      observer.disconnect();
-      window.removeEventListener("resize", fit);
-      document.removeEventListener("focusin", onFocus);
+      viewport.removeEventListener("resize", fitViewport);
+      root.style.removeProperty("--mind-visible-height");
     };
-  }, [view, guide.dismissed, guide.step, ws.halted]);
+  }, [view]);
 
   const timelineRunning = useMemo(() => timelineCounts(toolTimeline).running, [toolTimeline]);
   useEffect(() => {
@@ -2305,7 +1778,7 @@ export function CommandApp() {
       if (fail === "grok" || fail === "none") setFailoverPolicy(fail);
       setRoutingMode(readRoutingMode(localStorage));
       setRoutingPanel(readRoutingPanel(localStorage));
-      setRatings(readRatings(localStorage));
+
     } catch {
       /* a private browser can refuse storage */
     } finally {
@@ -2717,14 +2190,15 @@ export function CommandApp() {
     });
   }
 
-  function agentTools(source: Workspace): AgentTool[] {
+  function agentTools(source: Workspace, chat: Chat): AgentTool[] {
+    const scoped = workspaceForChat(source, chat);
     const local = (id: "list_projects" | "list_chats" | "search_notes"): AgentTool => ({
       id,
       confirm: false,
       available: true,
       unavailableReason: "",
       run: (text) => {
-        const result = runLocalPlan(source, [{ id, tool: id, query: text }], { autonomy: "automatic", halted: source.halted, tokens: {} });
+        const result = runLocalPlan(scoped, [{ id, tool: id, query: text }], { autonomy: "automatic", halted: source.halted, tokens: {} });
         return { ok: true, text: result.lines.join("\n") || "No result." };
       },
     });
@@ -2742,7 +2216,7 @@ export function CommandApp() {
           const usable = matches.filter((skill) => skill.kind !== "not-installed");
           const one = usable.length === 1 ? usable[0] : null;
           const reply = one
-            ? runSkill(source, one, enabledSkills[one.id] !== false).text
+            ? runSkill(scoped, one, enabledSkills[one.id] !== false).text
             : matches.map((skill) => `${skill.name} — ${skill.kind === "not-installed" ? "Not installed" : skill.kind === "installed" ? "Installed" : "Built-in"}. ${skill.needs}`).join("\n") || "No skill matches. Nothing was run.";
           return { ok: true, text: reply };
         },
@@ -2758,10 +2232,13 @@ export function CommandApp() {
             xhr.open("POST", "/api/mind/skills", false);
             xhr.setRequestHeader("content-type", "application/json");
             xhr.send(JSON.stringify({ title: "from chat", body: text }));
-            const saved = JSON.parse(xhr.responseText) as { ok?: boolean; note?: string; error?: string };
-            return { ok: saved.ok !== false, text: saved.note || saved.error || "The skill was not saved." };
+            const proposal = JSON.parse(xhr.responseText) as { ok?: boolean; note?: string; markdown?: string; error?: string };
+            if (!proposal.ok || !proposal.markdown) {
+              return { ok: false, text: proposal.error || "Could not prepare a skill proposal." };
+            }
+            return { ok: true, text: `${proposal.note ?? "Review this skill proposal"}\n\n${proposal.markdown}` };
           } catch {
-            return { ok: false, text: "The skill was not saved. Nothing was sent off this machine." };
+            return { ok: false, text: "Could not prepare a skill proposal. Try again." };
           }
         },
       },
@@ -2820,7 +2297,7 @@ export function CommandApp() {
         sessionId: chat.id,
         text,
         modality: "chat",
-        tools: agentTools(source),
+        tools: agentTools(source, chat),
         toolId,
         nowMs: Date.now(),
         onEvent: observeToolEvent,
@@ -2840,7 +2317,7 @@ export function CommandApp() {
               sessionId: chat.id,
               text,
               modality: "chat",
-              tools: agentTools(source),
+              tools: agentTools(source, chat),
               toolId,
               confirm: grantNow,
               nowMs: Date.now(),
@@ -2857,7 +2334,7 @@ export function CommandApp() {
         });
         return true;
       }
-      const notes = chat.memory === "on" ? relevantMemories(source.memories, text) : [];
+      const notes = relevantMemories(memoriesForChat(source, chat), text);
       const reply = notes.length ? `${turn.text}\n\nSaved note: ${notes.map((item) => item.text).join(" ")}` : turn.text;
       recordToolTurn(chat, text, reply, undefined, { tool: toolId, ok: turn.status === "completed", action });
       if (turn.status === "failed" || turn.status === "timed_out" || turn.status === "cancelled") {
@@ -3185,12 +2662,14 @@ export function CommandApp() {
         url: `${prefix}/api/mind/turn`,
         signal,
         headers: {
+          "x-mind-turn-id": `${Date.now()}-${crypto.randomUUID()}`,
           "content-type": "application/json",
           ...(token ? { Authorization: `Bearer ${token}` } : {}),
         },
         body: chatTurnBody({
+          chatId: chat.id,
           text,
-          memory: options?.accessNotes?.length ? "on" : chat.memory,
+          memory: chat.memory,
           halted: wsRef.current.halted,
           history: history.map((item) => ({
             role: item.role,
@@ -3201,7 +2680,7 @@ export function CommandApp() {
           })),
           memoryContext: [
             ...(options?.accessNotes ?? []),
-            ...memoriesForChat(source, chat).map((item) => ({ id: item.id, text: item.text })),
+            ...rankMemories(memoriesForChat(source, chat), text).map(({ item }) => ({ id: item.id, text: item.text })),
           ].slice(0, 12),
           botKnowledge: chat.botKnowledge ?? "",
           provider: consultPlan && consultPlan.ok
@@ -3239,7 +2718,7 @@ export function CommandApp() {
           return null;
         }
         const kind = classifyHonestFailure(message);
-        reportFailure(message, kind ? honestFailureAuditAction(kind) : "chat_failed", chat.id, retryThisTurn);
+        reportFailure(`${message} Retry sends this message to ${providerOptions.find((item) => item.id === selectedProvider)?.label ?? selectedProvider} again.`, kind ? honestFailureAuditAction(kind) : "chat_failed", chat.id, retryThisTurn);
         return null;
       }
       setWs((prev) => {
@@ -3320,7 +2799,7 @@ export function CommandApp() {
       }
       const message = normalizeClientFailureMessage(caught);
       const kind = classifyHonestFailure(message);
-      reportFailure(message, kind ? honestFailureAuditAction(kind) : "chat_failed", chat.id, retryThisTurn);
+      reportFailure(`${message} Retry sends this message to ${providerOptions.find((item) => item.id === selectedProvider)?.label ?? selectedProvider} again.`, kind ? honestFailureAuditAction(kind) : "chat_failed", chat.id, retryThisTurn);
       return null;
     } finally {
       turnInFlight.current = false;
@@ -3547,8 +3026,12 @@ export function CommandApp() {
       projectId: projectChoice || null,
       personalityId: defaultPersonalityId,
     });
-    const attached = file ? `\n\nAttached file ${file.name}:\n${file.text.slice(0, 6000)}` : "";
-    const full = `${text || (images.length ? "Describe the attached image." : "")}${attached}`.slice(0, 8000);
+    const attached = file ? `\n\nAttached file ${file.name}:\n${file.text}` : "";
+    const full = `${text || (images.length ? "Describe the attached image." : "")}${attached}`;
+    if (full.length > 8000) {
+      setError("The message and attached text exceed the 8,000-character limit. Shorten them before sending.");
+      return;
+    }
     setDraft("");
     setStaged(null);
     setPendingImages([]);
@@ -3571,6 +3054,11 @@ export function CommandApp() {
     const effortPath = resolveSendPath(composerEffort);
     if (effortPath.notice) setNotice(effortPath.notice);
     const finished = await deliverPlanned(made.chat, full, { ...ws, chats: [made.chat, ...ws.chats] }, images);
+    if (!finished && !deliverStoredUser.current) {
+      setDraft((current) => current || text);
+      if (file) setStaged((current) => current ?? file);
+      if (images.length) setPendingImages((current) => current.length ? current : images);
+    }
     if (finished) await releaseNextCue();
   }
 
@@ -3630,6 +3118,7 @@ export function CommandApp() {
     setAgentNote(null);
     setAgentLog([]);
     setAgentImages([]);
+    const plannerScope = active ? workspaceForChat(ws, active) : emptyWorkspace();
     const plannerImages = pendingImages;
     setPendingImages([]);
     const prefix = previewPathPrefix(window.location.hostname, window.location.pathname) ?? "";
@@ -3641,9 +3130,9 @@ export function CommandApp() {
         headers: { "content-type": "application/json", ...(token ? { authorization: `Bearer ${token}` } : {}) },
         body: JSON.stringify({
           goal,
-          projects: ws.projects.map((project) => project.name),
-          chats: ws.chats.map((chat) => chat.title),
-          notes: ws.memories.filter((note) => !note.archived).map((note) => note.text),
+          projects: plannerScope.projects.map((project) => project.name),
+          chats: plannerScope.chats.map((chat) => chat.title),
+          notes: plannerScope.memories.map((note) => note.text),
           modelTier,
           images: plannerImages.map((image) => ({ dataUrl: image.dataUrl, name: image.name })),
         }),
@@ -3784,8 +3273,12 @@ export function CommandApp() {
       setError(chatPlan.reason);
       return;
     }
-    const attached = file ? `\n\nAttached file ${file.name}:\n${file.text.slice(0, 6000)}` : "";
-    const full = `${text || (images.length ? "Describe the attached image." : "Read the attached file.")}${attached}`.slice(0, 8000);
+    const attached = file ? `\n\nAttached file ${file.name}:\n${file.text}` : "";
+    const full = `${text || (images.length ? "Describe the attached image." : "Read the attached file.")}${attached}`;
+    if (full.length > 8000) {
+      setError("The message and attached text exceed the 8,000-character limit. Shorten them before sending.");
+      return;
+    }
     if (!sendingQueued) {
       setDraft("");
       setStaged(null);
@@ -3805,6 +3298,11 @@ export function CommandApp() {
     const effortPath = resolveSendPath(composerEffort);
     if (effortPath.notice) setNotice(effortPath.notice);
     const finished = await deliverPlanned(active, full, ws, images);
+    if (!finished && !deliverStoredUser.current && !sendingQueued) {
+      setDraft((current) => current || text);
+      if (file) setStaged((current) => current ?? file);
+      if (images.length) setPendingImages((current) => current.length ? current : images);
+    }
     if (finished) await releaseNextCue();
   }
 
@@ -4747,7 +4245,7 @@ export function CommandApp() {
       if (speakStageOpenRef.current) setSpeakCall((current) => ({ ...current, heard: transcript, reply: made.reply, error: "" }));
       return { ok: true as const, text: made.reply };
     }
-    const reply = await deliver({ ...chat, personalityId: spokenStyle, memory: "on" }, transcript, source, false, [], { accessNotes: eveAccessNotes(source) });
+    const reply = await deliver({ ...chat, personalityId: spokenStyle }, transcript, source, false, [], { accessNotes: chat.memory === "on" && !chat.temporary ? eveAccessNotes(workspaceForChat(source, chat)) : [] });
     if (!reply) return { ok: false as const, error: "The chat turn failed. Nothing was spoken." };
     return { ok: true as const, text: reply };
   }
@@ -5869,7 +5367,7 @@ export function CommandApp() {
   const dictationDisabled = ws.halted || voiceListening || voiceOverlayOpen;
 
   return (
-    <div className="shell flex h-dvh flex-col bg-bg text-fg md:flex-row" data-view={view} data-search={paletteOpen ? "open" : "closed"}>
+    <div id="mind-workspace" className="shell flex h-dvh flex-col bg-bg text-fg md:flex-row" data-view={view} data-search={paletteOpen ? "open" : "closed"}>
       <MenuMotion />
       {navOpen ? <button type="button" className="fixed inset-0 md:hidden" aria-label="Close menu" style={{ zIndex: 150, background: "transparent" }} onClick={() => setNavOpen(false)} /> : null}
       <aside ref={(node) => { navDrawerRef.current = node; pinRailFrame(node); }} onMouseDown={closeNavFromBackdrop} role={navOpen ? "dialog" : undefined} aria-modal={navOpen ? true : undefined} aria-label={navOpen ? "Workspace navigation" : undefined} className={`rail gpt-rail ${navOpen ? "nav-drawer-open flex" : "hidden"} fixed inset-0 z-40 w-full flex-col overflow-hidden md:static md:flex md:h-dvh ${railCollapsed ? "md:w-[4.5rem]" : "md:w-72"} md:shrink-0`}>
@@ -6106,7 +5604,7 @@ export function CommandApp() {
 
       <main ref={pinMainColumn} className="main-stage page-enter flex min-h-0 min-w-0 flex-1 flex-col" inert={navOpen}>
         <h1 className="sr-only">Adrian’s Mind OS</h1>
-        <header className="topbar flex flex-nowrap items-center gap-2 px-3 py-3 md:gap-3 md:px-5" ref={(node) => node?.style.setProperty("overflow", "visible", "important")}>
+        <header className="topbar flex flex-nowrap items-center gap-2 px-3 py-3 md:gap-3 md:px-5" ref={(node) => { if (view !== "chat" && view !== "command") node?.style.setProperty("overflow", "visible", "important"); else node?.style.removeProperty("overflow"); }}>
          <button type="button" className="grid size-11 shrink-0 place-items-center rounded-panel border border-line md:hidden" aria-label="Open menu" onClick={openNav}>
            <Menu className="size-4" />
          </button>
@@ -6266,11 +5764,11 @@ export function CommandApp() {
                 type="button"
                 className="surface-switch__button shrink-0 whitespace-nowrap"
                 data-testid="open-chat-settings"
+                ref={chatSettingsTrigger}
                 aria-label="Chat settings"
-                onClick={() => {
-                  const node = document.querySelector(".thread-chat-settings");
-                  if (node instanceof HTMLDetailsElement) node.open = !node.open;
-                }}
+                aria-controls="thread-chat-settings"
+                aria-expanded={chatSettingsOpen}
+                onClick={() => setChatSettingsOpen((open) => !open)}
               >
                 <span>Chat settings</span>
                 <ChevronDown size={16} strokeWidth={1.75} aria-hidden="true" />
@@ -6312,7 +5810,7 @@ export function CommandApp() {
                 </MenuCluster>
                 <MenuCluster label="Use a module" wide>
                   {consultModules.filter((item) => item.connected).length === 0 ? (
-                    <p className="px-3 text-xs text-muted">No module is connected. Nothing else is listed.</p>
+                    <p className="px-3 text-xs text-muted">No model module is configured.</p>
                   ) : consultModules.filter((item) => item.connected).map((item) => (
                     <button
                       key={item.id}
@@ -6325,7 +5823,7 @@ export function CommandApp() {
                       onClick={() => useProviderInChat(item.id)}
                     >
                       <span>{item.label}</span>
-                      <span className="text-xs text-muted">{providerChoice === item.id ? "In use" : "Configured"}</span>
+                      <span className="text-xs text-muted">{providerChoice === item.id ? "Selected" : "Configured"}</span>
                     </button>
                   ))}
                 </MenuCluster>
@@ -6637,7 +6135,7 @@ export function CommandApp() {
             </div>
           )}
           {view === "command" && (
-           <div ref={liftHomeStack} className="gpt-home mx-auto flex min-h-full w-full max-w-none flex-col justify-start gap-4 p-4 md:p-6" style={{ justifyContent: "flex-start" }}>
+           <div id="command-home" className="gpt-home mx-auto flex min-h-full w-full max-w-none flex-col justify-start gap-4 p-4 md:p-6" style={{ justifyContent: "flex-start" }}>
               <div className="masthead flex w-full items-center gap-3">
                 <div className="flex w-full flex-wrap items-end justify-between gap-3">
                   <div className="w-full min-w-0">
@@ -6666,7 +6164,7 @@ export function CommandApp() {
                 </div>
               </div>
               <FirstSteps state={guide} onChange={persistGuide} onOpen={openGuide} />
-              <section ref={liftHomeComposer} className="floating-composer command-card composer-dock rounded-panel p-3 md:p-4" data-composer="floating">
+              <section className="floating-composer command-card composer-dock rounded-panel p-3 md:p-4" data-composer="floating">
                 <details className="composer-advanced">
                   <summary>Controls</summary>
                 <div className="mt-2 flex flex-wrap items-center gap-2">
@@ -6762,19 +6260,7 @@ export function CommandApp() {
                     <div className="attachment-feedback flex flex-wrap items-center gap-2 text-xs text-muted"><span>Attached: {staged.name}</span><button type="button" className="min-h-11 text-accent" onClick={() => { setStaged(null); setNotice(null); }}>Remove attachment</button></div>
                   )}
                   <div className="composer-toolbar mt-2 flex flex-wrap items-center gap-2">
-                    <details
-                      className="composer-more"
-                      onToggle={(event) => {
-                        const menu = event.currentTarget.querySelector("[data-testid='home-composer-more-menu']");
-                        if (menu instanceof HTMLElement) pinComposerMenu(menu);
-                        if (event.currentTarget.open) {
-                          setContextOpen(false);
-                          setToolsOpen(false);
-                        }
-                      }}
-                    >
-                      <summary>More</summary>
-                      <div className="composer-more__menu" ref={(node) => pinComposerMenu(node)} data-testid="home-composer-more-menu">
+                    <ComposerMore testId="home-composer-more-menu" onOpen={() => { setContextOpen(false); setToolsOpen(false); }}>
                         <MenuCluster label="Files">
                           <button type="button" className="inline-flex items-center gap-2 rounded-panel border border-line px-3 text-sm" style={menuChip} onClick={() => fileRef.current?.click()}>
                             <Paperclip className="size-4" /> Attach
@@ -6851,8 +6337,7 @@ export function CommandApp() {
                             Translate
                           </button>
                         </MenuCluster>
-                      </div>
-                    </details>
+                    </ComposerMore>
                     <div className="legacy-composer-voice"><VoiceLevelMeter level={voiceLevel} listening={voiceListening} className="mr-1" /><BrowserDictationControl
                       state={dictation.phase}
                       level={dictationLevel}
@@ -7068,6 +6553,11 @@ export function CommandApp() {
 
           {view === "chat" && (
             <ChatPane
+              chatSettingsOpen={chatSettingsOpen}
+              onChatSettingsToggle={(open) => {
+                setChatSettingsOpen(open);
+                if (!open) chatSettingsTrigger.current?.focus({ preventScroll: true });
+              }}
               active={active}
               chats={ws.chats}
               personalityId={active?.personalityId ?? "assistant"}
@@ -7263,7 +6753,7 @@ export function CommandApp() {
                   <img src="/brand/logo-mark.jpg" alt="" className="size-10 rounded-xl" />
                   <div>
                     <h2 className="font-display text-3xl font-bold">Projects</h2>
-                    <p className="text-sm text-muted">Records on this device. Oak Bridge and BridgePoint stay outside this app.</p>
+                    <p className="text-sm text-muted">Group this device’s chats, notes, and files by project.</p>
                   </div>
                 </div>
                 <button id="new-project-button" type="button" className="inline-flex min-h-11 items-center gap-2 rounded-panel bg-accent px-4 text-sm font-semibold text-white" onClick={() => setProjectOpen(true)}>
@@ -7272,7 +6762,6 @@ export function CommandApp() {
               </div>
               <div className="mt-4 flex flex-wrap gap-2">
                 <span className="rounded-panel bg-accent px-3 py-2 text-sm text-white">On this device ({ws.projects.length})</span>
-                <span className="rounded-panel border border-line px-3 py-2 text-sm text-muted">External (2) · unchanged</span>
               </div>
               <div id="owner-projects">
                 {ws.projects.length === 0 && (
@@ -7334,21 +6823,6 @@ export function CommandApp() {
                     </article>
                   );
                 })}
-                {EXTERNAL.map((item) => (
-                  <article key={item.name} className="rounded-panel border border-line bg-surface p-4">
-                    <div className="flex items-start gap-3">
-                      <img src={item.mark} alt="" className="size-11 rounded-2xl" />
-                      <div>
-                        <div className="flex items-center gap-2">
-                          <h3 className="font-semibold">{item.name}</h3>
-                          <span className="rounded-full border border-line px-2 py-0.5 text-xs text-muted">External</span>
-                        </div>
-                        <p className="text-sm text-muted">{item.detail}</p>
-                      </div>
-                    </div>
-                    <p className="mt-3 text-xs text-muted">No tasks, files, or progress are read from that product.</p>
-                  </article>
-                ))}
               </div>
             </section>
           )}
@@ -7489,7 +6963,7 @@ export function CommandApp() {
                     const id = noteMenu;
                     setNoteMenu(null);
                     requestProtected("delete", `delete-memory:${id}`, "Delete this note", "The current text and its versions are removed from this browser.", "Approve delete", () => {
-                      setWs((prev) => pushAudit({ ...prev, memories: prev.memories.filter((note) => note.id !== id) }, "delete_memory", id, "approved"));
+                      setWs((prev) => pushAudit(deleteMemory(prev, id), "delete_memory", id, "approved"));
                     });
                   }}>Delete</button>
                 </ActionOverlay>
@@ -7973,7 +7447,7 @@ export function CommandApp() {
                     )}
                     {ws.files.filter((file) => !libraryProjectId || file.projectId === libraryProjectId).map((file) => (
                       <li key={file.id}>
-                        <button type="button" onClick={() => { setOpenFileId(file.id); setLibraryBand("preview"); }} className={`dense-row min-h-11 w-full px-2 text-left ${openFileId === file.id ? "tile-active bg-accent text-accent-ink" : ""}`}>
+                        <button type="button" onClick={() => { setOpenFileId(file.id); setLibraryBand("preview"); }} className={`dense-row min-h-11 w-full whitespace-normal [overflow-wrap:anywhere] px-2 text-left ${openFileId === file.id ? "tile-active bg-accent text-accent-ink" : ""}`}>
                           {file.name}
                         </button>
                       </li>
@@ -7990,7 +7464,7 @@ export function CommandApp() {
                   )}
                   {ws.files.filter((file) => file.id === openFileId).map((file) => (
                     <div key={file.id}>
-                      <p className="font-semibold">{file.name}</p>
+                      <p className="font-semibold [overflow-wrap:anywhere]">{file.name}</p>
                       {file.partial && <p className="text-sm text-muted">Partial text copy. Keep the original for the full contents.</p>}
                       <p className="text-xs text-muted">{formatBytes(file.bytes)} · {stamp(file.createdAt)} · {describeFile(file.name, file.text).summary}</p>
                       <pre tabIndex={0} aria-label="File text" className="mt-3 max-h-[60dvh] overflow-auto break-words whitespace-pre-wrap rounded-panel bg-bg p-3 text-sm">{file.text}</pre>
@@ -8395,7 +7869,7 @@ export function CommandApp() {
                     </table>
                     <p className="mt-1 text-muted">Merge updates matching IDs and adds new records. Replace applies the archive to the browser copy.</p>
                     <div className="mt-2 flex flex-wrap gap-2">
-                      <button type="button" className="min-h-11 rounded-panel border border-line px-3" onClick={() => requestProtected("overwrite", "import-merge", "Merge this archive", "Records with matching IDs are replaced by the versions from this archive.", "Merge archive", () => { setWs((prev) => pushAudit(mergeWorkspace(prev, importPreview.workspace), "import_merge", "archive", "merged")); setImportPreview(null); setImportStatus("Archive merged with this workspace."); })}>
+                      <button type="button" className="min-h-11 rounded-panel border border-line px-3" onClick={() => requestProtected("overwrite", "import-merge", "Merge this archive", "Merge records from the archive. For saved memory, corrections and deletions are preserved.", "Merge archive", () => { setWs((prev) => pushAudit(mergeWorkspace(prev, importPreview.workspace), "import_merge", "archive", "merged")); setImportPreview(null); setImportStatus("Archive merged with this workspace."); })}>
                         Merge
                       </button>
                       <button
@@ -8403,7 +7877,7 @@ export function CommandApp() {
                         className="min-h-11 rounded-panel border border-line px-3"
                         onClick={() =>
                           requestProtected("overwrite", `import-replace:${importPreview.workspace.version}`, "Replace this workspace", "Current chats, notes, projects, and files are replaced by the archive.", "Approve replace", () => {
-                            setWs((prev) => pushAudit({ ...importPreview.workspace, halted: prev.halted || importPreview.workspace.halted }, "import_replace", "archive", "replaced"));
+                            setWs((prev) => pushAudit(replaceFromArchive(prev, importPreview.workspace), "import_replace", "archive", "replaced"));
                             setImportPreview(null);
                             setImportStatus("Workspace replaced with the archive.");
                           })
@@ -8512,11 +7986,11 @@ export function CommandApp() {
       {projectOpen && (
         <Overlay labelledBy="create-project-title" onDismiss={() => { setProjectName(""); setProjectAbout(""); setError(null); setProjectOpen(false); window.setTimeout(() => document.getElementById("new-project-button")?.focus(), 0); }}>
           <h3 id="create-project-title" className="font-display text-2xl font-bold">Create project</h3>
-          <label className="mt-3 block text-sm font-medium" htmlFor="project-name">Project name <span className="text-danger">Required</span></label>
-          <input id="project-name" autoFocus value={projectName} onChange={(event) => { setProjectName(event.target.value); if (error === "Name the project.") setError(null); }} placeholder="Name" aria-describedby={error === "Name the project." ? "project-name-error" : undefined} className="mt-1 min-h-11 w-full rounded-panel border border-line bg-bg px-3 text-sm" />
+          <label className="mt-3 block text-sm font-medium" htmlFor="project-name">Project name <span className="text-muted">(required, up to {PROJECT_NAME_MAX} characters)</span></label>
+          <input id="project-name" autoFocus required maxLength={PROJECT_NAME_MAX} value={projectName} onChange={(event) => { setProjectName(event.target.value); if (error === "Name the project.") setError(null); }} placeholder="Name" aria-describedby={error === "Name the project." ? "project-name-error" : undefined} className="mt-1 min-h-11 w-full rounded-panel border border-line bg-bg px-3 text-sm" />
           {error === "Name the project." ? <p id="project-name-error" role="alert" className="mt-2 text-sm text-danger">Enter a project name before creating it.</p> : null}
-          <label className="mt-3 block text-sm font-medium" htmlFor="project-description">Description <span className="text-muted">Optional</span></label>
-          <textarea id="project-description" value={projectAbout} onChange={(event) => setProjectAbout(event.target.value)} placeholder="What belongs in this project?" rows={3} className="mt-1 w-full rounded-panel border border-line bg-bg px-3 py-2 text-sm" />
+          <label className="mt-3 block text-sm font-medium" htmlFor="project-description">Description <span className="text-muted">(optional, up to 400 characters)</span></label>
+          <textarea id="project-description" maxLength={400} value={projectAbout} onChange={(event) => setProjectAbout(event.target.value)} placeholder="What belongs in this project?" rows={3} className="mt-1 w-full rounded-panel border border-line bg-bg px-3 py-2 text-sm" />
           <div className="mt-3 flex gap-2">
             <button type="button" className="min-h-11 flex-1 rounded-panel border border-line" onClick={() => { setProjectName(""); setProjectAbout(""); setError(null); setProjectOpen(false); window.setTimeout(() => document.getElementById("new-project-button")?.focus(), 0); }}>Cancel</button>
             <button type="button" className="min-h-11 flex-1 rounded-panel bg-accent font-semibold text-accent-ink" onClick={saveProject}>Create</button>
@@ -8889,6 +8363,8 @@ function ReaPanel({
 }
 
 function ChatPane({
+  chatSettingsOpen,
+  onChatSettingsToggle,
   active,
   chats,
   personalityId,
@@ -8997,6 +8473,8 @@ function ChatPane({
   systemStatus,
   onViewAudit,
 }: {
+  chatSettingsOpen: boolean;
+  onChatSettingsToggle: (open: boolean) => void;
   active: Chat | null;
   chats: Chat[];
   personalityId: PersonalityId;
@@ -9143,9 +8621,33 @@ function ChatPane({
   const groups = ["Today", "Yesterday", "This week", "Earlier"]
     .map((label) => ({ label, items: visible.filter((chat) => chatBucket(chat) === label) }))
     .filter((group) => group.items.length > 0);
+  const transcript = useRef<HTMLDivElement>(null);
+  const turns = useRef<HTMLDivElement>(null);
+  const following = useRef(true);
+  const previousScrollTop = useRef(0);
+  const [detached, setDetached] = useState(false);
+
+  useLayoutEffect(() => {
+    const pane = transcript.current;
+    const content = turns.current;
+    if (!pane || !content) return;
+    following.current = true;
+    setDetached(false);
+    function followTail() {
+      if (pane && following.current) {
+        pane.scrollTop = pane.scrollHeight;
+        previousScrollTop.current = pane.scrollTop;
+      }
+    }
+    followTail();
+    const observer = new ResizeObserver(followTail);
+    observer.observe(content);
+    observer.observe(pane);
+    return () => observer.disconnect();
+  }, [active?.id]);
   const lastReply = [...(active?.messages ?? [])].reverse().find((msg) => msg.role === "assistant");
   return (
-    <div className="thread-shell flex h-full min-h-0 flex-col xl:flex-row">
+    <div id="chat-thread" className="thread-shell flex h-full min-h-0 flex-col xl:flex-row">
       {!active?.messages.length ? <aside className="flex max-h-72 shrink-0 flex-col border-b border-line xl:max-h-none xl:w-64 xl:border-r xl:border-b-0" data-testid="thread-history">
         <div className="p-3">
           <button type="button" onClick={onNew} className="flex min-h-11 w-full items-center justify-center gap-2 rounded-panel bg-accent text-sm font-semibold text-accent-ink">
@@ -9184,7 +8686,7 @@ function ChatPane({
          {active && customPersonality.trim() ? <p className="mt-1 text-sm text-muted">{active.title} is open in Chat. Its saved instructions are used for the next reply.</p> : null}
           {active?.temporary && <div className="text-xs text-muted">Excluded from workspace archives by default</div>}
           {active?.messages.some((message) => message.images?.some((image) => !image.dataUrl)) && <div className="text-xs text-muted">Some images are unavailable. Their references will be included in the transcript.</div>}
-         <details className="thread-chat-settings">
+         <details id="thread-chat-settings" className="thread-chat-settings" open={chatSettingsOpen} onToggle={(event) => onChatSettingsToggle(event.currentTarget.open)}>
            <summary>Chat settings</summary>
             <p className="text-sm text-muted">Only a configured provider can be selected. Another provider is not substituted.</p>
            <div className="mt-2 flex flex-wrap items-center gap-2">
@@ -9225,7 +8727,18 @@ function ChatPane({
             </div>
           </details>
         </div>
-        <div className="min-h-0 flex-1 space-y-3 overflow-auto p-4">
+        <div ref={transcript} className="min-h-0 flex-1 overflow-auto p-4" onScroll={(event) => {
+          const pane = event.currentTarget;
+          const end = Math.max(0, pane.scrollHeight - pane.clientHeight);
+          const top = pane.scrollTop;
+          // Growing content can increase the distance from the tail before its resize callback.
+          // Only an actual upward scroll should detach a reader who was following.
+          if (end - top < 32) following.current = true;
+          else if (top < Math.min(previousScrollTop.current, end) - 1) following.current = false;
+          previousScrollTop.current = top;
+          setDetached(!following.current);
+        }}>
+          <div ref={turns} className="space-y-3">
           <ChatMediaGallery messages={active?.messages} onUseInComposer={onSaveImage} onEditImagine={onEditImagine} onDownload={onDownloadImage} />
           {(!active || active.messages.length === 0) && !busy && (
             <div className="grid min-h-64 place-items-center text-center">
@@ -9380,6 +8893,12 @@ function ChatPane({
           )}
           {voiceListening ? <div className="flex items-center gap-2"><VoiceLevelMeter level={voiceLevel} listening={voiceListening} /></div> : null}
         </div>
+        </div>
+        {detached && <button type="button" className="jump-to-latest" onClick={() => {
+          following.current = true;
+          setDetached(false);
+          if (transcript.current) transcript.current.scrollTop = transcript.current.scrollHeight;
+        }}>Jump to latest</button>}
         {cue.length > 0 ? (
           <div className="rounded-panel border border-line p-2" data-testid="message-cue">
             <p className="text-xs uppercase tracking-wide text-muted">Next</p>
@@ -9427,6 +8946,7 @@ function ChatPane({
             for (const file of files.slice(0, 4)) onAddImageFile(file);
           }}
         >
+          <div className="thread-draft">
           {onPickModule && (!active || active.messages.length === 0) ? <ModuleSuggestions draft={draft} onPick={onPickModule} /> : null}
           <textarea
             value={draft}
@@ -9470,18 +8990,9 @@ function ChatPane({
               <p className="text-xs text-muted">Chat stays on Grok. Imagine generates images via grok-imagine-image. Video is not called.</p>
             </div>
           )}
+          </div>
           <div className="composer-toolbar mt-2 flex flex-wrap items-center gap-2">
-            <details className="composer-more" onKeyDown={(event) => {
-              if (event.key !== "Escape" || !event.currentTarget.open) return;
-              event.stopPropagation();
-              event.currentTarget.open = false;
-              event.currentTarget.querySelector("summary")?.focus();
-            }} onToggle={(event) => {
-              const menu = event.currentTarget.querySelector("[data-testid='composer-more-menu']");
-              if (menu instanceof HTMLElement) pinComposerMenu(menu);
-            }}>
-              <summary>More</summary>
-              <div className="composer-more__menu" ref={(node) => pinComposerMenu(node)} data-testid="composer-more-menu">
+            <ComposerMore testId="composer-more-menu">
                 <MenuCluster label="Files">
                   <button type="button" className="inline-flex items-center gap-2 rounded-panel border border-line/80 bg-white/5 px-3 text-sm" style={menuChip} onClick={onAttach}>
                     <Paperclip className="size-4" /> Attach
@@ -9518,8 +9029,7 @@ function ChatPane({
                     </select>
                   </label>
                 </MenuCluster>
-              </div>
-            </details>
+            </ComposerMore>
             <div className="legacy-composer-voice"><VoiceLevelMeter level={voiceLevel} listening={voiceListening} />
             <BrowserDictationControl
               state={dictationState}

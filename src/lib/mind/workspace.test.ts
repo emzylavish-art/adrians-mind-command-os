@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import {
+  addLocalFile,
   addMemory,
   canonical,
   createChat,
@@ -175,5 +176,24 @@ describe("reply identity across provider switches", () => {
     assert.deepEqual(restored.chats[0].messages.map(({ provider, model }) => [provider, model]), [
       [undefined, "legacy-model"], ["First", "model-1"], ["Second", "model unknown"],
     ]);
+  });
+});
+
+describe("library filenames", () => {
+  it("preserves distinct long names and their text when reopening an archive", async () => {
+    const prefix = "shared-filename-prefix-".repeat(7);
+    const names = [prefix + "first.md", prefix + "second.csv"];
+    let workspace = emptyWorkspace();
+    for (const name of names) {
+      workspace = addLocalFile(workspace, { name, text: "Contents of " + name, projectId: null });
+    }
+
+    const archive = await packWorkspace(workspace, false);
+    const restored = await unpackWorkspace(JSON.stringify(archive));
+    assert.ok(restored.ok);
+    assert.deepEqual(
+      restored.workspace.files.map(({ name, text }) => [name, text]).sort(),
+      names.map((name) => [name, "Contents of " + name]).sort(),
+    );
   });
 });

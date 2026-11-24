@@ -22,12 +22,7 @@ export async function runDurableCorePassForUser(userId: string) {
     return { ok: false as const, error: "No saved server workspace. Nothing ran. The browser copy was not changed." };
   }
   const workspace = normalizeWorkspace(raw);
-  let halted = workspace.halted;
-  try {
-    halted = halted || await haltIsOn(userId);
-  } catch {
-    halted = workspace.halted;
-  }
+  const halted = workspace.halted || await haltIsOn(userId);
   const next = applyCorePass({
     workspace: { ...workspace, halted },
     now: new Date().toISOString(),
