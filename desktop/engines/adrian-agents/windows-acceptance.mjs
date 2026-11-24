@@ -19,27 +19,34 @@ export function checkBoot(env) {
   return line("PASS", "boot", "Adrian agents is registered and running after login.");
 }
 
-export function readBootProbe(text) {
-  const taskRegistered = typeof text === "string" && text.includes("AdriansMind-Agents");
-  const processRunning = typeof text === "string" && /adrian-agents/i.test(text) && /node/i.test(text);
+export function readBootProbe(taskRegistered, commandLines, runtimePath) {
+  const expected = path.win32.normalize(runtimePath).toLowerCase();
+  const processRunning = commandLines.split(/\r?\n/).some((line) => {
+    const match = line.trim().match(/^(?:"([^"]+)"|(\S+))\s+(?:"([^"]+)"|([^"\s]+))$/);
+    if (!match) return false;
+    const executable = path.win32.basename(match[1] || match[2]).toLowerCase();
+    const script = path.win32.normalize(match[3] || match[4]).toLowerCase();
+    return executable === "node.exe" && script === expected;
+  });
   return { taskRegistered, processRunning };
 }
 
 export function readWindowsBoot(platform = process.platform) {
   if (platform !== "win32") return { taskRegistered: false, processRunning: false };
-  let taskText = "";
-  let processText = "";
+  let taskRegistered = false;
+  let commandLines = "";
   try {
-    taskText = execFileSync("schtasks", ["/Query", "/TN", "AdriansMind-Agents", "/FO", "LIST"], { encoding: "utf8" });
+    execFileSync("schtasks", ["/Query", "/TN", "AdriansMind-Agents"], { stdio: "ignore" });
+    taskRegistered = true;
   } catch {
-    taskText = "";
+    // Task registration could not be confirmed.
   }
   try {
-    processText = execFileSync("powershell", ["-NoProfile", "-Command", "Get-Process node | Select-Object -ExpandProperty Path"], { encoding: "utf8" });
+    commandLines = execFileSync("powershell", ["-NoProfile", "-Command", "Get-CimInstance Win32_Process -Filter \"Name='node.exe'\" | Select-Object -ExpandProperty CommandLine"], { encoding: "utf8" });
   } catch {
-    processText = "";
+    // An unreadable command line cannot establish runtime identity.
   }
-  return readBootProbe(`${taskText}\n${processText}`);
+  return readBootProbe(taskRegistered, commandLines, path.join(here, "runtime.mjs"));
 }
 
 export function checkApproval(dirs) {
