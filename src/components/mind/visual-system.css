@@ -224,6 +224,13 @@ html[data-theme="light"] .shell [data-testid="kimi-connection"] button[role="tab
   background: var(--mind-accent) !important;
   border-color: var(--mind-accent) !important;
   color: var(--mind-accent-ink) !important;
+  -webkit-text-fill-color: currentColor !important;
+}
+
+/* The graph keeps its dark canvas and HUD in either application theme. */
+html[data-theme="light"] .shell .dash3d-root :is(.dash3d-pill, .dash3d-mobile-nav-link) {
+  color: var(--dash3d-fg) !important;
+  -webkit-text-fill-color: currentColor !important;
 }
 
 html[data-theme="light"] .thread-chat-settings summary,

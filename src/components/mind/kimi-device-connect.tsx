@@ -104,7 +104,7 @@ export function KimiDeviceConnect() {
           </button>
         ))}
       </div>
-      <div className="mt-3 grid gap-2" aria-label="Adrian plugins">
+      <div className="mt-3 grid gap-2" role="group" aria-label="Adrian plugins">
         {(tab === "installed" ? OFFICIAL.filter((plugin) => added.includes(plugin.id)) : tab === "official" ? [] : tab === "curated" ? OFFICIAL : []).map((plugin) => {
           const on = added.includes(plugin.id);
           return (
