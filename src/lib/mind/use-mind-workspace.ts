@@ -45,7 +45,7 @@ export function useMindWorkspace(userId: string | null = "dev-user", email: stri
   const saveForOwner = useCallback((workspace: Workspace, gen: number) => {
     // Serialize snapshots so a slow older request cannot finish after a new workspace or wipe.
     pendingWrites.current++;
-    const result = writeQueue.current.then(() => {
+    const result = writeQueue.current.then(async () => {
       if (!userId || activeScope.current !== scope || gen !== persistGen.current) {
         return { ok: false as const, error: "The account workspace changed before saving." };
       }
