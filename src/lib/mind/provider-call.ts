@@ -1,5 +1,6 @@
 /** Bounded provider-specific chat calls with normalised assistant text. */
 import { reportedModel } from "./stream.ts";
+import { isOpenRouterFreeModel, OPENROUTER_FREE_MODEL_REQUIRED, OPENROUTER_FREE_ROUTING } from "./provider-catalog.ts";
 
 export type ProviderName = "grok" | "openai" | "anthropic" | "gemini" | "openrouter";
 type OtherProvider = Exclude<ProviderName, "grok">;
@@ -10,7 +11,7 @@ const KEYS: Record<OtherProvider, string> = {
 };
 const MODELS: Record<OtherProvider, string> = {
   openai: "gpt-4.1-mini", anthropic: "claude-sonnet-4-5",
-  gemini: "gemini-2.0-flash", openrouter: "openrouter/auto",
+  gemini: "gemini-3.1-flash-lite", openrouter: "",
 };
 export function configuredProviders(env: Record<string, string | undefined>): Record<OtherProvider, boolean> {
   return {
@@ -26,7 +27,9 @@ export function selectProvider(id: unknown, env: Record<string, string | undefin
     return { ok: false, error: "That provider is not known. Another provider is not substituted." };
   }
   if (!env[KEYS[name]]?.trim()) return { ok: false, error: "No " + name + " key is configured. Another provider is not substituted." };
-  return { ok: true, id: name, model: MODELS[name] };
+  const model = name === "openrouter" ? env.OPENROUTER_MODEL?.trim() ?? "" : MODELS[name];
+  if (name === "openrouter" && !isOpenRouterFreeModel(model)) return { ok: false, error: OPENROUTER_FREE_MODEL_REQUIRED };
+  return { ok: true, id: name, model };
 }
 type FetchLike = (url: string, init?: RequestInit) => Promise<{ ok: boolean; status: number; headers?: Pick<Headers, "get">; text: () => Promise<string> }>;
 function readableBlocks(value: unknown): string {
@@ -63,6 +66,7 @@ export async function callConfiguredProvider(input: {
   id: OtherProvider;
   key: string;
   prompt: string;
+  model?: string;
   systemPrompt?: string;
   history?: History[];
   signal?: AbortSignal;
@@ -79,7 +83,10 @@ export async function callConfiguredProvider(input: {
     ...(systemPrompt ? [{ role: "system" as const, content: systemPrompt }] : []),
     ...messages,
   ];
-  const models = MODELS;
+  const models = { ...MODELS, [input.id]: input.model || MODELS[input.id] };
+  if (input.id === "openrouter" && !isOpenRouterFreeModel(models.openrouter)) {
+    return { ok: false, text: "", error: OPENROUTER_FREE_MODEL_REQUIRED, httpStatus: 400 };
+  }
   const endpoints: Record<OtherProvider, { url: string; init: RequestInit }> = {
     openai: {
       url: "https://api.openai.com/v1/chat/completions",
@@ -92,8 +99,8 @@ export async function callConfiguredProvider(input: {
         body: JSON.stringify({ model: models.anthropic, max_tokens: 400, ...(systemPrompt ? { system: systemPrompt } : {}), messages }) },
     },
     gemini: {
-      url: "https://generativelanguage.googleapis.com/v1beta/models/" + models.gemini + ":generateContent?key=" + encodeURIComponent(input.key),
-      init: { headers: { "content-type": "application/json" }, body: JSON.stringify({
+      url: "https://generativelanguage.googleapis.com/v1beta/models/" + models.gemini + ":generateContent",
+      init: { headers: { "content-type": "application/json", "x-goog-api-key": input.key }, body: JSON.stringify({
         ...(systemPrompt ? { systemInstruction: { parts: [{ text: systemPrompt }] } } : {}),
         contents: messages.map((message) => ({ role: message.role === "assistant" ? "model" : "user", parts: [{ text: message.content }] })),
       }) },
@@ -101,7 +108,7 @@ export async function callConfiguredProvider(input: {
     openrouter: {
       url: "https://openrouter.ai/api/v1/chat/completions",
       init: { headers: { authorization: "Bearer " + input.key, "content-type": "application/json" },
-        body: JSON.stringify({ model: models.openrouter, messages: completionMessages }) },
+        body: JSON.stringify({ model: models.openrouter, messages: completionMessages, provider: OPENROUTER_FREE_ROUTING }) },
     },
   };
   const target = endpoints[input.id];
@@ -116,8 +123,8 @@ export async function callConfiguredProvider(input: {
     const retryAfter = rawDelay && (/^\d{1,8}$/.test(rawDelay) || (rawDelay.length <= 40 && Number.isFinite(Date.parse(rawDelay)))) ? rawDelay : undefined;
     return { ok: false, text: "", httpStatus: 429, retryAfter, error: input.id + " rate limited the request. Nothing was substituted." };
   }
-  if (response.status === 401 || response.status === 403) return { ok: false, text: "", error: input.id + " rejected the API key or account permissions." };
-  if (!response.ok) return { ok: false, text: "", error: input.id + " returned HTTP " + response.status + ". Nothing was substituted." };
+  if (response.status === 401 || response.status === 403) return { ok: false, text: "", httpStatus: response.status, error: input.id + " rejected the API key or account permissions." };
+  if (!response.ok) return { ok: false, text: "", httpStatus: response.status >= 400 && response.status < 500 ? response.status : undefined, error: input.id + " returned HTTP " + response.status + ". Nothing was substituted." };
   try {
     const raw = await response.text();
     if (raw.length > 500_000) return { ok: false, text: "", error: input.id + " returned a response larger than the supported limit." };
@@ -146,13 +153,13 @@ export async function routeSelectedModel(input: {
   history?: History[];
   signal?: AbortSignal;
   fetch: FetchLike;
-}): Promise<{ ok: boolean; text: string; error: string; model: string; httpStatus?: number; retryAfter?: string }> {
+}): Promise<{ ok: boolean; text: string; error: string; model: string; requestedModel?: string; httpStatus?: number; retryAfter?: string }> {
   const prompt = input.prompt.trim();
   if (!prompt) return { ok: false, text: "", error: "Write a message first. Nothing was sent.", model: input.id };
   if (input.id === "nemotron" || input.id === "openrouter") {
     const key = input.env.OPENROUTER_API_KEY;
     if (!key) return { ok: false, text: "", error: "OpenRouter is selected, but no OpenRouter key is connected. Nothing was sent and Grok was not substituted.", model: input.id };
-    const model = input.id === "nemotron" ? NEMOTRON_MODEL : (input.env.OPENROUTER_MODEL || "openrouter/auto");
+    const model = input.id === "nemotron" ? NEMOTRON_MODEL : input.env.OPENROUTER_MODEL?.trim() ?? "";
     const called = await callConfiguredProvider({
       id: "openrouter",
       key,
@@ -160,13 +167,10 @@ export async function routeSelectedModel(input: {
       systemPrompt: input.systemPrompt,
       history: input.history,
       signal: input.signal,
-      fetch: async (url, init) => {
-        const body = JSON.parse(String(init?.body ?? "{}")) as { model?: string };
-        body.model = model;
-        return input.fetch(url, { ...init, body: JSON.stringify(body) });
-      },
+      model,
+      fetch: input.fetch,
     });
-    return { ...called, model: reportedModel(called.model) };
+    return { ...called, model: reportedModel(called.model), requestedModel: model };
   }
   if (input.id === "ollama") {
     const url = input.env.LOCAL_MODEL_URL;

@@ -16,13 +16,24 @@ test("/signup redirects to the existing sign-up mode without weakening redirect 
   assert.match(login, /const next = safeRedirectPath\(search\.next\)/);
 });
 
-test("deployment config applies baseline security headers without a breaking CSP", () => {
-  const all = vercel.headers?.find((rule) => rule.source === "/(.*)")?.headers ?? [];
-  const header = (key) => all.find((entry) => entry.key.toLowerCase() === key.toLowerCase())?.value;
-  assert.equal(header("X-Content-Type-Options"), "nosniff");
-  assert.equal(header("X-Frame-Options"), "DENY");
-  assert.equal(header("Referrer-Policy"), "strict-origin-when-cross-origin");
-  assert.equal(header("Content-Security-Policy"), undefined);
+test("deployment config only permits the two same-origin workspace frames", () => {
+  const headersFor = (path) => Object.fromEntries(vercel.headers
+    .filter(({ source }) => new RegExp(`^${source}$`).test(path))
+    .flatMap(({ headers }) => headers.map(({ key, value }) => [key, value])));
+  for (const path of ["/", "/login", "/apps/social/other.html", "/apps/gpt-wrapper/index.html/other"]) {
+    const headers = headersFor(path);
+    assert.equal(headers["X-Content-Type-Options"], "nosniff");
+    assert.equal(headers["X-Frame-Options"], "DENY");
+    assert.equal(headers["Referrer-Policy"], "strict-origin-when-cross-origin");
+    assert.equal(headers["Content-Security-Policy"], undefined);
+  }
+  for (const path of ["/apps/social/index.html", "/apps/gpt-wrapper/index.html"]) {
+    const policies = vercel.headers
+      .filter(({ source }) => new RegExp(`^${source}$`).test(path))
+      .flatMap(({ headers }) => headers.filter(({ key }) => key === "X-Frame-Options"));
+    assert.deepEqual(policies.map(({ value }) => value), ["SAMEORIGIN"]);
+    assert.equal(headersFor(path)["Content-Security-Policy"], "frame-ancestors 'self'");
+  }
 });
 
 test("unknown routes offer a real home return link", () => {

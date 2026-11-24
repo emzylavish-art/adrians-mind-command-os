@@ -6,6 +6,13 @@ export function validCatalogModelId(value: string): boolean {
   return value.length > 0 && value.length <= 150 && MODEL_ID.test(value);
 }
 
+export const OPENROUTER_FREE_MODEL_REQUIRED = "Choose a specific OpenRouter model ending in :free. Automatic and paid models are unavailable in this route.";
+export const OPENROUTER_FREE_ROUTING = { max_price: { prompt: 0, completion: 0, request: 0, image: 0 } };
+
+export function isOpenRouterFreeModel(value: string): boolean {
+  return validCatalogModelId(value) && /^[^/:]+\/[^/:]+:free$/.test(value);
+}
+
 export function parseCustomProviderChoice(value: unknown):
   { ok: true; id: string; model: string } | { ok: false; error: string } {
   if (typeof value !== "string" || !value.startsWith("custom:")) return { ok: false, error: "Not a custom provider selection." };
@@ -97,7 +104,7 @@ const TOOL_NAME = /^[A-Za-z0-9_-]{1,80}$/;
 export function discoveredCapabilities(input: {
   models: ({ id: string; label: string; models: string[] } & ProviderAvailability)[];
   mcp: { id: string; label: string; state: string; tools: { name: string; description?: string }[] }[];
-  services?: { id: string; label: string; connected: boolean }[];
+  services?: { id: string; label: string; connected: boolean; opensWorkspace?: boolean }[];
 }): DiscoveredCapability[] {
   const models = input.models.flatMap((row) => {
     const reason = customProviderBlockReason(row);
@@ -130,7 +137,7 @@ export function discoveredCapabilities(input: {
   return [...models, ...tools, ...serviceCapabilities(input.services ?? [])];
 }
 
-export function serviceCapabilities(rows: { id: string; label: string; connected: boolean }[]): DiscoveredCapability[] {
+export function serviceCapabilities(rows: { id: string; label: string; connected: boolean; opensWorkspace?: boolean }[]): DiscoveredCapability[] {
   const out: DiscoveredCapability[] = [];
   const seen = new Set<string>();
   for (const row of rows) {
@@ -140,8 +147,10 @@ export function serviceCapabilities(rows: { id: string; label: string; connected
       id: `service:${row.id}`,
       label: row.label,
       kind: "service",
-      usable: row.connected,
-      reason: row.connected
+      usable: row.connected || row.opensWorkspace === true,
+      reason: row.opensWorkspace
+        ? `Open ${row.label}. The workspace checks its connection when opened.`
+        : row.connected
         ? `${row.label} is connected. Selecting it opens that service. It is not sent to Grok.`
         : `${row.label} is not connected. Nothing was sent and Grok was not substituted.`,
     });

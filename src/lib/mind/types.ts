@@ -34,6 +34,8 @@ export type Msg = {
   at: string;
   model?: string;
   provider?: string;
+  requestedModel?: string;
+  delivery?: "submitted" | "unconfirmed" | "stopped" | "failed";
   kind?: "error";
   /** Inline image attachments shown in the bubble and sent on the originating turn. */
   images?: MsgImage[];

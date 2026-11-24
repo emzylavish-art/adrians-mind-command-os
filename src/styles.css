@@ -7440,3 +7440,68 @@ html[data-theme="light"] .shell .min-h-0.flex-1.overflow-auto .page-shell .empty
 html[data-theme="light"] .shell[data-view="help"] .page-shell button.text-left.min-h-14 .text-muted {
   color: #475569 !important;
 }
+
+
+.controls-shelf {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 0.6rem;
+  padding: 0.2rem;
+}
+
+.controls-shelf > [data-menu-cluster] {
+  padding: 0.5rem;
+  border: 1px solid var(--color-line);
+  border-radius: 0.9rem;
+}
+
+.controls-shelf > [data-menu-cluster] > p:first-child {
+  flex: 1 0 100%;
+}
+
+.controls-shelf > [data-menu-cluster] > :is(button, a) {
+  overflow-wrap: anywhere;
+}
+
+@media (min-width: 600px) {
+  .controls-shelf {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .controls-shelf > :is([data-menu-cluster="Active model"], [data-menu-cluster="Use a module"], [data-menu-cluster="Install"]) {
+    grid-column: 1 / -1;
+  }
+}
+
+
+#mind-workspace #chat-thread .next-guesses {
+  display: flex;
+  gap: 0.5rem;
+  overflow-x: auto;
+}
+
+@media (max-width: 599px) {
+  .controls-shelf > [data-menu-cluster="Use a module"] > button {
+    flex-basis: 100% !important;
+  }
+
+  .controls-shelf > [data-menu-cluster="Use a module"] > button > :last-child {
+    flex-shrink: 0;
+    white-space: nowrap;
+  }
+
+  #mind-workspace #chat-thread .next-guesses {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 0.3rem;
+    max-height: none !important;
+    overflow: visible;
+  }
+
+  #mind-workspace #chat-thread .next-guesses .suggestion-chip {
+    min-width: 0;
+    justify-content: center;
+    padding-inline: 0.35rem;
+    text-align: center;
+  }
+}

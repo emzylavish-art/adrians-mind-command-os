@@ -449,8 +449,8 @@ async function dispatchMindTurn(request: Request, userId: string, data: Record<s
     if (blocked) return blocked;
     try {
       const result = await executeCustomChat(userId, chosen, formatted.messages, request.signal);
-      if (!result.ok) return json(result, 502);
-      const done = { text: result.text, model: result.model, provider: result.provider, usedIds: assembled.usedIds, usage: result.usage, requestId: result.requestId };
+      if (!result.ok) return json(result, result.httpStatus ?? 502);
+      const done = { text: result.text, model: result.model, provider: result.provider, requestedModel: chosen.model, usedIds: assembled.usedIds, usage: result.usage, requestId: result.requestId };
       const stream = `event: delta\ndata: ${JSON.stringify({ text: result.text })}\n\nevent: done\ndata: ${JSON.stringify(done)}\n\n`;
       return new Response(stream, { headers: { "content-type": "text/event-stream", "cache-control": "no-store" } });
     } catch {
@@ -489,7 +489,7 @@ async function dispatchMindTurn(request: Request, userId: string, data: Record<s
       fetch: globalThis.fetch,
     });
     if (!routed.ok) return json({ ok: false, error: routed.error, provider: requestedProvider }, routed.httpStatus ?? 502, routed.retryAfter);
-    const done = { text: routed.text, model: routed.model, provider: requestedProvider === "nemotron" ? "openrouter" : requestedProvider, usage: null, usedIds: context.usedIds, requestId: null };
+    const done = { text: routed.text, model: routed.model, requestedModel: routed.requestedModel, provider: requestedProvider === "nemotron" ? "openrouter" : requestedProvider, usage: null, usedIds: context.usedIds, requestId: null };
     const stream = "event: delta\ndata: " + JSON.stringify({ text: routed.text }) + "\n\nevent: done\ndata: " + JSON.stringify(done) + "\n\n";
     return new Response(stream, { headers: { "content-type": "text/event-stream", "cache-control": "no-store" } });
   }
@@ -527,6 +527,7 @@ async function dispatchMindTurn(request: Request, userId: string, data: Record<s
     if (!context.ok) return json(context, 400);
     const called = await callConfiguredProvider({
       id: selected.id,
+      model: selected.model,
       key,
       prompt: text,
       systemPrompt: context.systemPrompt,
@@ -536,7 +537,7 @@ async function dispatchMindTurn(request: Request, userId: string, data: Record<s
     });
     if (!called.ok) return json({ ok: false, error: called.error, provider: selected.id }, called.httpStatus ?? 502, called.retryAfter);
     // Use the same SSE contract as the Grok and custom-provider chat paths.
-    const done = { text: called.text, model: reportedModel(called.model), provider: selected.id, usage: null, usedIds: context.usedIds, requestId: null };
+    const done = { text: called.text, model: reportedModel(called.model), requestedModel: selected.model, provider: selected.id, usage: null, usedIds: context.usedIds, requestId: null };
     const stream = "event: delta\ndata: " + JSON.stringify({ text: called.text }) +
       "\n\nevent: done\ndata: " + JSON.stringify(done) + "\n\n";
     return new Response(stream, { headers: { "content-type": "text/event-stream", "cache-control": "no-store" } });

@@ -5,6 +5,7 @@ import { loadMindCopy, saveMindCopy } from "./server";
 import { chooseServerSync } from "./sync";
 import type { Workspace } from "./types";
 import { accountWorkspaceKey, emptyWorkspace, mergeMemoryState, loadWorkspaceForAccount } from "./workspace";
+import { mergeWorkspaceEdits } from "./workspace-edits";
 import { SAVE_FAIL, saveFailureMessage } from "./save-error";
 
 function hasContent(ws: Workspace) {
@@ -18,7 +19,10 @@ function reconcileStoredRecords(ws: Workspace, stored: Workspace): Workspace {
 
 
 export function useMindWorkspace(userId: string | null = "dev-user", email: string | null = null) {
-  const scope = useMemo(() => ({ userId, checkpoint: createWorkspaceCheckpoint(), images: accountImageStore(userId), empty: emptyWorkspace() }), [userId, email]);
+  const scope = useMemo(() => {
+    const empty = emptyWorkspace();
+    return { userId, checkpoint: createWorkspaceCheckpoint(), images: accountImageStore(userId), empty, browserBase: empty, serverRevision: null as string | null };
+  }, [userId, email]);
   const [loaded, setLoaded] = useState<{ scope: typeof scope; workspace: Workspace } | null>(null);
   const ready = loaded?.scope === scope;
   const ws = ready ? loaded.workspace : scope.empty;
@@ -49,7 +53,14 @@ export function useMindWorkspace(userId: string | null = "dev-user", email: stri
       if (!userId || activeScope.current !== scope || gen !== persistGen.current) {
         return { ok: false as const, error: "The account workspace changed before saving." };
       }
-      return saveMindCopy({ data: { workspace, ownerId: userId } });
+      if (!scope.serverRevision) return { ok: false as const, error: "Load the server copy before saving it. The browser copy was kept." };
+      const result = await saveMindCopy({ data: { workspace, ownerId: userId, expectedRevision: scope.serverRevision } });
+      if (result.ok) scope.serverRevision = result.revision;
+      else if ("conflict" in result && result.conflict && activeScope.current === scope && gen === persistGen.current) {
+        followServer.current = false;
+        setServerHeld(true);
+      }
+      return result;
     });
     writeQueue.current = result.then(() => {}, () => {}).finally(() => { pendingWrites.current--; });
     return result;
@@ -78,6 +89,7 @@ export function useMindWorkspace(userId: string | null = "dev-user", email: stri
         local = localRaw;
       }
       if (cancel || loadGen !== persistGen.current) return;
+      scope.browserBase = localRaw;
       local = reconcileStoredRecords(local, localRaw);
       setLoaded({ scope, workspace: local });
       if (!userId) return;
@@ -89,6 +101,7 @@ export function useMindWorkspace(userId: string | null = "dev-user", email: stri
           setSyncNote("Browser copy only. The server copy was not read. Nothing was deleted.");
           return;
         }
+        scope.serverRevision = result.revision;
         const browser = latest.current === scope.empty ? local : latest.current;
         const choice = chooseServerSync(hasContent(browser), Boolean(result.workspace && hasContent(result.workspace)));
         if (choice === "use-server" && result.workspace) {
@@ -179,7 +192,8 @@ export function useMindWorkspace(userId: string | null = "dev-user", email: stri
     const write = (copy: Workspace) => {
       if (!current()) return;
       const stored = loadWorkspaceForAccount(localStorage, userId, email);
-      localStorage.setItem(accountWorkspaceKey(userId), JSON.stringify(reconcileStoredRecords(copy, stored)));
+      localStorage.setItem(accountWorkspaceKey(userId), JSON.stringify(mergeWorkspaceEdits(stored, scope.browserBase, copy)));
+      scope.browserBase = copy;
     };
     const failure = () => {
       if (current()) setSaveError("This browser could not save the latest workspace. Its previous copy was kept.");
@@ -191,7 +205,10 @@ export function useMindWorkspace(userId: string | null = "dev-user", email: stri
       } catch { failure(); }
     };
     const id = window.setTimeout(() => {
-      void scope.checkpoint.compact(ws, scope.images).then(write).catch(failure);
+      void scope.checkpoint.compact(ws, scope.images).then((copy) => {
+        if (!navigator.locks) return write(copy);
+        return navigator.locks.request(accountWorkspaceKey(userId), () => write(copy));
+      }).catch(failure);
     }, 250);
     flushPending.current = flush;
     window.addEventListener("pagehide", flush);
@@ -272,6 +289,7 @@ export function useMindWorkspace(userId: string | null = "dev-user", email: stri
     if (userId) {
       const packed = JSON.stringify(next);
       localStorage.setItem(accountWorkspaceKey(userId), packed);
+      scope.browserBase = next;
     }
     setWs(next);
     try {

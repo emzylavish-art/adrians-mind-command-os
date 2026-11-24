@@ -36,3 +36,13 @@ test("puts an unsent line back at the front", () => {
   assert.deepEqual(restored.map((item) => item.id), ["a", "b"]);
   assert.equal(restoreCue(restored, held).length, 2);
 });
+
+
+test("keeps the queued chat and selected provider when releasing from a different conversation", () => {
+  const first = { id: "1", text: "First", chatId: "a", provider: "gemini" };
+  const second = { id: "2", text: "Second", chatId: "b", provider: "openrouter" };
+  const { queue } = cueMessage([first], second);
+  const held = takeNextCue(queue, (entry) => entry.chatId === "b");
+  assert.deepEqual(held.next, second);
+  assert.deepEqual(held.queue, [first]);
+});

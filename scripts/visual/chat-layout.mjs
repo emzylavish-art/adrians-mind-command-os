@@ -52,6 +52,13 @@ for (const [width, height, rootPercent] of [[390, 844, 100], [844, 390, 100], [3
         await page.goto(origin + "/?section=chat&chat=layout-" + count);
         await page.locator("article.turn").nth(count - 1).waitFor({ state: "attached" });
         if (rootPercent !== 100) await page.addStyleTag({ content: `html {font-size:${rootPercent}% !important}` });
+        const settingsTrigger = page.getByRole("button", { name: "Chat settings", exact: true });
+        await settingsTrigger.click();
+        const settings = page.locator("#thread-chat-settings[open]");
+        await settings.getByLabel("Conversation style", { exact: true }).waitFor();
+        await page.keyboard.press("Escape");
+        await settings.waitFor({ state: "hidden" });
+        assert(await settingsTrigger.evaluate((element) => document.activeElement === element), "Chat settings lost focus on Escape.");
         const composer = page.locator("form.thread-composer");
         const message = composer.getByRole("textbox", { name: "Message", exact: true });
         await message.fill("An editable draft");

@@ -22,7 +22,7 @@ describe("provider calls", () => {
     const reply = "r".repeat(6200) + ".";
     for (const id of ["gemini", "openrouter"] as const) {
       const result = await callConfiguredProvider({
-        id, key: "fixture", prompt, history: [{ role: "user", content: history }],
+        id, model: id === "openrouter" ? "vendor/example:free" : undefined, key: "fixture", prompt, history: [{ role: "user", content: history }],
         fetch: async (_url, init) => {
           const body = JSON.parse(String(init?.body));
           assert.deepEqual(id === "gemini" ? body.contents.map((row: { parts: { text: string }[] }) => row.parts[0].text) :
@@ -74,7 +74,7 @@ describe("provider calls", () => {
     for (const [id, field] of inputs) {
       const requests: Record<string, unknown>[] = [];
       const result = await callConfiguredProvider({
-        id, key: "test-key", prompt: "hello", systemPrompt: "Style preference only.",
+        id, model: id === "openrouter" ? "vendor/example:free" : undefined, key: "test-key", prompt: "hello", systemPrompt: "Style preference only.",
         fetch: async (_url, init) => {
           requests.push(JSON.parse(String(init?.body)) as Record<string, unknown>);
           return { ok: true, status: 200, text: async () => id === "gemini"
@@ -118,4 +118,41 @@ describe("provider calls", () => {
     assert.equal(result.ok, true);
     assert.equal(result.text, "reply");
   });
+});
+
+
+it("blocks OpenRouter automatic and paid models and sends the exact free model with a zero-price cap", async () => {
+  let calls = 0;
+  const send = (model: string) => callConfiguredProvider({
+    id: "openrouter", model, key: "fixture", prompt: "Synthetic check",
+    fetch: async (url, init) => {
+      calls++;
+      assert.match(url, /^https:\/\/openrouter\.ai\//);
+      const body = JSON.parse(String(init?.body));
+      assert.equal(body.model, "vendor/example:free");
+      assert.deepEqual(body.provider.max_price, { prompt: 0, completion: 0, request: 0, image: 0 });
+      return { ok: true, status: 200, text: async () => JSON.stringify({ model: body.model, choices: [{ message: { content: "Fixture response" } }] }) };
+    },
+  });
+  for (const model of ["openrouter/auto", "openrouter/free", "vendor/example", ""]) {
+    assert.equal((await send(model)).httpStatus, 400);
+  }
+  assert.equal(calls, 0);
+  assert.equal((await send("vendor/example:free")).model, "vendor/example:free");
+  assert.equal(calls, 1);
+});
+
+it("selects the supported Gemini default and sends credentials only in headers", async () => {
+  const model = "gemini-3.1-flash-lite";
+  assert.deepEqual(selectProvider("gemini", { GEMINI_API_KEY: "fixture" }), { ok: true, id: "gemini", model });
+  const result = await callConfiguredProvider({
+    id: "gemini", key: "fixture-secret", prompt: "Synthetic check",
+    fetch: async (url, init) => {
+      assert.match(url, new RegExp(model + ":generateContent$"));
+      assert.equal(url.includes("fixture-secret"), false);
+      assert.equal(new Headers(init?.headers).get("x-goog-api-key"), "fixture-secret");
+      return { ok: true, status: 200, text: async () => JSON.stringify({ modelVersion: model, candidates: [{ content: { parts: [{ text: "Fixture response" }] } }] }) };
+    },
+  });
+  assert.equal(result.model, model);
 });

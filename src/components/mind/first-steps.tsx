@@ -1,4 +1,3 @@
-import { useState } from "react";
 import {
   dismissFirstSteps,
   FIRST_STEPS,
@@ -64,13 +63,11 @@ export function FirstSteps({
   onChange: (next: FirstStepsState) => void;
   onOpen: (id: FirstStepId) => void;
 }) {
-  const [hiddenImage, setHiddenImage] = useState<string | null>(null);
   if (state.dismissed) return null;
   const step = FIRST_STEPS[state.step] ?? FIRST_STEPS[0];
   return (
-    <section ref={liftGuide} className="settings-card" data-testid="first-steps" aria-label="Next step">
-      {guideImage(step.image, hiddenImage === step.image, () => setHiddenImage(step.image))}
-      <div style={{ minWidth: 0, flex: "1 1 16rem" }}>
+    <section className="settings-card home-guide" data-testid="first-steps" aria-label="Next step">
+      <div className="min-w-0">
         <p className="text-xs uppercase tracking-wide text-muted">Step {state.step + 1} of {FIRST_STEPS.length}</p>
         <h2 className="font-display text-xl font-bold" data-testid="first-steps-title">{step.title}</h2>
         <p data-testid="first-steps-body">{step.body}</p>

@@ -64,8 +64,11 @@ document.addEventListener("click", (event) => {
   showPanel(panel.dataset.panel);
 });
 
+// The hosted dashboard can be opened by multiple accounts on one browser.
+const localConnection = ["localhost", "127.0.0.1", "[::1]"].includes(location.hostname) || location.protocol === "file:";
 function saved(key, fallback) {
-  return localStorage.getItem(key) || fallback;
+  if (!localConnection) return fallback;
+  try { return localStorage.getItem(key) || fallback; } catch { return fallback; }
 }
 
 function escapeHtml(value) {
@@ -121,9 +124,15 @@ baseInput.value = saved("adrian-base", defaultBase());
 secretInput.value = secretMeta ? secretMeta.content : saved("adrian-secret", "");
 
 document.querySelector("#save-connect").onclick = () => {
-  localStorage.setItem("adrian-base", baseInput.value.trim());
-  localStorage.setItem("adrian-secret", secretInput.value.trim());
-  setNote("Connection saved in this browser. Reading the PC.");
+  let savedLocally = false;
+  if (localConnection) {
+    try {
+      localStorage.setItem("adrian-base", baseInput.value.trim());
+      localStorage.setItem("adrian-secret", secretInput.value.trim());
+      savedLocally = true;
+    } catch { /* the open dashboard can still use the inputs */ }
+  }
+  setNote(savedLocally ? "Connection saved in this browser. Reading the PC." : "Connection used for this open dashboard. Reading the PC.");
   refresh();
 };
 

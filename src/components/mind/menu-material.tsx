@@ -1,4 +1,4 @@
-import { useEffect, useRef, type CSSProperties, type ReactNode } from "react";
+import { useEffect, useRef, type CSSProperties, type ReactNode, type RefObject } from "react";
 import { createPortal } from "react-dom";
 
 export function MenuMotion() {
@@ -212,15 +212,16 @@ export function ComposerMore({ children, testId, onOpen }: { children: ReactNode
 
 export function placeNear(card: HTMLElement, anchor: DOMRect, width = 320, align: "start" | "end" = "end") {
   const margin = 12;
-  const w = Math.min(width, window.innerWidth - margin * 2);
+  const w = Math.min(width, Math.max(0, window.innerWidth - margin * 2));
   card.style.setProperty("position", "fixed", "important");
   card.style.setProperty("width", `${w}px`, "important");
   card.style.setProperty("z-index", "1201", "important");
   card.style.setProperty("margin", "0", "important");
-  const height = card.getBoundingClientRect().height || 240;
+  const height = card.offsetHeight || 240;
   let top = anchor.bottom + 8;
   let left = align === "start" ? anchor.left : anchor.right - w;
-  if (top + height > window.innerHeight - margin) top = Math.max(margin, anchor.top - height - 8);
+  if (top + height > window.innerHeight - margin) top = anchor.top - height - 8;
+  top = Math.max(margin, Math.min(top, window.innerHeight - height - margin));
   if (left < margin) left = margin;
   if (left + w > window.innerWidth - margin) left = window.innerWidth - w - margin;
   card.style.setProperty("top", `${top}px`, "important");
@@ -231,6 +232,7 @@ export function placeNear(card: HTMLElement, anchor: DOMRect, width = 320, align
 
 export function AnchoredCard({
   anchor,
+  trigger,
   label,
   onClose,
   children,
@@ -241,6 +243,7 @@ export function AnchoredCard({
   phase = "open",
 }: {
   anchor: DOMRect | null;
+  trigger?: RefObject<HTMLButtonElement | null>;
   label: string;
   onClose: () => void;
   children: ReactNode;
@@ -251,24 +254,63 @@ export function AnchoredCard({
   phase?: "open" | "close";
 }) {
   const panel = useRef<HTMLDivElement>(null);
+  const close = useRef(onClose);
+  close.current = onClose;
+
   useEffect(() => {
     const node = panel.current;
     if (!node) return;
     finishMenu(node, phase);
-    if (anchor) placeNear(node, anchor, width, align);
+    const position = () => {
+      const target = trigger?.current?.getBoundingClientRect() ?? anchor;
+      if (target) placeNear(node, target, width, align);
+    };
+    position();
+    const observer = trigger && typeof ResizeObserver !== "undefined" ? new ResizeObserver(position) : null;
+    observer?.observe(node);
+    if (trigger?.current) observer?.observe(trigger.current);
+    if (trigger) window.addEventListener("resize", position);
+    return () => {
+      observer?.disconnect();
+      if (trigger) window.removeEventListener("resize", position);
+    };
+  }, [anchor, align, width, trigger, phase]);
+
+  useEffect(() => {
+    const node = panel.current;
+    if (!node) return;
+    const opener = trigger?.current;
+    const focusables = () => Array.from(node.querySelectorAll<HTMLElement>("button:not([disabled]), a[href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex='0']"))
+      .filter((item) => item.getClientRects().length > 0);
+    if (opener) node.focus({ preventScroll: true });
     const onKey = (event: KeyboardEvent) => {
-      if (event.key === "Escape") onClose();
+      if (event.key === "Escape") {
+        if (opener) event.preventDefault();
+        close.current();
+      } else if (event.key === "Tab" && opener && !event.defaultPrevented) {
+        const items = focusables();
+        const current = document.activeElement;
+        const index = items.indexOf(current as HTMLElement);
+        if (index === -1 || (!event.shiftKey && index === items.length - 1) || (event.shiftKey && index === 0)) {
+          event.preventDefault();
+          (event.shiftKey ? items.at(-1) ?? node : items[0] ?? node).focus();
+        }
+      }
     };
     document.addEventListener("keydown", onKey);
-    return () => document.removeEventListener("keydown", onKey);
-  }, [anchor, align, onClose, width, children, phase]);
+    return () => {
+      document.removeEventListener("keydown", onKey);
+      if (opener?.isConnected) opener.focus({ preventScroll: true });
+    };
+  }, [trigger]);
   if (typeof document === "undefined") return null;
   const light = document.documentElement.dataset.theme === "light";
   const card = (
     <div
       ref={panel}
       role="dialog"
-      aria-modal="false"
+      aria-modal={trigger ? true : false}
+      tabIndex={trigger ? -1 : undefined}
       aria-label={label}
       id={testId}
       data-testid={testId}

@@ -4,6 +4,7 @@
  * Host and HTTPS/DNS validation happens in requestProvider() before dispatch.
  */
 import { reportedModel } from "./stream.ts";
+import { OPENROUTER_FREE_ROUTING } from "./provider-catalog.ts";
 
 export type AiWireProtocol = "openai" | "anthropic" | "gemini";
 export type TextTurn = { role: "system" | "user" | "assistant"; content: string };
@@ -29,7 +30,7 @@ export function modelDiscoveryHeaders(kind: AiWireProtocol, key: string): Record
 }
 
 export function buildProviderChatRequest(
-  kind: AiWireProtocol, key: string, model: string, turns: TextTurn[],
+  kind: AiWireProtocol, key: string, model: string, turns: TextTurn[], freeOpenRouter = false,
 ): ProviderRequest {
   const messages = turns.slice(-15);
   const systemText = messages.filter((m) => m.role === "system").map((m) => m.content).join("\n\n");
@@ -63,7 +64,7 @@ export function buildProviderChatRequest(
   return {
     path: "chat/completions",
     headers: { ...modelDiscoveryHeaders(kind, key), "content-type": "application/json" },
-    body: JSON.stringify({ model, messages, stream: false }),
+    body: JSON.stringify({ model, messages, stream: false, ...(freeOpenRouter ? { provider: OPENROUTER_FREE_ROUTING } : {}) }),
   };
 }
 

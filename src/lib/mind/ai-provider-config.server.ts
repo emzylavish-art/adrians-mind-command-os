@@ -8,7 +8,7 @@ import { providerWireProtocol, modelDiscoveryHeaders, buildProviderChatRequest, 
 import { getSql, type Sql } from "../db.ts";
 import { connectorTokenSecretStatus, encryptSecret, decryptSecret } from "./connectors/crypto.ts";
 import { isLocalHostname, isPrivateAddressLiteral, pinnedHttpFetch, resolveAndPinMcpHostname } from "./mcp/http-dns-pin.ts";
-import { customProviderBlockReason, rankCatalogModels, validCatalogModelId } from "./provider-catalog.ts";
+import { customProviderBlockReason, isOpenRouterFreeModel, OPENROUTER_FREE_MODEL_REQUIRED, rankCatalogModels, validCatalogModelId } from "./provider-catalog.ts";
 
 export type PublicAiProvider = {
   id: string;
@@ -87,12 +87,13 @@ export function canonicalProviderBase(raw: string): string {
 function publicRow(row: StoredProvider): PublicAiProvider {
   let host = "";
   try { host = new URL(row.base_url).host; } catch { /* never expose a malformed URL */ }
+  const models = host === "openrouter.ai" ? asModels(row.models).filter(isOpenRouterFreeModel) : asModels(row.models);
   return {
     id: row.id,
     label: row.label,
     host,
-    defaultModel: row.default_model,
-    models: asModels(row.models),
+    defaultModel: models.includes(row.default_model) ? row.default_model : models[0] ?? "",
+    models,
     status: row.status,
     lastError: row.last_error,
     hasKey: Boolean(row.key_ciphertext),
@@ -125,6 +126,7 @@ export async function saveAiProvider(
     return { ok: false, error: "Enter a valid API key of at most 1500 characters." };
   }
   if (model && !validModelId(model)) return { ok: false, error: "The model ID contains unsupported characters." };
+  if (model && url.host === "openrouter.ai" && !isOpenRouterFreeModel(model)) return { ok: false, error: OPENROUTER_FREE_MODEL_REQUIRED };
   const secret = connectorTokenSecretStatus();
   if (!secret.ok) return { ok: false, error: "Credential encryption is not configured. Nothing was saved." };
   const record = {
@@ -161,6 +163,7 @@ export async function setAiProviderModel(userId: string, id: string, model: stri
   const sql = await getSql();
   const row = (await rows(sql, userId)).find((item) => item.id === id);
   if (!row) return { ok: false, error: "Provider not found for this account." };
+  if (publicRow(row).host === "openrouter.ai" && !isOpenRouterFreeModel(next)) return { ok: false, error: OPENROUTER_FREE_MODEL_REQUIRED };
   const current = asModels(row.models);
   const models = current.includes(next) ? current : [next, ...current];
   const [updated] = await sql.query<StoredProvider>(
@@ -232,7 +235,8 @@ export async function discoverAiModels(userId: string, id: string):
     } else {
       const body = JSON.parse(res.text) as { data?: Array<{ id?: unknown }>; models?: Array<{ id?: unknown; name?: unknown } | string> };
       const found = Array.isArray(body.data) ? body.data : Array.isArray(body.models) ? body.models : [];
-      const parsed = rankCatalogModels(found);
+      const ranked = rankCatalogModels(found);
+      const parsed = publicRow(requestRow).host === "openrouter.ai" ? ranked.filter(isOpenRouterFreeModel) : ranked;
       if (parsed.length) {
         models = parsed;
         status = "catalogued";
@@ -262,7 +266,7 @@ export async function executeCustomChat(
   signal?: AbortSignal,
 ): Promise<
   { ok: true; text: string; model: string; provider: string; requestId: string | null; usage: { prompt_tokens?: number; completion_tokens?: number } | null } |
-  { ok: false; error: string }
+  { ok: false; error: string; httpStatus?: number }
 > {
   const sql = await getSql();
   const row = (await rows(sql, userId)).find((item) => item.id === selection.id);
@@ -275,7 +279,9 @@ export async function executeCustomChat(
   if (!messages.length || !messages.some((m) => m.role === "user")) return { ok: false, error: "No user message was supplied." };
   try {
     const kind = providerWireProtocol(row.base_url);
-    const request = buildProviderChatRequest(kind, key, selection.model, messages);
+    const freeOpenRouter = publicRow(row).host === "openrouter.ai";
+    if (freeOpenRouter && !isOpenRouterFreeModel(selection.model)) return { ok: false, error: OPENROUTER_FREE_MODEL_REQUIRED };
+    const request = buildProviderChatRequest(kind, key, selection.model, messages, freeOpenRouter);
     const res = await requestProvider(row, request.path, {
       method: "POST",
       headers: request.headers,
@@ -288,7 +294,7 @@ export async function executeCustomChat(
       if (restriction) {
         await sql.query("update mind_ai_providers set status=$3,last_error=$4,updated_at=now() where user_id=$1 and id=$2", [userId, row.id, restriction, error]);
       }
-      return { ok: false, error };
+      return { ok: false, error, httpStatus: res.status >= 400 && res.status < 500 ? res.status : undefined };
     }
     const parsed = parseProviderText(kind, res.text);
     if (!parsed.ok) return parsed;

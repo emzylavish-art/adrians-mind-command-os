@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useId, useRef, useState } from "react";
 import { getBearerToken } from "@/lib/auth/client";
 
 type Start = {
@@ -21,8 +21,10 @@ const CURATED = [
 ] as const;
 
 const ADDED_KEY = "adrian-added-plugins";
+const PLUGIN_TABS = ["installed", "official", "curated", "custom"] as const;
 
 export function KimiDeviceConnect() {
+  const tabId = useId();
   const [notice, setNotice] = useState("Build uses the saved Grok key. There is no separate coding login.");
   const [userCode, setUserCode] = useState("");
   const [url, setUrl] = useState("");
@@ -94,16 +96,28 @@ export function KimiDeviceConnect() {
   }
 
   return (
-    <section className="mt-6 rounded-panel border border-line p-3" aria-label="Plugins">
+    <section className="plugin-catalog rounded-panel border border-line p-3" aria-label="Plugins">
       <h3 className="font-semibold">Plugins</h3>
       <p className="mt-1 text-sm text-muted">{notice}</p>
-      <div className="mt-3 flex flex-wrap gap-1" role="tablist" aria-label="Plugin groups">
-        {(["installed", "official", "curated", "custom"] as const).map((item) => (
-          <button key={item} ref={item === "curated" ? curatedTab : undefined} type="button" role="tab" aria-selected={tab === item} onClick={() => setTab(item)} className={"min-h-11 rounded-panel border px-3 text-sm capitalize " + (tab === item ? "border-accent bg-surface font-semibold" : "border-line")}>
+      <div className="workspace-tabs mt-3 flex flex-wrap gap-1" role="tablist" aria-label="Plugin groups" onKeyDown={(event) => {
+        const index = PLUGIN_TABS.indexOf(tab);
+        const last = PLUGIN_TABS.length - 1;
+        const next = event.key === "ArrowRight" ? (index + 1) % PLUGIN_TABS.length
+          : event.key === "ArrowLeft" ? (index + last) % PLUGIN_TABS.length
+          : event.key === "Home" ? 0
+          : event.key === "End" ? last : -1;
+        if (next < 0) return;
+        event.preventDefault();
+        setTab(PLUGIN_TABS[next]);
+        event.currentTarget.querySelectorAll<HTMLButtonElement>('[role="tab"]')[next]?.focus();
+      }}>
+        {PLUGIN_TABS.map((item) => (
+          <button key={item} id={`${tabId}-${item}`} ref={item === "curated" ? curatedTab : undefined} type="button" role="tab" aria-selected={tab === item} aria-controls={`${tabId}-panel`} tabIndex={tab === item ? 0 : -1} onClick={() => setTab(item)} className="min-h-11 rounded-panel border px-3 text-sm capitalize">
             {item}
           </button>
         ))}
       </div>
+      <div id={`${tabId}-panel`} role="tabpanel" aria-labelledby={`${tabId}-${tab}`} tabIndex={0}>
       <div className="mt-3 grid gap-2" role="group" aria-label="Adrian plugins">
         {(tab === "installed" ? CURATED.filter((plugin) => added.includes(plugin.id)) : tab === "curated" ? CURATED : []).map((plugin) => {
           const on = added.includes(plugin.id);
@@ -125,7 +139,7 @@ export function KimiDeviceConnect() {
           );
         })}
         {(tab === "official" || (tab === "installed" && added.length === 0)) && (
-          <div>
+          <div className="plugin-empty">
             <p className="text-sm text-muted">{tab === "official" ? "No official plugins are listed yet." : "No plugins added yet."}</p>
             <button type="button" className="mt-2 min-h-11 rounded-panel border border-line px-3" onClick={() => { setTab("curated"); curatedTab.current?.focus(); }}>Browse curated plugins</button>
           </div>
@@ -134,10 +148,11 @@ export function KimiDeviceConnect() {
       {tab === "custom" ? <div>
       <p className="mt-3 text-sm text-muted">There is no separate coding login on this page. A coding task uses the Grok key already saved for Adrian.</p>
       <form className="mt-4 flex flex-wrap gap-2" onSubmit={(event) => { event.preventDefault(); void saveMcp(); }}>
-        <input id="kimi-mcp-url" value={mcpUrl} onChange={(event) => setMcpUrl(event.target.value)} placeholder="https://your-mcp.example/mcp" className="min-h-11 min-w-64 flex-1 rounded-panel border border-line bg-bg px-3 text-sm" />
+        <input id="kimi-mcp-url" aria-label="Custom plugin server URL" value={mcpUrl} onChange={(event) => setMcpUrl(event.target.value)} placeholder="https://your-mcp.example/mcp" className="min-h-11 min-w-0 flex-1 rounded-panel border border-line bg-bg px-3 text-sm" />
         <button type="submit" className="min-h-11 rounded-panel border border-line px-3 text-sm" disabled={busy}>Connect MCP</button>
       </form>
       </div> : null}
+      </div>
       {plugins.length > 0 ? (
         <ul className="mt-3 space-y-1 text-sm">
           {plugins.map((plugin) => <li key={plugin.id || plugin.name}>{plugin.name}{plugin.description ? `. ${plugin.description}` : ""}</li>)}

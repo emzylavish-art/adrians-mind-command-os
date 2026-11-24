@@ -59,6 +59,7 @@ import { reaDoctor, reaInspect } from "@/lib/mind/rea";
 import { CAPABILITIES, isVerifiedCapability, type CapabilityStatus } from "@/lib/mind/registry";
 import { REQUIREMENTS, requirementCounts } from "@/lib/mind/requirements";
 import { consumeMindTurn, shouldStoreReply, STOPPED_REPLY } from "@/lib/mind/live-turn";
+import { boundAbortSignal } from "@/lib/mind/turn-timeouts";
 import { analyzeImageFile, createVoiceClientSecret, mcpCommand, mcpList, mcpRemove, mcpRegistryList, mcpRegistryToggle, mcpSave, mindStatus, notionCommand, notionDisconnect, notionStatus, recordAgentExecution, searchWeb, setExecutionHalt, speakText } from "@/lib/mind/server";
 import { SafeKeysPanel } from "@/components/mind/safe-keys-panel";
 import { AiProviderConnections } from "@/components/mind/ai-provider-connections";
@@ -384,16 +385,6 @@ function pinPageScroller(node: HTMLDivElement | null) {
 function showRailLabel(node: HTMLElement | null) {
   node?.style.setProperty("display", "block", "important");
 }
-function stackLibrary(node: HTMLElement | null) {
-  node?.style.setProperty("grid-template-columns", "minmax(0, 1fr)", "important");
-}
-function keepGroupRow(node: HTMLElement | null) {
-  if (!node) return;
-  node.style.setProperty("align-self", "start", "important");
-  node.style.setProperty("align-items", "flex-start", "important");
-  node.style.setProperty("height", "auto", "important");
-}
-
 const NAV_GROUPS: { label: string; items: { id: View; label: string; icon: typeof Home }[] }[] = [
   {
     label: "Work",
@@ -1011,7 +1002,7 @@ export function CommandApp() {
     return () => document.removeEventListener("keydown", dismiss);
   }, [view, chatSettingsOpen]);
   const [surfaceAnchor, setSurfaceAnchor] = useState<DOMRect | null>(null);
-  const [controlsAnchor, setControlsAnchor] = useState<DOMRect | null>(null);
+  const controlsTrigger = useRef<HTMLButtonElement>(null);
   const [navMoreOpen, setNavMoreOpen] = useState(false);
   const [navMoreHold, setNavMoreHold] = useState(false);
   const [navMoreAnchor, setNavMoreAnchor] = useState<DOMRect | null>(null);
@@ -1044,8 +1035,30 @@ export function CommandApp() {
   const turnGen = useRef(0);
   const turnInFlight = useRef(false);
   const deliverStoredUser = useRef(false);
-  const cueRef = useRef<CuedMessage[]>([]);
-  const [cued, setCued] = useState<CuedMessage[]>([]);
+  type QueuedChatMessage = CuedMessage & {
+    chatId: string;
+    ownerId: string;
+    dispatch: (chat: Chat, workspace: Workspace) => Promise<boolean>;
+  };
+  const turnOwner = useRef(draftOwner);
+  turnOwner.current = draftOwner;
+  const [turnChat, setTurnChat] = useState<{ ownerId: string | null; chatId: string } | null>(null);
+  const cueRef = useRef<QueuedChatMessage[]>([]);
+  const [cued, setCued] = useState<QueuedChatMessage[]>([]);
+  useEffect(() => {
+    return () => {
+      turnGen.current++;
+      turnAbort.current?.abort();
+      turnAbort.current = null;
+      turnInFlight.current = false;
+      cueRef.current = [];
+      setCued([]);
+      setBusy(false);
+      setLiveText("");
+      setTurnChat(null);
+      setFailure(null);
+    };
+  }, [draftOwner]);
   const imagineInFlight = useRef(false);
   const videoInFlight = useRef(false);
   const mcpInFlight = useRef(false);
@@ -1056,7 +1069,7 @@ export function CommandApp() {
     window.addEventListener("adrian-draft-storage-full", warn);
     return () => window.removeEventListener("adrian-draft-storage-full", warn);
   }, []);
-  const [failure, setFailure] = useState<{ message: string; auditId: string; retry: (() => void) | null; kind: HonestFailureKind | null; action?: RouteFailureAction } | null>(null);
+  const [failure, setFailure] = useState<{ message: string; auditId: string; retry: (() => void) | null; kind: HonestFailureKind | null; action?: RouteFailureAction; chatId?: string } | null>(null);
   const reportFailureRef = useRef<(message: string, action: string, target: string, retry: (() => void) | null) => void>(() => undefined);
   const [toolTimeline, setToolTimeline] = useState<ToolTimelineRow[]>([]);
   const [timelineTickMs, setTimelineTickMs] = useState(0);
@@ -1065,8 +1078,6 @@ export function CommandApp() {
   const [focusAuditId, setFocusAuditId] = useState<string | null>(null);
   const wsRef = useRef(ws);
   wsRef.current = ws;
-  const activeIdRef = useRef(activeId);
-  activeIdRef.current = activeId;
   const [grok, setGrok] = useState("Checking");
   const [databasePill, setDatabasePill] = useState("Checking");
   const [databaseDetail, setDatabaseDetail] = useState("The status check has not finished.");
@@ -1535,8 +1546,8 @@ export function CommandApp() {
     services: [
       { id: "notion", label: "Notion", connected: notion?.state === "connected" },
       { id: "drive", label: "Google Drive", connected: driveConnected },
-      { id: "social", label: "Adrian Social", connected: true },
-      { id: "gpt-wrapper", label: "GPT wrapper", connected: true },
+      { id: "social", label: "Adrian Social", connected: false, opensWorkspace: true },
+      { id: "gpt-wrapper", label: "GPT wrapper", connected: false, opensWorkspace: true },
     ],
   });
   const catalogModels = discovered.filter((item) => item.usable).map((item) => ({ id: item.id, label: item.label }));
@@ -2516,15 +2527,17 @@ export function CommandApp() {
     }
   }
 
+  type TurnRequest = { id: string; body: ReturnType<typeof chatTurnBody> };
+
   async function deliver(
     chat: Chat,
     text: string,
     source: Workspace,
     resume = false,
     images: ImageAttachment[] = [],
-    options?: { logicRoute?: LogicRouteId | null; skipUserMessage?: boolean; isolateOutputs?: boolean; accessNotes?: { id: string; text: string }[] },
+    options?: { logicRoute?: LogicRouteId | null; skipUserMessage?: boolean; isolateOutputs?: boolean; accessNotes?: { id: string; text: string }[]; request?: TurnRequest },
   ): Promise<string | null> {
-    if (turnInFlight.current) return null;
+    if (turnInFlight.current || turnOwner.current !== draftOwner) return null;
     const snapped = snapshotImages(images);
     if (shouldBlockForEmergencyStop(wsRef.current.halted, source.halted)) {
       reportEmergencyStop(chat.id, () => {
@@ -2585,7 +2598,7 @@ export function CommandApp() {
     const otherReady = !activeLogic && !isCustomProvider && selectedProvider !== "grok" && liveProviders[selectedProvider as "openai" | "anthropic" | "gemini" | "openrouter"] === true;
     let routed = chosenProvider(activeLogic || isCustomProvider ? "grok" : selectedProvider, isCustomProvider ? true : grokConfigured);
     if (!routedRunner && !otherReady && !activeLogic && !isCustomProvider && !routed.ok) {
-      const switched = failover(selectedProvider, grokConfigured === true, failoverPolicy);
+      const switched = failover(selectedProvider, grokConfigured === true, selectedProvider === "gemini" ? "none" : failoverPolicy);
       if (switched.provider === "grok") {
         routed = chosenProvider("grok", grokConfigured);
         if (routed.ok) setNotice(switched.note);
@@ -2618,22 +2631,25 @@ export function CommandApp() {
     const messages = selectRetryMessages(chat.messages, live);
     if (resume && messages.at(-1)?.role === "assistant") return null;
     const history = historyForDeliver(messages, resume);
-    const retryThisTurn = () => {
-      if (turnInFlight.current) return;
-      const liveNow = resolveChatMessages(wsRef.current.chats, chat.id, chat) as Msg[];
-      const chosen = selectRetryMessages(chat.messages, liveNow);
-      if (chosen.at(-1)?.role === "assistant") return;
-      void deliver(chat, text, wsRef.current, true, snapped);
-    };
     const title = resume || messages.length > 0 ? chat.title : text.replace(/\s+/g, " ").slice(0, 48);
-    if (!resume && !options?.skipUserMessage) {
+    const userMessageId = options?.skipUserMessage ? null : resume ? messages.at(-1)?.id ?? null : crypto.randomUUID();
+    const markDelivery = (delivery: Msg["delivery"]) => {
+      if (!userMessageId) return;
+      setWs((prev) => ({
+        ...prev,
+        chats: prev.chats.map((item) => item.id === chat.id
+          ? { ...item, messages: item.messages.map((message) => message.id === userMessageId ? { ...message, delivery } : message) }
+          : item),
+      }));
+    };
+    if (!resume && userMessageId) {
       deliverStoredUser.current = true;
-      const displayText = historyTextForImages(text, snapped);
-      const userMsg = {
-        id: crypto.randomUUID(),
-        role: "user" as const,
-        content: displayText,
+      const userMsg: Msg = {
+        id: userMessageId,
+        role: "user",
+        content: historyTextForImages(text, snapped),
         at: new Date().toISOString(),
+        delivery: "submitted",
         images: snapped.length ? snapped.map((image) => ({ dataUrl: image.dataUrl, name: image.name })) : undefined,
       };
       setWs((prev) => ({
@@ -2642,7 +2658,10 @@ export function CommandApp() {
           item.id === chat.id ? { ...item, title, messages: [...item.messages, userMsg] } : item,
         ),
       }));
+    } else if (resume) {
+      markDelivery("submitted");
     }
+    setTurnChat({ ownerId: draftOwner, chatId: chat.id });
     setBusy(true);
     setLiveText("");
     setError(null);
@@ -2652,21 +2671,13 @@ export function CommandApp() {
     const generation = ++turnGen.current;
     const controller = new AbortController();
     turnAbort.current = controller;
-    const timeout = AbortSignal.timeout(30_000);
-    const signal = typeof AbortSignal.any === "function" ? AbortSignal.any([controller.signal, timeout]) : timeout;
+    const { signal, cleanup: clearTurnTimeout } = boundAbortSignal(controller.signal, 30_000);
     const token = getBearerToken();
     const prefix = previewPathPrefix(window.location.hostname, window.location.pathname) ?? "";
     turnInFlight.current = true;
-    try {
-      const result = await consumeMindTurn({
-        url: `${prefix}/api/mind/turn`,
-        signal,
-        headers: {
-          "x-mind-turn-id": `${Date.now()}-${crypto.randomUUID()}`,
-          "content-type": "application/json",
-          ...(token ? { Authorization: `Bearer ${token}` } : {}),
-        },
-        body: chatTurnBody({
+    const request: TurnRequest = options?.request ?? {
+      id: `${Date.now()}-${crypto.randomUUID()}`,
+      body: chatTurnBody({
           chatId: chat.id,
           text,
           memory: chat.memory,
@@ -2701,12 +2712,39 @@ export function CommandApp() {
           personalityId: chat.personalityId ?? "assistant",
           customPersonality: chat.customPersonality ?? "",
         }),
+    };
+    function reportTurnError(message: string, deliveryUncertain: boolean) {
+      const useOriginal = deliveryUncertain || options?.request !== undefined;
+      markDelivery(useOriginal ? "unconfirmed" : "failed");
+      const retry = () => {
+        if (turnInFlight.current || turnOwner.current !== draftOwner) return;
+        const thread = wsRef.current.chats.find((item) => item.id === chat.id);
+        if (!thread || thread.messages.at(-1)?.role === "assistant") return;
+        void deliver(thread, text, wsRef.current, true, snapped, {
+          ...options, request: useOriginal ? request : undefined,
+        });
+      };
+      const kind = classifyHonestFailure(message);
+      const description = useOriginal ? `${message} Retry uses the original send ID so the server can recognize an already received request.` : message;
+      reportFailure(description, kind ? honestFailureAuditAction(kind) : "chat_failed", chat.id, retry);
+      setFailure((current) => current ? { ...current, chatId: chat.id } : current);
+    }
+    try {
+      const result = await consumeMindTurn({
+        url: `${prefix}/api/mind/turn`,
+        signal,
+        headers: {
+          "x-mind-turn-id": request.id,
+          "content-type": "application/json",
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        },
+        body: request.body,
         onDelta: (chunk) => {
-          if (generation !== turnGen.current) return;
+          if (generation !== turnGen.current || turnOwner.current !== draftOwner) return;
           setLiveText((current) => current + chunk);
         },
       });
-      if (generation !== turnGen.current) return null;
+      if (generation !== turnGen.current || turnOwner.current !== draftOwner) return null;
       setBusy(false);
       setLiveText("");
       if (turnAbort.current === controller) turnAbort.current = null;
@@ -2714,11 +2752,10 @@ export function CommandApp() {
       if (!shouldStoreReply(result)) {
         const message = result.ok ? "The provider returned an empty reply." : result.error;
         if (message === STOPPED_REPLY) {
-          setError(message);
+          markDelivery("stopped");
           return null;
         }
-        const kind = classifyHonestFailure(message);
-        reportFailure(`${message} Retry sends this message to ${providerOptions.find((item) => item.id === selectedProvider)?.label ?? selectedProvider} again.`, kind ? honestFailureAuditAction(kind) : "chat_failed", chat.id, retryThisTurn);
+        reportTurnError(message, result.ok || result.deliveryUncertain === true);
         return null;
       }
       setWs((prev) => {
@@ -2729,7 +2766,7 @@ export function CommandApp() {
               ? {
                   ...item,
                   messages: [
-                    ...item.messages,
+                    ...item.messages.map((message) => message.id === userMessageId ? { ...message, delivery: undefined } : message),
                     {
                       id: crypto.randomUUID(),
                       role: "assistant" as const,
@@ -2737,6 +2774,7 @@ export function CommandApp() {
                       at: new Date().toISOString(),
                       model: result.model,
                       ...(result.provider ? { provider: result.provider } : {}),
+                      ...(result.requestedModel ? { requestedModel: result.requestedModel } : {}),
                       ...(result.memorySaved === true
                         ? {
                             memorySaved: true as const,
@@ -2789,20 +2827,23 @@ export function CommandApp() {
       });
       return result.text;
     } catch (caught) {
-      if (generation !== turnGen.current) return null;
+      if (generation !== turnGen.current || turnOwner.current !== draftOwner) return null;
       setBusy(false);
       setLiveText("");
       if (turnAbort.current === controller) turnAbort.current = null;
       if (controller.signal.aborted) {
-        setError(STOPPED_REPLY);
+        markDelivery("stopped");
         return null;
       }
       const message = normalizeClientFailureMessage(caught);
-      const kind = classifyHonestFailure(message);
-      reportFailure(`${message} Retry sends this message to ${providerOptions.find((item) => item.id === selectedProvider)?.label ?? selectedProvider} again.`, kind ? honestFailureAuditAction(kind) : "chat_failed", chat.id, retryThisTurn);
+      reportTurnError(message, true);
       return null;
     } finally {
-      turnInFlight.current = false;
+      clearTurnTimeout();
+      if (generation === turnGen.current) {
+        turnInFlight.current = false;
+        setTurnChat(null);
+      }
     }
   }
 
@@ -2933,6 +2974,7 @@ export function CommandApp() {
   }
 
   async function deliverPlanned(chat: Chat, full: string, source: Workspace, images: ImageAttachment[]): Promise<boolean> {
+    if (turnOwner.current !== draftOwner) return false;
     deliverStoredUser.current = false;
     const primary = logicRoute ?? (isLogicRouteId(providerChoice) ? providerChoice : null);
     const seats = logicRoutes.map((item) => ({ id: item.id, label: item.label, ready: item.ready, reason: item.reason }));
@@ -3041,7 +3083,6 @@ export function CommandApp() {
       return;
     }
     setActiveId(made.chat.id);
-    activeIdRef.current = made.chat.id;
     if (!wsRef.current.chats.some((item) => item.id === made.chat.id)) {
       wsRef.current = { ...wsRef.current, chats: [made.chat, ...wsRef.current.chats] };
     }
@@ -3174,36 +3215,48 @@ export function CommandApp() {
     }
   }
 
-  function rememberCue(next: CuedMessage[]) {
+  function rememberCue(next: QueuedChatMessage[]) {
     cueRef.current = next;
     setCued(next);
   }
 
-  async function releaseNextCue() {
-    if (wsRef.current.halted || turnInFlight.current) return;
-    const wanted = activeIdRef.current;
-    const chat = wanted
-      ? wsRef.current.chats.find((item) => item.id === wanted) ?? null
-      : wsRef.current.chats[0] ?? null;
-    if (!chat) return;
-    const held = takeNextCue(cueRef.current);
-    if (!held.next) return;
+  async function releaseNextCue(onlyChatId?: string) {
+    if (wsRef.current.halted || turnInFlight.current || !draftOwner || turnOwner.current !== draftOwner) return;
+    const held = takeNextCue(cueRef.current, (item) => item.ownerId === draftOwner && (!onlyChatId || item.chatId === onlyChatId));
+    const entry = held.next;
+    if (!entry) return;
     rememberCue(held.queue);
-    setView("chat");
-    const finished = await deliverPlanned(chat, held.next.text, wsRef.current, []);
-    if (!finished && !deliverStoredUser.current) {
-      rememberCue(restoreCue(cueRef.current, held.next));
-      setNotice("The next line stayed in the cue. Nothing was sent.");
+    const chat = wsRef.current.chats.find((item) => item.id === entry.chatId);
+    if (!chat) {
+      setNotice("A queued message was dropped because its conversation was removed.");
+      await releaseNextCue(onlyChatId);
       return;
     }
-    if (finished) await releaseNextCue();
+    const finished = await entry.dispatch(chat, wsRef.current);
+    if (turnOwner.current !== entry.ownerId) return;
+    if (!finished && !deliverStoredUser.current) {
+      rememberCue(restoreCue(cueRef.current, entry));
+      setNotice("The next message stayed queued in its conversation.");
+      return;
+    }
+    if (finished) await releaseNextCue(onlyChatId);
   }
 
-  async function sendInChat(queuedText?: string) {
-    const sendingQueued = typeof queuedText === "string";
-    if ((busy || turnInFlight.current) && !sendingQueued) {
-      if (!draft.trim()) return;
-      const result = cueMessage(cueRef.current, draft, crypto.randomUUID());
+  async function sendInChat() {
+    if (busy || turnInFlight.current) {
+      const text = draft.trim();
+      if (!active || !draftOwner || !text) return;
+      if (staged || pendingImages.length || parseImagineCommand(text) !== null) {
+        setError("Wait for the active reply before sending an attachment or an image request.");
+        return;
+      }
+      const result = cueMessage(cueRef.current, {
+        id: crypto.randomUUID(),
+        text,
+        chatId: active.id,
+        ownerId: draftOwner,
+        dispatch: (chat, source) => deliverPlanned(chat, text, source, []),
+      });
       if (result.error) {
         setError(result.error);
         return;
@@ -3211,17 +3264,17 @@ export function CommandApp() {
       rememberCue(result.queue);
       setDraft("");
       setError(null);
-      setNotice("Cued. It sends after this reply.");
+      setNotice("Queued. This message will send in this conversation.");
       return;
     }
     if (!active) {
       void sendCommand();
       return;
     }
-    const text = (sendingQueued ? queuedText : draft).trim();
-    const images = sendingQueued ? [] : snapshotImages(pendingImages);
-    const file = sendingQueued ? null : staged;
-    const gate = canSend({ halted: wsRef.current.halted, busy: sendingQueued ? false : busy });
+    const text = draft.trim();
+    const images = snapshotImages(pendingImages);
+    const file = staged;
+    const gate = canSend({ halted: wsRef.current.halted, busy });
     if (!gate.ok) {
       if (wsRef.current.halted) {
         reportEmergencyStop(active.id, () => {
@@ -3279,11 +3332,9 @@ export function CommandApp() {
       setError("The message and attached text exceed the 8,000-character limit. Shorten them before sending.");
       return;
     }
-    if (!sendingQueued) {
-      setDraft("");
-      setStaged(null);
-      setPendingImages([]);
-    }
+    setDraft("");
+    setStaged(null);
+    setPendingImages([]);
     const source = ws;
     const action = voiceNext.current ? "voice" as const : "chat" as const;
     voiceNext.current = false;
@@ -3298,7 +3349,7 @@ export function CommandApp() {
     const effortPath = resolveSendPath(composerEffort);
     if (effortPath.notice) setNotice(effortPath.notice);
     const finished = await deliverPlanned(active, full, ws, images);
-    if (!finished && !deliverStoredUser.current && !sendingQueued) {
+    if (!finished && !deliverStoredUser.current) {
       setDraft((current) => current || text);
       if (file) setStaged((current) => current ?? file);
       if (images.length) setPendingImages((current) => current.length ? current : images);
@@ -5375,7 +5426,7 @@ export function CommandApp() {
           {!railCollapsed && (
             <p className="flex min-w-0 flex-1 items-center gap-2 text-2xl font-semibold tracking-tight">
               <img className="service-mark adrian-mark" src="/brand/logo-mark.jpg" alt="" width={32} height={32} />
-              Adrian
+              <span className="truncate">Adrian</span>
             </p>
           )}
           <button
@@ -5448,6 +5499,7 @@ export function CommandApp() {
           <Link
             to="/social"
             data-testid="nav-route-social"
+            aria-label="Social"
             className={`nav-item flex min-h-11 items-center gap-3 rounded-2xl px-3 text-sm font-medium text-muted ${railCollapsed ? "justify-center" : ""}`}
             onClick={() => setNavOpen(false)}
           >
@@ -5457,6 +5509,7 @@ export function CommandApp() {
           <Link
             to="/gpt-wrapper"
             data-testid="nav-route-gpt-wrapper"
+            aria-label="GPT wrapper"
             className={`nav-item flex min-h-11 items-center gap-3 rounded-2xl px-3 text-sm font-medium text-muted ${railCollapsed ? "justify-center" : ""}`}
             onClick={() => setNavOpen(false)}
           >
@@ -5746,13 +5799,14 @@ export function CommandApp() {
             <button
               type="button"
               className="surface-switch__button shrink-0 whitespace-nowrap"
+              ref={controlsTrigger}
               aria-expanded={controlsOpen}
-              aria-haspopup="menu"
+              aria-haspopup="dialog"
+              aria-controls={controlsOpen ? "controls-menu" : undefined}
               aria-label="Open controls"
-              onClick={(event) => {
+              onClick={() => {
                 const next = !controlsOpen;
                 closeMenus("controls");
-                setControlsAnchor(event.currentTarget.getBoundingClientRect());
                 setControlsOpen(next);
               }}
             >
@@ -5771,12 +5825,107 @@ export function CommandApp() {
                 onClick={() => setChatSettingsOpen((open) => !open)}
               >
                 <span>Chat settings</span>
-                <ChevronDown size={16} strokeWidth={1.75} aria-hidden="true" />
+                <ChevronDown className="chat-settings-chevron" size={16} strokeWidth={1.75} aria-hidden="true" />
+                <Settings className="chat-settings-icon" size={17} strokeWidth={1.75} aria-hidden="true" />
               </button>
             ) : null}
             {controlsOpen ? (
-              <AnchoredCard anchor={controlsAnchor} label="Controls" onClose={() => setControlsOpen(false)} testId="controls-menu" width={640} align="start">
-                <MenuShelf width="100%" testId="controls-shelf">
+              <AnchoredCard anchor={null} trigger={controlsTrigger} label="Controls" onClose={() => setControlsOpen(false)} testId="controls-menu" width={640} align="start">
+                <div className="controls-shelf" data-testid="controls-shelf">
+                <MenuCluster label="Active model" wide>
+                  <button
+                    type="button"
+                    className="flex min-h-11 items-center justify-between rounded-2xl px-3 text-left text-sm"
+                    style={menuChip}
+                    aria-expanded={modelRowsOpen}
+                    onClick={() => setModelRowsOpen((value) => !value)}
+                  >
+                    <span className="min-w-0 break-words">{controlsModelLabel}</span>
+                    <span aria-hidden="true">{modelRowsOpen ? "‹" : "›"}</span>
+                  </button>
+                  {modelRowsOpen && effectiveProvider !== "grok" ? (
+                    <ProviderPicker name="control-model" choices={providerOptions} choice={effectiveProvider} onChoose={useProviderInChat} logicRoutes={logicRoutes} />
+                  ) : modelRowsOpen ? (
+                    <ModelTierChip
+                      presentation="rows"
+                      tier={modelTier}
+                      onChoose={chooseModelTier}
+                      grokModel={grokModel}
+                      onChooseGrokModel={(model) => {
+                        useProviderInChat("grok");
+                        setGrokModel(model);
+                      }}
+                      lastResolved={lastResolvedTier}
+                      lastModel={lastModelUsed}
+                      logicRoute={logicRoute}
+                      logicRoutes={logicRoutes}
+                      onChooseLogic={useProviderInChat}
+                    />
+                  ) : null}
+                </MenuCluster>
+                <MenuCluster label="Add a service">
+                  <button
+                    type="button"
+                    role="menuitem"
+                    className="flex min-h-11 flex-col items-start justify-center rounded-2xl px-3 text-left"
+                    style={menuChip}
+                    onClick={() => { setView("connected"); setControlsOpen(false); setNavOpen(false); }}
+                  >
+                    <span className="text-sm">Connect a new service</span>
+                    <span className="text-xs text-muted">This does not change the module in use</span>
+                  </button>
+                </MenuCluster>
+                <MenuCluster label="Use a module" wide>
+                  {consultModules.filter((item) => item.connected).length === 0 ? (
+                    <p className="px-3 text-xs text-muted">No model module is configured.</p>
+                  ) : consultModules.filter((item) => item.connected).map((item) => (
+                    <button
+                      key={item.id}
+                      type="button"
+                      role="menuitemradio"
+                      aria-checked={providerChoice === item.id}
+                      data-testid={`control-module-${item.id}`}
+                      className="flex min-h-11 items-center justify-between rounded-2xl px-3 text-left text-sm"
+                      style={menuChip}
+                      onClick={() => useProviderInChat(item.id)}
+                    >
+                      <span className="min-w-0 break-words">{item.label}</span>
+                      <span className="text-xs text-muted">{providerChoice === item.id ? "Selected" : "Configured"}</span>
+                    </button>
+                  ))}
+                </MenuCluster>
+                <MenuCluster label="Work">
+                  <button
+                    type="button"
+                    role="menuitem"
+                    aria-pressed={composerEffort === "orchestrator"}
+                    className="flex min-h-11 items-center justify-between rounded-2xl px-3 text-left text-sm"
+                    style={menuChip}
+                    onClick={() => chooseComposerEffort(composerEffort === "orchestrator" ? "auto" : "orchestrator")}
+                  >
+                    <span>Orchestrator</span>
+                    <span className="text-xs text-muted">{composerEffort === "orchestrator" ? "On" : "Off"}</span>
+                  </button>
+                  {composerEffort === "orchestrator" ? (
+                    <div className="flex w-full flex-wrap gap-1" data-testid="orchestrator-models">
+                      {consultModules.filter((item) => item.connected).map((item) => (
+                        <button
+                          key={item.id}
+                          type="button"
+                          role="menuitem"
+                          data-testid="consult-model"
+                          aria-pressed={consultModel === item.id}
+                          className="flex min-h-11 items-center justify-between rounded-2xl px-3 text-left text-sm"
+                          style={menuChip}
+                          onClick={() => chooseConsultModel(item.id)}
+                        >
+                          <span className="min-w-0 break-words">{item.label}</span>
+                          <span className="text-xs text-muted">Ready</span>
+                        </button>
+                      ))}
+                    </div>
+                  ) : null}
+                </MenuCluster>
                 <MenuCluster label="Share">
                   <button
                     type="button"
@@ -5808,106 +5957,12 @@ export function CommandApp() {
                     <span className="text-xs text-muted">Voice route</span>
                   </p>
                 </MenuCluster>
-                <MenuCluster label="Use a module" wide>
-                  {consultModules.filter((item) => item.connected).length === 0 ? (
-                    <p className="px-3 text-xs text-muted">No model module is configured.</p>
-                  ) : consultModules.filter((item) => item.connected).map((item) => (
-                    <button
-                      key={item.id}
-                      type="button"
-                      role="menuitemradio"
-                      aria-checked={providerChoice === item.id}
-                      data-testid={`control-module-${item.id}`}
-                      className="flex min-h-11 items-center justify-between rounded-2xl px-3 text-left text-sm"
-                      style={menuChip}
-                      onClick={() => useProviderInChat(item.id)}
-                    >
-                      <span>{item.label}</span>
-                      <span className="text-xs text-muted">{providerChoice === item.id ? "Selected" : "Configured"}</span>
-                    </button>
-                  ))}
-                </MenuCluster>
-                <MenuCluster label="Add a service">
-                  <button
-                    type="button"
-                    role="menuitem"
-                    className="flex min-h-11 flex-col items-start justify-center rounded-2xl px-3 text-left"
-                    style={menuChip}
-                    onClick={() => { setView("connected"); setControlsOpen(false); setNavOpen(false); }}
-                  >
-                    <span className="text-sm">Connect a new service</span>
-                    <span className="text-xs text-muted">This does not change the module in use</span>
-                  </button>
-                </MenuCluster>
-                <MenuCluster label="Model" wide>
-                  <button
-                    type="button"
-                    className="flex min-h-11 items-center justify-between rounded-2xl px-3 text-left text-sm"
-                    style={menuChip}
-                    aria-expanded={modelRowsOpen}
-                    onClick={() => setModelRowsOpen((value) => !value)}
-                  >
-                    <span>{controlsModelLabel}</span>
-                    <span aria-hidden="true">{modelRowsOpen ? "‹" : "›"}</span>
-                  </button>
-                  {modelRowsOpen && effectiveProvider !== "grok" ? (
-                    <ProviderPicker name="control-model" choices={providerOptions} choice={effectiveProvider} onChoose={useProviderInChat} logicRoutes={logicRoutes} />
-                  ) : modelRowsOpen ? (
-                    <ModelTierChip
-                      presentation="rows"
-                      tier={modelTier}
-                      onChoose={chooseModelTier}
-                      grokModel={grokModel}
-                      onChooseGrokModel={(model) => {
-                        useProviderInChat("grok");
-                        setGrokModel(model);
-                      }}
-                      lastResolved={lastResolvedTier}
-                      lastModel={lastModelUsed}
-                      logicRoute={logicRoute}
-                      logicRoutes={logicRoutes}
-                      onChooseLogic={useProviderInChat}
-                    />
-                  ) : null}
-                </MenuCluster>
-                <MenuCluster label="Work">
-                  <button
-                    type="button"
-                    role="menuitem"
-                    aria-pressed={composerEffort === "orchestrator"}
-                    className="flex min-h-11 items-center justify-between rounded-2xl px-3 text-left text-sm"
-                    style={menuChip}
-                    onClick={() => chooseComposerEffort(composerEffort === "orchestrator" ? "auto" : "orchestrator")}
-                  >
-                    <span>Orchestrator</span>
-                    <span className="text-xs text-muted">{composerEffort === "orchestrator" ? "On" : "Off"}</span>
-                  </button>
-                  {composerEffort === "orchestrator" ? (
-                    <div className="flex w-full flex-wrap gap-1" data-testid="orchestrator-models">
-                      {consultModules.filter((item) => item.connected).map((item) => (
-                        <button
-                          key={item.id}
-                          type="button"
-                          role="menuitem"
-                          data-testid="consult-model"
-                          aria-pressed={consultModel === item.id}
-                          className="flex min-h-11 items-center justify-between rounded-2xl px-3 text-left text-sm"
-                          style={menuChip}
-                          onClick={() => chooseConsultModel(item.id)}
-                        >
-                          <span>{item.label}</span>
-                          <span className="text-xs text-muted">Ready</span>
-                        </button>
-                      ))}
-                    </div>
-                  ) : null}
-                </MenuCluster>
                 <MenuCluster label="Install" wide>
                   <a role="menuitem" className="flex min-h-11 items-center rounded-2xl px-3 text-sm" style={menuChip} href="/downloads/AdriansMind-Setup.exe" download data-testid="header-download-installer">Download Adrian's Mind</a>
                   <p className="px-3 pb-2 text-xs text-muted" data-testid="installer-note">Unsigned Windows app. It contains this product, including Build. It does not control the mouse, keyboard, or browser.</p>
                   <DesktopUpdateNote />
                 </MenuCluster>
-                </MenuShelf>
+                </div>
               </AnchoredCard>
             ) : null}
           </div>
@@ -6003,7 +6058,7 @@ export function CommandApp() {
             </button>
           </div>
         )}
-        {failure && (
+        {failure && (!failure.chatId || (view === "chat" && active?.id === failure.chatId)) && (
           <div
             className="flex flex-wrap items-center justify-between gap-2 border-b border-danger/40 bg-danger/10 px-4 py-2"
             role="alert"
@@ -6139,10 +6194,15 @@ export function CommandApp() {
               <div className="masthead flex w-full items-center gap-3">
                 <div className="flex w-full flex-wrap items-end justify-between gap-3">
                   <div className="w-full min-w-0">
-                    <h1 className="font-display text-3xl font-bold md:text-4xl">
-                      <span data-greeting={greet}>{greet}</span>, <span className="text-accent">Adrian</span>
-                    </h1>
-                    <p className="text-sm text-muted">Ask, build, or connect. The rest lives in Settings.</p>
+                    <div className="home-greeting">
+                      <img src="/brand/logo-mark.jpg" alt="" width={52} height={52} />
+                      <div>
+                        <h1 className="font-display text-3xl font-bold md:text-4xl">
+                          <span data-greeting={greet}>{greet}</span>, <span className="text-accent">Adrian</span>
+                        </h1>
+                        <p className="text-sm text-muted">What would you like to work on?</p>
+                      </div>
+                    </div>
                     <ModuleSuggestions draft={draft} onPick={pickModule} />
                     {ws.chats.length > 0 ? (
                       <div className="mt-3 w-full" aria-label="Recent">
@@ -6163,7 +6223,6 @@ export function CommandApp() {
                   </div>
                 </div>
               </div>
-              <FirstSteps state={guide} onChange={persistGuide} onOpen={openGuide} />
               <section className="floating-composer command-card composer-dock rounded-panel p-3 md:p-4" data-composer="floating">
                 <details className="composer-advanced">
                   <summary>Controls</summary>
@@ -6444,8 +6503,7 @@ export function CommandApp() {
                 )}
               </section>
 
-              <div className="gpt-starters" ref={(node) => pinShelf(node, "100%", false)} data-testid="start-shelf">
-                <p className="mb-1 text-xs uppercase tracking-wide text-muted" style={{ flex: "1 1 100%" }}>Start</p>
+              <div className="gpt-starters" role="group" aria-label="Start a task" data-testid="start-shelf">
                 <button type="button" aria-pressed={homeAction === "image"} onClick={() => { setHomeAction("image"); setCommandMode("ask"); }}>
                   <Image className="size-5" /> Create an image
                 </button>
@@ -6459,6 +6517,7 @@ export function CommandApp() {
                   <Search className="size-5" /> Search the web
                 </button>
               </div>
+              <FirstSteps state={guide} onChange={persistGuide} onOpen={openGuide} />
               <div className="flex flex-wrap gap-2 pb-1">
                 <button type="button" className="suggestion-chip" onClick={() => setDraft("Summarize my projects on this device")}>Summarize my projects</button>
                 <button type="button" className="suggestion-chip" onClick={() => setDraft("What can Run worker do right now?")}>What can the worker do?</button>
@@ -6567,8 +6626,8 @@ export function CommandApp() {
               projectId={chatProjectId}
               projectName={ws.projects.find((project) => project.id === chatProjectId)?.name ?? null}
               onClearProject={() => setChatProjectId(null)}
-              busy={busy}
-              liveText={liveText}
+              busy={busy && (!turnChat || (turnChat.ownerId === draftOwner && turnChat.chatId === active?.id))}
+              liveText={turnChat && turnChat.chatId !== active?.id ? "" : liveText}
               halted={ws.halted}
               draft={draft}
               error={error}
@@ -6577,10 +6636,11 @@ export function CommandApp() {
               onPickModule={pickModule}
               onPick={(id) => setActiveId(id)}
               onSend={() => void sendInChat()}
-              cue={cued}
-             onDropCue={(id) => rememberCue(dropCued(cueRef.current, id))}
-              onReleaseCue={() => void releaseNextCue()}
-             onStop={stopReply}
+              cue={cued.filter((item) => item.ownerId === draftOwner && item.chatId === active?.id)}
+              onDropCue={(id) => rememberCue(dropCued(cueRef.current, id))}
+              onReleaseCue={() => { if (active) void releaseNextCue(active.id); }}
+              canStop={busy && turnChat?.ownerId === draftOwner && turnChat?.chatId === active?.id}
+              onStop={stopReply}
               onRename={renameActive}
               onEdit={editMessage}
               onRegenerate={regenerate}
@@ -6756,12 +6816,12 @@ export function CommandApp() {
                     <p className="text-sm text-muted">Group this device’s chats, notes, and files by project.</p>
                   </div>
                 </div>
-                <button id="new-project-button" type="button" className="inline-flex min-h-11 items-center gap-2 rounded-panel bg-accent px-4 text-sm font-semibold text-white" onClick={() => setProjectOpen(true)}>
+                <button id="new-project-button" type="button" className="inline-flex min-h-11 items-center gap-2 rounded-panel bg-accent px-4 text-sm font-semibold text-accent-ink" onClick={() => setProjectOpen(true)}>
                   <Plus className="size-4" /> New Project
                 </button>
               </div>
               <div className="mt-4 flex flex-wrap gap-2">
-                <span className="rounded-panel bg-accent px-3 py-2 text-sm text-white">On this device ({ws.projects.length})</span>
+                <span className="project-count px-3 py-2 text-sm">On this device ({ws.projects.length})</span>
               </div>
               <div id="owner-projects">
                 {ws.projects.length === 0 && (
@@ -6793,7 +6853,7 @@ export function CommandApp() {
                       </div>
                       <p className="mt-3 text-xs text-muted">Created {stamp(project.createdAt)} · {chats} {chats === 1 ? "chat" : "chats"} · {notes} {notes === 1 ? "note" : "notes"} · {files} {files === 1 ? "file" : "files"}</p>
                       <div className="mt-3 flex flex-wrap gap-2">
-                        <button type="button" className="min-h-11 rounded-panel bg-accent px-3 text-sm text-white" onClick={() => { setChatProjectId(project.id); setProjectChoice(project.id); setActiveId(ws.chats.find((chat) => chat.projectId === project.id)?.id ?? null); setView("chat"); }}>Open chats</button>
+                        <button type="button" className="workspace-primary min-h-11 rounded-panel px-3 text-sm" onClick={() => { setChatProjectId(project.id); setProjectChoice(project.id); setActiveId(ws.chats.find((chat) => chat.projectId === project.id)?.id ?? null); setView("chat"); }}>Open chats</button>
                         <button type="button" className="min-h-11 rounded-panel border border-line px-3 text-sm" onClick={() => { setMemoryTab("project"); setMemoryProject(project.id); setView("memory"); }}>Notes</button>
                         <button type="button" className="min-h-11 rounded-panel border border-line px-3 text-sm" onClick={() => { setLibraryProjectId(project.id); setLibraryBand("files"); setView("files"); }}>Files</button>
                         <button
@@ -6834,32 +6894,31 @@ export function CommandApp() {
                   <img src="/brand/logo-mark.jpg" alt="" className="size-8 rounded-lg" />
                   <div>
                     <h2 className="font-display text-3xl font-bold">Memory</h2>
-                    <p className="text-sm text-muted">Notes you chose to keep. They stay in this browser, not a remote database.</p>
+                    <p className="text-sm text-muted">Keep useful notes and choose when a chat can use them.</p>
                   </div>
                 </div>
               </div>
-              <div className={`glow-card mt-4 grid gap-4 rounded-panel border p-4 md:grid-cols-2 ${memoryChoice === "on" ? "border-ok/40" : "border-danger/40"}`}>
+              <div className="memory-permission-card mt-4 grid gap-3 rounded-panel border p-4 md:grid-cols-[1fr_auto]">
                 <div className="flex items-center gap-3">
-                  <img src="/brand/logo-mark.jpg" alt="" className="size-12 rounded-2xl" />
+                  <Database aria-hidden="true" className="memory-permission-icon" />
                   <div>
-                    <p className="font-semibold">Memory: <span className={memoryChoice === "on" ? "text-ok" : "text-danger"}>{memoryChoice === "on" ? "ON" : "OFF"}</span></p>
+                    <p className="font-semibold">Chat memory <span className={memoryChoice === "on" ? "text-ok" : "text-muted"}>{memoryChoice === "on" ? "on" : "off"}</span></p>
                     <p className="text-sm text-muted">{memoryChoice === "on" ? "The next command can read notes in its scope. Existing chats stay off until you enable them there." : "A memory-off chat cannot read or save notes."}</p>
                   </div>
                 </div>
-                <div className="flex items-center justify-between gap-3">
-                  <p className="text-sm text-muted">Enable it only when you want notes used in a later command. This does not copy old chats into memory.</p>
-                  <button type="button" className="min-h-11 shrink-0 rounded-panel bg-accent px-4 text-sm font-semibold text-white" onClick={() => memoryChoice === "on" ? setMemoryChoice("off") : setArmMemory("composer")}>
+                <div className="flex items-center">
+                  <button type="button" className="min-h-11 shrink-0 rounded-panel bg-accent px-4 text-sm font-semibold text-accent-ink" onClick={() => memoryChoice === "on" ? setMemoryChoice("off") : setArmMemory("composer")}>
                     {memoryChoice === "on" ? "Turn off" : "Enable Memory"}
                   </button>
                 </div>
               </div>
-              <div className="mt-4 flex flex-wrap gap-2">
+              <div className="workspace-tabs mt-4 flex flex-wrap gap-2" role="group" aria-label="Memory views">
                 {([
                   ["mine", "My Memory"],
                   ["project", "Project Memory"],
                   ["transfer", "Imports & Exports"],
                 ] as const).map(([id, label]) => (
-                  <button key={id} type="button" aria-pressed={memoryTab === id} onClick={() => setMemoryTab(id)} className={`min-h-11 shrink-0 rounded-panel px-4 text-sm ${memoryTab === id ? "bg-accent text-accent-ink" : "border border-line text-muted"}`}>
+                  <button key={id} type="button" aria-pressed={memoryTab === id} onClick={() => setMemoryTab(id)} className="min-h-11 rounded-panel px-4 text-sm">
                     {label}
                   </button>
                 ))}
@@ -6872,8 +6931,8 @@ export function CommandApp() {
                 </div>
               )}
               {memoryTab !== "transfer" && <>
-              <div className="mt-4 grid gap-3 md:grid-cols-[16rem_1fr]">
-                <div className="glow-card rounded-panel border border-line bg-surface p-4 text-sm">
+              <div className="memory-layout mt-4 grid gap-3 md:grid-cols-[16rem_1fr]">
+                <div className="memory-overview rounded-panel border border-line bg-surface p-4 text-sm">
                 <p className="font-semibold">Memory overview</p>
                   <p className="mt-3 flex justify-between"><span className="text-muted">Status</span><span className={memoryChoice === "on" ? "text-ok" : "text-danger"}>{memoryChoice === "on" ? "ON" : "OFF"}</span></p>
                   <p className="mt-2 flex justify-between"><span className="text-muted">Active notes</span><span>{ws.memories.filter((item) => !item.archived).length}</span></p>
@@ -6881,7 +6940,7 @@ export function CommandApp() {
                   <p className="mt-2 flex justify-between"><span className="text-muted">Text size</span><span>{formatBytes(memoryBytes)}</span></p>
                   <p className="mt-3 text-xs text-muted">This size is the note text on this device. It is not a cloud quota.</p>
                 </div>
-                <div className="grid gap-2">
+                <div className="memory-editor grid min-w-0 gap-2">
                 <label className="text-sm font-medium" htmlFor="memory-new-note">New note</label>
                 <textarea id="memory-new-note" value={memoryText} maxLength={2000} onChange={(event) => setMemoryText(event.target.value)} placeholder="Write a note you want kept" rows={2} aria-describedby="memory-text-count" className="rounded-panel border border-line bg-surface px-3 py-2 text-sm" />
                 <p id="memory-text-count" className="text-xs text-muted">{memoryText.length.toLocaleString()} / 2,000 characters</p>
@@ -6924,12 +6983,12 @@ export function CommandApp() {
                 </label>
                 </div>
               </div>
-              <ul className="mt-4 space-y-2">
+              <ul className="memory-notes mt-4 space-y-2" aria-label="Saved notes">
                 {memories.length === 0 && <li className="glow-card rounded-panel border border-line bg-surface p-6 text-center text-sm text-muted">{memoryQuery.trim() ? "No notes match your search." : "No saved notes in this view yet."}</li>}
                 {memories.map((item) => (
                   <li
                     key={item.id}
-                    className="rounded-panel border border-line bg-surface p-3 text-sm"
+                    className="memory-note rounded-panel border border-line bg-surface p-3 text-sm"
                     onPointerDown={(event) => {
                       if ((event.target as HTMLElement).closest("button, textarea, input")) return;
                       const timer = window.setTimeout(() => setNoteMenu(item.id), 550);
@@ -6942,9 +7001,10 @@ export function CommandApp() {
                     {editId === item.id ? (
                       <label className="block text-sm">Edit note<textarea maxLength={2000} value={editText} onChange={(event) => setEditText(event.target.value)} className="min-h-20 w-full bg-transparent" /><span className="text-xs text-muted">{editText.length}/2000</span></label>
                     ) : (
-                      <p className="whitespace-pre-wrap">{item.text}</p>
+                      <p className="memory-note-text whitespace-pre-wrap">{item.text}</p>
                     )}
-                    <p className="mt-1 text-xs text-muted">{item.scope}{item.scope === "project" ? (ws.projects.some((project) => project.id === item.projectId) ? "" : " · project removed, note kept") : ""} · {stamp(item.updatedAt)}{item.archived ? " · archived" : ""} · Hold for actions</p>
+                    <p className="memory-note-meta mt-1 text-xs text-muted">{item.scope}{item.scope === "project" ? (ws.projects.some((project) => project.id === item.projectId) ? "" : " · project removed, note kept") : ""} · {stamp(item.updatedAt)}{item.archived ? " · archived" : ""}</p>
+                    <div className="memory-note-actions"><ActionsButton label={`note: ${item.text.slice(0, 56)}`} onOpen={() => setNoteMenu(item.id)} /></div>
                     {editId === item.id ? <button type="button" disabled={!editText.trim()} className="mt-2 min-h-11 rounded-panel border border-line px-3" onClick={() => { setWs((prev) => pushAudit(reviseMemory(prev, item.id, editText), "save_memory", item.id, "revised")); setEditId(null); }}>Save edit</button> : null}
                   </li>
                 ))}
@@ -7258,14 +7318,14 @@ export function CommandApp() {
                   </div>
                 </div>
               </div>
-              <div className="solid-form mt-4">
-                <nav className="mb-3 flex flex-wrap gap-2" aria-label="Research page">
+              <div className="solid-form research-workbench mt-4">
+                <nav className="workspace-tabs mb-3 flex flex-wrap gap-2" aria-label="Research page">
                   {([
                     ["search", "Ask"],
                     ["saved", "Saved"],
                     ["files", "Files"],
                   ] as const).map(([id, label]) => (
-                    <button key={id} type="button" className={`min-h-11 rounded-panel border px-3 text-sm ${researchBand === id ? "border-accent bg-accent text-accent-ink" : "border-line"}`} aria-pressed={researchBand === id} onClick={() => setResearchBand(id)}>{label}</button>
+                    <button key={id} type="button" className="min-h-11 rounded-panel border px-3 text-sm" aria-pressed={researchBand === id} onClick={() => setResearchBand(id)}>{label}</button>
                   ))}
                 </nav>
                 <div hidden={researchBand !== "search"}>
@@ -7422,22 +7482,22 @@ export function CommandApp() {
                   {driveConnected ? <button type="button" className="min-h-11 rounded-panel border border-line px-4 text-sm" onClick={() => setCloudPickerOpen(true)}>Browse Drive</button> : null}
                 </div>
               </div>
-              <div id="owner-library" ref={stackLibrary}>
+              <div id="owner-library">
                 {error && <p role="alert" className="mb-2 text-sm text-danger">{error}</p>}
                 {notice && <p role="status" className="mb-2 text-sm text-muted">{notice}</p>}
-                <nav ref={keepGroupRow} className="mb-3 flex flex-wrap gap-2" aria-label="Library groups">
+                <nav className="workspace-tabs mb-3 flex flex-wrap gap-2" aria-label="Library groups">
                   {([
                     ["files", "Files"],
                     ["preview", "Preview"],
                     ["media", "Media"],
                   ] as const).map(([id, label]) => (
-                    <button key={id} type="button" className={`min-h-11 rounded-panel border px-3 text-sm ${libraryBand === id ? "border-accent bg-accent text-accent-ink" : "border-line"}`} aria-pressed={libraryBand === id} onClick={() => setLibraryBand(id)}>{label}</button>
+                    <button key={id} type="button" className="min-h-11 rounded-panel border px-3 text-sm" aria-pressed={libraryBand === id} onClick={() => setLibraryBand(id)}>{label}</button>
                   ))}
                 </nav>
                 <aside className="library-list text-sm" hidden={libraryBand !== "files"}>
                   <p className="font-semibold">Text copies</p>
-                  <p className="mt-2 text-xs text-muted">These are the words you attached, not the original file and not a cloud drive.</p>
-                  <ul className="mt-3 space-y-1">
+                  <p className="mt-2 text-xs text-muted">Read the saved text. Keep the original file for its full contents.</p>
+                  <ul className="library-text-copies mt-3">
                     {libraryProjectId && <li className="flex flex-wrap items-center gap-3"><span>Project: {ws.projects.find((project) => project.id === libraryProjectId)?.name ?? "Unnamed project"}</span><button type="button" onClick={() => setLibraryProjectId(null)} className="min-h-11 text-accent">All files</button></li>}
                     {!ws.files.some((file) => !libraryProjectId || file.projectId === libraryProjectId) && (
                       <li className="empty-state py-6">
@@ -7447,8 +7507,10 @@ export function CommandApp() {
                     )}
                     {ws.files.filter((file) => !libraryProjectId || file.projectId === libraryProjectId).map((file) => (
                       <li key={file.id}>
-                        <button type="button" onClick={() => { setOpenFileId(file.id); setLibraryBand("preview"); }} className={`dense-row min-h-11 w-full whitespace-normal [overflow-wrap:anywhere] px-2 text-left ${openFileId === file.id ? "tile-active bg-accent text-accent-ink" : ""}`}>
-                          {file.name}
+                        <button type="button" aria-label={file.name} onClick={() => { setOpenFileId(file.id); setLibraryBand("preview"); }} className="library-file min-h-11 w-full text-left">
+                          <FileText aria-hidden="true" className="library-file-icon" />
+                          <span><strong>{file.name}</strong><small>{formatBytes(file.bytes)} · {stamp(file.createdAt)}</small></span>
+                          <span className="library-file-arrow" aria-hidden="true">›</span>
                         </button>
                       </li>
                     ))}
@@ -7686,10 +7748,9 @@ export function CommandApp() {
                       <h3 className="min-w-0">{section.group}</h3>
                       <ActionsButton label={`${section.group} section`} onOpen={() => setSettingsMenu(section.group)} />
                     </div>
-                    <div className="settings-index" ref={(node) => pinShelf(node, "100%", false)}>
+                    <div className="settings-index">
                     {section.items.map(([id, label, detail, open]) => (
-                      <button key={id} type="button" className="adrian-row" style={{ ...menuChip, flex: "1 1 16rem", minWidth: "14rem" }} onClick={open}>
-                        <img src={`/brand/logo-mark.jpg`} alt="" width={28} height={28} />
+                      <button key={id} type="button" className="adrian-row" onClick={open}>
                         <span>
                           <strong>{label}</strong>
                           <small>{detail}</small>
@@ -8387,6 +8448,7 @@ function ChatPane({
   cue,
   onDropCue,
   onReleaseCue,
+  canStop,
   onStop,
   onRename,
   onEdit,
@@ -8497,6 +8559,7 @@ function ChatPane({
   cue: CuedMessage[];
   onDropCue: (id: string) => void;
   onReleaseCue: () => void;
+  canStop: boolean;
   onStop: () => void;
   onRename: (title: string) => void;
   onEdit: (messageId: string, text: string) => void;
@@ -8686,7 +8749,15 @@ function ChatPane({
          {active && customPersonality.trim() ? <p className="mt-1 text-sm text-muted">{active.title} is open in Chat. Its saved instructions are used for the next reply.</p> : null}
           {active?.temporary && <div className="text-xs text-muted">Excluded from workspace archives by default</div>}
           {active?.messages.some((message) => message.images?.some((image) => !image.dataUrl)) && <div className="text-xs text-muted">Some images are unavailable. Their references will be included in the transcript.</div>}
-         <details id="thread-chat-settings" className="thread-chat-settings" open={chatSettingsOpen} onToggle={(event) => onChatSettingsToggle(event.currentTarget.open)}>
+          <details className="thread-mobile-tools mt-3">
+            <summary className="min-h-11 cursor-pointer text-sm">Provider</summary>
+            <ProviderPicker name="mind-provider-mobile" choices={choices} choice={providerChoice} onChoose={onProvider} logicRoutes={logicRoutes} grokVerified={grokVerified} />
+            <div className="mt-3">
+              {routeId === "grok" && <ModelTierPicker name="mind-tier-mobile" tier={modelTier} onChoose={onModelTier} logicRoute={logicRoute} logicRoutes={logicRoutes} onChooseLogic={onChooseLogic} />}
+            </div>
+          </details>
+        </div>
+        <details id="thread-chat-settings" className="thread-chat-settings" open={chatSettingsOpen} onToggle={(event) => onChatSettingsToggle(event.currentTarget.open)}>
            <summary>Chat settings</summary>
             <p className="text-sm text-muted">Only a configured provider can be selected. Another provider is not substituted.</p>
            <div className="mt-2 flex flex-wrap items-center gap-2">
@@ -8718,15 +8789,7 @@ function ChatPane({
               <MemoryChatToggle memory={memoryChoice} onChange={onMemoryChange} disabled={busy || halted} />
             </div>
           )}
-          </details>
-          <details className="thread-mobile-tools mt-3">
-            <summary className="min-h-11 cursor-pointer text-sm">Provider</summary>
-            <ProviderPicker name="mind-provider-mobile" choices={choices} choice={providerChoice} onChoose={onProvider} logicRoutes={logicRoutes} grokVerified={grokVerified} />
-            <div className="mt-3">
-              {routeId === "grok" && <ModelTierPicker name="mind-tier-mobile" tier={modelTier} onChoose={onModelTier} logicRoute={logicRoute} logicRoutes={logicRoutes} onChooseLogic={onChooseLogic} />}
-            </div>
-          </details>
-        </div>
+        </details>
         <div ref={transcript} className="min-h-0 flex-1 overflow-auto p-4" onScroll={(event) => {
           const pane = event.currentTarget;
           const end = Math.max(0, pane.scrollHeight - pane.clientHeight);
@@ -8753,6 +8816,14 @@ function ChatPane({
             return (
             <article key={msg.id} className={`turn w-full max-w-none px-1 py-2 text-sm ${msg.role === "user" ? "turn-user" : "turn-assistant"}`}>
               <p className="mb-1 text-xs text-muted">{msg.role === "user" ? "You" : [msg.provider, msg.model].filter(Boolean).join(" · ") || "Assistant · model unreported"} · {stamp(msg.at)}</p>
+              {msg.requestedModel && msg.model !== msg.requestedModel && (
+                <p className="mb-1 break-words text-xs text-muted">Requested {msg.requestedModel}</p>
+              )}
+              {msg.delivery && !(busy && msg.delivery === "submitted" && last?.id === msg.id) && (
+                <p className="mb-1 text-xs text-muted" role="status">
+                  {msg.delivery === "stopped" ? STOPPED_REPLY : msg.delivery === "failed" ? "The provider did not complete this reply." : "No finished reply was saved. The provider may already have received this message."}
+                </p>
+              )}
               {editingId === msg.id ? (
                 <form
                   onSubmit={(event) => {
@@ -8800,8 +8871,8 @@ function ChatPane({
                   </button>
                 )}
                 {msg.role === "assistant" && last?.id === msg.id && (
-                  <button type="button" className="min-h-11 rounded-full px-3 text-xs" onClick={busy ? onStop : onRegenerate} disabled={halted}>
-                    {replyActions({ role: "assistant", busy, speaking: false, hasSources: replyHasSources(msg.content) }).includes("stop-generating") ? "Stop generating" : "Regenerate"}
+                  <button type="button" className="min-h-11 rounded-full px-3 text-xs" onClick={onRegenerate} disabled={busy || halted}>
+                    Regenerate
                   </button>
                 )}
                 {msg.role === "assistant" && (
@@ -8876,6 +8947,7 @@ function ChatPane({
               </ul>
             </div>
           )}
+          {error && <p className="rounded-panel border border-line bg-surface px-3 py-2 text-sm text-danger" role="status">{error}</p>}
           {busy && liveText && (
             <article className="turn turn-assistant w-full max-w-none px-1 py-2 text-sm">
               <p className="mb-1 text-xs text-muted">{modelTier} · writing</p>
@@ -8884,11 +8956,10 @@ function ChatPane({
           )}
           {busy && !liveText && toolTimeline.length === 0 && (
             <div className="turn turn-assistant w-full max-w-none space-y-2 px-1 py-2" aria-live="polite">
-              <p className="text-xs text-muted">{active?.messages.at(-1)?.content.startsWith("/video") ? "Rendering the video." : active?.messages.at(-1)?.content.startsWith("/imagine") ? "Creating the image." : "Waiting for Grok."}</p>
+              <p className="text-xs text-muted">{active?.messages.at(-1)?.content.startsWith("/video") ? "Rendering the video." : active?.messages.at(-1)?.content.startsWith("/imagine") ? "Creating the image." : "Waiting for the selected provider."}</p>
               <div className="skeleton h-3" style={{ width: "75%" }} />
               <div className="skeleton h-3" style={{ width: "50%" }} />
               <div className="skeleton h-3" style={{ width: "66%" }} />
-              <button type="button" className="chat-pill min-h-11 border border-line px-3 text-sm" data-testid="stop-reply" onClick={onStop}>Stop this reply</button>
             </div>
           )}
           {voiceListening ? <div className="flex items-center gap-2"><VoiceLevelMeter level={voiceLevel} listening={voiceListening} /></div> : null}
@@ -8925,10 +8996,10 @@ function ChatPane({
           </div>
         ) : null}
         {lastReply ? (
-          <div className="next-guesses flex gap-2 overflow-x-auto px-3 pb-1" data-testid="next-guesses">
+          <div className="next-guesses px-3 pb-1" data-testid="next-guesses">
             <button type="button" className="suggestion-chip shrink-0" onClick={() => setDraft("Go deeper on that")}>Go deeper</button>
             <button type="button" className="suggestion-chip shrink-0" onClick={() => setDraft("Make that shorter")}>Make it shorter</button>
-            {lastReply?.kind === "error" || lastReply?.content.startsWith("/imagine") ? null : <button type="button" className="suggestion-chip shrink-0" onClick={() => setDraft("Turn that into an image")}>Turn that into an image</button>}
+            {lastReply?.kind === "error" || lastReply?.content.startsWith("/imagine") ? null : <button type="button" className="suggestion-chip shrink-0" onClick={() => setDraft("Turn that into an image")}>Make an image</button>}
           </div>
         ) : null}
         <form
@@ -8946,6 +9017,11 @@ function ChatPane({
             for (const file of files.slice(0, 4)) onAddImageFile(file);
           }}
         >
+          {canStop && (
+            <div className="mb-2 flex justify-end">
+              <button type="button" className="chat-pill min-h-11 border border-line px-3 text-sm" data-testid="stop-reply" onClick={onStop}>Stop this reply</button>
+            </div>
+          )}
           <div className="thread-draft">
           {onPickModule && (!active || active.messages.length === 0) ? <ModuleSuggestions draft={draft} onPick={onPickModule} /> : null}
           <textarea

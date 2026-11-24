@@ -1,8 +1,9 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import type { Sql } from "../db.ts";
+import { mergeWorkspaceEdits } from "./workspace-edits.ts";
 import { emptyWorkspace, normalizeWorkspace } from "./workspace.ts";
-import { readControl, readSnapshot, snapshotTooLarge, writeControl, writeSnapshot } from "./store.ts";
+import { readControl, readSnapshot, snapshotRevision, snapshotTooLarge, writeControl, writeSnapshot } from "./store.ts";
 
 function memorySql() {
   const tables = new Map<string, Map<string, unknown>>();
@@ -53,6 +54,34 @@ describe("mind store", () => {
     assert.equal(await readSnapshot(sql, "other"), null);
     assert.equal(await readControl(sql, "owner"), true);
     assert.equal(await readControl(sql, "other"), false);
+  });
+
+  it("rejects a stale snapshot without replacing a newer reply", async () => {
+    const { sql } = memorySql();
+    const base = emptyWorkspace();
+    const chat = { id: "c", title: "Thread", memory: "off" as const, temporary: false, autonomy: "ask" as const, projectId: null, retrievalLog: [], messages: [] };
+    base.chats = [chat];
+    const revision = await writeSnapshot(sql, "owner", base);
+    assert.equal(revision, snapshotRevision(base));
+    const reply = { id: "reply", role: "assistant" as const, content: "Newest saved reply", at: new Date(0).toISOString() };
+    const written = await writeSnapshot(sql, "owner", { ...base, chats: [{ ...chat, messages: [reply] }] }, revision!);
+    assert.ok(written && written !== revision);
+    assert.equal(await writeSnapshot(sql, "owner", { ...base, chats: [{ ...chat, title: "Stale" }] }, revision!), null);
+    assert.equal(normalizeWorkspace(await readSnapshot(sql, "owner")).chats[0]?.messages[0]?.content, reply.content);
+  });
+
+  it("merges independent browser changes and leaves deleted chats removed", () => {
+    const base = emptyWorkspace();
+    const chat = { id: "a", title: "Thread A", memory: "off" as const, temporary: false, autonomy: "ask" as const, projectId: null, retrievalLog: [], messages: [] };
+    const removed = { ...chat, id: "b", title: "Thread B" };
+    base.chats = [chat, removed];
+    const reply = { id: "reply", role: "assistant" as const, content: "Reply saved by A", at: new Date(0).toISOString() };
+    const result = mergeWorkspaceEdits(
+      { ...base, chats: [{ ...chat, messages: [reply] }] },
+      base,
+      { ...base, chats: [{ ...chat, title: "Renamed from B" }, { ...removed, title: "Stale edit" }] },
+    );
+    assert.deepEqual(result.chats, [{ ...chat, title: "Renamed from B", messages: [reply] }]);
   });
 
   it("keeps two owners' snapshots apart", async () => {
