@@ -6,6 +6,17 @@ export function validCatalogModelId(value: string): boolean {
   return value.length > 0 && value.length <= 150 && MODEL_ID.test(value);
 }
 
+export function parseCustomProviderChoice(value: unknown):
+  { ok: true; id: string; model: string } | { ok: false; error: string } {
+  if (typeof value !== "string" || !value.startsWith("custom:")) return { ok: false, error: "Not a custom provider selection." };
+  const match = /^custom:([0-9a-f-]{36}):(.{1,450})$/i.exec(value);
+  if (!match) return { ok: false, error: "Malformed custom provider selection." };
+  let model: string;
+  try { model = decodeURIComponent(match[2]); } catch { return { ok: false, error: "Invalid encoded model ID." }; }
+  if (!validCatalogModelId(model)) return { ok: false, error: "Invalid custom model ID." };
+  return { ok: true, id: match[1], model };
+}
+
 type CatalogRecord = {
   id?: unknown;
   name?: unknown;
@@ -61,6 +72,17 @@ export function catalogModuleChoices(rows: { id: string; label: string; models: 
   return out;
 }
 
+export type ProviderAvailability = { hasKey: boolean; status: string };
+
+export function customProviderBlockReason(row: ProviderAvailability): string | null {
+  if (!row.hasKey) return "The provider needs a saved credential.";
+  if (row.status === "catalogued" || row.status === "configured") return null;
+  if (row.status === "quota_or_rate_limited") return "The provider reported a billing or rate limit. Refresh its connection before sending.";
+  if (row.status === "credentials_rejected") return "The provider rejected its credential or permissions. Check the connection before sending.";
+  if (row.status === "unavailable") return "The provider is unavailable. Refresh its connection before sending.";
+  return "Provider readiness has not been established.";
+}
+
 export type DiscoveredCapability = {
   id: string;
   label: string;
@@ -73,16 +95,19 @@ const TOOL_NAME = /^[A-Za-z0-9_-]{1,80}$/;
 
 /** Models and MCP tools from a connection, with nothing dropped for being the wrong kind. */
 export function discoveredCapabilities(input: {
-  models: { id: string; label: string; models: string[] }[];
+  models: ({ id: string; label: string; models: string[] } & ProviderAvailability)[];
   mcp: { id: string; label: string; state: string; tools: { name: string; description?: string }[] }[];
   services?: { id: string; label: string; connected: boolean }[];
 }): DiscoveredCapability[] {
-  const models = catalogModuleChoices(input.models).map((item) => ({
-    ...item,
-    kind: "model" as const,
-    usable: true,
-    reason: "Discovered model. It sends to that API and is not substituted with Grok.",
-  }));
+  const models = input.models.flatMap((row) => {
+    const reason = customProviderBlockReason(row);
+    return catalogModuleChoices([row]).map((item) => ({
+      ...item,
+      kind: "model" as const,
+      usable: !reason,
+      reason: reason ?? "Configured for this API. Sending will check the model's response.",
+    }));
+  });
   const tools: DiscoveredCapability[] = [];
   const seen = new Set<string>();
   for (const server of input.mcp) {

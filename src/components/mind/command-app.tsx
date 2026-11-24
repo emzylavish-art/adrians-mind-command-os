@@ -1584,12 +1584,9 @@ export function CommandApp() {
   const [databaseDetail, setDatabaseDetail] = useState("The status check has not finished.");
   const [grokConfigured, setGrokConfigured] = useState<boolean | null>(null);
   const [liveProviders, setLiveProviders] = useState<Partial<Record<"openai" | "anthropic" | "gemini" | "openrouter", boolean>>>({});
+  const [selectionLoaded, setSelectionLoaded] = useState(false);
   const [providerChoice, setProviderChoice] = useState("grok");
   const [customAiProviders, setCustomAiProviders] = useState<PublicAiProvider[]>([]);
-  const customAiChoices = customAiProviders.filter((item) => item.hasKey).flatMap((item) => {
-    const models = item.models.length ? item.models : [item.defaultModel || item.label];
-    return models.filter(Boolean).map((model) => ({ id: `custom:${item.id}:${encodeURIComponent(model)}`, label: `${item.label}: ${model}`, enabled: true, reason: `Saved connection at ${item.host}.` }));
-  });
   const [modelTier, setModelTier] = useState<ModelTier>("Auto");
   const [grokModel, setGrokModel] = useState<string | null>(null);
   const [logicRoute, setLogicRoute] = useState<LogicRouteId | null>(null);
@@ -1894,12 +1891,12 @@ export function CommandApp() {
       providers: liveProviders,
       localRunner: typeof localStorage !== "undefined" && Boolean(localStorage.getItem("amcos.ollama.base")?.trim()),
     }),
-    ...customModules(customAiProviders.map((item) => ({ id: item.id, label: item.label, models: item.models, hasKey: item.hasKey }))),
+    ...customModules(customAiProviders),
   ], [grokConfigured, liveProviders, customAiProviders]);
 
   useEffect(() => {
     const storage = typeof localStorage === "undefined" ? null : localStorage;
-   const next = loadConsultModel(storage, consultModules);
+    const next = loadConsultModel(storage, consultModules);
     setConsultModel((current) => (consultModules.some((item) => item.id === current) ? current : next));
   }, [consultModules]);
 
@@ -1919,6 +1916,23 @@ export function CommandApp() {
       saveComposerEffort(typeof localStorage === "undefined" ? null : localStorage, effort);
       setComposerEffort(effort);
     }
+  }
+
+  function useProviderInChat(id: string) {
+    if (composerEffort === "orchestrator" || composerEffort === "build") chooseComposerEffort("auto");
+    chooseRoutingMode("A");
+    setLogicRoute(isLogicRouteId(id) ? id : null);
+    setProviderChoice(id);
+    if (active?.botProvider) {
+      // This conversation follows the explicit selection. Other bot threads keep their defaults.
+      setWs((prev) => ({
+        ...prev,
+        chats: prev.chats.map((chat) => chat.id === active.id ? { ...chat, botProvider: undefined } : chat),
+      }));
+    }
+    setView("chat");
+    setControlsOpen(false);
+    setNavOpen(false);
   }
 
   function chooseRoutingMode(mode: RoutingMode) {
@@ -2062,6 +2076,17 @@ export function CommandApp() {
   const clearedStop = useRef(false);
   const counts = requirementCounts();
   const active = ws.chats.find((chat) => chat.id === activeId) ?? null;
+  const providerOptions = [
+    ...providerChoicesWithKeys(grokConfigured, null, liveProviders),
+    ...consultModules.filter((item) => item.id === "nemotron" || item.id === "ollama")
+      .map((item) => ({ id: item.id, label: item.label, enabled: item.connected, reason: "Sending checks runner availability." })),
+    ...discovered.map((item) => ({ id: item.id, label: item.label, enabled: item.usable, reason: item.reason })),
+  ];
+  const effectiveRoute = routeForBotChat(active, { provider: providerChoice, modelTier });
+  const effectiveProvider = effectiveRoute.fromBot ? effectiveRoute.provider : logicRoute ?? effectiveRoute.provider;
+  const controlsModelLabel = effectiveProvider === "grok" ? grokModel ?? effectiveRoute.modelTier
+    : providerOptions.find((option) => option.id === effectiveProvider)?.label
+      ?? logicRoutes.find((option) => option.id === effectiveProvider)?.label ?? "Selected module unavailable";
   const storedBytes = useMemo(() => new Blob([JSON.stringify(ws)]).size, [ws]);
 
   useEffect(() => {
@@ -2275,6 +2300,7 @@ export function CommandApp() {
       const stored = readSelection(localStorage);
       setProviderChoice(stored.provider);
       setModelTier(stored.modelTier);
+      setGrokModel(stored.grokModel ?? null);
       setLogicRoute(stored.logicRoute);
       const fail = localStorage.getItem("amcos.failover.v1");
       if (fail === "grok" || fail === "none") setFailoverPolicy(fail);
@@ -2283,25 +2309,20 @@ export function CommandApp() {
       setRatings(readRatings(localStorage));
     } catch {
       /* a private browser can refuse storage */
+    } finally {
+      setSelectionLoaded(true);
     }
   }, []);
 
   useEffect(() => {
-    writeSelection(localStorage, { provider: providerChoice, modelTier, logicRoute });
+    if (!selectionLoaded) return;
     try {
+      writeSelection(localStorage, { provider: providerChoice, modelTier, logicRoute, grokModel: grokModel ?? undefined });
       localStorage.setItem("amcos.failover.v1", failoverPolicy);
     } catch {
       /* a private browser can refuse storage */
     }
-  }, [providerChoice, modelTier, logicRoute, failoverPolicy]);
-
-  useEffect(() => {
-    if (logicRoutes.length === 0) return;
-    const stored = logicRoutes.find((item) => item.id === logicRoute || item.id === providerChoice);
-    if (!stored || (stored.ready && !stored.credentialFallback)) return;
-    setLogicRoute(null);
-    if (isLogicRouteId(providerChoice)) setProviderChoice("grok");
-  }, [logicRoutes, logicRoute, providerChoice]);
+  }, [selectionLoaded, providerChoice, modelTier, logicRoute, grokModel, failoverPolicy]);
 
   useEffect(() => {
     const tick = () => setNow(new Date());
@@ -3188,7 +3209,7 @@ export function CommandApp() {
             ? consultPlan.plan.orchestrator
             : activeLogic ?? (isCustomProvider || otherReady || routedRunner ? selectedProvider : (routed.ok ? routed.id : selectedProvider)),
           modelTier: selectedTier,
-          requestedModel: grokModel,
+          requestedModel: selectedProvider === "grok" && !activeLogic && !consultPlan ? grokModel : null,
           logicRoute: consultPlan && consultPlan.ok ? null : activeLogic,
           orchestrator: consultPlan && consultPlan.ok ? consultPlan.plan.orchestrator : null,
           composerMode: orchestrating ? "orchestrator" : undefined,
@@ -3213,7 +3234,7 @@ export function CommandApp() {
       if (turnAbort.current === controller) turnAbort.current = null;
       if (result.ok && result.provider) setNotice(`${result.provider} answered.`);
       if (!shouldStoreReply(result)) {
-        const message = result.ok ? "Grok returned an empty reply." : result.error;
+        const message = result.ok ? "The provider returned an empty reply." : result.error;
         if (message === STOPPED_REPLY) {
           setError(message);
           return null;
@@ -3237,6 +3258,7 @@ export function CommandApp() {
                       content: result.text,
                       at: new Date().toISOString(),
                       model: result.model,
+                      ...(result.provider ? { provider: result.provider } : {}),
                       ...(result.memorySaved === true
                         ? {
                             memorySaved: true as const,
@@ -6301,16 +6323,10 @@ export function CommandApp() {
                       data-testid={`control-module-${item.id}`}
                       className="flex min-h-11 items-center justify-between rounded-2xl px-3 text-left text-sm"
                       style={menuChip}
-                      onClick={() => {
-                        setLogicRoute(null);
-                        setProviderChoice(item.id);
-                        setView("chat");
-                        setControlsOpen(false);
-                        setNavOpen(false);
-                      }}
+                      onClick={() => useProviderInChat(item.id)}
                     >
                       <span>{item.label}</span>
-                      <span className="text-xs text-muted">{providerChoice === item.id ? "In use" : "Ready"}</span>
+                      <span className="text-xs text-muted">{providerChoice === item.id ? "In use" : "Configured"}</span>
                     </button>
                   ))}
                 </MenuCluster>
@@ -6334,7 +6350,7 @@ export function CommandApp() {
                     aria-expanded={modelRowsOpen}
                     onClick={() => setModelRowsOpen((value) => !value)}
                   >
-                    <span>{grokModel ?? modelTier}</span>
+                    <span>{controlsModelLabel}</span>
                     <span aria-hidden="true">{modelRowsOpen ? "‹" : "›"}</span>
                   </button>
                   {modelRowsOpen ? (
@@ -6900,7 +6916,7 @@ export function CommandApp() {
                 )}
                 {toolsOpen && (
                   <ul className="mt-3 space-y-2 rounded-panel border border-line bg-bg p-3 text-sm">
-                    <li>Grok 4.5 — available when you press Send. Speak reads a reply only when you press Speak.</li>
+                    <li>Press Send to use the selected chat route. Speak reads a reply only when you press Speak.</li>
                     <li className="text-muted">GPT, Claude, Gemini, OpenRouter — no keys stored.</li>
                     <li>REA — official CLI from github.com/morluto/rea. Doctor and file inspect run here. Native decompilers are not installed.</li>
                     <li className="text-muted">Web research runs only when a search provider is configured. Otherwise the check refuses and creates no citations.</li>
@@ -7203,18 +7219,14 @@ export function CommandApp() {
                 setView("agents");
                 void checkRea();
               }}
-              providerChoices={[...providerChoicesWithKeys(grokConfigured, lastModelUsed, liveProviders), ...customAiChoices, ...discovered.map((item) => ({ id: item.id, label: item.label, enabled: item.usable, reason: item.reason }))]}
+              providerChoices={providerOptions}
               providerChoice={providerChoice}
               onProvider={(id) => {
                 if (isLogicRouteId(id)) {
                   const view = logicRoutes.find((item) => item.id === id);
                   if (!view?.ready) return;
-                  setLogicRoute(id);
-                  setProviderChoice(id);
-                  return;
                 }
-                setLogicRoute(null);
-                setProviderChoice(id);
+                useProviderInChat(id);
               }}
               modelTier={modelTier}
               onModelTier={chooseModelTier}
@@ -7680,7 +7692,7 @@ export function CommandApp() {
                       <ul className="mt-2 space-y-1">
                         {server.tools.map((tool) => (
                           <li key={tool.name}>
-                            <button type="button" className="min-h-11 w-full rounded-panel border border-line px-3 text-left text-xs" onClick={() => { setLogicRoute(null); setProviderChoice(`mcp:${server.id}:${encodeURIComponent(tool.name)}`); setView("chat"); }}>
+                            <button type="button" className="min-h-11 w-full rounded-panel border border-line px-3 text-left text-xs" onClick={() => useProviderInChat(`mcp:${server.id}:${encodeURIComponent(tool.name)}`)}>
                               {tool.name} · Use in chat
                             </button>
                           </li>
@@ -7711,7 +7723,7 @@ export function CommandApp() {
               {notice && <p className="voice-copy rounded-panel border border-line bg-surface px-3 py-2 text-sm text-muted">{presentVoiceCopy(notice)}</p>}
               <details className="intelligence-group">
                 <summary className="cursor-pointer text-sm font-semibold">API keys</summary>
-              <AiProviderConnections onChange={setCustomAiProviders} onUseModel={(id) => { setLogicRoute(null); setProviderChoice(id); setView("chat"); }} />
+              <AiProviderConnections onChange={setCustomAiProviders} onUseModel={useProviderInChat} />
               </details>
               <details className="intelligence-group">
                 <summary className="cursor-pointer text-sm font-semibold">Provider routes</summary>
@@ -8299,7 +8311,7 @@ export function CommandApp() {
                   <span className={`h-6 w-11 rounded-full ${failoverPolicy === "grok" ? "bg-accent-ink/30" : "bg-line"}`} />
                 </button>
               </div>
-                <AiProviderConnections onChange={setCustomAiProviders} onUseModel={(id) => { setLogicRoute(null); setProviderChoice(id); setView("chat"); }} />
+                <AiProviderConnections onChange={setCustomAiProviders} onUseModel={useProviderInChat} />
                 <button type="button" className="min-h-11 rounded-panel border border-line px-3 text-sm" onClick={() => setSettingsPane("keys")}>Open Safe keys</button>
                 <button type="button" className="min-h-11 rounded-panel border border-line px-3 text-sm" onClick={() => setView("connected")}>Open connections</button>
               </div>
@@ -9125,7 +9137,12 @@ function ChatPane({
   const markPreview = (control: string) => {
     setChromeNote(`${control} is preview only. No voice provider is connected.`);
   };
-  const grokVerified = Boolean(active?.messages.some((message) => message.role === "assistant" && typeof message.model === "string" && /grok/i.test(message.model)));
+  const grokVerified = Boolean(active?.messages.some((message) => message.role === "assistant" && /^(grok|xai)$/i.test(message.provider ?? "")));
+  const chatRoute = routeForBotChat(active, { provider: providerChoice, modelTier });
+  const routeId = chatRoute.fromBot ? chatRoute.provider : logicRoute ?? chatRoute.provider;
+  const routeLabel = choices.find((choice) => choice.id === routeId)?.label
+    ?? logicRoutes.find((route) => route.id === routeId)?.label
+    ?? "Selected module unavailable";
   const needle = filter.trim().toLowerCase();
   const scoped = projectId ? chats.filter((chat) => chat.projectId === projectId) : chats;
   const visible = needle ? scoped.filter((chat) => chat.title.toLowerCase().includes(needle)) : scoped;
@@ -9219,7 +9236,7 @@ function ChatPane({
           {(!active || active.messages.length === 0) && !busy && (
             <div className="grid min-h-64 place-items-center text-center">
               <ChatEmptyHero
-                title={active?.botProvider || active?.botTier ? `${active.botProvider ?? "Chat’s provider"} · ${active.botTier ?? "Chat’s tier"}` : undefined}
+                title={chatRoute.fromBot ? `${routeLabel} · ${chatRoute.modelTier}` : routeLabel}
                 subtitle={active?.agentId ? "This conversation belongs to the bot." : undefined}
               />
             </div>
@@ -9228,7 +9245,7 @@ function ChatPane({
             const last = active.messages.at(-1);
             return (
             <article key={msg.id} className={`turn w-full max-w-none px-1 py-2 text-sm ${msg.role === "user" ? "turn-user" : "turn-assistant"}`}>
-              <p className="mb-1 text-xs text-muted">{msg.role === "user" ? "You" : msg.model || "Grok 4.5"} · {stamp(msg.at)}</p>
+              <p className="mb-1 text-xs text-muted">{msg.role === "user" ? "You" : [msg.provider, msg.model].filter(Boolean).join(" · ") || "Assistant · model unreported"} · {stamp(msg.at)}</p>
               {editingId === msg.id ? (
                 <form
                   onSubmit={(event) => {

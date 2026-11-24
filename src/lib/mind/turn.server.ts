@@ -1,6 +1,6 @@
 import { requireUserId } from "../auth/verify.server";
 import { guardMindEnv } from "./isolation";
-import { CHAT_RATE_LIMIT_REPLY, checkTurnSize, consumeMindRateLimit, jsonRateLimited } from "./limits";
+import { checkTurnSize, createChatTurnPreflight } from "./limits";
 import { assembleTurn } from "./prompt";
 import { sanitizeAttachments, type ImageAttachment } from "./media";
 import type { ChatContent } from "./media/types";
@@ -20,7 +20,7 @@ import { buildRelayModelBody, relayModelStream } from "./relay";
 import { CHAT_TIMEOUT_REPLY, chatTurnTimeoutMs } from "./turn-timeouts";
 import { decideFetchSite } from "./request-guard";
 import { parseModelTierField, readJsonObjectBody } from "./request-body";
-import { readModelPayload } from "./stream";
+import { readModelPayload, reportedModel } from "./stream";
 import { resolveDatabaseUrl } from "../env.server.ts";
 import { LOGIC_ROUTE_LABEL, resolveRequestedRoute, toAdapterMessages, type LogicRouteId } from "./logic-routes.ts";
 import { inspectLogicRoutes, runLogicRoute } from "./logic-route-adapter.server.ts";
@@ -181,7 +181,7 @@ export async function completeModelReply(prepared: {
   return {
     ok: true as const,
     text: parsed.text,
-    model: prepared.model,
+    model: reportedModel(parsed.model),
     modelTier: prepared.modelTier.selected,
     resolvedTier: prepared.modelTier.resolved,
     tierReason: prepared.modelTier.reason,
@@ -228,7 +228,7 @@ function logicSse(input: {
   });
 }
 
-async function handleLogicTurn(userId: string, data: TurnBody, route: LogicRouteId): Promise<Response> {
+async function handleLogicTurn(userId: string, data: TurnBody, route: LogicRouteId, preflight: () => Promise<Response | null>): Promise<Response> {
   const label = LOGIC_ROUTE_LABEL[route];
   const images = sanitizeAttachments(data.images);
   if (images.length > 0) {
@@ -266,8 +266,8 @@ async function handleLogicTurn(userId: string, data: TurnBody, route: LogicRoute
       missing: view?.missing ?? [],
     }, 503);
   }
-  const limited = consumeMindRateLimit("chat", userId, 12);
-  if (!limited.ok) return jsonRateLimited(CHAT_RATE_LIMIT_REPLY, limited.retryAfterSec);
+  const blocked = await preflight();
+  if (blocked) return blocked;
   const ran = await runLogicRoute({
     route,
     messages: flat.messages,
@@ -330,6 +330,11 @@ export async function handleMindTurn(request: Request): Promise<Response> {
       return new Response(stream, { headers: { "content-type": "text/event-stream", "cache-control": "no-store" } });
     }
   }
+  const preflight = createChatTurnPreflight(userId, async () => {
+    if (body.halted === true) return true;
+    const { haltIsOn } = await import("./halt.server");
+    return haltIsOn(userId);
+  });
   let consultHelp = "";
   if (body.composerMode === "orchestrator") {
     const asked = typeof body.text === "string" ? body.text.trim() : "";
@@ -346,7 +351,12 @@ export async function handleMindTurn(request: Request): Promise<Response> {
         provider: planned.plan.orchestrator,
       }, 400);
     }
-    const help = await collectConsultHelp(planned.plan, (id, requestText) => askConnectedModule(userId, id, requestText));
+    const blocked = await preflight();
+    if (blocked) return blocked;
+    const help = await collectConsultHelp(planned.plan, async (id, requestText) => {
+      if (await preflight()) return { ok: false, text: "" };
+      return askConnectedModule(userId, id, requestText);
+    });
     consultHelp = orchestratorInstruction(planned.plan, help);
     body = { ...body, provider: planned.plan.orchestrator, logicRoute: undefined };
   }
@@ -354,7 +364,7 @@ export async function handleMindTurn(request: Request): Promise<Response> {
   if (!tierField.ok) return json({ ok: false, error: tierField.error }, 400);
   const logicField = resolveRequestedRoute({ logicRoute: body.logicRoute, provider: body.provider });
   if (!logicField.ok) return json({ ok: false, error: logicField.error }, 400);
-  if (logicField.route) return handleLogicTurn(userId, body, logicField.route);
+  if (logicField.route) return handleLogicTurn(userId, body, logicField.route, preflight);
   if (typeof body.provider === "string" && body.provider.startsWith("custom:")) {
     const chosen = parseCustomProviderChoice(body.provider);
     if (!chosen.ok) return json(chosen, 400);
@@ -376,8 +386,8 @@ export async function handleMindTurn(request: Request): Promise<Response> {
     if (!assembled.ok) return json({ ok: false, error: assembled.error }, 400);
     const formatted = toAdapterMessages(assembled.messages);
     if (!formatted.ok) return json({ ok: false, error: formatted.error }, 400);
-    const limited = consumeMindRateLimit("chat", userId, 12);
-    if (!limited.ok) return jsonRateLimited(CHAT_RATE_LIMIT_REPLY, limited.retryAfterSec);
+    const blocked = await preflight();
+    if (blocked) return blocked;
     try {
       const result = await executeCustomChat(userId, chosen, formatted.messages);
       if (!result.ok) return json(result, 502);
@@ -400,14 +410,22 @@ export async function handleMindTurn(request: Request): Promise<Response> {
   }
   const selected = selectProvider(body.provider, process.env);
   if (requestedProvider === "nemotron" || requestedProvider === "ollama" || requestedProvider === "openrouter") {
+    const text = typeof body.text === "string" ? body.text.trim() : "";
+    if (!text) return json({ ok: false, error: "Write a message first." }, 400);
+    const history = Array.isArray(body.history) ? body.history.filter(isHistory).slice(-12) : [];
+    const sized = checkTurnSize({ text, history, memoryContext: [], images: [] });
+    if (!sized.ok) return json(sized, 400);
+    const blocked = await preflight();
+    if (blocked) return blocked;
     const routed = await routeSelectedModel({
       id: requestedProvider,
-      prompt: typeof body.text === "string" ? body.text : "",
+      history,
+      prompt: text,
       env: process.env,
       fetch: globalThis.fetch,
     });
     if (!routed.ok) return json({ ok: false, error: routed.error, provider: requestedProvider });
-    const done = { text: routed.text, model: routed.model, provider: requestedProvider, usage: null, usedIds: [], requestId: null };
+    const done = { text: routed.text, model: routed.model, provider: requestedProvider === "nemotron" ? "openrouter" : requestedProvider, usage: null, usedIds: [], requestId: null };
     const stream = "event: delta\ndata: " + JSON.stringify({ text: routed.text }) + "\n\nevent: done\ndata: " + JSON.stringify(done) + "\n\n";
     return new Response(stream, { headers: { "content-type": "text/event-stream", "cache-control": "no-store" } });
   }
@@ -433,8 +451,8 @@ export async function handleMindTurn(request: Request): Promise<Response> {
     const { haltIsOn } = await import("./halt.server");
     if ((await haltIsOn(userId)) || body.halted === true) return json({ ok: false, error: "Emergency stop is on. No new action can run." });
     // Same chat rate limit as Grok — non-Grok must not skip the token bucket.
-    const limited = consumeMindRateLimit("chat", userId, 12);
-    if (!limited.ok) return jsonRateLimited(CHAT_RATE_LIMIT_REPLY, limited.retryAfterSec);
+    const blocked = await preflight();
+    if (blocked) return blocked;
     const key = process.env[selected.id === "openai" ? "OPENAI_API_KEY" : selected.id === "anthropic" ? "ANTHROPIC_API_KEY" : selected.id === "gemini" ? "GEMINI_API_KEY" : "OPENROUTER_API_KEY"] ?? "";
     const history = Array.isArray(body.history)
       ? body.history.filter(isHistory).slice(-12).map((item) => ({ role: item.role, content: item.content }))
@@ -449,7 +467,7 @@ export async function handleMindTurn(request: Request): Promise<Response> {
     });
     if (!called.ok) return json({ ok: false, error: called.error, provider: selected.id }, 502);
     // Use the same SSE contract as the Grok and custom-provider chat paths.
-    const done = { text: called.text, model: selected.model, provider: selected.id, usage: null, usedIds: [], requestId: null };
+    const done = { text: called.text, model: reportedModel(called.model), provider: selected.id, usage: null, usedIds: [], requestId: null };
     const stream = "event: delta\ndata: " + JSON.stringify({ text: called.text }) +
       "\n\nevent: done\ndata: " + JSON.stringify(done) + "\n\n";
     return new Response(stream, { headers: { "content-type": "text/event-stream", "cache-control": "no-store" } });
@@ -459,6 +477,8 @@ export async function handleMindTurn(request: Request): Promise<Response> {
   if (!allowedModelIds(process.env).has(prepared.model)) {
     return json({ ok: false, error: "That model is not available. Another provider is not substituted." });
   }
+  const blocked = await preflight();
+  if (blocked) return blocked;
   const hasMultimodalContent = prepared.assembled.messages.some((message) => typeof message.content !== "string");
   const keyed = resolveXaiInferenceApiKey(process.env);
   const openaiKey = process.env.OPENAI_API_KEY?.trim() ?? "";
@@ -543,12 +563,7 @@ async function modulesConnectedNow(userId: string) {
   try {
     const { listAiProviders } = await import("./ai-provider-config.server.ts");
     const saved = await listAiProviders(userId);
-    modules.push(...customModules(saved.map((item) => ({
-      id: item.id,
-      label: item.label,
-      models: item.models,
-      hasKey: item.hasKey,
-    }))));
+    modules.push(...customModules(saved));
   } catch {
     /* A disconnected custom list is not invented. */
   }
@@ -589,6 +604,10 @@ async function askConnectedModule(userId: string, id: string, requestText: strin
     } catch {
       return { ok: false, text: "" };
     }
+  }
+  if (id === "nemotron" || id === "ollama" || id === "openrouter") {
+    const result = await routeSelectedModel({ id, prompt: requestText, env: process.env, fetch: globalThis.fetch });
+    return { ok: result.ok, text: result.text };
   }
   const selected = selectProvider(id, process.env);
   if (!selected.ok || selected.id === "grok") return { ok: false, text: "" };

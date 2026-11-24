@@ -177,6 +177,7 @@ function normalizeChat(row: unknown): Chat | null {
         content: msg.content,
         at: str(msg.at, new Date(0).toISOString()),
         model: typeof msg.model === "string" ? msg.model : undefined,
+        ...(typeof msg.provider === "string" && msg.provider.trim() ? { provider: msg.provider.trim() } : {}),
         ...publicImages(msg.images),
         ...publicVideo(msg.videoUrl),
         ...(msg.memorySaved === true

@@ -163,3 +163,17 @@ describe("workspace memory", () => {
     assert.equal(cleared.audit[0]?.action, "wipe_browser");
   });
 });
+
+describe("reply identity across provider switches", () => {
+  it("keeps the provider and model of each completed turn when reopening a chat", () => {
+    const saved = normalizeWorkspace({ chats: [{ id: "thread", messages: [
+      { role: "assistant", content: "legacy", model: "legacy-model" },
+      { role: "assistant", content: "one", provider: "First", model: "model-1" },
+      { role: "assistant", content: "two", provider: "Second", model: "model unknown" },
+    ] }] });
+    const restored = normalizeWorkspace(JSON.parse(JSON.stringify(saved)));
+    assert.deepEqual(restored.chats[0].messages.map(({ provider, model }) => [provider, model]), [
+      [undefined, "legacy-model"], ["First", "model-1"], ["Second", "model unknown"],
+    ]);
+  });
+});

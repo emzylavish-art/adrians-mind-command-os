@@ -1,4 +1,6 @@
 /** Bounded provider-specific chat calls with normalised assistant text. */
+import { reportedModel } from "./stream.ts";
+
 export type ProviderName = "grok" | "openai" | "anthropic" | "gemini" | "openrouter";
 type OtherProvider = Exclude<ProviderName, "grok">;
 type History = { role: "user" | "assistant"; content: string };
@@ -42,6 +44,10 @@ export function parseProviderText(id: OtherProvider, raw: string): string {
   let json: any;
   try { json = JSON.parse(raw); } catch { return ""; }
   if (!json || typeof json !== "object") return "";
+  return extractAssistantText(id, json);
+}
+
+function extractAssistantText(id: OtherProvider, json: Record<string, any>): string {
   let text = "";
   if (id === "openai" || id === "openrouter") {
     text = readableBlocks(json.choices?.[0]?.message?.content);
@@ -60,7 +66,7 @@ export async function callConfiguredProvider(input: {
   systemPrompt?: string;
   history?: History[];
   fetch: FetchLike;
-}): Promise<{ ok: boolean; text: string; error: string }> {
+}): Promise<{ ok: boolean; text: string; error: string; model?: string }> {
   if (!input.key) return { ok: false, text: "", error: "No " + input.id + " key is configured. Nothing was sent." };
   const prompt = input.prompt.trim().slice(0, 4000);
   if (!prompt) return { ok: false, text: "", error: "Write a message first." };
@@ -110,8 +116,10 @@ export async function callConfiguredProvider(input: {
   if (response.status === 401 || response.status === 403) return { ok: false, text: "", error: input.id + " rejected the API key or account permissions." };
   if (!response.ok) return { ok: false, text: "", error: input.id + " returned HTTP " + response.status + ". Nothing was substituted." };
   try {
-    const parsed = parseProviderText(input.id, await response.text());
-    return parsed ? { ok: true, text: parsed, error: "" } :
+    const raw = await response.text();
+    const payload = raw.length <= 500_000 ? JSON.parse(raw) : null;
+    const parsed = payload && typeof payload === "object" ? extractAssistantText(input.id, payload) : "";
+    return parsed ? { ok: true, text: parsed, model: reportedModel(input.id === "gemini" ? payload.modelVersion : payload.model), error: "" } :
       { ok: false, text: "", error: input.id + " returned no assistant text or an unsupported response format." };
   } catch {
     return { ok: false, text: "", error: input.id + " returned an unreadable response." };
@@ -130,6 +138,7 @@ export async function routeSelectedModel(input: {
   id: string;
   prompt: string;
   env: Record<string, string | undefined>;
+  history?: History[];
   fetch: FetchLike;
 }): Promise<{ ok: boolean; text: string; error: string; model: string }> {
   const prompt = input.prompt.trim();
@@ -142,13 +151,14 @@ export async function routeSelectedModel(input: {
       id: "openrouter",
       key,
       prompt,
+      history: input.history,
       fetch: async (url, init) => {
         const body = JSON.parse(String(init?.body ?? "{}")) as { model?: string };
         body.model = model;
         return input.fetch(url, { ...init, body: JSON.stringify(body) });
       },
     });
-    return { ...called, model };
+    return { ...called, model: reportedModel(called.model) };
   }
   if (input.id === "ollama") {
     const url = input.env.LOCAL_MODEL_URL;
@@ -161,9 +171,9 @@ export async function routeSelectedModel(input: {
     }
     if (!response.ok) return { ok: false, text: "", error: "Local model runner returned HTTP " + response.status + ". Nothing was substituted.", model: "ollama" };
     try {
-      const json = JSON.parse(await response.text()) as { text?: unknown };
+      const json = JSON.parse(await response.text()) as { text?: unknown; model?: unknown };
       const text = typeof json.text === "string" ? json.text.trim() : "";
-      return text ? { ok: true, text, error: "", model: "ollama" } : { ok: false, text: "", error: "Local model runner returned no text. Nothing was substituted.", model: "ollama" };
+      return text ? { ok: true, text, error: "", model: reportedModel(json.model) } : { ok: false, text: "", error: "Local model runner returned no text. Nothing was substituted.", model: "ollama" };
     } catch {
       return { ok: false, text: "", error: "Local model runner returned an unreadable response.", model: "ollama" };
     }

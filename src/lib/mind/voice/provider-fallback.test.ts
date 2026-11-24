@@ -102,7 +102,7 @@ describe("voice provider fallback", () => {
     assert.equal(reply.ok, true);
     if (reply.ok) {
       assert.equal(reply.provider, "OpenAI");
-      assert.equal(reply.model, "gpt-4o-mini");
+      assert.equal(reply.model, "model unknown");
       assert.equal(reply.text, "It is sunny.");
     }
     for (const result of [heard, spoken, reply]) {

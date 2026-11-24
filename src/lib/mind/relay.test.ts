@@ -40,7 +40,7 @@ describe("provider relay", () => {
         return new Response(
           new ReadableStream({
             start(controller) {
-              controller.enqueue(encoder.encode('data: {"choices":[{"delta":{"content":"Hel"}}]}\n'));
+              controller.enqueue(encoder.encode('data: {"model":"upstream-revision","choices":[{"delta":{"content":"Hel"}}]}\n'));
               controller.enqueue(encoder.encode('data: {"choices":[{"delta":{"content":"lo"}}]}\n'));
               controller.enqueue(encoder.encode("data: [DONE]\n"));
               controller.close();
@@ -61,6 +61,7 @@ describe("provider relay", () => {
     assert.equal(done?.event, "done");
     if (done?.event === "done") {
       assert.equal(done.text, "Hello");
+      assert.equal(done.model, "upstream-revision");
       assert.deepEqual(done.usedIds, ["n1"]);
     }
   });

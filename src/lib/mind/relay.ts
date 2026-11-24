@@ -1,4 +1,4 @@
-import { createSseFeed, pushSse, type ModelUsage } from "./stream.ts";
+import { createSseFeed, pushSse, reportedModel, type ModelUsage } from "./stream.ts";
 import { CHAT_DISCONNECT_REPLY, CHAT_TIMEOUT_REPLY, chatTurnTimeoutMs } from "./turn-timeouts.ts";
 export { CHAT_DISCONNECT_REPLY };
 import type { ChatContent } from "./media/types.ts";
@@ -199,7 +199,7 @@ export function relayModelStream(input: {
         const usage: ModelUsage | null = feed.usage;
         send("done", {
           text: feed.text.trim(),
-          model: input.model,
+          model: reportedModel(feed.model),
           provider: "xAI",
           usage,
           usedIds: input.usedIds,

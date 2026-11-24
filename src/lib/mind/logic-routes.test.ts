@@ -33,6 +33,23 @@ function snapshot(routes: ProviderStatusSnapshot["providers"], budget?: Provider
 }
 
 describe("selection persistence", () => {
+  it("restores catalog, tool, service and local provider choices without substituting Grok", () => {
+    const storage = memoryStorage();
+    const longId = "custom:aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee:" + encodeURIComponent("a" + "/".repeat(149));
+    for (const provider of [longId, "custom:aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee:vendor%2Fchat%3Afree", "mcp:aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee:read_file", "service:drive", "nemotron", "ollama"]) {
+      writeSelection(storage, { provider, modelTier: "Auto", logicRoute: null });
+      assert.equal(readSelection(memoryStorage(storage.dump())).provider, provider);
+    }
+  });
+
+  it("restores exact Grok models and clears stale model overrides when a tier is chosen", () => {
+    const storage = memoryStorage();
+    writeSelection(storage, { provider: "grok", modelTier: "Auto", logicRoute: null, grokModel: "grok-4.6" });
+    assert.equal(readSelection(memoryStorage(storage.dump())).grokModel, "grok-4.6");
+    writeSelection(storage, { provider: "grok", modelTier: "Expert", logicRoute: null });
+    assert.equal(readSelection(storage).grokModel, undefined);
+  });
+
   it("restores model, provider, and logic route after a reload", () => {
     const first = memoryStorage();
     writeSelection(first, { provider: "sol", modelTier: "Heavy", logicRoute: "sol" });

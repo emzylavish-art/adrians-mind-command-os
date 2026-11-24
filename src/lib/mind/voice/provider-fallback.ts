@@ -1,3 +1,4 @@
+import { reportedModel } from "../stream.ts";
 /**
  * Server-side voice and Direct-chat fallback.
  * Tries xAI first. OpenAI is used only on this server, from OPENAI_API_KEY.
@@ -112,7 +113,7 @@ export async function openAiDirectChat(input: {
     return { ok: false, error: "OpenAI chat did not answer." };
   }
   if (!res.ok) return { ok: false, error: `OpenAI chat returned ${res.status}.` };
-  let payload: { choices?: { message?: { content?: string } }[] };
+  let payload: { model?: unknown; choices?: { message?: { content?: string } }[] };
   try {
     payload = (await res.json()) as { choices?: { message?: { content?: string } }[] };
   } catch {
@@ -120,7 +121,7 @@ export async function openAiDirectChat(input: {
   }
   const text = payload.choices?.[0]?.message?.content?.trim() ?? "";
   if (!text) return { ok: false, error: "OpenAI chat returned an empty reply." };
-  return { ok: true, text, model: OPENAI_CHAT_MODEL };
+  return { ok: true, text, model: reportedModel(payload.model) };
 }
 
 export async function transcribeWithFallback(input: {
@@ -198,7 +199,7 @@ export async function directChatWithFallback(input: {
       return { ok: false, error: "xAI chat did not answer. Nothing was substituted.", provider: null };
     }
     if (res.ok) {
-      let payload: { choices?: { message?: { content?: string } }[] };
+      let payload: { model?: unknown; choices?: { message?: { content?: string } }[] };
       try {
         payload = (await res.json()) as { choices?: { message?: { content?: string } }[] };
       } catch {
@@ -206,7 +207,7 @@ export async function directChatWithFallback(input: {
       }
       const text = payload.choices?.[0]?.message?.content?.trim() ?? "";
       if (!text) return { ok: false, error: "xAI chat returned an empty reply.", provider: null };
-      return { ok: true, text, model, provider: "xAI" };
+      return { ok: true, text, model: reportedModel(payload.model), provider: "xAI" };
     }
     const body = await res.text().catch(() => "");
     if (!isXaiAuthFailure(res.status, body)) {

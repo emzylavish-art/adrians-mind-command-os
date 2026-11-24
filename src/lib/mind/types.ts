@@ -33,6 +33,7 @@ export type Msg = {
   content: string;
   at: string;
   model?: string;
+  provider?: string;
   kind?: "error";
   /** Inline image attachments shown in the bubble and sent on the originating turn. */
   images?: MsgImage[];

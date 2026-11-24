@@ -1,18 +1,24 @@
 /** Honest label when a done event did not confirm which model answered. */
 export const UNKNOWN_MODEL_LABEL = "model unknown";
 
+export function reportedModel(value: unknown): string {
+  return typeof value === "string" && value.trim() ? value.trim() : UNKNOWN_MODEL_LABEL;
+}
+
 export type ModelUsage = { prompt_tokens?: number; completion_tokens?: number };
 
-export function readModelPayload(raw: string): { text: string; streamed: boolean; usage: ModelUsage | null } {
+export function readModelPayload(raw: string): { text: string; model?: string; streamed: boolean; usage: ModelUsage | null } {
   const body = raw.trim();
   if (!body.includes("data:")) {
     try {
       const parsed = JSON.parse(body) as {
         choices?: { message?: { content?: string } }[];
+        model?: unknown;
         usage?: ModelUsage;
       };
       return {
         text: parsed.choices?.[0]?.message?.content?.trim() ?? "",
+        model: reportedModel(parsed.model),
         streamed: false,
         usage: parsed.usage ?? null,
       };
@@ -22,10 +28,10 @@ export function readModelPayload(raw: string): { text: string; streamed: boolean
   }
   const fed = pushSse(createSseFeed(), body.endsWith("\n") ? body : `${body}\n`);
   if (fed.bad) return { text: "", streamed: true, usage: null };
-  return { text: fed.text.trim(), streamed: true, usage: fed.usage };
+  return { text: fed.text.trim(), model: reportedModel(fed.model), streamed: true, usage: fed.usage };
 }
 
-export type SseFeed = { buffer: string; text: string; usage: ModelUsage | null; bad: boolean };
+export type SseFeed = { buffer: string; text: string; usage: ModelUsage | null; model?: string; bad: boolean };
 
 export function createSseFeed(): SseFeed {
   return { buffer: "", text: "", usage: null, bad: false };
@@ -46,12 +52,14 @@ export function pushSse(feed: SseFeed, chunk: string): SseFeed & { deltas: strin
       const parsed = JSON.parse(data) as {
         choices?: { delta?: { content?: string }; message?: { content?: string } }[];
         usage?: ModelUsage | null;
+        model?: unknown;
       };
       const text = parsed.choices?.[0]?.delta?.content ?? parsed.choices?.[0]?.message?.content ?? "";
       if (text) {
         feed.text += text;
         deltas.push(text);
       }
+      if (typeof parsed.model === "string" && parsed.model.trim()) feed.model = parsed.model.trim();
       if (parsed.usage) feed.usage = parsed.usage;
     } catch {
       feed.bad = true;

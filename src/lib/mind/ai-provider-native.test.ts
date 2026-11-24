@@ -44,16 +44,16 @@ describe("native BYOK provider request formats", () => {
 describe("native BYOK provider response formats", () => {
   it("parses text and token usage from Anthropic", () => {
     const result = parseProviderText("anthropic", JSON.stringify({
-      content: [{ type: "text", text: "Answer" }], usage: { input_tokens: 25, output_tokens: 12 },
+      model: "upstream-model", content: [{ type: "text", text: "Answer" }], usage: { input_tokens: 25, output_tokens: 12 },
     }));
-    assert.deepEqual(result, { ok: true, text: "Answer", usage: { prompt_tokens: 25, completion_tokens: 12 } });
+    assert.deepEqual(result, { ok: true, text: "Answer", model: "upstream-model", usage: { prompt_tokens: 25, completion_tokens: 12 } });
   });
   it("parses text and usage from Gemini", () => {
     const result = parseProviderText("gemini", JSON.stringify({
       candidates: [{ content: { parts: [{ text: "Hello" }] } }],
       usageMetadata: { promptTokenCount: 8, candidatesTokenCount: 2 },
     }));
-    assert.deepEqual(result, { ok: true, text: "Hello", usage: { prompt_tokens: 8, completion_tokens: 2 } });
+    assert.deepEqual(result, { ok: true, text: "Hello", model: "model unknown", usage: { prompt_tokens: 8, completion_tokens: 2 } });
   });
   it("rejects tool requests for all providers before any tool executes", () => {
     for (const [kind, body] of [

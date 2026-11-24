@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { ActionOverlay } from "@/components/mind/conversation-menu";
+import { customProviderBlockReason } from "@/lib/mind/provider-catalog";
 import { getBearerToken } from "@/lib/auth/client";
 import type { PublicAiProvider } from "@/lib/mind/ai-provider-config.server";
 
@@ -186,7 +187,7 @@ export function AiProviderConnections({ onChange, onUseModel }: { onChange?: (ro
                 <p className="text-xs text-muted">{row.models.length} models. Free text models are first. The list is not shortened.</p>
                 <ul aria-label={row.label + " models"} className="mt-2 grid max-h-64 gap-2 overflow-y-auto p-1" style={{ overflowX: "hidden" }}>
                   {row.models.map((id, index) => (
-                    <li key={id}>
+                    <li key={id} className="flex items-center gap-2">
                       <button
                         type="button"
                         className="adrian-row flex min-h-11 w-full items-center gap-3 rounded-2xl border border-line px-3 text-left text-xs"
@@ -196,8 +197,12 @@ export function AiProviderConnections({ onChange, onUseModel }: { onChange?: (ro
                         <span aria-hidden="true" className="grid size-7 shrink-0 place-items-center rounded-full bg-surface text-[0.7rem]">{index + 1}</span>
                         <span className="min-w-0 flex-1 break-all">{id}</span>
                         {id.endsWith(":free") ? <span className="shrink-0 rounded-full border border-line px-2 py-1">free</span> : null}
-                        <span className="shrink-0 rounded-full border border-line px-2 py-1" onClick={(event) => { event.stopPropagation(); onUseModel?.(`custom:${row.id}:${encodeURIComponent(id)}`); }}>Use in chat</span>
                       </button>
+                      {onUseModel && (
+                        <button type="button" className="min-h-11 shrink-0 rounded-panel border border-line px-3 text-xs" disabled={Boolean(customProviderBlockReason(row))} title={customProviderBlockReason(row) ?? undefined} aria-label={`Use ${row.label} ${id} in chat`} onClick={() => onUseModel(`custom:${row.id}:${encodeURIComponent(id)}`)}>
+                          Use in chat
+                        </button>
+                      )}
                     </li>
                   ))}
                 </ul>

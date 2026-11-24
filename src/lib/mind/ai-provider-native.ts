@@ -3,11 +3,13 @@
  * All inputs are server-owned and credentials are never echoed into results.
  * Host and HTTPS/DNS validation happens in requestProvider() before dispatch.
  */
+import { reportedModel } from "./stream.ts";
+
 export type AiWireProtocol = "openai" | "anthropic" | "gemini";
 export type TextTurn = { role: "system" | "user" | "assistant"; content: string };
 export type ProviderRequest = { path: string; headers: Record<string, string>; body: string };
 export type ParsedAnswer =
-  | { ok: true; text: string; usage: { prompt_tokens?: number; completion_tokens?: number } | null }
+  | { ok: true; text: string; model: string; usage: { prompt_tokens?: number; completion_tokens?: number } | null }
   | { ok: false; error: string };
 
 export function providerWireProtocol(baseUrl: string): AiWireProtocol {
@@ -116,5 +118,5 @@ export function parseProviderText(kind: AiWireProtocol, raw: string): ParsedAnsw
     usage = usagePair(u.prompt_tokens, u.completion_tokens);
   }
   if (!text) return { ok: false, error: "The provider returned no assistant text." };
-  return { ok: true, text, usage };
+  return { ok: true, text, model: reportedModel(kind === "gemini" ? body.modelVersion : body.model), usage };
 }
