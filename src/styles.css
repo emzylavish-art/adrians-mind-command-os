@@ -1954,8 +1954,8 @@ aside span.grid.size-11.rounded-2xl {
   .main-stage {
     padding-bottom: 2.5rem !important;
   }
-  /* The desktop start screen already spaces its in-flow composer inside the page. */
-  .shell[data-view="command"] > .main-stage:not(:has([data-testid="handy-dictation"])) {
+  /* Desktop chat composers are in flow when the dictation bar is closed. */
+  .shell:is([data-view="command"], [data-view="chat"]) > .main-stage:not(:has([data-testid="handy-dictation"])) {
     --page-scroll-bottom: 0px;
     padding-bottom: env(safe-area-inset-bottom, 0px) !important;
   }
