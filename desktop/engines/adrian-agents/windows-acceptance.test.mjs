@@ -27,9 +27,13 @@ test("the script passes only the checks it can see and fails the Windows-only on
 });
 
 test("boot passes only when the login task and process are both present", () => {
-  const probe = readBootProbe("TaskName: AdriansMind-Agents\nnode.exe adrian-agents");
-  assert.equal(probe.taskRegistered, true);
-  assert.equal(probe.processRunning, true);
+  const runtime = String.raw`C:\Adrian Mind\desktop\engines\adrian-agents\runtime.mjs`;
+  const command = `"C:\\Program Files\\nodejs\\node.exe" "${runtime}"`;
+  const probe = readBootProbe(true, command, runtime);
   assert.equal(checkBoot({ platform: "win32", ...probe }).status, "PASS");
   assert.equal(checkBoot({ platform: "linux", ...probe }).status, "FAIL");
+  for (const sample of ["node.exe", 'node.exe "C:\\other\\runtime.mjs"', command + ".old", ""]) {
+    assert.equal(checkBoot({ platform: "win32", ...readBootProbe(true, sample, runtime) }).status, "FAIL");
+  }
+  assert.equal(checkBoot({ platform: "win32", ...readBootProbe(false, command, runtime) }).status, "FAIL");
 });
