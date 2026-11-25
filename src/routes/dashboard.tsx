@@ -1,14 +1,14 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { OwnerDashboard } from "@/components/mind/owner-dashboard";
+import { AgentCommandCenter } from "@/components/mind/agent-command-center";
 
-/** Account-scoped dashboard: never put connections or workspaces in a public feed. */
+/** Public read-only dashboard. Account-scoped connections remain inside the signed-in workspace. */
 export const Route = createFileRoute("/dashboard")({
-  component: OwnerDashboard,
+  component: AgentCommandCenter,
   head: () => ({
     meta: [
-      { title: "Adrian's Mind · Dashboard" },
+      { title: "Adrian's Mind · Agent Command Center" },
       { name: "theme-color", content: "#080d14" },
-      { name: "description", content: "Your Adrian's Mind connections and workspaces." },
+      { name: "description", content: "Live AI agent fleet, task queue, execution timeline, and system health." },
     ],
   }),
 });
