@@ -9,6 +9,8 @@ import { getBearerToken } from "@/lib/auth/client";
 import { loadMcpWithHttpFallback } from "@/lib/mind/mcp-list-http";
 import { getRecentChats } from "@/lib/mind/recent-chats";
 import { ConversationSections } from "@/components/mind/conversation-sections";
+import { CloudBrowserSettings } from "@/components/mind/cloud-browser-settings";
+import { OwnerDashboard } from "@/components/mind/owner-dashboard";
 import { DesktopUpdateNote } from "@/components/mind/desktop-update-note";
 import { ActionOverlay, ActionsButton } from "@/components/mind/conversation-menu";
 import { applyArchive, applyFavorite, applyProject, applyRename, conversationSharePath, quoteIntoNewChat, scheduleConversation, type ConversationAction } from "@/lib/mind/conversation-actions";
@@ -761,7 +763,7 @@ export function CommandApp() {
     return () => cancelAnimationFrame(frame);
   }, [cardFocus, view]);
   const [homeAction, setHomeAction] = useState<"ask" | "image" | "video" | "write" | "search">("ask");
-  const [settingsPane, setSettingsPane] = useState<null | "general" | "connections" | "voice" | "pages" | "data" | "safety" | "keys">(null);
+  const [settingsPane, setSettingsPane] = useState<null | "general" | "connections" | "voice" | "pages" | "data" | "safety" | "keys" | "browser">(null);
   const [wipeAsk, setWipeAsk] = useState(false);
   const [wipeStatus, setWipeStatus] = useState<string | null>(null);
   const [hiddenSettings, setHiddenSettings] = useState<string[]>([]);
@@ -7116,6 +7118,7 @@ export function CommandApp() {
           {view === "runs" && <FleetPanel key="runs" mode="runs" ws={ws} setWs={setWs} initialAgentId={botDestinationId} focusRunId={focusRunId} />}
           {view === "connected" && (
             <section className="page-shell">
+              <OwnerDashboard />
               <div className="page-hero mb-4 flex items-center gap-3"><img src="/brand/logo-mark.jpg" alt="" className="size-8 rounded-lg" /><div><h2 className="font-display text-3xl font-bold">Connected</h2><p className="text-sm text-muted">Setup explains what is missing. A service is connected only after the server says so.</p></div></div>
               {statusSignedIn === false ? <div className="sign-in-summary" role="status">Sign in to check your connections. <Link to="/login">Sign in</Link></div> : null}
               <ServiceBoard
@@ -7723,6 +7726,7 @@ export function CommandApp() {
                   ]},
                   { group: "Preferences", items: [
                     ["general", "Appearance", "Dark, light, motion, or follow this device", () => setSettingsPane("general")],
+                    ["browser", "Cloud browser", "Website permissions and browser data", () => setSettingsPane("browser")],
                     ["voice", "Voice", "Speak voice and pace", () => setSettingsPane("voice")],
                   ]},
                   { group: "Personalization", items: [
@@ -7779,6 +7783,7 @@ export function CommandApp() {
               {settingsPane && (
                 <button type="button" className="text-sm text-muted" onClick={() => setSettingsPane(null)}>Back</button>
               )}
+              {settingsPane === "browser" && <CloudBrowserSettings owner={account?.id ?? null} />}
               <div id="settings-general" hidden={settingsPane !== "general"} className="settings-card card-texture rounded-panel p-4 text-sm">
                 <div className="settings-row">
                   <div>

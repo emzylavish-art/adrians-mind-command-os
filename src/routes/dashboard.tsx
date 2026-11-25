@@ -1,7 +1,7 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { AgentCommandCenter } from "@/components/mind/agent-command-center";
 
-/** Public read-only dashboard for Adrian's Mind agent operations. */
+/** Public read-only dashboard. Account-scoped connections remain inside the signed-in workspace. */
 export const Route = createFileRoute("/dashboard")({
   component: AgentCommandCenter,
   head: () => ({
