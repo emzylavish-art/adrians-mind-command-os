@@ -32,14 +32,14 @@ function latestCommitOnBranch(repo: string, branch: string): string | null {
     return execFileSync(
       "git",
       ["-C", repo, "log", "-1", "--format=%h %s", branch, "--"],
-      { encoding: "utf8", timeout: 8000 },
+      { encoding: "utf8", timeout: 8000, stdio: ["ignore", "pipe", "pipe"] },
     ).trim() || null;
   } catch {
     try {
       return execFileSync(
         "git",
         ["-C", repo, "log", "-1", "--format=%h %s", `origin/${branch}`, "--"],
-        { encoding: "utf8", timeout: 8000 },
+        { encoding: "utf8", timeout: 8000, stdio: ["ignore", "pipe", "pipe"] },
       ).trim() || null;
     } catch {
       return null;

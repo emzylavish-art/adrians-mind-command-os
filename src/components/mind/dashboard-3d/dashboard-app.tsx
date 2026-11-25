@@ -47,7 +47,7 @@ function ClientUniverseScene(props: UniverseProps) {
 
 export function DashboardApp({ embedded = false }: { embedded?: boolean }) {
   const { state, refresh } = useDashboardStatus();
-  const [selected, setSelected] = useState<BotNode | null>(null);
+  const [selectedBotId, setSelectedBotId] = useState<string | null>(null);
   const [notionPage, setNotionPage] = useState<NotionSnapPage | null>(null);
   const [webglError, setWebglError] = useState<string | null>(null);
   const [rendererMode, setRendererMode] = useState<"graph" | "universe">("graph");
@@ -57,7 +57,7 @@ export function DashboardApp({ embedded = false }: { embedded?: boolean }) {
     setFlyState(next);
     setCityLayout(layout);
     if (next.level !== "universe") {
-      setSelected(null);
+      setSelectedBotId(null);
       setNotionPage(null);
     }
   }, []);
@@ -181,6 +181,13 @@ export function DashboardApp({ embedded = false }: { embedded?: boolean }) {
   }, [state, scrubMs, nowMs]);
 
   const sceneData = scrubView.data;
+  const selected = selectedBotId && state.status === "ready"
+    ? state.data.bots.find((bot) => bot.id === selectedBotId) ?? null
+    : null;
+
+  useEffect(() => {
+    if (selectedBotId && !selected) setSelectedBotId(null);
+  }, [selectedBotId, selected]);
 
   useEffect(() => {
     if (!sceneData) {
@@ -197,7 +204,7 @@ export function DashboardApp({ embedded = false }: { embedded?: boolean }) {
 
   const selectGraphBot = (bot: BotNode) => {
     if (state.status !== "ready") return;
-    setSelected(bot);
+    setSelectedBotId(bot.id);
     const mapped = state.data.notionGraph.botPageMap[bot.id];
     setNotionPage(mapped ? state.data.notionGraph.pages.find((p) => p.id === mapped) ?? null : null);
   };
@@ -206,7 +213,7 @@ export function DashboardApp({ embedded = false }: { embedded?: boolean }) {
     if (state.status !== "ready") return;
     const page = state.data.notionGraph.pages.find((p) => p.id === pageId) ?? null;
     setNotionPage(page);
-    setSelected(null);
+    setSelectedBotId(null);
   };
 
   return (
@@ -301,7 +308,7 @@ export function DashboardApp({ embedded = false }: { embedded?: boolean }) {
               data-testid="zoom-sky"
               onClick={() => {
                 unlockSound();
-                setSelected(null);
+                setSelectedBotId(null);
                 setNotionPage(null);
                 document.dispatchEvent(new CustomEvent("dash3d-sky"));
               }}
@@ -319,7 +326,7 @@ export function DashboardApp({ embedded = false }: { embedded?: boolean }) {
             reducedMotion={reducedMotion}
             onSelectBot={selectGraphBot}
             onSelectNotion={openNotion}
-            onSkyView={() => { setSelected(null); setNotionPage(null); }}
+            onSkyView={() => { setSelectedBotId(null); setNotionPage(null); }}
             onUnavailable={setWebglError}
           />
         ) : (
@@ -328,7 +335,7 @@ export function DashboardApp({ embedded = false }: { embedded?: boolean }) {
             reducedMotion={reducedMotion}
             onSelectBot={selectGraphBot}
             onSelectNotion={openNotion}
-            onSkyView={() => { setSelected(null); setNotionPage(null); }}
+            onSkyView={() => { setSelectedBotId(null); setNotionPage(null); }}
             onUnavailable={setWebglError}
             onFlyoverChange={onFlyoverChange}
           />
@@ -346,7 +353,7 @@ export function DashboardApp({ embedded = false }: { embedded?: boolean }) {
               <ul className="dash3d-list" style={{ marginTop: "0.75rem", textAlign: "left" }}>
                 {state.data.bots.map((b) => (
                   <li key={b.id}>
-                    <button type="button" className="dash3d-pill" onClick={() => setSelected(b)}>
+                    <button type="button" className="dash3d-pill" onClick={() => setSelectedBotId(b.id)}>
                       <span className={`dash3d-dot ${b.health}`} />
                       {b.name}
                     </button>
@@ -440,7 +447,7 @@ export function DashboardApp({ embedded = false }: { embedded?: boolean }) {
                   <ul className="dash3d-list">
                     {state.data.bots.map((bot) => (
                       <li key={bot.id}>
-                        <button type="button" className="dash3d-pill" onClick={() => setSelected(bot)}>
+                        <button type="button" className="dash3d-pill" onClick={() => setSelectedBotId(bot.id)}>
                           <span className={`dash3d-dot ${bot.health}`} />
                           {bot.name}
                         </button>
@@ -501,7 +508,7 @@ export function DashboardApp({ embedded = false }: { embedded?: boolean }) {
           }}
           onOpenNotion={openNotion}
           onSelectBot={(bot) => {
-            setSelected(bot);
+            setSelectedBotId(bot.id);
           }}
         />
       ) : null}
@@ -515,7 +522,7 @@ export function DashboardApp({ embedded = false }: { embedded?: boolean }) {
         notionNeighbors={resolveNotionNeighbors(state.status === "ready" ? state.data : null, notionPage?.id)}
         portraitSrc={selected ? `/dashboard-3d/art/portrait-${selected.id}.webp` : null}
         onClose={() => {
-          setSelected(null);
+          setSelectedBotId(null);
           setNotionPage(null);
         }}
       />
