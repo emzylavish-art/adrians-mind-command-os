@@ -514,15 +514,21 @@ export function replaceFromArchive(current: Workspace, archive: Workspace): Work
 export function mergeWorkspace(current: Workspace, incoming: Workspace): Workspace {
   const byId = <T extends { id: string }>(rows: T[]) => new Map(rows.map((row) => [row.id, row]));
   const merge = <T extends { id: string }>(left: T[], right: T[]) => [...byId([...left, ...right]).values()];
+  const archivedChats = byId(incoming.chats);
   return {
     version: 1,
     halted: current.halted,
-    chats: merge(current.chats, incoming.chats),
+    chats: [...byId([...incoming.chats, ...current.chats]).values()].map((chat) => {
+      const archive = archivedChats.get(chat.id);
+      if (!archive || archive === chat) return chat;
+      const messages = merge(archive.messages, chat.messages).sort((a, b) => a.at.localeCompare(b.at));
+      return { ...chat, temporary: chat.temporary || archive.temporary, messages };
+    }),
     ...mergeMemoryState(current, incoming),
     projects: merge(current.projects, incoming.projects),
     files: merge(current.files, incoming.files),
-    usage: merge(current.usage, incoming.usage),
-    audit: merge(current.audit, incoming.audit),
+    usage: merge(current.usage, incoming.usage).sort((a, b) => b.at.localeCompare(a.at)).slice(0, 200),
+    audit: merge(current.audit, incoming.audit).sort((a, b) => b.at.localeCompare(a.at)).slice(0, 200),
     agents: merge(current.agents, incoming.agents),
     deployments: merge(current.deployments, incoming.deployments),
     runs: merge(current.runs, incoming.runs),

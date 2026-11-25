@@ -197,3 +197,14 @@ describe("library filenames", () => {
     );
   });
 });
+
+it("merging an older archive twice retains newer turns and preserves local conflicting text", () => {
+  const make = (entries: string[]) => normalizeWorkspace({ chats: [{ id: "thread", title: "Fixture", messages: entries.map((content, i) => ({
+    id: String(i), role: "user", content, at: new Date(i * 1000).toISOString(),
+  })) }] });
+  const current = make(["corrected", "later"]);
+  const old = make(["original"]);
+  const merged = mergeWorkspace(mergeWorkspace(current, old), old);
+  assert.deepEqual(merged.chats[0].messages.map((msg) => msg.content), ["corrected", "later"]);
+  assert.equal(merged.chats.length, 1);
+});
