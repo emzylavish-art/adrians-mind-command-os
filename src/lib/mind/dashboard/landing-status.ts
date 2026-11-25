@@ -37,6 +37,7 @@ function runGit(repo: string, args: string[]): string {
     encoding: "utf8",
     timeout: 12_000,
     maxBuffer: 2 * 1024 * 1024,
+    stdio: ["ignore", "pipe", "pipe"],
   }).trim();
 }
 
