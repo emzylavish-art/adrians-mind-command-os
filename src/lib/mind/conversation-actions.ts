@@ -39,7 +39,12 @@ export function applyArchive(ws: Workspace, ids: readonly string[], archived: bo
 
 export function applyProject(ws: Workspace, ids: readonly string[], projectId: string | null): Workspace {
   const chosen = new Set(ids);
-  return { ...ws, chats: ws.chats.map((chat) => (chosen.has(chat.id) ? { ...chat, projectId } : chat)) };
+  return {
+    ...ws,
+    chats: ws.chats.map((chat) => chosen.has(chat.id) ? { ...chat, projectId } : chat),
+    memories: ws.memories.map((note) => note.scope === "chat" && note.chatId && chosen.has(note.chatId)
+      ? { ...note, projectId, updatedAt: new Date().toISOString() } : note),
+  };
 }
 
 export function applyRename(ws: Workspace, ids: readonly string[], title: string): Workspace | null {
@@ -75,14 +80,18 @@ export function quoteIntoNewChat(ws: Workspace, source: Chat): { ws: Workspace; 
   };
 }
 
-export function scheduleConversation(ws: Workspace, name: string): { ws: Workspace; created: boolean; error?: string } {
+export function scheduleConversation(ws: Workspace, name: string, chatId?: string): { ws: Workspace; created: boolean; error?: string } {
+  if (chatId && !ws.chats.some((chat) => chat.id === chatId && !chat.temporary)) {
+    return { ws, created: false, error: "Choose a saved conversation before scheduling." };
+  }
   const title = name.replace(/\s+/g, " ").trim().slice(0, 80);
   if (!title) return { ws, created: false, error: "Name the schedule." };
-  if (ws.schedules.some((job) => job.name === title)) return { ws, created: false };
+  if (ws.schedules.some((job) => chatId ? job.chatId === chatId : !job.chatId && job.name === title)) return { ws, created: false };
   const added = addSchedule(ws, title, null, 1440);
   if (!added.ok) return { ws, created: false, error: added.error };
   const job = added.ws.schedules[0];
-  return { ws: job ? setScheduleEnabled(added.ws, job.id, false) : added.ws, created: true };
+  const saved = setScheduleEnabled(added.ws, job.id, false);
+  return { ws: { ...saved, schedules: saved.schedules.map((entry) => entry.id === job.id ? { ...entry, chatId } : entry) }, created: true };
 }
 
 export function visibleConversations<T extends { archived?: boolean }>(chats: readonly T[], includeArchived = false) {

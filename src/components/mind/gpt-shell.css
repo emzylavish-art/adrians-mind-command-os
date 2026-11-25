@@ -380,20 +380,6 @@ html[data-theme="light"] .gpt-rail nav a.nav-item {
   font-weight: 700;
 }
 
-.speak-stage {
-  position: fixed;
-  inset: 0;
-  z-index: 90;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: space-between;
-  gap: 0.8rem;
-  background: #000;
-  color: #fff;
-  padding: calc(0.8rem + env(safe-area-inset-top)) 1rem calc(1rem + env(safe-area-inset-bottom));
-}
-
 .speak-stage header {
   position: absolute;
   top: 0.8rem;
@@ -731,16 +717,92 @@ html[data-theme="light"] .gpt-rail nav a.nav-item {
   font-size: 0.8rem;
 }
 
-.speak-call {
+.speak-stage.speak-call {
+  position: fixed;
+  inset: 0;
+  z-index: 500;
+  box-sizing: border-box;
+  margin: 0;
+  max-width: none;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  grid-template-rows: auto minmax(0, 1fr) auto;
+  gap: clamp(.6rem, 2vh, 1.25rem);
+  padding: max(.75rem, env(safe-area-inset-top)) max(1rem, env(safe-area-inset-right))
+    max(.9rem, env(safe-area-inset-bottom)) max(1rem, env(safe-area-inset-left));
+  overflow: hidden;
+  color: #f4f5fa;
+  background: radial-gradient(ellipse at 50% 42%, #191a33 0, #0e101b 39%, #080910 78%);
+}
+
+.speak-call__top {
+  position: relative;
+  z-index: 2;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: .5rem;
+  font-size: clamp(.78rem, 1.5vw, 1rem);
+  font-weight: 650;
+}
+
+.speak-call__provider { color: #babbd0; font-weight: 400; }
+.speak-call__safety { display: flex; flex-wrap: wrap; justify-content: end; gap: .4rem; }
+.speak-call__safety button {
+  min-height: 2.75rem;
+  border: 1px solid #8b5b67;
+  border-radius: 999px;
+  background: #251b23;
+  color: #ffd7df;
+  padding: 0 .85rem;
+  font-size: .8rem;
+}
+
+.speak-call__dock {
+  position: relative;
+  z-index: 2;
+  justify-self: center;
+  display: grid;
+  gap: .55rem;
+  grid-template-columns: minmax(0, 1fr);
+  min-width: 0;
+  width: min(100%, 42rem);
+}
+
+.speak-call .speak-system {
+  position: relative;
+  z-index: 2;
   display: flex;
   flex-direction: column;
   align-items: center;
+  justify-self: stretch;
+  min-height: 0;
+  gap: .65rem;
   overflow: auto;
-  justify-content: flex-end;
-  gap: 0.85rem;
-  padding-bottom: calc(1.1rem + env(safe-area-inset-bottom));
-  background: #07080c !important;
-  z-index: 400 !important;
+  padding: .25rem .5rem;
+  text-align: center;
+}
+
+.speak-system::before, .speak-system::after { content: ""; margin-block: auto; }
+.speak-system > * { flex: none; }
+.speak-system h2 { margin: 0; font-size: clamp(1.75rem, 4.5vw, 3.4rem); line-height: 1.08; letter-spacing: -.035em; font-weight: 600; }
+.speak-system [data-testid="speak-status"] { color: #c4c6d8; }
+.speak-call__symbol {
+  display: grid; place-items: center;
+  width: clamp(4rem, 14vh, 8rem); aspect-ratio: 1;
+  margin-bottom: .4rem;
+  border-radius: 50%;
+  color: #eeebff;
+  background: radial-gradient(circle at 40% 32%, #7872b4, #423e6d 55%, #24233f);
+  box-shadow: 0 0 4.5rem #6558ae30, inset 0 0 0 1px #d3ccff33;
+}
+.speak-call__symbol svg { width: 44%; height: 44%; stroke-width: 1.5; }
+.speak-call .speak-system:has(~ .speak-sheet) { visibility: hidden; }
+@media (max-height: 500px) {
+  .speak-stage.speak-call { gap: .25rem; padding-block: max(.25rem, env(safe-area-inset-top)) max(.25rem, env(safe-area-inset-bottom)); }
+  .speak-call__symbol { display: none; }
+  .speak-call__dock { gap: .25rem; }
+  .speak-system h2 { font-size: 1.6rem; }
 }
 
 html.eve-call-open body > *:not([data-testid="speak-stage"]) {
@@ -768,6 +830,11 @@ html.eve-call-open body > *:not([data-testid="speak-stage"]) {
   box-shadow: 0 18px 40px rgba(0, 0, 0, 0.4);
 }
 
+.eve-stage-panel:has([data-testid="talking-head-fallback"][data-state="failed"]) {
+  height: auto;
+  box-shadow: none;
+}
+
 .eve-stage-label {
   margin: 0;
   color: #d4d4d8;
@@ -787,20 +854,8 @@ html.eve-call-open body > *:not([data-testid="speak-stage"]) {
   margin-top: auto;
 }
 
-.speak-call__status {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 0.45rem;
-  margin-top: auto;
-  color: #a1a1aa;
-  font-size: 0.95rem;
-}
-
-.speak-call__status p { margin: 0; }
-
 .speak-call__place {
-  min-height: 2.25rem;
+  min-height: 2.75rem;
   border: 0;
   border-radius: 999px;
   background: #f5f5f5;
@@ -818,36 +873,43 @@ html.eve-call-open body > *:not([data-testid="speak-stage"]) {
   white-space: pre-wrap;
 }
 
-.speak-stage {
-  display: flex !important;
-  flex-direction: column !important;
-  align-items: stretch !important;
-  justify-content: space-between !important;
-}
-
-.speak-system {
-  width: min(100%, 52rem) !important;
-  flex: 1 1 auto;
-}
-
 .speak-call__pills,
 .speak-call__bar {
   display: flex;
-  width: min(100%, 28rem);
+  width: 100%;
   align-items: center;
-  gap: 0.65rem;
+  gap: clamp(.25rem, 1.1vw, .65rem);
   position: relative;
   z-index: 4;
 }
 
-.speak-call__pills { justify-content: center; }
+.speak-call__pills {
+  justify-content: center;
+  flex-wrap: wrap;
+}
+
+.speak-call__transcript {
+  position: relative;
+  z-index: 2;
+  overflow-wrap: anywhere;
+}
+
+.speak-stage button:focus-visible,
+.speak-stage input:focus-visible {
+  outline: 2px solid #9bbdff;
+  outline-offset: 2px;
+}
+
+.speak-stage button:disabled {
+  opacity: .55;
+}
 
 .speak-call__pills button,
 .speak-call__bar button,
 .speak-sheet button {
   display: grid;
-  min-width: 3.4rem;
-  min-height: 3.4rem;
+  min-width: 2.75rem;
+  min-height: 2.75rem;
   place-items: center;
   border: 0;
   border-radius: 999px;

@@ -109,7 +109,7 @@ export const HONEST_FAILURE_MESSAGES = {
    * Notice, not a red Retry of the same unconfigured call.
    */
   notion_not_configured:
-    "Notion is not connected. Set NOTION_TOKEN on the server to an internal integration secret, then share the pages with that integration. Nothing was searched or updated. The secret is not shown here.",
+    "Notion is not connected. Open Plugins, connect your Notion workspace and choose the pages to share. Nothing was searched or updated. The secret is not shown here.",
   /** Same sentence as notion.ts when the owner disconnects the workspace. */
   notion_disconnected:
     "Notion is disconnected for this workspace. The server secret stays hidden. Nothing is called.",

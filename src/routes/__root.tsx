@@ -48,6 +48,7 @@ export const Route = createRootRoute({
   component: () => (
     <html lang="en" suppressHydrationWarning>
       <head>
+        <script src="/mind-theme.js" />
         <HeadContent />
       </head>
       <body>

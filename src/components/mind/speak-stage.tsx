@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
+import { loadVoiceSettings, saveVoiceSettings } from "@/lib/mind/voice/settings";
 import { createPortal } from "react-dom";
-import { AudioLines, Camera, Mic, MicOff, MonitorUp, PhoneOff, Plus, Settings, Volume2, VolumeX, X } from "lucide-react";
+import { ArrowUp, AudioLines, Camera, Mic, MicOff, MonitorUp, PhoneOff, Plus, Settings, Volume2, VolumeX, X } from "lucide-react";
 import { openCameraStream, openScreenStream } from "@/components/mind/live-voice-bar/frame-capture";
 import { sharedAudioOutput } from "@/lib/mind/voice/audio-output";
 import {
@@ -44,10 +45,15 @@ type ActivationId = (typeof ACTIVATION)[number]["id"];
 export function SpeakStage(props: {
   open: boolean;
   signedIn: boolean;
+  freeOnly?: boolean;
   live?: boolean;
   onClose: () => void;
   onSignIn: () => void;
-  onLive?: () => void;
+  onLive: () => Promise<void>;
+  onVoice: (voice: XaiBuiltinVoice) => void;
+  micMuted: boolean;
+  onMicMute: (muted: boolean) => void;
+  recording: boolean;
   onAsk?: (text: string) => Promise<string | null | { reply?: string; error?: string }>;
   onKeepRecording?: (stream: MediaStream) => void;
   onEmergencyStop?: () => void;
@@ -59,15 +65,21 @@ export function SpeakStage(props: {
   spoken?: string;
   callError?: string;
 }) {
+  const dialogRef = useRef<HTMLDivElement>(null);
+  const settingsButton = useRef<HTMLButtonElement>(null);
+  const closeSettingsButton = useRef<HTMLButtonElement>(null);
+  const callGeneration = useRef(0);
   const videoRef = useRef<HTMLVideoElement>(null);
   const streamRef = useRef<MediaStream | null>(null);
-  const micRef = useRef<MediaStream | null>(null);
+  const openRef = useRef(props.open);
+  openRef.current = props.open;
+  const mediaGeneration = useRef(0);
+  const held = useRef(false);
   const fileRef = useRef<HTMLInputElement>(null);
   const keepRef = useRef(props.onKeepRecording);
   keepRef.current = props.onKeepRecording;
   const [source, setSource] = useState<"none" | "camera" | "screen">("none");
-  const [muted, setMuted] = useState(false);
-  const [listening, setListening] = useState(false);
+  const [connecting, setConnecting] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
   const [line, setLine] = useState("");
   const [asking, setAsking] = useState(false);
@@ -81,35 +93,22 @@ export function SpeakStage(props: {
   const [style, setStyle] = useState<StyleId>("Storyteller");
   const [activation, setActivation] = useState<ActivationId>("default");
   const [volume, setVolume] = useState(100);
-  const [calling, setCalling] = useState(false);
-  const [callHeard, setCallHeard] = useState("");
-  const callAbortRef = useRef<AbortController | null>(null);
-  const callAudioRef = useRef<HTMLAudioElement | null>(null);
+  const [recordingPending, setRecordingPending] = useState(false);
   const speechCutRef = useRef(false);
   const cutSpeechRef = useRef<(reason: "owner" | "tab") => void>(() => undefined);
 
   function cutSpeech(reason: "owner" | "tab") {
     speechCutRef.current = true;
-    callAbortRef.current?.abort();
-    callAbortRef.current = null;
-    const playing = callAudioRef.current;
-    if (playing) {
-      playing.pause();
-      try { playing.currentTime = 0; } catch { /* a closed element can refuse */ }
-      playing.removeAttribute("src");
-      playing.load();
-      callAudioRef.current = null;
-    }
-    document.querySelectorAll("audio").forEach((element) => {
-      element.pause();
-      try { element.currentTime = 0; } catch { /* ignore */ }
-    });
+    callGeneration.current++;
+    mediaGeneration.current++;
+    stopVideo();
+    sharedAudioOutput.interrupt();
     window.speechSynthesis?.cancel();
-    setCalling(false);
     setReply("");
+    setConnecting(false);
     const message = reason === "tab"
       ? "Speech cut. The tab is closing."
-      : "Speech cut. Emergency stop is on. EVE can press Clear.";
+      : "Speech cut. Emergency stop is on. Press Clear stop to release it.";
     setNotice(message);
     if (reason === "owner") props.onEmergencyStop?.();
   }
@@ -117,9 +116,8 @@ export function SpeakStage(props: {
 
   function clearStop() {
     speechCutRef.current = false;
-    setCalling(false);
     setReply("");
-    setNotice("EVE cleared the stop. Speech can start again.");
+    setNotice(null);
     props.onClearStop?.();
   }
 
@@ -135,20 +133,27 @@ export function SpeakStage(props: {
   }, [props.open]);
 
   useEffect(() => {
+    if (!props.open) return;
     setVoice(readStoredVoiceChoice(window.localStorage));
     const saved = window.localStorage.getItem("adrian-speak-rate");
     if (saved === "slow" || saved === "natural" || saved === "brisk") setRate(saved);
     const savedStyle = window.localStorage.getItem("adrian-speak-style");
     if (savedStyle === "Storyteller" || savedStyle === "Supportive" || savedStyle === "Playful" || savedStyle === "Calm" || savedStyle === "Unhinged") setStyle(savedStyle);
-    const savedVolume = Number(window.localStorage.getItem("adrian-speak-volume"));
+    const savedVolume = Number(window.localStorage.getItem("adrian-speak-volume") ?? "100");
     if (Number.isFinite(savedVolume)) setVolume(Math.min(100, Math.max(0, savedVolume)));
-    const savedActivation = window.localStorage.getItem("adrian-speak-activation");
-    if (savedActivation === "default" || savedActivation === "isolation" || savedActivation === "push") setActivation(savedActivation);
-  }, []);
+    const savedActivation = loadVoiceSettings(window.localStorage).activation;
+    setActivation(savedActivation === "push_to_talk" ? "push" : savedActivation);
+  }, [props.open]);
 
   useEffect(() => {
-    if (props.live) setNotice((current) => current?.startsWith("Connecting") ? "Live. Speak, and EVE answers on this call." : current);
-  }, [props.live]);
+    if (!props.open) return;
+    sharedAudioOutput.setOutputVolume(speakerMuted ? 0 : volume / 100);
+    sharedAudioOutput.setPcmRate(rate === "slow" ? 0.85 : rate === "brisk" ? 1.15 : 1);
+    return () => {
+      sharedAudioOutput.setOutputVolume(1);
+      sharedAudioOutput.setPcmRate(1);
+    };
+  }, [props.open, speakerMuted, volume, rate]);
 
   function stopVideo() {
     streamRef.current?.getTracks().forEach((track) => track.stop());
@@ -157,43 +162,35 @@ export function SpeakStage(props: {
     setSource("none");
   }
 
-  function stopMic() {
-    micRef.current?.getTracks().forEach((track) => track.stop());
-    micRef.current = null;
-    setListening(false);
-  }
-
   useEffect(() => {
-    if (!props.open) {
-      stopVideo();
-      const kept = micRef.current;
-      if (kept && keepRef.current) {
-        micRef.current = null;
-        setListening(false);
-        keepRef.current(kept);
-      } else {
-        stopMic();
-      }
-      setSettingsOpen(false);
-      document.documentElement.classList.remove("eve-call-open");
-    } else {
-      document.documentElement.classList.add("eve-call-open");
-    }
+    if (!props.open) return;
+    const opener = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+    document.documentElement.classList.add("eve-call-open");
+    dialogRef.current?.focus();
     return () => {
+      callGeneration.current++;
+      mediaGeneration.current++;
+      held.current = false;
+      stopVideo();
+      setSettingsOpen(false);
+      setConnecting(false);
+      setRecordingPending(false);
+      setReply("");
+      setNotice(null);
+      setSpeakerMuted(false);
       document.documentElement.classList.remove("eve-call-open");
+      if (opener?.isConnected) opener.focus({ preventScroll: true });
     };
   }, [props.open]);
 
   useEffect(() => {
-    return () => {
-      streamRef.current?.getTracks().forEach((track) => track.stop());
-      const kept = micRef.current;
-      if (kept && keepRef.current) keepRef.current(kept);
-      else kept?.getTracks().forEach((track) => track.stop());
-      micRef.current = null;
-      streamRef.current = null;
-    };
-  }, []);
+    if (settingsOpen) closeSettingsButton.current?.focus();
+  }, [settingsOpen]);
+
+  function closeSettings() {
+    setSettingsOpen(false);
+    settingsButton.current?.focus();
+  }
 
   async function show(next: "camera" | "screen") {
     if (source === next) {
@@ -202,7 +199,12 @@ export function SpeakStage(props: {
       return;
     }
     stopVideo();
+    const generation = ++mediaGeneration.current;
     const opened = next === "camera" ? await openCameraStream() : await openScreenStream();
+    if (generation !== mediaGeneration.current || !openRef.current) {
+      if (opened.ok) opened.stream.getTracks().forEach((track) => track.stop());
+      return;
+    }
     if (!opened.ok) {
       setNotice(opened.error);
       return;
@@ -220,44 +222,46 @@ export function SpeakStage(props: {
     setNotice(next === "camera" ? "Camera is on. It stays on this device until you end Speak." : "Screen share is on. It stays on this device until you end Speak.");
   }
 
-  async function toggleMic() {
-    if (listening) {
-      stopMic();
-      if (props.onLive && props.live) props.onLive();
-      setNotice("Recording stopped.");
-      return;
-    }
-    if (!navigator.mediaDevices?.getUserMedia) {
-      setNotice("This browser cannot open the microphone.");
-      return;
-    }
+  async function startLive() {
+    if (props.freeOnly) { setNotice("Free-only mode keeps xAI realtime voice off."); return; }
+    if (!props.signedIn) { props.onSignIn(); return; }
+    if (props.halted || connecting || props.live) return;
+    const generation = callGeneration.current;
+    setNotice(null);
+    setConnecting(true);
     try {
-      const status = await navigator.permissions?.query?.({ name: "microphone" as PermissionName }).catch(() => null);
-      if (status?.state === "denied") {
-        setNotice("Microphone permission is blocked for this site. Allow it once in the browser settings, then return here.");
+      await sharedAudioOutput.preparePlayback();
+      if (generation === callGeneration.current && openRef.current && !speechCutRef.current) await props.onLive();
+    } catch {
+      if (openRef.current) setNotice("Audio output could not start. Enable sound and try again.");
+    } finally {
+      if (openRef.current && generation === callGeneration.current) setConnecting(false);
+    }
+  }
+
+  async function startRecording() {
+    if (recordingPending || props.recording || props.live || connecting || props.halted) return;
+    const generation = mediaGeneration.current;
+    setRecordingPending(true);
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      if (!openRef.current || generation !== mediaGeneration.current) {
+        stream.getTracks().forEach((track) => track.stop());
         return;
       }
-      const stream = await navigator.mediaDevices.getUserMedia({
-        audio: activation === "isolation"
-          ? { echoCancellation: true, noiseSuppression: true, autoGainControl: true }
-          : true,
-      });
-      stream.getTracks().forEach((track) => {
-        track.enabled = true;
-      });
-      micRef.current = stream;
-      setListening(true);
-      setMuted(false);
-      setNotice("Recording this tab. Leave this screen and it keeps running.");
-      props.onLive?.();
+      keepRef.current?.(stream);
+      props.onClose();
     } catch {
-      setNotice("Microphone permission was blocked. Allow it for this site, then press the mic again.");
+      if (openRef.current) setNotice("The microphone could not be opened for recording.");
+    } finally {
+      if (openRef.current) setRecordingPending(false);
     }
   }
 
   function chooseVoice(next: XaiBuiltinVoice) {
     const stored = writeStoredVoiceChoice(next, window.localStorage);
     setVoice(stored);
+    props.onVoice(stored);
     setNotice(`${voiceDisplayName(stored)} is saved for Speak.`);
   }
 
@@ -265,6 +269,7 @@ export function SpeakStage(props: {
     setRate(next);
     try {
       window.localStorage.setItem("adrian-speak-rate", next);
+      saveVoiceSettings(window.localStorage, { ...loadVoiceSettings(window.localStorage), speed: next === "natural" ? "normal" : next === "brisk" ? "fast" : "slow" });
     } catch {
       /* private mode */
     }
@@ -282,28 +287,29 @@ export function SpeakStage(props: {
     const level = Math.min(100, Math.max(0, next));
     setVolume(level);
     try { window.localStorage.setItem("adrian-speak-volume", String(level)); } catch { /* private mode */ }
-    document.querySelectorAll("audio").forEach((element) => { element.volume = level / 100; });
     setNotice(level === 0 ? "Speaker volume is off." : `Speaker volume is ${level}.`);
   }
 
   function chooseActivation(next: ActivationId) {
     setActivation(next);
-    try { window.localStorage.setItem("adrian-speak-activation", next); } catch { /* private mode */ }
+    if (props.live) props.onMicMute(next === "push");
+    saveVoiceSettings(window.localStorage, { ...loadVoiceSettings(window.localStorage), activation: next === "push" ? "push_to_talk" : next });
     setNotice(next === "push" ? "Push to talk is saved. Hold the microphone to talk." : next === "isolation" ? "Voice isolation is saved for the next microphone open." : "Default voice activation is saved.");
   }
 
   function toggleSpeaker() {
     const next = !speakerMuted;
     setSpeakerMuted(next);
-    document.querySelectorAll("audio").forEach((element) => { element.muted = next; });
     if (next) window.speechSynthesis?.cancel();
     setNotice(next ? "Speaker muted for this call." : "Speaker on.");
   }
 
   async function ask() {
     const text = line.trim();
-    if (!text || !props.onAsk || asking) return;
+    if (!text || !props.onAsk || asking || props.halted) return;
+    if (!props.signedIn) { props.onSignIn(); return; }
     setAsking(true);
+    setShowTranscript(true);
     setReply("");
     setNotice("Adrian is answering. The reply will be spoken.");
     try {
@@ -325,114 +331,73 @@ export function SpeakStage(props: {
     }
   }
 
-  async function placeCall() {
-    if (calling || props.halted || speechCutRef.current) {
-      setNotice(props.halted || speechCutRef.current ? "Emergency stop is on. Speech was not started." : "Calling. Speech is being heard and answered.");
-      return;
-    }
-    const abort = new AbortController();
-    callAbortRef.current = abort;
-    setCalling(true);
-    setCallHeard("");
-    setReply("");
-    setNotice("Calling. Speech is being heard and answered.");
-    setShowTranscript(true);
-    try {
-      const response = await fetch("/api/mind/voice/call", {
-        method: "POST",
-        credentials: "include",
-        headers: { "content-type": "application/json" },
-        body: "{}",
-        signal: abort.signal,
-      });
-      if (speechCutRef.current || abort.signal.aborted) {
-        setNotice("Speech cut. Nothing continued.");
-        return;
-      }
-      const body = await response.json().catch(() => ({})) as { ok?: boolean; heard?: string; reply?: string; audio?: string; error?: string };
-      if (speechCutRef.current || abort.signal.aborted) {
-        setNotice("Speech cut. Nothing continued.");
-        return;
-      }
-      if (!body.ok || !body.reply) {
-        setNotice(body.error || "The call did not finish. Nothing was spoken.");
-        return;
-      }
-      setCallHeard(body.heard || "");
-      setReply(body.reply);
-      setNotice(`Spoken: ${body.reply}`);
-      if (body.audio && !speakerMuted) {
-        window.speechSynthesis?.cancel();
-        sharedAudioOutput.interrupt();
-        window.dispatchEvent(new Event("adrian-one-voice"));
-        const audio = new Audio(`data:audio/mpeg;base64,${body.audio}`);
-        callAudioRef.current = audio;
-        audio.setAttribute("data-speak-call", "true");
-        audio.setAttribute("data-testid", "call-audio");
-        document.body.appendChild(audio);
-        audio.volume = volume / 100;
-        if (speechCutRef.current) {
-          audio.pause();
-          setNotice("Speech cut. Nothing continued.");
-          return;
-        }
-        await audio.play().catch(() => undefined);
-      }
-    } catch (err) {
-      if (speechCutRef.current || (err instanceof DOMException && err.name === "AbortError")) {
-        setNotice((current) => current?.startsWith("Speech cut") ? current : "Speech cut. Nothing continued.");
-        return;
-      }
-      setNotice("The call did not finish. Nothing was spoken.");
-    } finally {
-      setCalling(false);
-    }
-  }
-
   if (!props.open) return null;
-  const status = source === "camera" ? "Camera on" : source === "screen" ? "Sharing your screen" : props.live ? "Live" : listening ? "Listening" : "Start talking";
-  const transcript = [uploadName, notice, props.heard ? `Heard: ${props.heard}` : "", reply || props.spoken || "", props.callError || ""].filter(Boolean).join("\n");
-  const callTranscript = [callHeard ? `Heard: ${callHeard}` : "", reply ? `Spoken: ${reply}` : "", notice || ""].filter(Boolean).join("\n");
-  const eveState = calling ? "listening" : reply || props.spoken ? "speaking" : listening ? "listening" : "idle";
+  const status = props.halted ? "Emergency stop is on" : props.callError ? "Voice unavailable" : props.live ? (props.micMuted ? "Microphone muted" : "Live conversation") : connecting ? "Connecting…" : "Ready to start";
+  const transcript = [props.heard && `You: ${props.heard}`, (reply || props.spoken) && `Adrian: ${reply || props.spoken}`, uploadName].filter(Boolean).join("\n");
 
   const stage = (
-    <div className="speak-stage speak-call" role="dialog" aria-modal="true" aria-label="Speak" data-testid="speak-stage" style={{ position: "fixed", inset: 0, zIndex: 500, background: "#07080c" }}>
-      <section className="speak-system" data-testid="speak-system" style={{ position: "relative", zIndex: 2, width: "min(100%, 28rem)", color: "#f4f4f5", textAlign: "center" }}>
-        <p>System call</p>
-        <h2 style={{ fontSize: "1.35rem", fontWeight: 700 }}>Speak talks to the system.</h2>
-        <p style={{ marginTop: "0.4rem", color: "#d4d4d8" }}>Voice only. No video and no avatar. Mute the microphone or end the call when you are done.</p>
-        <div style={{ display: "flex", justifyContent: "center", gap: "0.5rem", marginTop: "0.8rem" }}>
-          <button type="button" data-testid="speak-emergency-stop" onClick={() => cutSpeechRef.current("owner")} style={{ minHeight: "2.75rem", border: "1px solid #fb7185", borderRadius: "0.75rem", padding: "0 0.9rem", color: "#fecdd3", background: "transparent" }}>Emergency stop</button>
-          <button type="button" data-testid="speak-clear-stop" onClick={() => clearStop()} style={{ minHeight: "2.75rem", border: "1px solid #86efac", borderRadius: "0.75rem", padding: "0 0.9rem", color: "#bbf7d0", background: "transparent" }}>Clear stop</button>
-        </div>
-        <p data-testid="speak-speech-cut" role="status">{notice?.startsWith("Speech cut") || notice?.startsWith("Stop cleared") ? notice : props.halted ? "Emergency stop is on. Press Clear stop to speak again." : "Emergency stop is yours. Clear stop only releases that stop."}</p>
-      </section>
-      <p data-testid="speak-face" style={{ position: "relative", zIndex: 2, color: "#d4d4d8" }}>Speak hears a reply. It does not open Intelligence Layer.</p>
+    <div ref={dialogRef} tabIndex={-1} className="speak-stage speak-call" role="dialog" aria-modal="true" aria-label="Speak" data-testid="speak-stage"
+      onKeyDownCapture={(event) => {
+        if (event.key === "Escape") {
+          event.preventDefault();
+          event.stopPropagation();
+          if (settingsOpen) closeSettings();
+          else props.onClose();
+          return;
+        }
+        if (event.key !== "Tab") return;
+        const root = settingsOpen ? dialogRef.current?.querySelector(".speak-sheet") : dialogRef.current;
+        const controls = root?.querySelectorAll<HTMLElement>('button:not([disabled]), input:not([hidden]):not([disabled])');
+        if (!controls?.length) return;
+        const first = controls[0], last = controls[controls.length - 1];
+        if (event.shiftKey && (document.activeElement === first || document.activeElement === root)) { event.preventDefault(); last.focus(); }
+        else if (!event.shiftKey && document.activeElement === last) { event.preventDefault(); first.focus(); }
+      }}
+    >
       <video ref={videoRef} className={source === "none" ? "is-hidden" : source} playsInline muted autoPlay />
-      <div className="speak-call__status">
-        <AudioLines aria-hidden="true" />
-        <p role="status" data-testid="speak-status">{reply ? `Spoken: ${reply}` : status}</p>
-        {calling ? <p data-testid="speak-once">Speaking…</p> : null}
+      <div className="speak-call__top">
+        <span>Adrian’s Mind <span className="speak-call__provider">/ {props.freeOnly ? "Free-only · cloud voice off" : "xAI realtime"}</span></span>
+        <div className="speak-call__safety">
+          <button type="button" data-testid="speak-emergency-stop" onClick={() => cutSpeechRef.current("owner")}>Emergency stop</button>
+          {props.halted && <button type="button" data-testid="speak-clear-stop" onClick={clearStop}>Clear stop</button>}
+        </div>
       </div>
-      {callTranscript ? <p className="speak-call__transcript" data-testid="speak-reply">{callTranscript}</p> : reply || props.spoken || props.callError ? <p className="speak-call__transcript" data-testid="speak-reply">{props.callError || reply || props.spoken}</p> : null}
-      {!callTranscript && showTranscript && transcript ? <p className="speak-call__transcript" data-testid="speak-transcript">{transcript}</p> : null}
+      <section className="speak-system" data-testid="speak-system">
+        <div className="speak-call__symbol" aria-hidden="true"><AudioLines /></div>
+        <h2>Speak with Adrian</h2>
+        <p role="status" data-testid="speak-status">{status}</p>
+        {!props.live && <button type="button" className="speak-call__place" disabled={props.halted || connecting || recordingPending || props.recording} onClick={() => void startLive()}>{!props.signedIn ? "Sign in to speak" : connecting ? "Connecting…" : props.callError ? "Retry live conversation" : "Start live conversation"}</button>}
+        {props.callError && <p className="speak-call__transcript" role="alert">{props.callError}</p>}
+        {notice && <p className="speak-call__transcript" data-testid="speak-speech-cut" role="status">{notice}</p>}
+        {showTranscript && transcript && <p className="speak-call__transcript" data-testid="speak-transcript">{transcript}</p>}
+      </section>
+      <div className="speak-call__dock">
       <div className="speak-call__pills" aria-label="Call controls">
         <button type="button" aria-label="Screen share" aria-pressed={source === "screen"} onClick={() => void show("screen")}><MonitorUp /></button>
         <button type="button" aria-label={speakerMuted ? "Unmute speaker" : "Mute speaker"} aria-pressed={speakerMuted} onClick={toggleSpeaker}>{speakerMuted ? <VolumeX /> : <Volume2 />}</button>
-        <button type="button" aria-label={muted || !(props.live || listening) ? "Unmute microphone" : "Mute microphone"} aria-pressed={(props.live || listening) && !muted} onClick={() => { if (activation === "push" && !listening) return; void toggleMic(); }} onPointerDown={() => { if (activation === "push" && !listening) void toggleMic(); }} onPointerUp={() => { if (activation === "push" && listening) stopMic(); }}>{muted || !(props.live || listening) ? <MicOff /> : <Mic />}</button>
-        <button type="button" aria-label="Voice settings" aria-pressed={settingsOpen} onClick={() => setSettingsOpen((open) => !open)}><Settings /></button>
+        <button type="button" disabled={!props.live} aria-label={activation === "push" ? "Hold to talk" : props.micMuted ? "Unmute microphone" : "Mute microphone"} aria-pressed={props.live && !props.micMuted}
+          onClick={() => { if (activation !== "push") props.onMicMute(!props.micMuted); }}
+          onPointerDown={(event) => { if (activation === "push") { event.currentTarget.setPointerCapture(event.pointerId); held.current = true; props.onMicMute(false); } }}
+          onLostPointerCapture={() => { if (held.current) { held.current = false; props.onMicMute(true); } }}
+          onKeyDown={(event) => { if (activation === "push" && (event.key === " " || event.key === "Enter")) { event.preventDefault(); held.current = true; props.onMicMute(false); } }}
+          onKeyUp={() => { if (held.current) { held.current = false; props.onMicMute(true); } }}
+          onBlur={() => { if (held.current) { held.current = false; props.onMicMute(true); } }}
+        >{props.micMuted || !props.live ? <MicOff /> : <Mic />}</button>
+        <button ref={settingsButton} type="button" aria-label="Voice settings" aria-pressed={settingsOpen} onClick={() => setSettingsOpen((open) => !open)}><Settings /></button>
         <button type="button" className="speak-call__notes" aria-label="Transcript" aria-pressed={showTranscript} onClick={() => setShowTranscript((open) => !open)}><AudioLines /></button>
         <button type="button" className="speak-call__code" aria-label="Open in Intelligence" onClick={() => props.onHandCode?.(line.trim() || props.heard || props.spoken || "")}>Code</button>
       </div>
       <form className="speak-call__bar" onSubmit={(event) => { event.preventDefault(); void ask(); }}>
         <button type="button" aria-label="Add a file" onClick={() => fileRef.current?.click()}><Plus /></button>
         <input aria-label="Ask Anything" placeholder="Ask Anything" value={line} onChange={(event) => setLine(event.target.value)} />
+        {line.trim() && <button type="submit" aria-label="Send to Adrian" disabled={asking || props.halted}><ArrowUp /></button>}
         <button type="button" className="speak-call__end" aria-label="End call" onClick={() => { stopVideo(); props.onClose(); }}><PhoneOff /></button>
       </form>
+      </div>
       {settingsOpen ? (
         <section className="speak-sheet" aria-label="Voice settings">
           <header>
-            <button type="button" aria-label="Close voice settings" onClick={() => setSettingsOpen(false)}><X /></button>
+            <button ref={closeSettingsButton} type="button" aria-label="Close voice settings" onClick={closeSettings}><X /></button>
             <h2>Voice settings</h2>
           </header>
           <button type="button" className="speak-sheet__voice" onClick={() => chooseVoice(VOICES[(VOICES.findIndex((item) => item.id === voice) + 1) % VOICES.length].id)}>
@@ -455,6 +420,7 @@ export function SpeakStage(props: {
             {RATES.map((item) => <button key={item.id} type="button" aria-pressed={rate === item.id} onClick={() => chooseRate(item.id)}>{item.label}</button>)}
           </div>
           <button type="button" aria-pressed={source === "camera"} onClick={() => void show("camera")}><Camera /> Camera</button>
+          {props.onKeepRecording && <button type="button" disabled={!props.signedIn || props.halted || connecting || props.live || props.recording || recordingPending} onClick={() => void startRecording()}>Record this tab separately</button>}
           {!props.signedIn ? <button type="button" onClick={props.onSignIn}>Sign in to start the live call</button> : null}
         </section>
       ) : null}

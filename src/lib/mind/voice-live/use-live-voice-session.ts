@@ -25,6 +25,7 @@ const OFF_STATE: LiveVoicePublicState = {
 };
 
 export type UseLiveVoiceSessionOptions = {
+  freeOnly?: boolean;
   isOverlayMicOpen?: () => boolean;
   onUserTranscript?: (text: string) => void;
   onAssistantTranscript?: (text: string) => void;
@@ -51,7 +52,8 @@ export function useLiveVoiceSession(options: UseLiveVoiceSessionOptions = {}) {
       (async (signal?: AbortSignal): Promise<MintSecretResult> => {
         try {
           if (signal?.aborted) return { ok: false, error: "Voice start canceled." };
-          const secret = await createVoiceClientSecret();
+          if (optionsRef.current.freeOnly) return { ok: false, error: "Free-only mode keeps realtime voice off." };
+          const secret = await createVoiceClientSecret({ data: { freeOnly: optionsRef.current.freeOnly } });
           if (signal?.aborted) return { ok: false, error: "Voice start canceled." };
           if (!secret || typeof secret !== "object" || !("ok" in secret)) {
             return { ok: false, error: formatVoiceClientError(secret) };
@@ -100,6 +102,10 @@ export function useLiveVoiceSession(options: UseLiveVoiceSessionOptions = {}) {
     setSpeakerMuted(false);
     setState((prev) => ({ ...OFF_STATE, modeBadge: prev.modeBadge, error: null }));
   }, []);
+
+  useEffect(() => {
+    if (options.freeOnly && sessionRef.current) end();
+  }, [options.freeOnly, end]);
 
   const toggleMute = useCallback(() => {
     ensureSession().toggleMute();

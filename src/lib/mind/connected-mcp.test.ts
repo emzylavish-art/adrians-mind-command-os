@@ -13,10 +13,18 @@ import { loadRegistry, resetRegistryStoreForTests, saveRegistry, setConnectedLeg
 const SECRET = "test-connector-secret";
 const TOKEN = "test-connected-bearer";
 type Row = { userId: string; id: string; record: string };
+const approvals = new Map<string, string>();
 function memoryDb(rows: Row[] = []): RegistryDb & { rows: Row[] } {
   return {
     rows,
     async query<T = Record<string, unknown>>(text: string, params: unknown[] = []): Promise<T[]> {
+      if (text.includes("mind_mcp_call_approvals")) {
+        if (!params.length) return [];
+        const [id, owner, digest] = params.map(String);
+        if (text.startsWith("INSERT")) approvals.set(id, JSON.stringify([owner, digest]));
+        else if (approvals.get(id) === JSON.stringify([owner, digest])) { approvals.delete(id); return [{ approval_id: id }] as T[]; }
+        return [];
+      }
       const userId = String(params[0]);
       if (text.startsWith("select record")) return rows.filter((row) => row.userId === userId).map((row) => ({ record: row.record })) as T[];
       if (text.startsWith("select id")) return rows.filter((row) => row.userId === userId).map((row) => ({ id: row.id })) as T[];
@@ -172,10 +180,11 @@ describe("Connected durable backend", { concurrency: false }, () => {
   it("durable chat sees saved rows across fresh loads and enforces confirmation and schemas without generic text", async () => {
     const db = memoryDb();
     const wire = fakeMcp();
-    await saveConnectedMcp(db, "owner", input, wire);
+    const saved = await saveConnectedMcp(db, "owner", input, wire);
     resetRegistryStoreForTests();
     setConnectedLegacyDirectory(directory);
-    const turn = (text: string, confirmed = false, userId = "owner") => runConnectedMcpTurn({ db: memoryDb(db.rows), userId, text, confirmed, ...wire });
+    let approvalId: string | undefined;
+    const turn = (text: string, confirmed = false, userId = "owner") => runConnectedMcpTurn({ db: memoryDb(db.rows), userId, text, confirmed, approvalId, approvalServerId: confirmed && saved.ok ? saved.savedId : undefined, ...wire });
     wire.calls.length = 0;
     const listed = await turn("list MCP tools");
     assert.equal(listed.ok, true);
@@ -183,6 +192,7 @@ describe("Connected durable backend", { concurrency: false }, () => {
     assert.equal((await turn("list MCP tools", false, "stranger")).ok, false);
     const unconfirmed = await turn('call MCP tool lookup {"id":"42"}');
     assert.equal(unconfirmed.needsConfirmation, true);
+    approvalId = unconfirmed.approvalId;
     assert.equal(wire.calls.length, 0);
     assert.equal((await turn("call MCP tool lookup arbitrary words", true)).ok, false);
     assert.equal((await turn('call MCP tool lookup {"text":"not a schema field"}', true)).ok, false);
@@ -190,8 +200,26 @@ describe("Connected durable backend", { concurrency: false }, () => {
     const called = await turn('call MCP tool lookup {"id":"42"}', true);
     assert.equal(called.ok, true);
     assert.equal(called.text, "found");
+    assert.equal((await turn('call MCP tool lookup {"id":"42"}', true)).ok, false);
     assert.deepEqual(wire.calls.find((call) => call.method === "tools/call")?.params?.arguments, { id: "42" });
     assert.ok(!JSON.stringify(called).includes(TOKEN));
+  });
+
+  it("keeps a reviewed call on the selected server after removal", async () => {
+    const db = memoryDb();
+    const wire = fakeMcp();
+    const first = await saveConnectedMcp(db, "owner", input, wire);
+    const second = await saveConnectedMcp(db, "owner", { ...input, label: "Other" }, wire);
+    assert.ok(first.ok && second.ok);
+    const text = `call MCP tool lookup on server ${first.savedId} {"id":"42"}`;
+    const request = { db, userId: "owner", text, confirmed: false, ...wire };
+    const proposal = await runConnectedMcpTurn(request);
+    assert.equal(proposal.approvalServerId, first.savedId);
+    await removeConnectedMcp(db, "owner", first.savedId);
+    wire.calls.length = 0;
+    const result = await runConnectedMcpTurn({ ...request, confirmed: true, approvalServerId: proposal.approvalServerId, approvalId: proposal.approvalId });
+    assert.equal(result.ok, false);
+    assert.equal(wire.calls.length, 0);
   });
 
   it("blocks save/chat while halted and does not call disabled or deleted durable rows", async () => {

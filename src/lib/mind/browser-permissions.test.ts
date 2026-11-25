@@ -2,16 +2,22 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { browserAddress, browserPreferencesKey, defaultBrowserPreferences, parseBrowserPreferences, websitePermission } from "./browser-permissions.ts";
 
-test("website permissions are account-scoped and exact-origin", () => {
+test("handoffs honor the exact origin and the current default after reload", () => {
   const url = browserAddress("example.com/path")!;
-  const prefs = parseBrowserPreferences(JSON.stringify({ defaultPermission: "block", sites: { [url.origin]: "allow" } }));
-  assert.equal(websitePermission(prefs, url), "allow");
-  assert.equal(websitePermission(prefs, new URL("https://shop.example.com")), "block");
   assert.equal(websitePermission(defaultBrowserPreferences, url), "ask");
+  const restored = parseBrowserPreferences(JSON.stringify({ defaultPermission: "block", sites: { [url.origin]: "allow" } }));
+  assert.equal(websitePermission(restored, url), "allow");
+  for (const address of ["http://example.com/path", "https://shop.example.com", "https://example.com:8443"]) {
+    assert.equal(websitePermission(restored, new URL(address)), "block");
+  }
   assert.notEqual(browserPreferencesKey("a"), browserPreferencesKey("b"));
 });
 
-test("unsafe addresses and invalid stored rules fail closed", () => {
-  for (const address of ["file:///a", "javascript:void(0)", "https://u:p@example.com", "bad address"]) assert.equal(browserAddress(address), null);
-  for (const raw of ["{}", "bad json", '{"defaultPermission":"allow","sites":{"https://example.com/path":"allow"}}']) assert.throws(() => parseBrowserPreferences(raw));
+test("invalid stored rules fail closed and non-web or credentialed URLs are refused", () => {
+  for (const address of ["file:///a", "javascript:void(0)", "https://u:p@example.com", "bad address"]) {
+    assert.equal(browserAddress(address), null);
+  }
+  for (const raw of ["{}", "bad json", '{"defaultPermission":"allow","sites":{"https://example.com/path":"allow"}}']) {
+    assert.throws(() => parseBrowserPreferences(raw));
+  }
 });

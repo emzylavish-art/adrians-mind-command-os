@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import { conversationSharePath } from "@/lib/mind/conversation-actions";
 import { BotBuilder } from "@/components/mind/bot-builder";
 import { zoneIsValid } from "@/lib/mind/schedule-clock";
 import { getBearerToken } from "@/lib/auth/client";
@@ -177,6 +178,7 @@ export function FleetPanel({
   const [provider, setProvider] = useState<string>(providerChoice ?? "openai");
   const [gmailBoard, setGmailBoard] = useState<{ state: string; detail: string }>({ state: "Checking", detail: "Checking connection…" });
   const [jobName, setJobName] = useState("");
+  const [jobInstruction, setJobInstruction] = useState("");
   const [scheduleBand, setScheduleBand] = useState<"jobs" | "new">(initialAgentId ? "new" : "jobs");
   const [jobZone, setJobZone] = useState(() => Intl.DateTimeFormat().resolvedOptions().timeZone || "UTC");
   const [jobHour, setJobHour] = useState("");
@@ -420,8 +422,8 @@ export function FleetPanel({
         return addConnection(current, params.provider, params.label, false);
       case "add_mailbox":
         return addMailbox(current, params.label, params.address);
-      case "add_schedule":
-        return addSchedule(
+      case "add_schedule": {
+        const result = addSchedule(
           current,
           params.name,
           params.agentId,
@@ -430,7 +432,10 @@ export function FleetPanel({
           params.timeZone,
           params.clockHour,
           params.clockMinute,
+          params.instruction,
         );
+        return result.ok ? { ...result, ws: setScheduleEnabled(result.ws, result.ws.schedules[0].id, false) } : result;
+      }
     }
   }
 
@@ -605,7 +610,7 @@ export function FleetPanel({
               </details>}
               <div className="mt-2 flex flex-wrap gap-2">
                 {(run.state === "queued" || run.state === "running") ? <button type="button" className="min-h-11 rounded-panel border border-line px-3" onClick={() => setWs((prev) => pauseRun(prev, run.id))}>Pause</button> : null}
-                {run.state === "paused" ? <button type="button" className="min-h-11 rounded-panel border border-line px-3" onClick={() => setWs((prev) => resumeRun(prev, run.id))}>Resume</button> : null}
+                {(run.state === "paused" || run.state === "waiting_external") ? <button type="button" className="min-h-11 rounded-panel border border-line px-3" onClick={() => setWs((prev) => resumeRun(prev, run.id))}>{run.state === "waiting_external" ? "Retry this step" : "Resume"}</button> : null}
                 {!["completed", "failed", "canceled"].includes(run.state) ? <button type="button" className="min-h-11 rounded-panel border border-line px-3" onClick={() => setWs((prev) => cancelRun(prev, run.id))}>Stop run</button> : null}
                 {run.state === "waiting_approval" ? <>
                   {run.plan.some((step) => step.tool === "browser") ? <button type="button" className="min-h-11 rounded-panel border border-line px-3" onClick={() => setWs((prev) => approveRunAction(prev, run.id, "browser"))}>Approve browser</button> : null}
@@ -719,16 +724,19 @@ export function FleetPanel({
           <p className="pb-2 text-xs text-muted">One pass: node --experimental-strip-types scripts/schedule-tick.mjs. Stay up: node --experimental-strip-types scripts/schedule-worker.mjs. Interval: MIND_WORKER_INTERVAL_MS.</p>
         </details>
         <div id="owner-scheduled" className="solid-form mt-4" hidden={scheduleBand !== "new"}>
-          <p className="text-sm text-muted">Add a daily job. It waits here until you run due schedules or the worker is started.</p>
+          <p className="text-sm text-muted">Save a daily job, then choose Turn on to queue it while Adrian is open.</p>
           <div className="job-fields mt-3">
           <label className="text-sm">Name
             <input value={jobName} onChange={(event) => setJobName(event.target.value)} placeholder="Morning notes" aria-label="Job name" className="mt-1 min-h-11 w-full rounded-panel border border-line bg-surface px-3 text-sm" />
           </label>
+          <label className="text-sm">Task instruction
+            <textarea maxLength={2000} value={jobInstruction} onChange={(event) => setJobInstruction(event.target.value)} className="block min-h-11 w-full rounded-panel border border-line bg-surface p-2" />
+          </label>
           <label className="text-sm">Time zone
             <input value={jobZone} onChange={(event) => setJobZone(event.target.value)} placeholder="America/Chicago" aria-label="Time zone" className="mt-1 min-h-11 w-full rounded-panel border border-line bg-surface px-3 text-sm" />
           </label>
-          <label className="text-sm">Hour
-            <input type="number" min="0" max="23" step="1" value={jobHour} onChange={(event) => setJobHour(event.target.value)} placeholder="0-23" aria-label="Hour" className="mt-1 min-h-11 w-full rounded-panel border border-line bg-surface px-3 text-sm" />
+          <label className="text-sm">Time
+            <input type="time" step="60" value={jobHour} onChange={(event) => setJobHour(event.target.value)} aria-label="Time" className="mt-1 min-h-11 w-full rounded-panel border border-line bg-surface px-3 text-sm" />
           </label>
           <label className="text-sm">Agent
             <select aria-label="Schedule agent" value={scheduleAgentId} onChange={(event) => setScheduleAgentId(event.target.value)} className="mt-1 min-h-11 w-full rounded-panel border border-line bg-surface px-3 text-sm">
@@ -742,10 +750,11 @@ export function FleetPanel({
             className="min-h-11 rounded-panel bg-accent px-4 text-sm font-semibold text-accent-ink"
             disabled={ws.halted || !scheduleAgentId}
             onClick={() => {
-              const hour = Number(jobHour);
+              const [hour, minute] = jobHour.split(":").map(Number);
+              if (!jobInstruction.trim()) { setScheduleError("Enter the task for the agent."); return; }
               if (!jobName.trim()) { setScheduleError("Enter a job name."); return; }
-              if (!jobHour.trim() || !Number.isInteger(hour) || hour < 0 || hour > 23) {
-                setScheduleError("Enter a whole hour from 0 to 23.");
+              if (!jobHour.trim() || !Number.isInteger(hour) || hour < 0 || hour > 23 || !Number.isInteger(minute) || minute < 0 || minute > 59) {
+                setScheduleError("Choose an hour and minute.");
                 return;
               }
               if (!zoneIsValid(jobZone.trim())) { setScheduleError("Enter a valid time zone, such as America/New_York."); return; }
@@ -757,14 +766,16 @@ export function FleetPanel({
               const saved = runMutation(snapshotFleetMutationParams({
                 kind: "add_schedule",
                 name: jobName,
+                instruction: jobInstruction.trim(),
                 agentId: scheduleAgentId,
                 intervalMinutes: 1440,
                 timeZone: jobZone.trim(),
                 clockHour: hour,
-                clockMinute: 0,
+                clockMinute: minute,
               }));
               if (saved) {
                 setJobName("");
+                setJobInstruction("");
                 setJobHour("");
                 setScheduleAgentId("");
                 setScheduleBand("jobs");
@@ -794,9 +805,15 @@ export function FleetPanel({
             return (
             <li key={job.id} className="dense-card p-3 text-sm">
               <p className="font-semibold">{job.name}</p>
+              <p className="text-sm">Task: {job.instruction || job.name}</p>
+              <p className="text-sm text-muted">Runs in an open browser or a running local schedule worker.</p>
               <p className="mt-1 text-sm text-muted">{job.enabled ? (blocked ? "Blocked" : "On") : "Off"} · {bot?.name ?? "No bot assigned"}</p>
               <p className="text-sm text-muted">{job.clockHour == null ? `Every ${job.intervalMinutes} minutes` : `Daily at ${String(job.clockHour).padStart(2, "0")}:${String(job.clockMinute ?? 0).padStart(2, "0")} ${job.timeZone || "UTC"}`}</p>
-              {blocked ? <p className="text-sm text-danger">{bot?.archived ? "Agent archived" : "Agent unavailable"}</p> : <p className="text-sm text-muted">Next due <time dateTime={job.nextRunAt}>{new Date(job.nextRunAt).toLocaleString()}</time></p>}
+              {blocked ? <p className="text-sm text-danger">{bot?.archived ? "Agent archived" : "Agent unavailable"}</p> : <p className="text-sm text-muted">Next due in your local time <time dateTime={job.nextRunAt}>{new Date(job.nextRunAt).toLocaleString()}</time></p>}
+              {job.chatId && ws.chats.some((chat) => chat.id === job.chatId) && <a className="underline" href={conversationSharePath(job.chatId, ["chat"])}>Open conversation</a>}
+              {job.lastQueuedRunId && <p>Last occurrence: {ws.runs.find((run) => run.id === job.lastQueuedRunId)?.state ?? "Run record unavailable"}</p>}
+              {job.lastRunAt && <p>Last completed: {new Date(job.lastRunAt).toLocaleString()}</p>}
+              {job.lastAttemptAt && <p>Last attempt: {new Date(job.lastAttemptAt).toLocaleString()}</p>}
               {job.lastError && <p className="text-sm text-danger">{job.lastError}</p>}
               {blocked && <label className="mt-2 block text-sm">Reassign bot
                 <select value="" className="ml-2 min-h-11 max-w-full rounded-panel border border-line bg-surface px-2" onChange={(event) => {
@@ -807,7 +824,8 @@ export function FleetPanel({
                   {ws.agents.filter((agent) => !agent.archived).map((agent) => <option key={agent.id} value={agent.id}>{agent.name}</option>)}
                 </select>
               </label>}
-              <button type="button" disabled={!job.enabled && blocked} className="mt-2 min-h-11 rounded-panel border border-line px-3 text-sm" onClick={() => setWs((prev) => setScheduleEnabled(prev, job.id, !job.enabled))}>{job.enabled ? "Turn off" : "Turn on"}</button>
+              <button type="button" disabled={!job.enabled && (blocked || ws.halted)} className="mt-2 min-h-11 rounded-panel border border-line px-3 text-sm" onClick={() => setWs((prev) => setScheduleEnabled(prev, job.id, !job.enabled))}>{job.enabled ? "Turn off" : "Turn on for next occurrence"}</button>
+              {!job.enabled && !blocked && job.nextRunAt < new Date().toISOString() && <button type="button" disabled={ws.halted} className="ml-2 min-h-11 rounded-panel border border-line px-3" onClick={() => setWs((prev) => setScheduleEnabled(prev, job.id, true, new Date().toISOString(), true))}>Queue one missed occurrence on next check</button>}
             </li>
           ); })}
         </ul>

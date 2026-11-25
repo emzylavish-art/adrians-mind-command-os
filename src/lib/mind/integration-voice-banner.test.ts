@@ -66,10 +66,11 @@ describe("integration voice + banner wiring survives merge", () => {
       "runImagine",
       "historyTextForImages",
       "ServiceBoard",
-      "analyzeImageFile",
+      "fileToDownscaledDataUrl",
     ]) {
       assert.match(commandApp, new RegExp(needle.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")));
     }
+    assert.doesNotMatch(commandApp, /analyzeImageFile\(/);
     for (const needle of ["resolveXaiInferenceApiKey", "boundAbortSignal", "AGENT_TIMEOUT_REPLY", "agentRunTimeoutMs", "images: result.images"]) {
       assert.match(agentRun, new RegExp(needle.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")));
     }

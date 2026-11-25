@@ -1,30 +1,100 @@
 import { useEffect, useState } from "react";
-import { browserAddress, browserPermissions, browserPreferencesKey, parseBrowserPreferences, websitePermission, type BrowserPermission, type BrowserPreferences } from "@/lib/mind/browser-permissions";
+import {
+  browserAddress, browserPermissions, browserPreferencesKey, defaultBrowserPreferences,
+  parseBrowserPreferences, websitePermission, type BrowserPermission, type BrowserPreferences,
+} from "@/lib/mind/browser-permissions";
 
 const labels: Record<BrowserPermission, string> = { ask: "Always ask", allow: "Allow opening", block: "Block" };
 const control = "min-h-11 max-w-full rounded-panel border border-line bg-surface px-3";
 
+function PermissionSelect({ label, value, onChange }: { label: string; value: BrowserPermission; onChange: (value: BrowserPermission) => void }) {
+  return <select aria-label={label} className={control} value={value} onChange={(event) => onChange(event.target.value as BrowserPermission)}>
+    {browserPermissions.map((permission) => <option key={permission} value={permission}>{labels[permission]}</option>)}
+  </select>;
+}
+
 export function CloudBrowserSettings({ owner }: { owner: string | null }) {
   const [settings, setSettings] = useState<BrowserPreferences | null>(null);
-  const [site, setSite] = useState(""); const [permission, setPermission] = useState<BrowserPermission>("ask");
-  const [address, setAddress] = useState(""); const [notice, setNotice] = useState("");
+  const [site, setSite] = useState("");
+  const [newPermission, setNewPermission] = useState<BrowserPermission>("ask");
+  const [address, setAddress] = useState("");
+  const [notice, setNotice] = useState("");
   const key = owner ? browserPreferencesKey(owner) : null;
+
   useEffect(() => {
     if (!key) return;
-    const read = () => { try { setSettings(parseBrowserPreferences(localStorage.getItem(key))); } catch { setSettings(null); setNotice("Browser preferences could not be read."); } };
-    read(); window.addEventListener("storage", read); return () => window.removeEventListener("storage", read);
+    function read() {
+      try { setSettings(parseBrowserPreferences(localStorage.getItem(key!))); }
+      catch { setSettings(null); setNotice("Browser preferences could not be read. Website opening is unavailable."); }
+    }
+    read();
+    function sync(event: StorageEvent) { if (event.key === key || event.key === null) read(); }
+    window.addEventListener("storage", sync);
+    return () => window.removeEventListener("storage", sync);
   }, [key]);
-  const update = (fn: (prev: BrowserPreferences) => BrowserPreferences) => {
-    if (!key) return; try { const next = fn(parseBrowserPreferences(localStorage.getItem(key))); localStorage.setItem(key, JSON.stringify(next)); setSettings(next); setNotice("Preference saved for this account on this device."); } catch { setNotice("Could not save this preference."); }
-  };
-  if (!key) return <section className="settings-card rounded-panel p-4 text-sm"><h3 className="font-display text-xl font-bold">Cloud browser</h3><p className="mt-2 text-muted">Sign in to manage website handoff permissions.</p></section>;
-  return <section className="settings-card space-y-4 rounded-panel p-4 text-sm" aria-labelledby="cloud-browser-title">
+
+  function update(fn: (prev: BrowserPreferences) => BrowserPreferences) {
+    if (!key) return false;
+    try {
+      const next = fn(parseBrowserPreferences(localStorage.getItem(key)));
+      localStorage.setItem(key, JSON.stringify(next));
+      setSettings(next);
+      setNotice("Preference saved for this account on this device.");
+      return true;
+    } catch {
+      setNotice("Could not save this preference. Check browser storage and try again.");
+      return false;
+    }
+  }
+
+  function handoff() {
+    const target = browserAddress(address);
+    if (!key || !target) { setNotice("Enter an HTTP or HTTPS website address."); return; }
+    let permission: BrowserPermission;
+    try { permission = websitePermission(parseBrowserPreferences(localStorage.getItem(key)), target); }
+    catch { setNotice("Could not verify browser permissions."); return; }
+    if (permission === "block") { setNotice(`Website opening is blocked for ${target.origin}.`); return; }
+    if (permission === "ask" && !window.confirm(`Open ${target.href} in your browser?`)) return;
+    window.open(target.href, "_blank", "noopener,noreferrer");
+  }
+
+  return <section className="settings-card space-y-5 rounded-panel p-4 text-sm" aria-labelledby="cloud-browser-title">
     <h3 id="cloud-browser-title" className="font-display text-xl font-bold">Cloud browser</h3>
-    <p className="text-muted">Mind OS hands a website to your browser. You control that tab; verification codes and CAPTCHA challenges stay with you.</p>
-    {settings && <><label className="grid gap-1"><span className="font-semibold">Default permissions</span><select aria-label="Default website permission" className={control} value={settings.defaultPermission} onChange={(e) => update((prev) => ({ ...prev, defaultPermission: e.target.value as BrowserPermission }))}>{browserPermissions.map((value) => <option key={value} value={value}>{labels[value]}</option>)}</select></label>
-      <div className="space-y-2"><p className="font-semibold">Specific websites</p>{Object.entries(settings.sites).map(([origin, value]) => <div className="flex flex-wrap items-center gap-2" key={origin}><span className="min-w-0 break-all">{origin}</span><button type="button" className={control} onClick={() => update((prev) => { const sites = { ...prev.sites }; delete sites[origin]; return { ...prev, sites }; })}>Remove</button><span className="text-muted">{labels[value]}</span></div>)}
-        <form className="flex flex-wrap gap-2" onSubmit={(e) => { e.preventDefault(); const url = browserAddress(site); if (!url) return setNotice("Enter an HTTP or HTTPS website address."); update((prev) => ({ ...prev, sites: { ...prev.sites, [url.origin]: permission } })); setSite(""); }}><input aria-label="Website for permission" className={control} value={site} placeholder="example.com" onChange={(e) => setSite(e.target.value)} /><select aria-label="Website permission" className={control} value={permission} onChange={(e) => setPermission(e.target.value as BrowserPermission)}>{browserPermissions.map((value) => <option key={value} value={value}>{labels[value]}</option>)}</select><button className={control}>Save website rule</button></form>
-      </div><form className="flex flex-wrap gap-2" onSubmit={(e) => { e.preventDefault(); const url = browserAddress(address); if (!url) return setNotice("Enter an HTTP or HTTPS website address."); const result = websitePermission(settings, url); if (result === "block") return setNotice(`Website opening is blocked for ${url.origin}.`); if (result === "ask" && !window.confirm(`Open ${url.href} in your browser?`)) return; window.open(url.href, "_blank", "noopener,noreferrer"); }}><input aria-label="Website to open" className={control} value={address} placeholder="https://example.com" onChange={(e) => setAddress(e.target.value)} /><button className={control}>Open website</button></form></>}
+    <p className="text-muted">Mind OS can hand a website over to your browser. You control that tab. Autonomous cloud browsing is unavailable.</p>
+    {!key ? <p>Sign in to manage your website permissions.</p> : settings && <>
+      <div className="settings-row flex-wrap"><div><p className="font-semibold">Default permissions</p><p className="text-muted">Applies to website handoffs from this panel.</p></div>
+        <PermissionSelect label="Default permissions" value={settings.defaultPermission} onChange={(defaultPermission) => update((prev) => ({ ...prev, defaultPermission }))} /></div>
+      <div><p className="font-semibold">Email verification codes</p><p className="text-muted">Enter your code on the website yourself.</p></div>
+      <div><p className="font-semibold">CAPTCHAs</p><p className="text-muted">Complete the challenge yourself in the website tab.</p></div>
+      <fieldset className="space-y-2"><legend className="font-semibold">Specific websites</legend>
+        {Object.entries(settings.sites).map(([origin, permission]) => <div key={origin} className="flex flex-wrap items-center gap-2">
+          <span className="min-w-0 break-all">{origin}</span>
+          <PermissionSelect label={`Permission for ${origin}`} value={permission} onChange={(value) => update((prev) => ({ ...prev, sites: { ...prev.sites, [origin]: value } }))} />
+          <button type="button" className={control} aria-label={`Remove rule for ${origin}`} onClick={() => update((prev) => {
+            const sites = { ...prev.sites }; delete sites[origin]; return { ...prev, sites };
+          })}>Remove</button>
+        </div>)}
+        <form className="flex flex-wrap gap-2" onSubmit={(event) => {
+          event.preventDefault(); const url = browserAddress(site);
+          if (!url) { setNotice("Enter an HTTP or HTTPS website address."); return; }
+          if (update((prev) => ({ ...prev, sites: { ...prev.sites, [url.origin]: newPermission } }))) setSite("");
+        }}>
+          <input aria-label="Website for permission" className={control} placeholder="example.com" value={site} onChange={(event) => setSite(event.target.value)} />
+          <PermissionSelect label="Permission for new website" value={newPermission} onChange={setNewPermission} />
+          <button type="submit" className={control}>Save website rule</button>
+        </form>
+      </fieldset>
+      <div><p className="font-semibold">Browser data</p><p className="text-muted">Website cookies stay in the browser you open. Manage or clear them in that browser’s settings.</p></div>
+      <form className="flex flex-wrap gap-2" onSubmit={(event) => { event.preventDefault(); handoff(); }}>
+        <input aria-label="Website to open" className={control} placeholder="https://example.com" value={address} onChange={(event) => setAddress(event.target.value)} />
+        <button className={control} type="submit">Open website</button>
+      </form>
+    </>}
+    {key && !settings && notice && <button className={control} type="button" onClick={() => {
+      if (!window.confirm("Reset browser permissions for this account on this device?")) return;
+      try { localStorage.removeItem(key); setSettings(defaultBrowserPreferences); setNotice("Website permissions reset to Always ask."); }
+      catch { setNotice("Browser storage is unavailable."); }
+    }}>Reset browser permissions</button>}
     <p role="status" className="text-muted">{notice}</p>
   </section>;
 }

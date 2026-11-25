@@ -1,8 +1,8 @@
+import { decryptSecret } from "./crypto.ts";
 import { timingSafeEqual } from "node:crypto";
 import {
   clearConnection,
   CONNECTOR_DISPLAY_NAMES,
-  getAccessToken,
   newOAuthState,
   readConnection,
   savePendingOAuth,
@@ -41,7 +41,7 @@ export type FetchLike = (url: string, init?: RequestInit) => Promise<{
 }>;
 
 export type TokenAuthStyle = "basic" | "body" | "basic_and_body";
-export type RevokeStyle = "none" | "bearer_json" | "form_token" | "github_basic" | "slack_auth_revoke";
+export type RevokeStyle = "none" | "notion_basic" | "form_token" | "github_basic" | "slack_auth_revoke";
 
 export type OAuthProviderEnv = {
   clientId?: string;
@@ -189,7 +189,8 @@ export async function exchangeAuthorizationCode(
   if (env.redirectUri && typeof env.redirectUri === "string") {
     /* checked after pending load */
   }
-  const pending = hasDurableOAuthStore() ? await takeDurablePendingOAuth(input.state) : takePendingOAuth(input.state);
+  const claim = newOAuthState().state;
+  const pending = hasDurableOAuthStore() ? await takeDurablePendingOAuth(input.state, claim) : takePendingOAuth(input.state);
   if (!pending || pending.connector !== provider.id) {
     return { ok: false, error: "OAuth state is invalid or expired. Nothing was stored." };
   }
@@ -199,6 +200,7 @@ export async function exchangeAuthorizationCode(
   if (env.redirectUri && pending.redirectUri !== env.redirectUri) {
     return { ok: false, error: "OAuth redirect URI mismatch. Nothing was stored." };
   }
+  if (!hasDurableOAuthStore()) savePendingOAuth({ ...pending, state: claim });
   const body = new URLSearchParams({
     grant_type: "authorization_code",
     code: input.code,
@@ -239,8 +241,11 @@ export async function exchangeAuthorizationCode(
   }
   try {
     const save = hasDurableOAuthStore()
-      ? saveDurableConnection
-      : async (payload: Parameters<typeof storeAccessToken>[0]) => storeAccessToken(payload);
+      ? (payload: Parameters<typeof storeAccessToken>[0]) => saveDurableConnection(payload, claim)
+      : async (payload: Parameters<typeof storeAccessToken>[0]) => {
+          if (!takePendingOAuth(claim)) throw new Error("This connection attempt has expired or was disconnected.");
+          return storeAccessToken(payload);
+        };
     const conn = await save({
       ownerId: pending.ownerId,
       connector: provider.id,
@@ -297,23 +302,25 @@ export type DisconnectResult = ConnectionPublic & { revokeOk?: boolean; revokeDe
 
 export async function disconnectProvider(
   provider: OAuthProvider,
-  input: { ownerId: string; env?: OAuthProviderEnv; fetch?: FetchLike },
+  input: { ownerId: string; env?: OAuthProviderEnv; fetch?: FetchLike; expectedConnectedAt?: string },
 ): Promise<DisconnectResult> {
   const env = input.env ?? provider.readEnv();
-  const token = hasDurableOAuthStore()
-    ? await getDurableAccessToken(input.ownerId, provider.id)
-    : getAccessToken(input.ownerId, provider.id);
+  const removed = hasDurableOAuthStore()
+    ? await clearDurableConnection(input.ownerId, provider.id, input.expectedConnectedAt)
+    : clearConnection(input.ownerId, provider.id, input.expectedConnectedAt);
+  const token = removed ? decryptSecret(removed.accessTokenEnc) : null;
   let revokeOk: boolean | undefined;
   let revokeDetail: string | undefined;
   if (token && env.revokeUrl && provider.revokeStyle !== "none") {
     const fetchImpl = input.fetch ?? (globalThis.fetch as FetchLike);
     try {
       let response: Awaited<ReturnType<FetchLike>> | null = null;
-      if (provider.revokeStyle === "bearer_json") {
+      if (provider.revokeStyle === "notion_basic" && env.clientId && env.clientSecret) {
         response = await fetchImpl(env.revokeUrl, {
           method: "POST",
           headers: {
-            Authorization: `Bearer ${token}`,
+            Authorization: `Basic ${Buffer.from(`${env.clientId}:${env.clientSecret}`).toString("base64")}`,
+            "Notion-Version": "2022-06-28",
             "Content-Type": "application/json",
           },
           body: JSON.stringify({ token }),
@@ -328,7 +335,8 @@ export async function disconnectProvider(
         response = await fetchImpl(env.revokeUrl, {
           method: "POST",
           headers: {
-            Authorization: `Bearer ${token}`,
+            Authorization: `Basic ${Buffer.from(`${env.clientId}:${env.clientSecret}`).toString("base64")}`,
+            "Notion-Version": "2022-06-28",
             "Content-Type": "application/x-www-form-urlencoded",
           },
           body: new URLSearchParams({ token }),
@@ -345,6 +353,10 @@ export async function disconnectProvider(
         });
       }
       revokeOk = Boolean(response?.ok);
+      if (revokeOk && provider.revokeStyle === "slack_auth_revoke") {
+        const result = await response?.json().catch(() => null) as { ok?: boolean; revoked?: boolean } | null;
+        revokeOk = result?.ok === true && result.revoked === true;
+      }
       revokeDetail = revokeOk
         ? "Provider revoke succeeded; local token cleared."
         : "Provider revoke failed or was unreachable; local token was still cleared.";
@@ -353,11 +365,10 @@ export async function disconnectProvider(
       revokeDetail = "Provider revoke failed or was unreachable; local token was still cleared.";
     }
   }
-  if (hasDurableOAuthStore()) await clearDurableConnection(input.ownerId, provider.id);
-  else clearConnection(input.ownerId, provider.id);
+  if (removed && revokeOk === undefined) revokeDetail = "Local access was removed. Provider-side revocation was not confirmed.";
   const pub = toPublic(provider.id, null, providerConfigured(env));
   const detail =
-    revokeDetail && pub.state !== "not_configured"
+    revokeDetail
       ? `${pub.detail} ${revokeDetail}`
       : pub.detail;
   return { ...pub, detail, revokeOk, revokeDetail };

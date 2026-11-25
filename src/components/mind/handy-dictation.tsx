@@ -14,7 +14,9 @@ import { finishDictation } from "@/lib/mind/system-dictation";
 
 type Phase = "idle" | "speak" | "saved";
 
-export function HandyDictation() {
+export function HandyDictation({ freeOnly = false }: { freeOnly?: boolean }) {
+  const currentFreeOnly = useRef(freeOnly);
+  currentFreeOnly.current = freeOnly;
   const field = useRef<HTMLInputElement | HTMLTextAreaElement | null>(null);
   const session = useRef<WhisperSession | null>(null);
   const [phase, setPhase] = useState<Phase>("idle");
@@ -87,12 +89,13 @@ export function HandyDictation() {
         setNote(`Words are in ${fieldLabel(current)}. Press Send yourself. Speak was not opened.`);
       },
       transcribe: async (input) => {
+        if (currentFreeOnly.current) return { ok: false, error: "Free-only mode keeps cloud transcription off." };
         const response = await fetch("/api/mind/voice/stt", {
           method: "POST",
           credentials: "same-origin",
           headers: { "content-type": "application/json" },
           body: JSON.stringify({
-            audioBase64: input.audioBase64,
+            audioBase64: input.audioBase64, freeOnly: currentFreeOnly.current,
             mime: input.mime || "audio/webm",
             filename: (input.mime || "").includes("mp4") ? "dictation.m4a" : "dictation.webm",
           }),

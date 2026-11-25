@@ -1,20 +1,35 @@
 import { haltIsOn } from "@/lib/mind/halt.server";
 import { createFileRoute } from "@tanstack/react-router";
-import { claimNextJob, findAgentByToken, readJob } from "@/lib/mind/pc-pairing/store";
+import { acceptJob, claimNextJob, findAgentByToken, offerNextJob, readJob, recordFileProtocol, touchAgent } from "@/lib/mind/pc-pairing/store";
 
 function json(body: unknown, status = 200) {
-  return new Response(JSON.stringify(body), { status, headers: { "content-type": "application/json" } });
+  return new Response(JSON.stringify(body), { status, headers: { "content-type": "application/json", "cache-control": "no-store" } });
+}
+
+function authenticate(request: Request) {
+  const match = /^Bearer\s+(\S+)$/i.exec(request.headers.get("authorization") ?? "");
+  return match ? findAgentByToken(match[1]) : null;
 }
 
 export const Route = createFileRoute("/api/mind/pc/jobs")({
   server: {
     handlers: {
+      POST: async ({ request }) => {
+        const agent = authenticate(request);
+        if (!agent) return json({ ok: false, error: "Valid agent token required." }, 401);
+        const body = await request.json().catch(() => null);
+        if (typeof body?.jobId !== "string" || typeof body.receiptId !== "string" || !/^[a-f0-9]{32}$/.test(body.receiptId)) {
+          return json({ ok: false, error: "A job ID and delivery receipt are required." }, 400);
+        }
+        if (await haltIsOn(agent.ownerId)) return json({ ok: false, error: "Emergency stop is on or unavailable." }, 423);
+        const job = acceptJob(agent.id, body.jobId, body.receiptId);
+        if (!job) return json({ ok: true, accepted: false });
+        return json({ ok: true, accepted: true, status: job.status });
+      },
       GET: async ({ request }) => {
-        const authorization = request.headers.get("authorization");
-        const token = authorization?.toLowerCase().startsWith("bearer ") ? authorization.slice(7).trim() : "";
-        if (!token) return json({ ok: false, error: "Agent token required." }, 401);
-        const agent = findAgentByToken(token);
-        if (!agent) return json({ ok: false, error: "Unknown agent token." }, 401);
+        const agent = authenticate(request);
+        if (!agent) return json({ ok: false, error: "Valid agent token required." }, 401);
+        touchAgent(agent.id);
         const requestedJobId = new URL(request.url).searchParams.get("jobId");
         if (requestedJobId) {
           const job = readJob(requestedJobId);
@@ -24,10 +39,13 @@ export const Route = createFileRoute("/api/mind/pc/jobs")({
         if (await haltIsOn(agent.ownerId)) {
           return json({ ok: true, job: null, detail: "Emergency stop is on or unavailable. Job stayed queued." });
         }
-        const job = claimNextJob(agent.id);
+        const offer = new URL(request.url).searchParams.get("delivery") === "offer";
+        recordFileProtocol(agent.id, offer);
+        const job = offer ? offerNextJob(agent.id) : claimNextJob(agent.id);
         if (!job) return json({ ok: true, job: null });
         return json({
           ok: true,
+          offered: offer,
           job: {
             id: job.id,
             kind: job.kind,

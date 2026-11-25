@@ -1,5 +1,5 @@
 import { createHash, randomBytes, timingSafeEqual } from "node:crypto";
-import { mkdirSync, readFileSync, writeFileSync, existsSync, readdirSync, unlinkSync } from "node:fs";
+import { mkdirSync, readFileSync, writeFileSync, existsSync, readdirSync, linkSync, renameSync, statSync, unlinkSync, utimesSync } from "node:fs";
 import { join } from "node:path";
 import { localDataPath } from "../../local-data.ts";
 
@@ -10,6 +10,7 @@ export type PairedAgent = {
   tokenHash: string;
   registeredAt: string;
   lastSeenAt: string;
+  fileProtocol?: 2;
 };
 
 export type PcJob = {
@@ -25,6 +26,7 @@ export type PcJob = {
   updatedAt: string;
   output?: string;
   error?: string;
+  receiptId?: string;
 };
 
 export type PcJobEvent = {
@@ -130,7 +132,11 @@ export function listAgents(ownerId: string): PairedAgent[] {
     if (!name.endsWith(".json")) continue;
     try {
       const agent = JSON.parse(readFileSync(join(agentsDir(), name), "utf8")) as PairedAgent;
-      if (agent.ownerId === ownerId) out.push(agent);
+      if (agent.ownerId === ownerId) {
+        agent.lastSeenAt = statSync(join(agentsDir(), name)).mtime.toISOString();
+        if (existsSync(join(agentsDir(), name + ".file-v2"))) agent.fileProtocol = 2;
+        out.push(agent);
+      }
     } catch {
       /* skip */
     }
@@ -155,13 +161,25 @@ export function findAgentByToken(token: string): PairedAgent | null {
 
 export function touchAgent(agentId: string) {
   const path = agentPath(agentId);
-  if (!path || !existsSync(path)) return;
+  if (!path) return;
   try {
-    const agent = JSON.parse(readFileSync(path, "utf8")) as PairedAgent;
-    agent.lastSeenAt = new Date().toISOString();
-    writeFileSync(path, JSON.stringify(agent));
-  } catch {
-    /* ignore */
+    const now = new Date();
+    // A heartbeat must never recreate a concurrently revoked credential.
+    utimesSync(path, now, now);
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error;
+  }
+}
+
+export function recordFileProtocol(agentId: string, supportsPreconditions: boolean) {
+  const path = agentPath(agentId);
+  if (!path) return;
+  const marker = path + ".file-v2";
+  if (supportsPreconditions) {
+    if (!existsSync(marker)) writeFileSync(marker, "");
+  } else if (existsSync(marker)) {
+    try { unlinkSync(marker); }
+    catch (error) { if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error; }
   }
 }
 
@@ -179,6 +197,7 @@ export function unregisterAgent(ownerId: string, agentId: string): boolean {
 }
 
 export function enqueueJob(input: {
+  jobKey?: string;
   ownerId: string;
   agentId: string;
   kind?: PcJob["kind"];
@@ -187,9 +206,10 @@ export function enqueueJob(input: {
   confirm: boolean;
 }): PcJob {
   ensure();
+  if (input.jobKey !== undefined && !/^[a-f0-9]{32}$/.test(input.jobKey)) throw new Error("Invalid job ID.");
   const now = new Date().toISOString();
   const job: PcJob = {
-    id: randomBytes(12).toString("hex"),
+    id: input.jobKey ?? randomBytes(12).toString("hex"),
     ownerId: input.ownerId,
     agentId: input.agentId,
     kind: input.kind ?? "shell",
@@ -200,49 +220,110 @@ export function enqueueJob(input: {
     createdAt: now,
     updatedAt: now,
   };
-  writeFileSync(join(jobsDir(), `${job.id}.json`), JSON.stringify(job));
+  const path = join(jobsDir(), `${job.id}.json`);
+  const staging = path + "." + randomBytes(8).toString("hex") + ".tmp";
+  writeFileSync(staging, JSON.stringify(job), { mode: 0o600, flag: "wx" });
+  try {
+    linkSync(staging, path);
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code !== "EEXIST") throw error;
+    const prior = readJob(job.id);
+    if (!prior || prior.ownerId !== job.ownerId || prior.agentId !== job.agentId || prior.kind !== job.kind ||
+        prior.command !== job.command || prior.confirm !== job.confirm || JSON.stringify(prior.payload) !== JSON.stringify(job.payload)) {
+      throw new Error("Job ID already in use.");
+    }
+    return prior;
+  } finally {
+    unlinkSync(staging);
+  }
   return job;
+}
+
+type Transition = Pick<PcJob, "status"> & Partial<Pick<PcJob, "receiptId" | "error" | "output">>;
+
+function snapshot(jobId: string) {
+  const path = jobPath(jobId);
+  if (!path) return null;
+  let job: PcJob;
+  try {
+    job = JSON.parse(readFileSync(path, "utf8")) as PcJob;
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === "ENOENT") return null;
+    throw error;
+  }
+  // Each transition publishes a complete delta at the next sequence number.
+  // Older jobs start at sequence zero and are readable without a migration.
+  let sequence = 0;
+  while (existsSync(`${path}.${sequence + 1}`)) {
+    Object.assign(job, JSON.parse(readFileSync(`${path}.${++sequence}`, "utf8")));
+  }
+  return { job, path, sequence };
 }
 
 export function readJob(jobId: string): PcJob | null {
-  const path = jobPath(jobId);
-  if (!path) return null;
-  try {
-    return JSON.parse(readFileSync(path, "utf8")) as PcJob;
-  } catch {
-    return null;
+  return snapshot(jobId)?.job ?? null;
+}
+
+function changeJob(jobId: string, decide: (job: PcJob) => Transition | "unchanged" | null): PcJob | null {
+  for (;;) {
+    const current = snapshot(jobId);
+    if (!current) return null;
+    const delta = decide(current.job);
+    if (!delta) return null;
+    if (delta === "unchanged") return current.job;
+    const update = { ...delta, updatedAt: new Date().toISOString() };
+    const temp = `${current.path}.${randomBytes(12).toString("hex")}.tmp`;
+    writeFileSync(temp, JSON.stringify(update), { mode: 0o600, flag: "wx" });
+    try {
+      linkSync(temp, `${current.path}.${current.sequence + 1}`);
+      return { ...current.job, ...update };
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code !== "EEXIST") throw error;
+      // A concurrent cancel, claim or result won. Reevaluate the transition.
+    } finally {
+      unlinkSync(temp);
+    }
   }
 }
 
-function writeJob(job: PcJob) {
-  const path = jobPath(job.id);
-  if (!path) return;
-  job.updatedAt = new Date().toISOString();
-  writeFileSync(path, JSON.stringify(job));
+export function offerNextJob(agentId: string): PcJob | null {
+  ensure();
+  return readdirSync(jobsDir())
+    .filter((n) => n.endsWith(".json") && !existsSync(join(jobsDir(), n + ".1")))
+    .map((n) => readJob(n.replace(/\.json$/, "")))
+    .filter((j): j is PcJob => Boolean(j && j.agentId === agentId && j.status === "queued"))
+    .sort((a, b) => a.createdAt.localeCompare(b.createdAt))[0] ?? null;
+}
+
+export function acceptJob(agentId: string, jobId: string, receiptId?: string): PcJob | null {
+  const job = changeJob(jobId, (current) => {
+    if (current.agentId !== agentId) return null;
+    if (receiptId && current.receiptId === receiptId) return "unchanged";
+    if (current.status !== "queued") return null;
+    return { status: "running", receiptId };
+  });
+  if (job) touchAgent(agentId);
+  return job;
 }
 
 export function claimNextJob(agentId: string): PcJob | null {
-  ensure();
-  const queued = readdirSync(jobsDir())
-    .filter((n) => n.endsWith(".json"))
-    .map((n) => readJob(n.replace(/\.json$/, "")))
-    .filter((j): j is PcJob => Boolean(j && j.agentId === agentId && j.status === "queued"))
-    .sort((a, b) => a.createdAt.localeCompare(b.createdAt));
-  const job = queued[0];
-  if (!job) return null;
-  job.status = "running";
-  writeJob(job);
-  touchAgent(agentId);
-  return job;
+  const offered = offerNextJob(agentId);
+  if (!offered) return null;
+  const payload = offered.payload;
+  if (offered.kind === "file-op" && (payload?.expectedContent !== undefined || payload?.expectedMissing === true || payload?.expectedRevision !== undefined)) {
+    changeJob(offered.id, (job) => job.status === "queued" ? { status: "error", error: "Update the paired Companion before making reviewed changes. Nothing was executed." } : null);
+    return null;
+  }
+  return acceptJob(agentId, offered.id);
 }
 
 export function requestJobCancel(ownerId: string, jobId: string): PcJob | null {
-  const job = readJob(jobId);
-  if (!job || job.ownerId !== ownerId || ["done", "error", "timeout", "cancelled"].includes(job.status)) return null;
-  job.status = job.status === "queued" ? "cancelled" : "cancel_requested";
-  job.error = "Cancellation requested by the owner.";
-  writeJob(job);
-  return job;
+  return changeJob(jobId, (job) => {
+    if (job.ownerId !== ownerId) return null;
+    if (job.status === "cancel_requested") return "unchanged";
+    if (job.status !== "queued" && job.status !== "running") return null;
+    return { status: job.status === "queued" ? "cancelled" : "cancel_requested", error: "Cancellation requested by the owner." };
+  });
 }
 
 export function appendJobEvent(input: {
@@ -295,29 +376,31 @@ export function completeJob(input: {
   output?: string;
   error?: string;
 }): PcJob | null {
-  const job = readJob(input.jobId);
-  if (!job || job.agentId !== input.agentId) return null;
-  if (job.status === "cancel_requested") {
-    job.status = "cancelled";
-    job.error = "Cancelled by the owner.";
-    writeJob(job);
-    touchAgent(input.agentId);
-    return job;
-  }
-  job.status = input.ok ? "done" : "error";
-  job.output = (input.output || "").slice(0, 8000);
-  job.error = (input.error || "").slice(0, 2000);
-  writeJob(job);
-  touchAgent(input.agentId);
+  const job = changeJob(input.jobId, (current) => {
+    if (current.agentId !== input.agentId || current.status === "queued") return null;
+    if (current.status === "cancel_requested") return { status: "cancelled", error: "Cancelled by the owner." };
+    if (current.status !== "running") return "unchanged";
+    const output = input.output ?? "";
+    if (current.kind === "file-op" && input.ok) {
+      // Two 1M-code-unit file versions can each expand sixfold when JSON escaped.
+      if (output.length <= 12_100_000) {
+        try {
+          const result = JSON.parse(output);
+          if (result && typeof result === "object" && !Array.isArray(result)) return { status: "done", output, error: "" };
+        } catch { /* report a readable terminal outcome below */ }
+      }
+      return { status: "error", error: "PC reported completion but its file result is unreadable. Check the workspace before retrying." };
+    }
+    return { status: input.ok ? "done" : "error", output: output.slice(0, 8000), error: (input.error ?? "").slice(0, 2000) };
+  });
+  if (job) touchAgent(input.agentId);
   return job;
 }
 
 export function markJobTimeout(jobId: string) {
-  const job = readJob(jobId);
-  if (!job || ["done", "error", "cancelled"].includes(job.status)) return;
-  job.status = "timeout";
-  job.error = "Timed out waiting for the paired PC agent.";
-  writeJob(job);
+  changeJob(jobId, (job) => job.status === "queued" || job.status === "running"
+    ? { status: "timeout", error: "Timed out waiting for the paired PC agent. Check the workspace before retrying." }
+    : null);
 }
 
 export function onlineAgents(ownerId: string, onlineMs = 60_000, now = Date.now()): PairedAgent[] {

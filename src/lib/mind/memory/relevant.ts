@@ -1,4 +1,4 @@
-type Note = { id: string; text: string; archived?: boolean };
+type Note = { id: string; text: string; archived?: boolean; alwaysApply?: boolean };
 
 /** Preserve ordinary preferences as fallback; move lexical evidence ahead of unrelated notes. */
 export function rankMemories<T extends Note>(items: T[], query: string) {
@@ -12,7 +12,10 @@ export function rankMemories<T extends Note>(items: T[], query: string) {
 }
 
 export function relevantMemories<T extends Note>(items: T[], query: string) {
-  return rankMemories(items, query).filter((hit) => hit.score > 0).slice(0, 5).map((hit) => hit.item);
+  const eligible = rankMemories(items, query);
+  const preferences = eligible.filter(({ item }) => item.alwaysApply);
+  const relevant = eligible.filter(({ item, score }) => !item.alwaysApply && score > 0);
+  return [...preferences, ...relevant].slice(0, 12).map(({ item }) => item);
 }
 
 export function voiceProviderStatus(voiceKey: string | undefined) {

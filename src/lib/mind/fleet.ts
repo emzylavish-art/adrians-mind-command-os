@@ -110,6 +110,10 @@ export type ScheduleJob = {
   intervalMinutes: number;
   nextRunAt: string;
   lastRunAt: string | null;
+  chatId?: string;
+  instruction?: string;
+  lastAttemptAt?: string;
+  lastQueuedRunId?: string;
   enabled: boolean;
   lastError: string;
   timeZone: string;
@@ -187,7 +191,9 @@ export function buildTaskPlan(goal: string, tools: FleetTool[]): PlanStep[] {
 /** Independent pieces of one goal. Capped so delegation cannot fan out. */
 export function delegationGoals(goal: string): string[] {
   const parts = goal.split(/\s+and\s+/i).map((part) => part.trim()).filter(Boolean);
-  const goals = (parts.length > 0 ? parts : [goal.trim()]).slice(0, PLAN_MAX_CHILDREN);
+  const goals = parts.length > PLAN_MAX_CHILDREN
+    ? [...parts.slice(0, PLAN_MAX_CHILDREN - 1), parts.slice(PLAN_MAX_CHILDREN - 1).join(" and ")]
+    : parts;
   return goals.length > 0 ? goals : [goal.trim().slice(0, 2000)];
 }
 
@@ -385,6 +391,10 @@ export function readFleet(input: unknown): FleetShape {
         agentId: typeof row.agentId === "string" ? row.agentId : null,
         intervalMinutes: typeof row.intervalMinutes === "number" ? Math.min(10_080, Math.max(5, row.intervalMinutes)) : 1440,
         nextRunAt: typeof row.nextRunAt === "string" ? row.nextRunAt : stamp(),
+        chatId: typeof row.chatId === "string" ? row.chatId : undefined,
+        instruction: typeof row.instruction === "string" ? row.instruction.slice(0, 2000) : undefined,
+        lastQueuedRunId: typeof row.lastQueuedRunId === "string" ? row.lastQueuedRunId : undefined,
+        lastAttemptAt: typeof row.lastAttemptAt === "string" ? row.lastAttemptAt : undefined,
         lastRunAt: typeof row.lastRunAt === "string" ? row.lastRunAt : null,
         enabled: row.enabled !== false,
         lastError: typeof row.lastError === "string" ? row.lastError.slice(0, 300) : "",
@@ -564,9 +574,10 @@ export function gmailConnectAttempt(): { ok: false; error: string } {
   return { ok: false, error: "Google OAuth is not configured. No mailbox was connected and no message was read or sent." };
 }
 
-export function addSchedule(ws: Workspace, name: string, agentId: string | null, intervalMinutes: number, now?: string, timeZone = "UTC", clockHour: number | null = null, clockMinute = 0): { ok: true; ws: Workspace } | { ok: false; error: string } {
+export function addSchedule(ws: Workspace, name: string, agentId: string | null, intervalMinutes: number, now?: string, timeZone = "UTC", clockHour: number | null = null, clockMinute = 0, instruction?: string): { ok: true; ws: Workspace } | { ok: false; error: string } {
   const title = name.trim().slice(0, 80);
   if (!title) return { ok: false, error: "Name the schedule." };
+  if (instruction !== undefined && (!instruction.trim() || instruction.trim().length > 2000)) return { ok: false, error: "Enter a task instruction of 1 to 2,000 characters." };
   if (clockHour != null && (!Number.isInteger(clockHour) || clockHour < 0 || clockHour > 23)) return { ok: false, error: "Enter a whole hour from 0 to 23." };
   if (clockHour != null && !zoneIsValid(timeZone)) return { ok: false, error: "Enter a valid time zone." };
   if (agentId && !ws.agents.some((agent) => agent.id === agentId && !agent.archived)) return { ok: false, error: "Choose an active bot." };
@@ -578,6 +589,7 @@ export function addSchedule(ws: Workspace, name: string, agentId: string | null,
   const job: ScheduleJob = {
     id: nid("job"),
     name: title,
+    instruction: instruction?.trim(),
     agentId,
     intervalMinutes: minutes,
     nextRunAt: clock?.at ?? at,
@@ -594,8 +606,16 @@ export function addSchedule(ws: Workspace, name: string, agentId: string | null,
   return { ok: true, ws: { ...ws, schedules: [job, ...ws.schedules] } };
 }
 
-export function setScheduleEnabled(ws: Workspace, id: string, enabled: boolean): Workspace {
-  return { ...ws, schedules: ws.schedules.map((job) => (job.id === id ? { ...job, enabled } : job)) };
+export function setScheduleEnabled(ws: Workspace, id: string, enabled: boolean, now = stamp(), runMissed = false): Workspace {
+  return { ...ws, schedules: ws.schedules.map((job) => {
+    if (job.id !== id || job.enabled === enabled) return job;
+    let nextRunAt = job.nextRunAt;
+    if (enabled && !runMissed && nextRunAt <= now) {
+      nextRunAt = job.clockHour == null ? new Date(Date.parse(now) + job.intervalMinutes * 60_000).toISOString()
+        : nextClock(now, job.timeZone, job.clockHour, job.clockMinute ?? 0).at;
+    }
+    return { ...job, enabled, nextRunAt };
+  }) };
 }
 
 export function deployAgent(ws: Workspace, agentId: string, target: "local-worker" | "hosted-worker", now?: string): { ok: true; ws: Workspace } | { ok: false; error: string } {
@@ -608,7 +628,7 @@ export function deployAgent(ws: Workspace, agentId: string, target: "local-worke
   return { ok: true, ws: { ...ws, deployments: [record, ...ws.deployments.filter((item) => item.agentId !== agentId)] } };
 }
 
-export function enqueueRun(ws: Workspace, agentId: string, goal: string, now?: string, parentId: string | null = null, depth = 0): { ok: true; ws: Workspace; run: AgentRun } | { ok: false; error: string } {
+export function enqueueRun(ws: Workspace, agentId: string, goal: string, now?: string, parentId: string | null = null, depth = 0, runId = nid("run")): { ok: true; ws: Workspace; run: AgentRun } | { ok: false; error: string } {
   if (ws.halted) return { ok: false, error: "Emergency stop is on. No new action can run." };
   const agent = ws.agents.find((item) => item.id === agentId && !item.archived);
   if (!agent) return { ok: false, error: "That agent is not on this device." };
@@ -617,7 +637,7 @@ export function enqueueRun(ws: Workspace, agentId: string, goal: string, now?: s
   if (ws.runs.length >= 200) return { ok: false, error: "Too many runs are stored on this device." };
   const at = stamp(now);
   const run: AgentRun = {
-    id: nid("run"),
+    id: runId,
     agentId,
     parentId,
     depth: depth === 1 ? 1 : 0,
@@ -652,14 +672,14 @@ export function pauseRun(ws: Workspace, runId: string): Workspace {
 
 export function resumeRun(ws: Workspace, runId: string): Workspace {
   if (ws.halted) return ws;
-  return { ...ws, runs: ws.runs.map((run) => (run.id === runId && run.state === "paused" && canTransition(run.state, "queued") ? { ...run, state: "queued", updatedAt: stamp() } : run)) };
+  return { ...ws, runs: ws.runs.map((run) => (run.id === runId && (run.state === "paused" || run.state === "waiting_external") && canTransition(run.state, "queued") ? { ...run, state: "queued", updatedAt: stamp() } : run)) };
 }
 
 export function cancelRun(ws: Workspace, runId: string, now?: string): Workspace {
   const at = stamp(now);
   const fleet = readFleet(ws);
   const runs = fleet.runs.map((run) => {
-    if (run.id !== runId || !canTransition(run.state, "canceled")) return run;
+    if ((run.id !== runId && run.parentId !== runId) || !canTransition(run.state, "canceled")) return run;
     event(fleet, run.id, at, "canceled", "Stopped. Unfinished work was not marked complete.");
     return { ...run, state: "canceled" as const, error: "Stopped.", updatedAt: at, leaseUntil: null };
   });
@@ -688,6 +708,13 @@ function finish(run: AgentRun, state: RunState, at: string, error = ""): AgentRu
   return { ...run, state, error, updatedAt: at, leaseUntil: null, workerId: null };
 }
 
+function advanceWithResult(run: AgentRun, detail: string): AgentRun {
+  const full = [run.result, detail].filter(Boolean).join("\n");
+  const marker = "\n[Result excerpt truncated]";
+  const result = full.length <= 4000 ? full : full.slice(0, 4000 - marker.length) + marker;
+  return { ...run, result, step: run.step + 1 };
+}
+
 function quoteUrl(goal: string) {
   return goal.split(/\s+/).find((part) => HTTP.test(part)) ?? "";
 }
@@ -713,12 +740,12 @@ export function tickFleet(ws: Workspace, env: TickEnv): Workspace {
     if (!tool || claimed.step >= claimed.maxSteps) {
       const lines = fleet.runEvents.filter((item) => item.runId === claimed.id && item.kind === "tool_result").map((item) => item.detail);
       event(fleet, claimed.id, at, "completed", lines.length ? "Finished from tool results." : "Finished with no tool results.");
-      return finish({ ...claimed, result: lines.join("\n").slice(0, 4000) || "Finished with no tool results." }, "completed", at);
+      return finish({ ...claimed, result: claimed.result || lines.join("\n").slice(0, 4000) || "Finished with no tool results." }, "completed", at);
     }
     if (tool === "delegate") {
       if (claimed.depth >= 1) {
         event(fleet, claimed.id, at, "tool_result", "Child runs do not delegate again.");
-        return { ...claimed, step: claimed.step + 1 };
+        return advanceWithResult(claimed, "Child runs do not delegate again.");
       }
       const kids = [...fleet.runs, ...extra].filter((item) => item.parentId === claimed.id);
       const open = kids.filter((item) => !TERMINAL.has(item.state));
@@ -757,9 +784,15 @@ export function tickFleet(ws: Workspace, env: TickEnv): Workspace {
         return { ...claimed, plan };
       }
       if (open.length) return claimed;
-      const detail = kids.map((item) => item.result || item.error || item.state).join(" | ").slice(0, 500);
+      const detail = kids.map((item) => item.result || item.error || item.state).join(" | ");
+      if (kids.some((child) => child.state !== "completed")) {
+        const state = kids.every((child) => child.state === "canceled") ? "canceled" : "failed";
+        const outcome = kids.map((child) => child.id + ": " + child.state).join(", ");
+        event(fleet, claimed.id, at, state, outcome);
+        return finish({ ...claimed, result: detail }, state, at, outcome);
+      }
       event(fleet, claimed.id, at, "tool_result", detail || "Child runs finished.");
-      return { ...claimed, step: claimed.step + 1 };
+      return advanceWithResult(claimed, detail);
     }
     if (LOCAL.has(tool)) {
       const local = tool as LocalTool;
@@ -770,10 +803,10 @@ export function tickFleet(ws: Workspace, env: TickEnv): Workspace {
         memories: agent.memory === "on" ? ws.memories.filter((note) => note.scope === "global" || (note.scope === "project" && !!agent.projectId && note.projectId === agent.projectId)) : [],
       };
       const executed = runLocalPlan(scope, [{ id: local, tool: local, query: claimed.goal }], { autonomy: "automatic", halted: false, tokens: {} });
-      const detail = executed.lines.join(" ").slice(0, 500);
+      const detail = executed.lines.join(" ");
       event(fleet, claimed.id, at, executed.ok ? "tool_result" : "failed", detail);
       if (!executed.ok) return finish(claimed, "failed", at, detail);
-      return { ...claimed, step: claimed.step + 1 };
+      return advanceWithResult(claimed, detail);
     }
     if (tool === "browser" || tool === "gmail_send") {
       const decision = decide({
@@ -794,9 +827,9 @@ export function tickFleet(ws: Workspace, env: TickEnv): Workspace {
         event(fleet, claimed.id, at, "waiting_external", result.error);
         return finish(claimed, "waiting_external", at, result.error);
       }
-      const detail = result.citations.map((item) => `${item.title} ${item.url}`).join(" | ").slice(0, 500);
+      const detail = result.citations.map((item) => `${item.title} ${item.url}`).join(" | ");
       event(fleet, claimed.id, at, "tool_result", detail);
-      return { ...claimed, step: claimed.step + 1 };
+      return advanceWithResult(claimed, detail);
     }
     if (tool === "browser") {
       if (!env.browser) {
@@ -825,8 +858,9 @@ export function tickFleet(ws: Workspace, env: TickEnv): Workspace {
         event(fleet, claimed.id, at, "failed", opened.error);
         return finish(claimed, "failed", at, opened.error);
       }
-      event(fleet, claimed.id, at, "tool_result", `${opened.title} ${url}`.slice(0, 500));
-      return { ...claimed, step: claimed.step + 1 };
+      const detail = `${opened.title} ${url}`;
+      event(fleet, claimed.id, at, "tool_result", detail);
+      return advanceWithResult(claimed, detail);
     }
     if (tool === "gmail_read" || tool === "gmail_send") {
       const error = "No Gmail account is connected. Nothing was read or sent.";
@@ -837,20 +871,34 @@ export function tickFleet(ws: Workspace, env: TickEnv): Workspace {
     event(fleet, claimed.id, at, "waiting_external", error);
     return finish(claimed, "waiting_external", at, error);
   });
-  return withFleet(ws, { ...fleet, runs: [...extra, ...runs] });
+  const schedules = fleet.schedules.map((job) => {
+    if (!job.lastQueuedRunId) return job;
+    const run = runs.find((item) => item.id === job.lastQueuedRunId);
+    if (!run || !TERMINAL.has(run.state)) return job;
+    return run.state === "completed"
+      ? { ...job, lastRunAt: run.updatedAt, lastStatus: "ran" as const }
+      : { ...job, lastStatus: "failed" as const, lastError: run.error || run.state };
+  });
+  return withFleet(ws, { ...fleet, schedules, runs: [...extra, ...runs] });
 }
 
 export function runDueSchedules(ws: Workspace, now: string): Workspace {
+  if (ws.halted) return ws;
   let next = ws;
   const jobs = ws.schedules.map((job) => {
     if (!job.enabled || job.nextRunAt > now) return job;
+    if (job.chatId && !next.chats.some((chat) => chat.id === job.chatId && !chat.temporary)) {
+      return { ...job, enabled: false, lastAttemptAt: now, lastError: "The scheduled conversation is unavailable." };
+    }
     const agent = next.agents.find((item) => item.id === job.agentId && !item.archived);
-    if (!agent) return { ...job, lastRunAt: now, lastError: "That agent is not on this device. Nothing was queued." };
-    const queued = enqueueRun(next, agent.id, job.name, now);
-    if (!queued.ok) return { ...job, lastRunAt: now, lastError: queued.error };
+    if (!agent) return { ...job, enabled: false, lastAttemptAt: now, lastError: "That agent is not on this device. Nothing was queued." };
+    const occurrenceId = "scheduled:" + job.id + ":" + job.nextRunAt;
+    const existing = next.runs.find((run) => run.id === occurrenceId);
+    const queued = existing ? { ok: true as const, ws: next, run: existing } : enqueueRun(next, agent.id, job.instruction || job.name, now, null, 0, occurrenceId);
+    if (!queued.ok) return { ...job, enabled: false, lastAttemptAt: now, lastError: queued.error };
     next = queued.ws;
-    const clock = job.clockHour == null ? null : nextClock(now, job.timeZone || "UTC", job.clockHour, job.clockMinute ?? 0);
-    return { ...job, lastRunAt: now, lastError: "", nextRunAt: clock?.at ?? new Date(Date.parse(now) + job.intervalMinutes * 60_000).toISOString() };
+    const clock = job.clockHour == null ? null : nextClock(now, job.timeZone || "UTC", job.clockHour, job.clockMinute ?? 0, job.nextRunAt);
+    return { ...job, lastAttemptAt: now, lastQueuedRunId: queued.run.id, lastError: "", nextRunAt: clock?.at ?? new Date(Date.parse(now) + job.intervalMinutes * 60_000).toISOString() };
   });
   return { ...next, schedules: jobs };
 }

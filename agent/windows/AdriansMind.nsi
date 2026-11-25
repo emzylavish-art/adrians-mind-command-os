@@ -1,6 +1,6 @@
 Unicode true
-Name "Adrian's Mind"
-OutFile "..\..\public\downloads\AdriansMind-Setup.exe"
+Name "Adrian's Mind Build Companion"
+OutFile "AdriansMind-Build-Companion.exe"
 InstallDir "$LOCALAPPDATA\AdrianMind"
 RequestExecutionLevel user
 SetCompress off
@@ -32,7 +32,7 @@ Function PairPage
     Abort
   ${EndIf}
 
-  ${NSD_CreateLabel} 0 0 100% 36u "Installs Adrian's Mind for this Windows user. On the signed-in site, open Build and press Mint pairing code. Paste that code here. It expires in five minutes. Leave it blank to install the files and pair later from the Start menu."
+  ${NSD_CreateLabel} 0 0 100% 36u "Installs the Build Companion for this Windows user. On the signed-in site, open Build and press Mint pairing code. Paste that code here. It expires in five minutes. Leave it blank to install the files and pair later from the Start menu."
   Pop $0
 
   ${NSD_CreateLabel} 0 40u 100% 8u "Dashboard"
@@ -66,11 +66,11 @@ Section "Companion"
   File "README.md"
   WriteUninstaller "$INSTDIR\Uninstall.exe"
 
-  CreateDirectory "$SMPROGRAMS\Adrian's Mind"
-  CreateShortcut "$SMPROGRAMS\Adrian's Mind\Pair this PC.lnk" "$WINDIR\System32\WindowsPowerShell\v1.0\powershell.exe" "-NoProfile -ExecutionPolicy Bypass -File $\"$INSTDIR\Pair-Now.ps1$\""
-  CreateShortcut "$SMPROGRAMS\Adrian's Mind\Emergency stop.lnk" "$WINDIR\System32\WindowsPowerShell\v1.0\powershell.exe" "-NoProfile -ExecutionPolicy Bypass -File $\"$INSTDIR\Emergency-Stop.ps1$\""
-  CreateShortcut "$SMPROGRAMS\Adrian's Mind\Companion folder.lnk" "$INSTDIR"
-  CreateShortcut "$SMPROGRAMS\Adrian's Mind\Uninstall.lnk" "$INSTDIR\Uninstall.exe"
+  CreateDirectory "$SMPROGRAMS\Adrian's Mind Build Companion"
+  CreateShortcut "$SMPROGRAMS\Adrian's Mind Build Companion\Pair this PC.lnk" "$WINDIR\System32\WindowsPowerShell\v1.0\powershell.exe" "-NoProfile -ExecutionPolicy Bypass -File $\"$INSTDIR\Pair-Now.ps1$\""
+  CreateShortcut "$SMPROGRAMS\Adrian's Mind Build Companion\Emergency stop.lnk" "$WINDIR\System32\WindowsPowerShell\v1.0\powershell.exe" "-NoProfile -ExecutionPolicy Bypass -File $\"$INSTDIR\Emergency-Stop.ps1$\""
+  CreateShortcut "$SMPROGRAMS\Adrian's Mind Build Companion\Companion folder.lnk" "$INSTDIR"
+  CreateShortcut "$SMPROGRAMS\Adrian's Mind Build Companion\Uninstall.lnk" "$INSTDIR\Uninstall.exe"
 
   ${If} $PairingCode != ""
     ClearErrors
@@ -103,9 +103,9 @@ Section "Uninstall"
   Delete "$INSTDIR\README.md"
   Delete "$INSTDIR\Uninstall.exe"
   RMDir "$INSTDIR"
-  Delete "$SMPROGRAMS\Adrian's Mind\Pair this PC.lnk"
-  Delete "$SMPROGRAMS\Adrian's Mind\Emergency stop.lnk"
-  Delete "$SMPROGRAMS\Adrian's Mind\Companion folder.lnk"
-  Delete "$SMPROGRAMS\Adrian's Mind\Uninstall.lnk"
-  RMDir "$SMPROGRAMS\Adrian's Mind"
+  Delete "$SMPROGRAMS\Adrian's Mind Build Companion\Pair this PC.lnk"
+  Delete "$SMPROGRAMS\Adrian's Mind Build Companion\Emergency stop.lnk"
+  Delete "$SMPROGRAMS\Adrian's Mind Build Companion\Companion folder.lnk"
+  Delete "$SMPROGRAMS\Adrian's Mind Build Companion\Uninstall.lnk"
+  RMDir "$SMPROGRAMS\Adrian's Mind Build Companion"
 SectionEnd

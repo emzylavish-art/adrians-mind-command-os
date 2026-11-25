@@ -69,8 +69,10 @@ export function VoiceCloningStudioPage({ onBack }: { onBack?: () => void }) {
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
 
   const mediaRef = useRef<MediaRecorder | null>(null);
-  const chunksRef = useRef<Blob[]>([]);
-  const playbackRef = useRef<{ audio: HTMLAudioElement; url: string } | null>(null);
+  const recordingRequest = useRef<symbol | null>(null);
+  const playbackEpoch = useRef(0);
+  const [profilesLoaded, setProfilesLoaded] = useState(false);
+  const playbackRef = useRef<{ audio: HTMLAudioElement; url: string; finish: () => void } | null>(null);
   const [recordingTarget, setRecordingTarget] = useState<"consent" | "sample" | null>(null);
 
   const selected = useMemo(
@@ -82,10 +84,11 @@ export function VoiceCloningStudioPage({ onBack }: { onBack?: () => void }) {
     try {
       const [st, list] = await Promise.all([
         vcsProviderStatus(),
-        vcsListProfiles().catch(() => ({ ok: false as const, profiles: [] as VoiceProfile[] })),
+        vcsListProfiles(),
       ]);
       setStatus(st);
-      if (list && "profiles" in list) setProfiles(list.profiles);
+      setProfiles(list.profiles);
+      setProfilesLoaded(true);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Could not load Voice Cloning Studio.");
     }
@@ -96,6 +99,7 @@ export function VoiceCloningStudioPage({ onBack }: { onBack?: () => void }) {
   }, [refresh]);
 
   const stopPlayback = useCallback(() => {
+    playbackEpoch.current += 1;
     sharedAudioOutput.interrupt();
     const cur = playbackRef.current;
     if (cur) {
@@ -106,6 +110,7 @@ export function VoiceCloningStudioPage({ onBack }: { onBack?: () => void }) {
       } catch {
         /* ignore */
       }
+      cur.finish();
       URL.revokeObjectURL(cur.url);
       playbackRef.current = null;
     }
@@ -115,6 +120,7 @@ export function VoiceCloningStudioPage({ onBack }: { onBack?: () => void }) {
   const playAudio = useCallback(
     async (audioBase64: string, mime = "audio/mpeg") => {
       stopPlayback();
+      const epoch = playbackEpoch.current;
       setPlaying(true);
       try {
         if (mime.includes("wav") || mime.includes("wave")) {
@@ -123,13 +129,13 @@ export function VoiceCloningStudioPage({ onBack }: { onBack?: () => void }) {
           for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
           const url = URL.createObjectURL(new Blob([bytes], { type: "audio/wav" }));
           const audio = new Audio(url);
-          playbackRef.current = { audio, url };
           await new Promise<void>((resolve) => {
+            playbackRef.current = { audio, url, finish: resolve };
             audio.onended = () => resolve();
             audio.onerror = () => resolve();
             void audio.play().catch(() => resolve());
           });
-          if (playbackRef.current?.url === url) {
+          if ((playbackRef.current as { url: string } | null)?.url === url) {
             URL.revokeObjectURL(url);
             playbackRef.current = null;
           }
@@ -137,14 +143,22 @@ export function VoiceCloningStudioPage({ onBack }: { onBack?: () => void }) {
           await sharedAudioOutput.playMpegBase64(audioBase64);
         }
       } finally {
-        setPlaying(false);
+        if (playbackEpoch.current === epoch) setPlaying(false);
       }
     },
     [stopPlayback],
   );
 
   useEffect(() => {
-    return () => stopPlayback();
+    return () => {
+      recordingRequest.current = null;
+      const recorder = mediaRef.current;
+      if (recorder) {
+        if (recorder.state !== "inactive") recorder.stop();
+        recorder.stream.getTracks().forEach((track) => track.stop());
+      }
+      stopPlayback();
+    };
   }, [stopPlayback]);
 
   async function startChallenge() {
@@ -165,34 +179,54 @@ export function VoiceCloningStudioPage({ onBack }: { onBack?: () => void }) {
   }
 
   async function startRecording(target: "consent" | "sample") {
+    if (recordingRequest.current) return;
+    const request = Symbol();
+    recordingRequest.current = request;
+    setRecordingTarget(target);
     setError("");
     stopPlayback();
+    let stream: MediaStream | undefined;
     try {
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      if (recordingRequest.current !== request) {
+        stream.getTracks().forEach((track) => track.stop());
+        return;
+      }
       const mime = MediaRecorder.isTypeSupported("audio/webm") ? "audio/webm" : "audio/mp4";
       const recorder = new MediaRecorder(stream, { mimeType: mime });
-      chunksRef.current = [];
+      const chunks: Blob[] = [];
       recorder.ondataavailable = (ev) => {
-        if (ev.data.size) chunksRef.current.push(ev.data);
+        if (ev.data.size) chunks.push(ev.data);
       };
       recorder.onstop = () => {
-        stream.getTracks().forEach((t) => t.stop());
-        const blob = new Blob(chunksRef.current, { type: mime });
+        recorder.stream.getTracks().forEach((track) => track.stop());
+        if (recordingRequest.current !== request) return;
+        const blob = new Blob(chunks, { type: mime });
         if (target === "consent") setConsentBlob(blob);
         else setSampleBlob(blob);
+        recordingRequest.current = null;
         setRecordingTarget(null);
         mediaRef.current = null;
       };
       mediaRef.current = recorder;
-      setRecordingTarget(target);
       recorder.start();
     } catch {
+      stream?.getTracks().forEach((track) => track.stop());
+      if (recordingRequest.current !== request) return;
+      recordingRequest.current = null;
+      mediaRef.current = null;
+      setRecordingTarget(null);
       setError("Microphone permission was denied or unavailable.");
     }
   }
 
   function stopRecording() {
-    mediaRef.current?.stop();
+    const recorder = mediaRef.current;
+    if (recorder && recorder.state !== "inactive") recorder.stop();
+    else if (!recorder) {
+      recordingRequest.current = null;
+      setRecordingTarget(null);
+    }
   }
 
   async function onUpload(target: "consent" | "sample", file: File | null) {
@@ -267,6 +301,7 @@ export function VoiceCloningStudioPage({ onBack }: { onBack?: () => void }) {
     setError("");
     setBusy(true);
     stopPlayback();
+    const epoch = playbackEpoch.current;
     try {
       const res = await vcsGenerate({ data: { profileId: selected.id, text: generateText } });
       if (!res.ok) {
@@ -274,7 +309,7 @@ export function VoiceCloningStudioPage({ onBack }: { onBack?: () => void }) {
         return;
       }
       setLastAudio({ profileId: selected.id, audioBase64: res.audioBase64, mime: res.mime });
-      await playAudio(res.audioBase64, res.mime);
+      if (playbackEpoch.current === epoch) await playAudio(res.audioBase64, res.mime);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Generate failed.");
     } finally {
@@ -332,9 +367,12 @@ export function VoiceCloningStudioPage({ onBack }: { onBack?: () => void }) {
     setBusy(true);
     setError("");
     try {
+      stopPlayback();
+      setLastAudio(null);
       const res = await vcsDeleteProfile({ data: { profileId } });
       if (!res.ok) {
         setError(res.error);
+        if (res.code === "provider_delete_pending") { setSelectedId(null); await refresh(); }
         return;
       }
       setProfiles((prev) => prev.filter((p) => p.id !== profileId));
@@ -496,7 +534,7 @@ export function VoiceCloningStudioPage({ onBack }: { onBack?: () => void }) {
                   Stop consent recording
                 </button>
               ) : (
-                <button type="button" className="min-h-11 rounded-panel border border-line px-3" onClick={() => void startRecording("consent")} data-testid="vcs-rec-consent">
+                <button type="button" className="min-h-11 rounded-panel border border-line px-3" disabled={!!recordingTarget} onClick={() => void startRecording("consent")} data-testid="vcs-rec-consent">
                   Record consent
                 </button>
               )}
@@ -518,7 +556,7 @@ export function VoiceCloningStudioPage({ onBack }: { onBack?: () => void }) {
                   Stop sample recording
                 </button>
               ) : (
-                <button type="button" className="min-h-11 rounded-panel border border-line px-3" onClick={() => void startRecording("sample")} data-testid="vcs-rec-sample">
+                <button type="button" className="min-h-11 rounded-panel border border-line px-3" disabled={!!recordingTarget} onClick={() => void startRecording("sample")} data-testid="vcs-rec-sample">
                   Record sample
                 </button>
               )}
@@ -547,11 +585,14 @@ export function VoiceCloningStudioPage({ onBack }: { onBack?: () => void }) {
           <h2 className="text-base font-semibold">Your profiles</h2>
           {profiles.length === 0 ? (
             <div className="vcs-empty" data-testid="vcs-profiles-empty">
-              <p className="text-sm text-muted">No voice profiles yet.</p>
+              <p className="text-sm text-muted">{profilesLoaded ? "No voice profiles yet." : "Profiles have not been retrieved."}</p>
+              <button type="button" onClick={() => void refresh()}>Refresh profiles</button>
             </div>
           ) : (
             <ul className="space-y-2">
-              {profiles.map((p) => (
+              {profiles.map((p) => p.status === "deleted" ? (
+                <li key={p.id}>{p.name} · Provider deletion pending <button type="button" disabled={busy} onClick={() => void onDelete(p.id)}>Retry deletion</button></li>
+              ) : (
                 <li key={p.id}>
                   <button
                     type="button"

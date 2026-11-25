@@ -1,5 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { getBearerToken } from "@/lib/auth/client";
+import { focusConnection } from "./focus-connection";
+import { NotionWorkspaces } from "./notion-workspaces";
 import { KimiDeviceConnect } from "@/components/mind/kimi-device-connect";
 import { checkMcpStorage } from "@/lib/mind/mcp-storage-status";
 import { oauthBoardState } from "@/lib/mind/connection-board";
@@ -105,8 +107,9 @@ function boardForOauth(name: string, oauth: OauthStatus | null | undefined, lega
 
 export function ServiceBoard({
   grokConfigured,
+  providers = [],
+  savedMcp = [],
   onSetup,
-  notion,
   mcp,
   localComputer,
   onDisconnect,
@@ -114,6 +117,8 @@ export function ServiceBoard({
   onOpenConnect,
 }: {
   grokConfigured: boolean;
+  providers?: { id: string; label: string; defaultModel: string; host: string; hasKey: boolean; status: string }[];
+  savedMcp?: { id: string; label: string; state: string; tools: { name: string }[] }[];
   onSetup: (message: string) => void;
   notion?: { state: string; detail: string } | null;
   mcp?: { state: string; detail: string } | null;
@@ -132,22 +137,26 @@ export function ServiceBoard({
   const [mcpStorage, setMcpStorage] = useState<{ state: "checking" | "ready" | "error"; detail: string } | null>(null);
   const [showWaiting, setShowWaiting] = useState(false);
   const [catalogQuery, setCatalogQuery] = useState("");
-  const inFlight = useRef<Set<string>>(new Set());
+  const inFlight = useRef(new Map<string, AbortController>());
 
   const refreshOne = useCallback((name: string) => {
     const meta = OAUTH_BOARD[name];
     if (!meta) return;
-    if (inFlight.current.has(name)) return;
-    inFlight.current.add(name);
+    inFlight.current.get(name)?.abort();
+    const probe = new AbortController();
+    inFlight.current.set(name, probe);
     setRefreshing(name);
     // Always resolves: 401/403/5xx, network, non-JSON, and a hung probe become a terminal unavailable status.
     void fetchOauthStatusPayload(`/api/mind/oauth/${meta.path}/status`, {
       timeoutMs: OAUTH_STATUS_FETCH_TIMEOUT_MS,
+      signal: probe.signal,
+      bearer: getBearerToken(),
     })
       .then((status) => {
-        setOauthByName((prev) => ({ ...prev, [name]: status }));
+        if (inFlight.current.get(name) === probe) setOauthByName((prev) => ({ ...prev, [name]: status }));
       })
       .finally(() => {
+        if (inFlight.current.get(name) !== probe) return;
         inFlight.current.delete(name);
         setRefreshing((current) => (current === name ? null : current));
       });
@@ -160,6 +169,7 @@ export function ServiceBoard({
   useEffect(() => {
     refreshAll();
     const onMsg = (event: MessageEvent) => {
+      if (event.origin !== window.location.origin) return;
       if (!event.data || typeof event.data !== "object") return;
       const type = (event.data as { type?: string }).type;
       if (!type) return;
@@ -168,7 +178,12 @@ export function ServiceBoard({
       }
     };
     window.addEventListener("message", onMsg);
-    return () => window.removeEventListener("message", onMsg);
+    const probes = inFlight.current;
+    return () => {
+      window.removeEventListener("message", onMsg);
+      for (const probe of probes.values()) probe.abort();
+      probes.clear();
+    };
   }, [refreshAll, refreshOne]);
 
   const grok: Service = grokConfigured
@@ -184,7 +199,7 @@ export function ServiceBoard({
     }
     const meta = OAUTH_BOARD[service.name];
     if (!meta) return service;
-    const legacy = service.name === "Notion" ? notion : null;
+    const legacy = null;
     const board = boardForOauth(service.name, oauthByName[service.name], legacy);
     return { name: service.name, state: board.state, detail: board.detail };
   });
@@ -196,7 +211,12 @@ export function ServiceBoard({
     const run = () => {
       setBusy(params.name);
       setOauthActionState({ status: "running", action: params.action, name: params.name });
-      void runOauthBoardAction(params, fetch).then((result) => {
+      void runOauthBoardAction(params, (url, init) => {
+        const headers = new Headers(init.headers);
+        const bearer = getBearerToken();
+        if (bearer) headers.set("authorization", `Bearer ${bearer}`);
+        return fetch(url, { ...init, headers });
+      }).then((result) => {
         if (result.ok) {
           setOauthActionState({ status: "ok", note: result.note, name: result.name, redirectUrl: result.redirectUrl });
           if (params.action === "connect" && result.redirectUrl) {
@@ -247,7 +267,15 @@ export function ServiceBoard({
   function disconnectOauth(name: string) {
     const meta = OAUTH_BOARD[name];
     if (!meta) return;
-    runOauthAction(snapshotOauthBoardActionParams({ action: "disconnect", name, path: meta.path }));
+    runOauthAction(snapshotOauthBoardActionParams({ action: "disconnect", name, path: meta.path, expectedConnectedAt: oauthByName[name]?.connectedAt }));
+  }
+
+  function openSavedRow(id: string) {
+    const node = document.getElementById(id);
+    const details = node?.closest("details");
+    if (details) details.open = true;
+    node?.scrollIntoView({ block: "center" });
+    node?.focus({ preventScroll: true });
   }
 
   function explainOrOpen(name: string, detail: string) {
@@ -259,23 +287,46 @@ export function ServiceBoard({
     <div className="intelligence-main" data-testid="plugins-pane">
     {(() => {
       const readyState = (state: string) => state === "Key present" || state === "Connected" || state === "API token present";
-      const rows = [grok, ...services];
-      const connected = rows.filter((service) => readyState(service.state));
-      const waiting = rows.filter((service) => !readyState(service.state));
+      const rows = services.filter((service) => catalogBand(service.name) !== "Models");
+      const unresolved = (state: string) => state === "Checking" || state === "Status unavailable";
+      const connected = rows.filter((service) => readyState(service.state) && catalogBand(service.name) !== "Models");
+      const waiting = rows.filter((service) => !connected.includes(service) && !unresolved(service.state));
       const needle = catalogQuery.trim().toLowerCase();
+      const matchesSearch = (service: Service) => !needle || `${service.name} ${service.detail}`.toLowerCase().includes(needle);
+      const foundProviders = providers.filter((row) => [row.label, row.host, row.defaultModel].join(" ").toLowerCase().includes(needle));
+      const foundMcp = savedMcp.filter((row) => [row.label, ...row.tools.map((tool) => tool.name)].join(" ").toLowerCase().includes(needle));
+      const checking = rows.filter((service) => unresolved(service.state) && matchesSearch(service));
       const catalog = waiting.filter((service) => !needle || `${service.name} ${service.detail}`.toLowerCase().includes(needle));
       const bands = ["Communication", "Productivity", "Developer", "Models", "Research and media", "Custom MCP", "Other"]
         .map((label) => ({ label, items: catalog.filter((service) => catalogBand(service.name) === label) }))
         .filter((band) => band.items.length > 0);
       return (
         <>
+          <div className="flex flex-wrap gap-2">
+            <input aria-label="Search plugins" value={catalogQuery} onChange={(event) => setCatalogQuery(event.target.value)} placeholder="Search plugins" className="min-h-11 flex-1 rounded-panel border border-line bg-transparent px-3 text-sm" />
+            <button type="button" className="min-h-11 rounded-panel border border-line px-3" onClick={() => onOpenConnect?.("MCP")}>Add custom MCP</button>
+          </div>
           <section className="intelligence-group" aria-label="Connected" data-testid="connected-services">
             <h3>Saved connections</h3>
-            <p className="mb-2 text-sm text-muted">{connected.length ? "Check each service’s status before using it." : "No saved connections yet. Open the service catalog below to get started."}</p>
+            <p className="mb-2 text-sm text-muted">{connected.length || savedMcp.length ? "Check each service’s status before using it." : rows.some((r) => unresolved(r.state)) ? "Some connection statuses are pending or unavailable." : "No saved connections yet."}</p>
             <div id="owner-service-board" className="service-board plugin-links">
-              {connected.map((service) => renderService(service))}
+              {connected.filter(matchesSearch).map((service) => renderService(service))}
+              {foundMcp.map((server) => <article key={server.id} className="plugin-link">
+                <div className="plugin-link__main"><ServiceMark name="MCP" /><div><p className="font-semibold">{server.label}</p><p className="text-sm text-muted">{server.state} · {server.tools.length} supported tools</p></div></div>
+                <button className="min-h-11 text-accent" onClick={() => openSavedRow("connection-" + server.id)}>Review tools</button>
+              </article>)}
             </div>
           </section>
+          <section className="intelligence-group" aria-label="Model providers">
+            <h3>Model providers</h3>
+            {matchesSearch(grok) && <p className="text-sm">{grok.name} · {grok.state}</p>}
+            {foundProviders.map((provider) => <article key={provider.id} className="plugin-link">
+              <div><p className="font-semibold">{provider.label}</p><p className="text-sm text-muted">{provider.hasKey ? "Key saved" : "Key missing"} · {provider.defaultModel || "No model selected"} · {provider.status}</p></div>
+              <button className="min-h-11 text-accent" onClick={() => openSavedRow("provider-" + provider.id)}>Manage provider</button>
+            </article>)}
+            <button className="min-h-11 text-accent" onClick={() => openSavedRow("owner-api-connect")}>Add model provider</button>
+          </section>
+          {checking.length > 0 && <section className="intelligence-group" aria-label="Connection status"><h3>Checking and unavailable</h3><div className="service-board plugin-links">{checking.map(renderService)}</div></section>}
           <section className="intelligence-group" aria-label="Build links" data-testid="kimi-connection">
             <h3>Build links</h3>
             <KimiDeviceConnect />
@@ -285,10 +336,10 @@ export function ServiceBoard({
             <button type="button" className="min-h-11 rounded-panel border border-line px-3 text-sm" aria-expanded={showWaiting} onClick={() => setShowWaiting((open) => !open)}>
               {showWaiting ? "Hide services that are not connected" : `Show ${waiting.length} services that are not connected`}
             </button>
-            {showWaiting ? (
+            {showWaiting || needle ? (
               <div className="mt-3 space-y-3">
-                <input aria-label="Search plugins" value={catalogQuery} onChange={(event) => setCatalogQuery(event.target.value)} placeholder="Search plugins" className="min-h-11 w-full rounded-panel border border-line bg-transparent px-3 text-sm" />
-                {bands.length === 0 ? <p className="text-sm text-muted">No plugin matches that search.</p> : bands.map((band) => (
+
+                {bands.length === 0 && !connected.some(matchesSearch) && !checking.length && !foundProviders.length && !foundMcp.length && !matchesSearch(grok) ? <p className="text-sm text-muted">No plugin matches that search.</p> : bands.map((band) => (
                   <details key={band.label} className="rounded-panel border border-line p-3" open={needle.length > 0}>
                     <summary className="cursor-pointer text-sm font-semibold">{band.label}</summary>
                     <div className="service-board plugin-links mt-3">{band.items.map((service) => renderService(service))}</div>
@@ -307,7 +358,7 @@ export function ServiceBoard({
     if (name === "Gmail" || name === "Slack") return "Communication";
     if (name === "Notion" || name === "Google Drive" || name === "Google Docs" || name === "Google Calendar") return "Productivity";
     if (name === "GitHub" || name === "Local computer") return "Developer";
-    if (name === "OpenAI" || name === "Claude" || name === "Gemini" || name === "OpenRouter" || name === "Nemotron" || name === "Local model") return "Models";
+    if (name === "Grok" || name === "OpenAI" || name === "Claude" || name === "Gemini" || name === "OpenRouter" || name === "Nemotron" || name === "Local model") return "Models";
     if (name === "YouTube" || name === "Web search" || name === "Image and video") return "Research and media";
     if (name === "MCP") return "Custom MCP";
     return "Other";
@@ -320,12 +371,11 @@ export function ServiceBoard({
         const needsSignIn = Boolean(oauth && /sign in required/i.test(oauth.detail));
         const slackOff = service.name === "Slack";
         const oauthConnected = Boolean(meta && oauth?.state === "connected");
-        const legacyConnected = service.name === "Notion" && !oauthConnected && notion?.state === "connected";
         const showOauthConnect = Boolean(meta && oauth?.state === "not_connected" && !unavailable);
         const showNotConfigured = Boolean(meta && oauth?.state === "not_configured");
         const isBusy = busy === service.name;
         return (
-          <article key={service.name} className="plugin-link">
+          <article ref={focusConnection} tabIndex={-1} id={meta ? `connection-${meta.connector}` : undefined} key={service.name} className="plugin-link">
             <div className="plugin-link__main">
               <ServiceMark name={service.name} />
               <div>
@@ -335,7 +385,7 @@ export function ServiceBoard({
             </div>
             <span className="plugin-link__state">{slackOff ? "Off" : needsSignIn ? "Not connected" : service.state}</span>
             <div className="plugin-link__action">
-            {slackOff ? null : needsSignIn ? (
+            {service.name === "Google Docs" ? <span className="text-xs text-muted">Setup unavailable</span> : slackOff ? null : needsSignIn ? (
               <button type="button" className="min-h-11 rounded-panel bg-accent px-3 text-sm font-semibold text-accent-ink" onClick={() => window.location.assign("/login")}>
                 Sign in
               </button>
@@ -361,16 +411,15 @@ export function ServiceBoard({
               <button type="button" className="min-h-11 rounded-panel border border-line px-3 text-sm" onClick={() => explainOrOpen(service.name, service.detail)}>
                 Setup
               </button>
-            ) : legacyConnected && onDisconnect ? (
-              <button type="button" className="min-h-11 rounded-panel border border-line px-3 text-sm" onClick={onDisconnect}>
-                Disconnect
-              </button>
+
             ) : (
               <button type="button" className="min-h-11 rounded-panel border border-line px-3 text-sm" onClick={() => explainOrOpen(service.name, service.detail)}>
                 {service.name === "Grok" && grokConfigured ? "How it works" : "Setup"}
               </button>
             )}
             </div>
+            {service.name === "Notion" && oauth && (oauthConnected || showOauthConnect) &&
+              <NotionWorkspaces key={oauth.connectedAt || oauth.state} onAdd={() => connectOauth("Notion")} onSelect={() => refreshOne("Notion")} />}
             {service.name === "MCP" ? (
               <div className="plugin-link__extra">
                 <button

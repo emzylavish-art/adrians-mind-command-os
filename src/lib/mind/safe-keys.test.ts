@@ -19,7 +19,8 @@ describe("Safe Keys capability inventory", () => {
     assert.doesNotMatch(panel, /<input|<textarea|type=["']password/i);
     assert.doesNotMatch(panel, /xai-/);
     assert.match(panel, /SAFE_KEY_CAPABILITIES/);
-    assert.match(panel, /SAFE_KEY_STATUS/);
+    assert.match(panel, /safeKeyStatus\(capability.id/);
+    assert.match(panel, /Account model providers/);
     assert.match(panel, /onCopy/);
   });
 });

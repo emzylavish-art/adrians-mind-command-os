@@ -103,6 +103,7 @@ export async function handleVoiceStt(request: Request, deps: VoiceHttpDeps = {})
   if (blocked) return blocked;
   const read = await readJsonObjectBody(request, 6_000_000);
   if (!read.ok) return json({ ok: false, code: "network_failure", error: read.error }, read.status);
+  if (read.body.freeOnly === true) return json({ ok: false, error: "Free-only mode keeps cloud transcription off." });
   const parsed = validateTranscribeAudioInput(read.body);
   if (!parsed.ok) return json({ ok: false, code: "empty_transcript", error: parsed.error });
   const decoded = decodeAudioBase64(parsed.audioBase64);
@@ -130,6 +131,7 @@ export async function handleVoiceTts(request: Request, deps: VoiceHttpDeps = {})
   if (blocked) return blocked;
   const read = await readJsonObjectBody(request, 32_000);
   if (!read.ok) return json({ ok: false, code: "network_failure", error: read.error }, read.status);
+  if (read.body.freeOnly === true) return json({ ok: false, error: "Free-only mode keeps cloud speech off." });
   const parsed = validateSpeakTextInput(read.body.text);
   if (!parsed.ok) return json({ ok: false, code: "chat_failed", error: parsed.error });
   const env = deps.env ?? process.env;

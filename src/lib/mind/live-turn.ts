@@ -44,6 +44,17 @@ function readOrAbort(reader: ReadableStreamDefaultReader<Uint8Array>, signal: Ab
   });
 }
 
+/** Prepare a send on the server clock before any inference request. */
+export async function prepareTurnId(url: string, headers: HeadersInit, signal: AbortSignal, fetchImpl: typeof fetch = fetch): Promise<string> {
+  const response = await fetchImpl(url, { method: "GET", headers, signal, credentials: "same-origin", cache: "no-store" });
+  if (!response.ok) throw new Error("Could not prepare this send. No model was called.");
+  const value = await response.json() as { operationId?: unknown };
+  if (typeof value.operationId !== "string" || !/^\d{13}-[a-f0-9-]{36}$/i.test(value.operationId)) {
+    throw new Error("The server did not supply a send ID. No model was called.");
+  }
+  return value.operationId;
+}
+
 export async function consumeMindTurn(input: {
   url: string;
   body: unknown;
@@ -94,7 +105,6 @@ export async function consumeMindTurn(input: {
   const reader = response.body.getReader();
   const decoder = new TextDecoder();
   let carry = "";
-  let finished: LiveTurnResult | null = null;
   const stop = async (): Promise<LiveTurnResult> => {
     await reader.cancel().catch(() => undefined);
     return { ok: false, error: STOPPED_REPLY };
@@ -125,10 +135,10 @@ export async function consumeMindTurn(input: {
       if (event.event === "delta") input.onDelta(event.text);
       if (event.event === "error" || event.event === "canceled") {
         await reader.cancel().catch(() => undefined);
-        return { ok: false, error: event.error, ...((event.event === "canceled" || !finished) ? { deliveryUncertain: true } : {}) };
+        return { ok: false, error: event.error, deliveryUncertain: true };
       }
       if (event.event === "done") {
-        finished = {
+        const finished: LiveTurnResult = {
           ok: true,
           text: event.text,
           model: event.model,
@@ -146,11 +156,11 @@ export async function consumeMindTurn(input: {
         };
         const outcome = outcomeFromDoneEvent(event);
         if (outcome) rememberTierOutcome(outcome);
+        // The protocol is complete. Waiting for EOF can lose a confirmed reply on disconnect.
+        void reader.cancel().catch(() => undefined);
+        return finished;
       }
     }
   }
-  if (input.signal.aborted || !finished || !finished.ok || !finished.text.trim()) {
-    return { ok: false, error: input.signal.aborted ? STOPPED_REPLY : "The model connection closed before the reply finished. The provider may have processed this request.", ...(input.signal.aborted ? {} : { deliveryUncertain: true }) };
-  }
-  return finished;
+  return { ok: false, error: "The model connection closed before the reply finished. The provider may have processed this request.", deliveryUncertain: true };
 }

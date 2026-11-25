@@ -4,6 +4,7 @@ import {
   LayoutDashboard, ListTodo, Network, RefreshCw, Search, ShieldCheck,
   Workflow, X,
 } from "lucide-react";
+import { OwnerDashboard } from "./owner-dashboard";
 import { useDashboardStatus } from "@/components/mind/dashboard-3d/use-dashboard-status";
 import type { BotNode, Health } from "@/lib/mind/dashboard/types";
 
@@ -61,6 +62,19 @@ function AgentRow({ bot, onSelect }: { bot: BotNode; onSelect: (bot: BotNode) =>
 }
 
 export function AgentCommandCenter() {
+  const [operations, setOperations] = useState(false);
+  return <div className="h-full overflow-y-auto bg-bg text-fg">
+    <OwnerDashboard />
+    <div className="mx-auto max-w-5xl px-4 pb-4 md:px-6">
+      <button type="button" className="min-h-11 rounded-panel border border-line px-3" aria-expanded={operations} onClick={() => setOperations((open) => !open)}>
+        {operations ? "Hide public operations" : "View public operations"}
+      </button>
+    </div>
+    {operations && <PublicOperations />}
+  </div>;
+}
+
+function PublicOperations() {
   const { state, refresh } = useDashboardStatus();
   const [section, setSection] = useState<Section>("3D Map");
   const [query, setQuery] = useState("");

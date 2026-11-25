@@ -10,7 +10,7 @@ import { loadMcpWithHttpFallback } from "@/lib/mind/mcp-list-http";
 import { getRecentChats } from "@/lib/mind/recent-chats";
 import { ConversationSections } from "@/components/mind/conversation-sections";
 import { CloudBrowserSettings } from "@/components/mind/cloud-browser-settings";
-import { OwnerDashboard } from "@/components/mind/owner-dashboard";
+import { PUBLIC_INSTALLER } from "@/lib/mind/desktop-update";
 import { DesktopUpdateNote } from "@/components/mind/desktop-update-note";
 import { ActionOverlay, ActionsButton } from "@/components/mind/conversation-menu";
 import { applyArchive, applyFavorite, applyProject, applyRename, conversationSharePath, quoteIntoNewChat, scheduleConversation, type ConversationAction } from "@/lib/mind/conversation-actions";
@@ -29,6 +29,7 @@ import {
   Home,
   Image,
   Lock,
+  LayoutDashboard,
   MessageSquare,
   Mic,
   MicOff,
@@ -60,9 +61,11 @@ import { approvalTokenFor, decide, type Autonomy } from "@/lib/mind/policy";
 import { reaDoctor, reaInspect } from "@/lib/mind/rea";
 import { CAPABILITIES, isVerifiedCapability, type CapabilityStatus } from "@/lib/mind/registry";
 import { REQUIREMENTS, requirementCounts } from "@/lib/mind/requirements";
-import { consumeMindTurn, shouldStoreReply, STOPPED_REPLY } from "@/lib/mind/live-turn";
+import { consumeMindTurn, prepareTurnId, shouldStoreReply, STOPPED_REPLY } from "@/lib/mind/live-turn";
 import { boundAbortSignal } from "@/lib/mind/turn-timeouts";
-import { analyzeImageFile, createVoiceClientSecret, mcpCommand, mcpList, mcpRemove, mcpRegistryList, mcpRegistryToggle, mcpSave, mindStatus, notionCommand, notionDisconnect, notionStatus, recordAgentExecution, searchWeb, setExecutionHalt, speakText } from "@/lib/mind/server";
+import { createVoiceClientSecret, mcpCommand, mcpList, mcpRemove, mcpRegistryList, mcpRegistryToggle, mcpSave, mindStatus, notionCommand, notionStatus, recordAgentExecution, searchWeb, setExecutionHalt, speakText } from "@/lib/mind/server";
+import { focusConnection } from "./focus-connection";
+import { listNotionWorkspaces } from "@/lib/mind/notion-workspaces";
 import { SafeKeysPanel } from "@/components/mind/safe-keys-panel";
 import { AiProviderConnections } from "@/components/mind/ai-provider-connections";
 import type { PublicAiProvider } from "@/lib/mind/ai-provider-config.server";
@@ -88,7 +91,7 @@ import {
   VoiceModeStage,
 } from "@/components/mind/voice-ui";
 
-const DashboardApp = lazy(() => import("@/components/mind/dashboard-3d/dashboard-app").then((mod) => ({ default: mod.DashboardApp })));
+const DashboardApp = lazy(() => import("@/components/mind/agent-command-center").then((mod) => ({ default: mod.AgentCommandCenter })));
 import { isLiveVoiceOccupied, LIVE_VOICE_BUSY_MESSAGE } from "@/lib/mind/voice-live/occupancy";
 import { probeOllamaConductor, runOllamaConductor } from "@/lib/mind/voice/ollama-conductor";
 import { DIRECT_FALLBACK_NOTICE, formatVoiceClientError, resolveVoiceMode } from "@/lib/mind/voice/errors";
@@ -100,12 +103,12 @@ import {
   setVoiceModeStore,
   subscribeVoiceMode,
 } from "@/lib/mind/voice/mode-store";
+import { sanitizeAudioFilename } from "@/lib/mind/voice/voice-input";
 import { captureSpeakUtterance } from "@/lib/mind/voice/capture-utterance";
 import { type SpeakRetryParams } from "@/lib/mind/voice/speak-action";
 import { runMountedSpeak } from "@/lib/mind/voice/speak-click";
 import { speakCanRetry } from "@/lib/mind/voice/speak-failures";
 import { interruptMessageSpeak } from "@/lib/mind/voice/speak-control";
-import { replyVoiceForTurn, shouldSpeakTranscriptAgain } from "@/lib/mind/voice/one-voice";
 import { withSessionTimeout } from "@/lib/mind/voice/session-timeout";
 import { clampSpeakText, sanitizeVoiceTranscript } from "@/lib/mind/voice/limits";
 import { createListenGuard, resolveListenAction } from "@/lib/mind/voice/listen-guard";
@@ -173,8 +176,7 @@ import {
   shouldAcceptTranscript,
   toggleMute,
 } from "@/lib/mind/voice/spam-guard";
-import { buildVoiceChatTurn } from "@/lib/mind/voice/voice-chat-turn";
-import { routeVoiceModeTranscript } from "@/lib/mind/voice/transcript-routing";
+import { createCallHistory, type CallHistory } from "@/lib/mind/voice/voice-chat-turn";
 import type { Chat, Msg, Workspace } from "@/lib/mind/types";
 import { ServiceBoard } from "@/components/mind/service-board";
 import { EveWorkbench } from "@/components/mind/eve-workbench";
@@ -190,18 +192,19 @@ import { CloudPicker, type CloudPickerAttach } from "@/components/mind/media/clo
 import { InlineImage } from "@/components/mind/media/inline-image";
 import { ChatMediaGallery } from "@/components/mind/media/chat-media-gallery";
 import { explainRejectedImageFile } from "@/components/mind/media/accept-image-files";
-import { listChatGalleryImages } from "@/lib/mind/media/chat-gallery";
+import { imageDownloadName, listChatGalleryImages } from "@/lib/mind/media/chat-gallery";
 import { fileToDownscaledDataUrl } from "@/components/mind/media/downscale";
 import { historyTextForImages, parseImagineCommand, toImageAttachments, type ImageAttachment } from "@/lib/mind/media";
 import { haltFleet, enqueueRun, runDueSchedules, togglePin } from "@/lib/mind/fleet";
 import { tickFleet } from "@/lib/mind/fleet";
 import { createBotFromSpeech, parseCreateBot } from "@/lib/mind/speak-bot";
 import { interpretCommand, type CommandMode } from "@/lib/mind/intent";
+import { notionSearchIssue, retainActivity } from "@/lib/mind/connection-attention";
 import { paletteHits } from "@/lib/mind/palette";
 import { paletteKeyAction } from "@/lib/mind/palette-keys";
 import { runLocalPlan } from "@/lib/mind/local-tools";
 import { greeting } from "@/lib/mind/greeting";
-import { rankMemories, relevantMemories } from "@/lib/mind/memory";
+import { relevantMemories } from "@/lib/mind/memory/relevant";
 import { databaseMode } from "@/lib/mind/persistence";
 import { runAgentTurn, type AgentTool, type ToolEvent } from "@/lib/mind/orchestrator";
 import {
@@ -237,13 +240,13 @@ import {
   type LogicRouteId,
   type LogicRoutePublic,
 } from "@/lib/mind/logic-routes";
-import { runSkill, searchSkills, SKILLS } from "@/lib/mind/skills";
+import { runSkill, runRequestedSkill, searchSkills, SKILLS } from "@/lib/mind/skills";
 import LocalSkillsTools from "@/components/mind/local-skills-tools";
 import { HandyDictation } from "@/components/mind/handy-dictation";
 import { detectWithHandy } from "@/lib/mind/handy-dictation";
 import { ModuleSuggestions } from "@/components/mind/module-suggestions";
 import { type ModuleSuggestion } from "@/lib/intent/module-suggestions";
-import { refreshSkills } from "@/lib/mind/skill-refresh";
+
 import { exportChat, prepareRegenerate, prepareRetry, renameChat, reviseUserTurn } from "@/lib/mind/transcript";
 import { replyActions, replyHasSources } from "@/lib/mind/reply-actions";
 import { useComposerDraft } from "@/lib/mind/use-composer-draft";
@@ -300,6 +303,7 @@ import {
   deleteMemory,
   workspaceForChat,
   addProject,
+  archiveMessagePreview,
   clearedBrowserCopy,
   createChat,
   openBotChat,
@@ -310,13 +314,14 @@ import {
   packWorkspace,
   pushAudit,
   pushUsage,
+  sha256,
   reviseMemory,
   unpackWorkspace,
   updateChatPersonality,
   updateChatCustomPersonality,
 } from "@/lib/mind/workspace";
 import { WORKSPACE_ROUTE_LINKS } from "@/lib/mind/workspace-nav";
-import { CONVERSATIONAL_PERSONALITIES, type PersonalityId } from "@/lib/mind/personalities";
+import { CONVERSATIONAL_PERSONALITIES, resolvePersonalityId, type PersonalityId } from "@/lib/mind/personalities";
 import { clearPersonaSelection, readPersonaSelection } from "@/lib/mind/personas/selection";
 
 type View =
@@ -614,7 +619,7 @@ function humanAction(action: string) {
     delete_file: "File deleted",
     create_project: "Project created",
     archive_memory: "Note archived",
-    message_sent: "Grok replied",
+    message_sent: "Conversation message",
     chat_failed: "Chat failed",
     open_page_failed: "Open page failed",
     research_failed: "Research failed",
@@ -742,10 +747,18 @@ export function CommandApp() {
   const [view, setViewState] = useState<View>("command");
   const applyingLocation = useRef(false);
   const locationHistory = useRef<"push" | "replace">("push");
+  function loginReturnPath(resumeSpeak = false) {
+    const params = new URLSearchParams();
+    if (view !== "command") params.set("section", view);
+    if (view === "chat" && activeId && !draftPrivate) params.set("chat", activeId);
+    if (view === "settings" && settingsPane) params.set("pane", settingsPane);
+    if (resumeSpeak) params.set("resume", "speak");
+    return params.size ? "/?" + params.toString() : "/";
+  }
   function setView(next: View) {
     setViewState(next);
   }
-  const [imagineEdit, setImagineEdit] = useState<{ image: string; text: string; returnFocus: HTMLElement | null } | null>(null);
+  const [imagineEdit, setImagineEdit] = useState<{ image: string; text: string; result?: ImageAttachment; returnFocus: HTMLElement | null } | null>(null);
   const [imagineEditError, setImagineEditError] = useState<string | null>(null);
   const [researchPending, setResearchPending] = useState(false);
   const researchFlight = useRef(false);
@@ -757,14 +770,18 @@ export function CommandApp() {
     if (!cardFocus) return;
     const frame = requestAnimationFrame(() => {
       const card = document.getElementById(cardFocus.id);
+      if (card) {
+        const panel = card.closest("details");
+        if (panel) panel.open = true;
+      }
       card?.focus({ preventScroll: true });
-      card?.scrollIntoView({ block: "nearest" });
+      card?.scrollIntoView({ block: cardFocus.id.startsWith("message-") ? "center" : "nearest" });
     });
     return () => cancelAnimationFrame(frame);
   }, [cardFocus, view]);
   const [homeAction, setHomeAction] = useState<"ask" | "image" | "video" | "write" | "search">("ask");
-  const [settingsPane, setSettingsPane] = useState<null | "general" | "connections" | "voice" | "pages" | "data" | "safety" | "keys" | "browser">(null);
-  const [wipeAsk, setWipeAsk] = useState(false);
+  const [settingsPane, setSettingsPane] = useState<null | "general" | "connections" | "voice" | "pages" | "data" | "safety" | "keys" | "browser" | "personalization">(null);
+  const [wipeAsk, setWipeAsk] = useState<string | null>(null);
   const [wipeStatus, setWipeStatus] = useState<string | null>(null);
   const [hiddenSettings, setHiddenSettings] = useState<string[]>([]);
   const [settingsMenu, setSettingsMenu] = useState<string | null>(null);
@@ -807,7 +824,7 @@ export function CommandApp() {
     const phone = window.matchMedia("(max-width: 767px)").matches;
     if (drawer && phone) {
       const light = document.documentElement.dataset.theme === "light";
-      const reduce = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+      const reduce = document.documentElement.dataset.adrianMotion === "reduce" || window.matchMedia("(prefers-reduced-motion: reduce)").matches;
       drawer.style.setProperty("inset", "0 auto 0 0", "important");
       drawer.style.setProperty("width", "min(18.5rem, 84vw)", "important");
       drawer.style.setProperty("height", "100dvh", "important");
@@ -900,19 +917,32 @@ export function CommandApp() {
   });
   const [guide, setGuide] = useState<FirstStepsState>({ step: 0, dismissed: false });
   const [commandMode, setCommandMode] = useState<CommandMode>("ask");
-  const [defaultPersonalityId, setDefaultPersonalityId] = useState<PersonalityId>("assistant");
   const [activeId, setActiveId] = useState<string | null>(null);
   const [temporary, setTemporary] = useState(false);
   const draftOwner = account?.id ?? (loopback ? "dev-user" : null);
+  const personalityKey = "amcos.default-style." + (draftOwner ?? "guest");
+  const [stylePreference, setStylePreference] = useState<{ key: string; id: PersonalityId } | null>(null);
+  const defaultPersonalityId = stylePreference?.key === personalityKey ? stylePreference.id : "assistant";
+  useEffect(() => {
+    try { setStylePreference({ key: personalityKey, id: resolvePersonalityId(localStorage.getItem(personalityKey)) }); }
+    catch { setStylePreference(null); }
+  }, [personalityKey]);
+  function setDefaultPersonalityId(id: PersonalityId) {
+    setStylePreference({ key: personalityKey, id });
+    try { localStorage.setItem(personalityKey, id); } catch { /* Keep the session preference. */ }
+  }
   const draftChat = view === "chat" && activeId ? ws.chats.find((item) => item.id === activeId) : null;
   const draftPrivate = draftChat?.temporary ?? temporary;
   const draftScope = JSON.stringify([draftOwner, draftChat?.id ?? "home", draftPrivate]);
   const persistDraft = Boolean(draftOwner) && !draftPrivate;
-  const [draft, setDraft] = useComposerDraft(draftScope, "text", "", persistDraft);
+  const [draft, setDraft, setDraftInScope] = useComposerDraft(draftScope, "text", "", persistDraft);
   const [busy, setBusy] = useState(false);
   const [liveText, setLiveText] = useState("");
   const turnAbort = useRef<AbortController | null>(null);
-  const voiceNext = useRef(false);
+  const voiceScope = JSON.stringify([draftOwner, view, activeId]);
+  const currentVoiceScope = useRef(voiceScope);
+  currentVoiceScope.current = voiceScope;
+  const auxiliaryHistory = useRef<{ scope: string; record: CallHistory } | null>(null);
   const voiceSession = useRef<RealtimeVoiceSession | null>(null);
   const listenRef = useRef<(opts?: { mode?: "toggle" | "start" | "stop" }) => void>(() => undefined);
   const voiceMode = useSyncExternalStore(subscribeVoiceMode, getVoiceMode, getServerVoiceMode);
@@ -928,6 +958,7 @@ export function CommandApp() {
   const speakGenRef = useRef(0);
   const listenGuardRef = useRef(createListenGuard());
   const voiceReconnectRef = useRef(0);
+  const reconnectTimer = useRef<number | undefined>(undefined);
   const draftRef = useRef(draft);
   draftRef.current = draft;
   const [dictation, setDictation] = useState<DictationMachineState>(() => createDictationMachine(""));
@@ -1040,6 +1071,7 @@ export function CommandApp() {
   type QueuedChatMessage = CuedMessage & {
     chatId: string;
     ownerId: string;
+    paused?: boolean;
     dispatch: (chat: Chat, workspace: Workspace) => Promise<boolean>;
   };
   const turnOwner = useRef(draftOwner);
@@ -1055,6 +1087,7 @@ export function CommandApp() {
       turnInFlight.current = false;
       cueRef.current = [];
       setCued([]);
+      setPending(null);
       setBusy(false);
       setLiveText("");
       setTurnChat(null);
@@ -1103,7 +1136,13 @@ export function CommandApp() {
   const [failoverPolicy, setFailoverPolicy] = useState<"none" | "grok">("none");
  const [researchCitations, setResearchCitations] = useState<{ title: string; url: string }[]>([]);
   const [researchReportQuestion, setResearchReportQuestion] = useState("");
-  const [researchHistory, setResearchHistory] = useState<{ id: string; question: string; summary: string; citations: { title: string; url: string }[]; at: string }[]>([]);
+  type ResearchReport = { id: string; question: string; summary: string; citations: { title: string; url: string }[]; at: string; steps?: { query: string; ok: boolean; count: number }[] };
+  const [researchHistory, setResearchHistory] = useState<ResearchReport[]>([]);
+  const [researchSteps, setResearchSteps] = useState<ResearchReport["steps"]>([]);
+  const [researchOwner, setResearchOwner] = useState<string | null>(null);
+  const [providerModels, setProviderModels] = useState<Record<string, string>>({});
+  const [searchProvider, setSearchProvider] = useState("Checking search route");
+
   const [agentGoal, setAgentGoal] = useState("");
   const [agentBusy, setAgentBusy] = useState(false);
   const [agentNote, setAgentNote] = useState<string | null>(null);
@@ -1118,13 +1157,33 @@ export function CommandApp() {
   const [memoryText, setMemoryText] = useState("");
   const [memoryProject, setMemoryProject] = useState("");
   const [memoryQuery, setMemoryQuery] = useState("");
-  const [memoryTab, setMemoryTab] = useState<"mine" | "project" | "transfer">("mine");
+  const [memoryTab, setMemoryTab] = useState<"mine" | "project" | "chat" | "transfer">("mine");
   const memoryScope = memoryTab === "project" ? "project" : "global";
   const [researchText, setResearchText] = useState("");
   const [researchBand, setResearchBand] = useState<"search" | "saved" | "files">("search");
   const [researchNote, setResearchNote] = useState<string | null>(null);
   const [lookupQuery, setLookupQuery] = useState("");
   const [chatProjectId, setChatProjectId] = useState<string | null>(null);
+  const [imageAllowance, setImageAllowance] = useState<{ dailyCap: number; remaining: number; unconfirmed: number; resetAt: string } | null>(null);
+  const [allowanceError, setAllowanceError] = useState("");
+  useEffect(() => {
+    if (view !== "activity") return;
+    const controller = new AbortController();
+    const prefix = previewPathPrefix(window.location.hostname, window.location.pathname) ?? "";
+    const token = getBearerToken();
+    setImageAllowance(null);
+    setAllowanceError("");
+    void fetch(prefix + "/api/mind/media/generate", { credentials: "include", cache: "no-store", signal: controller.signal,
+      headers: token ? { authorization: "Bearer " + token } : {},
+    }).then(async (response) => {
+      const body = await response.json();
+      if (!response.ok || !body.ok) throw new Error(body.error || "Image allowance unavailable.");
+      if (!controller.signal.aborted) setImageAllowance(body);
+    }).catch((error) => {
+      if (!controller.signal.aborted) setAllowanceError(error instanceof Error ? error.message : "Image allowance unavailable.");
+    });
+    return () => controller.abort();
+  }, [view, draftOwner]);
   const [activityQuery, setActivityQuery] = useState("");
   const [openFileId, setOpenFileId] = useState<string | null>(null);
   const [shareProjectId, setShareProjectId] = useState<string | null>(null);
@@ -1141,6 +1200,7 @@ export function CommandApp() {
   const [projectOpen, setProjectOpen] = useState(false);
   const [includeTemporary, setIncludeTemporary] = useState(false);
   const [importPreview, setImportPreview] = useState<{ workspace: Workspace; name: string } | null>(null);
+  const messagePreview = importPreview ? archiveMessagePreview(ws, importPreview.workspace) : null;
   const importCounts = importPreview ? ([
     ["chats", "Chats"], ["memories", "Notes"], ["projects", "Projects"], ["files", "Files"], ["agents", "Bots"], ["runs", "Runs"], ["schedules", "Schedules"],
   ] as const).map(([key, label]) => {
@@ -1151,8 +1211,10 @@ export function CommandApp() {
   const [importChecking, setImportChecking] = useState(false);
   const [importStatus, setImportStatus] = useState("");
   const [importError, setImportError] = useState<string | null>(null);
-  const [staged, setStaged] = useComposerDraft<Staged | null>(draftScope, "file", null, persistDraft);
-  const [pendingImages, setPendingImages] = useComposerDraft<ImageAttachment[]>(draftScope, "images", EMPTY_DRAFT_IMAGES, persistDraft);
+  const [staged, setStaged, setStagedInScope] = useComposerDraft<Staged | null>(draftScope, "file", null, persistDraft);
+  const [pendingImages, setPendingImages, setImagesInScope] = useComposerDraft<ImageAttachment[]>(draftScope, "images", EMPTY_DRAFT_IMAGES, persistDraft);
+  const [excerpt, setExcerpt] = useState<{ scope: string; file: Staged; limit: number } | null>(null);
+  const excerptRef = useRef<HTMLTextAreaElement>(null);
   const [cameraOpen, setCameraOpen] = useState(false);
   const [cloudPickerOpen, setCloudPickerOpen] = useState(false);
   const [driveConnected, setDriveConnected] = useState(false);
@@ -1167,6 +1229,7 @@ export function CommandApp() {
 
   useEffect(() => {
     if (ws.halted) {
+      if (cueRef.current.some((entry) => !entry.paused)) rememberCue(cueRef.current.map((entry) => ({ ...entry, paused: true })));
       setAvatarPresence("offline");
       return;
     }
@@ -1228,6 +1291,16 @@ export function CommandApp() {
       locationHistory.current = "replace";
       const resolved = resolveShare(window.location.search, wsRef.current, known);
       setViewState(resolved.view as View);
+      if (resolved.view === "settings") {
+        const pane = params.get("pane");
+        if (pane === "connections" || pane === "general" || pane === "keys" || pane === "voice" || pane === "data" || pane === "safety" || pane === "browser" || pane === "pages" || pane === "personalization") setSettingsPane(pane);
+      }
+      if (params.get("resume") === "speak") {
+        setSpeakStageOpen(true);
+        const url = new URL(window.location.href);
+        url.searchParams.delete("resume");
+        window.history.replaceState(window.history.state, "", url.pathname + url.search + url.hash);
+      }
       setActiveId(resolved.chatId);
       setShareProjectId(resolved.projectId);
       setShareBotId(resolved.botId);
@@ -1408,7 +1481,7 @@ export function CommandApp() {
   }
 
   function chooseModelTier(tier: ModelTier) {
-    useProviderInChat("grok");
+    selectProviderInChat("grok", tier);
     setGrokModel(null);
     setModelTier(tier);
     const effort = effortForModelTier(tier);
@@ -1418,18 +1491,19 @@ export function CommandApp() {
     }
   }
 
-  function useProviderInChat(id: string) {
+  function selectProviderInChat(id: string, tier?: ModelTier) {
     if (id !== providerChoice) clearFailure();
     if (composerEffort === "orchestrator" || composerEffort === "build") chooseComposerEffort("auto");
     chooseRoutingMode("A");
-    setLogicRoute(isLogicRouteId(id) ? id : null);
-    setProviderChoice(id);
-    if (active?.botProvider || active?.botTier) {
+    if (active?.agentId || active?.botProvider || active?.botTier) {
       // This conversation follows the explicit selection. Other bot threads keep their defaults.
       setWs((prev) => ({
         ...prev,
-        chats: prev.chats.map((chat) => chat.id === active.id ? { ...chat, botProvider: undefined, botTier: undefined } : chat),
+        chats: prev.chats.map((chat) => chat.id === active.id ? { ...chat, botProvider: id, botTier: tier ?? chat.botTier ?? modelTier } : chat),
       }));
+    } else {
+      setLogicRoute(isLogicRouteId(id) ? id : null);
+      setProviderChoice(id);
     }
     setView("chat");
     setControlsOpen(false);
@@ -1455,15 +1529,16 @@ export function CommandApp() {
   }, [ratingOwner]);
 
   function rateReply(messageId: string, score: 1 | 2 | 3 | 4 | 5, model: string | null) {
-    const next = saveRating(typeof localStorage === "undefined" ? null : localStorage, {
-      messageId,
-      score,
-      model,
-      mode: routingMode,
-      at: new Date().toISOString(),
-    }, ratingOwner);
-
-    setRatings(next);
+    const reply = active?.messages.find((item) => item.id === messageId);
+    if (!reply || active?.temporary) return;
+    try {
+      const next = saveRating(localStorage, {
+        messageId, score, model, provider: reply.provider, mode: reply.routingMode ?? null, at: new Date().toISOString(),
+      }, ratingOwner);
+      setRatings(next);
+    } catch {
+      setNotice("The browser could not save this rating.");
+    }
   }
 
   function interruptSpeakPlayback() {
@@ -1479,6 +1554,7 @@ export function CommandApp() {
 
   useEffect(() => {
     const releaseVoice = () => {
+      window.clearTimeout(reconnectTimer.current);
       interruptMessageSpeak({
         sharedAudio: sharedAudioOutput,
         abortSpeak: speakAbortRef.current,
@@ -1539,6 +1615,16 @@ export function CommandApp() {
   const [reaReport, setReaReport] = useState<string | null>(null);
   const [notion, setNotion] = useState<{ state: "unconfigured" | "disconnected" | "connected"; detail: string } | null>(null);
   const [notionQuery, setNotionQuery] = useState("");
+  const notionEpoch = useRef(0);
+  const notionSearchRequest = useRef(0);
+  const searchIssue = notionSearchIssue(ws.audit);
+  const [notionPreview, setNotionPreview] = useState<{ owner: string | null; chatId: string; text: string } | null>(null);
+  useEffect(() => {
+    notionEpoch.current++;
+    setNotionPreview(null);
+    setNotionQuery(""); setNotionPages([]); setNotionNote(null);
+  }, [draftOwner]);
+  useEffect(() => { setNotionPreview(null); }, [activeId, view]);
   const [notionPages, setNotionPages] = useState<{ id: string; title: string; url: string }[]>([]);
   const [notionNote, setNotionNote] = useState<string | null>(null);
   const [mcpServers, setMcpServers] = useState<SavedMcpServer[]>([]);
@@ -1570,7 +1656,9 @@ export function CommandApp() {
   const [mcpUrl, setMcpUrl] = useState("");
   const [mcpToken, setMcpToken] = useState("");
   const [skillQuery, setSkillQuery] = useState("");
-  const [skillRefresh, setSkillRefresh] = useState<ReturnType<typeof refreshSkills> | null>(null);
+  const [skillInventory, setSkillInventory] = useState<string[]>([]);
+  const [skillInventoryStatus, setSkillInventoryStatus] = useState("");
+  const [skillRefreshNonce, setSkillRefreshNonce] = useState(0);
   const [skillBand, setSkillBand] = useState<"device" | "installed" | "missing">("device");
   const [enabledSkills, setEnabledSkills] = useState<Record<string, boolean>>({});
   const [skillNoteQuery, setSkillNoteQuery] = useState("");
@@ -1578,10 +1666,12 @@ export function CommandApp() {
   const [skillStorageError, setSkillStorageError] = useState("");
   const searchRef = useRef<HTMLInputElement>(null);
   const fileRef = useRef<HTMLInputElement>(null);
-  const inspectNext = useRef<View | null>(null);
+  const inspectFileRef = useRef<HTMLInputElement>(null);
   const clearedStop = useRef(false);
   const counts = requirementCounts();
   const active = ws.chats.find((chat) => chat.id === activeId) ?? null;
+  const followupPrivate = active?.temporary ?? temporary;
+
   const providerOptions = [
     ...providerChoicesWithKeys(grokConfigured, null, liveProviders),
     ...consultModules.filter((item) => item.id === "nemotron" || item.id === "ollama")
@@ -1590,6 +1680,15 @@ export function CommandApp() {
   ];
   const effectiveRoute = routeForBotChat(active, { provider: providerChoice, modelTier });
   const effectiveProvider = effectiveRoute.fromBot ? effectiveRoute.provider : logicRoute ?? effectiveRoute.provider;
+  const researchFreeOnly = effectiveProvider === "openrouter" || effectiveProvider === "nemotron" || /(?:%3A|:)free$/i.test(effectiveProvider)
+    || /:free$/i.test(providerModels[effectiveProvider] || "");
+  const currentFreeOnly = useRef(researchFreeOnly);
+  currentFreeOnly.current = researchFreeOnly;
+  useEffect(() => {
+    if (!researchFreeOnly) return;
+    if (listenMintAbortRef.current || voiceSession.current) stopVoiceSession();
+    if (speakAbortRef.current) interruptSpeakPlayback();
+  }, [researchFreeOnly]);
   const controlsModelLabel = effectiveProvider === "grok" ? grokModel ?? effectiveRoute.modelTier
     : providerOptions.find((option) => option.id === effectiveProvider)?.label
       ?? logicRoutes.find((option) => option.id === effectiveProvider)?.label ?? "Selected module unavailable";
@@ -1597,8 +1696,9 @@ export function CommandApp() {
 
   useEffect(() => {
     if (!focusAuditId || view !== "activity") return;
+    if (!ws.audit.some((item) => item.id === focusAuditId)) { setNotice("This event is no longer in the retained activity history."); return; }
     const node = document.getElementById(`audit-${focusAuditId}`);
-    node?.scrollIntoView({ block: "nearest", behavior: "smooth" });
+    node?.scrollIntoView({ block: "nearest", behavior: document.documentElement.dataset.adrianMotion === "reduce" ? "instant" : "smooth" });
   }, [focusAuditId, view, ws.audit]);
 
   useEffect(() => {
@@ -1611,22 +1711,47 @@ export function CommandApp() {
   }, [navMoreOpen]);
   useEffect(() => {
     if (view !== "skills") return;
-    setSkillRefresh(refreshSkills());
-  }, [view]);
+    const controller = new AbortController();
+    const prefix = previewPathPrefix(window.location.hostname, window.location.pathname) ?? "";
+    setSkillInventoryStatus("Reading skill directory…");
+    const bearer = getBearerToken();
+    void fetch(prefix + "/api/mind/skills", { credentials: "include", cache: "no-store", signal: controller.signal,
+      headers: bearer ? { authorization: "Bearer " + bearer } : {},
+    }).then(async (response) => {
+      const body = await response.json() as { skills?: string[]; error?: string };
+      if (!response.ok || !Array.isArray(body.skills)) throw new Error(body.error || "Could not read skill directory.");
+      if (controller.signal.aborted) return;
+      setSkillInventory(body.skills);
+      setSkillInventoryStatus(body.skills.length + " instruction sets found on the server.");
+    }).catch((error) => {
+      if (!controller.signal.aborted) setSkillInventoryStatus(error instanceof Error ? error.message : "Skill refresh failed.");
+    });
+    return () => controller.abort();
+  }, [view, skillRefreshNonce]);
 
   useEffect(() => {
     const viewport = window.visualViewport;
     if (!viewport || (view !== "chat" && view !== "command")) return;
     const root = document.documentElement;
+    function resetViewport() {
+      root.style.removeProperty("--mind-visible-height");
+      root.style.removeProperty("--mind-visible-top");
+    }
     function fitViewport() {
-      if (viewport && viewport.scale === 1) root.style.setProperty("--mind-visible-height", `${Math.round(viewport.height)}px`);
-      else root.style.removeProperty("--mind-visible-height");
+      if (!viewport || viewport.scale !== 1) {
+        resetViewport();
+        return;
+      }
+      root.style.setProperty("--mind-visible-height", `${Math.round(viewport.height)}px`);
+      root.style.setProperty("--mind-visible-top", `${Math.max(0, Math.round(viewport.offsetTop))}px`);
     }
     fitViewport();
     viewport.addEventListener("resize", fitViewport);
+    viewport.addEventListener("scroll", fitViewport);
     return () => {
       viewport.removeEventListener("resize", fitViewport);
-      root.style.removeProperty("--mind-visible-height");
+      viewport.removeEventListener("scroll", fitViewport);
+      resetViewport();
     };
   }, [view]);
 
@@ -1647,6 +1772,8 @@ export function CommandApp() {
       .then((status) => {
         if (!active) return;
         setGrokConfigured(status.grok === "configured");
+        setSearchProvider(status.searchProvider);
+        setProviderModels(status.providerModels);
         if (status.providers && typeof status.providers === "object") setLiveProviders(status.providers);
         setGrok(status.grok === "configured" ? "Configured" : status.grok === "down" ? "Refused" : "Setup required");
         setStatusSignedIn(status.signedIn === true);
@@ -1825,6 +1952,8 @@ export function CommandApp() {
       const queued = current.runs.some((run) => run.state === "queued" || run.state === "running");
       if (!due && !queued) return;
       for (const run of current.runs) {
+        // Scheduled occurrences execute their declared agent tools. Their titles must never become PC commands.
+        if (run.id.startsWith("scheduled:") || run.parentId?.startsWith("scheduled:")) continue;
         if (run.state !== "queued" || desktopActedRef.current.has(run.id) || !spokenPcCommand(run.goal)) continue;
         desktopActedRef.current.add(run.id);
         void fetch("/api/mind/pc/status", { method: "POST", credentials: "include", headers: { "content-type": "application/json" }, body: JSON.stringify({ text: run.goal }) });
@@ -1906,13 +2035,19 @@ export function CommandApp() {
   }, []);
 
   useEffect(() => {
+    setResearchOwner(draftOwner);
+    setResearchHistory([]);
+    setResearchCitations([]);
+    setResearchText("");
+    setResearchNote(null);
+    setResearchReportQuestion("");
+    setResearchSteps([]);
+    if (!draftOwner) return;
     try {
-      const stored = JSON.parse(localStorage.getItem("amcos.research.v1") || "[]") as { id: string; question: string; summary: string; citations: { title: string; url: string }[]; at: string }[];
+      const stored = JSON.parse(localStorage.getItem(`amcos.research.v2.${draftOwner}`) || "[]") as ResearchReport[];
       if (Array.isArray(stored)) setResearchHistory(stored.slice(0, 8));
-    } catch {
-      /* a private browser can refuse storage */
-    }
-  }, []);
+    } catch { /* Browser storage is optional. */ }
+  }, [draftOwner]);
 
   useEffect(() => {
     const device = window.matchMedia("(prefers-color-scheme: dark)");
@@ -1932,7 +2067,7 @@ export function CommandApp() {
   }, [theme]);
 
   useEffect(() => {
-    applyMotionChoice(document, motionChoice);
+    applyMotionChoice(document, readMotionChoice(motionChoice, window.matchMedia("(prefers-reduced-motion: reduce)").matches));
   }, [motionChoice]);
 
   useEffect(() => {
@@ -1978,7 +2113,7 @@ export function CommandApp() {
       setNavOpen(false);
       return;
     }
-    window.location.assign("/login");
+    window.location.assign("/login?next=" + encodeURIComponent(loginReturnPath()));
   };
 
   const hits = useMemo(
@@ -2016,7 +2151,17 @@ export function CommandApp() {
       const kind = hit.view === "agents" ? "bot" : hit.view === "projects" ? "project" : "run";
       setCardFocus({ id: `${kind}-${hit.ref}` });
     } else setCardFocus(null);
-    if (hit.view === "chat" && hit.ref) setActiveId(hit.ref);
+    if ((hit.view === "chat" || hit.view === "code") && hit.ref) {
+      setActiveId(hit.ref);
+      if (hit.messageId) setCardFocus({ id: "message-" + hit.messageId });
+    }
+    if (hit.view === "memory" && hit.ref) {
+      const note = ws.memories.find((item) => item.id === hit.ref);
+      setMemoryTab(note?.scope === "project" ? "project" : note?.scope === "chat" ? "chat" : "mine");
+      setMemoryProject(note?.projectId || "");
+      setMemoryQuery("");
+      setCardFocus({ id: "note-" + hit.ref });
+    }
     if (hit.view === "projects" && hit.ref) setShareProjectId(hit.ref);
     if (hit.view === "agents" && hit.ref) setShareBotId(hit.ref);
     if (hit.view === "files" && hit.ref) {
@@ -2024,7 +2169,9 @@ export function CommandApp() {
       setOpenFileId(hit.ref);
       setLibraryBand("preview");
     }
-    setView(hit.view);
+    if (hit.view === "speak") openSpeakStage();
+    else if (hit.view === "social" || hit.view === "gpt-wrapper") window.location.assign("/" + hit.view);
+    else setView(hit.view);
     setQuery("");
     setPaletteIndex(0);
     setPaletteOpen(false);
@@ -2089,9 +2236,10 @@ export function CommandApp() {
     }
     if (action === "copy") {
       const text = targets.map((chat) => `${window.location.origin}${window.location.pathname}${conversationSharePath(chat.id, Object.keys(TITLES))}`).join("\n");
-      void navigator.clipboard?.writeText(text).then(
-        () => setNotice(targets.length === 1 ? "Link copied. It opens this conversation on a device that already has it." : "Links copied."),
-        () => setNotice("Clipboard copy was blocked."),
+      if (!navigator.clipboard) { setNotice(text); return; }
+      void navigator.clipboard.writeText(text).then(
+        () => setNotice(targets.length === 1 ? "Link copied. It opens this conversation on a device that already has it." : "Links copied. They open on devices that already have these conversations."),
+        () => setNotice(text),
       );
       return;
     }
@@ -2104,25 +2252,34 @@ export function CommandApp() {
       return;
     }
     if (action === "scheduled") {
-      const name = targets.length === 1 ? shownChatTitle(targets[0]!) : extra?.title || targets[0]!.title;
-      const result = scheduleConversation(wsRef.current, name);
-      if (result.error) {
-        setError(result.error);
-        return;
+      let next = wsRef.current;
+      let created = 0;
+      for (const chat of targets) {
+        const result = scheduleConversation(next, shownChatTitle(chat), chat.id);
+        if (result.error) { setError(result.error); return; }
+        if (result.created) {
+          next = pushAudit(result.ws, "schedule_chat", chat.id, "saved off");
+          created++;
+        }
       }
-      setWs(pushAudit(result.ws, "schedule_chat", targets[0]!.id, result.created ? "saved off" : "already scheduled"));
+      setWs(next);
       setView("scheduled");
       setNavOpen(false);
-      setNotice(result.created ? "The schedule is saved and off. Nothing runs until you turn it on." : "That schedule is already saved. Nothing new was added.");
+      setNotice(created ? `${created} schedule(s) saved and off. Choose an agent and turn on when ready.` : "Schedules already saved.");
       return;
     }
     if (action === "pin") {
       const allPinned = targets.every((chat) => wsRef.current.pins.some((pin) => pin.kind === "chat" && pin.ref === chat.id));
-      setWs((prev) => targets.reduce((next, chat) => {
+      const before = wsRef.current;
+      const after = targets.reduce((next, chat) => {
         const isPinned = next.pins.some((pin) => pin.kind === "chat" && pin.ref === chat.id);
         return allPinned || !isPinned ? togglePin(next, "chat", chat.id) : next;
-      }, prev));
-      setNotice(allPinned ? "Unpinned." : "Pinned.");
+      }, before);
+      setWs(after);
+      const added = targets.filter((chat) => !before.pins.some((pin) => pin.kind === "chat" && pin.ref === chat.id) && after.pins.some((pin) => pin.kind === "chat" && pin.ref === chat.id));
+      const skipped = targets.filter((chat) => !after.pins.some((pin) => pin.kind === "chat" && pin.ref === chat.id));
+      const addedText = added.length ? `Pinned ${added.map(shownChatTitle).join(", ")}. ` : "";
+      setNotice(allPinned ? "Unpinned." : skipped.length ? `${addedText}Pin limit reached. Skipped ${skipped.map(shownChatTitle).join(", ")}.` : addedText.trim());
       return;
     }
     if (action === "favorite") {
@@ -2138,7 +2295,7 @@ export function CommandApp() {
     }
     if (action === "project") {
       setWs((prev) => pushAudit(applyProject(prev, ids, extra?.projectId ?? null), "assign_project", ids[0] ?? "chat", extra?.projectId || "cleared"));
-      setNotice(extra?.projectId ? "Added to the project." : "Removed from the project.");
+      setNotice(extra?.projectId ? "Conversation and its chat notes moved. Existing project files stay in their original project." : "Removed from the project.");
       return;
     }
     if (action === "rename") {
@@ -2185,20 +2342,19 @@ export function CommandApp() {
   }
 
   function recordToolTurn(chat: Chat, text: string, reply: string, mutate?: (prev: Workspace) => Workspace, meta?: { tool: string; ok: boolean; action: "chat" | "voice" }) {
-    const title = chat.messages.length > 0 ? chat.title : text.replace(/\s+/g, " ").slice(0, 48);
+    if (turnOwner.current !== draftOwner || !wsRef.current.chats.some((item) => item.id === chat.id)) return;
     const at = new Date().toISOString();
     const userMsg = { id: crypto.randomUUID(), role: "user" as const, content: text, at };
     const assistant = { id: crypto.randomUUID(), role: "assistant" as const, content: reply, at, model: "local-tool" };
-    setActiveId(chat.id);
-    setView("chat");
-    setError(null);
-    if (meta) void recordAgentExecution({ data: { id: assistant.id, tool: meta.tool, action: meta.action, ok: meta.ok, detail: reply } }).catch(() => undefined);
+    if (meta) void recordAgentExecution({ data: { id: assistant.id, tool: meta.tool, action: meta.action, ok: meta.ok, detail: meta.ok ? "Completed" : "Failed" } }).catch(() => undefined);
     setWs((prev) => {
+      const current = prev.chats.find((item) => item.id === chat.id);
+      if (!current || turnOwner.current !== draftOwner) return prev;
       const base = mutate ? mutate(prev) : prev;
-      const exists = base.chats.some((item) => item.id === chat.id);
-      const chats = exists
-        ? base.chats.map((item) => (item.id === chat.id ? { ...item, title, messages: [...item.messages, userMsg, assistant] } : item))
-        : [{ ...chat, title, messages: [userMsg, assistant] }, ...base.chats];
+      const title = !current.messages.length && current.title === chat.title ? text.replace(/\s+/g, " ").slice(0, 48) : current.title;
+      const chats = base.chats.map((item) => item.id === chat.id
+        ? { ...current, title, messages: [...current.messages, userMsg, assistant] }
+        : item);
       return pushAudit({ ...base, chats }, "tool_turn", meta?.tool ?? chat.id, meta ? `${meta.action} ${meta.ok ? "completed" : "failed"}` : "no model");
     });
   }
@@ -2212,7 +2368,7 @@ export function CommandApp() {
       unavailableReason: "",
       run: (text) => {
         const result = runLocalPlan(scoped, [{ id, tool: id, query: text }], { autonomy: "automatic", halted: source.halted, tokens: {} });
-        return { ok: true, text: result.lines.join("\n") || "No result." };
+        return { ok: result.ok, text: result.lines.join("\n") || "No result." };
       },
     });
     return [
@@ -2224,15 +2380,7 @@ export function CommandApp() {
         confirm: false,
         available: true,
         unavailableReason: "",
-        run: (text) => {
-          const matches = searchSkills(text.replace(/\bskills?\b/gi, " "));
-          const usable = matches.filter((skill) => skill.kind !== "not-installed");
-          const one = usable.length === 1 ? usable[0] : null;
-          const reply = one
-            ? runSkill(scoped, one, enabledSkills[one.id] !== false).text
-            : matches.map((skill) => `${skill.name} — ${skill.kind === "not-installed" ? "Not installed" : skill.kind === "installed" ? "Installed" : "Built-in"}. ${skill.needs}`).join("\n") || "No skill matches. Nothing was run.";
-          return { ok: true, text: reply };
-        },
+        run: (text) => runRequestedSkill(scoped, text, enabledSkills),
       },
       {
         id: "save_chat_skill",
@@ -2393,11 +2541,14 @@ export function CommandApp() {
   }
 
   async function runWebResearch(chat: Chat, query: string, action: "chat" | "voice" = "chat") {
+    if (turnOwner.current !== draftOwner || !wsRef.current.chats.some((item) => item.id === chat.id)) return;
     setBusy(true);
     setError(null);
     try {
-      const result = await searchWeb({ data: { query } });
+      const result = await searchWeb({ data: { query, freeOnly: researchFreeOnly } });
+      if (turnOwner.current !== draftOwner) return;
       setBusy(false);
+      if (!wsRef.current.chats.some((item) => item.id === chat.id)) return;
       setResearchCitations(result.citations);
       setResearchReportQuestion(query);
       if (!result.ok) {
@@ -2418,7 +2569,9 @@ export function CommandApp() {
       setResearchNote(result.summary || "");
       setNotice(`Research kept ${result.citations.length} http(s) citation${result.citations.length === 1 ? "" : "s"}.`);
     } catch {
+      if (turnOwner.current !== draftOwner) return;
       setBusy(false);
+      if (!wsRef.current.chats.some((item) => item.id === chat.id)) return;
       const message = "The search provider could not be reached. No citations were created.";
       const retry = () => {
         void runWebResearch(chat, query, action);
@@ -2429,12 +2582,32 @@ export function CommandApp() {
     }
   }
 
-  async function askNotion(chat: Chat, text: string, confirmed = false, pageId: string | null = null) {
+  async function askNotion(chat: Chat, text: string, confirmed = false, pageId: string | null = null, workspaceId = chat.notionWorkspaceId) {
+    if (turnOwner.current !== draftOwner || !wsRef.current.chats.some((item) => item.id === chat.id)) return;
     setBusy(true);
     setError(null);
+    const epoch = notionEpoch.current;
     try {
-      const result = await notionCommand({ data: { text, confirmed, pageId } });
+      if (!workspaceId) {
+        const spaces = await listNotionWorkspaces();
+        if (turnOwner.current !== draftOwner) return;
+        setBusy(false);
+        if (epoch !== notionEpoch.current || !wsRef.current.chats.some((c) => c.id === chat.id)) return;
+        const target = spaces.find((space) => space.active);
+        if (!target) { setError("Choose a connected Notion workspace in Plugins before using Notion here."); return; }
+        setPending({ id: target.id, kind: "notion-workspace", label: "Use Notion workspace",
+          detail: `Use ${target.name} for Notion requests in this conversation?`, confirm: "Use workspace",
+          run: () => {
+            setWs((prev) => ({ ...prev, chats: prev.chats.map((item) => item.id === chat.id ? { ...item, notionWorkspaceId: target.id } : item) }));
+            void askNotion(chat, text, false, null, target.id);
+          },
+        });
+        return;
+      }
+      const result = await notionCommand({ data: { text, confirmed, pageId, workspaceId } });
+      if (turnOwner.current !== draftOwner) return;
       setBusy(false);
+      if (epoch !== notionEpoch.current || !wsRef.current.chats.some((item) => item.id === chat.id)) return;
       setNotion((current) => current ?? { state: result.state, detail: result.error || "Notion answered from the server." });
       if (result.needsConfirmation && result.pages[0]) {
         const target = result.pages[0];
@@ -2445,32 +2618,38 @@ export function CommandApp() {
           detail: result.error,
           confirm: "Append",
           run: () => {
-            void askNotion(chat, text, true, target.id);
+            void askNotion(chat, text, true, target.id, workspaceId);
           },
         });
         return;
       }
       if (!result.ok) {
         const message = result.error || "Notion did not complete the requested operation.";
-        const retry = () => { void askNotion(chat, text, confirmed, pageId); };
+        const retry = () => { void askNotion(chat, text, false, pageId, workspaceId); };
         reportFailure(message, "notion_operation_failed", "notion", retry, result.needsConfirmation ? "none" : "retry");
         recordToolTurn(chat, text, message, undefined, { tool: "notion", ok: false, action: "chat" });
         return;
       }
       const lines = [result.error, ...result.pages.map((page) => `${page.title} — ${page.url}`), result.content].filter(Boolean);
-      recordToolTurn(chat, text, lines.join("\n") || "Notion returned nothing.");
+      if (lines.length && epoch === notionEpoch.current) {
+        setNotionPreview({ owner: draftOwner, chatId: chat.id, text: lines.join("\n") });
+      }
+      recordToolTurn(chat, text, "Notion completed the request. Retrieved content is shown only in the current preview.");
     } catch {
+      if (turnOwner.current !== draftOwner) return;
       setBusy(false);
+      if (!wsRef.current.chats.some((item) => item.id === chat.id)) return;
       const message = "Notion could not be reached. Nothing was changed.";
       const retry = () => {
-        void askNotion(chat, text, confirmed, pageId);
+        void askNotion(chat, text, false, pageId, workspaceId);
       };
       if (emitFailure("notion", mountFailure({ message, action: "notion_unreachable", target: "notion" }, retry))) return;
       setError(message);
     }
   }
 
-  async function askMcp(chat: Chat, text: string, confirmed = false) {
+  async function askMcp(chat: Chat, text: string, confirmed = false, approvalServerId?: string, approvalId?: string) {
+    if (turnOwner.current !== draftOwner || !wsRef.current.chats.some((item) => item.id === chat.id)) return;
     if (mcpInFlight.current) return;
     mcpInFlight.current = true;
     setBusy(true);
@@ -2478,8 +2657,10 @@ export function CommandApp() {
     clearFailure();
     setToolResultStatus("running");
     try {
-      const result = await mcpCommand({ data: { text, confirmed } });
+      const result = await mcpCommand({ data: { text, confirmed, approvalServerId, approvalId } });
+      if (turnOwner.current !== draftOwner) return;
       setBusy(false);
+      if (!wsRef.current.chats.some((item) => item.id === chat.id)) return;
       if (result.servers.every(isSavedMcpServer)) {
         setMcpServers(result.servers);
         setMcpSavedListState({
@@ -2487,7 +2668,9 @@ export function CommandApp() {
           servers: result.servers.map((server) => ({ id: server.id, label: server.label, kind: "saved", enabled: server.state !== "failed" })),
         });
       }
-      if (result.needsConfirmation) {
+      if (result.needsConfirmation && "approvalServerId" in result && typeof result.approvalServerId === "string") {
+        const reviewedServerId = result.approvalServerId;
+        const review = result.approvalId;
         setToolResultStatus("idle");
         setPending({
           id: "mcp-call",
@@ -2496,7 +2679,7 @@ export function CommandApp() {
           detail: result.error,
           confirm: "Call",
           run: () => {
-            void askMcp(chat, text, true);
+            void askMcp(chat, text, true, reviewedServerId, review);
           },
         });
         return;
@@ -2513,16 +2696,18 @@ export function CommandApp() {
       });
       if (failure) {
         reportFailure(failure.message, failure.kind, failure.target, () => {
-          void askMcp(chat, text, confirmed);
+          void askMcp(chat, text, false);
         });
       }
       recordToolTurn(chat, text, `[${status}] ${reply}`, undefined, { tool: "mcp", ok: result.ok, action: "chat" });
     } catch {
+      if (turnOwner.current !== draftOwner) return;
       setBusy(false);
+      if (!wsRef.current.chats.some((item) => item.id === chat.id)) return;
       setToolResultStatus("error");
       const message = HONEST_FAILURE_MESSAGES.mcp_unreachable;
       reportFailure(message, "mcp_tool_failed", "mcp", () => {
-        void askMcp(chat, text, confirmed);
+        void askMcp(chat, text, false);
       });
     } finally {
       mcpInFlight.current = false;
@@ -2537,7 +2722,7 @@ export function CommandApp() {
     source: Workspace,
     resume = false,
     images: ImageAttachment[] = [],
-    options?: { logicRoute?: LogicRouteId | null; skipUserMessage?: boolean; isolateOutputs?: boolean; accessNotes?: { id: string; text: string }[]; request?: TurnRequest },
+    options?: { logicRoute?: LogicRouteId | null; skipUserMessage?: boolean; isolateOutputs?: boolean; accessNotes?: { id: string; text: string }[]; request?: TurnRequest; operationId?: string; replaceReplyId?: string; recovery?: Msg["deliveryRoute"] },
   ): Promise<string | null> {
     if (turnInFlight.current || turnOwner.current !== draftOwner) return null;
     const snapped = snapshotImages(images);
@@ -2548,8 +2733,9 @@ export function CommandApp() {
       return null;
     }
     const botRoute = routeForBotChat(chat, { provider: providerChoice, modelTier });
-    const selectedProvider = botRoute.provider;
-    const selectedTier = botRoute.modelTier;
+    const savedRoute = options?.recovery;
+    const selectedProvider = savedRoute?.provider ?? botRoute.provider;
+    const selectedTier = savedRoute?.tier ?? botRoute.modelTier;
     if (selectedProvider.startsWith("mcp:")) {
       const chosen = discovered.find((item) => item.id === selectedProvider);
       if (!chosen?.usable) {
@@ -2577,7 +2763,7 @@ export function CommandApp() {
       else if (name === "notion") setView("connected");
       return null;
     }
-    const activeLogic = options && "logicRoute" in options
+    const activeLogic = savedRoute ? (isLogicRouteId(savedRoute.provider) ? savedRoute.provider : null) : options && "logicRoute" in options
       ? options.logicRoute ?? null
       : botRoute.fromBot ? null : logicRoute ?? (isLogicRouteId(selectedProvider) ? selectedProvider : null);
     if (activeLogic) {
@@ -2599,16 +2785,16 @@ export function CommandApp() {
     }
     const otherReady = !activeLogic && !isCustomProvider && selectedProvider !== "grok" && liveProviders[selectedProvider as "openai" | "anthropic" | "gemini" | "openrouter"] === true;
     let routed = chosenProvider(activeLogic || isCustomProvider ? "grok" : selectedProvider, isCustomProvider ? true : grokConfigured);
-    if (!routedRunner && !otherReady && !activeLogic && !isCustomProvider && !routed.ok) {
+    if (!savedRoute && !routedRunner && !otherReady && !activeLogic && !isCustomProvider && !routed.ok) {
       const switched = failover(selectedProvider, grokConfigured === true, selectedProvider === "gemini" ? "none" : failoverPolicy);
       if (switched.provider === "grok") {
         routed = chosenProvider("grok", grokConfigured);
         if (routed.ok) setNotice(switched.note);
       }
     }
-    const orchestrating = resolveSendPath(composerEffort).path === "orchestrator";
+    const orchestrating = savedRoute ? savedRoute.orchestrated : resolveSendPath(composerEffort).path === "orchestrator";
     const consultPlan = orchestrating
-      ? planModelConsult({ orchestrator: consultModel, modules: consultModules, question: text })
+      ? planModelConsult({ orchestrator: savedRoute?.provider ?? consultModel, modules: consultModules, question: text })
       : null;
     if (consultPlan && !consultPlan.ok) {
       reportFailure(consultPlan.error, "model_unavailable", "provider", () => {
@@ -2630,39 +2816,15 @@ export function CommandApp() {
       });
       if (lastUser >= 0) live = live.slice(0, lastUser + 1);
     }
-    const messages = selectRetryMessages(chat.messages, live);
+    if (options?.replaceReplyId && live.at(-1)?.id !== options.replaceReplyId) {
+      setError("The reply changed before regeneration. Choose the current reply to regenerate.");
+      return null;
+    }
+    const messages = options?.replaceReplyId ? live.slice(0, -1) : selectRetryMessages(chat.messages, live);
     if (resume && messages.at(-1)?.role === "assistant") return null;
     const history = historyForDeliver(messages, resume);
     const title = resume || messages.length > 0 ? chat.title : text.replace(/\s+/g, " ").slice(0, 48);
     const userMessageId = options?.skipUserMessage ? null : resume ? messages.at(-1)?.id ?? null : crypto.randomUUID();
-    const markDelivery = (delivery: Msg["delivery"]) => {
-      if (!userMessageId) return;
-      setWs((prev) => ({
-        ...prev,
-        chats: prev.chats.map((item) => item.id === chat.id
-          ? { ...item, messages: item.messages.map((message) => message.id === userMessageId ? { ...message, delivery } : message) }
-          : item),
-      }));
-    };
-    if (!resume && userMessageId) {
-      deliverStoredUser.current = true;
-      const userMsg: Msg = {
-        id: userMessageId,
-        role: "user",
-        content: historyTextForImages(text, snapped),
-        at: new Date().toISOString(),
-        delivery: "submitted",
-        images: snapped.length ? snapped.map((image) => ({ dataUrl: image.dataUrl, name: image.name })) : undefined,
-      };
-      setWs((prev) => ({
-        ...prev,
-        chats: prev.chats.map((item) =>
-          item.id === chat.id ? { ...item, title, messages: [...item.messages, userMsg] } : item,
-        ),
-      }));
-    } else if (resume) {
-      markDelivery("submitted");
-    }
     setTurnChat({ ownerId: draftOwner, chatId: chat.id });
     setBusy(true);
     setLiveText("");
@@ -2677,8 +2839,53 @@ export function CommandApp() {
     const token = getBearerToken();
     const prefix = previewPathPrefix(window.location.hostname, window.location.pathname) ?? "";
     turnInFlight.current = true;
+    let operationId: string;
+    try {
+      operationId = options?.request?.id ?? options?.operationId ?? await prepareTurnId(`${prefix}/api/mind/turn`, token ? { Authorization: `Bearer ${token}` } : {}, signal);
+      if (generation !== turnGen.current || turnOwner.current !== draftOwner || signal.aborted || wsRef.current.halted ||
+          !wsRef.current.chats.some((item) => item.id === chat.id)) throw new Error();
+    } catch {
+      clearTurnTimeout();
+      if (generation === turnGen.current) {
+        turnInFlight.current = false;
+        turnAbort.current = null;
+        setBusy(false);
+        setTurnChat(null);
+        setError("This send could not be prepared. No model was called.");
+      }
+      return null;
+    }
+    const markDelivery = (delivery: Msg["delivery"]) => {
+      if (!userMessageId || options?.replaceReplyId) return;
+      setWs((prev) => ({
+        ...prev,
+        chats: prev.chats.map((item) => item.id === chat.id
+          ? { ...item, messages: item.messages.map((message) => message.id === userMessageId ? { ...message, delivery, deliveryOperationId: operationId } : message) }
+          : item),
+      }));
+    };
+    if (!resume && userMessageId) {
+      deliverStoredUser.current = true;
+      const userMsg: Msg = {
+        id: userMessageId,
+        role: "user",
+        content: historyTextForImages(text, snapped),
+        at: new Date().toISOString(),
+        delivery: "submitted",
+        deliveryOperationId: operationId,
+        images: snapped.length ? snapped.map((image) => ({ dataUrl: image.dataUrl, name: image.name, origin: image.origin })) : undefined,
+      };
+      setWs((prev) => ({
+        ...prev,
+        chats: prev.chats.map((item) =>
+          item.id === chat.id ? { ...item, title, messages: [...item.messages, userMsg] } : item,
+        ),
+      }));
+    } else if (resume) {
+      markDelivery("submitted");
+    }
     const request: TurnRequest = options?.request ?? {
-      id: `${Date.now()}-${crypto.randomUUID()}`,
+      id: operationId,
       body: chatTurnBody({
           chatId: chat.id,
           text,
@@ -2693,14 +2900,14 @@ export function CommandApp() {
           })),
           memoryContext: [
             ...(options?.accessNotes ?? []),
-            ...rankMemories(memoriesForChat(source, chat), text).map(({ item }) => ({ id: item.id, text: item.text })),
+            ...relevantMemories(memoriesForChat(source, chat), text).map((item) => ({ id: item.id, text: item.text })),
           ].slice(0, 12),
           botKnowledge: chat.botKnowledge ?? "",
           provider: consultPlan && consultPlan.ok
             ? consultPlan.plan.orchestrator
             : activeLogic ?? (isCustomProvider || otherReady || routedRunner ? selectedProvider : (routed.ok ? routed.id : selectedProvider)),
           modelTier: selectedTier,
-          requestedModel: selectedProvider === "grok" && !activeLogic && !consultPlan ? grokModel : null,
+          requestedModel: savedRoute?.model ?? (selectedProvider === "grok" && !activeLogic && !consultPlan ? grokModel : providerModels[selectedProvider] ?? null),
           logicRoute: consultPlan && consultPlan.ok ? null : activeLogic,
           orchestrator: consultPlan && consultPlan.ok ? consultPlan.plan.orchestrator : null,
           composerMode: orchestrating ? "orchestrator" : undefined,
@@ -2710,18 +2917,24 @@ export function CommandApp() {
             helpers: consultPlan.plan.helpers,
             purpose: consultPlan.plan.purpose,
           } : null,
-          images: snapped.map((image) => ({ dataUrl: image.dataUrl, name: image.name })),
+          images: snapped.map((image) => ({ dataUrl: image.dataUrl, name: image.name, origin: image.origin })),
           personalityId: chat.personalityId ?? "assistant",
           customPersonality: chat.customPersonality ?? "",
         }),
     };
     function reportTurnError(message: string, deliveryUncertain: boolean) {
-      const useOriginal = deliveryUncertain || options?.request !== undefined;
+      const useOriginal = deliveryUncertain || options?.request !== undefined || options?.operationId !== undefined;
       markDelivery(useOriginal ? "unconfirmed" : "failed");
       const retry = () => {
         if (turnInFlight.current || turnOwner.current !== draftOwner) return;
         const thread = wsRef.current.chats.find((item) => item.id === chat.id);
-        if (!thread || thread.messages.at(-1)?.role === "assistant") return;
+        if (!thread) return;
+        if (options?.replaceReplyId && thread.messages.at(-1)?.id === options.replaceReplyId) {
+          const prior = prepareRegenerate(wsRef.current, chat.id);
+          if (!("error" in prior)) void deliver(prior.chat, text, wsRef.current, true, snapped, { ...options, request: useOriginal ? request : undefined });
+          return;
+        }
+        if (thread.messages.at(-1)?.role === "assistant") return;
         void deliver(thread, text, wsRef.current, true, snapped, {
           ...options, request: useOriginal ? request : undefined,
         });
@@ -2732,6 +2945,19 @@ export function CommandApp() {
       setFailure((current) => current ? { ...current, chatId: chat.id } : current);
     }
     try {
+      const fingerprint = await sha256(JSON.stringify(request.body));
+      if (savedRoute && fingerprint !== savedRoute.fingerprint) {
+        markDelivery("unconfirmed");
+        setError("The original message context changed. Its previous delivery is unconfirmed. Review the thread before starting a new send.");
+        return null;
+      }
+      if (userMessageId && !options?.replaceReplyId) {
+        const deliveryRoute = { provider: String(request.body.provider), model: typeof request.body.requestedModel === "string" ? request.body.requestedModel : null,
+          tier: selectedTier, orchestrated: request.body.composerMode === "orchestrator", fingerprint };
+        setWs((prev) => ({ ...prev, chats: prev.chats.map((item) => item.id === chat.id
+          ? { ...item, messages: item.messages.map((message) => message.id === userMessageId ? { ...message, deliveryRoute } : message) }
+          : item) }));
+      }
       const result = await consumeMindTurn({
         url: `${prefix}/api/mind/turn`,
         signal,
@@ -2764,17 +2990,18 @@ export function CommandApp() {
         const next = {
           ...prev,
           chats: prev.chats.map((item) =>
-            item.id === chat.id
+            item.id === chat.id && (!options?.replaceReplyId || item.messages.at(-1)?.id === options.replaceReplyId)
               ? {
                   ...item,
                   messages: [
-                    ...item.messages.map((message) => message.id === userMessageId ? { ...message, delivery: undefined } : message),
+                    ...item.messages.filter((message) => message.id !== options?.replaceReplyId).map((message) => message.id === userMessageId ? { ...message, delivery: undefined, deliveryOperationId: undefined, deliveryRoute: undefined } : message),
                     {
                       id: crypto.randomUUID(),
                       role: "assistant" as const,
                       content: result.text,
                       at: new Date().toISOString(),
                       model: result.model,
+                      routingMode,
                       ...(result.provider ? { provider: result.provider } : {}),
                       ...(result.requestedModel ? { requestedModel: result.requestedModel } : {}),
                       ...(result.memorySaved === true
@@ -2817,6 +3044,8 @@ export function CommandApp() {
             id: crypto.randomUUID(),
             chatId: chat.id,
             at: new Date().toISOString(),
+            provider: result.provider || undefined,
+            requestedModel: result.requestedModel || undefined,
             model: result.model,
             requestId: result.requestId,
             promptTokens: result.usage?.prompt_tokens ?? null,
@@ -2843,6 +3072,8 @@ export function CommandApp() {
     } finally {
       clearTurnTimeout();
       if (generation === turnGen.current) {
+        setBusy(false);
+        if (turnAbort.current === controller) turnAbort.current = null;
         turnInFlight.current = false;
         setTurnChat(null);
       }
@@ -2867,9 +3098,10 @@ export function CommandApp() {
 
   function downloadImageDataUrl(src: string, alt: string) {
     const link = document.createElement("a");
-    const ext = src.startsWith("data:image/png") ? "png" : src.startsWith("data:image/webp") ? "webp" : "jpg";
+    const name = imageDownloadName(src, alt);
+    if (!name) { setError("Unrecognized image format."); return; }
     link.href = src;
-    link.download = (alt || "image").replace(/[^a-zA-Z0-9._-]+/g, "-").slice(0, 80) + "." + ext;
+    link.download = name;
     link.click();
   }
 
@@ -2880,12 +3112,15 @@ export function CommandApp() {
     }
     setPendingImages((prev) => {
       if (prev.length >= 4) {
+        setNotice(null);
         setError("You can attach up to 4 images per message.");
         return prev;
       }
+      setError(null);
+      setNotice("Image added to the composer.");
       return [...prev, { dataUrl: src, name: alt || `saved-${prev.length + 1}.jpg` }];
     });
-    setNotice("Image saved into the composer for a follow-up turn.");
+
   }
 
   function editMessage(messageId: string, text: string) {
@@ -2917,8 +3152,9 @@ export function CommandApp() {
       setError(prepared.error);
       return;
     }
-    setWs(prepared.ws);
-    void deliver(prepared.chat, prepared.text, prepared.ws, true, snapshotImages(toImageAttachments(prepared.images)));
+    void deliver(prepared.chat, prepared.text, prepared.ws, true, snapshotImages(toImageAttachments(prepared.images)), {
+      replaceReplyId: active.messages.at(-1)?.id,
+    });
   }
 
   function retryLast() {
@@ -2937,22 +3173,36 @@ export function CommandApp() {
       setError(prepared.error);
       return;
     }
-    if (prepared.chat.messages.at(-1)?.role !== "user") return;
+    const last = prepared.chat.messages.at(-1);
+    if (last?.role !== "user") return;
+    const unresolved = last.delivery === "submitted" || last.delivery === "unconfirmed";
+    if (unresolved && (!last.deliveryOperationId || !last.deliveryRoute)) {
+      setError("The outcome of this earlier send is unknown. Its original send details are unavailable. Review the conversation before starting a new send.");
+      return;
+    }
     setError(null);
-    void deliver(prepared.chat, prepared.text, wsRef.current, true, snapshotImages(toImageAttachments(prepared.images)));
+    void deliver(prepared.chat, prepared.text, wsRef.current, true, snapshotImages(toImageAttachments(prepared.images)), {
+      operationId: unresolved ? last.deliveryOperationId : undefined,
+      recovery: last.deliveryRoute,
+    });
   }
 
-  function exportActive() {
+  function exportActive(textOnly = false) {
     if (!active) return;
     const packed = exportChat(ws, active.id);
     if ("error" in packed) {
       setError(packed.error);
       return;
     }
-    const blob = new Blob([packed.json], { type: "application/json" });
+    const plain = active.messages.map((message) => {
+      const speaker = message.role === "user" ? "You" : [message.provider, message.model].filter(Boolean).join(" · ") || "Assistant";
+      return `${speaker}
+${message.content}`;
+    }).join("\n\n");
+    const blob = new Blob([textOnly ? plain : packed.json], { type: textOnly ? "text/plain;charset=utf-8" : "application/json" });
     const link = document.createElement("a");
     link.href = URL.createObjectURL(blob);
-    link.download = packed.filename;
+    link.download = textOnly ? packed.filename.replace(/\.json$/, ".txt") : packed.filename;
     link.click();
     URL.revokeObjectURL(link.href);
     setWs((prev) => pushAudit(prev, "export_chat", active.id, packed.filename));
@@ -2978,9 +3228,10 @@ export function CommandApp() {
   async function deliverPlanned(chat: Chat, full: string, source: Workspace, images: ImageAttachment[]): Promise<boolean> {
     if (turnOwner.current !== draftOwner) return false;
     deliverStoredUser.current = false;
-    const primary = logicRoute ?? (isLogicRouteId(providerChoice) ? providerChoice : null);
+    const bot = routeForBotChat(chat, { provider: providerChoice, modelTier });
+    const primary = bot.fromBot ? (isLogicRouteId(bot.provider) ? bot.provider : null) : logicRoute ?? (isLogicRouteId(providerChoice) ? providerChoice : null);
     const seats = logicRoutes.map((item) => ({ id: item.id, label: item.label, ready: item.ready, reason: item.reason }));
-    const plan = planRouting({ mode: routingMode, primary, seats, panel: routingPanel });
+    const plan = planRouting({ mode: bot.fromBot ? "A" : routingMode, primary, seats, panel: routingPanel });
     if (!plan.ok) {
       setError(plan.reason);
       return false;
@@ -2995,6 +3246,13 @@ export function CommandApp() {
         isolateOutputs: index > 0,
       });
       if (textOut == null) return false;
+      if (index === plan.calls.length - 1 && textOut.trim() &&
+          currentVoiceScope.current === JSON.stringify([draftOwner, "chat", chat.id]) &&
+          !wsRef.current.halted && !document.hidden && !voiceSession.current?.isOpen) {
+        let readAloud = false;
+        try { readAloud = localStorage.getItem("adrian-speak-auto-read") === "on"; } catch { /* Storage may be unavailable. */ }
+        if (readAloud) void speak(textOut);
+      }
     }
     return true;
   }
@@ -3080,10 +3338,6 @@ export function CommandApp() {
     setStaged(null);
     setPendingImages([]);
     const source = { ...ws, chats: [made.chat, ...ws.chats] };
-    if (settleIntent(made.chat, full, source)) {
-      if (file) setWs((prev) => addLocalFile(prev, { name: file.name, text: file.text, projectId: projectChoice || null }));
-      return;
-    }
     setActiveId(made.chat.id);
     if (!wsRef.current.chats.some((item) => item.id === made.chat.id)) {
       wsRef.current = { ...wsRef.current, chats: [made.chat, ...wsRef.current.chats] };
@@ -3091,47 +3345,57 @@ export function CommandApp() {
     setView("chat");
     setWs((prev) => {
       let next = { ...prev, chats: [made.chat, ...prev.chats] };
-      if (file) next = addLocalFile(next, { name: file.name, text: file.text, projectId: projectChoice || null });
+      if (file && !made.chat.temporary) next = addLocalFile(next, { name: file.name, text: file.text, projectId: projectChoice || null });
       return pushAudit(next, "create_chat", made.chat.id, `memory ${made.chat.memory}; ${made.chat.autonomy}`);
     });
+    if (settleIntent(made.chat, full, source)) return;
     const effortPath = resolveSendPath(composerEffort);
     if (effortPath.notice) setNotice(effortPath.notice);
     const finished = await deliverPlanned(made.chat, full, { ...ws, chats: [made.chat, ...ws.chats] }, images);
     if (!finished && !deliverStoredUser.current) {
-      setDraft((current) => current || text);
-      if (file) setStaged((current) => current ?? file);
-      if (images.length) setPendingImages((current) => current.length ? current : images);
+      const scope = JSON.stringify([draftOwner, made.chat.id, made.chat.temporary]);
+      const persist = Boolean(draftOwner) && !made.chat.temporary;
+      setDraftInScope(scope, persist, (current) => current || text);
+      if (file) setStagedInScope(scope, persist, (current) => current ?? file);
+      if (images.length) setImagesInScope(scope, persist, (current) => current.length ? current : images);
     }
     if (finished) await releaseNextCue();
   }
 
-  async function startResearch(question = researchText) {
+  async function startResearch(question = researchText, retry?: ResearchReport) {
     const query = question.trim();
+    if (turnOwner.current !== draftOwner || !draftOwner) return;
     if (!query || researchFlight.current) return;
     if (wsRef.current.halted) {
       reportEmergencyStop("search", () => {
-        void startResearch(query);
+        void startResearch(query, retry);
       });
       return;
     }
     researchFlight.current = true;
     setResearchPending(true);
     try {
-      const result = await searchWeb({ data: { query } });
+      const result = await searchWeb({ data: { query, freeOnly: researchFreeOnly, retryQueries: retry?.steps?.filter((step) => !step.ok).map((step) => step.query) } });
+      if (!draftOwner || turnOwner.current !== draftOwner) return;
       setError(null);
       setWs((prev) => pushAudit(prev, result.configured && result.ok ? "research_result" : "research_refused", "search", result.ok ? `${result.citations.length} sources` : "no citation"));
       if (!result.ok) {
         reportFailure(result.error || "Research refused. No citations were created.", "research_failed", "search", () => {
-          void startResearch(query);
+          void startResearch(query, retry);
         });
       } else {
+        const steps = retry?.steps?.map((step) => result.steps?.find((current) => current.query === step.query) ?? step) ?? result.steps;
+        const citations = [...new Map([...(retry?.citations ?? []), ...result.citations].map((item) => [item.url, item])).values()];
+        const summary = retry && steps ? `${steps.filter((step) => step.ok).length} of ${steps.length} searches succeeded.` : result.summary || "";
+        const report: ResearchReport = { id: retry?.id ?? crypto.randomUUID(), question: query, steps, summary, citations, at: new Date().toISOString() };
         setResearchReportQuestion(query);
-        setResearchCitations(result.citations);
-        setResearchNote(result.summary || "");
-        const report = { id: crypto.randomUUID(), question: query, summary: result.summary || "", citations: result.citations, at: new Date().toISOString() };
+        setResearchCitations(citations);
+        setResearchNote(summary);
+        setResearchSteps(steps);
         setResearchHistory((current) => {
-          const next = [report, ...current].slice(0, 8);
-          try { localStorage.setItem("amcos.research.v1", JSON.stringify(next)); } catch { /* private mode */ }
+          if (turnOwner.current !== draftOwner) return current;
+          const next = [report, ...current.filter((item) => item.id !== report.id)].slice(0, 8);
+          try { localStorage.setItem(`amcos.research.v2.${draftOwner}`, JSON.stringify(next)); } catch { /* private mode */ }
           return next;
         });
         clearFailure();
@@ -3139,7 +3403,7 @@ export function CommandApp() {
     } catch (caught) {
       const message = caught instanceof Error ? caught.message : "The search did not run. No citations were created.";
       reportFailure(message, "research_failed", "search", () => {
-        void startResearch(query);
+        void startResearch(query, retry);
       });
     } finally {
       researchFlight.current = false;
@@ -3148,6 +3412,7 @@ export function CommandApp() {
   }
 
   async function runPlanner() {
+    if (currentFreeOnly.current) { setAgentNote("Free-only mode is on. This action uses a separate xAI provider that may charge."); return; }
     if (ws.halted || agentBusy) return;
     const goal = agentGoal.trim();
     if (!goal) {
@@ -3173,11 +3438,12 @@ export function CommandApp() {
         headers: { "content-type": "application/json", ...(token ? { authorization: `Bearer ${token}` } : {}) },
         body: JSON.stringify({
           goal,
+          freeOnly: currentFreeOnly.current,
           projects: plannerScope.projects.map((project) => project.name),
           chats: plannerScope.chats.map((chat) => chat.title),
           notes: plannerScope.memories.map((note) => note.text),
           modelTier,
-          images: plannerImages.map((image) => ({ dataUrl: image.dataUrl, name: image.name })),
+          images: plannerImages.map((image) => ({ dataUrl: image.dataUrl, name: image.name, origin: image.origin })),
         }),
       });
       const payload = (await response.json()) as {
@@ -3193,20 +3459,21 @@ export function CommandApp() {
       if (controller.signal.aborted) return;
       setAgentLog(payload.log ?? []);
       const modelBit = payload.model ? ` Model ${payload.model}${payload.resolvedTier ? ` (${payload.modelTier ?? modelTier}→${payload.resolvedTier})` : ""}.` : "";
-      const agentImages = (payload.images ?? [])
+      const agentImages: ImageAttachment[] = (payload.images ?? [])
         .filter((image) => typeof image.dataUrl === "string" && image.dataUrl.startsWith("data:image/"))
         .map((image, index) => ({
           dataUrl: image.dataUrl,
+          origin: "generated" as const,
           name: image.name || `imagine-${index + 1}.jpg`,
           mime: image.mime,
         }));
       if (agentImages.length) {
-        setPendingImages(agentImages);
+        setPendingImages((previous) => previous.length + agentImages.length <= 4 ? [...previous, ...agentImages] : previous);
         setAgentImages(agentImages);
       } else {
         setAgentImages([]);
       }
-      setAgentNote((payload.ok ? payload.text ?? "" : payload.error || "The planner did not finish.") + (payload.ok ? modelBit : "") + (agentImages.length ? ` · ${agentImages.length} image staged for follow-up.` : ""));
+      setAgentNote((payload.ok ? payload.text ?? "" : payload.error || "The planner did not finish.") + (payload.ok ? modelBit : "") + (agentImages.length ? ` · ${agentImages.length} image available below.` : ""));
       setWs((prev) => pushAudit(prev, "agent_plan", "bounded", payload.ok ? (agentImages.length ? "finished+imagine" : "finished") : "stopped"));
     } catch {
       if (controller.signal.aborted) setAgentNote("Stopped. The unfinished reply was not saved.");
@@ -3222,29 +3489,30 @@ export function CommandApp() {
     setCued(next);
   }
 
-  async function releaseNextCue(onlyChatId?: string) {
+  async function releaseNextCue(onlyChatId?: string, single = false) {
     if (wsRef.current.halted || turnInFlight.current || !draftOwner || turnOwner.current !== draftOwner) return;
-    const held = takeNextCue(cueRef.current, (item) => item.ownerId === draftOwner && (!onlyChatId || item.chatId === onlyChatId));
+    const held = takeNextCue(cueRef.current, (item) => item.ownerId === draftOwner && (single || !item.paused) && (!onlyChatId || item.chatId === onlyChatId));
     const entry = held.next;
     if (!entry) return;
     rememberCue(held.queue);
     const chat = wsRef.current.chats.find((item) => item.id === entry.chatId);
     if (!chat) {
       setNotice("A queued message was dropped because its conversation was removed.");
-      await releaseNextCue(onlyChatId);
+      if (!single) await releaseNextCue(onlyChatId);
       return;
     }
     const finished = await entry.dispatch(chat, wsRef.current);
     if (turnOwner.current !== entry.ownerId) return;
     if (!finished && !deliverStoredUser.current) {
-      rememberCue(restoreCue(cueRef.current, entry));
+      rememberCue(restoreCue(cueRef.current, wsRef.current.halted ? { ...entry, paused: true } : entry));
       setNotice("The next message stayed queued in its conversation.");
       return;
     }
-    if (finished) await releaseNextCue(onlyChatId);
+    if (finished && !single) await releaseNextCue(onlyChatId);
   }
 
   async function sendInChat() {
+    if (wsRef.current.halted) { setError("Emergency stop is on."); return; }
     if (busy || turnInFlight.current) {
       const text = draft.trim();
       if (!active || !draftOwner || !text) return;
@@ -3319,8 +3587,8 @@ export function CommandApp() {
       return;
     }
     const chatPlan = planRouting({
-      mode: routingMode,
-      primary: logicRoute ?? (isLogicRouteId(providerChoice) ? providerChoice : null),
+      mode: effectiveRoute.fromBot ? "A" : routingMode,
+      primary: isLogicRouteId(effectiveProvider) ? effectiveProvider : null,
       seats: logicRoutes.map((item) => ({ id: item.id, label: item.label, ready: item.ready, reason: item.reason })),
       panel: routingPanel,
     });
@@ -3338,14 +3606,12 @@ export function CommandApp() {
     setStaged(null);
     setPendingImages([]);
     const source = ws;
-    const action = voiceNext.current ? "voice" as const : "chat" as const;
-    voiceNext.current = false;
-    if (settleIntent(active, full, source, action)) {
-      if (file) setWs((prev) => addLocalFile(prev, { name: file.name, text: file.text, projectId: active.projectId }));
+    if (settleIntent(active, full, source)) {
+      if (file && !active.temporary) setWs((prev) => addLocalFile(prev, { name: file.name, text: file.text, projectId: active.projectId }));
       await releaseNextCue();
       return;
     }
-    if (file) {
+    if (file && !active.temporary) {
       setWs((prev) => addLocalFile(prev, { name: file.name, text: file.text, projectId: active.projectId }));
     }
     const effortPath = resolveSendPath(composerEffort);
@@ -3360,6 +3626,7 @@ export function CommandApp() {
   }
 
   async function runImagine(promptRaw?: string, targetChat: Chat | null = active, opts?: { retry?: boolean }) {
+    if (currentFreeOnly.current) { setError("Free-only mode is on. This action uses a separate xAI provider that may charge."); return; }
     if (imagineInFlight.current || busy) return;
     const prompt = (promptRaw ?? draft).trim();
     if (!prompt) {
@@ -3399,6 +3666,9 @@ export function CommandApp() {
       );
     }
     const chatId = chat.id;
+    const imageScope = JSON.stringify([draftOwner, chatId, chat.temporary]);
+    const persistImages = Boolean(draftOwner) && !chat.temporary;
+    if (!targetChat && pendingImages.length) setImagesInScope(imageScope, persistImages, pendingImages);
     if (!opts?.retry) {
       const userMsg = {
         id: crypto.randomUUID(),
@@ -3450,7 +3720,7 @@ export function CommandApp() {
           "content-type": "application/json",
           ...(token ? { authorization: `Bearer ${token}` } : {}),
         },
-        body: JSON.stringify({ prompt, n: 1 }),
+        body: JSON.stringify({ prompt, n: 1, freeOnly: currentFreeOnly.current }),
       });
       const payload = (await response.json()) as {
         ok?: boolean;
@@ -3458,6 +3728,7 @@ export function CommandApp() {
         model?: string;
         images?: { dataUrl: string; mime?: string; name?: string }[];
       };
+      if (turnOwner.current !== draftOwner) return;
       if (!response.ok || !payload.ok || !payload.images?.length) {
         rememberImagineFailure(
           imageGenerationFailure({
@@ -3473,12 +3744,19 @@ export function CommandApp() {
       }
       const images: ImageAttachment[] = payload.images.map((image, index) => ({
         dataUrl: image.dataUrl,
+        origin: "generated",
         name: image.name || `imagine-${index + 1}.jpg`,
         mime: image.mime,
       }));
-      const model = payload.model || "grok-imagine-image";
-      setPendingImages(images);
-      setNotice(`Imagine (${model}). Attached for a follow-up vision turn — Send or Agent to reuse.`);
+      const model = payload.model?.trim();
+      setImagesInScope(imageScope, persistImages, (previous) => {
+        if (previous.length + images.length > 4) {
+          setNotice("Image created in this chat. The composer is full.");
+          return previous;
+        }
+        setNotice("Image created and added to the composer.");
+        return [...previous, ...images];
+      });
       clearFailure();
       setWs((prev) => {
         const next = {
@@ -3492,19 +3770,20 @@ export function CommandApp() {
                     {
                       id: crypto.randomUUID(),
                       role: "assistant" as const,
-                      content: `Generated with ${model}. The image is shown below and staged in the composer so you can Send or run Agent with it as vision input.`,
+                      content: model ? `Generated with ${model}.` : "Image generated. The provider did not report a model.",
                       at: new Date().toISOString(),
                       model,
-                      images: images.map((image) => ({ dataUrl: image.dataUrl, name: image.name })),
+                      images: images.map((image) => ({ dataUrl: image.dataUrl, name: image.name, origin: image.origin })),
                     },
                   ],
                 }
               : item,
           ),
         };
-        return pushAudit(next, "imagine_generate", chatId, model);
+        return pushAudit(next, "imagine_generate", chatId, model || "model unreported");
       });
     } catch (caught) {
+      if (turnOwner.current !== draftOwner) return;
       const normalized = normalizeClientFailureMessage(caught);
       const kind = classifyHonestFailure(normalized);
       rememberImagineFailure(
@@ -3524,6 +3803,7 @@ export function CommandApp() {
   }
 
   async function runVideo(promptRaw?: string) {
+    if (currentFreeOnly.current) { setError("Free-only mode is on. This action uses a separate xAI provider that may charge."); return; }
     if (videoInFlight.current) return;
     const prompt = (promptRaw ?? draft).trim();
     if (!prompt) {
@@ -3600,7 +3880,7 @@ export function CommandApp() {
           "content-type": "application/json",
           ...(token ? { authorization: `Bearer ${token}` } : {}),
         },
-        body: JSON.stringify({ kind: "video", action: "start", prompt, duration: 5 }),
+        body: JSON.stringify({ kind: "video", action: "start", prompt, duration: 5, freeOnly: currentFreeOnly.current }),
       });
       const started = (await start.json()) as { ok?: boolean; error?: string; requestId?: string; model?: string };
       if (!start.ok || !started.ok || !started.requestId) {
@@ -3673,6 +3953,7 @@ export function CommandApp() {
   }
 
   async function runImagineEdit(imageDataUrl: string, promptRaw: string) {
+    if (currentFreeOnly.current) { setImagineEditError("Free-only mode is on. This action uses a separate xAI provider that may charge."); return; }
     if (imagineInFlight.current || busy) return;
     const prompt = promptRaw.trim();
     if (!prompt) {
@@ -3699,7 +3980,7 @@ export function CommandApp() {
           "content-type": "application/json",
           ...(token ? { authorization: `Bearer ${token}` } : {}),
         },
-        body: JSON.stringify({ prompt, image: imageDataUrl, mode: "edit", n: 1 }),
+        body: JSON.stringify({ prompt, image: imageDataUrl, mode: "edit", n: 1, freeOnly: currentFreeOnly.current }),
       });
       const payload = (await response.json()) as {
         ok?: boolean;
@@ -3707,6 +3988,7 @@ export function CommandApp() {
         model?: string;
         images?: { dataUrl: string; mime?: string; name?: string }[];
       };
+      if (turnOwner.current !== draftOwner) return;
       if (!response.ok || !payload.ok || !payload.images?.length) {
         const failure = imageGenerationFailure({
           mode: "edit",
@@ -3722,12 +4004,25 @@ export function CommandApp() {
       }
       const images: ImageAttachment[] = payload.images.map((image, index) => ({
         dataUrl: image.dataUrl,
+        origin: "edited",
         name: image.name || `imagine-edit-${index + 1}.jpg`,
         mime: image.mime,
       }));
-      if (!active) setPendingImages((previous) => [...previous, ...images].slice(0, 4));
-      closeImagineEditor();
-      setNotice(`Edited with ${payload.model || "grok-imagine-image"}. ${active ? "Added to this chat." : "Staged for Send / Agent."}`);
+      if (!active) {
+        setPendingImages((previous) => {
+          if (previous.length + images.length > 4) {
+            setImagineEdit((previousEdit) => previousEdit && { ...previousEdit, result: images[0] });
+            setImagineEditError("The composer is full. Download the edited image before closing.");
+            return previous;
+          }
+          closeImagineEditor();
+          setNotice("Edited image added to the composer.");
+          return [...previous, ...images];
+        });
+      } else {
+        closeImagineEditor();
+        setNotice("Edited image added to this chat.");
+      }
       clearFailure();
       if (active) {
         const chatId = active.id;
@@ -3748,10 +4043,10 @@ export function CommandApp() {
                     {
                       id: crypto.randomUUID(),
                       role: "assistant" as const,
-                      content: `Edited with ${payload.model || "grok-imagine-image"}.`,
+                      content: payload.model ? `Edited with ${payload.model}.` : "Image edited. The provider did not report a model.",
                       at: new Date().toISOString(),
-                      model: payload.model || "grok-imagine-image",
-                      images: images.map((image) => ({ dataUrl: image.dataUrl, name: image.name })),
+                      model: payload.model,
+                      images: images.map((image) => ({ dataUrl: image.dataUrl, name: image.name, origin: image.origin })),
                     },
                   ],
                 }
@@ -3760,6 +4055,7 @@ export function CommandApp() {
         }));
       }
     } catch (caught) {
+      if (turnOwner.current !== draftOwner) return;
       const normalized = normalizeClientFailureMessage(caught);
       const failure = imageGenerationFailure({
         mode: "edit",
@@ -3817,9 +4113,14 @@ export function CommandApp() {
           setError("You can attach up to 4 images per message.");
           return prev;
         }
-        return [...prev, { dataUrl: item.dataUrl, name: item.name, mime: item.mime }];
+        setError(null); setNotice("Image attached.");
+        return [...prev, { dataUrl: item.dataUrl, name: item.name, mime: item.mime, origin: "attached" }];
       });
-      setError(null);
+      return;
+    }
+    const remaining = 8000 - (draft.trim() || "Read the attached file.").length - `\n\nAttached file ${item.name}:\n`.length;
+    if (item.text.length > remaining) {
+      setExcerpt({ scope: draftScope, file: { name: item.name, text: item.text }, limit: Math.max(0, remaining) });
       return;
     }
     setStaged({ name: item.name, text: item.text });
@@ -3838,32 +4139,19 @@ export function CommandApp() {
       setPendingImages((prev) => {
         if (prev.length >= 4) {
           setError("You can attach up to 4 images per message.");
+          setNotice(null);
           return prev;
         }
-        return [...prev, { dataUrl: scaled.dataUrl, name: scaled.name, mime: scaled.mime }];
+        setError(null);
+        setNotice(`Image “${scaled.name}” staged${scaled.scaled ? " (downscaled)" : ""}. Send uses the selected chat route.`);
+        return [...prev, { dataUrl: scaled.dataUrl, name: scaled.name, mime: scaled.mime, origin: "attached" }];
       });
-      setError(null);
-      let notice = `Image “${scaled.name}” staged${scaled.scaled ? " (downscaled)" : ""}. Send includes it for the model.`;
-      // Keep mcp/voice analyzeImageFile path alongside media attach when the raw file is small enough.
-      if (file.size <= 400_000) {
-        try {
-          const bytes = new Uint8Array(await file.arrayBuffer());
-          let binary = "";
-          for (let index = 0; index < bytes.length; index += 0x8000) binary += String.fromCharCode(...bytes.subarray(index, index + 0x8000));
-          const result = await analyzeImageFile({ data: { name: file.name, bytes: file.size, imageBase64: btoa(binary) } });
-          if (result.analyzed) notice = `${notice} ${result.provider} returned: ${result.text}`;
-          else if (result.error) notice = `${notice} Analyze: ${result.error}`;
-        } catch {
-          // attach already succeeded
-        }
-      }
-      setNotice(notice);
     } catch {
       setError("That image could not be prepared.");
     }
   }
 
-  async function onPicked(file: File) {
+  async function onPicked(file: File, inspection: View | null) {
     setNotice(null);
     setError(null);
     if (/\.(png|jpe?g|gif|webp)$/i.test(file.name) || (file.type || "").startsWith("image/")) {
@@ -3889,7 +4177,8 @@ export function CommandApp() {
       setError("Only text files can be read here. Nothing was uploaded.");
       return;
     }
-    const stagedFile = { name: file.name, text: text.slice(0, 40000) };
+    const coverage = pdf?.coverage ? `[Partial PDF: ${pdf.coverage}]\n` : "";
+    const stagedFile = { name: file.name, text: coverage + text.slice(0, 40000) };
     const partial = pdf?.partial || text.length > stagedFile.text.length;
     if (view === "files") {
       if (wsRef.current.files.length >= 40) {
@@ -3898,23 +4187,26 @@ export function CommandApp() {
       }
       const savedId = crypto.randomUUID();
       setWs((prev) => {
-        return addLocalFile(prev, { id: savedId, name: stagedFile.name, text, partial, projectId: libraryProjectId || projectChoice || null });
+        return addLocalFile(prev, { id: savedId, name: stagedFile.name, text: coverage + text, partial, projectId: libraryProjectId || projectChoice || null });
       });
       setOpenFileId(savedId);
       setLibraryBand("preview");
       const savedCopy = partial ? `a partial text copy of “${file.name}”` : pdf ? `extracted text from “${file.name}”` : `“${file.name}”`;
-      setNotice(`Saved ${savedCopy} to Library.`);
+      setNotice(`Saved ${savedCopy} to Library. ${pdf?.coverage ?? ""}`.trim());
+      return;
+    }
+    const remaining = 8000 - (draft.trim() || "Read the attached file.").length - `\n\nAttached file ${file.name}:\n`.length;
+    if (!inspection && stagedFile.text.length > remaining) {
+      setExcerpt({ scope: draftScope, file: stagedFile, limit: Math.max(0, remaining) });
       return;
     }
     setStaged(stagedFile);
     setError(null);
-    if (inspectNext.current) {
-      const destination = inspectNext.current;
-      inspectNext.current = null;
-      await inspectWithRea(stagedFile, destination);
+    if (inspection) {
+      await inspectWithRea(stagedFile, inspection);
       return;
     }
-    setNotice(`“${file.name}” is staged${partial ? " as a partial text copy" : pdf ? " as extracted text" : ""}. Press Send to include it, or Analyze File to run REA.`);
+    setNotice(`“${file.name}” is staged${partial ? " as a partial text copy" : pdf ? " as extracted text" : ""}. ${pdf?.coverage ?? ""} Press Send to include it, or Analyze File to run REA.`);
   }
 
   async function downloadArchive() {
@@ -3948,35 +4240,12 @@ export function CommandApp() {
     }
   }
 
-  async function toggleStop() {
-    const next = !ws.halted;
-    if (!next) clearedStop.current = true;
-    if (next) {
-      turnAbort.current?.abort();
-      agentAbort.current?.abort();
-    }
-    setError(null);
-    setWs((prev) => {
-      const updated = pushAudit({ ...prev, halted: next }, "emergency_stop", "session", next ? "on" : "cleared");
-      if (!next) return updated;
-      const stopped = haltFleet(updated);
-      return {
-        ...stopped,
-        schedules: stopped.schedules.map((job) => (job.enabled ? { ...job, enabled: false } : job)),
-      };
-    });
-    setNotice(next
-      ? "Emergency stop is on. Open runs were canceled and schedules were paused. Logs and memory were kept."
-      : "Emergency stop is off. Schedules stay paused until you enable them.");
-    try {
-      const result = await setExecutionHalt({ data: { on: next } });
-      if (!result.ok) setError(result.error);
-    } catch {
-      setError(next ? "The server did not confirm the stop. Sends are blocked in this browser." : "The server did not confirm it. The stop is off in this browser.");
-    }
+  function toggleStop() {
+    return wsRef.current.halted ? clearEmergencyStop() : pressEmergencyStop();
   }
   async function pressEmergencyStop() {
-    interruptSpeakPlayback();
+    stopVoiceSession();
+    clearedStop.current = false;
     if (wsRef.current.halted) return;
     turnAbort.current?.abort();
     agentAbort.current?.abort();
@@ -3999,20 +4268,56 @@ export function CommandApp() {
     }
   }
   async function clearEmergencyStop() {
-    clearedStop.current = true;
     setError(null);
-    setWs((prev) => (prev.halted ? pushAudit({ ...prev, halted: false }, "emergency_stop", "session", "cleared by eve") : prev));
-    setNotice("EVE cleared the emergency stop from Speak. Schedules stay paused until you enable them.");
     try {
       const result = await setExecutionHalt({ data: { on: false } });
-      if (!result.ok) setError(result.error);
+      if (!result.ok) {
+        setError(result.error);
+        setSpeakCall((current) => ({ ...current, error: result.error }));
+        return;
+      }
+      clearedStop.current = true;
+      setWs((prev) => (prev.halted ? pushAudit({ ...prev, halted: false }, "emergency_stop", "session", "cleared by owner") : prev));
+      setSpeakCall((current) => ({ ...current, error: "" }));
+      setNotice("Emergency stop cleared. Schedules remain paused.");
     } catch {
-      setError("The server did not confirm the clear. The stop is off in this browser.");
+      const message = "The server could not confirm the release. Emergency stop remains on.";
+      setError(message);
+      setSpeakCall((current) => ({ ...current, error: message }));
     }
   }
   function explain(text: string) {
     setNotice(text);
     setError(null);
+  }
+
+  async function searchConnectedNotion(query: string) {
+    if (!query || wsRef.current.halted || turnOwner.current !== draftOwner) return;
+    const request = ++notionSearchRequest.current;
+    const epoch = notionEpoch.current;
+    const current = () => request === notionSearchRequest.current && epoch === notionEpoch.current && turnOwner.current === draftOwner;
+    let message: string;
+    try {
+      const result = await notionCommand({ data: { text: `Search my Notion for ${query}`, confirmed: false, pageId: null } });
+      if (!current()) return;
+      if (result.ok) {
+        setNotionPages(result.pages);
+        setNotionNote(result.pages.length ? "" : "Notion returned no pages.");
+        const previous = notionSearchIssue(wsRef.current.audit);
+        if (previous) {
+          setWs((prev) => pushAudit(prev, "notion_search_recovered", "notion:search", "Search succeeded."));
+          setFailure((active) => active?.auditId === previous.id ? null : active);
+        }
+        return;
+      }
+      message = result.error || "Notion search did not complete.";
+    } catch {
+      if (!current()) return;
+      message = "Notion search could not be completed.";
+    }
+    setNotionPages([]);
+    setNotionNote(message);
+    reportFailure(message, "notion_search_failed", "notion:search", () => { void searchConnectedNotion(query); });
   }
 
   function clearFailure() {
@@ -4024,7 +4329,7 @@ export function CommandApp() {
     const { message, action, target, kind, failureAction } = outcome;
     setWs((prev) => ({
       ...prev,
-      audit: [{ id: auditId, at: new Date().toISOString(), action, target, result: message }, ...prev.audit].slice(0, 200),
+      audit: retainActivity([{ id: auditId, at: new Date().toISOString(), action, target, result: message }, ...prev.audit]),
     }));
    setFailure({ message, auditId, retry: onceRetry(retry), kind, action: failureAction });
     setError(null);
@@ -4264,9 +4569,9 @@ export function CommandApp() {
       : command === "/fix"
         ? `Fix only the files named here. ${rest}`.trim()
         : `Do this in the hosted workspace and report what changed. ${rest || text}`.trim();
-    sessionStorage.setItem("adrian-build-draft", task.slice(0, 4000));
-    sessionStorage.setItem("adrian-human-return", id);
-    if (command === "/fix" || command === "/run" || command === "/test") sessionStorage.setItem("adrian-build-mode", "auto");
+    sessionStorage.setItem(`adrian-build-draft.${draftOwner || "signed-out"}`, task.slice(0, 4000));
+    sessionStorage.setItem(`adrian-human-return.${draftOwner || "signed-out"}`, id);
+    if (command === "/fix" || command === "/run" || command === "/test") sessionStorage.setItem(`adrian-build-mode.${draftOwner || "signed-out"}`, "auto");
     setWs((prev) => appendHumanResult(prev, id, text, "Handed to Build. File changes happen only after you press Run build. This thread stays here."));
     setView("build");
     return "Opened Build with this Intelligence task. The thread is still saved.";
@@ -4304,7 +4609,8 @@ export function CommandApp() {
   }
 
   async function speak(text: string, messageId = "", voiceId = voiceChoiceRef.current, replay?: SpeakRetryParams) {
-    if (!replay && voiceModeRef.current === "orchestrator") {
+    if (currentFreeOnly.current) { setError("Free-only mode is on. Cloud voice requires a billable provider. Browser dictation is still available when supported."); return { ok: false as const, error: "Free-only mode is on. Cloud voice requires a billable provider. Browser dictation is still available when supported." }; }
+    if (!text && !replay && voiceModeRef.current === "orchestrator") {
       const probe = await probeOllamaConductor({
         baseUrl: (typeof localStorage !== "undefined" && localStorage.getItem("amcos.ollama.base")) || undefined,
         model: (typeof localStorage !== "undefined" && localStorage.getItem("amcos.ollama.model")) || undefined,
@@ -4332,7 +4638,7 @@ export function CommandApp() {
       isCurrent: () => generation === speakGenRef.current && !abort.signal.aborted,
       deps: {
         capture: () => captureSpeakUtterance({ maxMs: 6000, signal: abort.signal }),
-        transcribe: async (audioBase64) => {
+        transcribe: async (audioBase64, mime) => {
           const detected = await detectWithHandy(audioBase64);
           if (detected.ok) {
             setNotice("Handy Whisper Flow detected this. Speak is the call.");
@@ -4349,7 +4655,7 @@ export function CommandApp() {
               ...(token ? { Authorization: `Bearer ${token}` } : {}),
             },
             signal: abort.signal,
-            body: JSON.stringify({ audioBase64, mime: "audio/webm", filename: "speak.webm" }),
+            body: JSON.stringify({ audioBase64, mime, freeOnly: currentFreeOnly.current, filename: sanitizeAudioFilename("speak", mime) }),
           });
           try {
             const body = (await response.json()) as { ok?: boolean; text?: string; error?: string; provider?: string };
@@ -4362,7 +4668,7 @@ export function CommandApp() {
         chatTurn: (transcript) => speakChatTurn(transcript),
         synthesize: async (reply, voice) => {
           noteSpokenText(reply);
-          const spoken = await speakText({ data: { text: reply, voiceId: voice } });
+          const spoken = await speakText({ data: { text: reply, voiceId: voice, freeOnly: currentFreeOnly.current } });
           if (spoken && typeof spoken === "object" && "ok" in spoken && spoken.ok) {
             const audio = "audio" in spoken && typeof spoken.audio === "string" ? spoken.audio.trim() : "";
             if (!audio) return { ok: false, error: "The provider returned no audio. Nothing was played." };
@@ -4374,7 +4680,7 @@ export function CommandApp() {
           window.speechSynthesis?.cancel();
           voiceSession.current?.interruptPlayback();
           const pace = localStorage.getItem("adrian-speak-rate");
-          const volume = Number(localStorage.getItem("adrian-speak-volume"));
+          const volume = Number(localStorage.getItem("adrian-speak-volume") ?? "100");
           await sharedAudioOutput.playMpegBase64(audio, {
             rate: pace === "slow" ? 0.85 : pace === "brisk" ? 1.15 : 1,
             volume: Number.isFinite(volume) ? volume / 100 : 1,
@@ -4400,63 +4706,41 @@ export function CommandApp() {
     return speechFailed ? { ok: false as const, error: speechError || "The reply was not spoken." } : { ok: true as const };
   }
 
-  function appendLiveVoiceUser(text: string) {
-    const clipped = text.trim();
-    if (!clipped) return;
-    const targetId = activeId ?? active?.id ?? null;
-    if (!targetId) {
-      setDraft(clipped);
-      setNotice("Live voice heard you. Open a chat to keep the transcript in the thread.");
-      return;
-    }
-    const userMsg = { id: crypto.randomUUID(), role: "user" as const, content: clipped, at: new Date().toISOString() };
-    setWs((prev) =>
-      pushAudit(
-        {
-          ...prev,
-          chats: prev.chats.map((item) =>
-            item.id === targetId ? { ...item, messages: [...item.messages, userMsg] } : item,
-          ),
-        },
-        "message_sent",
-        targetId,
-        "live-voice-user",
-      ),
-    );
+  useEffect(() => () => {
+    if (voiceSession.current || listenMintAbortRef.current) stopVoiceSession();
+    auxiliaryHistory.current = null;
+  }, [voiceScope]);
+
+  function makeCallHistory() {
+    return createCallHistory(active?.id ?? null, () => createChat(wsRef.current, {
+      memory: memoryChoice, autonomy, temporary, projectId: chatProjectId || projectChoice || null,
+      personalityId: defaultPersonalityId,
+    }).chat);
   }
 
-  function appendLiveVoiceAssistant(text: string) {
-    const clipped = text.trim();
-    if (!clipped) return;
-    noteSpokenText(clipped);
-    const targetId = activeId ?? active?.id ?? null;
-    if (!targetId) {
-      setNotice(`Live voice reply: ${clipped.slice(0, 160)}`);
-      return;
+  function appendLiveTranscript(role: Msg["role"], text: string, record?: CallHistory, model = "grok-voice-latest", provider = "xai") {
+    const content = text.trim();
+    if (!content || currentVoiceScope.current !== voiceScope || wsRef.current.halted) return;
+    if (!record) {
+      if (auxiliaryHistory.current?.scope !== voiceScope) auxiliaryHistory.current = { scope: voiceScope, record: makeCallHistory() };
+      record = auxiliaryHistory.current.record;
     }
-    const assistantMsg = {
-      id: crypto.randomUUID(),
-      role: "assistant" as const,
-      content: clipped,
-      at: new Date().toISOString(),
-      model: "grok-voice-latest",
-    };
-    setWs((prev) =>
-      pushAudit(
-        {
-          ...prev,
-          chats: prev.chats.map((item) =>
-            item.id === targetId ? { ...item, messages: [...item.messages, assistantMsg] } : item,
-          ),
-        },
-        "message_sent",
-        targetId,
-        "live-voice-assistant",
-      ),
-    );
+    if (role === "assistant") noteSpokenText(content);
+    const message: Msg = { id: crypto.randomUUID(), at: new Date().toISOString(), role, content };
+    if (role === "assistant") Object.assign(message, { model, provider });
+    const append = record(message);
+    setWs((prev) => {
+      if (currentVoiceScope.current !== voiceScope || prev.halted) return prev;
+      const next = append(prev);
+      if (next === prev) return prev;
+      const thread = next.chats.find((chat) => chat.messages.at(-1)?.id === message.id)!;
+      return pushAudit(next, "message_sent", thread.id, `live-voice-${role}`);
+    });
   }
 
-    function stopVoiceSession() {
+  function stopVoiceSession() {
+    window.clearTimeout(reconnectTimer.current);
+    endFlight(flightGateRef.current, flightGateRef.current.generation);
     clearStageTimeout();
     voiceActiveRef.current = false;
     speakQueueRef.current.active = null;
@@ -4476,8 +4760,7 @@ export function CommandApp() {
     holdInterruptedRef.current = false;
   }
 
-  function toggleVoiceMute() {
-    const desired = toggleMute(voiceMutedRef.current);
+  function setVoiceMicMuted(desired: boolean) {
     const decided = nextMuteState(voiceMutedRef.current, desired);
     if (!decided.changed) return;
     voiceMutedRef.current = decided.muted;
@@ -4488,7 +4771,16 @@ export function CommandApp() {
     if (overlayOpenRef.current) setOverlayNotice(message);
   }
 
-  async function handleVoiceTranscript(transcript: string) {
+  useEffect(() => {
+    if (ws.halted) stopVoiceSession();
+  }, [ws.halted]);
+
+  function toggleVoiceMute() {
+    setVoiceMicMuted(toggleMute(voiceMutedRef.current));
+  }
+
+  async function handleVoiceTranscript(transcript: string, record: CallHistory, mode: VoiceRoutingMode, isCurrent: () => boolean) {
+    if (!isCurrent()) return;
     if (!shouldAcceptTranscript(transcriptDedupeRef.current, transcript)) return;
     const sanitized = sanitizeVoiceTranscript(transcript);
     if (!sanitized.ok) {
@@ -4505,102 +4797,33 @@ export function CommandApp() {
       }
       if (spokenPcCommand(text)) {
         const acted = await fetch("/api/mind/pc/status", { method: "POST", credentials: "include", headers: { "content-type": "application/json" }, body: JSON.stringify({ text }) }).then((response) => response.json()).catch(() => null) as { output?: string; error?: string } | null;
+        if (!isCurrent()) return;
         const extra = acted?.output || acted?.error || "";
         made.reply = extra ? `${made.reply} ${extra}` : made.reply;
       }
       setWs(made.ws);
       setNotice(made.reply);
       if (speakStageOpenRef.current) setSpeakCall((current) => ({ ...current, heard: text, reply: made.reply, error: "" }));
-      speakOnOpenSession(made.reply);
+      if (mode === "orchestrator") await speak(made.reply);
+      else speakOnOpenSession(made.reply);
       return;
     }
-    if (overlayOpenRef.current) {
-      const routed = routeVoiceModeTranscript(text);
-      setVoiceLiveTranscript(clampLiveTranscript(routed.overlayTranscript));
-      // Empty composerDraft means the transcript stays out of the composer. Do not wipe text the user already typed.
-      if (routed.composerDraft) setDraft(routed.composerDraft);
-      if (!routed.sendAsChatTurn) return;
-      setOverlayNotice("Heard you. This realtime turn goes to chat, not the composer.");
-    } else {
-      setDraft(text);
-      voiceNext.current = true;
-      setNotice(`Voice transcript ready (${voiceModeRef.current === "orchestrator" ? "Orchestrator" : "Direct"}).`);
-    }
-    if (voiceModeRef.current === "orchestrator") {
-      window.speechSynthesis?.cancel();
-      voiceSession.current?.interruptPlayback();
-      setBusy(true);
-      const conducted = await runOllamaConductor(text, {
-        baseUrl: (typeof localStorage !== "undefined" && localStorage.getItem("amcos.ollama.base")) || undefined,
-        model: (typeof localStorage !== "undefined" && localStorage.getItem("amcos.ollama.model")) || undefined,
-      });
-      setBusy(false);
-      if (!conducted.ok) {
-        if (!conducted.unreachable) {
-          setError(conducted.error);
-          return;
-        }
-        const route = resolveVoiceMode("orchestrator", false);
-        applyVoiceMode("direct");
-        const notice = route.notice ?? DIRECT_FALLBACK_NOTICE;
-        setNotice(notice);
-        if (overlayOpenRef.current) setOverlayNotice(notice);
-      } else {
-      if (active) {
-        const turn = buildVoiceChatTurn({
-          userText: text,
-          assistantText: conducted.text,
-          model: conducted.model,
-        });
-        if (turn) {
-          setWs((prev) =>
-            pushAudit(
-              {
-                ...prev,
-                chats: prev.chats.map((item) =>
-                  item.id === active.id ? { ...item, messages: [...item.messages, turn.user, turn.assistant] } : item,
-                ),
-              },
-              "message_sent",
-              active.id,
-              conducted.model,
-            ),
-          );
-        }
-      }
-      if (!voiceSession.current?.isOpen) speakOnOpenSession(conducted.text);
-      return;
-      }
-    }
-    const liveVoice = replyVoiceForTurn({
-      liveSessionOpen: Boolean(voiceSession.current?.isOpen),
-      mode: "direct",
-      placingCall: false,
+    appendLiveTranscript("user", text, record);
+    if (mode === "direct") return;
+    const conducted = await runOllamaConductor(text, {
+      baseUrl: localStorage.getItem("amcos.ollama.base") || undefined,
+      model: localStorage.getItem("amcos.ollama.model") || undefined,
     });
-    if (!shouldSpeakTranscriptAgain(liveVoice)) {
-      appendLiveVoiceUser(text);
-      setNotice("Heard you. This turn uses one voice.");
-      if (overlayOpenRef.current) setOverlayNotice("Heard you. This turn uses one voice.");
+    if (!isCurrent()) return;
+    if (!conducted.ok) {
+      setError(conducted.error);
+      if (speakStageOpenRef.current) setSpeakCall((current) => ({ ...current, error: conducted.error }));
+      if (overlayOpenRef.current) setOverlayError(conducted.error);
       return;
     }
-    if (!active) {
-      if (spokenPcCommand(text)) {
-        const acted = await fetch("/api/mind/pc/status", { method: "POST", credentials: "include", headers: { "content-type": "application/json" }, body: JSON.stringify({ text }) }).then((response) => response.json()).catch(() => null) as { output?: string; error?: string } | null;
-        const message = acted?.output || acted?.error || "The installed app did not run that PC action.";
-        setNotice(message);
-        if (speakStageOpenRef.current) setSpeakCall((current) => ({ ...current, heard: text, reply: message, error: "" }));
-        speakOnOpenSession(message);
-        return;
-      }
-      setNotice("Open or create a chat so Direct mode can send the transcript to the selected model.");
-      if (overlayOpenRef.current) {
-        setOverlayNotice("Open or create a chat so Direct mode can send the transcript to the selected model.");
-      }
-      return;
-    }
-    if (ws.halted || busy) return;
-    const reply = await deliver(active, text, ws);
-    if (reply) speakOnOpenSession(reply);
+    appendLiveTranscript("assistant", conducted.text, record, conducted.model, "ollama");
+    if (speakStageOpenRef.current) setSpeakCall((current) => ({ ...current, reply: conducted.text }));
+    await speak(conducted.text);
   }
 
   function clearStageTimeout() {
@@ -4678,10 +4901,7 @@ export function CommandApp() {
 
   function speakOnOpenSession(text: string) {
     const session = voiceSession.current;
-    if (!session?.isOpen) {
-      void speak(text);
-      return;
-    }
+    if (!session?.isOpen) return;
     const decision = enqueueSpeak(speakQueueRef.current, text);
     if (decision === "start") session.speakText(text);
   }
@@ -4871,6 +5091,7 @@ export function CommandApp() {
   }
 
   async function startServerDictation() {
+    if (currentFreeOnly.current) { setError("This browser needs cloud transcription. Free-only mode keeps it off."); return; }
     if (wsRef.current.halted) {
       setError("Emergency stop is on. Dictation was not started.");
       return;
@@ -4917,7 +5138,7 @@ export function CommandApp() {
         method: "POST",
         credentials: "same-origin",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ audioBase64, mime, filename: mime.includes("mp4") ? "dictation.m4a" : "dictation.webm" }),
+        body: JSON.stringify({ audioBase64, mime, freeOnly: currentFreeOnly.current, filename: sanitizeAudioFilename("dictation", mime) }),
       });
       const body = await response.json() as { ok?: boolean; text?: string; error?: string };
       const text = body.text?.trim() ?? "";
@@ -4956,6 +5177,7 @@ export function CommandApp() {
   function openSpeakStage() {
     closeMenus();
     clearOverlayFlag();
+    setSpeakCall({ heard: "", reply: "", error: "" });
     setSpeakStageOpen(true);
   }
 
@@ -4985,6 +5207,7 @@ export function CommandApp() {
   }
 
   function closeSpeakStage() {
+    speakStageOpenRef.current = false;
     setSpeakStageOpen(false);
     if (!overlayOpenRef.current) void listen({ mode: "stop" });
   }
@@ -5051,6 +5274,7 @@ export function CommandApp() {
     );
     const action = resolveListenAction(mode, sessionBusy);
     if (action === "start" && isLiveVoiceOccupied()) {
+      if (speakStageOpenRef.current) setSpeakCall((current) => ({ ...current, error: LIVE_VOICE_BUSY_MESSAGE }));
       setNotice(LIVE_VOICE_BUSY_MESSAGE);
       if (overlayOpenRef.current) setOverlayNotice(LIVE_VOICE_BUSY_MESSAGE);
       return;
@@ -5063,6 +5287,13 @@ export function CommandApp() {
         setOverlayPhase("idle");
         setOverlayNotice("Voice capture stopped.");
       }
+      return;
+    }
+    if (action === "start" && currentFreeOnly.current) {
+      const message = "Free-only mode is on. Cloud voice requires a billable provider. Browser dictation is still available when supported.";
+      setSpeakCall((current) => ({ ...current, error: message }));
+      setOverlayError(message);
+      setError(message);
       return;
     }
     if (action === "start" && !voiceCanStart()) return;
@@ -5103,7 +5334,10 @@ export function CommandApp() {
     voiceSession.current = null;
     voiceActiveRef.current = true;
 
+    const mintAbort = new AbortController();
+    listenMintAbortRef.current = mintAbort;
     const markCanceled = () => {
+      if (listenMintAbortRef.current !== mintAbort) return;
       if (connectStateRef.current.stage === "error") {
         voiceActiveRef.current = false;
         setVoiceListening(false);
@@ -5135,14 +5369,12 @@ export function CommandApp() {
       }
 
       publishConnectStage("getting_session");
-      listenMintAbortRef.current?.abort();
-      const mintAbort = new AbortController();
-      listenMintAbortRef.current = mintAbort;
+      if (mintAbort.signal.aborted) return;
       setNotice("Minting voice session… (press mic or release Space to cancel)");
 
       let secret: Awaited<ReturnType<typeof createVoiceClientSecret>>;
       try {
-        secret = await withSessionTimeout(() => createVoiceClientSecret(), undefined, mintAbort.signal);
+        secret = await withSessionTimeout(() => createVoiceClientSecret({ data: { freeOnly: currentFreeOnly.current } }), undefined, mintAbort.signal);
         if (mintAbort.signal.aborted) {
           markCanceled();
           return;
@@ -5164,7 +5396,7 @@ export function CommandApp() {
         if (expiresAt > 0 && secretNeedsRemint(expiresAt) && !mintAbort.signal.aborted) {
           setNotice("Voice secret is near expiry. Minting a fresh session…");
           try {
-            secret = await withSessionTimeout(() => createVoiceClientSecret(), undefined, mintAbort.signal);
+            secret = await withSessionTimeout(() => createVoiceClientSecret({ data: { freeOnly: currentFreeOnly.current } }), undefined, mintAbort.signal);
           } catch (caught) {
             if (mintAbort.signal.aborted) {
               markCanceled();
@@ -5190,27 +5422,37 @@ export function CommandApp() {
 
       publishConnectStage("connecting");
       const voiceChat = wsRef.current.chats.find((item) => item.id === activeId) ?? null;
+      const sessionMode = getVoiceMode();
       const voiceBuilt = voiceSessionInstructions({
-        mode: getVoiceMode(),
+        mode: sessionMode,
         personalityId: speakStylePersonality(typeof localStorage === "undefined" ? null : localStorage.getItem("adrian-speak-style")),
         customPersonality: voiceChat?.customPersonality ?? "",
         characterId: readStoredCharacterId(typeof localStorage === "undefined" ? null : localStorage),
       });
-      const session = new RealtimeVoiceSession(
+      const record = makeCallHistory();
+      const isCurrent = (): boolean => voiceSession.current === session && session.isOpen && !wsRef.current.halted && currentVoiceScope.current === voiceScope;
+      let turnNumber = 0;
+      const session: RealtimeVoiceSession = new RealtimeVoiceSession(
         {
           onTranscript: (text) => {
+            if (!isCurrent()) return;
+            const turn = ++turnNumber;
             setVoiceLiveTranscript(clampLiveTranscript(text));
             if (speakStageOpenRef.current) setSpeakCall((current) => ({ ...current, heard: text, error: "" }));
-            void handleVoiceTranscript(text);
+            void handleVoiceTranscript(text, record, sessionMode, () => isCurrent() && turnNumber === turn);
           },
           onAssistantTranscript: (text) => {
-            appendLiveVoiceAssistant(text);
+            if (!isCurrent() || sessionMode === "orchestrator") return;
+            appendLiveTranscript("assistant", text, record);
             if (speakStageOpenRef.current) setSpeakCall((current) => ({ ...current, reply: text, error: "" }));
           },
           onPartialTranscript: (text) => {
+            if (!isCurrent()) return;
             setVoiceLiveTranscript(clampLiveTranscript(text));
           },
           onSpeechStarted: () => {
+            if (!isCurrent()) return;
+            ++turnNumber;
             if (overlayOpenRef.current) {
               pushBarge({ type: "speech_started" });
               return;
@@ -5232,7 +5474,7 @@ export function CommandApp() {
           onStatus: (status) => {
             const previous = lastSessionStatusRef.current;
             lastSessionStatusRef.current = status;
-            setVoiceListening(status === "listening" || status === "processing" || status === "connecting");
+            setVoiceListening(Boolean(voiceSession.current?.isCapturing));
             if (status === "processing") setAvatarPresence("processing");
             if (status === "speaking") {
               setSpeaking(true);
@@ -5297,10 +5539,14 @@ export function CommandApp() {
               setOverlayPhase("error");
               setOverlayError(failed.error ?? VOICE_CONNECTION_DROPPED);
             }
+            if (speakStageOpenRef.current) {
+              setSpeakCall((current) => ({ ...current, error: VOICE_CONNECTION_DROPPED }));
+              return;
+            }
             if (voiceReconnectRef.current < 1) {
               voiceReconnectRef.current += 1;
               setNotice("Voice connection dropped. Reconnecting once…");
-              window.setTimeout(() => {
+              reconnectTimer.current = window.setTimeout(() => {
                 void listenRef.current({ mode: "start" });
               }, 400);
             }
@@ -5308,18 +5554,24 @@ export function CommandApp() {
         },
         sharedAudioOutput,
         undefined,
-        { voice: voiceChoiceRef.current, instructions: voiceBuilt.instructions },
+        { voice: voiceChoiceRef.current, instructions: voiceBuilt.instructions, transcriptOnly: voiceBuilt.silent,
+          voiceIsolation: loadVoiceSettings(localStorage).activation === "isolation",
+        },
       );
       voiceSession.current = session;
       await session.connect(secret.value);
       if (mintAbort.signal.aborted) {
         session.close();
-        voiceSession.current = null;
+        if (voiceSession.current === session) voiceSession.current = null;
         markCanceled();
         return;
       }
       publishConnectStage("requesting_mic");
+      const startMuted = voiceMutedRef.current || (speakStageOpenRef.current && loadVoiceSettings(localStorage).activation === "push_to_talk");
+      session.setMuted(startMuted);
+      setVoiceMicMuted(startMuted);
       await session.startCapture();
+      if (mintAbort.signal.aborted || voiceSession.current !== session || !session.isCapturing) return;
       publishConnectStage("listening");
       setVoiceListening(true);
       voiceReconnectRef.current = 0;
@@ -5328,6 +5580,7 @@ export function CommandApp() {
       setNotice(`Realtime voice listening (${modeLabel}). Hold Space or press mic to stop.`);
       if (overlayOpenRef.current) setOverlayNotice(`Realtime voice listening (${modeLabel}).`);
     } catch (caught) {
+      if (mintAbort.signal.aborted || listenMintAbortRef.current !== mintAbort) return;
       stopVoiceSession();
       const normalized = normalizeVoiceConnectError(caught);
       const mic = formatMicCaptureError(caught);
@@ -5336,13 +5589,15 @@ export function CommandApp() {
       const failed = failStage(stage, message);
       connectStateRef.current = failed;
       setError(message);
+      if (speakStageOpenRef.current) setSpeakCall((current) => ({ ...current, error: message }));
       if (overlayOpenRef.current) {
         setOverlayPhase("error");
         setOverlayError(failed.error);
       }
     } finally {
       endFlight(flightGateRef.current, flight.generation);
-      if (!voiceSession.current?.isOpen) {
+      if (listenMintAbortRef.current === mintAbort && !voiceSession.current?.isOpen) listenMintAbortRef.current = null;
+      if (flightGateRef.current.generation === flight.generation && !voiceSession.current?.isOpen) {
         voiceActiveRef.current = false;
         listenGuardRef.current.end();
       }
@@ -5373,8 +5628,15 @@ export function CommandApp() {
     setReaBusy(true);
     setView(destination);
     setError(null);
-    const result = await reaInspect({ data: file });
-    setReaBusy(false);
+    let result: Awaited<ReturnType<typeof reaInspect>>;
+    try {
+      result = await reaInspect({ data: file });
+    } catch {
+      setReaReport(`Could not inspect ${file.name}. Check your connection and try again.`);
+      return;
+    } finally {
+      setReaBusy(false);
+    }
     if (!result.ok) {
       setReaReport(result.error);
       setWs((prev) => pushAudit(prev, "rea_inspect", file.name, "failed"));
@@ -5401,6 +5663,7 @@ export function CommandApp() {
   const headerTone = ws.halted || grok === "Refused" || grok === "Status unavailable" ? "text-danger border-danger/40" : grok === "Setup required" ? "text-warn border-warn/40" : "text-muted border-line";
   const memories = ws.memories.filter((item) => {
     if (!showArchived && item.archived) return false;
+    if (memoryTab === "chat" && item.scope !== "chat") return false;
     if (memoryTab === "mine" && item.scope !== "global") return false;
     if (memoryTab === "project" && item.scope !== "project") return false;
     if (memoryTab === "project" && memoryProject && item.projectId !== memoryProject) return false;
@@ -5451,6 +5714,18 @@ export function CommandApp() {
           </button>
         </div>
         <nav ref={pinRailScroll} className="min-h-0 flex-1 overflow-y-auto px-3 pb-3" data-testid="workspace-nav" style={{ overflowY: "auto", minHeight: 0 }}>
+          <button
+            type="button"
+            data-testid="nav-route-dashboard"
+            title="Dashboard"
+            aria-label="Dashboard"
+            aria-current={view === "dashboard" ? "page" : undefined}
+            className={`nav-item mb-4 flex min-h-11 w-full items-center gap-3 rounded-2xl px-3 text-sm font-medium ${railCollapsed ? "justify-center px-0" : ""} ${view === "dashboard" ? "nav-item-active" : "text-muted"}`}
+            onClick={() => { setView("dashboard"); setNavOpen(false); closeMenus(); }}
+          >
+            <LayoutDashboard size={20} className="shrink-0" aria-hidden="true" />
+            {!railCollapsed && "Dashboard"}
+          </button>
           {NAV_GROUPS.map((group) => (
             <div key={group.label} className="mb-4">
               {!railCollapsed && <p ref={showRailLabel} className="meta-label px-3 pb-2">{group.label}</p>}
@@ -5567,7 +5842,6 @@ export function CommandApp() {
             ) : null}
             </>
           )}
-          <Link to="/dashboard" data-testid="nav-route-dashboard" className="nav-route-link sr-only">Dashboard</Link>
           {!railCollapsed && <div className="mx-3 my-3 border-t border-white/10" />}
           {!railCollapsed && ws.chats.length > 0 && (
             <div className="mb-4" data-testid="sidebar-recent">
@@ -5578,14 +5852,14 @@ export function CommandApp() {
                 titleFor={shownChatTitle}
                 projects={ws.projects.map((project) => ({ id: project.id, name: project.name }))}
                 pinnedIds={ws.pins.filter((pin) => pin.kind === "chat").map((pin) => pin.ref)}
-                scheduledNames={ws.schedules.map((job) => job.name)}
+                scheduledChatIds={ws.schedules.flatMap((job) => job.chatId ? [job.chatId] : [])}
                 onOpen={(id) => {
                   setActiveId(id);
                   setView(isIntelligenceThread(ws.chats.find((chat) => chat.id === id)?.customPersonality) ? "code" : "chat");
                   setNavOpen(false);
                 }}
                 onAction={runConversationAction}
-                extras={(ids) => (ids.length === 1 && ids[0] === activeId ? [{ label: "Download transcript", onPick: exportActive }] : [])}
+                extras={(ids) => (ids.length === 1 && ids[0] === activeId ? [{ label: "Download text transcript", onPick: () => exportActive(true) }, { label: "Download transcript JSON with attachments", onPick: () => exportActive() }] : [])}
               />
             </div>
           )}
@@ -5757,7 +6031,7 @@ export function CommandApp() {
                 <p className="px-3 pb-1 pt-1 text-[11px] font-semibold uppercase tracking-[0.14em] text-muted">Results</p>
                 {hits.length === 0 && <p className="px-3 py-3 text-sm text-muted">No matches.</p>}
                 {hits.map((hit, index) => {
-                  const kind = hit.meta === "Chat" ? "chat" : hit.meta === "Agent" ? "agent" : hit.meta === "Project" ? "project" : hit.meta === "File" ? "file" : null;
+                  const kind = hit.meta === "Chat" || hit.meta === "Intelligence" ? "chat" : hit.meta === "Agent" ? "agent" : hit.meta === "Project" ? "project" : hit.meta === "File" ? "file" : null;
                   const active = hits.length > 0 && index === Math.min(Math.max(paletteIndex, 0), hits.length - 1);
                   return (
                     <div key={hit.key}>
@@ -5770,10 +6044,14 @@ export function CommandApp() {
                         onMouseEnter={() => setPaletteIndex(index)}
                         onPointerDown={(event) => {
                           if (!kind || !hit.ref) return;
-                          event.currentTarget.dataset.held = "0";
+                          const button = event.currentTarget;
+                          button.dataset.held = "0";
                           const timer = window.setTimeout(() => {
-                            event.currentTarget.dataset.held = "1";
-                            setWs((prev) => togglePin(prev, kind, hit.ref));
+                            button.dataset.held = "1";
+                            const before = wsRef.current;
+                            const after = togglePin(before, kind, hit.ref);
+                            setWs(after);
+                            setNotice(after === before ? `Pin limit reached. ${hit.label} was not added.` : after.pins.some((pin) => pin.kind === kind && pin.ref === hit.ref) ? `Pinned ${hit.label}.` : `Unpinned ${hit.label}.`);
                           }, 550);
                           event.currentTarget.dataset.hold = String(timer);
                         }}
@@ -5788,7 +6066,7 @@ export function CommandApp() {
                           openPaletteHit(hit);
                         }}
                       >
-                        <span className="truncate">{hit.label}</span>
+                        <span className="min-w-0 truncate">{hit.label}{hit.excerpt && <small className="block truncate text-muted">{hit.excerpt}</small>}</span>
                         <span className="text-xs text-muted">{hit.meta}</span>
                       </button>
                     </div>
@@ -5846,7 +6124,7 @@ export function CommandApp() {
                     <span aria-hidden="true">{modelRowsOpen ? "‹" : "›"}</span>
                   </button>
                   {modelRowsOpen && effectiveProvider !== "grok" ? (
-                    <ProviderPicker name="control-model" choices={providerOptions} choice={effectiveProvider} onChoose={useProviderInChat} logicRoutes={logicRoutes} />
+                    <ProviderPicker name="control-model" choices={providerOptions} choice={effectiveProvider} onChoose={selectProviderInChat} logicRoutes={logicRoutes} />
                   ) : modelRowsOpen ? (
                     <ModelTierChip
                       presentation="rows"
@@ -5854,14 +6132,14 @@ export function CommandApp() {
                       onChoose={chooseModelTier}
                       grokModel={grokModel}
                       onChooseGrokModel={(model) => {
-                        useProviderInChat("grok");
+                        selectProviderInChat("grok");
                         setGrokModel(model);
                       }}
                       lastResolved={lastResolvedTier}
                       lastModel={lastModelUsed}
                       logicRoute={logicRoute}
                       logicRoutes={logicRoutes}
-                      onChooseLogic={useProviderInChat}
+                      onChooseLogic={selectProviderInChat}
                     />
                   ) : null}
                 </MenuCluster>
@@ -5889,7 +6167,7 @@ export function CommandApp() {
                       data-testid={`control-module-${item.id}`}
                       className="flex min-h-11 items-center justify-between rounded-2xl px-3 text-left text-sm"
                       style={menuChip}
-                      onClick={() => useProviderInChat(item.id)}
+                      onClick={() => selectProviderInChat(item.id)}
                     >
                       <span className="min-w-0 break-words">{item.label}</span>
                       <span className="text-xs text-muted">{providerChoice === item.id ? "Selected" : "Configured"}</span>
@@ -5960,7 +6238,7 @@ export function CommandApp() {
                   </p>
                 </MenuCluster>
                 <MenuCluster label="Install" wide>
-                  <a role="menuitem" className="flex min-h-11 items-center rounded-2xl px-3 text-sm" style={menuChip} href="/downloads/AdriansMind-Setup.exe" download data-testid="header-download-installer">Download Adrian's Mind</a>
+                  <a role="menuitem" className="flex min-h-11 items-center rounded-2xl px-3 text-sm" style={menuChip} href={PUBLIC_INSTALLER} data-testid="header-download-installer">Windows release · four parts</a>
                   <p className="px-3 pb-2 text-xs text-muted" data-testid="installer-note">Unsigned Windows app. It contains this product, including Build. It does not control the mouse, keyboard, or browser.</p>
                   <DesktopUpdateNote />
                 </MenuCluster>
@@ -6014,7 +6292,13 @@ export function CommandApp() {
         {bellOpen && (
           <AnchoredCard anchor={alertAnchor} label="Alerts" onClose={() => setBellOpen(false)} testId="alerts-panel" width={300} align="end">
             <MenuGroup label="Status" first>
-              {ws.halted ? <p className="px-3 py-2 text-sm text-danger">Emergency stop is on. Sending and approvals are blocked.</p> : <p className="px-3 py-2 text-sm text-muted">No active alerts.</p>}
+              {ws.halted ? <p className="px-3 py-2 text-sm text-danger">Emergency stop is on. Sending and approvals are blocked.</p> : null}
+              {searchIssue && <button type="button" className="min-h-11 px-3 text-left text-sm text-danger" onClick={() => {
+                setView("connected"); setCardFocus({ id: "owner-notion-search" }); closeMenus();
+              }}>Notion search needs attention · {searchIssue.result} · Open Notion search</button>}
+              {failure && failure.auditId !== searchIssue?.id && <button type="button" className="min-h-11 px-3 text-left text-sm text-danger" onClick={() => { setActivityQuery(""); setFocusAuditId(failure.auditId); setView("activity"); closeMenus(); }}>{failure.message} · View activity</button>}
+              {ws.schedules.some((job) => job.lastError) && <button type="button" className="min-h-11 px-3 text-left text-sm text-danger" onClick={() => { setView("scheduled"); closeMenus(); }}>A scheduled job needs attention · Open Scheduled</button>}
+              {!ws.halted && !searchIssue && !failure && !ws.schedules.some((job) => job.lastError) && <p className="px-3 py-2 text-sm text-muted">No current warnings.</p>}
             </MenuGroup>
             <MenuGroup label="Recent">
               {ws.audit.length === 0 ? <p className="px-3 py-2 text-sm text-muted">Nothing recorded yet.</p> : null}
@@ -6023,7 +6307,7 @@ export function CommandApp() {
                   {humanAction(entry.action)} · {stamp(entry.at)}
                 </p>
               ))}
-              {ws.audit.length > 0 ? <button type="button" className="flex min-h-11 w-full items-center rounded-2xl px-3 text-left text-sm" onClick={() => { setView("activity"); closeMenus(); }}>View activity</button> : null}
+              {ws.audit.length > 0 ? <button type="button" className="flex min-h-11 w-full items-center rounded-2xl px-3 text-left text-sm" onClick={() => { setActivityQuery(""); setView("activity"); closeMenus(); }}>View activity</button> : null}
             </MenuGroup>
           </AnchoredCard>
         )}
@@ -6036,7 +6320,7 @@ export function CommandApp() {
               <UserButton />
               <SupabaseAccountControls />
               <SignedOut>
-                <Link to="/login" className="flex min-h-11 items-center rounded-2xl px-3 text-sm" style={menuChip}>
+                <Link to="/login" search={{ next: loginReturnPath() }} className="flex min-h-11 items-center rounded-2xl px-3 text-sm" style={menuChip}>
                   Sign in
                 </Link>
               </SignedOut>
@@ -6153,14 +6437,15 @@ export function CommandApp() {
               onToggleStop={() => { void toggleStop(); }}
               onPreviewVoice={(line) => { void speak(line); }}
               onTalk={openSpeakStage}
-              onAsk={async (text) => {
-                const blocked = decideComputerAction({ text, halted: wsRef.current.halted === true, paired: false, actor: "eve" });
-                if (blocked.kind !== "none") return blocked.message;
+              onAsk={async (text, showAnswer) => {
                 const turn = await speakChatTurn(text, { stay: true });
-                if (!turn.ok) return turn.error;
-                const spoken = await speak(turn.text);
-                if (!spoken?.ok) return spoken?.error || "The reply was written, but it was not spoken.";
-                return turn.text;
+                if (!turn.ok) return turn;
+                showAnswer(turn.text);
+                const spoken = await speak(turn.text).catch(() => undefined);
+                return {
+                  ...turn,
+                  playbackError: spoken?.ok ? undefined : spoken?.error || "Audio playback did not finish.",
+                };
               }}
               onOpenChat={() => { setView("command"); setNavOpen(false); }}
               onOpenCode={(text) => {
@@ -6187,7 +6472,7 @@ export function CommandApp() {
           {view === "dashboard" && (
             <div className="h-full min-h-0">
               <Suspense fallback={<p className="p-6 text-sm text-muted">Opening the dashboard…</p>}>
-                <DashboardApp embedded />
+                <DashboardApp />
               </Suspense>
             </div>
           )}
@@ -6215,10 +6500,10 @@ export function CommandApp() {
                           titleFor={shownChatTitle}
                           projects={ws.projects.map((project) => ({ id: project.id, name: project.name }))}
                           pinnedIds={ws.pins.filter((pin) => pin.kind === "chat").map((pin) => pin.ref)}
-                          scheduledNames={ws.schedules.map((job) => job.name)}
+                          scheduledChatIds={ws.schedules.flatMap((job) => job.chatId ? [job.chatId] : [])}
                          onOpen={(id) => { setActiveId(id); setView("chat"); }}
                          onAction={runConversationAction}
-                         extras={(ids) => (ids.length === 1 && ids[0] === activeId ? [{ label: "Download transcript", onPick: exportActive }] : [])}
+                         extras={(ids) => (ids.length === 1 && ids[0] === activeId ? [{ label: "Download text transcript", onPick: () => exportActive(true) }, { label: "Download transcript JSON with attachments", onPick: () => exportActive() }] : [])}
                        />
                       </div>
                     ) : null}
@@ -6311,7 +6596,7 @@ export function CommandApp() {
                   {error && !error.includes("Notion status") ? (
                     <p className="composer-error attachment-feedback" role="alert">
                       {error}{" "}
-                      {error.includes("Sign in") ? <Link to="/login">Sign in</Link> : null}
+                      {error.includes("Sign in") ? <Link to="/login" search={{ next: loginReturnPath() }}>Sign in</Link> : null}
                     </p>
                   ) : null}
                   {notice ? (
@@ -6425,7 +6710,7 @@ export function CommandApp() {
                         ✓
                       </button>
                     ) : null}
-                    <button type="button" className="gpt-voice inline-flex min-h-11 items-center gap-2 rounded-full bg-[#2f6bff] px-3 text-sm text-white" aria-label="Speak" title="Speak is the call. It does not type into the field." onPointerDown={(event) => { event.preventDefault(); openSpeakStage(); }} onClick={openSpeakStage}>
+                    <button type="button" className="gpt-voice inline-flex min-h-11 items-center gap-2 rounded-full bg-[#2f6bff] px-3 text-sm text-white" aria-label="Speak" title="Speak is the call. It does not type into the field." onClick={openSpeakStage}>
                       <Volume2 className="size-4" /> Speak
                     </button>
                     <button type="button" className="inline-flex min-h-11 items-center gap-2 rounded-full border border-line px-3 text-sm" aria-label="Dictation" title="Open the desktop dictation companion" onClick={() => { void fetch("http://127.0.0.1:4198/summon", { method: "POST" }).then((response) => { if (!response.ok) setNotice("The dictation companion is not running. It starts with the installed desktop app, not this website."); }).catch(() => setNotice("The dictation companion is not running on this computer. It is part of the installed desktop app, not this website.")); }}>
@@ -6459,7 +6744,7 @@ export function CommandApp() {
                 )}
                 {toolsOpen && (
                   <ul className="mt-3 space-y-2 rounded-panel border border-line bg-bg p-3 text-sm">
-                    <li>Press Send to use the selected chat route. Speak reads a reply only when you press Speak.</li>
+                    <li>Press Send to use the selected chat route. Choose Speak for a live voice conversation, or Mic to dictate a message.</li>
                     <li className="text-muted">GPT, Claude, Gemini, OpenRouter — no keys stored.</li>
                     <li>REA — official CLI from github.com/morluto/rea. Doctor and file inspect run here. Native decompilers are not installed.</li>
                     <li className="text-muted">Web research runs only when a search provider is configured. Otherwise the check refuses and creates no citations.</li>
@@ -6512,7 +6797,7 @@ export function CommandApp() {
                 <button type="button" aria-pressed={homeAction === "video"} onClick={() => { setHomeAction("video"); setCommandMode("ask"); }}>
                   <Video className="size-5" /> Create a video
                 </button>
-                <button type="button" aria-pressed={homeAction === "write"} onClick={() => { setHomeAction("write"); setCommandMode("build"); }}>
+                <button type="button" aria-pressed={homeAction === "write"} onClick={() => { setHomeAction("write"); setCommandMode("ask"); }}>
                   <FileText className="size-5" /> Write or edit
                 </button>
                 <button type="button" aria-pressed={homeAction === "search"} onClick={() => { setHomeAction("search"); setCommandMode("research"); }}>
@@ -6543,7 +6828,7 @@ export function CommandApp() {
                   )}
                   {ws.projects.slice(0, 3).map((project) => {
                     const chats = ws.chats.filter((chat) => chat.projectId === project.id).length;
-                    const notes = ws.memories.filter((item) => item.projectId === project.id && !item.archived).length;
+                    const notes = ws.memories.filter((item) => item.scope === "project" && item.projectId === project.id && !item.archived).length;
                     return (
                       <button key={project.id} type="button" onClick={() => setView("projects")} className="mt-3 w-full rounded-panel bg-bg p-3 text-left">
                         <span className="flex items-start gap-3">
@@ -6612,6 +6897,16 @@ export function CommandApp() {
             </div>
           )}
 
+          {view === "chat" && notionPreview && notionPreview.owner === draftOwner && notionPreview.chatId === active?.id && (
+            <section aria-label="Notion result" className="mx-auto w-full max-w-3xl rounded-panel border border-line bg-surface p-3">
+              <div className="flex items-center justify-between">
+                <strong>Notion preview</strong>
+                <button type="button" className="min-h-11 px-2" onClick={() => setNotionPreview(null)}>Dismiss</button>
+              </div>
+              <p className="text-sm text-muted">Visible here only. Copy any passage you want to include in your next message.</p>
+              <pre className="max-h-60 overflow-auto whitespace-pre-wrap break-words">{notionPreview.text}</pre>
+            </section>
+          )}
           {view === "chat" && (
             <ChatPane
               chatSettingsOpen={chatSettingsOpen}
@@ -6640,7 +6935,7 @@ export function CommandApp() {
               onSend={() => void sendInChat()}
               cue={cued.filter((item) => item.ownerId === draftOwner && item.chatId === active?.id)}
               onDropCue={(id) => rememberCue(dropCued(cueRef.current, id))}
-              onReleaseCue={() => { if (active) void releaseNextCue(active.id); }}
+              onReleaseCue={() => { if (active) void releaseNextCue(active.id, true); }}
               canStop={busy && turnChat?.ownerId === draftOwner && turnChat?.chatId === active?.id}
               onStop={stopReply}
               onRename={renameActive}
@@ -6659,7 +6954,7 @@ export function CommandApp() {
               onDeleteSection={(label, ids) => deleteSavedChats(ids, `Delete ${label}`)}
               projects={ws.projects.map((project) => ({ id: project.id, name: project.name }))}
               pinnedIds={ws.pins.filter((pin) => pin.kind === "chat").map((pin) => pin.ref)}
-              scheduledNames={ws.schedules.map((job) => job.name)}
+              scheduledChatIds={ws.schedules.flatMap((job) => job.chatId ? [job.chatId] : [])}
               onConversationAction={runConversationAction}
               onSave={(content) => {
                 if (!active || active.memory !== "on") {
@@ -6680,15 +6975,15 @@ export function CommandApp() {
               onStopSpeak={interruptSpeakPlayback}
               onOpenSpeak={openSpeakStage}
               onOpenBuild={(text) => {
-                sessionStorage.setItem("adrian-build-draft", text.slice(0, 4000));
+                sessionStorage.setItem(`adrian-build-draft.${draftOwner || "signed-out"}`, text.slice(0, 4000));
                 setView("build");
                 setNavOpen(false);
               }}
               onOpenHuman={(text) => handToHumanCode(text, "From Chat")}
               onListen={() => void listen()}
               onListenStop={() => void listen({ mode: "stop" })}
-              onLiveUserTranscript={(text) => appendLiveVoiceUser(text)}
-              onLiveAssistantTranscript={(text) => appendLiveVoiceAssistant(text)}
+              onLiveUserTranscript={(text) => appendLiveTranscript("user", text)}
+              onLiveAssistantTranscript={(text) => appendLiveTranscript("assistant", text)}
               onLiveVoiceError={(message) => setError(message)}
               onLiveVoiceNotice={(message) => setNotice(message)}
               speaking={speaking}
@@ -6760,8 +7055,7 @@ export function CommandApp() {
               onAnalyze={() => {
                 if (staged) void inspectWithRea(staged, "research");
                 else {
-                  inspectNext.current = "research";
-                  fileRef.current?.click();
+                  inspectFileRef.current?.click();
                 }
               }}
               onDoctor={() => {
@@ -6775,13 +7069,13 @@ export function CommandApp() {
                   const view = logicRoutes.find((item) => item.id === id);
                   if (!view?.ready) return;
                 }
-                useProviderInChat(id);
+                selectProviderInChat(id);
               }}
               modelTier={modelTier}
               onModelTier={chooseModelTier}
               logicRoute={logicRoute}
               logicRoutes={logicRoutes}
-              onChooseLogic={useProviderInChat}
+              onChooseLogic={selectProviderInChat}
               toolTimeline={toolTimeline}
               timelineNowMs={timelineTickMs || Date.now()}
               agentActivity={agentActivityFromTimeline(toolTimeline)}
@@ -6835,7 +7129,7 @@ export function CommandApp() {
                 )}
                 {ws.projects.map((project) => {
                   const chats = ws.chats.filter((chat) => chat.projectId === project.id).length;
-                  const notes = ws.memories.filter((item) => item.projectId === project.id && !item.archived).length;
+                  const notes = ws.memories.filter((item) => item.scope === "project" && item.projectId === project.id && !item.archived).length;
                   const files = ws.files.filter((file) => file.projectId === project.id).length;
                   return (
                     <article key={project.id} id={`project-${project.id}`} tabIndex={-1} className="dense-card card-texture p-4" onClick={(event) => {
@@ -6904,8 +7198,8 @@ export function CommandApp() {
                 <div className="flex items-center gap-3">
                   <Database aria-hidden="true" className="memory-permission-icon" />
                   <div>
-                    <p className="font-semibold">Chat memory <span className={memoryChoice === "on" ? "text-ok" : "text-muted"}>{memoryChoice === "on" ? "on" : "off"}</span></p>
-                    <p className="text-sm text-muted">{memoryChoice === "on" ? "The next command can read notes in its scope. Existing chats stay off until you enable them there." : "A memory-off chat cannot read or save notes."}</p>
+                    <p className="font-semibold">Memory for new chats <span className={memoryChoice === "on" ? "text-ok" : "text-muted"}>{memoryChoice === "on" ? "on" : "off"}</span></p>
+                    <p className="text-sm text-muted">{memoryChoice === "on" ? "New chats can use relevant notes in their scope. Existing chats keep their own setting." : "New chats start with memory off. Existing chats keep their own setting."}</p>
                   </div>
                 </div>
                 <div className="flex items-center">
@@ -6918,6 +7212,7 @@ export function CommandApp() {
                 {([
                   ["mine", "My Memory"],
                   ["project", "Project Memory"],
+                  ["chat", "Chat notes"],
                   ["transfer", "Imports & Exports"],
                 ] as const).map(([id, label]) => (
                   <button key={id} type="button" aria-pressed={memoryTab === id} onClick={() => setMemoryTab(id)} className="min-h-11 rounded-panel px-4 text-sm">
@@ -6925,7 +7220,7 @@ export function CommandApp() {
                   </button>
                 ))}
               </div>
-              <p className="mt-4 text-sm text-muted">{memoryTab === "project" ? "Project notes stay inside the project you pick." : memoryTab === "transfer" ? "Export is a JSON file with a hash. Import refuses a file whose hash does not match." : "Personal notes are global on this device. You can save and manage them here while chat use is off."}</p>
+              <p className="mt-4 text-sm text-muted">{memoryTab === "chat" ? "Manage notes saved for individual conversations, including closed chats." : memoryTab === "project" ? "Project notes stay inside the project you pick." : memoryTab === "transfer" ? "Export is a JSON file with a hash. Import refuses a file whose hash does not match." : "Personal notes are global on this device. You can save and manage them here while chat use is off."}</p>
               {memoryTab === "transfer" && (
                 <div className="mt-3 flex flex-wrap gap-2">
                   <button type="button" className="min-h-11 rounded-panel bg-accent px-4 text-sm font-semibold text-white" onClick={() => void downloadArchive()}>Export archive</button>
@@ -6943,6 +7238,7 @@ export function CommandApp() {
                   <p className="mt-3 text-xs text-muted">This size is the note text on this device. It is not a cloud quota.</p>
                 </div>
                 <div className="memory-editor grid min-w-0 gap-2">
+                {memoryTab !== "chat" && <>
                 <label className="text-sm font-medium" htmlFor="memory-new-note">New note</label>
                 <textarea id="memory-new-note" value={memoryText} maxLength={2000} onChange={(event) => setMemoryText(event.target.value)} placeholder="Write a note you want kept" rows={2} aria-describedby="memory-text-count" className="rounded-panel border border-line bg-surface px-3 py-2 text-sm" />
                 <p id="memory-text-count" className="text-xs text-muted">{memoryText.length.toLocaleString()} / 2,000 characters</p>
@@ -6980,6 +7276,7 @@ export function CommandApp() {
                     Save note
                   </button>
                 </div>
+                </>}
                 <label className="flex items-center gap-2 text-sm text-muted">
                   <input type="checkbox" checked={showArchived} onChange={(event) => setShowArchived(event.target.checked)} /> Show archived
                 </label>
@@ -6990,6 +7287,7 @@ export function CommandApp() {
                 {memories.map((item) => (
                   <li
                     key={item.id}
+                    id={"note-" + item.id} tabIndex={-1}
                     className="memory-note rounded-panel border border-line bg-surface p-3 text-sm"
                     onPointerDown={(event) => {
                       if ((event.target as HTMLElement).closest("button, textarea, input")) return;
@@ -7005,6 +7303,20 @@ export function CommandApp() {
                     ) : (
                       <p className="memory-note-text whitespace-pre-wrap">{item.text}</p>
                     )}
+                    <label className="flex min-h-11 items-center gap-2 text-xs">
+                      <input type="checkbox" checked={item.alwaysApply === true} onChange={(event) => {
+                        const checked = event.target.checked;
+                        setWs((prev) => ({ ...prev, memories: prev.memories.map((note) => note.id === item.id
+                          ? { ...note, alwaysApply: checked, updatedAt: new Date().toISOString() } : note) }));
+                      }} /> Always apply when this note is in scope and memory is on
+                    </label>
+                    {item.versions.length > 0 && <details className="text-xs">
+                      <summary>Previous wording ({item.versions.length}) · included in workspace archives</summary>
+                      <ul>{item.versions.map((version, index) => <li key={index}>{stamp(version.at)} · {version.text}</li>)}</ul>
+                      <button type="button" className="min-h-11" onClick={() => requestProtected("delete", `clear-note-versions:${item.id}`, "Remove previous wording", "The current note stays. Future exports will include only the current wording.", "Remove history", () => {
+                        setWs((prev) => ({ ...prev, memories: prev.memories.map((note) => note.id === item.id ? { ...note, versions: [], updatedAt: new Date().toISOString() } : note) }));
+                      })}>Remove previous wording</button>
+                    </details>}
                     <p className="memory-note-meta mt-1 text-xs text-muted">{item.scope}{item.scope === "project" ? (ws.projects.some((project) => project.id === item.projectId) ? "" : " · project removed, note kept") : ""} · {stamp(item.updatedAt)}{item.archived ? " · archived" : ""}</p>
                     <div className="memory-note-actions"><ActionsButton label={`note: ${item.text.slice(0, 56)}`} onOpen={() => setNoteMenu(item.id)} /></div>
                     {editId === item.id ? <button type="button" disabled={!editText.trim()} className="mt-2 min-h-11 rounded-panel border border-line px-3" onClick={() => { setWs((prev) => pushAudit(reviseMemory(prev, item.id, editText), "save_memory", item.id, "revised")); setEditId(null); }}>Save edit</button> : null}
@@ -7021,7 +7333,7 @@ export function CommandApp() {
                     setWs((prev) => pushAudit({ ...prev, memories: prev.memories.map((note) => (note.id === item.id ? { ...note, archived: !note.archived, updatedAt: new Date().toISOString() } : note)) }, "archive_memory", item.id, action));
                     setNoteMenu(null);
                   }}>{memories.find((note) => note.id === noteMenu)?.archived ? "Restore" : "Archive"}</button>
-                  <button type="button" className="flex min-h-11 w-full items-center rounded-2xl px-3 text-left text-sm" style={{ color: "rgb(248 113 113)" }} onClick={() => {
+                  <button type="button" className="flex min-h-11 w-full items-center rounded-2xl px-3 text-left text-sm" style={{ color: "var(--color-danger)" }} onClick={() => {
                     const id = noteMenu;
                     setNoteMenu(null);
                     requestProtected("delete", `delete-memory:${id}`, "Delete this note", "The current text and its versions are removed from this browser.", "Approve delete", () => {
@@ -7118,10 +7430,11 @@ export function CommandApp() {
           {view === "runs" && <FleetPanel key="runs" mode="runs" ws={ws} setWs={setWs} initialAgentId={botDestinationId} focusRunId={focusRunId} />}
           {view === "connected" && (
             <section className="page-shell">
-              <OwnerDashboard />
               <div className="page-hero mb-4 flex items-center gap-3"><img src="/brand/logo-mark.jpg" alt="" className="size-8 rounded-lg" /><div><h2 className="font-display text-3xl font-bold">Connected</h2><p className="text-sm text-muted">Setup explains what is missing. A service is connected only after the server says so.</p></div></div>
-              {statusSignedIn === false ? <div className="sign-in-summary" role="status">Sign in to check your connections. <Link to="/login">Sign in</Link></div> : null}
-              <ServiceBoard
+              {statusSignedIn === false ? <div className="sign-in-summary" role="status">Sign in to check your connections. <Link to="/login" search={{ next: loginReturnPath() }}>Sign in</Link></div> : null}
+              <ServiceBoard key={account?.id ?? "guest"}
+                providers={customAiProviders}
+                savedMcp={mcpSavedListState.status === "ready" ? mcpServers : []}
                 grokConfigured={grokConfigured === true}
                 notion={notion}
                 mcp={mcpBoard}
@@ -7141,47 +7454,31 @@ export function CommandApp() {
                   const node = document.getElementById(target);
                   const box = node?.closest("details");
                   if (box) box.open = true;
-                  node?.scrollIntoView({ behavior: "smooth", block: "center" });
+                  node?.scrollIntoView({ behavior: document.documentElement.dataset.adrianMotion === "reduce" ? "instant" : "smooth", block: "center" });
                   setNotice("The paste form is open below. A card is connected only after the server says so.");
                 }}
                 onDisconnect={() => {
-                  void notionDisconnect().then((status) => {
-                    setNotion(status);
-                    setNotice(status.detail);
-                  });
+                  notionEpoch.current++;
+                  const issue = notionSearchIssue(wsRef.current.audit);
+                  if (issue) {
+                    setWs((prev) => pushAudit(prev, "notion_search_disconnected", "notion:search", "Disconnected."));
+                    setFailure((active) => active?.auditId === issue.id ? null : active);
+                  }
+                  setNotionPreview(null);
+                  setNotion({ state: "disconnected", detail: "Notion disconnected." });
+                  setNotionQuery("");
+                  setNotionPages([]);
+                  setNotionNote(null);
                 }}
               />
               <details className="intelligence-group mt-4">
                 <summary className="cursor-pointer text-sm font-semibold">Notion search</summary>
               <form
-                id="owner-notion-search"
+                id="owner-notion-search" tabIndex={-1}
                 className="rounded-panel border border-line bg-surface p-3"
                 onSubmit={(event) => {
                   event.preventDefault();
-                  const query = notionQuery.trim();
-                  if (!query || ws.halted) return;
-                  void notionCommand({ data: { text: `Search my Notion for ${query}`, confirmed: false, pageId: null } }).then((result) => {
-                    setNotionPages(result.pages);
-                    setNotionNote(result.error || (result.pages.length ? "" : "Notion returned no pages."));
-                    if (!result.ok) {
-                      const message = result.error || "Notion search did not complete.";
-                      reportFailure(message, "notion_search_failed", "notion:search", () => {
-                        void notionCommand({ data: { text: `Search my Notion for ${query}`, confirmed: false, pageId: null } }).then((retryResult) => {
-                          setNotionPages(retryResult.pages);
-                          setNotionNote(retryResult.error || (retryResult.pages.length ? "" : "Notion returned no pages."));
-                        }).catch(() => undefined);
-                      });
-                    }
-                  }).catch(() => {
-                    const message = "Notion search could not be completed. Its connection state is unchanged.";
-                    reportFailure(message, "notion_search_failed", "notion:search", () => {
-                      void notionCommand({ data: { text: `Search my Notion for ${query}`, confirmed: false, pageId: null } }).then((retryResult) => {
-                        setNotionPages(retryResult.pages);
-                        setNotionNote(retryResult.error || (retryResult.pages.length ? "" : "Notion returned no pages."));
-                      }).catch(() => undefined);
-                    });
-                    setNotionNote(message);
-                  });
+                  void searchConnectedNotion(notionQuery.trim());
                 }}
               >
                 <h3 className="font-semibold">Search Notion</h3>
@@ -7216,14 +7513,14 @@ export function CommandApp() {
                 <button type="submit" className="mt-3 min-h-11 rounded-panel bg-accent px-4 text-sm font-semibold text-accent-ink" disabled={ws.halted || mcpMutationBusy || !mcpUrl.trim()}>{mcpMutationBusy ? "Checking connection…" : "Test and save"}</button>
                 <ul className="mt-3 space-y-2">
                   {mcpSavedListState.status === "ready" && mcpServers.map((server) => (
-                    <li key={server.id} className="rounded-panel border border-line px-3 py-2 text-sm">
+                    <li tabIndex={-1} ref={focusConnection} id={`connection-${server.id}`} key={server.id} className="rounded-panel border border-line px-3 py-2 text-sm">
                       <span className="font-semibold">{server.label}</span>
                       <span className="ml-2 text-muted">{server.host} · {server.state}</span>
                       <p className="text-muted">{server.error || server.tools.map((tool) => tool.name).join(", ") || "No tools returned."}</p>
                       <ul className="mt-2 space-y-1">
                         {server.tools.map((tool) => (
                           <li key={tool.name}>
-                            <button type="button" className="min-h-11 w-full rounded-panel border border-line px-3 text-left text-xs" onClick={() => useProviderInChat(`mcp:${server.id}:${encodeURIComponent(tool.name)}`)}>
+                            <button type="button" className="min-h-11 w-full rounded-panel border border-line px-3 text-left text-xs" onClick={() => selectProviderInChat(`mcp:${server.id}:${encodeURIComponent(tool.name)}`)}>
                               {tool.name} · Use in chat
                             </button>
                           </li>
@@ -7254,7 +7551,7 @@ export function CommandApp() {
               {notice && <p className="voice-copy rounded-panel border border-line bg-surface px-3 py-2 text-sm text-muted">{presentVoiceCopy(notice)}</p>}
               <details className="intelligence-group">
                 <summary className="cursor-pointer text-sm font-semibold">API keys</summary>
-              <AiProviderConnections onChange={setCustomAiProviders} onUseModel={useProviderInChat} />
+              <AiProviderConnections onChange={setCustomAiProviders} onUseModel={selectProviderInChat} />
               </details>
               <details className="intelligence-group">
                 <summary className="cursor-pointer text-sm font-semibold">Provider routes</summary>
@@ -7286,10 +7583,10 @@ export function CommandApp() {
           {view === "tools" && <FleetPanel mode="tools" ws={ws} setWs={setWs} onFailure={(message, retry, surface) => reportFailure(message, surface === "mcp" ? "mcp_tool_failed" : "open_page_failed", surface === "mcp" ? "mcp:tools" : "browser", retry)} />}
           {view === "build" && (
             <section className="page-shell">
-              <BuildWorkspace onDiscuss={(text) => handToHumanCode(text, "From Build")} onResult={(text) => {
-                const id = sessionStorage.getItem("adrian-human-return");
+              <BuildWorkspace freeOnly={researchFreeOnly} key={draftOwner ?? "signed-out"} ownerId={draftOwner ?? undefined} onDiscuss={(text) => handToHumanCode(text, "From Build")} onResult={(text) => {
+                const id = sessionStorage.getItem(`adrian-human-return.${draftOwner || "signed-out"}`);
                 if (!id) { handToHumanCode(text, "Build result"); return; }
-                sessionStorage.removeItem("adrian-human-return");
+                sessionStorage.removeItem(`adrian-human-return.${draftOwner || "signed-out"}`);
                 setWs((prev) => appendHumanResult(prev, id, "Build result", text || "Build finished. No output was reported."));
                 setActiveId(id);
                 setView("code");
@@ -7299,18 +7596,18 @@ export function CommandApp() {
           )}
           {view === "code" && (
             <HumanCodePanel
-              threads={ws.chats.filter((chat) => isIntelligenceThread(chat.customPersonality)).map((chat) => ({ id: chat.id, title: shownChatTitle(chat), messages: chat.messages.map((message) => ({ role: message.role, content: message.content })) }))}
+              threads={ws.chats.filter((chat) => isIntelligenceThread(chat.customPersonality)).map((chat) => ({ id: chat.id, title: shownChatTitle(chat), messages: chat.messages }))}
               activeId={activeId || ""}
               busy={busy}
               notice={notice}
               onNew={openHumanCode}
               onOpen={(id) => { setActiveId(id); setView("code"); }}
               onSend={(id, text, image) => void sendHumanCode(id, text, image)}
-              onBuild={(text) => { if (activeId) sessionStorage.setItem("adrian-human-return", activeId); sessionStorage.setItem("adrian-build-draft", text.slice(0, 4000)); setView("build"); setNavOpen(false); }}
+              onBuild={(text) => { if (activeId) sessionStorage.setItem(`adrian-human-return.${draftOwner || "signed-out"}`, activeId); sessionStorage.setItem(`adrian-build-draft.${draftOwner || "signed-out"}`, text.slice(0, 4000)); setView("build"); setNavOpen(false); }}
               halted={ws.halted}
             />
           )}
-          {view === "research" && (
+          {view === "research" && researchOwner === draftOwner && (
             <section className="page-shell">
               <div className="page-hero card-texture">
                 <div className="flex items-center gap-3">
@@ -7334,7 +7631,8 @@ export function CommandApp() {
                 <div hidden={researchBand !== "search"}>
                 <label className="text-sm" htmlFor="research-question">Question</label>
                 <textarea id="research-question" value={researchText} onChange={(event) => setResearchText(event.target.value)} placeholder="What do you want to research?" rows={3} className="input-glow mt-2 w-full rounded-panel border border-line bg-bg px-3 py-2 text-sm" />
-                <button type="button" className="mt-3 min-h-11 rounded-panel bg-accent px-4 text-sm font-semibold text-accent-ink disabled:opacity-50" disabled={ws.halted || researchPending || !researchText.trim()} onClick={() => void startResearch()}>
+                <p className="mt-2 text-sm text-muted">{researchFreeOnly ? "Free-only selection. No verified free search provider is available." : `Research provider: ${searchProvider}. Provider usage may be billed.`}</p>
+                <button type="button" className="mt-3 min-h-11 rounded-panel bg-accent px-4 text-sm font-semibold text-accent-ink disabled:opacity-50" disabled={ws.halted || researchFreeOnly || searchProvider === "Unavailable" || searchProvider === "Checking search route" || researchPending || !researchText.trim()} onClick={() => void startResearch()}>
                   {researchPending ? "Searching…" : "Start research"}
                 </button>
                 {researchReportQuestion && <h3 className="mt-3 font-semibold">{researchReportQuestion}</h3>}
@@ -7342,6 +7640,12 @@ export function CommandApp() {
                 {researchCitations.length === 0 && !researchNote ? (
                   <p className="mt-3 text-sm text-muted">Reports and their sources appear here after a search.</p>
                 ) : null}
+                {researchSteps?.some((step) => !step.ok) && (
+                  <button type="button" disabled={researchPending || ws.halted || researchFreeOnly} className="min-h-11 text-sm text-accent" onClick={() => {
+                    const report = researchHistory.find((item) => item.question === researchReportQuestion && item.steps === researchSteps);
+                    if (report) void startResearch(report.question, report);
+                  }}>Retry missing searches</button>
+                )}
                 {researchCitations.length > 0 && (
                   <ul className="mt-3 space-y-2 text-sm">
                     {researchCitations.filter((item) => /^https?:\/\//i.test(item.url)).map((item) => (
@@ -7351,10 +7655,10 @@ export function CommandApp() {
                     ))}
                   </ul>
                 )}
-                {researchNote && researchCitations.length > 0 ? (
+                {researchCitations.length > 0 ? (
                   <button type="button" className="mt-3 min-h-11 rounded-panel border border-line px-3 text-sm" onClick={() => {
                     const sources = researchCitations.filter((item) => /^https?:\/\//i.test(item.url)).map((item) => `${item.title}: ${item.url}`).join("\n");
-                    setDraft(`Research report for: ${researchReportQuestion || researchText}\n${researchNote}\n\nSources:\n${sources}\n\nFollow-up question: `);
+                    setDraftInScope(JSON.stringify([draftOwner, active?.id ?? "home", followupPrivate]), Boolean(draftOwner) && !followupPrivate, (prior) => (prior ? prior + "\n\n" : "") + `Research report for: ${researchReportQuestion || researchText}\n${researchNote || ""}\n\nSources:\n${sources}\n\nFollow-up question: `);
                     setView("chat");
                     setNavOpen(false);
                   }}>Ask a follow-up in Chat</button>
@@ -7365,7 +7669,7 @@ export function CommandApp() {
                     <ul className="mt-2 space-y-2">
                       {researchHistory.map((report) => (
                         <li key={report.id}>
-                          <button type="button" disabled={researchPending} className="min-h-11 text-left text-sm text-accent" onClick={() => { setResearchText(report.question); setResearchReportQuestion(report.question); setResearchNote(report.summary); setResearchCitations(report.citations); setResearchBand("search"); }}>
+                          <button type="button" disabled={researchPending} className="min-h-11 text-left text-sm text-accent" onClick={() => { setResearchText(report.question); setResearchReportQuestion(report.question); setResearchNote(report.summary); setResearchCitations(report.citations); setResearchSteps(report.steps); setResearchBand("search"); }}>
                             {report.question} · {report.citations.length} sources
                           </button>
                         </li>
@@ -7400,9 +7704,9 @@ export function CommandApp() {
                     <p className="text-sm text-muted">Built-in skills read this device. Not installed means the outside service is not connected.</p>
                   </div>
                 </div>
-                <button type="button" className="min-h-11 rounded-panel border border-line px-3 text-sm" data-testid="skill-refresh" data-asked-permission="false" onClick={() => setSkillRefresh(refreshSkills())}>Refresh</button>
+                <button type="button" className="min-h-11 rounded-panel border border-line px-3 text-sm" data-testid="skill-refresh" data-asked-permission="false" onClick={() => setSkillRefreshNonce((n) => n + 1)}>Refresh</button>
               </div>
-              {skillRefresh ? <p className="text-sm text-muted" data-testid="skill-refresh-status" data-asked-permission={String(skillRefresh.askedPermission)}>{skillRefresh.count} skills refreshed. Permission was not asked.</p> : null}
+              <p role="status" className="text-sm text-muted" data-testid="skill-refresh-status">{skillInventoryStatus}</p>
               <input value={skillQuery} onChange={(event) => setSkillQuery(event.target.value)} placeholder="Search skills" aria-label="Search skills" className="min-h-11 w-full rounded-panel border border-line bg-surface px-3 text-sm" />
               <nav className="flex flex-wrap gap-2" aria-label="Skill groups">
                 {([
@@ -7413,9 +7717,14 @@ export function CommandApp() {
                   <button key={id} type="button" className={`min-h-11 rounded-panel border px-3 text-sm ${skillBand === id ? "border-accent bg-accent text-accent-ink" : "border-line"}`} aria-pressed={skillBand === id} onClick={() => setSkillBand(id)}>{label}</button>
                 ))}
               </nav>
+              {skillBand === "installed" && <details className="rounded-panel border border-line p-3" open={skillQuery.trim() ? true : undefined}>
+                <summary>Server instruction sets ({skillInventory.length})</summary>
+                <ul className="mt-2">{skillInventory.filter((name) => name.toLowerCase().includes(skillQuery.trim().toLowerCase())).map((name) => <li key={name}>{name}</li>)}</ul>
+              </details>}
               <div id="owner-skills">
                 {(skillQuery.trim() ? searchSkills(skillQuery) : SKILLS).filter((skill) => skillBand === "device" ? skill.kind === "built-in" : skillBand === "installed" ? skill.kind === "installed" : skill.kind === "not-installed").map((skill) => {
-                  const on = skill.kind !== "not-installed" && enabledSkills[skill.id] !== false;
+                  const required = skill.id === "adrian-os-builder";
+                  const on = required || (skill.kind !== "not-installed" && enabledSkills[skill.id] !== false);
                   return (
                     <article key={skill.id} className="skill-card">
                       <div className="flex items-start justify-between gap-3">
@@ -7429,7 +7738,7 @@ export function CommandApp() {
                       <p className="mt-1 text-sm text-muted">{skill.needs}</p>
                       {skill.tool === "search_notes" && <label className="mt-2 block text-sm">Words to find<input value={skillNoteQuery} onChange={(event) => setSkillNoteQuery(event.target.value)} className="mt-1 block min-h-11 w-full rounded-panel border border-line bg-bg px-3" /></label>}
                       <div className="mt-3 flex gap-2">
-                        {skill.kind !== "not-installed" ? (
+                        {skill.kind !== "not-installed" && !required ? (
                           <button
                             type="button"
                             className="min-h-11 rounded-panel border border-line px-3 text-sm"
@@ -7453,7 +7762,7 @@ export function CommandApp() {
                           className="min-h-11 rounded-panel bg-accent px-3 text-sm font-semibold text-accent-ink"
                           onClick={() => setSkillResult({ id: skill.id, text: runSkill(ws, skill, on, skillNoteQuery).text })}
                         >
-                          Run
+                          {required ? "View Build instructions" : "Run"}
                         </button>}
                         {skill.id === "notion" && <button type="button" className="min-h-11 text-sm text-accent" onClick={() => setView("connected")}>Open connections</button>}
                       </div>
@@ -7461,7 +7770,7 @@ export function CommandApp() {
                     </article>
                   );
                 })}
-                {(skillQuery.trim() ? searchSkills(skillQuery) : SKILLS).filter((skill) => skillBand === "device" ? skill.kind === "built-in" : skillBand === "installed" ? skill.kind === "installed" : skill.kind === "not-installed").length === 0 && <p className="rounded-panel border border-line p-4 text-sm text-muted">No skills match “{skillQuery.trim()}” in this group.</p>}
+                {(skillQuery.trim() ? searchSkills(skillQuery) : SKILLS).filter((skill) => skillBand === "device" ? skill.kind === "built-in" : skillBand === "installed" ? skill.kind === "installed" : skill.kind === "not-installed").length === 0 && !(skillBand === "installed" && skillInventory.some((name) => name.toLowerCase().includes(skillQuery.trim().toLowerCase()))) && <p className="rounded-panel border border-line p-4 text-sm text-muted">No skills match “{skillQuery.trim()}” in this group.</p>}
               </div>
               {skillStorageError && <p className="rounded-panel border border-danger/40 p-3 text-sm text-danger" role="alert">{skillStorageError}</p>}
               {notice && <p className="voice-copy rounded-panel border border-line bg-surface px-3 py-2 text-sm text-muted">{presentVoiceCopy(notice)}</p>}
@@ -7621,6 +7930,17 @@ export function CommandApp() {
                   </div>
                 </div>
               </div>
+              {imageAllowance && <p className="mt-3 text-sm">Imagine allowance: {imageAllowance.remaining} of {imageAllowance.dailyCap} images remaining. Resets at {new Date(imageAllowance.resetAt).toLocaleString(undefined, { dateStyle: "medium", timeStyle: "short" })} local time (midnight UTC). {imageAllowance.unconfirmed > 0 && `${imageAllowance.unconfirmed} reserved with provider outcome unconfirmed.`}</p>}
+              {allowanceError && <p role="status" className="mt-3 text-sm">Image allowance unavailable. {allowanceError}</p>}
+              {ws.usage.length > 0 && <details className="mt-3 rounded-panel border border-line p-3">
+                <summary>Recent model usage · up to 200 replies</summary>
+                <ul>{ws.usage.map((entry) => <li key={entry.id} className="mt-2 break-words text-sm">
+                  {stamp(entry.at)} · {entry.provider || "Provider unreported"} · {entry.model}
+                  {entry.requestedModel && entry.requestedModel !== entry.model && <> · Requested {entry.requestedModel}</>}
+                  <div>Input tokens: {entry.promptTokens ?? "unknown"} · Output tokens: {entry.completionTokens ?? "unknown"}</div>
+                  {entry.requestId && <div>Request: {entry.requestId}</div>}
+                </li>)}</ul>
+              </details>}
               <input value={activityQuery} onChange={(event) => setActivityQuery(event.target.value)} placeholder="Filter activity" className="input-glow mt-4 min-h-11 w-full rounded-panel border border-line bg-surface/80 px-3 text-sm" aria-label="Filter activity" />
               <ul className="mt-4 space-y-2">
                 {ws.audit.length === 0 && (
@@ -7718,7 +8038,7 @@ export function CommandApp() {
               <nav className="intelligence-main space-y-3" aria-label="Settings sections" hidden={settingsPane !== null}>
                 {([
                   { group: "Account", items: [
-                    ["sign-in", "Sign in", "Keep this account’s own copy", () => { window.location.assign("/login"); }],
+                    ["sign-in", "Sign in", "Keep this account’s own copy", () => { window.location.assign("/login?next=" + encodeURIComponent(loginReturnPath())); }],
                     ["sign-up", "Sign up", "A new account starts empty", () => { window.location.assign("/login?mode=sign-up"); }],
                     ["keys", "Safe keys", "Open a saved key and copy it", () => setSettingsPane("keys")],
                     ["data", "Data", "What stays in this browser", () => setSettingsPane("data")],
@@ -7730,7 +8050,7 @@ export function CommandApp() {
                     ["voice", "Voice", "Speak voice and pace", () => setSettingsPane("voice")],
                   ]},
                   { group: "Personalization", items: [
-                    ["personalization", "Personalization", "How replies sound", () => { setView("chat"); setNavOpen(false); }],
+                    ["personalization", "Personalization", "Default style for new conversations", () => setSettingsPane("personalization")],
                   ]},
                   { group: "Connections", items: [
                     ["plugins", "Plugins", "Connected services and Build links", () => { setView("connected"); setNavOpen(false); }],
@@ -7765,8 +8085,8 @@ export function CommandApp() {
                   </section>
                 ))}
                 {hiddenSettings.length > 0 && (
-                  <section className="adrian-layer intelligence-group" aria-label="Removed sections">
-                    <h3>Removed sections</h3>
+                  <section className="adrian-layer intelligence-group" aria-label="Hidden sections">
+                    <h3>Hidden sections</h3>
                     <div className="grid gap-2">
                       {hiddenSettings.map((name) => (
                         <button key={name} type="button" className="adrian-row min-h-11 rounded-2xl border border-line px-3 text-left text-sm" onClick={() => rememberHiddenSettings(restoreSection(hiddenSettings, name))}>Restore {name}</button>
@@ -7777,13 +8097,19 @@ export function CommandApp() {
               </nav>
               {settingsMenu && (
                 <ActionOverlay label={`Actions for ${settingsMenu} section`} title={settingsMenu} onClose={() => setSettingsMenu(null)}>
-                  <button type="button" className="flex min-h-11 w-full items-center rounded-2xl px-3 text-left text-sm" style={{ color: "rgb(248 113 113)" }} onClick={() => { rememberHiddenSettings(hideSection(hiddenSettings, settingsMenu)); setSettingsMenu(null); }}>Delete section</button>
+                  <button type="button" className="flex min-h-11 w-full items-center rounded-2xl px-3 text-left text-sm" onClick={() => { rememberHiddenSettings(hideSection(hiddenSettings, settingsMenu)); setSettingsMenu(null); }}>Hide section</button>
                 </ActionOverlay>
               )}
               {settingsPane && (
                 <button type="button" className="text-sm text-muted" onClick={() => setSettingsPane(null)}>Back</button>
               )}
-              {settingsPane === "browser" && <CloudBrowserSettings owner={account?.id ?? null} />}
+              {settingsPane === "personalization" && <label className="settings-card grid gap-2 rounded-panel p-4 text-sm">
+                Default style for new conversations
+                <select value={defaultPersonalityId} onChange={(event) => setDefaultPersonalityId(resolvePersonalityId(event.target.value))} className="min-h-11 rounded-panel border border-line bg-surface px-3">
+                  {CONVERSATIONAL_PERSONALITIES.map((profile) => <option key={profile.id} value={profile.id}>{profile.label}</option>)}
+                </select>
+              </label>}
+              {settingsPane === "browser" && <CloudBrowserSettings key={draftOwner ?? "signed-out"} owner={draftOwner} />}
               <div id="settings-general" hidden={settingsPane !== "general"} className="settings-card card-texture rounded-panel p-4 text-sm">
                 <div className="settings-row">
                   <div>
@@ -7826,13 +8152,14 @@ export function CommandApp() {
                   Show first steps
                 </button>
               </div>
-              <div id="settings-connections" hidden={settingsPane !== "connections"} className="space-y-4">
+              {settingsPane === "connections" && <div id="settings-connections" className="space-y-4">
               <div className="settings-card rounded-panel p-4 text-sm">
                 <p className="font-semibold">Provider failover</p>
+                <p>Selected: {controlsModelLabel}{providerModels[effectiveProvider] ? " · " + providerModels[effectiveProvider] : ""}</p>
                 <p className="mt-1 text-muted">
                   {failoverPolicy === "none"
-                    ? "Off. A failed or unconfigured provider is not replaced with another one. Chat still sends only through Grok when that key is present."
-                    : "On. If the selected provider cannot run, chat may switch to Grok when that key is present. The switch is recorded in the notice."}
+                    ? "Off. Chat reports an unavailable provider and keeps the selected route."
+                    : "On for eligible routes. An explicitly selected Gemini or free OpenRouter model keeps its route when unavailable."}
                 </p>
                 <button
                   type="button"
@@ -7845,23 +8172,23 @@ export function CommandApp() {
                   <span className={`h-6 w-11 rounded-full ${failoverPolicy === "grok" ? "bg-accent-ink/30" : "bg-line"}`} />
                 </button>
               </div>
-                <AiProviderConnections onChange={setCustomAiProviders} onUseModel={useProviderInChat} />
+                <AiProviderConnections onChange={setCustomAiProviders} onUseModel={selectProviderInChat} />
                 <button type="button" className="min-h-11 rounded-panel border border-line px-3 text-sm" onClick={() => setSettingsPane("keys")}>Open Safe keys</button>
                 <button type="button" className="min-h-11 rounded-panel border border-line px-3 text-sm" onClick={() => setView("connected")}>Open connections</button>
-              </div>
-              <div id="settings-keys" hidden={settingsPane !== "keys"} className="space-y-4">
-                <SafeKeysPanel />
-              </div>
-              <div id="settings-voice" hidden={settingsPane !== "voice"}>
+              </div>}
+              {settingsPane === "keys" && <div id="settings-keys" className="space-y-4">
+                <SafeKeysPanel key={account?.id ?? "guest"} />
+              </div>}
+              {settingsPane === "voice" && <div id="settings-voice">
                 <VoiceSettingsBlock onReset={() => applyVoiceChoice(DEFAULT_XAI_VOICE)} />
                 <SpeakPanel />
-              </div>
+              </div>}
               <div id="settings-data" hidden={settingsPane !== "data"} className="space-y-4">
               <div className="settings-card rounded-panel p-4 text-sm">
                 <div className="settings-row">
                   <div>
                     <p className="font-semibold">On this device</p>
-                    <p className="text-muted">{formatBytes(storedBytes)}. {syncNote}</p>
+                    <p className="text-muted">Workspace records: {formatBytes(storedBytes)}. Drafts and separately stored image bytes are excluded. {syncNote}</p>
                   </div>
                 </div>
                 <div className="settings-row">
@@ -7933,7 +8260,7 @@ export function CommandApp() {
                         {importCounts.map((row) => <tr className="border-t border-line" key={row.label}><th className="py-2" scope="row">{row.label}</th><td>{row.current}</td><td>{row.incoming}</td><td>{row.overlap}</td></tr>)}
                       </tbody>
                     </table>
-                    <p className="mt-1 text-muted">Merge updates matching IDs and adds new records. Replace applies the archive to the browser copy.</p>
+                    <p className="mt-1 text-muted">Merge keeps {messagePreview?.kept} device-only messages in matching chats. For conflicting messages it keeps the device version. Conflicts in this archive: {messagePreview?.conflicts.join(", ") || "none"}.</p>
                     <div className="mt-2 flex flex-wrap gap-2">
                       <button type="button" className="min-h-11 rounded-panel border border-line px-3" onClick={() => requestProtected("overwrite", "import-merge", "Merge this archive", "Merge records from the archive. For saved memory, corrections and deletions are preserved.", "Merge archive", () => { setWs((prev) => pushAudit(mergeWorkspace(prev, importPreview.workspace), "import_merge", "archive", "merged")); setImportPreview(null); setImportStatus("Archive merged with this workspace."); })}>
                         Merge
@@ -7959,7 +8286,7 @@ export function CommandApp() {
               <div className="settings-card rounded-panel p-4 text-sm">
                 <p className="font-semibold">Clear this browser</p>
                 <p className="mt-1 text-muted">Removes chats, notes, projects, files, and bots stored in this browser. The sign-in account, connected keys, and emergency stop stay. A paired computer is not deleted.</p>
-                <button type="button" data-testid="wipe-browser-copy" className="mt-3 min-h-11 rounded-panel border border-line px-3 text-sm" onClick={() => setWipeAsk(true)}>
+                <button type="button" data-testid="wipe-browser-copy" className="mt-3 min-h-11 rounded-panel border border-line px-3 text-sm" onClick={() => setWipeAsk(account?.id ?? null)}>
                   Clear browser copy
                 </button>
                 {wipeStatus ? <p data-testid="wipe-browser-status" role="status" className="mt-2 text-sm">{wipeStatus}</p> : null}
@@ -7985,14 +8312,35 @@ export function CommandApp() {
             </section>
           )}
         </div>
-        <HandyDictation />
+        <HandyDictation freeOnly={researchFreeOnly} />
       </main>
+      {excerpt && excerpt.scope === draftScope && (
+        <Overlay labelledBy="excerpt-title" onDismiss={() => setExcerpt(null)}>
+          <div className="space-y-3">
+            <h2 id="excerpt-title" className="font-semibold">Choose an excerpt from {excerpt.file.name}</h2>
+            <p className="text-sm text-muted">Select up to {excerpt.limit.toLocaleString()} characters to send with this draft.</p>
+            <textarea ref={excerptRef} aria-label="File excerpt" rows={8} readOnly value={excerpt.file.text} className="w-full rounded-panel border border-line bg-bg p-2" />
+            <button type="button" className="min-h-11 rounded-panel border border-line px-3" onClick={() => {
+              const field = excerptRef.current;
+              const selected = field?.value.slice(field.selectionStart, field.selectionEnd) ?? "";
+              if (!selected.trim() || selected.length > excerpt.limit) {
+                setError(`Select 1–${excerpt.limit} characters inside the file.`);
+                return;
+              }
+              setStaged({ name: excerpt.file.name, text: selected }); setExcerpt(null); setError(null); setNotice("Selected excerpt attached.");
+            }}>Attach selected text</button>
+            <button type="button" className="min-h-11 rounded-panel px-3" onClick={() => setExcerpt(null)}>Cancel</button>
+            {error && <p role="alert">{error}</p>}
+          </div>
+        </Overlay>
+      )}
       {imagineEdit && (
         <Overlay labelledBy="imagine-edit-title" onDismiss={() => { if (!busy) closeImagineEditor(); }}>
           <form className="space-y-3" onSubmit={(event) => { event.preventDefault(); void runImagineEdit(imagineEdit.image, imagineEdit.text); }}>
             <h2 id="imagine-edit-title" className="text-lg font-semibold">Edit image with Imagine</h2>
-            <img src={imagineEdit.image} alt="Selected image" className="max-h-40 w-full rounded-panel object-contain" />
+            <img src={imagineEdit.result?.dataUrl ?? imagineEdit.image} alt="Selected image" className="max-h-40 w-full rounded-panel object-contain" />
             <label className="block text-sm">Describe the edit<textarea autoFocus rows={3} value={imagineEdit.text} onChange={(event) => { setImagineEdit({ ...imagineEdit, text: event.target.value }); setImagineEditError(null); }} className="mt-1 w-full rounded-panel border border-line bg-bg p-2" /></label>
+            {imagineEdit.result && <button type="button" onClick={() => imagineEdit.result && downloadImageDataUrl(imagineEdit.result.dataUrl, imagineEdit.result.name || "edited")}>Download edited image</button>}
             {imagineEditError && <p role="alert" className="text-sm text-danger">{imagineEditError}</p>}
             <div className="flex flex-wrap gap-2">
               <button type="submit" disabled={busy || !imagineEdit.text.trim()} className="min-h-11 rounded-panel bg-accent px-3 text-sm text-accent-ink">{busy ? "Generating…" : "Generate edit"}</button>
@@ -8010,7 +8358,15 @@ export function CommandApp() {
         onChange={(event) => {
           const file = event.target.files?.[0];
           event.target.value = "";
-          if (file) void onPicked(file).catch(() => setError("Couldn’t read this file. Choose another file to try again."));
+          if (file) void onPicked(file, null).catch(() => setError("Couldn’t read this file. Choose another file to try again."));
+        }}
+      />
+      <input
+        ref={inspectFileRef} type="file" accept=".txt,.md,.json,.csv,.pdf,.js,.ts,.mjs,text/plain,application/pdf" className="hidden"
+        onChange={(event) => {
+          const file = event.target.files?.[0];
+          event.target.value = "";
+          if (file) void onPicked(file, "research").catch(() => setError("Could not read the file for inspection."));
         }}
       />
       <input
@@ -8028,8 +8384,11 @@ export function CommandApp() {
         open={cameraOpen}
         onClose={() => setCameraOpen(false)}
         onCapture={(dataUrl, name) => {
-          setPendingImages((prev) => prev.length >= 4 ? prev : [...prev, { dataUrl, name, mime: "image/jpeg" }]);
-          setNotice(`Camera snapshot “${name}” attached to the composer. Press Send to include it.`);
+          setPendingImages((prev) => {
+            if (prev.length >= 4) { setNotice(null); setError("The composer is full. Remove an attachment before capturing."); return prev; }
+            setNotice(`Camera snapshot “${name}” attached to the composer.`);
+            return [...prev, { dataUrl, name, mime: "image/jpeg", origin: "camera" }];
+          });
         }}
       />
       <CloudPicker
@@ -8045,7 +8404,7 @@ export function CommandApp() {
           <p className="mt-2 text-sm text-muted">Voice starts only after you sign in and press Speak. Your microphone has not been requested.</p>
           <div className="mt-3 flex gap-2">
             <button type="button" className="min-h-11 flex-1 rounded-panel border border-line" onClick={() => setVoiceSignInNotice(false)}>Cancel</button>
-            <Link to="/login" className="min-h-11 flex-1 rounded-panel bg-accent text-center leading-[2.75rem] font-semibold text-accent-ink">Sign in</Link>
+            <Link to="/login" search={{ next: loginReturnPath() }} className="min-h-11 flex-1 rounded-panel bg-accent text-center leading-[2.75rem] font-semibold text-accent-ink">Sign in</Link>
           </div>
         </Overlay>
       )}
@@ -8084,25 +8443,22 @@ export function CommandApp() {
           </div>
         </Overlay>
       )}
-      {wipeAsk && (
-        <Overlay labelledBy="wipe-browser-title" onDismiss={() => setWipeAsk(false)}>
+      {wipeAsk && wipeAsk === account?.id && (
+        <Overlay labelledBy="wipe-browser-title" onDismiss={() => setWipeAsk(null)}>
           <h3 id="wipe-browser-title" className="font-display text-2xl font-bold">Clear this browser copy?</h3>
-          <p className="mt-2 text-sm text-muted">Chats, notes, projects, files, and bots in this browser are removed. If this browser can reach its server copy, that copy of the same records is replaced. The sign-in account, connected keys, and emergency stop stay. A paired computer is not deleted.</p>
+          <p className="mt-2 text-sm text-muted">Chats, notes, projects, files, and bots in this browser are removed. Your server copy stays available. The sign-in account, connected keys, and emergency stop stay. A paired computer is not deleted.</p>
           <div className="mt-3 flex gap-2">
-            <button type="button" className="min-h-11 flex-1 rounded-panel border border-line" onClick={() => setWipeAsk(false)}>Keep data</button>
+            <button type="button" className="min-h-11 flex-1 rounded-panel border border-line" onClick={() => setWipeAsk(null)}>Keep data</button>
             <button
               type="button"
               data-testid="confirm-wipe-browser"
               className="min-h-11 flex-1 rounded-panel bg-accent font-semibold text-accent-ink"
               onClick={() => {
                 const next = clearedBrowserCopy(wsRef.current);
-                setWipeAsk(false);
+                setWipeAsk(null);
                 setActiveId(null);
                 setWipeStatus("Clearing this browser copy…");
-                void clearStoredCopy(next).then((saved) => {
-                  const message = saved
-                    ? "This browser copy was cleared. The server copy of these records was replaced. The sign-in account, connected keys, and emergency stop were not deleted."
-                    : "This browser copy was cleared. The server copy was not replaced. The sign-in account, connected keys, and emergency stop were not deleted.";
+                void clearStoredCopy(next).then((message) => {
                   setWipeStatus(message);
                   setNotice(message);
                 });
@@ -8168,6 +8524,7 @@ export function CommandApp() {
       />
       <SpeakStage
         open={speakStageOpen}
+        freeOnly={researchFreeOnly}
         signedIn={statusSignedIn === true || (typeof window !== "undefined" && (window.location.hostname === "127.0.0.1" || window.location.hostname === "localhost"))}
         live={voiceListening}
         onClose={closeSpeakStage}
@@ -8178,8 +8535,15 @@ export function CommandApp() {
           if (activeId) setWs((prev) => updateChatPersonality(prev, activeId, personalityId));
           setNotice(`${style} is saved as the personality. The voice name is separate.`);
         }}
-        onSignIn={() => { setSpeakStageOpen(false); window.location.assign("/login"); }}
-        onLive={() => void listen({ mode: voiceListening ? "stop" : "start" })}
+        onSignIn={() => { setSpeakStageOpen(false); window.location.assign("/login?next=" + encodeURIComponent(loginReturnPath(true))); }}
+        recording={taskRecording}
+        onVoice={applyVoiceChoice}
+        micMuted={voiceMuted}
+        onMicMute={setVoiceMicMuted}
+        onLive={() => {
+          setSpeakCall((current) => ({ ...current, error: "" }));
+          return listen({ mode: "start" });
+        }}
         heard={speakCall.heard}
         spoken={speakCall.reply}
         callError={speakCall.error}
@@ -8191,6 +8555,7 @@ export function CommandApp() {
           if (blocked.kind !== "none") return { error: blocked.message };
           const turn = await speakChatTurn(text);
           if (!turn.ok) return { error: turn.error };
+          if (!speakStageOpenRef.current || wsRef.current.halted) return { reply: turn.text, error: "Call ended before playback." };
           const spoken = await speak(turn.text);
           if (!spoken?.ok) return { reply: turn.text, error: spoken?.error || "The reply was written, but it was not spoken." };
           return { reply: turn.text };
@@ -8203,11 +8568,12 @@ export function CommandApp() {
         </div>
       ) : null}
       <LiveVoiceBar
+        freeOnly={researchFreeOnly}
         compactIdle
         authReady={statusSignedIn === true}
         authSignedIn={statusSignedIn === true}
         onSignInRequired={() => setVoiceSignInNotice(true)}
-        onCompactSpeak={() => void speak("")}
+        onCompactSpeak={openSpeakStage}
         onChatAttachImage={(image) => setPendingImages((prev) => prev.length >= 4 ? prev : [...prev, image])}
         onDictateToggle={onDictationMic}
         isOverlayMicOpen={() =>
@@ -8220,8 +8586,8 @@ export function CommandApp() {
           )
         }
         stopOverlayMic={() => void listen({ mode: "stop" })}
-        onUserTranscript={(text) => appendLiveVoiceUser(text)}
-        onAssistantTranscript={(text) => appendLiveVoiceAssistant(text)}
+        onUserTranscript={(text) => appendLiveTranscript("user", text)}
+        onAssistantTranscript={(text) => appendLiveTranscript("assistant", text)}
         onError={(message) => setError(message)}
         onNotice={(message) => setNotice(message)}
         onChatSend={(text) => {
@@ -8465,7 +8831,7 @@ function ChatPane({
   onDeleteSection,
   projects = [],
   pinnedIds = [],
-  scheduledNames = [],
+  scheduledChatIds = [],
   onConversationAction,
   onSave,
   onNew,
@@ -8570,13 +8936,13 @@ function ChatPane({
   onEdit: (messageId: string, text: string) => void;
   onRegenerate: () => void;
   onRetry: () => void;
-  onExport: () => void;
+  onExport: (textOnly?: boolean) => void;
   onDelete: () => void;
   onDeleteChat?: (id: string, title: string) => void;
   onDeleteSection?: (label: string, ids: string[]) => void;
   projects?: { id: string; name: string }[];
   pinnedIds?: string[];
-  scheduledNames?: string[];
+  scheduledChatIds?: string[];
   onConversationAction?: (action: ConversationAction, ids: string[], extra?: { projectId?: string | null; title?: string }) => void;
   onSave: (content: string) => void;
   onNew: () => void;
@@ -8739,10 +9105,10 @@ function ChatPane({
               activeId={active?.id}
               projects={projects}
               pinnedIds={pinnedIds}
-              scheduledNames={scheduledNames}
+              scheduledChatIds={scheduledChatIds}
               onOpen={onPick}
               onAction={onConversationAction}
-              extras={(ids) => (active && ids.length === 1 && ids[0] === active.id ? [{ label: "Download transcript", onPick: onExport }] : [])}
+              extras={(ids) => (active && ids.length === 1 && ids[0] === active.id ? [{ label: "Download text transcript", onPick: () => onExport(true) }, { label: "Download transcript JSON with attachments", onPick: () => onExport(false) }] : [])}
             />
           )}
         </div>
@@ -8795,7 +9161,12 @@ function ChatPane({
             </div>
           )}
         </details>
-        <div ref={transcript} className="min-h-0 flex-1 overflow-auto p-4" onScroll={(event) => {
+        <div ref={transcript} className="min-h-0 flex-1 overflow-auto p-4" onFocusCapture={(event) => {
+          if (event.target instanceof HTMLElement && event.target.matches("article.turn[id^='message-']")) {
+            following.current = false;
+            setDetached(true);
+          }
+        }} onScroll={(event) => {
           const pane = event.currentTarget;
           const end = Math.max(0, pane.scrollHeight - pane.clientHeight);
           const top = pane.scrollTop;
@@ -8819,13 +9190,14 @@ function ChatPane({
           {active?.messages.map((msg) => {
             const last = active.messages.at(-1);
             return (
-            <article key={msg.id} className={`turn w-full max-w-none px-1 py-2 text-sm ${msg.role === "user" ? "turn-user" : "turn-assistant"}`}>
+            <article key={msg.id} id={"message-" + msg.id} tabIndex={-1} className={`turn w-full max-w-none px-1 py-2 text-sm ${msg.role === "user" ? "turn-user" : "turn-assistant"}`}>
               <p className="mb-1 text-xs text-muted">{msg.role === "user" ? "You" : [msg.provider, msg.model].filter(Boolean).join(" · ") || "Assistant · model unreported"} · {stamp(msg.at)}</p>
               {msg.requestedModel && msg.model !== msg.requestedModel && (
                 <p className="mb-1 break-words text-xs text-muted">Requested {msg.requestedModel}</p>
               )}
               {msg.delivery && !(busy && msg.delivery === "submitted" && last?.id === msg.id) && (
                 <p className="mb-1 text-xs text-muted" role="status">
+                  {msg.deliveryRoute && <span>{msg.deliveryRoute.provider} · {msg.deliveryRoute.model ?? msg.deliveryRoute.tier}. </span>}
                   {msg.delivery === "stopped" ? STOPPED_REPLY : msg.delivery === "failed" ? "The provider did not complete this reply." : "No finished reply was saved. The provider may already have received this message."}
                 </p>
               )}
@@ -8884,6 +9256,15 @@ function ChatPane({
                   <details className="relative">
                     <summary className="chat-button chat-button--ghost" aria-label="More">⋯</summary>
                     <div className="absolute bottom-12 left-0 z-20 flex min-w-44 flex-col rounded-2xl border border-line bg-bg p-1">
+                      {!active.temporary && <label className="px-3 py-2 text-xs">Rate this reply
+                        <select aria-label="Rate this reply" value={ratings.find((rating) => rating.messageId === msg.id)?.score ?? ""} onChange={(event) => {
+                          const score = Number(event.target.value);
+                          if (score >= 1 && score <= 5) onRate(msg.id, score as 1 | 2 | 3 | 4 | 5, msg.model ?? null);
+                        }}>
+                          <option value="" disabled>Choose rating</option>
+                          {[1, 2, 3, 4, 5].map((score) => <option key={score} value={score}>{score} / 5</option>)}
+                        </select>
+                      </label>}
                       <button type="button" className="min-h-11 px-3 text-left text-xs" onClick={() => onOpenBuild(msg.content)}>Open in Build</button>
                       <button type="button" className="min-h-11 px-3 text-left text-xs" onClick={() => onOpenHuman(msg.content)}>Open in Intelligence</button>
                       {replyHasSources(msg.content) ? <p className="px-3 py-2 text-xs">Sources: {msg.content.match(/https?:\/\/\S+/g)?.join(" ")}</p> : null}
@@ -9373,22 +9754,13 @@ function ComposerEffortControl({
   const connected = consultModules.filter((item) => item.connected);
   return (
     <div className="composer-effort" data-testid="composer-effort">
-      <div className="flex flex-wrap items-center gap-2">
-        <span className="text-xs text-muted">Effort</span>
-        {COMPOSER_MODES.map((item) => (
-          <button
-            key={item.id}
-            type="button"
-            aria-pressed={mode === item.id}
-            className={`min-h-11 rounded-full px-3 text-sm ${mode === item.id ? "bg-accent text-accent-ink tile-active" : "border border-line/80 bg-white/5 text-muted"}`}
-            onClick={() => onChoose(item.id)}
-          >
-            {item.label}
-          </button>
-        ))}
-        <span className="rounded-full border border-line px-2 py-0.5 text-xs text-muted">{resolved.badge}</span>
-      </div>
-      <p className="mt-1 text-xs text-muted" style={{ maxWidth: "100%", whiteSpace: "normal", overflowWrap: "anywhere" }}>
+      <label className="composer-effort-field">
+        <span>Effort</span>
+        <select value={mode} onChange={(event) => onChoose(event.target.value as ComposerModeId)}>
+          {COMPOSER_MODES.map((item) => <option key={item.id} value={item.id}>{item.label}</option>)}
+        </select>
+      </label>
+      <p className="composer-effort-description">
         {current?.detail}
         {resolved.notice ? ` ${resolved.notice}` : ""}
       </p>

@@ -208,3 +208,9 @@ it("merging an older archive twice retains newer turns and preserves local confl
   assert.deepEqual(merged.chats[0].messages.map((msg) => msg.content), ["corrected", "later"]);
   assert.equal(merged.chats.length, 1);
 });
+
+it("chat attachment copies cannot evict any of the forty saved files", () => {
+  let workspace = emptyWorkspace();
+  for (let i = 0; i < 40; i++) workspace = addLocalFile(workspace, { name: i + ".txt", text: "saved", projectId: null });
+  assert.equal(addLocalFile(workspace, { name: "extra.txt", text: "turn only", projectId: null }), workspace);
+});

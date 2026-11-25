@@ -2,7 +2,7 @@
  * Per-owner Imagine spend ledger (server-oriented; memory backend for tests).
  * Estimates are approximate — update when xAI publishes stable image pricing.
  */
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { mkdirSync, readFileSync, writeFileSync, renameSync } from "node:fs";
 import { dirname } from "node:path";
 
 export const DEFAULT_IMAGINE_DAILY_CAP = 40;
@@ -30,6 +30,7 @@ export type ImagineSpendSummary = {
   estimatedCostUsd: number;
   dailyCap: number;
   remaining: number;
+  resetAt: string;
 };
 
 export type ImagineSpendLedger = {
@@ -45,7 +46,7 @@ function dayKey(at: number): string {
 export function getImagineDailyCap(env: Record<string, string | undefined> = process.env): number {
   const raw = env.MIND_IMAGINE_DAILY_CAP;
   const n = raw ? Number(raw) : DEFAULT_IMAGINE_DAILY_CAP;
-  if (!Number.isFinite(n) || n < 1) return DEFAULT_IMAGINE_DAILY_CAP;
+  if (!Number.isFinite(n) || n < 0) return 0;
   return Math.min(500, Math.floor(n));
 }
 
@@ -101,17 +102,19 @@ function summarize(events: ImagineSpendEvent[], ownerId: string, now: number): I
     estimatedCostUsd,
     dailyCap,
     remaining: Math.max(0, dailyCap - count),
+    resetAt: new Date(Date.parse(day + "T00:00:00Z") + 86_400_000).toISOString(),
   };
 }
 
 export function createFileSpendLedger(filePath: string): ImagineSpendLedger {
   function readAll(): ImagineSpendEvent[] {
     try {
-      if (!existsSync(filePath)) return [];
       const parsed = JSON.parse(readFileSync(filePath, "utf8")) as { events?: ImagineSpendEvent[] };
-      return Array.isArray(parsed.events) ? parsed.events : [];
-    } catch {
-      return [];
+      if (!Array.isArray(parsed.events) || !parsed.events.every((e) => e && typeof e.ownerId === "string" && typeof e.model === "string" && Number.isInteger(e.n) && e.n > 0 && Number.isFinite(e.at) && Number.isFinite(e.estimatedCostUsd))) throw new Error("Unreadable image allowance history.");
+      return parsed.events;
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code === "ENOENT") return [];
+      throw error;
     }
   }
   function writeAll(events: ImagineSpendEvent[]) {
@@ -119,7 +122,9 @@ export function createFileSpendLedger(filePath: string): ImagineSpendLedger {
     // Keep ~14 days
     const cutoff = Date.now() - 14 * 24 * 60 * 60 * 1000;
     const trimmed = events.filter((event) => event.at >= cutoff);
-    writeFileSync(filePath, JSON.stringify({ events: trimmed }, null, 0), "utf8");
+    const temp = filePath + "." + crypto.randomUUID();
+    writeFileSync(temp, JSON.stringify({ events: trimmed }), "utf8");
+    renameSync(temp, filePath);
   }
   return {
     record(input) {
@@ -146,39 +151,74 @@ export function createFileSpendLedger(filePath: string): ImagineSpendLedger {
   };
 }
 
-let activeLedger: ImagineSpendLedger = createMemorySpendLedger();
+let testLedger: ImagineSpendLedger | null = null;
 
 export function setImagineSpendLedger(ledger: ImagineSpendLedger) {
-  activeLedger = ledger;
-}
-
-export function getImagineSpendLedger(): ImagineSpendLedger {
-  return activeLedger;
+  testLedger = ledger;
 }
 
 export function resetImagineSpendLedgerForTests() {
-  activeLedger = createMemorySpendLedger();
+  testLedger = createMemorySpendLedger();
 }
 
-/** Apply rate-limit + daily cap. Call before any xAI image spend. */
-export function assertImagineSpendAllowed(input: {
-  ownerId: string;
-  sessionId?: string;
-  n: number;
-  checkRateLimit: (key: string) => { ok: true } | { ok: false; error: string; retryAfterSec: number };
-  rateLimitKey: (parts: { ownerId: string; sessionId?: string }) => string;
-}): { ok: true } | { ok: false; error: string; status: number } {
+type Attempt = { ownerId: string; model: string; n: number };
+type StoredAttempt = { id: string; model: string; n: number; at_ms: number; confirmed: boolean };
+
+async function durableSql() {
+  const { getSql, dbSource } = await import("../../db.ts");
+  if (process.env.VERCEL && dbSource === "pglite") throw new Error("Shared usage storage is unavailable.");
+  return getSql();
+}
+
+async function dayUsage(sql: import("../../db.ts").Sql, ownerId: string, now: number) {
+  // Include pre-migration, file-backed usage until the UTC day rolls over.
+  const legacy = createFileSpendLedger(DEFAULT_SPEND_LEDGER_PATH).summary(ownerId, now);
+  const rows = await sql<StoredAttempt>`select id, model, n, at_ms, confirmed from mind_imagine_attempts where owner_id = ${ownerId} and day = ${legacy.day}`;
+  let unknown = 0;
+  for (const row of rows) {
+    legacy.count += row.n;
+    legacy.byModel[row.model] = (legacy.byModel[row.model] ?? 0) + row.n;
+    legacy.estimatedCostUsd += estimateImagineCostUsd(row.model, row.n);
+    if (!row.confirmed) unknown += row.n;
+  }
+  legacy.remaining = Math.max(0, legacy.dailyCap - legacy.count);
+  return { ...legacy, estimatedCostUsd: Math.round(legacy.estimatedCostUsd * 1000) / 1000, unconfirmed: unknown };
+}
+
+export async function imagineUsage(ownerId: string) {
+  if (testLedger) return { ...testLedger.summary(ownerId), unconfirmed: 0 };
+  return dayUsage(await durableSql(), ownerId, Date.now());
+}
+
+/** Reserve before dispatch. Failure after dispatch leaves the allowance consumed and the outcome unconfirmed. */
+export async function reserveImagine(input: Attempt): Promise<{ ok: true; confirm: () => Promise<void> } | { ok: false; error: string; status: number }> {
   const ownerId = input.ownerId.trim();
   if (!ownerId) return { ok: false, error: "Imagine requires an owner id for spend controls.", status: 400 };
-  const rate = input.checkRateLimit(input.rateLimitKey({ ownerId, sessionId: input.sessionId }));
-  if (!rate.ok) return { ok: false, error: rate.error, status: 429 };
-  if (activeLedger.wouldExceedCap(ownerId, input.n)) {
-    const summary = activeLedger.summary(ownerId);
-    return {
-      ok: false,
-      error: `Daily Imagine cap reached (${summary.count}/${summary.dailyCap} images today). Try again tomorrow or raise MIND_IMAGINE_DAILY_CAP.`,
-      status: 429,
-    };
+  const capped = { ok: false as const, status: 429, error: "Daily Imagine cap reached. Check the remaining allowance." };
+  try {
+    if (testLedger) {
+      if (testLedger.wouldExceedCap(ownerId, input.n)) return capped;
+      testLedger.record(input);
+      return { ok: true, confirm: async () => {} };
+    }
+    const sql = await durableSql();
+    if (!sql.transaction) throw new Error("A transactional allowance ledger is required.");
+    const now = Date.now();
+    const day = dayKey(now);
+    const id = crypto.randomUUID();
+    return await sql.transaction(async (tx) => {
+      await tx`insert into mind_imagine_days (owner_id, day) values (${ownerId}, ${day}) on conflict do nothing`;
+      await tx`select day from mind_imagine_days where owner_id = ${ownerId} and day = ${day} for update`;
+      const summary = await dayUsage(tx, ownerId, now);
+      if (summary.remaining < input.n) return capped;
+      await tx`insert into mind_imagine_attempts (id, owner_id, day, model, n, at_ms) values (${id}, ${ownerId}, ${day}, ${input.model}, ${input.n}, ${now})`;
+      return { ok: true as const, confirm: async () => {
+        // The reservation already counts. A reporting outage should not discard the delivered image.
+        try { await sql`update mind_imagine_attempts set confirmed = true where id = ${id}`; }
+        catch { /* An unconfirmed reservation remains visible. */ }
+      }};
+    });
+  } catch {
+    return { ok: false, status: 503, error: "Image usage could not be verified. The provider request was paused." };
   }
-  return { ok: true };
 }

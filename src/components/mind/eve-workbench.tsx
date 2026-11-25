@@ -81,7 +81,7 @@ export function EveWorkbench({
   onToggleStop: () => void;
   onPreviewVoice?: (line: string) => void;
   onTalk?: () => void;
-  onAsk?: (text: string) => Promise<string>;
+  onAsk?: (text: string, showAnswer: (answer: string) => void) => Promise<{ ok: true; text: string; playbackError?: string } | { ok: false; error: string }>;
   personalityId?: string;
   customPersonality?: string;
   chatTitle?: string;
@@ -208,13 +208,17 @@ export function EveWorkbench({
     }
     setAskBusy(true);
     setAskReply("EVE is answering.");
-    void fetch("/api/mind/receipts", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ operation: "record", state: "PROPOSED", action: "ask-eve", detail: text.slice(0, 180) }) });
+    void fetch("/api/mind/receipts", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ operation: "record", state: "PROPOSED", action: "ask-eve", detail: "Asked EVE a question." }) }).catch(() => undefined);
     try {
-      const reply = await onAsk(text);
-      setAskReply(reply || "EVE did not return a reply.");
-      const recorded = await fetch("/api/mind/receipts", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ operation: "record", state: "EXECUTED", action: "ask-eve", detail: reply ? "EVE answered." : "EVE did not return a reply." }) }).then((response) => response.json()).catch(() => null);
+      const result = await onAsk(text, setAskReply);
+      if (!result.ok) {
+        setAskReply(result.error);
+        return;
+      }
+      setAskReply(result.playbackError ? `${result.text}\n\nAudio: ${result.playbackError}` : result.text);
+      setAsk("");
+      const recorded = await fetch("/api/mind/receipts", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ operation: "record", state: "EXECUTED", action: "ask-eve", detail: "EVE returned a written answer." }) }).then((response) => response.json()).catch(() => null);
       if (recorded?.receipt) setReceipts((prev) => [recorded.receipt, ...prev].slice(0, 8));
-      if (reply && !/did not|failed|error/i.test(reply)) setAsk("");
     } catch {
       setAskReply("EVE did not finish that reply. Nothing was marked complete.");
     } finally {
@@ -230,7 +234,7 @@ export function EveWorkbench({
         <header className="page-hero flex flex-col gap-4 p-4 md:flex-row md:items-center md:justify-between md:p-6">
           <div className="flex min-w-0 flex-col items-stretch gap-4 sm:flex-row sm:items-center">
             <div hidden={eveBand !== "talk" && eveBand !== "figure"}>
-            <EveTurn state={askBusy ? "listening" : askReply ? "speaking" : "idle"} expression={expression} spoken={askReply ?? undefined} framing={framing} projection={heard ?? undefined} className="eve-stage-panel" showHead />
+            <EveTurn expression={expression} framing={framing} projection={heard ?? undefined} className="eve-stage-panel" showHead />
             </div>
             <div className="min-w-0">
               <p className="text-xs font-semibold uppercase tracking-[0.18em] text-muted">Adrian Core · Intelligence</p>
@@ -270,19 +274,19 @@ export function EveWorkbench({
           <div className="flex flex-wrap items-center justify-between gap-3">
             <div>
               <h2 className="text-lg font-semibold">Talk with EVE</h2>
-              <p className="mt-1 text-sm text-muted">EVE can read chats, projects, files, agents, and connections. Memory stays on for her. She cannot press the emergency stop.</p>
+              <p className="mt-1 text-sm text-muted">Ask a question here or open Speak for a live voice conversation. EVE follows the current chat’s memory settings.</p>
             </div>
             <button type="button" className="inline-flex min-h-11 items-center rounded-panel bg-accent px-4 text-sm font-semibold text-accent-ink" onClick={() => onTalk?.()} data-testid="eve-talk-open">
-              Talk
+              Open Speak
             </button>
           </div>
           <form className="mt-3 flex flex-col gap-2 sm:flex-row" onSubmit={(event) => void askEve(event)}>
-            <input value={ask} onChange={(event) => setAsk(event.target.value)} maxLength={2000} aria-label="Ask EVE" placeholder="Speak or type. Her screen changes as you talk." className="min-h-11 min-w-0 flex-1 rounded-panel border border-line bg-bg px-3 text-sm" disabled={askBusy || !onAsk} />
+            <input value={ask} onChange={(event) => setAsk(event.target.value)} maxLength={2000} aria-label="Ask EVE" placeholder="Type a question for EVE" className="min-h-11 min-w-0 flex-1 rounded-panel border border-line bg-bg px-3 text-sm" disabled={askBusy || !onAsk} />
             <button type="submit" className="inline-flex min-h-11 items-center justify-center rounded-panel border border-line px-4 text-sm font-semibold disabled:opacity-50" disabled={askBusy || !onAsk || !ask.trim()} data-testid="eve-ask">
               {askBusy ? "Answering" : "Ask"}
             </button>
           </form>
-          {askReply ? <p className="mt-3 text-sm" role="status" data-testid="eve-reply">{askReply}</p> : null}
+          {askReply ? <p className="mt-3 whitespace-pre-wrap text-sm" role="status" data-testid="eve-reply">{askReply}</p> : null}
           <div className="mt-3 rounded-panel border border-line p-3" data-testid="eve-projection">
             <p className="text-sm font-semibold">EVE's computer</p>
             <p className="mt-1 text-xs text-muted">{heard.note}</p>
@@ -447,7 +451,7 @@ export function EveWorkbench({
             <section className="rounded-panel border border-line bg-surface p-4">
               <h2 className="flex items-center gap-2 font-semibold"><Bot className="size-5" /> Digital human</h2>
               <p className="mt-1 text-xs text-muted">{roster.femaleFilled} of {roster.femaleFilled + roster.femaleOpen} female identities filled. {roster.maleFilled} of {roster.maleOpen} male identities filled. Same Adrian Core. No extra permissions.</p>
-              <EveTurn state={askBusy ? "listening" : askReply ? "speaking" : "idle"} expression={expression} spoken={askReply ?? undefined} framing={framing} projection={heard ?? undefined} />
+              <EveTurn expression={expression} framing={framing} projection={heard ?? undefined} />
               <div className="mt-3 flex flex-wrap gap-2" role="group" aria-label="Avatar framing">
                 {(["full", "upper", "face", "compact"] as AvatarFraming[]).map((mode) => (
                   <button key={mode} type="button" className={"min-h-11 rounded-panel border px-3 text-xs " + (framing === mode ? "border-accent bg-accent/10" : "border-line")} onClick={() => { setFraming(mode); writeStoredFraming(mode); }}>{mode}</button>

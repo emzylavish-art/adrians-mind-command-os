@@ -142,7 +142,7 @@ export function SpeakPanel() {
     noteSaved(nextOn ? "auto-read on" : "auto-read off", writeKey(AUTO_READ_KEY, nextOn ? "on" : "off"));
     setNext(
       nextOn
-        ? "Next: send a chat message. With auto-read on, press Speak on that reply to hear it in the saved voice."
+        ? "New replies in your open chat will be read aloud. If playback needs a gesture, choose Read aloud on the reply."
         : "Next: leave replies on screen. Press Speak on a message only when you want it read aloud.",
     );
   }

@@ -5,7 +5,7 @@ import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { PGlite } from "@electric-sql/pglite";
 import { pendingMigrations } from "./migration-plan.mjs";
-import { runWorkerPass } from "../src/lib/mind/worker-pass.ts";
+import { runLocalSchedulePass } from "../src/lib/mind/worker-pass.ts";
 
 const root = join(dirname(fileURLToPath(import.meta.url)), "..");
 const dataDir = join(root, ".data", "pglite");
@@ -19,6 +19,7 @@ function toSql(pg) {
     return result.rows;
   };
   sql.query = async (text, params = []) => (await pg.query(text, params)).rows;
+  if (pg.transaction) sql.transaction = (fn) => pg.transaction((tx) => fn(toSql(tx)));
   return sql;
 }
 
@@ -39,7 +40,7 @@ try {
     await pg.query("insert into _migrations (name) values ($1)", [name]);
     await pg.exec("commit");
   }
-  const result = await runWorkerPass(toSql(pg), now, `worker-${process.pid}`);
+  const result = await runLocalSchedulePass(toSql(pg), now, `worker-${process.pid}`);
   await pg.close();
   const report = { at: now, heartbeatAt: now, running: false, mode: "one-shot", ...result, hosted: false, localOnly: true, note: "One pass against the file database on this machine. This process then exits. It is not a hosted always-on worker." };
   mkdirSync(join(root, ".data"), { recursive: true });

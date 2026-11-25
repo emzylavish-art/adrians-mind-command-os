@@ -116,7 +116,17 @@ describe("notion oauth", () => {
         text: async () => "",
       }),
     });
-    const after = await disconnectNotion({ ownerId: "owner", env: oauthEnv });
+    const earlier = buildNotionAuthorizeUrl({ ownerId: "owner", env: oauthEnv });
+    assert.ok(earlier.ok);
+    const after = await disconnectNotion({ ownerId: "owner", env: oauthEnv, fetch: async (url, init) => {
+      assert.equal(url, "https://api.notion.com/v1/oauth/revoke");
+      assert.match(new Headers(init?.headers).get("authorization") || "", /^Basic /);
+      return { ok: true, status: 200, json: async () => ({}), text: async () => "" };
+    } });
+    assert.equal(after.revokeOk, true);
+    const stale = await exchangeNotionCode({ code: "stale", state: earlier.state, env: oauthEnv,
+      fetch: async () => { throw new Error("invalidated callback reached transport"); } });
+    assert.equal(stale.ok, false);
     assert.equal(after.state, "not_connected");
     assert.equal(getAccessToken("owner", "notion"), null);
   });

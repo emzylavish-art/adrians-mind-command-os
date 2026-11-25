@@ -1,122 +1,102 @@
-import { type ChildProcess, execFileSync, spawn } from "node:child_process";
-import { readFileSync } from "node:fs";
+import { type ChildProcess, spawn } from "node:child_process";
+import { createHash } from "node:crypto";
+import { readFile } from "node:fs/promises";
+import { createServer } from "node:net";
 import { join } from "node:path";
 import { adrianBuildCommand, adrianBuildEnv, packageLabel } from "./acp-client.ts";
 import { ensureCodingSearchBridge } from "./coding-search-bridge.server.ts";
 import { localDataPath } from "../../../local-data.ts";
 
-const PORT = 58631;
-
-type BrowserRun = {
-  child: ChildProcess;
-  port: number;
-};
-
+type BrowserRun = { child: ChildProcess; port: number; home: string; owner: string };
+type StartResult = { ok: boolean; package: string; error?: string };
 let running: BrowserRun | null = null;
+let starting: { owner: string; promise: Promise<StartResult> } | null = null;
 
-function redact(text: string): string {
-  return text
-    .replace(/xai-[A-Za-z0-9_-]{8,}/g, "[saved key]")
-    .replace(/sk-[A-Za-z0-9_-]{8,}/g, "[saved key]")
-    .replace(/token[=:\s]+[A-Za-z0-9._~+/-]{8,}/gi, "token=[redacted]")
-    .slice(0, 280);
+async function availablePort(): Promise<number> {
+  return new Promise((resolve, reject) => {
+    const server = createServer();
+    server.on("error", reject);
+    server.listen(0, "127.0.0.1", () => {
+      const address = server.address();
+      server.close((error) => {
+        if (error || !address || typeof address === "string") reject(error ?? new Error("No local port available."));
+        else resolve(address.port);
+      });
+    });
+  });
 }
 
-function releasePort(port: number) {
-  try {
-    const listed = execFileSync("ss", ["-ltnp"], { encoding: "utf8" });
-    const line = listed.split("\n").find((item) => item.includes(`:${port}`));
-    const match = line?.match(/pid=(\d+)/);
-    if (match) process.kill(Number(match[1]), "SIGTERM");
-  } catch {
-    // The port is already free, or this computer cannot list listeners.
-  }
+function activeRun(owner: string): BrowserRun | null {
+  return running?.owner === owner && running.child.exitCode === null && running.child.signalCode === null && !running.child.killed ? running : null;
 }
 
-function tokenFor(env: NodeJS.ProcessEnv): string {
-  const home = env.KIMI_CODE_HOME || localDataPath("adrian-build-home");
-  return readFileSync(`${home}/server.token`, "utf8").trim();
+export function codingBrowserStatus(owner: string) {
+  return { package: packageLabel(adrianBuildCommand()), localOnly: true, running: Boolean(activeRun(owner)) };
 }
 
-export function codingBrowserStatus() {
-  const command = adrianBuildCommand();
-  return {
-    package: packageLabel(command),
-    localOnly: true,
-    running: Boolean(running && running.child.exitCode == null),
-    port: running?.port,
-  };
-}
-
-export async function ensureCodingBrowser(): Promise<{ ok: boolean; port?: number; package: string; error?: string }> {
+async function start(owner: string): Promise<StartResult> {
   const command = adrianBuildCommand();
   const label = packageLabel(command);
-  if (process.env.VERCEL) {
-    return { ok: false, package: label, error: "The coding browser runs on this computer. The public site cannot keep that process open." };
-  }
-  if (!command.endsWith(".mjs") && !command.endsWith(".js")) {
-    return { ok: false, package: label, error: "The in-repo coding package was not found." };
+  if (process.env.VERCEL || (!command.endsWith(".mjs") && !command.endsWith(".js"))) {
+    return { ok: false, package: label, error: "Start the installed coding package on this computer." };
   }
   const bridge = await ensureCodingSearchBridge();
-  if (!bridge.ok) return { ok: false, package: label, error: bridge.error || "The coding search bridge did not start." };
-  if (running && running.child.exitCode == null) {
-    running.child.kill();
-    running = null;
-  }
-  releasePort(PORT);
-
-  const env = adrianBuildEnv();
-  const child = spawn(process.execPath, [command, "web", "--no-open", "--port", String(PORT)], {
-    cwd: process.cwd(),
-    env,
-    stdio: ["ignore", "pipe", "pipe"],
+  if (!bridge.ok) return { ok: false, package: label, error: "The coding search bridge did not start." };
+  const port = await availablePort();
+  const home = join(localDataPath("coding-browser"), createHash("sha256").update(owner).digest("hex"));
+  const child = spawn(process.execPath, [command, "web", "--no-open", "--port", String(port)], {
+    cwd: process.cwd(), env: adrianBuildEnv(home), stdio: "ignore",
   });
-  let log = "";
-  const onData = (chunk: Buffer) => {
-    log = redact(`${log}${chunk.toString("utf8")}`).slice(-280);
-  };
-  child.stdout?.on("data", onData);
-  child.stderr?.on("data", onData);
-  running = { child, port: PORT };
-
-  const ready = await new Promise<boolean>((resolve) => {
-    const timer = setTimeout(() => {
-      clearInterval(interval);
-      resolve(false);
-    }, 15_000);
-    const check = () => {
-      if (child.exitCode != null) {
-        clearTimeout(timer);
-        clearInterval(interval);
-        resolve(false);
-        return;
+  let failed = false;
+  child.once("error", () => { failed = true; });
+  child.once("exit", () => { if (running?.child === child) running = null; });
+  const deadline = Date.now() + 15_000;
+  while (!failed && child.exitCode === null && child.signalCode === null && Date.now() < deadline) {
+    try {
+      const response = await fetch(`http://127.0.0.1:${port}/`, { signal: AbortSignal.timeout(500), redirect: "error" });
+      await response.body?.cancel();
+      if (response.ok && (await readFile(join(home, "server.token"), "utf8")).trim()) {
+        running = { child, port, home, owner };
+        return { ok: true, package: label };
       }
-      fetch(`http://127.0.0.1:${PORT}/`, { signal: AbortSignal.timeout(800) })
-        .then((response) => {
-          if (!response.ok) return;
-          clearTimeout(timer);
-          clearInterval(interval);
-          resolve(true);
-        })
-        .catch(() => undefined);
-    };
-    const interval = setInterval(check, 400);
-    child.once("exit", () => {
-      clearInterval(interval);
-      clearTimeout(timer);
-      resolve(false);
-    });
-    check();
-  });
-  if (!ready || child.exitCode != null) {
-    running = null;
-    return { ok: false, package: label, error: log || "The coding browser did not start. No Kimi login was requested." };
+    } catch { /* The process may still be starting. */ }
+    await new Promise((resolve) => setTimeout(resolve, 200));
   }
-  return { ok: true, port: PORT, package: label };
+  if (child.exitCode === null && child.signalCode === null) child.kill();
+  return { ok: false, package: label, error: "The local coding browser did not start." };
 }
 
-export function codingBrowserFrame(port: number): string {
-  const token = encodeURIComponent(tokenFor(adrianBuildEnv()));
-  const src = `http://127.0.0.1:${port}/#token=${token}`;
+export async function ensureCodingBrowser(owner: string): Promise<StartResult> {
+  const status = codingBrowserStatus(owner);
+  if (status.running) return { ok: true, package: status.package };
+  if (starting?.owner === owner) return starting.promise;
+  if (starting || running) return { ok: false, package: status.package, error: "The coding browser is in use on this computer." };
+  const promise = start(owner).catch(() => ({ ok: false, package: status.package, error: "The local coding browser is unavailable." }));
+  starting = { owner, promise };
+  try { return await promise; } finally { starting = null; }
+}
+
+export async function closeCodingBrowser(owner: string): Promise<boolean> {
+  if (starting?.owner === owner) await starting.promise;
+  const run = activeRun(owner);
+  if (!run) return false;
+  return new Promise((resolve) => {
+    const timer = setTimeout(() => {
+      run.child.removeListener("exit", closed);
+      resolve(false);
+    }, 4000);
+    function closed() { clearTimeout(timer); resolve(true); }
+    run.child.once("exit", closed);
+    if (!run.child.kill()) { clearTimeout(timer); run.child.removeListener("exit", closed); resolve(false); }
+  });
+}
+
+export async function codingBrowserFrame(owner: string): Promise<string | null> {
+  const run = activeRun(owner);
+  if (!run) return null;
+  let token: string;
+  try { token = (await readFile(join(run.home, "server.token"), "utf8")).trim(); } catch { return null; }
+  if (!token || activeRun(owner) !== run) return null;
+  const src = `http://127.0.0.1:${run.port}/#token=${encodeURIComponent(token)}`;
   return `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>Coding browser</title><style>html,body,iframe{margin:0;height:100%;width:100%;border:0;background:#111;color:#fff}</style></head><body><iframe title="Coding browser" src="${src}"></iframe></body></html>`;
 }

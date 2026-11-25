@@ -11,9 +11,9 @@ import { readFileSync } from "node:fs";
 import { locksDirFromEnvSafe, repoDirFromEnvSafe } from "./safe-paths.ts";
 import { classifyHealth } from "./health.ts";
 import { readLocksDir } from "./locks.ts";
-import { fetchNotionGraph, fetchNotionStopPoints } from "./notion.ts";
+
 import { buildConstellations, constellationEdges, systemWeather } from "./constellations.ts";
-import { loadNotionSnapshotFile } from "./notion-graph.ts";
+
 import { buildProjectsDashboard } from "./projects.ts";
 import { buildFleetPlan } from "./fleet-plan.ts";
 import type { BotNode, DashboardStatus, LockRecord } from "./types.ts";
@@ -107,12 +107,12 @@ export async function buildDashboardStatus(
     }
   }
 
-  const notion = await fetchNotionStopPoints(env.NOTION_TOKEN);
-  const liveGraph = await fetchNotionGraph(env.NOTION_TOKEN);
-  const notionGraph = liveGraph ?? loadNotionSnapshotFile();
-  if (notion.available) {
-    notionGraph.mode = notionGraph.available ? notionGraph.mode : "live";
-  }
+  // This feed is public. Exclude account and deployment Notion sources before deriving charts or feeds.
+  const notion = { available: false as const, reason: "Workspace data is private." };
+  const notionGraph: DashboardStatus["notionGraph"] = {
+    available: false, mode: "unavailable", reason: notion.reason,
+    generatedAt: null, pages: [], edges: [], botPageMap: {}, stats: { pages: 0, edges: 0, botsMapped: 0 },
+  };
 
   const conductor = loadConductorNudges("/workspace");
   const gapDispatcher = loadGapDispatcherFeed("/workspace/rea-captures");

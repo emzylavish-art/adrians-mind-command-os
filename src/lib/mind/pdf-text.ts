@@ -1,4 +1,4 @@
-export type PdfText = { ok: boolean; text: string; pages: number; error: string; partial?: boolean };
+export type PdfText = { ok: boolean; text: string; pages: number; error: string; partial?: boolean; coverage?: string };
 
 function latin1(bytes: Uint8Array): string {
   let out = "";
@@ -62,22 +62,68 @@ export async function extractPdfText(bytes: Uint8Array): Promise<PdfText> {
   const source = latin1(bytes);
   if (!source.includes("%PDF")) return { ok: false, text: "", pages: 0, error: "That file is not a PDF. Nothing was extracted." };
   const pages = source.match(/\/Type\s*\/Page(?!s)/g)?.length ?? 0;
-  const parts: string[] = [];
-  let skippedStream = false;
-  const streams = source.matchAll(/stream\r?\n([\s\S]*?)endstream/g);
-  for (const match of streams) {
-    const raw = match[1] ?? "";
-    const before = source.slice(Math.max(0, (match.index ?? 0) - 240), match.index ?? 0);
-    let content = raw;
-    if (before.includes("/FlateDecode")) {
-      const inflated = await inflate(Uint8Array.from(raw, (char) => char.charCodeAt(0)));
-      if (!inflated) { skippedStream = true; continue; }
+  const objects = new Map<string, string>();
+  for (const match of source.matchAll(/(\d+)\s+(\d+)\s+obj\b([\s\S]*?)endobj/g)) {
+    objects.set(match[1] + " " + match[2], match[3]);
+  }
+  const refKeys = (fragment: string) => [...fragment.matchAll(/(\d+)\s+(\d+)\s+R\b/g)].map((m) => m[1] + " " + m[2]);
+  const catalog = [...objects.values()].find((entry) => /\/Type\s*\/Catalog\b/.test(entry));
+  const tree = catalog?.match(/\/Pages\s+(\d+\s+\d+\s+R)/)?.[1];
+  const ordered: string[] = [];
+  const seen = new Set<string>();
+  const stack = tree ? refKeys(tree) : [];
+  while (stack.length) {
+    const key = stack.pop()!;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    const node = objects.get(key) || "";
+    if (/\/Type\s*\/Page\b/.test(node)) ordered.push(node);
+    else stack.push(...refKeys(node.match(/\/Kids\s*\[([^\]]*)\]/)?.[1] || "").reverse());
+  }
+
+  async function decodeObject(entry: string) {
+    const match = entry.match(/\bstream\r?\n([\s\S]*?)endstream/);
+    if (!match) return { text: "", partial: true };
+    const dictionary = entry.slice(0, match.index);
+    let content = match[1];
+    if (/\/Filter\b/.test(dictionary)) {
+      if (!/\/Filter\s*(?:\/FlateDecode\b|\[\s*\/FlateDecode\s*\])/.test(dictionary)) return { text: "", partial: true };
+      const inflated = await inflate(Uint8Array.from(content, (char) => char.charCodeAt(0)));
+      if (!inflated) return { text: "", partial: true };
       content = latin1(inflated);
     }
-    parts.push(...stringsFrom(content));
+    const text = stringsFrom(content).join(" ");
+    // Hex glyphs, quotation operators and embedded images/forms require a fuller PDF reader.
+    return { text, partial: !text || /<[\da-f\s]+>\s*(?:Tj|[^\]]*\]\s*TJ)|\)\s*['"]|\sDo\b|\bBI\b/i.test(content) };
+  }
+
+  const parts: string[] = [];
+  const uncertain: number[] = [];
+  let coverage: string | undefined;
+  if (ordered.length && ordered.length === pages) {
+    for (const [index, page] of ordered.entries()) {
+      const refs = refKeys(page.match(/\/Contents\s*(\[[^\]]*\]|\d+\s+\d+\s+R)/)?.[1] || "");
+      let incomplete = !refs.length;
+      for (const ref of refs) {
+        const decoded = await decodeObject(objects.get(ref) || "");
+        if (decoded.text) parts.push(decoded.text);
+        if (decoded.partial) incomplete = true;
+      }
+      if (incomplete) uncertain.push(index + 1);
+    }
+    if (uncertain.length) coverage = "Incomplete text coverage on PDF pages " + uncertain.join(", ") + ".";
+  } else {
+    // Older or compressed page trees may have extractable text without reliable page attribution.
+    for (const entry of objects.values()) {
+      if (!/\bstream\r?\n/.test(entry)) continue;
+      const decoded = await decodeObject(entry);
+      if (decoded.text) parts.push(decoded.text);
+    }
+    coverage = "PDF page coverage could not be verified.";
   }
   const extracted = parts.join(" ").replace(/\s+/g, " ").trim();
   const text = extracted.slice(0, 40000);
-  if (!text) return { ok: false, text: "", pages, error: pages ? "No text operators were found. OCR is not configured, so a scanned page was not read. Nothing was invented." : "No text was found in this PDF. Nothing was invented." };
-  return { ok: true, text, pages, error: "", ...(skippedStream || text.length < extracted.length ? { partial: true } : {}) };
+  if (!text) return { ok: false, text: "", pages, error: pages ? "No usable text was extracted. Scanned pages require OCR. Nothing was invented." : "No text was found in this PDF. Nothing was invented." };
+  if (text.length < extracted.length) coverage = [coverage, "The text copy ends at 40,000 characters."].filter(Boolean).join(" ");
+  return { ok: true, text, pages, error: "", ...(coverage ? { partial: true, coverage } : {}) };
 }

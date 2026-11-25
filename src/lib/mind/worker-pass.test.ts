@@ -1,9 +1,9 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import type { Sql } from "../db.ts";
-import type { ScheduleJob } from "./fleet.ts";
+import { addAgentFromTemplate, addSchedule, enqueueRun, type ScheduleJob } from "./fleet.ts";
 import type { Workspace } from "./types.ts";
-import { claimSchedules, runWorkerPass } from "./worker-pass.ts";
+import { claimSchedules, runLocalSchedulePass, runWorkerPass } from "./worker-pass.ts";
 import { emptyWorkspace } from "./workspace.ts";
 
 function job(partial: Partial<ScheduleJob> & Pick<ScheduleJob, "id" | "name" | "nextRunAt">): ScheduleJob {
@@ -53,6 +53,25 @@ describe("worker pass", () => {
     assert.equal(savedB.schedules[0]?.nextRunAt, "2026-04-02T12:00:00.000Z");
     const second = await runWorkerPass(sql, "2026-04-01T12:00:00.000Z", "worker-b");
     assert.equal(second.ran, 0);
+  });
+
+  it("the standalone pass queues and finishes a due local job, leaving unrelated work alone", async () => {
+    const now = "2026-04-01T12:00:00.000Z";
+    const made = addAgentFromTemplate(emptyWorkspace(), "Documents", now);
+    if (!made.ok) throw Error(made.error);
+    made.agent.tools = ["list_projects"];
+    const manual = enqueueRun(made.ws, made.agent.id, "Manual request", now);
+    if (!manual.ok) throw Error(manual.error);
+    const scheduled = addSchedule(manual.ws, "Daily list", made.agent.id, 60, now);
+    if (!scheduled.ok) throw Error(scheduled.error);
+    const { sql, snaps } = db([{ userId: "fixture", ws: scheduled.ws }]);
+    const first = await runLocalSchedulePass(sql, now, "local", async () => "off");
+    assert.equal(first.ran, 0);
+    const second = await runLocalSchedulePass(sql, "2026-04-01T12:00:30.000Z", "local", async () => "off");
+    assert.equal(second.ran, 1);
+    const saved = JSON.parse(snaps.get("fixture")!) as Workspace;
+    assert.equal(saved.runs.find(run => run.id === manual.run.id)?.state, "queued");
+    assert.equal(saved.schedules[0]?.lastStatus, "ran");
   });
 
   it("claims before running so a second worker skips, and an expired lease can be recovered", () => {

@@ -16,3 +16,8 @@ describe("schedule clock", () => {
     assert.equal(fallback.zone, "UTC");
   });
 });
+
+it("aligns to the minute and runs once per local date on clock rollback", () => {
+  assert.equal(nextClock("2026-04-01T12:59:58.123Z", "Africa/Lagos", 14, 0).at, "2026-04-01T13:00:00.000Z");
+  assert.equal(nextClock("2026-11-01T05:30:00Z", "America/New_York", 1, 30, "2026-11-01T05:30:00Z").at, "2026-11-02T06:30:00.000Z");
+});

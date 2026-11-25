@@ -10,7 +10,7 @@ export function isIntelligenceThread(value?: string) {
 export type HumanThread = {
   id: string;
   title: string;
-  messages: { role: string; content: string }[];
+  messages: { id?: string; role: string; content: string }[];
 };
 
 type WorkspaceFile = { path: string; bytes: number };
@@ -136,8 +136,8 @@ export function HumanCodePanel(props: {
           <section className="intelligence-group" aria-label="Discussion">
             <h3>Discussion</h3>
             <div className="max-h-80 space-y-3 overflow-auto" style={{ fontSize, whiteSpace: wrap ? "pre-wrap" : "pre", overflowX: wrap ? "hidden" : "auto" }}>
-              {active?.messages.length ? active.messages.slice(-8).map((message, index) => (
-                <p key={`${message.role}-${index}`}><strong>{message.role === "user" ? "You" : "Intelligence"}: </strong>{message.content}</p>
+              {active?.messages.length ? active.messages.map((message, index) => (
+                <p key={message.id ?? `${message.role}-${index}`} id={message.id ? "message-" + message.id : undefined} tabIndex={-1}><strong>{message.role === "user" ? "You" : "Intelligence"}: </strong>{message.content}</p>
               )) : <p className="text-sm text-muted">Ask about code here. File changes still go to Build.</p>}
             </div>
             <p className="mt-3 text-xs text-muted" data-testid="human-model">Discussion uses Grok. Execution uses Adrian Build.</p>

@@ -6,9 +6,9 @@ export const Route = createFileRoute("/dashboard")({
   component: AgentCommandCenter,
   head: () => ({
     meta: [
-      { title: "Adrian's Mind · Agent Command Center" },
+      { title: "Adrian's Mind · Dashboard" },
       { name: "theme-color", content: "#080d14" },
-      { name: "description", content: "Live AI agent fleet, task queue, execution timeline, and system health." },
+      { name: "description", content: "Your connected workspaces and the public operations dashboard." },
     ],
   }),
 });

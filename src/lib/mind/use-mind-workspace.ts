@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type SetStateAction } from "react";
 import { accountImageStore } from "./media/blob-store";
+import { clearAccountDrafts } from "./use-composer-draft";
 import { createWorkspaceCheckpoint } from "./workspace-checkpoint";
 import { loadMindCopy, saveMindCopy } from "./server";
 import { chooseServerSync } from "./sync";
@@ -282,42 +283,28 @@ export function useMindWorkspace(userId: string | null = "dev-user", email: stri
     setSaveError(null);
   }
 
-  async function clearStoredCopy(next: Workspace): Promise<boolean> {
-    if (!ready || !userId || activeScope.current !== scope) return false;
-    const gen = ++persistGen.current;
+  async function clearStoredCopy(next: Workspace): Promise<string> {
+    if (!ready || !userId || activeScope.current !== scope) return "The account changed or is still loading. Reopen Settings and try again.";
+    try {
+      localStorage.setItem(accountWorkspaceKey(userId), JSON.stringify(next));
+    } catch {
+      return "This browser blocked the storage change. Its workspace was kept.";
+    }
+    ++persistGen.current;
+    followServer.current = false;
+    scope.browserBase = next;
     latest.current = next;
-    if (userId) {
-      const packed = JSON.stringify(next);
-      localStorage.setItem(accountWorkspaceKey(userId), packed);
-      scope.browserBase = next;
-    }
     setWs(next);
+    setServerHeld(true);
+    setSaveError(null);
+    const message = "This device’s workspace was cleared. Your server copy was kept.";
+    setSyncNote(message);
     try {
-      scope.images.clear();
+      clearAccountDrafts(userId);
+      await scope.images.clear();
+      return message;
     } catch {
-      // The browser has already cleared the owner's snapshot references.
-    }
-    try {
-      const result = await saveForOwner(next, gen);
-      if (gen !== persistGen.current) return false;
-      const message = saveFailureMessage(result);
-      if (!message) {
-        followServer.current = true;
-        savedJson.current = JSON.stringify(next);
-        setServerHeld(false);
-        setSaveError(null);
-        setSyncNote("This browser copy was cleared. The server copy of these records was replaced. The sign-in account was not deleted.");
-        return true;
-      }
-      setSaveError(message);
-      setSyncNote("This browser copy was cleared. The server copy was not replaced. The sign-in account was not deleted.");
-      return false;
-    } catch {
-      if (gen !== persistGen.current) return false;
-      const message = saveFailureMessage({ ok: false }) ?? SAVE_FAIL;
-      setSaveError(message);
-      setSyncNote("This browser copy was cleared. The server copy was not replaced. The sign-in account was not deleted.");
-      return false;
+      return "This device’s workspace was cleared. Draft or image removal is unconfirmed. Close other Mind OS tabs and retry.";
     }
   }
 

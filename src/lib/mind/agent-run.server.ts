@@ -79,6 +79,7 @@ export async function handleAgentRun(request: Request): Promise<Response> {
   const read = await readJsonObjectBody(request, MAX_BODY);
   if (!read.ok) return json({ ok: false, error: read.error, log: [] }, read.status);
   const body: { goal?: unknown; projects?: unknown; chats?: unknown; notes?: unknown; modelTier?: unknown; images?: unknown } = read.body;
+  if (read.body.freeOnly === true) return json({ ok: false, error: "Free-only mode prevents use of the paid agent runtime.", log: [] }, 403);
   const tierField = parseModelTierField(body.modelTier);
   if (!tierField.ok) return json({ ok: false, error: tierField.error, log: [] }, 400);
   const { haltIsOn } = await import("./halt.server");

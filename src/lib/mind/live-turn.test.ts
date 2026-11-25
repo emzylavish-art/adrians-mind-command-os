@@ -1,11 +1,21 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
-import { CHAT_DISCONNECT_REPLY, consumeMindTurn, shouldStoreReply, STOPPED_REPLY } from "./live-turn.ts";
+import { CHAT_DISCONNECT_REPLY, consumeMindTurn, prepareTurnId, shouldStoreReply, STOPPED_REPLY } from "./live-turn.ts";
 import { CHAT_TIMEOUT_REPLY } from "./turn-timeouts.ts";
 import { prepareRetry } from "./transcript.ts";
 import { emptyWorkspace } from "./workspace.ts";
 
 describe("live turn", () => {
+  it("takes its send ID from the server even when client and server clocks disagree", async () => {
+    const serverId = `1600000000000-${crypto.randomUUID()}`;
+    const id = await prepareTurnId("/turn", {}, new AbortController().signal, async (_, init) => {
+      assert.equal(init?.method, "GET");
+      assert.equal(init?.cache, "no-store");
+      return Response.json({ operationId: serverId });
+    });
+    assert.equal(id, serverId);
+  });
+
   it("shows deltas and commits only the finished reply", async () => {
     const seen: string[] = [];
     const body = new ReadableStream({
@@ -27,6 +37,28 @@ describe("live turn", () => {
     assert.deepEqual(seen, ["Hel"]);
     assert.equal(result.ok, true);
     if (result.ok) assert.equal(result.text, "Hello");
+  });
+
+  it("commits a done event while the transport is still open", async () => {
+    const controller = new AbortController();
+    let cancelled = false;
+    const body = new ReadableStream({
+      start(stream) {
+        stream.enqueue(new TextEncoder().encode('event: done\ndata: {"text":"complete","model":"fixture","usedIds":[]}\n\n'));
+      },
+      cancel() { cancelled = true; },
+    });
+    const timeout = setTimeout(() => controller.abort(), 1000);
+    try {
+      const result = await consumeMindTurn({
+        url: "/fixture", body: {}, headers: {}, signal: controller.signal, onDelta: () => {},
+        fetchImpl: async () => new Response(body, { headers: { "content-type": "text/event-stream" } }),
+      });
+      assert.equal(result.ok && result.text, "complete");
+      assert.equal(cancelled, true);
+    } finally {
+      clearTimeout(timeout);
+    }
   });
 
   it("does not keep a reply when the server reports an error", async () => {

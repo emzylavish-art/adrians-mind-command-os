@@ -29,3 +29,17 @@ describe("pdf text", () => {
     assert.equal(found.pages, 1);
   });
 });
+
+it("labels the actual page with unread glyphs even when objects are stored out of page order", async () => {
+  const result = await extractPdfText(bytes([
+    "%PDF-1.4", "1 0 obj << /Type /Catalog /Pages 2 0 R >> endobj",
+    "2 0 obj << /Type /Pages /Kids [5 0 R 3 0 R] /Count 2 >> endobj",
+    "3 0 obj << /Type /Page /Contents 4 0 R >> endobj",
+    "4 0 obj << >> stream\n<6F6B> Tj\nendstream endobj",
+    "5 0 obj << /Type /Page /Contents 6 0 R >> endobj",
+    "6 0 obj << >> stream\n(Intro) Tj\nendstream endobj", "%%EOF",
+  ].join("\n")));
+  assert.equal(result.text, "Intro");
+  assert.equal(result.partial, true);
+  assert.match(result.coverage || "", /pages 2\./);
+});

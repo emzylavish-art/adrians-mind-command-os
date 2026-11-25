@@ -1,4 +1,6 @@
 import { useEffect, useRef, useState } from "react";
+import { getBearerToken } from "@/lib/auth/client";
+import type { PublicAiProvider } from "@/lib/mind/ai-provider-config.server";
 import { SAFE_KEY_CAPABILITIES, safeKeyStatus } from "@/lib/mind/safe-keys";
 import { copyOwnerKeyFn, listOwnerKeySlotsFn } from "@/lib/mind/owner-keys-fns";
 
@@ -54,6 +56,22 @@ export function SafeKeysPanel({ slots, onCopy, openAiConfigured = false }: SafeK
     };
   }, [slots, attempt]);
 
+  const [providers, setProviders] = useState<PublicAiProvider[] | null>(null);
+  const [providerError, setProviderError] = useState(false);
+  useEffect(() => {
+    let active = true;
+    const bearer = getBearerToken();
+    setProviderError(false);
+    void fetch("/api/mind/providers", { credentials: "same-origin", cache: "no-store", headers: bearer ? { authorization: `Bearer ${bearer}` } : {} })
+      .then(async (response) => {
+        if (!response.ok) throw new Error();
+        const body = await response.json();
+        if (!body.ok || !Array.isArray(body.providers)) throw new Error();
+        if (active) setProviders(body.providers);
+      }).catch(() => { if (active) setProviderError(true); });
+    return () => { active = false; };
+  }, [attempt]);
+
   async function copySlot(id: string) {
     if (copyFlight.current) return;
     copyFlight.current = true;
@@ -87,6 +105,10 @@ export function SafeKeysPanel({ slots, onCopy, openAiConfigured = false }: SafeK
         <p className="mt-1 text-xs text-muted">
           Check which owner keys are configured. Use Connections to set up a provider.
         </p>
+      </div>
+      <div className="mb-4">
+        <h4 className="text-sm font-semibold">Account model providers</h4>
+        {providerError ? <p role="status">Provider keys could not be checked. <button onClick={() => setAttempt((n) => n + 1)}>Retry</button></p> : !providers ? <p role="status">Checking providers…</p> : !providers.length ? <p>No provider keys saved.</p> : <ul>{providers.map((row) => <li key={row.id}>{row.label} · {row.hasKey ? "Key saved" : "Key missing"} · {row.status}</li>)}</ul>}
       </div>
       <div className="mb-4" data-testid="owner-key-slots">
         <h4 className="text-sm font-semibold">Owner keys</h4>

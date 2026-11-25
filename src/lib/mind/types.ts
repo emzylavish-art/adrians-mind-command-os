@@ -19,6 +19,7 @@ export type { AgentDefinition, AgentRun, BrowserSessionRecord, DeploymentRecord,
 export type Autonomy = "ask" | "automatic";
 
 export type MsgImage = {
+  origin?: "attached" | "camera" | "generated" | "edited";
   /** Inline data URL when hydrated for display/send. May be omitted in persisted JSON when blobId is set. */
   dataUrl?: string;
   /** IndexedDB (or other blob store) key for large image bytes. Backward compatible with inline-only messages. */
@@ -35,6 +36,9 @@ export type Msg = {
   model?: string;
   provider?: string;
   requestedModel?: string;
+  routingMode?: "A" | "B" | "C" | "D";
+  deliveryOperationId?: string;
+  deliveryRoute?: { provider: string; tier: ModelTier; model: string | null; orchestrated: boolean; fingerprint: string };
   delivery?: "submitted" | "unconfirmed" | "stopped" | "failed";
   kind?: "error";
   /** Inline image attachments shown in the bubble and sent on the originating turn. */
@@ -49,6 +53,7 @@ export type Msg = {
 export type Retrieval = { at: string; ids: string[] };
 
 export type Chat = {
+  notionWorkspaceId?: string;
   id: string;
   agentId?: string;
   botProvider?: NonNullable<BotModel["chatProvider"]>;
@@ -82,6 +87,7 @@ export type MemoryItem = {
   updatedAt: string;
   archived: boolean;
   versions: MemoryVersion[];
+  alwaysApply?: boolean;
 };
 
 export type Project = {
@@ -95,11 +101,13 @@ export type UsageEntry = {
   id: string;
   chatId: string;
   at: string;
+  provider?: string;
+  requestedModel?: string;
   model: string;
   requestId: string | null;
   promptTokens: number | null;
   completionTokens: number | null;
-  kind: "actual";
+  kind: "actual" | "partial" | "unknown";
 };
 
 export type AuditEntry = {

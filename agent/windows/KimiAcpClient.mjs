@@ -1,5 +1,6 @@
 #!/usr/bin/env node
 import { mkdir, readdir, readFile, rename, rm, stat, writeFile } from "node:fs/promises";
+import { createHash } from "node:crypto";
 import { spawn } from "node:child_process";
 import { createInterface } from "node:readline";
 import { isAbsolute, relative, resolve } from "node:path";
@@ -16,8 +17,8 @@ if (!configPath || !jobPath) {
   process.exit(2);
 }
 
-const config = JSON.parse(await readFile(configPath, "utf8"));
-const job = JSON.parse(await readFile(jobPath, "utf8"));
+const config = JSON.parse((await readFile(configPath, "utf8")).replace(/^\uFEFF/, ""));
+const job = JSON.parse((await readFile(jobPath, "utf8")).replace(/^\uFEFF/, ""));
 const payload = job.payload && typeof job.payload === "object" ? job.payload : {};
 const prompt = typeof payload.prompt === "string" ? payload.prompt : "";
 const operation = typeof payload.operation === "string" ? payload.operation : "";
@@ -25,14 +26,7 @@ const allowedRoots = Array.isArray(config.allowedRoots) ? config.allowedRoots.fi
 const root = resolve(String(payload.cwd || allowedRoots[0] || process.cwd()));
 const kimiCommand = String(config.kimiPath || "kimi");
 const dashboardUrl = String(config.dashboardUrl || "").replace(/\/$/, "");
-const token = String(config.token || "");
-
-if (job.kind === "kimi-acp" && !prompt) throw new Error("Kimi job has no prompt.");
-if (job.kind === "file-op" && !["list", "read", "write", "search", "rename", "delete"].includes(operation)) throw new Error("Unsupported file operation.");
-if (!dashboardUrl || !token) throw new Error("Companion config is missing dashboardUrl or token.");
-if (!allowedRoots.some((allowed) => isWithin(root, resolve(allowed)))) {
-  throw new Error("Requested Kimi workspace is outside the Companion allowed roots.");
-}
+const token = String(config.jobToken || (!config.tokenId && config.token) || "");
 
 function isWithin(candidate, allowed) {
   const rel = relative(allowed, candidate);
@@ -42,7 +36,7 @@ function isWithin(candidate, allowed) {
 function safePath(rawPath) {
   if (typeof rawPath !== "string" || !rawPath.trim()) return null;
   const candidate = resolve(root, rawPath);
-  return allowedRoots.some((allowed) => isWithin(candidate, resolve(allowed))) ? candidate : null;
+  return isWithin(candidate, root) ? candidate : null;
 }
 
 async function post(path, body) {
@@ -69,6 +63,12 @@ async function event(type, payloadValue = {}) {
   }
 }
 
+// Device + inode distinguish most same-name replacements; timestamps also catch
+// edits and inode reuse. Keep the token opaque to the editor.
+function fileRevision(info) {
+  return createHash("sha256").update([info.dev, info.ino, info.birthtimeNs, info.ctimeNs, info.size].join(":")).digest("hex");
+}
+
 async function listWorkspace(directory, prefix = "", output = []) {
   if (output.length >= 500) return output;
   for (const entry of await readdir(directory, { withFileTypes: true })) {
@@ -77,8 +77,8 @@ async function listWorkspace(directory, prefix = "", output = []) {
     const fullPath = resolve(directory, entry.name);
     if (entry.isDirectory()) await listWorkspace(fullPath, relativePath, output);
     else {
-      const info = await stat(fullPath);
-      output.push({ path: relativePath, bytes: info.size });
+      const info = await stat(fullPath, { bigint: true });
+      output.push({ path: relativePath, bytes: Number(info.size), revision: fileRevision(info) });
     }
     if (output.length >= 500) break;
   }
@@ -105,36 +105,54 @@ async function runFileOperation() {
       if (file.path.toLowerCase().includes(query) || text.toLowerCase().includes(query)) matches.push({ path: file.path, bytes: file.bytes });
     }
     await event("file_search", { count: matches.length });
-    return JSON.stringify({ operation, query: payload.query, matches });
+    return JSON.stringify({ operation, cwd: root, query: payload.query, matches });
   }
   const path = safePath(payload.path);
   if (!path) throw new Error("Requested file path is outside the approved workspace.");
   if (operation === "rename" || operation === "delete") {
     if (payload.confirm !== true) throw new Error("Explicit confirmation is required.");
+    const reviewed = fileRevision(await stat(path, { bigint: true }));
+    if (typeof payload.expectedRevision === "string" && payload.expectedRevision !== reviewed) {
+      throw new Error("The reviewed file changed or was replaced. Review the current file before continuing.");
+    }
     if (operation === "delete") {
       await rm(path, { force: false });
       await event("file_delete", { path: payload.path });
-      return JSON.stringify({ operation, path: payload.path, deleted: true });
+      return JSON.stringify({ operation, cwd: root, path: payload.path, deleted: true });
     }
     const target = safePath(payload.to);
     if (!target) throw new Error("Rename target is outside the approved workspace.");
     await mkdir(resolve(target, ".."), { recursive: true });
     await rename(path, target);
     await event("file_rename", { from: payload.path, to: payload.to });
-    return JSON.stringify({ operation, from: payload.path, to: payload.to });
+    return JSON.stringify({ operation, cwd: root, from: payload.path, to: payload.to });
   }
   if (operation === "read") {
-    const content = (await readFile(path, "utf8")).slice(0, 1_000_000);
+    const revision = fileRevision(await stat(path, { bigint: true }));
+    const content = await readFile(path, "utf8");
+    if (fileRevision(await stat(path, { bigint: true })) !== revision) throw new Error("File changed during read. Reopen it.");
+    if (content.length > 1_000_000) throw new Error("File exceeds the editor limit. The full file must be reviewed before editing.");
     await event("file_read", { path: payload.path, bytes: content.length });
-    return JSON.stringify({ operation, path: payload.path, content });
+    return JSON.stringify({ operation, cwd: root, path: payload.path, revision, content });
   }
   if (typeof payload.content !== "string" || payload.content.length > 1_000_000) throw new Error("File content is missing or too large.");
   let before = "";
-  try { before = (await readFile(path, "utf8")).slice(0, 1_000_000); } catch { /* new file */ }
+  let exists = true;
+  try {
+    before = await readFile(path, "utf8");
+  } catch (error) {
+    if (error.code !== "ENOENT") throw error;
+    exists = false;
+  }
+  if (before.length > 1_000_000) throw new Error("Existing file exceeds the editor limit. Nothing was written.");
+  if (payload.expectedMissing === true && exists) throw new Error("File already exists. Choose a new name.");
+  if (typeof payload.expectedContent === "string" && (!exists || before !== payload.expectedContent)) {
+    throw new Error("The file changed since it was opened. Review it before saving.");
+  }
   await mkdir(resolve(path, ".."), { recursive: true });
-  await writeFile(path, payload.content, "utf8");
+  await writeFile(path, payload.content, { encoding: "utf8", flag: payload.expectedMissing === true ? "wx" : "w" });
   await event("file_write", { path: payload.path, bytes: payload.content.length, reviewed: true });
-  return JSON.stringify({ operation, path: payload.path, before, after: payload.content });
+  return JSON.stringify({ operation, cwd: root, path: payload.path, revision: fileRevision(await stat(path, { bigint: true })), before, after: payload.content });
 }
 
 async function runShellOperation() {
@@ -208,22 +226,13 @@ async function handleAgentRequest(message) {
     }
   }
   if (method === "fs/write_text_file") {
-    const path = safePath(params.path);
-    if (!path) return respondError(message.id, -32003, "File path is outside the approved workspace.");
-    if (typeof params.content !== "string" || params.content.length > 1_000_000) {
-      return respondError(message.id, -32602, "File content is missing or too large.");
-    }
-    try {
-      await writeFile(path, params.content, "utf8");
-      await event("file_write", { path: params.path, bytes: params.content.length });
-      return respond(message.id, {});
-    } catch (error) {
-      return respondError(message.id, -32004, error instanceof Error ? error.message : "File write failed.");
-    }
+    // This worker has no ACP owner-approval bridge. Explicit reviewed file jobs
+    // use runFileOperation and do not flow through an agent reverse request.
+    return respondError(message.id, -32003, "Use a reviewed file operation to write to the paired workspace.");
   }
   if (method === "session/request_permission") {
     await event("permission_request", { request: params });
-    return respond(message.id, { outcome: "cancelled" });
+    return respond(message.id, { outcome: { outcome: "cancelled" } });
   }
   if (method === "terminal/create" || method === "terminal/output" || method === "terminal/release" || method === "terminal/kill" || method === "terminal/wait_for_exit") {
     await event("terminal_request", { method, request: params, decision: "denied" });
@@ -234,16 +243,21 @@ async function handleAgentRequest(message) {
 }
 
 async function main() {
+  if (job.kind === "kimi-acp" && !prompt) throw new Error("Kimi job has no prompt.");
+  if (job.kind === "file-op" && !["list", "read", "write", "search", "rename", "delete"].includes(operation)) throw new Error("Unsupported file operation.");
+  if (!dashboardUrl || !token) throw new Error("Companion config is missing dashboardUrl or token.");
+  if (!allowedRoots.some((allowed) => isWithin(root, resolve(allowed)))) {
+    throw new Error("Requested Kimi workspace is outside the Companion allowed roots.");
+  }
+
   if (job.kind === "shell") {
     const result = await runShellOperation();
-    await post("/api/mind/pc/result", { jobId: job.id, ok: true, output: result });
-    return;
+    return result;
   }
   if (job.kind === "file-op") {
     const result = await runFileOperation();
     await event("session_complete", { kind: "file-op" });
-    await post("/api/mind/pc/result", { jobId: job.id, ok: true, output: result });
-    return;
+    return result;
   }
   await event("runtime_start", { command: "kimi acp", cwd: root });
   child = spawn(kimiCommand, ["acp"], {
@@ -291,7 +305,7 @@ async function main() {
   const initialized = await request("initialize", {
     protocolVersion: 1,
     clientInfo: { name: "Adrian OS Windows Companion", version: "1.0.0" },
-    clientCapabilities: { fs: { readTextFile: true, writeTextFile: true }, terminal: false },
+    clientCapabilities: { fs: { readTextFile: true, writeTextFile: false }, terminal: false },
   });
   await event("initialized", { agentInfo: initialized?.agentInfo || {}, agentCapabilities: initialized?.agentCapabilities || {} });
   const session = await request("session/new", { cwd: root, mcpServers: [], additionalDirectories: [] });
@@ -312,14 +326,57 @@ async function main() {
   try { await request("session/close", { sessionId }, 30_000); } catch { /* best effort */ }
   child.stdin.end();
   if (!closed) child.kill();
-  await post("/api/mind/pc/result", { jobId: job.id, ok: true, output: output || "Kimi completed without an assistant text chunk." });
+  return output || "Kimi completed without an assistant text chunk.";
 }
 
-try {
-  await main();
-} catch (error) {
-  const message = error instanceof Error ? error.message : String(error);
-  await event("runtime_error", { error: message });
-  try { await post("/api/mind/pc/result", { jobId: job.id, ok: false, error: message }); } catch (reportError) { console.error(reportError); }
+async function getReceipt(path) {
+  try { return await readFile(path, "utf8"); }
+  catch (error) { if (error.code === "ENOENT") return null; throw error; }
+}
+
+async function deliver() {
+  const started = jobPath + ".started";
+  const resultPath = jobPath + ".result";
+  const existing = await getReceipt(resultPath);
+  let result;
+  if (existing !== null) {
+    result = JSON.parse(existing);
+    if (result.jobId !== job.id) throw new Error("Mismatched local result receipt.");
+  } else {
+    try {
+      await writeFile(started, JSON.stringify({ jobId: job.id, pid: process.pid }), { flag: "wx", mode: 0o600, flush: true });
+    } catch (error) {
+      if (error.code !== "EEXIST") throw error;
+      const previous = JSON.parse(await readFile(started, "utf8"));
+      if (previous.jobId !== job.id) throw new Error("Mismatched local start receipt.");
+      try {
+        process.kill(previous.pid, 0);
+        throw new Error("The previous worker may still be active. Waiting for its result.");
+      } catch (probeError) {
+        if (probeError.code !== "ESRCH") throw probeError;
+      }
+      result = { jobId: job.id, ok: false, error: "The worker stopped before recording the outcome. Check the workspace before retrying; this job was not repeated." };
+    }
+    if (!result) {
+      try {
+        const status = await jobStatus();
+        if (status?.job?.status !== "running") throw new Error("Job is no longer active or its status could not be verified.");
+        result = { jobId: job.id, ok: true, output: await main() };
+      } catch (error) {
+        const message = error instanceof Error ? error.message : String(error);
+        await event("runtime_error", { error: message });
+        result = { jobId: job.id, ok: false, error: message };
+      }
+    }
+    await writeFile(resultPath + ".new", JSON.stringify(result), { mode: 0o600, flush: true });
+    await rename(resultPath + ".new", resultPath);
+  }
+  const ack = await post("/api/mind/pc/result", result);
+  if (!ack.ok) throw new Error("Dashboard did not acknowledge the saved outcome.");
+}
+
+try { await deliver(); }
+catch (error) {
+  console.error(error instanceof Error ? error.message : String(error));
   process.exitCode = 1;
 }

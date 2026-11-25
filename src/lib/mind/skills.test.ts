@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import { emptyWorkspace } from "./workspace.ts";
-import { runSkill, searchSkills } from "./skills.ts";
+import { runRequestedSkill, runSkill, searchSkills } from "./skills.ts";
 
 describe("skills", () => {
   it("lists a built-in skill and does not mark Notion installed", () => {
@@ -26,4 +26,13 @@ describe("skills", () => {
     assert.equal(runSkill(ws, notion, true).ok, false);
     assert.match(runSkill(ws, notion, true).text, /not installed/);
   });
+});
+
+it("keeps chat skill search arguments and reports a disabled skill as failed", () => {
+  const ws = emptyWorkspace();
+  assert.equal(runRequestedSkill(ws, "use note search skill to find invoices", { notes: false }).ok, false);
+  const result = runRequestedSkill(ws, "use note search skill to find invoices", {});
+  assert.equal(result.ok, true);
+  assert.match(result.text, /No matching notes/);
+  assert.equal(runRequestedSkill(ws, "use note search skill", {}).ok, false);
 });

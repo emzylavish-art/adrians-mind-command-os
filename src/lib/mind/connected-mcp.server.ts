@@ -1,5 +1,7 @@
+import { createHash, randomUUID } from "node:crypto";
 import {
   callCustomConnection,
+  validateArgs,
   listCustomConnections,
   saveCustomConnection,
   type PublicConnection,
@@ -22,14 +24,14 @@ async function halted(userId: string, deps: Dependencies): Promise<boolean> {
 /** Deliberate legacy UI DTO: no URL, bearer, ciphertext or registry internals. */
 export function connectedMcpPublic(connection: PublicConnection): McpPublic {
   const schemaReady = connection.operations.some((operation) => operation.compatible && operation.inputSchema);
-  const ready = connection.state === "ready" && schemaReady && !connection.error;
+  const ready = connection.enabled !== false && connection.state === "ready" && schemaReady && !connection.error;
   return {
     id: connection.id,
     label: connection.label,
     host: connection.host,
     state: ready ? "connected" : connection.state === "unchecked" ? "unchecked" : "failed",
-    tools: connection.operations.map(({ name, description }) => ({ name, description })),
-    error: connection.error || (connection.state === "ready" && !schemaReady ? "No compatible tool schema is saved. Reconnect before calling tools." : ""),
+    tools: connection.operations.filter((op) => op.compatible && op.inputSchema).map(({ name, description }) => ({ name, description })),
+    error: connection.enabled === false ? "This connection is disabled." : connection.error || (connection.state === "ready" && !schemaReady ? "No compatible tool schema is saved. Reconnect before calling tools." : ""),
   };
 }
 
@@ -64,7 +66,7 @@ export async function removeConnectedMcp(db: RegistryDb | null, userId: string, 
   return listConnectedMcp(db, userId);
 }
 
-type TurnResult = { ok: boolean; needsConfirmation: boolean; servers: McpPublic[]; text: string; error: string };
+type TurnResult = { approvalId?: string; approvalServerId?: string; ok: boolean; needsConfirmation: boolean; servers: McpPublic[]; text: string; error: string };
 
 /** Chat uses the same durable rows and schema/confirmation enforcement as Tools. */
 export async function runConnectedMcpTurn(input: {
@@ -72,6 +74,8 @@ export async function runConnectedMcpTurn(input: {
   userId: string;
   text: string;
   confirmed: boolean;
+  approvalServerId?: string;
+  approvalId?: string;
 } & Dependencies): Promise<TurnResult> {
   const refused = (error: string, servers: McpPublic[] = [], needsConfirmation = false): TurnResult => ({ ok: false, needsConfirmation, servers, text: "", error });
   if (!input.db) return refused(NO_DB);
@@ -89,14 +93,16 @@ export async function runConnectedMcpTurn(input: {
       ok: !failed,
       needsConfirmation: false,
       servers,
-      text: servers.filter((server) => enabledIds.has(server.id)).flatMap((server) => server.tools.map((tool) => `${server.label}: ${tool.name}`)).join("\n"),
+      text: servers.filter((server) => enabledIds.has(server.id) && server.state === "connected").flatMap((server) => server.tools.map((tool) => `${server.label}: ${tool.name}`)).join("\n"),
       error: failed?.error || (failed ? "An MCP connection is not ready. Reconnect on Connected." : ""),
     };
   }
-  const candidates = connections.filter((connection) => enabledIds.has(connection.id) && connectedMcpPublic(connection).state === "connected" && connection.operations.some((operation) => operation.name === intent.tool));
+  if (input.confirmed && !input.approvalServerId) return refused("Select the connection again to confirm this call.", servers);
+  const requestedId = input.approvalServerId || intent.serverId;
+  if (intent.serverId && requestedId !== intent.serverId) return refused("The reviewed connection does not match the request.", servers);
+  const candidates = connections.filter((connection) => (!requestedId || requestedId === connection.id) && enabledIds.has(connection.id) && (connectedMcpPublic(connection).state === "connected" || (Boolean(requestedId) && connection.state === "unauthorized")) && connection.operations.some((operation) => operation.name === intent.tool && operation.compatible));
   if (candidates.length !== 1) return refused(candidates.length ? "That tool name is ambiguous across saved servers. Select a connection in Tools. Nothing was called." : "That tool is not available on a ready, enabled MCP connection. Nothing was called.", servers);
   const target = candidates[0];
-  if (!input.confirmed) return refused(`Call “${intent.tool}” on ${target.label} only after you confirm. Nothing was called.`, servers, true);
   let args: Record<string, unknown>;
   try {
     const parsed: unknown = JSON.parse(intent.args || "{}");
@@ -105,8 +111,23 @@ export async function runConnectedMcpTurn(input: {
   } catch {
     return refused("Use JSON object arguments matching the tool schema. A generic text argument was not assumed. Nothing was called.", servers);
   }
+  const operation = target.operations.find((item) => item.name === intent.tool);
+  if (!operation?.inputSchema) return refused("This tool has no supported argument schema.", servers);
+  const checked = validateArgs(operation.inputSchema, args);
+  if (!checked.ok) return refused(checked.error, servers);
+  const hash = createHash("sha256").update(JSON.stringify([target.id, intent.tool, checked.args])).digest("hex");
+  if (!input.confirmed) {
+    const approvalId = randomUUID();
+    await input.db.query("DELETE FROM mind_mcp_call_approvals WHERE expires_at <= now()");
+    await input.db.query("INSERT INTO mind_mcp_call_approvals (approval_id, owner_id, request_hash, expires_at) VALUES ($1,$2,$3,now()+interval '10 minutes')", [approvalId, input.userId, hash]);
+    return { ...refused(`Call “${intent.tool}” on ${target.label} only after you confirm. Nothing was called.`, servers, true), approvalServerId: target.id, approvalId };
+  }
+  if (!input.approvalId || !/^[0-9a-f-]{36}$/.test(input.approvalId)) return refused("Review the exact call again.", servers);
+  const consumed = await input.db.query("DELETE FROM mind_mcp_call_approvals WHERE approval_id=$1 AND owner_id=$2 AND request_hash=$3 AND expires_at>now() RETURNING approval_id", [input.approvalId, input.userId, hash]);
+  if (!consumed.length) return refused("The call changed or its approval expired or was already used. Review it again.", servers);
   // Recheck immediately before dispatch; do not weaken the wrapper's halt gate.
   if (await halted(input.userId, input)) return refused(STOPPED, servers);
   const result = await callCustomConnection({ ...input, id: target.id, operation: intent.tool, args });
-  return { ok: result.ok, needsConfirmation: false, servers, text: result.ok ? result.text : "", error: result.ok ? "" : result.text };
+  const latest = result.connection;
+  return { ok: result.ok, needsConfirmation: false, servers: latest ? servers.map((server) => server.id === latest.id ? connectedMcpPublic(latest) : server) : servers, text: result.ok ? result.text : "", error: result.ok ? "" : result.text };
 }

@@ -234,3 +234,19 @@ dl { grid-template-columns: 1fr 1fr; margin: 12px 0 0; }
   form { grid-template-columns: 1fr 1fr auto; align-items: end; }
   form button { height: 46px; }
 }
+
+html[data-theme="light"] {
+  --ink: #f8f7fa; --paper: #201b26; --panel: #fff; --muted: #63586b;
+  --line: #c7becd; --violet: #6141a1; --live: #31714c; --stop: #9c322d;
+}
+html[data-theme="light"] :is(.top, .dock, .sidebar) { background-color: var(--panel); }
+html[data-theme="light"] :is(.state.down, button.danger) { color: var(--stop); }
+html[data-theme="light"] .state.up { color: var(--live); }
+html[data-theme="light"] :is(.section-nav button.on, .dock button.on, button[data-approve], .primary) { color: #fff; }
+html[data-theme="light"] :is(input, textarea) { background: var(--panel); color: var(--paper); }
+
+html[data-theme="light"] :is(button[data-action="stop"], button[data-account-action="stop"], button[data-reject]) { color: var(--stop); }
+html[data-theme="light"] :is(button, a.button) { color: white; }
+html[data-theme="light"] :is(.nav, .map button, .section-nav button, .dock button, button[data-action="pause"], button[data-account-action="pause"]) { color: var(--paper); }
+html[data-theme="light"] :is(.section-nav button.on, .dock button.on, button[data-approve], #save-connect) { color: white; }
+html[data-theme="light"] :is(button[data-action="stop"], button[data-account-action="stop"], button[data-reject]) { color: var(--stop); }

@@ -10,6 +10,48 @@ describe("SharedAudioOutput", () => {
     assert.equal(out.isPlaying, false);
   });
 
+  it("plays PCM chunks consecutively, changes gain during playback, and resets the timeline after interruption", async () => {
+    const starts: number[] = [];
+    const gain = { gain: { value: 1 }, connect() {} };
+    const sources: { onended: (() => void) | null; stop(): void }[] = [];
+    class TestContext {
+      state = "running";
+      currentTime = 5;
+      destination = {};
+      createGain() { return gain; }
+      createBuffer() { return { duration: 0.25, getChannelData: () => new Float32Array(1) }; }
+      createBufferSource() {
+        const source = {
+          onended: null as (() => void) | null,
+          playbackRate: { value: 1 },
+          connect(target: unknown) { assert.equal(target, gain); },
+          start(time: number) { starts.push(time); },
+          stop() { this.onended?.(); },
+        };
+        sources.push(source);
+        return source;
+      }
+    }
+    const original = globalThis.AudioContext;
+    globalThis.AudioContext = TestContext as unknown as typeof AudioContext;
+    try {
+      const out = new SharedAudioOutput();
+      const first = out.playPcm16(new Uint8Array(2));
+      const second = out.playPcm16(new Uint8Array(2));
+      assert.deepEqual(starts, [5, 5.25]);
+      out.setOutputVolume(0);
+      assert.equal(gain.gain.value, 0);
+      out.interrupt();
+      await Promise.all([first, second]);
+      const third = out.playPcm16(new Uint8Array(2));
+      assert.deepEqual(starts, [5, 5.25, 5]);
+      sources[2].onended?.();
+      await third;
+    } finally {
+      globalThis.AudioContext = original;
+    }
+  });
+
   it("interrupt resolves an in-flight playMpegBase64 await (Speak cutoff)", async () => {
     const out = new SharedAudioOutput();
     // Minimal valid-looking base64 so decode succeeds; Audio may not exist in node.

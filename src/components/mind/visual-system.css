@@ -415,6 +415,8 @@ html[data-theme="light"] .provider-identity {
 
 /* Home and Chat share one viewport. Only the transcript and oversized panels scroll. */
 #mind-workspace:is([data-view="chat"], [data-view="command"]) {
+  position: relative;
+  top: var(--mind-visible-top, 0px);
   height: var(--mind-visible-height, 100dvh) !important;
   min-height: 0 !important;
   max-height: var(--mind-visible-height, 100dvh) !important;
@@ -476,11 +478,11 @@ html[data-theme="light"] .provider-identity {
   gap: 4px;
 }
 #chat-thread form.thread-composer {
-  flex: 0 1 auto !important;
+  flex: 0 0 auto !important;
   max-height: min(68%, 330px) !important;
   padding: 6px 10px !important;
   gap: 4px !important;
-  overflow: hidden !important;
+  overflow-y: auto !important;
 }
 #chat-thread .next-guesses {
   position: static !important;
@@ -622,7 +624,7 @@ html[data-theme="light"] .provider-identity {
 #command-home .composer-more { display: block !important; }
 #command-home .composer-toolbar { order: 3; }
 #command-home textarea { order: 0; }
-#command-home .composer-more__menu :is(.composer-effort, label:has(select)) { display: flex !important; }
+#command-home .composer-more__menu label:has(select):not(.composer-effort-field) { display: flex !important; }
 
 /* A compact task hierarchy for the main workspace. The same colors and spacing
  * carry through the launcher, conversation and the saved-work surfaces. */
@@ -1214,4 +1216,41 @@ html[data-theme="light"] #mind-workspace #command-home .masthead {
     flex: 1 1 5.5rem !important;
     padding-inline: 6px !important;
   }
+}
+
+/* Keep the chat settings readable inside the narrow popover. */
+:is(#chat-thread, #command-home) .composer-more__menu [data-menu-cluster="Chat"] > .composer-effort {
+  display: grid !important;
+  flex: 0 0 100%;
+  width: 100%;
+  min-width: 0;
+  max-height: none;
+  overflow: visible;
+  gap: 0.5rem;
+  padding: 0.25rem 0.35rem;
+}
+:is(#chat-thread, #command-home) .composer-more__menu .composer-effort-field {
+  display: grid !important;
+  grid-template-columns: minmax(3.25rem, auto) minmax(0, 1fr);
+  align-items: center;
+  gap: 0.75rem;
+  font-size: 0.875rem;
+}
+.composer-effort-field select {
+  min-width: 0;
+  width: 100%;
+  min-height: 44px;
+  padding-inline: 0.65rem;
+  border: 1px solid var(--workspace-line);
+  border-radius: 0.75rem;
+  background: var(--mind-canvas);
+  color: var(--mind-copy);
+  font: inherit;
+}
+.composer-effort-description {
+  margin: 0;
+  color: var(--mind-muted);
+  font-size: 0.875rem;
+  line-height: 1.45;
+  overflow-wrap: anywhere;
 }

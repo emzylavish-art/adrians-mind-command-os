@@ -35,29 +35,31 @@ function Test-AgentIntegrity {
   }
 }
 
-function Send-JobResult($jobId, [bool]$ok, [string]$output, [string]$error) {
-  $uri = $cfg.dashboardUrl.TrimEnd("/") + "/api/mind/pc/result"
-  $body = @{ jobId = $jobId; ok = $ok; output = $output; error = $error } | ConvertTo-Json
-  try { Invoke-RestMethod -Method Post -Uri $uri -Headers @{ Authorization = "Bearer $($cfg.token)" } -Body $body -ContentType "application/json" | Out-Null }
-  catch { Write-AgentLog "Job result error: $($_.Exception.Message)" }
-}
-
-function Invoke-KimiJob($job) {
-  if (Test-LocalStop) { Send-JobResult $job.id $false "" "Emergency stop is on."; return }
-  $jobFile = Join-Path $AgentRoot ("kimi-job-" + $job.id + ".json")
-  try {
-    $job | ConvertTo-Json -Depth 12 | Set-Content -Path $jobFile -Encoding utf8
-    $node = if ($cfg.nodePath) { [string]$cfg.nodePath } else { "node" }
-    if ($cfg.kimiPath) { Write-AgentLog "Starting Kimi ACP via configured CLI $($cfg.kimiPath)" }
-    Write-AgentLog "Starting Companion job $($job.id) ($($job.kind))"
-    & $node $KimiClientPath --config $ConfigPath --job-json $jobFile 2>&1 | ForEach-Object { Write-AgentLog ([string]$_) }
-    if ($LASTEXITCODE -ne 0) { Write-AgentLog "Kimi ACP worker exited with code $LASTEXITCODE; worker attempted to report the failure." }
-  } catch {
-    Write-AgentLog "Kimi ACP launch failed: $($_.Exception.Message)"
-    Send-JobResult $job.id $false "" $_.Exception.Message
-  } finally {
-    Remove-Item -Force -ErrorAction SilentlyContinue $jobFile
+function Invoke-PendingJob {
+  $uri = $cfg.dashboardUrl.TrimEnd("/") + "/api/mind/pc/jobs"
+  $headers = @{ Authorization = "Bearer $jobToken" }
+  if (-not (Test-Path $pendingFile)) {
+    # An offer leaves the server record queued until our local receipt is durable.
+    $offer = Invoke-RestMethod -Method Get -Uri ($uri + "?delivery=offer") -Headers $headers
+    if (-not $offer.job) { return }
+    if (-not $offer.offered) { throw "Dashboard does not support recoverable job delivery; update dashboard before running this Companion." }
+    $job = $offer.job
+    $job | Add-Member -NotePropertyName receiptId -NotePropertyValue ([guid]::NewGuid().ToString("N"))
+    [IO.File]::WriteAllText(($pendingFile + ".new"), ($job | ConvertTo-Json -Depth 12), [Text.UTF8Encoding]::new($false))
+    [IO.File]::Move(($pendingFile + ".new"), $pendingFile)
   }
+  $job = Get-Content -Raw -Encoding UTF8 $pendingFile | ConvertFrom-Json
+  $body = @{jobId = $job.id; receiptId = $job.receiptId} | ConvertTo-Json
+  $ack = Invoke-RestMethod -Method Post -Uri $uri -Headers $headers -Body $body -ContentType "application/json"
+  if (-not $ack.ok) { throw "Job acceptance could not be confirmed." }
+  if ($ack.accepted -and $ack.status -in @("running","cancel_requested")) {
+    if (Test-LocalStop) { return }
+    $node = if ($cfg.nodePath) { [string]$cfg.nodePath } else { "node" }
+    & $node $KimiClientPath --config $ConfigPath --job-json $pendingFile 2>&1 | ForEach-Object { Write-AgentLog ([string]$_) }
+    if ($LASTEXITCODE -ne 0) { return } # Keep receipt for reconciliation after reconnect.
+  }
+  Remove-Item -Force -ErrorAction SilentlyContinue ($pendingFile + ".result"), ($pendingFile + ".result.new"), ($pendingFile + ".started")
+  Remove-Item -Force $pendingFile
 }
 
 if (-not (Test-Path $ConfigPath)) { Write-AgentLog "Missing config; exiting."; exit 1 }
@@ -68,28 +70,36 @@ $isLocal = ($dashUri.Host -eq "localhost") -or ($dashUri.Host -eq "127.0.0.1")
 if ($dashUri.Scheme -ne "https" -and -not ($dashUri.Scheme -eq "http" -and $isLocal)) { Write-AgentLog "Refusing non-TLS dashboard URL."; exit 4 }
 Write-AgentLog "Agent starting for device $($cfg.deviceId)"
 
-while ($true) {
-  if (Test-LocalStop) { Write-AgentLog "Local emergency stop flag present; exiting."; exit 2 }
-  try { Test-AgentIntegrity } catch { Write-AgentLog $_.Exception.Message; exit 5 }
+# A second agent loop must never consume or remove the first loop's receipt.
+$jobToken = if ($cfg.jobToken) { $cfg.jobToken } elseif (-not $cfg.tokenId) { $cfg.token } else { $null }
+if (-not $jobToken) { Write-AgentLog "Signed device pairing is enabled. Build job polling requires separate owner enrollment." }
+$receiptDir = Join-Path $AgentRoot ("delivery-" + [Convert]::ToBase64String([Text.Encoding]::UTF8.GetBytes([string]$cfg.deviceId)).TrimEnd("=").Replace("/", "_").Replace("+", "-"))
+[IO.Directory]::CreateDirectory($receiptDir) | Out-Null
+$pendingFile = Join-Path $receiptDir "pending.json"
+$loopLock = [IO.File]::Open((Join-Path $receiptDir "agent.lock"), "OpenOrCreate", "ReadWrite", "None")
+try {
+  while ($true) {
+    if (Test-LocalStop) { Write-AgentLog "Local emergency stop flag present; exiting."; exit 2 }
+    try { Test-AgentIntegrity } catch { Write-AgentLog $_.Exception.Message; exit 5 }
 
-  try {
-    $hbUri = $cfg.dashboardUrl.TrimEnd("/") + "/api/mind/pairing/heartbeat"
-    $hbBody = @{ token = $cfg.token; publicKeyFingerprint = $cfg.publicKeyFingerprint } | ConvertTo-Json
-    $hb = Invoke-RestMethod -Method Post -Uri $hbUri -Body $hbBody -ContentType "application/json"
-    if (-not $hb.ok) {
-      Write-AgentLog "Heartbeat rejected: $($hb.error)"
-      if ($hb.error -match "stop|revoked|invalid|fingerprint|binding") { exit 3 }
+    if ($cfg.tokenId) {
+      try {
+        $hbUri = $cfg.dashboardUrl.TrimEnd("/") + "/api/mind/pairing/heartbeat"
+        $hbBody = @{ token = $cfg.token; publicKeyFingerprint = $cfg.publicKeyFingerprint } | ConvertTo-Json
+        $hb = Invoke-RestMethod -Method Post -Uri $hbUri -Body $hbBody -ContentType "application/json"
+        if (-not $hb.ok) {
+          Write-AgentLog "Heartbeat rejected: $($hb.error)"
+          if ($hb.error -match "stop|revoked|invalid|fingerprint|binding") { exit 3 }
+          Start-Sleep -Seconds 5
+          continue
+        }
+      } catch { Write-AgentLog "Heartbeat error: $($_.Exception.Message)"; Start-Sleep -Seconds 5; continue }
+
     }
-  } catch { Write-AgentLog "Heartbeat error: $($_.Exception.Message)" }
+    try {
+      if ($jobToken) { Invoke-PendingJob }
+    } catch { Write-AgentLog "Job poll error: $($_.Exception.Message)" }
 
-  try {
-    $jobsUri = $cfg.dashboardUrl.TrimEnd("/") + "/api/mind/pc/jobs"
-    $jobs = Invoke-RestMethod -Method Get -Uri $jobsUri -Headers @{ Authorization = "Bearer $($cfg.token)" }
-    if ($jobs.ok -and $jobs.job) {
-      if ($jobs.job.kind -eq "kimi-acp" -or $jobs.job.kind -eq "file-op" -or $jobs.job.kind -eq "shell") { Invoke-KimiJob $jobs.job }
-      else { Send-JobResult $jobs.job.id $false "" "Unsupported Companion job kind." }
-    }
-  } catch { Write-AgentLog "Job poll error: $($_.Exception.Message)" }
-
-  Start-Sleep -Seconds 5
-}
+    Start-Sleep -Seconds 5
+  }
+} finally { $loopLock.Dispose() }

@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import { resetAppearance, resetVoice, THEME_KEY, FAILOVER_KEY, SPEAK_RATE_KEY, APPEARANCE_DEFAULTS, VOICE_DEFAULTS } from "./settings-reset.ts";
-import { VOICE_SETTINGS_KEY } from "./voice/settings.ts";
+import { loadVoiceSettings, saveVoiceSettings, VOICE_SETTINGS_KEY } from "./voice/settings.ts";
 
 function memory() {
   const values = new Map<string, string>();
@@ -39,4 +39,17 @@ describe("settings section reset", () => {
     assert.equal(voice.voiceId, "eve");
     assert.equal(storage.getItem(SPEAK_RATE_KEY), "natural");
   });
+});
+
+it("keeps Push to Talk across both controls and clears legacy activation on reset", () => {
+  const storage = memory();
+  storage.setItem("adrian-speak-activation", "push");
+  assert.equal(loadVoiceSettings(storage).activation, "push_to_talk");
+  saveVoiceSettings(storage, { ...VOICE_DEFAULTS, activation: "isolation" });
+  assert.equal(loadVoiceSettings(storage).activation, "isolation");
+  saveVoiceSettings(storage, { ...VOICE_DEFAULTS, activation: "push_to_talk" });
+  assert.equal(storage.getItem("adrian-speak-activation"), "push");
+  resetVoice(storage);
+  assert.equal(loadVoiceSettings(storage).activation, "default");
+  assert.equal(storage.getItem("adrian-speak-activation"), "default");
 });

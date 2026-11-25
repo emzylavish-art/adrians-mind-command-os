@@ -16,6 +16,11 @@ export class SharedAudioOutput {
   private ctx: AudioContext | null = null;
   private sources: AudioBufferSourceNode[] = [];
   private stopped = false;
+  private outputGain: GainNode | null = null;
+  private outputVolume = 1;
+  private pcmRate = 1;
+  private nextChunkAt = 0;
+  private generation = 0;
   private playing = false;
   private onEnded: (() => void) | null = null;
   private htmlAudio: HTMLAudioElement | null = null;
@@ -47,22 +52,43 @@ export class SharedAudioOutput {
     this.onEnded = listener;
   }
 
+  setPcmRate(rate: number) {
+    if (Number.isFinite(rate)) this.pcmRate = Math.max(0.7, Math.min(1.5, rate));
+  }
+
+  setOutputVolume(level: number) {
+    if (!Number.isFinite(level)) return;
+    this.outputVolume = Math.max(0, Math.min(1, level));
+    if (this.outputGain) this.outputGain.gain.value = this.outputVolume;
+    if (this.htmlAudio) this.htmlAudio.volume = this.outputVolume;
+  }
+
   private ensureCtx(sampleRate: number) {
     if (this.ctx && this.ctx.state !== "closed") return this.ctx;
     const Ctx = (globalThis as unknown as { AudioContext?: typeof AudioContext; webkitAudioContext?: typeof AudioContext }).AudioContext
       ?? (globalThis as unknown as { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
     if (!Ctx) throw new Error("This browser has no audio output.");
     this.ctx = new Ctx({ sampleRate });
+    this.outputGain = this.ctx.createGain();
+    this.outputGain.gain.value = this.outputVolume;
+    this.outputGain.connect(this.ctx.destination);
     return this.ctx;
+  }
+
+  /** Called from the Start conversation gesture so mobile browsers can unlock playback. */
+  async preparePlayback() {
+    const ctx = this.ensureCtx(24000);
+    if (ctx.state !== "running") await ctx.resume();
   }
 
   /** Stop buffered PCM playback immediately. */
   stop() {
     this.stopped = true;
+    this.generation++;
+    this.nextChunkAt = 0;
     this.playing = false;
     for (const source of this.sources) {
       try {
-        source.onended = null;
         source.stop();
       } catch {
         /* already stopped */
@@ -80,7 +106,9 @@ export class SharedAudioOutput {
     this.stopped = false;
     const sampleRate = format.sampleRate || 24000;
     const ctx = this.ensureCtx(sampleRate);
-    if (ctx.state === "suspended") await ctx.resume().catch(() => undefined);
+    const generation = this.generation;
+    if (ctx.state === "suspended") await ctx.resume();
+    if (generation !== this.generation) return;
     const aligned = bytes.byteOffset % 2 === 0 ? bytes : bytes.slice();
     const samples = new Int16Array(aligned.buffer, aligned.byteOffset, Math.floor(aligned.byteLength / 2));
     const buffer = ctx.createBuffer(1, samples.length, sampleRate);
@@ -88,13 +116,14 @@ export class SharedAudioOutput {
     for (let i = 0; i < samples.length; i++) channel[i] = samples[i] / 32768;
     const source = ctx.createBufferSource();
     source.buffer = buffer;
-    source.connect(ctx.destination);
+    source.playbackRate.value = this.pcmRate;
+    source.connect(this.outputGain!);
     this.sources.push(source);
     this.playing = true;
     await new Promise<void>((resolve) => {
       source.onended = () => {
         this.sources = this.sources.filter((item) => item !== source);
-        if (this.sources.length === 0) {
+        if (generation === this.generation && this.sources.length === 0) {
           this.playing = false;
           this.onEnded?.();
           this.emitClock();
@@ -106,7 +135,9 @@ export class SharedAudioOutput {
           resolve();
           return;
         }
-        source.start();
+        const start = Math.max(this.nextChunkAt, ctx.currentTime);
+        source.start(start);
+        this.nextChunkAt = start + buffer.duration / this.pcmRate;
         this.emitClock();
       } catch {
         resolve();
@@ -133,7 +164,7 @@ export class SharedAudioOutput {
     const url = URL.createObjectURL(blob);
     const audio = new Audio(url);
     if (options?.rate && Number.isFinite(options.rate)) audio.playbackRate = Math.min(1.5, Math.max(0.7, options.rate));
-    if (options?.volume != null && Number.isFinite(options.volume)) audio.volume = Math.min(1, Math.max(0, options.volume));
+    audio.volume = options?.volume != null && Number.isFinite(options.volume) ? Math.min(this.outputVolume, Math.max(0, options.volume)) : this.outputVolume;
     this.htmlAudio = audio;
     this.playing = true;
     this.emitClock();

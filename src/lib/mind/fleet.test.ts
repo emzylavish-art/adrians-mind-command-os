@@ -9,6 +9,7 @@ import {
   approveRunAction,
   buildTaskPlan,
   canTransition,
+  cancelRun,
   delegationGoals,
   deployAgent,
   enqueueRun,
@@ -244,4 +245,17 @@ describe("local agent worker", () => {
     assert.equal(hits.some((hit) => hit.meta === "Agent" && hit.label === "Documents"), true);
     assert.equal(JSON.stringify(hits).includes("sk-"), false);
   });
+});
+
+it("cancels delegated children and preserves the third part of a goal", () => {
+  let ws = started("Project manager", "Lake and Dock and Pier");
+  ws = tick(ws);
+  ws = tick(ws, "2026-04-01T12:01:00.000Z");
+  const parent = ws.runs.find(r => !r.parentId)!;
+  assert.ok(ws.runs.some(r => r.goal === "Dock and Pier"));
+  const canceled = cancelRun(ws, parent.id);
+  assert.ok(canceled.runs.every(r => r.state === "canceled"));
+  for (const child of ws.runs.filter(r => r.parentId)) ws = cancelRun(ws, child.id);
+  ws = tick(ws, "2026-04-01T12:02:00.000Z");
+  assert.equal(ws.runs.find(r => r.id === parent.id)?.state, "canceled");
 });

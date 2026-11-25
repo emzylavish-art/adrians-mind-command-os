@@ -22,6 +22,7 @@ export type FleetMutationParams =
   | { kind: "add_mailbox"; label: string; address: string }
   | {
       kind: "add_schedule";
+      instruction?: string;
       name: string;
       agentId: string | null;
       intervalMinutes: number;
@@ -58,6 +59,7 @@ export function snapshotFleetMutationParams(params: FleetMutationParams): FleetM
     case "add_schedule":
       return {
         kind: "add_schedule",
+        ...(params.instruction !== undefined ? { instruction: params.instruction } : {}),
         name: params.name,
         agentId: params.agentId,
         intervalMinutes: params.intervalMinutes,

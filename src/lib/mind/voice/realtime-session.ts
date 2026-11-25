@@ -22,8 +22,11 @@ export type RealtimeHandlers = {
 };
 
 export type RealtimeSessionOptions = {
+  /** Local orchestration owns the spoken reply. Only receive user transcription here. */
+  transcriptOnly?: boolean;
   /** Built-in or allowlisted voice id applied on session.update (default eve). */
   voice?: string;
+  voiceIsolation?: boolean;
   /** When omitted, the existing short capture prompt is used. */
   instructions?: string;
 };
@@ -86,6 +89,7 @@ export class RealtimeVoiceSession {
 
   private voiceId: string;
   private instructions: string;
+  private transcriptOnly: boolean;
   private captureMedia: () => Promise<MediaStream>;
 
   constructor(
@@ -98,10 +102,12 @@ export class RealtimeVoiceSession {
         channelCount: 1,
         echoCancellation: true,
         noiseSuppression: true,
+        ...(options.voiceIsolation ? { autoGainControl: true } : {}),
       },
     }),
   ) {
     this.handlers = handlers;
+    this.transcriptOnly = options.transcriptOnly === true;
     this.output = output;
     this.socketFactory = socketFactory;
     this.voiceId = resolveXaiVoiceId(options.voice);
@@ -131,6 +137,7 @@ export class RealtimeVoiceSession {
 
   setMuted(muted: boolean) {
     this.muted = muted;
+    this.media?.getAudioTracks().forEach((track) => { track.enabled = !muted; });
     if (muted) this.handlers.onLevel?.(0);
   }
 
@@ -144,6 +151,7 @@ export class RealtimeVoiceSession {
       const timer = setTimeout(() => reject(new Error("Voice realtime did not connect in time.")), 15_000);
       const onOpen = () => {
         clearTimeout(timer);
+        if (this.ws !== ws || this.intentionalClose) { reject(new Error("Voice session closed.")); return; }
         this.open = true;
         resolve();
       };
@@ -153,8 +161,13 @@ export class RealtimeVoiceSession {
       };
       ws.addEventListener("open", onOpen);
       ws.addEventListener("error", onError);
-      ws.addEventListener("message", (event) => this.onMessage(event as MessageEvent));
+      ws.addEventListener("message", (event) => {
+        if (this.open && this.ws === ws && !this.intentionalClose) this.onMessage(event as MessageEvent);
+      });
       ws.addEventListener("close", () => {
+        clearTimeout(timer);
+        reject(new Error("Voice session closed."));
+        if (this.ws !== ws || this.intentionalClose) return;
         const unexpected = !this.intentionalClose && (this.open || this.capturing || this.media != null);
         this.open = false;
         this.stopCapture();
@@ -171,13 +184,12 @@ export class RealtimeVoiceSession {
         audio: {
           input: {
             format: { type: "audio/pcm", rate: REALTIME_SAMPLE_RATE },
-            transcription: { model: "grok-voice-transcribe-2.0" },
+            transcription: { model: "grok-transcribe" },
           },
           output: { format: { type: "audio/pcm", rate: REALTIME_SAMPLE_RATE } },
         },
       },
     });
-    this.handlers.onStatus?.("listening");
   }
 
   private send(payload: unknown) {
@@ -200,6 +212,10 @@ export class RealtimeVoiceSession {
       return;
     }
     const type = msg.type || "";
+    if (this.transcriptOnly && type.startsWith("response.")) {
+      if (type === "response.created") this.send({ type: "response.cancel" });
+      return;
+    }
     if (type === "error") {
       const message = msg.error?.message || "Voice realtime error.";
       if (/no active response/i.test(message)) return;
@@ -218,6 +234,7 @@ export class RealtimeVoiceSession {
     }
     if (
       type === "conversation.item.input_audio_transcription.delta" ||
+      type === "conversation.item.input_audio_transcription.updated" ||
       type === "conversation.item.input_audio_transcription.partial" ||
       type === "input_audio_transcription.delta"
     ) {
@@ -240,7 +257,9 @@ export class RealtimeVoiceSession {
       if (msg.delta) {
         this.responseActive = true;
         this.handlers.onStatus?.("speaking");
-        void this.output.playPcm16Base64(msg.delta, { sampleRate: REALTIME_SAMPLE_RATE });
+        void this.output.playPcm16Base64(msg.delta, { sampleRate: REALTIME_SAMPLE_RATE }).catch(() => {
+          this.handlers.onError?.("Audio playback was blocked. End the call and start it again with sound enabled.");
+        });
       }
       return;
     }
@@ -299,6 +318,7 @@ export class RealtimeVoiceSession {
     }
     this.capturePending = false;
     this.media = media;
+    media.getAudioTracks().forEach((track) => { track.enabled = !this.muted; });
     const Ctx = window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
     this.audioCtx = new Ctx({ sampleRate: REALTIME_SAMPLE_RATE });
     const captureRate = this.audioCtx.sampleRate || REALTIME_SAMPLE_RATE;

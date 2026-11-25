@@ -1,11 +1,23 @@
-import { useCallback, useMemo, useSyncExternalStore, type SetStateAction } from "react";
+import { useCallback, useEffect, useMemo, useSyncExternalStore, type SetStateAction } from "react";
+
+const clearEvent = "adrian-clear-account-drafts";
+function ownerPrefix(owner: string) { return "amcos.draft.v1.[" + JSON.stringify(owner) + ","; }
+
+export function clearAccountDrafts(owner: string) {
+  const prefix = ownerPrefix(owner);
+  for (let index = sessionStorage.length - 1; index >= 0; index--) {
+    const key = sessionStorage.key(index);
+    if (key?.startsWith(prefix)) sessionStorage.removeItem(key);
+  }
+  window.dispatchEvent(new CustomEvent(clearEvent, { detail: prefix }));
+}
 
 /** Each open tab owns its drafts. Temporary conversations keep drafts in memory only. */
 export function useComposerDraft<T>(scope: string, field: string, initial: T, persist: boolean) {
   const fields = useMemo(() => new Map<string, T>(), []);
   const listeners = useMemo(() => new Set<() => void>(), []);
   const key = `amcos.draft.v1.${scope}.${field}`;
-  const getSnapshot = useCallback(() => {
+  const read = useCallback((key: string, persist: boolean) => {
     if (!fields.has(key)) {
       let value = initial;
       if (persist) {
@@ -17,14 +29,24 @@ export function useComposerDraft<T>(scope: string, field: string, initial: T, pe
       fields.set(key, value);
     }
     return fields.get(key) as T;
-  }, [fields, initial, key, persist]);
+  }, [fields, initial]);
+  const getSnapshot = useCallback(() => read(key, persist), [read, key, persist]);
   const subscribe = useCallback((notify: () => void) => {
     listeners.add(notify);
     return () => { listeners.delete(notify); };
   }, [listeners]);
+  useEffect(() => {
+    const clear = (event: Event) => {
+      const prefix = (event as CustomEvent<string>).detail;
+      for (const stored of fields.keys()) if (stored.startsWith(prefix)) fields.delete(stored);
+      for (const notify of listeners) notify();
+    };
+    window.addEventListener(clearEvent, clear);
+    return () => window.removeEventListener(clearEvent, clear);
+  }, [fields, listeners]);
   const value = useSyncExternalStore(subscribe, getSnapshot, () => initial);
-  const setValue = useCallback((update: SetStateAction<T>) => {
-    const next = typeof update === "function" ? (update as (previous: T) => T)(getSnapshot()) : update;
+  const write = useCallback((key: string, persist: boolean, update: SetStateAction<T>) => {
+    const next = typeof update === "function" ? (update as (previous: T) => T)(read(key, persist)) : update;
     fields.set(key, next);
     if (persist) {
       try {
@@ -37,6 +59,9 @@ export function useComposerDraft<T>(scope: string, field: string, initial: T, pe
       }
     }
     for (const notify of listeners) notify();
-  }, [fields, getSnapshot, key, listeners, persist]);
-  return [value, setValue] as const;
+  }, [fields, read, listeners]);
+  const setValue = useCallback((update: SetStateAction<T>) => write(key, persist, update), [key, persist, write]);
+  const setInScope = useCallback((scope: string, persist: boolean, update: SetStateAction<T>) =>
+    write(`amcos.draft.v1.${scope}.${field}`, persist, update), [field, write]);
+  return [value, setValue, setInScope] as const;
 }

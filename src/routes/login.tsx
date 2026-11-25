@@ -1,5 +1,5 @@
 import { lazy, Suspense, useEffect, useState, type FormEvent, type ReactNode } from "react";
-import { createFileRoute, Link } from "@tanstack/react-router";
+import { createFileRoute, isRedirect, Link } from "@tanstack/react-router";
 import {
   getSupabaseAuthUser,
   signInWithPassword,
@@ -41,8 +41,7 @@ export const Route = createFileRoute("/login")({
     try {
       return await getSupabaseAuthUser();
     } catch {
-      // Keep shape aligned with AuthUserResult so broker Google/X stays gated.
-      return { configured: false, user: null, brokerConfigured: false, supabaseOAuthProviders: [] };
+      return { checkFailed: true as const, configured: false, user: null, brokerConfigured: false, supabaseOAuthProviders: [] };
     }
   },
   component: Login,
@@ -256,7 +255,7 @@ function Login() {
     } catch (err) {
       const message =
         err instanceof Error ? err.message : "Something went wrong.";
-      if (!/redirect/i.test(message)) {
+      if (!isRedirect(err)) {
         setBanner(message);
         setBannerKind("auth_error");
       }
@@ -312,7 +311,7 @@ function Login() {
     } catch (err) {
       const message =
         err instanceof Error ? err.message : "Something went wrong.";
-      if (!/redirect/i.test(message)) {
+      if (!isRedirect(err)) {
         setBanner(message);
         setBannerKind("auth_error");
       }
@@ -348,7 +347,12 @@ function Login() {
         />
         <SignInGuide />
 
-        {!supabaseConfigured ? (
+        {"checkFailed" in data ? (
+          <div role="alert" className="mt-5 rounded-panel border border-line p-4">
+            <p>Sign-in status could not be checked.</p>
+            <button type="button" className="min-h-11 underline" onClick={() => window.location.reload()}>Retry sign-in check</button>
+          </div>
+        ) : !supabaseConfigured ? (
           <div
             className="mt-5 rounded-panel border border-line bg-surface-2 px-4 py-3 text-sm leading-relaxed text-muted"
             role="status"

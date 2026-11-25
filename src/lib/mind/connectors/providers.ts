@@ -275,7 +275,7 @@ const notionProvider: OAuthProvider = {
   scopes: [],
   pkce: true,
   tokenAuth: "basic",
-  revokeStyle: "bearer_json",
+  revokeStyle: "notion_basic",
   authorizeExtra: { owner: "user" },
   readEnv: (env = process.env) => ({
     clientId: trim(env, "NOTION_OAUTH_CLIENT_ID"),
@@ -283,7 +283,7 @@ const notionProvider: OAuthProvider = {
     redirectUri: trim(env, "NOTION_OAUTH_REDIRECT_URI"),
     authorizeUrl: trim(env, "NOTION_OAUTH_AUTHORIZE_URL") || "https://api.notion.com/v1/oauth/authorize",
     tokenUrl: trim(env, "NOTION_OAUTH_TOKEN_URL") || "https://api.notion.com/v1/oauth/token",
-    revokeUrl: trim(env, "NOTION_OAUTH_REVOKE_URL"),
+    revokeUrl: trim(env, "NOTION_OAUTH_REVOKE_URL") || "https://api.notion.com/v1/oauth/revoke",
   }),
   parseAccount: (json) => {
     const workspaceName = typeof json.workspace_name === "string" ? json.workspace_name : undefined;

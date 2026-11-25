@@ -2,7 +2,7 @@
  * Per-chat media gallery helpers — read message image refs only (no new storage).
  */
 
-export type ChatGalleryKind = "attached" | "camera" | "generated";
+export type ChatGalleryKind = "attached" | "camera" | "generated" | "edited";
 
 export type ChatGalleryItem = {
   key: string;
@@ -15,15 +15,15 @@ export type ChatGalleryItem = {
 export type GalleryMessage = {
   id: string;
   role?: string;
-  images?: { dataUrl?: string; blobId?: string; name?: string | null }[];
+  images?: { dataUrl?: string; blobId?: string; name?: string | null; origin?: ChatGalleryKind }[];
 };
 
-export function classifyGalleryName(name: string | null | undefined, role?: string): ChatGalleryKind {
-  const label = (name ?? "").toLowerCase();
-  if (/^camera/.test(label) || /burst|capture/.test(label)) return "camera";
-  if (/^generated|^imagine|grok-imagine|edited/.test(label)) return "generated";
-  if (role === "assistant" && (!name || /image|attachment|amcos/.test(label))) return "generated";
-  return "attached";
+export function imageDownloadName(dataUrl: string, name: string) {
+  const mime = dataUrl.slice(5, dataUrl.indexOf(";")).toLowerCase();
+  const extension = ({ "image/jpeg": "jpg", "image/png": "png", "image/gif": "gif", "image/webp": "webp" } as Record<string, string>)[mime];
+  if (!extension) return null;
+  const base = (name || "image").replace(/\.(?:jpe?g|png|gif|webp)$/i, "").replace(/[^a-zA-Z0-9._-]+/g, "-").slice(0, 80);
+  return (base || "image") + "." + extension;
 }
 
 /**
@@ -45,7 +45,7 @@ export function listChatGalleryImages(messages: GalleryMessage[] | undefined | n
         src,
         name,
         messageId: msg.id,
-        kind: classifyGalleryName(name, msg.role),
+        kind: image.origin ?? (msg.role === "assistant" ? "generated" : "attached"),
       });
     });
   }

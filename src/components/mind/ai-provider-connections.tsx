@@ -174,6 +174,8 @@ export function AiProviderConnections({ onChange, onUseModel }: { onChange?: (ro
         {rows.map((row) => (
           <article
             key={row.id}
+            id={`provider-${row.id}`}
+            tabIndex={-1}
             className="adrian-layer rounded-panel border border-line p-3"
             onPointerDown={(event) => {
               if ((event.target as HTMLElement).closest("button, select, input")) return;

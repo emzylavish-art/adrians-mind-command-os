@@ -63,6 +63,7 @@ export async function disconnectNotion(input: {
   ownerId: string;
   env?: NotionOAuthEnv;
   fetch?: FetchLike;
+  expectedConnectedAt?: string;
 }): Promise<DisconnectResult> {
   return disconnectProvider(notion(), input);
 }
@@ -81,11 +82,32 @@ export async function resolveNotionTokenPersistent(
   return undefined;
 }
 
-/** Prefer OAuth-stored token, then env integration token. Legacy local-test helper. */
+/** Resolve only the specified owner’s local OAuth grant. */
 export function resolveNotionToken(ownerId: string | undefined, env: NodeJS.ProcessEnv = process.env): string | undefined {
   if (ownerId) {
     const oauth = getAccessToken(ownerId, "notion");
     if (oauth) return oauth;
   }
   return undefined;
+}
+
+export async function savedNotionWorkspaces(owner: string) {
+  const { listDurableNotionWorkspaces, readDurableConnection } = await import("./durable-oauth.server.ts");
+  const { localNotionWorkspaces, readConnection } = await import("./store.ts");
+  const durable = hasDurableOAuthStore();
+  const rows = durable ? await listDurableNotionWorkspaces(owner) : localNotionWorkspaces(owner);
+  const active = durable ? await readDurableConnection(owner, "notion") : readConnection(owner, "notion");
+  return rows.map((row) => ({
+    id: row.workspaceId || "legacy", name: row.workspaceName || row.accountLabel || "Notion workspace",
+    active: Boolean(active && active.workspaceId === row.workspaceId),
+  }));
+}
+
+export async function resolveWorkspaceGrant(owner: string, id: string) {
+  const { listDurableNotionWorkspaces } = await import("./durable-oauth.server.ts");
+  const { localNotionWorkspaces } = await import("./store.ts");
+  const { decryptSecret } = await import("./crypto.ts");
+  const rows = hasDurableOAuthStore() ? await listDurableNotionWorkspaces(owner) : localNotionWorkspaces(owner);
+  const match = rows.find((row) => (row.workspaceId || "legacy") === id);
+  return match ? decryptSecret(match.accessTokenEnc) ?? undefined : undefined;
 }

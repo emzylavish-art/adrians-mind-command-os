@@ -2,6 +2,8 @@ import { spawn } from "node:child_process";
 import { createRequire } from "node:module";
 import { existsSync, readFileSync } from "node:fs";
 import { resolve } from "node:path";
+import { getSql } from "../../db.ts";
+import { accountFilePath, machineRequired } from "./account-workspace.ts";
 import { requireUserId } from "../../auth/verify.server.ts";
 import { assertSameOrigin } from "../connectors/oauth-csrf.ts";
 import { adrianHostedWorkspace } from "./hosted/acp-client.ts";
@@ -54,11 +56,10 @@ export function completeSource(path: string, text: string, line: number, column:
     getScriptSnapshot: (name) => (name === fileName ? ts.ScriptSnapshot.fromString(text) : undefined),
     getCurrentDirectory: () => "/",
     getDefaultLibFileName: (settings) => ts.getDefaultLibFilePath(settings),
-    fileExists: ts.sys.fileExists,
-    readFile: ts.sys.readFile,
-    readDirectory: ts.sys.readDirectory,
-    directoryExists: ts.sys.directoryExists,
-    getDirectories: ts.sys.getDirectories,
+    fileExists: (name) => name === fileName,
+    readFile: (name) => name === fileName ? text : undefined,
+    readDirectory: () => [],
+    getDirectories: () => [],
   };
   const service = ts.createLanguageService(host);
   const offset = offsetAt(text, line, column);
@@ -163,8 +164,9 @@ export async function debugSourceFile(file: string, line: number): Promise<{ ok:
 }
 
 export async function handleIdeTools(request: Request): Promise<Response> {
+  let ownerId: string;
   try {
-    await requireUserId(request.headers.get("authorization")?.replace(/^Bearer\s+/i, "") || undefined);
+    ownerId = await requireUserId(request.headers.get("authorization")?.replace(/^Bearer\s+/i, "") || undefined);
   } catch {
     return json({ ok: false, error: "Sign in is required." }, 401);
   }
@@ -173,7 +175,19 @@ export async function handleIdeTools(request: Request): Promise<Response> {
   if (!origin.ok) return json({ ok: false, error: origin.error }, 403);
   const body = await request.json().catch(() => ({})) as { action?: unknown; path?: unknown; text?: unknown; line?: unknown; column?: unknown };
   const relativePath = typeof body.path === "string" ? body.path : "";
-  const target = workspaceFile(relativePath);
+  if (ownerId !== "dev-user") {
+    if (body.action !== "complete") return json({ ok: false, error: machineRequired }, 409);
+    const path = accountFilePath(relativePath);
+    if (!path) return json({ ok: false, error: "Choose a file inside your workspace." }, 400);
+    if (typeof body.text !== "string") {
+      try {
+        const [row] = await (await getSql()).query<{ text_copy: string }>("select text_copy from mind_kimi_file where user_id=$1 and path=$2", [ownerId, path]);
+        if (!row) return json({ ok: false, error: "File was not found in your workspace." }, 404);
+        body.text = row.text_copy;
+      } catch { return json({ ok: false, error: "Account workspace storage is unavailable." }, 503); }
+    }
+  }
+  const target = ownerId === "dev-user" ? workspaceFile(relativePath) : accountFilePath(relativePath);
   if (!target) return json({ ok: false, error: "That file is outside the hosted workspace or is secret. Nothing ran." }, 400);
   if (body.action === "complete") {
     const text = typeof body.text === "string" ? body.text.slice(0, 200_000) : existsSync(target) ? readFileSync(target, "utf8").slice(0, 200_000) : "";

@@ -2,13 +2,15 @@ import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import { analyzeImage } from "./image-analyze.ts";
 
+const imageBase64 = Buffer.concat([Buffer.from("ffd8ff", "hex"), Buffer.alloc(97)]).toString("base64");
+
 describe("image analysis", () => {
   it("does not call a provider when no vision key is set", async () => {
     let called = false;
     const result = await analyzeImage({
       name: "dock.png",
       bytes: 100,
-      imageBase64: "aaaa",
+      imageBase64,
       visionKey: undefined,
       fetch: async () => {
         called = true;
@@ -24,12 +26,13 @@ describe("image analysis", () => {
     const ok = await analyzeImage({
       name: "dock.png",
       bytes: 100,
-      imageBase64: "aaaa",
+      imageBase64,
       visionKey: "vision-key",
       fetch: async (url, init) => {
         assert.match(url, /openai/);
         assert.match(JSON.stringify(init?.headers), /vision-key/);
-        return { ok: true, status: 200, text: async () => "A dock." };
+        assert.match(String(init?.body), /image\/jpeg/);
+        return { ok: true, status: 200, text: async () => JSON.stringify({ choices: [{ message: { content: "A dock." } }] }) };
       },
     });
     assert.equal(ok.analyzed, true);
@@ -37,7 +40,7 @@ describe("image analysis", () => {
     const failed = await analyzeImage({
       name: "dock.png",
       bytes: 100,
-      imageBase64: "aaaa",
+      imageBase64,
       visionKey: "vision-key",
       fetch: async () => ({ ok: false, status: 401, text: async () => "" }),
     });

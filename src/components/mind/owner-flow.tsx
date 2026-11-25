@@ -57,7 +57,7 @@ export function OwnerFlow(props: {
         method: "POST",
         credentials: "include",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify(body),
+        body: JSON.stringify({ ...body, workspace: "hosted" }),
       });
       const data = (await response.json()) as { ok?: boolean; content?: string; error?: string; path?: string };
       if (!data.ok) {
@@ -79,8 +79,8 @@ export function OwnerFlow(props: {
         <div>
           <p className="text-xs uppercase tracking-wide text-muted">Windows software</p>
           <h2 className="mt-1 text-lg font-semibold">Download Adrian's Mind</h2>
-          <p className="mt-1 max-w-2xl text-sm text-muted" data-testid="windows-installer-ready">This download is the Windows app. It is Adrian's Mind, not a separate Kimi program. The installed app can list Desktop files and ask Windows to move the pointer or type. This website cannot. It is unsigned.</p>
-          <a className="mt-3 inline-flex min-h-11 items-center rounded-panel bg-accent px-3 text-sm font-semibold text-accent-ink" href={INSTALLER_HREF} download data-testid="download-installer">Download Adrian's Mind</a>
+          <p className="mt-1 max-w-2xl text-sm text-muted" data-testid="windows-installer-ready">The Windows release is a 6.4 GB download in four parts. Download part00 through part03, join them in order and verify the full SHA-256 before opening the installer. The full package is unsigned.</p>
+          <a className="mt-3 inline-flex min-h-11 items-center rounded-panel bg-accent px-3 text-sm font-semibold text-accent-ink" href={INSTALLER_HREF} data-testid="download-installer">Open Windows release</a>
         </div>
         <div className="flex flex-wrap gap-2">
           <button type="button" className="inline-flex min-h-11 items-center rounded-panel border border-line px-3 text-sm" onClick={props.onOpenSpeak} data-testid="owner-flow-speak">Open Speak</button>

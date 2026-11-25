@@ -26,6 +26,7 @@ param(
   [string]$DeviceName = $env:COMPUTERNAME,
   [string]$KimiPath = "kimi",
   [string]$NodePath = "node",
+  [switch]$EnableBuildJobs,
   [switch]$ForceAdmin
 )
 
@@ -59,20 +60,28 @@ New-Item -ItemType Directory -Force -Path $KeyDir | Out-Null
 # Generate RSA keypair locally if missing (private key stays on disk, never uploaded).
 $PrivPath = Join-Path $KeyDir "device_private.pem"
 $PubPath = Join-Path $KeyDir "device_public.pem"
-if (-not (Test-Path $PrivPath)) {
-  Write-Host "Generating device keypair in $KeyDir (private key never leaves this PC)..."
-  $rsa = [System.Security.Cryptography.RSA]::Create(2048)
-  try {
-    $priv = $rsa.ExportRSAPrivateKeyPem()
-    $pub = $rsa.ExportRSAPublicKeyPem()
-    Set-Content -Path $PrivPath -Value $priv -Encoding ascii
-    Set-Content -Path $PubPath -Value $pub -Encoding ascii
-    # Restrict ACL to current user
-    icacls $PrivPath /inheritance:r /grant:r "$env:USERNAME:(R,W)" | Out-Null
-  } finally {
-    $rsa.Dispose()
-  }
+if (-not (Test-Path $PrivPath) -or -not (Test-Path $PubPath)) {
+  # The Windows PowerShell 5.1 runtime does not expose the PEM export methods.
+  # Use the same Node executable as the Companion and never print key material.
+  $keyScript = @'
+const fs = require("node:fs");
+const crypto = require("node:crypto");
+const [privatePath, publicPath] = process.argv.slice(2);
+if (!fs.existsSync(privatePath)) {
+  if (fs.existsSync(publicPath)) throw Error("Public key exists without its corresponding private key.");
+  const pair = crypto.generateKeyPairSync("rsa", { modulusLength: 2048 });
+  fs.writeFileSync(privatePath, pair.privateKey.export({type:"pkcs8",format:"pem"}), {flag:"wx", mode:0o600});
 }
+if (!fs.existsSync(publicPath)) {
+  const pub = crypto.createPublicKey(fs.readFileSync(privatePath)).export({type:"spki",format:"pem"});
+  fs.writeFileSync(publicPath, pub, {flag:"wx"});
+}
+'@
+  $keyScript | & $NodePath - $PrivPath $PubPath
+  if ($LASTEXITCODE -ne 0) { throw "Device key generation failed." }
+}
+icacls $PrivPath /inheritance:r /grant:r "$($env:USERNAME):(R,W)" | Out-Null
+if ($LASTEXITCODE -ne 0) { throw "The private device key could not be restricted to this user." }
 
 $PublicKeyPem = Get-Content -Raw -Path $PubPath
 
@@ -120,8 +129,21 @@ $config = @{
   nodePath = $NodePath
   pinnedOrigin = $DashboardUrl.TrimEnd("/")
 }
+# The pairing token is scoped to signed device actions. Build jobs use a
+# separate credential minted by the signed-in owner at /api/mind/pc/register.
+if ($EnableBuildJobs) {
+  $secureToken = Read-Host "Enter the separate Build agent token issued for this PC" -AsSecureString
+  $ptr = [Runtime.InteropServices.Marshal]::SecureStringToBSTR($secureToken)
+  try {
+    $config.jobToken = [Runtime.InteropServices.Marshal]::PtrToStringBSTR($ptr)
+    if (-not $config.jobToken.Trim()) { throw "A separate Build agent token is required." }
+  } finally {
+    [Runtime.InteropServices.Marshal]::ZeroFreeBSTR($ptr)
+  }
+}
 $config | ConvertTo-Json | Set-Content -Path $ConfigPath -Encoding utf8
-icacls $ConfigPath /inheritance:r /grant:r "$env:USERNAME:(R,W)" | Out-Null
+icacls $ConfigPath /inheritance:r /grant:r "$($env:USERNAME):(R,W)" | Out-Null
+if ($LASTEXITCODE -ne 0) { throw "The config could not be restricted to this user." }
 
 # Ensure workspace root exists (user-visible)
 New-Item -ItemType Directory -Force -Path (Join-Path $env:USERPROFILE "MindWorkspace") | Out-Null
@@ -177,4 +199,4 @@ Write-Host "Emergency stop: powershell -File `"$StopScript`""
 Write-Host "Uninstall: powershell -File `"$(Join-Path $PSScriptRoot 'Uninstall-MindAgent.ps1')`""
 
 # Start now
-Start-Process -FilePath "powershell.exe" -ArgumentList @("-NoProfile","-WindowStyle","Hidden","-ExecutionPolicy","Bypass","-File",$AgentScript) | Out-Null
+Start-Process -FilePath "powershell.exe" -ArgumentList @("-NoProfile","-WindowStyle","Hidden","-ExecutionPolicy","Bypass","-File",("`"" + $AgentScript + "`"")) | Out-Null

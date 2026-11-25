@@ -192,7 +192,7 @@ export function parseMcpIntent(text: string): { action: "list" } | { action: "ca
   const lower = text.toLowerCase();
   if (!/\bmcp\b/.test(lower)) return { action: "unclear" };
   const call = text.match(/\b(?:call|use|run)\b[\s\S]{0,40}\bmcp\b[\s\S]{0,20}\btool\s+([A-Za-z0-9_-]+)(?:\s+on server\s+([0-9a-f-]{36}))?\s*([\s\S]*)/i);
-  if (call?.[1]) return { action: "call", tool: call[1].slice(0, 80), serverId: call[2], args: (call[3] ?? "").trim().slice(0, 1500) };
+  if (call?.[1]) return { action: "call", tool: call[1], serverId: call[2], args: (call[3] ?? "").trim() };
   if (/\b(list|show|what)\b/.test(lower)) return { action: "list" };
   return { action: "unclear" };
 }

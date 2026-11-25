@@ -13,7 +13,6 @@ const {
   PUBLIC_FEED,
   UPDATE_PATH,
   chooseCloud,
-  decideUpdate,
   decideFullUpdate,
   hashesMatch,
   isAllowedDownloadUrl,
@@ -249,11 +248,7 @@ async function checkCloud(window) {
     if (launchInstaller(finalPath)) app.quit();
     return;
   }
-  const decision = decideUpdate(LOCAL_BUILD, remote);
-  if (decision.action !== "install" || !decision.url || !remote) return;
-  const file = await downloadVerified(decision.url, remote.sha256, remote.size).catch(() => null);
-  if (!file) return;
-  if (launchInstaller(file)) app.quit();
+
 }
 
 app.whenReady().then(async () => {

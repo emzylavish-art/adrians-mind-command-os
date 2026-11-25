@@ -124,6 +124,9 @@ baseInput.value = saved("adrian-base", defaultBase());
 secretInput.value = secretMeta ? secretMeta.content : saved("adrian-secret", "");
 
 document.querySelector("#save-connect").onclick = () => {
+  edited.clear();
+  originalValues.clear();
+  freshStatus = false;
   let savedLocally = false;
   if (localConnection) {
     try {
@@ -174,7 +177,39 @@ function empty(text) {
   return card(text, "");
 }
 
-async function render(status, config, opt, audit) {
+let refreshGeneration = 0;
+let freshStatus = false;
+const edited = new Set();
+const originalValues = new Map();
+const formValues = {
+  "limits-form": (config) => ({ us: config.limits.per_contact_daily.US, ng: config.limits.per_contact_daily.NG, account: config.limits.per_account_daily }),
+  "timing-form": (config) => ({ min: config.timing.gap_min_seconds, max: config.timing.gap_max_seconds }),
+};
+for (const id of Object.keys(formValues)) {
+  document.getElementById(id).addEventListener("input", () => edited.add(id));
+}
+function renderConfig(config) {
+  for (const [id, valuesFor] of Object.entries(formValues)) {
+    if (edited.has(id)) continue;
+    const values = valuesFor(config);
+    originalValues.set(id, JSON.stringify(values));
+    for (const [key, value] of Object.entries(values)) document.getElementById(id).elements.namedItem(key).value = value;
+  }
+}
+function maySave(form, config) {
+  if (!originalValues.has(form.id)) {
+    setNote("Load the PC settings before saving.");
+    return false;
+  }
+  if (JSON.stringify(formValues[form.id](config)) === originalValues.get(form.id)) return true;
+  if (!window.confirm("These settings changed on the PC. Replace them with the values in this form?")) {
+    setNote("Your draft is still here. The PC settings were kept.");
+    return false;
+  }
+  return true;
+}
+
+function renderStatus(status) {
   const state = document.querySelector("#runtime-state");
   state.textContent = status.state || "unknown";
   state.classList.toggle("up", status.state === "running");
@@ -231,40 +266,41 @@ async function render(status, config, opt, audit) {
     ${meter("RAM", health.ram_percent ?? "n/a", health.ram_percent)}
     ${meter("Disk free", formatBytes(health.disk_free_bytes))}
     ${meter("Uptime", formatUptime(health.uptime_seconds))}`;
-  document.querySelector("#limits-form [name=us]").value = config.limits.per_contact_daily.US;
-  document.querySelector("#limits-form [name=ng]").value = config.limits.per_contact_daily.NG;
-  document.querySelector("#limits-form [name=account]").value = config.limits.per_account_daily;
-  document.querySelector("#timing-form [name=min]").value = config.timing.gap_min_seconds;
-  document.querySelector("#timing-form [name=max]").value = config.timing.gap_max_seconds;
-  document.querySelector("#optouts").innerHTML = (opt.items || []).length
-    ? opt.items.map((item) => card(item.display_name || item.tiktok_user_id || "Contact", item.opt_out_type || "clear")).join("")
-    : empty("None");
-  document.querySelector("#audit").innerHTML = (audit.items || []).slice(0, 20)
-    .map((item) => card(item.action, `${item.timestamp || ""} ${item.contact_id || ""}`)).join("") || empty("No audit rows");
-  try {
-    const captures = await call("/api/captures");
-    const rows = captures.items || [];
-    document.querySelector("#captures").innerHTML = rows.length
-      ? rows.map((item) => card(item.name || "panel", item.stored_at || item.text || "")).join("")
-      : "";
-  } catch (error) {
-    document.querySelector("#captures").innerHTML = "";
-  }
 }
 
 async function refresh() {
-  try {
-    const status = await read("status", "/api/status");
-    const config = await read("config", "/api/config");
-    const opt = await read("opt-outs", "/api/optouts");
-    const audit = await read("audit", "/api/audit");
-    await render(status, config, opt, audit);
-    setNote("Live. All four reads finished.");
-  } catch (error) {
-    document.querySelector("#runtime-state").classList.add("down");
-    const which = error.read ? `${error.read} read failed. ` : "";
-    setNote(which + explain(error));
+  const generation = ++refreshGeneration;
+  const parts = [
+    ["status", "/api/status", renderStatus],
+    ["config", "/api/config", renderConfig],
+    ["opt-outs", "/api/optouts", (opt) => {
+      document.querySelector("#optouts").innerHTML = (opt.items || []).map((item) =>
+        card(item.display_name || item.tiktok_user_id || "Contact", item.opt_out_type || "clear")).join("") || empty("None");
+    }],
+    ["audit", "/api/audit", (audit) => {
+      document.querySelector("#audit").innerHTML = (audit.items || []).slice(0, 20)
+        .map((item) => card(item.action, `${item.timestamp || ""} ${item.contact_id || ""}`)).join("") || empty("No audit rows");
+    }],
+    ["captures", "/api/captures", (captures) => {
+      document.querySelector("#captures").innerHTML = (captures.items || [])
+        .map((item) => card(item.name || "panel", item.stored_at || item.text || "")).join("");
+    }],
+  ];
+  const results = await Promise.allSettled(parts.map(async ([name, path, paint]) => {
+    const data = await read(name, path);
+    if (generation === refreshGeneration) paint(data);
+  }));
+  if (generation !== refreshGeneration) return;
+  const failures = parts.filter((_, i) => results[i].status === "rejected").map(([name]) => name);
+  freshStatus = results.slice(0, 4).every(result => result.status === "fulfilled");
+  if (results[0].status === "rejected") {
+    const state = document.querySelector("#runtime-state");
+    state.textContent = "Stale";
+    state.classList.remove("up");
+    state.classList.add("down");
   }
+  document.querySelectorAll("#sessions button, #ready button, #drafts button").forEach((button) => { button.disabled = !freshStatus; });
+  setNote(failures.length ? "Stale data: " + failures.join(", ") + ". Refresh the PC connection." : "Live. All reads finished.");
 }
 
 async function act(path, body) {
@@ -300,6 +336,10 @@ document.querySelector("#global-controls").onclick = async (event) => {
 };
 
 document.body.onclick = async (event) => {
+  if (!freshStatus && event.target.closest("#sessions, #drafts, #ready")) {
+    setNote("Refresh the PC status before acting on this row.");
+    return;
+  }
   const account = event.target.dataset.account;
   const action = event.target.dataset.accountAction;
   if (account && action) {
@@ -324,10 +364,14 @@ document.querySelector("#limits-form").onsubmit = async (event) => {
   event.preventDefault();
   try {
     const config = await call("/api/config");
+    if (!maySave(event.target, config)) return;
     config.limits.per_contact_daily.US = Number(event.target.us.value);
     config.limits.per_contact_daily.NG = Number(event.target.ng.value);
     config.limits.per_account_daily = Number(event.target.account.value);
+    const submitted = JSON.stringify([...new FormData(event.target)]);
     await call("/api/config", { method: "PUT", body: JSON.stringify({ config }) });
+    originalValues.set(event.target.id, JSON.stringify(formValues[event.target.id](config)));
+    if (submitted === JSON.stringify([...new FormData(event.target)])) edited.delete(event.target.id);
     refresh();
   } catch (error) {
     setNote(explain(error));
@@ -338,9 +382,13 @@ document.querySelector("#timing-form").onsubmit = async (event) => {
   event.preventDefault();
   try {
     const config = await call("/api/config");
+    if (!maySave(event.target, config)) return;
     config.timing.gap_min_seconds = Number(event.target.min.value);
     config.timing.gap_max_seconds = Number(event.target.max.value);
+    const submitted = JSON.stringify([...new FormData(event.target)]);
     await call("/api/config", { method: "PUT", body: JSON.stringify({ config }) });
+    originalValues.set(event.target.id, JSON.stringify(formValues[event.target.id](config)));
+    if (submitted === JSON.stringify([...new FormData(event.target)])) edited.delete(event.target.id);
     refresh();
   } catch (error) {
     setNote(explain(error));

@@ -102,7 +102,7 @@ describe("mounted Speak click", () => {
     assert.doesNotMatch(speakTurn, /fetch\(|consumeMindTurn|\/api\/mind\/turn/);
     assert.match(composer, /await deliverPlanned\(made\.chat, full,/);
     assert.match(planned, /await deliver\(chat, full,/);
-    assert.match(commandApp, /onCompactSpeak=\{\(\) => void speak\(""\)\}/);
+    assert.match(commandApp, /onCompactSpeak=\{openSpeakStage\}/);
     assert.match(commandApp, /chatTurn: \(transcript\) => speakChatTurn\(transcript\)/);
 
     const order: string[] = [];
@@ -131,9 +131,10 @@ describe("mounted Speak click", () => {
           deps: {
             capture: async () => {
               order.push("mic");
-              return { ok: true, audioBase64: "bWlj" };
+              return { ok: true, audioBase64: "bWlj", mime: "audio/mp4;codecs=mp4a.40.2" };
             },
-            transcribe: async (audio) => {
+            transcribe: async (audio, mime) => {
+              assert.equal(mime, "audio/mp4;codecs=mp4a.40.2");
               order.push("stt");
               assert.equal(audio, "bWlj");
               return { ok: true, text: "what is the weather" };
