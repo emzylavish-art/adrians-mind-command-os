@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import { focusConnection } from "./focus-connection";
 import { callCustomConnectionFn, listCustomConnectionsFn, saveCustomConnectionFn } from "@/lib/mind/custom-connection-fns";
 import type { PublicConnection } from "@/lib/mind/custom-connection";
 import { missingConfigNotice, reasonCode, safeReason } from "@/lib/mind/mcp/call-contract";
@@ -16,7 +17,7 @@ export function CustomConnections({ halted }: { halted: boolean }) {
   const [token, setToken] = useState("");
   const [fields, setFields] = useState("");
   const [args, setArgs] = useState<Record<string, string>>({});
-  const [confirm, setConfirm] = useState(false);
+  const [approved, setApproved] = useState<string | null>(null);
   const [result, setResult] = useState<AttemptView | null>(null);
   const activeAttempt = useRef("");
 
@@ -86,11 +87,14 @@ export function CustomConnections({ halted }: { halted: boolean }) {
       {notice ? <p className="text-sm text-muted">{notice}</p> : null}
       <ul className="space-y-2 text-sm">
         {rows.map((row) => (
-          <li key={row.id} className="rounded-panel border border-line bg-surface p-3">
+          <li tabIndex={-1} ref={focusConnection} id={`connection-${row.id}`} key={row.id} className="rounded-panel border border-line bg-surface p-3">
             <p className="font-semibold">{row.label}</p>
             <p className="text-xs text-muted">{row.kind} · {row.method} · {row.auth} · token {row.hasToken ? "stored" : "none"} · {row.host} · {row.state}</p>
             {row.error ? <p className="text-muted">{row.error}</p> : null}
-            {row.operations.map((operation) => (
+            {row.operations.map((operation) => {
+              const approval = JSON.stringify([row.id, operation.name, operation.inputSchema, args]);
+              const confirm = approved === approval;
+              return (
               <div key={operation.name} className="mt-2">
                 <p className="font-semibold">{operation.name} · {operation.compatible ? "schema" : "incompatible"}</p>
                 <p className="text-xs text-muted">{operation.description}</p>
@@ -105,13 +109,13 @@ export function CustomConnections({ halted }: { halted: boolean }) {
                   </label>
                 )) : <p className="text-xs text-muted">No compatible argument schema. Nothing will be called.</p>}
                 <label className="mt-2 flex items-center gap-2 text-xs text-muted">
-                  <input type="checkbox" checked={confirm} onChange={(event) => setConfirm(event.target.checked)} />
+                  <input type="checkbox" checked={confirm} onChange={(event) => setApproved(event.target.checked ? approval : null)} />
                   Confirm this call
                 </label>
                 <button
                   type="button"
                   className="mt-2 min-h-11 rounded-panel border border-line px-3"
-                  disabled={!operation.compatible || halted || ((row.kind === "mcp" || row.method === "POST") && !confirm)}
+                  disabled={row.enabled === false || !operation.compatible || halted || ((row.kind === "mcp" || row.method === "POST") && !confirm)}
                   onClick={() => {
                     const payload: Record<string, string | boolean | number> = {};
                     for (const [name, spec] of Object.entries(operation.inputSchema?.properties ?? {})) {
@@ -119,10 +123,11 @@ export function CustomConnections({ halted }: { halted: boolean }) {
                       if (!raw) continue;
                       payload[name] = spec.type === "integer" ? Number(raw) : spec.type === "boolean" ? raw === "true" : raw;
                     }
+                    setApproved(null);
                     const localAttemptId = crypto.randomUUID();
                     activeAttempt.current = localAttemptId;
                     setResult({ localAttemptId, upstreamRequestId: null, status: "running", text: "", retryable: false });
-                    void callCustomConnectionFn({ data: { id: row.id, operation: operation.name, args: payload, confirmed: confirm || row.method === "GET" } }).then((called) => {
+                    void callCustomConnectionFn({ data: { id: row.id, operation: operation.name, args: payload, confirmed: confirm || (row.kind === "http" && row.method === "GET") } }).then((called) => {
                       const next = acceptResult(activeAttempt.current, { localAttemptId, status: called.status, text: called.text });
                       if (next !== "stale") setResult(next);
                       if (called.connection) setRows((current) => current.map((item) => item.id === called.connection?.id ? called.connection : item));
@@ -135,7 +140,7 @@ export function CustomConnections({ halted }: { halted: boolean }) {
                   Call {operation.name}
                 </button>
               </div>
-            ))}
+            ); })}
           </li>
         ))}
       </ul>

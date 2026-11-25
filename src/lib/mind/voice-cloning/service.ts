@@ -95,7 +95,7 @@ export function createVoiceCloningService(deps: VoiceCloningServiceDeps = {}) {
     },
 
     listProfiles(userId: string): VoiceProfile[] {
-      return store.listProfiles(userId);
+      return [...store.listProfiles(userId), ...store.pendingProviderDeletes(userId).map((p) => ({ ...p, providerVoiceId: null }))];
     },
 
     async createProfile(userId: string, input: {
@@ -279,7 +279,9 @@ export function createVoiceCloningService(deps: VoiceCloningServiceDeps = {}) {
         };
       }
 
-      const tts = await provider().synthesize({
+      const selectedProvider = provider();
+      if (selectedProvider.id !== profile.provider) return { ok: false, code: "provider_changed", error: "Reconnect the voice provider used to create this profile." };
+      const tts = await selectedProvider.synthesize({
         text: textV.text,
         voiceId: profile.providerVoiceId,
         format: profile.provider === "local-http" ? "wav" : "mp3",
@@ -304,22 +306,6 @@ export function createVoiceCloningService(deps: VoiceCloningServiceDeps = {}) {
       if (!existing) {
         return { ok: false, error: "Voice profile not found.", code: "not_found" };
       }
-      if (existing.status === "deleted") {
-        return {
-          ok: true,
-          profileId: id,
-          deletedAt: existing.deletedAt || new Date(now()).toISOString(),
-          providerDeleted: false,
-          verifiable: true,
-        };
-      }
-
-      let providerDeleted = false;
-      if (existing.providerVoiceId) {
-        const del = await provider().deleteVoice(existing.providerVoiceId);
-        providerDeleted = del.ok ? del.deleted : false;
-      }
-
       const marked = await store.markDeleted(userId, id, now());
       if (!marked || marked.status !== "deleted") {
         return { ok: false, error: "Delete did not complete.", code: "delete_failed" };
@@ -330,6 +316,20 @@ export function createVoiceCloningService(deps: VoiceCloningServiceDeps = {}) {
       const sampleGone = store.readSampleBase64(id) === null;
       if (stillActive || !consentGone || !sampleGone) {
         return { ok: false, error: "Delete could not be verified.", code: "delete_unverified" };
+      }
+      let providerDeleted = false;
+      if (marked.providerVoiceId) {
+        const activeProvider = provider();
+        if (activeProvider.id === marked.provider) {
+          try {
+            const result = await activeProvider.deleteVoice(marked.providerVoiceId);
+            providerDeleted = result.ok && result.deleted;
+          } catch { /* Retain the deletion record until the provider acknowledges it. */ }
+        }
+        if (!providerDeleted) {
+          return { ok: false, code: "provider_delete_pending", error: "Local voice and consent removed. Provider deletion pending. Retry when the original provider is available." };
+        }
+        await store.confirmProviderDelete(userId, id);
       }
       return {
         ok: true,

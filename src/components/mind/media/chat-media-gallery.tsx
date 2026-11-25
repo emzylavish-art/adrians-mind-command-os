@@ -16,15 +16,16 @@ export function ChatMediaGallery({
   const items = useMemo(() => listChatGalleryImages(messages), [messages]);
   const [open, setOpen] = useState(false);
   const [active, setActive] = useState<ChatGalleryItem | null>(null);
-  const kinds = ["attached", "camera", "generated"] as const;
+  const kinds = ["attached", "camera", "generated", "edited"] as const;
 
-  if (items.length === 0) return null;
+  const unavailable = (messages ?? []).flatMap((msg) => (msg.images ?? []).filter(img => !img.dataUrl && img.blobId));
+  if (!items.length && !unavailable.length) return null;
 
   return (
     <section className="mb-3 rounded-panel border border-line bg-surface p-3" data-media="chat-gallery" aria-label="Chat media gallery">
       <div className="mb-2 flex items-center justify-between gap-2">
         <p className="text-xs font-semibold uppercase tracking-wide text-muted">
-          Chat images · {items.length}
+          Chat images · {items.length + unavailable.length}
         </p>
         <button
           type="button"
@@ -38,6 +39,7 @@ export function ChatMediaGallery({
       </div>
       {open && (
         <div className="space-y-3" data-media="chat-gallery-grid">
+          {unavailable.map((image, i) => <p key={i} className="text-sm text-muted">{image.name || "Saved image"} · Image data unavailable on this device</p>)}
           {kinds.map((kind) => {
             const group = items.filter((item) => item.kind === kind);
             return (

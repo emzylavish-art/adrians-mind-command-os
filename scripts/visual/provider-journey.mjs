@@ -61,6 +61,10 @@ for (const order of [["gemini", customId], [customId, "gemini"]]) {
       });
       const requests = [];
       await context.route(`${origin}/api/mind/turn`, (route) => {
+        if (route.request().method() === "GET") {
+          return route.fulfill({ json: { operationId: `${Date.now()}-${crypto.randomUUID()}` } });
+        }
+        assert.match(route.request().headers()["x-mind-turn-id"] || "", /^\d{13}-/);
         const body = route.request().postDataJSON();
         requests.push(body);
         const identity = models.get(body.provider);

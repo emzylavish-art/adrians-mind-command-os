@@ -15,6 +15,7 @@ export type MediaBlobStore = {
 };
 
 export type ImageRef = {
+  origin?: "attached" | "camera" | "generated" | "edited";
   dataUrl?: string;
   blobId?: string;
   name?: string;
@@ -120,8 +121,14 @@ export function accountImageStore(owner: string | null) {
     async get(id: string) {
       return (await scoped.get(id)) ?? (await legacy.get(id));
     },
-    clear() {
-      if (typeof indexedDB !== "undefined") indexedDB.deleteDatabase(name);
+    async clear() {
+      if (typeof indexedDB === "undefined") return;
+      await new Promise<void>((resolve, reject) => {
+        const request = indexedDB.deleteDatabase(name);
+        request.onsuccess = () => resolve();
+        request.onerror = () => reject(request.error);
+        request.onblocked = () => reject(new Error("Another tab is using the image store."));
+      });
     },
   };
 }
@@ -143,10 +150,10 @@ export async function hydrateImageRefs(images: ImageRef[] | undefined, store: Me
           continue;
         }
         // Missing blob on reload — keep the ref so UI can show an honest placeholder.
-        out.push({ blobId: image.blobId, name: image.name, mime: image.mime });
+        out.push({ blobId: image.blobId, name: image.name, mime: image.mime, ...(image.origin ? { origin: image.origin } : {}) });
         continue;
       } catch {
-        out.push({ blobId: image.blobId, name: image.name, mime: image.mime });
+        out.push({ blobId: image.blobId, name: image.name, mime: image.mime, ...(image.origin ? { origin: image.origin } : {}) });
         continue;
       }
     }
@@ -167,10 +174,10 @@ export async function compactImageRefs(images: ImageRef[] | undefined, store: Me
     if (image.blobId && image.dataUrl && shouldOffloadDataUrl(image.dataUrl)) {
       try {
         await store.put(image.blobId, image.dataUrl);
-        out.push({ blobId: image.blobId, name: image.name, mime: image.mime });
+        out.push({ blobId: image.blobId, name: image.name, mime: image.mime, ...(image.origin ? { origin: image.origin } : {}) });
       } catch (error) {
         // Quota / private mode — keep inline rather than lose the image.
-        out.push({ dataUrl: image.dataUrl, blobId: image.blobId, name: image.name, mime: image.mime });
+        out.push({ dataUrl: image.dataUrl, blobId: image.blobId, name: image.name, mime: image.mime, ...(image.origin ? { origin: image.origin } : {}) });
         if (!isQuotaExceededError(error)) {
           /* still degraded */
         }
@@ -181,15 +188,15 @@ export async function compactImageRefs(images: ImageRef[] | undefined, store: Me
       const blobId = newMediaBlobId();
       try {
         await store.put(blobId, image.dataUrl!);
-        out.push({ blobId, name: image.name, mime: image.mime });
+        out.push({ blobId, name: image.name, mime: image.mime, ...(image.origin ? { origin: image.origin } : {}) });
       } catch {
-        out.push({ dataUrl: image.dataUrl, name: image.name, mime: image.mime });
+        out.push({ dataUrl: image.dataUrl, name: image.name, mime: image.mime, ...(image.origin ? { origin: image.origin } : {}) });
       }
       continue;
     }
     // Small / already-compact / legacy inline-only
-    if (image.dataUrl) out.push({ dataUrl: image.dataUrl, blobId: image.blobId, name: image.name, mime: image.mime });
-    else if (image.blobId) out.push({ blobId: image.blobId, name: image.name, mime: image.mime });
+    if (image.dataUrl) out.push({ dataUrl: image.dataUrl, blobId: image.blobId, name: image.name, mime: image.mime, ...(image.origin ? { origin: image.origin } : {}) });
+    else if (image.blobId) out.push({ blobId: image.blobId, name: image.name, mime: image.mime, ...(image.origin ? { origin: image.origin } : {}) });
   }
   return out;
 }
@@ -237,7 +244,7 @@ export async function imagesForExport(images: ImageRef[] | undefined, store: Med
   const hydrated = await hydrateImageRefs(images, store);
   return hydrated
     .filter((image): image is ImageRef & { dataUrl: string } => typeof image.dataUrl === "string" && image.dataUrl.startsWith("data:image/"))
-    .map((image) => ({ dataUrl: image.dataUrl, name: image.name ?? null }));
+    .map((image) => ({ dataUrl: image.dataUrl, name: image.name ?? null, ...(image.origin ? { origin: image.origin } : {}) }));
 }
 
 /** Prefer IndexedDB; fall back to memory when private mode / no IDB. */

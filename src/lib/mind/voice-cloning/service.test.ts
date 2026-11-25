@@ -185,7 +185,20 @@ describe("voice-cloning service delete + consent + export", () => {
     const gen1 = await svc.generate("user-1", { profileId: created.profile.id, text: "Hello" });
     assert.equal(gen1.ok, true);
 
+    let calledWith: string | undefined;
+    ready.deleteVoice = async (id) => { calledWith = id; throw new Error("Fixture outage"); };
+    const pending = await svc.deleteProfile("user-1", created.profile.id);
+    assert.equal(pending.ok, false);
+    if (!pending.ok) assert.equal(pending.code, "provider_delete_pending");
+    assert.equal(calledWith, "abcd1234");
+    assert.equal(store.getProfile("user-1", created.profile.id), null);
+    assert.equal(store.readSampleBase64(created.profile.id), null);
+    assert.equal(store.getConsentForProfile(created.profile.id), null);
+    const recovered = new VoiceCloningStore(store.dir);
+    assert.equal(recovered.pendingProviderDeletes("user-1")[0]?.providerVoiceId, "abcd1234");
+    ready.deleteVoice = async () => ({ ok: true, deleted: true });
     const del = await svc.deleteProfile("user-1", created.profile.id);
+    assert.equal(store.pendingProviderDeletes("user-1").length, 0);
     assert.equal(del.ok, true);
     if (del.ok) assert.equal(del.verifiable, true);
 

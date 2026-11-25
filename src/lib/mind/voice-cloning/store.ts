@@ -114,6 +114,20 @@ export class VoiceCloningStore {
     return { ...p };
   }
 
+  pendingProviderDeletes(userId: string): VoiceProfile[] {
+    return this.data.profiles.filter((p) => p.userId === userId && p.status === "deleted" && p.providerVoiceId);
+  }
+
+  async confirmProviderDelete(userId: string, id: string): Promise<void> {
+    await this.withLock(() => {
+      const row = this.data.profiles.find((p) => p.userId === userId && p.id === id && p.status === "deleted");
+      if (row) {
+        row.providerVoiceId = null;
+        this.persistSync();
+      }
+    });
+  }
+
   countActiveProfiles(userId: string): number {
     return this.listProfiles(userId).length;
   }
@@ -156,15 +170,13 @@ export class VoiceCloningStore {
     return this.withLock(() => {
       const p = this.data.profiles.find((x) => x.id === profileId && x.userId === userId);
       if (!p) return null;
-      if (p.status === "deleted") return { ...p };
       p.status = "deleted";
-      p.deletedAt = new Date(now).toISOString();
+      p.deletedAt ??= new Date(now).toISOString();
       p.updatedAt = p.deletedAt;
-      p.providerVoiceId = null;
       try {
         unlinkSync(this.samplePath(profileId));
-      } catch {
-        /* already gone */
+      } catch (error) {
+        if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error;
       }
       this.data.consents = this.data.consents.filter((c) => c.profileId !== profileId);
       this.persistSync();

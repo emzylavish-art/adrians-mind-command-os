@@ -59,3 +59,9 @@ html[data-theme="light"] #command-palette .palette-option-active {
   background: rgb(15 23 42 / 0.06);
   box-shadow: inset 0 0 0 1px rgb(15 23 42 / 0.12);
 }
+
+#mind-workspace [id^="message-"]:focus,
+#mind-workspace [id^="note-"]:focus {
+  outline: 2px solid var(--color-accent, currentColor);
+  outline-offset: -2px;
+}

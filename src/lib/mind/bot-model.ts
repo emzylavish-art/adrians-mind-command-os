@@ -1,4 +1,5 @@
 import { parseCustomProviderChoice } from "./provider-catalog.ts";
+import { isLogicRouteId } from "./logic-routes.ts";
 import { isModelTier, type ModelTier } from "./model-tiers.ts";
 
 export const BOT_PROVIDERS = ["grok", "openai", "anthropic", "gemini", "openrouter", "nemotron", "ollama"] as const;
@@ -16,7 +17,7 @@ export function normalizeBotModel(input: { chatProvider?: unknown; chatTier?: un
   const tool = typeof provider === "string" && /^mcp:[0-9a-f-]{36}:[A-Za-z0-9_%-]{1,240}$/i.test(provider);
   const service = typeof provider === "string" && /^service:[a-z0-9-]{1,40}$/i.test(provider);
   return {
-    chatProvider: typeof provider === "string" && ((BOT_PROVIDERS as readonly string[]).includes(provider) || catalog || tool || service) ? provider : null,
+    chatProvider: typeof provider === "string" && ((BOT_PROVIDERS as readonly string[]).includes(provider) || isLogicRouteId(provider) || catalog || tool || service) ? provider : null,
     chatTier: isModelTier(tier) ? tier : null,
   };
 }
@@ -39,6 +40,8 @@ export function normalizeBotKnowledge(value: unknown): { knowledge: string; reje
   if (typeof value !== "string") return { knowledge: "", rejected: "" };
   const text = value.trim().slice(0, 4000);
   if (!text) return { knowledge: "", rejected: "" };
+  // Reject binary control bytes in an otherwise plain-text note.
+  // eslint-disable-next-line no-control-regex
   if (/[\u0000-\u0008\u000B\u000C\u000E-\u001F]/.test(text)) return { knowledge: "", rejected: "Only a text note can be saved." };
   if (KEY_SHAPED.test(text)) return { knowledge: "", rejected: "That note looks like a key. It was not saved." };
   return { knowledge: text, rejected: "" };

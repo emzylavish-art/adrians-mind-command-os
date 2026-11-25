@@ -34,9 +34,13 @@ describe("RealtimeVoiceSession", () => {
     let created: FakeSocket | undefined;
     const output = new SharedAudioOutput();
     const transcripts: string[] = [];
+    const partials: string[] = [];
+    const statuses: string[] = [];
     const session = new RealtimeVoiceSession(
       {
+        onStatus: (status) => statuses.push(status),
         onTranscript: (text) => transcripts.push(text),
+        onPartialTranscript: (text) => partials.push(text),
         onAssistantTranscript: (text) => transcripts.push(`assistant:${text}`),
       },
       output,
@@ -50,9 +54,14 @@ describe("RealtimeVoiceSession", () => {
     );
     await session.connect("ephemeral-test");
     assert.equal(session.isOpen, true);
+    assert.deepEqual(statuses, ["connecting"], "Opening a socket alone does not establish microphone capture");
     assert.ok(created);
     const socket = created as FakeSocket;
     assert.ok(socket.sent.some((line: string) => line.includes("session.update")));
+    socket.emitMessage({ type: "conversation.item.input_audio_transcription.updated", transcript: "hello word" });
+    socket.emitMessage({ type: "conversation.item.input_audio_transcription.updated", transcript: "hello world" });
+    assert.deepEqual(partials, ["hello word", "hello world"]);
+    assert.deepEqual(transcripts, []);
     socket.emitMessage({ type: "conversation.item.input_audio_transcription.completed", transcript: "hello world" });
     assert.deepEqual(transcripts, ["hello world"]);
     socket.emitMessage({ type: "response.output_audio_transcript.delta", delta: "Ready " });
@@ -63,6 +72,29 @@ describe("RealtimeVoiceSession", () => {
     socket.emitMessage({ type: "response.created" });
     session.interruptPlayback();
     assert.ok(socket.sent.some((line: string) => line.includes("response.cancel")));
+    session.close();
+    socket.emitMessage({ type: "conversation.item.input_audio_transcription.completed", transcript: "late" });
+    assert.deepEqual(transcripts, ["hello world", "assistant:Ready now."]);
+  });
+
+  it("in local orchestration transcribes input and suppresses the native answer", async () => {
+    const socket = new FakeSocket();
+    const heard: string[] = [];
+    const output = new SharedAudioOutput();
+    let played = 0;
+    output.playPcm16Base64 = async () => { played++; };
+    const session = new RealtimeVoiceSession({
+      onTranscript: (text) => heard.push(text),
+      onAssistantTranscript: () => assert.fail("Native voice must not duplicate the conductor reply"),
+    }, output, () => { queueMicrotask(() => socket.openNow()); return socket; }, { transcriptOnly: true });
+    await session.connect("test-token");
+    socket.emitMessage({ type: "conversation.item.input_audio_transcription.completed", transcript: "Hello" });
+    socket.emitMessage({ type: "response.created" });
+    socket.emitMessage({ type: "response.output_audio.delta", delta: "AA==" });
+    socket.emitMessage({ type: "response.output_audio_transcript.done", transcript: "A duplicate" });
+    assert.deepEqual(heard, ["Hello"]);
+    assert.equal(played, 0);
+    assert.equal(socket.sent.filter((value) => JSON.parse(value).type === "response.cancel").length, 1);
     session.close();
   });
 
@@ -83,7 +115,7 @@ describe("RealtimeVoiceSession", () => {
     assert.ok(update);
     assert.ok(update!.includes('"voice":"eve"'), update);
     assert.ok(update!.includes('"transcription"'), update);
-    assert.ok(update!.includes("grok-voice-transcribe-2.0"), update);
+    assert.ok(update!.includes("grok-transcribe"), update);
     session.close();
   });
 

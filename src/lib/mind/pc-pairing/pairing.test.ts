@@ -4,7 +4,11 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, it } from "node:test";
 import {
+  acceptJob,
   appendJobEvent,
+  offerNextJob,
+  requestJobCancel,
+  markJobTimeout,
   claimNextJob,
   completeJob,
   enqueueJob,
@@ -97,6 +101,39 @@ describe("pc pairing", () => {
     assert.equal(listJobEvents("owner", job.id).length, 1);
     assert.equal(listJobEvents("other-owner", job.id).length, 0);
     assert.equal(appendJobEvent({ jobId: job.id, agentId: "000000000000000000000000", type: "forged" }), null);
+  });
+
+  it("recovers a lost offer and a lost acceptance response without authorizing a second receipt", () => {
+    setPcPairingDirectory(mkdtempSync(join(tmpdir(), "pc-delivery-")));
+    const job = enqueueJob({ ownerId: "owner", agentId: "a", command: "task", confirm: false });
+    assert.equal(offerNextJob("a")?.id, job.id);
+    assert.equal(offerNextJob("a")?.status, "queued");
+    assert.equal(acceptJob("b", job.id, "receipt"), null);
+    assert.equal(acceptJob("a", job.id, "receipt")?.status, "running");
+    assert.equal(acceptJob("a", job.id, "receipt")?.status, "running");
+    assert.equal(offerNextJob("a"), null);
+    assert.equal(acceptJob("a", job.id, "different"), null);
+    assert.equal(requestJobCancel("owner", job.id)?.status, "cancel_requested");
+    assert.equal(completeJob({ jobId: job.id, agentId: "a", ok: true })?.status, "cancelled");
+    assert.equal(completeJob({ jobId: job.id, agentId: "a", ok: true })?.status, "cancelled");
+  });
+
+  it("preserves complete file results, terminal state and bounded shell logs", () => {
+    setPcPairingDirectory(mkdtempSync(join(tmpdir(), "pc-results-")));
+    const args = { agentId: "a", ownerId: "owner", command: "test", confirm: true };
+    const output = JSON.stringify({ before: "\u0000".repeat(1_000_000), after: "\u0000".repeat(1_000_000) });
+    const file = enqueueJob({ ...args, kind: "file-op" });
+    assert.equal(completeJob({ ...args, jobId: file.id, ok: true, output: "{}" }), null);
+    claimNextJob(args.agentId);
+    assert.equal(completeJob({ ...args, jobId: file.id, ok: true, output })?.output, output);
+    markJobTimeout(file.id);
+    assert.equal(completeJob({ ...args, jobId: file.id, ok: false })?.output, output);
+    const shell = enqueueJob(args);
+    claimNextJob(args.agentId);
+    assert.equal(completeJob({ ...args, jobId: shell.id, ok: true, output })?.output?.length, 8000);
+    const timed = enqueueJob(args);
+    markJobTimeout(timed.id);
+    assert.equal(completeJob({ ...args, jobId: timed.id, ok: true })?.status, "timeout");
   });
 
   it("reports no online agents when lastSeen is stale", () => {

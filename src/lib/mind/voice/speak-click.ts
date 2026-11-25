@@ -215,7 +215,7 @@ export async function runMountedSpeak(input: SpeakMountedInput): Promise<{ ok: b
   const deps: SpeakActionDeps = {
     session: guard(sourceDeps.session),
     capture: guard(sourceDeps.capture),
-    transcribe: guardInput(sourceDeps.transcribe),
+    transcribe: guardTwo(sourceDeps.transcribe),
     chatTurn: guardInput(sourceDeps.chatTurn),
     synthesize: guardTwo(sourceDeps.synthesize),
     play: guardPlay(sourceDeps.play),

@@ -12,7 +12,7 @@ export const CANNOT_RUN = [
   "Microphone after the browser closes",
 ] as const;
 
-export const INSTALLER_HREF = "/downloads/AdriansMind-Setup.exe";
+export { PUBLIC_INSTALLER as INSTALLER_HREF } from "./desktop-update.ts";
 
 export const DESKTOP_ACTIONS = [
   { id: "mouse", label: "Mouse" },

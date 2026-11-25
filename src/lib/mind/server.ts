@@ -4,7 +4,7 @@ import { guardMindEnv } from "./isolation";
 import { allowMindRequest } from "./limits";
 import { describePersistence } from "./persistence";
 import { modelTierCatalog } from "./model-tiers";
-import { configuredProviders } from "./provider-call";
+import { configuredProviders, selectProvider, NEMOTRON_MODEL } from "./provider-call";
 import { performSearch } from "./research";
 import { interpretWorkerHealth } from "./worker-health";
 import { resolveXaiInferenceApiKey } from "./xai-adapter";
@@ -35,6 +35,13 @@ export const mindStatus = createServerFn({ method: "GET" }).handler(async () => 
     signedIn = false;
   }
   const described = describePersistence(resolveDatabaseUrl(process.env));
+  const providerModels: Record<string, string> = { nemotron: NEMOTRON_MODEL };
+  for (const id of ["gemini", "openai", "anthropic", "openrouter"]) {
+    const selected = selectProvider(id, process.env);
+    if (selected.ok) providerModels[id] = selected.model;
+  }
+  const searchProvider = process.env.MIND_SEARCH_ENDPOINT?.trim() && process.env.MIND_SEARCH_KEY?.trim()
+    ? "Configured search service" : resolveXaiInferenceApiKey(process.env).ok ? "Grok web search" : "Unavailable";
   const persistence = described.note;
   const databaseBackend = described.backend;
   const { inspectLogicRoutes } = await import("./logic-route-adapter.server.ts");
@@ -52,6 +59,8 @@ export const mindStatus = createServerFn({ method: "GET" }).handler(async () => 
       signedIn,
       persistence,
       databaseBackend,
+      providerModels,
+      searchProvider,
       providers: configuredProviders(process.env),
       logicRoutes,
       checkedAt,
@@ -71,6 +80,8 @@ export const mindStatus = createServerFn({ method: "GET" }).handler(async () => 
     signedIn,
     persistence,
     databaseBackend,
+    providerModels,
+    searchProvider,
     providers: configuredProviders(process.env),
     logicRoutes,
     checkedAt,
@@ -121,11 +132,17 @@ export const workerHealth = createServerFn({ method: "GET" }).handler(async () =
 
 export const searchWeb = createServerFn({ method: "POST" })
   .middleware([authMiddleware])
-  .validator((input: { query: string }) => ({ query: typeof input.query === "string" ? input.query.slice(0, 300) : "" }))
+  .validator((input: { query: string; freeOnly?: boolean; retryQueries?: string[] }) => ({
+    query: typeof input.query === "string" ? input.query.trim() : "", freeOnly: input.freeOnly === true, retryQueries: Array.isArray(input.retryQueries) ? input.retryQueries.filter((q) => typeof q === "string" && q.length <= 330).slice(0, 3) : undefined,
+  }))
   .handler(async ({ data, context }) => {
     const { haltIsOn } = await import("./halt.server");
     if (await haltIsOn(context.userId)) {
       return { ok: false as const, configured: false, citations: [] as { title: string; url: string }[], error: "Emergency stop is on. No new action can run." };
+    }
+    if (data.freeOnly || data.query.length > 300) {
+      return { ok: false as const, configured: false, citations: [] as { title: string; url: string }[],
+        error: data.freeOnly ? "Free-only mode is active. No verified free web search route is available." : "Shorten the research question to 300 characters before searching." };
     }
     if (!allowMindRequest("search", context.userId, 6)) {
       return { ok: false as const, configured: false, citations: [] as { title: string; url: string }[], error: "Too many searches. Wait a minute and try again." };
@@ -135,10 +152,13 @@ export const searchWeb = createServerFn({ method: "POST" })
     if (endpoint && key) {
       return performSearch({
         query: data.query,
+        retryQueries: data.retryQueries,
+        deep: data.retryQueries ? true : undefined,
         endpoint,
         key,
       });
     }
+    if (data.retryQueries) return { ok: false as const, configured: false, citations: [], error: "The original research service is unavailable." };
     const { searchWithGrok } = await import("./xai-search");
     return searchWithGrok(data.query);
   });
@@ -173,23 +193,24 @@ export const recordAgentExecution = createServerFn({ method: "POST" })
 export const notionStatus = createServerFn({ method: "GET" })
   .middleware([authMiddleware])
   .handler(async ({ context }) => {
-    const { notionConnection, readNotionPref } = await import("./notion");
-    const pref = readNotionPref(context.userId);
-    return notionConnection(process.env.NOTION_TOKEN, pref.disabled);
+    const { notionConnection } = await import("./notion");
+    const { resolveNotionTokenPersistent } = await import("./connectors/notion-oauth");
+    return notionConnection(await resolveNotionTokenPersistent(context.userId), false);
   });
 
 export const notionDisconnect = createServerFn({ method: "POST" })
   .middleware([authMiddleware])
   .handler(async ({ context }) => {
-    const { notionConnection, writeNotionPref } = await import("./notion");
-    writeNotionPref(context.userId, true);
-    return notionConnection(process.env.NOTION_TOKEN, true);
+    const { disconnectNotion } = await import("./connectors/notion-oauth");
+    const status = await disconnectNotion({ ownerId: context.userId });
+    return { state: "disconnected" as const, detail: status.detail };
   });
 
 export const notionCommand = createServerFn({ method: "POST" })
   .middleware([authMiddleware])
-  .validator((input: { text?: string; confirmed?: boolean; pageId?: string | null }) => ({
+  .validator((input: { text?: string; confirmed?: boolean; pageId?: string | null; workspaceId?: string }) => ({
     text: typeof input.text === "string" ? input.text.slice(0, 2000) : "",
+    workspaceId: typeof input.workspaceId === "string" ? input.workspaceId : undefined,
     confirmed: input.confirmed === true,
     pageId: typeof input.pageId === "string" ? input.pageId.slice(0, 80) : null,
   }))
@@ -223,11 +244,11 @@ export const notionCommand = createServerFn({ method: "POST" })
         verified: false,
       };
     }
-    const { readNotionPref, runNotionTurn } = await import("./notion");
-    const pref = readNotionPref(context.userId);
+    const { runNotionTurn } = await import("./notion");
+    const { resolveNotionTokenPersistent, resolveWorkspaceGrant } = await import("./connectors/notion-oauth");
     const result = await runNotionTurn({
-      token: process.env.NOTION_TOKEN,
-      disabled: pref.disabled,
+      token: data.workspaceId ? await resolveWorkspaceGrant(context.userId, data.workspaceId) : await resolveNotionTokenPersistent(context.userId),
+      disabled: false,
       text: data.text,
       confirmed: data.confirmed,
       pageId: data.pageId,
@@ -242,7 +263,7 @@ export const notionCommand = createServerFn({ method: "POST" })
         tool: "notion",
         action: result.action,
         ok: result.ok,
-        detail: result.error || result.pages.map((page) => page.title).join(", ") || result.content.slice(0, 180) || "no result",
+        detail: result.ok ? `Notion ${result.action} completed.` : `Notion ${result.action} did not complete.`,
       });
     } catch {
       /* the reply still reports the API result when the record cannot be saved */
@@ -291,11 +312,13 @@ export const mcpRemove = createServerFn({ method: "POST" })
 
 export const mcpCommand = createServerFn({ method: "POST" })
   .middleware([authMiddleware])
-  .validator((input: { text?: string; confirmed?: boolean }) => ({
-    text: typeof input.text === "string" ? input.text.slice(0, 2000) : "",
+  .validator((input: { text?: string; confirmed?: boolean; approvalServerId?: string; approvalId?: string }) => ({
+    text: typeof input.text === "string" ? input.text : "",
+    approvalServerId: input.approvalServerId, approvalId: input.approvalId,
     confirmed: input.confirmed === true,
   }))
   .handler(async ({ data, context }) => {
+    if (data.text.length > 2000) return { ok: false, needsConfirmation: false, servers: [], text: "", error: "MCP requests are limited to 2000 characters. Nothing was called." };
     const { haltIsOn } = await import("./halt.server");
     if (await haltIsOn(context.userId)) {
       return { ok: false, needsConfirmation: false, servers: [], text: "", error: "Emergency stop is on. No MCP server was called." };
@@ -303,7 +326,7 @@ export const mcpCommand = createServerFn({ method: "POST" })
     const { runConnectedMcpTurn } = await import("./connected-mcp.server");
     const { databaseConfigured } = await import("./mcp/registry-store");
     const db = databaseConfigured() ? await (await import("../db")).getSql() : null;
-    return runConnectedMcpTurn({ db, userId: context.userId, text: data.text, confirmed: data.confirmed, isHalted: haltIsOn });
+    return runConnectedMcpTurn({ db, userId: context.userId, text: data.text, confirmed: data.confirmed, approvalServerId: data.approvalServerId, approvalId: data.approvalId, isHalted: haltIsOn });
   });
 
 export const inspectWebPage = createServerFn({ method: "POST" })
@@ -340,7 +363,7 @@ export const analyzeImageFile = createServerFn({ method: "POST" })
   .validator((input: { name?: string; bytes?: number; imageBase64?: string }) => ({
     name: typeof input.name === "string" ? input.name.slice(0, 120) : "",
     bytes: typeof input.bytes === "number" ? input.bytes : 0,
-    imageBase64: typeof input.imageBase64 === "string" ? input.imageBase64.slice(0, 200_000) : "",
+    imageBase64: typeof input.imageBase64 === "string" ? (input.imageBase64.length <= 533_336 ? input.imageBase64 : "") : "",
   }))
   .handler(async ({ data }) => {
     const { analyzeImage } = await import("./image-analyze");
@@ -422,8 +445,9 @@ export const loadMindCopy = createServerFn({ method: "POST" })
 
 export const speakText = createServerFn({ method: "POST" })
   .middleware([authMiddleware])
-  .validator((input: { text: string; voiceId?: string }) => input)
+  .validator((input: { text: string; voiceId?: string; freeOnly?: boolean }) => input)
   .handler(async ({ data, context }) => {
+    if (data.freeOnly) return { ok: false as const, error: "Free-only mode keeps cloud speech off." };
     const { validateSpeakTextInput } = await import("./voice/voice-input");
     const parsed = validateSpeakTextInput((data as { text?: unknown } | null)?.text);
     if (!parsed.ok) return { ok: false as const, error: parsed.error };
@@ -447,7 +471,9 @@ export const speakText = createServerFn({ method: "POST" })
 
 export const createVoiceClientSecret = createServerFn({ method: "POST" })
   .middleware([authMiddleware])
-  .handler(async ({ context }) => {
+  .validator((input?: { freeOnly?: boolean }) => ({ freeOnly: input?.freeOnly === true }))
+  .handler(async ({ context, data }) => {
+    if (data.freeOnly) return { ok: false as const, error: "Free-only mode keeps realtime voice off." };
     const { haltIsOn } = await import("./halt.server");
     if (await haltIsOn(context.userId)) return { ok: false as const, error: "Emergency stop is on. Voice was not started." };
     if (!allowMindRequest("voice_secret", context.userId, 20)) {

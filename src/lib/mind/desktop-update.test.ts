@@ -7,6 +7,10 @@ import { fileURLToPath } from "node:url";
 import {
   CLOUD_ORIGIN,
   LOCAL_BUILD,
+  FULL_PACKAGE,
+  decideFullUpdate,
+  isFullPackageSpec,
+  readCloudManifest,
   PUBLIC_INSTALLER,
   chooseCloud,
   decideUpdate,
@@ -22,18 +26,16 @@ const cjs = require("../../../desktop/cloud-update.cjs");
 const root = join(dirname(fileURLToPath(import.meta.url)), "../../..");
 const hash = "a".repeat(64);
 const remote = {
-  product: "adrians-mind",
-  version: "0.9.0",
+  ...publishedManifest,
   build: 2,
-  download: "/downloads/AdriansMind-Setup.exe",
   sha256: hash,
-  size: 110238126,
+  fullPackage: { ...FULL_PACKAGE, sha256: hash },
 };
 
-test("a newer pinned build with a matching hash can install", () => {
+test("a newer full package opens the release with all four verified parts", () => {
   const decision = decideUpdate(1, remote);
   assert.equal(decision.action, "install");
-  assert.equal(decision.url, `${CLOUD_ORIGIN}/downloads/AdriansMind-Setup.exe`);
+  assert.equal(decision.url, PUBLIC_INSTALLER);
   assert.equal(cjs.decideUpdate(1, remote).action, "install");
 });
 
@@ -55,7 +57,7 @@ test("download hosts are pinned and redirects cannot choose the window", () => {
   assert.equal(isAllowedDownloadUrl(`${CLOUD_ORIGIN}/downloads/AdriansMind-Setup.exe`), true);
   assert.equal(isAllowedDownloadUrl("https://github.com/emzylavish-art/adrians-mind-command-os/releases/download/desktop-installer/AdriansMind-Setup-Full.exe.part00"), true);
   assert.equal(isAllowedDownloadUrl("https://github.com/emzylavish-art/adrians-mind-command-os/releases/download/desktop-installer/AdriansMind-Setup.exe"), false);
-  assert.equal(isAllowedDownloadUrl(PUBLIC_INSTALLER), true);
+  assert.equal(isAllowedDownloadUrl(PUBLIC_INSTALLER), false);
   assert.equal(isAllowedDownloadUrl("https://release-assets.githubusercontent.com/file"), false);
   assert.equal(isAllowedDownloadUrl("https://release-assets.githubusercontent.com/file", 1), true);
   for (const blocked of [
@@ -72,8 +74,7 @@ test("download hosts are pinned and redirects cannot choose the window", () => {
     assert.equal(cjs.isAllowedDownloadUrl(blocked), false, blocked);
   }
   assert.equal(resolveDownloadUrl("/other.exe"), null);
-  assert.equal(decideUpdate(1, { ...remote, download: "https://evil.example/AdriansMind-Setup.exe" }).action, "switch");
-  assert.equal(decideUpdate(1, remote).switchUrl, `${CLOUD_ORIGIN}/`);
+  assert.equal(decideUpdate(1, { ...remote, download: "https://evil.example/AdriansMind-Setup.exe" }).url, PUBLIC_INSTALLER);
 });
 
 test("hash rejection is exact and the note does not carry a token", () => {
@@ -83,7 +84,7 @@ test("hash rejection is exact and the note does not carry a token", () => {
   const note = updateNote(LOCAL_BUILD, null, decideUpdate(LOCAL_BUILD, null));
   assert.match(note, new RegExp(CLOUD_ORIGIN));
   assert.equal(/ghp_|github_pat_|Bearer |sk-/.test(note), false);
-  assert.equal(publishedManifest.download, "/downloads/AdriansMind-Setup.exe");
+  assert.equal(publishedManifest.download, PUBLIC_INSTALLER);
   assert.equal(publishedManifest.build, LOCAL_BUILD);
 });
 
@@ -103,12 +104,28 @@ test("the launcher pins the same host and does not embed a token", () => {
   assert.equal(launcher.includes("ELECTRON_RUN_AS_NODE"), true);
 });
 
-test("an engine-sized installer can install and a file at the release limit cannot", () => {
-  assert.equal(decideUpdate(1, { ...remote, size: 600_000_000 }).action, "install");
-  assert.equal(cjs.validSize(600_000_000), true);
-  assert.equal(cjs.validSize(500_000_000), true);
-  assert.equal(decideUpdate(1, { ...remote, size: 2_000_000_000 }).action, "switch");
-  assert.equal(cjs.validSize(2_000_000_000), false);
+test("retired single-file feeds and incomplete packages cannot install a release part", () => {
+  for (const download of ["/downloads/AdriansMind-Setup.exe", FULL_PACKAGE.parts[0].url]) {
+    const single = { ...remote, size: 600_000_000, download, fullPackage: undefined };
+    assert.equal(decideUpdate(1, single).action, "switch");
+    assert.equal(cjs.decideUpdate(1, single).action, "switch");
+  }
+  for (const parts of [
+    FULL_PACKAGE.parts.slice(1),
+    [...FULL_PACKAGE.parts].reverse(),
+    [FULL_PACKAGE.parts[0], FULL_PACKAGE.parts[0], ...FULL_PACKAGE.parts.slice(2)],
+    [{ ...FULL_PACKAGE.parts[0], url: FULL_PACKAGE.parts[1].url }, ...FULL_PACKAGE.parts.slice(1)],
+  ]) {
+    const pack = { ...FULL_PACKAGE, parts };
+    assert.equal(isFullPackageSpec(pack), false);
+    assert.equal(cjs.isFullPackageSpec(pack), false);
+  }
+});
+
+test("cloud feed parsing keeps the complete split-file contract", async () => {
+  const read = await readCloudManifest(async () => Response.json(remote));
+  assert.equal(decideFullUpdate(1, read).action, "full-install");
+  assert.equal(cjs.decideFullUpdate(1, read).action, "full-install");
 });
 test("the future site download points at the public installer and not a private token", () => {
   const vercel = JSON.parse(readFileSync(join(root, "vercel.json"), "utf8"));

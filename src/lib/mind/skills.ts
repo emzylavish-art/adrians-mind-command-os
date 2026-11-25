@@ -40,3 +40,19 @@ export function runSkill(ws: Workspace, skill: Skill, enabled: boolean, query?: 
   const result = runLocalPlan(ws, [{ id: skill.tool, tool: skill.tool, query }], { autonomy: "automatic", halted: ws.halted, tokens: {} });
   return { ok: result.ok, text: result.lines.join("\n") || "No result." };
 }
+
+/** Only a named runnable skill can execute. Pass the remainder of the request as its input. */
+export function runRequestedSkill(ws: Workspace, request: string, enabled: Record<string, boolean>): { ok: boolean; text: string } {
+  const lower = request.toLowerCase();
+  const words = " " + lower.replace(/[^a-z0-9]+/g, " ") + " ";
+  const named = SKILLS.filter((skill) => words.includes(" " + skill.name.toLowerCase() + " "));
+  if (named.length === 1) {
+    const skill = named[0]!;
+    const query = request.slice(lower.indexOf(skill.name.toLowerCase()) + skill.name.length)
+      .replace(/^\s*(?:skill\b)?\s*(?:to\s+)?(?:find|search(?:\s+for)?)?\s*/i, "").trim();
+    if (skill.id === "adrian-os-builder") return { ok: false, text: "Builder instructions apply to hosted Build. Open Build to run a coding task." };
+    return runSkill(ws, skill, enabled[skill.id] !== false, query);
+  }
+  const matches = searchSkills(request.replace(/\bskills?\b/gi, " "));
+  return { ok: matches.length > 0, text: matches.map((skill) => skill.name + " — " + skill.needs).join("\n") || "No matching skill." };
+}

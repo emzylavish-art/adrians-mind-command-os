@@ -83,7 +83,7 @@ describe("H33 Notion connector failure banners", () => {
     assert.match(html, /role="status"/);
     assert.match(html, /data-testid="notion-configure"/);
     assert.match(html, />Setup</);
-    assert.match(html, /Set NOTION_TOKEN/);
+    assert.match(html, /Open Plugins/);
     assert.doesNotMatch(html, /role="alert"/);
     assert.doesNotMatch(html, /data-testid="failure-retry"/);
     assert.doesNotMatch(html, /data-testid="failure-banner"/);

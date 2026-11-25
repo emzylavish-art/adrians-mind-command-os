@@ -1,3 +1,4 @@
+import { machineRequired } from "./account-workspace.ts";
 import { requireUserId } from "../../auth/verify.server";
 import { assertSameOrigin } from "../connectors/oauth-csrf";
 import { haltIsOn } from "../halt.server";
@@ -44,8 +45,9 @@ export async function handleKimiSession(request: Request): Promise<Response> {
     if (!origin.ok) return json({ ok: false, error: origin.error }, 403);
     try {
       const ownerId = await ownerIdFromRequest(request);
-      const body = (await request.json().catch(() => ({}))) as { prompt?: unknown; cwd?: unknown; mode?: unknown; resumeSessionId?: unknown; fork?: unknown; action?: unknown };
+      const body = (await request.json().catch(() => ({}))) as { prompt?: unknown; cwd?: unknown; mode?: unknown; resumeSessionId?: unknown; fork?: unknown; action?: unknown; agentId?: unknown; jobKey?: unknown };
       if ((body as { action?: unknown }).action === "close") {
+        if (ownerId !== "dev-user") return json({ ok: false, error: machineRequired }, 409);
         const sessionId = typeof body.resumeSessionId === "string" ? body.resumeSessionId.trim().slice(0, 80) : "";
         if (!sessionId) return json({ ok: false, error: "session id is required to close the coding process." }, 400);
         return json({ ok: true, closed: closeHostedCodingSession(sessionId), sessionId });
@@ -54,11 +56,15 @@ export async function handleKimiSession(request: Request): Promise<Response> {
       const prompt = typeof body.prompt === "string" ? body.prompt.trim().slice(0, MAX_PROMPT) : "";
       if (!prompt) return json({ ok: false, error: "prompt is required." }, 400);
       const requestedCwd = typeof body.cwd === "string" && body.cwd.trim() ? body.cwd.trim().slice(0, MAX_CWD) : undefined;
-      const cwd = resolveBuildWorkspace(requestedCwd);
       const mode = body.mode === "plan" || body.mode === "auto" || body.mode === "yolo" || body.mode === "default" ? body.mode as CodingMode : undefined;
       const resumeSessionId = typeof body.resumeSessionId === "string" ? body.resumeSessionId.trim().slice(0, 80) : "";
       const agents = onlineAgents(ownerId);
-      if (agents.length === 0) {
+      const agent = body.agentId === undefined ? agents[0] : agents.find((item) => item.id === body.agentId);
+      if (body.agentId !== undefined && !agent) return json({ ok: false, error: "The selected Build PC is offline. Reconnect it before submitting." }, 409);
+      if (body.jobKey !== undefined && (typeof body.jobKey !== "string" || !/^[a-f0-9]{32}$/.test(body.jobKey))) return json({ ok: false, error: "Invalid job ID." }, 400);
+      if (!agent) {
+        if (ownerId !== "dev-user") return json({ ok: false, executed: false, error: machineRequired }, 409);
+        const cwd = resolveBuildWorkspace(requestedCwd);
         if (mode || resumeSessionId || body.fork === true) {
           const workspace = cwd || adrianHostedWorkspace();
           const checkpoint = snapshotHostedWorkspace();
@@ -105,14 +111,14 @@ export async function handleKimiSession(request: Request): Promise<Response> {
           package: packageLabel(hosted.command),
         }, accepted ? 200 : hosted.status === "not_configured" ? 503 : 409);
       }
-      const agent = agents[0];
       const job = enqueueJob({
+        jobKey: typeof body.jobKey === "string" ? body.jobKey : undefined,
         ownerId,
         agentId: agent.id,
         kind: "kimi-acp",
         command: "kimi acp",
         confirm: false,
-        payload: { prompt, cwd },
+        payload: { prompt, cwd: requestedCwd },
       });
       return json({
         ok: true,

@@ -41,7 +41,7 @@ export type SpeakRetryParams = {
 export type SpeakActionDeps = {
   session?: () => Promise<unknown>;
   capture?: () => Promise<unknown>;
-  transcribe?: (audioBase64: string) => Promise<unknown>;
+  transcribe?: (audioBase64: string, mime: string) => Promise<unknown>;
   chatTurn?: (transcript: string) => Promise<unknown>;
   synthesize?: (text: string, voiceId: string) => Promise<unknown>;
   play?: (audio: string) => Promise<void>;
@@ -240,6 +240,7 @@ export async function runSpeakAction(params: SpeakRetryParams, deps: SpeakAction
     if (failure) return { ok: false, noop: false, ...failure, params: snap };
   }
   let audioIn = "";
+  let mime = "audio/webm";
   if (deps.capture) {
     try {
       const captured = await deps.capture();
@@ -248,6 +249,7 @@ export async function runSpeakAction(params: SpeakRetryParams, deps: SpeakAction
         return { ok: false, noop: false, ...classified, params: snap };
       }
       const rec = asRecord(captured);
+      if (typeof rec?.mime === "string" && rec.mime) mime = rec.mime;
       audioIn = rec && typeof rec.audioBase64 === "string" ? rec.audioBase64 : "";
     } catch (caught) {
       const classified = classifySpeakFailure(caught);
@@ -257,7 +259,7 @@ export async function runSpeakAction(params: SpeakRetryParams, deps: SpeakAction
   let transcript = snap.transcript;
   if (deps.transcribe) {
     try {
-      const transcribed = await deps.transcribe(audioIn);
+      const transcribed = await deps.transcribe(audioIn, mime);
       if (failed(transcribed)) {
         const classified = classifySpeakFailure(transcribed);
         return { ok: false, noop: false, ...classified, params: snap };

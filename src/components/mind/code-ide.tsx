@@ -125,7 +125,10 @@ function HighlightedEditor(props: { path: string; text: string; disabled: boolea
 export function CodeIde(props: {
   files: IdeFile[];
   matches: string[];
-  tabs: string[];
+  tabs: { id: string; path: string; workspace: string; cwd?: string }[];
+  selectedId: string;
+  onSelectTab: (id: string) => void;
+  onOpenMatch: (path: string) => void;
   dirty: string[];
   selected: string;
   text: string;
@@ -138,9 +141,10 @@ export function CodeIde(props: {
   onCloseTab: (path: string) => void;
   onChange: (value: string) => void;
   onSave: () => void;
+  onCheck: () => void;
 }) {
   const tree = fileTree(props.files);
-  const dirty = props.selected !== "" && props.dirty.includes(props.selected);
+  const dirty = props.selected !== "" && props.dirty.includes(props.selectedId);
   const [completions, setCompletions] = useState<string[]>([]);
   const [debugText, setDebugText] = useState("");
   const [toolNotice, setToolNotice] = useState("");
@@ -182,27 +186,28 @@ export function CodeIde(props: {
           <button type="submit">New</button>
         </form>
         {tree.length ? <TreeRows nodes={tree} depth={0} selected={props.selected} onOpen={props.onOpen} /> : <p className="code-ide-empty">Choose Browse to list the hosted workspace.</p>}
-        {props.matches.map((path) => <button key={path} type="button" className="code-ide-match" onClick={() => props.onOpen(path)}>Match: {path}</button>)}
+        {props.matches.map((path) => <button key={path} type="button" className="code-ide-match" onClick={() => props.onOpenMatch(path)}>Match: {path}</button>)}
       </aside>
       <section>
         <div className="code-ide-tabs" role="tablist" aria-label="Open files">
-          {props.tabs.map((path) => (
-            <div key={path} className="code-ide-tab">
-              <button type="button" role="tab" aria-selected={path === props.selected} onClick={() => props.onOpen(path)}>
-                {path.split("/").at(-1)}{props.dirty.includes(path) ? " •" : ""}
+          {props.tabs.map(({ id, path, workspace, cwd }) => (
+            <div key={id} className="code-ide-tab" title={`${workspace} ${cwd || ""} ${path}`}>
+              <button type="button" role="tab" aria-selected={id === props.selectedId} onClick={() => props.onSelectTab(id)}>
+                {path.split("/").at(-1)}{props.dirty.includes(id) ? " •" : ""}
               </button>
-              <button type="button" aria-label={`Close ${path}`} onClick={() => props.onCloseTab(path)}>×</button>
+              <button type="button" aria-label={`Close ${path}`} onClick={() => props.onCloseTab(id)}>×</button>
             </div>
           ))}
           {!props.tabs.length ? <span className="code-ide-empty">No file open</span> : null}
         </div>
         {props.selected ? (
-          <HighlightedEditor path={props.selected} text={props.text} disabled={props.busy} onChange={props.onChange} />
+          <HighlightedEditor key={props.selectedId} path={props.selected} text={props.text} disabled={props.busy} onChange={props.onChange} />
         ) : (
           <p className="code-ide-empty">Select a file from the tree.</p>
         )}
         <div className="code-ide-status">
           <button type="button" disabled={!props.selected || props.busy || !dirty} onClick={props.onSave}>{props.busy ? "Saving…" : "Save reviewed file"}</button>
+          {props.selected && <button type="button" disabled={props.busy} onClick={props.onCheck}>Check disk copy</button>}
           <span>{props.selected ? `${props.selected} · ${props.text.split("\n").length} lines · ${dirty ? "Unsaved" : "Matches last read or verified save"}` : "No file selected"}</span>
         </div>
         <div className="code-ide-tools">
@@ -211,7 +216,7 @@ export function CodeIde(props: {
             Breakpoint line
             <input aria-label="Breakpoint line" type="number" min={1} value={breakLine} onChange={(event) => setBreakLine(Number(event.target.value) || 1)} />
           </label>
-          <button type="button" disabled={!props.selected || props.busy} onClick={() => void debug()}>Debug</button>
+          <button type="button" disabled={!props.selected || props.busy || dirty || props.tabs.find((tab) => tab.id === props.selectedId)?.workspace !== "hosted"} title="Debug runs the saved hosted file" onClick={() => void debug()}>Debug</button>
         </div>
         <div className="code-ide-results">
           {completions.length ? <ul data-testid="completions">{completions.map((name) => <li key={name}>{name}</li>)}</ul> : null}

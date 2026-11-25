@@ -19,6 +19,7 @@ export type OauthBoardActionParams = {
   name: string;
   /** API path segment under /api/mind/oauth/{path}/… */
   path: string;
+  expectedConnectedAt?: string;
 };
 
 export type OauthBoardActionState =
@@ -124,6 +125,7 @@ export async function runOauthBoardAction(
 
     const res = await fetchImpl(oauthBoardActionUrl(snap), {
       method: "POST",
+      ...(snap.expectedConnectedAt ? { headers: { "x-connected-at": snap.expectedConnectedAt } } : {}),
       credentials: "include",
     });
     const body = (await res.json().catch(() => null)) as {
@@ -166,6 +168,7 @@ export function snapshotOauthBoardActionParams(params: OauthBoardActionParams): 
     action: params.action,
     name: params.name,
     path: params.path,
+    ...(params.expectedConnectedAt ? { expectedConnectedAt: params.expectedConnectedAt } : {}),
   };
 }
 

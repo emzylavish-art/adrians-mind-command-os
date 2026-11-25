@@ -87,6 +87,8 @@ export function ActionOverlay({
 }) {
   const panel = useRef<HTMLDivElement>(null);
   const opener = useRef<HTMLElement | null>(null);
+  const close = useRef(onClose);
+  close.current = onClose;
   useEffect(() => {
     const node = panel.current;
     if (!node) return;
@@ -94,23 +96,34 @@ export function ActionOverlay({
     if (!opener.current && focused instanceof HTMLElement && focused !== document.body && !node.contains(focused)) {
       opener.current = focused;
     }
-    const reduce = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    const reduce = document.documentElement.dataset.adrianMotion === "reduce" || window.matchMedia("(prefers-reduced-motion: reduce)").matches;
     finishMenu(node);
     if (reduce) node.style.removeProperty("animation");
     node.style.setProperty("z-index", "1201", "important");
     placeCard(node);
     node.querySelector<HTMLElement>("button, input, select")?.focus();
     const onKey = (event: KeyboardEvent) => {
-      if (event.key !== "Escape" || !node.contains(document.activeElement)) return;
-      event.stopPropagation();
-      onClose();
-      requestAnimationFrame(() => {
-        if (opener.current?.isConnected) opener.current.focus({ preventScroll: true });
-      });
+      if (!node.contains(document.activeElement)) return;
+      if (event.key === "Escape") {
+        event.stopPropagation();
+        close.current();
+      }
+      if (event.key === "Tab") {
+        const controls = Array.from(node.querySelectorAll<HTMLElement>("button:not(:disabled), input:not(:disabled), select:not(:disabled), textarea:not(:disabled), a[href]")).filter((control) => control.getClientRects().length > 0);
+        const first = controls[0], last = controls.at(-1);
+        if (event.shiftKey && document.activeElement === first) { event.preventDefault(); last?.focus(); }
+        else if (!event.shiftKey && document.activeElement === last) { event.preventDefault(); first?.focus(); }
+      }
     };
     document.addEventListener("keydown", onKey);
-    return () => document.removeEventListener("keydown", onKey);
-  }, [onClose, children]);
+    const observer = new ResizeObserver(() => placeCard(node));
+    observer.observe(node);
+    return () => {
+      observer.disconnect();
+      document.removeEventListener("keydown", onKey);
+      if (opener.current?.isConnected) opener.current.focus({ preventScroll: true });
+    };
+  }, []);
   if (typeof document === "undefined") return null;
   return createPortal(
     <div
@@ -124,7 +137,7 @@ export function ActionOverlay({
       <div
         ref={panel}
         role="dialog"
-        aria-modal="false"
+        aria-modal="true"
         aria-label={label}
         className="adrian-menu adrian-layer"
         onMouseDown={(event) => event.stopPropagation()}
@@ -197,7 +210,7 @@ export function ConversationMenu({
                     key={item.id}
                     type="button"
                     className="flex min-h-11 items-center gap-3 rounded-2xl px-3 text-left text-sm"
-                    style={{ ...menuChip, ...(item.id === "delete" ? { color: "rgb(248 113 113)" } : {}) }}
+                    style={{ ...menuChip, ...(item.id === "delete" ? { color: "var(--color-danger)" } : {}) }}
                     onClick={() => {
                       if (item.id === "project") { setProjectOpen(true); return; }
                       if (item.id === "rename") { setRenaming(true); return; }

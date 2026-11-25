@@ -1,7 +1,7 @@
 import { useMemo, useRef, useState } from "react";
 import type { MemoryItem, MemoryScope, Workspace } from "@/lib/mind/types";
 import { addMemory, deleteMemory, reviseMemory } from "@/lib/mind/workspace";
-import { MEMORY_TEXT_MAX } from "@/lib/mind/memory";
+import { MEMORY_TEXT_MAX } from "@/lib/mind/memory/constants";
 import {
   MemoryActionFailureBanner,
   onceRetry,

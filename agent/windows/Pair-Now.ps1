@@ -10,7 +10,8 @@
 [CmdletBinding()]
 param(
   [string]$DashboardUrl = "",
-  [string]$PairingCode = ""
+  [string]$PairingCode = "",
+  [switch]$EnableBuildJobs
 )
 
 $ErrorActionPreference = "Stop"
@@ -36,11 +37,12 @@ if ($PairingCode -notmatch '^[ABCDEFGHJKLMNPQRSTUVWXYZ23456789]{4}-[ABCDEFGHJKLM
   throw "Pairing code must look like ABCD-EFGH from Mint pairing code. Nothing was paired."
 }
 
-foreach ($name in @("node", "kimi")) {
+if (-not (Get-Command node -ErrorAction SilentlyContinue)) { throw "Node.js is required to pair and run this Companion." }
+foreach ($name in @("kimi")) {
   if (-not (Get-Command $name -ErrorAction SilentlyContinue)) {
     Write-Warning "$name is not on PATH. Pairing can still finish. PC jobs stay off until $name is installed."
   }
 }
 
-& (Join-Path $PSScriptRoot "Install-MindAgent.ps1") -DashboardUrl $DashboardUrl -PairingCode $PairingCode
+& (Join-Path $PSScriptRoot "Install-MindAgent.ps1") -DashboardUrl $DashboardUrl -PairingCode $PairingCode -EnableBuildJobs:$EnableBuildJobs
 exit $LASTEXITCODE

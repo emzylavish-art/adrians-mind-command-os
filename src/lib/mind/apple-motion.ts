@@ -85,6 +85,5 @@ export const MOTION_KEY = "amcos.motion.v1";
 export type MotionChoice = "smooth" | "reduce";
 
 export function readMotionChoice(raw: string | null, systemReduce = false): MotionChoice {
-  if (raw === "smooth" || raw === "reduce") return raw;
-  return systemReduce ? "reduce" : "smooth";
+  return systemReduce || raw === "reduce" ? "reduce" : "smooth";
 }

@@ -1,3 +1,5 @@
+import { retainActivity } from "./connection-attention.ts";
+import { isModelTier } from "./model-tiers.ts";
 import { emptyFleet, readFleet } from "./fleet.ts";
 import { normalizeBotModel } from "./bot-model.ts";
 import { normalizeBotKnowledge } from "./bot-model.ts";
@@ -54,7 +56,7 @@ export function emptyWorkspace(): Workspace {
 /** Clears chats, notes, projects, files, and bots. The emergency stop stays as it was. */
 export function clearedBrowserCopy(prev: Workspace): Workspace {
   return pushAudit(
-    { ...emptyWorkspace(), halted: prev.halted, deletedMemoryIds: [...new Set([...(prev.deletedMemoryIds ?? []), ...prev.memories.map((note) => note.id)])] },
+    { ...emptyWorkspace(), halted: prev.halted },
     "wipe_browser",
     "workspace",
     "cleared",
@@ -155,11 +157,13 @@ export function normalizeWorkspace(input: unknown): Workspace {
         id: str(row.id),
         chatId: str(row.chatId),
         at: str(row.at),
+        provider: typeof row.provider === "string" ? row.provider : undefined,
+        requestedModel: typeof row.requestedModel === "string" ? row.requestedModel : undefined,
         model: str(row.model, "unknown"),
         requestId: typeof row.requestId === "string" ? row.requestId : null,
         promptTokens: typeof row.promptTokens === "number" ? row.promptTokens : null,
         completionTokens: typeof row.completionTokens === "number" ? row.completionTokens : null,
-        kind: "actual",
+        kind: usageKind(row.promptTokens, row.completionTokens),
       });
     }
   }
@@ -188,14 +192,22 @@ function normalizeChat(row: unknown): Chat | null {
       if (!isRecord(msg) || (msg.role !== "user" && msg.role !== "assistant") || typeof msg.content !== "string") {
         continue;
       }
+      const route = msg.deliveryRoute;
+      const recovery = msg.role === "user" && isRecord(route) && typeof route.provider === "string" && route.provider.length <= 600 &&
+        isModelTier(route.tier) && typeof route.fingerprint === "string" && /^[a-f0-9]{64}$/.test(route.fingerprint)
+        ? { provider: route.provider, tier: route.tier, model: typeof route.model === "string" ? route.model.slice(0, 150) : null,
+            orchestrated: route.orchestrated === true, fingerprint: route.fingerprint } : null;
       messages.push({
+        ...(recovery ? { deliveryRoute: recovery } : {}),
         id: str(msg.id, crypto.randomUUID()),
         role: msg.role,
         content: msg.content,
         at: str(msg.at, new Date(0).toISOString()),
         model: typeof msg.model === "string" ? msg.model : undefined,
         ...(typeof msg.provider === "string" && msg.provider.trim() ? { provider: msg.provider.trim() } : {}),
+        ...(msg.routingMode === "A" || msg.routingMode === "B" || msg.routingMode === "C" || msg.routingMode === "D" ? { routingMode: msg.routingMode } : {}),
         ...(typeof msg.requestedModel === "string" && msg.requestedModel.trim() ? { requestedModel: msg.requestedModel.trim().slice(0, 150) } : {}),
+        ...(msg.role === "user" && typeof msg.deliveryOperationId === "string" && /^\d{13}-[a-f0-9-]{36}$/i.test(msg.deliveryOperationId) ? { deliveryOperationId: msg.deliveryOperationId } : {}),
         ...(msg.role === "user" && (msg.delivery === "submitted" || msg.delivery === "unconfirmed" || msg.delivery === "stopped" || msg.delivery === "failed") ? { delivery: msg.delivery } : {}),
         ...publicImages(msg.images),
         ...publicVideo(msg.videoUrl),
@@ -217,6 +229,7 @@ function normalizeChat(row: unknown): Chat | null {
   return {
     id: str(row.id),
     title: str(row.title, "New session").slice(0, 80),
+    ...(typeof row.notionWorkspaceId === "string" && row.notionWorkspaceId.length <= 200 ? { notionWorkspaceId: row.notionWorkspaceId } : {}),
     ...(typeof row.agentId === "string" && row.agentId ? { agentId: row.agentId } : {}),
     ...chatBotModel(row),
     memory,
@@ -257,6 +270,7 @@ function publicImages(value: unknown): { images: NonNullable<Msg["images"]> } | 
     images.push({
       dataUrl,
       blobId,
+      ...(item.origin === "attached" || item.origin === "camera" || item.origin === "generated" || item.origin === "edited" ? { origin: item.origin } : {}),
       name: typeof item.name === "string" ? item.name.slice(0, 120) : undefined,
       mime: typeof item.mime === "string" ? item.mime.slice(0, 40) : undefined,
     });
@@ -296,6 +310,7 @@ function normalizeMemory(row: unknown): MemoryItem | null {
     updatedAt: str(row.updatedAt),
     archived: row.archived === true,
     versions,
+    ...(row.alwaysApply === true ? { alwaysApply: true } : {}),
   };
 }
 
@@ -417,7 +432,7 @@ export function deleteMemory(ws: Workspace, id: string): Workspace {
 
 export function reviseMemory(ws: Workspace, id: string, text: string): Workspace {
   const next = text.trim().slice(0, 2000);
-  if (!next) return ws;
+  if (!next || ws.memories.find((note) => note.id === id)?.text === next) return ws;
   return {
     ...ws,
     memories: ws.memories.map((item) =>
@@ -511,6 +526,23 @@ export function replaceFromArchive(current: Workspace, archive: Workspace): Work
   return { ...archive, memories, deletedMemoryIds: [...deleted], halted: current.halted || archive.halted };
 }
 
+export function archiveMessagePreview(current: Workspace, incoming: Workspace) {
+  const existing = new Map(current.chats.map((chat) => [chat.id, chat]));
+  const conflicts: string[] = [];
+  let kept = 0;
+  for (const chat of incoming.chats) {
+    const local = existing.get(chat.id);
+    if (!local) continue;
+    const archive = new Map(chat.messages.map((message) => [message.id, message]));
+    for (const message of local.messages) {
+      const other = archive.get(message.id);
+      if (!other) kept++;
+      else if (canonical(other) !== canonical(message)) conflicts.push(chat.title);
+    }
+  }
+  return { kept, conflicts };
+}
+
 export function mergeWorkspace(current: Workspace, incoming: Workspace): Workspace {
   const byId = <T extends { id: string }>(rows: T[]) => new Map(rows.map((row) => [row.id, row]));
   const merge = <T extends { id: string }>(left: T[], right: T[]) => [...byId([...left, ...right]).values()];
@@ -528,7 +560,7 @@ export function mergeWorkspace(current: Workspace, incoming: Workspace): Workspa
     projects: merge(current.projects, incoming.projects),
     files: merge(current.files, incoming.files),
     usage: merge(current.usage, incoming.usage).sort((a, b) => b.at.localeCompare(a.at)).slice(0, 200),
-    audit: merge(current.audit, incoming.audit).sort((a, b) => b.at.localeCompare(a.at)).slice(0, 200),
+    audit: retainActivity(merge(current.audit, incoming.audit).sort((a, b) => b.at.localeCompare(a.at))),
     agents: merge(current.agents, incoming.agents),
     deployments: merge(current.deployments, incoming.deployments),
     runs: merge(current.runs, incoming.runs),
@@ -549,21 +581,28 @@ export function recordAudit(ws: Workspace, action: string, target: string, resul
     target,
     result,
   };
-  return { ws: { ...ws, audit: [entry, ...ws.audit].slice(0, 200) }, entry };
+  return { ws: { ...ws, audit: retainActivity([entry, ...ws.audit]) }, entry };
 }
 
 export function pushAudit(ws: Workspace, action: string, target: string, result: string): Workspace {
   return recordAudit(ws, action, target, result).ws;
 }
 
+function usageKind(prompt: unknown, completion: unknown): UsageEntry["kind"] {
+  const valid = (value: unknown) => typeof value === "number" && Number.isSafeInteger(value) && value >= 0;
+  if (valid(prompt) && valid(completion)) return "actual";
+  return valid(prompt) || valid(completion) ? "partial" : "unknown";
+}
+
 export function pushUsage(ws: Workspace, entry: Omit<UsageEntry, "kind">): Workspace {
-  return { ...ws, usage: [{ ...entry, kind: "actual" as const }, ...ws.usage].slice(0, 200) };
+  return { ...ws, usage: [{ ...entry, kind: usageKind(entry.promptTokens, entry.completionTokens) }, ...ws.usage].slice(0, 200) };
 }
 
 export function addLocalFile(
   ws: Workspace,
   input: { id?: string; name: string; text: string; partial?: boolean; projectId: string | null },
 ): Workspace {
+  if (ws.files.length >= 40) return ws;
   const text = input.text.slice(0, 40000);
   if (!text.trim()) return ws;
   const file: LocalFile = {
@@ -575,7 +614,7 @@ export function addLocalFile(
     projectId: input.projectId,
     createdAt: new Date().toISOString(),
   };
-  return { ...ws, files: [file, ...ws.files].slice(0, 40) };
+  return { ...ws, files: [file, ...ws.files] };
 }
 
 export function addProject(ws: Workspace, name: string, description: string): { ws: Workspace; project: Project } {

@@ -3,7 +3,7 @@
  * (text, images, history) and reads the live workspace for halt/history.
  */
 
-export type RetryImage = { dataUrl: string; name?: string; mime?: string };
+export type RetryImage = { origin?: "attached" | "camera" | "generated" | "edited"; dataUrl: string; name?: string; mime?: string };
 export type RetryHistoryItem = {
   role: "user" | "assistant" | "system" | string;
   content: string;
@@ -34,6 +34,7 @@ export function snapshotImages(images: RetryImage[]): RetryImage[] {
   return images.map((image) => {
     const next: RetryImage = { dataUrl: image.dataUrl };
     if (image.name !== undefined) next.name = image.name;
+    if (image.origin !== undefined) next.origin = image.origin;
     if (image.mime !== undefined) next.mime = image.mime;
     return next;
   });

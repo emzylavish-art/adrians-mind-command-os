@@ -1,22 +1,18 @@
 import { useEffect, useRef, useState } from "react";
 import { TALKING_HEAD_AVATAR, TALKING_HEAD_SOURCE, talkingHeadView } from "@/lib/mind/talking-head-face";
 
-type TalkingHeadInstance = {
-  showAvatar: (avatar: Record<string, unknown>) => Promise<void>;
-  setView: (view: string) => void;
-  stop: () => void;
-  renderer?: { dispose: () => void; domElement?: HTMLCanvasElement };
-  audioCtx?: { close?: () => Promise<void> | void };
-};
+import type { TalkingHead } from "talkinghead";
 
 export function TalkingHeadFace({ framing = "upper" }: { framing?: string }) {
   const node = useRef<HTMLDivElement>(null);
-  const head = useRef<TalkingHeadInstance | null>(null);
+  const head = useRef<TalkingHead | null>(null);
   const [state, setState] = useState<"loading" | "ready" | "failed">("loading");
   const [note, setNote] = useState("Loading the open-source face.");
   const view = talkingHeadView(framing);
 
+  const latestView = useRef(view);
   useEffect(() => {
+    latestView.current = view;
     head.current?.setView(view);
   }, [view]);
 
@@ -24,14 +20,22 @@ export function TalkingHeadFace({ framing = "upper" }: { framing?: string }) {
     const mount = node.current;
     if (!mount) return;
     let stopped = false;
+    function release() {
+      const instance = head.current;
+      head.current = null;
+      const audio = instance?.audioCtx;
+      try { instance?.dispose(); } finally {
+        if (audio?.state !== "closed") void audio?.close().catch(() => undefined);
+        mount?.replaceChildren();
+      }
+    }
     void (async () => {
       try {
-        const spec = "talkinghead";
-        const mod = await import(/* @vite-ignore */ spec) as { TalkingHead: new (node: HTMLElement, options?: Record<string, unknown>) => TalkingHeadInstance };
+        const { TalkingHead } = await import("talkinghead");
         if (stopped) return;
-        const instance = new mod.TalkingHead(mount, {
+        const instance = new TalkingHead(mount, {
           lipsyncModules: [],
-          cameraView: view,
+          cameraView: latestView.current,
           cameraRotateEnable: false,
           cameraZoomEnable: false,
           cameraPanEnable: false,
@@ -47,34 +51,29 @@ export function TalkingHeadFace({ framing = "upper" }: { framing?: string }) {
           body: "F",
           avatarMood: "neutral",
         });
-        instance.setView(talkingHeadView(framing));
         if (!stopped) {
+          instance.setView(latestView.current);
           setState("ready");
-          setNote("Open-source TalkingHead is the face while Emma is reserved. This is the project sample, not a new generated person.");
+          setNote("EVE’s 3D avatar");
         }
-      } catch (error) {
+      } catch {
         if (!stopped) {
+          release();
           setState("failed");
-          const message = error instanceof Error ? error.message : "The open-source face did not start.";
-          setNote(message.includes("nk_") ? "The open-source face did not start." : message);
+          setNote("3D avatar unavailable. You can still ask EVE or open Speak.");
         }
       }
     })();
     return () => {
       stopped = true;
-      const current = head.current;
-      head.current = null;
-      try { current?.stop(); } catch { /* already stopped */ }
-      try { current?.renderer?.dispose(); } catch { /* renderer already gone */ }
-      void current?.audioCtx?.close?.();
-      mount.replaceChildren();
+      release();
     };
   }, []);
 
   return (
     <div className="flex h-full min-h-0 w-full flex-col" data-testid="talking-head-fallback" data-state={state} data-source={TALKING_HEAD_SOURCE}>
-      <div ref={node} data-testid="talking-head-stage" style={{ width: "100%", height: "100%", minHeight: "16rem" }} />
-      <p className="px-3 pb-3 text-xs text-muted" data-testid="talking-head-note">{note}</p>
+      <div hidden={state === "failed"} ref={node} data-testid="talking-head-stage" style={{ width: "100%", height: "100%", minHeight: "16rem" }} />
+      <p className="p-3 text-xs text-muted" data-testid="talking-head-note">{note}</p>
     </div>
   );
 }

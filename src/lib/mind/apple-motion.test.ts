@@ -27,11 +27,11 @@ describe("appleMotionCss", () => {
     assert.match(css, /animation: none !important/);
   });
 
-  it("keeps a stored choice ahead of the device default", () => {
+  it("reduces motion when either the device or the owner requests it", () => {
     assert.equal(readMotionChoice(null, false), "smooth");
     assert.equal(readMotionChoice(null, true), "reduce");
     assert.equal(readMotionChoice("reduce", false), "reduce");
-    assert.equal(readMotionChoice("smooth", true), "smooth");
+    assert.equal(readMotionChoice("smooth", true), "reduce");
     assert.equal(readMotionChoice("paper", true), "reduce");
   });
 });

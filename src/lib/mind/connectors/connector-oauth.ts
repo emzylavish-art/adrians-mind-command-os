@@ -62,7 +62,7 @@ export async function connectorConnectionStatusPersistent(
 
 export async function disconnectConnector(
   connector: ConnectorId,
-  input: { ownerId: string; env?: OAuthProviderEnv; fetch?: FetchLike },
+  input: { ownerId: string; env?: OAuthProviderEnv; fetch?: FetchLike; expectedConnectedAt?: string },
 ): Promise<DisconnectResult> {
   return disconnectProvider(getProvider(connector), input);
 }

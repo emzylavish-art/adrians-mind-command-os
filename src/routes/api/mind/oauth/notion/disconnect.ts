@@ -17,7 +17,7 @@ export const Route = createFileRoute("/api/mind/oauth/notion/disconnect")({
           const authorization = request.headers.get("authorization");
           const bearer = authorization?.toLowerCase().startsWith("bearer ") ? authorization.slice(7).trim() : undefined;
           const userId = await requireUserId(bearer);
-          const status = await disconnectNotion({ ownerId: userId });
+          const status = await disconnectNotion({ ownerId: userId, expectedConnectedAt: request.headers.get("x-connected-at") ?? undefined });
           return json({
             ok: true,
             state: status.state,

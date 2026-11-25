@@ -55,12 +55,7 @@ function parseSafeHttpUrl(raw: string): { href: string; key: string } | null {
   if (parsed.protocol !== "http:" && parsed.protocol !== "https:") return null;
   if (parsed.username || parsed.password) return null;
   if (!parsed.hostname) return null;
-  parsed.hash = "";
-  if (parsed.pathname.length > 1 && parsed.pathname.endsWith("/")) {
-    parsed.pathname = parsed.pathname.slice(0, -1);
-  }
-  const href = parsed.href;
-  return { href, key: href.toLowerCase() };
+  return { href: parsed.href, key: parsed.href };
 }
 
 /** Keep only titles and absolute http(s) URLs that the provider actually returned. */
@@ -125,14 +120,14 @@ export function searchConfigError(endpoint?: string, key?: string): string | nul
 
 /** Build 2–3 focused follow-up queries for deep research (no model call). */
 export function planDeepQueries(query: string): string[] {
-  const text = query.trim().slice(0, 300);
+  const text = query.trim();
   if (!text) return [];
   const lower = text.toLowerCase();
   const plans = [text];
   if (!/\boverview\b|\bsummary\b/.test(lower)) plans.push(`${text} overview`);
   if (!/\brisk|limit|drawback|critic/.test(lower)) plans.push(`${text} risks and limitations`);
   if (!/\bcompare|vs\b|versus/.test(lower) && plans.length < 3) plans.push(`${text} comparison`);
-  return [...new Set(plans.map((item) => item.slice(0, 300)))].slice(0, 3);
+  return [...new Set(plans)].slice(0, 3);
 }
 
 export function shouldRunDeepResearch(query: string, deepFlag?: boolean): boolean {
@@ -156,6 +151,7 @@ export async function performSearch(input: {
   deep?: boolean;
   timeoutMs?: number;
   deepTimeoutMs?: number;
+  retryQueries?: string[];
 }): Promise<ResearchResult> {
   const text = queryText(input.query);
   if (!text) return { ok: false, configured: false, citations: [], error: "Write what you want researched." };
@@ -194,7 +190,7 @@ async function performSingleSearch(input: {
       method: "POST",
       signal: bound.signal,
       headers: { "content-type": "application/json", authorization: `Bearer ${input.key}` },
-      body: JSON.stringify({ query: text.slice(0, 300) }),
+      body: JSON.stringify({ query: text }),
     });
   } catch (caught) {
     if (isTimeoutAbort(bound.signal, caught) || isTimeoutAbort(bound.signal, bound.signal.reason)) {
@@ -249,6 +245,7 @@ export async function performDeepResearch(input: {
   signal?: AbortSignal;
   timeoutMs?: number;
   deepTimeoutMs?: number;
+  retryQueries?: string[];
 }): Promise<ResearchResult> {
   const text = queryText(input.query);
   if (!text) return { ok: false, configured: false, citations: [], error: "Write what you want researched." };
@@ -257,7 +254,7 @@ export async function performDeepResearch(input: {
 
   const overall = combineSignals(input.signal, input.deepTimeoutMs ?? deepSearchTimeoutMs());
   const perQuery = input.timeoutMs ?? searchTimeoutMs();
-  const queries = planDeepQueries(text);
+  const queries = planDeepQueries(text).filter((q) => !input.retryQueries || input.retryQueries.includes(q));
   const steps: { query: string; ok: boolean; count: number }[] = [];
   const collected: ResearchCitation[] = [];
   let sawTimeout = false;
@@ -265,13 +262,9 @@ export async function performDeepResearch(input: {
     for (const q of queries) {
       if (overall.signal.aborted) {
         const timedOut = isTimeoutAbort(overall.signal, overall.signal.reason);
-        return {
-          ok: false,
-          configured: true,
-          citations: [],
-          error: timedOut || sawTimeout ? SEARCH_TIMEOUT_REPLY : "Research stopped. No citations were saved as a success.",
-          steps,
-        };
+        sawTimeout ||= timedOut;
+        if (!collected.length) return { ok: false, configured: true, citations: [], error: timedOut ? SEARCH_TIMEOUT_REPLY : "Research stopped.", steps };
+        break;
       }
       const one = await performSingleSearch({
         ...input,
@@ -283,7 +276,8 @@ export async function performDeepResearch(input: {
       if (one.error === SEARCH_TIMEOUT_REPLY) {
         sawTimeout = true;
         if (isTimeoutAbort(overall.signal, overall.signal.reason)) {
-          return { ok: false, configured: true, citations: [], error: SEARCH_TIMEOUT_REPLY, steps };
+          if (!collected.length) return { ok: false, configured: true, citations: [], error: SEARCH_TIMEOUT_REPLY, steps };
+          break;
         }
       }
       if (one.ok) collected.push(...one.citations);
@@ -304,10 +298,13 @@ export async function performDeepResearch(input: {
       steps,
     };
   }
+  for (const query of queries.slice(steps.length)) steps.push({ query, ok: false, count: 0 });
+  const failed = steps.filter((step) => !step.ok);
   const summaryLines = [
     `Deep research used ${steps.length} searches and kept ${citations.length} http(s) sources the provider returned:`,
     ...citations.map((item, index) => `${index + 1}. ${item.title} — ${item.url}`),
   ];
+  if (failed.length) summaryLines.push(`${steps.length - failed.length} of ${steps.length} searches succeeded. Missing: ${failed.map((step) => step.query).join("; ")}.`);
   if (sawTimeout) {
     summaryLines.push("Note: some searches timed out; only confirmed sources are listed.");
   }
@@ -319,6 +316,6 @@ export async function performDeepResearch(input: {
     error: "",
     steps,
     summary,
-    ...(sawTimeout ? { partial: true as const } : {}),
+    ...(failed.length ? { partial: true as const } : {}),
   };
 }

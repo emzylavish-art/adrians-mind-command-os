@@ -1,4 +1,4 @@
-import { readdirSync } from "node:fs";
+import { readdirSync, statSync } from "node:fs";
 import { join } from "node:path";
 import { createFileRoute } from "@tanstack/react-router";
 import { requireUserId } from "@/lib/auth/verify.server";
@@ -20,23 +20,21 @@ function slug(title: string) {
 }
 
 function listSkills() {
-  try {
-    return readdirSync(root, { withFileTypes: true })
-      .filter((entry) => entry.isDirectory())
-      .map((entry) => entry.name)
-      .slice(0, 80);
-  } catch {
-    return [];
-  }
+  return readdirSync(root, { withFileTypes: true })
+    .filter((entry) => entry.isDirectory() && statSync(join(root, entry.name, "SKILL.md"), { throwIfNoEntry: false })?.isFile())
+    .map((entry) => entry.name)
+    .sort();
 }
 
 export const Route = createFileRoute("/api/mind/skills")({
   server: {
     handlers: {
-      GET: async () => {
-        try { await requireUserId(); }
+      GET: async ({ request }) => {
+        const bearer = request.headers.get("authorization")?.match(/^Bearer (.+)$/i)?.[1];
+        try { await requireUserId(bearer); }
         catch { return json({ ok: false, error: "Sign in is required." }, 401); }
-        return json({ skills: listSkills() });
+        try { return json({ ok: true, skills: listSkills() }); }
+        catch { return json({ ok: false, error: "Skill directory could not be read." }, 503); }
       },
       POST: async ({ request }) => {
         const origin = assertSameOrigin(request);

@@ -14,7 +14,7 @@ export function ConversationSections<T extends Row>({
   titleFor,
   projects = [],
   pinnedIds = [],
-  scheduledNames = [],
+  scheduledChatIds = [],
   extras,
 }: {
   chats: readonly T[];
@@ -24,7 +24,7 @@ export function ConversationSections<T extends Row>({
   titleFor?: (chat: T) => string;
   projects?: readonly { id: string; name: string }[];
   pinnedIds?: readonly string[];
-  scheduledNames?: readonly string[];
+  scheduledChatIds?: readonly string[];
   extras?: (ids: string[]) => readonly Extra[];
 }) {
   const [menu, setMenu] = useState<{ title: string; ids: string[] } | null>(null);
@@ -49,7 +49,7 @@ export function ConversationSections<T extends Row>({
                 chat={chat}
                 title={titleFor ? titleFor(chat) : chat.title}
                 active={activeId === chat.id}
-                scheduled={scheduledNames.includes(titleFor ? titleFor(chat) : chat.title)}
+                scheduled={scheduledChatIds.includes(chat.id)}
                 onOpen={() => onOpen(chat.id)}
                 onHold={() => openMenu(titleFor ? titleFor(chat) : chat.title, [chat.id])}
               />
@@ -67,7 +67,7 @@ export function ConversationSections<T extends Row>({
                 chat={chat}
                 title={titleFor ? titleFor(chat) : chat.title}
                 active={activeId === chat.id}
-                scheduled={false}
+                scheduled={scheduledChatIds.includes(chat.id)}
                 onOpen={() => onOpen(chat.id)}
                 onHold={() => openMenu(titleFor ? titleFor(chat) : chat.title, [chat.id])}
               />
@@ -140,7 +140,7 @@ function ConversationRow<T extends Row>({
           onOpen();
         }}
       >
-        <span className="block truncate">{title}{chat.favorite ? " · Favorite" : ""}{scheduled ? " · Scheduled" : ""}</span>
+        <span className="block truncate">{title}{chat.favorite ? " · Favorite" : ""}{scheduled ? " · Schedule saved" : ""}</span>
       </button>
     </li>
   );

@@ -69,7 +69,7 @@ export async function searchWithGrok(
   query: string,
   options: { fetchImpl?: typeof fetch; apiKey?: string } = {},
 ): Promise<ResearchResult> {
-  const text = query.trim().slice(0, 300);
+  const text = query.trim();
   if (!text) return { ok: false, configured: false, citations: [], error: "Write what you want researched." };
   const apiKey = options.apiKey ?? resolveXaiInferenceApiKey();
   if (!apiKey) {

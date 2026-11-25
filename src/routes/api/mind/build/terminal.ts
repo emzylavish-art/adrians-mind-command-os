@@ -1,4 +1,5 @@
 import { createFileRoute } from "@tanstack/react-router";
+import { machineRequired } from "@/lib/mind/kimi/account-workspace";
 import { requireUserId } from "@/lib/auth/verify.server";
 import { assertSameOrigin } from "@/lib/mind/connectors/oauth-csrf";
 import { haltIsOn } from "@/lib/mind/halt.server";
@@ -26,6 +27,7 @@ export const Route = createFileRoute("/api/mind/build/terminal")({
           const command = typeof body.command === "string" ? body.command.trim().slice(0, 500) : "";
           if (!command) return json({ ok: false, error: "command is required." }, 400);
           if (!agent) {
+            if (ownerId !== "dev-user") return json({ ok: false, error: machineRequired }, 409);
             if (body.confirm === true) {
               const result = await runHostedTerminal({
                 id: typeof body.approvalId === "string" ? body.approvalId : "",

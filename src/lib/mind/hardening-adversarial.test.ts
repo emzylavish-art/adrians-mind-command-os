@@ -9,7 +9,8 @@ import { consumeMindTurn } from "./live-turn.ts";
 import { resolveModelTier, routeAutoTier } from "./model-tiers.ts";
 import { normalizeCitations, performDeepResearch, performSearch, SEARCH_TIMEOUT_REPLY } from "./research.ts";
 
-const SECRET = "xai-SUPERSECRET-0123456789abcdef";
+// Deliberately non-provider-shaped fixture: never put credential-like strings in source.
+const SECRET = "test-relay-key-not-a-provider-credential";
 
 async function readAll(response: Response): Promise<string> {
   assert.ok(response.body);
@@ -62,7 +63,7 @@ describe("chip never shows a model that did not answer", () => {
     });
   }
 
-  it("client consume of a done-then-error stream does not keep the reply", async () => {
+  it("a valid terminal done wins over trailing frames", async () => {
     const body = sse(
       `event: done\ndata: ${JSON.stringify({ text: "ok", model: "grok-4.5", usedIds: [] })}\n\n`,
       `event: error\ndata: ${JSON.stringify({ error: "late failure" })}\n\n`,
@@ -75,7 +76,7 @@ describe("chip never shows a model that did not answer", () => {
       fetchImpl: (async () => new Response(body, { headers: { "content-type": "text/event-stream" } })) as typeof fetch,
       onDelta: () => undefined,
     });
-    assert.equal(result.ok, false);
+    assert.equal(result.ok && result.text, "ok");
   });
 });
 
@@ -129,14 +130,16 @@ describe("search results are untrusted", () => {
     assert.deepEqual(cites.map((c) => c.url), ["https://example.com/a"]);
   });
 
-  it("dedupes the same page within one search (case of host, fragment, trailing slash)", () => {
+  it("normalizes host case and preserves distinct paths, trailing slashes, and section anchors", () => {
     const cites = normalizeCitations([
       { title: "A", url: "https://Example.com/page" },
+      { title: "duplicate", url: "https://example.com/page" },
       { title: "A2", url: "https://example.com/page/" },
       { title: "A3", url: "https://example.com/page#top" },
       { title: "B", url: "https://example.com/other" },
     ]);
-    assert.deepEqual(cites.map((c) => c.title), ["A", "B"]);
+    assert.deepEqual(cites.map((c) => c.title), ["A", "A2", "A3", "B"]);
+    assert.equal(cites[2].url, "https://example.com/page#top");
   });
 
   it("strips control characters so a title cannot forge extra summary lines", async () => {

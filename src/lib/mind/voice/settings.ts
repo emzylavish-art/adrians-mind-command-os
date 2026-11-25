@@ -28,9 +28,12 @@ export const DEFAULT_VOICE_SETTINGS: VoiceSettings = {
 export function loadVoiceSettings(storage: Pick<Storage, "getItem"> | null | undefined): VoiceSettings {
   try {
     const raw = storage?.getItem(VOICE_SETTINGS_KEY);
-    if (!raw) return { ...DEFAULT_VOICE_SETTINGS };
-    const parsed = JSON.parse(raw) as Partial<VoiceSettings>;
-    return { ...DEFAULT_VOICE_SETTINGS, ...parsed };
+    const parsed = raw ? JSON.parse(raw) as Partial<VoiceSettings> : {};
+    const legacy = storage?.getItem("adrian-speak-activation");
+    // Existing installations may have conflicting settings. Preserve a request for push to talk.
+    const activation = parsed.activation === "push_to_talk" || legacy === "push" ? "push_to_talk"
+      : parsed.activation === "isolation" || legacy === "isolation" ? "isolation" : "default";
+    return { ...DEFAULT_VOICE_SETTINGS, ...parsed, activation };
   } catch {
     return { ...DEFAULT_VOICE_SETTINGS };
   }
@@ -39,6 +42,7 @@ export function loadVoiceSettings(storage: Pick<Storage, "getItem"> | null | und
 export function saveVoiceSettings(storage: Pick<Storage, "setItem"> | null | undefined, next: VoiceSettings): void {
   try {
     storage?.setItem(VOICE_SETTINGS_KEY, JSON.stringify(next));
+    storage?.setItem("adrian-speak-activation", next.activation === "push_to_talk" ? "push" : next.activation);
   } catch {
     /* private mode may refuse */
   }

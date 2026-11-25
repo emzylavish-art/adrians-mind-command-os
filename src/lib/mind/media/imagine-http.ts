@@ -7,12 +7,7 @@ import {
   setImagineRateLimitStore,
 } from "./harden.ts";
 import { createFileRateLimitStore, DEFAULT_IMAGINE_RATE_LIMIT_PATH } from "./rate-limit-store.ts";
-import {
-  createFileSpendLedger,
-  DEFAULT_SPEND_LEDGER_PATH,
-  getImagineSpendLedger,
-  setImagineSpendLedger,
-} from "./spend-ledger.ts";
+import { imagineUsage } from "./spend-ledger.ts";
 import { editImagineImage, generateImagineImages, normalizeImaginePrompt, resolveImagineModel } from "./imagine.ts";
 import { readOwnerVideo, startOwnerVideo } from "./video.ts";
 import { normalizeImageDataUrl } from "./data-url.ts";
@@ -23,12 +18,6 @@ try {
 } catch {
   /* memory store remains the default */
 }
-try {
-  setImagineSpendLedger(createFileSpendLedger(DEFAULT_SPEND_LEDGER_PATH));
-} catch {
-  /* memory ledger remains the default */
-}
-
 function json(body: unknown, status = 200) {
   return new Response(JSON.stringify(body), {
     status,
@@ -108,6 +97,7 @@ export async function handleImagineGenerate(request: Request): Promise<Response>
 
   const record = body && typeof body === "object" ? (body as Record<string, unknown>) : {};
   if (record.kind === "video" && record.action === "status") return handleOwnerVideo(record);
+  if (record.freeOnly === true) return json({ ok: false, error: "Free-only mode prevents a paid image or video request." }, 403);
   if (await haltIsOn(userId)) return json({ ok: false, error: "Emergency stop is on or unavailable. Generation was blocked." }, 403);
   if (record.kind === "video") return handleOwnerVideo(record);
   const normalized = normalizeImaginePrompt(record.prompt);
@@ -174,7 +164,8 @@ export async function handleImagineGenerate(request: Request): Promise<Response>
 
   return json({
     ok: true,
-    model: result.model,
+    model: result.reportedModel,
+    requestedModel: model,
     images: result.images.map((image, index) => ({
       dataUrl: image.dataUrl,
       mime: image.mime,
@@ -213,15 +204,9 @@ export async function handleImagineStatus(request: Request): Promise<Response> {
     );
   }
 
-  const summary = getImagineSpendLedger().summary(userId);
-  return json({
-    ok: true,
-    ownerId: summary.ownerId,
-    day: summary.day,
-    count: summary.count,
-    byModel: summary.byModel,
-    estimatedCostUsd: summary.estimatedCostUsd,
-    dailyCap: summary.dailyCap,
-    remaining: summary.remaining,
-  });
+  try {
+    return json({ ok: true, ...await imagineUsage(userId) });
+  } catch {
+    return json({ ok: false, error: "Image usage could not be verified." }, 503);
+  }
 }

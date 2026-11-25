@@ -155,7 +155,8 @@ export type ResponseRating = {
   messageId: string;
   score: 1 | 2 | 3 | 4 | 5;
   model: string | null;
-  mode: RoutingMode;
+  mode: RoutingMode | null;
+  provider?: string;
   at: string;
 };
 
@@ -174,8 +175,8 @@ export function readRatings(storage: Pick<Storage, "getItem"> | null | undefined
     return parsed.flatMap((item) => {
       if (!item || typeof item !== "object") return [];
       const row = item as Partial<ResponseRating>;
-      if (typeof row.messageId !== "string" || !isRatingScore(row.score) || !isRoutingMode(row.mode) || typeof row.at !== "string") return [];
-      return [{ messageId: row.messageId, score: row.score, model: typeof row.model === "string" ? row.model : null, mode: row.mode, at: row.at }];
+      if (typeof row.messageId !== "string" || !isRatingScore(row.score) || (row.mode !== null && !isRoutingMode(row.mode)) || typeof row.at !== "string") return [];
+      return [{ messageId: row.messageId, score: row.score, ...(typeof row.provider === "string" ? { provider: row.provider } : {}), model: typeof row.model === "string" ? row.model : null, mode: row.mode, at: row.at }];
     });
   } catch {
     return [];
@@ -184,10 +185,7 @@ export function readRatings(storage: Pick<Storage, "getItem"> | null | undefined
 
 export function saveRating(storage: Pick<Storage, "getItem" | "setItem"> | null | undefined, rating: ResponseRating, owner = "device:guest"): ResponseRating[] {
   const next = [rating, ...readRatings(storage, owner).filter((item) => item.messageId !== rating.messageId)].slice(0, 200);
-  try {
-    storage?.setItem(RATING_KEY + "." + owner, JSON.stringify(next));
-  } catch {
-    /* private mode */
-  }
+  if (!storage) throw new Error("Rating storage unavailable");
+  storage.setItem(RATING_KEY + "." + owner, JSON.stringify(next));
   return next;
 }

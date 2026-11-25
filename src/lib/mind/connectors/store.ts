@@ -97,9 +97,29 @@ export function readConnection(ownerId: string, connector: ConnectorId): StoredC
   }
 }
 
-export function clearConnection(ownerId: string, connector: ConnectorId) {
+export function clearConnection(ownerId: string, connector: ConnectorId, expectedConnectedAt?: string) {
+  const active = readConnection(ownerId, connector);
+  if (expectedConnectedAt && active?.connectedAt !== expectedConnectedAt) throw new Error("The selected connection changed. Refresh before disconnecting.");
+  const workspace = connector === "notion" ? active?.workspaceId : null;
+  if (workspace) {
+    const archived = workspaceFile(ownerId, workspace);
+    if (existsSync(archived)) unlinkSync(archived);
+  }
   const path = ownerFile(ownerId, `${connector}.json`);
   if (existsSync(path)) unlinkSync(path);
+  if (existsSync(pendingDir())) {
+    for (const name of readdirSync(pendingDir())) {
+      const file = pendingOAuthPath(name.replace(/\.json$/, ""));
+      if (!file || !name.endsWith(".json")) continue;
+      try {
+        const entry = JSON.parse(readFileSync(file, "utf8")) as PendingOAuth;
+        if (entry.ownerId === ownerId && entry.connector === connector) unlinkSync(file);
+      } catch (error) {
+        if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error;
+      }
+    }
+  }
+  return active;
 }
 
 export function getAccessToken(ownerId: string, connector: ConnectorId): string | null {
@@ -112,6 +132,45 @@ export function getRefreshToken(ownerId: string, connector: ConnectorId): string
   const conn = readConnection(ownerId, connector);
   if (!conn?.refreshTokenEnc) return null;
   return decryptSecret(conn.refreshTokenEnc);
+}
+
+export function sameExternalAccount(previous: StoredConnection | null, incoming: { workspaceId?: string; accountLabel?: string }): boolean {
+  if (!previous) return false;
+  if (previous.workspaceId || incoming.workspaceId) return Boolean(previous.workspaceId && previous.workspaceId === incoming.workspaceId);
+  return Boolean(previous.accountLabel?.includes("@") && previous.accountLabel === incoming.accountLabel);
+}
+
+function notionWorkspaceDir(owner: string) {
+  return ownerFile(owner, "notion-workspaces");
+}
+function workspaceFile(owner: string, id: string) {
+  return join(notionWorkspaceDir(owner), createHash("sha256").update(id).digest("hex") + ".json");
+}
+function archiveWorkspace(conn: StoredConnection) {
+  if (!conn.workspaceId) return;
+  mkdirSync(notionWorkspaceDir(conn.ownerId), { recursive: true });
+  const path = workspaceFile(conn.ownerId, conn.workspaceId);
+  const temp = path + "." + randomBytes(8).toString("hex");
+  writeFileSync(temp, JSON.stringify(conn), { mode: 0o600 });
+  renameSync(temp, path);
+}
+export function localNotionWorkspaces(owner: string): StoredConnection[] {
+  const active = readConnection(owner, "notion");
+  const dir = notionWorkspaceDir(owner);
+  const rows = new Map<string, StoredConnection>();
+  if (existsSync(dir)) for (const name of readdirSync(dir).filter((item) => item.endsWith(".json"))) {
+    const row = JSON.parse(readFileSync(join(dir, name), "utf8")) as StoredConnection;
+    if (row.ownerId === owner && row.connector === "notion" && row.workspaceId) rows.set(row.workspaceId, row);
+  }
+  if (active) rows.set(active.workspaceId || "legacy", active);
+  return [...rows.values()];
+}
+export function selectLocalNotionWorkspace(owner: string, id: string) {
+  const next = localNotionWorkspaces(owner).find((row) => (row.workspaceId || "legacy") === id);
+  if (!next) throw new Error("That workspace is no longer connected.");
+  const current = readConnection(owner, "notion");
+  if (current) archiveWorkspace(current);
+  saveConnection(next);
 }
 
 export function storeAccessToken(input: {
@@ -127,10 +186,13 @@ export function storeAccessToken(input: {
   scopes?: string;
 }): StoredConnection {
   const access = encryptSecret(input.accessToken);
-  const previous = readConnection(input.ownerId, input.connector);
+  const active = readConnection(input.ownerId, input.connector);
+  const previous = input.connector === "notion" && input.workspaceId
+    ? localNotionWorkspaces(input.ownerId).find((row) => row.workspaceId === input.workspaceId) ?? null
+    : active;
   const refresh = input.refreshToken
     ? encryptSecret(input.refreshToken)
-    : previous?.refreshTokenEnc
+    : sameExternalAccount(previous, input) && previous?.refreshTokenEnc
       ? { ciphertext: previous.refreshTokenEnc }
       : undefined;
   const conn: StoredConnection = {
@@ -146,6 +208,11 @@ export function storeAccessToken(input: {
     tokenType: input.tokenType,
     scopes: input.scopes,
   };
+  if (input.connector === "notion" && input.workspaceId) {
+    archiveWorkspace(conn);
+    if (active && active.workspaceId !== input.workspaceId) return conn;
+  }
+  if (input.connector === "notion" && active?.workspaceId && !input.workspaceId) throw new Error("Notion did not identify the workspace.");
   saveConnection(conn);
   return conn;
 }

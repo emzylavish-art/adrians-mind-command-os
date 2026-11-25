@@ -29,10 +29,14 @@ test("only one delivery claims an operation; the receipt survives restart", asyn
   const body = { conversation: "thread-1", provider: "gemini", text: "Temporary fixture input" };
   try {
     await db.exec(await readFile(new URL("../../../migrations/0010_mind_turn_receipts.sql", import.meta.url), "utf8"));
+    await db.exec(await readFile(new URL("../../../migrations/0011_mind_turn_retryable.sql", import.meta.url), "utf8"));
     const deliver = () => claimTurn(sql, "owner-1", operation, body, expires);
     assert.deepEqual((await Promise.all([deliver(), deliver()])).sort(), ["claimed", "waiting"]);
     assert.equal(await claimTurn(sql, "owner-1", operation, { ...body, provider: "openrouter" }, expires), "different");
     assert.equal(await claimTurn(sql, "owner-2", operation, body, expires), "claimed");
+    await finishTurnReceipt(sql, "owner-1", operation, true);
+    assert.equal(await claimTurn(sql, "owner-1", operation, { ...body, provider: "openrouter" }, expires), "different");
+    assert.deepEqual((await Promise.all([deliver(), deliver()])).sort(), ["claimed", "waiting"]);
     await finishTurnReceipt(sql, "owner-1", operation);
     await db.close();
     db = new PGlite(directory);

@@ -1,6 +1,6 @@
 /** One bounded microphone take for Speak. Tests inject getUserMedia and MediaRecorder. No provider calls. */
 
-import { blobToBase64 } from "./dictation.ts";
+import { blobToBase64, preferredDictationMime } from "./dictation.ts";
 import { speakCanceled, speakFailure, type SpeakCanceled, type SpeakFailure } from "./speak-failures.ts";
 
 export type CaptureOk = { ok: true; audioBase64: string; mime: string };
@@ -48,7 +48,7 @@ export async function captureSpeakUtterance(options?: {
     stream.getTracks().forEach((track) => track.stop());
     return speakFailure("mic_missing");
   }
-  const mimeType = options?.mimeType || "audio/webm";
+  const mimeType = options?.mimeType || preferredDictationMime();
   let recorder: RecorderLike;
   try {
     recorder = new Recorder(stream, { mimeType }) as unknown as RecorderLike;
@@ -96,7 +96,7 @@ export async function captureSpeakUtterance(options?: {
   options?.signal?.removeEventListener("abort", onAbort);
   stream.getTracks().forEach((track) => track.stop());
   if (options?.signal?.aborted) return speakCanceled();
-  const mime = recorder.mimeType || mimeType;
+  const mime = recorder.mimeType || chunks[0]?.type || mimeType;
   const blob = new Blob(chunks, { type: mime });
   if (blob.size < 32) return speakFailure("empty_transcript");
   const audioBase64 = await blobToBase64(blob);

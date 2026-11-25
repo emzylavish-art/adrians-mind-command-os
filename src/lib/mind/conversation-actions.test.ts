@@ -57,3 +57,12 @@ describe("conversation actions", () => {
     assert.equal(second.ws.schedules.length, 1);
   });
 });
+
+it("schedules identically named conversations by ID and rejects a temporary source", () => {
+  const ws = { ...emptyWorkspace(), chats: [chat("a", "Weekly"), chat("b", "Weekly"), { ...chat("c", "Temp"), temporary: true }] };
+  const first = scheduleConversation(ws, "Weekly", "a");
+  const second = scheduleConversation(first.ws, "Weekly", "b");
+  assert.deepEqual(second.ws.schedules.map(job => job.chatId).sort(), ["a", "b"]);
+  assert.equal(scheduleConversation(second.ws, "New title", "a").created, false);
+  assert.equal(scheduleConversation(second.ws, "Temp", "c").created, false);
+});

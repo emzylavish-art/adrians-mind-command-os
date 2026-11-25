@@ -1,6 +1,6 @@
 Unicode true
 Name "Adrian's Mind"
-OutFile "AdriansMind-Setup-full.exe"
+OutFile "AdriansMind-Setup-Full.exe"
 InstallDir "$LOCALAPPDATA\Programs\Adrian's Mind"
 RequestExecutionLevel admin
 SetCompressor /SOLID lzma

@@ -1,3 +1,4 @@
+import { PUBLIC_INSTALLER } from "@/lib/mind/desktop-update";
 import { useState } from "react";
 
 type UpdateBody = {
@@ -6,7 +7,7 @@ type UpdateBody = {
 };
 
 export function DesktopUpdateNote() {
-  const [text, setText] = useState("Press Update. The laptop downloads the newer verified installer. Nothing is copied from this phone.");
+  const [text, setText] = useState("Check for a newer Windows release.");
   const [busy, setBusy] = useState(false);
 
   async function check() {
@@ -19,9 +20,9 @@ export function DesktopUpdateNote() {
       const note = typeof body.note === "string" ? body.note : "The update check could not run. This PC stays on the installed copy.";
       const action = body.decision?.action;
       const url = typeof body.decision?.url === "string" ? body.decision.url : "";
-      if (action === "install" && url) {
+      if (action === "install" && url === PUBLIC_INSTALLER) {
         setText(note);
-        window.location.assign(url);
+        window.location.assign(PUBLIC_INSTALLER);
         return;
       }
       setText(note);

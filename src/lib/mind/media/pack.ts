@@ -8,13 +8,14 @@ export function sanitizeAttachments(input: unknown): ImageAttachment[] {
   const out: ImageAttachment[] = [];
   for (const item of input) {
     if (!item || typeof item !== "object") continue;
-    const record = item as { dataUrl?: unknown; name?: unknown; mime?: unknown };
+    const record = item as { dataUrl?: unknown; name?: unknown; mime?: unknown; origin?: unknown };
     if (typeof record.dataUrl !== "string") continue;
     const normalized = normalizeImageDataUrl(record.dataUrl);
     if (!normalized) continue;
     const parsed = parseImageDataUrl(normalized);
     out.push({
       dataUrl: normalized,
+      ...(record.origin === "attached" || record.origin === "camera" || record.origin === "generated" || record.origin === "edited" ? { origin: record.origin } : {}),
       name: sanitizeMediaLabel(record.name),
       mime: parsed.ok ? parsed.mime : typeof record.mime === "string" ? record.mime : undefined,
     });

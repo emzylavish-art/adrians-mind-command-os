@@ -4,7 +4,8 @@ declare module "talkinghead" {
     showAvatar(avatar: Record<string, unknown>): Promise<void>;
     setView(view: string): void;
     stop(): void;
+    dispose(): void;
     renderer?: { dispose: () => void; domElement?: HTMLCanvasElement };
-    audioCtx?: { close?: () => Promise<void> | void };
+    audioCtx?: AudioContext;
   }
 }

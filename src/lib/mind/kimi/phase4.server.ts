@@ -1,3 +1,4 @@
+import { machineRequired } from "./account-workspace.ts";
 import { requireUserId } from "../../auth/verify.server";
 import { assertSameOrigin } from "../connectors/oauth-csrf";
 import { haltIsOn } from "../halt.server";
@@ -78,6 +79,7 @@ export async function handleKimiVoice(request: Request): Promise<Response> {
     const instructions = body.instructions?.trim().slice(0, 2_000) || "";
     const prompt = `${instructions ? `Project instructions:\n${instructions}\n\n` : ""}[Adrian Speak transcript]\n${transcript}`;
     if (!agent) {
+      if (ownerId !== "dev-user") return json({ ok: false, executed: false, error: machineRequired }, 409);
       const workspace = resolveBuildWorkspace(body.cwd) || adrianHostedWorkspace();
       const turn = await runCodingTurn({ prompt, cwd: workspace, mode: "auto" });
       await recordKimiAttempt({ ownerId, status: turn.ok ? "session_created" : "failed", error: turn.error });

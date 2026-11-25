@@ -53,6 +53,7 @@ export type LiveVoiceBarProps = {
   onAskChange?: (value: string) => void;
   /** Existing model picker (Logic-owned) — wrapped in .composer-bar__model. */
   modelPickerSlot?: ReactNode;
+  freeOnly?: boolean;
   compactIdle?: boolean;
   authReady?: boolean;
   authSignedIn?: boolean;
@@ -66,6 +67,7 @@ function speakAttr(ui: LiveVoiceUiAttr): LiveVoiceUiAttr {
 
 export function LiveVoiceBar(props: LiveVoiceBarProps) {
   const live = useLiveVoiceSession({
+    freeOnly: props.freeOnly,
     isOverlayMicOpen: props.isOverlayMicOpen,
     onUserTranscript: props.onUserTranscript,
     onAssistantTranscript: props.onAssistantTranscript,

@@ -33,6 +33,7 @@ export type PublicOperation = {
 export type ConnectionState = "unchecked" | "ready" | "unauthorized" | "missing_config" | "incompatible" | "failed";
 
 export type PublicConnection = {
+  enabled?: boolean;
   id: string;
   label: string;
   kind: "mcp" | "http";
@@ -69,6 +70,7 @@ function toPublic(server: RegistryRecord): PublicConnection | null {
   const kind = server.protocol === "http" ? "http" : "mcp";
   const operations = Array.isArray(server.operations) ? server.operations as PublicOperation[] : [];
   return {
+    enabled: server.enabled,
     id: server.id,
     label: server.label,
     kind,
@@ -111,7 +113,9 @@ export function readOperationSchema(input: unknown): OperationSchema | null {
   const schema = input as Record<string, unknown>;
   if (schema.type !== "object" || !schema.properties || typeof schema.properties !== "object" || Array.isArray(schema.properties)) return null;
   const properties: OperationSchema["properties"] = {};
-  for (const [key, raw] of Object.entries(schema.properties).slice(0, 12)) {
+  const fields = Object.entries(schema.properties);
+  if (fields.length > 12) return null;
+  for (const [key, raw] of fields) {
     if (!/^[A-Za-z_][A-Za-z0-9_]{0,40}$/.test(key) || !raw || typeof raw !== "object") return null;
     const type = (raw as { type?: unknown }).type;
     if (type !== "string" && type !== "boolean" && type !== "integer") return null;
@@ -136,7 +140,8 @@ export function validateArgs(schema: OperationSchema, args: Record<string, unkno
     }
     if (spec.type === "string") {
       if (typeof value !== "string") return { ok: false, error: `${key} must be a string. Nothing was called.` };
-      out[key] = value.slice(0, 500);
+      if (value.length > 500) return { ok: false, error: `${key} exceeds 500 characters. Nothing was called.` };
+      out[key] = value;
     } else if (spec.type === "boolean") {
       if (typeof value !== "boolean") return { ok: false, error: `${key} must be boolean. Nothing was called.` };
       out[key] = value;
@@ -194,7 +199,7 @@ async function send(url: string, init: RequestInit, deps: { fetch?: FetchLike; l
     const text = redact(await response.text(), token);
     controller.signal.throwIfAborted();
     if (Buffer.byteLength(text) > maxBytes) return fail("error", "The response was larger than the limit and was dropped. Nothing was retried.", response.status);
-    return { ok: true as const, status: response.status, text: text.slice(0, 8000), sessionId: response.headers.get("mcp-session-id") };
+    return { ok: true as const, status: response.status, text, sessionId: response.headers.get("mcp-session-id") };
   };
   try {
     return await Promise.race([operation(), deadline]);
@@ -233,9 +238,10 @@ function initialized(text: string): boolean {
 
 function operationFromTool(tool: { name?: unknown; description?: unknown; inputSchema?: unknown }): PublicOperation | null {
   if (typeof tool.name !== "string" || !tool.name.trim() || tool.name.toLowerCase() === "model.generate") return null;
+  if (tool.name.length > 80) return null;
   const schema = readOperationSchema(tool.inputSchema);
   return {
-    name: tool.name.slice(0, 80),
+    name: tool.name,
     description: typeof tool.description === "string" ? tool.description.slice(0, 180) : "",
     inputSchema: schema,
     compatible: Boolean(schema),
@@ -328,17 +334,23 @@ async function refreshMcp(db: ConnectionDb | null, userId: string, id: string, d
     }, deps, row.token ?? "");
     if (!notified.ok) return fail("failed", "The MCP initialized notification was not accepted.");
   }
-  const listed = await send(row.url, {
-    method: "POST",
-    headers: { "content-type": "application/json", accept: "application/json, text/event-stream", ...protocolHeaders, ...(row.token ? { authorization: `Bearer ${row.token}` } : {}) },
-    body: JSON.stringify({ jsonrpc: "2.0", id: 2, method: "tools/list", params: {} }),
-  }, deps, row.token ?? "");
-  if (!listed.ok) return fail(listed.status === "unauthorized" ? "unauthorized" : "failed", listed.error);
-  const parsed = rpcEnvelope(listed.text);
-  const tools = parsed.result && typeof parsed.result === "object" && Array.isArray((parsed.result as { tools?: unknown }).tools)
-    ? (parsed.result as { tools: { name?: unknown; description?: unknown; inputSchema?: unknown }[] }).tools
-    : [];
-  const operations = tools.map(operationFromTool).filter((item): item is PublicOperation => Boolean(item));
+  const operations: PublicOperation[] = [];
+  const cursors = new Set<string>();
+  let cursor: string | undefined;
+  do {
+    const listed = await send(row.url, {
+      method: "POST",
+      headers: { "content-type": "application/json", accept: "application/json, text/event-stream", ...protocolHeaders, ...(row.token ? { authorization: `Bearer ${row.token}` } : {}) },
+      body: JSON.stringify({ jsonrpc: "2.0", id: 2 + cursors.size, method: "tools/list", params: cursor ? { cursor } : {} }),
+    }, deps, row.token ?? "");
+    if (!listed.ok) return fail(listed.status === "unauthorized" ? "unauthorized" : "failed", listed.error);
+    const data = rpcEnvelope(listed.text).result as { tools?: Parameters<typeof operationFromTool>[0][]; nextCursor?: unknown } | undefined;
+    if (!Array.isArray(data?.tools)) return fail("failed", "Tool discovery returned an unreadable page.");
+    operations.push(...data.tools.map(operationFromTool).filter((item): item is PublicOperation => Boolean(item)));
+    cursor = typeof data.nextCursor === "string" ? data.nextCursor : undefined;
+    if (operations.length > 256 || (cursor && (cursors.has(cursor) || cursors.size >= 15))) return fail("failed", "Tool discovery was incomplete. Check the server and test again.");
+    if (cursor) cursors.add(cursor);
+  } while (cursor);
   row.operations = operations;
   row.state = operations.some((item) => item.compatible) ? "ready" : "incompatible";
   row.error = row.state === "incompatible" ? "No tool advertised an object argument schema. A generic text argument was not assumed." : "";
@@ -363,6 +375,7 @@ export async function callCustomConnection(input: {
   const row = loaded.servers.find((item) => item.id === input.id);
   const connection = row ? toPublic(row) : null;
   if (!row || !connection) return { ok: false, status: "error", text: "That connection is not saved. Nothing was called.", connection: null, transport: null, rpc: null };
+  if (!row.enabled) return { ok: false, status: "error", text: "This connection is disabled.", connection, transport: null, rpc: null };
   if (input.operation.toLowerCase() === "model.generate") {
     return { ok: false, status: "incompatible", text: "model.generate is not a connectivity check. Nothing was called.", connection, transport: null, rpc: null };
   }
@@ -381,24 +394,42 @@ export async function callCustomConnection(input: {
   if (!checked.ok) return { ok: false, status: "incompatible", text: checked.error, connection, transport: null, rpc: null };
   const headers: Record<string, string> = { accept: "application/json", ...(row.token ? { authorization: `Bearer ${row.token}` } : {}) };
   const token = row.token ?? "";
+  async function recordAccess(state: "ready" | "unauthorized", error: string) {
+    if (!row || row.state === state) return;
+    if (input.db) {
+      await input.db.query(
+        "UPDATE mind_mcp_registry SET record = record || $3::jsonb WHERE user_id=$1 AND id=$2 AND record->>'url'=$4 AND record->>'tokenEnc' IS NOT DISTINCT FROM $5 AND record->>'state' IS NOT DISTINCT FROM $6",
+        [input.userId, row.id, JSON.stringify({ state, error }), row.url, row.tokenEnc ?? null, row.state ?? null],
+      );
+    } else {
+      await writeRow(input.db, input.userId, { ...row, state, error });
+    }
+    if (connection) { connection.state = state; connection.error = error; }
+  }
+  async function reportTransportFailure(response: Extract<Awaited<ReturnType<typeof send>>, { ok: false }>) {
+    if (response.status === "unauthorized") await recordAccess("unauthorized", response.error);
+    return { ok: false, status: response.status, text: response.error, connection, transport: { ok: false, status: response.httpStatus, ms: Date.now() - started }, rpc: null };
+  }
   if (connection.kind === "http" && connection.method === "GET") {
     const url = new URL(row.url ?? "");
     for (const [key, value] of Object.entries(checked.args)) url.searchParams.set(key, String(value));
     const sent = await send(url.toString(), { method: "GET", headers }, input, token);
-    if (!sent.ok) return { ok: false, status: sent.status, text: sent.error, connection, transport: { ok: false, status: sent.httpStatus, ms: Date.now() - started }, rpc: null };
-    return { ok: true, status: "ok", text: sent.text, connection, transport: { ok: true, status: sent.status, ms: Date.now() - started }, rpc: null };
+    if (!sent.ok) return reportTransportFailure(sent);
+    await recordAccess("ready", "");
+    return { ok: true, status: "ok", text: sent.text.slice(0, 8000), connection, transport: { ok: true, status: sent.status, ms: Date.now() - started }, rpc: null };
   }
   if (connection.kind === "http") {
     const sent = await send(row.url ?? "", { method: "POST", headers: { ...headers, "content-type": "application/json" }, body: JSON.stringify(checked.args) }, input, token);
-    if (!sent.ok) return { ok: false, status: sent.status, text: sent.error, connection, transport: { ok: false, status: sent.httpStatus, ms: Date.now() - started }, rpc: null };
-    return { ok: true, status: "ok", text: sent.text, connection, transport: { ok: true, status: sent.status, ms: Date.now() - started }, rpc: null };
+    if (!sent.ok) return reportTransportFailure(sent);
+    await recordAccess("ready", "");
+    return { ok: true, status: "ok", text: sent.text.slice(0, 8000), connection, transport: { ok: true, status: sent.status, ms: Date.now() - started }, rpc: null };
   }
   const opened = await send(row.url ?? "", {
     method: "POST",
     headers: { ...headers, "content-type": "application/json", accept: "application/json, text/event-stream" },
     body: JSON.stringify({ jsonrpc: "2.0", id: 1, method: "initialize", params: { protocolVersion: "2024-11-05", capabilities: {}, clientInfo: { name: "adrians-mind", version: "1" } } }),
   }, input, token);
-  if (!opened.ok) return { ok: false, status: opened.status, text: opened.error, connection, transport: { ok: false, status: opened.httpStatus, ms: Date.now() - started }, rpc: null };
+  if (!opened.ok) return reportTransportFailure(opened);
   if (!initialized(opened.text)) return { ok: false, status: "error", text: safeReason("error"), connection, transport: { ok: true, status: opened.status, ms: Date.now() - started }, rpc: { isError: true, content: [{ type: "text", text: safeReason("error") }], structuredContent: null } };
   const reply = rpcEnvelope(opened.text).result;
   const version = reply && typeof reply === "object" && typeof (reply as { protocolVersion?: unknown }).protocolVersion === "string"
@@ -410,14 +441,14 @@ export async function callCustomConnection(input: {
       headers: { ...headers, "content-type": "application/json", ...protocolHeaders },
       body: JSON.stringify({ jsonrpc: "2.0", method: "notifications/initialized" }),
     }, input, token);
-    if (!ready.ok) return { ok: false, status: ready.status, text: ready.error, connection, transport: { ok: false, status: ready.httpStatus, ms: Date.now() - started }, rpc: null };
+    if (!ready.ok) return reportTransportFailure(ready);
   }
   const called = await send(row.url ?? "", {
     method: "POST",
     headers: { ...headers, "content-type": "application/json", accept: "application/json, text/event-stream", ...protocolHeaders },
     body: JSON.stringify({ jsonrpc: "2.0", id: 3, method: "tools/call", params: { name: operation.name, arguments: checked.args } }),
   }, input, token);
-  if (!called.ok) return { ok: false, status: called.status, text: called.error, connection, transport: { ok: false, status: called.httpStatus, ms: Date.now() - started }, rpc: null };
+  if (!called.ok) return reportTransportFailure(called);
   const parsed = rpcEnvelope(called.text);
   if (parsed.error) {
     const reason = safeReason("error");
@@ -430,6 +461,7 @@ export async function callCustomConnection(input: {
       rpc: { isError: true, content: [{ type: "text", text: reason }], structuredContent: null },
     };
   }
+  await recordAccess("ready", "");
   const rpc = rpcFromResult(parsed.result, token);
   const text = rpc?.content.filter((part) => part.type === "text").map((part) => part.text ?? "").join("\n") ?? "";
   const hasPayload = Boolean(text) || Boolean(rpc && (rpc.content.length > 0 || rpc.structuredContent != null));

@@ -243,7 +243,7 @@ function logicSse(input: {
   });
 }
 
-async function handleLogicTurn(userId: string, data: TurnBody, route: LogicRouteId, preflight: () => Promise<Response | null>): Promise<Response> {
+async function handleLogicTurn(userId: string, data: TurnBody, route: LogicRouteId, preflight: () => Promise<Response | null>, markDispatched: () => void): Promise<Response> {
   const label = LOGIC_ROUTE_LABEL[route];
   const images = sanitizeAttachments(data.images);
   if (images.length > 0) {
@@ -283,6 +283,7 @@ async function handleLogicTurn(userId: string, data: TurnBody, route: LogicRoute
   }
   const blocked = await preflight();
   if (blocked) return blocked;
+  markDispatched();
   const ran = await runLogicRoute({
     route,
     messages: flat.messages,
@@ -301,7 +302,7 @@ async function handleLogicTurn(userId: string, data: TurnBody, route: LogicRoute
 }
 
 export async function handleMindTurn(request: Request): Promise<Response> {
-  if (request.method !== "POST") return json({ ok: false, error: "Method not allowed." }, 405);
+  if (request.method !== "POST" && request.method !== "GET") return json({ ok: false, error: "Method not allowed." }, 405);
   if (
     decideFetchSite({
       site: request.headers.get("sec-fetch-site"),
@@ -321,6 +322,7 @@ export async function handleMindTurn(request: Request): Promise<Response> {
     const message = error instanceof Error ? error.message : "Unauthorized";
     return json({ ok: false, error: message === "Unauthorized" ? "Sign in is required." : message }, message === "Unauthorized" ? 401 : 403);
   }
+  if (request.method === "GET") return json({ operationId: `${Date.now()}-${crypto.randomUUID()}` });
   const read = await readJsonObjectBody(request, MAX_BODY);
   if (!read.ok) return json({ ok: false, error: read.error }, read.status);
   const operationId = request.headers.get("x-mind-turn-id");
@@ -347,10 +349,11 @@ export async function handleMindTurn(request: Request): Promise<Response> {
   } catch {
     return json({ ok: false, error: "Send verification is temporarily unavailable. The provider was not contacted." }, 503);
   }
-  const response = await dispatchMindTurn(request, userId, read.body);
+  let dispatched = false;
+  const response = await dispatchMindTurn(request, userId, read.body, () => { dispatched = true; });
   // The insert is the protection. A failed audit update must not hide a real reply.
   try {
-    await finishTurnReceipt(sql, userId, operationId);
+    await finishTurnReceipt(sql, userId, operationId, !dispatched);
     await pruneTurnReceipts(sql);
   } catch {
     // The existing receipt keeps later deliveries from starting another call.
@@ -358,7 +361,7 @@ export async function handleMindTurn(request: Request): Promise<Response> {
   return response;
 }
 
-async function dispatchMindTurn(request: Request, userId: string, data: Record<string, unknown>): Promise<Response> {
+async function dispatchMindTurn(request: Request, userId: string, data: Record<string, unknown>, markDispatched: () => void = () => {}): Promise<Response> {
   if (request.signal.aborted) return json({ ok: false, error: "This send was canceled before it started." }, 499);
   let body = data as TurnBody;
   const { readHaltState } = await import("./halt.server.ts");
@@ -376,6 +379,7 @@ async function dispatchMindTurn(request: Request, userId: string, data: Record<s
   if (localOwner && adrianPcEnabled() && typeof body.text === "string" && body.text.trim()) {
     const pc = await runAdrianPc({ text: body.text, halted: false });
     if (pc.ran) {
+      markDispatched();
       body = { ...body, text: `${body.text}\n\nAdrian PC result: ${pc.output}` };
     }
   }
@@ -387,6 +391,7 @@ async function dispatchMindTurn(request: Request, userId: string, data: Record<s
     }
     const local = runLocalCommand(body.text);
     if (local) {
+      markDispatched();
       const done = { text: local, model: "adrian-local", provider: "Adrian", usage: null, usedIds: [], requestId: null };
       const stream = `event: delta\ndata: ${JSON.stringify({ text: local })}\n\nevent: done\ndata: ${JSON.stringify(done)}\n\n`;
       return new Response(stream, { headers: { "content-type": "text/event-stream", "cache-control": "no-store" } });
@@ -414,6 +419,7 @@ async function dispatchMindTurn(request: Request, userId: string, data: Record<s
     if (blocked) return blocked;
     const help = await collectConsultHelp(planned.plan, async (id, requestText) => {
       if (await preflight()) return { ok: false, text: "" };
+      markDispatched();
       return askConnectedModule(userId, id, requestText);
     });
     consultHelp = orchestratorInstruction(planned.plan, help);
@@ -423,7 +429,7 @@ async function dispatchMindTurn(request: Request, userId: string, data: Record<s
   if (!tierField.ok) return json({ ok: false, error: tierField.error }, 400);
   const logicField = resolveRequestedRoute({ logicRoute: body.logicRoute, provider: body.provider });
   if (!logicField.ok) return json({ ok: false, error: logicField.error }, 400);
-  if (logicField.route) return handleLogicTurn(userId, body, logicField.route, preflight);
+  if (logicField.route) return handleLogicTurn(userId, body, logicField.route, preflight, markDispatched);
   if (typeof body.provider === "string" && body.provider.startsWith("custom:")) {
     const chosen = parseCustomProviderChoice(body.provider);
     if (!chosen.ok) return json(chosen, 400);
@@ -448,6 +454,7 @@ async function dispatchMindTurn(request: Request, userId: string, data: Record<s
     const blocked = await preflight();
     if (blocked) return blocked;
     try {
+      markDispatched();
       const result = await executeCustomChat(userId, chosen, formatted.messages, request.signal);
       if (!result.ok) return json(result, result.httpStatus ?? 502);
       const done = { text: result.text, model: result.model, provider: result.provider, requestedModel: chosen.model, usedIds: assembled.usedIds, usage: result.usage, requestId: result.requestId };
@@ -468,6 +475,9 @@ async function dispatchMindTurn(request: Request, userId: string, data: Record<s
     }, 400);
   }
   const selected = selectProvider(body.provider, process.env);
+  if (selected.ok && selected.id !== "grok" && typeof body.requestedModel === "string" && body.requestedModel !== selected.model) {
+    return json({ ok: false, error: "The configured model changed. Choose the current model before sending again." }, 409);
+  }
   if (requestedProvider === "nemotron" || requestedProvider === "ollama" || requestedProvider === "openrouter") {
     const text = typeof body.text === "string" ? body.text.trim() : "";
     if (!text) return json({ ok: false, error: "Write a message first." }, 400);
@@ -479,6 +489,7 @@ async function dispatchMindTurn(request: Request, userId: string, data: Record<s
     if ((requestedProvider === "nemotron" || requestedProvider === "openrouter") && !process.env.OPENROUTER_API_KEY?.trim()) {
       return json({ ok: false, error: "OpenRouter is selected, but no OpenRouter key is connected. Nothing was sent.", provider: requestedProvider }, 503);
     }
+    markDispatched();
     const routed = await routeSelectedModel({
       id: requestedProvider,
       systemPrompt: context.systemPrompt,
@@ -525,6 +536,7 @@ async function dispatchMindTurn(request: Request, userId: string, data: Record<s
     if (!text) return json({ ok: false, error: "Write a message first." }, 400);
     const context = directTurnContext(body, text, history, consultHelp);
     if (!context.ok) return json(context, 400);
+    markDispatched();
     const called = await callConfiguredProvider({
       id: selected.id,
       model: selected.model,
@@ -560,6 +572,7 @@ async function dispatchMindTurn(request: Request, userId: string, data: Record<s
   if (shouldPersistTurnMemory({ memory: prepared.memory, saveText: prepared.saveMemoryText })) {
     const { getSql } = await import("../db");
     const { createOwnerMemory } = await import("./memory/owner-ops");
+    markDispatched();
     const saved = await createOwnerMemory(await getSql(), userId, {
       scope: "chat",
       text: prepared.saveMemoryText,
@@ -571,6 +584,7 @@ async function dispatchMindTurn(request: Request, userId: string, data: Record<s
     memorySaved = signal.memorySaved;
     savedMemoryId = signal.savedMemoryId;
   }
+  markDispatched();
   return relayModelStream({
     apiKey,
     model: prepared.model,

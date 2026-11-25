@@ -17,7 +17,7 @@ import { fileURLToPath } from "node:url";
 import { PGlite } from "@electric-sql/pglite";
 import { pendingMigrations } from "./migration-plan.mjs";
 import { createWorkerLoop } from "../src/lib/mind/worker-loop.ts";
-import { runWorkerPass } from "../src/lib/mind/worker-pass.ts";
+import { runLocalSchedulePass } from "../src/lib/mind/worker-pass.ts";
 
 const root = join(dirname(fileURLToPath(import.meta.url)), "..");
 const dataDir = join(root, ".data", "pglite");
@@ -41,6 +41,7 @@ function toSql(pg) {
     return result.rows;
   };
   sql.query = async (text, params = []) => (await pg.query(text, params)).rows;
+  if (pg.transaction) sql.transaction = (fn) => pg.transaction((tx) => fn(toSql(tx)));
   return sql;
 }
 
@@ -63,7 +64,7 @@ const sql = toSql(pg);
 const loop = createWorkerLoop({
   log,
   runPass: async () => {
-    const result = await runWorkerPass(sql, new Date().toISOString(), `worker-${process.pid}`);
+    const result = await runLocalSchedulePass(sql, new Date().toISOString(), `worker-${process.pid}`);
     writeStatus({ running: true, ...result });
     log("pass-result", `Owners ${result.owners}. Ran ${result.ran}. Skipped ${result.skipped}. Failed ${result.failed}. Recovered ${result.recovered}.`);
     return result;

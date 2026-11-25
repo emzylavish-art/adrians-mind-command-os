@@ -54,9 +54,8 @@ export function packageLabel(command: string): string {
   return command.includes(marker) ? marker : "in-repo coding package";
 }
 
-export function adrianBuildEnv(): NodeJS.ProcessEnv {
+export function adrianBuildEnv(home = process.env.KIMI_CODE_HOME || localDataPath("adrian-build-home")): NodeJS.ProcessEnv {
   const key = resolveXaiInferenceApiKey();
-  const home = process.env.KIMI_CODE_HOME || localDataPath("adrian-build-home");
   mkdirSync(home, { recursive: true });
   mkdirSync(adrianHostedWorkspace(), { recursive: true });
   installCodingExtensions(home, codingSearchUrl());
@@ -307,8 +306,8 @@ function attachLive(handle: LiveHandle) {
         handle.calls.push(message.method);
         if (message.method === "session/request_permission") {
           const options = Array.isArray(params.options) ? params.options.filter(isObject) : [];
-          const kinds = allow ? ["allow_always", "allow_once"] : ["reject_once", "reject_always"];
-          const match = options.find((option) => kinds.includes(String(option.kind)));
+          const kind = allow ? "allow_once" : "reject_once";
+          const match = options.find((option) => option.kind === kind && typeof option.optionId === "string");
           reply(message.id, match && typeof match.optionId === "string" ? { outcome: { outcome: "selected", optionId: match.optionId } } : { outcome: { outcome: "cancelled" } });
         } else if (message.method === "fs/read_text_file") {
           const target = workspaceFile(handle.cwd, params.path);

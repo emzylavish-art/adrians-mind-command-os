@@ -1,3 +1,4 @@
+import { MIND_MAX_BODY_BYTES } from "./request-body.ts";
 /**
  * Chat model-picker selections for Astra, Sol, and Luna.
  * Readiness and the live call stay in the provider adapter. This module only
@@ -355,12 +356,12 @@ export type ChatTurnBodyInput = {
 
 /** Client JSON for POST /api/mind/turn. The server re-resolves model and endpoint. */
 export function chatTurnBody(input: ChatTurnBodyInput): Record<string, unknown> {
-  return {
+  const body = {
     text: input.text,
     ...(input.chatId ? { chatId: input.chatId } : {}),
     memory: input.memory,
     halted: input.halted,
-    history: input.history,
+    history: input.history.slice(-12),
     memoryContext: input.memoryContext,
     ...(normalizeBotKnowledge(input.botKnowledge).knowledge ? { botKnowledge: normalizeBotKnowledge(input.botKnowledge).knowledge } : {}),
     personalityId: input.personalityId ?? "assistant",
@@ -375,6 +376,16 @@ export function chatTurnBody(input: ChatTurnBodyInput): Record<string, unknown> 
     ...(input.consult ? { consult: input.consult } : {}),
     images: input.images,
   };
+  const size = () => new TextEncoder().encode(JSON.stringify(body)).byteLength;
+  if (body.history.length && size() > MIND_MAX_BODY_BYTES) {
+    for (let i = 0; i < body.history.length; i++) {
+      const turn = body.history[i];
+      if (!turn || typeof turn !== "object" || !("images" in turn) || !Array.isArray(turn.images) || !turn.images.length) continue;
+      body.history[i] = { ...turn, images: [] };
+      if (size() <= MIND_MAX_BODY_BYTES) break;
+    }
+  }
+  return body;
 }
 
 export function toAdapterMessages(

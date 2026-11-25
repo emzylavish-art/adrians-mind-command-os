@@ -25,7 +25,8 @@ export async function claimTurn(
   const inserted = await sql<{ operation_id: string }>`
     insert into mind_turn_receipt (user_id, operation_id, request_hash, expires_at)
     values (${userId}, ${operationId}, ${requestHash}, ${expiresAt.toISOString()})
-    on conflict (user_id, operation_id) do nothing
+    on conflict (user_id, operation_id) do update set retryable = false
+    where mind_turn_receipt.retryable and mind_turn_receipt.request_hash = excluded.request_hash
     returning operation_id
   `;
   if (inserted.length) return "claimed";
@@ -38,9 +39,9 @@ export async function claimTurn(
   return receipt.responded ? "responded" : "waiting";
 }
 
-export async function finishTurnReceipt(sql: Sql, userId: string, operationId: string): Promise<void> {
+export async function finishTurnReceipt(sql: Sql, userId: string, operationId: string, retryable = false): Promise<void> {
   await sql`
-    update mind_turn_receipt set responded = true
+    update mind_turn_receipt set responded = ${!retryable}, retryable = ${retryable}
     where user_id = ${userId} and operation_id = ${operationId}
   `;
 }

@@ -1,5 +1,5 @@
 import { IMAGINE_MAX_N, checkImagineRateLimit, imagineRateLimitKey, mapImagineHttpError } from "./harden.ts";
-import { assertImagineSpendAllowed, getImagineSpendLedger } from "./spend-ledger.ts";
+import { reserveImagine } from "./spend-ledger.ts";
 import { fetchPinnedUrl, resolveAndPinUrl, type LookupFn } from "./ssrf.ts";
 import { resolveImageApiKey, resolveXaiInferenceApiKey } from "./xai-key.ts";
 import { MAX_DATA_URL_CHARS, MAX_IMAGES_PER_TURN } from "./types.ts";
@@ -42,7 +42,7 @@ export type ImagineImage = {
 };
 
 export type ImagineResult =
-  | { ok: true; model: string; images: ImagineImage[]; usage?: unknown }
+  | { ok: true; model: string; reportedModel?: string; images: ImagineImage[]; usage?: unknown }
   | { ok: false; error: string; status?: number };
 
 type FetchLike = (input: string, init?: RequestInit) => Promise<Response>;
@@ -115,6 +115,12 @@ async function downloadUrlToDataUrl(
   return dataUrlFromB64(b64, downloaded.contentType.startsWith("image/") ? downloaded.contentType : "image/jpeg");
 }
 
+function checkOwnerRate(meter?: { ownerId: string; sessionId?: string }) {
+  if (!meter?.ownerId?.trim()) return { ok: false as const, error: "Imagine requires an owner id for spend controls.", status: 400 };
+  const rate = checkImagineRateLimit(imagineRateLimitKey(meter));
+  return rate.ok ? null : { ok: false as const, error: rate.error, status: 429 };
+}
+
 /**
  * Call xAI Grok Imagine (`POST /v1/images/generations`).
  * Prefers b64_json; when only a URL is returned, downloads it server-side into a data URL.
@@ -138,21 +144,8 @@ export async function generateImagineImages(
   const model = resolveImagineModel(input.model);
   const n = clampCount(input.n);
 
-  if (!options.skipSpendControls) {
-    const ownerId = options.meter?.ownerId?.trim() ?? "";
-    if (!ownerId) {
-      return { ok: false, error: "Imagine requires an owner id for spend controls.", status: 400 };
-    }
-    const allowed = assertImagineSpendAllowed({
-      ownerId,
-      sessionId: options.meter?.sessionId,
-      n,
-      checkRateLimit: checkImagineRateLimit,
-      rateLimitKey: imagineRateLimitKey,
-    });
-    if (!allowed.ok) return { ok: false, error: allowed.error, status: allowed.status };
-  }
-
+  const rejected = options.skipSpendControls ? null : checkOwnerRate(options.meter);
+  if (rejected) return rejected;
   const apiKey = options.apiKey ?? resolveImageApiKey();
   if (!apiKey) {
     return {
@@ -165,6 +158,12 @@ export async function generateImagineImages(
   const fetchImpl = options.fetchImpl ?? fetch;
   const endpoint = options.endpoint ?? XAI_IMAGES_GENERATIONS_URL;
 
+  const reservation = options.skipSpendControls ? null : await reserveImagine({
+    ownerId: options.meter?.ownerId ?? "",
+    model,
+    n: n,
+  });
+  if (reservation && !reservation.ok) return reservation;
   let response: Response;
   try {
     response = await fetchImpl(endpoint, {
@@ -234,12 +233,11 @@ export async function generateImagineImages(
   }
 
   const resolvedModel = typeof record.model === "string" && record.model ? record.model : model;
-  if (!options.skipSpendControls && options.meter?.ownerId) {
-    getImagineSpendLedger().record({ ownerId: options.meter.ownerId, model: resolvedModel, n: images.length || n });
-  }
+  await reservation?.confirm();
   return {
     ok: true,
     model: resolvedModel,
+    reportedModel: typeof record.model === "string" && record.model.trim() ? record.model : undefined,
     images,
     usage: record.usage,
   };
@@ -297,21 +295,8 @@ export async function editImagineImage(
     }
   }
 
-  if (!options.skipSpendControls) {
-    const ownerId = options.meter?.ownerId?.trim() ?? "";
-    if (!ownerId) {
-      return { ok: false, error: "Imagine requires an owner id for spend controls.", status: 400 };
-    }
-    const allowed = assertImagineSpendAllowed({
-      ownerId,
-      sessionId: options.meter?.sessionId,
-      n: 1,
-      checkRateLimit: checkImagineRateLimit,
-      rateLimitKey: imagineRateLimitKey,
-    });
-    if (!allowed.ok) return { ok: false, error: allowed.error, status: allowed.status };
-  }
-
+  const rejected = options.skipSpendControls ? null : checkOwnerRate(options.meter);
+  if (rejected) return rejected;
   const apiKey = options.apiKey ?? resolveXaiInferenceApiKey();
   if (!apiKey) {
     return {
@@ -334,6 +319,12 @@ export async function editImagineImage(
   if (imageUrls.length === 1) requestBody.image_url = imageUrls[0];
   else requestBody.image_urls = imageUrls;
 
+  const reservation = options.skipSpendControls ? null : await reserveImagine({
+    ownerId: options.meter?.ownerId ?? "",
+    model,
+    n: 1,
+  });
+  if (reservation && !reservation.ok) return reservation;
   let response: Response;
   try {
     response = await fetchImpl(endpoint, {
@@ -398,12 +389,11 @@ export async function editImagineImage(
   }
 
   const resolvedModel = typeof record.model === "string" && record.model ? record.model : model;
-  if (!options.skipSpendControls && options.meter?.ownerId) {
-    getImagineSpendLedger().record({ ownerId: options.meter.ownerId, model: resolvedModel, n: images.length || 1 });
-  }
+  await reservation?.confirm();
   return {
     ok: true,
     model: resolvedModel,
+    reportedModel: typeof record.model === "string" && record.model.trim() ? record.model : undefined,
     images,
     usage: record.usage,
   };

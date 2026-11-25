@@ -35,6 +35,7 @@ export function unavailableStatus(httpStatus?: number): OauthStatusPayload {
 
 export type FetchOauthStatusDeps = {
   fetchFn?: typeof fetch;
+  bearer?: string | null;
   timeoutMs?: number;
   signal?: AbortSignal;
 };
@@ -55,7 +56,7 @@ export async function fetchOauthStatusPayload(
     deps.signal && typeof AbortSignal.any === "function" ? AbortSignal.any([deps.signal, timeout]) : timeout;
 
   try {
-    const res = await fetchFn(url, { credentials: "include", signal });
+    const res = await fetchFn(url, { credentials: "include", cache: "no-store", signal, ...(deps.bearer ? { headers: { authorization: `Bearer ${deps.bearer}` } } : {}) });
     const text = await res.text().catch(() => "");
     let body: unknown = null;
     if (text) {

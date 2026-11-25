@@ -21,7 +21,7 @@ export const Route = createFileRoute("/api/mind/oauth/$connector/disconnect")({
           const authorization = request.headers.get("authorization");
           const bearer = authorization?.toLowerCase().startsWith("bearer ") ? authorization.slice(7).trim() : undefined;
           const userId = await requireUserId(bearer);
-          const status = await disconnectConnector(connector, { ownerId: userId });
+          const status = await disconnectConnector(connector, { ownerId: userId, expectedConnectedAt: request.headers.get("x-connected-at") ?? undefined });
           return json({ ok: true, ...status });
         } catch (error) {
           const message = error instanceof Error ? error.message : "Unauthorized";

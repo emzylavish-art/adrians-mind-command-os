@@ -1,3 +1,5 @@
+Historical build receipt. Current release metadata is in public/desktop-update.json.
+
 AdriansMind-Setup-Full.exe (Windows PE 7z SFX GUI)
 e88ff2205540742bd5d9ee75be09e9938e522a00ce0f0514af6c5da14a2d0550  /home/ubuntu/Downloads/AdriansMind-Setup-Full.exe
 size=6389066607

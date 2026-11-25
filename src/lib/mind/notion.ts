@@ -4,7 +4,7 @@ import { join } from "node:path";
 import { localDataPath } from "../local-data.ts";
 
 export const NOTION_SETUP =
-  "Notion is not connected. Set NOTION_TOKEN on the server to an internal integration secret, then share the pages with that integration. Nothing was searched or updated. The secret is not shown here.";
+  "Notion is not connected. Open Plugins, connect your Notion workspace and choose the pages to share. Nothing was searched or updated. The secret is not shown here.";
 
 export type NotionPage = { id: string; title: string; url: string; kind: "page" | "database" };
 

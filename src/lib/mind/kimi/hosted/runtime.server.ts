@@ -1,3 +1,4 @@
+import { machineRequired } from "../account-workspace.ts";
 import { requireUserId } from "../../../auth/verify.server";
 import { assertSameOrigin } from "../../connectors/oauth-csrf";
 import { probeKimiAcp } from "./acp-client.ts";
@@ -13,7 +14,8 @@ export async function handleKimiRuntime(request: Request): Promise<Response> {
     if (!origin.ok) return json({ ok: false, error: origin.error }, 403);
   }
   try {
-    await requireUserId(request.headers.get("authorization")?.replace(/^Bearer\s+/i, ""));
+    const ownerId = await requireUserId(request.headers.get("authorization")?.replace(/^Bearer\s+/i, ""));
+    if (ownerId !== "dev-user") return json({ ok: false, status: "BLOCKED", error: machineRequired }, 409);
   } catch {
     return json({ ok: false, error: "Sign in is required." }, 401);
   }

@@ -20,7 +20,7 @@ function advance(job: TickJob, now: string): string {
     const start = Date.parse(now);
     return new Date((Number.isFinite(start) ? start : Date.now()) + job.intervalMinutes * 60_000).toISOString();
   }
-  return nextClock(now, job.timeZone || "UTC", job.clockHour, job.clockMinute ?? 0).at;
+  return nextClock(now, job.timeZone || "UTC", job.clockHour, job.clockMinute ?? 0, job.nextRunAt).at;
 }
 
 export function tickSchedules(

@@ -1,5 +1,9 @@
 export const PALETTE_DESTINATIONS = [
   { id: "command", label: "Chat" },
+  { id: "dashboard", label: "Dashboard" },
+  { id: "speak", label: "Speak" },
+  { id: "social", label: "Social" },
+  { id: "gpt-wrapper", label: "GPT Wrapper" },
   { id: "chat", label: "Thread" },
   { id: "agents", label: "Bots" },
   { id: "runs", label: "Runs" },
@@ -8,7 +12,7 @@ export const PALETTE_DESTINATIONS = [
   { id: "files", label: "Library" },
   { id: "build", label: "Build" },
   { id: "code", label: "Intelligence", aliases: ["human code"] },
-  { id: "connected", label: "Connected" },
+  { id: "connected", label: "Plugins", aliases: ["connections", "connected", "MCP"] },
   { id: "tools", label: "Tools" },
   { id: "skills", label: "Skills" },
   { id: "voice", label: "Voice clone", aliases: ["voice cloning", "clone"] },
@@ -30,12 +34,14 @@ export type PaletteHit = {
   meta: string;
   view: (typeof PALETTE_DESTINATIONS)[number]["id"];
   ref: string;
+  excerpt?: string;
+  messageId?: string;
 };
 
 type PaletteInput = {
   query: string;
   projects: { id: string; name: string; description: string }[];
-  chats: { id: string; title: string; messages: { content: string }[]; humanCode?: boolean }[];
+  chats: { id: string; title: string; messages: { id?: string; content: string }[]; humanCode?: boolean }[];
   memories: { id: string; text: string; archived: boolean }[];
   files: { id: string; name: string; text: string }[];
   agents: { id: string; name: string; description: string; archived: boolean }[];
@@ -68,9 +74,14 @@ export function paletteHits(input: PaletteInput): PaletteHit[] {
     }
   }
   for (const chat of input.chats) {
-    const blob = `${chat.title} ${chat.messages.map((msg) => msg.content).join(" ")}`.toLowerCase();
-    if (blob.includes(search)) {
-      rows.push({ key: chat.id, label: chat.title, meta: chat.humanCode ? "Intelligence" : "Chat", view: chat.humanCode ? "code" : "chat", ref: chat.id });
+    const message = chat.messages.find((item) => item.content.toLowerCase().includes(search));
+    if (chat.title.toLowerCase().includes(search) || message) {
+      const start = message ? Math.max(0, message.content.toLowerCase().indexOf(search) - 28) : 0;
+      rows.push({
+        key: chat.id, label: chat.title, meta: chat.humanCode ? "Intelligence" : "Chat",
+        view: chat.humanCode ? "code" : "chat", ref: chat.id,
+        messageId: message?.id, excerpt: message?.content.slice(start, start + Math.max(search.length, 96)),
+      });
     }
   }
   for (const note of input.memories) {
@@ -83,5 +94,9 @@ export function paletteHits(input: PaletteInput): PaletteHit[] {
       rows.push({ key: file.id, label: file.name, meta: "File", view: "files", ref: file.id });
     }
   }
-  return rows.slice(0, 16);
+  const rank = (row: PaletteHit) => {
+    if (row.label.toLowerCase() !== search) return 0;
+    return row.ref && (row.view === "chat" || row.view === "code") ? 2 : 1;
+  };
+  return rows.sort((a, b) => rank(b) - rank(a));
 }

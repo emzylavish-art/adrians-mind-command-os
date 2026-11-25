@@ -6,7 +6,7 @@ import { CodeIde } from "@/components/mind/code-ide";
 import { OwnerFlow } from "@/components/mind/owner-flow";
 import { ActionOverlay } from "@/components/mind/conversation-menu";
 import { chatTurnBody } from "@/lib/mind/logic-routes";
-import { consumeMindTurn } from "@/lib/mind/live-turn";
+import { consumeMindTurn, prepareTurnId } from "@/lib/mind/live-turn";
 
 type CompanionState = {
   ok?: boolean;
@@ -31,6 +31,13 @@ type BuildJob = {
   createdAt: string;
   updatedAt: string;
 };
+
+type FileTarget = { workspace: string; cwd?: string };
+type EditorBuffer = FileTarget & { path: string; saved: string; draft: string };
+type FileResult = FileTarget & { files?: WorkspaceFile[]; matches?: { path: string }[]; path?: string; content?: string; before?: string; after?: string; truncated?: boolean };
+function bufferKey(target: FileTarget, path: string) {
+  return JSON.stringify([target.workspace, target.cwd || "", path]);
+}
 
 type WorkspaceFile = { path: string; bytes: number };
 
@@ -70,6 +77,8 @@ function shortDiff(path: string, before: string, after: string): string {
 
 
 export function BuildWorkspace(props: {
+  ownerId?: string;
+  freeOnly?: boolean;
   onDiscuss?: (text: string) => void;
   onResult?: (text: string) => void;
   halted?: boolean;
@@ -90,6 +99,10 @@ export function BuildWorkspace(props: {
   const [notice, setNotice] = useState<string | null>(null);
   const [plan, setPlan] = useState("");
   const [planModel, setPlanModel] = useState("");
+  const planFlight = useRef(false);
+  const planAttempts = useRef(new Map<string, string>());
+  const planOwner = useRef(props.ownerId);
+  planOwner.current = props.ownerId;
   const [planning, setPlanning] = useState(false);
   const [panel, setPanel] = useState<"agent" | "timeline" | "changes" | "editor" | "terminal" | "capabilities" | "browser">("editor");
   const [newFileName, setNewFileName] = useState("");
@@ -98,9 +111,12 @@ export function BuildWorkspace(props: {
   const [workspaceFiles, setWorkspaceFiles] = useState<WorkspaceFile[]>([]);
   const [selectedFile, setSelectedFile] = useState("");
   const [tabs, setTabs] = useState<string[]>([]);
-  const [buffers, setBuffers] = useState<Record<string, { draft: string; saved: string }>>({});
+  const [buffers, setBuffers] = useState<Record<string, EditorBuffer>>({});
   const buffersRef = useRef(buffers);
-  const [fileBusy, setFileBusy] = useState(false);
+  const [fileRequests, setFileRequests] = useState(0);
+  const fileBusy = fileRequests > 0;
+  const [listingTarget, setListingTarget] = useState<FileTarget>();
+  const [matchTarget, setMatchTarget] = useState<FileTarget>();
   const [fileNotice, setFileNotice] = useState<string | null>(null);
   const [terminalCommand, setTerminalCommand] = useState("");
   const [terminalOutput, setTerminalOutput] = useState("");
@@ -126,7 +142,7 @@ export function BuildWorkspace(props: {
     [events],
   );
   const online = (companion.onlineAgentIds?.length ?? 0) > 0;
-  const active = job?.status === "queued" || job?.status === "running";
+  const active = job?.status === "queued" || job?.status === "running" || job?.status === "cancel_requested";
   buffersRef.current = buffers;
   const editorText = buffers[selectedFile]?.draft ?? "";
   const editorDirty = Object.values(buffers).some((buffer) => buffer.draft !== buffer.saved);
@@ -150,10 +166,13 @@ export function BuildWorkspace(props: {
     }
   }
 
+  const pollSequence = useRef(0);
   async function refreshJob(jobId: string) {
+    const sequence = ++pollSequence.current;
     try {
       const response = await fetch(`/api/mind/build/session?jobId=${encodeURIComponent(jobId)}`, { credentials: "include", cache: "no-store" });
       const data = (await response.json()) as { ok?: boolean; job?: BuildJob; events?: BuildEvent[]; error?: string };
+      if (sequence !== pollSequence.current) return;
       if (!response.ok || !data.ok || !data.job) {
         setNotice(data.error || "Build session status could not be read.");
         return;
@@ -165,21 +184,32 @@ export function BuildWorkspace(props: {
     }
   }
 
-  async function runFileOperation(operation: "list" | "read" | "write" | "search" | "rename" | "delete", path?: string, content?: string, extra?: { query?: string; to?: string; confirm?: boolean }) {
-    setFileBusy(true);
+  async function runFileOperation(operation: "list" | "read" | "write" | "search" | "rename" | "delete", path?: string, content?: string, extra?: { query?: string; to?: string; confirm?: boolean; workspace?: string; cwd?: string; expectedMissing?: boolean; expectedContent?: string }): Promise<FileResult | null> {
+    setFileRequests((pending) => pending + 1);
     setFileNotice(null);
     try {
       const response = await fetch("/api/mind/build/files", { method: "POST", credentials: "include", headers: { "content-type": "application/json" }, body: JSON.stringify({ operation, cwd: cwd.trim() || undefined, path, content, ...extra }) });
-      const queued = (await response.json()) as { ok?: boolean; jobId?: string; error?: string; files?: WorkspaceFile[]; matches?: { path: string }[]; content?: string; result?: { files?: WorkspaceFile[]; matches?: { path: string }[]; content?: string; path?: string; before?: string; after?: string } };
-      if (response.ok && queued.ok && !queued.jobId) return queued.result || queued;
+      const queued = await response.json();
+      if (response.ok && queued.ok && !queued.jobId) {
+        const workspace = response.headers.get("X-Mind-Workspace");
+        if (!workspace) { setFileNotice("The server did not identify the workspace. Reload after updating Mind OS."); return null; }
+        return { ...(queued.result || queued), workspace };
+      }
       if (!response.ok || !queued.ok || !queued.jobId) { setFileNotice(queued.error || "File operation could not be queued."); return null; }
       for (let attempt = 0; attempt < 90; attempt += 1) {
         const statusResponse = await fetch(`/api/mind/build/files?jobId=${encodeURIComponent(queued.jobId)}`, { credentials: "include", cache: "no-store" });
         const status = (await statusResponse.json()) as { ok?: boolean; job?: { status: string; output?: string; error?: string }; error?: string };
         if (!statusResponse.ok || !status.ok || !status.job) { setFileNotice(status.error || "File operation status could not be read."); return null; }
-        if (["done", "error", "timeout"].includes(status.job.status)) {
+        if (["done", "error", "timeout", "cancelled"].includes(status.job.status)) {
           if (status.job.status !== "done") { setFileNotice(status.job.error || "File operation failed."); return null; }
-          return JSON.parse(status.job.output || "{}");
+          try {
+            const result = JSON.parse(status.job.output || "");
+            if (!queued.workspace || !result || typeof result !== "object") throw new Error();
+            return { ...result, workspace: queued.workspace, cwd: result.cwd || extra?.cwd || undefined };
+          } catch {
+            setFileNotice("The PC completed the operation but its result is unreadable. Check the file before retrying.");
+            return null;
+          }
         }
         await new Promise((resolve) => window.setTimeout(resolve, 500));
       }
@@ -189,13 +219,28 @@ export function BuildWorkspace(props: {
       setFileNotice("File operation could not reach Adrian OS.");
       return null;
     } finally {
-      setFileBusy(false);
+      setFileRequests((pending) => pending - 1);
     }
   }
 
   async function browseWorkspace() {
-    const result = await runFileOperation("list") as { files?: WorkspaceFile[] } | null;
-    if (result?.files) { setWorkspaceFiles(result.files); setPanel("editor"); }
+    const result = await runFileOperation("list");
+    if (!result?.files) return;
+    if (result.truncated) setFileNotice("Showing a limited file listing. Use Search for other paths.");
+    setListingTarget({ workspace: result.workspace, cwd: result.cwd });
+    setWorkspaceFiles(result.files);
+    setPanel("editor");
+  }
+
+  async function closeCodingBrowser() {
+    try {
+      const response = await fetch("/api/mind/build/browser", { method: "DELETE", credentials: "include" });
+      if (!response.ok) throw new Error("Close failed");
+      setBrowserFrame("");
+      setBrowserNotice("Coding browser closed.");
+    } catch {
+      setBrowserNotice("Could not verify that the coding browser closed.");
+    }
   }
 
   async function openCodingBrowser() {
@@ -216,25 +261,34 @@ export function BuildWorkspace(props: {
     }
   }
 
-  async function openFile(path: string) {
-    setTabs((prev) => prev.includes(path) ? prev : [...prev, path]);
-    const cached = buffersRef.current[path];
-    if (cached) {
-      setSelectedFile(path);
+  function showFile(target: FileTarget, path: string, text: string) {
+    const key = bufferKey(target, path);
+    setBuffers((prev) => ({ ...prev, [key]: prev[key] ?? { ...target, path, saved: text, draft: text } }));
+    setTabs((prev) => prev.includes(key) ? prev : [...prev, key]);
+    setSelectedFile(key);
+    setPanel("editor");
+  }
+
+  async function openFile(path: string, target?: FileTarget) {
+    const cached = target && bufferKey(target, path);
+    if (cached && buffersRef.current[cached]) {
+      setSelectedFile(cached);
       setPanel("editor");
       return;
     }
-    const result = await runFileOperation("read", path) as { content?: string } | null;
-    if (result && typeof result.content === "string") {
-      setBuffers((prev) => ({ ...prev, [path]: prev[path] ?? { draft: result.content, saved: result.content } }));
-      setSelectedFile(path);
-      setPanel("editor");
-    }
+    const result = await runFileOperation("read", path, undefined, target);
+    if (result?.truncated) { setFileNotice("This file exceeds the editable size limit."); return; }
+    if (typeof result?.content === "string") showFile({ workspace: result.workspace, cwd: result.cwd }, path, result.content);
   }
 
   function closeTab(path: string) {
     const buffer = buffersRef.current[path];
-    if (buffer && buffer.draft !== buffer.saved && typeof window !== "undefined" && !window.confirm(`Close ${path} without a verified save?`)) return;
+    if (buffer && buffer.draft !== buffer.saved && typeof window !== "undefined" && !window.confirm(`Close ${buffer.path} without a verified save?`)) return;
+    setBuffers((prev) => {
+      const next = { ...prev };
+      delete next[path];
+      return next;
+    });
     setTabs((prev) => {
       const next = prev.filter((item) => item !== path);
       if (selectedFile === path) setSelectedFile(next.at(-1) || "");
@@ -248,26 +302,44 @@ export function BuildWorkspace(props: {
       setFileNotice("Use a file name inside this workspace.");
       return;
     }
-    const result = await runFileOperation("write", name, "") as { path?: string } | null;
-    const createdPath = result?.path;
-    if (!createdPath) return;
+    if (!listingTarget || (listingTarget.workspace !== "hosted" && !listingTarget.cwd)) { setFileNotice("Browse the destination workspace before creating this file."); return; }
+    const result = await runFileOperation("write", name, "", { ...listingTarget, expectedMissing: true });
+    if (!result?.path) return;
+    const createdPath = result.path;
     setNewFileName("");
-    setTabs((prev) => prev.includes(createdPath) ? prev : [...prev, createdPath]);
-    setBuffers((prev) => ({ ...prev, [createdPath]: { draft: "", saved: "" } }));
-    setSelectedFile(createdPath);
+    showFile({ workspace: result.workspace, cwd: result.cwd }, createdPath, "");
     setPanel("editor");
     setFileNotice(`Created ${createdPath}. Type in the editor, then save.`);
   }
 
   async function saveFile() {
     if (!selectedFile) { setFileNotice("Select a file before saving."); return; }
-    const result = await runFileOperation("write", selectedFile, editorText) as { path?: string; before?: string; after?: string } | null;
+    const buffer = buffers[selectedFile];
+    if (!buffer) return;
+    if (buffer.workspace !== "hosted" && !buffer.cwd) { setFileNotice("Update the companion and reopen the file to identify its workspace root before saving."); return; }
+    const result = await runFileOperation("write", buffer.path, editorText, { workspace: buffer.workspace, cwd: buffer.cwd, expectedContent: buffer.saved });
     if (result?.path) {
-      const verified = result.after || editorText;
-      setBuffers((prev) => ({ ...prev, [selectedFile]: { draft: verified, saved: verified } }));
+      const verified = result.after ?? editorText;
+      setBuffers((prev) => prev[selectedFile] ? { ...prev, [selectedFile]: { ...prev[selectedFile], saved: verified } } : prev);
       setLastDiff({ path: result.path, before: result.before || "", after: verified });
       setFileNotice(`Saved ${result.path}. The before/after text is the reviewed result, not an assumed write.`);
     }
+  }
+
+  async function checkFileState() {
+    const buffer = buffers[selectedFile];
+    if (!buffer) return;
+    const result = await runFileOperation("read", buffer.path, undefined, { workspace: buffer.workspace, cwd: buffer.cwd });
+    if (!result || result.truncated || typeof result.content !== "string") return;
+    const disk = result.content;
+    setLastDiff({ path: buffer.path, before: disk, after: buffer.draft });
+    if (disk !== buffer.saved && disk !== buffer.draft &&
+        !window.confirm("The file changed on disk. Keep your draft and use the current disk version as the baseline for your next save?")) {
+      setFileNotice("Your draft was kept. Open Changes to compare it with the disk copy.");
+      return;
+    }
+    setBuffers((prev) => prev[selectedFile] ? { ...prev, [selectedFile]: { ...prev[selectedFile], saved: disk } } : prev);
+    setFileNotice(disk === buffer.draft ? "The verified disk copy matches the checked draft." : "Disk copy checked. Your draft is available for review.");
   }
 
   async function requestTerminalApproval() {
@@ -297,7 +369,7 @@ export function BuildWorkspace(props: {
   }
 
   async function readGit(init = false) {
-    setFileBusy(true);
+    setFileRequests((pending) => pending + 1);
     setFileNotice(null);
     try {
       const response = await fetch("/api/mind/build/files", { method: "POST", credentials: "include", headers: { "content-type": "application/json" }, body: JSON.stringify({ operation: init ? "git-init" : "git", confirm: init }) });
@@ -307,12 +379,12 @@ export function BuildWorkspace(props: {
     } catch {
       setFileNotice("Git status could not be read. Nothing was committed or pushed.");
     } finally {
-      setFileBusy(false);
+      setFileRequests((pending) => pending - 1);
     }
   }
 
   async function commitGit(message: string) {
-    setFileBusy(true);
+    setFileRequests((pending) => pending + 1);
     setFileNotice(null);
     try {
       const response = await fetch("/api/mind/build/files", { method: "POST", credentials: "include", headers: { "content-type": "application/json" }, body: JSON.stringify({ operation: "git-commit", confirm: true, content: message }) });
@@ -322,12 +394,12 @@ export function BuildWorkspace(props: {
     } catch {
       setFileNotice("Local commit could not be completed. Nothing was pushed.");
     } finally {
-      setFileBusy(false);
+      setFileRequests((pending) => pending - 1);
     }
   }
 
   async function branchGit(name: string) {
-    setFileBusy(true);
+    setFileRequests((pending) => pending + 1);
     setFileNotice(null);
     try {
       const response = await fetch("/api/mind/build/files", { method: "POST", credentials: "include", headers: { "content-type": "application/json" }, body: JSON.stringify({ operation: "git-branch", confirm: true, to: name }) });
@@ -337,7 +409,7 @@ export function BuildWorkspace(props: {
     } catch {
       setFileNotice("Local branch could not be created. Nothing was pushed.");
     } finally {
-      setFileBusy(false);
+      setFileRequests((pending) => pending - 1);
     }
   }
 
@@ -349,17 +421,17 @@ export function BuildWorkspace(props: {
 
   useEffect(() => {
     void browseWorkspace();
-    const live = sessionStorage.getItem("adrian-build-live-session");
+    const live = sessionStorage.getItem(`adrian-build-live-session.${props.ownerId || "signed-out"}`);
     if (live) setSessionId(live);
-    const draft = sessionStorage.getItem("adrian-build-draft");
+    const draft = sessionStorage.getItem(`adrian-build-draft.${props.ownerId || "signed-out"}`);
     if (!draft) return;
     setPrompt(draft);
-    sessionStorage.removeItem("adrian-build-draft");
-    const fromHuman = Boolean(sessionStorage.getItem("adrian-human-return"));
-    const requested = sessionStorage.getItem("adrian-build-mode");
+    sessionStorage.removeItem(`adrian-build-draft.${props.ownerId || "signed-out"}`);
+    const fromHuman = Boolean(sessionStorage.getItem(`adrian-human-return.${props.ownerId || "signed-out"}`));
+    const requested = sessionStorage.getItem(`adrian-build-mode.${props.ownerId || "signed-out"}`);
     if (requested === "auto" || requested === "plan" || requested === "default") {
       setMode(requested);
-      sessionStorage.removeItem("adrian-build-mode");
+      sessionStorage.removeItem(`adrian-build-mode.${props.ownerId || "signed-out"}`);
     }
     setNotice(fromHuman ? "Opened from Intelligence. Review the task, then press Run build. The result returns to that thread." : "Opened from Chat. Review the task, then press Run build.");
   }, []);
@@ -375,8 +447,10 @@ export function BuildWorkspace(props: {
   }, [editorDirty]);
 
   useEffect(() => {
-    const savedJobId = typeof localStorage === "undefined" ? "" : localStorage.getItem("adrian-build-last-job") || "";
-    if (savedJobId) void refreshJob(savedJobId);
+    try {
+      const savedJobId = localStorage.getItem(`adrian-build-last-job.${props.ownerId || "signed-out"}`);
+      if (savedJobId) void refreshJob(savedJobId);
+    } catch { /* A new job can still run without browser storage. */ }
   }, []);
 
   useEffect(() => {
@@ -391,29 +465,39 @@ export function BuildWorkspace(props: {
     return () => window.clearInterval(timer);
   }, [active, job?.id]);
 
+  const submittingBuild = useRef(false);
   async function submit(event: FormEvent) {
     event.preventDefault();
+    if (props.freeOnly) { setNotice("Free-only is selected. Build has no verified free coding model for this action."); return; }
     const text = prompt.trim();
     if (!text) {
       setNotice("Describe the coding task before submitting.");
       return;
     }
+    if (submittingBuild.current || active) return;
+    submittingBuild.current = true;
+    const agentId = companion.onlineAgentIds?.[0];
+    const jobKey = agentId ? crypto.randomUUID().replaceAll("-", "") : undefined;
+    ++pollSequence.current;
     setLoading(true);
     setNotice(null);
     setEvents([]);
     try {
+      if (jobKey) {
+        try { localStorage.setItem(`adrian-build-last-job.${props.ownerId || "signed-out"}`, jobKey); } catch { /* Recovery remains available on this screen. */ }
+      }
       const response = await fetch("/api/mind/build/session", {
         method: "POST",
         credentials: "include",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ prompt: text, cwd: cwd.trim() || undefined, mode, resumeSessionId: sessionId || undefined }),
+        body: JSON.stringify({ prompt: text, agentId, jobKey, cwd: cwd.trim() || undefined, mode, resumeSessionId: sessionId || undefined }),
       });
       const data = (await response.json()) as { ok?: boolean; jobId?: string; executed?: boolean; error?: string; version?: string; agent?: string; loginRequired?: boolean; output?: string; package?: string; sessionId?: string; mode?: string; resumed?: boolean; forkedSessionId?: string; filesChanged?: { path: string; before: string; after: string }[] };
       if (!response.ok || !data.ok || !data.jobId) {
         if (data.executed) {
           if (data.sessionId) {
             setSessionId(data.sessionId);
-            sessionStorage.setItem("adrian-build-live-session", data.sessionId);
+            sessionStorage.setItem(`adrian-build-live-session.${props.ownerId || "signed-out"}`, data.sessionId);
           }
           const change = data.filesChanged?.[0];
           if (change) setLastDiff(change);
@@ -421,7 +505,7 @@ export function BuildWorkspace(props: {
           const reused = (data as { reused?: boolean }).reused === true;
           setNotice(`${data.mode || mode} mode ran Adrian Build${reused ? " on the same running process" : data.resumed ? " and resumed the last session" : ""}. ${alive ? "The process is still running for this session." : ""} ${change ? `Changed ${change.path}.` : "No file change was reported."}`);
           const result = [change ? shortDiff(change.path, change.before, change.after) : "No file change was found on disk.", data.output].filter(Boolean).join("\n").slice(0, 2000);
-          if (sessionStorage.getItem("adrian-human-return")) props.onResult?.(result);
+          if (sessionStorage.getItem(`adrian-human-return.${props.ownerId || "signed-out"}`)) props.onResult?.(result);
           setJob({ id: "local", status: "done", output: [data.package, data.mode ? `mode ${data.mode}` : "", data.resumed ? "resumed" : "", data.forkedSessionId ? `fork ${data.forkedSessionId}` : "", data.output].filter(Boolean).join("\n") || "Accepted.", error: "", createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() });
           setPanel("agent");
           return;
@@ -429,22 +513,29 @@ export function BuildWorkspace(props: {
         setNotice(data.error || "The build session could not be queued.");
         return;
       }
+      ++pollSequence.current;
       setJob({ id: data.jobId, status: "queued", output: "", error: "", createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() });
-      localStorage.setItem("adrian-build-last-job", data.jobId);
+      try { localStorage.setItem(`adrian-build-last-job.${props.ownerId || "signed-out"}`, data.jobId); } catch { /* The accepted job remains visible in this session. */ }
       setNotice("Task queued on the paired computer.");
     } catch {
-      setNotice("The Build request could not reach Adrian OS. Nothing was executed.");
+      setNotice("Build could not verify the outcome. Check the session history before submitting again.");
+      if (jobKey) await refreshJob(jobKey);
     } finally {
+      submittingBuild.current = false;
       setLoading(false);
     }
   }
 
   async function planWithGrok() {
+    if (planFlight.current || props.halted) return;
+    const owner = props.ownerId;
+    if (props.freeOnly) { setNotice("Free-only is selected. Build has no verified free coding model for this action."); return; }
     const text = prompt.trim();
     if (!text) {
       setNotice("Describe the task before asking Grok for a plan.");
       return;
     }
+    planFlight.current = true;
     setPlanning(true);
     setPlan("");
     setPlanModel("");
@@ -453,11 +544,7 @@ export function BuildWorkspace(props: {
     const timeout = AbortSignal.timeout(30_000);
     const signal = typeof AbortSignal.any === "function" ? AbortSignal.any([controller.signal, timeout]) : timeout;
     try {
-      const result = await consumeMindTurn({
-        url: "/api/mind/turn",
-        signal,
-        headers: { "content-type": "application/json" },
-        body: chatTurnBody({
+      const body = chatTurnBody({
           text: `Plan this Adrian Build task. Do not claim any file was written.\n\n${text}`,
           memory: "off",
           halted: false,
@@ -467,9 +554,30 @@ export function BuildWorkspace(props: {
           modelTier: "Heavy",
           logicRoute: null,
           images: [],
-        }),
-        onDelta: (chunk) => setPlan((current) => current + chunk),
       });
+      const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(JSON.stringify(body)));
+      const fingerprint = Array.from(new Uint8Array(digest), (byte) => byte.toString(16).padStart(2, "0")).join("");
+      const key = `adrian.build.plan.${owner ?? "local"}.${fingerprint}`;
+      let id = planAttempts.current.get(key);
+      if (!id) {
+        try { id = sessionStorage.getItem(key) || undefined; } catch { /* the open tab can still recover */ }
+      }
+      id ??= await prepareTurnId("/api/mind/turn", {}, signal);
+      if (planOwner.current !== owner || signal.aborted) return;
+      planAttempts.current.set(key, id);
+      try { sessionStorage.setItem(key, id); } catch { /* retained in this tab */ }
+      const result = await consumeMindTurn({
+        url: "/api/mind/turn",
+        signal,
+        headers: { "content-type": "application/json", "x-mind-turn-id": id },
+        body,
+        onDelta: (chunk) => { if (planOwner.current === owner) setPlan((current) => current + chunk); },
+      });
+      if (planOwner.current !== owner) return;
+      if (result.ok || !result.deliveryUncertain) {
+        planAttempts.current.delete(key);
+        try { sessionStorage.removeItem(key); } catch { /* browser storage unavailable */ }
+      }
       if (!result.ok) {
         setNotice(result.error);
         return;
@@ -480,15 +588,17 @@ export function BuildWorkspace(props: {
     } catch {
       setNotice("The Grok plan could not be completed. No file was written.");
     } finally {
+      planFlight.current = false;
       setPlanning(false);
     }
   }
 
   async function cancelBuild() {
-    if (!job?.id || !active) return;
+    if (!job?.id || !active || job.status === "cancel_requested") return;
     try {
       const response = await fetch("/api/mind/build/cancel", { method: "POST", credentials: "include", headers: { "content-type": "application/json" }, body: JSON.stringify({ jobId: job.id }) });
       const data = (await response.json()) as { ok?: boolean; error?: string };
+      if (data.ok) setJob((current) => current?.id === job.id && (current.status === "queued" || current.status === "running") ? { ...current, status: "cancel_requested" } : current);
       setNotice(data.ok ? "Cancellation requested. Waiting for the Companion to stop the runtime." : data.error || "Cancellation was not accepted.");
     } catch { setNotice("Cancellation request could not reach Adrian OS."); }
   }
@@ -499,7 +609,7 @@ export function BuildWorkspace(props: {
       const response = await fetch("/api/mind/build/session", { method: "POST", credentials: "include", headers: { "content-type": "application/json" }, body: JSON.stringify({ action: "close", resumeSessionId: sessionId }) });
       const data = (await response.json()) as { ok?: boolean; closed?: boolean; error?: string };
       if (!response.ok || !data.ok) { setNotice(data.error || "The coding process was not closed."); return; }
-      sessionStorage.removeItem("adrian-build-live-session");
+      sessionStorage.removeItem(`adrian-build-live-session.${props.ownerId || "signed-out"}`);
       setSessionId("");
       setNotice(data.closed ? "The coding process for this session was closed." : "No coding process was still running.");
     } catch {
@@ -508,7 +618,8 @@ export function BuildWorkspace(props: {
   }
 
   async function searchWorkspace() {
-    const result = await runFileOperation("search", undefined, undefined, { query: searchQuery }) as { matches?: { path: string }[] } | null;
+    const result = await runFileOperation("search", undefined, undefined, { query: searchQuery });
+    setMatchTarget(result ? { workspace: result.workspace, cwd: result.cwd } : undefined);
     setSearchMatches(result?.matches?.map((item) => item.path) || []);
     setPanel("editor");
   }
@@ -549,13 +660,15 @@ export function BuildWorkspace(props: {
   }
 
   async function submitVoice() {
+    if (props.freeOnly) { setNotice("Free-only is selected. A free Build voice task route is unavailable."); return; }
     if (!transcript.trim()) return;
     const instructions = projects.find((project) => project.cwd === cwd)?.instructions || "";
     const response = await fetch("/api/mind/build/voice", { method: "POST", credentials: "include", headers: { "content-type": "application/json" }, body: JSON.stringify({ transcript, cwd, instructions }) });
     const data = await response.json() as { ok?: boolean; jobId?: string; error?: string; limitation?: string };
     if (data.jobId) {
+      ++pollSequence.current;
       setJob({ id: data.jobId, status: "queued", output: "", error: "", createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() });
-      localStorage.setItem("adrian-build-last-job", data.jobId);
+      try { localStorage.setItem(`adrian-build-last-job.${props.ownerId || "signed-out"}`, data.jobId); } catch { /* The accepted job remains visible in this session. */ }
     }
     setNotice(data.ok ? data.limitation || "Voice transcript queued." : data.error || "Voice transcript was not queued.");
   }
@@ -587,7 +700,7 @@ export function BuildWorkspace(props: {
             <img src="/brand/logo-mark.jpg" alt="" className="size-8 rounded-lg" />
             <div>
               <h2 className="font-display text-3xl font-bold">Adrian Build</h2>
-              <p className="text-sm text-muted">Adrian Build runs here with the saved Grok key. Type a task and press Run build, or open a file and type in the editor.</p>
+              <p className="text-sm text-muted">Build uses its configured coding runtime. Open a workspace file to edit it, or submit a coding task.</p>
             </div>
           </div>
           <button type="button" className="inline-flex min-h-11 items-center gap-2 rounded-panel border border-line px-3 text-sm" onClick={() => { void refreshCompanion(); if (job) void refreshJob(job.id); }}>
@@ -599,8 +712,8 @@ export function BuildWorkspace(props: {
       <section className={`intelligence-group flex flex-wrap items-center gap-3 ${online ? "border-success/40" : "border-warning/40"}`} aria-label="Status" hidden={band !== "actions"}>
         <h3 className="w-full">Status</h3>
         {online ? <Activity className="size-5 text-success" aria-hidden="true" /> : <WifiOff className="size-5 text-warning" aria-hidden="true" />}
-        <p className="min-w-0 flex-1 text-sm">{online ? (companion.detail || "Paired computer connected.") : "Adrian Build is ready on this site. Run uses the hosted workspace."}</p>
-        <span className="rounded-full border border-line px-2 py-1 text-xs">{online ? "Ready to queue" : "Hosted workspace ready"}</span>
+        <p className="min-w-0 flex-1 text-sm">{online ? (companion.detail || "Paired computer connected.") : "No paired Build agent is online. Account files are available in the editor."}</p>
+        <span className="rounded-full border border-line px-2 py-1 text-xs">{online ? "Ready to queue" : "Account file editor"}</span>
       </section>
 
       <nav className="intelligence-group" aria-label="Build sections">
@@ -658,7 +771,7 @@ export function BuildWorkspace(props: {
       {workspaceFiles.length ? (
         <div className="flex flex-wrap gap-2" aria-label="Workspace files" hidden={band !== "files"}>
           {workspaceFiles.slice(0, 8).map((file) => (
-            <button key={file.path} type="button" className="min-h-11 max-w-full break-all rounded-panel border border-line px-3 text-left text-xs" onClick={() => void openFile(file.path)}>{file.path}</button>
+            <button key={file.path} type="button" className="min-h-11 max-w-full break-all rounded-panel border border-line px-3 text-left text-xs" onClick={() => void openFile(file.path, listingTarget)}>{file.path}</button>
           ))}
         </div>
       ) : null}
@@ -729,18 +842,18 @@ export function BuildWorkspace(props: {
               <div><p className="text-xs uppercase tracking-[0.18em] text-muted">Build panel</p><h3 className="font-semibold">{panel === "agent" ? "Agent output" : panel === "timeline" ? "Execution timeline" : panel === "changes" ? "File-change review" : panel === "editor" ? "Code editor" : panel === "terminal" ? "Integrated terminal" : panel === "browser" ? "Coding browser" : "Capability inventory"}</h3></div>
               {active ? <Square className="size-4 animate-pulse text-warning" aria-label="Task active" /> : <ShieldCheck className="size-5 text-success" aria-label="Task settled" />}
             </div>
-            {panel === "browser" ? <div className="space-y-2"><p className="text-sm text-muted" role="status">{browserNotice || "The coding browser uses the in-repo package and the saved Grok key. It does not ask for a separate login."}</p>{browserFrame ? <iframe title="Coding browser" src={browserFrame} className="h-[32rem] w-full rounded-panel border border-line bg-black" /> : null}</div> : null}
+            {panel === "browser" ? <div className="space-y-2"><p className="text-sm text-muted" role="status">{browserNotice || "The coding browser uses the in-repo package and the saved Grok key. It does not ask for a separate login."}</p>{browserFrame ? <><button type="button" className="min-h-11 rounded-panel border border-line px-3" onClick={() => void closeCodingBrowser()}>Close coding browser</button><iframe title="Coding browser" src={browserFrame} className="h-[32rem] w-full rounded-panel border border-line bg-black" /></> : null}</div> : null}
             {panel === "agent" ? <>
               <div className="min-h-32 whitespace-pre-wrap rounded-panel border border-line bg-black/10 p-3 text-sm">{assistantText || job?.output || job?.error || "No active build task. Submit a task to stream agent output here."}</div>
-              {active ? <button type="button" onClick={() => void cancelBuild()} className="min-h-10 rounded-panel border border-danger/40 px-3 text-sm text-danger">Stop task</button> : null}
+              {active ? <button type="button" disabled={job?.status === "cancel_requested"} onClick={() => void cancelBuild()} className="min-h-10 rounded-panel border border-danger/40 px-3 text-sm text-danger">{job?.status === "cancel_requested" ? "Stopping…" : "Stop task"}</button> : null}
               {sessionId ? <button type="button" onClick={() => void endCodingSession()} className="min-h-10 rounded-panel border border-line px-3 text-sm">End coding session</button> : null}
               {job?.error ? <p className="text-sm text-danger" role="alert">{job.error}</p> : null}
             </> : null}
             {panel === "timeline" ? <ol className="max-h-96 space-y-2 overflow-auto text-sm">{events.map((item) => <li key={item.id} className="rounded-panel border border-line p-2"><div className="flex items-center justify-between gap-2"><span className="font-medium">{eventLabel(item)}</span><time className="text-xs text-muted">{new Date(item.createdAt).toLocaleTimeString()}</time></div>{updateText(item) ? <p className="mt-1 text-xs text-muted">{updateText(item).slice(0, 240)}</p> : null}</li>)}{!events.length ? <li className="text-sm text-muted">No events yet.</li> : null}</ol> : null}
-            {panel === "changes" ? <GitReview report={gitReport} busy={fileBusy} onRead={() => void readGit(false)} onInit={() => void readGit(true)} onCommit={(message) => void commitGit(message)} onBranch={(name) => void branchGit(name)} onOpen={(path) => { setPanel("editor"); void openFile(path); }} /> : null}
+            {panel === "changes" ? <GitReview report={gitReport} busy={fileBusy} onRead={() => void readGit(false)} onInit={() => void readGit(true)} onCommit={(message) => void commitGit(message)} onBranch={(name) => void branchGit(name)} onOpen={(path) => { setPanel("editor"); void openFile(path, { workspace: "hosted" }); }} /> : null}
             {panel === "changes" ? <div className="space-y-2">{changedFiles.map((path) => <div key={path} className="rounded-panel border border-line p-3 text-sm"><FileDiff className="mr-2 inline size-4 text-accent" />{path}<span className="ml-2 text-xs text-muted">written by ACP</span></div>)}{lastDiff ? <div className="rounded-panel border border-line p-3 text-xs"><p className="font-semibold">Reviewed save: {lastDiff.path}</p><p className="mt-2 whitespace-pre-wrap text-danger">{lastDiff.before}</p><hr className="my-2 border-line" /><p className="whitespace-pre-wrap text-success">{lastDiff.after}</p></div> : null}{!changedFiles.length && !lastDiff ? <p className="text-sm text-muted">No file-write events have been reported for this session.</p> : null}<p className="text-xs text-muted">Reviewed file saves return before/after content for bounded change review.</p></div> : null}
             {panel === "changes" ? <button type="button" className="min-h-11 rounded-panel border border-line px-3 text-sm" onClick={() => void restoreLatestCheckpoint()}>Restore last checkpoint</button> : null}
-            {panel === "editor" ? <CodeIde files={workspaceFiles} matches={searchMatches} tabs={tabs} dirty={dirtyTabs} selected={selectedFile} text={editorText} busy={fileBusy} notice={fileNotice} newName={newFileName} onNewName={setNewFileName} onCreate={() => void createFile()} onOpen={(path) => void openFile(path)} onCloseTab={closeTab} onChange={(value) => setBuffers((prev) => ({ ...prev, [selectedFile]: { draft: value, saved: prev[selectedFile]?.saved ?? "" } }))} onSave={() => void saveFile()} /> : null}
+            {panel === "editor" ? <CodeIde files={workspaceFiles} matches={searchMatches} tabs={tabs.map((id) => ({ id, path: buffers[id]?.path || "", workspace: buffers[id]?.workspace || "", cwd: buffers[id]?.cwd }))} dirty={dirtyTabs} selectedId={selectedFile} selected={buffers[selectedFile]?.path || ""} text={editorText} busy={fileBusy} notice={fileNotice} newName={newFileName} onNewName={setNewFileName} onCreate={() => void createFile()} onOpen={(path) => void openFile(path, listingTarget)} onOpenMatch={(path) => void openFile(path, matchTarget)} onSelectTab={setSelectedFile} onCloseTab={closeTab} onChange={(value) => setBuffers((prev) => prev[selectedFile] ? { ...prev, [selectedFile]: { ...prev[selectedFile], draft: value } } : prev)} onCheck={() => void checkFileState()} onSave={() => void saveFile()} /> : null}
             {panel === "capabilities" ? <div className="space-y-2">{capabilities.map((item) => <div key={item.id} className="rounded-panel border border-line p-3 text-sm"><div className="flex items-center justify-between gap-2"><span className="font-medium">{item.label}</span><span className="text-xs text-muted">{item.status.replaceAll("_", " ")}</span></div><p className="mt-1 text-xs text-muted">{item.evidence}</p></div>)}{!capabilities.length ? <p className="text-sm text-muted">Capability inventory has not loaded.</p> : null}<div className="rounded-panel border border-line p-3 text-xs text-muted"><p>Projects: {projects.map((project) => project.label).join(", ") || "none"}</p><p>Sessions: {sessions.map((session) => session.name).join(", ") || "none"}</p><p>Providers: {providers.map((provider) => `${provider.model}${provider.hasKey ? " (key stored)" : ""} · ${provider.runtimeUse}`).join(", ") || "none"}</p></div></div> : null}
             {panel === "capabilities" ? <KimiPhase4Panel initializeResponse={null} updates={events} /> : null}
             {panel === "terminal" ? <div className="space-y-3"><input value={terminalCommand} onChange={(event) => setTerminalCommand(event.target.value)} placeholder="Command requiring explicit approval" className="min-h-11 w-full rounded-panel border border-line bg-transparent px-3 font-mono text-sm outline-none focus:border-accent" aria-label="Terminal command" /><div className="flex flex-wrap gap-2"><button type="button" disabled={terminalBusy || !terminalCommand.trim()} onClick={() => void requestTerminalApproval()} className="min-h-10 rounded-panel border border-line px-3 text-sm disabled:opacity-50">{terminalBusy ? "Requesting…" : "Request approval"}</button>{terminalApproval ? <button type="button" disabled={terminalBusy} onClick={() => void approveTerminal()} className="min-h-10 rounded-panel bg-accent px-3 text-sm font-semibold text-accent-ink disabled:opacity-50">Approve exact command</button> : null}</div>{terminalApproval ? <p className="rounded-panel border border-warning/40 bg-warning/10 p-3 text-xs">Pending approval: <code>{terminalApproval.command}</code>{terminalApproval.expiresAt ? ` · expires ${terminalApproval.expiresAt}` : ""} · hosted workspace</p> : null}<div className="min-h-40 whitespace-pre-wrap rounded-panel border border-line bg-black/20 p-4 font-mono text-xs text-muted">{terminalOutput || (deniedTerminals ? `${deniedTerminals} ACP terminal request${deniedTerminals === 1 ? "" : "s"} denied by the agent safety policy.` : "No approved terminal output yet.")}</div><p className="text-xs text-muted">The exact command runs only after you approve it. It runs in the hosted workspace when no computer is paired. Dangerous commands are refused by the server even after approval. {terminalHistory.map((item) => `${item.ok ? "ok" : "failed"}: ${item.command}`).join(" · ")}</p></div> : null}

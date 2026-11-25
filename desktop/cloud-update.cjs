@@ -1,11 +1,13 @@
 const crypto = require("crypto");
+const bundled = require("node:fs").existsSync(require("node:path").join(__dirname, "desktop-update.json"));
+const release = bundled ? require("./desktop-update.json") : require("../public/desktop-update.json");
 const CLOUD_ORIGIN = "https://adrians-mind.vercel.app";
 const UPDATE_PATH = "/api/mind/desktop-update";
 const INSTALLER_PATH = "/downloads/AdriansMind-Setup.exe";
-const PUBLIC_FEED = "https://raw.githubusercontent.com/emzylavish-art/adrians-mind-live/main/desktop-update.json";
-const PUBLIC_INSTALLER = "https://github.com/emzylavish-art/adrians-mind-command-os/releases/download/desktop-installer/AdriansMind-Setup-Full.exe.part00";
-const LOCAL_BUILD = 9;
-const LOCAL_VERSION = "0.9.1";
+const PUBLIC_FEED = "https://raw.githubusercontent.com/emzylavish-art/adrians-mind-command-os/main/public/desktop-update.json";
+const PUBLIC_INSTALLER = release.download;
+const LOCAL_BUILD = release.build;
+const LOCAL_VERSION = release.version;
 const PAYLOAD_HASH_MARK = "\nADRIAN_PAYLOAD_SHA256=";
 const PAYLOAD_HASH_TAIL = "\n";
 const GITHUB_ASSETS = new Set([
@@ -59,27 +61,17 @@ function validFullSize(value) {
   return Number.isInteger(value) && value > 0 && value < 12_000_000_000;
 }
 
-const FULL_PACKAGE = {
-  finalName: "AdriansMind-Setup-Full.exe",
-  sha256: "69eb42349678734900d740fefce253abe5b8ad266915e5925872f133627a1f97",
-  payloadSha256: "860e669c1b01174b2708e9bf1c1a0f6d5b0a4fc8921189d9845dde28efb4c338",
-  size: 6398372946,
-  parts: [
-    { name: "AdriansMind-Setup-Full.exe.part00", sha256: "a6516a5c1038e62f234cc49d20912310876b472d7464512cb9eaff08d9aa8b70", size: 1992294400, url: "https://github.com/emzylavish-art/adrians-mind-command-os/releases/download/desktop-installer/AdriansMind-Setup-Full.exe.part00" },
-    { name: "AdriansMind-Setup-Full.exe.part01", sha256: "f29d223edeee8b832b28b8f40f7171de64dd8226e48c48bd58b25700cb352749", size: 1992294400, url: "https://github.com/emzylavish-art/adrians-mind-command-os/releases/download/desktop-installer/AdriansMind-Setup-Full.exe.part01" },
-    { name: "AdriansMind-Setup-Full.exe.part02", sha256: "0b201ccb5c002a580fe287406fb9c11490d7df2e9b38e9d62ab01d06c7b85425", size: 1992294400, url: "https://github.com/emzylavish-art/adrians-mind-command-os/releases/download/desktop-installer/AdriansMind-Setup-Full.exe.part02" },
-    { name: "AdriansMind-Setup-Full.exe.part03", sha256: "c4578967a26fdb810c577d496c085d47330d28e8210f13512ca5c45dddf52ed9", size: 421489746, url: "https://github.com/emzylavish-art/adrians-mind-command-os/releases/download/desktop-installer/AdriansMind-Setup-Full.exe.part03" },
-  ],
-};
+const FULL_PACKAGE = release.fullPackage;
 
 function isFullPackageSpec(value) {
   if (!value || typeof value !== "object" || Array.isArray(value)) return false;
   if (value.finalName !== "AdriansMind-Setup-Full.exe") return false;
-  if (!validHash(value.sha256) || !validFullSize(value.size)) return false;
+  if (!validHash(value.sha256) || !validHash(value.payloadSha256) || !validFullSize(value.size)) return false;
   if (!Array.isArray(value.parts) || value.parts.length !== 4) return false;
   let sum = 0;
-  for (const part of value.parts) {
-    if (!part || typeof part.name !== "string" || !part.name.startsWith("AdriansMind-Setup-Full.exe.part")) return false;
+  for (const [index, part] of value.parts.entries()) {
+    const expected = FULL_PACKAGE.parts[index];
+    if (!part || part.name !== expected.name || part.url !== expected.url) return false;
     if (!validHash(part.sha256) || !validSize(part.size)) return false;
     if (typeof part.url !== "string" || !isAllowedDownloadUrl(part.url, 0)) return false;
     sum += part.size;
@@ -89,11 +81,12 @@ function isFullPackageSpec(value) {
 
 function decideFullUpdate(localBuild, remote) {
   if (!Number.isInteger(localBuild)) return { action: "stay", reason: "local-missing" };
-  const remoteBuild = remote && Number.isInteger(remote.build) ? remote.build : LOCAL_BUILD;
+  if (!isManifest(remote)) return { action: "stay", reason: "cloud-missing" };
+  const remoteBuild = remote.build;
   if (remoteBuild <= localBuild) return { action: "stay", reason: "not-newer" };
   const pack = remote && remote.fullPackage ? remote.fullPackage : null;
   if (!pack) return { action: "stay", reason: "full-missing" };
-  if (!isFullPackageSpec(pack)) return { action: "stay", reason: "full-invalid" };
+  if (remote.product !== "adrians-mind" || remote.sha256 !== pack.sha256 || remote.size !== pack.size || !isFullPackageSpec(pack)) return { action: "stay", reason: "full-invalid" };
   if (pack.sha256 === FULL_PACKAGE.sha256) return { action: "stay", reason: "same-file" };
   return { action: "full-install", reason: "verified-full-parts", fullPackage: pack };
 }
@@ -142,10 +135,8 @@ function decideUpdate(localBuild, remote) {
   }
   if (remote.build < localBuild) return { action: "stay", reason: "cloud-older" };
   if (remote.build === localBuild) return { action: "stay", reason: "cloud-current" };
-  const url = typeof remote.download === "string" ? resolveDownloadUrl(remote.download) : null;
-  if (url && validHash(remote.sha256) && validSize(remote.size)) {
-    return { action: "install", reason: "verified-installer", url, switchUrl: `${CLOUD_ORIGIN}/` };
-  }
+  const full = decideFullUpdate(localBuild, remote);
+  if (full.action === "full-install") return { action: "install", reason: full.reason, url: PUBLIC_INSTALLER };
   return { action: "switch", reason: "newer-without-verified-file", switchUrl: `${CLOUD_ORIGIN}/` };
 }
 
