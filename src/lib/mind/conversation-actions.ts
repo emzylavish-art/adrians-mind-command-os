@@ -60,7 +60,7 @@ export function quoteIntoNewChat(ws: Workspace, source: Chat): { ws: Workspace; 
   const made = createChat(ws, {
     memory: source.memory,
     autonomy: source.autonomy,
-    temporary: false,
+    temporary: source.temporary,
     projectId: source.projectId,
     personalityId: source.personalityId,
   });
