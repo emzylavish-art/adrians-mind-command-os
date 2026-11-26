@@ -1,4 +1,5 @@
 import { createServerFn } from "@tanstack/react-start";
+import { isolationMiddleware } from "@/lib/auth/middleware";
 
 export const listOwnerKeySlotsFn = createServerFn({ method: "GET" }).handler(async () => {
   const { listOwnerKeySlots } = await import("./owner-keys.server");
@@ -6,6 +7,7 @@ export const listOwnerKeySlotsFn = createServerFn({ method: "GET" }).handler(asy
 });
 
 export const copyOwnerKeyFn = createServerFn({ method: "POST" })
+  .middleware([isolationMiddleware])
   .validator((input: { id?: string }) => ({
     id: typeof input?.id === "string" ? input.id : "",
   }))

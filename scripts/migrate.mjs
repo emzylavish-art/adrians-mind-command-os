@@ -26,13 +26,16 @@ import { guardMindEnv } from "../src/lib/mind/isolation.ts";
 // DATABASE_URL was inherited from the project configuration. Only the
 // production deployment is allowed to update the production schema.
 // Local invocations remain explicit and continue to work.
+const requiredForRelease = process.argv.includes("--require-database");
 if (process.env.VERCEL && process.env.VERCEL_ENV !== "production") {
+  if (requiredForRelease) throw new Error("Release migration cannot run in a Vercel preview or development environment.");
   console.log("[migrate] non-production Vercel environment — skipping database migrations.");
   process.exit(0);
 }
 
 const databaseUrl = resolveMigrateDatabaseUrl(process.env);
 if (!databaseUrl) {
+  if (requiredForRelease) throw new Error("Release migration requires a configured database target.");
   console.log(
     "[migrate] DATABASE_URL/POSTGRES_URL not set — skipping (the PGLite fallback migrates itself).",
   );
@@ -66,12 +69,14 @@ async function main() {
   let entries;
   try {
     entries = await readdir(migrationsDir);
-  } catch {
+  } catch (error) {
+    if (requiredForRelease) throw error;
     console.log("[migrate] no migrations/ directory — nothing to do.");
     return;
   }
   // An app with no schema of its own must not pay for a database connection.
   if (pendingMigrations(entries, []).length === 0) {
+    if (requiredForRelease) throw new Error("Release migration inventory is empty.");
     console.log("[migrate] no migrations — nothing to do.");
     return;
   }

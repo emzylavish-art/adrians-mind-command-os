@@ -19,6 +19,7 @@ export type PersonaSelectParams = {
   name: string;
   source: PersonaSource;
   templateName?: string;
+  templateId?: string;
   agentId?: string;
   /** live is always false for directory cards; kept for Retry fidelity. */
   live: false;
@@ -41,6 +42,7 @@ export function snapshotPersonaSelectParams(card: PersonaCard): PersonaSelectPar
     name: card.name,
     source: card.source,
     templateName: card.templateName,
+    templateId: card.templateId,
     agentId: card.agentId,
     live: false,
     description: card.description,
@@ -63,6 +65,7 @@ export function cardFromPersonaSelectParams(params: PersonaSelectParams): Person
     roleCategory: params.roleCategory,
     source: params.source,
     templateName: params.templateName,
+    templateId: params.templateId,
     agentId: params.agentId,
     tools: [...params.tools],
     live: false,

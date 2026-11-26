@@ -39,6 +39,16 @@ function db(initial: { userId: string; ws: Workspace }[]) {
 }
 
 describe("worker pass", () => {
+  it("refuses local execution without shared transactions before reading or changing owner state", async () => {
+    let reads = 0;
+    let stopReads = 0;
+    const sql = (async () => { reads++; return []; }) as unknown as Sql;
+    sql.query = async () => { reads++; return []; };
+    await assert.rejects(runLocalSchedulePass(sql, "2026-04-01T12:00:00.000Z", "unlocked-worker", async () => { stopReads++; return "off"; }), /requires transactional storage/);
+    assert.equal(reads, 0);
+    assert.equal(stopReads, 0);
+  });
+
   it("persists one due job and does not run another owner or the same job twice", async () => {
     const due = emptyWorkspace();
     due.schedules.push(job({ id: "job-1", name: "Morning", nextRunAt: "2026-04-01T12:00:00.000Z" }));
@@ -66,6 +76,7 @@ describe("worker pass", () => {
     if (!manual.ok) throw Error(manual.error);
     const scheduled = addSchedule(manual.ws, "Daily list", made.agent.id, 60, now);
     if (!scheduled.ok) throw Error(scheduled.error);
+    scheduled.ws.schedules[0].executionTarget = "local-worker";
     const { sql, snaps } = db([{ userId: "fixture", ws: scheduled.ws }]);
     const first = await runLocalSchedulePass(sql, now, "local", async () => "off");
     assert.equal(first.ran, 0);
@@ -123,4 +134,17 @@ describe("worker pass", () => {
     assert.equal(saved.audit[0]?.action, "schedule_failed");
     assert.notEqual(saved.schedules[0]?.nextRunAt, "2026-04-01T12:00:00.000Z");
   });
+});
+
+it("C5 hosted worker dispatch is explicit, secret-authorized, and bounded", async () => {
+  const { handleScheduleTick } = await import("./schedule-tick.server.ts");
+  let passes = 0;
+  const token = "fixture-only-worker-token-32-characters";
+  const pass = async () => { passes++; return { owners: 1, ran: 1, skipped: 0, failed: 0, recovered: 0 }; };
+  const noToken = await handleScheduleTick(new Request("https://fixture.example/api/mind/schedules/tick", { method: "POST" }), { token, pass });
+  assert.equal(noToken.status, 401);
+  assert.equal(passes, 0);
+  const configured = await handleScheduleTick(new Request("https://fixture.example/api/mind/schedules/tick", { method: "POST", headers: { authorization: `Bearer ${token}` } }), { token, pass });
+  assert.equal(configured.status, 200);
+  assert.equal(passes, 1);
 });

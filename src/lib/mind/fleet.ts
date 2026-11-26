@@ -1,5 +1,6 @@
 import { runLocalPlan, type LocalTool } from "./local-tools.ts";
 import { nextClock, zoneIsValid } from "./schedule-clock.ts";
+import { scheduleRecovery } from "./schedule-recovery.ts";
 import { scheduleOccurrences, type ScheduleTiming, type MissedSchedulePolicy } from "./schedule-policy.ts";
 import { normalizeBotModel } from "./bot-model.ts";
 import { normalizeBotKnowledge } from "./bot-model.ts";
@@ -28,10 +29,13 @@ export type RunState =
   | "paused"
   | "completed"
   | "failed"
-  | "canceled";
+  | "canceled"
+  | "cancel_requested";
 
 export type AgentDefinition = {
   id: string;
+  /** Stable template origin, independent of the editable name. */
+  templateId?: string;
   name: string;
   description: string;
   role: string;
@@ -62,6 +66,16 @@ export type DeploymentRecord = {
   error: string;
 };
 
+export type RunStepResult = {
+  stepId: string;
+  tool: FleetTool;
+  output: string;
+  at: string;
+  recordIds?: string[];
+};
+
+export type RunDefinition = Pick<AgentDefinition, "version" | "tools" | "projectId" | "memory" | "approval" | "maxSteps">;
+export type RunCompletion = { execution: "finished" | "budget_exhausted" | "no_results"; objective: "unverified"; evidence: string[] };
 export type AgentRun = {
   id: string;
   agentId: string;
@@ -83,6 +97,10 @@ export type AgentRun = {
   externalOperation?: { id: string; stepId: string; state: "dispatching" | "succeeded" | "failed" | "unknown" | "not_sent"; startedAt: string; finishedAt?: string };
   delegationScope?: { tools: FleetTool[]; projectId: string | null; memory: "on" | "off" };
   plan: PlanStep[];
+  definition?: RunDefinition;
+  completion?: RunCompletion;
+  executionRuntime?: "browser-local" | "scheduled-local" | "server-local";
+  cancellation?: { requestedAt: string; acknowledgedAt: string | null; scope: "local-worker" };
   result: string;
   error: string;
   createdAt: string;
@@ -101,6 +119,18 @@ export type RunApproval = {
   state: "requested" | "granted" | "consumed" | "expired" | "revoked" | "superseded";
   updatedAt: string;
   batchId?: string;
+};
+
+export type ScheduleOccurrence = {
+  id: string;
+  dueAt: string;
+  runId?: string;
+  state: RunState | "skipped";
+  updatedAt: string;
+  detail: string;
+  missedCount?: number;
+  deliveredAt?: string;
+  deliveryError?: string;
 };
 export type FleetStepResult = {
   id: string;
@@ -151,6 +181,9 @@ export type ScheduleJob = {
   instruction?: string;
   lastAttemptAt?: string;
   lastQueuedRunId?: string;
+  overlapPolicy?: "queue" | "skip" | "parallel";
+  maxParallel?: number;
+  occurrences?: { runId: string; scheduledAt: string; state: RunState; updatedAt: string }[];
   enabled: boolean;
   lastError: string;
   timeZone: string;
@@ -221,6 +254,21 @@ function needOf(tool: FleetTool): PlanNeed {
   return "none";
 }
 
+const GOAL_TOOL_INTENTS: Record<FleetTool, RegExp> = {
+    list_projects: /\b(?:list|show|find|inspect|review)\s+(?:(?:my|all|saved|available|the)\s+)*(?:projects?|project list)\b/i,
+    list_chats: /\b(?:list|show|find|inspect|review)\s+(?:(?:my|all|saved|available|the)\s+)*(?:chats?|conversations?)\b/i,
+    search_notes: /\b(?:search|find|read|show|review)\s+(?:(?:my|all|saved|relevant|the)\s+)*(?:notes?|memories|memory)\b/i,
+    web_search: /\b(?:search\s+(?:the\s+)?(?:web|internet)|research|find\s+(?:online\s+)?sources)\b/i,
+    browser: /https?:\/\/\S+|\b(?:open|read|browse|inspect)\s+(?:the\s+)?(?:page|website|url)\b/i,
+    gmail_read: /\b(?:read|find|search|list|show)\s+(?:(?:my|all|the|unread)\s+)*(?:emails?|inbox|mailbox)\b/i,
+    gmail_send: /\b(?:send|reply|forward)\s+(?:(?:an?|the)\s+)*(?:emails?|mail|message|note)\b/i,
+    model: /\b(?:summari[sz]e|reason|think|analy[sz]e|draft)\b/i,
+    delegate: /\b(?:delegate|split\s+(?:the\s+)?work)\b/i,
+};
+function explicitGoalTools(goal: string): FleetTool[] {
+  return FLEET_TOOLS.filter((tool) => GOAL_TOOL_INTENTS[tool].test(goal));
+}
+
 export function buildTaskPlan(goal: string, tools: FleetTool[]): PlanStep[] {
   const title = goal.trim().slice(0, 160);
   return tools
@@ -252,6 +300,7 @@ const NEXT_STATE: Record<RunState, readonly RunState[]> = {
   completed: [],
   failed: [],
   canceled: [],
+  cancel_requested: ["canceled", "failed"],
 };
 
 export function canTransition(from: RunState, to: RunState): boolean {
@@ -272,17 +321,17 @@ export function toolCatalog(): { id: FleetTool; name: string; available: boolean
   ];
 }
 
-export const AGENT_TEMPLATES: Omit<AgentDefinition, "id" | "createdAt" | "updatedAt" | "version" | "archived" | "projectId">[] = [
-  { name: "Personal assistant", description: "Reads projects, chats, and notes on this device.", role: "assistant", instructions: "Use only the granted local reads.", tools: ["list_projects", "list_chats", "search_notes"], memory: "off", maxSteps: 6, approval: "automatic" },
-  { name: "Research", description: "Searches notes, then a configured search provider. It does not invent citations.", role: "research", instructions: "Stop when search is not configured.", tools: ["search_notes", "web_search"], memory: "off", maxSteps: 4, approval: "ask" },
-  { name: "Browser operator", description: "Opens one approved http(s) page when a browser driver is attached.", role: "browser", instructions: "Do not browse without approval.", tools: ["browser"], memory: "off", maxSteps: 2, approval: "ask" },
-  { name: "Coding", description: "Lists projects on this device. It does not edit the repository.", role: "coding", instructions: "Do not claim a code change.", tools: ["list_projects"], memory: "off", maxSteps: 2, approval: "automatic" },
-  { name: "Email", description: "Reads or sends mail only after a mailbox is connected and a send is approved.", role: "email", instructions: "Never send without approval.", tools: ["gmail_read", "gmail_send"], memory: "off", maxSteps: 3, approval: "ask" },
-  { name: "Project manager", description: "Lists work, then delegates one level to the same agent without repeating delegation.", role: "manager", instructions: "Delegate once.", tools: ["list_projects", "delegate"], memory: "off", maxSteps: 4, approval: "automatic" },
-  { name: "Documents", description: "Searches notes on this device.", role: "documents", instructions: "Stay inside notes.", tools: ["search_notes"], memory: "off", maxSteps: 2, approval: "automatic" },
-  { name: "Data analysis", description: "Searches notes. It does not invent charts or totals.", role: "data", instructions: "Report only note text.", tools: ["search_notes"], memory: "off", maxSteps: 2, approval: "automatic" },
-  { name: "Knowledge", description: "Lists projects and searches notes the owner already saved.", role: "knowledge", instructions: "Do not search the web.", tools: ["list_projects", "search_notes"], memory: "on", maxSteps: 4, approval: "automatic" },
-  { name: "Content", description: "Searches notes for source material. It does not generate images or video.", role: "content", instructions: "Do not call a media API.", tools: ["search_notes"], memory: "off", maxSteps: 2, approval: "automatic" },
+export const AGENT_TEMPLATES: (Omit<AgentDefinition, "id" | "createdAt" | "updatedAt" | "version" | "archived" | "projectId"> & { templateId: string })[] = [
+  { templateId: "builtin:personal-assistant", name: "Personal assistant", description: "Reads projects, chats, and notes on this device.", role: "assistant", instructions: "Use only the granted local reads.", tools: ["list_projects", "list_chats", "search_notes"], memory: "off", maxSteps: 6, approval: "automatic" },
+  { templateId: "builtin:research", name: "Research", description: "Searches notes, then a configured search provider. It does not invent citations.", role: "research", instructions: "Stop when search is not configured.", tools: ["search_notes", "web_search"], memory: "off", maxSteps: 4, approval: "ask" },
+  { templateId: "builtin:browser-operator", name: "Browser operator", description: "Opens one approved http(s) page when a browser driver is attached.", role: "browser", instructions: "Do not browse without approval.", tools: ["browser"], memory: "off", maxSteps: 2, approval: "ask" },
+  { templateId: "builtin:coding", name: "Coding", description: "Lists projects on this device. It does not edit the repository.", role: "coding", instructions: "Do not claim a code change.", tools: ["list_projects"], memory: "off", maxSteps: 2, approval: "automatic" },
+  { templateId: "builtin:email", name: "Email", description: "Reads or sends mail only after a mailbox is connected and a send is approved.", role: "email", instructions: "Never send without approval.", tools: ["gmail_read", "gmail_send"], memory: "off", maxSteps: 3, approval: "ask" },
+  { templateId: "builtin:project-manager", name: "Project manager", description: "Lists work, then delegates one level to the same agent without repeating delegation.", role: "manager", instructions: "Delegate once.", tools: ["list_projects", "delegate"], memory: "off", maxSteps: 4, approval: "automatic" },
+  { templateId: "builtin:documents", name: "Documents", description: "Searches notes on this device.", role: "documents", instructions: "Stay inside notes.", tools: ["search_notes"], memory: "off", maxSteps: 2, approval: "automatic" },
+  { templateId: "builtin:data-analysis", name: "Data analysis", description: "Searches notes. It does not invent charts or totals.", role: "data", instructions: "Report only note text.", tools: ["search_notes"], memory: "off", maxSteps: 2, approval: "automatic" },
+  { templateId: "builtin:knowledge", name: "Knowledge", description: "Lists projects and searches notes the owner already saved.", role: "knowledge", instructions: "Do not search the web.", tools: ["list_projects", "search_notes"], memory: "on", maxSteps: 4, approval: "automatic" },
+  { templateId: "builtin:content", name: "Content", description: "Searches notes for source material. It does not generate images or video.", role: "content", instructions: "Do not call a media API.", tools: ["search_notes"], memory: "off", maxSteps: 2, approval: "automatic" },
 ];
 
 function stamp(now?: string) {
@@ -429,7 +478,7 @@ export function readFleet(input: unknown): FleetShape {
   if (Array.isArray(input.runs)) {
     for (const row of input.runs) {
       if (!isRecord(row) || typeof row.id !== "string" || typeof row.agentId !== "string") continue;
-      const state = typeof row.state === "string" && ["queued", "running", "waiting_approval", "waiting_external", "paused", "completed", "failed", "canceled"].includes(row.state)
+      const state = typeof row.state === "string" && ["queued", "running", "waiting_approval", "waiting_external", "paused", "completed", "failed", "canceled", "cancel_requested"].includes(row.state)
         ? (row.state as RunState)
         : "failed";
       fleet.runs.push({
@@ -457,6 +506,10 @@ export function readFleet(input: unknown): FleetShape {
         } : undefined,
         delegationScope: isRecord(row.delegationScope) ? { tools: toolList(row.delegationScope.tools), projectId: typeof row.delegationScope.projectId === "string" ? row.delegationScope.projectId : null, memory: row.delegationScope.memory === "on" ? "on" : "off" } : undefined,
         plan: readPlan(row.plan),
+        definition: readRunDefinition(row.definition),
+        completion: readCompletion(row.completion),
+        executionRuntime: row.executionRuntime === "scheduled-local" || row.executionRuntime === "server-local" ? row.executionRuntime : "browser-local",
+        cancellation: isRecord(row.cancellation) && typeof row.cancellation.requestedAt === "string" ? { requestedAt: row.cancellation.requestedAt, acknowledgedAt: typeof row.cancellation.acknowledgedAt === "string" ? row.cancellation.acknowledgedAt : null, scope: "local-worker" } : undefined,
         result: typeof row.result === "string" ? row.result.slice(0, 4000) : "",
         error: typeof row.error === "string" ? row.error.slice(0, 500) : "",
         createdAt: typeof row.createdAt === "string" ? row.createdAt : stamp(),
@@ -513,6 +566,9 @@ export function readFleet(input: unknown): FleetShape {
         chatId: typeof row.chatId === "string" ? row.chatId : undefined,
         instruction: typeof row.instruction === "string" ? row.instruction.slice(0, 2000) : undefined,
         lastQueuedRunId: typeof row.lastQueuedRunId === "string" ? row.lastQueuedRunId : undefined,
+        overlapPolicy: row.overlapPolicy === "parallel" || row.overlapPolicy === "skip" ? row.overlapPolicy : "queue",
+        maxParallel: typeof row.maxParallel === "number" ? Math.min(4, Math.max(1, Math.floor(row.maxParallel))) : 2,
+        occurrences: readOccurrences(row.occurrences),
         lastAttemptAt: typeof row.lastAttemptAt === "string" ? row.lastAttemptAt : undefined,
         lastRunAt: typeof row.lastRunAt === "string" ? row.lastRunAt : null,
         enabled: row.enabled !== false,
@@ -561,6 +617,30 @@ export function readFleet(input: unknown): FleetShape {
   fleet.mailboxes = fleet.mailboxes.slice(0, 500);
   fleet.runEvents = fleet.runEvents.slice(0, 400);
   return fleet;
+}
+
+function readApprovals(value: unknown): RunApproval[] {
+  if (!Array.isArray(value)) return [];
+  return value.filter((row) => isRecord(row) && typeof row.stepId === "string" && typeof row.action === "string" && (FLEET_TOOLS as readonly string[]).includes(row.action) && typeof row.fingerprint === "string" && typeof row.approvedAt === "string" && typeof row.expiresAt === "string")
+    .slice(0, 20).map((row) => ({ stepId: row.stepId.slice(0, 40), action: row.action as FleetTool, fingerprint: row.fingerprint.slice(0, 12000), approvedAt: row.approvedAt, expiresAt: row.expiresAt, ...(typeof row.consumedAt === "string" ? { consumedAt: row.consumedAt } : {}) }));
+}
+
+function readRunDefinition(value: unknown): RunDefinition | undefined {
+  if (!isRecord(value) || !Number.isInteger(value.version) || !Array.isArray(value.tools)) return undefined;
+  return { version: value.version as number, tools: toolList(value.tools), projectId: typeof value.projectId === "string" ? value.projectId : null,
+    memory: value.memory === "on" ? "on" : "off", approval: value.approval === "automatic" ? "automatic" : "ask", maxSteps: typeof value.maxSteps === "number" ? Math.max(1, Math.min(20, Math.floor(value.maxSteps))) : 4 };
+}
+function readCompletion(value: unknown): RunCompletion | undefined {
+  if (!isRecord(value) || !["finished", "budget_exhausted", "no_results"].includes(String(value.execution))) return undefined;
+  return { execution: value.execution as RunCompletion["execution"], objective: "unverified", evidence: Array.isArray(value.evidence) ? value.evidence.filter((v): v is string => typeof v === "string").slice(0, 20) : [] };
+}
+function readOccurrences(value: unknown): NonNullable<ScheduleJob["occurrences"]> {
+  if (!Array.isArray(value)) return [];
+  return value.flatMap((row) => isRecord(row) && typeof row.runId === "string" && typeof row.scheduledAt === "string" && typeof row.updatedAt === "string" && typeof row.state === "string" && row.state in NEXT_STATE
+    ? [{ runId: row.runId, scheduledAt: row.scheduledAt, updatedAt: row.updatedAt, state: row.state as RunState }] : []).slice(-100);
+}
+function snapshotDefinition(agent: AgentDefinition): RunDefinition {
+  return { version: agent.version, tools: [...agent.tools], projectId: agent.projectId, memory: agent.memory, approval: agent.approval, maxSteps: agent.maxSteps };
 }
 
 function readPlan(value: unknown): PlanStep[] {
@@ -734,6 +814,9 @@ export function addSchedule(ws: Workspace, name: string, agentId: string | null,
     intervalMinutes: minutes,
     nextRunAt: clock?.at ?? at,
     lastRunAt: null,
+    missedPolicy: "once",
+    overlapPolicy: "wait",
+    occurrences: [],
     enabled: true,
     lastError: clock ? "" : "",
     timeZone: clock?.zone ?? "UTC",
@@ -798,6 +881,8 @@ export function enqueueRun(ws: Workspace, agentId: string, goal: string, now?: s
     approvalHistory: [],
     verification: { state: "unverified", detail: "The requested objective has not been verified." },
     plan: buildTaskPlan(text, agent.tools),
+    definition: snapshotDefinition(agent),
+    executionRuntime: runId.startsWith("scheduled:") ? "scheduled-local" : "browser-local",
     result: "",
     error: "",
     createdAt: at,
@@ -806,6 +891,14 @@ export function enqueueRun(ws: Workspace, agentId: string, goal: string, now?: s
   const fleet = readFleet(ws);
   event(fleet, run.id, at, "task_created", `Queued ${agent.name}.`);
   return { ok: true, run, ws: withFleet(ws, { ...fleet, runs: [run, ...fleet.runs] }) };
+}
+
+export function reviewedRunOperation(run: AgentRun, agent: AgentDefinition): string {
+  return JSON.stringify({ run: run.id, agent: run.agentId, agentVersion: agent.version, pinnedVersion: run.agentVersion, step: run.step, tool: run.plan[run.step]?.tool, goal: run.goal, destination: quoteUrl(run.goal), projectId: agent.projectId, memory: agent.memory, approval: agent.approval, tools: agent.tools, chatId: run.chatId, scheduleId: run.scheduleId });
+}
+
+export function runOperationFingerprint(run: AgentRun, agent: AgentDefinition): string {
+  return JSON.stringify({ runId: run.id, agentId: agent.id, agentVersion: agent.version, projectId: agent.projectId, goal: run.goal, planVersion: run.planVersion ?? 0, plan: run.plan, step: run.step });
 }
 
 export function enqueueConfiguredRun(ws: Workspace, agentId: string, goal: string, inputs?: Partial<Record<FleetTool, PlanStep["input"]>>, now?: string): ReturnType<typeof enqueueRun> {
@@ -834,6 +927,20 @@ export function approveRunAction(ws: Workspace, runId: string, actionId: string,
       return { ...run, pendingApproval: { ...pending, state: pending.expiresAt <= now ? "expired" as const : "superseded" as const, updatedAt: now }, state: "queued" as const, error: "The reviewed action expired or changed. Review the new request before it runs.", updatedAt: now };
     }
     return { ...run, approvedActions: [], pendingApproval: { ...pending, state: "granted" as const, updatedAt: now }, state: "queued" as const, error: "", updatedAt: now };
+  }) };
+}
+
+export function assignDelegation(ws: Workspace, runId: string, index: number, agentId: string): Workspace {
+  if (ws.halted) return ws;
+  return { ...ws, runs: ws.runs.map((run) => {
+    if (run.id !== runId || run.depth > 0 || run.step > 0 || run.state !== "queued") return run;
+    const chosen = ws.agents.find((item) => item.id === agentId && !item.archived);
+    if (!chosen) return run;
+    const goals = delegationGoals(run.goal);
+    if (!goals[index]) return run;
+    const assignments = goals.map((goal, i) => run.delegations?.[i] || { agentId: run.agentId, goal, allowedTools: run.plan.map((step) => step.tool).filter((tool) => tool !== "delegate"), maxSteps: run.maxSteps });
+    assignments[index] = { agentId, goal: goals[index], allowedTools: chosen.tools.filter((tool) => tool !== "delegate"), maxSteps: Math.min(run.maxSteps, chosen.maxSteps) };
+    return { ...run, delegations: assignments, approvedActions: [] };
   }) };
 }
 
@@ -915,7 +1022,10 @@ export function haltFleet(ws: Workspace, now?: string): Workspace {
   return withFleet(ws, { ...fleet, runs });
 }
 
+export type BrowserReadObjective = { url: string; goal: string; capability: "read_page" };
+
 export type TickEnv = {
+  runtime?: AgentRun["executionRuntime"];
   now: string;
   workerId: string;
   browser?: (url: string) => { ok: true; title: string; excerpt: string } | { ok: false; error: string };
@@ -936,11 +1046,13 @@ function finish(run: AgentRun, state: RunState, at: string, error = ""): AgentRu
   return { ...run, state, error, updatedAt: at, leaseUntil: null, workerId: null };
 }
 
-function advanceWithResult(run: AgentRun, detail: string): AgentRun {
+function advanceWithResult(run: AgentRun, detail: string, recordIds: string[] = []): AgentRun {
   const full = [run.result, detail].filter(Boolean).join("\n");
   const marker = "\n[Result excerpt truncated]";
   const result = full.length <= 4000 ? full : full.slice(0, 4000 - marker.length) + marker;
-  return { ...run, result, step: run.step + 1 };
+  const step = run.plan[run.step];
+  const receipt: RunStepResult[] = step ? [{ stepId: step.id, tool: step.tool, output: detail.slice(0, 4000), at: run.updatedAt, recordIds }] : [];
+  return { ...run, result, step: run.step + 1, stepResults: [...(run.stepResults ?? []), ...receipt] };
 }
 
 function quoteUrl(goal: string) {
@@ -1154,6 +1266,31 @@ export function tickFleet(ws: Workspace, env: TickEnv): Workspace {
   return withFleet(ws, { ...fleet, schedules, runs: [...extra, ...runs] });
 }
 
+export function scheduleExecutionStatus(job: ScheduleJob, now = new Date().toISOString()): string {
+  if (!job.enabled) return "Disabled";
+  const target = job.executionTarget || "browser";
+  if (target === "browser") return "Enabled · requires this app open and synchronized";
+  const heartbeat = Date.parse(job.workerHeartbeatAt || "");
+  return Number.isFinite(heartbeat) && Date.parse(now) - heartbeat < 120_000 ? `Enabled · worker ${job.workerId || target} recently checked` : `Enabled · no recent ${target} heartbeat; execution availability is unverified`;
+}
+
+function nextOccurrence(job: ScheduleJob, after: string): string {
+  return job.clockHour == null ? new Date(Date.parse(after) + job.intervalMinutes * 60_000).toISOString() : nextClock(after, job.timeZone || "UTC", job.clockHour, job.clockMinute ?? 0, after).at;
+}
+
+export function setSchedulePolicy(ws: Workspace, id: string, policy: {
+  missedPolicy?: NonNullable<ScheduleJob["missedPolicy"]>;
+  overlapPolicy?: NonNullable<ScheduleJob["overlapPolicy"]>;
+  resultDelivery?: NonNullable<ScheduleJob["resultDelivery"]>;
+}): Workspace {
+  if (ws.halted) return ws;
+  return { ...ws, schedules: ws.schedules.map((job) => job.id === id ? { ...job,
+    ...(policy.missedPolicy && ["once", "skip", "review"].includes(policy.missedPolicy) ? { missedPolicy: policy.missedPolicy } : {}),
+    ...(policy.overlapPolicy && ["wait", "skip", "parallel"].includes(policy.overlapPolicy) ? { overlapPolicy: policy.overlapPolicy } : {}),
+    ...(policy.resultDelivery && ["runs", "conversation"].includes(policy.resultDelivery) ? { resultDelivery: policy.resultDelivery, occurrences: job.occurrences?.map((occurrence) => ({ ...occurrence, deliveryError: undefined })) } : {}),
+  } : job) };
+}
+
 export function configureSchedulePolicy(ws: Workspace, id: string, policy: { timing?: ScheduleTiming; missedPolicy?: MissedSchedulePolicy }): Workspace {
   return { ...ws, schedules: ws.schedules.map(job => job.id === id ? { ...job, ...policy } : job) };
 }
@@ -1192,4 +1329,40 @@ export function runDueSchedules(ws: Workspace, now: string): Workspace {
     return { ...job, recoveryPending: false, recoveryApprovalFor: undefined, missedOccurrences: recovery.missed, lastAttemptAt: now, lastQueuedRunId, lastError: "", nextRunAt: recovery.nextRunAt };
   });
   return { ...next, schedules: jobs };
+}
+
+export type FleetModelRequest = {
+  operationId: string;
+  runId: string;
+  agentId: string;
+  agentVersion: number;
+  provider: string;
+  tier: ModelTier | null;
+  goal: string;
+  instructions: string;
+  knowledge: string;
+  notes: { id: string; text: string }[];
+  maxCalls: 1;
+};
+
+/** A server must persist this claim before making the single permitted provider call. */
+export function claimFleetModelStep(ws: Workspace, runId: string, operationId: string, now: string): { ok: true; ws: Workspace; request: FleetModelRequest } | { ok: false; error: string } {
+  const run = ws.runs.find((item) => item.id === runId);
+  const agent = run && ws.agents.find((item) => item.id === run.agentId && !item.archived);
+  if (ws.halted || !run || !agent) return { ok: false, error: "The run is unavailable or stopped." };
+  if (run.step >= run.maxSteps || !["queued", "waiting_external"].includes(run.state) || run.plan[run.step]?.tool !== "model" || !agent.tools.includes("model")) return { ok: false, error: "This run has no permitted model step." };
+  if (run.modelOperation) return { ok: false, error: "This model operation already started. Reconcile its outcome before creating new work." };
+  if (!run.execution?.provider || !run.agentVersion || run.agentVersion !== agent.version) return { ok: false, error: "Review the agent provider and revision before starting its model step." };
+  const request: FleetModelRequest = { operationId, runId, agentId: run.agentId, agentVersion: run.agentVersion, provider: run.execution.provider, tier: run.execution.tier, goal: run.goal, instructions: run.execution.instructions, knowledge: run.execution.knowledge, notes: agent.memory === "on" && run.execution.memory === "on" ? ws.memories.filter((note) => !note.archived && (note.scope === "global" || note.scope === "project" && !!run.execution?.projectId && note.projectId === run.execution.projectId)).slice(0, 12).map(({ id, text }) => ({ id, text })) : [], maxCalls: 1 };
+  return { ok: true, request, ws: { ...ws, runs: ws.runs.map((item) => item.id === runId ? { ...item, state: "waiting_external" as const, modelOperation: { id: operationId, state: "claimed" as const, provider: request.provider }, updatedAt: now, error: "Model operation accepted; awaiting its verified result." } : item) } };
+}
+
+export function completeFleetModelStep(ws: Workspace, request: FleetModelRequest, outcome: { ok: boolean; text?: string; error?: string; provider: string; model?: string; dispatched?: boolean }, now: string): Workspace {
+  return { ...ws, runs: ws.runs.map((run) => {
+    if (run.id !== request.runId || run.modelOperation?.id !== request.operationId || run.modelOperation.state !== "claimed") return run;
+    if (ws.halted || run.state === "canceled") return { ...run, modelOperation: { ...run.modelOperation, state: "uncertain" as const }, error: "Stopped while a provider outcome was pending; no new work started." };
+    if (!outcome.ok || outcome.provider !== request.provider || !outcome.text?.trim()) return { ...run, modelOperation: outcome.dispatched === false ? undefined : { ...run.modelOperation, state: "uncertain" as const }, state: "waiting_external" as const, error: outcome.error || "The requested provider result could not be verified. It was not retried." };
+    const updated = advanceWithResult(run, outcome.text);
+    return { ...updated, state: "queued" as const, error: "", updatedAt: now, modelOperation: { ...run.modelOperation, state: "completed" as const, model: outcome.model } };
+  }) };
 }

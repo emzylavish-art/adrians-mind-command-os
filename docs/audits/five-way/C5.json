@@ -1,0 +1,373 @@
+{
+  "sourceChecklist": "docs/audit-handoff/C5.md",
+  "rows": [
+    {
+      "finding": "C5/AA-001",
+      "source": "docs/audit-handoff/C5.md#L130",
+      "expected": "Owner-bound connection board replaces static Integrations account claims; feature descriptions carry no invented verification timestamp.",
+      "implementation": "[P](#files-p); P37",
+      "regression": "[P](#files-p); P37",
+      "disposition": "Combined verification pending"
+    },
+    {
+      "finding": "C5/AA-002",
+      "source": "docs/audit-handoff/C5.md#L131",
+      "expected": "Notion retains workspace/page and structured authentication, permission, missing-selection and temporary failure; targeted repair and fresh write review preserve destination.",
+      "implementation": "[P](#files-p); P37",
+      "regression": "[P](#files-p); P37",
+      "disposition": "Combined verification pending"
+    },
+    {
+      "finding": "C5/AA-003",
+      "source": "docs/audit-handoff/C5.md#L132",
+      "expected": "401 sign-in required, confirmed absent grant and unavailable status use distinct badges.",
+      "implementation": "[P](#files-p); P37",
+      "regression": "[P](#files-p); P37",
+      "disposition": "Combined verification pending"
+    },
+    {
+      "finding": "C5/AA-004",
+      "source": "docs/audit-handoff/C5.md#L133",
+      "expected": "Owner-scoped selection writes only changed fields against latest storage; failover persistence is separate and stale tabs cannot overwrite unrelated choice.",
+      "implementation": "[S](#files-s); S28/S4",
+      "regression": "[S](#files-s); S28/S4",
+      "disposition": "Combined verification pending"
+    },
+    {
+      "finding": "C5/AA-005",
+      "source": "docs/audit-handoff/C5.md#L134",
+      "expected": "Bot-owned exact model is persisted/reloaded; a global ordinary-chat exact Grok choice cannot override the bot tier.",
+      "implementation": "[S](#files-s); S28/S4",
+      "regression": "[S](#files-s); S28/S4",
+      "disposition": "Combined verification pending"
+    },
+    {
+      "finding": "C5/AA-006",
+      "source": "docs/audit-handoff/C5.md#L135",
+      "expected": "Header and Effort share tier semantics, clear the appropriate exact Grok override and preserve explicitly chosen non-Grok providers.",
+      "implementation": "[S](#files-s); S28/S4",
+      "regression": "[S](#files-s); S28/S4",
+      "disposition": "Combined verification pending"
+    },
+    {
+      "finding": "C5/AA-007",
+      "source": "docs/audit-handoff/C5.md#L136",
+      "expected": "Composed Speak transcribes one utterance, calls the ordinary selected answer route exactly once and sends the answer to independently selected speech output; native xAI is explicit. Choices persist per owner and receipts identify stages.",
+      "implementation": "[V](#files-v); V40",
+      "regression": "[V](#files-v); V40",
+      "disposition": "Combined verification pending"
+    },
+    {
+      "finding": "C5/AA-008",
+      "source": "docs/audit-handoff/C5.md#L137",
+      "expected": "Explicit STT/TTS destination across composed Speak, Mic, Handy and legacy transcribeDictation/Whisper Flow. Stored keys never select a recording destination. Legacy default/auto requests require a fresh explicit choice; selected missing cloud key errors. Local Handy failure cannot upload elsewhere without a named allowed fallback. At most one alternate attempt; actual transcript provider retained.",
+      "implementation": "[V](#files-v); V40/L13",
+      "regression": "[V](#files-v); V40/L13",
+      "disposition": "Combined verification pending"
+    },
+    {
+      "finding": "C5/AA-009",
+      "source": "docs/audit-handoff/C5.md#L138",
+      "expected": "Live personality sends session.update and only acknowledges active after matching session.updated; rejection/timeout keeps reconnect wording truthful.",
+      "implementation": "[V](#files-v); V40",
+      "regression": "[V](#files-v); V40",
+      "disposition": "Combined verification pending"
+    },
+    {
+      "finding": "C5/AA-010",
+      "source": "docs/audit-handoff/C5.md#L139",
+      "expected": "Dispatch is marked only after validation, DNS and abort checks immediately before provider transport; local rejection remains retryable, uncertain transport keeps duplicate protection.",
+      "implementation": "[P](#files-p), [U](#files-u); P37/U4",
+      "regression": "[P](#files-p), [U](#files-u); P37/U4",
+      "disposition": "Combined verification pending"
+    },
+    {
+      "finding": "C5/AA-011",
+      "source": "docs/audit-handoff/C5.md#L140",
+      "expected": "Known credential rejection survives unsupported/failed catalog refreshes until meaningful recovery; healthy manual-provider path remains available.",
+      "implementation": "[P](#files-p); P37",
+      "regression": "[P](#files-p); P37",
+      "disposition": "Combined verification pending"
+    },
+    {
+      "finding": "C5/AA-012",
+      "source": "docs/audit-handoff/C5.md#L141",
+      "expected": "Owner/request-generation gates suppress obsolete catalog reads before local/parent publication. Server discovery also compares owner, endpoint, credential and prior schema/state before persistence; late results cannot resurrect a removed or changed connection.",
+      "implementation": "[P](#files-p); P37",
+      "regression": "[P](#files-p); P37",
+      "disposition": "Combined verification pending"
+    },
+    {
+      "finding": "C5/AA-013",
+      "source": "docs/audit-handoff/C5.md#L142",
+      "expected": "Canonical-owner remount clears unsent secrets; server compares expectedOwnerId with independently authenticated owner before encryption/save/discovery.",
+      "implementation": "[A](#files-a), [P](#files-p); P37",
+      "regression": "[A](#files-a), [P](#files-p); P37",
+      "disposition": "Combined verification pending"
+    },
+    {
+      "finding": "C5/AA-014",
+      "source": "docs/audit-handoff/C5.md#L143",
+      "expected": "Canonical verified owner feeds UI/workspace/forms. Conflicting unlinked identities block account operations; sign-out requires both mechanisms, including cookie session without bearer, and failure prevents misleading local clear/redirect.",
+      "implementation": "[A](#files-a); P37",
+      "regression": "[A](#files-a); P37",
+      "disposition": "Combined verification pending"
+    },
+    {
+      "finding": "C5/AA-015",
+      "source": "docs/audit-handoff/C5.md#L144",
+      "expected": "Fresh MCP discovery updates shared saved capabilities with owner/definition compare-and-set; schema/annotation/connection revision binds review; rediscovery drift invalidates old approval and stale discovery cannot resurrect a removed connection.",
+      "implementation": "[P](#files-p); P37",
+      "regression": "[P](#files-p); P37",
+      "disposition": "Combined verification pending"
+    },
+    {
+      "finding": "C5/AA-016",
+      "source": "docs/audit-handoff/C5.md#L145",
+      "expected": "Review displays owner, host, tool and normalized arguments; Deny/Escape restores originating draft without replacing newer text; changed destination requires fresh approval.",
+      "implementation": "[P](#files-p); P37",
+      "regression": "[P](#files-p); P37",
+      "disposition": "Combined verification pending"
+    },
+    {
+      "finding": "C5/AA-017",
+      "source": "docs/audit-handoff/C5.md#L146",
+      "expected": "Retained retry compares memory policy/content revision at final dispatch. Changed context blocks replay; intentional fresh send uses current memory and new operation identity.",
+      "implementation": "[M](#files-m); M14",
+      "regression": "[M](#files-m); M14",
+      "disposition": "Combined verification pending"
+    },
+    {
+      "finding": "C5/AA-018",
+      "source": "docs/audit-handoff/C5.md#L147",
+      "expected": "Explicit Save and run / Run saved version / Cancel; verify expected-content save before submission, retain draft on saved run, reject failed/wrong-workspace save.",
+      "implementation": "[B](#files-b); B52",
+      "regression": "[B](#files-b); B52",
+      "disposition": "Combined verification pending"
+    },
+    {
+      "finding": "C5/AA-019",
+      "source": "docs/audit-handoff/C5.md#L148",
+      "expected": "Terminal review pins workspace/computer and cwd; routes and approval use exact reviewed destination; missing selected computer cannot fall back to another.",
+      "implementation": "[B](#files-b); B52",
+      "regression": "[B](#files-b); B52",
+      "disposition": "Combined verification pending"
+    },
+    {
+      "finding": "C5/AA-020",
+      "source": "docs/audit-handoff/C5.md#L149",
+      "expected": "Submitted-source receipt retains workspace/cwd/file SHA-256/save policy; local development checks disk baseline. UI explicitly distinguishes baseline from executed revision.",
+      "implementation": "[B](#files-b); B52",
+      "regression": "[B](#files-b); B52",
+      "disposition": "Combined verification pending"
+    },
+    {
+      "finding": "C5/AA-021",
+      "source": "docs/audit-handoff/C5.md#L150",
+      "expected": "Memory-only export includes notes and necessary scope labels; full workspace backup is separately described and retains broad data.",
+      "implementation": "[M](#files-m); M8",
+      "regression": "[M](#files-m); M8",
+      "disposition": "Combined verification pending"
+    },
+    {
+      "finding": "C5/AA-022",
+      "source": "docs/audit-handoff/C5.md#L151",
+      "expected": "Proposed conservative privacy default implemented: preview conflicts, preserve local memory-off and default new imported chats off unless archived preferences explicitly restored.",
+      "implementation": "[M](#files-m); M8",
+      "regression": "[M](#files-m); M8",
+      "disposition": "Combined verification pending"
+    },
+    {
+      "finding": "C5/AA-023",
+      "source": "docs/audit-handoff/C5.md#L152",
+      "expected": "Preview lists record conflicts and Merge keeps current project/file/agent/schedule records; Replace remains explicit.",
+      "implementation": "[M](#files-m); M8",
+      "regression": "[M](#files-m); M8",
+      "disposition": "Combined verification pending"
+    },
+    {
+      "finding": "C5/AA-024",
+      "source": "docs/audit-handoff/C5.md#L153",
+      "expected": "Unresolved/undeclared imported scope is quarantined; invalid scoped notes rejected. Manual unarchive cannot enable retrieval. Replace rechecks destinations; valid legacy hashes remain valid.",
+      "implementation": "[M](#files-m); M8",
+      "regression": "[M](#files-m); M8",
+      "disposition": "Combined verification pending"
+    },
+    {
+      "finding": "C5/AA-025",
+      "source": "docs/audit-handoff/C5.md#L154",
+      "expected": "Execution target and heartbeat readiness distinguish browser/local/hosted workers. Secret-authorized hosted POST performs bounded transaction-backed local-tool work.",
+      "implementation": "[F](#files-f); B52",
+      "regression": "[F](#files-f); B52",
+      "disposition": "Combined verification pending"
+    },
+    {
+      "finding": "C5/AA-026",
+      "source": "docs/audit-handoff/C5.md#L155",
+      "expected": "Explicit run-once, skip, review and bounded catch-up policies with missed/skipped accounting; catch-up at most three per pass.",
+      "implementation": "[F](#files-f); B52",
+      "regression": "[F](#files-f); B52",
+      "disposition": "Combined verification pending"
+    },
+    {
+      "finding": "C5/AA-027",
+      "source": "docs/audit-handoff/C5.md#L156",
+      "expected": "Schedule/run/occurrence/chat identity remains pinned; stable result message delivered once to originating chat; invalid destination blocks instead of retargeting.",
+      "implementation": "[F](#files-f); B52",
+      "regression": "[F](#files-f); B52",
+      "disposition": "Combined verification pending"
+    },
+    {
+      "finding": "C5/AA-028",
+      "source": "docs/audit-handoff/C5.md#L157",
+      "expected": "Default one-active includes approval/external waits; optional skip or bounded queue accounts for later occurrences independently.",
+      "implementation": "[F](#files-f); B52",
+      "regression": "[F](#files-f); B52",
+      "disposition": "Combined verification pending"
+    },
+    {
+      "finding": "C5/AA-029",
+      "source": "docs/audit-handoff/C5.md#L158",
+      "expected": "Shared owner transactions and expected revision guard browser/manual/local/hosted work; model stage claims once; nontransactional storage fails before reads.",
+      "implementation": "[F](#files-f); B52",
+      "regression": "[F](#files-f); B52",
+      "disposition": "Combined verification pending"
+    },
+    {
+      "finding": "C5/AA-030",
+      "source": "docs/audit-handoff/C5.md#L159",
+      "expected": "Reviewed model step pins provider/tier/instructions/knowledge/memory, claims durably, calls normal adapter once and records actual usage; explicit budget/free-only prevent implicit paid execution.",
+      "implementation": "[F](#files-f), [U](#files-u); B52",
+      "regression": "[F](#files-f), [U](#files-u); B52",
+      "disposition": "Combined verification pending"
+    },
+    {
+      "finding": "C5/AA-031",
+      "source": "docs/audit-handoff/C5.md#L160",
+      "expected": "Execute saved run.plan rather than current agent tool index; pinned context/revision coexists with immediate revocation and permission checks.",
+      "implementation": "[F](#files-f); B52",
+      "regression": "[F](#files-f); B52",
+      "disposition": "Combined verification pending"
+    },
+    {
+      "finding": "C5/AA-032",
+      "source": "docs/audit-handoff/C5.md#L161",
+      "expected": "Initial plan includes delegation; child timeline events preserve original parent plan/history.",
+      "implementation": "[F](#files-f); B52",
+      "regression": "[F](#files-f); B52",
+      "disposition": "Combined verification pending"
+    },
+    {
+      "finding": "C5/AA-033",
+      "source": "docs/audit-handoff/C5.md#L162",
+      "expected": "Explicit child-agent assignments pin specialist identity/tools/context/step budget; no inherited approval and bounded recursion.",
+      "implementation": "[F](#files-f); B52",
+      "regression": "[F](#files-f); B52",
+      "disposition": "Combined verification pending"
+    },
+    {
+      "finding": "C5/AA-034",
+      "source": "docs/audit-handoff/C5.md#L163",
+      "expected": "Approval binds run/step/goal/arguments/destination/current permissions and agent revision; mutation requires new review before driver dispatch.",
+      "implementation": "[F](#files-f); B52",
+      "regression": "[F](#files-f); B52",
+      "disposition": "Combined verification pending"
+    },
+    {
+      "finding": "C5/AA-035",
+      "source": "docs/audit-handoff/C5.md#L164",
+      "expected": "Local stop remains active on sync failure; owner-bound pending/confirmed/unconfirmed states and sync retry only activate until explicit release.",
+      "implementation": "[H](#files-h); B52",
+      "regression": "[H](#files-h); B52",
+      "disposition": "Combined verification pending"
+    },
+    {
+      "finding": "C5/AA-036",
+      "source": "docs/audit-handoff/C5.md#L165",
+      "expected": "Halted Build requests job cancellation/session close; server cancels queued companion jobs and marks running cancellation requested with owner-specific summary.",
+      "implementation": "[H](#files-h), [B](#files-b); B52",
+      "regression": "[H](#files-h), [B](#files-b); B52",
+      "disposition": "Combined verification pending"
+    },
+    {
+      "finding": "C5/AA-037",
+      "source": "docs/audit-handoff/C5.md#L166",
+      "expected": "Local protection, authoritative stop, canceled queued and pending/unknown runtime work are distinguished; release never restarts paused schedules.",
+      "implementation": "[H](#files-h); B52",
+      "regression": "[H](#files-h); B52",
+      "disposition": "Combined verification pending"
+    },
+    {
+      "finding": "C5/AA-038",
+      "source": "docs/audit-handoff/C5.md#L167",
+      "expected": "Normalize reported native/custom provider tokens and request IDs; missing/invalid values remain unknown.",
+      "implementation": "[U](#files-u); U4/UD9",
+      "regression": "[U](#files-u); U4/UD9",
+      "disposition": "Combined verification pending"
+    },
+    {
+      "finding": "C5/AA-039",
+      "source": "docs/audit-handoff/C5.md#L168",
+      "expected": "Each helper emits independent stable stage receipt under its parent, separately aggregatable from primary answer.",
+      "implementation": "[U](#files-u); U4/UD9",
+      "regression": "[U](#files-u); U4/UD9",
+      "disposition": "Combined verification pending"
+    },
+    {
+      "finding": "C5/AA-040",
+      "source": "docs/audit-handoff/C5.md#L169",
+      "expected": "Execution ledger survives absent assistant message and interrupted/split streams; journal failure before dispatch prevents call, post-dispatch write failure preserves response and duplicate protection.",
+      "implementation": "[U](#files-u); U4/UD9",
+      "regression": "[U](#files-u); U4/UD9",
+      "disposition": "Combined verification pending"
+    },
+    {
+      "finding": "C5/AA-041",
+      "source": "docs/audit-handoff/C5.md#L170",
+      "expected": "Independent durable usage table, UTC date/day/month/provider/channel aggregates, selected-period export and explicit reviewed retention supplement Activity. Export is bounded to 10,000 records and labels partial coverage. Owner/CSRF/cutoff checks protect deletion; each batch removes at most 1,000 before cutoff. Chat/orchestrator/agent/Speak/image/Build channels retain actual or explicitly unknown provider evidence.",
+      "implementation": "[U](#files-u); UD9",
+      "regression": "[U](#files-u); UD9",
+      "disposition": "Combined verification pending"
+    },
+    {
+      "finding": "C5/AA-042",
+      "source": "docs/audit-handoff/C5.md#L171",
+      "expected": "Owner + operation + stage is accounting identity; duplicate execution dedupes and completed receipt cannot downgrade; distinct helpers/operations stay distinct.",
+      "implementation": "[U](#files-u), [M](#files-m); UD9",
+      "regression": "[U](#files-u), [M](#files-m); UD9",
+      "disposition": "Combined verification pending"
+    },
+    {
+      "finding": "C5/LEGACY-AA018",
+      "source": "docs/audit-handoff/C5.md#L172",
+      "expected": "Actual deliver handler blocks delete/correct/archive/memory-off during prepare GET and fingerprint. Baseline now describes the same source that builds the body; a preexisting stale source is rejected. Unchanged context posts once.",
+      "implementation": "[M](#files-m); M14",
+      "regression": "[M](#files-m); M14",
+      "disposition": "Combined verification pending"
+    },
+    {
+      "finding": "C5/LEGACY-AA019",
+      "source": "docs/audit-handoff/C5.md#L173",
+      "expected": "Owner-isolated runtime capability disables Debug with explanation; unavailable actual handler sends zero requests. Preserve server isolation.",
+      "implementation": "[B](#files-b); B52",
+      "regression": "[B](#files-b); B52",
+      "disposition": "Combined verification pending"
+    },
+    {
+      "finding": "C5/LEGACY-AA020",
+      "source": "docs/audit-handoff/C5.md#L174",
+      "expected": "Buffer/text revision and generation reject old A after selecting B. Actual handler fixture completes B then releases A; only B suggestions remain.",
+      "implementation": "[B](#files-b); B52",
+      "regression": "[B](#files-b); B52",
+      "disposition": "Combined verification pending"
+    },
+    {
+      "finding": "C5/LEGACY-AA021",
+      "source": "docs/audit-handoff/C5.md#L175",
+      "expected": "Actual Debug fetch rejection clears busy with unconfirmed failure. Rejected/malformed payload is guarded and cannot claim breakpoint success/absence. Mounted malformed-response UI remains a release check.",
+      "implementation": "[B](#files-b); B52",
+      "regression": "[B](#files-b); B52",
+      "disposition": "Combined verification pending"
+    }
+  ]
+}

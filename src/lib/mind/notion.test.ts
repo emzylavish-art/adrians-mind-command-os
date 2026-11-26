@@ -1,4 +1,6 @@
 import assert from "node:assert/strict";
+import { randomUUID } from "node:crypto";
+import type { NotionReceiptStore, NotionWriteReceipt } from "./notion-write-receipt.ts";
 import { mkdtempSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -6,6 +8,11 @@ import { describe, it } from "node:test";
 import type { Sql } from "../db.ts";
 import { readToolRuns, writeToolRun } from "./notion-record.ts";
 import { NOTION_SETUP, notionConnection, pagesFromSearch, parseNotionIntent, readNotionPref, runNotionTurn, setNotionPrefDirectory, textFromBlocks, writeNotionPref } from "./notion.ts";
+
+function receipts(): NotionReceiptStore {
+  const rows = new Map<string, NotionWriteReceipt>();
+  return { read: async (id) => rows.get(id) ?? null, claim: async (id, value) => { if (rows.has(id)) return false; rows.set(id, value); return true; }, save: async (id, value) => { rows.set(id, value); } };
+}
 
 const page = (id: string, title: string) => ({
   object: "page",
@@ -100,13 +107,13 @@ describe("notion", () => {
   it("requires confirmation before an append and then verifies the text is on the page", async () => {
     const routes = {
       "POST /search": { body: { results: [page("p1", "Roadmap")] } },
-      "PATCH /blocks/p1/children": { body: { results: [] } },
-      "GET /blocks/p1/children?page_size=50": { body: { results: [{ type: "paragraph", paragraph: { rich_text: [{ plain_text: "today's priorities" }] } }] } },
+      "PATCH /blocks/p1/children": { body: { results: [{ id: "new-block" }] } },
+      "GET /blocks/new-block": { body: { id: "new-block", type: "paragraph", paragraph: { rich_text: [{ plain_text: "today's priorities" }] } } },
     };
     const held = await runNotionTurn({ token: "secret", disabled: false, text: "Append today's priorities to the Notion page about roadmap", confirmed: false, pageId: null, fetch: fakeFetch(routes).fetch });
     assert.equal(held.needsConfirmation, true);
     assert.equal(held.wrote, false);
-    const done = await runNotionTurn({ token: "secret", disabled: false, text: "Append today's priorities to the Notion page about roadmap", confirmed: true, pageId: "p1", fetch: fakeFetch(routes).fetch });
+    const done = await runNotionTurn({ token: "secret", disabled: false, text: "Append today's priorities to the Notion page about roadmap", confirmed: true, pageId: "p1", operationId: randomUUID(), receipts: receipts(), fetch: fakeFetch(routes).fetch });
     assert.equal(done.verified, true);
     assert.equal(done.wrote, true);
   });
@@ -118,15 +125,16 @@ describe("notion", () => {
       text: "Append today's priorities to the Notion page about roadmap",
       confirmed: true,
       pageId: "p1",
+      operationId: randomUUID(), receipts: receipts(),
       fetch: fakeFetch({
         "POST /search": { body: { results: [page("p1", "Roadmap")] } },
-        "PATCH /blocks/p1/children": { body: { results: [] } },
-        "GET /blocks/p1/children?page_size=50": { body: { results: [] } },
+        "PATCH /blocks/p1/children": { body: { results: [{ id: "new-block" }] } },
+        "GET /blocks/new-block": { body: { id: "new-block", type: "paragraph", paragraph: { rich_text: [{ plain_text: "different" }] } } },
       }).fetch,
     });
     assert.equal(result.ok, false);
     assert.equal(result.verified, false);
-    assert.match(result.error, /not found/);
+    assert.match(result.error, /could not be verified/);
   });
 
   it("reports an API error and does not invent pages", async () => {
@@ -140,7 +148,7 @@ describe("notion", () => {
     });
     assert.equal(result.ok, false);
     assert.equal(result.pages.length, 0);
-    assert.match(result.error, /invalid/);
+    assert.match(result.error, /rejected.*credential/);
     assert.equal(result.error.includes("secret-token"), false);
   });
 
@@ -171,5 +179,33 @@ describe("notion", () => {
     const b = await readToolRuns(sql, "owner-b");
     assert.deepEqual(a.map((row) => row.id), ["r1"]);
     assert.deepEqual(b.map((row) => row.id), ["r2"]);
+  });
+});
+
+
+describe("C5 Notion recovery remains bound to the selected destination", () => {
+  it("distinguishes revoked credentials and insufficient permissions without attempting a write", async () => {
+    for (const [status, recovery] of [[401, "reconnect"], [403, "permissions"]] as const) {
+      let requests = 0;
+      const result = await runNotionTurn({ token: "fixture", disabled: false, text: "append note to Notion page Plans", confirmed: true, pageId: "old-page", fetch: async () => { requests++; return { ok: false, status, json: async () => ({ message: "Denied" }) }; } });
+      assert.equal(result.ok, false);
+      assert.equal(result.recovery, recovery);
+      assert.match(result.error, /same workspace/);
+      assert.equal(result.wrote, false);
+      assert.equal(requests, 1);
+    }
+  });
+  it("does not treat one alternate result as ambiguity or rebind a removed pinned page", async () => {
+    let requests = 0;
+    const result = await runNotionTurn({ token: "fixture", disabled: false, text: "read Notion page Plans", confirmed: false, pageId: "removed", fetch: async () => { requests++; return { ok: true, status: 200, json: async () => ({ results: [{ object: "page", id: "other", url: "https://notion.so/other", properties: {} }] }) }; } });
+    assert.equal(result.ambiguous, false);
+    assert.equal(result.recovery, "page_unavailable");
+    assert.match(result.error, /selected Notion page/);
+    assert.equal(requests, 1);
+  });
+  it("a missing explicit workspace grant cannot fall through to another grant", async () => {
+    const result = await runNotionTurn({ token: undefined, workspaceId: "removed-workspace", disabled: false, text: "read Notion page Plans", confirmed: false, pageId: null, fetch: async () => { throw new Error("must not call"); } });
+    assert.equal(result.recovery, "workspace_removed");
+    assert.equal(result.state, "disconnected");
   });
 });

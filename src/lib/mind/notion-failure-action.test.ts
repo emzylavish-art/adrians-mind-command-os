@@ -189,7 +189,7 @@ describe("H33 Notion connector failure banners", () => {
     assert.equal(notionFailureLogHref("11111111-2222-4333-8444-555555555555"), "#audit-11111111-2222-4333-8444-555555555555");
   });
 
-  it("Retry of a 404 re-executes notionCommand with the same text, confirmed, and pageId", () => {
+  it("Retry of a 404 preserves text and destination but requires fresh confirmation", () => {
     const params = snapshotNotionFailureParams({
       text: "Read the Notion page about roadmap",
       confirmed: true,
@@ -209,7 +209,7 @@ describe("H33 Notion connector failure banners", () => {
     });
     retry?.();
     retry?.();
-    assert.deepEqual(seen, [{ text: params.text, confirmed: true, pageId: "p1" }]);
+    assert.deepEqual(seen, [{ text: params.text, confirmed: false, pageId: "p1" }]);
     const html = renderToStaticMarkup(
       createElement(NotionFailureBanner, {
         failure: outcome.failure,
@@ -304,19 +304,19 @@ describe("H33 Notion connector failure banners", () => {
     assert.equal(ambiguous.tone, "message");
   });
 
-  it("a verify miss and an emergency stop are failures; emergency stop is not user_stopped", () => {
+  it("an accepted write is recovery information, while emergency stop remains a failure", () => {
     const verify = notionFailureFromTurn(
       turn({
         ok: false,
         state: "connected",
         action: "append",
         error: "Notion accepted a write, but the text was not found when the page was read back.",
+        wrote: true,
+        writeOutcome: "accepted",
       }),
       { text: "Append today's priorities to the Notion page about roadmap", confirmed: true, pageId: "p1", surface: "chat" },
     );
-    assert.equal(verify.tone, "failure");
-    if (verify.tone !== "failure") return;
-    assert.equal(verify.failure.kind, "notion_failed");
+    assert.equal(verify.tone, "message");
     const halted = notionFailureFromTurn(
       turn({ ok: false, state: "connected", error: "Emergency stop is on. Notion was not called." }),
       searchParams(),

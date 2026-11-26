@@ -63,6 +63,7 @@ export function MobilePanelCard({
   return (
     <section
       id={`panel-${id}`}
+      tabIndex={-1}
       className={`dash3d-mobile-card${expanded ? " is-open" : " is-collapsed"}${isFocused ? " is-focused" : ""}`}
       data-testid={testId ?? `mobile-card-${id}`}
       data-panel-id={id}
@@ -138,10 +139,7 @@ export function MobileSectionNav({ focused, onJump }: NavProps) {
           onClick={(e) => {
             e.preventDefault();
             onJump(s.id);
-            const el = document.getElementById(s.hash);
-            const reduce =
-              typeof matchMedia === "function" && matchMedia("(prefers-reduced-motion: reduce)").matches;
-            el?.scrollIntoView({ behavior: reduce ? "auto" : "smooth", block: "start" });
+
           }}
         >
           {s.label}
@@ -153,6 +151,7 @@ export function MobileSectionNav({ focused, onJump }: NavProps) {
 
 export function MobileChrome({
   sceneInteract,
+  graphicsAvailable = true,
   onSceneInteract,
   filtersSlot,
   focused,
@@ -160,6 +159,7 @@ export function MobileChrome({
   onBack,
 }: {
   sceneInteract: boolean;
+  graphicsAvailable?: boolean;
   onSceneInteract: (v: boolean) => void;
   filtersSlot: ReactNode;
   focused: MobilePanelId | null;
@@ -179,11 +179,12 @@ export function MobileChrome({
           type="button"
           className={`dash3d-pill dash3d-orbit-toggle${sceneInteract ? " is-on" : ""}`}
           data-testid="scene-interact"
+          disabled={!graphicsAvailable}
           aria-pressed={sceneInteract}
           title="When on, one-finger pan and pinch orbit the scene. When off, a vertical swipe scrolls the page."
           onClick={() => onSceneInteract(!sceneInteract)}
         >
-          {sceneInteract ? "Orbit on" : "Orbit off"}
+          {!graphicsAvailable ? "Orbit unavailable" : sceneInteract ? "Orbit on" : "Orbit off"}
         </button>
         {filtersSlot}
       </div>

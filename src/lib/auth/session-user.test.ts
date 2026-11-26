@@ -1,15 +1,15 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
-import { pickSessionUser, localPreviewIdentityAllowed } from "./session-user.ts";
+import { pickSessionUser, localPreviewIdentityAllowed, SessionConflictError } from "./session-user.ts";
 
 describe("pickSessionUser", () => {
-  it("prefers Supabase when both sessions exist", () => {
+  it("rejects conflicting verified sessions instead of selecting another owner", () => {
     assert.deepEqual(
       pickSessionUser({
         supabaseUser: { id: "sb-1", email: "a@b.co" },
         betterAuthUser: { id: "ba-1", email: "c@d.co" },
       }),
-      { id: "sb-1", email: "a@b.co" },
+      null,
     );
   });
 

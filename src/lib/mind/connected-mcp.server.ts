@@ -1,15 +1,18 @@
-import { createHash, randomUUID } from "node:crypto";
+import { randomUUID } from "node:crypto";
 import {
   callCustomConnection,
   validateArgs,
+  readOperationSchema,
   listCustomConnections,
   saveCustomConnection,
+  connectionCapabilityRevision,
   type PublicConnection,
 } from "./custom-connection.ts";
 import { connectorTokenSecretStatus } from "./connectors/crypto.ts";
 import { haltIsOn } from "./halt.server.ts";
 import { parseMcpIntent, type McpPublic } from "./mcp.ts";
 import { loadRegistry, type RegistryDb } from "./mcp/registry-store.ts";
+import { approvalRequestFingerprint, connectionRevision } from "./mcp/approval-snapshot.ts";
 import { removeRegistryServer } from "./mcp/registry.ts";
 
 const NO_DB = "No durable database is configured (DATABASE_URL or POSTGRES_URL). Nothing was saved or called.";
@@ -23,14 +26,21 @@ async function halted(userId: string, deps: Dependencies): Promise<boolean> {
 
 /** Deliberate legacy UI DTO: no URL, bearer, ciphertext or registry internals. */
 export function connectedMcpPublic(connection: PublicConnection): McpPublic {
-  const schemaReady = connection.operations.some((operation) => operation.compatible && operation.inputSchema);
+  const tools = connection.operations.flatMap((operation) => {
+    const inputSchema = readOperationSchema(operation.inputSchema);
+    if (!operation.compatible || !inputSchema) return [];
+    return [{ name: operation.name, description: operation.description, inputSchema,
+      ...(typeof operation.annotations?.readOnlyHint === "boolean" ? { annotations: { readOnlyHint: operation.annotations.readOnlyHint } } : {}),
+    }];
+  });
+  const schemaReady = tools.length > 0;
   const ready = connection.enabled !== false && connection.state === "ready" && schemaReady && !connection.error;
   return {
     id: connection.id,
     label: connection.label,
     host: connection.host,
     state: ready ? "connected" : connection.state === "unchecked" ? "unchecked" : "failed",
-    tools: connection.operations.filter((op) => op.compatible && op.inputSchema).map(({ name, description }) => ({ name, description })),
+    tools,
     error: connection.enabled === false ? "This connection is disabled." : connection.error || (connection.state === "ready" && !schemaReady ? "No compatible tool schema is saved. Reconnect before calling tools." : ""),
   };
 }
@@ -66,7 +76,7 @@ export async function removeConnectedMcp(db: RegistryDb | null, userId: string, 
   return listConnectedMcp(db, userId);
 }
 
-type TurnResult = { approvalId?: string; approvalServerId?: string; ok: boolean; needsConfirmation: boolean; servers: McpPublic[]; text: string; error: string };
+type TurnResult = { approval?: { accountId: string; connectionId: string; label: string; host: string; tool: string; args: Record<string, string | number | boolean>; capabilityRevision: string }; approvalId?: string; approvalServerId?: string; ok: boolean; needsConfirmation: boolean; servers: McpPublic[]; text: string; error: string };
 
 /** Chat uses the same durable rows and schema/confirmation enforcement as Tools. */
 export async function runConnectedMcpTurn(input: {
@@ -115,7 +125,11 @@ export async function runConnectedMcpTurn(input: {
   if (!operation?.inputSchema) return refused("This tool has no supported argument schema.", servers);
   const checked = validateArgs(operation.inputSchema, args);
   if (!checked.ok) return refused(checked.error, servers);
-  const hash = createHash("sha256").update(JSON.stringify([target.id, intent.tool, checked.args])).digest("hex");
+  const reviewedRow = loaded.servers.find((row) => row.id === target.id);
+  if (!reviewedRow) return refused("That connection changed. Review it again.", servers);
+  const revision = connectionRevision(reviewedRow);
+  if (target.revision !== revision) return refused("That connection changed while loading. Review it again.", servers);
+  const hash = approvalRequestFingerprint(revision, intent.tool, checked.args);
   if (!input.confirmed) {
     const approvalId = randomUUID();
     await input.db.query("DELETE FROM mind_mcp_call_approvals WHERE expires_at <= now()");
@@ -127,7 +141,7 @@ export async function runConnectedMcpTurn(input: {
   if (!consumed.length) return refused("The call changed or its approval expired or was already used. Review it again.", servers);
   // Recheck immediately before dispatch; do not weaken the wrapper's halt gate.
   if (await halted(input.userId, input)) return refused(STOPPED, servers);
-  const result = await callCustomConnection({ ...input, id: target.id, operation: intent.tool, args });
+  const result = await callCustomConnection({ ...input, id: target.id, operation: intent.tool, args, expectedRevision: revision, isHalted: (owner) => halted(owner, input) });
   const latest = result.connection;
   return { ok: result.ok, needsConfirmation: false, servers: latest ? servers.map((server) => server.id === latest.id ? connectedMcpPublic(latest) : server) : servers, text: result.ok ? result.text : "", error: result.ok ? "" : result.text };
 }

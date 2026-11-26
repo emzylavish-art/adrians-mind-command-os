@@ -1,6 +1,69 @@
 import { boundAbortSignal, isTimeoutAbort } from "./turn-timeouts.ts";
 
 export type ResearchCitation = { title: string; url: string; retrievedAt?: string; query?: string; publishedAt?: string; excerpt?: string; verification?: "search-result-only" };
+export type ResearchProviderIdentity = {
+  id: string;
+  label: string;
+  strategy: "multi_query" | "single_query";
+  routeFingerprint: string;
+  model?: string;
+};
+export type ResearchDepth = "quick" | "standard" | "deep";
+export type ResearchSource = ResearchCitation & {
+  query: string; status: "discovered" | "snippet" | "inspected" | "inaccessible";
+  excerpt: string; fetchedAt: string | null; contentHash: string | null;
+  error?: string; finalUrl?: string;
+};
+export type ResearchRoute = {
+  provider: "configured-search" | "xai-web-search";
+  configurationRevision: string; endpointOrigin: string | null;
+  reportedModel: string | null; requestId: string | null;
+};
+export type ResearchStep = { query: string; ok: boolean; count: number; status?: "succeeded" | "failed" | "unattempted"; error?: string };
+export type ResearchEvidence = ResearchCitation & { query: string; at: string; verification: "provider_returned"; providerId?: string; routeFingerprint?: string };
+export type ResearchAnswer = { text: string; annotations: { url: string; start: number | null; end: number | null }[] };
+
+export function researchRetryAllowed(retryQueries: string[] | undefined, expected: string | undefined, current: ResearchProviderIdentity): boolean {
+  return !retryQueries || Boolean(expected && expected === current.routeFingerprint);
+}
+
+/** Rebuild from merged records after recovery; do not replace evidence with a success counter. */
+export function researchSummary(input: {
+  citations: ResearchCitation[];
+  steps?: ResearchStep[];
+  evidence?: ResearchEvidence[];
+  providerIdentity?: ResearchProviderIdentity;
+  attempts?: ResearchStep[];
+}): string {
+  const steps = input.steps ?? [];
+  const failed = steps.filter((step) => !step.ok);
+  const evidenceCount = new Set((input.evidence ?? input.citations).map((item) => item.url)).size;
+  const lines = [input.providerIdentity?.strategy === "single_query"
+    ? `${input.providerIdentity.label} returned ${input.citations.length} sources from one provider-assisted search. A multi-query research plan was not executed.`
+    : `Deep research used ${steps.length} searches and kept ${input.citations.length} http(s) sources the provider returned:`];
+  if (steps.length) lines.push(`${steps.length - failed.length} of ${steps.length} searches succeeded.`);
+  if (failed.length) lines.push(`Missing: ${failed.map((step) => step.query).join("; ")}.`);
+  if (evidenceCount > input.citations.length) lines.push(`${evidenceCount} distinct sources were returned; ${input.citations.length} are shown with coverage across queries. The remaining source records are retained as evidence.`);
+  if ((input.attempts?.length ?? 0) > steps.length) lines.push(`${input.attempts!.length} query attempts are recorded, including retries.`);
+  if ((input.attempts ?? steps).some((step) => /timed out/i.test(step.error ?? ""))) lines.push("Some attempts timed out; their failures remain in the attempt history.");
+  lines.push(...input.citations.map((item, index) => `${index + 1}. ${item.title} — ${item.url}`));
+  lines.push("Evidence level: provider-returned sources. Adrian has not independently opened or verified these pages.");
+  return lines.join("\n");
+}
+
+export function withResearchProvenance(result: ResearchResult, providerIdentity: ResearchProviderIdentity, query: string): ResearchResult {
+  const at = new Date().toISOString();
+  const steps = (result.steps ?? [{ query, ok: result.ok, count: result.citations.length, ...(result.error ? { error: result.error } : {}) }]).map((step) => ({ ...step, at: step.at ?? at, providerId: providerIdentity.id, routeFingerprint: providerIdentity.routeFingerprint }));
+  const evidence = (result.evidence ?? result.citations.map((citation) => ({ ...citation, query, at, verification: "provider_returned" as const }))).map((item) => ({ ...item, providerId: providerIdentity.id, routeFingerprint: providerIdentity.routeFingerprint }));
+  const next = { ...result, providerIdentity, steps, evidence };
+  return { ...next, summary: result.ok ? researchSummary(next) : result.summary };
+}
+export type ResearchEvidenceReport = {
+  version: 1; depth: ResearchDepth; createdAt: string;
+  findings: { text: string; sourceUrls: string[]; status: "source-excerpt" | "provider-synthesis" | "unverified" }[];
+  uncertainties: string[]; conflicts: { text: string; sourceUrls: string[]; status: "requires-review" }[];
+  sourceDomains: number; attemptedQueries: number; unattemptedQueries: number;
+};
 
 export type ResearchResult = {
   ok: boolean;
@@ -8,7 +71,15 @@ export type ResearchResult = {
   citations: ResearchCitation[];
   error: string;
   /** Present when deep research ran multiple searches. */
-  steps?: { query: string; ok: boolean; count: number }[];
+  steps?: ResearchStep[];
+  evidence?: ResearchSource[];
+  report?: ResearchEvidenceReport;
+  route?: ResearchRoute;
+  providerAnswer?: string;
+  usage?: { prompt_tokens?: number; completion_tokens?: number } | null;
+  requestId?: string | null;
+  reportedModel?: string | null;
+  persistence?: { saved: boolean; reportId?: string; revision?: number; error?: string };
   summary?: string;
   /** Only explicit provider citation spans; absence is not evidence for every summary claim. */
   claims?: { text: string; sourceUrls: string[]; kind: "provider-cited" }[];
@@ -85,6 +156,33 @@ export function normalizeCitations(hits: unknown, retrieval?: { query: string; r
     if (citations.length === 8) break;
   }
   return citations;
+}
+
+/** Round-robin selection keeps later query evidence inside the same source budget. */
+export function fairResearchCitations(groups: ResearchCitation[][], limit = 8): ResearchCitation[] {
+  const seen = new Set<string>();
+  const out: ResearchCitation[] = [];
+  for (let index = 0; out.length < limit && groups.some((g) => index < g.length); index++) {
+    for (const group of groups) {
+      const item = group[index];
+      if (!item) continue;
+      const safe = parseSafeHttpUrl(item.url);
+      if (!safe || seen.has(safe.key)) continue;
+      seen.add(safe.key);
+      out.push({ title: item.title, url: safe.href });
+      if (out.length === limit) break;
+    }
+  }
+  return out;
+}
+
+export function researchSnippets(hits: unknown, query: string, citations: ResearchCitation[]): ResearchSource[] {
+  return citations.map((citation) => {
+    const hit = Array.isArray(hits) ? hits.find((row) => row && typeof row === "object" && parseSafeHttpUrl(String(row.url ?? ""))?.href === citation.url) : null;
+    const raw = hit?.snippet ?? hit?.description ?? hit?.content;
+    const excerpt = typeof raw === "string" ? raw.replace(/\p{Cc}/gu, " ").trim().slice(0, 900) : "";
+    return { ...citation, query, status: excerpt ? "snippet" : "discovered", excerpt, fetchedAt: null, contentHash: null };
+  });
 }
 
 function dedupeCitations(items: ResearchCitation[], limit = 8): ResearchCitation[] {
@@ -207,6 +305,7 @@ async function performSingleSearch(input: {
       body: JSON.stringify({ query: text }),
     });
   } catch (caught) {
+    if (caught instanceof Error && caught.name === "ResearchDispatchBlocked") { bound.cleanup(); return { ok: false, configured: true, citations: [], error: caught.message }; }
     if (isTimeoutAbort(bound.signal, caught) || isTimeoutAbort(bound.signal, bound.signal.reason)) {
       bound.cleanup();
       return { ok: false, configured: true, citations: [], error: SEARCH_TIMEOUT_REPLY };
@@ -244,7 +343,11 @@ async function performSingleSearch(input: {
     if (!citations.length) {
       return { ok: false, configured: true, citations: [], error: "The search returned no usable sources. No citations were created." };
     }
-    return { ok: true, configured: true, citations, error: "" };
+    const record = payload as Record<string, unknown>;
+    return { ok: true, configured: true, citations, error: "", evidence: researchSnippets(hits, text, citations),
+      ...(typeof record.answer === "string" ? { providerAnswer: record.answer.slice(0, 16_000) } : {}),
+      requestId: response.headers.get("x-request-id"), reportedModel: typeof record.model === "string" ? record.model.slice(0, 160) : null,
+    };
   } finally {
     bound.cleanup();
   }
@@ -270,15 +373,16 @@ export async function performDeepResearch(input: {
   const overall = combineSignals(input.signal, input.deepTimeoutMs ?? deepSearchTimeoutMs());
   const perQuery = input.timeoutMs ?? searchTimeoutMs();
   const queries = planDeepQueries(text).filter((q) => !input.retryQueries || input.retryQueries.includes(q));
-  const steps: { query: string; ok: boolean; count: number }[] = [];
-  const collected: ResearchCitation[] = [];
+  const steps: ResearchStep[] = [];
+  const collected: ResearchCitation[][] = [];
+  const evidence: ResearchSource[] = [];
   let sawTimeout = false;
   try {
     for (const q of queries) {
       if (overall.signal.aborted) {
         const timedOut = isTimeoutAbort(overall.signal, overall.signal.reason);
         sawTimeout ||= timedOut;
-        if (!collected.length) return { ok: false, configured: true, citations: [], error: timedOut ? SEARCH_TIMEOUT_REPLY : "Research stopped.", steps };
+        if (!collected.length) { for (const query of queries.slice(steps.length)) steps.push({ query, ok: false, count: 0, status: "unattempted" }); return { ok: false, configured: true, citations: [], error: timedOut ? SEARCH_TIMEOUT_REPLY : "Research stopped.", steps }; }
         break;
       }
       const one = await performSingleSearch({
@@ -287,21 +391,22 @@ export async function performDeepResearch(input: {
         signal: overall.signal,
         timeoutMs: perQuery,
       });
-      steps.push({ query: q, ok: one.ok, count: one.citations.length });
+      steps.push({ query: q, ok: one.ok, count: one.citations.length, status: one.ok ? "succeeded" : "failed", ...(one.error ? { error: one.error } : {}) });
+      evidence.push(...(one.evidence ?? []));
       if (one.error === SEARCH_TIMEOUT_REPLY) {
         sawTimeout = true;
         if (isTimeoutAbort(overall.signal, overall.signal.reason)) {
-          if (!collected.length) return { ok: false, configured: true, citations: [], error: SEARCH_TIMEOUT_REPLY, steps };
+          if (!collected.length) { for (const query of queries.slice(steps.length)) steps.push({ query, ok: false, count: 0, status: "unattempted" }); return { ok: false, configured: true, citations: [], error: SEARCH_TIMEOUT_REPLY, steps }; }
           break;
         }
       }
-      if (one.ok) collected.push(...one.citations);
+      if (one.ok) collected.push(one.citations);
     }
   } finally {
     overall.cleanup();
   }
 
-  const citations = dedupeCitations(collected, 8);
+  const citations = fairResearchCitations(collected, 8);
   if (!citations.length) {
     return {
       ok: false,
@@ -313,15 +418,15 @@ export async function performDeepResearch(input: {
       steps,
     };
   }
-  for (const query of queries.slice(steps.length)) steps.push({ query, ok: false, count: 0 });
+  for (const query of queries.slice(steps.length)) steps.push({ query, ok: false, count: 0, status: "unattempted" });
   const failed = steps.filter((step) => !step.ok);
   const summaryLines = [
-    `Deep research used ${steps.length} searches and kept ${citations.length} http(s) sources the provider returned:`,
+    `Deep research used ${steps.filter((step) => step.status !== "unattempted").length} searches and kept ${citations.length} http(s) sources the provider returned:`,
     ...citations.map((item, index) => `${index + 1}. ${item.title} — ${item.url}`),
   ];
   if (failed.length) summaryLines.push(`${steps.length - failed.length} of ${steps.length} searches succeeded. Missing: ${failed.map((step) => step.query).join("; ")}.`);
   if (sawTimeout) {
-    summaryLines.push("Note: some searches timed out; only confirmed sources are listed.");
+    summaryLines.push("Note: some searches timed out; only discovered sources are listed.");
   }
   const summary = summaryLines.join("\n");
   return {
@@ -331,6 +436,7 @@ export async function performDeepResearch(input: {
     error: "",
     steps,
     summary,
+    evidence: citations.map((citation) => evidence.find((source) => source.url === citation.url) ?? { ...citation, query: text, status: "discovered" as const, excerpt: "", fetchedAt: null, contentHash: null }),
     ...(failed.length ? { partial: true as const } : {}),
   };
 }

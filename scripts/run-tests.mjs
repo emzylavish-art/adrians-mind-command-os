@@ -1,9 +1,12 @@
-#!/usr/bin/env node
-import { spawn } from "node:child_process";
-import { discoverTests, repositoryRoot } from "./test-inventory.mjs";
+import { resolve } from "node:path";
+import { fileURLToPath } from "node:url";
+import { runNodeTests, testInventory } from "./test-inventory.mjs";
+export { discoverTests } from "./test-inventory.mjs";
 
-const files = discoverTests();
-console.log(JSON.stringify({ inventory: "all deterministic tests", total: files.length }));
-const child = spawn(process.execPath, ["--experimental-strip-types", "--test", `--test-concurrency=${Math.max(1, Math.min(4, Number(process.env.MIND_TEST_CONCURRENCY) || 4))}`, ...files], { cwd: repositoryRoot, stdio: "inherit", shell: false });
-child.on("error", (error) => { console.error(error.message); process.exitCode = 1; });
-child.on("exit", (code, signal) => { process.exitCode = code ?? (signal ? 1 : 0); });
+export function main() {
+  const files = testInventory();
+  return runNodeTests([...files.scripts, ...files.source]);
+}
+
+// Importing the discovery runner from a regression must never recursively launch npm test.
+if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) process.exitCode = main();

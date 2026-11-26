@@ -1,5 +1,8 @@
-import { useMemo, useRef } from "react";
-import { authClient, authEnabled } from "./client";
+import { useMemo, useRef, useEffect, useSyncExternalStore, useState } from "react";
+import { authClient, authEnabled, getBearerToken } from "./client";
+import { createSessionIdentityStore, PENDING_SESSION, readSessionIdentity, type CanonicalSessionState } from "./session-state";
+import { previewPathPrefix } from "../preview-path-prefix";
+import { sessionInstanceId } from "./session-identity";
 
 /** Normalized user shape used across the app, auth on or off. */
 export type AppUser = {
@@ -10,6 +13,8 @@ export type AppUser = {
   profileImageUrl: string | null;
   /** True when this is the sandbox/dev fallback (auth not configured). */
   isDevFallback: boolean;
+  /** Ephemeral login identity for stale-callback guards; never a bearer or credential. */
+  sessionEpoch?: string | null;
 };
 
 /**
@@ -25,6 +30,7 @@ export const DEV_USER: AppUser = {
   primaryEmail: "dev@example.com",
   profileImageUrl: null,
   isDevFallback: true,
+  sessionEpoch: "local-preview",
 };
 
 /** `useCurrentUserState()` result: the user plus the session-loading flag. */
@@ -36,15 +42,21 @@ export type CurrentUserState = {
   error?: string | null;
 };
 
-const DEV_STATE: CurrentUserState = { user: DEV_USER, isPending: false };
+const DEV_STATE: CurrentUserState = { user: DEV_USER, isPending: false, status: "authenticated", error: null };
+const identityStore = createSessionIdentityStore(() => {
+  const prefix = previewPathPrefix(window.location.hostname, window.location.pathname) ?? "";
+  return readSessionIdentity(fetch, `${prefix}/api/mind/session`, getBearerToken());
+});
+const serverSnapshot = () => PENDING_SESSION;
 
 /**
  * Current user + loading state. Same behavior in live preview and when deployed:
  *   - Auth enabled -> the real signed-in user; `user` is `null` while
  *                            the session resolves (`isPending: true`) and when
- *                            signed out (`isPending: false`). Session comes from
- *                            Better Auth `useSession()` → `/api/auth/get-session`
- *                            (cookie when deployed; bearer in live preview).
+ *                            signed out (`isPending: false`). Identity comes from
+ *                            `/api/mind/session`, the same verified owner contract
+ *                            used by execution and persistence. Better Auth updates
+ *                            trigger revalidation; cached profile data is display only.
  *   - Auth disabled (`VITE_AUTH_ENABLED=false`) -> `DEV_USER`, never pending.
  *
  * Protect a route by waiting out `isPending` before acting on `user` —
@@ -73,9 +85,10 @@ function useSessionUserState(): CurrentUserState {
   const primaryEmail = data?.user.email ?? null;
   const emailVerified = data?.user.emailVerified === true;
   const profileImageUrl = data?.user.image ?? null;
+  const sessionEpoch = sessionInstanceId(data?.session);
   const user = useMemo<AppUser | null>(
-    () => (id ? { id, displayName, primaryEmail, emailVerified, profileImageUrl, isDevFallback: false } : null),
-    [id, displayName, primaryEmail, emailVerified, profileImageUrl],
+    () => (id ? { id, displayName, primaryEmail, emailVerified, profileImageUrl, isDevFallback: false, sessionEpoch } : null),
+    [id, displayName, primaryEmail, emailVerified, profileImageUrl, sessionEpoch],
   );
   if (user) lastVerified.current = user;
   else if (!isPending && !error) lastVerified.current = null;

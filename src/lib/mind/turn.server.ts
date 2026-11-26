@@ -1,3 +1,13 @@
+import { writeUsageReceipt, trackUsageResponse } from "./usage-ledger.server.ts";
+import type { UsageReceipt } from "./usage-ledger.ts";
+import { providerRequestId } from "./provider-usage.ts";
+import { withExecutionReceipts } from "./execution-response.ts";
+import { readModelExecutions, saveModelExecution } from "./model-execution.server.ts";
+import type { ConsultExecutionReceipt } from "./model-consult.ts";
+import type { ProviderReceipt } from "./provider-receipt.ts";
+import { selectContextHistory } from "./context-budget.ts";
+import { modelExecutionPlan, type ModelExecutionPlan } from "./execution-plan.ts";
+import { withFailureEnvelope } from "./failure-envelope.ts";
 import { toNativeProviderTurns } from "./ai-provider-native.ts";
 import type { ModelCapabilities } from "./model-capabilities.ts";
 import type { SkillApplicationReceipt } from "./skill-activation.ts";
@@ -17,6 +27,7 @@ import { sessionErrorStatus } from "../auth/session-resolution.ts";
 import { DEV_USER_ID, isLoopbackPreview, requireUserId } from "../auth/verify.server";
 import { guardMindEnv } from "./isolation";
 import { checkTurnSize, createChatTurnPreflight } from "./limits";
+import { consumeSharedMindRateLimit } from "./rate-limit.server.ts";
 import { assembleTurn } from "./prompt";
 import { sanitizeAttachments, type ImageAttachment } from "./media";
 import type { ChatContent } from "./media/types";
@@ -26,8 +37,9 @@ import { isAvailableGrokSelection, parseModelControls, reconcileTierParams, reso
 import { assertLiveProvider } from "./providers";
 import { callConfiguredProvider, httpStatusForProviderSelection, routeSelectedModel, selectProvider } from "./provider-call";
 import { configuredProviders } from "./provider-call";
-import { ADRIAN_MIND_IDENTITY, builtinModules, collectConsultHelp, customModules, orchestratorInstruction, planModelConsult, type ConsultReply } from "./model-consult.ts";
+import { ADRIAN_MIND_IDENTITY, builtinModules, customModules, orchestratorInstruction, planModelConsult, type ConsultReply, executeConsultPlan, type HelperReceipt, type HelperReply, collectConsultReport, isLocalConsultRunner, type ConsultAttempt, type ConsultHelperReply } from "./model-consult.ts";
 import { adrianPcEnabled, runAdrianPc } from "./adrian-pc.server.ts";
+import { ownerScreenshotReader } from "./pc-vision.server.ts";
 import { consequentialSpeechRefusal } from "./frontier-2031.ts";
 import { destructiveSpeechRefusal } from "./reversibility.ts";
 import { ensureLocalCapabilityFile, runLocalCommand } from "./local-capabilities.ts";
@@ -41,7 +53,11 @@ import { resolveDatabaseUrl } from "../env.server.ts";
 import { LOGIC_ROUTE_LABEL, resolveRequestedRoute, toAdapterMessages, type LogicRouteId } from "./logic-routes.ts";
 import { inspectLogicRoutes, runLogicRoute } from "./logic-route-adapter.server.ts";
 import { parseCustomProviderChoice, executeCustomChat, validateCustomProviderSelection } from "./ai-provider-config.server.ts";
-import { claimTurn, finishTurnReceipt, pruneTurnReceipts, turnOperationExpiry } from "./turn-receipt.ts";
+import { claimTurn, pruneTurnReceipts, turnOperationExpiry, readTurnReceipt } from "./turn-receipt.ts";
+import { readTurnRecovery, recoverableTurnResponse } from "./turn-recovery.ts";
+import { governedModelCall, reserveResourceOperation, settleResourceOperation, settleResourceStream } from "./resource-governor.server.ts";
+import { assertCurrentMemoryContext } from "./memory/dispatch-policy.server.ts";
+import { resolveTurnInstructions, instructionContext, recordLoadedInstructions, type LoadedInstruction } from "./skill-instructions.server.ts";
 import type { Sql } from "../db";
 
 /** Default Expert model id — kept for status/docs; live turns use resolveModelTier. */
@@ -81,6 +97,7 @@ export type TurnBody = {
   knowledgePassages?: unknown;
   selectedImageMessageIds?: unknown;
   composerMode?: unknown;
+  usageChannel?: unknown;
   orchestrator?: unknown;
   consult?: unknown;
   modelControls?: unknown;
@@ -221,8 +238,13 @@ function json(body: unknown, status = 200, retryAfter?: string) {
   const responseBody = record?.ok === false ? { ...record, code: turnErrorCode(record.code, status) } : body;
   return new Response(JSON.stringify(responseBody), {
     status,
-    headers: { "content-type": "application/json", "cache-control": "no-store", ...(retryAfter ? { "retry-after": retryAfter } : {}) },
+    headers: { "content-type": "application/json", "cache-control": "no-store", "x-mind-primary-dispatched": "0", ...(retryAfter ? { "retry-after": retryAfter } : {}) },
   });
+}
+
+function failureReceipt(result: Partial<ProviderReceipt> & { model?: string; requestedModel?: string | null; dispatched?: boolean }) {
+  return { usage: result.usage ?? null, requestId: result.requestId ?? null, model: result.model,
+    requestedModel: result.requestedModel, executionLocation: result.executionLocation, dispatched: result.dispatched };
 }
 
 function logicSse(input: {
@@ -353,6 +375,10 @@ export async function handleMindTurn(request: Request): Promise<Response> {
     sql = await getSql();
     const receipt = await claimTurn(sql, userId, operationId, read.body, expiresAt);
     if (receipt !== "claimed") {
+      if (receipt === "responded" && read.body.temporary !== true) {
+        const recovered = await readTurnRecovery(sql, userId, operationId);
+        if (recovered) return recovered;
+      }
       const error = receipt === "different"
         ? "This send ID already belongs to a different request."
         : receipt === "waiting"
@@ -364,15 +390,44 @@ export async function handleMindTurn(request: Request): Promise<Response> {
     return json({ ok: false, error: "Send verification is temporarily unavailable. The provider was not contacted." }, 503);
   }
   let dispatched = false;
-  const response = await dispatchMindTurn(request, userId, read.body, () => { dispatched = true; });
+  const usage: UsageReceipt = {
+    id: `${operationId}/answer`, operationId, stage: "answer", chatId: typeof read.body.chatId === "string" ? read.body.chatId : "",
+    channel: read.body.usageChannel === "speak" ? "speak" : read.body.composerMode === "orchestrator" ? "orchestrator" : "chat",
+    at: new Date().toISOString(), provider: typeof read.body.provider === "string" ? read.body.provider : "grok",
+    requestedModel: typeof read.body.requestedModel === "string" ? read.body.requestedModel : undefined,
+    model: "model unknown", requestId: null, promptTokens: null, completionTokens: null,
+    outcome: "unconfirmed", dispatched: false,
+  };
+  const recordUsage = (entry: UsageReceipt) => writeUsageReceipt(sql, userId, entry);
+  try {
+    await recordUsage(usage);
+  } catch {
+    // Before dispatch, require a durable execution record. A missing migration or
+    // unavailable ledger must not create an unrecorded paid request.
+    await finishTurnReceipt(sql, userId, operationId, true).catch(() => undefined);
+    const unavailable = json({ ok: false, error: "Execution accounting is unavailable. Nothing was sent. Try again after storage is restored." }, 503);
+    unavailable.headers.set("x-mind-dispatch", "none");
+    return unavailable;
+  }
+  let response: Response;
+  try {
+    response = await dispatchMindTurn(request, userId, read.body, () => { dispatched = true; }, usage, recordUsage);
+  } catch {
+    response = json({ ok: false, error: "The request could not be completed. Check the conversation before sending again." }, 503);
+  }
+  const accounted = { ...usage, dispatched, outcome: !dispatched ? "rejected_before_dispatch" as const : response.ok ? "unconfirmed" as const : "failed" as const };
+  // Preserve a provider response after dispatch, even if its final accounting
+  // write fails. The initial durable record remains explicitly unconfirmed.
+  await recordUsage(accounted).catch(() => undefined);
+  response.headers.set("x-mind-dispatch", dispatched ? "sent" : "none");
+  response = trackUsageResponse(response, accounted, recordUsage);
   // The insert is the protection. A failed audit update must not hide a real reply.
   try {
-    await finishTurnReceipt(sql, userId, operationId, !dispatched);
     await pruneTurnReceipts(sql);
   } catch {
     // The existing receipt keeps later deliveries from starting another call.
   }
-  return response;
+  return recoverableTurnResponse({ response, sql, owner: userId, operation: operationId, retain: read.body.temporary !== true && read.body.retainResponse !== false, dispatched });
 }
 
 async function dispatchMindTurn(request: Request, userId: string, data: Record<string, unknown>, onDispatched: () => void = () => {}): Promise<Response> {
@@ -721,6 +776,9 @@ async function modulesConnectedNow(userId: string) {
     grokConfigured: resolveXaiInferenceApiKey(process.env).ok,
     providers: configuredProviders(process.env),
     localRunner: Boolean(process.env.LOCAL_MODEL_URL),
+    localRunnerUrl: process.env.LOCAL_MODEL_URL,
+    openrouterModel: process.env.OPENROUTER_MODEL,
+    ollamaModel: process.env.OLLAMA_MODEL,
   });
   try {
     const { listAiProviders } = await import("./ai-provider-config.server.ts");

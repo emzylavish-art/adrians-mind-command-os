@@ -56,9 +56,13 @@ export function applyRename(ws: Workspace, ids: readonly string[], title: string
   return { ...ws, chats: ws.chats.map((chat) => (names.has(chat.id) ? { ...chat, title: names.get(chat.id)! } : chat)) };
 }
 
-export function quoteText(chat: { title: string; messages?: { role?: string; content?: string }[] }) {
-  const line = chat.messages?.find((message) => message.role === "user" && message.content?.trim())?.content?.trim() || chat.title;
-  return `Quoted from ${chat.title}: ${line}`.slice(0, 2000);
+export function quoteText(chat: { title: string; messages?: { id?: string; role?: string; content?: string }[] }, messageId?: string) {
+  const messages = (chat.messages ?? []).filter((message) => message.content?.trim());
+  const selected = messageId ? messages.filter((message) => message.id === messageId) : messages.slice(-6);
+  const lines = selected.map((message) => `${message.role === "assistant" ? "Assistant" : "Owner"}: ${message.content!.trim()}`);
+  const body = lines.join("\n\n") || chat.title;
+  const excerpt = body.length > 1800 ? body.slice(0, 1800) + "\n[Excerpt shortened; open the source conversation for the full record.]" : body;
+  return `Quoted from ${chat.title}${messageId ? " (selected message)" : " (recent conversation excerpt)"}:\n${excerpt}`;
 }
 
 export function quoteIntoNewChat(ws: Workspace, source: Chat): { ws: Workspace; chatId: string } {

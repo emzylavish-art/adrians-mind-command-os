@@ -1,0 +1,305 @@
+{
+  "audit": "C2 — Notion Recovery Audit",
+  "chapterId": "4231aa276323810e913fdd2b090f4e8b",
+  "baseSha": "18d5b9364e6bdcfec028eeccf56fe596946ed8ce",
+  "branch": "audit/c2-notion-recovery-20261125-5f8234",
+  "scope": "Dashboard recovery, consultation planning and execution receipts, model catalog capability profiles",
+  "sourceRecords": {
+    "M02": "https://app.notion.com/p/4231aa27632381e9a37cd6e9d60ad24f",
+    "M04": "https://app.notion.com/p/4231aa27632381869472f5c5b0708cbe",
+    "M13": "https://app.notion.com/p/4231aa27632381dc975ddd5cad6dc5fb",
+    "M21": "https://app.notion.com/p/4231aa27632381d0b0bcee3b73483f38",
+    "M23": "https://app.notion.com/p/4231aa2763238151b68bff99553e91eb",
+    "M27": "https://app.notion.com/p/4231aa27632381128690f52119225578"
+  },
+  "findings": [
+    {
+      "id": "AA-003",
+      "title": "Reduced-motion Universe stays parked after context restoration",
+      "source": "M02",
+      "status": "fixed and tested",
+      "expected": "Restore rebuilds the renderer resources and schedules a frame even while reduced motion has parked animation.",
+      "files": ["src/components/mind/dashboard-3d/universe-scene.tsx", "src/components/mind/dashboard-3d/c2-dashboard-recovery.test.ts"],
+      "changed": "The actual restored-context handler synchronizes scene data and calls arm(data); its fixture executes that callback with a parked render loop.",
+      "proof": ["dashboard-regressions"],
+      "stillNeeded": "Release-device GPU context loss/restore check. The fixture does not prove a browser GPU implementation."
+    },
+    {
+      "id": "AA-004",
+      "title": "Motion preference resets the current renderer and navigation state",
+      "source": "M02",
+      "status": "fixed and tested",
+      "expected": "Change motion preference in place while preserving camera, selected bot and fly state.",
+      "files": ["src/components/mind/dashboard-3d/universe-scene.tsx", "src/components/mind/dashboard-3d/fleet-force-graph.tsx", "src/components/mind/dashboard-3d/c2-dashboard-recovery.test.ts"],
+      "changed": "Renderer lifecycle no longer depends on motion preference. Live refs update motion and postprocessing and wake a static frame without disposing camera/navigation state.",
+      "proof": ["dashboard-regressions"],
+      "stillNeeded": "Visual browser verification for both Graph and Universe."
+    },
+    {
+      "id": "AA-008",
+      "title": "Historical timeline differs from fallback health and selected details",
+      "source": "M04",
+      "status": "fixed and tested",
+      "expected": "Every health view reflects the selected timeline point; fields not reconstructed are explicitly current.",
+      "files": ["src/components/mind/dashboard-3d/dashboard-app.tsx", "src/components/mind/dashboard-3d/node-detail-panel.tsx", "src/components/mind/dashboard-3d/time-scrubber.tsx", "src/components/mind/dashboard-3d/c2-dashboard-recovery.test.ts"],
+      "changed": "Fallback rows, support list, selected bot and operator search use sceneData rather than current health. Time and detail labels identify historical health and current-only fields. Existing time-scrub unknown-before-first-event behavior is preserved.",
+      "proof": ["dashboard-regressions"],
+      "stillNeeded": "None for the deterministic health-state transition; live visual QA remains a release check."
+    },
+    {
+      "id": "AA-009",
+      "title": "Graphics controls and transient filters are misleading after renderer failure",
+      "source": "M04",
+      "status": "fixed and tested",
+      "expected": "Failure provides usable list navigation and honest disabled graphics controls; retry preserves filter, selection and timeline.",
+      "files": ["src/components/mind/dashboard-3d/dashboard-app.tsx", "src/components/mind/dashboard-3d/dashboard-3d.css", "src/components/mind/dashboard-3d/mobile-structure.tsx", "src/components/mind/dashboard-3d/graph-filters-panel.tsx", "src/components/mind/dashboard-3d/fleet-force-graph.tsx", "src/components/mind/dashboard-3d/universe-scene.tsx", "src/components/mind/dashboard-3d/c2-dashboard-recovery.test.ts"],
+      "changed": "Filters are owned by Dashboard and passed to each renderer and list. Asynchronous Graph initialization reads the latest filter. Failure names Graph or Universe accurately, disables zoom/orbit/sky actions, uses normal-flow fallback layout and offers explicit Retry 3D without resetting state. Filter disclosures use unique DOM IDs.",
+      "proof": ["dashboard-regressions"],
+      "stillNeeded": "Responsive fallback screenshot and real WebGL retry check on release preview."
+    },
+    {
+      "id": "AA-010",
+      "title": "Mobile navigation silently targets unmounted support panels",
+      "source": "M04",
+      "status": "fixed and tested",
+      "expected": "Selecting Money, Feed or Time opens the required panel and then scrolls/focuses it; disabled capabilities explain their state.",
+      "files": ["src/components/mind/dashboard-3d/dashboard-app.tsx", "src/components/mind/dashboard-3d/mobile-structure.tsx", "src/lib/mind/dashboard/view-state.ts", "src/components/mind/dashboard-3d/c2-dashboard-recovery.test.ts"],
+      "changed": "Navigation opens support content first, then an effect focuses and scrolls after mount. Missing feature panels display availability guidance. Back restores navigation focus; reduced motion uses automatic scrolling.",
+      "proof": ["dashboard-regressions"],
+      "stillNeeded": "Physical touch/keyboard verification remains separate from source integration fixtures."
+    },
+    {
+      "id": "AA-044",
+      "title": "All connected helpers are selected regardless of task and cost",
+      "source": "M13",
+      "status": "fixed and tested",
+      "expected": "Simple requests need no helpers; complex requests use at most two relevant, compatible and authorized routes. Paid or unknown helpers need explicit selection and permission.",
+      "files": ["src/lib/mind/model-consult.ts", "src/lib/mind/model-consult.test.ts", "src/lib/mind/turn.server.ts", "src/lib/mind/mcp-selected.test.ts"],
+      "changed": "Task classes assign implementation/evidence/critique roles, with bounded automatic free/local helpers and explicit helperIds plus allowPaidHelpers for paid or unknown routes. The server rebuilds the plan from current connections and validates caller choices before dispatch.",
+      "proof": ["model-regressions", "model-integration"],
+      "stillNeeded": "Root-owned command-app now passes helperIds, allowPaidHelpers and freeOnly; consolidate its visible controls with these server regressions. Legacy generated helpers are deliberately not authorization."
+    },
+    {
+      "id": "AA-045",
+      "title": "Product identity instruction suppresses truthful provider attribution",
+      "source": "M13",
+      "status": "fixed and tested",
+      "expected": "Preserve Adrian identity while reporting requested and actually reported provider/model identities from receipts.",
+      "files": ["src/lib/mind/model-consult.ts", "src/lib/mind/model-consult.test.ts", "src/lib/mind/turn.server.ts"],
+      "changed": "Identity text explicitly permits verified execution attribution and requires unknown when receipts do not establish identity; helper adapters return actual metadata separately from requested model.",
+      "proof": ["model-regressions"],
+      "stillNeeded": "A model's compliance with the prompt requires a later approved provider evaluation. The UI receipt is deterministic evidence."
+    },
+    {
+      "id": "AA-046",
+      "title": "Independent helper collection is sequential",
+      "source": "M13",
+      "status": "fixed and tested",
+      "expected": "At most two independent helpers run concurrently with cancellation and finite deadlines.",
+      "files": ["src/lib/mind/model-consult.ts", "src/lib/mind/model-consult.test.ts", "src/lib/mind/turn.server.ts"],
+      "changed": "A bounded worker collector passes cancellation signals, races a deadline, clears listeners/timers and preserves deterministic attempt order. The server now calls this collector.",
+      "proof": ["model-regressions"],
+      "stillNeeded": "No external latency claims are made."
+    },
+    {
+      "id": "AA-047",
+      "title": "Helper failures and contribution completeness are discarded",
+      "source": "M13",
+      "status": "fixed and tested",
+      "expected": "Keep a receipt for success, failure, cancellation or timeout, with reported identity and explicit truncation; transport it to the client.",
+      "files": ["src/lib/mind/model-consult.ts", "src/lib/mind/turn.server.ts", "src/lib/mind/stream.ts", "src/lib/mind/live-turn.ts", "src/lib/mind/types.ts", "src/lib/mind/c2-model-provider-contract.test.ts"],
+      "changed": "Structured consult attempts include bounded status, timing, usage and identity fields. Long contributions retain both beginning and final qualification with an omission marker. SSE and client consumption preserve sanitized receipts. Root owns workspace persistence and transcript rendering.",
+      "proof": ["model-regressions"],
+      "stillNeeded": "Include root-owned workspace normalization and visible receipt panel in consolidated UI verification."
+    },
+    {
+      "id": "AA-048",
+      "title": "Synthesis instructions omit explicit contradiction and evidence handling",
+      "source": "M13",
+      "status": "fixed and tested",
+      "expected": "Preserve disagreement, assumptions, uncertainty, incomplete evidence and missing helpers; do not treat model agreement as independent evidence.",
+      "files": ["src/lib/mind/model-consult.ts", "src/lib/mind/model-consult.test.ts"],
+      "changed": "The actual synthesis instruction includes those requirements, separate execution records and untrusted helper contributions. Fixtures include dissent at the end of a long answer and an unavailable helper.",
+      "proof": ["model-regressions"],
+      "stillNeeded": "Provider-level synthesis accuracy remains unverified; a prompt contract does not prove model reasoning quality."
+    },
+    {
+      "id": "AA-049",
+      "title": "Model aliases are treated as independent intelligence routes",
+      "source": "M13",
+      "status": "fixed and tested",
+      "expected": "Do not pay for duplicate helpers when known aliases resolve to the selected orchestrator or same physical API/model.",
+      "files": ["src/lib/mind/model-consult.ts", "src/lib/mind/model-consult.test.ts", "src/lib/mind/turn.server.ts"],
+      "changed": "Canonical route keys use configured models and official API identity. OpenRouter/Nemotron and known custom/direct API aliases deduplicate; unknown external endpoints are not falsely asserted to be independent or equivalent.",
+      "proof": ["model-regressions"],
+      "stillNeeded": "Unknown intermediary hosting relationships cannot be proved from model names alone."
+    },
+    {
+      "id": "AA-084",
+      "title": "Consultation regression tests omit disagreement, truncation and specialization",
+      "source": "M21",
+      "status": "fixed and tested",
+      "expected": "Deterministic fixtures preserve dissent, qualifications, failures, roles and actual identity through the synthesis and receipt contracts.",
+      "files": ["src/lib/mind/model-consult.test.ts", "src/lib/mind/c2-model-provider-contract.test.ts"],
+      "changed": "Added bounded concurrency, role selection, pricing authorization, alias, dissent, truncation-tail, missing-helper, cancellation/deadline and SSE receipt regressions that the discovered normal test runner includes.",
+      "proof": ["model-regressions"],
+      "stillNeeded": "A separate approved golden-answer evaluation with real providers is needed to claim generated synthesis quality."
+    },
+    {
+      "id": "AA-090",
+      "title": "One chat admission token covers unrestricted provider fan-out",
+      "source": "M23",
+      "status": "fixed and tested",
+      "expected": "A turn may consume one chat admission, but each helper and final provider attempt must independently pass the shared provider-call budget and stop check.",
+      "files": ["src/lib/mind/turn.server.ts", "src/lib/mind/model-consult.ts", "src/lib/mind/c2-model-provider-contract.test.ts", "src/lib/mind/provider-http.test.ts"],
+      "changed": "Preflight calls the shared provider-call bucket for every dispatch; consultation admission alone does not consume an artificial provider call. Planning caps a turn at two helpers plus its selected final model. Root/Notion agent owns the shared durable limiter.",
+      "proof": ["model-regressions", "model-integration"],
+      "stillNeeded": "Integrate with shared limiter migrations and run cross-route budget tests after all branches are combined. No monetary ledger is claimed."
+    },
+    {
+      "id": "AA-093",
+      "title": "Filesystem spend evidence does not establish complete account billing",
+      "source": "M23",
+      "status": "proposal needing a decision",
+      "expected": "Financial reporting identifies its evidence coverage and never claims complete billing from incomplete local telemetry.",
+      "files": ["src/lib/mind/dashboard/spend-core.ts", "src/lib/mind/dashboard/spend.ts", "src/components/mind/dashboard-3d/money-panel.tsx"],
+      "changed": "Implemented honest Spend telemetry label and source/event coverage note. A durable owner-scoped monetary ledger and authoritative provider billing reconciliation are not implemented by this Dashboard patch.",
+      "proof": ["dashboard-regressions"],
+      "stillNeeded": "Choose authoritative billing sources, pricing versioning and reconciliation/retention policy before claiming a complete monetary ledger."
+    },
+    {
+      "id": "AA-094",
+      "title": "The first eight filesystem matches can exclude newest spend records",
+      "source": "M23",
+      "status": "fixed and tested",
+      "expected": "Select the newest unique eligible files before bounded reading and expose omitted coverage.",
+      "files": ["src/lib/mind/dashboard/spend.ts", "src/lib/mind/dashboard/spend-core.ts", "src/lib/mind/dashboard/spend.test.ts", "src/components/mind/dashboard-3d/money-panel.tsx"],
+      "changed": "Candidate paths deduplicate and sort by modification time before the eight-file read cap. Stable path ordering breaks ties. Money view retains the coverage explanation; tests include newest ninth file and duplicate roots.",
+      "proof": ["dashboard-regressions"],
+      "stillNeeded": "No production spend files were read and no billing totals were verified."
+    },
+    {
+      "id": "AA-109",
+      "title": "Missing pricing can be classified as zero cost",
+      "source": "M27",
+      "status": "fixed and tested",
+      "expected": "Only explicit finite nonnegative decimal prices count; missing/malformed/boolean values stay unknown. Preserve enforced OpenRouter free routing.",
+      "files": ["src/lib/mind/provider-catalog.ts", "src/lib/mind/provider-catalog.test.ts", "src/lib/mind/model-consult.ts", "src/lib/mind/ai-provider-config.server.ts"],
+      "changed": "Strict price parser replaces coercive Number conversion. Custom routes are automatic-free only when the exact OpenRouter :free route enforces zero-price execution; catalog zero alone is not spending authorization.",
+      "proof": ["model-regressions", "model-integration"],
+      "stillNeeded": "None for deterministic price classification; upstream actual charges remain outside fixtures."
+    },
+    {
+      "id": "AA-110",
+      "title": "Catalog normalization discards capability metadata",
+      "source": "M27",
+      "status": "fixed and tested",
+      "expected": "Retain validated modality, context, pricing, tool and structured-output metadata alongside stable model IDs.",
+      "files": ["src/lib/mind/provider-catalog.ts", "src/lib/mind/ai-provider-config.server.ts", "migrations/0019_c2_model_profiles.sql", "src/lib/mind/provider-catalog.test.ts", "src/lib/mind/c2-model-profile-store.test.ts"],
+      "changed": "Profiles persist in an additive model_profiles JSONB column; the old string models array remains compatible. Discovery returns normalized profiles without guessing unknown fields; refreshing capability metadata preserves newer execution receipts atomically.",
+      "proof": ["model-regressions", "model-integration", "model-profile-sql"],
+      "stillNeeded": "Apply migration 0019 in the later authorized deployment pipeline before the new code reads the column."
+    },
+    {
+      "id": "AA-111",
+      "title": "Provider readiness hides model-specific inference failures",
+      "source": "M27",
+      "status": "fixed and tested",
+      "expected": "Separate provider credentials from individual model outcomes and retain exact owner/model/actual response identity.",
+      "files": ["src/lib/mind/ai-provider-config.server.ts", "src/lib/mind/provider-catalog.ts", "src/lib/mind/c2-model-provider-contract.test.ts", "src/lib/mind/c2-model-profile-store.test.ts"],
+      "changed": "Successful and failed inference produces per-model receipts. One model's 429 or 403 does not disable every model on the credential. Unknown/current readiness remains honest; no automatic paid probes run. Atomic JSON updates preserve concurrent model receipts and owner isolation.",
+      "proof": ["model-regressions", "model-profile-sql"],
+      "stillNeeded": "No live provider or account was tested; model receipt UI reflects existing executions only."
+    },
+    {
+      "id": "AA-112",
+      "title": "Unified discovery lacks category-specific capability information",
+      "source": "M27",
+      "status": "fixed and tested",
+      "expected": "Preserve model profiles, validated tool schemas and descriptive read-only hints, and explicit known/unknown service account/operations.",
+      "files": ["src/lib/mind/provider-catalog.ts", "src/lib/mind/mcp.ts", "src/lib/mind/custom-connection.ts", "src/lib/mind/connected-mcp.server.ts", "src/lib/mind/provider-catalog.test.ts", "src/lib/mind/connected-mcp.test.ts"],
+      "changed": "Unified inventory has category-specific fields. Actual MCP discovery and public DTO retain the validated argument schema and boolean readOnlyHint; hints never authorize a call or bypass confirmation. Unknown service identity/operations are left unknown rather than inferred from connection labels.",
+      "proof": ["model-integration"],
+      "stillNeeded": "Further provider-specific account/operation metadata must be supplied by its own connector; no absent grant is invented."
+    },
+    {
+      "id": "AA-113",
+      "title": "Local skill suggestions are not a general intelligence router",
+      "source": "M27",
+      "status": "proposal needing a decision",
+      "expected": "Preserve predictable local skills and conservative abstention while evaluating an explicitly selected model against known capability and spending requirements.",
+      "files": ["src/lib/mind/provider-catalog.ts", "src/lib/mind/ai-provider-config.server.ts", "src/lib/mind/turn.server.ts", "src/lib/mind/c2-model-provider-contract.test.ts"],
+      "changed": "Implemented separate compatibility validation for selected BYOK routes, unknown special capabilities, known context overflow, text modality and free-only execution. The local keyword router remains intact. No silent provider substitution or general autonomous model selection was added.",
+      "proof": ["model-regressions", "model-integration"],
+      "stillNeeded": "Decide a general recommendation/selection policy, privacy constraints and owner-visible consent UX before autonomous cross-provider task routing. The existing narrow skill router is not itself a proven defect."
+    }
+  ],
+  "checks": {
+    "dashboard-regressions": {
+      "command": "node --experimental-strip-types --test src/components/mind/dashboard-3d/c2-dashboard-recovery.test.ts src/lib/mind/dashboard/spend.test.ts src/lib/mind/dashboard/time-scrub.test.ts src/lib/mind/dashboard/graph-filters.test.ts src/components/mind/dashboard-3d/mobile-structure-wired.test.ts src/components/mind/dashboard-3d/postfx/context-loss.test.ts src/components/mind/dashboard-3d/motion/reduced-motion.test.ts",
+      "result": "31 passed, 0 failed",
+      "level": "Actual Dashboard component hook fixture, extracted actual renderer callbacks and graph initialization with synthetic renderer, unit tests; no real browser/GPU."
+    },
+    "model-regressions": {
+      "command": "node --experimental-strip-types --test --test-concurrency=1 src/lib/mind/c2-model-provider-contract.test.ts src/lib/mind/model-consult.test.ts src/lib/mind/provider-catalog.test.ts src/lib/mind/catalog-modules.test.ts src/lib/mind/stream.test.ts src/lib/mind/live-turn.test.ts",
+      "result": "46 passed, 0 failed; includes actual server consultation-consent and direct free-only gates",
+      "level": "Model planning units; actual BYOK entry points and HTTP preflight in an isolated VM with synthetic SQL/network; actual SSE parsing."
+    },
+    "model-integration": {
+      "command": "node --experimental-strip-types --test --test-concurrency=1 src/lib/mind/provider-http.test.ts src/lib/mind/mcp-selected.test.ts src/lib/mind/provider-catalog.test.ts src/lib/mind/connected-mcp.test.ts",
+      "result": "20 passed, 0 failed",
+      "level": "Existing normal behavior and explicit-consent regression, real MCP discovery/DTO with fake HTTP and owner-scoped in-memory SQL."
+    },
+    "model-profile-sql": {
+      "command": "node --experimental-strip-types --test src/lib/mind/c2-model-profile-store.test.ts",
+      "result": "1 passed, 0 failed; includes catalog-refresh race preservation",
+      "level": "Actual additive migration and application SQL on isolated PGlite; no production database."
+    },
+    "runner-recovery": {
+      "command": "TMPDIR=/workspace/scratch/5f8234e6a978/audit-recovery/test-tmp node --experimental-strip-types --test --test-concurrency=1 src/lib/mind/model-consult.test.ts src/lib/mind/provider-catalog.test.ts src/lib/mind/logic-routes.test.ts src/lib/mind/provider-http.test.ts src/lib/mind/mcp-selected.test.ts src/lib/mind/connected-mcp.test.ts src/lib/mind/handy-dictation.test.ts src/lib/mind/github-tools.test.ts src/lib/supabase/callback-redirect.test.ts src/lib/mind/dashboard/hud-order.test.ts",
+      "result": "56 passed, 0 failed, 1 explicitly gated Handy live-engine test skipped; includes bounded receipt serialization and stored MCP schema revalidation",
+      "level": "Previously undiscovered fixtures corrected for current translation grammar, intentional collapsed HUD defaults and Node TypeScript import resolution; Handy mock behavior remains exercised without a real engine."
+    },
+    "runner-shards": {
+      "command": "TMPDIR=/workspace/scratch/5f8234e6a978/audit-recovery/test-tmp node --test scripts/test-inventory.test.mjs",
+      "result": "6 passed, 0 failed",
+      "finding": "AA-082 (shared with root implementation)",
+      "files": ["scripts/test-inventory.mjs", "scripts/test-inventory.test.mjs", "scripts/run-tests.mjs", "scripts/run-tests-shard.mjs"],
+      "level": "Actual repository inventory: four disjoint source shards cover every discovered source test; separate script inventory, import-safe entry points, invalid CLI arguments, empty selection and test environment/argv contract checked. Each run owns a fresh TMPDIR subdirectory and removes only that directory in finally, including failure paths; caller files survive. A 120-second Node test deadline reports hung workers as failures rather than hiding open resources. Existing CI workflows are unchanged."
+    },
+    "fresh-database-probe": {
+      "result": "connected-mcp-health.test.ts passed unchanged: 1 passed, 0 failed with a newly created TMPDIR and 256 MB V8 heap",
+      "level": "The unchanged scenario passed under fresh storage after failing under reused storage. Test database paths include only TMPDIR and PID; per-invocation isolation now prevents that collision. No business assertion was removed or changed.",
+      "log": "c2-connected-mcp-fresh-probe.log"
+    },
+    "targeted-typecheck": {
+      "result": "TypeScript API real module graph at 512 MB: diagnostics=0 for Dashboard/planner/SSE/client/fixture roots, and independently for turn.server.ts, ai-provider-config.server.ts and connected-mcp.server.ts. These runs preceded final additional serializable DTO types; root owns final combined client/compiler result.",
+      "limitations": "Earlier unrestricted full typecheck and 2048 MB attempt were killed with exit 137; no assertion that those passed."
+    },
+    "final-changed-tests-typecheck": {
+      "result": "All 40 changed/new TypeScript test roots pass real dependency-graph type checking with ambient declarations: eight sequential batches at 512 MB, followed by diagnostics=0 for three corrected fixture roots.",
+      "corrections": "Moved failure guards before success assertions in fleet/persona fixtures to avoid never-type access; normalized optional pageId to null in the Notion fixture to match the actual handler contract.",
+      "logs": ["c2-changed-test-types.log", "c2-changed-test-types-recheck.log"],
+      "boundary": "This is scoped type-check proof, not a passing whole-project tsc claim."
+    },
+    "final-changed-source-lint": {
+      "result": "130 changed/new source TS/TSX and scripts MJS checked at 256 MB. Final exit 1: 6 errors and 80 warnings. All six remaining errors are independently reproduced on base HEAD; both introduced errors were corrected without changing behavior.",
+      "corrections": "Equivalent numeric control-byte scan in PDF parsing and removal of unnecessary hyphen escape in skill query parsing.",
+      "baselineErrors": ["Universe scene: three prefer-const errors", "AI provider key validation: one no-control-regex error", "Connected MCP existing test: one prefer-const error", "Personality sanitizer: one no-control-regex error"],
+      "logs": ["c2-changed-eslint-final.log", "c2-eslint-baseline-errors.log"]
+    },
+    "final-fixture-regressions": {
+      "command": "TMPDIR=/workspace/scratch/5f8234e6a978/audit-recovery/test-tmp node --max-old-space-size=256 --experimental-strip-types --test --test-concurrency=1 src/lib/mind/fleet-audit-recovery.test.ts src/lib/mind/personas/selection.test.ts src/lib/mind/notion-entrypoint-recovery.test.ts src/lib/mind/pdf-text-audit.test.ts src/lib/mind/pdf-text.test.ts src/lib/mind/skills.test.ts",
+      "result": "48 passed, 0 failed",
+      "log": "c2-final-fixture-regressions.log"
+    }
+  },
+  "integrationConcerns": [
+    "Root owns command-app helper selection, receipt rendering, and workspace/types normalization; preserve these paths when merging.",
+    "turn.server.ts is shared with voice, media history, stop checks and durable provider rate limits. Check behavior even if Git merges cleanly.",
+    "Additive migration 0019_c2_model_profiles.sql must follow the existing provider table migration. No migration ran against a production database.",
+    "connected-mcp DTO changes are metadata-only. Existing schema validation, connection selection, approval hashes, halt and permission gates must remain.",
+    "The default helper policy intentionally stops automatic paid/unknown fan-out; callers must explicitly authorize selected helpers.",
+    "No live provider, authenticated browser session, GPU, physical device, release deployment or billing account was tested in this patch."
+  ]
+}

@@ -1,4 +1,4 @@
-import { useCurrentUser } from "@/lib/auth/use-current-user";
+import { useCurrentUser, useCurrentUserState } from "@/lib/auth/use-current-user";
 import { useMindWorkspace } from "@/lib/mind/use-mind-workspace";
 import { AccountPreferencesProvider, useAccountPreferences } from "../account-preferences-context";
 import { useEffect, useMemo, useState } from "react";

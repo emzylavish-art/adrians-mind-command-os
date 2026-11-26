@@ -1,0 +1,76 @@
+{
+  "schemaVersion": 1,
+  "environments": [
+    {
+      "id": "source",
+      "state": "unverified",
+      "revision": null,
+      "executedAt": null,
+      "evidence": [],
+      "nextAction": "Inspect the exact committed candidate and attach source paths/revision."
+    },
+    {
+      "id": "unit-fixture",
+      "state": "unverified",
+      "revision": null,
+      "executedAt": null,
+      "evidence": [],
+      "nextAction": "Run the normal discovered test runner on the exact committed candidate and retain its report."
+    },
+    {
+      "id": "local-browser-chromium",
+      "state": "passed",
+      "revision": "b17e90c5728f7f1a9f303f703fcf073cbdd2175e",
+      "executedAt": "2026-11-26T03:44:44.359Z",
+      "evidence": [
+        "docs/audits/evidence/c1-local/report.json",
+        "docs/audits/evidence/c1-local/transitions.json"
+      ],
+      "nextAction": "Repeat the relevant browser checks after integration changes the source revision; separately verify authorized authenticated and physical environments.",
+      "browserOrRuntimeVersion": "Chromium 153.0.8010.0",
+      "authenticated": false,
+      "physicalDevice": false,
+      "scope": "Seven synthetic states at two viewports and eleven listed transitions; no live account, provider, deployment or physical device."
+    },
+    {
+      "id": "authenticated-preview",
+      "state": "unverified",
+      "revision": null,
+      "executedAt": null,
+      "evidence": [],
+      "nextAction": "Use an authorized disposable account on the exact preview candidate; record signed-in journeys without production writes."
+    },
+    {
+      "id": "authenticated-production",
+      "state": "unverified",
+      "revision": null,
+      "executedAt": null,
+      "evidence": [],
+      "nextAction": "After separate release approval, verify the actual alias, deployment SHA and signed-in read-only journeys."
+    },
+    {
+      "id": "physical-ios",
+      "state": "unverified",
+      "revision": null,
+      "executedAt": null,
+      "evidence": [],
+      "nextAction": "Record actual iPhone model, OS, Safari/PWA version, input/audio behavior and exact web revision."
+    },
+    {
+      "id": "physical-windows",
+      "state": "unverified",
+      "revision": null,
+      "executedAt": null,
+      "evidence": [],
+      "nextAction": "Verify the separately versioned installer and actual paired computer; website tests do not prove native behavior."
+    },
+    {
+      "id": "physical-android",
+      "state": "unverified",
+      "revision": null,
+      "executedAt": null,
+      "evidence": [],
+      "nextAction": "Run later authorized Android device/browser checks; no Android result is implied by Chromium emulation."
+    }
+  ]
+}

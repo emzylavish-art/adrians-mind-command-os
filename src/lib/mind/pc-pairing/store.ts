@@ -11,6 +11,17 @@ export type PairedAgent = {
   registeredAt: string;
   lastSeenAt: string;
   fileProtocol?: 2;
+  capabilities?: DeviceCapabilities;
+};
+export type DeviceCapabilities = {
+  version: string;
+  shell: boolean;
+  fileProtocol: 0 | 2;
+  cancellation: boolean;
+  codingRuntime: boolean;
+  localModel: boolean;
+  busy: boolean;
+  workspaceIds: string[];
 };
 
 export type PcJob = {
@@ -27,6 +38,10 @@ export type PcJob = {
   output?: string;
   error?: string;
   receiptId?: string;
+  acceptedAt?: string;
+  cancellationRequestedAt?: string;
+  communicationTimedOutAt?: string;
+  lateOutcome?: "completed_after_cancel" | "completed_after_timeout" | "failed_after_timeout";
 };
 
 export type PcJobEvent = {
@@ -135,6 +150,8 @@ export function listAgents(ownerId: string): PairedAgent[] {
       if (agent.ownerId === ownerId) {
         agent.lastSeenAt = statSync(join(agentsDir(), name)).mtime.toISOString();
         if (existsSync(join(agentsDir(), name + ".file-v2"))) agent.fileProtocol = 2;
+        const capabilitiesPath = join(agentsDir(), name + ".capabilities");
+        if (existsSync(capabilitiesPath)) { try { agent.capabilities = parseDeviceCapabilities(JSON.parse(readFileSync(capabilitiesPath, "utf8"))) ?? undefined; } catch { /* unknown */ } }
         out.push(agent);
       }
     } catch {
@@ -239,7 +256,7 @@ export function enqueueJob(input: {
   return job;
 }
 
-type Transition = Pick<PcJob, "status"> & Partial<Pick<PcJob, "receiptId" | "error" | "output">>;
+export type JobTransition = Pick<PcJob, "status"> & Partial<Pick<PcJob, "receiptId" | "error" | "output" | "acceptedAt" | "cancellationRequestedAt" | "communicationTimedOutAt" | "lateOutcome">>;
 
 function snapshot(jobId: string) {
   const path = jobPath(jobId);
@@ -264,7 +281,7 @@ export function readJob(jobId: string): PcJob | null {
   return snapshot(jobId)?.job ?? null;
 }
 
-function changeJob(jobId: string, decide: (job: PcJob) => Transition | "unchanged" | null): PcJob | null {
+function changeJob(jobId: string, decide: (job: PcJob) => JobTransition | "unchanged" | null): PcJob | null {
   for (;;) {
     const current = snapshot(jobId);
     if (!current) return null;
@@ -300,7 +317,7 @@ export function acceptJob(agentId: string, jobId: string, receiptId?: string): P
     if (current.agentId !== agentId) return null;
     if (receiptId && current.receiptId === receiptId) return "unchanged";
     if (current.status !== "queued") return null;
-    return { status: "running", receiptId };
+    return { status: "running", receiptId, acceptedAt: new Date().toISOString() };
   });
   if (job) touchAgent(agentId);
   return job;
@@ -322,8 +339,43 @@ export function requestJobCancel(ownerId: string, jobId: string): PcJob | null {
     if (job.ownerId !== ownerId) return null;
     if (job.status === "cancel_requested") return "unchanged";
     if (job.status !== "queued" && job.status !== "running") return null;
-    return { status: job.status === "queued" ? "cancelled" : "cancel_requested", error: "Cancellation requested by the owner." };
+    return { status: job.status === "queued" ? "cancelled" : "cancel_requested", error: "Cancellation requested by the owner.", cancellationRequestedAt: new Date().toISOString() };
   });
+}
+
+export type BuildCancellationSummary = { queuedCancelled: number; cancellationRequested: number; unconfirmed: number };
+
+/** Owner-scoped sweep, including jobs whose Build screen is no longer mounted. */
+export function cancelOwnerBuildJobs(ownerId: string): BuildCancellationSummary {
+  const summary = { queuedCancelled: 0, cancellationRequested: 0, unconfirmed: 0 };
+  if (!ownerId || !existsSync(jobsDir())) return summary;
+  for (const name of readdirSync(jobsDir()).filter((name) => name.endsWith(".json"))) {
+    try {
+      const existing = readJob(name.slice(0, -5));
+      if (!existing || existing.ownerId !== ownerId || existing.kind !== "kimi-acp") continue;
+      if (!["queued", "running", "cancel_requested"].includes(existing.status)) continue;
+      const result = requestJobCancel(ownerId, existing.id);
+      if (result?.status === "cancelled") summary.queuedCancelled++;
+      else if (result?.status === "cancel_requested") summary.cancellationRequested++;
+      // A completion won the atomic transition. Its recorded outcome stays intact.
+    } catch { summary.unconfirmed++; }
+  }
+  return summary;
+}
+
+/** Requests cancellation for this owner's known jobs; running jobs remain unconfirmed. */
+export function cancelOwnerJobs(ownerId: string): { cancelled: number; pending: number; unknown: number } {
+  ensure();
+  const result = { cancelled: 0, pending: 0, unknown: 0 };
+  for (const name of readdirSync(jobsDir()).filter((item) => item.endsWith(".json"))) {
+    const job = readJob(name.slice(0, -5));
+    if (!job || job.ownerId !== ownerId || !["queued", "running", "cancel_requested"].includes(job.status)) continue;
+    const next = requestJobCancel(ownerId, job.id);
+    if (!next) result.unknown += 1;
+    else if (next.status === "cancelled") result.cancelled += 1;
+    else result.pending += 1;
+  }
+  return result;
 }
 
 export function appendJobEvent(input: {
@@ -369,37 +421,34 @@ export function listJobEvents(ownerId: string, jobId: string, limit = 200): PcJo
     .slice(-Math.max(1, Math.min(limit, 500)));
 }
 
-export function completeJob(input: {
-  jobId: string;
-  agentId: string;
-  ok: boolean;
-  output?: string;
-  error?: string;
-}): PcJob | null {
-  const job = changeJob(input.jobId, (current) => {
-    if (current.agentId !== input.agentId || current.status === "queued") return null;
-    if (current.status === "cancel_requested") return { status: "cancelled", error: "Cancelled by the owner." };
-    if (current.status !== "running") return "unchanged";
-    const output = input.output ?? "";
-    if (current.kind === "file-op" && input.ok) {
-      // Two 1M-code-unit file versions can each expand sixfold when JSON escaped.
-      if (output.length <= 12_100_000) {
-        try {
-          const result = JSON.parse(output);
-          if (result && typeof result === "object" && !Array.isArray(result)) return { status: "done", output, error: "" };
-        } catch { /* report a readable terminal outcome below */ }
-      }
-      return { status: "error", error: "PC reported completion but its file result is unreadable. Check the workspace before retrying." };
+export type JobCompletionInput = { jobId: string; agentId: string; ok: boolean; output?: string; error?: string; cancelled?: boolean; receiptId?: string };
+/** A stop/timeout is an observation; authenticated execution evidence remains authoritative. */
+export function jobCompletionTransition(current: PcJob, input: JobCompletionInput): JobTransition | "unchanged" | null {
+  if (current.agentId !== input.agentId || current.status === "queued") return null;
+  if (current.receiptId && input.receiptId && current.receiptId !== input.receiptId) return null;
+  if (!["running", "cancel_requested", "timeout"].includes(current.status)) return "unchanged";
+  if (current.status === "timeout" && !current.acceptedAt) return "unchanged";
+  if (input.cancelled === true && !input.ok) return { status: "cancelled", output: (input.output ?? "").slice(0, 8000), error: "Companion confirmed cancellation. Completed effects, if any, were not reversed." };
+  const lateOutcome = current.status === "cancel_requested" && input.ok ? "completed_after_cancel" as const : current.status === "timeout" ? input.ok ? "completed_after_timeout" as const : "failed_after_timeout" as const : undefined;
+  const output = input.output ?? "";
+  if (current.kind === "file-op" && input.ok) {
+    if (output.length <= 12_100_000) {
+      try { const result = JSON.parse(output); if (result && typeof result === "object" && !Array.isArray(result)) return { status: "done", output, error: "", lateOutcome }; }
+      catch { /* readable uncertainty below */ }
     }
-    return { status: input.ok ? "done" : "error", output: output.slice(0, 8000), error: (input.error ?? "").slice(0, 2000) };
-  });
+    return { status: "error", error: "PC reported completion but its file result is unreadable. Check the workspace before retrying." };
+  }
+  return { status: input.ok ? "done" : "error", output: output.slice(0, 8000), error: (input.error ?? "").slice(0, 2000), lateOutcome };
+}
+export function completeJob(input: JobCompletionInput): PcJob | null {
+  const job = changeJob(input.jobId, (current) => jobCompletionTransition(current, input));
   if (job) touchAgent(input.agentId);
   return job;
 }
 
 export function markJobTimeout(jobId: string) {
   changeJob(jobId, (job) => job.status === "queued" || job.status === "running"
-    ? { status: "timeout", error: "Timed out waiting for the paired PC agent. Check the workspace before retrying." }
+    ? { status: "timeout", communicationTimedOutAt: new Date().toISOString(), error: "Timed out waiting for the paired PC agent. Check the workspace before retrying." }
     : null);
 }
 
@@ -408,4 +457,22 @@ export function onlineAgents(ownerId: string, onlineMs = 60_000, now = Date.now(
     const seen = Date.parse(agent.lastSeenAt);
     return Number.isFinite(seen) && now - seen <= onlineMs;
   });
+}
+
+export function parseDeviceCapabilities(value: unknown): DeviceCapabilities | null {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return null;
+  const row = value as Record<string, unknown>;
+  if (typeof row.version !== "string" || !row.version.trim() || row.version.length > 80 || !["shell", "cancellation", "codingRuntime", "localModel", "busy"].every((key) => typeof row[key] === "boolean") || (row.fileProtocol !== 0 && row.fileProtocol !== 2) || !Array.isArray(row.workspaceIds) || row.workspaceIds.some((id) => typeof id !== "string" || id.length > 200)) return null;
+  return { version: row.version, shell: row.shell as boolean, cancellation: row.cancellation as boolean, codingRuntime: row.codingRuntime as boolean, localModel: row.localModel as boolean, busy: row.busy as boolean, fileProtocol: row.fileProtocol as 0 | 2, workspaceIds: (row.workspaceIds as string[]).slice(0, 100) };
+}
+export function recordCapabilities(agentId: string, value: unknown): boolean {
+  const capabilities = parseDeviceCapabilities(value); const path = agentPath(agentId);
+  if (!capabilities || !path || !existsSync(path)) return false;
+  // Separate immutable credential file: a heartbeat must never recreate a revoked agent.
+  writeFileSync(path + ".capabilities", JSON.stringify(capabilities), { mode: 0o600 });
+  return existsSync(path);
+}
+export function deviceReadiness(agent: PairedAgent, now = Date.now()) {
+  const online = Number.isFinite(Date.parse(agent.lastSeenAt)) && now - Date.parse(agent.lastSeenAt) <= 60_000;
+  return { online, capabilitiesVerified: Boolean(agent.capabilities), busy: agent.capabilities?.busy ?? null, shellReady: online && agent.capabilities?.shell === true && !agent.capabilities.busy, fileReady: online && agent.capabilities?.fileProtocol === 2 && !agent.capabilities.busy, codingReady: online && agent.capabilities?.codingRuntime === true && !agent.capabilities.busy, localModelReady: online && agent.capabilities?.localModel === true && !agent.capabilities.busy };
 }

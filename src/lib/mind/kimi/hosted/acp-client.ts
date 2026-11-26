@@ -7,7 +7,7 @@ import { dirname, join, relative, resolve } from "node:path";
 import { resolveXaiInferenceApiKey } from "../../media/xai-key.ts";
 import { installCodingExtensions } from "./coding-extensions.server.ts";
 import { codingSearchUrl } from "./coding-search-bridge.server.ts";
-import { ADRIAN_OS_BUILDER_ORDER } from "../../adrian-os-skill.ts";
+import { builderInstructions, type BuilderInstructionReceipt } from "./builder-instructions.ts";
 import { localDataPath } from "../../../local-data.ts";
 
 export type KimiProbe = {
@@ -112,7 +112,8 @@ export async function probeKimiAcp(command = adrianBuildCommand(), cwd = process
 }
 
 export async function runHostedPrompt(prompt: string, command = adrianBuildCommand(), cwd = process.cwd()): Promise<KimiProbe & { output?: string }> {
-  return await exchange(command, cwd, [prompt]);
+  const instructions = builderInstructions(prompt);
+  return await exchange(command, cwd, [instructions.text], instructions.receipt);
 }
 
 async function exchange(command: string, cwd: string, prompts: string[]): Promise<KimiProbe & { output?: string }> {

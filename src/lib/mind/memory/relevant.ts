@@ -1,3 +1,9 @@
+
+
+const EQUIVALENTS: Record<string, string> = { costs: "cost", price: "cost", pricing: "cost", expense: "cost", expenses: "cost", budget: "cost", deadlines: "deadline", due: "deadline", tasks: "task", projects: "project", preferences: "preference", preferred: "preference" };
+function terms(text: string) {
+  return new Set((text.toLowerCase().match(/[\p{L}\p{N}]{3,}/gu) ?? []).map((word) => EQUIVALENTS[word] ?? word));
+}
 export type RetrievalNote = { id: string; text: string; archived?: boolean; alwaysApply?: boolean; updatedAt?: string; authority?: "owner-approved" | "unreviewed" | "historical"; supersedesIds?: string[]; source?: string; sourceRef?: { documentId?: string; section?: string; url?: string; quote?: string } };
 
 const STOP_WORDS = new Set("a an and are as at be been but by can could did do does for from had has have how i if in information into is it its me more my of on or our please should some that the their them there these they this to use used using was we were what when where which with would you your about explain details current latest help need want tell something".split(" "));

@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import { RunCountsView, RunEvidence } from "./run-evidence";
 import { conversationSharePath } from "@/lib/mind/conversation-actions";
 import { BotBuilder } from "@/components/mind/bot-builder";
 import { zoneIsValid } from "@/lib/mind/schedule-clock";
@@ -17,6 +18,7 @@ import {
   addMailbox,
   addSchedule,
   setScheduleEnabled,
+  setSchedulePolicy,
   approveRunAction,
   approveRunBatch,
   clearFinishedRuns,
@@ -30,8 +32,9 @@ import {
   readFleet,
   pauseRun,
   resumeRun,
-  runDueSchedules,
-  tickFleet,
+  assignDelegation,
+  delegationGoals,
+  scheduleExecutionStatus,
   togglePin,
   toolCatalog,
   type FleetTool,
@@ -117,6 +120,7 @@ function botAvatarSrc(name: string) {
 }
 
 function readLocalTool(id: string, ws: Workspace): string {
+  if (ws.toolPermissions?.[id] === false) return "This tool is turned off for this workspace. Nothing was read.";
   if (id === "list_projects") {
     if (ws.projects.length === 0) return "No projects stored in this browser.";
     return ws.projects.map((project) => project.name).join("\n");
@@ -779,7 +783,7 @@ export function FleetPanel({
         <ul className="mt-4 space-y-2">
           {ws.connections.length === 0 && <li className="text-sm text-muted">No extra connections yet. Chat still uses the server Grok key only when you press Send.</li>}
           {ws.connections.map((item) => (
-            <li key={item.id} className="dense-card dense-row text-sm">
+            <li key={item.id} id={`connection-${item.id}`} tabIndex={-1} className="dense-card dense-row text-sm">
               {item.label} · {item.provider} · {logicRoutes.find((row) => row.id === (item.provider as string))?.reason ?? (item.status === "server-configured" ? "Server key present. Live call not verified." : "Not configured. It cannot be selected.")} · secret stored: no
             </li>
           ))}
@@ -907,7 +911,7 @@ export function FleetPanel({
             const bot = ws.agents.find((agent) => agent.id === job.agentId);
             const blocked = !bot || bot.archived;
             return (
-            <li key={job.id} className="dense-card p-3 text-sm">
+            <li key={job.id} id={`schedule-${job.id}`} tabIndex={-1} className="dense-card p-3 text-sm">
               <p className="font-semibold">{job.name}</p>
               <p className="text-sm">Task: {job.instruction || job.name}</p>
               <p className="text-sm text-muted">Runs in an open browser or a running local schedule worker.</p>
@@ -1339,7 +1343,7 @@ export function FleetPanel({
       <ul className="mt-4 space-y-2 text-sm">
         {ws.browserSessions.length === 0 && <li className="rounded-panel border border-line bg-surface p-3 text-muted">No browser sessions yet. Open page records one only after a successful inspect.</li>}
         {ws.browserSessions.map((session) => (
-          <li key={session.id} className="dense-card p-3">
+          <li key={session.id} id={`browser-${session.id}`} tabIndex={-1} className="dense-card p-3">
             <p className="font-semibold">{session.title || "No title"} · {session.status}</p>
             <p className="text-xs text-muted">{session.url}</p>
             <p className="mt-1">{session.excerpt || session.lastAction}</p>

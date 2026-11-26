@@ -1,3 +1,7 @@
+import { knownCodeFilesFor, reviewedRelatedNavigation, type CodeBufferSource } from "@/lib/mind/kimi/code-navigation";
+import type { BuilderInstructionReceipt } from "@/lib/mind/kimi/hosted/builder-instructions";
+import type { FileReconciliation } from "@/lib/mind/kimi/file-reconciliation";
+import { checkpointListOutcome, type BuildRuntime } from "@/lib/mind/kimi/runtime-capabilities";
 import { useEffect, useMemo, useRef, useState, type FormEvent } from "react";
 import { Activity, Code2, FileDiff, FolderOpen, RefreshCw, Send, ShieldCheck, Square, Terminal, WifiOff } from "lucide-react";
 import { KimiPhase4Panel } from "@/components/mind/kimi-phase4-panel";
@@ -10,6 +14,8 @@ import { OwnerFlow } from "@/components/mind/owner-flow";
 import { ActionOverlay } from "@/components/mind/conversation-menu";
 import { chatTurnBody } from "@/lib/mind/logic-routes";
 import { consumeMindTurn, prepareTurnId } from "@/lib/mind/live-turn";
+import { boundAbortSignal } from "@/lib/mind/turn-timeouts";
+import { createBuildPlanningGate } from "@/lib/mind/kimi/build-lifecycle";
 import { buildBufferKey as bufferKey, buildDraftKey, buildResultHandoff, parseBuildDraft, serializeBuildDraft, type BuildEditorBuffer as EditorBuffer, type BuildFileTarget as FileTarget } from "@/lib/mind/kimi/build-review";
 import { buildResultKey, parseBuildResult, serializeBuildResult, type BuildStoredReceipt } from "@/lib/mind/kimi/build-result";
 import { previewPathPrefix } from "@/lib/preview-path-prefix";
@@ -30,6 +36,7 @@ type BuildEvent = {
 };
 
 type BuildJob = {
+  sourceReceipt?: { workspace: string; cwd: string; files: { path: string; sha256: string }[]; policy: string } | null;
   id: string;
   status: "queued" | "running" | "cancel_requested" | "cancelled" | "done" | "error" | "timeout";
   output: string;
@@ -37,8 +44,7 @@ type BuildJob = {
   createdAt: string;
   updatedAt: string;
 };
-
-type FileResult = FileTarget & { files?: WorkspaceFile[]; matches?: { path: string }[]; path?: string; content?: string; before?: string; after?: string; truncated?: boolean };
+type FileResult = FileTarget & { files?: WorkspaceFile[]; matches?: { path: string }[]; path?: string; content?: string; before?: string; after?: string; truncated?: boolean; nextCursor?: string; total?: number; revision?: string };
 
 type WorkspaceFile = { path: string; bytes: number };
 

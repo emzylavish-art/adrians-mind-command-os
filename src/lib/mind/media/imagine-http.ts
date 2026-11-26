@@ -1,3 +1,6 @@
+import { externalResourceCall } from "../external-resource-call.server.ts";
+import { withFailureEnvelope } from "../failure-envelope.ts";
+import { durableMediaOperations, mediaPayloadHash, runMediaOnce, validMediaOperationId, type MediaOperationStore } from "./operations.server.ts";
 import { haltIsOn } from "../halt.server.ts";
 import { requireUserId } from "@/lib/auth/verify.server";
 import { decideFetchSite } from "@/lib/mind/request-guard";
@@ -12,6 +15,7 @@ import { editImagineImage, generateImagineImages, normalizeImaginePrompt, resolv
 import { readOwnerVideo, startOwnerVideo } from "./video.ts";
 import { normalizeImageDataUrl } from "./data-url.ts";
 import { MAX_DATA_URL_CHARS } from "./types.ts";
+import { validateCreativeParameters } from "./asset-lifecycle.ts";
 import { randomUUID } from "node:crypto";
 import { durableVideoJobs } from "./video-job-store.server.ts";
 import { pollVideoJob, startVideoJob } from "./video-jobs.ts";
@@ -22,12 +26,14 @@ try {
 } catch {
   /* memory store remains the default */
 }
-function json(body: unknown, status = 200) {
-  return new Response(JSON.stringify(body), {
+function mediaJson(body: unknown, status = 200, subsystem: "image" | "video" = "image", operationKind: "read" | "generation" = "generation") {
+  const subject = body && typeof body === "object" && "kind" in body && body.kind === "video" ? "video" : subsystem;
+  return new Response(JSON.stringify(withFailureEnvelope(body, { subsystem: subject, status, operationKind })), {
     status,
     headers: { "content-type": "application/json", "cache-control": "no-store" },
   });
 }
+const json = mediaJson;
 
 function guardSite(request: Request): Response | null {
   if (

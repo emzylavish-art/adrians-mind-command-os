@@ -1,7 +1,9 @@
 import { guardMindEnv } from "./isolation.ts";
 
 export function describePersistence(databaseUrl: string | undefined): {
+  /** Legacy wire alias retained for existing clients. Prefer storageKind. */
   backend: "memory" | "postgres" | "refused";
+  storageKind: "local-file" | "remote-postgres" | "refused";
   cloudBackup: false;
   restartChecked: false;
   note: string;
@@ -10,6 +12,7 @@ export function describePersistence(databaseUrl: string | undefined): {
   if (!gate.ok) {
     return {
       backend: "refused",
+      storageKind: "refused",
       cloudBackup: false,
       restartChecked: false,
       note: gate.error,
@@ -18,6 +21,7 @@ export function describePersistence(databaseUrl: string | undefined): {
   if (!databaseUrl?.trim()) {
     return {
       backend: "memory",
+      storageKind: "local-file",
       cloudBackup: false,
       restartChecked: false,
       note: "The browser keeps its own copy. Without DATABASE_URL or POSTGRES_URL the server uses a PGLite file on this machine (.data/pglite). That file can survive a process restart here. It is not cloud backup, and a serverless host does not keep it.",
@@ -25,6 +29,7 @@ export function describePersistence(databaseUrl: string | undefined): {
   }
   return {
     backend: "postgres",
+    storageKind: "remote-postgres",
     cloudBackup: false,
     restartChecked: false,
     note: "DATABASE_URL or POSTGRES_URL is set. A restart test against that database was not run here. The browser copy and the server copy stay separate. This is not verified cloud backup.",

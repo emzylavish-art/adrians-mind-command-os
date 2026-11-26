@@ -73,3 +73,14 @@ describe("candidate build and explicit migration contract", () => {
     assert.match(result.stderr, /migration database does not match/);
   });
 });
+
+it("explicit release preparation fails when SQL would be skipped", () => {
+  const file = fileURLToPath(new URL("./migrate.mjs", import.meta.url));
+  for (const env of [{}, { VERCEL: "1", VERCEL_ENV: "preview" }]) {
+    const result = spawnSync(process.execPath, [file, "--require-database"], {
+      env: { PATH: process.env.PATH, ...env }, encoding: "utf8", timeout: 10000,
+    });
+    assert.equal(result.status, 1);
+    assert.match(result.stderr, /Release migration/);
+  }
+});

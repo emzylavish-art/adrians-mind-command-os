@@ -32,7 +32,9 @@ it("preserves simultaneous acknowledgements, corrections and forget across stale
 });
 
 it("keeps project, chat and disabled-memory markers out of voice/tool context and ranks relevant notes first", () => {
-  const one = createChat(emptyWorkspace(), { projectId: "one", temporary: false, memory: "on", autonomy: "ask" });
+  const initial = emptyWorkspace();
+  initial.projects = ["one", "two"].map((id) => ({ id, name: id, description: "", createdAt: "2026-01-01T00:00:00.000Z" }));
+  const one = createChat(initial, { projectId: "one", temporary: false, memory: "on", autonomy: "ask" });
   const two = createChat(one.ws, { projectId: "two", temporary: false, memory: "on", autonomy: "ask" });
   two.chat.title = "Foreign marker";
   let ws = two.ws;

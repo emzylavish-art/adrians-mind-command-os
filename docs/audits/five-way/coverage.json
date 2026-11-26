@@ -1,0 +1,985 @@
+{
+  "handoff": "4241aa2763238106adc5e1423f9d1d12",
+  "endMarkers": [
+    "End of C1 source handoff.",
+    "End of C2 source handoff.",
+    "End of C3 source handoff.",
+    "End of C4 source handoff.",
+    "End of C5 source handoff."
+  ],
+  "master": "4231aa2763238172a515d9ecebc9aa3d",
+  "indexes": [
+    "4231aa2763238138937ec5a478120d17",
+    "4231aa276323810e913fdd2b090f4e8b",
+    "4231aa276323819f92ece254a4708b65",
+    "4231aa2763238158bd39d4c8d58191dc",
+    "4231aa27632381fea26be4afb3ef7d00"
+  ],
+  "records": [
+    {
+      "chapter": "C1",
+      "record": "M01",
+      "page": "4231aa276323816a9133d798b075b29e",
+      "endMarker": "830a548c-0b8b-5b76-b793-a06137b9b43f",
+      "sourceCharacters": 24219
+    },
+    {
+      "chapter": "C1",
+      "record": "M02",
+      "page": "4231aa27632381babfcfe2dcf88bea6d",
+      "endMarker": "8c058cf6-6ff5-5ab6-9504-13f837fd3810",
+      "sourceCharacters": 22421
+    },
+    {
+      "chapter": "C1",
+      "record": "M03",
+      "page": "4231aa2763238117a082ecbbc9e784ff",
+      "endMarker": "9057fd43-a87e-511e-8705-87c6f085d8ce",
+      "sourceCharacters": 28012
+    },
+    {
+      "chapter": "C1",
+      "record": "M04",
+      "page": "4231aa27632381a483d1ddf5621afb07",
+      "endMarker": "d32c1700-05c2-4c73-a9cd-2915b4c940ac",
+      "sourceCharacters": 9983
+    },
+    {
+      "chapter": "C1",
+      "record": "M05",
+      "page": "4231aa27632381a1983ad70b98d0eb77",
+      "endMarker": "2d1ba598-8e4e-41dd-b1a1-6d56deec09e4",
+      "sourceCharacters": 11849
+    },
+    {
+      "chapter": "C1",
+      "record": "M06",
+      "page": "4231aa276323814ba23ef6527ad64388",
+      "endMarker": "2688e867-04d5-46ec-b838-fb295c645433",
+      "sourceCharacters": 12285
+    },
+    {
+      "chapter": "C1",
+      "record": "M07",
+      "page": "4231aa2763238171b61ded08986e6b29",
+      "endMarker": "af675d43-2f60-4fbd-a496-15a183b83f00",
+      "sourceCharacters": 13243
+    },
+    {
+      "chapter": "C1",
+      "record": "M08",
+      "page": "4231aa27632381d6a2e8d69d24e7feac",
+      "endMarker": "da53889e-4590-4e8b-8a42-ddc50234fbbb",
+      "sourceCharacters": 14095
+    },
+    {
+      "chapter": "C1",
+      "record": "M09",
+      "page": "4231aa2763238142af7ed04c954f6825",
+      "endMarker": "eaa549fb-dfe2-4755-abd7-83d451400852",
+      "sourceCharacters": 14703
+    },
+    {
+      "chapter": "C1",
+      "record": "M10",
+      "page": "4231aa276323814dbf40cef97b4305d3",
+      "endMarker": "7a7fe715-c382-419d-aba4-04a84c95a531",
+      "sourceCharacters": 14567
+    },
+    {
+      "chapter": "C1",
+      "record": "M11",
+      "page": "4231aa27632381d99628f1d98fbeea1c",
+      "endMarker": "e17bf346-7ae3-4b71-959b-ed5d3d457ff6",
+      "sourceCharacters": 16801
+    },
+    {
+      "chapter": "C1",
+      "record": "M12",
+      "page": "4231aa27632381f287e3e6e03345ff49",
+      "endMarker": "63833162-7f14-40f6-9767-f875d859f11f",
+      "sourceCharacters": 17442
+    },
+    {
+      "chapter": "C1",
+      "record": "M13",
+      "page": "4231aa27632381b19fa1fc1c1031fe5e",
+      "endMarker": "ea9c531b-28c1-48ca-a99f-a9fd8b6ae2eb",
+      "sourceCharacters": 15787
+    },
+    {
+      "chapter": "C1",
+      "record": "M14",
+      "page": "4231aa276323815f9afdfa12c46c4c5a",
+      "endMarker": "7fe9092e-758e-403a-be8f-5a148584b591",
+      "sourceCharacters": 16414
+    },
+    {
+      "chapter": "C1",
+      "record": "M15",
+      "page": "4231aa276323811985e2cac3d3a06889",
+      "endMarker": "bb9aaea3-6f27-4bf2-b2a1-cb716e13b068",
+      "sourceCharacters": 16586
+    },
+    {
+      "chapter": "C1",
+      "record": "M16",
+      "page": "4231aa27632381dda334ed147a51ab26",
+      "endMarker": "d5e45a92-73f2-418a-8ad8-2dc439267e0b",
+      "sourceCharacters": 16151
+    },
+    {
+      "chapter": "C1",
+      "record": "M17",
+      "page": "4231aa27632381a8a514ca3d0e9b3a84",
+      "endMarker": "dc18ef48-48e7-43fb-ba38-6feebcef6cc2",
+      "sourceCharacters": 18574
+    },
+    {
+      "chapter": "C1",
+      "record": "M18",
+      "page": "4231aa27632381cc9d3bd3c7803fcb87",
+      "endMarker": "2f169775-9bf5-4d6e-be01-63e9f95b1d79",
+      "sourceCharacters": 19208
+    },
+    {
+      "chapter": "C1",
+      "record": "M19",
+      "page": "4231aa276323810fb293e13da228b8cd",
+      "endMarker": "19f5687c-a3cd-426a-bcae-2976f3555626",
+      "sourceCharacters": 17972
+    },
+    {
+      "chapter": "C1",
+      "record": "M20",
+      "page": "4231aa276323815eb1e9c95087daece4",
+      "endMarker": "90898ca9-5e6b-479c-8396-1c9cabe1f60c",
+      "sourceCharacters": 18661
+    },
+    {
+      "chapter": "C1",
+      "record": "M21",
+      "page": "4231aa2763238116b82eeb6f3e38e85e",
+      "endMarker": "66a1280e-51b4-4f53-973f-aa07b8683ce1",
+      "sourceCharacters": 21877
+    },
+    {
+      "chapter": "C1",
+      "record": "M22",
+      "page": "4231aa276323813da4e1cba1752ca724",
+      "endMarker": "56476a0b-dcdf-4a5a-9bc9-1bd80588c568",
+      "sourceCharacters": 18596
+    },
+    {
+      "chapter": "C1",
+      "record": "M23",
+      "page": "4231aa27632381f6b3cac21bfd22501a",
+      "endMarker": "80495a52-7e6a-54b7-a1f4-ff2f3f7c8b58",
+      "sourceCharacters": 1161
+    },
+    {
+      "chapter": "C1",
+      "record": "M24",
+      "page": "4231aa2763238113a479f494d0e77daf",
+      "endMarker": "7c0fe2c8-15f6-51e9-bb9b-9bd784a29962",
+      "sourceCharacters": 1135
+    },
+    {
+      "chapter": "C2",
+      "record": "M01",
+      "page": "4231aa2763238131b9fecd6819d766f3",
+      "endMarker": "606d25b0-b893-52ae-aca7-e363b75a3825",
+      "sourceCharacters": 26850
+    },
+    {
+      "chapter": "C2",
+      "record": "M02",
+      "page": "4231aa27632381e9a37cd6e9d60ad24f",
+      "endMarker": "453c3a18-d31a-5ee9-832a-e71dfadafcd3",
+      "sourceCharacters": 23260
+    },
+    {
+      "chapter": "C2",
+      "record": "M03",
+      "page": "4231aa2763238146965fef923f587572",
+      "endMarker": "ec433c44-c590-5903-85f4-d18f0f341c65",
+      "sourceCharacters": 27810
+    },
+    {
+      "chapter": "C2",
+      "record": "M04",
+      "page": "4231aa27632381869472f5c5b0708cbe",
+      "endMarker": "73202fa4-6704-4194-adce-34b384af2d30",
+      "sourceCharacters": 14774
+    },
+    {
+      "chapter": "C2",
+      "record": "M05",
+      "page": "4231aa27632381e1a710e1b586ce189b",
+      "endMarker": "4d30afda-07dd-4a77-a9fb-0fb357b83477",
+      "sourceCharacters": 15843
+    },
+    {
+      "chapter": "C2",
+      "record": "M06",
+      "page": "4231aa27632381c3ae36d674243b513b",
+      "endMarker": "356594b9-585b-45cd-a5e4-e2a3fe86e87f",
+      "sourceCharacters": 12215
+    },
+    {
+      "chapter": "C2",
+      "record": "M07",
+      "page": "4231aa27632381ed8e50f1f436509cb4",
+      "endMarker": "9cdb4cd8-3983-47a4-bed8-3f80ae935317",
+      "sourceCharacters": 13350
+    },
+    {
+      "chapter": "C2",
+      "record": "M08",
+      "page": "4231aa27632381868c8dd844634f74af",
+      "endMarker": "4a23de80-5c23-4089-a7bb-c29f905278a6",
+      "sourceCharacters": 14989
+    },
+    {
+      "chapter": "C2",
+      "record": "M09",
+      "page": "4231aa2763238124adcaf9962f76543e",
+      "endMarker": "74934f00-66d5-407a-8149-647bf4712d38",
+      "sourceCharacters": 15682
+    },
+    {
+      "chapter": "C2",
+      "record": "M10",
+      "page": "4231aa27632381a5acb6ff69867ba20d",
+      "endMarker": "89f50469-35b5-49da-8bca-9a0ea02a96f0",
+      "sourceCharacters": 14001
+    },
+    {
+      "chapter": "C2",
+      "record": "M11",
+      "page": "4231aa27632381928b57cf722df45cf1",
+      "endMarker": "e51f370a-f846-4166-bb77-e9f3dc66819c",
+      "sourceCharacters": 15929
+    },
+    {
+      "chapter": "C2",
+      "record": "M12",
+      "page": "4231aa2763238141b69cc3ae204385f6",
+      "endMarker": "6e2e2d24-25d7-415c-a1f2-d2f978a8d4d1",
+      "sourceCharacters": 15221
+    },
+    {
+      "chapter": "C2",
+      "record": "M13",
+      "page": "4231aa27632381dc975ddd5cad6dc5fb",
+      "endMarker": "d9013491-e1b7-47a4-b005-f941262b5491",
+      "sourceCharacters": 16244
+    },
+    {
+      "chapter": "C2",
+      "record": "M14",
+      "page": "4231aa27632381efa506f0c42f528c7a",
+      "endMarker": "a232bae6-791b-4c3d-9a66-227423b10383",
+      "sourceCharacters": 17555
+    },
+    {
+      "chapter": "C2",
+      "record": "M15",
+      "page": "4231aa27632381fe99b9ea856e78aaea",
+      "endMarker": "d96a92b4-0833-4bf7-9370-1ef0a59cd484",
+      "sourceCharacters": 13131
+    },
+    {
+      "chapter": "C2",
+      "record": "M16",
+      "page": "4231aa2763238127aa0fea0a7f655a4b",
+      "endMarker": "df085579-4bad-4bc9-adbb-2f1d6c6c8137",
+      "sourceCharacters": 13363
+    },
+    {
+      "chapter": "C2",
+      "record": "M17",
+      "page": "4231aa27632381879471efc07ba09e07",
+      "endMarker": "1dd94c3c-6ecd-4eb8-835c-bff1e876ee46",
+      "sourceCharacters": 13076
+    },
+    {
+      "chapter": "C2",
+      "record": "M18",
+      "page": "4231aa2763238101989ad978b9516b1a",
+      "endMarker": "ccbcb581-6056-4122-8bed-c886b51b5b7a",
+      "sourceCharacters": 17542
+    },
+    {
+      "chapter": "C2",
+      "record": "M19",
+      "page": "4231aa2763238193821de8ba67f70a94",
+      "endMarker": "f6e8f791-b55e-426c-8041-fc6be607dca3",
+      "sourceCharacters": 7357
+    },
+    {
+      "chapter": "C2",
+      "record": "M20",
+      "page": "4231aa27632381b185a9d583f742cb20",
+      "endMarker": "1b3c2e5e-6331-4a0c-811c-9d27eda339f1",
+      "sourceCharacters": 12919
+    },
+    {
+      "chapter": "C2",
+      "record": "M21",
+      "page": "4231aa27632381d0b0bcee3b73483f38",
+      "endMarker": "3f8d805c-b2e8-4b0e-aa72-d2c520ecd2a8",
+      "sourceCharacters": 12297
+    },
+    {
+      "chapter": "C2",
+      "record": "M22",
+      "page": "4231aa27632381748c41da5e9f01a245",
+      "endMarker": "dd0edd04-9fcd-4e65-9996-9c2f77cc09a6",
+      "sourceCharacters": 8273
+    },
+    {
+      "chapter": "C2",
+      "record": "M23",
+      "page": "4231aa2763238151b68bff99553e91eb",
+      "endMarker": "0953f4f8-1f06-4905-9ffa-93205a82c2ee",
+      "sourceCharacters": 14723
+    },
+    {
+      "chapter": "C2",
+      "record": "M24",
+      "page": "4231aa27632381319a47ffec4f099e26",
+      "endMarker": "c5c788e2-c825-43df-a376-3cf3186c8879",
+      "sourceCharacters": 14358
+    },
+    {
+      "chapter": "C2",
+      "record": "M25",
+      "page": "4231aa2763238185a292c53f8c573d92",
+      "endMarker": "6acf0f7f-d0cd-4f4d-93e0-3c63b5d6a3d8",
+      "sourceCharacters": 11261
+    },
+    {
+      "chapter": "C2",
+      "record": "M26",
+      "page": "4231aa27632381f9bb1eece695bf3ad8",
+      "endMarker": "fb816265-fbc4-42e2-a3c4-f3cec8493143",
+      "sourceCharacters": 12526
+    },
+    {
+      "chapter": "C2",
+      "record": "M27",
+      "page": "4231aa27632381128690f52119225578",
+      "endMarker": "4d0c4053-e59c-4f3e-afac-40043f26bb88",
+      "sourceCharacters": 14132
+    },
+    {
+      "chapter": "C2",
+      "record": "M28",
+      "page": "4231aa276323816990f8dbd5049b59b6",
+      "endMarker": "1cd3b63c-6882-4e1b-b84c-44ecce84f1dc",
+      "sourceCharacters": 14885
+    },
+    {
+      "chapter": "C2",
+      "record": "M29",
+      "page": "4231aa27632381168d07ce7ef138e982",
+      "endMarker": "3addda84-1bdb-436f-917e-400b728113ad",
+      "sourceCharacters": 13676
+    },
+    {
+      "chapter": "C2",
+      "record": "M30",
+      "page": "4231aa2763238145b0c2d166ca446d68",
+      "endMarker": "0e6f3676-740b-4395-8cf5-f33364693272",
+      "sourceCharacters": 14124
+    },
+    {
+      "chapter": "C2",
+      "record": "M31",
+      "page": "4231aa276323816aa837f15db16766a8",
+      "endMarker": "72ac2ebd-d435-4276-9d08-8b12893fb591",
+      "sourceCharacters": 14226
+    },
+    {
+      "chapter": "C2",
+      "record": "M32",
+      "page": "4231aa276323811d8a98ed544cc94690",
+      "endMarker": "c2da6367-15ff-5ff1-9d4d-fa24533ca4e5",
+      "sourceCharacters": 1201
+    },
+    {
+      "chapter": "C3",
+      "record": "M01",
+      "page": "4231aa27632381a88537cba17b180850",
+      "endMarker": "5638252c-54d4-464a-a34f-70ee01ede7e2",
+      "sourceCharacters": 10277
+    },
+    {
+      "chapter": "C3",
+      "record": "M02",
+      "page": "4231aa276323816186e8e0710bea0ea7",
+      "endMarker": "46ae172f-4a9b-4164-b2a7-518f63ecb310",
+      "sourceCharacters": 11091
+    },
+    {
+      "chapter": "C3",
+      "record": "M03",
+      "page": "4231aa27632381cc8c02c71687e1eace",
+      "endMarker": "daee2958-fa4c-4ee4-be7f-03c50001b6ea",
+      "sourceCharacters": 10180
+    },
+    {
+      "chapter": "C3",
+      "record": "M04",
+      "page": "4231aa27632381abac76d40b08908ac2",
+      "endMarker": "604b7bd6-ea1c-46db-bf69-baab9a3fdfcd",
+      "sourceCharacters": 11467
+    },
+    {
+      "chapter": "C3",
+      "record": "M05",
+      "page": "4231aa276323811ab098d4165040dc60",
+      "endMarker": "f81f3760-8e05-41d2-8cb6-d86a7d59dab3",
+      "sourceCharacters": 9582
+    },
+    {
+      "chapter": "C3",
+      "record": "M06",
+      "page": "4231aa2763238140b158ccaf57d73b5e",
+      "endMarker": "6b3c64de-f080-4064-86b4-419734d7a360",
+      "sourceCharacters": 10751
+    },
+    {
+      "chapter": "C3",
+      "record": "M07",
+      "page": "4231aa276323814cb638d85ea57f14ba",
+      "endMarker": "760fec8b-28de-4571-b314-532040bffe8d",
+      "sourceCharacters": 10482
+    },
+    {
+      "chapter": "C3",
+      "record": "M08",
+      "page": "4231aa27632381fdb94ac16db5ed80c3",
+      "endMarker": "0378e95e-7770-40e3-9e37-1c15f93a16e4",
+      "sourceCharacters": 10854
+    },
+    {
+      "chapter": "C3",
+      "record": "M09",
+      "page": "4231aa2763238198baedce70efbd6ad1",
+      "endMarker": "c4a70c22-8822-4023-b2f0-0ad716d37af5",
+      "sourceCharacters": 12244
+    },
+    {
+      "chapter": "C3",
+      "record": "M10",
+      "page": "4231aa2763238162bceaf86a6387abea",
+      "endMarker": "576d74a2-5aa8-4468-bc69-391afdec4249",
+      "sourceCharacters": 10853
+    },
+    {
+      "chapter": "C3",
+      "record": "M11",
+      "page": "4231aa27632381a9b336c91893fc0102",
+      "endMarker": "18b757a6-ec42-4b85-8bbf-3f59ae31e19d",
+      "sourceCharacters": 11119
+    },
+    {
+      "chapter": "C3",
+      "record": "M12",
+      "page": "4231aa27632381ff9284c58496817fea",
+      "endMarker": "1f53e95a-658f-4b0c-b779-877316d756e0",
+      "sourceCharacters": 11584
+    },
+    {
+      "chapter": "C3",
+      "record": "M13",
+      "page": "4231aa27632381f9a99fe4f1271c834f",
+      "endMarker": "91013ee8-2da0-4749-8f54-b42eabd90fd8",
+      "sourceCharacters": 10535
+    },
+    {
+      "chapter": "C3",
+      "record": "M14",
+      "page": "4231aa2763238147b9d1f4ba01664da8",
+      "endMarker": "a65c6fc9-4be6-44a9-9824-96cc6a0af0a1",
+      "sourceCharacters": 11816
+    },
+    {
+      "chapter": "C3",
+      "record": "M15",
+      "page": "4231aa27632381d98ac7cbec3df66df0",
+      "endMarker": "083767f1-aafd-4547-a5eb-ce82b337e934",
+      "sourceCharacters": 10895
+    },
+    {
+      "chapter": "C3",
+      "record": "M16",
+      "page": "4231aa27632381ea8ad7c936997e8d8a",
+      "endMarker": "b78a025b-3fb3-4ee3-be66-de21be186684",
+      "sourceCharacters": 12039
+    },
+    {
+      "chapter": "C3",
+      "record": "M17",
+      "page": "4231aa2763238147aaedf7fd3f264071",
+      "endMarker": "649bfc22-a58c-4f8d-9db6-9744c7daf19f",
+      "sourceCharacters": 10717
+    },
+    {
+      "chapter": "C3",
+      "record": "M18",
+      "page": "4231aa27632381ed9ac0e866811a05b0",
+      "endMarker": "bcf9d906-7e20-47ee-8f33-8f7a135d3753",
+      "sourceCharacters": 11503
+    },
+    {
+      "chapter": "C3",
+      "record": "M19",
+      "page": "4231aa2763238123ba00e74cdd72f78a",
+      "endMarker": "749d69a9-ca42-4ab1-99a5-fbac758f9c0c",
+      "sourceCharacters": 9990
+    },
+    {
+      "chapter": "C3",
+      "record": "M20",
+      "page": "4231aa276323813b8e83c4d67fc74d75",
+      "endMarker": "8e346f06-cf15-45c7-ac4b-13ba9fd15547",
+      "sourceCharacters": 10473
+    },
+    {
+      "chapter": "C3",
+      "record": "M21",
+      "page": "4231aa2763238177b9e7d01b728f26fc",
+      "endMarker": "5125236e-3075-4a0a-aa83-b8371abbede3",
+      "sourceCharacters": 11957
+    },
+    {
+      "chapter": "C3",
+      "record": "M22",
+      "page": "4231aa276323819da93ac370049063b6",
+      "endMarker": "58ee7c9d-c0dd-4c38-97e4-54964679de97",
+      "sourceCharacters": 12953
+    },
+    {
+      "chapter": "C3",
+      "record": "M23",
+      "page": "4231aa27632381dba2ede7779aedadbf",
+      "endMarker": "5e722f74-3b0d-4dde-8012-644da1998550",
+      "sourceCharacters": 12448
+    },
+    {
+      "chapter": "C3",
+      "record": "M24",
+      "page": "4231aa27632381069895d5e3cbf25ba5",
+      "endMarker": "38b8a01c-6e82-4944-8c11-caa9f7c77ee5",
+      "sourceCharacters": 15197
+    },
+    {
+      "chapter": "C3",
+      "record": "M25",
+      "page": "4231aa2763238191aa4ce9ab58836eb2",
+      "endMarker": "fa1eff7e-ee2f-4412-a8b1-ae4e1a1f2aad",
+      "sourceCharacters": 14582
+    },
+    {
+      "chapter": "C3",
+      "record": "M26",
+      "page": "4231aa27632381acad4ecea2322b9c29",
+      "endMarker": "f36d362b-8c8a-462c-8f29-45e2f1935460",
+      "sourceCharacters": 11604
+    },
+    {
+      "chapter": "C3",
+      "record": "M27",
+      "page": "4231aa2763238129b63ee8d2ecd24c0d",
+      "endMarker": "2312f430-3f78-4855-b849-ebe69656038a",
+      "sourceCharacters": 13836
+    },
+    {
+      "chapter": "C3",
+      "record": "M28",
+      "page": "4231aa27632381f8a837e66563c0e411",
+      "endMarker": "388d2a55-74fb-4ec3-952e-cd75b2211813",
+      "sourceCharacters": 13067
+    },
+    {
+      "chapter": "C3",
+      "record": "M29",
+      "page": "4231aa2763238151b7b5ca659f32ba53",
+      "endMarker": "d65833fe-19c0-4ab5-b9dc-9931861ab380",
+      "sourceCharacters": 15046
+    },
+    {
+      "chapter": "C3",
+      "record": "M30",
+      "page": "4231aa27632381e7aa5ac10724d525c0",
+      "endMarker": "deae4051-3183-4657-870d-39e24c981345",
+      "sourceCharacters": 14171
+    },
+    {
+      "chapter": "C3",
+      "record": "M31",
+      "page": "4231aa27632381249552d3299052851f",
+      "endMarker": "b43c22e9-045e-45e2-bb35-b0551bc86ea6",
+      "sourceCharacters": 14096
+    },
+    {
+      "chapter": "C3",
+      "record": "M32",
+      "page": "4231aa276323816aa290fed0a7de9eb5",
+      "endMarker": "521ea01c-4065-4a9b-9864-36ebaf5438e7",
+      "sourceCharacters": 14583
+    },
+    {
+      "chapter": "C3",
+      "record": "M33",
+      "page": "4231aa2763238179b84fefac7b0a4e01",
+      "endMarker": "f87db11c-f4aa-46bc-bf40-2a45c46864bc",
+      "sourceCharacters": 14614
+    },
+    {
+      "chapter": "C3",
+      "record": "M34",
+      "page": "4231aa276323817ea275ea86deb2c6ca",
+      "endMarker": "d299be43-f679-4502-a11f-c805bf23b316",
+      "sourceCharacters": 16630
+    },
+    {
+      "chapter": "C3",
+      "record": "M35",
+      "page": "4231aa27632381e9b072d821c7f277bb",
+      "endMarker": "ff6ac827-bae2-42c3-90d1-c6c30d36e230",
+      "sourceCharacters": 15559
+    },
+    {
+      "chapter": "C3",
+      "record": "M36",
+      "page": "4231aa2763238124abf2ed4fc16ae120",
+      "endMarker": "8a2eb962-55ba-4b14-b2bf-03e2d74d0989",
+      "sourceCharacters": 13522
+    },
+    {
+      "chapter": "C3",
+      "record": "M37",
+      "page": "4231aa276323813f889acc53aff24391",
+      "endMarker": "c26cca2d-e1de-434a-8f8a-e3fe0ad9a0e9",
+      "sourceCharacters": 16369
+    },
+    {
+      "chapter": "C3",
+      "record": "M38",
+      "page": "4231aa2763238117a6f9ec5d8e4b552e",
+      "endMarker": "908c95d9-f454-48ae-bdfa-06ec01805cb1",
+      "sourceCharacters": 15424
+    },
+    {
+      "chapter": "C3",
+      "record": "M39",
+      "page": "4231aa2763238197accae4b1a8a5c3a6",
+      "endMarker": "bc345bb4-83a1-422e-8d44-b4576b43a223",
+      "sourceCharacters": 15866
+    },
+    {
+      "chapter": "C3",
+      "record": "M40",
+      "page": "4231aa2763238184ba26c59e417d11b0",
+      "endMarker": "89f60430-69be-4947-b0b7-e8a2034c8f89",
+      "sourceCharacters": 17917
+    },
+    {
+      "chapter": "C3",
+      "record": "M41",
+      "page": "4231aa27632381669580e5a263b3abca",
+      "endMarker": "fb321a7b-6fd1-4e22-af2c-74f25cfc99d2",
+      "sourceCharacters": 15966
+    },
+    {
+      "chapter": "C3",
+      "record": "M42",
+      "page": "4231aa27632381ab98d1c6c9f17da64f",
+      "endMarker": "e2fa9634-6796-50d7-95aa-f00decb0ca38",
+      "sourceCharacters": 1252
+    },
+    {
+      "chapter": "C3",
+      "record": "M43",
+      "page": "4231aa27632381f1839cc786c6a64db1",
+      "endMarker": "1a8e36b1-da83-5431-82b9-3c094be6db45",
+      "sourceCharacters": 1167
+    },
+    {
+      "chapter": "C4",
+      "record": "M01",
+      "page": "4231aa2763238104bb34df725195c48b",
+      "endMarker": "da45fa8c-6e9c-5f0f-b58f-248379d51bc2",
+      "sourceCharacters": 24340
+    },
+    {
+      "chapter": "C4",
+      "record": "M02",
+      "page": "4231aa276323816ab14bef85ae5a036e",
+      "endMarker": "1f7a8709-3946-50c3-97ea-7b578badf9f1",
+      "sourceCharacters": 30714
+    },
+    {
+      "chapter": "C4",
+      "record": "M03",
+      "page": "4231aa276323816c8bc4ea9ba2413a8a",
+      "endMarker": "22e1b3fe-b069-5cb3-adb1-ea59f62e60d5",
+      "sourceCharacters": 27951
+    },
+    {
+      "chapter": "C4",
+      "record": "M04",
+      "page": "4231aa276323817095bbd25f8bb9962c",
+      "endMarker": "37b64d85-6ec3-5ab8-9aea-13591ee3c6c1",
+      "sourceCharacters": 24670
+    },
+    {
+      "chapter": "C4",
+      "record": "M05",
+      "page": "4231aa27632381b28fcae62e9ed26666",
+      "endMarker": "09560f5c-e0c7-5ad9-956e-e7a86d24416f",
+      "sourceCharacters": 26553
+    },
+    {
+      "chapter": "C4",
+      "record": "M06",
+      "page": "4231aa27632381038d80dd42a09592fa",
+      "endMarker": "1adb9ed0-4740-4baa-9b24-f9ed0ddd39f1",
+      "sourceCharacters": 15605
+    },
+    {
+      "chapter": "C4",
+      "record": "M07",
+      "page": "4231aa27632381c9a3fbd326e2ff1435",
+      "endMarker": "5a657cce-5a21-4fbf-9079-9d1e798468b2",
+      "sourceCharacters": 15429
+    },
+    {
+      "chapter": "C4",
+      "record": "M08",
+      "page": "4231aa2763238195aaa0e254f75a8962",
+      "endMarker": "39b54957-781f-414d-a805-6f7a48b346c3",
+      "sourceCharacters": 15706
+    },
+    {
+      "chapter": "C4",
+      "record": "M09",
+      "page": "4231aa276323815fbc73edcb28d97371",
+      "endMarker": "5f29834f-e96d-4a82-b96a-13175384eed0",
+      "sourceCharacters": 19526
+    },
+    {
+      "chapter": "C4",
+      "record": "M10",
+      "page": "4231aa27632381eb9f12ce61ad7460a4",
+      "endMarker": "a3c22a44-ef9e-454e-aaa3-7ca53a458e72",
+      "sourceCharacters": 20513
+    },
+    {
+      "chapter": "C4",
+      "record": "M11",
+      "page": "4231aa276323810d9de1d5dd42755a1e",
+      "endMarker": "a790220f-c336-493a-8579-5c35f1a4ed78",
+      "sourceCharacters": 16752
+    },
+    {
+      "chapter": "C4",
+      "record": "M12",
+      "page": "4231aa27632381b383fdd59196635d40",
+      "endMarker": "202383bb-5763-41e9-9608-4973933af4fc",
+      "sourceCharacters": 15607
+    },
+    {
+      "chapter": "C4",
+      "record": "M13",
+      "page": "4231aa27632381adbc7bd929061e72bd",
+      "endMarker": "074dd761-c6af-44a9-be5c-e0837c882bfd",
+      "sourceCharacters": 16203
+    },
+    {
+      "chapter": "C4",
+      "record": "M14",
+      "page": "4231aa27632381d8b12dd07d9d1c7487",
+      "endMarker": "4b3633f6-45d5-4b3b-9482-d6caa50189dc",
+      "sourceCharacters": 16809
+    },
+    {
+      "chapter": "C4",
+      "record": "M15",
+      "page": "4231aa2763238112b552d4b569b60cab",
+      "endMarker": "e8f27612-0f08-43ac-8ec0-094f103358a2",
+      "sourceCharacters": 15175
+    },
+    {
+      "chapter": "C4",
+      "record": "M16",
+      "page": "4231aa2763238124b037e9eb5f111253",
+      "endMarker": "99785298-83fe-401d-a4fc-0915261fb989",
+      "sourceCharacters": 17718
+    },
+    {
+      "chapter": "C4",
+      "record": "M17",
+      "page": "4231aa276323817e8455cb3953a72033",
+      "endMarker": "27d4d840-f3e3-48e0-a3c5-69ecd55da817",
+      "sourceCharacters": 18136
+    },
+    {
+      "chapter": "C4",
+      "record": "M18",
+      "page": "4231aa276323817f8737fc62576b5d59",
+      "endMarker": "e20daabc-cd19-54c9-a077-42c522013945",
+      "sourceCharacters": 1269
+    },
+    {
+      "chapter": "C4",
+      "record": "M19",
+      "page": "4231aa2763238139b50dee3f987d6250",
+      "endMarker": "8c121b2c-96b3-5371-8a8c-ac4c1beb0b03",
+      "sourceCharacters": 1163
+    },
+    {
+      "chapter": "C4",
+      "record": "M20",
+      "page": "4231aa276323810f8a6ae4fb849fa73f",
+      "endMarker": "5e7453b3-24c1-5fbe-9858-abf913fffea2",
+      "sourceCharacters": 1225
+    },
+    {
+      "chapter": "C4",
+      "record": "M21",
+      "page": "4231aa27632381fe8d50df7283844428",
+      "endMarker": "4342f9e1-2f21-5163-8689-15e858f18681",
+      "sourceCharacters": 1125
+    },
+    {
+      "chapter": "C5",
+      "record": "M01",
+      "page": "4231aa276323811a9248d44ff46b0520",
+      "endMarker": "4edef614-c12b-53a1-abb9-304decc3a4a5",
+      "sourceCharacters": 22218
+    },
+    {
+      "chapter": "C5",
+      "record": "M02",
+      "page": "4231aa276323818a887ddf30153ecd98",
+      "endMarker": "d2fcbf0f-9184-5f2e-8783-3082b300e26e",
+      "sourceCharacters": 32057
+    },
+    {
+      "chapter": "C5",
+      "record": "M03",
+      "page": "4231aa27632381a1835fc4c6e2286a23",
+      "endMarker": "c32f6543-7792-5d4d-a6d9-4b32bf3a0762",
+      "sourceCharacters": 34383
+    },
+    {
+      "chapter": "C5",
+      "record": "M04",
+      "page": "4231aa27632381f0b327efb6671da28e",
+      "endMarker": "ed7c5198-7708-5ac7-b245-27bbd883b3f6",
+      "sourceCharacters": 31817
+    },
+    {
+      "chapter": "C5",
+      "record": "M05",
+      "page": "4231aa276323818498dfc387cf6fffc0",
+      "endMarker": "bab2f29e-6a5b-480d-b487-8898666f1985",
+      "sourceCharacters": 1102,
+      "standalone": "unavailable; see M06"
+    },
+    {
+      "chapter": "C5",
+      "record": "M06",
+      "page": "4231aa27632381d09c3fcf061b0489a2",
+      "endMarker": "8e2501ed-04ae-5733-817f-5dd85770aa7b",
+      "sourceCharacters": 35122
+    },
+    {
+      "chapter": "C5",
+      "record": "M07",
+      "page": "4231aa2763238100a71dcb88b0f7dad8",
+      "endMarker": "4596bace-dedd-4dc4-9844-8994243f4bc0",
+      "sourceCharacters": 10944
+    },
+    {
+      "chapter": "C5",
+      "record": "M08",
+      "page": "4231aa27632381348badf93ff24a5184",
+      "endMarker": "6b6b260e-c591-4e1e-bebe-ad2eacc1399b",
+      "sourceCharacters": 13488
+    },
+    {
+      "chapter": "C5",
+      "record": "M09",
+      "page": "4231aa27632381cc999afc5763573eae",
+      "endMarker": "001a0bc7-2c5f-4a63-b2b2-676b25bc39e2",
+      "sourceCharacters": 16996
+    },
+    {
+      "chapter": "C5",
+      "record": "M10",
+      "page": "4231aa2763238176b98fc9d5ba1858a7",
+      "endMarker": "cf73ff68-0af0-4fc6-9812-1802e90db8f1",
+      "sourceCharacters": 18831
+    },
+    {
+      "chapter": "C5",
+      "record": "M11",
+      "page": "4231aa27632381428380d1be1f582b13",
+      "endMarker": "979c8e64-3f31-4392-a411-1d8a052b13c0",
+      "sourceCharacters": 17608
+    },
+    {
+      "chapter": "C5",
+      "record": "M12",
+      "page": "4231aa27632381b4b1f5d49ce262c8a2",
+      "endMarker": "6064a4b8-922c-4cd0-8808-2630f4008832",
+      "sourceCharacters": 10854
+    },
+    {
+      "chapter": "C5",
+      "record": "M13",
+      "page": "4231aa27632381ec8bb5de4569c947a3",
+      "endMarker": "dcfd5dfe-2773-42bf-a8a0-953d1c343111",
+      "sourceCharacters": 15448
+    },
+    {
+      "chapter": "C5",
+      "record": "M14",
+      "page": "4231aa276323818aafe0f7d110dabe17",
+      "endMarker": "90245c60-bb70-5c22-ab5e-d4b23ebf104e",
+      "sourceCharacters": 1164
+    },
+    {
+      "chapter": "C5",
+      "record": "M15",
+      "page": "4231aa27632381d3bb82cd22ac8703f8",
+      "endMarker": "e4eafc1c-9b6e-5dd1-b62e-a0ab2efa2479",
+      "sourceCharacters": 1227
+    },
+    {
+      "chapter": "C5",
+      "record": "M16",
+      "page": "4231aa27632381aa8b1bcd351a8824f3",
+      "endMarker": "60f9e96a-2c87-5f8a-9de0-60dc5546445b",
+      "sourceCharacters": 1172
+    },
+    {
+      "chapter": "C5",
+      "record": "M17",
+      "page": "4231aa27632381a6a48fed3815456e7a",
+      "endMarker": "4949c9fb-667b-5c2d-b383-1d8377047bda",
+      "sourceCharacters": 1153
+    }
+  ],
+  "sourceGaps": [
+    "C3 Pass 01 standalone final",
+    "C4 Pass 05 standalone final",
+    "C5 M05 standalone reply; M06 cumulative"
+  ]
+}

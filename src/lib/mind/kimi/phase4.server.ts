@@ -1,12 +1,14 @@
+import { buildRuntimeCapabilities } from "./runtime-capabilities.ts";
 import { machineRequired } from "./account-workspace.ts";
 import { requireUserId } from "../../auth/verify.server";
 import { assertSameOrigin } from "../connectors/oauth-csrf";
 import { haltIsOn } from "../halt.server";
-import { enqueueJob, onlineAgents, readJob } from "../pc-pairing/store";
+import { enqueueJob, onlineAgents, readJob } from "../pc-pairing/coordination.server.ts";
 import { KIMI_CAPABILITIES, capabilitySummary } from "./capabilities";
 import { archiveProject, listAudit, listProjects, listProviders, listSessions, saveProject, saveProvider, saveSessionMeta } from "./build-store";
 import { HOSTED_BUILD_MODEL, adrianHostedWorkspace, packageLabel, resolveBuildWorkspace, runCodingTurn } from "./hosted/acp-client.ts";
 import { recordKimiAttempt } from "./persist.ts";
+import { runGovernedHostedCoding } from "./hosted/resource-dispatch.server.ts";
 import { dispatchContext, reserveDispatchAttempt, runSettledDispatch } from "../dispatch-attempt.ts";
 import { resolveXaiInferenceApiKey } from "../media/xai-key.ts";
 
@@ -27,9 +29,9 @@ function fail(error: unknown) {
 
 export async function handleKimiCapabilities(request: Request): Promise<Response> {
   try {
-    await owner(request);
+    const ownerId = await owner(request);
     if (request.method !== "GET") return json({ ok: false, error: "Method not allowed." }, 405);
-    return json({ ok: true, capabilities: KIMI_CAPABILITIES, summary: capabilitySummary(), runtimeVerified: false });
+    return json({ ok: true, capabilities: KIMI_CAPABILITIES, summary: capabilitySummary(), runtimeVerified: false, runtimes: buildRuntimeCapabilities(ownerId, await onlineAgents(ownerId)) });
   } catch (error) { return fail(error); }
 }
 
@@ -46,7 +48,7 @@ export async function handleKimiProjects(request: Request): Promise<Response> {
       return json({ ok, error: ok ? undefined : "Project not found." }, ok ? 200 : 404);
     }
     if (body.action === "session") {
-      const job = readJob(body.jobId || "");
+      const job = await readJob(body.jobId || "");
       if (!job || job.ownerId !== ownerId) return json({ ok: false, error: "Session not found." }, 404);
       return json({ ok: true, session: saveSessionMeta({ ownerId, jobId: job.id, name: body.name, archived: body.archived }) });
     }

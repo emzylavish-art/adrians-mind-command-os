@@ -8,6 +8,21 @@ const agents = [
 ];
 
 describe("command intent", () => {
+  it("keeps Gmail questions and drafts in chat and names missing mailbox adapters truthfully", () => {
+    for (const text of ["Explain how Gmail works", "How do I check my Gmail?", "Draft an email to my colleague", "Write an email about the roadmap"]) {
+      assert.equal(interpretCommand(text, []).kind, "chat");
+    }
+    const saved = interpretCommand("Check my Gmail", [], "ask", { gmail: { authorizationSaved: true } });
+    assert.equal(saved.kind, "blocked");
+    if (saved.kind === "blocked") {
+      assert.match(saved.reply, /authorization is saved/);
+      assert.match(saved.reply, /not implemented/);
+      assert.doesNotMatch(saved.reply, /No Gmail account is connected/);
+    }
+    const unknown = interpretCommand("Send an email", []);
+    assert.equal(unknown.kind, "blocked");
+    if (unknown.kind === "blocked") assert.doesNotMatch(unknown.reply, /No Gmail account is connected/);
+  });
   it("leaves an ordinary question for the chat model", () => {
     assert.equal(interpretCommand("What is a pier?", agents).kind, "chat");
   });

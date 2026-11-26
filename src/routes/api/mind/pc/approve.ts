@@ -43,7 +43,10 @@ export const Route = createFileRoute("/api/mind/pc/approve")({
           }
           const result = await runOnPairedAgent({
             ownerId: userId,
+            agentId: consumed.record.agentId ?? undefined,
             command: consumed.record.command,
+            agentId: consumed.record.agentId,
+            cwd: consumed.record.cwd,
             confirm: true,
           });
           if (!result) {

@@ -27,7 +27,7 @@ export const ownerConnections = createServerFn({ method: "POST" })
     try {
       const { savedNotionWorkspaces } = await import("../connectors/notion-oauth");
       for (const space of await savedNotionWorkspaces(context.userId)) {
-        connections.push({ section: "connected", id: "notion/" + space.id, name: "Notion", detail: space.name, status: space.active ? "Selected workspace" : "Authorization saved" });
+        connections.push({ section: "connected", id: "notion/" + space.id, name: "Notion", detail: [space.name, space.attention].filter(Boolean).join(" · "), status: space.attention ? "Needs attention" : space.active ? "Selected workspace" : "Authorization saved" });
       }
     } catch { unavailable.push("Notion"); }
     try {

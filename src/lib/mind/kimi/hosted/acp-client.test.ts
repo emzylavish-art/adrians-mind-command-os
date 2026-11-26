@@ -1,9 +1,11 @@
 import assert from "node:assert/strict";
-import { chmodSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { chmodSync, mkdtempSync, rmSync, writeFileSync, readFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { createHash } from "node:crypto";
+import { ADRIAN_OS_BUILDER_OUTPUT, ADRIAN_OS_BUILDER_VERSION } from "../../adrian-os-skill.ts";
 import { describe, it } from "node:test";
-import { closeHostedCodingSession, probeKimiAcp, runCodingTurn } from "./acp-client.ts";
+import { closeHostedCodingSession, probeKimiAcp, runCodingTurn, runHostedPrompt } from "./acp-client.ts";
 
 describe("hosted Kimi ACP client", () => {
   it("keeps turn receipts separate, preserves long output, and refuses unacknowledged mode changes", async (t) => {
@@ -75,12 +77,14 @@ describe("hosted Kimi ACP client", () => {
     });
     writeFileSync(fake, `
       import { createInterface } from "node:readline";
+      import { writeFileSync } from "node:fs";
       const send = m => console.log(JSON.stringify({ jsonrpc: "2.0", ...m }));
       let turn;
       createInterface({ input: process.stdin }).on("line", line => {
         const m = JSON.parse(line);
         if (m.method === "session/prompt") {
           turn = m.id;
+          writeFileSync("captured-prompt.json", JSON.stringify(m.params.prompt));
           const options = ["allow_always","reject_always","reject_once","allow_once"]
             .filter(kind => !JSON.stringify(m.params.prompt).includes("permanent-only") || kind.endsWith("always"))
             .map(kind => ({kind, optionId: kind}));
@@ -99,6 +103,11 @@ describe("hosted Kimi ACP client", () => {
         const result = await runCodingTurn({ mode, prompt, cwd: dir });
         assert.equal(result.ok, true);
         assert.equal(result.output, expected);
+        const received = JSON.parse(readFileSync(join(dir, "captured-prompt.json"), "utf8"))[0].text as string;
+        assert.equal(received, `${ADRIAN_OS_BUILDER_OUTPUT}\n\nCurrent task:\n${prompt}`);
+        assert.deepEqual(result.instructionReceipt, { id: "adrian-os-builder", version: ADRIAN_OS_BUILDER_VERSION,
+          sha256: createHash("sha256").update(ADRIAN_OS_BUILDER_OUTPUT).digest("hex"),
+          characters: ADRIAN_OS_BUILDER_OUTPUT.length, delivery: "attached_to_acp_prompt" });
       } finally {
         closeHostedCodingSession("fixture");
       }
@@ -116,5 +125,34 @@ describe("hosted Kimi ACP client", () => {
     assert.equal(probe.status, "authentication_required");
     assert.equal(probe.runtimeVerified, false);
     assert.equal(probe.version, "0");
+    assert.equal(probe.instructionReceipt, undefined, "a handshake failure never claims instructions were sent");
+    rmSync(dir, { recursive: true, force: true });
   });
+  it("C1 AA034 attaches the same full skill to the one-shot hosted ACP path", async (t) => {
+    const dir = mkdtempSync(join(tmpdir(), "c1-acp-skill-"));
+    t.after(() => rmSync(dir, { recursive: true, force: true }));
+    const script = join(dir, "fake.mjs");
+    writeFileSync(script, `
+      import { createInterface } from "node:readline";
+      createInterface({ input: process.stdin }).on("line", line => {
+        const m = JSON.parse(line);
+        const result = m.method === "session/new" ? { sessionId: "fixture" }
+          : m.method === "session/prompt" ? { text: m.params.prompt[0].text }
+          : { protocolVersion: 1, agentInfo: { name: "fixture" } };
+        console.log(JSON.stringify({ jsonrpc: "2.0", id: m.id, result }));
+      });`);
+    const previousHome = process.env.KIMI_CODE_HOME;
+    const previousWorkspace = process.env.ADRIAN_BUILD_WORKSPACE;
+    process.env.KIMI_CODE_HOME = join(dir, "home");
+    process.env.ADRIAN_BUILD_WORKSPACE = dir;
+    t.after(() => {
+      if (previousHome === undefined) delete process.env.KIMI_CODE_HOME; else process.env.KIMI_CODE_HOME = previousHome;
+      if (previousWorkspace === undefined) delete process.env.ADRIAN_BUILD_WORKSPACE; else process.env.ADRIAN_BUILD_WORKSPACE = previousWorkspace;
+    });
+    const result = await runHostedPrompt("fixture task", script, dir);
+    assert.equal(result.status, "session_created");
+    assert.equal(result.output, `${ADRIAN_OS_BUILDER_OUTPUT}\n\nCurrent task:\nfixture task`);
+    assert.equal(result.instructionReceipt?.sha256, createHash("sha256").update(ADRIAN_OS_BUILDER_OUTPUT).digest("hex"));
+  });
+
 });

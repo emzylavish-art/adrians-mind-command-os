@@ -1,0 +1,1153 @@
+{
+  "audit": "C2 — Notion Recovery Audit",
+  "chapterId": "4231aa276323810e913fdd2b090f4e8b",
+  "recoveredRecordCount": 32,
+  "sourceRecords": [
+    {
+      "record": "C2/M01",
+      "title": "C2 · M01 · Pass 1 — Can Notion recover correctly when a connected workspace cannot complete an action?",
+      "url": "https://app.notion.com/p/4231aa2763238131b9fecd6819d766f3",
+      "id": "4231aa2763238131b9fecd6819d766f3"
+    },
+    {
+      "record": "C2/M02",
+      "title": "C2 · M02 · Pass 2 — Can the Dashboard recover without losing your place?",
+      "url": "https://app.notion.com/p/4231aa27632381e9a37cd6e9d60ad24f",
+      "id": "4231aa27632381e9a37cd6e9d60ad24f"
+    },
+    {
+      "record": "C2/M03",
+      "title": "C2 · M03 · Pass 3 — Do Skills settings govern ordinary chat and recovery?",
+      "url": "https://app.notion.com/p/4231aa2763238146965fef923f587572",
+      "id": "4231aa2763238146965fef923f587572"
+    },
+    {
+      "record": "C2/M04",
+      "title": "C2 · M04 · Pass 4 — Dashboard resilience when 3D graphics are unavailable",
+      "url": "https://app.notion.com/p/4231aa27632381869472f5c5b0708cbe",
+      "id": "4231aa27632381869472f5c5b0708cbe"
+    },
+    {
+      "record": "C2/M05",
+      "title": "C2 · M05 · Pass 5 — Library, document identity and chat continuity",
+      "url": "https://app.notion.com/p/4231aa27632381e1a710e1b586ce189b",
+      "id": "4231aa27632381e1a710e1b586ce189b"
+    },
+    {
+      "record": "C2/M06",
+      "title": "C2 · M06 · Pass 6 — Speak, provider independence and voice intelligence",
+      "url": "https://app.notion.com/p/4231aa27632381c3ae36d674243b513b",
+      "id": "4231aa27632381c3ae36d674243b513b"
+    },
+    {
+      "record": "C2/M07",
+      "title": "C2 · M07 · Pass 7 — Plugins, Integrations and capability discovery",
+      "url": "https://app.notion.com/p/4231aa27632381ed8e50f1f436509cb4",
+      "id": "4231aa27632381ed8e50f1f436509cb4"
+    },
+    {
+      "record": "C2/M08",
+      "title": "C2 · M08 · Pass 8 — Project isolation, bot knowledge and configuration continuity",
+      "url": "https://app.notion.com/p/4231aa27632381868c8dd844634f74af",
+      "id": "4231aa27632381868c8dd844634f74af"
+    },
+    {
+      "record": "C2/M09",
+      "title": "C2 · M09 · Pass 9 — Automation, scheduled execution and unattended reliability",
+      "url": "https://app.notion.com/p/4231aa2763238124adcaf9962f76543e",
+      "id": "4231aa2763238124adcaf9962f76543e"
+    },
+    {
+      "record": "C2/M10",
+      "title": "C2 · M10 · Pass 10 — Notifications, approvals and operational awareness",
+      "url": "https://app.notion.com/p/4231aa27632381a5acb6ff69867ba20d",
+      "id": "4231aa27632381a5acb6ff69867ba20d"
+    },
+    {
+      "record": "C2/M11",
+      "title": "C2 · M11 · Pass 11 — Agent planning, execution intelligence and task integrity",
+      "url": "https://app.notion.com/p/4231aa27632381928b57cf722df45cf1",
+      "id": "4231aa27632381928b57cf722df45cf1"
+    },
+    {
+      "record": "C2/M12",
+      "title": "C2 · M12 · Pass 12 — Research intelligence and evidence integrity",
+      "url": "https://app.notion.com/p/4231aa2763238141b69cc3ae204385f6",
+      "id": "4231aa2763238141b69cc3ae204385f6"
+    },
+    {
+      "record": "C2/M13",
+      "title": "C2 · M13 · Pass 13 — Multi-model orchestration and independent intelligence",
+      "url": "https://app.notion.com/p/4231aa27632381dc975ddd5cad6dc5fb",
+      "id": "4231aa27632381dc975ddd5cad6dc5fb"
+    },
+    {
+      "record": "C2/M14",
+      "title": "C2 · M14 · Pass 14 — Workspace synchronization and multi-device continuity",
+      "url": "https://app.notion.com/p/4231aa27632381efa506f0c42f528c7a",
+      "id": "4231aa27632381efa506f0c42f528c7a"
+    },
+    {
+      "record": "C2/M15",
+      "title": "C2 · M15 · Pass 15 — Security, execution authority and approval integrity",
+      "url": "https://app.notion.com/p/4231aa27632381fe99b9ea856e78aaea",
+      "id": "4231aa27632381fe99b9ea856e78aaea"
+    },
+    {
+      "record": "C2/M16",
+      "title": "C2 · M16 · Pass 16 — Performance, storage efficiency and responsiveness",
+      "url": "https://app.notion.com/p/4231aa2763238127aa0fea0a7f655a4b",
+      "id": "4231aa2763238127aa0fea0a7f655a4b"
+    },
+    {
+      "record": "C2/M17",
+      "title": "C2 · M17 · Pass 17 — Interface design, accessibility and interaction consistency",
+      "url": "https://app.notion.com/p/4231aa27632381879471efc07ba09e07",
+      "id": "4231aa27632381879471efc07ba09e07"
+    },
+    {
+      "record": "C2/M18",
+      "title": "C2 · M18 · Pass 18 — Conversation intelligence and context management",
+      "url": "https://app.notion.com/p/4231aa2763238101989ad978b9516b1a",
+      "id": "4231aa2763238101989ad978b9516b1a"
+    },
+    {
+      "record": "C2/M19",
+      "title": "C2 · M19 · Pass 19 — Desktop and mobile application readiness",
+      "url": "https://app.notion.com/p/4231aa2763238193821de8ba67f70a94",
+      "id": "4231aa2763238193821de8ba67f70a94"
+    },
+    {
+      "record": "C2/M20",
+      "title": "C2 · M20 · Pass 20 — System observability and self-diagnostics",
+      "url": "https://app.notion.com/p/4231aa27632381b185a9d583f742cb20",
+      "id": "4231aa27632381b185a9d583f742cb20"
+    },
+    {
+      "record": "C2/M21",
+      "title": "C2 · M21 · Pass 21 — Testing architecture and regression prevention",
+      "url": "https://app.notion.com/p/4231aa27632381d0b0bcee3b73483f38",
+      "id": "4231aa27632381d0b0bcee3b73483f38"
+    },
+    {
+      "record": "C2/M22",
+      "title": "C2 · M22 · Pass 22 — Build intelligence and autonomous development",
+      "url": "https://app.notion.com/p/4231aa27632381748c41da5e9f01a245",
+      "id": "4231aa27632381748c41da5e9f01a245"
+    },
+    {
+      "record": "C2/M23",
+      "title": "C2 · M23 · Pass 23 — Cost intelligence and resource governance",
+      "url": "https://app.notion.com/p/4231aa2763238151b68bff99553e91eb",
+      "id": "4231aa2763238151b68bff99553e91eb"
+    },
+    {
+      "record": "C2/M24",
+      "title": "C2 · M24 · Pass 24 — Knowledge intelligence and information reliability",
+      "url": "https://app.notion.com/p/4231aa27632381319a47ffec4f099e26",
+      "id": "4231aa27632381319a47ffec4f099e26"
+    },
+    {
+      "record": "C2/M25",
+      "title": "C2 · M25 · Pass 25 — Browser and computer-use intelligence",
+      "url": "https://app.notion.com/p/4231aa2763238185a292c53f8c573d92",
+      "id": "4231aa2763238185a292c53f8c573d92"
+    },
+    {
+      "record": "C2/M26",
+      "title": "C2 · M26 · Pass 26 — External integration resilience",
+      "url": "https://app.notion.com/p/4231aa27632381f9bb1eece695bf3ad8",
+      "id": "4231aa27632381f9bb1eece695bf3ad8"
+    },
+    {
+      "record": "C2/M27",
+      "title": "C2 · M27 · Pass 27 — Intelligence routing and capability matching",
+      "url": "https://app.notion.com/p/4231aa27632381128690f52119225578",
+      "id": "4231aa27632381128690f52119225578"
+    },
+    {
+      "record": "C2/M28",
+      "title": "C2 · M28 · Pass 28 — Multimedia intelligence and attachment integrity",
+      "url": "https://app.notion.com/p/4231aa276323816990f8dbd5049b59b6",
+      "id": "4231aa276323816990f8dbd5049b59b6"
+    },
+    {
+      "record": "C2/M29",
+      "title": "C2 · M29 · Pass 29 — Search and navigation intelligence",
+      "url": "https://app.notion.com/p/4231aa27632381168d07ce7ef138e982",
+      "id": "4231aa27632381168d07ce7ef138e982"
+    },
+    {
+      "record": "C2/M30",
+      "title": "C2 · M30 · Pass 30 — Personalization and behavioral intelligence",
+      "url": "https://app.notion.com/p/4231aa2763238145b0c2d166ca446d68",
+      "id": "4231aa2763238145b0c2d166ca446d68"
+    },
+    {
+      "record": "C2/M31",
+      "title": "C2 · M31 · Pass 31 — Data durability and disaster recovery",
+      "url": "https://app.notion.com/p/4231aa276323816aa837f15db16766a8",
+      "id": "4231aa276323816aa837f15db16766a8"
+    },
+    {
+      "record": "C2/M32",
+      "title": "C2 · M32 · Additional audit note",
+      "url": "https://app.notion.com/p/4231aa276323811d8a98ed544cc94690",
+      "id": "4231aa276323811d8a98ed544cc94690"
+    }
+  ],
+  "findingInventory": [
+    {
+      "id": "AA-001",
+      "auditId": "C2/AA-001",
+      "title": "Permission denial is flattened into generic Retry, with no action-specific repair state",
+      "record": "C2/M01",
+      "source": "https://app.notion.com/p/4231aa2763238131b9fecd6819d766f3"
+    },
+    {
+      "id": "AA-002",
+      "auditId": "C2/AA-002",
+      "title": "A successful append to a long page can become a duplicate through recovery",
+      "record": "C2/M01",
+      "source": "https://app.notion.com/p/4231aa2763238131b9fecd6819d766f3"
+    },
+    {
+      "id": "AA-003",
+      "auditId": "C2/AA-003",
+      "title": "Graphics recovery does not wake a parked reduced-motion Universe",
+      "record": "C2/M02",
+      "source": "https://app.notion.com/p/4231aa27632381e9a37cd6e9d60ad24f"
+    },
+    {
+      "id": "AA-004",
+      "auditId": "C2/AA-004",
+      "title": "Changing motion preference resets the current Universe location",
+      "record": "C2/M02",
+      "source": "https://app.notion.com/p/4231aa27632381e9a37cd6e9d60ad24f"
+    },
+    {
+      "id": "AA-005",
+      "auditId": "C2/AA-005",
+      "title": "Skills Off is bypassed by ordinary chat commands",
+      "record": "C2/M03",
+      "source": "https://app.notion.com/p/4231aa2763238146965fef923f587572"
+    },
+    {
+      "id": "AA-006",
+      "auditId": "C2/AA-006",
+      "title": "Ordinary note search uses the instruction as its query",
+      "record": "C2/M03",
+      "source": "https://app.notion.com/p/4231aa2763238146965fef923f587572"
+    },
+    {
+      "id": "AA-007",
+      "auditId": "C2/AA-007",
+      "title": "Retry retains the old Off setting after the skill is enabled",
+      "record": "C2/M03",
+      "source": "https://app.notion.com/p/4231aa2763238146965fef923f587572"
+    },
+    {
+      "id": "AA-008",
+      "auditId": "C2/AA-008",
+      "title": "Historical timeline and fallback display different health states",
+      "record": "C2/M04",
+      "source": "https://app.notion.com/p/4231aa27632381869472f5c5b0708cbe"
+    },
+    {
+      "id": "AA-009",
+      "auditId": "C2/AA-009",
+      "title": "Dashboard continues offering unusable graphics controls",
+      "record": "C2/M04",
+      "source": "https://app.notion.com/p/4231aa27632381869472f5c5b0708cbe"
+    },
+    {
+      "id": "AA-010",
+      "auditId": "C2/AA-010",
+      "title": "Mobile Dashboard navigation can target panels that do not exist",
+      "record": "C2/M04",
+      "source": "https://app.notion.com/p/4231aa27632381869472f5c5b0708cbe"
+    },
+    {
+      "id": "AA-011",
+      "auditId": "C2/AA-011",
+      "title": "Deleting a Library document does not remove its embedded conversation copy",
+      "record": "C2/M05",
+      "source": "https://app.notion.com/p/4231aa27632381e1a710e1b586ce189b"
+    },
+    {
+      "id": "AA-012",
+      "auditId": "C2/AA-012",
+      "title": "Importing an older archive can restore a deliberately deleted Library document",
+      "record": "C2/M05",
+      "source": "https://app.notion.com/p/4231aa27632381e1a710e1b586ce189b"
+    },
+    {
+      "id": "AA-013",
+      "auditId": "C2/AA-013",
+      "title": "Repeated attachments can consume Library capacity without creating distinct useful documents",
+      "record": "C2/M05",
+      "source": "https://app.notion.com/p/4231aa27632381e1a710e1b586ce189b"
+    },
+    {
+      "id": "AA-014",
+      "auditId": "C2/AA-014",
+      "title": "Live Speak cannot independently select its answer provider",
+      "record": "C2/M06",
+      "source": "https://app.notion.com/p/4231aa27632381c3ae36d674243b513b"
+    },
+    {
+      "id": "AA-015",
+      "auditId": "C2/AA-015",
+      "title": "Free-only mode blocks the separate voice pipeline before local transcription can be attempted",
+      "record": "C2/M06",
+      "source": "https://app.notion.com/p/4231aa27632381c3ae36d674243b513b"
+    },
+    {
+      "id": "AA-016",
+      "auditId": "C2/AA-016",
+      "title": "An unfinished typed Speak request can outlive its original call",
+      "record": "C2/M06",
+      "source": "https://app.notion.com/p/4231aa27632381c3ae36d674243b513b"
+    },
+    {
+      "id": "AA-017",
+      "auditId": "C2/AA-017",
+      "title": "Speak's provider label does not distinguish live conversation from typed-answer playback",
+      "record": "C2/M06",
+      "source": "https://app.notion.com/p/4231aa27632381c3ae36d674243b513b"
+    },
+    {
+      "id": "AA-018",
+      "auditId": "C2/AA-018",
+      "title": "Granted permission information is stored but discarded before reaching Plugins",
+      "record": "C2/M07",
+      "source": "https://app.notion.com/p/4231aa27632381ed8e50f1f436509cb4"
+    },
+    {
+      "id": "AA-019",
+      "auditId": "C2/AA-019",
+      "title": "Gmail authorization and ordinary chat execution can contradict each other",
+      "record": "C2/M07",
+      "source": "https://app.notion.com/p/4231aa27632381ed8e50f1f436509cb4"
+    },
+    {
+      "id": "AA-020",
+      "auditId": "C2/AA-020",
+      "title": "Connection status does not establish current operational access",
+      "record": "C2/M07",
+      "source": "https://app.notion.com/p/4231aa27632381ed8e50f1f436509cb4"
+    },
+    {
+      "id": "AA-021",
+      "auditId": "C2/AA-021",
+      "title": "Existing bot conversations retain their original configuration",
+      "record": "C2/M08",
+      "source": "https://app.notion.com/p/4231aa27632381868c8dd844634f74af"
+    },
+    {
+      "id": "AA-022",
+      "auditId": "C2/AA-022",
+      "title": "Deleting a project can leave bots assigned to a nonexistent project",
+      "record": "C2/M08",
+      "source": "https://app.notion.com/p/4231aa27632381868c8dd844634f74af"
+    },
+    {
+      "id": "AA-023",
+      "auditId": "C2/AA-023",
+      "title": "Deleted-project notes can remain eligible for retrieval through an orphaned bot project identity",
+      "record": "C2/M08",
+      "source": "https://app.notion.com/p/4231aa27632381868c8dd844634f74af"
+    },
+    {
+      "id": "AA-024",
+      "auditId": "C2/AA-024",
+      "title": "Bot knowledge produces a misleading Memory Off message",
+      "record": "C2/M08",
+      "source": "https://app.notion.com/p/4231aa27632381868c8dd844634f74af"
+    },
+    {
+      "id": "AA-025",
+      "auditId": "C2/AA-025",
+      "title": "Browser scheduling is not equivalent to persistent automation",
+      "record": "C2/M09",
+      "source": "https://app.notion.com/p/4231aa2763238124adcaf9962f76543e"
+    },
+    {
+      "id": "AA-026",
+      "auditId": "C2/AA-026",
+      "title": "Missed scheduled occurrences are collapsed without an explicit recovery policy",
+      "record": "C2/M09",
+      "source": "https://app.notion.com/p/4231aa2763238124adcaf9962f76543e"
+    },
+    {
+      "id": "AA-027",
+      "auditId": "C2/AA-027",
+      "title": "Overlapping scheduled runs can lose their individual schedule-level outcome tracking",
+      "record": "C2/M09",
+      "source": "https://app.notion.com/p/4231aa2763238124adcaf9962f76543e"
+    },
+    {
+      "id": "AA-028",
+      "auditId": "C2/AA-028",
+      "title": "Scheduled conversation execution does not inherently continue the conversation",
+      "record": "C2/M09",
+      "source": "https://app.notion.com/p/4231aa2763238124adcaf9962f76543e"
+    },
+    {
+      "id": "AA-029",
+      "auditId": "C2/AA-029",
+      "title": "Multiple unresolved failures compete for one actionable notification",
+      "record": "C2/M10",
+      "source": "https://app.notion.com/p/4231aa27632381a5acb6ff69867ba20d"
+    },
+    {
+      "id": "AA-030",
+      "auditId": "C2/AA-030",
+      "title": "Starting an unrelated chat request clears the existing failure banner",
+      "record": "C2/M10",
+      "source": "https://app.notion.com/p/4231aa27632381a5acb6ff69867ba20d"
+    },
+    {
+      "id": "AA-031",
+      "auditId": "C2/AA-031",
+      "title": "Recovery actions are represented as in-memory callbacks rather than durable operation descriptors",
+      "record": "C2/M10",
+      "source": "https://app.notion.com/p/4231aa27632381a5acb6ff69867ba20d"
+    },
+    {
+      "id": "AA-032",
+      "auditId": "C2/AA-032",
+      "title": "Agent approval awareness can be masked by unrelated avatar activity",
+      "record": "C2/M10",
+      "source": "https://app.notion.com/p/4231aa27632381a5acb6ff69867ba20d"
+    },
+    {
+      "id": "AA-033",
+      "auditId": "C2/AA-033",
+      "title": "Saved execution plans are not authoritative during fleet execution",
+      "record": "C2/M11",
+      "source": "https://app.notion.com/p/4231aa27632381928b57cf722df45cf1"
+    },
+    {
+      "id": "AA-034",
+      "auditId": "C2/AA-034",
+      "title": "Fleet planning is a tool-list expansion rather than objective-driven intelligence",
+      "record": "C2/M11",
+      "source": "https://app.notion.com/p/4231aa27632381928b57cf722df45cf1"
+    },
+    {
+      "id": "AA-035",
+      "auditId": "C2/AA-035",
+      "title": "Declared dependencies do not transfer results between execution steps",
+      "record": "C2/M11",
+      "source": "https://app.notion.com/p/4231aa27632381928b57cf722df45cf1"
+    },
+    {
+      "id": "AA-036",
+      "auditId": "C2/AA-036",
+      "title": "Exhausting the step budget can mark an incomplete plan as completed",
+      "record": "C2/M11",
+      "source": "https://app.notion.com/p/4231aa27632381928b57cf722df45cf1"
+    },
+    {
+      "id": "AA-037",
+      "auditId": "C2/AA-037",
+      "title": "Agent execution can process project notes without checking archived status in its scope filter",
+      "record": "C2/M11",
+      "source": "https://app.notion.com/p/4231aa27632381928b57cf722df45cf1"
+    },
+    {
+      "id": "AA-038",
+      "auditId": "C2/AA-038",
+      "title": "Search-result discovery is not equivalent to verified research",
+      "record": "C2/M12",
+      "source": "https://app.notion.com/p/4231aa2763238141b69cc3ae204385f6"
+    },
+    {
+      "id": "AA-039",
+      "auditId": "C2/AA-039",
+      "title": "Deep research behaves differently depending on the configured search provider",
+      "record": "C2/M12",
+      "source": "https://app.notion.com/p/4231aa2763238141b69cc3ae204385f6"
+    },
+    {
+      "id": "AA-040",
+      "auditId": "C2/AA-040",
+      "title": "Research retries do not retain the original provider identity",
+      "record": "C2/M12",
+      "source": "https://app.notion.com/p/4231aa2763238141b69cc3ae204385f6"
+    },
+    {
+      "id": "AA-041",
+      "auditId": "C2/AA-041",
+      "title": "Research recovery replaces the original summary with a search-success counter",
+      "record": "C2/M12",
+      "source": "https://app.notion.com/p/4231aa2763238141b69cc3ae204385f6"
+    },
+    {
+      "id": "AA-042",
+      "auditId": "C2/AA-042",
+      "title": "Citation limits can conceal the actual coverage of successful research queries",
+      "record": "C2/M12",
+      "source": "https://app.notion.com/p/4231aa2763238141b69cc3ae204385f6"
+    },
+    {
+      "id": "AA-043",
+      "auditId": "C2/AA-043",
+      "title": "The xAI search adapter discards the relationship between citations and the generated answer",
+      "record": "C2/M12",
+      "source": "https://app.notion.com/p/4231aa2763238141b69cc3ae204385f6"
+    },
+    {
+      "id": "AA-044",
+      "auditId": "C2/AA-044",
+      "title": "Connected helper models are automatically selected without task-specific specialization",
+      "record": "C2/M13",
+      "source": "https://app.notion.com/p/4231aa27632381dc975ddd5cad6dc5fb"
+    },
+    {
+      "id": "AA-045",
+      "auditId": "C2/AA-045",
+      "title": "The orchestration identity instruction suppresses model attribution",
+      "record": "C2/M13",
+      "source": "https://app.notion.com/p/4231aa27632381dc975ddd5cad6dc5fb"
+    },
+    {
+      "id": "AA-046",
+      "auditId": "C2/AA-046",
+      "title": "Helper collection is sequential rather than independently concurrent",
+      "record": "C2/M13",
+      "source": "https://app.notion.com/p/4231aa27632381dc975ddd5cad6dc5fb"
+    },
+    {
+      "id": "AA-047",
+      "auditId": "C2/AA-047",
+      "title": "Helper response processing loses detailed failure and completeness information",
+      "record": "C2/M13",
+      "source": "https://app.notion.com/p/4231aa27632381dc975ddd5cad6dc5fb"
+    },
+    {
+      "id": "AA-048",
+      "auditId": "C2/AA-048",
+      "title": "The synthesis instruction does not explicitly require disagreement analysis",
+      "record": "C2/M13",
+      "source": "https://app.notion.com/p/4231aa27632381dc975ddd5cad6dc5fb"
+    },
+    {
+      "id": "AA-049",
+      "auditId": "C2/AA-049",
+      "title": "Model aliases are not necessarily independent intelligence sources",
+      "record": "C2/M13",
+      "source": "https://app.notion.com/p/4231aa27632381dc975ddd5cad6dc5fb"
+    },
+    {
+      "id": "AA-050",
+      "auditId": "C2/AA-050",
+      "title": "Older archives can overwrite newer bot configurations",
+      "record": "C2/M14",
+      "source": "https://app.notion.com/p/4231aa27632381efa506f0c42f528c7a"
+    },
+    {
+      "id": "AA-051",
+      "auditId": "C2/AA-051",
+      "title": "An older archive can restore a previously disabled schedule to an enabled state",
+      "record": "C2/M14",
+      "source": "https://app.notion.com/p/4231aa27632381efa506f0c42f528c7a"
+    },
+    {
+      "id": "AA-052",
+      "auditId": "C2/AA-052",
+      "title": "Older run records can overwrite newer terminal execution states",
+      "record": "C2/M14",
+      "source": "https://app.notion.com/p/4231aa27632381efa506f0c42f528c7a"
+    },
+    {
+      "id": "AA-053",
+      "auditId": "C2/AA-053",
+      "title": "Conversation merging preserves messages but can discard newer conversation metadata",
+      "record": "C2/M14",
+      "source": "https://app.notion.com/p/4231aa27632381efa506f0c42f528c7a"
+    },
+    {
+      "id": "AA-054",
+      "auditId": "C2/AA-054",
+      "title": "Concurrent memory edits can lose one branch of the revision history",
+      "record": "C2/M14",
+      "source": "https://app.notion.com/p/4231aa27632381efa506f0c42f528c7a"
+    },
+    {
+      "id": "AA-055",
+      "auditId": "C2/AA-055",
+      "title": "Archive integrity verification does not establish archive authenticity",
+      "record": "C2/M14",
+      "source": "https://app.notion.com/p/4231aa27632381efa506f0c42f528c7a"
+    },
+    {
+      "id": "AA-056",
+      "auditId": "C2/AA-056",
+      "title": "The shared action classifier treats unknown operation types as ordinary",
+      "record": "C2/M15",
+      "source": "https://app.notion.com/p/4231aa27632381fe99b9ea856e78aaea"
+    },
+    {
+      "id": "AA-057",
+      "auditId": "C2/AA-057",
+      "title": "Fleet approvals lack a complete operation-specific authorization record",
+      "record": "C2/M15",
+      "source": "https://app.notion.com/p/4231aa27632381fe99b9ea856e78aaea"
+    },
+    {
+      "id": "AA-058",
+      "auditId": "C2/AA-058",
+      "title": "The fleet approval mutation does not independently validate emergency stop or run eligibility",
+      "record": "C2/M15",
+      "source": "https://app.notion.com/p/4231aa27632381fe99b9ea856e78aaea"
+    },
+    {
+      "id": "AA-059",
+      "auditId": "C2/AA-059",
+      "title": "Emergency stop needs an explicit distinction between stopping new work and stopping work already dispatched",
+      "record": "C2/M15",
+      "source": "https://app.notion.com/p/4231aa27632381fe99b9ea856e78aaea"
+    },
+    {
+      "id": "AA-060",
+      "auditId": "C2/AA-060",
+      "title": "Complete workspace serialization runs even when storage statistics are not visible",
+      "record": "C2/M16",
+      "source": "https://app.notion.com/p/4231aa2763238127aa0fea0a7f655a4b"
+    },
+    {
+      "id": "AA-061",
+      "auditId": "C2/AA-061",
+      "title": "Tool execution timers update the main application four times per second",
+      "record": "C2/M16",
+      "source": "https://app.notion.com/p/4231aa2763238127aa0fea0a7f655a4b"
+    },
+    {
+      "id": "AA-062",
+      "auditId": "C2/AA-062",
+      "title": "Fleet polling can perform unnecessary work while no execution progress is possible",
+      "record": "C2/M16",
+      "source": "https://app.notion.com/p/4231aa2763238127aa0fea0a7f655a4b"
+    },
+    {
+      "id": "AA-063",
+      "auditId": "C2/AA-063",
+      "title": "Recording timers check elapsed time more frequently than the displayed precision requires",
+      "record": "C2/M16",
+      "source": "https://app.notion.com/p/4231aa2763238127aa0fea0a7f655a4b"
+    },
+    {
+      "id": "AA-064",
+      "auditId": "C2/AA-064",
+      "title": "Shared dialogs have contradictory accessibility semantics",
+      "record": "C2/M17",
+      "source": "https://app.notion.com/p/4231aa27632381879471efc07ba09e07"
+    },
+    {
+      "id": "AA-065",
+      "auditId": "C2/AA-065",
+      "title": "Shared dialogs lack centralized focus-entry and focus-restoration behavior",
+      "record": "C2/M17",
+      "source": "https://app.notion.com/p/4231aa27632381879471efc07ba09e07"
+    },
+    {
+      "id": "AA-066",
+      "auditId": "C2/AA-066",
+      "title": "Command-palette pinning depends on a hidden long-press gesture",
+      "record": "C2/M17",
+      "source": "https://app.notion.com/p/4231aa27632381879471efc07ba09e07"
+    },
+    {
+      "id": "AA-067",
+      "auditId": "C2/AA-067",
+      "title": "Command-palette shortcut guidance is not adapted to the operating system",
+      "record": "C2/M17",
+      "source": "https://app.notion.com/p/4231aa27632381879471efc07ba09e07"
+    },
+    {
+      "id": "AA-068",
+      "auditId": "C2/AA-068",
+      "title": "The mobile navigation drawer applies a separate hardcoded visual theme",
+      "record": "C2/M17",
+      "source": "https://app.notion.com/p/4231aa27632381879471efc07ba09e07"
+    },
+    {
+      "id": "AA-069",
+      "auditId": "C2/AA-069",
+      "title": "Long conversations have a fixed recent-message context boundary",
+      "record": "C2/M18",
+      "source": "https://app.notion.com/p/4231aa2763238101989ad978b9516b1a"
+    },
+    {
+      "id": "AA-070",
+      "auditId": "C2/AA-070",
+      "title": "Saved preferences can consume the entire relevant-memory allowance",
+      "record": "C2/M18",
+      "source": "https://app.notion.com/p/4231aa2763238101989ad978b9516b1a"
+    },
+    {
+      "id": "AA-071",
+      "auditId": "C2/AA-071",
+      "title": "Memory retrieval relies on literal vocabulary overlap",
+      "record": "C2/M18",
+      "source": "https://app.notion.com/p/4231aa2763238101989ad978b9516b1a"
+    },
+    {
+      "id": "AA-072",
+      "auditId": "C2/AA-072",
+      "title": "Quoting a conversation into a new task carries only its first nonempty user message",
+      "record": "C2/M18",
+      "source": "https://app.notion.com/p/4231aa2763238101989ad978b9516b1a"
+    },
+    {
+      "id": "AA-073",
+      "auditId": "C2/AA-073",
+      "title": "New quoted tasks do not copy all custom conversation instructions",
+      "record": "C2/M18",
+      "source": "https://app.notion.com/p/4231aa2763238101989ad978b9516b1a"
+    },
+    {
+      "id": "AA-074",
+      "auditId": "C2/AA-074",
+      "title": "Editing an earlier user message removes subsequent conversation history from the active record",
+      "record": "C2/M18",
+      "source": "https://app.notion.com/p/4231aa2763238101989ad978b9516b1a"
+    },
+    {
+      "id": "AA-075",
+      "auditId": "C2/AA-075",
+      "title": "Standalone conversation exports omit important context configuration",
+      "record": "C2/M18",
+      "source": "https://app.notion.com/p/4231aa2763238101989ad978b9516b1a"
+    },
+    {
+      "id": "AA-076",
+      "auditId": "C2/AA-076",
+      "title": "Website and installed application release verification must remain separate",
+      "record": "C2/M19",
+      "source": "https://app.notion.com/p/4231aa2763238193821de8ba67f70a94"
+    },
+    {
+      "id": "AA-077",
+      "auditId": "C2/AA-077",
+      "title": "Execution receipts depend on temporary server-process memory",
+      "record": "C2/M20",
+      "source": "https://app.notion.com/p/4231aa27632381b185a9d583f742cb20"
+    },
+    {
+      "id": "AA-078",
+      "auditId": "C2/AA-078",
+      "title": "Execution receipts are consumed before durable recording succeeds",
+      "record": "C2/M20",
+      "source": "https://app.notion.com/p/4231aa27632381b185a9d583f742cb20"
+    },
+    {
+      "id": "AA-079",
+      "auditId": "C2/AA-079",
+      "title": "Configuration readiness is not equivalent to verified service health",
+      "record": "C2/M20",
+      "source": "https://app.notion.com/p/4231aa27632381b185a9d583f742cb20"
+    },
+    {
+      "id": "AA-080",
+      "auditId": "C2/AA-080",
+      "title": "Unknown emergency-stop storage state is collapsed into a boolean diagnostic result",
+      "record": "C2/M20",
+      "source": "https://app.notion.com/p/4231aa27632381b185a9d583f742cb20"
+    },
+    {
+      "id": "AA-081",
+      "auditId": "C2/AA-081",
+      "title": "Execution evidence records lack detailed correlation metadata",
+      "record": "C2/M20",
+      "source": "https://app.notion.com/p/4231aa27632381b185a9d583f742cb20"
+    },
+    {
+      "id": "AA-082",
+      "auditId": "C2/AA-082",
+      "title": "Explicit test-file enumeration creates a coverage maintenance risk",
+      "record": "C2/M21",
+      "source": "https://app.notion.com/p/4231aa27632381d0b0bcee3b73483f38"
+    },
+    {
+      "id": "AA-083",
+      "auditId": "C2/AA-083",
+      "title": "Execution-ledger tests do not cover failed durable recording",
+      "record": "C2/M21",
+      "source": "https://app.notion.com/p/4231aa27632381d0b0bcee3b73483f38"
+    },
+    {
+      "id": "AA-084",
+      "auditId": "C2/AA-084",
+      "title": "Multi-model tests validate helper selection but not synthesis quality",
+      "record": "C2/M21",
+      "source": "https://app.notion.com/p/4231aa27632381d0b0bcee3b73483f38"
+    },
+    {
+      "id": "AA-085",
+      "auditId": "C2/AA-085",
+      "title": "Release evidence needs a clear distinction between test levels",
+      "record": "C2/M21",
+      "source": "https://app.notion.com/p/4231aa27632381d0b0bcee3b73483f38"
+    },
+    {
+      "id": "AA-086",
+      "auditId": "C2/AA-086",
+      "title": "Resume commands can report success without changing execution state",
+      "record": "C2/M22",
+      "source": "https://app.notion.com/p/4231aa27632381748c41da5e9f01a245"
+    },
+    {
+      "id": "AA-087",
+      "auditId": "C2/AA-087",
+      "title": "Workbench approval validation is not bound to the pending action",
+      "record": "C2/M22",
+      "source": "https://app.notion.com/p/4231aa27632381748c41da5e9f01a245"
+    },
+    {
+      "id": "AA-088",
+      "auditId": "C2/AA-088",
+      "title": "Manual worker-step receipts do not describe actual execution progress",
+      "record": "C2/M22",
+      "source": "https://app.notion.com/p/4231aa27632381748c41da5e9f01a245"
+    },
+    {
+      "id": "AA-089",
+      "auditId": "C2/AA-089",
+      "title": "Workbench regression tests cover basic lifecycle behavior but omit command-result fidelity",
+      "record": "C2/M22",
+      "source": "https://app.notion.com/p/4231aa27632381748c41da5e9f01a245"
+    },
+    {
+      "id": "AA-090",
+      "auditId": "C2/AA-090",
+      "title": "Request-rate limits do not independently limit the number of provider calls",
+      "record": "C2/M23",
+      "source": "https://app.notion.com/p/4231aa2763238151b68bff99553e91eb"
+    },
+    {
+      "id": "AA-091",
+      "auditId": "C2/AA-091",
+      "title": "Rate-limit state is maintained within individual server processes",
+      "record": "C2/M23",
+      "source": "https://app.notion.com/p/4231aa2763238151b68bff99553e91eb"
+    },
+    {
+      "id": "AA-092",
+      "auditId": "C2/AA-092",
+      "title": "Rate-limit cleanup applies the current request's time window to other buckets",
+      "record": "C2/M23",
+      "source": "https://app.notion.com/p/4231aa2763238151b68bff99553e91eb"
+    },
+    {
+      "id": "AA-093",
+      "auditId": "C2/AA-093",
+      "title": "Dashboard spending depends on a filesystem discovery adapter",
+      "record": "C2/M23",
+      "source": "https://app.notion.com/p/4231aa2763238151b68bff99553e91eb"
+    },
+    {
+      "id": "AA-094",
+      "auditId": "C2/AA-094",
+      "title": "Spending-file discovery can exclude newer evidence before sorting events",
+      "record": "C2/M23",
+      "source": "https://app.notion.com/p/4231aa2763238151b68bff99553e91eb"
+    },
+    {
+      "id": "AA-095",
+      "auditId": "C2/AA-095",
+      "title": "Request-size validation does not independently establish a model-specific token budget",
+      "record": "C2/M23",
+      "source": "https://app.notion.com/p/4231aa2763238151b68bff99553e91eb"
+    },
+    {
+      "id": "AA-096",
+      "auditId": "C2/AA-096",
+      "title": "Local knowledge-search results discard source identity and revision information",
+      "record": "C2/M24",
+      "source": "https://app.notion.com/p/4231aa27632381319a47ffec4f099e26"
+    },
+    {
+      "id": "AA-097",
+      "auditId": "C2/AA-097",
+      "title": "Local knowledge search does not independently reconcile conflicting records",
+      "record": "C2/M24",
+      "source": "https://app.notion.com/p/4231aa27632381319a47ffec4f099e26"
+    },
+    {
+      "id": "AA-098",
+      "auditId": "C2/AA-098",
+      "title": "Project discovery returns names without stable project identities",
+      "record": "C2/M24",
+      "source": "https://app.notion.com/p/4231aa27632381319a47ffec4f099e26"
+    },
+    {
+      "id": "AA-099",
+      "auditId": "C2/AA-099",
+      "title": "Local discovery tools do not independently enforce archive and temporary-conversation visibility",
+      "record": "C2/M24",
+      "source": "https://app.notion.com/p/4231aa27632381319a47ffec4f099e26"
+    },
+    {
+      "id": "AA-100",
+      "auditId": "C2/AA-100",
+      "title": "Local knowledge tools return unstructured execution results",
+      "record": "C2/M24",
+      "source": "https://app.notion.com/p/4231aa27632381319a47ffec4f099e26"
+    },
+    {
+      "id": "AA-101",
+      "auditId": "C2/AA-101",
+      "title": "Fleet browser execution is limited to opening a URL",
+      "record": "C2/M25",
+      "source": "https://app.notion.com/p/4231aa2763238185a292c53f8c573d92"
+    },
+    {
+      "id": "AA-102",
+      "auditId": "C2/AA-102",
+      "title": "Browser objectives without explicit URLs fail at the inspected fleet entry point",
+      "record": "C2/M25",
+      "source": "https://app.notion.com/p/4231aa2763238185a292c53f8c573d92"
+    },
+    {
+      "id": "AA-103",
+      "auditId": "C2/AA-103",
+      "title": "Browser execution receives the extracted destination rather than a complete structured objective",
+      "record": "C2/M25",
+      "source": "https://app.notion.com/p/4231aa2763238185a292c53f8c573d92"
+    },
+    {
+      "id": "AA-104",
+      "auditId": "C2/AA-104",
+      "title": "Browser approval does not distinguish read-only navigation from consequential interactions",
+      "record": "C2/M25",
+      "source": "https://app.notion.com/p/4231aa2763238185a292c53f8c573d92"
+    },
+    {
+      "id": "AA-105",
+      "auditId": "C2/AA-105",
+      "title": "Stored refresh credentials do not establish automatic authorization recovery",
+      "record": "C2/M26",
+      "source": "https://app.notion.com/p/4231aa27632381f9bb1eece695bf3ad8"
+    },
+    {
+      "id": "AA-106",
+      "auditId": "C2/AA-106",
+      "title": "Local disconnection and provider-side revocation are separate outcomes",
+      "record": "C2/M26",
+      "source": "https://app.notion.com/p/4231aa27632381f9bb1eece695bf3ad8"
+    },
+    {
+      "id": "AA-107",
+      "auditId": "C2/AA-107",
+      "title": "Provider revocation confirmation requires provider-specific interpretation",
+      "record": "C2/M26",
+      "source": "https://app.notion.com/p/4231aa27632381f9bb1eece695bf3ad8"
+    },
+    {
+      "id": "AA-108",
+      "auditId": "C2/AA-108",
+      "title": "Integration recovery needs durable operation-specific state",
+      "record": "C2/M26",
+      "source": "https://app.notion.com/p/4231aa27632381f9bb1eece695bf3ad8"
+    },
+    {
+      "id": "AA-109",
+      "auditId": "C2/AA-109",
+      "title": "Missing pricing values can be interpreted as zero-cost pricing",
+      "record": "C2/M27",
+      "source": "https://app.notion.com/p/4231aa27632381128690f52119225578"
+    },
+    {
+      "id": "AA-110",
+      "auditId": "C2/AA-110",
+      "title": "Model catalogue normalization discards capability metadata",
+      "record": "C2/M27",
+      "source": "https://app.notion.com/p/4231aa27632381128690f52119225578"
+    },
+    {
+      "id": "AA-111",
+      "auditId": "C2/AA-111",
+      "title": "Discovered model usability is determined primarily at the provider level",
+      "record": "C2/M27",
+      "source": "https://app.notion.com/p/4231aa27632381128690f52119225578"
+    },
+    {
+      "id": "AA-112",
+      "auditId": "C2/AA-112",
+      "title": "Model, MCP tool and service choices share a limited capability representation",
+      "record": "C2/M27",
+      "source": "https://app.notion.com/p/4231aa27632381128690f52119225578"
+    },
+    {
+      "id": "AA-113",
+      "auditId": "C2/AA-113",
+      "title": "The inspected decision router is a narrow skill-suggestion engine",
+      "record": "C2/M27",
+      "source": "https://app.notion.com/p/4231aa27632381128690f52119225578"
+    },
+    {
+      "id": "AA-114",
+      "auditId": "C2/AA-114",
+      "title": "Historical image selection is based on recency rather than relevance",
+      "record": "C2/M28",
+      "source": "https://app.notion.com/p/4231aa276323816990f8dbd5049b59b6"
+    },
+    {
+      "id": "AA-115",
+      "auditId": "C2/AA-115",
+      "title": "Historical image selection uses all-or-nothing message groups",
+      "record": "C2/M28",
+      "source": "https://app.notion.com/p/4231aa276323816990f8dbd5049b59b6"
+    },
+    {
+      "id": "AA-116",
+      "auditId": "C2/AA-116",
+      "title": "Assistant-generated historical images are not included by the inspected image-history builder",
+      "record": "C2/M28",
+      "source": "https://app.notion.com/p/4231aa276323816990f8dbd5049b59b6"
+    },
+    {
+      "id": "AA-117",
+      "auditId": "C2/AA-117",
+      "title": "PDF extraction has a deliberately limited document-reading implementation",
+      "record": "C2/M28",
+      "source": "https://app.notion.com/p/4231aa276323816990f8dbd5049b59b6"
+    },
+    {
+      "id": "AA-118",
+      "auditId": "C2/AA-118",
+      "title": "PDF extraction flattens document structure and loses page-level evidence associations",
+      "record": "C2/M28",
+      "source": "https://app.notion.com/p/4231aa276323816990f8dbd5049b59b6"
+    },
+    {
+      "id": "AA-119",
+      "auditId": "C2/AA-119",
+      "title": "PDF extraction truncates the document at a fixed character boundary",
+      "record": "C2/M28",
+      "source": "https://app.notion.com/p/4231aa276323816990f8dbd5049b59b6"
+    },
+    {
+      "id": "AA-120",
+      "auditId": "C2/AA-120",
+      "title": "Global search requires contiguous text matches rather than independent search terms",
+      "record": "C2/M29",
+      "source": "https://app.notion.com/p/4231aa27632381168d07ce7ef138e982"
+    },
+    {
+      "id": "AA-121",
+      "auditId": "C2/AA-121",
+      "title": "Search ranking does not meaningfully differentiate most matching results",
+      "record": "C2/M29",
+      "source": "https://app.notion.com/p/4231aa27632381168d07ce7ef138e982"
+    },
+    {
+      "id": "AA-122",
+      "auditId": "C2/AA-122",
+      "title": "Conversation search returns only the first matching message",
+      "record": "C2/M29",
+      "source": "https://app.notion.com/p/4231aa27632381168d07ce7ef138e982"
+    },
+    {
+      "id": "AA-123",
+      "auditId": "C2/AA-123",
+      "title": "Global search does not independently distinguish archived and temporary conversations",
+      "record": "C2/M29",
+      "source": "https://app.notion.com/p/4231aa27632381168d07ce7ef138e982"
+    },
+    {
+      "id": "AA-124",
+      "auditId": "C2/AA-124",
+      "title": "Global search results omit project context",
+      "record": "C2/M29",
+      "source": "https://app.notion.com/p/4231aa27632381168d07ce7ef138e982"
+    },
+    {
+      "id": "AA-125",
+      "auditId": "C2/AA-125",
+      "title": "Search scans workspace content synchronously whenever its dependencies change",
+      "record": "C2/M29",
+      "source": "https://app.notion.com/p/4231aa27632381168d07ce7ef138e982"
+    },
+    {
+      "id": "AA-126",
+      "auditId": "C2/AA-126",
+      "title": "Custom personality instructions are silently truncated during normalization",
+      "record": "C2/M30",
+      "source": "https://app.notion.com/p/4231aa2763238145b0c2d166ca446d68"
+    },
+    {
+      "id": "AA-127",
+      "auditId": "C2/AA-127",
+      "title": "Personality normalization removes meaningful instruction structure",
+      "record": "C2/M30",
+      "source": "https://app.notion.com/p/4231aa2763238145b0c2d166ca446d68"
+    },
+    {
+      "id": "AA-128",
+      "auditId": "C2/AA-128",
+      "title": "Unknown personality identities silently resolve to the default Assistant style",
+      "record": "C2/M30",
+      "source": "https://app.notion.com/p/4231aa2763238145b0c2d166ca446d68"
+    },
+    {
+      "id": "AA-129",
+      "auditId": "C2/AA-129",
+      "title": "Persona template selection resolves existing agents by display name",
+      "record": "C2/M30",
+      "source": "https://app.notion.com/p/4231aa2763238145b0c2d166ca446d68"
+    },
+    {
+      "id": "AA-130",
+      "auditId": "C2/AA-130",
+      "title": "Persona handoff persistence can succeed only partially",
+      "record": "C2/M30",
+      "source": "https://app.notion.com/p/4231aa2763238145b0c2d166ca446d68"
+    },
+    {
+      "id": "AA-131",
+      "auditId": "C2/AA-131",
+      "title": "Persisted persona-selection records lack an independently enforced freshness boundary",
+      "record": "C2/M30",
+      "source": "https://app.notion.com/p/4231aa2763238145b0c2d166ca446d68"
+    },
+    {
+      "id": "AA-132",
+      "auditId": "C2/AA-132",
+      "title": "Persistence readiness does not establish verified backup availability",
+      "record": "C2/M31",
+      "source": "https://app.notion.com/p/4231aa276323816aa837f15db16766a8"
+    },
+    {
+      "id": "AA-133",
+      "auditId": "C2/AA-133",
+      "title": "Browser and server synchronization uses a binary content-presence decision",
+      "record": "C2/M31",
+      "source": "https://app.notion.com/p/4231aa276323816aa837f15db16766a8"
+    },
+    {
+      "id": "AA-134",
+      "auditId": "C2/AA-134",
+      "title": "A configured remote database does not establish restart recovery",
+      "record": "C2/M31",
+      "source": "https://app.notion.com/p/4231aa276323816aa837f15db16766a8"
+    },
+    {
+      "id": "AA-135",
+      "auditId": "C2/AA-135",
+      "title": "Local persistence terminology is internally inconsistent",
+      "record": "C2/M31",
+      "source": "https://app.notion.com/p/4231aa276323816aa837f15db16766a8"
+    },
+    {
+      "id": "AA-136",
+      "auditId": "C2/AA-136",
+      "title": "Backup completeness remains unverified across Adrian's major data categories",
+      "record": "C2/M31",
+      "source": "https://app.notion.com/p/4231aa276323816aa837f15db16766a8"
+    }
+  ]
+}

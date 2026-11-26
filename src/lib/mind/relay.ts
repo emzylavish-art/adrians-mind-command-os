@@ -1,4 +1,5 @@
 import { createSseFeed, pushSse, reportedModel, type ModelUsage } from "./stream.ts";
+import { withFailureEnvelope } from "./failure-envelope.ts";
 import { CHAT_DISCONNECT_REPLY, CHAT_TIMEOUT_REPLY, chatTurnTimeoutMs } from "./turn-timeouts.ts";
 export { CHAT_DISCONNECT_REPLY };
 import type { DispatchOutcome } from "./dispatch-attempt.ts";
@@ -92,7 +93,12 @@ export function relayModelStream(input: {
     async start(controller) {
       const send = (event: string, data: unknown) => {
         if (closed) return;
-        controller.enqueue(encoder.encode(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`));
+        const payload = (event === "error" || event === "canceled") && data && typeof data === "object" ? withFailureEnvelope({ ...data, ...(input.meta?.helperReceipts ? { helperReceipts: input.meta.helperReceipts } : {}) }, {
+          subsystem: "chat", operationKind: "generation", stage: "response", outcome: "unknown", retryPolicy: event === "canceled" ? "never" : "replay-receipt",
+          operationId: typeof input.meta?.resourceOperationId === "string" ? input.meta.resourceOperationId : null,
+          provider: typeof input.meta?.provider === "string" ? input.meta.provider : "xai",
+        }) : data;
+        controller.enqueue(encoder.encode(`event: ${event}\ndata: ${JSON.stringify(payload)}\n\n`));
       };
       const finish = async (ok = false) => {
         await settle(ok);

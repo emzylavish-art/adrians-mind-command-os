@@ -31,6 +31,7 @@ import {
   type DnsLookupFn,
 } from "./http-dns-pin.ts";
 import { haltIsOn } from "../halt.server.ts";
+import { readCappedBody } from "./http-body.ts";
 
 export type McpServerKind = "builtin" | "http" | "command";
 
@@ -314,35 +315,6 @@ type RpcFailure = {
   rpc: McpCallRpc;
 };
 
-async function readCappedBody(
-  response: Awaited<ReturnType<FetchLike>> & { body?: unknown },
-  maxBytes: number,
-): Promise<{ ok: true; text: string } | { ok: false }> {
-  const declared = Number(response.headers.get("content-length"));
-  if (Number.isFinite(declared) && declared > maxBytes) return { ok: false };
-  const body = response.body as { getReader?: () => ReadableStreamDefaultReader<Uint8Array> } | null | undefined;
-  if (body && typeof body.getReader === "function") {
-    const reader = body.getReader();
-    const decoder = new TextDecoder();
-    let total = 0;
-    let text = "";
-    for (;;) {
-      const { done, value } = await reader.read();
-      if (done) break;
-      total += value.byteLength;
-      if (total > maxBytes) {
-        await reader.cancel().catch(() => undefined);
-        return { ok: false };
-      }
-      text += decoder.decode(value, { stream: true });
-    }
-    return { ok: true, text: text + decoder.decode() };
-  }
-  const text = await response.text();
-  if (Buffer.byteLength(text, "utf8") > maxBytes) return { ok: false };
-  return { ok: true, text };
-}
-
 export async function registryRpc(
   fetchImpl: FetchLike,
   url: string,
@@ -532,6 +504,20 @@ export async function listRegistryTools(
       continue;
     }
     if (!server.url) continue;
+    if (server.protocol === "mcp") {
+      // Custom forms, chat approvals and this live list consume one saved
+      // discovery snapshot. Pagination and schema compatibility are shared.
+      const { refreshMcp } = await import("../custom-connection.ts");
+      // Only an explicitly injected adapter may replace the pinned transport.
+      // Passing native fetch as an injection would resolve the hostname again.
+      const fresh = await refreshMcp(deps.registryDb ?? null, userId, server.id, { fetch: fetchImpl === globalThis.fetch ? undefined : fetchImpl, ...deps.http });
+      if (fresh.state !== "ready") {
+        tools.push({ serverId: server.id, serverLabel: server.label, name: fresh.discoveryStatus === "timeout" ? "(timeout)" : "(unavailable)", description: fresh.error, enabled: true, status: fresh.discoveryStatus === "timeout" ? "timeout" : "error" });
+      } else {
+        tools.push(...fresh.operations.map((operation) => ({ serverId: server.id, serverLabel: server.label, name: operation.name, description: operation.description, inputSchema: operation.inputSchema, enabled: true, status: operation.compatible ? "ok" as const : "error" as const })));
+      }
+      continue;
+    }
     const opened = await registryRpc(fetchImpl, server.url, server.token ?? "", null, {
       jsonrpc: "2.0",
       id: 1,
@@ -689,6 +675,11 @@ export async function callRegistryTool(input: {
     params: { protocolVersion: "2024-11-05", capabilities: {}, clientInfo: { name: "adrians-mind", version: "1" } },
   }, input.http);
   if (!opened.ok) return rpcFailureResult(server.id, input.tool, opened, started);
+  const current = (await readServers(input.userId, input.registryDb)).find((item) => item.id === server.id);
+  if (!current?.enabled || current.url !== server.url || current.tokenEnc !== server.tokenEnc) return { status: "error", ok: false, serverId: server.id, tool: input.tool, text: "The MCP connection changed before dispatch. Nothing was called.", transport: null, rpc: null };
+  let stopped = true;
+  try { stopped = await (input.isHalted ?? haltIsOn)(input.userId); } catch { /* fail closed */ }
+  if (stopped) return { status: "error", ok: false, serverId: server.id, tool: input.tool, text: "Emergency stop is on or unavailable. No MCP tool was called.", transport: null, rpc: null };
   const called = await registryRpc(fetchImpl, server.url, server.token ?? "", opened.session, {
     jsonrpc: "2.0",
     id: 3,

@@ -4,13 +4,16 @@ import { createBudgetedAgentModel } from "./agent-model-dispatch.server.ts";
 import { resolveModelTier } from "./model-tiers";
 import { AGENT_TIMEOUT_REPLY, agentRunTimeoutMs, boundAbortSignal, isTimeoutAbort } from "./turn-timeouts";
 import { guardMindEnv } from "./isolation";
-import { AGENT_RATE_LIMIT_REPLY, consumeMindRateLimit, jsonRateLimited } from "./limits";
+import { AGENT_RATE_LIMIT_REPLY, jsonRateLimited } from "./limits";
+import { consumeSharedMindRateLimit } from "./rate-limit.server.ts";
 import { decideFetchSite } from "./request-guard";
-import { emptyWorkspace } from "./workspace";
 import { sanitizeAttachments } from "./media/index.ts";
 import { resolveXaiInferenceApiKey } from "./xai-adapter";
 import { parseModelTierField, readJsonObjectBody } from "./request-body";
 import { resolveDatabaseUrl } from "../env.server.ts";
+import { governedModelCall } from "./resource-governor.server.ts";
+import { normalizeProviderReceipt } from "./provider-call.ts";
+import { readAuthorizedAgentContext } from "./memory/dispatch-policy.server.ts";
 
 const MAX_BODY = 2_500_000;
 
@@ -19,11 +22,6 @@ function json(body: unknown, status = 200) {
     status,
     headers: { "content-type": "application/json", "cache-control": "no-store" },
   });
-}
-
-function names(value: unknown, limit: number) {
-  if (!Array.isArray(value)) return [];
-  return value.filter((item): item is string => typeof item === "string").map((item) => item.trim().slice(0, 200)).filter(Boolean).slice(0, limit);
 }
 
 export async function handleAgentRun(request: Request): Promise<Response> {
@@ -58,7 +56,8 @@ export async function handleAgentRun(request: Request): Promise<Response> {
   const { haltIsOn } = await import("./halt.server");
   if (await haltIsOn(userId)) return json({ ok: false, error: "Emergency stop is on. No new action can run.", log: [] });
   // Rate limit after body guard + tier parse so malformed bodies stay 400 and do not consume a token.
-  const limited = consumeMindRateLimit("agent", userId, 6);
+  const limited = await consumeSharedMindRateLimit("agent", userId, 6);
+  if (!limited.ok && "unavailable" in limited) return json({ ok: false, error: "Usage limits could not be checked. No agent call was sent.", log: [] }, 503);
   if (!limited.ok) return jsonRateLimited(AGENT_RATE_LIMIT_REPLY, limited.retryAfterSec, { log: [] });
   const gate = guardMindEnv({
     databaseUrl: resolveDatabaseUrl(process.env),

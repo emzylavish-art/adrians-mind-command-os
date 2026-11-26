@@ -1,7 +1,9 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { requireUserId } from "@/lib/auth/verify.server";
-import { listAgents, onlineAgents } from "@/lib/mind/pc-pairing/store";
+import { assertSameOrigin } from "@/lib/mind/connectors/oauth-csrf";
+import { deviceReadiness, listAgents, onlineAgents } from "@/lib/mind/pc-pairing/coordination.server";
 import { adrianPcEnabled, runAdrianPc } from "@/lib/mind/adrian-pc.server";
+import { ownerScreenshotReader } from "@/lib/mind/pc-vision.server";
 import { haltIsOn, readHaltState } from "@/lib/mind/halt.server";
 
 function json(body: unknown, status = 200) {
@@ -16,13 +18,16 @@ export const Route = createFileRoute("/api/mind/pc/status")({
           const authorization = request.headers.get("authorization");
           const bearer = authorization?.toLowerCase().startsWith("bearer ") ? authorization.slice(7).trim() : undefined;
           const userId = await requireUserId(bearer);
-          const agents = listAgents(userId).map((a) => ({
+          const agents = (await listAgents(userId)).map((a) => ({
             id: a.id,
             label: a.label,
             registeredAt: a.registeredAt,
             lastSeenAt: a.lastSeenAt,
+            readiness: deviceReadiness(a),
+            capabilities: a.capabilities ?? null,
+            legacyFileProtocol: a.fileProtocol ?? null,
           }));
-          const online = onlineAgents(userId).map((a) => a.id);
+          const online = (await onlineAgents(userId)).map((a) => a.id);
           return json({
             ok: true,
             stopState: await readHaltState(userId),
@@ -38,6 +43,8 @@ export const Route = createFileRoute("/api/mind/pc/status")({
         }
       },
       POST: async ({ request }) => {
+        const origin = assertSameOrigin(request);
+        if (!origin.ok) return json({ ok: false, error: origin.error }, 403);
         try {
           const authorization = request.headers.get("authorization");
           const bearer = authorization?.toLowerCase().startsWith("bearer ") ? authorization.slice(7).trim() : undefined;
@@ -48,7 +55,7 @@ export const Route = createFileRoute("/api/mind/pc/status")({
           const body = await request.json().catch(() => null) as { text?: unknown } | null;
           const text = typeof body?.text === "string" ? body.text : "";
           const halted = await haltIsOn(userId);
-          const result = await runAdrianPc({ text, halted });
+          const result = await runAdrianPc({ text, halted, readImage: ownerScreenshotReader(userId) });
           return json({ ok: true, ran: result.ran, output: result.output });
         } catch (error) {
           const message = error instanceof Error ? error.message : "Unauthorized";

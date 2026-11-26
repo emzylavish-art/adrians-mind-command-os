@@ -147,6 +147,7 @@ export function NodeDetailPanel({
   status,
   notionNeighbors,
   portraitSrc,
+  healthTimeLabel,
 }: {
   bot: BotNode | null;
   notionPage: NotionSnapPage | null;
@@ -156,6 +157,7 @@ export function NodeDetailPanel({
   status?: DashboardStatus | null;
   notionNeighbors?: NotionSnapPage[];
   portraitSrc?: string | null;
+  healthTimeLabel?: string;
 }) {
   const detail =
     bot && status
@@ -177,7 +179,7 @@ export function NodeDetailPanel({
         <button type="button" className="dash3d-side-close" onClick={onClose} aria-label="Close details">
           ×
         </button>
-        {detail ? <BotDetailBody detail={detail} spend={spend} portraitSrc={portraitSrc} /> : null}
+        {detail ? <BotDetailBody detail={detail} spend={spend} portraitSrc={portraitSrc} healthTimeLabel={healthTimeLabel} /> : null}
         {!detail && bot ? (
           <p className="dash3d-muted">Detail data {NO_SOURCE}</p>
         ) : null}

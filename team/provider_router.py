@@ -48,6 +48,30 @@ PROVIDERS = {
 class ProviderError(RuntimeError):
     """Safe provider error that does not include secrets or response bodies."""
 
+    def __init__(self, message, receipt=None):
+        super().__init__(message)
+        self.receipt = receipt if receipt is not None else {"dispatched": False}
+
+
+def _execution_receipt(provider, requested_model, data=None, request_id=None):
+    """Retain only bounded identity and valid counters, never provider error text."""
+    data = data if isinstance(data, dict) else {}
+    usage = data.get("usage") if isinstance(data.get("usage"), dict) else {}
+    if provider == "ollama":
+        usage = {"prompt_tokens": data.get("prompt_eval_count", usage.get("prompt_tokens")),
+                 "completion_tokens": data.get("eval_count", usage.get("completion_tokens"))}
+    usage = {key: value for key, value in usage.items()
+             if key in ("prompt_tokens", "completion_tokens") and type(value) is int and 0 <= value <= 9007199254740991}
+    identity = request_id or data.get("request_id") or data.get("id")
+    if not isinstance(identity, str) or not identity.strip() or len(identity) > 300 or "\r" in identity or "\n" in identity:
+        identity = None
+    model = data.get("model")
+    if not isinstance(model, str) or not model.strip() or len(model) > 200:
+        model = "model unknown"
+    return {"provider": provider, "requested_model": requested_model, "model": model,
+            "usage": usage or None, "request_id": identity, "dispatched": True,
+            "executionLocation": "local" if provider == "ollama" else "hosted"}
+
 
 def provider_status():
     result = {}
@@ -82,7 +106,11 @@ def _extract_streamed_content(body):
             event = json.loads(raw)
         except json.JSONDecodeError:
             continue
-        delta = event.get("choices", [{}])[0].get("delta", {}).get("content") if isinstance(event.get("choices"), list) else None
+        if not isinstance(event, dict):
+            continue
+        choices = event.get("choices")
+        first = choices[0] if isinstance(choices, list) and choices else {}
+        delta = first.get("delta", {}).get("content") if isinstance(first, dict) else None
         if delta is None and isinstance(event.get("message"), dict):
             delta = event["message"].get("content")
         if delta is None and event.get("type") == "response.output_text.delta":
@@ -143,25 +171,53 @@ def generate(provider, messages, *, model=None, timeout=60, stream=False):
     try:
         with urllib.request.urlopen(request, timeout=int(timeout)) as response:
             body = response.read(2_000_001)
+            request_id = response.headers.get("x-request-id") or response.headers.get("request-id")
+            if not isinstance(request_id, str) or len(request_id) > 300:
+                request_id = None
             if len(body) > 2_000_000:
-                raise ProviderError("Provider response exceeded the 2 MB limit.")
+                raise ProviderError("Provider response exceeded the 2 MB limit.", _execution_receipt(provider, selected_model, request_id=request_id))
     except urllib.error.HTTPError as exc:
-        raise ProviderError(f"{provider} returned HTTP {exc.code}.") from None
+        error_data = None
+        try:
+            error_body = exc.read(2_000_001)
+            if len(error_body) <= 2_000_000:
+                error_data = json.loads(error_body.decode("utf-8"))
+        except (OSError, UnicodeDecodeError, json.JSONDecodeError, TypeError):
+            pass
+        request_id = exc.headers.get("x-request-id") or exc.headers.get("request-id") if exc.headers else None
+        raise ProviderError(f"{provider} returned HTTP {exc.code}.", _execution_receipt(provider, selected_model, error_data, request_id)) from None
     except (urllib.error.URLError, TimeoutError, OSError) as exc:
-        raise ProviderError(f"{provider} request failed: {type(exc).__name__}.") from None
+        raise ProviderError(f"{provider} request failed: {type(exc).__name__}.", _execution_receipt(provider, selected_model)) from None
 
+    data = None
     try:
         if stream:
+            metadata = {}
+            for line in body.decode("utf-8").splitlines():
+                if not line.startswith("data:") or not line[5:].strip() or line[5:].strip() == "[DONE]":
+                    continue
+                try:
+                    chunk = json.loads(line[5:].strip())
+                except json.JSONDecodeError:
+                    continue
+                if isinstance(chunk, dict):
+                    for field in ("model", "usage", "id"):
+                        if chunk.get(field) is not None:
+                            metadata[field] = chunk[field]
+            data = metadata
             answer, chunk_count = _extract_streamed_content(body)
-            return {"provider": provider, "model": selected_model, "content": answer, "streamed": True, "chunk_count": chunk_count}
+            return {**_execution_receipt(provider, selected_model, metadata, request_id),
+                    "content": answer, "streamed": True, "chunk_count": chunk_count}
         data = json.loads(body.decode("utf-8"))
         if provider == "ollama":
             answer = data["message"]["content"]
         else:
             answer = data["choices"][0]["message"]["content"]
+    except ProviderError as exc:
+        raise ProviderError(str(exc), _execution_receipt(provider, selected_model, data, request_id)) from None
     except (UnicodeDecodeError, json.JSONDecodeError, KeyError, IndexError, TypeError):
-        raise ProviderError("Provider returned an unexpected response format.") from None
-    return {"provider": provider, "model": selected_model, "content": answer}
+        raise ProviderError("Provider returned an unexpected response format.", _execution_receipt(provider, selected_model, data, request_id)) from None
+    return {**_execution_receipt(provider, selected_model, data, request_id), "content": answer}
 
 
 def route_order():
@@ -214,7 +270,7 @@ def main():
         result = generate_routed(messages, model=args.model, timeout=args.timeout, stream=args.stream) if args.route else generate(args.provider, messages, model=args.model, timeout=args.timeout, stream=args.stream)
         print(json.dumps(result, ensure_ascii=False))
     except ProviderError as exc:
-        print(json.dumps({"error": str(exc)}), file=__import__("sys").stderr)
+        print(json.dumps({"error": str(exc), **exc.receipt}), file=__import__("sys").stderr)
         raise SystemExit(2)
 
 

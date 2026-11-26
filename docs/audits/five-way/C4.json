@@ -1,0 +1,533 @@
+{
+  "sourceChecklist": "docs/adrian-analysis-implementation-checklist.md",
+  "rows": [
+    {
+      "finding": "C4/AA-001",
+      "source": "C4/M01",
+      "expected": "Accepted or uncertain append recovery must never append again.",
+      "implementation": "docs/adrian-analysis-implementation-checklist.md#L19",
+      "regression": "[G01](#g01-notion-recovery)",
+      "disposition": "Combined verification pending"
+    },
+    {
+      "finding": "C4/AA-002",
+      "source": "C4/M01",
+      "expected": "Connection labels and timestamps must describe evidence for the current owner.",
+      "implementation": "docs/adrian-analysis-implementation-checklist.md#L20",
+      "regression": "[G02](#g02-integration-status)",
+      "disposition": "Combined verification pending"
+    },
+    {
+      "finding": "C4/AA-003",
+      "source": "C4/M02",
+      "expected": "Typed and recorded microphone answers must use the selected capable text route.",
+      "implementation": "docs/adrian-analysis-implementation-checklist.md#L21",
+      "regression": "[G03](#g03-voice-stages)",
+      "disposition": "Combined verification pending"
+    },
+    {
+      "finding": "C4/AA-004",
+      "source": "C4/M02",
+      "expected": "Failed transcription must not silently authorize a different paid provider.",
+      "implementation": "docs/adrian-analysis-implementation-checklist.md#L22",
+      "regression": "[G03](#g03-voice-stages)",
+      "disposition": "Combined verification pending"
+    },
+    {
+      "finding": "C4/AA-005",
+      "source": "C4/M02",
+      "expected": "Unavailable local direction must preserve the selected preference.",
+      "implementation": "docs/adrian-analysis-implementation-checklist.md#L23",
+      "regression": "[G03](#g03-voice-stages)",
+      "disposition": "Combined verification pending"
+    },
+    {
+      "finding": "C4/AA-006",
+      "source": "C4/M03",
+      "expected": "Settings pane must survive deep link, back and reload.",
+      "implementation": "docs/adrian-analysis-implementation-checklist.md#L24",
+      "regression": "[G04](#g04-navigation)",
+      "disposition": "Combined verification pending"
+    },
+    {
+      "finding": "C4/AA-007",
+      "source": "C4/M03",
+      "expected": "The first user navigation must be a Back-reachable history entry.",
+      "implementation": "docs/adrian-analysis-implementation-checklist.md#L25",
+      "regression": "[G04](#g04-navigation)",
+      "disposition": "Combined verification pending"
+    },
+    {
+      "finding": "C4/AA-008",
+      "source": "C4/M03",
+      "expected": "Intelligence reload must restore the selected thread.",
+      "implementation": "docs/adrian-analysis-implementation-checklist.md#L26",
+      "regression": "[G04](#g04-navigation)",
+      "disposition": "Combined verification pending"
+    },
+    {
+      "finding": "C4/AA-009",
+      "source": "C4/M04",
+      "expected": "Debug must truthfully reflect the host capability.",
+      "implementation": "docs/adrian-analysis-implementation-checklist.md#L27",
+      "regression": "[G05](#g05-build-editor)",
+      "disposition": "Combined verification pending"
+    },
+    {
+      "finding": "C4/AA-010",
+      "source": "C4/M04",
+      "expected": "Editor themes and empty output should remain clean and readable.",
+      "implementation": "docs/adrian-analysis-implementation-checklist.md#L28",
+      "regression": "[G05](#g05-build-editor)",
+      "disposition": "Combined verification pending"
+    },
+    {
+      "finding": "C4/AA-011",
+      "source": "C4/M05",
+      "expected": "Library upload must use the visible destination.",
+      "implementation": "docs/adrian-analysis-implementation-checklist.md#L29",
+      "regression": "[G06](#g06-library-destinations)",
+      "disposition": "Combined verification pending"
+    },
+    {
+      "finding": "C4/AA-012",
+      "source": "C4/M05",
+      "expected": "Preview must belong to the selected Library scope.",
+      "implementation": "docs/adrian-analysis-implementation-checklist.md#L30",
+      "regression": "[G06](#g06-library-destinations)",
+      "disposition": "Combined verification pending"
+    },
+    {
+      "finding": "C4/AA-013",
+      "source": "C4/M05",
+      "expected": "Drive Library import must save to that destination, without sending/staging chat.",
+      "implementation": "docs/adrian-analysis-implementation-checklist.md#L31",
+      "regression": "[G06](#g06-library-destinations)",
+      "disposition": "Combined verification pending"
+    },
+    {
+      "finding": "C4/AA-014",
+      "source": "C4/M05",
+      "expected": "Signed-out Library must not claim account persistence.",
+      "implementation": "docs/adrian-analysis-implementation-checklist.md#L32",
+      "regression": "[G06](#g06-library-destinations)",
+      "disposition": "Combined verification pending"
+    },
+    {
+      "finding": "C4/AA-015",
+      "source": "C4/M05",
+      "expected": "Scheduler must use the current owner after delayed auth or switching.",
+      "implementation": "docs/adrian-analysis-implementation-checklist.md#L33",
+      "regression": "[G07](#g07-schedules)",
+      "disposition": "Combined verification pending"
+    },
+    {
+      "finding": "C4/AA-016",
+      "source": "C4/M05",
+      "expected": "Time zone must remain readable in the responsive schedule form.",
+      "implementation": "docs/adrian-analysis-implementation-checklist.md#L34",
+      "regression": "[G07](#g07-schedules)",
+      "disposition": "Combined verification pending"
+    },
+    {
+      "finding": "C4/AA-017",
+      "source": "C4/M06",
+      "expected": "Changed MCP capabilities must invalidate old approval.",
+      "implementation": "docs/adrian-analysis-implementation-checklist.md#L35",
+      "regression": "[G08](#g08-mcp-approvals-and-cancellation)",
+      "disposition": "Combined verification pending"
+    },
+    {
+      "finding": "C4/AA-018",
+      "source": "C4/M06",
+      "expected": "Every supported schema constraint must be enforced before dispatch.",
+      "implementation": "docs/adrian-analysis-implementation-checklist.md#L36",
+      "regression": "[G08](#g08-mcp-approvals-and-cancellation)",
+      "disposition": "Combined verification pending"
+    },
+    {
+      "finding": "C4/AA-019",
+      "source": "C4/M06",
+      "expected": "Dismissed or replaced MCP operation results must not restore stale UI.",
+      "implementation": "docs/adrian-analysis-implementation-checklist.md#L37",
+      "regression": "[G08](#g08-mcp-approvals-and-cancellation)",
+      "disposition": "Combined verification pending"
+    },
+    {
+      "finding": "C4/AA-020",
+      "source": "C4/M07",
+      "expected": "Dispatch must use current saved-memory permission.",
+      "implementation": "docs/adrian-analysis-implementation-checklist.md#L38",
+      "regression": "[G09](#g09-current-context-permission)",
+      "disposition": "Combined verification pending"
+    },
+    {
+      "finding": "C4/AA-021",
+      "source": "C4/M07",
+      "expected": "Recovery must not replay a previously authorized context payload.",
+      "implementation": "docs/adrian-analysis-implementation-checklist.md#L39",
+      "regression": "[G09](#g09-current-context-permission)",
+      "disposition": "Combined verification pending"
+    },
+    {
+      "finding": "C4/AA-022",
+      "source": "C4/M07",
+      "expected": "Saved memory, history, knowledge and personality must be distinguished.",
+      "implementation": "docs/adrian-analysis-implementation-checklist.md#L40",
+      "regression": "[G09](#g09-current-context-permission)",
+      "disposition": "Combined verification pending"
+    },
+    {
+      "finding": "C4/AA-023",
+      "source": "C4/M08",
+      "expected": "Global stop must affect Build even when its screen is absent.",
+      "implementation": "docs/adrian-analysis-implementation-checklist.md#L41",
+      "regression": "[G10](#g10-durable-stop-and-build-lifecycle)",
+      "disposition": "Combined verification pending"
+    },
+    {
+      "finding": "C4/AA-024",
+      "source": "C4/M08",
+      "expected": "Stopped planning must ignore late chunks and block queued submission.",
+      "implementation": "docs/adrian-analysis-implementation-checklist.md#L42",
+      "regression": "[G10](#g10-durable-stop-and-build-lifecycle)",
+      "disposition": "Combined verification pending"
+    },
+    {
+      "finding": "C4/AA-025",
+      "source": "C4/M08",
+      "expected": "Halt/disable must be checked after tool initialization.",
+      "implementation": "docs/adrian-analysis-implementation-checklist.md#L43",
+      "regression": "[G08](#g08-mcp-approvals-and-cancellation)",
+      "disposition": "Combined verification pending"
+    },
+    {
+      "finding": "C4/AA-026",
+      "source": "C4/M08",
+      "expected": "Cancellation requested must not be labeled confirmed completion.",
+      "implementation": "docs/adrian-analysis-implementation-checklist.md#L44",
+      "regression": "[G10](#g10-durable-stop-and-build-lifecycle)",
+      "disposition": "Combined verification pending"
+    },
+    {
+      "finding": "C4/AA-027",
+      "source": "C4/M09",
+      "expected": "CAS conflict retry must fetch and use a current revision.",
+      "implementation": "docs/adrian-analysis-implementation-checklist.md#L45",
+      "regression": "[G11](#g11-workspace-reconciliation)",
+      "disposition": "Combined verification pending"
+    },
+    {
+      "finding": "C4/AA-028",
+      "source": "C4/M09",
+      "expected": "A partial local snapshot must not delete unseen remote records.",
+      "implementation": "docs/adrian-analysis-implementation-checklist.md#L46",
+      "regression": "[G11](#g11-workspace-reconciliation)",
+      "disposition": "Combined verification pending"
+    },
+    {
+      "finding": "C4/AA-029",
+      "source": "C4/M09",
+      "expected": "Storage events must reconcile all workspace collections.",
+      "implementation": "docs/adrian-analysis-implementation-checklist.md#L47",
+      "regression": "[G11](#g11-workspace-reconciliation)",
+      "disposition": "Combined verification pending"
+    },
+    {
+      "finding": "C4/AA-030",
+      "source": "C4/M09",
+      "expected": "Unrelated field edits must merge and true conflicts must be reviewable.",
+      "implementation": "docs/adrian-analysis-implementation-checklist.md#L48",
+      "regression": "[G11](#g11-workspace-reconciliation)",
+      "disposition": "Combined verification pending"
+    },
+    {
+      "finding": "C4/AA-031",
+      "source": "C4/M10",
+      "expected": "Portable image references require verified owner-scoped bytes.",
+      "implementation": "docs/adrian-analysis-implementation-checklist.md#L49",
+      "regression": "[G12](#g12-attachment-integrity)",
+      "disposition": "Combined verification pending"
+    },
+    {
+      "finding": "C4/AA-032",
+      "source": "C4/M10",
+      "expected": "Oversized image failure must preserve the original local bytes.",
+      "implementation": "docs/adrian-analysis-implementation-checklist.md#L50",
+      "regression": "[G12](#g12-attachment-integrity)",
+      "disposition": "Combined verification pending"
+    },
+    {
+      "finding": "C4/AA-033",
+      "source": "C4/M10",
+      "expected": "Missing images must be visible and excluded honestly from requests.",
+      "implementation": "docs/adrian-analysis-implementation-checklist.md#L51",
+      "regression": "[G12](#g12-attachment-integrity)",
+      "disposition": "Combined verification pending"
+    },
+    {
+      "finding": "C4/AA-034",
+      "source": "C4/M10",
+      "expected": "Archive integrity must state whether attachment bytes are complete.",
+      "implementation": "docs/adrian-analysis-implementation-checklist.md#L52",
+      "regression": "[G12](#g12-attachment-integrity)",
+      "disposition": "Combined verification pending"
+    },
+    {
+      "finding": "C4/AA-035",
+      "source": "C4/M10",
+      "expected": "Unowned legacy caches must not cross account boundaries.",
+      "implementation": "docs/adrian-analysis-implementation-checklist.md#L53",
+      "regression": "[G12](#g12-attachment-integrity)",
+      "disposition": "Combined verification pending"
+    },
+    {
+      "finding": "C4/AA-036",
+      "source": "C4/M11",
+      "expected": "Early important context must not be lost to repeated fixed last-12 slicing.",
+      "implementation": "docs/adrian-analysis-implementation-checklist.md#L54",
+      "regression": "[G13](#g13-context-selection)",
+      "disposition": "Combined verification pending"
+    },
+    {
+      "finding": "C4/AA-037",
+      "source": "C4/M11",
+      "expected": "Budgeting should use verified per-model input/output capacities when available.",
+      "implementation": "docs/adrian-analysis-implementation-checklist.md#L55",
+      "regression": "[G13](#g13-context-selection)",
+      "disposition": "Combined verification pending"
+    },
+    {
+      "finding": "C4/AA-038",
+      "source": "C4/M11",
+      "expected": "Image-budget omission must be visible in the send context receipt.",
+      "implementation": "docs/adrian-analysis-implementation-checklist.md#L56",
+      "regression": "[G13](#g13-context-selection)",
+      "disposition": "Combined verification pending"
+    },
+    {
+      "finding": "C4/AA-039",
+      "source": "C4/M12",
+      "expected": "Received partial text must survive interruption.",
+      "implementation": "docs/adrian-analysis-implementation-checklist.md#L57",
+      "regression": "[G14](#g14-streaming-and-send-recovery)",
+      "disposition": "Combined verification pending"
+    },
+    {
+      "finding": "C4/AA-040",
+      "source": "C4/M12",
+      "expected": "Stopped/uncertain retry must not silently create a new paid execution.",
+      "implementation": "docs/adrian-analysis-implementation-checklist.md#L58",
+      "regression": "[G14](#g14-streaming-and-send-recovery)",
+      "disposition": "Combined verification pending"
+    },
+    {
+      "finding": "C4/AA-041",
+      "source": "C4/M12",
+      "expected": "Parsers must agree on errors, framing, terminal markers and cancellation.",
+      "implementation": "docs/adrian-analysis-implementation-checklist.md#L59",
+      "regression": "[G14](#g14-streaming-and-send-recovery)",
+      "disposition": "Combined verification pending"
+    },
+    {
+      "finding": "C4/AA-042",
+      "source": "C4/M12",
+      "expected": "Streaming checkpoints must be clearly incomplete after reload.",
+      "implementation": "docs/adrian-analysis-implementation-checklist.md#L60",
+      "regression": "[G14](#g14-streaming-and-send-recovery)",
+      "disposition": "Combined verification pending"
+    },
+    {
+      "finding": "C4/AA-043",
+      "source": "C4/M13",
+      "expected": "Returned provider usage and actual model must reach recorded usage.",
+      "implementation": "docs/adrian-analysis-implementation-checklist.md#L61",
+      "regression": "[G15](#g15-execution-receipts)",
+      "disposition": "Combined verification pending"
+    },
+    {
+      "finding": "C4/AA-044",
+      "source": "C4/M13",
+      "expected": "Failed/uncertain calls need honest usage; known preflight rejection is not execution.",
+      "implementation": "docs/adrian-analysis-implementation-checklist.md#L62",
+      "regression": "[G15](#g15-execution-receipts)",
+      "disposition": "Combined verification pending"
+    },
+    {
+      "finding": "C4/AA-045",
+      "source": "C4/M13",
+      "expected": "Recent history must not be confused with configurable lifetime accounting.",
+      "implementation": "docs/adrian-analysis-implementation-checklist.md#L63",
+      "regression": "[G15](#g15-execution-receipts)",
+      "disposition": "Combined verification pending"
+    },
+    {
+      "finding": "C4/AA-046",
+      "source": "C4/M13",
+      "expected": "Every dispatched helper must have its own deduplicated execution receipt.",
+      "implementation": "docs/adrian-analysis-implementation-checklist.md#L64",
+      "regression": "[G15](#g15-execution-receipts)",
+      "disposition": "Combined verification pending"
+    },
+    {
+      "finding": "C4/AA-047",
+      "source": "C4/M14",
+      "expected": "Every matching message in a chat must be reachable.",
+      "implementation": "docs/adrian-analysis-implementation-checklist.md#L65",
+      "regression": "[G16](#g16-local-search)",
+      "disposition": "Combined verification pending"
+    },
+    {
+      "finding": "C4/AA-048",
+      "source": "C4/M14",
+      "expected": "Ranking must favor deterministic meaningful matches.",
+      "implementation": "docs/adrian-analysis-implementation-checklist.md#L66",
+      "regression": "[G16](#g16-local-search)",
+      "disposition": "Combined verification pending"
+    },
+    {
+      "finding": "C4/AA-049",
+      "source": "C4/M14",
+      "expected": "Reordered keywords and exact phrases must be supported locally.",
+      "implementation": "docs/adrian-analysis-implementation-checklist.md#L67",
+      "regression": "[G16](#g16-local-search)",
+      "disposition": "Combined verification pending"
+    },
+    {
+      "finding": "C4/AA-050",
+      "source": "C4/M14",
+      "expected": "Supported saved record types need exact destinations.",
+      "implementation": "docs/adrian-analysis-implementation-checklist.md#L68",
+      "regression": "[G16](#g16-local-search)",
+      "disposition": "Combined verification pending"
+    },
+    {
+      "finding": "C4/AA-051",
+      "source": "C4/M14",
+      "expected": "Excerpts must show the matched content.",
+      "implementation": "docs/adrian-analysis-implementation-checklist.md#L69",
+      "regression": "[G16](#g16-local-search)",
+      "disposition": "Combined verification pending"
+    },
+    {
+      "finding": "C4/AA-052",
+      "source": "C4/M15",
+      "expected": "Queue removal must be a keyboard-accessible named action.",
+      "implementation": "docs/adrian-analysis-implementation-checklist.md#L70",
+      "regression": "[G17](#g17-accessible-actions)",
+      "disposition": "Combined verification pending"
+    },
+    {
+      "finding": "C4/AA-053",
+      "source": "C4/M15",
+      "expected": "Pinning must be visible and operable without a context menu.",
+      "implementation": "docs/adrian-analysis-implementation-checklist.md#L71",
+      "regression": "[G16](#g16-local-search)",
+      "disposition": "Combined verification pending"
+    },
+    {
+      "finding": "C4/AA-054",
+      "source": "C4/M15",
+      "expected": "Blocking dialogs must contain focus and restore their invoker.",
+      "implementation": "docs/adrian-analysis-implementation-checklist.md#L72",
+      "regression": "[G17](#g17-accessible-actions)",
+      "disposition": "Combined verification pending"
+    },
+    {
+      "finding": "C4/AA-055",
+      "source": "C4/M15",
+      "expected": "Shortcut hints must match the input platform.",
+      "implementation": "docs/adrian-analysis-implementation-checklist.md#L73",
+      "regression": "[G17](#g17-accessible-actions)",
+      "disposition": "Combined verification pending"
+    },
+    {
+      "finding": "C4/AA-056",
+      "source": "C4/M15",
+      "expected": "Response lifecycle must be announced without token spam.",
+      "implementation": "docs/adrian-analysis-implementation-checklist.md#L74",
+      "regression": "[G17](#g17-accessible-actions)",
+      "disposition": "Combined verification pending"
+    },
+    {
+      "finding": "C4/AA-057",
+      "source": "C4/M16",
+      "expected": "All auth sources must resolve to one verified owner or an explicit conflict.",
+      "implementation": "docs/adrian-analysis-implementation-checklist.md#L75",
+      "regression": "[G18](#g18-canonical-identity)",
+      "disposition": "Combined verification pending"
+    },
+    {
+      "finding": "C4/AA-058",
+      "source": "C4/M16",
+      "expected": "Pending auth must not display or hydrate another scope.",
+      "implementation": "docs/adrian-analysis-implementation-checklist.md#L76",
+      "regression": "[G18](#g18-canonical-identity)",
+      "disposition": "Combined verification pending"
+    },
+    {
+      "finding": "C4/AA-059",
+      "source": "C4/M16",
+      "expected": "OAuth completion must bind to the initiated popup transaction.",
+      "implementation": "docs/adrian-analysis-implementation-checklist.md#L77",
+      "regression": "[G18](#g18-canonical-identity)",
+      "disposition": "Combined verification pending"
+    },
+    {
+      "finding": "C4/AA-060",
+      "source": "C4/M16",
+      "expected": "Canceled/failed account switching must retain recoverable scoped work.",
+      "implementation": "docs/adrian-analysis-implementation-checklist.md#L78",
+      "regression": "[G18](#g18-canonical-identity)",
+      "disposition": "Combined verification pending"
+    },
+    {
+      "finding": "C4/AA-061",
+      "source": "C4/M16",
+      "expected": "Expired sessions must offer original-owner receipt recovery without resending.",
+      "implementation": "docs/adrian-analysis-implementation-checklist.md#L79",
+      "regression": "[G14](#g14-streaming-and-send-recovery)",
+      "disposition": "Combined verification pending"
+    },
+    {
+      "finding": "C4/AA-062",
+      "source": "C4/M17",
+      "expected": "Long history needs measured bounded repeated work while retaining navigation.",
+      "implementation": "docs/adrian-analysis-implementation-checklist.md#L80",
+      "regression": "[G19](#g19-rendering-performance)",
+      "disposition": "Combined verification pending"
+    },
+    {
+      "finding": "C4/AA-063",
+      "source": "C4/M17",
+      "expected": "New stream chunks must not reparse unchanged historical content.",
+      "implementation": "docs/adrian-analysis-implementation-checklist.md#L81",
+      "regression": "[G19](#g19-rendering-performance)",
+      "disposition": "Combined verification pending"
+    },
+    {
+      "finding": "C4/AA-064",
+      "source": "C4/M17",
+      "expected": "Hidden storage statistics must not serialize each workspace update.",
+      "implementation": "docs/adrian-analysis-implementation-checklist.md#L82",
+      "regression": "[G19](#g19-rendering-performance)",
+      "disposition": "Combined verification pending"
+    },
+    {
+      "finding": "C4/AA-065",
+      "source": "C4/M17",
+      "expected": "Small edits must produce proportionate database writes.",
+      "implementation": "docs/adrian-analysis-implementation-checklist.md#L83",
+      "regression": "[G20](#g20-incremental-persistence)",
+      "disposition": "Combined verification pending"
+    },
+    {
+      "finding": "C4/AA-066",
+      "source": "C4/M17",
+      "expected": "Palette recalculation must follow searchable record changes.",
+      "implementation": "docs/adrian-analysis-implementation-checklist.md#L84",
+      "regression": "[G16](#g16-local-search)",
+      "disposition": "Combined verification pending"
+    }
+  ]
+}

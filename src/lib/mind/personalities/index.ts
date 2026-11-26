@@ -17,10 +17,19 @@ export function normalizeCustomPersonality(value: unknown): string {
   if (typeof value !== "string") return "";
   return value
     .replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F\u007F]/g, " ")
-    .replace(/\s+([,.;:!?])/g, "$1")
-    .replace(/\s+/g, " ")
+    .replace(/\r\n?/g, "\n")
+    .replace(/[^\S\n]+([,.;:!?])/g, "$1")
+    .replace(/[^\S\n]+/g, " ")
+    .replace(/ *\n */g, "\n")
+    .replace(/\n{3,}/g, "\n\n")
     .trim()
     .slice(0, MAX_CUSTOM_PERSONALITY_CHARS);
+}
+
+export function personalityStatus(value: unknown, custom: unknown) {
+  const raw = typeof custom === "string" ? custom : "";
+  const effective = normalizeCustomPersonality(raw);
+  return { id: resolvePersonalityId(value), fallback: !isPersonalityId(value), effective, truncated: raw.length > MAX_CUSTOM_PERSONALITY_CHARS, limit: MAX_CUSTOM_PERSONALITY_CHARS };
 }
 
 const PERSONALITY_IDS = new Set<string>(CONVERSATIONAL_PERSONALITIES.map((item) => item.id));

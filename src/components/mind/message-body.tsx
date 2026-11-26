@@ -1,4 +1,4 @@
-import { useId, useState, type ReactNode } from "react";
+import { memo, useId, useMemo, useState, type ReactNode } from "react";
 import { splitBlocks } from "@/lib/mind/blocks";
 import { InlineImage } from "@/components/mind/media/inline-image";
 import { MarkdownProse } from "@/components/mind/markdown-prose";
@@ -14,6 +14,17 @@ import {
 
 const MD_IMAGE = /!\[([^\]]*)\]\(([^)\s]+)(?:\s+"[^"]*")?\)/g;
 const HAS_MARKDOWN_IMAGE = /!\[[^\]]*\]\([^)\s]+/;
+// Markdown depends only on its text. Streaming a different answer must not
+// tokenize every historical paragraph again when parent callbacks change.
+const StableMarkdownProse = memo(MarkdownProse);
+type MessageBodyProps = {
+  text: string;
+  images?: MsgImage[];
+  onEditImagine?: (src: string) => void;
+  onSaveImage?: (src: string, alt: string) => void;
+  onDownloadImage?: (src: string, alt: string) => void;
+  onFailure?: (message: string, retry: () => void) => void;
+};
 
 function TextWithImages({
   text,
@@ -31,7 +42,7 @@ function TextWithImages({
   let match: RegExpExecArray | null;
   const re = new RegExp(MD_IMAGE.source, "g");
   while ((match = re.exec(text)) !== null) {
-    if (match.index > last) nodes.push(<MarkdownProse key={`text-${last}`} text={text.slice(last, match.index)} />);
+    if (match.index > last) nodes.push(<StableMarkdownProse key={`text-${last}`} text={text.slice(last, match.index)} />);
     const alt = match[1] || "image";
     const src = match[2]!;
     if (src.startsWith("data:image/") || /^https?:\/\//i.test(src)) {
@@ -50,61 +61,58 @@ function TextWithImages({
     }
     last = match.index + match[0].length;
   }
-  if (last < text.length) nodes.push(<MarkdownProse key={`text-${last}`} text={text.slice(last)} />);
+  if (last < text.length) nodes.push(<StableMarkdownProse key={`text-${last}`} text={text.slice(last)} />);
   return <div className="space-y-2">{nodes}</div>;
 }
 
-export function MessageBody({
+export const MessageBody = memo(function MessageBody({
   text,
   images,
   onEditImagine,
   onSaveImage,
   onDownloadImage,
   onFailure,
-}: {
-  text: string;
-  images?: MsgImage[];
-  onEditImagine?: (src: string) => void;
-  onSaveImage?: (src: string, alt: string) => void;
-  onDownloadImage?: (src: string, alt: string) => void;
-  /** Optional: reportFailure for top View log — mount wiring may live outside this lane. */
-  onFailure?: (message: string, retry: () => void) => void;
-}) {
-  return <AnswerBody text={text} images={images} onEditImagine={onEditImagine} onSaveImage={onSaveImage} onDownloadImage={onDownloadImage} onFailure={onFailure} />;
-}
+}: MessageBodyProps) {
+  const imageActions = useMemo(() => Boolean(images?.length) || HAS_MARKDOWN_IMAGE.test(text), [text, images]);
+  return <AnswerBody text={text} images={images} onEditImagine={imageActions ? onEditImagine : undefined} onSaveImage={imageActions ? onSaveImage : undefined} onDownloadImage={imageActions ? onDownloadImage : undefined} onFailure={onFailure} />;
+});
 
-export function AnswerTabs({
+export const AnswerTabs = memo(function AnswerTabs(props: MessageBodyProps) {
+  const imageActions = useMemo(() => Boolean(props.images?.length) || HAS_MARKDOWN_IMAGE.test(props.text), [props.text, props.images]);
+  // Text-only answers have no image controls. Keeping unrelated image handlers
+  // outside this boundary lets the stable transcript skip streaming updates.
+  // For every actual image, current callbacks still participate in comparison.
+  return <AnswerTabsContent {...props} onEditImagine={imageActions ? props.onEditImagine : undefined}
+    onSaveImage={imageActions ? props.onSaveImage : undefined} onDownloadImage={imageActions ? props.onDownloadImage : undefined} />;
+});
+
+const AnswerTabsContent = memo(function AnswerTabsContent({
   text,
   images,
   onEditImagine,
   onSaveImage,
   onDownloadImage,
   onFailure,
-}: {
-  text: string;
-  images?: MsgImage[];
-  onEditImagine?: (src: string) => void;
-  onSaveImage?: (src: string, alt: string) => void;
-  onDownloadImage?: (src: string, alt: string) => void;
-  onFailure?: (message: string, retry: () => void) => void;
-}) {
+}: MessageBodyProps) {
   const tabs = ["answer", "links", "images"] as const;
   const [tab, setTab] = useState<(typeof tabs)[number]>("answer");
   const id = useId();
-  const destinations = new Map<string, string>();
-  for (const block of splitBlocks(text)) {
-    if (block.kind !== "text") continue;
-    const body = block.text.replace(MD_IMAGE, "").replace(/`[^`]*`/g, "");
-    const prose = body.replace(/\[([^\]]+)\]\((https?:\/\/[^\s)]+)\)/g, (_, label: string, url: string) => {
-      destinations.set(url, label);
-      return "";
-    });
-    for (const [raw] of prose.matchAll(/https?:\/\/[^\s)>\]]+/g)) {
-      const url = raw.replace(/[.,;]+$/, "");
-      if (!destinations.has(url)) destinations.set(url, url);
+  const links = useMemo(() => {
+    const destinations = new Map<string, string>();
+    for (const block of splitBlocks(text)) {
+      if (block.kind !== "text") continue;
+      const body = block.text.replace(MD_IMAGE, "").replace(/`[^`]*`/g, "");
+      const prose = body.replace(/\[([^\]]+)\]\((https?:\/\/[^\s)]+)\)/g, (_, label: string, url: string) => {
+        destinations.set(url, label);
+        return "";
+      });
+      for (const [raw] of prose.matchAll(/https?:\/\/[^\s)>\]]+/g)) {
+        const url = raw.replace(/[.,;]+$/, "");
+        if (!destinations.has(url)) destinations.set(url, url);
+      }
     }
-  }
-  const links = [...destinations.entries()];
+    return [...destinations.entries()];
+  }, [text]);
   const pictures = images ?? [];
   return (
     <div data-testid="answer-tabs">
@@ -135,24 +143,17 @@ export function AnswerTabs({
       </div>
     </div>
   );
-}
+});
 
-function AnswerBody({
+const AnswerBody = memo(function AnswerBody({
   text,
   images,
   onEditImagine,
   onSaveImage,
   onDownloadImage,
   onFailure,
-}: {
-  text: string;
-  images?: MsgImage[];
-  onEditImagine?: (src: string) => void;
-  onSaveImage?: (src: string, alt: string) => void;
-  onDownloadImage?: (src: string, alt: string) => void;
-  onFailure?: (message: string, retry: () => void) => void;
-}) {
-  const blocks = splitBlocks(text);
+}: MessageBodyProps) {
+  const blocks = useMemo(() => splitBlocks(text), [text]);
   const [copied, setCopied] = useState<number | null>(null);
   const [copyState, setCopyState] = useState<CopyCodeState>({ status: "idle" });
 
@@ -188,7 +189,7 @@ function AnswerBody({
           />
         ) : image.blobId ? (
           <p key={`attach-${index}`} className="text-xs text-muted">
-            Image reference {image.name || image.blobId} is stored offline and is still loading.
+            {image.name || "Image attachment"} is unavailable on this device. Reattach it to use its contents.
           </p>
         ) : null,
       )}
@@ -223,9 +224,9 @@ function AnswerBody({
             onDownloadImage={onDownloadImage}
           />
         ) : (
-          <MarkdownProse key={index} text={block.text} />
+          <StableMarkdownProse key={index} text={block.text} />
         ),
       )}
     </div>
   );
-}
+});

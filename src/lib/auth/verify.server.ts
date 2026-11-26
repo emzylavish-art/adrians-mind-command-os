@@ -1,8 +1,9 @@
 import { reconcileSessionReads, classifySessionError, type SessionRead } from "./session-resolution.ts";
 import { getRequest } from "@tanstack/react-start/server";
-import { localPreviewIdentityAllowed } from "./session-user.ts";
+import { localPreviewIdentityAllowed, verifiedSessionIdentity, verifiedSupabaseCandidate } from "./session-user.ts";
 import { gateIdentityEnabled } from "./gate-identity.server";
 import { auth, authConfigured } from "./server";
+import { hasSupabaseCredential, identitiesAgree } from "./identity-continuity.ts";
 
 /**
  * Server-side session resolution (server-only).
@@ -32,7 +33,7 @@ export class UnauthorizedError extends Error {
   }
 }
 
-export type VerifiedUser = { id: string; email: string | null };
+export type VerifiedUser = { id: string; email: string | null; sessionSource?: "supabase" | "better-auth" | "both" };
 
 /**
  * Resolve the signed-in user from the current request, or `null` when auth isn't

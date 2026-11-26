@@ -1,6 +1,7 @@
 import { createHash } from "node:crypto";
 import type { Sql } from "../db";
 import type { AgentRun, Workspace } from "./types";
+import { applyWorkspaceDelta, workspaceJsonBytes } from "./workspace-delta.ts";
 
 import { canonical, mergeChatDeletionState, mergeMemoryState, normalizeWorkspace } from "./workspace.ts";
 import { applyWorkspaceChanges, validateWorkspaceChanges } from "./workspace-changes.ts";
@@ -8,7 +9,7 @@ import { applyWorkspaceChanges, validateWorkspaceChanges } from "./workspace-cha
 const MAX_JSON = 1_500_000;
 
 export function snapshotTooLarge(ws: Workspace): boolean {
-  return JSON.stringify(ws).length > MAX_JSON;
+  return workspaceJsonBytes(ws) > MAX_JSON;
 }
 
 async function withOwnerSnapshot<T>(sql: Sql, userId: string, fn: (tx: Sql, raw: unknown) => Promise<T>): Promise<T> {
@@ -91,6 +92,35 @@ export function writeSnapshot(sql: Sql, userId: string, ws: Workspace, expectedR
     const workspace = { ...incoming, ...mergeMemoryState(current, incoming), ...mergeChatDeletionState(incoming, current), runs: preserveServerRunAuthority(current.runs, incoming.runs) };
     return { workspace, result: snapshotRevision(workspace) };
   });
+}
+
+const RECORD_TABLES = {
+  projects: "mind_project", chats: "mind_chat", memories: "mind_memory", files: "mind_file",
+  audit: "mind_audit", usage: "mind_usage", agents: "mind_agent", runs: "mind_agent_run",
+  runEvents: "mind_agent_event", connections: "mind_connection", mailboxes: "mind_mailbox",
+  schedules: "mind_schedule", deployments: "mind_deployment",
+} as const;
+
+/** Changes are applied under the same owner lock/revision contract as full checkpoints. */
+export function writeSnapshotDelta(sql: Sql, userId: string, delta: unknown, expectedRevision: string): Promise<{ revision: string; workspace: Workspace } | null> {
+  return updateOwnerWorkspace<{ revision: string; workspace: Workspace } | null>(sql, userId, (current, raw) => {
+    if (snapshotRevision(raw) !== expectedRevision) return { result: null };
+    const applied = applyWorkspaceDelta(current, delta);
+    const workspace = { ...applied, ...mergeMemoryState(current, applied) };
+    return { workspace, result: { revision: snapshotRevision(workspace), workspace } };
+  });
+}
+
+const mirroredCollections = {
+  projects: "mind_project", chats: "mind_chat", memories: "mind_memory", files: "mind_file",
+  audit: "mind_audit", usage: "mind_usage", agents: "mind_agent", runs: "mind_agent_run",
+  runEvents: "mind_agent_event", connections: "mind_connection", mailboxes: "mind_mailbox",
+  schedules: "mind_schedule", deployments: "mind_deployment",
+} as const;
+
+function changedRows<K extends keyof typeof mirroredCollections>(next: Workspace, previous: Workspace, key: K): Workspace[K] {
+  const before = new Map(previous[key].map((row) => [row.id, row]));
+  return next[key].filter((row) => canonical(before.get(row.id)) !== canonical(row)) as Workspace[K];
 }
 
 /** Bounded resource changes can save after the aggregate compatibility snapshot grows beyond the bulk-copy limit. */

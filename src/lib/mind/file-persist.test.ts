@@ -26,7 +26,7 @@ function toSql(pg: Pick<PGlite, "query"> & Partial<Pick<PGlite, "transaction">>)
 }
 
 async function openDatabase(dataDir: string) {
-  const pg = new PGlite({ dataDir });
+  const pg = new PGlite({ dataDir, initialMemory: 128 * 1024 * 1024, postgresqlconf: ["shared_buffers=8MB", "work_mem=1MB"] });
   await pg.waitReady;
   await pg.exec("create table if not exists _migrations (name text primary key, applied_at timestamptz not null default now())");
   const names = readdirSync(join(process.cwd(), "migrations"));
@@ -144,4 +144,42 @@ describe("file database", () => {
       rmSync(dir, { recursive: true, force: true });
     }
   });
+});
+
+it("C2/AA-134 keeps execution receipts, deletion records and control state across isolated database reopen", async () => {
+  const { addAgentFromTemplate, addSchedule, runDueSchedules } = await import("./fleet.ts");
+  const { readControl, writeControl, snapshotRevision } = await import("./store.ts");
+  const dir = mkdtempSync(join(tmpdir(), "mind-c2-recovery-"));
+  let database: PGlite | undefined;
+  try {
+    database = await openDatabase(dir);
+    const made = addAgentFromTemplate(emptyWorkspace(), "Coding", "2026-11-25T12:00:00.000Z");
+    if (!made.ok) throw new Error(made.error);
+    const schedule = addSchedule(made.ws, "Recovery fixture", made.agent.id, 60, "2026-11-25T12:00:00.000Z");
+    if (!schedule.ok) throw new Error(schedule.error);
+    const ws = runDueSchedules(schedule.ws, "2026-11-25T12:00:00.000Z");
+    ws.deletedMemoryIds = ["removed-note"];
+    ws.deletedFileIds = ["removed-file"];
+    const savedRevision = await writeSnapshot(toSql(database), "c2-owner", ws);
+    await writeControl(toSql(database), "c2-owner", true);
+    await database.close();
+    database = undefined;
+    database = await openDatabase(dir);
+    const raw = await readSnapshot(toSql(database), "c2-owner");
+    assert.equal(snapshotRevision(raw), savedRevision);
+    const restored = normalizeWorkspace(raw);
+    assert.deepEqual(restored.deletedMemoryIds, ["removed-note"]);
+    assert.deepEqual(restored.deletedFileIds, ["removed-file"]);
+    assert.equal(restored.schedules[0]?.occurrences?.[0]?.runId, restored.runs[0]?.id);
+    assert.equal(restored.runs[0]?.plan[0]?.tool, "list_projects");
+    assert.equal(await readControl(toSql(database), "c2-owner"), true);
+    assert.equal(await readControl(toSql(database), "another-owner"), false);
+    assert.equal(await readSnapshot(toSql(database), "another-owner"), null);
+    const rejected = await writeSnapshot(toSql(database), "c2-owner", emptyWorkspace(), "0".repeat(64));
+    assert.equal(rejected, null);
+    assert.equal(snapshotRevision(await readSnapshot(toSql(database), "c2-owner")), savedRevision);
+  } finally {
+    if (database) await database.close();
+    rmSync(dir, { recursive: true, force: true });
+  }
 });

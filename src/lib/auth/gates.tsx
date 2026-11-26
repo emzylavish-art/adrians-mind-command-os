@@ -92,6 +92,7 @@ export function UserButton() {
   // Sign-out can take a moment (and can fail when deployed), so the control
   // shows it is working and cannot be fired twice.
   const [signingOut, setSigningOut] = useState(false);
+  const [signOutError, setSignOutError] = useState<string | null>(null);
   const gateSession = useSyncExternalStore(
     subscribeToNothing,
     hasGateSessionMarker,
@@ -120,13 +121,18 @@ export function UserButton() {
           onClick={() => {
             setSigningOut(true);
             // Success navigates away; on failure re-enable so it can be retried.
-            void signOut().catch(() => setSigningOut(false));
+            setSignOutError(null);
+            void signOut("/", user.sessionSource).catch((error) => {
+              setSigningOut(false);
+              setSignOutError(error instanceof Error ? error.message : "Sign-out could not be confirmed. Please try again.");
+            });
           }}
           className="cursor-pointer text-sm underline-offset-4 opacity-70 hover:underline disabled:cursor-wait disabled:no-underline"
         >
           {signingOut ? "Signing out…" : "Sign out"}
         </button>
       )}
+      {signOutError ? <span role="alert" className="text-xs text-danger">{signOutError}</span> : null}
     </div>
   );
 }

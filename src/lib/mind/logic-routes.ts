@@ -1,3 +1,4 @@
+import { selectContextHistory, type ContextMessage } from "./context-budget.ts";
 import { MIND_MAX_BODY_BYTES } from "./request-body.ts";
 /**
  * Chat model-picker selections for Astra, Sol, and Luna.
@@ -7,6 +8,7 @@ import { MIND_MAX_BODY_BYTES } from "./request-body.ts";
 
 import { isValidModelId, type ModelTier, type ModelControls } from "./model-tiers.ts";
 import { normalizeBotKnowledge, normalizeBotModel } from "./bot-model.ts";
+import { referencedHistoryImages, MAX_HISTORY_IMAGES, MAX_HISTORY_IMAGE_CHARS } from "./media/history.ts";
 import type { ConversationCheckpoint } from "./conversation-context.ts";
 
 export type { ModelTier };
@@ -359,15 +361,21 @@ export type ChatTurnBodyInput = {
   logicRoute: LogicRouteId | null;
   orchestrator?: string | null;
   composerMode?: string;
+  usageChannel?: "chat" | "speak";
   identity?: string;
-  consult?: { available: string[]; helpers: { id: string; request: string }[]; purpose: string } | null;
+  freeOnly?: boolean;
+  consult?: { available: string[]; helpers: { id: string; request: string }[]; purpose: string; helperIds?: string[]; allowPaidHelpers?: boolean } | null;
   images: unknown[];
 };
+
+/** Client JSON for POST /api/mind/turn. The server re-resolves model and endpoint. */
+export type HistoryBodyOmission = { messageIndex: number; name: string; reason: "request_body_budget" };
 
 /** Client JSON for POST /api/mind/turn. The server re-resolves model and endpoint. */
 export function chatTurnBody(input: ChatTurnBodyInput): Record<string, unknown> {
   const body = {
     text: input.text,
+    ...(input.usageChannel ? { usageChannel: input.usageChannel } : {}),
     ...(input.chatId ? { chatId: input.chatId } : {}),
     ...(input.projectId ? { projectId: input.projectId } : {}),
     ...(input.taskId ? { taskId: input.taskId } : {}),

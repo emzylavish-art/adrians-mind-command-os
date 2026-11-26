@@ -5,7 +5,8 @@ import { normalizeBotKnowledge } from "./bot-model.ts";
 import { ADRIAN_MIND_IDENTITY } from "./model-consult.ts";
 import { personalityInstruction } from "./personalities/index.ts";
 import { packageChatContent, sanitizeAttachments, type ChatContent, type ImageAttachment } from "./media/index.ts";
-import { buildHistoryWithReceipt, type HistoryInputMessage } from "./media/history.ts";
+import { buildHistoryWithReceipt, type HistoryInputMessage, imagePayloadChars, MAX_HISTORY_IMAGE_CHARS } from "./media/history.ts";
+import { projectEvidenceInstruction } from "./knowledge.ts";
 import { allocateConversationContext, contextBudget, estimateTextTokens, extractRelevantPassages, type ContextOptions, type ContextReceipt, type ConversationCheckpoint } from "./conversation-context.ts";
 
 export function assembleTurn(input: {

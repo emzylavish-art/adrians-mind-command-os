@@ -1,13 +1,17 @@
+import { readHelperReceipts } from "./execution-evidence.ts";
+import { readFailureEnvelope, type FailureEnvelope } from "./failure-envelope.ts";
+import type { ModelExecutionPlan } from "./execution-plan.ts";
 import type { SkillApplicationReceipt } from "./skill-activation.ts";
 import type { ContextReceipt } from "./conversation-context.ts";
-import type { ConsultEvidence } from "./model-consult.ts";
+import type { ConsultEvidence, HelperReceipt, ConsultAttempt, ConsultExecutionReceipt } from "./model-consult.ts";
+import { readExecutionReceipts, readPrimaryFailureReceipt, type PrimaryFailureReceipt } from "./execution-receipt.ts";
 import { normalizeTurnCallEvidence, pullMindEvents, type ModelUsage, type TurnCallEvidence } from "./stream.ts";
 
 import { outcomeFromDoneEvent, rememberTierOutcome } from "./model-tier-memory.ts";
 import { CHAT_DISCONNECT_REPLY, CHAT_TIMEOUT_REPLY, isTimeoutAbort } from "./turn-timeouts.ts";
 import { turnErrorCode, type TurnErrorCode } from "./turn-error.ts";
 
-export const STOPPED_REPLY = "Stopped. The unfinished reply was not saved.";
+export const STOPPED_REPLY = "Stopped listening for this reply. Any received partial text is kept as incomplete; provider cancellation is unconfirmed.";
 export { CHAT_TIMEOUT_REPLY, CHAT_DISCONNECT_REPLY };
 
 export type LiveTurnResult =
@@ -64,6 +68,16 @@ export async function prepareTurnId(url: string, headers: HeadersInit, signal: A
   return (await prepareTurn(url, headers, signal, fetchImpl)).operationId;
 }
 
+export async function checkTurnReceipt(url: string, operationId: string, headers: HeadersInit, signal?: AbortSignal, fetchImpl: typeof fetch = fetch): Promise<{ state: string; ownerId: string; executions?: ConsultExecutionReceipt[] }> {
+  const response = await fetchImpl(`${url}?operationId=${encodeURIComponent(operationId)}`, { method: "GET", headers, signal, credentials: "same-origin", cache: "no-store" });
+  if (response.status === 401) throw new Error("Sign in to the original account to check this send. No message was resent.");
+  if (!response.ok) throw new Error("The earlier send could not be checked. No message was resent.");
+  const result = await response.json() as { state?: unknown; ownerId?: unknown; executions?: unknown };
+  if (typeof result.state !== "string" || !result.state || typeof result.ownerId !== "string" || !result.ownerId) throw new Error("The send receipt was unavailable. No message was resent.");
+  const executions = readExecutionReceipts(result.executions, operationId);
+  return { state: result.state, ownerId: result.ownerId, ...(executions.length ? { executions } : {}) };
+}
+
 export async function consumeMindTurn(input: {
   url: string;
   body: unknown;
@@ -109,6 +123,7 @@ export async function consumeMindTurn(input: {
       code = turnErrorCode(payload.code, response.status);
       evidence = normalizeTurnCallEvidence(payload);
       uncertain ||= payload.duplicate === true;
+      if (response.headers.get("x-mind-dispatch") === "none" && !payload.duplicate) uncertain = false;
       if (typeof payload.error === "string" && payload.error.trim()) message = payload.error;
     } catch {
       /* the status message stands */
@@ -181,6 +196,7 @@ export async function consumeMindTurn(input: {
           savedMemoryId: event.savedMemoryId ?? null,
           provider: event.provider,
           requestedModel: event.requestedModel,
+          consult: event.consult,
           credentialFallback: event.credentialFallback ?? null,
         };
         const outcome = outcomeFromDoneEvent(event);

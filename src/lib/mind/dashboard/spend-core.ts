@@ -23,7 +23,7 @@ export type SpendEvent = {
 };
 
 export type SpendLoadResult =
-  | { ok: true; events: SpendEvent[]; source: string; droppedInvalid: number }
+  | { ok: true; events: SpendEvent[]; source: string; droppedInvalid: number; coverage?: string }
   | { ok: false; reason: string; droppedInvalid?: number };
 
 export type SpendAdapter = {
@@ -38,6 +38,7 @@ export type SpendLoadContext = {
   listNames?: (dir: string) => string[];
   exists?: (path: string) => boolean;
   statSize?: (path: string) => number;
+  statModifiedMs?: (path: string) => number;
 };
 
 export type MoneyWarning = {
@@ -60,6 +61,8 @@ export type MoneyView = {
   stale: boolean;
   droppedInvalid: number;
   todayKey: string | null;
+  /** Bounded observed telemetry, not an authoritative provider invoice. */
+  coverage?: string;
 };
 
 export function watDayKey(ms: number): string {
@@ -292,5 +295,6 @@ export function buildMoneyView(input: BuildMoneyInput): MoneyView {
     stale,
     droppedInvalid: input.loadResult.droppedInvalid,
     todayKey,
+    coverage: input.loadResult.coverage,
   };
 }

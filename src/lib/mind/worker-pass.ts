@@ -110,7 +110,7 @@ export async function runLocalSchedulePass(sql: Sql, now: string, workerId: stri
       const active = scheduledRuns.some((run) => run.state === "queued" || run.state === "running");
       const justAttempted = due.schedules.some((job, i) => job !== current.schedules[i]);
       if (!active && !justAttempted) return { result: { ran: 0, failed: 0 } };
-      const stepped = tickFleet({ ...due, runs: scheduledRuns }, { workerId, now });
+      const stepped = tickFleet({ ...due, runs: scheduledRuns }, { workerId, now, runtime: "scheduled-local" });
       const changed = stepped.runs.filter((run) => !run.parentId && current.runs.find(old => old.id === run.id)?.state !== run.state);
       const failed = due.schedules.filter((job, i) => job !== current.schedules[i] && job.lastError).length;
       // This local step finished inside the owner snapshot transaction. A later one-shot

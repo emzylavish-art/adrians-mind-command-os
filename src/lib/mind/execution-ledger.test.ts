@@ -18,6 +18,30 @@ import {
 } from "./limits.ts";
 
 describe("execution ledger (forged tool runs)", () => {
+  it("retries recording after storage failure without consuming or executing the action again", async () => {
+    resetExecutionLedgerForTests(); resetMindRateLimitsForTests();
+    const id = issueServerExecution("recovery-owner", { tool: "notion", action: "chat", ok: true, detail: "accepted" });
+    const failed = await recordIssuedExecution({ userId: "recovery-owner", id, write: async () => { throw new Error("fixture storage failure"); } });
+    assert.equal(failed.ok, false);
+    let records = 0;
+    const recovered = await recordIssuedExecution({ userId: "recovery-owner", id, write: async () => { records++; } });
+    assert.equal(recovered.ok, true);
+    assert.equal(records, 1);
+  });
+
+  it("claims an in-flight receipt so two recording requests cannot insert it twice", async () => {
+    resetExecutionLedgerForTests(); resetMindRateLimitsForTests();
+    const id = issueServerExecution("race-owner", { tool: "notion", action: "chat", ok: true, detail: "accepted" });
+    let release!: () => void;
+    const wait = new Promise<void>((resolve) => { release = resolve; });
+    let records = 0;
+    const first = recordIssuedExecution({ userId: "race-owner", id, write: async () => { records++; await wait; } });
+    const other = await recordIssuedExecution({ userId: "race-owner", id, write: async () => { records++; } });
+    assert.equal(other.ok, false);
+    release();
+    assert.equal((await first).ok, true);
+    assert.equal(records, 1);
+  });
   it("rejects a forged / unknown id", async () => {
     resetExecutionLedgerForTests();
     resetMindRateLimitsForTests();
@@ -140,5 +164,18 @@ describe("rate-limit map stays bounded", () => {
       issueServerExecution(`u${i % 3}`, { tool: "t", action: "chat", ok: true, detail: "d" }, 1_000 + i);
     }
     assert.ok(executionLedgerSizeForTests() <= MAX_EXECUTION_LEDGER_ENTRIES);
+  });
+});
+
+
+describe("execution receipt context", () => {
+  it("preserves server correlation metadata while dropping unsupported fields", async () => {
+    resetExecutionLedgerForTests(); resetMindRateLimitsForTests();
+    const metadata = { provider: "notion", operationId: "operation-1", workspaceId: "workspace-a", durationMs: 12.7, accessToken: "must-not-persist" };
+    const id = issueServerExecution("metadata-owner", { tool: "notion", action: "chat", ok: false, detail: "verification pending", metadata });
+    let stored: unknown;
+    assert.equal((await recordIssuedExecution({ userId: "metadata-owner", id, write: async (run) => { stored = run.metadata; } })).ok, true);
+    assert.deepEqual(stored, { operationId: "operation-1", workspaceId: "workspace-a", provider: "notion", durationMs: 13 });
+    assert.equal(JSON.stringify(stored).includes("must-not-persist"), false);
   });
 });

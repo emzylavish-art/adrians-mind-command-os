@@ -17,6 +17,7 @@ export type PcApprovalRecord = {
   commandHash: string;
   agentId: string;
   agentLabel: string;
+  cwd?: string;
   createdAt: string;
   expiresAt: string;
   status: PcApprovalStatus;
@@ -29,6 +30,7 @@ export type PcApprovalPublic = {
   command: string;
   agentId: string;
   agentLabel: string;
+  cwd?: string;
   createdAt: string;
   expiresAt: string;
   status: PcApprovalStatus;
@@ -128,6 +130,7 @@ export function createPcApproval(input: {
   command: string;
   agentId: string;
   agentLabel: string;
+  cwd?: string;
   nowMs?: number;
 }): PcApprovalRecord {
   pruneExpiredApprovals(input.nowMs ?? Date.now());
@@ -141,6 +144,7 @@ export function createPcApproval(input: {
     commandHash: hashCommand(command),
     agentId: input.agentId,
     agentLabel: input.agentLabel.slice(0, 80),
+    cwd: input.cwd?.slice(0, 500),
     createdAt: new Date(now).toISOString(),
     expiresAt: new Date(now + PC_APPROVAL_TTL_MS).toISOString(),
     status: "pending",
@@ -180,6 +184,7 @@ export function listPendingApprovals(ownerId: string, nowMs = Date.now()): PcApp
       command: record.command,
       agentId: record.agentId,
       agentLabel: record.agentLabel,
+      cwd: record.cwd,
       createdAt: record.createdAt,
       expiresAt: record.expiresAt,
       status: record.status,

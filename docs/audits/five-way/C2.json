@@ -1,0 +1,2191 @@
+{
+  "sourceChecklist": "docs/audits/c2/findings.json",
+  "rows": [
+    {
+      "finding": "C2/AA-001",
+      "source": "C2/M01",
+      "expected": "Permission denial keeps a typed error, exact workspace/page identity and reconnect guidance; permission repair never reuses a write approval for another workspace.",
+      "implementation": [
+        "migrations/0018_c2_execution_recovery.sql",
+        "src/components/mind/command-app.tsx",
+        "src/lib/mind/notion-operation-store.ts",
+        "src/lib/mind/notion.ts",
+        "src/lib/mind/server.ts"
+      ],
+      "regression": [
+        "src/lib/mind/notion-entrypoint-recovery.test.ts",
+        "src/lib/mind/notion-recovery.test.ts"
+      ],
+      "disposition": "Combined verification pending"
+    },
+    {
+      "finding": "C2/AA-002",
+      "source": "C2/M01",
+      "expected": "Accepted or uncertain writes reconcile the same operation without another PATCH, including long pages and lost responses.",
+      "implementation": [
+        "migrations/0018_c2_execution_recovery.sql",
+        "src/components/mind/command-app.tsx",
+        "src/lib/mind/notion-operation-store.ts",
+        "src/lib/mind/notion.ts",
+        "src/lib/mind/server.ts"
+      ],
+      "regression": [
+        "src/lib/mind/durable-recovery.test.ts",
+        "src/lib/mind/notion-entrypoint-recovery.test.ts",
+        "src/lib/mind/notion-recovery.test.ts"
+      ],
+      "disposition": "Combined verification pending"
+    },
+    {
+      "finding": "C2/AA-003",
+      "source": "C2/M02",
+      "expected": "Restore rebuilds the renderer resources and schedules a frame even while reduced motion has parked animation.",
+      "implementation": [
+        "src/components/mind/dashboard-3d/c2-dashboard-recovery.test.ts",
+        "src/components/mind/dashboard-3d/universe-scene.tsx"
+      ],
+      "regression": [
+        "src/components/mind/dashboard-3d/c2-dashboard-recovery.test.ts",
+        "src/components/mind/dashboard-3d/mobile-structure-wired.test.ts",
+        "src/components/mind/dashboard-3d/motion/reduced-motion.test.ts",
+        "src/components/mind/dashboard-3d/postfx/context-loss.test.ts",
+        "src/lib/mind/dashboard/graph-filters.test.ts",
+        "src/lib/mind/dashboard/spend.test.ts",
+        "src/lib/mind/dashboard/time-scrub.test.ts"
+      ],
+      "disposition": "Combined verification pending"
+    },
+    {
+      "finding": "C2/AA-004",
+      "source": "C2/M02",
+      "expected": "Change motion preference in place while preserving camera, selected bot and fly state.",
+      "implementation": [
+        "src/components/mind/dashboard-3d/c2-dashboard-recovery.test.ts",
+        "src/components/mind/dashboard-3d/fleet-force-graph.tsx",
+        "src/components/mind/dashboard-3d/universe-scene.tsx"
+      ],
+      "regression": [
+        "src/components/mind/dashboard-3d/c2-dashboard-recovery.test.ts",
+        "src/components/mind/dashboard-3d/mobile-structure-wired.test.ts",
+        "src/components/mind/dashboard-3d/motion/reduced-motion.test.ts",
+        "src/components/mind/dashboard-3d/postfx/context-loss.test.ts",
+        "src/lib/mind/dashboard/graph-filters.test.ts",
+        "src/lib/mind/dashboard/spend.test.ts",
+        "src/lib/mind/dashboard/time-scrub.test.ts"
+      ],
+      "disposition": "Combined verification pending"
+    },
+    {
+      "finding": "C2/AA-005",
+      "source": "C2/M03",
+      "expected": "An ordinary chat skill invocation obeys its current Skills switch.",
+      "implementation": [
+        "src/components/mind/command-app.tsx",
+        "src/lib/mind/skills.ts"
+      ],
+      "regression": [
+        "src/lib/mind/c2-workspace-recovery.test.ts",
+        "src/lib/mind/skills.test.ts"
+      ],
+      "disposition": "Combined verification pending"
+    },
+    {
+      "finding": "C2/AA-006",
+      "source": "C2/M03",
+      "expected": "Ordinary note-search grammar passes the requested query rather than the command prefix.",
+      "implementation": [
+        "src/components/mind/command-app.tsx",
+        "src/lib/mind/skills.ts"
+      ],
+      "regression": [
+        "src/lib/mind/c2-workspace-recovery.test.ts",
+        "src/lib/mind/skills.test.ts"
+      ],
+      "disposition": "Combined verification pending"
+    },
+    {
+      "finding": "C2/AA-007",
+      "source": "C2/M03",
+      "expected": "A retry reads the current skill switch rather than a captured older value.",
+      "implementation": [
+        "src/components/mind/command-app.tsx",
+        "src/lib/mind/skills.ts"
+      ],
+      "regression": [
+        "src/lib/mind/c2-workspace-recovery.test.ts",
+        "src/lib/mind/retry-fidelity.test.ts"
+      ],
+      "disposition": "Combined verification pending"
+    },
+    {
+      "finding": "C2/AA-008",
+      "source": "C2/M04",
+      "expected": "Every health view reflects the selected timeline point; fields not reconstructed are explicitly current.",
+      "implementation": [
+        "src/components/mind/dashboard-3d/c2-dashboard-recovery.test.ts",
+        "src/components/mind/dashboard-3d/dashboard-app.tsx",
+        "src/components/mind/dashboard-3d/node-detail-panel.tsx",
+        "src/components/mind/dashboard-3d/time-scrubber.tsx"
+      ],
+      "regression": [
+        "src/components/mind/dashboard-3d/c2-dashboard-recovery.test.ts",
+        "src/components/mind/dashboard-3d/mobile-structure-wired.test.ts",
+        "src/components/mind/dashboard-3d/motion/reduced-motion.test.ts",
+        "src/components/mind/dashboard-3d/postfx/context-loss.test.ts",
+        "src/lib/mind/dashboard/graph-filters.test.ts",
+        "src/lib/mind/dashboard/spend.test.ts",
+        "src/lib/mind/dashboard/time-scrub.test.ts"
+      ],
+      "disposition": "Combined verification pending"
+    },
+    {
+      "finding": "C2/AA-009",
+      "source": "C2/M04",
+      "expected": "Failure provides usable list navigation and honest disabled graphics controls; retry preserves filter, selection and timeline.",
+      "implementation": [
+        "src/components/mind/dashboard-3d/c2-dashboard-recovery.test.ts",
+        "src/components/mind/dashboard-3d/dashboard-3d.css",
+        "src/components/mind/dashboard-3d/dashboard-app.tsx",
+        "src/components/mind/dashboard-3d/fleet-force-graph.tsx",
+        "src/components/mind/dashboard-3d/graph-filters-panel.tsx",
+        "src/components/mind/dashboard-3d/mobile-structure.tsx",
+        "src/components/mind/dashboard-3d/universe-scene.tsx"
+      ],
+      "regression": [
+        "src/components/mind/dashboard-3d/c2-dashboard-recovery.test.ts",
+        "src/components/mind/dashboard-3d/mobile-structure-wired.test.ts",
+        "src/components/mind/dashboard-3d/motion/reduced-motion.test.ts",
+        "src/components/mind/dashboard-3d/postfx/context-loss.test.ts",
+        "src/lib/mind/dashboard/graph-filters.test.ts",
+        "src/lib/mind/dashboard/spend.test.ts",
+        "src/lib/mind/dashboard/time-scrub.test.ts"
+      ],
+      "disposition": "Combined verification pending"
+    },
+    {
+      "finding": "C2/AA-010",
+      "source": "C2/M04",
+      "expected": "Selecting Money, Feed or Time opens the required panel and then scrolls/focuses it; disabled capabilities explain their state.",
+      "implementation": [
+        "src/components/mind/dashboard-3d/c2-dashboard-recovery.test.ts",
+        "src/components/mind/dashboard-3d/dashboard-app.tsx",
+        "src/components/mind/dashboard-3d/mobile-structure.tsx",
+        "src/lib/mind/dashboard/view-state.ts"
+      ],
+      "regression": [
+        "src/components/mind/dashboard-3d/c2-dashboard-recovery.test.ts",
+        "src/components/mind/dashboard-3d/mobile-structure-wired.test.ts",
+        "src/components/mind/dashboard-3d/motion/reduced-motion.test.ts",
+        "src/components/mind/dashboard-3d/postfx/context-loss.test.ts",
+        "src/lib/mind/dashboard/graph-filters.test.ts",
+        "src/lib/mind/dashboard/spend.test.ts",
+        "src/lib/mind/dashboard/time-scrub.test.ts"
+      ],
+      "disposition": "Combined verification pending"
+    },
+    {
+      "finding": "C2/AA-011",
+      "source": "C2/M05",
+      "expected": "Library deletion clearly distinguishes the retained historical attachment copy from the removed Library record.",
+      "implementation": [
+        "src/components/mind/command-app.tsx",
+        "src/lib/mind/workspace.ts"
+      ],
+      "regression": [
+        "src/lib/mind/c2-workspace-recovery.test.ts"
+      ],
+      "disposition": "Combined verification pending"
+    },
+    {
+      "finding": "C2/AA-012",
+      "source": "C2/M05",
+      "expected": "Ordinary archive merge cannot resurrect a deliberately deleted Library ID.",
+      "implementation": [
+        "src/components/mind/command-app.tsx",
+        "src/lib/mind/types.ts",
+        "src/lib/mind/workspace-edits.ts",
+        "src/lib/mind/workspace.ts"
+      ],
+      "regression": [
+        "src/lib/mind/c2-workspace-recovery.test.ts",
+        "src/lib/mind/workspace.test.ts"
+      ],
+      "disposition": "Combined verification pending"
+    },
+    {
+      "finding": "C2/AA-013",
+      "source": "C2/M05",
+      "expected": "Repeated identical attachments reuse capacity within their original project scope.",
+      "implementation": [
+        "src/components/mind/command-app.tsx",
+        "src/lib/mind/workspace.ts"
+      ],
+      "regression": [
+        "src/lib/mind/c2-workspace-recovery.test.ts"
+      ],
+      "disposition": "Combined verification pending"
+    },
+    {
+      "finding": "C2/AA-014",
+      "source": "C2/M06",
+      "expected": "Speak can use an independently selected text-answer provider with compatible separate input/output engines.",
+      "implementation": [
+        "src/components/mind/command-app.tsx",
+        "src/components/mind/speak-stage.tsx",
+        "src/lib/mind/server.ts",
+        "src/lib/mind/voice/http.server.ts",
+        "src/lib/mind/voice/staged-pipeline.ts"
+      ],
+      "regression": [
+        "src/lib/mind/c2-interface-recovery.test.ts",
+        "src/lib/mind/voice/staged-pipeline.test.ts"
+      ],
+      "disposition": "Combined verification pending"
+    },
+    {
+      "finding": "C2/AA-015",
+      "source": "C2/M06",
+      "expected": "Free-only mode allows local input and browser output while blocking chargeable speech stages before dispatch.",
+      "implementation": [
+        "src/components/mind/command-app.tsx",
+        "src/components/mind/speak-stage.tsx",
+        "src/lib/mind/server.ts",
+        "src/lib/mind/voice/http.server.ts",
+        "src/lib/mind/voice/staged-pipeline.ts"
+      ],
+      "regression": [
+        "src/lib/mind/voice/staged-pipeline.test.ts"
+      ],
+      "disposition": "Combined verification pending"
+    },
+    {
+      "finding": "C2/AA-016",
+      "source": "C2/M06",
+      "expected": "An ended/replaced Speak call cannot play an older delayed response in the next call.",
+      "implementation": [
+        "src/components/mind/command-app.tsx",
+        "src/components/mind/speak-stage.tsx",
+        "src/lib/mind/server.ts",
+        "src/lib/mind/voice/http.server.ts",
+        "src/lib/mind/voice/staged-pipeline.ts"
+      ],
+      "regression": [
+        "src/lib/mind/voice/staged-pipeline.test.ts"
+      ],
+      "disposition": "Combined verification pending"
+    },
+    {
+      "finding": "C2/AA-017",
+      "source": "C2/M06",
+      "expected": "Speak attributes audio input, the actual answer turn and speech output separately.",
+      "implementation": [
+        "src/components/mind/command-app.tsx",
+        "src/components/mind/speak-stage.tsx",
+        "src/lib/mind/server.ts",
+        "src/lib/mind/voice/http.server.ts",
+        "src/lib/mind/voice/staged-pipeline.ts"
+      ],
+      "regression": [
+        "src/lib/mind/c2-interface-recovery.test.ts",
+        "src/lib/mind/voice/staged-pipeline.test.ts"
+      ],
+      "disposition": "Combined verification pending"
+    },
+    {
+      "finding": "C2/AA-018",
+      "source": "C2/M07",
+      "expected": "Public status and Plugins expose recorded scopes while distinguishing provider-reported grants from requested or unknown evidence.",
+      "implementation": [
+        "migrations/0018_c2_execution_recovery.sql",
+        "src/components/mind/service-board.tsx",
+        "src/lib/mind/connection-board.ts",
+        "src/lib/mind/connectors/durable-oauth.server.ts",
+        "src/lib/mind/connectors/oauth-provider.ts",
+        "src/lib/mind/connectors/recovery.ts",
+        "src/lib/mind/connectors/store.ts",
+        "src/lib/mind/connectors/token-expiry.ts",
+        "src/lib/mind/connectors/token-refresh.ts",
+        "src/lib/mind/oauth-board-action.ts",
+        "src/lib/mind/service-board-status.ts"
+      ],
+      "regression": [
+        "src/lib/mind/connection-board.test.ts",
+        "src/lib/mind/connectors/token-recovery.test.ts",
+        "src/lib/mind/service-board-status.test.ts"
+      ],
+      "disposition": "Combined verification pending"
+    },
+    {
+      "finding": "C2/AA-019",
+      "source": "C2/M07",
+      "expected": "Ordinary mailbox requests truthfully explain unavailable chat execution without claiming an authorized account is disconnected.",
+      "implementation": [
+        "src/components/mind/command-app.tsx",
+        "src/lib/mind/intent.test.ts",
+        "src/lib/mind/intent.ts"
+      ],
+      "regression": [
+        "src/lib/mind/intent.test.ts"
+      ],
+      "disposition": "Combined verification pending"
+    },
+    {
+      "finding": "C2/AA-020",
+      "source": "C2/M07",
+      "expected": "Connection labels distinguish saved authorization, expired credentials, required reconnect and unconfirmed revocation from capability proof.",
+      "implementation": [
+        "migrations/0018_c2_execution_recovery.sql",
+        "src/components/mind/service-board.tsx",
+        "src/lib/mind/connection-board.ts",
+        "src/lib/mind/connectors/durable-oauth.server.ts",
+        "src/lib/mind/connectors/oauth-provider.ts",
+        "src/lib/mind/connectors/recovery.ts",
+        "src/lib/mind/connectors/store.ts",
+        "src/lib/mind/connectors/token-expiry.ts",
+        "src/lib/mind/connectors/token-refresh.ts",
+        "src/lib/mind/oauth-board-action.ts",
+        "src/lib/mind/service-board-status.ts"
+      ],
+      "regression": [
+        "src/lib/mind/connection-board.test.ts",
+        "src/lib/mind/connectors/token-recovery.test.ts",
+        "src/lib/mind/service-board-status.test.ts"
+      ],
+      "disposition": "Combined verification pending"
+    },
+    {
+      "finding": "C2/AA-021",
+      "source": "C2/M08",
+      "expected": "Existing bot chats show their saved configuration revision and apply newer settings only through an explicit action.",
+      "implementation": [
+        "src/components/mind/command-app.tsx",
+        "src/lib/mind/types.ts",
+        "src/lib/mind/workspace.ts"
+      ],
+      "regression": [
+        "src/lib/mind/bot-model.test.ts",
+        "src/lib/mind/c2-workspace-recovery.test.ts"
+      ],
+      "disposition": "Combined verification pending"
+    },
+    {
+      "finding": "C2/AA-022",
+      "source": "C2/M08",
+      "expected": "Deleting a project removes stale active project assignments from chats, files and bots.",
+      "implementation": [
+        "src/components/mind/command-app.tsx",
+        "src/lib/mind/workspace.ts"
+      ],
+      "regression": [
+        "src/lib/mind/c2-workspace-recovery.test.ts"
+      ],
+      "disposition": "Combined verification pending"
+    },
+    {
+      "finding": "C2/AA-023",
+      "source": "C2/M08",
+      "expected": "Missing projects and archived/temporary conversations must not be eligible for fleet context.",
+      "implementation": [
+        "src/components/mind/command-app.tsx",
+        "src/components/mind/fleet-panels.tsx",
+        "src/lib/mind/fleet.ts",
+        "src/lib/mind/local-tools.ts",
+        "src/lib/mind/workspace.ts"
+      ],
+      "regression": [
+        "src/lib/mind/c2-workspace-recovery.test.ts",
+        "src/lib/mind/fleet-audit-recovery.test.ts",
+        "src/lib/mind/fleet.test.ts"
+      ],
+      "disposition": "Combined verification pending"
+    },
+    {
+      "finding": "C2/AA-024",
+      "source": "C2/M08",
+      "expected": "Copied bot knowledge and saved-memory state have separate truthful explanations.",
+      "implementation": [
+        "src/components/mind/command-app.tsx",
+        "src/lib/mind/workspace.ts"
+      ],
+      "regression": [
+        "src/lib/mind/c2-workspace-recovery.test.ts"
+      ],
+      "disposition": "Combined verification pending"
+    },
+    {
+      "finding": "C2/AA-025",
+      "source": "C2/M09",
+      "expected": "Distinguish an open-browser worker, runnable local worker scripts, and verified hosted automation.",
+      "implementation": [
+        "package.json",
+        "scripts/schedule-tick.mjs",
+        "scripts/schedule-worker.mjs",
+        "src/components/mind/fleet-panels.tsx",
+        "src/lib/mind/fleet.ts"
+      ],
+      "regression": [
+        "src/lib/mind/fleet-audit-recovery.test.ts",
+        "src/lib/mind/fleet.test.ts"
+      ],
+      "disposition": "Combined verification pending"
+    },
+    {
+      "finding": "C2/AA-026",
+      "source": "C2/M09",
+      "expected": "Missed occurrences and overlaps need explicit policy, anchored cadence and individual outcomes.",
+      "implementation": [
+        "src/components/mind/fleet-panels.tsx",
+        "src/lib/mind/fleet.ts",
+        "src/lib/mind/schedule-recovery.ts"
+      ],
+      "regression": [
+        "src/lib/mind/fleet-audit-recovery.test.ts",
+        "src/lib/mind/fleet.test.ts"
+      ],
+      "disposition": "Combined verification pending"
+    },
+    {
+      "finding": "C2/AA-027",
+      "source": "C2/M09",
+      "expected": "Missed occurrences and overlaps need explicit policy, anchored cadence and individual outcomes.",
+      "implementation": [
+        "src/components/mind/fleet-panels.tsx",
+        "src/lib/mind/fleet.ts",
+        "src/lib/mind/schedule-recovery.ts"
+      ],
+      "regression": [
+        "src/lib/mind/fleet-audit-recovery.test.ts",
+        "src/lib/mind/fleet.test.ts"
+      ],
+      "disposition": "Combined verification pending"
+    },
+    {
+      "finding": "C2/AA-028",
+      "source": "C2/M09",
+      "expected": "Separate bot workflows and autonomous conversation continuation; explicitly select result destination.",
+      "implementation": [
+        "src/components/mind/fleet-panels.tsx",
+        "src/lib/mind/fleet.ts"
+      ],
+      "regression": [
+        "src/lib/mind/fleet-audit-recovery.test.ts",
+        "src/lib/mind/fleet.test.ts",
+        "src/lib/mind/workspace-archive-manifest.test.ts"
+      ],
+      "disposition": "Combined verification pending"
+    },
+    {
+      "finding": "C2/AA-029",
+      "source": "C2/M10",
+      "expected": "Multiple unresolved operations remain independently discoverable and actionable.",
+      "implementation": [
+        "src/components/mind/command-app.tsx",
+        "src/lib/mind/recovery-inbox.ts",
+        "src/lib/mind/types.ts",
+        "src/lib/mind/workspace.ts"
+      ],
+      "regression": [
+        "src/lib/mind/c2-interface-recovery.test.ts",
+        "src/lib/mind/notion-entrypoint-recovery.test.ts"
+      ],
+      "disposition": "Combined verification pending"
+    },
+    {
+      "finding": "C2/AA-030",
+      "source": "C2/M10",
+      "expected": "An unrelated send may clear a transient banner without erasing unresolved recovery state.",
+      "implementation": [
+        "src/components/mind/command-app.tsx",
+        "src/lib/mind/recovery-inbox.ts",
+        "src/lib/mind/types.ts",
+        "src/lib/mind/workspace.ts"
+      ],
+      "regression": [
+        "src/lib/mind/c2-interface-recovery.test.ts"
+      ],
+      "disposition": "Combined verification pending"
+    },
+    {
+      "finding": "C2/AA-031",
+      "source": "C2/M10",
+      "expected": "Reload recovery uses structured operation descriptors and revalidates current context before any dispatch.",
+      "implementation": [
+        "src/components/mind/command-app.tsx",
+        "src/lib/mind/notion-operation-store.ts",
+        "src/lib/mind/recovery-inbox.ts",
+        "src/lib/mind/types.ts",
+        "src/lib/mind/workspace.ts"
+      ],
+      "regression": [
+        "src/lib/mind/c2-interface-recovery.test.ts",
+        "src/lib/mind/durable-recovery.test.ts",
+        "src/lib/mind/notion-entrypoint-recovery.test.ts"
+      ],
+      "disposition": "Combined verification pending"
+    },
+    {
+      "finding": "C2/AA-032",
+      "source": "C2/M10",
+      "expected": "Pending approvals remain visible independently of avatar activity or another warning.",
+      "implementation": [
+        "src/components/mind/command-app.tsx",
+        "src/lib/mind/recovery-inbox.ts"
+      ],
+      "regression": [
+        "src/components/mind/c2-command-entrypoints.test.ts",
+        "src/lib/mind/c2-interface-recovery.test.ts"
+      ],
+      "disposition": "Combined verification pending"
+    },
+    {
+      "finding": "C2/AA-033",
+      "source": "C2/M11",
+      "expected": "Execute the saved allowed plan, enforce dependencies and transfer declared typed results; unfinished work cannot be completed merely by exhausting a budget.",
+      "implementation": [
+        "src/components/mind/fleet-panels.tsx",
+        "src/lib/mind/fleet.ts"
+      ],
+      "regression": [
+        "src/lib/mind/fleet-audit-recovery.test.ts",
+        "src/lib/mind/fleet.test.ts"
+      ],
+      "disposition": "Combined verification pending"
+    },
+    {
+      "finding": "C2/AA-034",
+      "source": "C2/M11",
+      "expected": "An explicit supported objective should choose relevant allowed tools and unknown/ambiguous goals should remain truthfully labeled.",
+      "implementation": [
+        "src/components/mind/fleet-panels.tsx",
+        "src/lib/mind/fleet.ts"
+      ],
+      "regression": [
+        "src/lib/mind/fleet-audit-recovery.test.ts",
+        "src/lib/mind/fleet.test.ts"
+      ],
+      "disposition": "Combined verification pending"
+    },
+    {
+      "finding": "C2/AA-035",
+      "source": "C2/M11",
+      "expected": "Execute the saved allowed plan, enforce dependencies and transfer declared typed results; unfinished work cannot be completed merely by exhausting a budget.",
+      "implementation": [
+        "src/components/mind/fleet-panels.tsx",
+        "src/lib/mind/fleet.ts"
+      ],
+      "regression": [
+        "src/lib/mind/fleet-audit-recovery.test.ts",
+        "src/lib/mind/fleet.test.ts"
+      ],
+      "disposition": "Combined verification pending"
+    },
+    {
+      "finding": "C2/AA-036",
+      "source": "C2/M11",
+      "expected": "Execute the saved allowed plan, enforce dependencies and transfer declared typed results; unfinished work cannot be completed merely by exhausting a budget.",
+      "implementation": [
+        "src/components/mind/fleet-panels.tsx",
+        "src/lib/mind/fleet.ts"
+      ],
+      "regression": [
+        "src/lib/mind/fleet-audit-recovery.test.ts",
+        "src/lib/mind/fleet.test.ts"
+      ],
+      "disposition": "Combined verification pending"
+    },
+    {
+      "finding": "C2/AA-037",
+      "source": "C2/M11",
+      "expected": "Archived notes must be excluded from execution.",
+      "implementation": [
+        "src/components/mind/fleet-panels.tsx",
+        "src/lib/mind/fleet.ts",
+        "src/lib/mind/local-tools.ts"
+      ],
+      "regression": [
+        "src/lib/mind/fleet-audit-recovery.test.ts",
+        "src/lib/mind/fleet.test.ts"
+      ],
+      "disposition": "Combined verification pending"
+    },
+    {
+      "finding": "C2/AA-038",
+      "source": "C2/M12",
+      "expected": "Source discovery must not be presented as independent source verification.",
+      "implementation": [
+        "src/components/mind/command-app.tsx",
+        "src/lib/mind/research-route.server.ts",
+        "src/lib/mind/research.ts",
+        "src/lib/mind/server.ts",
+        "src/lib/mind/xai-search.ts"
+      ],
+      "regression": [
+        "src/lib/mind/research-audit-recovery.test.ts",
+        "src/lib/mind/research-failure-action.test.ts",
+        "src/lib/mind/research.test.ts"
+      ],
+      "disposition": "Combined verification pending"
+    },
+    {
+      "finding": "C2/AA-039",
+      "source": "C2/M12",
+      "expected": "The interface must identify the research strategy actually executed by the selected provider.",
+      "implementation": [
+        "src/components/mind/command-app.tsx",
+        "src/lib/mind/research-route.server.ts",
+        "src/lib/mind/research.ts",
+        "src/lib/mind/server.ts",
+        "src/lib/mind/xai-search.ts"
+      ],
+      "regression": [
+        "src/lib/mind/research-audit-recovery.test.ts",
+        "src/lib/mind/research-failure-action.test.ts",
+        "src/lib/mind/research.test.ts"
+      ],
+      "disposition": "Combined verification pending"
+    },
+    {
+      "finding": "C2/AA-040",
+      "source": "C2/M12",
+      "expected": "Retries retain route identity and accumulated evidence, summaries retain sources, and citation caps preserve query coverage and answer attribution.",
+      "implementation": [
+        "src/components/mind/command-app.tsx",
+        "src/lib/mind/research-route.server.ts",
+        "src/lib/mind/research.ts",
+        "src/lib/mind/server.ts",
+        "src/lib/mind/xai-search.ts"
+      ],
+      "regression": [
+        "src/lib/mind/research-audit-recovery.test.ts",
+        "src/lib/mind/research-failure-action.test.ts",
+        "src/lib/mind/research.test.ts"
+      ],
+      "disposition": "Combined verification pending"
+    },
+    {
+      "finding": "C2/AA-041",
+      "source": "C2/M12",
+      "expected": "Retries retain route identity and accumulated evidence, summaries retain sources, and citation caps preserve query coverage and answer attribution.",
+      "implementation": [
+        "src/components/mind/command-app.tsx",
+        "src/lib/mind/research-route.server.ts",
+        "src/lib/mind/research.ts",
+        "src/lib/mind/server.ts",
+        "src/lib/mind/xai-search.ts"
+      ],
+      "regression": [
+        "src/lib/mind/research-audit-recovery.test.ts",
+        "src/lib/mind/research-failure-action.test.ts",
+        "src/lib/mind/research.test.ts"
+      ],
+      "disposition": "Combined verification pending"
+    },
+    {
+      "finding": "C2/AA-042",
+      "source": "C2/M12",
+      "expected": "Retries retain route identity and accumulated evidence, summaries retain sources, and citation caps preserve query coverage and answer attribution.",
+      "implementation": [
+        "src/components/mind/command-app.tsx",
+        "src/lib/mind/research-route.server.ts",
+        "src/lib/mind/research.ts",
+        "src/lib/mind/server.ts",
+        "src/lib/mind/xai-search.ts"
+      ],
+      "regression": [
+        "src/lib/mind/research-audit-recovery.test.ts",
+        "src/lib/mind/research-failure-action.test.ts",
+        "src/lib/mind/research.test.ts"
+      ],
+      "disposition": "Combined verification pending"
+    },
+    {
+      "finding": "C2/AA-043",
+      "source": "C2/M12",
+      "expected": "Retries retain route identity and accumulated evidence, summaries retain sources, and citation caps preserve query coverage and answer attribution.",
+      "implementation": [
+        "src/components/mind/command-app.tsx",
+        "src/lib/mind/research-route.server.ts",
+        "src/lib/mind/research.ts",
+        "src/lib/mind/server.ts",
+        "src/lib/mind/xai-search.ts"
+      ],
+      "regression": [
+        "src/lib/mind/research-audit-recovery.test.ts",
+        "src/lib/mind/research-failure-action.test.ts",
+        "src/lib/mind/research.test.ts"
+      ],
+      "disposition": "Combined verification pending"
+    },
+    {
+      "finding": "C2/AA-044",
+      "source": "C2/M13",
+      "expected": "Simple requests need no helpers; complex requests use at most two relevant, compatible and authorized routes. Paid or unknown helpers need explicit selection and permission.",
+      "implementation": [
+        "src/lib/mind/mcp-selected.test.ts",
+        "src/lib/mind/model-consult.test.ts",
+        "src/lib/mind/model-consult.ts",
+        "src/lib/mind/turn.server.ts"
+      ],
+      "regression": [
+        "src/lib/mind/c2-model-provider-contract.test.ts",
+        "src/lib/mind/catalog-modules.test.ts",
+        "src/lib/mind/connected-mcp.test.ts",
+        "src/lib/mind/live-turn.test.ts",
+        "src/lib/mind/mcp-selected.test.ts",
+        "src/lib/mind/model-consult.test.ts",
+        "src/lib/mind/provider-catalog.test.ts",
+        "src/lib/mind/provider-http.test.ts",
+        "src/lib/mind/stream.test.ts"
+      ],
+      "disposition": "Combined verification pending"
+    },
+    {
+      "finding": "C2/AA-045",
+      "source": "C2/M13",
+      "expected": "Preserve Adrian identity while reporting requested and actually reported provider/model identities from receipts.",
+      "implementation": [
+        "src/lib/mind/model-consult.test.ts",
+        "src/lib/mind/model-consult.ts",
+        "src/lib/mind/turn.server.ts"
+      ],
+      "regression": [
+        "src/lib/mind/c2-model-provider-contract.test.ts",
+        "src/lib/mind/catalog-modules.test.ts",
+        "src/lib/mind/live-turn.test.ts",
+        "src/lib/mind/model-consult.test.ts",
+        "src/lib/mind/provider-catalog.test.ts",
+        "src/lib/mind/stream.test.ts"
+      ],
+      "disposition": "Combined verification pending"
+    },
+    {
+      "finding": "C2/AA-046",
+      "source": "C2/M13",
+      "expected": "At most two independent helpers run concurrently with cancellation and finite deadlines.",
+      "implementation": [
+        "src/lib/mind/model-consult.test.ts",
+        "src/lib/mind/model-consult.ts",
+        "src/lib/mind/turn.server.ts"
+      ],
+      "regression": [
+        "src/lib/mind/c2-model-provider-contract.test.ts",
+        "src/lib/mind/catalog-modules.test.ts",
+        "src/lib/mind/live-turn.test.ts",
+        "src/lib/mind/model-consult.test.ts",
+        "src/lib/mind/provider-catalog.test.ts",
+        "src/lib/mind/stream.test.ts"
+      ],
+      "disposition": "Combined verification pending"
+    },
+    {
+      "finding": "C2/AA-047",
+      "source": "C2/M13",
+      "expected": "Keep a receipt for success, failure, cancellation or timeout, with reported identity and explicit truncation; transport it to the client.",
+      "implementation": [
+        "src/lib/mind/c2-model-provider-contract.test.ts",
+        "src/lib/mind/live-turn.ts",
+        "src/lib/mind/model-consult.ts",
+        "src/lib/mind/stream.ts",
+        "src/lib/mind/turn.server.ts",
+        "src/lib/mind/types.ts"
+      ],
+      "regression": [
+        "src/lib/mind/c2-model-provider-contract.test.ts",
+        "src/lib/mind/catalog-modules.test.ts",
+        "src/lib/mind/live-turn.test.ts",
+        "src/lib/mind/model-consult.test.ts",
+        "src/lib/mind/provider-catalog.test.ts",
+        "src/lib/mind/stream.test.ts"
+      ],
+      "disposition": "Combined verification pending"
+    },
+    {
+      "finding": "C2/AA-048",
+      "source": "C2/M13",
+      "expected": "Preserve disagreement, assumptions, uncertainty, incomplete evidence and missing helpers; do not treat model agreement as independent evidence.",
+      "implementation": [
+        "src/lib/mind/model-consult.test.ts",
+        "src/lib/mind/model-consult.ts"
+      ],
+      "regression": [
+        "src/lib/mind/c2-model-provider-contract.test.ts",
+        "src/lib/mind/catalog-modules.test.ts",
+        "src/lib/mind/live-turn.test.ts",
+        "src/lib/mind/model-consult.test.ts",
+        "src/lib/mind/provider-catalog.test.ts",
+        "src/lib/mind/stream.test.ts"
+      ],
+      "disposition": "Combined verification pending"
+    },
+    {
+      "finding": "C2/AA-049",
+      "source": "C2/M13",
+      "expected": "Do not pay for duplicate helpers when known aliases resolve to the selected orchestrator or same physical API/model.",
+      "implementation": [
+        "src/lib/mind/model-consult.test.ts",
+        "src/lib/mind/model-consult.ts",
+        "src/lib/mind/turn.server.ts"
+      ],
+      "regression": [
+        "src/lib/mind/c2-model-provider-contract.test.ts",
+        "src/lib/mind/catalog-modules.test.ts",
+        "src/lib/mind/live-turn.test.ts",
+        "src/lib/mind/model-consult.test.ts",
+        "src/lib/mind/provider-catalog.test.ts",
+        "src/lib/mind/stream.test.ts"
+      ],
+      "disposition": "Combined verification pending"
+    },
+    {
+      "finding": "C2/AA-050",
+      "source": "C2/M14",
+      "expected": "Older archives do not overwrite a newer bot configuration.",
+      "implementation": [
+        "src/lib/mind/use-mind-workspace.ts",
+        "src/lib/mind/workspace.ts"
+      ],
+      "regression": [
+        "src/lib/mind/c2-workspace-recovery.test.ts",
+        "src/lib/mind/workspace.test.ts"
+      ],
+      "disposition": "Combined verification pending"
+    },
+    {
+      "finding": "C2/AA-051",
+      "source": "C2/M14",
+      "expected": "Restoring data cannot silently restore an old enabled schedule or grant automatic execution authority.",
+      "implementation": [
+        "src/lib/mind/fleet.ts",
+        "src/lib/mind/workspace.ts"
+      ],
+      "regression": [
+        "src/lib/mind/c2-workspace-recovery.test.ts",
+        "src/lib/mind/fleet-audit-recovery.test.ts",
+        "src/lib/mind/workspace-archive-manifest.test.ts"
+      ],
+      "disposition": "Combined verification pending"
+    },
+    {
+      "finding": "C2/AA-052",
+      "source": "C2/M14",
+      "expected": "Stale imported runs cannot replace newer terminal execution state or revive old approvals.",
+      "implementation": [
+        "src/lib/mind/workspace.ts"
+      ],
+      "regression": [
+        "src/lib/mind/c2-workspace-recovery.test.ts",
+        "src/lib/mind/workspace-archive-manifest.test.ts"
+      ],
+      "disposition": "Combined verification pending"
+    },
+    {
+      "finding": "C2/AA-053",
+      "source": "C2/M14",
+      "expected": "Conversation metadata has independent revision evidence while messages and retrieval history merge safely.",
+      "implementation": [
+        "src/lib/mind/types.ts",
+        "src/lib/mind/use-mind-workspace.ts",
+        "src/lib/mind/workspace.ts"
+      ],
+      "regression": [
+        "src/lib/mind/c2-workspace-recovery.test.ts"
+      ],
+      "disposition": "Combined verification pending"
+    },
+    {
+      "finding": "C2/AA-054",
+      "source": "C2/M14",
+      "expected": "Divergent saved-memory revisions preserve the losing branch as history.",
+      "implementation": [
+        "src/lib/mind/workspace.ts"
+      ],
+      "regression": [
+        "src/lib/mind/c2-workspace-recovery.test.ts",
+        "src/lib/mind/workspace.test.ts"
+      ],
+      "disposition": "Combined verification pending"
+    },
+    {
+      "finding": "C2/AA-055",
+      "source": "C2/M14",
+      "expected": "Archive checksum validation is described as content integrity, not author/account authenticity.",
+      "implementation": [
+        "src/components/mind/command-app.tsx",
+        "src/lib/mind/workspace-archive-manifest.ts",
+        "src/lib/mind/workspace.ts"
+      ],
+      "regression": [
+        "src/lib/mind/c2-workspace-recovery.test.ts",
+        "src/lib/mind/workspace-archive-manifest.test.ts"
+      ],
+      "disposition": "Combined verification pending"
+    },
+    {
+      "finding": "C2/AA-056",
+      "source": "C2/M15",
+      "expected": "Unregistered operation types fail closed while registered existing confirmation entry points keep working.",
+      "implementation": [
+        "src/components/mind/c2-command-entrypoints.test.ts",
+        "src/lib/mind/policy.ts"
+      ],
+      "regression": [
+        "src/components/mind/c2-command-entrypoints.test.ts",
+        "src/lib/mind/fleet-audit-recovery.test.ts",
+        "src/lib/mind/policy.test.ts"
+      ],
+      "disposition": "Combined verification pending"
+    },
+    {
+      "finding": "C2/AA-057",
+      "source": "C2/M15",
+      "expected": "Approvals bind exact current operations, expire, consume once, and obey stop/eligibility. Already-dispatched outcomes must not be reported reversed.",
+      "implementation": [
+        "src/components/mind/fleet-panels.tsx",
+        "src/lib/mind/fleet.ts"
+      ],
+      "regression": [
+        "src/lib/mind/fleet-audit-recovery.test.ts",
+        "src/lib/mind/fleet.test.ts"
+      ],
+      "disposition": "Combined verification pending"
+    },
+    {
+      "finding": "C2/AA-058",
+      "source": "C2/M15",
+      "expected": "Approvals bind exact current operations, expire, consume once, and obey stop/eligibility. Already-dispatched outcomes must not be reported reversed.",
+      "implementation": [
+        "src/components/mind/fleet-panels.tsx",
+        "src/lib/mind/fleet.ts"
+      ],
+      "regression": [
+        "src/lib/mind/fleet-audit-recovery.test.ts",
+        "src/lib/mind/fleet.test.ts"
+      ],
+      "disposition": "Combined verification pending"
+    },
+    {
+      "finding": "C2/AA-059",
+      "source": "C2/M15",
+      "expected": "Approvals bind exact current operations, expire, consume once, and obey stop/eligibility. Already-dispatched outcomes must not be reported reversed.",
+      "implementation": [
+        "src/components/mind/fleet-panels.tsx",
+        "src/lib/mind/fleet.ts"
+      ],
+      "regression": [
+        "src/lib/mind/fleet-audit-recovery.test.ts",
+        "src/lib/mind/fleet.test.ts"
+      ],
+      "disposition": "Combined verification pending"
+    },
+    {
+      "finding": "C2/AA-060",
+      "source": "C2/M16",
+      "expected": "Storage statistics do not serialize the full workspace while Settings is hidden.",
+      "implementation": [
+        "src/components/mind/command-app.tsx"
+      ],
+      "regression": [
+        "src/lib/mind/c2-interface-recovery.test.ts"
+      ],
+      "disposition": "Combined verification pending"
+    },
+    {
+      "finding": "C2/AA-061",
+      "source": "C2/M16",
+      "expected": "Elapsed tool timers update their own display instead of the complete CommandApp timer state.",
+      "implementation": [
+        "src/components/mind/command-app.tsx"
+      ],
+      "regression": [
+        "src/lib/mind/tools-timeline.test.ts"
+      ],
+      "disposition": "Combined verification pending"
+    },
+    {
+      "finding": "C2/AA-062",
+      "source": "C2/M16",
+      "expected": "Idle, terminal-only and leased fleets should not produce new snapshots without progress.",
+      "implementation": [
+        "src/components/mind/fleet-panels.tsx",
+        "src/lib/mind/fleet.ts"
+      ],
+      "regression": [
+        "src/lib/mind/fleet-audit-recovery.test.ts",
+        "src/lib/mind/fleet.test.ts"
+      ],
+      "disposition": "Combined verification pending"
+    },
+    {
+      "finding": "C2/AA-063",
+      "source": "C2/M16",
+      "expected": "A seconds display checks elapsed time at second precision and derives it from the recorder clock.",
+      "implementation": [
+        "src/components/mind/command-app.tsx"
+      ],
+      "regression": [
+        "src/lib/mind/c2-interface-recovery.test.ts"
+      ],
+      "disposition": "Combined verification pending"
+    },
+    {
+      "finding": "C2/AA-064",
+      "source": "C2/M17",
+      "expected": "Shared dialogs have one named modal semantic, native focus containment, cancellation and opener restoration.",
+      "implementation": [
+        "src/components/mind/command-app.tsx",
+        "src/components/mind/command-search.css"
+      ],
+      "regression": [
+        "src/lib/mind/c2-interface-recovery.test.ts"
+      ],
+      "disposition": "Combined verification pending"
+    },
+    {
+      "finding": "C2/AA-065",
+      "source": "C2/M17",
+      "expected": "Shared dialogs have one named modal semantic, native focus containment, cancellation and opener restoration.",
+      "implementation": [
+        "src/components/mind/command-app.tsx",
+        "src/components/mind/command-search.css"
+      ],
+      "regression": [
+        "src/lib/mind/c2-interface-recovery.test.ts"
+      ],
+      "disposition": "Combined verification pending"
+    },
+    {
+      "finding": "C2/AA-066",
+      "source": "C2/M17",
+      "expected": "Pinning is visible and keyboard accessible without a long-press gesture.",
+      "implementation": [
+        "src/components/mind/command-app.tsx"
+      ],
+      "regression": [
+        "src/components/mind/c2-command-entrypoints.test.ts"
+      ],
+      "disposition": "Combined verification pending"
+    },
+    {
+      "finding": "C2/AA-067",
+      "source": "C2/M17",
+      "expected": "Shortcut guidance matches the current platform.",
+      "implementation": [
+        "src/components/mind/command-app.tsx",
+        "src/lib/mind/palette.ts"
+      ],
+      "regression": [
+        "src/lib/mind/c2-interface-recovery.test.ts"
+      ],
+      "disposition": "Combined verification pending"
+    },
+    {
+      "finding": "C2/AA-068",
+      "source": "C2/M17",
+      "expected": "Mobile navigation shares the application theme tokens while preserving reduced-motion and focus behavior.",
+      "implementation": [
+        "src/components/mind/command-app.tsx"
+      ],
+      "regression": [
+        "src/lib/mind/c2-interface-recovery.test.ts"
+      ],
+      "disposition": "Combined verification pending"
+    },
+    {
+      "finding": "C2/AA-069",
+      "source": "C2/M18",
+      "expected": "Retrieve relevant older context within the bounded request without silently treating all history as included.",
+      "implementation": [
+        "src/components/mind/command-app.tsx",
+        "src/lib/mind/media/history.ts"
+      ],
+      "regression": [
+        "src/lib/mind/media/history-audit.test.ts"
+      ],
+      "disposition": "Combined verification pending"
+    },
+    {
+      "finding": "C2/AA-070",
+      "source": "C2/M18",
+      "expected": "Always-apply preferences cannot consume every slot needed by relevant task evidence.",
+      "implementation": [
+        "src/lib/mind/memory/relevant.ts"
+      ],
+      "regression": [
+        "src/lib/mind/c2-workspace-recovery.test.ts"
+      ],
+      "disposition": "Combined verification pending"
+    },
+    {
+      "finding": "C2/AA-071",
+      "source": "C2/M18",
+      "expected": "A free local path recognizes bounded common equivalent terms without claiming full semantic understanding.",
+      "implementation": [
+        "src/lib/mind/memory/relevant.ts"
+      ],
+      "regression": [
+        "src/lib/mind/c2-workspace-recovery.test.ts"
+      ],
+      "disposition": "Combined verification pending"
+    },
+    {
+      "finding": "C2/AA-072",
+      "source": "C2/M18",
+      "expected": "Quoting a conversation carries an identified useful excerpt instead of only its first user message.",
+      "implementation": [
+        "src/components/mind/command-app.tsx",
+        "src/lib/mind/conversation-actions.ts"
+      ],
+      "regression": [
+        "src/lib/mind/c2-workspace-recovery.test.ts",
+        "src/lib/mind/conversation-actions.test.ts"
+      ],
+      "disposition": "Combined verification pending"
+    },
+    {
+      "finding": "C2/AA-073",
+      "source": "C2/M18",
+      "expected": "A quoted task preserves applicable custom conversation instructions and explicit copied bot context.",
+      "implementation": [
+        "src/lib/mind/conversation-actions.ts"
+      ],
+      "regression": [
+        "src/lib/mind/c2-workspace-recovery.test.ts",
+        "src/lib/mind/conversation-actions.test.ts"
+      ],
+      "disposition": "Combined verification pending"
+    },
+    {
+      "finding": "C2/AA-074",
+      "source": "C2/M18",
+      "expected": "Editing produces a revised branch while preserving the original conversation.",
+      "implementation": [
+        "src/components/mind/command-app.tsx",
+        "src/lib/mind/transcript.ts"
+      ],
+      "regression": [
+        "src/lib/mind/c2-workspace-recovery.test.ts",
+        "src/lib/mind/transcript.test.ts"
+      ],
+      "disposition": "Combined verification pending"
+    },
+    {
+      "finding": "C2/AA-075",
+      "source": "C2/M18",
+      "expected": "Standalone conversation exports carry configuration and explicitly state attachment portability limits.",
+      "implementation": [
+        "src/lib/mind/transcript.ts"
+      ],
+      "regression": [
+        "src/lib/mind/c2-workspace-recovery.test.ts",
+        "src/lib/mind/transcript.test.ts"
+      ],
+      "disposition": "Combined verification pending"
+    },
+    {
+      "finding": "C2/AA-076",
+      "source": "C2/M19",
+      "expected": "Website and installed applications have independent release identity and verification records.",
+      "implementation": [
+        "docs/audits/c2/README.md"
+      ],
+      "regression": [],
+      "disposition": "Combined verification pending"
+    },
+    {
+      "finding": "C2/AA-077",
+      "source": "C2/M20",
+      "expected": "Authoritative receipts remain owner-scoped and recordable across independent server instances.",
+      "implementation": [
+        "migrations/0018_c2_execution_recovery.sql",
+        "src/lib/mind/execution-ledger.server.ts",
+        "src/lib/mind/execution-ledger.ts",
+        "src/lib/mind/notion-record.ts",
+        "src/lib/mind/server.ts"
+      ],
+      "regression": [
+        "src/lib/mind/durable-recovery.test.ts",
+        "src/lib/mind/execution-ledger.test.ts"
+      ],
+      "disposition": "Combined verification pending"
+    },
+    {
+      "finding": "C2/AA-078",
+      "source": "C2/M20",
+      "expected": "Transient recording failure allows an idempotent recording retry with zero repeat executions.",
+      "implementation": [
+        "migrations/0018_c2_execution_recovery.sql",
+        "src/lib/mind/execution-ledger.server.ts",
+        "src/lib/mind/execution-ledger.ts",
+        "src/lib/mind/notion-record.ts",
+        "src/lib/mind/server.ts"
+      ],
+      "regression": [
+        "src/lib/mind/durable-recovery.test.ts",
+        "src/lib/mind/execution-ledger.test.ts"
+      ],
+      "disposition": "Combined verification pending"
+    },
+    {
+      "finding": "C2/AA-079",
+      "source": "C2/M20",
+      "expected": "Status identifies configuration evidence and avoids paid probe calls or fabricated service health.",
+      "implementation": [
+        "src/components/mind/service-board.tsx",
+        "src/lib/mind/server.ts"
+      ],
+      "regression": [
+        "src/lib/mind/diagnostic-entrypoint.test.ts"
+      ],
+      "disposition": "Combined verification pending"
+    },
+    {
+      "finding": "C2/AA-080",
+      "source": "C2/M20",
+      "expected": "On/off/unknown remain separate; unknown still blocks execution.",
+      "implementation": [
+        "src/components/mind/command-app.tsx",
+        "src/lib/mind/server.ts"
+      ],
+      "regression": [
+        "src/lib/mind/diagnostic-entrypoint.test.ts",
+        "src/lib/mind/halt-file.test.ts"
+      ],
+      "disposition": "Combined verification pending"
+    },
+    {
+      "finding": "C2/AA-081",
+      "source": "C2/M20",
+      "expected": "Receipts can preserve known provider/model, workspace/chat/project, operation/parent/attempt, duration, certainty and failure code.",
+      "implementation": [
+        "migrations/0018_c2_execution_recovery.sql",
+        "src/lib/mind/execution-ledger.server.ts",
+        "src/lib/mind/execution-ledger.ts",
+        "src/lib/mind/notion-record.ts",
+        "src/lib/mind/server.ts"
+      ],
+      "regression": [
+        "src/lib/mind/durable-recovery.test.ts",
+        "src/lib/mind/execution-ledger.test.ts"
+      ],
+      "disposition": "Combined verification pending"
+    },
+    {
+      "finding": "C2/AA-082",
+      "source": "C2/M21",
+      "expected": "The ordinary runner discovers all checked-in source/script tests and shards share an exact disjoint inventory.",
+      "implementation": [
+        "package.json",
+        "scripts/run-tests-shard.mjs",
+        "scripts/run-tests.mjs",
+        "scripts/test-inventory.mjs",
+        "scripts/test-inventory.test.mjs"
+      ],
+      "regression": [
+        "scripts/test-inventory.test.mjs"
+      ],
+      "disposition": "Combined verification pending"
+    },
+    {
+      "finding": "C2/AA-083",
+      "source": "C2/M21",
+      "expected": "Normal test discovery includes storage-failure, restart/client and idempotency regressions.",
+      "implementation": [
+        "src/lib/mind/durable-recovery.test.ts",
+        "src/lib/mind/execution-ledger.test.ts"
+      ],
+      "regression": [
+        "src/lib/mind/durable-recovery.test.ts",
+        "src/lib/mind/execution-ledger.test.ts"
+      ],
+      "disposition": "Combined verification pending"
+    },
+    {
+      "finding": "C2/AA-084",
+      "source": "C2/M21",
+      "expected": "Deterministic fixtures preserve dissent, qualifications, failures, roles and actual identity through the synthesis and receipt contracts.",
+      "implementation": [
+        "src/lib/mind/c2-model-provider-contract.test.ts",
+        "src/lib/mind/model-consult.test.ts"
+      ],
+      "regression": [
+        "src/lib/mind/c2-model-provider-contract.test.ts",
+        "src/lib/mind/catalog-modules.test.ts",
+        "src/lib/mind/live-turn.test.ts",
+        "src/lib/mind/model-consult.test.ts",
+        "src/lib/mind/provider-catalog.test.ts",
+        "src/lib/mind/stream.test.ts"
+      ],
+      "disposition": "Combined verification pending"
+    },
+    {
+      "finding": "C2/AA-085",
+      "source": "C2/M21",
+      "expected": "Implementation and release reports distinguish source/unit/handler/SQL/browser/live-provider/device evidence.",
+      "implementation": [
+        "docs/audits/c2/README.md",
+        "docs/audits/c2/findings.json",
+        "docs/audits/c2/validate-checklist.mjs",
+        "docs/audits/c2/verification.md",
+        "docs/audits/c2/check-types.mjs"
+      ],
+      "regression": [
+        "docs/audits/c2/validate-checklist.mjs"
+      ],
+      "disposition": "Combined verification pending"
+    },
+    {
+      "finding": "C2/AA-086",
+      "source": "C2/M22",
+      "expected": "Workbench results describe actual state changes, exact pending approvals and worker progress.",
+      "implementation": [
+        "src/lib/mind/fleet.ts",
+        "src/lib/mind/workbench-command.ts"
+      ],
+      "regression": [
+        "src/lib/mind/fleet-audit-recovery.test.ts",
+        "src/lib/mind/workbench-command.test.ts"
+      ],
+      "disposition": "Combined verification pending"
+    },
+    {
+      "finding": "C2/AA-087",
+      "source": "C2/M22",
+      "expected": "Workbench results describe actual state changes, exact pending approvals and worker progress.",
+      "implementation": [
+        "src/lib/mind/fleet.ts",
+        "src/lib/mind/workbench-command.ts"
+      ],
+      "regression": [
+        "src/lib/mind/fleet-audit-recovery.test.ts",
+        "src/lib/mind/workbench-command.test.ts"
+      ],
+      "disposition": "Combined verification pending"
+    },
+    {
+      "finding": "C2/AA-088",
+      "source": "C2/M22",
+      "expected": "Workbench results describe actual state changes, exact pending approvals and worker progress.",
+      "implementation": [
+        "src/lib/mind/fleet.ts",
+        "src/lib/mind/workbench-command.ts"
+      ],
+      "regression": [
+        "src/lib/mind/fleet-audit-recovery.test.ts",
+        "src/lib/mind/workbench-command.test.ts"
+      ],
+      "disposition": "Combined verification pending"
+    },
+    {
+      "finding": "C2/AA-089",
+      "source": "C2/M22",
+      "expected": "Workbench results describe actual state changes, exact pending approvals and worker progress.",
+      "implementation": [
+        "src/lib/mind/fleet.ts",
+        "src/lib/mind/workbench-command.ts"
+      ],
+      "regression": [
+        "src/lib/mind/fleet-audit-recovery.test.ts",
+        "src/lib/mind/workbench-command.test.ts"
+      ],
+      "disposition": "Combined verification pending"
+    },
+    {
+      "finding": "C2/AA-090",
+      "source": "C2/M23",
+      "expected": "A turn may consume one chat admission, but each helper and final provider attempt must independently pass the shared provider-call budget and stop check.",
+      "implementation": [
+        "src/lib/mind/c2-model-provider-contract.test.ts",
+        "src/lib/mind/model-consult.ts",
+        "src/lib/mind/provider-http.test.ts",
+        "src/lib/mind/turn.server.ts"
+      ],
+      "regression": [
+        "src/lib/mind/c2-model-provider-contract.test.ts",
+        "src/lib/mind/catalog-modules.test.ts",
+        "src/lib/mind/connected-mcp.test.ts",
+        "src/lib/mind/live-turn.test.ts",
+        "src/lib/mind/mcp-selected.test.ts",
+        "src/lib/mind/model-consult.test.ts",
+        "src/lib/mind/provider-catalog.test.ts",
+        "src/lib/mind/provider-http.test.ts",
+        "src/lib/mind/stream.test.ts"
+      ],
+      "disposition": "Combined verification pending"
+    },
+    {
+      "finding": "C2/AA-091",
+      "source": "C2/M23",
+      "expected": "All production rate-limit entrypoints use a shared owner/bucket/window counter; shared-storage failure blocks provider dispatch.",
+      "implementation": [
+        "migrations/0018_c2_execution_recovery.sql",
+        "src/lib/mind/agent-run.server.ts",
+        "src/lib/mind/limits.ts",
+        "src/lib/mind/rate-limit.server.ts",
+        "src/lib/mind/rea.ts",
+        "src/lib/mind/server.ts",
+        "src/lib/mind/turn.server.ts",
+        "src/lib/mind/voice-cloning/service.ts",
+        "src/lib/mind/voice/http.server.ts",
+        "src/routes/api/mind/nuance/key.ts",
+        "src/routes/api/mind/nuance/session.ts",
+        "src/routes/api/mind/providers.ts"
+      ],
+      "regression": [
+        "src/lib/mind/durable-recovery.test.ts",
+        "src/lib/mind/limits.test.ts",
+        "src/lib/mind/voice-cloning/service.test.ts"
+      ],
+      "disposition": "Combined verification pending"
+    },
+    {
+      "finding": "C2/AA-092",
+      "source": "C2/M23",
+      "expected": "Pruning a short window cannot reset an unrelated longer quota.",
+      "implementation": [
+        "src/lib/mind/limits.test.ts",
+        "src/lib/mind/limits.ts"
+      ],
+      "regression": [
+        "src/lib/mind/execution-ledger.test.ts",
+        "src/lib/mind/limits.test.ts"
+      ],
+      "disposition": "Combined verification pending"
+    },
+    {
+      "finding": "C2/AA-093",
+      "source": "C2/M23",
+      "expected": "Financial reporting identifies its evidence coverage and never claims complete billing from incomplete local telemetry.",
+      "implementation": [
+        "src/components/mind/dashboard-3d/money-panel.tsx",
+        "src/lib/mind/dashboard/spend-core.ts",
+        "src/lib/mind/dashboard/spend.ts"
+      ],
+      "regression": [
+        "src/components/mind/dashboard-3d/c2-dashboard-recovery.test.ts",
+        "src/components/mind/dashboard-3d/mobile-structure-wired.test.ts",
+        "src/components/mind/dashboard-3d/motion/reduced-motion.test.ts",
+        "src/components/mind/dashboard-3d/postfx/context-loss.test.ts",
+        "src/lib/mind/dashboard/graph-filters.test.ts",
+        "src/lib/mind/dashboard/spend.test.ts",
+        "src/lib/mind/dashboard/time-scrub.test.ts"
+      ],
+      "disposition": "Combined verification pending"
+    },
+    {
+      "finding": "C2/AA-094",
+      "source": "C2/M23",
+      "expected": "Select the newest unique eligible files before bounded reading and expose omitted coverage.",
+      "implementation": [
+        "src/components/mind/dashboard-3d/money-panel.tsx",
+        "src/lib/mind/dashboard/spend-core.ts",
+        "src/lib/mind/dashboard/spend.test.ts",
+        "src/lib/mind/dashboard/spend.ts"
+      ],
+      "regression": [
+        "src/components/mind/dashboard-3d/c2-dashboard-recovery.test.ts",
+        "src/components/mind/dashboard-3d/mobile-structure-wired.test.ts",
+        "src/components/mind/dashboard-3d/motion/reduced-motion.test.ts",
+        "src/components/mind/dashboard-3d/postfx/context-loss.test.ts",
+        "src/lib/mind/dashboard/graph-filters.test.ts",
+        "src/lib/mind/dashboard/spend.test.ts",
+        "src/lib/mind/dashboard/time-scrub.test.ts"
+      ],
+      "disposition": "Combined verification pending"
+    },
+    {
+      "finding": "C2/AA-095",
+      "source": "C2/M23",
+      "expected": "Pre-dispatch context sizing should include selected-model capacity, output reservation and modality/tool overhead.",
+      "implementation": [
+        "src/components/mind/command-app.tsx",
+        "src/lib/mind/ai-provider-config.server.ts",
+        "src/lib/mind/media/history.ts",
+        "src/lib/mind/provider-catalog.ts"
+      ],
+      "regression": [
+        "src/lib/mind/c2-model-provider-contract.test.ts",
+        "src/lib/mind/media/history-audit.test.ts",
+        "src/lib/mind/provider-catalog.test.ts"
+      ],
+      "disposition": "Combined verification pending"
+    },
+    {
+      "finding": "C2/AA-096",
+      "source": "C2/M24",
+      "expected": "Local knowledge search preserves record identity, source, revision and scope.",
+      "implementation": [
+        "src/components/mind/command-app.tsx",
+        "src/lib/mind/local-tools.ts"
+      ],
+      "regression": [
+        "src/lib/mind/c2-workspace-recovery.test.ts",
+        "src/lib/mind/fleet-audit-recovery.test.ts"
+      ],
+      "disposition": "Combined verification pending"
+    },
+    {
+      "finding": "C2/AA-097",
+      "source": "C2/M24",
+      "expected": "Conflicting saved records remain distinguishable without presenting an unverified merged truth.",
+      "implementation": [
+        "src/lib/mind/local-tools.ts"
+      ],
+      "regression": [
+        "src/lib/mind/c2-workspace-recovery.test.ts",
+        "src/lib/mind/fleet-audit-recovery.test.ts"
+      ],
+      "disposition": "Combined verification pending"
+    },
+    {
+      "finding": "C2/AA-098",
+      "source": "C2/M24",
+      "expected": "Projects with the same display name remain distinguishable in local discovery.",
+      "implementation": [
+        "src/lib/mind/local-tools.ts"
+      ],
+      "regression": [
+        "src/lib/mind/c2-workspace-recovery.test.ts",
+        "src/lib/mind/fleet-audit-recovery.test.ts"
+      ],
+      "disposition": "Combined verification pending"
+    },
+    {
+      "finding": "C2/AA-099",
+      "source": "C2/M24",
+      "expected": "Missing projects and archived/temporary conversations must not be eligible for fleet context.",
+      "implementation": [
+        "src/components/mind/fleet-panels.tsx",
+        "src/lib/mind/fleet.ts",
+        "src/lib/mind/local-tools.ts"
+      ],
+      "regression": [
+        "src/lib/mind/fleet-audit-recovery.test.ts",
+        "src/lib/mind/fleet.test.ts"
+      ],
+      "disposition": "Combined verification pending"
+    },
+    {
+      "finding": "C2/AA-100",
+      "source": "C2/M24",
+      "expected": "Local execution outputs retain typed identity and scope for dependent steps.",
+      "implementation": [
+        "src/lib/mind/fleet.ts",
+        "src/lib/mind/local-tools.ts"
+      ],
+      "regression": [
+        "src/lib/mind/fleet-audit-recovery.test.ts",
+        "src/lib/mind/fleet.test.ts"
+      ],
+      "disposition": "Combined verification pending"
+    },
+    {
+      "finding": "C2/AA-101",
+      "source": "C2/M25",
+      "expected": "Browser capability and result must describe actual read-page work, not general navigation/task automation.",
+      "implementation": [
+        "src/components/mind/fleet-panels.tsx",
+        "src/lib/mind/fleet.ts"
+      ],
+      "regression": [
+        "src/lib/mind/fleet-audit-recovery.test.ts",
+        "src/lib/mind/fleet.test.ts"
+      ],
+      "disposition": "Combined verification pending"
+    },
+    {
+      "finding": "C2/AA-102",
+      "source": "C2/M25",
+      "expected": "Require an explicit recoverable destination, pass the full objective to the driver, and constrain the authorized capability.",
+      "implementation": [
+        "src/components/mind/fleet-panels.tsx",
+        "src/lib/mind/fleet.ts"
+      ],
+      "regression": [
+        "src/lib/mind/fleet-audit-recovery.test.ts",
+        "src/lib/mind/fleet.test.ts"
+      ],
+      "disposition": "Combined verification pending"
+    },
+    {
+      "finding": "C2/AA-103",
+      "source": "C2/M25",
+      "expected": "Require an explicit recoverable destination, pass the full objective to the driver, and constrain the authorized capability.",
+      "implementation": [
+        "src/components/mind/fleet-panels.tsx",
+        "src/lib/mind/fleet.ts"
+      ],
+      "regression": [
+        "src/lib/mind/fleet-audit-recovery.test.ts",
+        "src/lib/mind/fleet.test.ts"
+      ],
+      "disposition": "Combined verification pending"
+    },
+    {
+      "finding": "C2/AA-104",
+      "source": "C2/M25",
+      "expected": "Require an explicit recoverable destination, pass the full objective to the driver, and constrain the authorized capability.",
+      "implementation": [
+        "src/components/mind/fleet-panels.tsx",
+        "src/lib/mind/fleet.ts"
+      ],
+      "regression": [
+        "src/lib/mind/fleet-audit-recovery.test.ts",
+        "src/lib/mind/fleet.test.ts"
+      ],
+      "disposition": "Combined verification pending"
+    },
+    {
+      "finding": "C2/AA-105",
+      "source": "C2/M26",
+      "expected": "Expired credentials refresh only the exact same grant, rotate safely, stop looping after rejection and cannot resurrect a disconnected/replaced account.",
+      "implementation": [
+        "migrations/0018_c2_execution_recovery.sql",
+        "src/lib/mind/connectors/durable-oauth.server.ts",
+        "src/lib/mind/connectors/notion-oauth.ts",
+        "src/lib/mind/connectors/oauth-provider.ts",
+        "src/lib/mind/connectors/recovery.ts",
+        "src/lib/mind/connectors/store.ts",
+        "src/lib/mind/connectors/token-expiry.ts",
+        "src/lib/mind/connectors/token-refresh.ts",
+        "src/lib/mind/media/cloud/connection.ts",
+        "src/lib/mind/server.ts"
+      ],
+      "regression": [
+        "src/lib/mind/connectors/token-recovery.test.ts"
+      ],
+      "disposition": "Combined verification pending"
+    },
+    {
+      "finding": "C2/AA-106",
+      "source": "C2/M26",
+      "expected": "Credentials are removed locally, while unconfirmed remote revocation remains visible after reload/reconnect.",
+      "implementation": [
+        "migrations/0018_c2_execution_recovery.sql",
+        "src/components/mind/service-board.tsx",
+        "src/lib/mind/connection-board.ts",
+        "src/lib/mind/connectors/durable-oauth.server.ts",
+        "src/lib/mind/connectors/oauth-provider.ts",
+        "src/lib/mind/connectors/recovery.ts",
+        "src/lib/mind/connectors/store.ts",
+        "src/lib/mind/connectors/token-expiry.ts",
+        "src/lib/mind/connectors/token-refresh.ts",
+        "src/lib/mind/oauth-board-action.ts",
+        "src/lib/mind/service-board-status.ts"
+      ],
+      "regression": [
+        "src/lib/mind/connectors/token-recovery.test.ts"
+      ],
+      "disposition": "Combined verification pending"
+    },
+    {
+      "finding": "C2/AA-107",
+      "source": "C2/M26",
+      "expected": "Each provider response is interpreted by its documented success contract, with unknown results disclosed.",
+      "implementation": [
+        "src/lib/mind/connectors/oauth-provider.ts",
+        "src/lib/mind/connectors/token-recovery.test.ts"
+      ],
+      "regression": [
+        "src/lib/mind/connectors/token-recovery.test.ts"
+      ],
+      "disposition": "Combined verification pending"
+    },
+    {
+      "finding": "C2/AA-108",
+      "source": "C2/M26",
+      "expected": "Recovery preserves original owner/workspace/operation and distinguishes retry, reconnect and verification without duplicate writes.",
+      "implementation": [
+        "migrations/0018_c2_execution_recovery.sql",
+        "src/components/mind/command-app.tsx",
+        "src/lib/mind/connectors/durable-oauth.server.ts",
+        "src/lib/mind/connectors/oauth-provider.ts",
+        "src/lib/mind/connectors/recovery.ts",
+        "src/lib/mind/connectors/store.ts",
+        "src/lib/mind/connectors/token-expiry.ts",
+        "src/lib/mind/connectors/token-refresh.ts",
+        "src/lib/mind/execution-ledger.server.ts",
+        "src/lib/mind/execution-ledger.ts",
+        "src/lib/mind/notion-operation-store.ts",
+        "src/lib/mind/notion-record.ts",
+        "src/lib/mind/notion.ts",
+        "src/lib/mind/server.ts"
+      ],
+      "regression": [
+        "src/lib/mind/connectors/token-recovery.test.ts",
+        "src/lib/mind/durable-recovery.test.ts",
+        "src/lib/mind/notion-entrypoint-recovery.test.ts",
+        "src/lib/mind/notion-recovery.test.ts"
+      ],
+      "disposition": "Combined verification pending"
+    },
+    {
+      "finding": "C2/AA-109",
+      "source": "C2/M27",
+      "expected": "Only explicit finite nonnegative decimal prices count; missing/malformed/boolean values stay unknown. Preserve enforced OpenRouter free routing.",
+      "implementation": [
+        "src/lib/mind/ai-provider-config.server.ts",
+        "src/lib/mind/model-consult.ts",
+        "src/lib/mind/provider-catalog.test.ts",
+        "src/lib/mind/provider-catalog.ts"
+      ],
+      "regression": [
+        "src/lib/mind/c2-model-provider-contract.test.ts",
+        "src/lib/mind/catalog-modules.test.ts",
+        "src/lib/mind/connected-mcp.test.ts",
+        "src/lib/mind/live-turn.test.ts",
+        "src/lib/mind/mcp-selected.test.ts",
+        "src/lib/mind/model-consult.test.ts",
+        "src/lib/mind/provider-catalog.test.ts",
+        "src/lib/mind/provider-http.test.ts",
+        "src/lib/mind/stream.test.ts"
+      ],
+      "disposition": "Combined verification pending"
+    },
+    {
+      "finding": "C2/AA-110",
+      "source": "C2/M27",
+      "expected": "Retain validated modality, context, pricing, tool and structured-output metadata alongside stable model IDs.",
+      "implementation": [
+        "migrations/0019_c2_model_profiles.sql",
+        "src/lib/mind/ai-provider-config.server.ts",
+        "src/lib/mind/c2-model-profile-store.test.ts",
+        "src/lib/mind/provider-catalog.test.ts",
+        "src/lib/mind/provider-catalog.ts"
+      ],
+      "regression": [
+        "src/lib/mind/c2-model-profile-store.test.ts",
+        "src/lib/mind/c2-model-provider-contract.test.ts",
+        "src/lib/mind/catalog-modules.test.ts",
+        "src/lib/mind/connected-mcp.test.ts",
+        "src/lib/mind/live-turn.test.ts",
+        "src/lib/mind/mcp-selected.test.ts",
+        "src/lib/mind/model-consult.test.ts",
+        "src/lib/mind/provider-catalog.test.ts",
+        "src/lib/mind/provider-http.test.ts",
+        "src/lib/mind/stream.test.ts"
+      ],
+      "disposition": "Combined verification pending"
+    },
+    {
+      "finding": "C2/AA-111",
+      "source": "C2/M27",
+      "expected": "Separate provider credentials from individual model outcomes and retain exact owner/model/actual response identity.",
+      "implementation": [
+        "src/lib/mind/ai-provider-config.server.ts",
+        "src/lib/mind/c2-model-profile-store.test.ts",
+        "src/lib/mind/c2-model-provider-contract.test.ts",
+        "src/lib/mind/provider-catalog.ts"
+      ],
+      "regression": [
+        "src/lib/mind/c2-model-profile-store.test.ts",
+        "src/lib/mind/c2-model-provider-contract.test.ts",
+        "src/lib/mind/catalog-modules.test.ts",
+        "src/lib/mind/live-turn.test.ts",
+        "src/lib/mind/model-consult.test.ts",
+        "src/lib/mind/provider-catalog.test.ts",
+        "src/lib/mind/stream.test.ts"
+      ],
+      "disposition": "Combined verification pending"
+    },
+    {
+      "finding": "C2/AA-112",
+      "source": "C2/M27",
+      "expected": "Preserve model profiles, validated tool schemas and descriptive read-only hints, and explicit known/unknown service account/operations.",
+      "implementation": [
+        "src/lib/mind/connected-mcp.server.ts",
+        "src/lib/mind/connected-mcp.test.ts",
+        "src/lib/mind/custom-connection.ts",
+        "src/lib/mind/mcp.ts",
+        "src/lib/mind/provider-catalog.test.ts",
+        "src/lib/mind/provider-catalog.ts"
+      ],
+      "regression": [
+        "src/lib/mind/connected-mcp.test.ts",
+        "src/lib/mind/mcp-selected.test.ts",
+        "src/lib/mind/provider-catalog.test.ts",
+        "src/lib/mind/provider-http.test.ts"
+      ],
+      "disposition": "Combined verification pending"
+    },
+    {
+      "finding": "C2/AA-113",
+      "source": "C2/M27",
+      "expected": "Preserve predictable local skills and conservative abstention while evaluating an explicitly selected model against known capability and spending requirements.",
+      "implementation": [
+        "src/lib/mind/ai-provider-config.server.ts",
+        "src/lib/mind/c2-model-provider-contract.test.ts",
+        "src/lib/mind/provider-catalog.ts",
+        "src/lib/mind/turn.server.ts"
+      ],
+      "regression": [
+        "src/lib/mind/c2-model-provider-contract.test.ts",
+        "src/lib/mind/catalog-modules.test.ts",
+        "src/lib/mind/connected-mcp.test.ts",
+        "src/lib/mind/live-turn.test.ts",
+        "src/lib/mind/mcp-selected.test.ts",
+        "src/lib/mind/model-consult.test.ts",
+        "src/lib/mind/provider-catalog.test.ts",
+        "src/lib/mind/provider-http.test.ts",
+        "src/lib/mind/stream.test.ts"
+      ],
+      "disposition": "Combined verification pending"
+    },
+    {
+      "finding": "C2/AA-114",
+      "source": "C2/M28",
+      "expected": "Historical references, fitting images and assistant-generated images must reach compatible model input with honest omission metadata.",
+      "implementation": [
+        "src/components/mind/command-app.tsx",
+        "src/lib/mind/logic-routes.ts",
+        "src/lib/mind/media/history.ts",
+        "src/lib/mind/prompt.ts",
+        "src/lib/mind/turn.server.ts"
+      ],
+      "regression": [
+        "src/lib/mind/logic-routes.test.ts",
+        "src/lib/mind/media/history-audit.test.ts",
+        "src/lib/mind/media/history.test.ts"
+      ],
+      "disposition": "Combined verification pending"
+    },
+    {
+      "finding": "C2/AA-115",
+      "source": "C2/M28",
+      "expected": "Historical references, fitting images and assistant-generated images must reach compatible model input with honest omission metadata.",
+      "implementation": [
+        "src/components/mind/command-app.tsx",
+        "src/lib/mind/logic-routes.ts",
+        "src/lib/mind/media/history.ts",
+        "src/lib/mind/prompt.ts",
+        "src/lib/mind/turn.server.ts"
+      ],
+      "regression": [
+        "src/lib/mind/logic-routes.test.ts",
+        "src/lib/mind/media/history-audit.test.ts",
+        "src/lib/mind/media/history.test.ts"
+      ],
+      "disposition": "Combined verification pending"
+    },
+    {
+      "finding": "C2/AA-116",
+      "source": "C2/M28",
+      "expected": "Historical references, fitting images and assistant-generated images must reach compatible model input with honest omission metadata.",
+      "implementation": [
+        "src/components/mind/command-app.tsx",
+        "src/lib/mind/logic-routes.ts",
+        "src/lib/mind/media/history.ts",
+        "src/lib/mind/prompt.ts",
+        "src/lib/mind/turn.server.ts"
+      ],
+      "regression": [
+        "src/lib/mind/logic-routes.test.ts",
+        "src/lib/mind/media/history-audit.test.ts",
+        "src/lib/mind/media/history.test.ts"
+      ],
+      "disposition": "Combined verification pending"
+    },
+    {
+      "finding": "C2/AA-117",
+      "source": "C2/M28",
+      "expected": "Preserve supported PDF text/structure and late document passages within separate extraction and request budgets; unsupported scans must remain honest.",
+      "implementation": [
+        "src/components/mind/command-app.tsx",
+        "src/lib/mind/pdf-text.ts",
+        "src/lib/mind/types.ts",
+        "src/lib/mind/workspace.ts"
+      ],
+      "regression": [
+        "src/lib/mind/pdf-text-audit.test.ts",
+        "src/lib/mind/pdf-text.test.ts"
+      ],
+      "disposition": "Combined verification pending"
+    },
+    {
+      "finding": "C2/AA-118",
+      "source": "C2/M28",
+      "expected": "Preserve supported PDF text/structure and late document passages within separate extraction and request budgets; unsupported scans must remain honest.",
+      "implementation": [
+        "src/components/mind/command-app.tsx",
+        "src/lib/mind/pdf-text.ts",
+        "src/lib/mind/types.ts",
+        "src/lib/mind/workspace.ts"
+      ],
+      "regression": [
+        "src/lib/mind/pdf-text-audit.test.ts",
+        "src/lib/mind/pdf-text.test.ts"
+      ],
+      "disposition": "Combined verification pending"
+    },
+    {
+      "finding": "C2/AA-119",
+      "source": "C2/M28",
+      "expected": "Preserve supported PDF text/structure and late document passages within separate extraction and request budgets; unsupported scans must remain honest.",
+      "implementation": [
+        "src/components/mind/command-app.tsx",
+        "src/lib/mind/pdf-text.ts",
+        "src/lib/mind/types.ts",
+        "src/lib/mind/workspace.ts"
+      ],
+      "regression": [
+        "src/lib/mind/pdf-text-audit.test.ts",
+        "src/lib/mind/pdf-text.test.ts"
+      ],
+      "disposition": "Combined verification pending"
+    },
+    {
+      "finding": "C2/AA-120",
+      "source": "C2/M29",
+      "expected": "Global search supports independent query terms and deliberate quoted phrases.",
+      "implementation": [
+        "src/components/mind/command-app.tsx",
+        "src/lib/mind/palette.ts"
+      ],
+      "regression": [
+        "src/lib/mind/c2-interface-recovery.test.ts"
+      ],
+      "disposition": "Combined verification pending"
+    },
+    {
+      "finding": "C2/AA-121",
+      "source": "C2/M29",
+      "expected": "Global search ranks exact/prefix titles above incidental body matches deterministically.",
+      "implementation": [
+        "src/components/mind/command-app.tsx",
+        "src/lib/mind/palette.ts"
+      ],
+      "regression": [
+        "src/lib/mind/c2-interface-recovery.test.ts"
+      ],
+      "disposition": "Combined verification pending"
+    },
+    {
+      "finding": "C2/AA-122",
+      "source": "C2/M29",
+      "expected": "A conversation can expose each matching message and navigate to its exact location.",
+      "implementation": [
+        "src/components/mind/command-app.tsx",
+        "src/components/mind/command-search.css",
+        "src/lib/mind/palette.ts"
+      ],
+      "regression": [
+        "src/lib/mind/c2-interface-recovery.test.ts"
+      ],
+      "disposition": "Combined verification pending"
+    },
+    {
+      "finding": "C2/AA-123",
+      "source": "C2/M29",
+      "expected": "Search results clearly distinguish archived and temporary conversations.",
+      "implementation": [
+        "src/components/mind/command-app.tsx",
+        "src/lib/mind/palette.ts"
+      ],
+      "regression": [
+        "src/lib/mind/c2-interface-recovery.test.ts"
+      ],
+      "disposition": "Combined verification pending"
+    },
+    {
+      "finding": "C2/AA-124",
+      "source": "C2/M29",
+      "expected": "Search results include project context and support project-name discovery.",
+      "implementation": [
+        "src/components/mind/command-app.tsx",
+        "src/lib/mind/palette.ts"
+      ],
+      "regression": [
+        "src/lib/mind/c2-interface-recovery.test.ts"
+      ],
+      "disposition": "Combined verification pending"
+    },
+    {
+      "finding": "C2/AA-125",
+      "source": "C2/M29",
+      "expected": "Repeated queries must reuse normalized workspace text and project/context metadata, rebuilding only affected immutable collections while preserving complete message matches and ranking.",
+      "implementation": [
+        "src/lib/mind/palette.ts",
+        "src/components/mind/command-app.tsx",
+        "src/lib/mind/palette-index.test.ts"
+      ],
+      "regression": [
+        "src/lib/mind/palette-index.test.ts",
+        "src/lib/mind/palette-label.test.ts",
+        "src/lib/mind/c2-workspace-recovery.test.ts"
+      ],
+      "disposition": "Combined verification pending"
+    },
+    {
+      "finding": "C2/AA-126",
+      "source": "C2/M30",
+      "expected": "Custom personality limits are disclosed and imported truncation remains visible.",
+      "implementation": [
+        "src/components/mind/command-app.tsx",
+        "src/lib/mind/personalities/index.ts",
+        "src/lib/mind/types.ts",
+        "src/lib/mind/workspace.ts"
+      ],
+      "regression": [
+        "src/lib/mind/c2-interface-recovery.test.ts"
+      ],
+      "disposition": "Combined verification pending"
+    },
+    {
+      "finding": "C2/AA-127",
+      "source": "C2/M30",
+      "expected": "Custom instruction paragraphs and line structure survive safe normalization.",
+      "implementation": [
+        "src/components/mind/command-app.tsx",
+        "src/lib/mind/personalities/index.ts",
+        "src/lib/mind/types.ts",
+        "src/lib/mind/workspace.ts"
+      ],
+      "regression": [
+        "src/lib/mind/c2-interface-recovery.test.ts",
+        "src/lib/mind/personalities/index.test.ts"
+      ],
+      "disposition": "Combined verification pending"
+    },
+    {
+      "finding": "C2/AA-128",
+      "source": "C2/M30",
+      "expected": "Unavailable personality IDs use an explicit safe fallback with a persistent explanation.",
+      "implementation": [
+        "src/components/mind/command-app.tsx",
+        "src/lib/mind/personalities/index.ts",
+        "src/lib/mind/types.ts",
+        "src/lib/mind/workspace.ts"
+      ],
+      "regression": [
+        "src/lib/mind/c2-interface-recovery.test.ts"
+      ],
+      "disposition": "Combined verification pending"
+    },
+    {
+      "finding": "C2/AA-129",
+      "source": "C2/M30",
+      "expected": "Renaming a template instance preserves identity; a same-name custom agent is never substituted.",
+      "implementation": [
+        "src/components/mind/command-app.tsx",
+        "src/components/mind/persona-directory.tsx",
+        "src/components/mind/surfaces/explore-panel.tsx",
+        "src/lib/mind/fleet.ts",
+        "src/lib/mind/persona-select-action.ts",
+        "src/lib/mind/personas/directory.ts",
+        "src/lib/mind/personas/selection.ts",
+        "src/routes/explore.tsx"
+      ],
+      "regression": [
+        "src/lib/mind/persona-select-action.test.ts",
+        "src/lib/mind/personas/selection.test.ts"
+      ],
+      "disposition": "Combined verification pending"
+    },
+    {
+      "finding": "C2/AA-130",
+      "source": "C2/M30",
+      "expected": "Selection and template identity persist atomically in the correct account, preserving newer workspace state and recoverability.",
+      "implementation": [
+        "src/components/mind/command-app.tsx",
+        "src/components/mind/persona-directory.tsx",
+        "src/components/mind/surfaces/explore-panel.tsx",
+        "src/lib/mind/fleet.ts",
+        "src/lib/mind/persona-select-action.ts",
+        "src/lib/mind/personas/directory.ts",
+        "src/lib/mind/personas/selection.ts",
+        "src/routes/explore.tsx"
+      ],
+      "regression": [
+        "src/lib/mind/integration-persona-explore.test.ts",
+        "src/lib/mind/personas/selection.test.ts"
+      ],
+      "disposition": "Combined verification pending"
+    },
+    {
+      "finding": "C2/AA-131",
+      "source": "C2/M30",
+      "expected": "Only a valid recent owner-bound selection can be consumed once; malformed/missing timestamps cannot become current.",
+      "implementation": [
+        "src/components/mind/command-app.tsx",
+        "src/components/mind/persona-directory.tsx",
+        "src/components/mind/surfaces/explore-panel.tsx",
+        "src/lib/mind/fleet.ts",
+        "src/lib/mind/persona-select-action.ts",
+        "src/lib/mind/personas/directory.ts",
+        "src/lib/mind/personas/selection.ts",
+        "src/routes/explore.tsx"
+      ],
+      "regression": [
+        "src/lib/mind/integration-persona-explore.test.ts",
+        "src/lib/mind/personas/selection.test.ts"
+      ],
+      "disposition": "Combined verification pending"
+    },
+    {
+      "finding": "C2/AA-132",
+      "source": "C2/M31",
+      "expected": "Storage configuration, backup existence and proven restoration are separate claims.",
+      "implementation": [
+        "src/lib/mind/persistence.ts",
+        "src/lib/mind/workspace-archive-manifest.ts",
+        "src/lib/mind/workspace.ts"
+      ],
+      "regression": [
+        "src/lib/mind/persistence.test.ts",
+        "src/lib/mind/workspace-archive-manifest.test.ts"
+      ],
+      "disposition": "Combined verification pending"
+    },
+    {
+      "finding": "C2/AA-133",
+      "source": "C2/M31",
+      "expected": "Bootstrap must preserve both nonempty copies; subsequent saves require revision-aware compare-and-swap.",
+      "implementation": [
+        "src/lib/mind/store.ts",
+        "src/lib/mind/sync.ts",
+        "src/lib/mind/use-mind-workspace.ts"
+      ],
+      "regression": [
+        "src/lib/mind/sync.test.ts"
+      ],
+      "disposition": "Combined verification pending"
+    },
+    {
+      "finding": "C2/AA-134",
+      "source": "C2/M31",
+      "expected": "Persist a synthetic full workspace/control state, close the database, reopen it, and prove isolation and stale-write rejection.",
+      "implementation": [
+        "src/lib/mind/file-persist.test.ts"
+      ],
+      "regression": [
+        "src/lib/mind/file-persist.test.ts"
+      ],
+      "disposition": "Combined verification pending"
+    },
+    {
+      "finding": "C2/AA-135",
+      "source": "C2/M31",
+      "expected": "Storage labels distinguish disk file from process memory without breaking old wire clients.",
+      "implementation": [
+        "src/lib/mind/persistence.ts"
+      ],
+      "regression": [
+        "src/lib/mind/persistence.test.ts",
+        "src/lib/mind/workspace-archive-manifest.test.ts"
+      ],
+      "disposition": "Combined verification pending"
+    },
+    {
+      "finding": "C2/AA-136",
+      "source": "C2/M31",
+      "expected": "The workspace export declares portable categories and omissions, and recovery preserves execution safety.",
+      "implementation": [
+        "src/lib/mind/workspace-archive-manifest.ts",
+        "src/lib/mind/workspace.ts"
+      ],
+      "regression": [
+        "src/lib/mind/workspace-archive-manifest.test.ts"
+      ],
+      "disposition": "Combined verification pending"
+    }
+  ]
+}

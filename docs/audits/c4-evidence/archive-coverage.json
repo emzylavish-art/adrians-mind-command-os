@@ -1,0 +1,243 @@
+{
+  "chapterId": "4231aa2763238158bd39d4c8d58191dc",
+  "source": "https://chatgpt.com/c/6b071c4e-2ad0-83ea-9296-a778626dc86d",
+  "coverageGap": "Standalone Pass5 AA011\u2013014 not recovered from archive. C4/M05 cumulative ledger retains IDs; detailed inherited chat summary supplied scope, marked separately.",
+  "records": {
+    "C4/M01": {
+      "url": "https://app.notion.com/p/4231aa2763238104bb34df725195c48b?pvs=204",
+      "title": "C4 \u00b7 M01 \u00b7 Pass 1 \u2014 Does Notion recovery preserve an accepted action, and do the connection screens describe the same state?",
+      "endMarker": "da45fa8c-6e9c-5f0f-b58f-248379d51bc2",
+      "lastEditedAt": "2026-11-25T21:06:26.270Z",
+      "truncationReported": false,
+      "unknownBlockCount": 0
+    },
+    "C4/M02": {
+      "url": "https://app.notion.com/p/4231aa276323816ab14bef85ae5a036e?pvs=204",
+      "title": "C4 \u00b7 M02 \u00b7 Pass 2 \u2014 Speak changes provider rules depending on how you ask",
+      "endMarker": "1f7a8709-3946-50c3-97ea-7b578badf9f1",
+      "lastEditedAt": "2026-11-25T21:06:26.270Z",
+      "truncationReported": false,
+      "unknownBlockCount": 0
+    },
+    "C4/M03": {
+      "url": "https://app.notion.com/p/4231aa276323816c8bc4ea9ba2413a8a?pvs=204",
+      "title": "C4 \u00b7 M03 \u00b7 Pass 3 \u2014 Navigation can lose your place in the app",
+      "endMarker": "22e1b3fe-b069-5cb3-adb1-ea59f62e60d5",
+      "lastEditedAt": "2026-11-25T21:06:26.270Z",
+      "truncationReported": false,
+      "unknownBlockCount": 0
+    },
+    "C4/M04": {
+      "url": "https://app.notion.com/p/4231aa276323817095bbd25f8bb9962c?pvs=204",
+      "title": "C4 \u00b7 M04 \u00b7 Pass 4 \u2014 Build Debug: saved-file behavior, availability, and editor clarity",
+      "endMarker": "37b64d85-6ec3-5ab8-9aea-13591ee3c6c1",
+      "lastEditedAt": "2026-11-25T21:06:31.910Z",
+      "truncationReported": false,
+      "unknownBlockCount": 0
+    },
+    "C4/M05": {
+      "url": "https://app.notion.com/p/4231aa27632381b28fcae62e9ed26666?pvs=204",
+      "title": "C4 \u00b7 M05 \u00b7 Pass 6 \u2014 Scheduled: timezone continuity and automatic progress after sign-in",
+      "endMarker": "09560f5c-e0c7-5ad9-956e-e7a86d24416f",
+      "lastEditedAt": "2026-11-25T21:06:31.910Z",
+      "truncationReported": false,
+      "unknownBlockCount": 0
+    },
+    "C4/M06": {
+      "url": "https://app.notion.com/p/4231aa27632381038d80dd42a09592fa?pvs=204",
+      "title": "C4 \u00b7 M06 \u00b7 Pass 7 \u2014 Custom MCP: does approval remain valid when a tool changes?",
+      "endMarker": "1adb9ed0-4740-4baa-9b24-f9ed0ddd39f1",
+      "lastEditedAt": "2026-11-25T21:06:31.910Z",
+      "truncationReported": false,
+      "unknownBlockCount": 0
+    },
+    "C4/M07": {
+      "url": "https://app.notion.com/p/4231aa27632381c9a3fbd326e2ff1435?pvs=204",
+      "title": "C4 \u00b7 M07 \u00b7 Pass 8 \u2014 Memory isolation, project boundaries and context privacy",
+      "endMarker": "5a657cce-5a21-4fbf-9079-9d1e798468b2",
+      "lastEditedAt": "2026-11-25T21:06:35.005Z",
+      "truncationReported": false,
+      "unknownBlockCount": 0
+    },
+    "C4/M08": {
+      "url": "https://app.notion.com/p/4231aa2763238195aaa0e254f75a8962?pvs=204",
+      "title": "C4 \u00b7 M08 \u00b7 Pass 9 \u2014 Emergency stop and in-flight execution This analysis examines Adrian\u2019s ability to stop work that has alrea",
+      "endMarker": "39b54957-781f-414d-a805-6f7a48b346c3",
+      "lastEditedAt": "2026-11-25T21:06:35.005Z",
+      "truncationReported": false,
+      "unknownBlockCount": 0
+    },
+    "C4/M09": {
+      "url": "https://app.notion.com/p/4231aa276323815fbc73edcb28d97371?pvs=204",
+      "title": "C4 \u00b7 M09 \u00b7 Pass 10 \u2014 Multi-device synchronization and conflicting edits",
+      "endMarker": "5f29834f-e96d-4a82-b96a-13175384eed0",
+      "lastEditedAt": "2026-11-25T21:06:35.005Z",
+      "truncationReported": false,
+      "unknownBlockCount": 0
+    },
+    "C4/M10": {
+      "url": "https://app.notion.com/p/4231aa27632381eb9f12ce61ad7460a4?pvs=204",
+      "title": "C4 \u00b7 M10 \u00b7 Pass 11 \u2014 Attachment persistence and storage integrity",
+      "endMarker": "a3c22a44-ef9e-454e-aaa3-7ca53a458e72",
+      "lastEditedAt": "2026-11-25T21:06:37.592Z",
+      "truncationReported": false,
+      "unknownBlockCount": 0
+    },
+    "C4/M11": {
+      "url": "https://app.notion.com/p/4231aa276323810d9de1d5dd42755a1e?pvs=204",
+      "title": "C4 \u00b7 M11 \u00b7 Pass 12 \u2014 Long conversations, context limits and preservation of earlier analysis",
+      "endMarker": "a790220f-c336-493a-8579-5c35f1a4ed78",
+      "lastEditedAt": "2026-11-25T21:06:37.592Z",
+      "truncationReported": false,
+      "unknownBlockCount": 0
+    },
+    "C4/M12": {
+      "url": "https://app.notion.com/p/4231aa27632381b383fdd59196635d40?pvs=204",
+      "title": "C4 \u00b7 M12 \u00b7 Pass 13 \u2014 Streaming response integrity and interrupted generation",
+      "endMarker": "202383bb-5763-41e9-9608-4973933af4fc",
+      "lastEditedAt": "2026-11-25T21:06:37.592Z",
+      "truncationReported": false,
+      "unknownBlockCount": 0
+    },
+    "C4/M13": {
+      "url": "https://app.notion.com/p/4231aa27632381adbc7bd929061e72bd?pvs=204",
+      "title": "C4 \u00b7 M13 \u00b7 Pass 14 \u2014 Usage accounting, provider costs and execution transparency",
+      "endMarker": "074dd761-c6af-44a9-be5c-e0837c882bfd",
+      "lastEditedAt": "2026-11-25T21:06:44.681Z",
+      "truncationReported": false,
+      "unknownBlockCount": 0
+    },
+    "C4/M14": {
+      "url": "https://app.notion.com/p/4231aa27632381d8b12dd07d9d1c7487?pvs=204",
+      "title": "C4 \u00b7 M14 \u00b7 Pass 15 \u2014 Global search, indexing and retrieval accuracy",
+      "endMarker": "4b3633f6-45d5-4b3b-9482-d6caa50189dc",
+      "lastEditedAt": "2026-11-25T21:06:44.681Z",
+      "truncationReported": false,
+      "unknownBlockCount": 0
+    },
+    "C4/M15": {
+      "url": "https://app.notion.com/p/4231aa2763238112b552d4b569b60cab?pvs=204",
+      "title": "C4 \u00b7 M15 \u00b7 Pass 16 \u2014 Accessibility, keyboard interaction and interface usability",
+      "endMarker": "e8f27612-0f08-43ac-8ec0-094f103358a2",
+      "lastEditedAt": "2026-11-25T21:06:44.681Z",
+      "truncationReported": false,
+      "unknownBlockCount": 0
+    },
+    "C4/M16": {
+      "url": "https://app.notion.com/p/4231aa2763238124b037e9eb5f111253?pvs=204",
+      "title": "C4 \u00b7 M16 \u00b7 Pass 17 \u2014 Authentication, session expiration and account lifecycle",
+      "endMarker": "99785298-83fe-401d-a4fc-0915261fb989",
+      "lastEditedAt": "2026-11-25T21:06:50.260Z",
+      "truncationReported": false,
+      "unknownBlockCount": 0
+    },
+    "C4/M17": {
+      "url": "https://app.notion.com/p/4231aa276323817e8455cb3953a72033?pvs=204",
+      "title": "C4 \u00b7 M17 \u00b7 Pass 18 \u2014 Application performance, rendering efficiency and resource consumption",
+      "endMarker": "27d4d840-f3e3-48e0-a3c5-69ecd55da817",
+      "lastEditedAt": "2026-11-25T21:06:50.260Z",
+      "truncationReported": false,
+      "unknownBlockCount": 0
+    },
+    "C4/M18": {
+      "url": "https://app.notion.com/p/4231aa276323817f8737fc62576b5d59?pvs=204",
+      "title": "C4 \u00b7 M18 \u00b7 Additional audit note",
+      "endMarker": "e20daabc-cd19-54c9-a077-42c522013945",
+      "lastEditedAt": "2026-11-25T21:06:50.260Z",
+      "truncationReported": false,
+      "unknownBlockCount": 0
+    },
+    "C4/M19": {
+      "url": "https://app.notion.com/p/4231aa2763238139b50dee3f987d6250?pvs=204",
+      "title": "C4 \u00b7 M19 \u00b7 Additional audit note",
+      "endMarker": "8c121b2c-96b3-5371-8a8c-ac4c1beb0b03",
+      "lastEditedAt": "2026-11-25T21:06:51.284Z",
+      "truncationReported": false,
+      "unknownBlockCount": 0
+    },
+    "C4/M20": {
+      "url": "https://app.notion.com/p/4231aa276323810f8a6ae4fb849fa73f?pvs=204",
+      "title": "C4 \u00b7 M20 \u00b7 Additional audit note",
+      "endMarker": "5e7453b3-24c1-5fbe-9858-abf913fffea2",
+      "lastEditedAt": "2026-11-25T21:06:51.284Z",
+      "truncationReported": false,
+      "unknownBlockCount": 0
+    },
+    "C4/M21": {
+      "url": "https://app.notion.com/p/4231aa27632381fe8d50df7283844428?pvs=204",
+      "title": "C4 \u00b7 M21 \u00b7 Additional audit note",
+      "endMarker": "4342f9e1-2f21-5163-8689-15e858f18681",
+      "lastEditedAt": "2026-11-25T21:06:51.284Z",
+      "truncationReported": false,
+      "unknownBlockCount": 0
+    }
+  },
+  "findingIds": [
+    "AA-001",
+    "AA-002",
+    "AA-003",
+    "AA-004",
+    "AA-005",
+    "AA-006",
+    "AA-007",
+    "AA-008",
+    "AA-009",
+    "AA-010",
+    "AA-011",
+    "AA-012",
+    "AA-013",
+    "AA-014",
+    "AA-015",
+    "AA-016",
+    "AA-017",
+    "AA-018",
+    "AA-019",
+    "AA-020",
+    "AA-021",
+    "AA-022",
+    "AA-023",
+    "AA-024",
+    "AA-025",
+    "AA-026",
+    "AA-027",
+    "AA-028",
+    "AA-029",
+    "AA-030",
+    "AA-031",
+    "AA-032",
+    "AA-033",
+    "AA-034",
+    "AA-035",
+    "AA-036",
+    "AA-037",
+    "AA-038",
+    "AA-039",
+    "AA-040",
+    "AA-041",
+    "AA-042",
+    "AA-043",
+    "AA-044",
+    "AA-045",
+    "AA-046",
+    "AA-047",
+    "AA-048",
+    "AA-049",
+    "AA-050",
+    "AA-051",
+    "AA-052",
+    "AA-053",
+    "AA-054",
+    "AA-055",
+    "AA-056",
+    "AA-057",
+    "AA-058",
+    "AA-059",
+    "AA-060",
+    "AA-061",
+    "AA-062",
+    "AA-063",
+    "AA-064",
+    "AA-065",
+    "AA-066"
+  ]
+}

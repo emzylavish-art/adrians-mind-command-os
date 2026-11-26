@@ -4,6 +4,7 @@
  * Network requests are DNS-validated and pinned, with no redirect following.
  */
 import { randomUUID } from "node:crypto";
+import { discoveryFailureState } from "./provider-health.ts";
 import { implementedProviderCapabilities, preserveProviderModel, providerRestriction, providerRetryAt, type ProviderCapabilities } from "./provider-lifecycle.ts";
 import { providerWireProtocol, modelDiscoveryHeaders, buildProviderChatRequest, parseProviderText, type AiWireProtocol, type ParsedAnswer, type ProviderChatOptions, type TextTurn } from "./ai-provider-native.ts";
 import { consumeProviderStream } from "./ai-provider-stream.ts";
@@ -14,7 +15,9 @@ import { catalogCapabilities, imageCapabilityBlockReason, readModelCapabilityReg
 import type { Sql } from "../db.ts";
 import { connectorTokenSecretStatus, encryptSecret, decryptSecret } from "./connectors/crypto.ts";
 import { isLocalHostname, isPrivateAddressLiteral, pinnedHttpFetch, resolveAndPinMcpHostname } from "./mcp/http-dns-pin.ts";
-import { customProviderBlockReason, isOpenRouterFreeModel, OPENROUTER_FREE_MODEL_REQUIRED, rankCatalogModels, validCatalogModelId } from "./provider-catalog.ts";
+import { customProviderBlockReason, isOpenRouterFreeModel, OPENROUTER_FREE_MODEL_REQUIRED, rankCatalogModels, normalizeCatalogModels, modelCompatibility, type CatalogModelProfile, type ModelExecution, validCatalogModelId } from "./provider-catalog.ts";
+import { normalizeProviderReceipt } from "./provider-receipt.ts";
+import { reportedModel } from "./stream.ts";
 
 export type PublicAiProvider = {
   id: string;
@@ -22,6 +25,7 @@ export type PublicAiProvider = {
   host: string;
   defaultModel: string;
   models: string[];
+  modelProfiles?: CatalogModelProfile[];
   status: string;
   lastError: string;
   hasKey: boolean;
@@ -43,6 +47,7 @@ type StoredProvider = {
   key_ciphertext: string;
   default_model: string;
   models: unknown;
+  model_profiles?: unknown;
   status: string;
   last_error: string;
   catalog_checked_at?: string | Date | null;
@@ -103,6 +108,33 @@ function asModels(value: unknown): string[] {
     : [];
 }
 
+function asProfiles(value: unknown): CatalogModelProfile[] {
+  let raw = value;
+  if (typeof raw === "string") { try { raw = JSON.parse(raw); } catch { return []; } }
+  return normalizeCatalogModels(Array.isArray(raw) ? raw : raw && typeof raw === "object" ? Object.values(raw) : []);
+}
+function profileRecord(profiles: CatalogModelProfile[]): Record<string, CatalogModelProfile> {
+  return Object.fromEntries(profiles.map((profile) => [profile.id, profile]));
+}
+/** Atomic per-model receipt update: concurrent different-model calls do not overwrite one another. */
+export async function recordModelExecution(sql: Sql, ownerId: string, providerId: string, model: string, receipt: ModelExecution): Promise<void> {
+  await sql.query("update mind_ai_providers set model_profiles = jsonb_set(model_profiles, ARRAY[$3::text], coalesce(model_profiles -> $3, '{}'::jsonb) || jsonb_build_object('id', $3::text, 'lastExecution', $4::jsonb), true) where user_id=$1 and id=$2", [ownerId, providerId, model, JSON.stringify(receipt)]);
+}
+
+/** A catalog response may race inference. Retain each latest stored execution receipt atomically. */
+export async function recordModelCatalogue(sql: Sql, ownerId: string, providerId: string, input: {
+  baseUrl: string; defaultModel: string; models: string[]; status: string; lastError: string; profiles: CatalogModelProfile[];
+}): Promise<void> {
+  await sql.query(
+    `update mind_ai_providers set base_url=$3, default_model=$4, models=$5::jsonb, status=$6, last_error=$7,
+     model_profiles=coalesce((select jsonb_object_agg(incoming.key, incoming.value ||
+       case when model_profiles -> incoming.key ? 'lastExecution'
+       then jsonb_build_object('lastExecution', model_profiles -> incoming.key -> 'lastExecution') else '{}'::jsonb end)
+       from jsonb_each($8::jsonb) incoming), '{}'::jsonb), updated_at=now() where user_id=$1 and id=$2`,
+    [ownerId, providerId, input.baseUrl, input.defaultModel, JSON.stringify(input.models), input.status, input.lastError, JSON.stringify(profileRecord(input.profiles))],
+  );
+}
+
 const OFFICIAL_API_BASES: Record<string, string> = {
   "aistudio.google.com": "https://generativelanguage.googleapis.com/v1beta",
   "ai.google.dev": "https://generativelanguage.googleapis.com/v1beta",
@@ -134,6 +166,7 @@ function publicRow(row: StoredProvider): PublicAiProvider {
     defaultModel: preserveProviderModel(row.default_model, models).model,
     selectedModelAvailable: preserveProviderModel(row.default_model, models).available,
     models,
+    modelProfiles: asProfiles(row.model_profiles).filter((profile) => models.includes(profile.id)),
     status: row.status,
     lastError: row.last_error,
     hasKey: Boolean(row.key_ciphertext),

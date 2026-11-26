@@ -1,10 +1,14 @@
 import { useAccountPreferences } from "./account-preferences-context";
 import { useEffect, useRef, useState } from "react";
+import { captureComposedSpeech, playComposedSpeech } from "@/lib/mind/voice/composed-browser";
+import { runComposedVoiceTurn, type VoiceAnswer, type VoiceStageReceipt } from "@/lib/mind/voice/composed-turn";
+import { DEFAULT_VOICE_ROUTE, readVoiceRoutePreferences, writeVoiceRoutePreferences, speechEngineLabel, type VoiceRoutePreferences, type SpeechEngine } from "@/lib/mind/voice/route-preferences";
 import { loadVoiceSettings, saveVoiceSettings } from "@/lib/mind/voice/settings";
 import { createPortal } from "react-dom";
 import { ArrowUp, AudioLines, Camera, Mic, MicOff, MonitorUp, PhoneOff, Plus, Settings, Volume2, VolumeX, X } from "lucide-react";
 import { openCameraStream, openScreenStream } from "@/components/mind/live-voice-bar/frame-capture";
 import { sharedAudioOutput } from "@/lib/mind/voice/audio-output";
+import type { SpeakSelection, SpeakStageReceipt } from "@/lib/mind/voice/staged-pipeline";
 import {
   readStoredVoiceChoice,
   voiceDisplayName,

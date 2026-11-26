@@ -5,15 +5,18 @@ import { accountOriginalFileStore } from "./library-documents";
 import { accountKnowledgeStore } from "./knowledge-index";
 import { clearAccountDrafts } from "./use-composer-draft";
 import { createWorkspaceCheckpoint } from "./workspace-checkpoint";
-import { loadMindCopy, saveMindChanges } from "./server";
+import { loadMindCopy, saveMindChanges, loadAccountAttachment, saveAccountAttachment, runDurableCorePass, runFleetModelStep } from "./server";
 import { planWorkspaceChanges, validateWorkspaceChanges } from "./workspace-changes";
-import { chooseServerSync } from "./sync";
+import { reconcileServerWorkspace, serverCheckpointKey, synchronizeWorkspace } from "./sync";
+import { prepareAccountAttachments } from "./media/attachment-integrity";
 import type { Chat, Workspace } from "./types";
-import { accountWorkspaceKey, emptyWorkspace, mergeChatDeletionState, mergeMemoryState, loadWorkspaceForAccount, readWorkspaceRawForAccount } from "./workspace";
+import { accountWorkspaceKey, emptyWorkspace, mergeChatDeletionState, mergeMemoryState, loadWorkspaceForAccount, readWorkspaceRawForAccount, canonical, normalizeWorkspace, stampWorkspaceEdits, isPrimaryOwner } from "./workspace";
 import { parseWorkspaceDeferred } from "./workspace-loader";
 import { applyWorkspaceImagePatches, createWorkspaceMediaLoader, type WorkspaceMediaProgress } from "./workspace-media-loader";
-import { mergeWorkspaceEdits } from "./workspace-edits";
+import { mergeWorkspaceEdits, resolveWorkspaceConflict, reconcileWorkspace, type WorkspaceConflict } from "./workspace-edits";
+import { applyWorkspaceDelta, createWorkspaceDelta, deltaIsEmpty, splitWorkspaceDelta } from "./workspace-delta";
 import { SAVE_FAIL, saveFailureMessage } from "./save-error";
+import { normalizeRecovery } from "./recovery-inbox";
 
 function hasContent(ws: Workspace) {
   return ws.chats.length + ws.memories.length + ws.projects.length + ws.files.length + (ws.deletedMemoryIds?.length ?? 0) + (ws.deletedChatIds?.length ?? 0) + ws.audit.length + ws.agents.length > 0;
@@ -37,7 +40,7 @@ export function useMindWorkspace(userId: string | null = "dev-user", email: stri
   const ws = ready ? loaded.workspace : scope.empty;
   const setWs = useCallback((action: SetStateAction<Workspace>) => {
     setLoaded((current) => current?.scope === scope
-      ? { scope, workspace: typeof action === "function" ? action(current.workspace) : action }
+      ? { scope, workspace: stampWorkspaceEdits(current.workspace, typeof action === "function" ? action(current.workspace) : action) }
       : current);
   }, [scope]);
   const [syncNote, setSyncNote] = useState("Browser copy. Server copy has not been checked.");

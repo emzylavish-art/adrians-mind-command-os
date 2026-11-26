@@ -83,48 +83,80 @@ export function createIndexedDbBlobStore(name = MEDIA_BLOB_DB): MediaBlobStore {
   return {
     async put(id, dataUrl) {
       const db = await openDb(name);
-      await new Promise<void>((resolve, reject) => {
+      try { await new Promise<void>((resolve, reject) => {
         const tx = db.transaction(MEDIA_BLOB_STORE, "readwrite");
         tx.objectStore(MEDIA_BLOB_STORE).put(dataUrl, id);
         tx.oncomplete = () => resolve();
         tx.onerror = () => reject(tx.error ?? new Error("IndexedDB put failed."));
-      });
-      db.close();
+        tx.onabort = () => reject(tx.error ?? new Error("IndexedDB put aborted."));
+      }); } finally { db.close(); }
     },
     async get(id) {
       const db = await openDb(name);
-      const value = await new Promise<string | undefined>((resolve, reject) => {
+      try { return await new Promise<string | undefined>((resolve, reject) => {
         const tx = db.transaction(MEDIA_BLOB_STORE, "readonly");
         const req = tx.objectStore(MEDIA_BLOB_STORE).get(id);
         req.onsuccess = () => resolve(typeof req.result === "string" ? req.result : undefined);
         req.onerror = () => reject(req.error ?? new Error("IndexedDB get failed."));
-      });
-      db.close();
-      return value;
+        tx.onabort = () => reject(tx.error ?? new Error("IndexedDB get aborted."));
+      }); } finally { db.close(); }
     },
     async delete(id) {
       const db = await openDb(name);
-      await new Promise<void>((resolve, reject) => {
+      try { await new Promise<void>((resolve, reject) => {
         const tx = db.transaction(MEDIA_BLOB_STORE, "readwrite");
         tx.objectStore(MEDIA_BLOB_STORE).delete(id);
         tx.oncomplete = () => resolve();
         tx.onerror = () => reject(tx.error ?? new Error("IndexedDB delete failed."));
-      });
-      db.close();
+        tx.onabort = () => reject(tx.error ?? new Error("IndexedDB delete aborted."));
+      }); } finally { db.close(); }
     },
   };
 }
 
-/** New attachments live in the account database. Existing snapshots can still resolve legacy IDs. */
+/** Legacy reads require references from the verified legacy owner's stored snapshot.
+ * Successful migration removes the old bytes only after the scoped write commits. */
+export function scopedImageStore(
+  scoped: MediaBlobStore,
+  legacy: MediaBlobStore,
+  allowedLegacyIds: Set<string>,
+  remoteGet?: (id: string) => Promise<string | undefined>,
+): MediaBlobStore {
+  return {
+    put: scoped.put,
+    delete: scoped.delete,
+    async get(id) {
+      const own = await scoped.get(id).catch(() => undefined);
+      if (own) return own;
+      if (/^acct_[a-f0-9]{64}$/.test(id) && remoteGet) {
+        const bytes = await remoteGet(id);
+        if (bytes) {
+          await scoped.put(id, bytes).catch(() => {});
+          return bytes;
+        }
+      }
+      if (!allowedLegacyIds.has(id)) return undefined;
+      const bytes = await legacy.get(id);
+      if (!bytes) return undefined;
+      try {
+        await scoped.put(id, bytes);
+        await legacy.delete?.(id);
+        allowedLegacyIds.delete(id);
+      } catch { /* Original bytes remain recoverable after interrupted migration. */ }
+      return bytes;
+    },
+  };
+}
+
+/** Account blobs never fall back to the unowned legacy database. Legacy inline pixels still migrate normally. */
 export function accountImageStore(owner: string | null) {
   const name = MEDIA_BLOB_DB + ".owner." + encodeURIComponent(owner ?? "");
   const scoped = createIndexedDbBlobStore(name);
-  const legacy = createIndexedDbBlobStore();
   return {
     put: scoped.put,
     getOwned: scoped.get,
     async get(id: string) {
-      return (await scoped.get(id)) ?? (await legacy.get(id));
+      return scoped.get(id);
     },
     async clear() {
       if (typeof indexedDB === "undefined") return;

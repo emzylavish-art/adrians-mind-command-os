@@ -1,3 +1,4 @@
+import { ElapsedTime } from "@/components/mind/elapsed-time";
 import { Mic, Square, X } from "lucide-react";
 import { VoiceWaveform } from "@/components/mind/voice-waveform";
 
@@ -12,6 +13,7 @@ export function DictationPill(props: {
   state: DictationUiState;
   level?: number;
   elapsedSec?: number;
+  startedAt?: number | null;
   /** Mic click: start when idle, stop when recording. */
   onMicClick: () => void;
   onStop: () => void;
@@ -23,8 +25,6 @@ export function DictationPill(props: {
   const transcribing = props.state === "transcribing";
   const active = recording;
   const level = props.level ?? (recording ? 0.4 : 0);
-  const mm = Math.floor((props.elapsedSec ?? 0) / 60);
-  const ss = String((props.elapsedSec ?? 0) % 60).padStart(2, "0");
 
   return (
     <div className={`inline-flex flex-wrap items-center gap-2 ${props.className ?? ""}`} data-dictation-root={props.state}>
@@ -56,7 +56,7 @@ export function DictationPill(props: {
             bars={5}
             label={transcribing ? "Transcribing" : "Recording"}
           />
-          <span className="font-mono text-xs tabular-nums">{transcribing ? "…" : `${mm}:${ss}`}</span>
+          <span className="font-mono text-xs tabular-nums">{transcribing ? "…" : <ElapsedTime startedAt={props.startedAt} seconds={props.elapsedSec ?? 0} clock />}</span>
           {transcribing ? null : (
             <button
               type="button"

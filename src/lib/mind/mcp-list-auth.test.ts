@@ -7,18 +7,18 @@ import {
   resolveMcpListUserId,
 } from "./mcp-list-auth.ts";
 import { loadMcpList } from "./mcp-list-state.ts";
-import { pickSessionUser } from "../auth/session-user.ts";
+import { SessionIdentityConflictError, verifiedSessionIdentity } from "../auth/session-user.ts";
 
 const SAMPLE_SERVERS = [
   { id: "builtin", label: "Built-in", kind: "builtin", enabled: true },
 ];
 
-/** Mimic getSessionUser using pickSessionUser the same way verify.server does. */
+/** Use the same verified-identity contract as getSessionUser in verify.server. */
 function mockGetSessionUser(input: {
   supabaseUser: { id: string; email: string | null } | null;
   betterAuthUser: { id: string; email: string | null } | null;
 }) {
-  return pickSessionUser(input);
+  return verifiedSessionIdentity(input);
 }
 
 describe("mcp soft-auth with mocked Supabase session", () => {
@@ -82,7 +82,7 @@ describe("mcp soft-auth with mocked Supabase session", () => {
     assert.equal(buildMcpRegistryListPayload(userId, []).status, "unauthenticated");
   });
 
-  it("Supabase user still wins when Better Auth is disabled (no short-circuit)", () => {
+  it("accepts a verified Supabase user when Better Auth has no session (no short-circuit)", () => {
     const sessionUser = mockGetSessionUser({
       supabaseUser: { id: "sb-only", email: null },
       betterAuthUser: null,
@@ -96,6 +96,30 @@ describe("mcp soft-auth with mocked Supabase session", () => {
     });
     assert.equal(userId, "sb-only");
     assert.equal(buildMcpRegistryListPayload(userId, SAMPLE_SERVERS).status, "ok");
+  });
+
+  it("accepts matching verified accounts but rejects conflicting accounts before listing owner servers", () => {
+    const matching = mockGetSessionUser({
+      supabaseUser: { id: "same-owner", email: "owner@example.com" },
+      betterAuthUser: { id: "same-owner", email: "owner@example.com" },
+    });
+    assert.equal(matching?.id, "same-owner");
+    assert.equal(matching?.sessionSource, "both");
+
+    for (const [supabaseId, betterAuthId] of [["owner-a", "owner-b"], ["owner-b", "owner-a"]]) {
+      let reachedOwnerList = false;
+      assert.throws(() => {
+        const sessionUser = mockGetSessionUser({
+          supabaseUser: { id: supabaseId, email: "shared@example.com" },
+          betterAuthUser: { id: betterAuthId, email: "shared@example.com" },
+        });
+        const userId = resolveMcpListUserId({ sessionUser, authConfigured: true, gateIdentityEnabled: true,
+          databaseConfigured: true, devUserId: "dev-user" });
+        reachedOwnerList = true;
+        return buildMcpRegistryListPayload(userId, SAMPLE_SERVERS);
+      }, (error: unknown) => error instanceof SessionIdentityConflictError && error.status === 409);
+      assert.equal(reachedOwnerList, false, "conflicting verified accounts cannot select either owner's registry");
+    }
   });
 
   it("real server error still surfaces as error via loadMcpList (not quiet sign-in)", async () => {

@@ -1,7 +1,9 @@
+import type { PdfEvidenceIndex } from "./pdf-evidence.ts";
+import type { ExecutionEvidence } from "./execution-evidence.ts";
 import type { SkillApplicationReceipt } from "./skill-activation";
 import type { VoiceStagesReceipt } from "./voice/stage-receipts.ts";
 import type { ImagePreparationReceipt, ImageEditLineage } from "./media/image-metadata.ts";
-import type { ConsultEvidence } from "./model-consult.ts";
+import type { ConsultEvidence, HelperReceipt, ConsultAttempt } from "./model-consult.ts";
 import type { PersonalityId } from "./personalities/index.ts";
 import type { BotModel } from "./bot-model.ts";
 import type { ModelTier } from "./model-tiers.ts";
@@ -76,12 +78,27 @@ export type ReplyVersion = { id: string; content: string; at: string; provider?:
 
 export type Retrieval = { at: string; ids: string[] };
 
+/** Independent context controls. Missing legacy fields retain their documented defaults. */
+export type ChatContextPolicy = {
+  history?: boolean;
+  botKnowledge?: boolean;
+  projectDocuments?: boolean;
+  projectConversations?: boolean;
+  research?: boolean;
+  saveMemories?: boolean;
+};
+
 export type Chat = {
+  /** Metadata revision, independent of the most recent message. */
+  updatedAt?: string;
+  botConfigVersion?: number;
+  forkedFrom?: { chatId: string; messageId: string; at: string };
   notionWorkspaceId?: string;
   id: string;
   agentId?: string;
   botProvider?: NonNullable<BotModel["chatProvider"]>;
   botTier?: ModelTier;
+  botExactModel?: string;
   botKnowledge?: string;
   title: string;
   memory: "off" | "on";
@@ -90,6 +107,9 @@ export type Chat = {
   temporary: boolean;
   autonomy: Autonomy;
   personalityId?: PersonalityId;
+  /** Preserved import warning until the owner explicitly chooses a supported style. */
+  personalityFallback?: string;
+  customPersonalityTruncated?: boolean;
   customPersonality?: string;
   projectId: string | null;
   messages: Msg[];
@@ -140,10 +160,20 @@ export type Project = {
   name: string;
   description: string;
   createdAt: string;
+  archived?: boolean;
 };
 
 export type UsageEntry = {
+  executionId?: string;
   id: string;
+  operationId?: string;
+  channel?: "chat" | "orchestrator" | "speak" | "build" | "image" | "agent";
+  stage?: string;
+  outcome?: "unconfirmed" | "rejected_before_dispatch" | "completed" | "failed" | "canceled" | "stopped" | "unknown";
+  dispatched?: boolean;
+  /** Runtime progress is separate from evidence that a provider answered. */
+  executionState?: "queued" | "running" | "completed" | "failed" | "canceled";
+  providerDispatch?: "not_sent" | "sent" | "unknown";
   chatId: string;
   at: string;
   provider?: string;
@@ -153,6 +183,8 @@ export type UsageEntry = {
   promptTokens: number | null;
   completionTokens: number | null;
   kind: "actual" | "partial" | "unknown";
+  role?: "primary" | "helper";
+  executionLocation?: "local" | "hosted";
 };
 
 export type AuditEntry = {
@@ -169,6 +201,7 @@ export type LocalFileOriginal = { blobId: string; sha256: string; bytes: number;
 export type LocalFileVersion = { versionId: string; name: string; text: string; bytes: number; at: string; original?: LocalFileOriginal; partial?: boolean; extraction?: string };
 
 export type LocalFile = {
+  evidenceIndex?: PdfEvidenceIndex;
   id: string;
   name: string;
   text: string;
@@ -183,6 +216,13 @@ export type LocalFile = {
   sourceMessageId?: string;
   projectId: string | null;
   createdAt: string;
+  textSha256?: string;
+  revision?: number;
+  previousVersionId?: string;
+  archived?: boolean;
+  retrievalDisabled?: boolean;
+  original?: { id: string; sha256: string; bytes: number; mime: string; storage: "browser" };
+  extraction?: { method: "plain-text" | "pdf-text" | "legacy"; extractedCharacters: number; retainedCharacters: number; coverage: string; at: string };
 };
 
 export type Workspace = {
@@ -206,6 +246,26 @@ export type Workspace = {
   schedules: ScheduleJob[];
   pins: FleetPin[];
   browserSessions: BrowserSessionRecord[];
+  syncConflicts?: WorkspaceConflict[];
+  toolPermissions?: Record<string, boolean>;
+};
+
+export type RecoveryRecord = {
+  id: string; at: string; action: string; target: string; message: string;
+  state: "open" | "dismissed" | "resolved";
+  chatId?: string; workspaceId?: string; operationId?: string;
+  text?: string; pageId?: string | null; outcome?: string;
+};
+
+/** Both variants of a concurrent edit, preserved until the owner reviews them. */
+export type WorkspaceJsonValue = null | boolean | number | string | WorkspaceJsonValue[] | { [key: string]: WorkspaceJsonValue };
+export type WorkspaceConflict = {
+  id: string;
+  collection: string;
+  recordId: string;
+  field: string;
+  local: WorkspaceJsonValue;
+  remote: WorkspaceJsonValue;
 };
 
 export type MemoryNote = { id: string; text: string; authority?: MemoryItem["authority"]; sourceRef?: MemoryItem["sourceRef"]; alwaysApply?: boolean };

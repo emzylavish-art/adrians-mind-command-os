@@ -1,15 +1,38 @@
 import { consumeProviderStream } from "./ai-provider-stream.ts";
 import { consumeOllamaStream, mergeProviderReceipt } from "./provider-call-stream.ts";
 /** Bounded provider-specific chat calls with normalised assistant text. */
-import { reportedModel } from "./stream.ts";
+import { reportedModel, type ModelUsage } from "./stream.ts";
 import { isOpenRouterFreeModel, OPENROUTER_FREE_MODEL_REQUIRED, OPENROUTER_FREE_ROUTING } from "./provider-catalog.ts";
+import { normalizeProviderReceipt as executionReceipt } from "./provider-receipt.ts";
 import { parseModelControls, type ModelControls } from "./model-tiers.ts";
-import { readProviderReceipt, type ProviderReceipt } from "./provider-usage.ts";
+import { readProviderReceipt, type ProviderReceipt as UsageReceipt, normalizeProviderUsage, providerRequestId } from "./provider-usage.ts";
 
 export type ProviderName = "grok" | "openai" | "anthropic" | "gemini" | "openrouter";
+
+export type ProviderReceipt = {
+  usage?: ModelUsage | null;
+  executionLocation?: "local" | "hosted";
+  requestId?: string | null;
+  finishReason?: string | null;
+};
+
+/** Missing or invalid counters remain unknown; zero is retained only when reported. */
+export function normalizeProviderReceipt(id: string, payload: Record<string, any>, headers?: Pick<Headers, "get">): ProviderReceipt {
+  const source = id === "gemini" ? payload.usageMetadata : id === "ollama" ? payload : payload.usage;
+  const count = (value: unknown) => typeof value === "number" && Number.isSafeInteger(value) && value >= 0 ? value : undefined;
+  const prompt_tokens = count(id === "gemini" ? source?.promptTokenCount : id === "anthropic" ? source?.input_tokens : id === "ollama" ? source?.prompt_eval_count : source?.prompt_tokens);
+  const completion_tokens = count(id === "gemini" ? source?.candidatesTokenCount : id === "anthropic" ? source?.output_tokens : id === "ollama" ? source?.eval_count : source?.completion_tokens);
+  const label = (value: unknown) => typeof value === "string" && value.trim() ? value.trim().slice(0, 200) : null;
+  return {
+    executionLocation: executionReceipt(id, payload, headers).executionLocation,
+    usage: prompt_tokens === undefined && completion_tokens === undefined ? null : { ...(prompt_tokens !== undefined ? { prompt_tokens } : {}), ...(completion_tokens !== undefined ? { completion_tokens } : {}) },
+    requestId: label(headers?.get("x-request-id")) ?? label(headers?.get("request-id")) ?? label(payload.id) ?? label(payload.responseId),
+    finishReason: label(id === "gemini" ? payload.candidates?.[0]?.finishReason : id === "anthropic" ? payload.stop_reason : id === "ollama" ? payload.done_reason : payload.choices?.[0]?.finish_reason),
+  };
+}
 type OtherProvider = Exclude<ProviderName, "grok">;
 type History = { role: "user" | "assistant"; content: string };
-export type ProviderCallResult = { ok: boolean; text: string; error: string; model?: string; httpStatus?: number; retryAfter?: string; delivery?: "streamed" | "buffered" } & Partial<ProviderReceipt>;
+export type ProviderCallResult = { ok: boolean; text: string; error: string; model?: string; httpStatus?: number; retryAfter?: string; delivery?: "streamed" | "buffered" } & Partial<ProviderReceipt & UsageReceipt>;
 const KEYS: Record<OtherProvider, string> = {
   openai: "OPENAI_API_KEY", anthropic: "ANTHROPIC_API_KEY",
   gemini: "GEMINI_API_KEY", openrouter: "OPENROUTER_API_KEY",

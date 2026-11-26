@@ -1,3 +1,30 @@
+import { memorySendRevision, checkMemorySendRevision } from "@/lib/mind/memory-send-policy";
+import { commitSelectionChanges, ownerSelectionStorage, exactModelForChat } from "@/lib/mind/selection-sync";
+import type { StoredSelection } from "@/lib/mind/logic-routes";
+import { UsageHistory } from "@/components/mind/usage-history";
+import { archiveReview, packMemoryOnly, unpackMemoryOnly, quarantineImportedMemory, resolveImportedMemory, unreviewedMemoryScopeIds } from "@/lib/mind/archive-review";
+import { applyExecutionUsage } from "@/lib/mind/execution-usage";
+import { readVoicePipeline, writeVoicePipeline, speakWithBrowser, type VoicePipelinePreferences } from "@/lib/mind/voice/stage-routing";
+import { NotionIntegrationCard } from "@/components/mind/notion-integration-card";
+import { ModalOverlay } from "@/components/mind/modal-overlay";
+import { loadNotionRecovery, saveNotionRecovery, type NotionRecovery } from "@/lib/mind/notion-recovery";
+import { currentMemoryContext } from "@/lib/mind/context-permission";
+import { checkpointReply, completedHistory } from "@/lib/mind/partial-reply";
+import { contextReceiptNotice, type ContextReceipt } from "@/lib/mind/context-budget";
+import { ElapsedTime } from "@/components/mind/elapsed-time";
+import { createExecutionEvidence } from "@/lib/mind/execution-evidence";
+import { startBrowserWorkPump } from "@/lib/mind/browser-work-pump";
+import { subscribeVisibleClock } from "@/lib/mind/visible-clock";
+import { pollSavedVideo } from "@/lib/mind/media/video-poll";
+import { selectedVoiceRoute } from "@/lib/mind/voice/selected-route";
+import { InstructionLibrary, SkillPlanPreview } from "@/components/mind/instruction-library";
+import { defaultSkillPreferences, loadSkillPreferences, saveSkillPreferences, skillPreferenceKey, type SkillPreferences } from "@/lib/mind/skill-preferences";
+import type { TurnBody } from "@/lib/mind/turn.server";
+import { KnowledgeSettings } from "@/components/mind/knowledge-settings";
+import { ResearchEvidence, ResearchLibrary } from "@/components/mind/research-library";
+import { RetainedVideo } from "@/components/mind/retained-video";
+import { researchFollowupContext, mergeResearchEvidence } from "@/lib/mind/research-followup";
+import { identifyImages, prepareMediaExport } from "@/lib/mind/media/asset-lifecycle";
 import { stageCodeHandoff } from "@/lib/mind/code-handoff";
 import type { TurnErrorCode } from "@/lib/mind/turn-error";
 import { ChatPane } from "./chat-pane";
@@ -8,8 +35,18 @@ import { ResourceState } from "./resource-state";
 import { GeneratedArtifactWorkspace } from "@/components/mind/generated-artifact-workspace";
 import { saveGeneratedArtifact } from "@/lib/mind/generated-artifacts";
 import { accountImageStore } from "@/lib/mind/media/blob-store";
+import { saveDocumentOriginal } from "@/lib/mind/document-originals";
+import { retrieveProjectPassages, MAX_DOCUMENT_INPUT_BYTES, MAX_DOCUMENT_TEXT_CHARS, MAX_LIBRARY_FILES } from "@/lib/mind/knowledge";
+import { effectiveContextPolicy, freshContextPolicy, contextDisclosure } from "@/lib/mind/memory/context-policy";
+import { memoryPolicyRevision, validateMemoryDispatch } from "@/lib/mind/memory/dispatch-policy";
+import { nextReadingPosition } from "@/lib/mind/reading-position";
+import { beginIncidentRecovery, createIncident, incidentForOperation, incidentStorageKey, planIncidentRecovery, readIncidents, recordIncident, resolveIncident, verifyIncidentRecovery, type Incident, type RecoveryBindings, type RecoveryProof } from "@/lib/mind/incidents";
+import { failureEnvelopeFromAction, notionFailureEnvelope, readFailureEnvelope, type FailureDetails, type FailureEnvelope } from "@/lib/mind/failure-envelope";
+import { IncidentRecoveryCard } from "./incident-recovery-card";
+import { ResourceSettings } from "@/components/mind/resource-settings";
+import { createOperationScope } from "@/lib/mind/operation-scope";
 import { DataRetentionCenter } from "@/components/mind/data-retention-center";
-import { loadMindCopy } from "@/lib/mind/server";
+import { loadMindCopy, readExecutionControl } from "@/lib/mind/server";
 import { MediaRecoveryPanel } from "@/components/mind/media/media-recovery-panel";
 import { beginRecoverableVideo, pollRecoverableVideo } from "@/lib/mind/media/video-recovery";
 import { loadVideoSettings } from "@/lib/mind/media/video-settings";
@@ -28,7 +65,8 @@ import { MemorySelectionDetails, ContextReceiptDetails } from "@/components/mind
 import { updateMemoryMetadata } from "@/lib/mind/memory/maintenance";
 import { selectMemoryContext } from "@/lib/mind/memory/relevant";
 import { SpendingControls } from "@/components/mind/spending-controls";
-import { dismissRecovery, failureKindForAction, recoveryKind, readRecoveries, serializeRecoveries, upsertRecovery, type RecoveryEntry } from "@/lib/mind/recovery-inbox";
+import { dismissRecovery, failureKindForAction, recoveryKind, readRecoveries, serializeRecoveries, upsertRecovery, type RecoveryEntry, saveRecovery, closeRecovery } from "@/lib/mind/recovery-inbox";
+import { runStagedSpeak, loadSpeakSelection, STAGED_SPEAK_KEY, type SpeakSelection, type SpeakStageReceipt } from "@/lib/mind/voice/staged-pipeline";
 import { SurfaceErrorBoundary } from "@/components/mind/surface-error-boundary";
 import { SessionCenter } from "@/components/mind/session-center";
 import { ProjectWorkspace } from "@/components/mind/project-workspace";
@@ -40,17 +78,17 @@ import { canRetryAgentRequest, snapshotAgentRequest, summarizeAgentModelRounds, 
 import { loadModelControls, supportsTierReasoning } from "@/lib/mind/model-tiers";
 import { LibraryDocumentPreview } from "@/components/mind/library-document-preview";
 import { accountOriginalFileStore, prepareLibraryDocument, saveLibraryDocument, updateLibraryDocument } from "@/lib/mind/library-documents";
-import { ResearchEvidence } from "@/components/mind/research-evidence";
 import { createResearchRunGuard, loadResearchReports, makeResearchReport, researchAttachment, researchReferencesInText, saveResearchReport, type ResearchReport } from "@/lib/mind/research-reports";
 import { NotificationInbox } from "./notification-inbox";
 import { workspaceNotices, isQuietHour, DEFAULT_NOTIFICATION_PREFERENCES, type NotificationPreferences } from "@/lib/mind/notifications";
 import { INITIAL_MESSAGE_WINDOW, messageWindow } from "@/lib/mind/render-window";
-import { ARCHIVE_CATEGORIES, selectArchiveCategories, type ArchiveCategory } from "@/lib/mind/workspace";
+import { ARCHIVE_CATEGORIES, selectArchiveCategories, type ArchiveCategory, deleteLocalFile, deleteProject, refreshBotChat } from "@/lib/mind/workspace";
 import { WorkspaceDialog as Overlay } from "./workspace-dialog";
 import type { NotionPage } from "@/lib/mind/notion";
 import { AccountPreferencesProvider, useAccountPreferences } from "./account-preferences-context";
 import { accountPreferenceKey } from "@/lib/mind/account-preferences";
-import { lazy, Suspense, useEffect, useLayoutEffect, useMemo, useRef, useState, type KeyboardEvent as ReactKeyboardEvent, type MouseEvent as ReactMouseEvent, type ReactNode, useSyncExternalStore } from "react";
+import { lazy, Suspense, useEffect, useLayoutEffect, useMemo, useRef, useState, type KeyboardEvent as ReactKeyboardEvent, type MouseEvent as ReactMouseEvent, type ReactNode, useSyncExternalStore, useDeferredValue } from "react";
+import { createPortal } from "react-dom";
 import { Link, useRouter } from "@tanstack/react-router";
 import "./command-drawer-nav.css";
 import "./command-search.css";
@@ -58,7 +96,8 @@ import "./command-voice-mode.css";
 import "./gpt-shell.css";
 import "./visual-system.css";
 import "./workspace-layout.css";
-import { getBearerToken } from "@/lib/auth/client";
+import { getBearerToken, signOut } from "@/lib/auth/client";
+import { fetchOauthStatusPayload } from "@/lib/mind/service-board-status";
 import { loadMcpWithHttpFallback } from "@/lib/mind/mcp-list-http";
 import { getRecentChats } from "@/lib/mind/recent-chats";
 import { ConversationSections } from "@/components/mind/conversation-sections";
@@ -68,7 +107,7 @@ import { DesktopUpdateNote } from "@/components/mind/desktop-update-note";
 import { ActionOverlay, ActionsButton } from "@/components/mind/conversation-menu";
 import { applyArchive, applyFavorite, applyProject, applyRename, conversationSharePath, quoteIntoNewChat, scheduleConversation, type ConversationAction } from "@/lib/mind/conversation-actions";
 import { conversationSection, HIDDEN_SETTINGS_SECTIONS_KEY, hideSection, readHiddenSections, removeConversations, restoreSection } from "@/lib/mind/conversation-sections";
-import { resolveShare, sameShareLocation, shareMissLabel, shareWriteDropsMissing, shareWriteForView, writeShareSearch } from "@/lib/mind/app-location";
+import { settingsPaneFromSearch, resolveShare, sameShareLocation, shareMissLabel, shareWriteDropsMissing, shareWriteForView, writeShareSearch } from "@/lib/mind/app-location";
 import { routeForBotChat } from "@/lib/mind/bot-model";
 import { SignedOut, UserButton } from "@/lib/auth/gates";
 import { SupabaseAccountControls } from "@/components/mind/supabase-account";
@@ -112,9 +151,9 @@ import {
 } from "lucide-react";
 import { approvalTokenFor, decide, type Autonomy } from "@/lib/mind/policy";
 import { reaDoctor, reaInspect } from "@/lib/mind/rea";
-import { CAPABILITIES, isVerifiedCapability, type CapabilityStatus } from "@/lib/mind/registry";
+import { CAPABILITIES } from "@/lib/mind/registry";
 import { REQUIREMENTS, requirementCounts } from "@/lib/mind/requirements";
-import { consumeMindTurn, prepareTurn, shouldStoreReply, STOPPED_REPLY } from "@/lib/mind/live-turn";
+import { consumeMindTurn, prepareTurn, shouldStoreReply, STOPPED_REPLY, checkTurnReceipt } from "@/lib/mind/live-turn";
 import { boundAbortSignal } from "@/lib/mind/turn-timeouts";
 import { createVoiceClientSecret, mcpCommand, mcpList, mcpRemove, mcpRegistryList, mcpRegistryToggle, mcpSave, mindStatus, notionCommand, notionStatus, recordAgentExecution, searchWeb, setExecutionHalt, speakText } from "@/lib/mind/server";
 import { focusConnection } from "./focus-connection";
@@ -127,9 +166,10 @@ import { VoiceLevelMeter } from "@/components/mind/voice-level-meter";
 import { VoiceLiveTranscript } from "@/components/mind/voice-live-transcript";
 import { VoicePicker } from "@/components/mind/voice-picker";
 import { LiveVoiceBar } from "@/components/mind/live-voice-bar";
-import { VoiceCloningStudioPage } from "@/components/mind/voice-cloning-studio/voice-cloning-studio";
+const VoiceCloningStudioPage = lazy(() => import("@/components/mind/voice-cloning-studio/voice-cloning-studio").then((module) => ({ default: module.VoiceCloningStudioPage })));
 import { DictationPill } from "@/components/mind/dictation-pill";
 import { VoiceModeOverlay, type VoiceOverlayPhase } from "@/components/mind/voice-mode-overlay";
+import { researchSummary, type ResearchResult, type ResearchStep } from "@/lib/mind/research";
 import { SpeakStage } from "@/components/mind/speak-stage";
 import { HUMAN_CODE_NOTE, HumanCodePanel, isIntelligenceThread } from "@/components/mind/human-code-panel";
 import { SpeakPanel } from "@/components/mind/surfaces/speak-panel";
@@ -147,7 +187,8 @@ import {
 const DashboardApp = lazy(() => import("@/components/mind/agent-command-center").then((mod) => ({ default: mod.AgentCommandCenter })));
 import { isLiveVoiceOccupied, LIVE_VOICE_BUSY_MESSAGE } from "@/lib/mind/voice-live/occupancy";
 import { probeOllamaConductor, runOllamaConductor } from "@/lib/mind/voice/ollama-conductor";
-import { DIRECT_FALLBACK_NOTICE, formatVoiceClientError, resolveVoiceMode } from "@/lib/mind/voice/errors";
+import { readTranscriptionPolicy, transcriptionPolicyKey, transcriptionRecipients, type TranscriptionPolicy } from "@/lib/mind/voice/transcription-policy";
+import { formatVoiceClientError, resolveVoiceMode } from "@/lib/mind/voice/errors";
 import { commitVoiceMode, toggleVoiceMode, type VoiceRoutingMode } from "@/lib/mind/voice/mode";
 import {
   getServerVoiceMode,
@@ -185,6 +226,7 @@ import {
   writeStoredVoiceChoice,
 } from "@/lib/mind/voice/voices";
 import { RealtimeVoiceSession } from "@/lib/mind/voice/realtime-session";
+import { readVoiceRoutePreferences, speechEngineLabel, voiceRouteKey } from "@/lib/mind/voice/route-preferences";
 import { voiceSessionInstructions } from "@/lib/mind/voice-live/session-instructions";
 import { readStoredCharacterId } from "@/lib/mind/characters";
 import { noteSpokenText, readAvatarSession, setAvatarPresence } from "@/lib/mind/avatar/session";
@@ -231,13 +273,16 @@ import {
   toggleMute,
 } from "@/lib/mind/voice/spam-guard";
 import { createCallHistory, type CallHistory } from "@/lib/mind/voice/voice-chat-turn";
-import type { Chat, Msg, Workspace } from "@/lib/mind/types";
+import type { Chat, Msg, Workspace, MemoryScope } from "@/lib/mind/types";
 import { ServiceBoard } from "@/components/mind/service-board";
 import { EveWorkbench } from "@/components/mind/eve-workbench";
 import { FleetPanel } from "@/components/mind/fleet-panels";
-import { BuildWorkspace } from "@/components/mind/build-workspace";
+const BuildWorkspace = lazy(() => import("@/components/mind/build-workspace").then((module) => ({ default: module.BuildWorkspace })));
 import { ResearchPanel } from "@/components/mind/surfaces/research-panel";
-import { AnswerTabs, MessageBody } from "@/components/mind/message-body";
+import { MemoAnswerTabs, MemoMessageBody, useMessageMediaActions } from "@/components/mind/stable-message-body";
+import { useWorkspaceRecordSize } from "@/lib/mind/workspace-metrics";
+import { useViewScrollPosition } from "@/lib/mind/use-view-scroll-position";
+import { advanceVideoProgress, createVideoProgress, videoProgressMessage, type VideoProgress } from "@/lib/mind/media/video-progress";
 import { MemorySavedIndicator } from "@/components/mind/memory-saved-indicator";
 import { MemoryChatToggle } from "@/components/mind/memory-chat-toggle";
 import { AttachmentChips } from "@/components/mind/media/attachment-chips";
@@ -254,7 +299,7 @@ import { tickFleet } from "@/lib/mind/fleet";
 import { createBotFromSpeech, parseCreateBot } from "@/lib/mind/speak-bot";
 import { interpretCommand, type CommandMode } from "@/lib/mind/intent";
 import { notionSearchIssue, retainActivity } from "@/lib/mind/connection-attention";
-import { paletteHits } from "@/lib/mind/palette";
+import { createPaletteIndexBuilder, queryPaletteIndex, paletteShortcut } from "@/lib/mind/palette";
 import { paletteKeyAction } from "@/lib/mind/palette-keys";
 import { runLocalPlan } from "@/lib/mind/local-tools";
 import { greeting } from "@/lib/mind/greeting";
@@ -274,7 +319,8 @@ import {
   type ToolTimelineRow,
 } from "@/lib/mind/tools-timeline";
 import { describeFile } from "@/lib/mind/files-read";
-import { extractPdfText } from "@/lib/mind/pdf-text";
+import { selectHistoryForQuestion, prepareHistoryContext } from "@/lib/mind/media/history";
+import { extractPdfText, selectPdfChunks } from "@/lib/mind/pdf-text";
 import { ModelTierChip } from "@/components/mind/model-tier-chip";
 import { AnchoredCard, MenuCluster, MenuGroup, MenuMotion, MenuShelf, ComposerMore, finishMenu, menuChip, pinShelf } from "@/components/mind/menu-material";
 import { MODEL_TIERS, type ConcreteModelTier, type ModelTier, type modelTierCatalog } from "@/lib/mind/model-tiers";
@@ -295,7 +341,7 @@ import {
   type LogicRouteId,
   type LogicRoutePublic,
 } from "@/lib/mind/logic-routes";
-import { runSkill, runRequestedSkill, skillReadiness, SKILLS, type SkillReceipt } from "@/lib/mind/skills";
+import { runSkill, runRequestedSkill, skillReadiness, SKILLS, type SkillReceipt, runLocalSkill } from "@/lib/mind/skills";
 import LocalSkillsTools from "@/components/mind/local-skills-tools";
 import { HandyDictation } from "@/components/mind/handy-dictation";
 import { detectWithHandy } from "@/lib/mind/handy-dictation";
@@ -306,7 +352,7 @@ import { exportChat, prepareRegenerate, prepareRetry, renameChat, createEditedBr
 import { replyActions, replyHasSources } from "@/lib/mind/reply-actions";
 import { useComposerDraft } from "@/lib/mind/use-composer-draft";
 import { useMindWorkspace } from "@/lib/mind/use-mind-workspace";
-import { useCurrentUser, useCurrentUserState } from "@/lib/auth/use-current-user";
+import { useCurrentUserState } from "@/lib/auth/use-current-user";
 import { COMPOSER_MODES, effortForModelTier, effortModelTier, loadComposerEffort, resolveSendPath, saveComposerEffort, type ComposerModeId } from "@/lib/mind/composer-modes";
 import { ADRIAN_MIND_IDENTITY, builtinModules, customModules, loadConsultModel, planModelConsult, saveConsultModel, type ConsultModule } from "@/lib/mind/model-consult";
 import { planRouting, readRatings, readRoutingMode, readRoutingPanel, ROUTING_MODE_LABEL, saveRating, writeRoutingMode, writeRoutingPanel, type ResponseRating, type RoutingMode } from "@/lib/mind/routing-modes";
@@ -376,8 +422,8 @@ import {
   updateChatCustomPersonality,
 } from "@/lib/mind/workspace";
 import { WORKSPACE_ROUTE_LINKS } from "@/lib/mind/workspace-nav";
-import { CONVERSATIONAL_PERSONALITIES, resolvePersonalityId, type PersonalityId } from "@/lib/mind/personalities";
-import { applyPersonaHandoff, clearPersonaSelection, readPersonaSelection } from "@/lib/mind/personas/selection";
+import { CONVERSATIONAL_PERSONALITIES, isPersonalityId, personalityStatus, resolvePersonalityId, type PersonalityId } from "@/lib/mind/personalities";
+import { applyPersonaHandoff, consumePersonaHandoff } from "@/lib/mind/personas/selection";
 
 type View =
   | "command"
@@ -409,11 +455,13 @@ type Pending = {
   detail: string;
   confirm: string;
   run: () => void;
+  cancel?: () => void;
+  review?: Record<string, unknown>;
 };
 
 const EMPTY_DRAFT_IMAGES: ImageAttachment[] = [];
 
-type Staged = { name: string; text: string };
+type Staged = { name: string; text: string; source?: { fileId: string; revision: string; name: string } };
 
 function pinRailScroll(node: HTMLElement | null) {
   node?.style.setProperty("overflow-x", "hidden", "important");
@@ -527,17 +575,6 @@ const TITLES: Record<View, string> = {
   settings: "Settings",
   dashboard: "Dashboard",
 };
-
-function statusWord(status: CapabilityStatus) {
-  if (status === "live_verified") return "Live verified";
-  if (status === "ready") return "Ready";
-  if (status === "configured") return "Configured";
-  if (status === "blocked") return "Blocked";
-  if (status === "unconfigured") return "Not configured";
-  if (status === "local_required") return "Local only";
- if (status === "paid_required") return "Paid, not called";
- return "Not implemented";
-}
 
 const CAPABILITY_MARK: Record<string, string> = {
   "chat.grok": "grok",
@@ -2707,8 +2744,12 @@ function CommandSession({ account }: { account: ReturnType<typeof useCurrentUser
     }
   }
 
-  async function askNotion(chat: Chat, text: string, confirmed = false, pageId: string | null = null, workspaceId = chat.notionWorkspaceId, cursor: string | null = null) {
+  async function askNotion(chat: Chat, text: string, confirmed = false, pageId: string | null = null, workspaceId = chat.notionWorkspaceId, operationId?: string, cursor: string | null = null) {
     if (turnOwner.current !== draftOwner || !wsRef.current.chats.some((item) => item.id === chat.id)) return;
+    if ((confirmed || operationId) && wsRef.current.chats.find((item) => item.id === chat.id)?.notionWorkspaceId !== workspaceId) {
+      setError("This conversation's Notion workspace changed after the operation was prepared. Restore the original workspace to check its existing result, or prepare a new request and approval for the new workspace. Nothing was sent.");
+      return;
+    }
     setBusy(true);
     setError(null);
     const epoch = notionEpoch.current;
@@ -2729,16 +2770,12 @@ function CommandSession({ account }: { account: ReturnType<typeof useCurrentUser
         });
         return;
       }
-      const result = await notionCommand({ data: { text, confirmed, pageId, workspaceId, cursor } });
+      if (confirmed && operationId) setWs((prev) => saveRecovery(prev, { id: operationId, operationId, at: new Date().toISOString(), action: "notion_operation", target: "notion", chatId: chat.id, workspaceId, pageId, text, outcome: "uncertain", message: "Notion write outcome has not been confirmed. Check this existing operation before starting another write.", state: "open" }));
+      const result = await notionCommand({ data: { text, confirmed, pageId, workspaceId, operationId, cursor } });
       if (turnOwner.current !== draftOwner) return;
       setBusy(false);
-      if (epoch !== notionEpoch.current || !wsRef.current.chats.some((item) => item.id === chat.id)) return;
+      if (epoch !== notionEpoch.current || wsRef.current.chats.find((item) => item.id === chat.id)?.notionWorkspaceId !== workspaceId) return;
       setNotion((current) => current ?? { state: result.state, detail: result.error || "Notion answered from the server." });
-      if (result.ambiguous && result.pages.length) {
-        setNotionSelection({ chat, text, workspaceId, pages: result.pages, cursor: "nextCursor" in result ? result.nextCursor ?? null : null });
-        return;
-      }
-      setNotionSelection(null);
       if (result.needsConfirmation && result.pages[0]) {
         const target = result.pages[0];
         setPending({
@@ -2748,18 +2785,21 @@ function CommandSession({ account }: { account: ReturnType<typeof useCurrentUser
           detail: result.error,
           confirm: "Append",
           run: () => {
-            void askNotion(chat, text, true, target.id, workspaceId);
+            void askNotion(chat, text, true, target.id, workspaceId, result.operationId);
           },
         });
         return;
       }
       if (!result.ok) {
         const message = result.error || "Notion did not complete the requested operation.";
-        const retry = () => { void askNotion(chat, text, false, pageId, workspaceId); };
-        reportFailure(message, "notion_operation_failed", "notion", retry, result.needsConfirmation ? "none" : "retry");
+        const savedId = result.operationId ?? operationId;
+        if (savedId) setWs((prev) => saveRecovery(prev, { id: savedId, operationId: savedId, at: new Date().toISOString(), action: "notion_operation", target: "notion", chatId: chat.id, workspaceId, pageId: pageId ?? result.pages[0]?.id ?? null, text, outcome: result.outcome, message, state: "open" }));
+        const retry = result.recovery === "reconnect" ? null : () => { void askNotion(chat, text, false, pageId, workspaceId, savedId); };
+        reportFailure(message, "notion_operation_failed", "notion", retry, result.recovery === "reconnect" ? "setup" : result.needsConfirmation ? "none" : "retry");
         recordToolTurn(chat, text, message, undefined, { tool: "notion", ok: false, action: "chat" });
         return;
       }
+      if (result.operationId ?? operationId) setWs((prev) => closeRecovery(prev, (result.operationId ?? operationId)!, "resolved"));
       const lines = [result.error, ...result.pages.map((page) => `${page.title} — ${page.url}`), result.content].filter(Boolean);
       if (lines.length && epoch === notionEpoch.current) {
         setNotionPreview({ owner: draftOwner, chatId: chat.id, text: lines.join("\n") });
@@ -2769,9 +2809,9 @@ function CommandSession({ account }: { account: ReturnType<typeof useCurrentUser
       if (turnOwner.current !== draftOwner) return;
       setBusy(false);
       if (!wsRef.current.chats.some((item) => item.id === chat.id)) return;
-      const message = "Notion could not be reached. Nothing was changed.";
+      const message = confirmed && operationId ? "Notion's write response was lost. The outcome is uncertain. Check the existing operation; do not repeat the append." : "Notion could not be reached. No write was confirmed from this request.";
       const retry = () => {
-        void askNotion(chat, text, false, pageId, workspaceId);
+        void askNotion(chat, text, false, pageId, workspaceId, operationId);
       };
       if (emitFailure("notion", mountFailure({ message, action: "notion_unreachable", target: "notion" }, retry))) return;
       setError(message);
@@ -5880,7 +5920,7 @@ ${message.content}`;
         <h2 id="notion-choice-title" className="text-lg font-semibold">Choose the Notion page</h2>
         <p className="mt-2 text-sm text-muted">Workspace: {notionSelection.workspaceId}. Select the exact destination. Selecting a page does not approve a write.</p>
         <ul className="mt-3 max-h-80 overflow-auto space-y-2">{notionSelection.pages.map((page) => <li key={page.id}><button type="button" className="min-h-11 w-full rounded-panel border border-line p-3 text-left" onClick={() => { const choice = notionSelection; setNotionSelection(null); void askNotion(choice.chat, choice.text, false, page.id, choice.workspaceId); }}><strong>{page.title}</strong><span className="block break-all text-xs text-muted">{page.url}</span></button></li>)}</ul>
-        <div className="mt-4 flex gap-3"><button type="button" className="min-h-11 rounded-panel border border-line px-4" onClick={() => setNotionSelection(null)}>Cancel</button>{notionSelection.cursor ? <button type="button" className="min-h-11 rounded-panel border border-line px-4" disabled={busy} onClick={() => void askNotion(notionSelection.chat, notionSelection.text, false, null, notionSelection.workspaceId, notionSelection.cursor)}>More results</button> : null}</div>
+        <div className="mt-4 flex gap-3"><button type="button" className="min-h-11 rounded-panel border border-line px-4" onClick={() => setNotionSelection(null)}>Cancel</button>{notionSelection.cursor ? <button type="button" className="min-h-11 rounded-panel border border-line px-4" disabled={busy} onClick={() => void askNotion(notionSelection.chat, notionSelection.text, false, null, notionSelection.workspaceId, undefined, notionSelection.cursor)}>More results</button> : null}</div>
       </Overlay> : null}
       <MenuMotion />
       {navOpen ? <button type="button" className="fixed inset-0 md:hidden" aria-label="Close menu" style={{ zIndex: 150, background: "transparent" }} onClick={() => setNavOpen(false)} /> : null}
@@ -9119,4 +9159,14 @@ function chatStamp(chat: Chat) {
   const iso = chat.messages.at(-1)?.at ?? chat.messages[0]?.at;
   if (!iso) return "New";
   return new Date(iso).toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit" });
+}
+
+function ToolElapsed({ row }: { row: Parameters<typeof elapsedMs>[0] }) {
+  const [now, setNow] = useState(Date.now);
+  useEffect(() => {
+    if (row.endedAtMs != null) return;
+    const id = window.setInterval(() => setNow(Date.now()), 250);
+    return () => window.clearInterval(id);
+  }, [row.endedAtMs]);
+  return <span className="text-xs text-muted tabular-nums">{formatElapsed(elapsedMs(row, now))}</span>;
 }

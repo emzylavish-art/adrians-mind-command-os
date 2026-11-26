@@ -1,0 +1,1301 @@
+[
+  {
+    "path": "src/components/mind/ai-provider-connections.tsx",
+    "source": "C5",
+    "outstanding": [
+      "263:AiProviderConnections"
+    ]
+  },
+  {
+    "path": "src/components/mind/build-workspace.tsx",
+    "source": "C1",
+    "outstanding": [
+      "266:EditorBuffer",
+      "263:BuildWorkspace"
+    ]
+  },
+  {
+    "path": "src/components/mind/build-workspace.tsx",
+    "source": "C4",
+    "outstanding": [
+      "263:BuildWorkspace"
+    ]
+  },
+  {
+    "path": "src/components/mind/build-workspace.tsx",
+    "source": "C5",
+    "outstanding": [
+      "263:BuildWorkspace"
+    ]
+  },
+  {
+    "path": "src/components/mind/code-ide.tsx",
+    "source": "C1",
+    "outstanding": [
+      "263:HighlightedEditor",
+      "263:CodeIde"
+    ]
+  },
+  {
+    "path": "src/components/mind/code-ide.tsx",
+    "source": "C5",
+    "outstanding": [
+      "263:CodeIde"
+    ]
+  },
+  {
+    "path": "src/components/mind/command-app.tsx",
+    "source": "C1",
+    "outstanding": [
+      "263:CommandApp",
+      "263:BrowserDictationControl",
+      "263:ChatPane"
+    ]
+  },
+  {
+    "path": "src/components/mind/command-app.tsx",
+    "source": "C2",
+    "outstanding": [
+      "266:Staged",
+      "263:CommandApp",
+      "263:Overlay",
+      "263:ChatPane"
+    ]
+  },
+  {
+    "path": "src/components/mind/command-app.tsx",
+    "source": "C4",
+    "outstanding": [
+      "263:CommandApp",
+      "263:Overlay",
+      "263:ChatPane"
+    ]
+  },
+  {
+    "path": "src/components/mind/command-app.tsx",
+    "source": "C5",
+    "outstanding": [
+      "263:CommandApp"
+    ]
+  },
+  {
+    "path": "src/components/mind/custom-connections.tsx",
+    "source": "C4",
+    "outstanding": [
+      "263:CustomConnections"
+    ]
+  },
+  {
+    "path": "src/components/mind/custom-connections.tsx",
+    "source": "C5",
+    "outstanding": [
+      "263:CustomConnections"
+    ]
+  },
+  {
+    "path": "src/components/mind/dashboard-3d/dashboard-app.tsx",
+    "source": "C2",
+    "outstanding": [
+      "263:DashboardApp"
+    ]
+  },
+  {
+    "path": "src/components/mind/dashboard-3d/node-detail-panel.tsx",
+    "source": "C2",
+    "outstanding": [
+      "263:BotDetailBody"
+    ]
+  },
+  {
+    "path": "src/components/mind/fleet-panels.tsx",
+    "source": "C1",
+    "outstanding": [
+      "263:FleetPanel"
+    ]
+  },
+  {
+    "path": "src/components/mind/fleet-panels.tsx",
+    "source": "C2",
+    "outstanding": [
+      "263:FleetPanel"
+    ]
+  },
+  {
+    "path": "src/components/mind/fleet-panels.tsx",
+    "source": "C5",
+    "outstanding": [
+      "263:FleetPanel"
+    ]
+  },
+  {
+    "path": "src/components/mind/persona-directory.tsx",
+    "source": "C2",
+    "outstanding": [
+      "263:PersonaDirectoryView"
+    ]
+  },
+  {
+    "path": "src/components/mind/speak-stage.tsx",
+    "source": "C2",
+    "outstanding": [
+      "263:SpeakStage"
+    ]
+  },
+  {
+    "path": "src/components/mind/speak-stage.tsx",
+    "source": "C4",
+    "outstanding": [
+      "263:SpeakStage"
+    ]
+  },
+  {
+    "path": "src/components/mind/speak-stage.tsx",
+    "source": "C5",
+    "outstanding": [
+      "263:SpeakStage"
+    ]
+  },
+  {
+    "path": "src/components/mind/surfaces/explore-panel.tsx",
+    "source": "C2",
+    "outstanding": [
+      "import @/lib/mind/workspace",
+      "263:ExplorePanel"
+    ]
+  },
+  {
+    "path": "src/lib/auth/client.ts",
+    "source": "C5",
+    "outstanding": [
+      "263:signIn",
+      "263:signOut"
+    ]
+  },
+  {
+    "path": "src/lib/auth/session-user.test.ts",
+    "source": "C5",
+    "outstanding": [
+      "call:describe:pickSessionUser"
+    ]
+  },
+  {
+    "path": "src/lib/auth/session-user.ts",
+    "source": "C5",
+    "outstanding": [
+      "263:pickSessionUser"
+    ]
+  },
+  {
+    "path": "src/lib/auth/use-current-user.ts",
+    "source": "C4",
+    "outstanding": [
+      "266:AppUser",
+      "266:CurrentUserState",
+      "263:useSessionUserState"
+    ]
+  },
+  {
+    "path": "src/lib/auth/use-current-user.ts",
+    "source": "C5",
+    "outstanding": [
+      "263:useSessionUserState"
+    ]
+  },
+  {
+    "path": "src/lib/auth/verify.server.ts",
+    "source": "C1",
+    "outstanding": [
+      "263:getSessionUser"
+    ]
+  },
+  {
+    "path": "src/lib/auth/verify.server.ts",
+    "source": "C4",
+    "outstanding": [
+      "263:readSupabaseSessionUser",
+      "263:getSessionUser"
+    ]
+  },
+  {
+    "path": "src/lib/auth/verify.server.ts",
+    "source": "C5",
+    "outstanding": [
+      "266:VerifiedUser",
+      "263:readSupabaseSessionUser",
+      "263:readBetterAuthSessionUser",
+      "263:getSessionUser"
+    ]
+  },
+  {
+    "path": "src/lib/mind/agent-run.server.ts",
+    "source": "C1",
+    "outstanding": [
+      "263:grokModel",
+      "263:handleAgentRun"
+    ]
+  },
+  {
+    "path": "src/lib/mind/ai-provider-config.server.ts",
+    "source": "C2",
+    "outstanding": [
+      "263:rows",
+      "263:setAiProviderModel",
+      "263:discoverAiModels",
+      "263:executeCustomChat"
+    ]
+  },
+  {
+    "path": "src/lib/mind/ai-provider-config.server.ts",
+    "source": "C4",
+    "outstanding": [
+      "263:requestProvider",
+      "263:executeCustomChat"
+    ]
+  },
+  {
+    "path": "src/lib/mind/ai-provider-config.server.ts",
+    "source": "C5",
+    "outstanding": [
+      "263:saveAiProvider",
+      "263:requestProvider",
+      "263:discoverAiModels",
+      "263:executeCustomChat"
+    ]
+  },
+  {
+    "path": "src/lib/mind/ai-provider-native.ts",
+    "source": "C1",
+    "outstanding": [
+      "263:buildProviderChatRequest"
+    ]
+  },
+  {
+    "path": "src/lib/mind/connected-mcp.server.ts",
+    "source": "C4",
+    "outstanding": [
+      "263:runConnectedMcpTurn"
+    ]
+  },
+  {
+    "path": "src/lib/mind/connected-mcp.server.ts",
+    "source": "C5",
+    "outstanding": [
+      "263:runConnectedMcpTurn"
+    ]
+  },
+  {
+    "path": "src/lib/mind/connected-mcp.test.ts",
+    "source": "C5",
+    "outstanding": [
+      "call:describe:Connected durable backend"
+    ]
+  },
+  {
+    "path": "src/lib/mind/connectors/durable-oauth.server.ts",
+    "source": "C2",
+    "outstanding": [
+      "266:ConnRow",
+      "263:readDurableConnection",
+      "263:saveDurableConnection",
+      "263:writeActive"
+    ]
+  },
+  {
+    "path": "src/lib/mind/connectors/store.ts",
+    "source": "C2",
+    "outstanding": [
+      "263:toPublic"
+    ]
+  },
+  {
+    "path": "src/lib/mind/conversation-actions.ts",
+    "source": "C2",
+    "outstanding": [
+      "263:quoteIntoNewChat"
+    ]
+  },
+  {
+    "path": "src/lib/mind/core-runtime.ts",
+    "source": "C5",
+    "outstanding": [
+      "263:applyCorePass"
+    ]
+  },
+  {
+    "path": "src/lib/mind/custom-connection-fns.ts",
+    "source": "C4",
+    "outstanding": [
+      "var:callCustomConnectionFn"
+    ]
+  },
+  {
+    "path": "src/lib/mind/custom-connection-fns.ts",
+    "source": "C5",
+    "outstanding": [
+      "var:callCustomConnectionFn"
+    ]
+  },
+  {
+    "path": "src/lib/mind/custom-connection.test.ts",
+    "source": "C4",
+    "outstanding": [
+      "call:describe:custom connection blueprint regressions"
+    ]
+  },
+  {
+    "path": "src/lib/mind/custom-connection.test.ts",
+    "source": "C5",
+    "outstanding": [
+      "call:describe:custom connection blueprint regressions"
+    ]
+  },
+  {
+    "path": "src/lib/mind/custom-connection.ts",
+    "source": "C2",
+    "outstanding": [
+      "266:PublicOperation"
+    ]
+  },
+  {
+    "path": "src/lib/mind/custom-connection.ts",
+    "source": "C4",
+    "outstanding": [
+      "266:PublicOperation",
+      "263:toPublic",
+      "263:callCustomConnection"
+    ]
+  },
+  {
+    "path": "src/lib/mind/custom-connection.ts",
+    "source": "C5",
+    "outstanding": [
+      "266:PublicOperation",
+      "266:PublicConnection",
+      "263:canonical",
+      "263:toPublic",
+      "263:operationFromTool",
+      "263:refreshMcp",
+      "263:callCustomConnection"
+    ]
+  },
+  {
+    "path": "src/lib/mind/dashboard/hud-order.test.ts",
+    "source": "C2",
+    "outstanding": [
+      "call:describe:hud card order"
+    ]
+  },
+  {
+    "path": "src/lib/mind/fleet.ts",
+    "source": "C1",
+    "outstanding": [
+      "263:cancelRun",
+      "263:tickFleet",
+      "263:runDueSchedules"
+    ]
+  },
+  {
+    "path": "src/lib/mind/fleet.ts",
+    "source": "C2",
+    "outstanding": [
+      "266:RunApproval",
+      "266:AgentRun",
+      "266:ScheduleJob",
+      "266:PlanStep",
+      "263:buildTaskPlan",
+      "263:readFleet",
+      "263:readStepResults",
+      "263:readOccurrences",
+      "263:readPlan",
+      "263:setScheduleEnabled",
+      "263:enqueueRun",
+      "263:approveRunAction",
+      "263:cancelRun",
+      "263:haltFleet",
+      "266:TickEnv",
+      "263:quoteUrl",
+      "263:tickFleet",
+      "263:runDueSchedules"
+    ]
+  },
+  {
+    "path": "src/lib/mind/fleet.ts",
+    "source": "C5",
+    "outstanding": [
+      "266:AgentRun",
+      "266:ScheduleJob",
+      "263:readFleet",
+      "263:addSchedule",
+      "263:setScheduleEnabled",
+      "263:enqueueRun",
+      "263:approveRunAction",
+      "266:TickEnv",
+      "263:tickFleet",
+      "263:runDueSchedules"
+    ]
+  },
+  {
+    "path": "src/lib/mind/github-tools.test.ts",
+    "source": "C2",
+    "outstanding": [
+      "call:describe:GitHub tools"
+    ]
+  },
+  {
+    "path": "src/lib/mind/halt-file.test.ts",
+    "source": "C5",
+    "outstanding": [
+      "call:describe:authoritative emergency stop"
+    ]
+  },
+  {
+    "path": "src/lib/mind/halt.server.ts",
+    "source": "C4",
+    "outstanding": [
+      "263:setDurableHalt"
+    ]
+  },
+  {
+    "path": "src/lib/mind/halt.server.ts",
+    "source": "C5",
+    "outstanding": [
+      "263:setDurableHalt"
+    ]
+  },
+  {
+    "path": "src/lib/mind/handy-dictation.test.ts",
+    "source": "C1",
+    "outstanding": [
+      "call:test:Speak detection asks the loaded Handy engine and does not invent words"
+    ]
+  },
+  {
+    "path": "src/lib/mind/handy-dictation.test.ts",
+    "source": "C2",
+    "outstanding": [
+      "call:test:Speak detection asks the loaded Handy engine and does not invent words"
+    ]
+  },
+  {
+    "path": "src/lib/mind/image-analyze.ts",
+    "source": "C1",
+    "outstanding": [
+      "263:analyzeImage"
+    ]
+  },
+  {
+    "path": "src/lib/mind/integration-persona-explore.test.ts",
+    "source": "C2",
+    "outstanding": [
+      "call:describe:integration persona directory survives merge"
+    ]
+  },
+  {
+    "path": "src/lib/mind/kimi/acp.server.ts",
+    "source": "C1",
+    "outstanding": [
+      "263:handleKimiSession"
+    ]
+  },
+  {
+    "path": "src/lib/mind/kimi/acp.server.ts",
+    "source": "C5",
+    "outstanding": [
+      "263:handleKimiSession"
+    ]
+  },
+  {
+    "path": "src/lib/mind/kimi/hosted/acp-client.ts",
+    "source": "C1",
+    "outstanding": [
+      "266:KimiProbe",
+      "263:exchange",
+      "266:CodingTurn",
+      "263:runCodingTurn"
+    ]
+  },
+  {
+    "path": "src/lib/mind/kimi/persist.ts",
+    "source": "C1",
+    "outstanding": [
+      "import node:fs",
+      "263:restoreWorkspaceFiles"
+    ]
+  },
+  {
+    "path": "src/lib/mind/kimi/phase4.server.ts",
+    "source": "C1",
+    "outstanding": [
+      "263:handleKimiVoice"
+    ]
+  },
+  {
+    "path": "src/lib/mind/limits.test.ts",
+    "source": "C4",
+    "outstanding": [
+      "call:describe:mind request limits"
+    ]
+  },
+  {
+    "path": "src/lib/mind/limits.ts",
+    "source": "C2",
+    "outstanding": [
+      "263:createChatTurnPreflight"
+    ]
+  },
+  {
+    "path": "src/lib/mind/limits.ts",
+    "source": "C4",
+    "outstanding": [
+      "263:checkTurnSize"
+    ]
+  },
+  {
+    "path": "src/lib/mind/live-turn.ts",
+    "source": "C1",
+    "outstanding": [
+      "266:LiveTurnResult",
+      "263:consumeMindTurn"
+    ]
+  },
+  {
+    "path": "src/lib/mind/live-turn.ts",
+    "source": "C2",
+    "outstanding": [
+      "266:LiveTurnResult"
+    ]
+  },
+  {
+    "path": "src/lib/mind/live-turn.ts",
+    "source": "C4",
+    "outstanding": [
+      "266:LiveTurnResult",
+      "263:prepareTurnId",
+      "263:consumeMindTurn"
+    ]
+  },
+  {
+    "path": "src/lib/mind/logic-route-adapter.server.ts",
+    "source": "C4",
+    "outstanding": [
+      "263:invokeProviderRouter",
+      "263:runLogicRoute"
+    ]
+  },
+  {
+    "path": "src/lib/mind/logic-routes.ts",
+    "source": "C1",
+    "outstanding": [
+      "266:ChatTurnBodyInput",
+      "263:chatTurnBody"
+    ]
+  },
+  {
+    "path": "src/lib/mind/logic-routes.ts",
+    "source": "C2",
+    "outstanding": [
+      "263:chatTurnBody"
+    ]
+  },
+  {
+    "path": "src/lib/mind/logic-routes.ts",
+    "source": "C4",
+    "outstanding": [
+      "263:chatTurnBody"
+    ]
+  },
+  {
+    "path": "src/lib/mind/mcp-list-auth.test.ts",
+    "source": "C4",
+    "outstanding": [
+      "call:describe:mcpRegistryList wiring uses shared session helper"
+    ]
+  },
+  {
+    "path": "src/lib/mind/media/blob-store.ts",
+    "source": "C1",
+    "outstanding": [
+      "266:ImageRef",
+      "263:hydrateImageRefs",
+      "263:compactImageRefs"
+    ]
+  },
+  {
+    "path": "src/lib/mind/media/blob-store.ts",
+    "source": "C4",
+    "outstanding": [
+      "263:createIndexedDbBlobStore",
+      "263:accountImageStore"
+    ]
+  },
+  {
+    "path": "src/lib/mind/media/history.ts",
+    "source": "C2",
+    "outstanding": [
+      "263:buildHistoryMessages"
+    ]
+  },
+  {
+    "path": "src/lib/mind/media/imagine-http.ts",
+    "source": "C1",
+    "outstanding": [
+      "263:handleImagineGenerate",
+      "263:handleOwnerVideo"
+    ]
+  },
+  {
+    "path": "src/lib/mind/media/imagine.ts",
+    "source": "C5",
+    "outstanding": [
+      "263:generateImagineImages",
+      "263:editImagineImage"
+    ]
+  },
+  {
+    "path": "src/lib/mind/media/types.ts",
+    "source": "C1",
+    "outstanding": [
+      "266:ImageAttachment"
+    ]
+  },
+  {
+    "path": "src/lib/mind/memory/relevant.ts",
+    "source": "C2",
+    "outstanding": [
+      "263:rankMemories",
+      "263:relevantMemories"
+    ]
+  },
+  {
+    "path": "src/lib/mind/model-consult.test.ts",
+    "source": "C1",
+    "outstanding": [
+      "call:describe:model consult"
+    ]
+  },
+  {
+    "path": "src/lib/mind/model-consult.test.ts",
+    "source": "C2",
+    "outstanding": [
+      "call:describe:model consult"
+    ]
+  },
+  {
+    "path": "src/lib/mind/model-consult.ts",
+    "source": "C1",
+    "outstanding": [
+      "263:planModelConsult",
+      "263:collectConsultHelp"
+    ]
+  },
+  {
+    "path": "src/lib/mind/model-consult.ts",
+    "source": "C2",
+    "outstanding": [
+      "var:ADRIAN_MIND_IDENTITY",
+      "266:ConsultPlan",
+      "263:helpRequest",
+      "263:planModelConsult",
+      "263:returnedHelp",
+      "263:orchestratorInstruction",
+      "263:collectConsultHelp"
+    ]
+  },
+  {
+    "path": "src/lib/mind/model-consult.ts",
+    "source": "C4",
+    "outstanding": [
+      "263:collectConsultHelp"
+    ]
+  },
+  {
+    "path": "src/lib/mind/notion.ts",
+    "source": "C1",
+    "outstanding": [
+      "263:runNotionTurn"
+    ]
+  },
+  {
+    "path": "src/lib/mind/notion.ts",
+    "source": "C2",
+    "outstanding": [
+      "266:NotionTurn",
+      "263:callNotion",
+      "263:runNotionTurn"
+    ]
+  },
+  {
+    "path": "src/lib/mind/notion.ts",
+    "source": "C4",
+    "outstanding": [
+      "266:NotionTurn",
+      "263:callNotion",
+      "263:runNotionTurn"
+    ]
+  },
+  {
+    "path": "src/lib/mind/notion.ts",
+    "source": "C5",
+    "outstanding": [
+      "266:NotionTurn",
+      "263:callNotion",
+      "263:runNotionTurn"
+    ]
+  },
+  {
+    "path": "src/lib/mind/palette.ts",
+    "source": "C2",
+    "outstanding": [
+      "263:searchTerms",
+      "266:PaletteInput",
+      "263:paletteHits"
+    ]
+  },
+  {
+    "path": "src/lib/mind/palette.ts",
+    "source": "C4",
+    "outstanding": [
+      "263:destinationMatches",
+      "266:PaletteHit",
+      "263:paletteHits"
+    ]
+  },
+  {
+    "path": "src/lib/mind/pc-pairing/run.ts",
+    "source": "C5",
+    "outstanding": [
+      "263:runOnPairedAgent"
+    ]
+  },
+  {
+    "path": "src/lib/mind/pc-pairing/store.ts",
+    "source": "C4",
+    "outstanding": [
+      "263:completeJob"
+    ]
+  },
+  {
+    "path": "src/lib/mind/pdf-text.ts",
+    "source": "C2",
+    "outstanding": [
+      "266:PdfText",
+      "263:extractPdfText"
+    ]
+  },
+  {
+    "path": "src/lib/mind/personas/selection.test.ts",
+    "source": "C2",
+    "outstanding": [
+      "call:describe:persona selection"
+    ]
+  },
+  {
+    "path": "src/lib/mind/personas/selection.ts",
+    "source": "C2",
+    "outstanding": [
+      "import ../workspace.ts",
+      "263:persistPersonaOpen"
+    ]
+  },
+  {
+    "path": "src/lib/mind/prompt.ts",
+    "source": "C1",
+    "outstanding": [
+      "263:assembleTurn"
+    ]
+  },
+  {
+    "path": "src/lib/mind/prompt.ts",
+    "source": "C2",
+    "outstanding": [
+      "263:assembleTurn"
+    ]
+  },
+  {
+    "path": "src/lib/mind/provider-call.ts",
+    "source": "C1",
+    "outstanding": [
+      "263:callConfiguredProvider",
+      "263:routeSelectedModel"
+    ]
+  },
+  {
+    "path": "src/lib/mind/provider-call.ts",
+    "source": "C4",
+    "outstanding": [
+      "263:callConfiguredProvider",
+      "263:routeSelectedModel"
+    ]
+  },
+  {
+    "path": "src/lib/mind/provider-call.ts",
+    "source": "C5",
+    "outstanding": [
+      "263:callConfiguredProvider",
+      "263:routeSelectedModel"
+    ]
+  },
+  {
+    "path": "src/lib/mind/provider-catalog.ts",
+    "source": "C2",
+    "outstanding": [
+      "263:discoveredCapabilities"
+    ]
+  },
+  {
+    "path": "src/lib/mind/provider-http.test.ts",
+    "source": "C1",
+    "outstanding": [
+      "call:describe:non-Grok provider path rate limit"
+    ]
+  },
+  {
+    "path": "src/lib/mind/provider-http.test.ts",
+    "source": "C2",
+    "outstanding": [
+      "call:describe:non-Grok provider path rate limit"
+    ]
+  },
+  {
+    "path": "src/lib/mind/relay.ts",
+    "source": "C4",
+    "outstanding": [
+      "263:relayModelStream"
+    ]
+  },
+  {
+    "path": "src/lib/mind/research.ts",
+    "source": "C1",
+    "outstanding": [
+      "263:dedupeCitations"
+    ]
+  },
+  {
+    "path": "src/lib/mind/research.ts",
+    "source": "C2",
+    "outstanding": [
+      "266:ResearchStep",
+      "266:ResearchResult",
+      "263:performDeepResearch"
+    ]
+  },
+  {
+    "path": "src/lib/mind/retry-fidelity.ts",
+    "source": "C4",
+    "outstanding": [
+      "263:historyForDeliver"
+    ]
+  },
+  {
+    "path": "src/lib/mind/server.ts",
+    "source": "C1",
+    "outstanding": [
+      "var:mindStatus",
+      "var:searchWeb",
+      "var:notionCommand",
+      "var:analyzeImageFile",
+      "var:speakText",
+      "var:createVoiceClientSecret",
+      "var:transcribeDictation",
+      "var:refineDictationOptional"
+    ]
+  },
+  {
+    "path": "src/lib/mind/server.ts",
+    "source": "C2",
+    "outstanding": [
+      "var:searchWeb",
+      "var:notionCommand",
+      "var:speakText"
+    ]
+  },
+  {
+    "path": "src/lib/mind/server.ts",
+    "source": "C4",
+    "outstanding": [
+      "var:notionCommand",
+      "var:saveMindCopy"
+    ]
+  },
+  {
+    "path": "src/lib/mind/server.ts",
+    "source": "C5",
+    "outstanding": [
+      "var:runDurableCorePass",
+      "var:setExecutionHalt",
+      "var:speakText",
+      "var:createVoiceClientSecret",
+      "var:transcribeDictation",
+      "var:refineDictationOptional"
+    ]
+  },
+  {
+    "path": "src/lib/mind/store.test.ts",
+    "source": "C1",
+    "outstanding": [
+      "263:memorySql"
+    ]
+  },
+  {
+    "path": "src/lib/mind/store.test.ts",
+    "source": "C4",
+    "outstanding": [
+      "263:memorySql"
+    ]
+  },
+  {
+    "path": "src/lib/mind/store.ts",
+    "source": "C1",
+    "outstanding": [
+      "263:persistSnapshot"
+    ]
+  },
+  {
+    "path": "src/lib/mind/store.ts",
+    "source": "C4",
+    "outstanding": [
+      "263:updateOwnerWorkspace",
+      "263:persistSnapshot"
+    ]
+  },
+  {
+    "path": "src/lib/mind/stream.ts",
+    "source": "C1",
+    "outstanding": [
+      "266:MindClientEvent",
+      "263:pullMindEvents"
+    ]
+  },
+  {
+    "path": "src/lib/mind/stream.ts",
+    "source": "C2",
+    "outstanding": [
+      "266:MindClientEvent"
+    ]
+  },
+  {
+    "path": "src/lib/mind/stream.ts",
+    "source": "C4",
+    "outstanding": [
+      "266:MindClientEvent",
+      "263:pullMindEvents"
+    ]
+  },
+  {
+    "path": "src/lib/mind/transcript.ts",
+    "source": "C2",
+    "outstanding": [
+      "263:exportChat"
+    ]
+  },
+  {
+    "path": "src/lib/mind/turn.server.ts",
+    "source": "C1",
+    "outstanding": [
+      "266:TurnBody",
+      "263:directTurnContext",
+      "263:prepareMindTurnWithHelp",
+      "263:completeModelReply",
+      "263:json",
+      "263:logicSse",
+      "263:handleLogicTurn",
+      "263:dispatchMindTurn",
+      "263:askConnectedModule"
+    ]
+  },
+  {
+    "path": "src/lib/mind/turn.server.ts",
+    "source": "C2",
+    "outstanding": [
+      "266:TurnBody",
+      "263:directTurnContext",
+      "263:handleLogicTurn",
+      "263:dispatchMindTurn",
+      "263:askConnectedModule"
+    ]
+  },
+  {
+    "path": "src/lib/mind/turn.server.ts",
+    "source": "C4",
+    "outstanding": [
+      "263:prepareMindTurnWithHelp",
+      "263:logicSse",
+      "263:handleLogicTurn",
+      "263:handleMindTurn",
+      "263:dispatchMindTurn",
+      "263:askConnectedModule"
+    ]
+  },
+  {
+    "path": "src/lib/mind/turn.server.ts",
+    "source": "C5",
+    "outstanding": [
+      "263:dispatchMindTurn",
+      "263:askConnectedModule"
+    ]
+  },
+  {
+    "path": "src/lib/mind/types.ts",
+    "source": "C1",
+    "outstanding": [
+      "266:MsgImage",
+      "266:Msg",
+      "266:Chat"
+    ]
+  },
+  {
+    "path": "src/lib/mind/types.ts",
+    "source": "C2",
+    "outstanding": [
+      "266:Msg",
+      "266:LocalFile",
+      "266:Workspace"
+    ]
+  },
+  {
+    "path": "src/lib/mind/types.ts",
+    "source": "C4",
+    "outstanding": [
+      "266:Msg"
+    ]
+  },
+  {
+    "path": "src/lib/mind/types.ts",
+    "source": "C5",
+    "outstanding": [
+      "266:MemoryItem"
+    ]
+  },
+  {
+    "path": "src/lib/mind/use-mind-workspace.ts",
+    "source": "C1",
+    "outstanding": [
+      "263:useMindWorkspace"
+    ]
+  },
+  {
+    "path": "src/lib/mind/use-mind-workspace.ts",
+    "source": "C2",
+    "outstanding": [
+      "263:hasContent",
+      "263:reconcileStoredRecords"
+    ]
+  },
+  {
+    "path": "src/lib/mind/use-mind-workspace.ts",
+    "source": "C4",
+    "outstanding": [
+      "263:useMindWorkspace"
+    ]
+  },
+  {
+    "path": "src/lib/mind/use-mind-workspace.ts",
+    "source": "C5",
+    "outstanding": [
+      "263:useMindWorkspace"
+    ]
+  },
+  {
+    "path": "src/lib/mind/voice/http.server.ts",
+    "source": "C1",
+    "outstanding": [
+      "266:VoiceHttpDeps",
+      "263:coded",
+      "263:handleVoiceSession",
+      "263:handleVoiceStt",
+      "263:handleVoiceTts"
+    ]
+  },
+  {
+    "path": "src/lib/mind/voice/http.server.ts",
+    "source": "C2",
+    "outstanding": [
+      "263:haltOrLimit",
+      "263:handleVoiceStt"
+    ]
+  },
+  {
+    "path": "src/lib/mind/voice/http.server.ts",
+    "source": "C4",
+    "outstanding": [
+      "263:handleVoiceStt"
+    ]
+  },
+  {
+    "path": "src/lib/mind/voice/http.server.ts",
+    "source": "C5",
+    "outstanding": [
+      "266:VoiceHttpDeps",
+      "263:handleVoiceSession",
+      "263:handleVoiceStt",
+      "263:handleVoiceTts"
+    ]
+  },
+  {
+    "path": "src/lib/mind/voice/provider-fallback.test.ts",
+    "source": "C4",
+    "outstanding": [
+      "call:describe:voice provider fallback"
+    ]
+  },
+  {
+    "path": "src/lib/mind/voice/provider-fallback.test.ts",
+    "source": "C5",
+    "outstanding": [
+      "call:describe:voice provider fallback"
+    ]
+  },
+  {
+    "path": "src/lib/mind/voice/provider-fallback.ts",
+    "source": "C4",
+    "outstanding": [
+      "263:transcribeWithFallback"
+    ]
+  },
+  {
+    "path": "src/lib/mind/voice/provider-fallback.ts",
+    "source": "C5",
+    "outstanding": [
+      "263:transcribeWithFallback"
+    ]
+  },
+  {
+    "path": "src/lib/mind/voice/speak-mounted.test.ts",
+    "source": "C4",
+    "outstanding": [
+      "call:describe:mounted Speak click"
+    ]
+  },
+  {
+    "path": "src/lib/mind/workbench-command.ts",
+    "source": "C2",
+    "outstanding": [
+      "263:applyWorkbenchCommand"
+    ]
+  },
+  {
+    "path": "src/lib/mind/worker-pass.test.ts",
+    "source": "C5",
+    "outstanding": [
+      "263:db"
+    ]
+  },
+  {
+    "path": "src/lib/mind/worker-pass.ts",
+    "source": "C5",
+    "outstanding": [
+      "263:runLocalSchedulePass"
+    ]
+  },
+  {
+    "path": "src/lib/mind/workspace-edits.ts",
+    "source": "C1",
+    "outstanding": [
+      "263:mergeWorkspaceEdits"
+    ]
+  },
+  {
+    "path": "src/lib/mind/workspace-edits.ts",
+    "source": "C4",
+    "outstanding": [
+      "263:mergeFields",
+      "263:mergeRows"
+    ]
+  },
+  {
+    "path": "src/lib/mind/workspace.test.ts",
+    "source": "C2",
+    "outstanding": [
+      "call:it:chat attachment copies cannot evict any of the forty saved files"
+    ]
+  },
+  {
+    "path": "src/lib/mind/workspace.ts",
+    "source": "C1",
+    "outstanding": [
+      "263:normalizeChat",
+      "263:normalizeFile",
+      "263:openBotChat",
+      "263:packWorkspace"
+    ]
+  },
+  {
+    "path": "src/lib/mind/workspace.ts",
+    "source": "C2",
+    "outstanding": [
+      "263:normalizeWorkspace",
+      "263:openBotChat",
+      "263:packWorkspace",
+      "263:replaceFromArchive",
+      "263:mergeWorkspace",
+      "263:addLocalFile",
+      "263:deleteProject"
+    ]
+  },
+  {
+    "path": "src/lib/mind/workspace.ts",
+    "source": "C4",
+    "outstanding": [
+      "263:packWorkspace"
+    ]
+  },
+  {
+    "path": "src/lib/mind/workspace.ts",
+    "source": "C5",
+    "outstanding": [
+      "263:normalizeMemory",
+      "263:replaceFromArchive",
+      "263:mergeWorkspace",
+      "263:pushUsage"
+    ]
+  },
+  {
+    "path": "src/lib/mind/xai-search.ts",
+    "source": "C1",
+    "outstanding": [
+      "263:searchWithGrok"
+    ]
+  },
+  {
+    "path": "src/lib/mind/xai-search.ts",
+    "source": "C2",
+    "outstanding": [
+      "263:searchWithGrok"
+    ]
+  },
+  {
+    "path": "src/lib/supabase/actions.ts",
+    "source": "C4",
+    "outstanding": [
+      "var:signOutSupabase"
+    ]
+  },
+  {
+    "path": "src/routes/api/mind/build/terminal.ts",
+    "source": "C5",
+    "outstanding": [
+      "var:Route"
+    ]
+  },
+  {
+    "path": "src/routes/api/mind/kimi/terminal.ts",
+    "source": "C5",
+    "outstanding": [
+      "var:Route"
+    ]
+  },
+  {
+    "path": "src/routes/api/mind/pc/result.ts",
+    "source": "C4",
+    "outstanding": [
+      "var:Route"
+    ]
+  },
+  {
+    "path": "src/routes/api/mind/providers.ts",
+    "source": "C5",
+    "outstanding": [
+      "var:Route"
+    ]
+  }
+]

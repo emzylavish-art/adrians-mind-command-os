@@ -7,7 +7,7 @@ export function planReleasePreparation({ report, revision, actualRevision, dirty
   const errors = [...result.errors];
   if (!approved) errors.push("Schema preparation requires explicit --apply-compatible-migrations authorization.");
   if (actualRevision !== revision || dirty) errors.push("The executing checkout must be clean and at the verified candidate revision.");
-  return { ok: errors.length === 0, errors, command: errors.length ? null : [process.execPath, "scripts/migrate.mjs"] };
+  return { ok: errors.length === 0, errors, command: errors.length ? null : [process.execPath, "scripts/migrate.mjs", "--require-database"] };
 }
 
 // Builds and previews never call this entrypoint. It prepares compatible schema;

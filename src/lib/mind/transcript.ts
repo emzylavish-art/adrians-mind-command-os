@@ -1,4 +1,5 @@
 import type { Chat, Msg, MsgImage, ReplyVersion, Workspace } from "./types.ts";
+import { completedHistory } from "./partial-reply.ts";
 import { stripAttachedStub } from "./media/history.ts";
 import { canonical, sha256 } from "./workspace.ts";
 
@@ -30,9 +31,12 @@ export function reviseUserTurn(
     ...chat,
     title: index === 0 ? nextText.replace(/\s+/g, " ").slice(0, 48) : chat.title,
     messages: [...chat.messages.slice(0, index), edited],
+    updatedAt: new Date().toISOString(),
   };
+  const original: Chat = { ...chat, id: crypto.randomUUID(), title: `Before edit: ${chat.title}`.slice(0, 80), archived: true,
+    forkedFrom: { chatId, messageId, at: new Date().toISOString() } };
   return {
-    ws: { ...ws, chats: ws.chats.map((item) => (item.id === chatId ? nextChat : item)) },
+    ws: { ...ws, chats: [...ws.chats.map((item) => (item.id === chatId ? nextChat : item)), original] },
     chat: nextChat,
     text: nextText,
     images,
@@ -47,6 +51,7 @@ export function prepareRegenerate(
   if (!chat) return { error: "That chat is gone." };
   const last = chat.messages.at(-1);
   if (!last || last.role !== "assistant") return { error: "There is no reply to regenerate." };
+  if (last.replyStatus && last.replyStatus !== "complete") return { error: "This reply is incomplete. Check the original send before explicitly starting another message." };
   const messages = chat.messages.slice(0, -1);
   const user = messages.at(-1);
   if (!user || user.role !== "user") return { error: "The reply has no message to answer again." };
@@ -67,12 +72,13 @@ export function prepareRetry(
 ): { chat: Chat; text: string; images: MsgImage[] } | { error: string } {
   const chat = ws.chats.find((item) => item.id === chatId);
   if (!chat) return { error: "That chat is gone." };
-  const last = chat.messages.at(-1);
+  const messages = completedHistory(chat.messages);
+  const last = messages.at(-1);
   if (!last) return { error: "There is no message to retry." };
   if (last.role !== "user") return { error: "Use regenerate for the last reply." };
   const images = last.images ? [...last.images] : [];
   const text = stripAttachedStub(last.content) || last.content;
-  return { chat, text, images };
+  return { chat: { ...chat, messages }, text, images };
 }
 
 export function exportChat(ws: Workspace, chatId: string): { filename: string; json: string } | { error: string } {
@@ -108,6 +114,9 @@ export function exportChat(ws: Workspace, chatId: string): { filename: string; j
         content: msg.content,
         at: msg.at,
         model: msg.model ?? null,
+        replyStatus: msg.replyStatus,
+        replyOperationId: msg.replyOperationId,
+        contextNotice: msg.contextNotice,
         provider: msg.provider ?? null,
         requestedModel: msg.requestedModel ?? null,
         ...(msg.videoUrl ? { videoUrl: msg.videoUrl } : {}),

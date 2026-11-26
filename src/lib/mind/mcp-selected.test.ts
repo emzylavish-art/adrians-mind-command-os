@@ -46,6 +46,52 @@ test("confirmation names the selected MCP server and the call does not use the o
   assert.equal(called.some((url) => url.includes("other.example")), false);
 });
 
+test("orchestrator fan-out asks only explicitly selected helpers within its two-helper budget", async () => {
+  const planned = planModelConsult({
+    orchestrator: "grok",
+    modules: [
+      { id: "grok", label: "Grok", connected: true },
+      { id: "ollama", label: "Local model", connected: true },
+      { id: "openrouter", label: "OpenRouter", connected: true },
+    ],
+    question: "What is left?",
+    helperIds: ["ollama", "openrouter"],
+    allowPaidHelpers: true,
+  });
+  assert.equal(planned.ok, true);
+  if (!planned.ok) return;
+  const asked: string[] = [];
+  const help = await collectConsultHelp(planned.plan, async (id) => {
+    asked.push(id);
+    return { ok: true, text: id + " answered" };
+  });
+  assert.deepEqual(asked, ["ollama", "openrouter"]);
+  assert.equal(help.length, 2);
+});
+
+test("orchestrator fan-out asks only explicitly authorized connected helpers", async () => {
+  const planned = planModelConsult({
+    orchestrator: "grok",
+    modules: [
+      { id: "grok", label: "Grok", connected: true },
+      { id: "ollama", label: "Local model", connected: true },
+      { id: "openrouter", label: "OpenRouter", connected: true },
+    ],
+    question: "What is left?",
+    authorizedHelpers: ["ollama"],
+  });
+  assert.equal(planned.ok, true);
+  if (!planned.ok) return;
+  const asked: string[] = [];
+  const help = await collectConsultHelp(planned.plan, async (id) => {
+    asked.push(id);
+    return { ok: true, text: id + " answered" };
+  });
+  assert.deepEqual(asked, ["ollama"]);
+  assert.equal(help.length, 1);
+  assert.equal(asked.includes("openrouter"), false, "A connected paid route is not implicit consent");
+});
+
 test("orchestrator asks only explicitly selected connected helpers", async () => {
   const planned = planModelConsult({
     orchestrator: "grok",

@@ -52,6 +52,7 @@ describe("adversarial: Imagine spend controls inside generateImagineImages", () 
       {
         apiKey: "test-key", reserveDispatch: async () => ({ ok: true }),
         meter: { ownerId: owner, sessionId: "s1" },
+        recordUsage: async () => {},
         fetchImpl: async () => {
           throw new Error("must not fetch over daily cap");
         },
@@ -79,6 +80,7 @@ describe("adversarial: Imagine spend controls inside generateImagineImages", () 
       {
         apiKey: "test-key", reserveDispatch: async () => ({ ok: true }),
         meter: { ownerId: owner, sessionId: "s1" },
+        recordUsage: async () => {},
         fetchImpl: async () =>
           new Response(JSON.stringify({ data: [{ b64_json: TINY_PNG_B64 }], model: "grok-imagine-image" }), {
             status: 200,

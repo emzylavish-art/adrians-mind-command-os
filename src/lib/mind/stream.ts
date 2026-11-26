@@ -1,6 +1,11 @@
+import { readHelperReceipts } from "./execution-evidence.ts";
+import { readFailureEnvelope, type FailureEnvelope } from "./failure-envelope.ts";
+import { readModelExecutionPlan, type ModelExecutionPlan } from "./execution-plan.ts";
+import type { HelperReceipt, ConsultExecutionReceipt } from "./model-consult.ts";
+import { readExecutionReceipts, readPrimaryFailureReceipt, type PrimaryFailureReceipt } from "./execution-receipt.ts";
 import { normalizeSkillReceipts, type SkillApplicationReceipt } from "./skill-activation.ts";
 import { normalizeContextReceipt, type ContextReceipt } from "./conversation-context.ts";
-import { normalizeConsultation, type ConsultEvidence } from "./model-consult.ts";
+import { normalizeConsultation, type ConsultEvidence, normalizeConsultAttempts, type ConsultAttempt } from "./model-consult.ts";
 import { turnErrorCode, type TurnErrorCode } from "./turn-error.ts";
 /** Honest label when a done event did not confirm which model answered. */
 export const UNKNOWN_MODEL_LABEL = "model unknown";
@@ -40,7 +45,9 @@ export function normalizeTurnCallEvidence(value: unknown): TurnCallEvidence {
 
 export function readModelPayload(raw: string): { text: string; model?: string; streamed: boolean; usage: ModelUsage | null } {
   const body = raw.trim();
-  if (!body.includes("data:")) {
+  // A normal answer can itself contain the word "data:". Only protocol lines
+  // identify an SSE response; content inside a JSON string does not.
+  if (!/^data:/m.test(body)) {
     try {
       const parsed = JSON.parse(body) as {
         choices?: { message?: { content?: string } }[];
@@ -48,7 +55,7 @@ export function readModelPayload(raw: string): { text: string; model?: string; s
         usage?: ModelUsage;
       };
       return {
-        text: parsed.choices?.[0]?.message?.content?.trim() ?? "",
+        text: typeof parsed.choices?.[0]?.message?.content === "string" ? parsed.choices[0].message.content.trim() : "",
         model: reportedModel(parsed.model),
         streamed: false,
         usage: parsed.usage ?? null,
@@ -62,7 +69,7 @@ export function readModelPayload(raw: string): { text: string; model?: string; s
   return { text: fed.text.trim(), model: reportedModel(fed.model), streamed: true, usage: fed.usage };
 }
 
-export type SseFeed = { buffer: string; text: string; usage: ModelUsage | null; model?: string; bad: boolean };
+export type SseFeed = { buffer: string; text: string; usage: ModelUsage | null; model?: string; bad: boolean; done?: boolean };
 
 export function createSseFeed(): SseFeed {
   return { buffer: "", text: "", usage: null, bad: false };
@@ -70,7 +77,7 @@ export function createSseFeed(): SseFeed {
 
 export function pushSse(feed: SseFeed, chunk: string): SseFeed & { deltas: string[] } {
   const deltas: string[] = [];
-  if (feed.bad) return { ...feed, deltas };
+  if (feed.bad || feed.done) return { ...feed, deltas };
   feed.buffer += chunk;
   const lines = feed.buffer.split("\n");
   feed.buffer = lines.pop() ?? "";
@@ -78,14 +85,24 @@ export function pushSse(feed: SseFeed, chunk: string): SseFeed & { deltas: strin
     const trimmed = line.trim();
     if (!trimmed.startsWith("data:")) continue;
     const data = trimmed.slice(5).trim();
-    if (!data || data === "[DONE]") continue;
+    if (!data) continue;
+    if (data === "[DONE]") {
+      feed.done = true;
+      feed.buffer = "";
+      break;
+    }
     try {
       const parsed = JSON.parse(data) as {
         choices?: { delta?: { content?: string }; message?: { content?: string } }[];
         usage?: ModelUsage | null;
         model?: unknown;
+        error?: unknown;
       };
       const text = parsed.choices?.[0]?.delta?.content ?? parsed.choices?.[0]?.message?.content ?? "";
+      if (parsed.error != null || typeof text !== "string") {
+        feed.bad = true;
+        return { ...feed, deltas: [] };
+      }
       if (text) {
         feed.text += text;
         deltas.push(text);
@@ -155,6 +172,7 @@ export function pullMindEvents(buffer: string): { events: MindClientEvent[]; res
         savedMemoryId: typeof record.savedMemoryId === "string" ? record.savedMemoryId : null,
         provider: typeof record.provider === "string" ? record.provider : undefined,
         requestedModel: typeof record.requestedModel === "string" ? record.requestedModel : undefined,
+        consult: record.consult === undefined ? undefined : normalizeConsultAttempts(record.consult),
         credentialFallback: typeof record.credentialFallback === "string" ? record.credentialFallback : null,
       });
     }

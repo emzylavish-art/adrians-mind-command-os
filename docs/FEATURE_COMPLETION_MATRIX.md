@@ -1,23 +1,21 @@
-# Feature completion matrix
+# Feature completion evidence
 
-States match the product rule: Verified, Implemented with limitations, Blocked, Deferred.
+Completion belongs to an exact revision and an observed environment. The current machine-readable inventory is [feature-evidence.json](verification/feature-evidence.json). It covers every row from the earlier matrix and preserves four product states: **verified**, **implemented with limitations**, **blocked**, and **deferred**. Verification is separate: passed, failed, skipped, canceled, or unverified.
 
-| ID | Feature | State | Evidence |
-|---|---|---|---|
-| NAV | Multi-surface navigation | Implemented with limitations | New views render real controls. A signed-in click-through was not part of smoke. |
-| WORKER | Local agent worker | Verified | `fleet.test.ts` local read, pause, cancel, lease, delegation. |
-| HOST | Hosted worker | Blocked | `mind-worker.mjs` exits 2 without `DATABASE_URL`. |
-| PLAN | Bounded Grok planner | Implemented with limitations | Fake-model tests. Live tool call not spent. |
-| CHAT | Grok chat | Implemented with limitations | Existing adapter. Live send not spent in this change. |
-| SEARCH | Web research | Blocked | No search endpoint or key. Mock citation filter remains verified. |
-| GMAIL | Multiple mailboxes | Blocked | 60 records stay `not_connected`. OAuth is absent. Send asks, then refuses. |
-| BROWSER | Page driver | Implemented with limitations | Headless Chromium opened a local HTML document. Product button not clicked on a public site. |
-| SCHED | Due schedules | Verified | `runDueSchedules` queues one run. No hosted cron. |
-| CONN | Provider connection records | Verified | Secrets are not stored. Unconfigured providers stay unselected. |
-| MEDIA | Image and video | Blocked | Paid APIs are not called. |
-| VOICE | Full duplex | Blocked | One-shot Speak only. |
-| REA | Healthy REA | Blocked | Doctor JSON healthy false. Node 22.23.3. Native engines missing. |
-| DB | Durable database | Blocked | `DATABASE_URL` unset. |
-| PHONE | iPhone install | Blocked | No physical device. |
-| PC | HP EliteBook | Blocked | No pairing protocol was completed. |
-| ZAPIA | Zapia | Deferred | Screenshot observed. Not built. |
+The C1 implementation was tested at **`b17e90c5728f7f1a9f303f703fcf073cbdd2175e`**, based on `18d5b9364e6bdcfec028eeccf56fe596946ed8ce`. Its [scoped feature results](audits/evidence/c1-feature-evidence.json), [environment results](audits/evidence/c1-environment-evidence.json), and [validation record](audits/c1-validation.json) retain actual local evidence:416 passing regression files,2,295 passing tests,4 explicit optional skips,14 synthetic browser states and 11 workflow transitions. The full-product inventory remains a conservative template. These local results do not establish live account/provider/deployment or physical-device behavior.
+
+The earlier table is retained as [historical evidence](verification/feature-matrix-legacy.md). Its unversioned claims that OAuth, a pairing protocol, or realtime voice were absent are not current feature descriptions. The source contains implementations; their presence alone does not prove a live account, runtime, or device.
+
+## Validate a record
+
+```bash
+node scripts/verification/validate.mjs --features docs/verification/feature-evidence.json --revision FULL_CANDIDATE_SHA
+```
+
+This consistency check accepts explicit unverified records. Add `--require-current` when every listed feature must have passed evidence for the candidate. Prior passed evidence becomes **historical** when its revision differs. A valid record is not a substitute for opening its artifacts or independently checking a service.
+
+Each passed verification needs the exact revision, environment, execution time, supporting artifact links, and remaining blockers. Physical evidence additionally needs an actual device and runtime version; signed-in evidence must state authentication explicitly. A failed, skipped, canceled, or unverified check is never promoted to passed.
+
+## Remaining environment checks
+
+See [environment-evidence.json](verification/environment-evidence.json) and the [verification guide](verification/README.md). Physical iPhone, Windows installer, paired runtime, Android, authenticated production, and live-provider checks remain separate from website source and fixtures. No device or production result is asserted by this document.

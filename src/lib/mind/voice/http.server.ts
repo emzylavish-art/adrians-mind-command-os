@@ -1,3 +1,5 @@
+import { authorizeExternalResource, externalResourceCall } from "../external-resource-call.server.ts";
+import { withFailureEnvelope } from "../failure-envelope.ts";
 /**
  * Authenticated HTTP handlers for the Speak path.
  * POST /api/mind/voice/session — mint an ephemeral realtime client secret (value is not returned).
@@ -10,15 +12,18 @@ import { dispatchContext, reserveDispatchAttempt, runSettledDispatch, type Reser
 import type { MonetaryDispatchContext } from "../financial-policy.ts";
 import { STT_MODEL } from "./stt.ts";
 import { OPENAI_STT_MODEL, OPENAI_TTS_MODEL } from "./provider-fallback.ts";
+import { parseCloudSpeechPolicy } from "./route-preferences.ts";
 import { decideFetchSite } from "../request-guard.ts";
 import { readJsonObjectBody } from "../request-body.ts";
-import { allowMindRequest } from "../limits.ts";
+import { consumeSharedMindRateLimit } from "../rate-limit.server.ts";
 import { mintRealtimeClientSecret } from "./client-secret.ts";
 import { resolveVoiceApiKey } from "./keys.ts";
+import { parseTranscriptionPolicy } from "./transcription-policy.ts";
 import { resolveSelectedSpeechCredential, speakSelected, transcribeSelected } from "./provider-selection.server.ts";
 import type { SelectedSpeechCredential } from "./provider-selection.ts";
 import { decodeAudioBase64, validateSpeakTextInput, validateTranscribeAudioInput } from "./voice-input.ts";
 import { isSpeakCode, speakFailure, voiceSecretExpired, type SpeakCode } from "./speak-failures.ts";
+import { createVoiceUsageTracker, type VoiceUsageWriter } from "./usage.server.ts";
 
 export type VoiceHttpDeps = {
   requireUser?: (request: Request) => Promise<string>;
@@ -33,7 +38,7 @@ export type VoiceHttpDeps = {
 };
 
 function json(body: unknown, status = 200) {
-  return new Response(JSON.stringify(body), {
+  return new Response(JSON.stringify(withFailureEnvelope(body, { subsystem: "voice", status, operationKind: "generation" })), {
     status,
     headers: { "content-type": "application/json", "cache-control": "no-store" },
   });
@@ -98,6 +103,8 @@ function speechContext(request: Request, body: Record<string, unknown>, selected
 
 function providerOrNetwork(error: string): Response {
   if (/no speech key|not configured|no xai_api_key/i.test(error)) return coded("provider_not_configured");
+  if (/returned 401|returned 403|unauthorized|incorrect api key/i.test(error)) return json({ ok: false, code: "provider_not_configured", error: "The selected speech service rejected authorization. Repair that connection or explicitly choose another service." });
+  if (/returned 429/i.test(error)) return coded("rate_limited");
   if (/did not answer|could not be reached|timed out|network/i.test(error)) return coded("network_failure");
   return json({ ok: false, code: "network_failure" as const, error: speakFailure("network_failure").message });
 }

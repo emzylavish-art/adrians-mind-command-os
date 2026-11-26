@@ -29,7 +29,7 @@ describe("conversation personalities", () => {
 
   it("bounds custom style text and keeps it separate from permissions", () => {
     const normalized = normalizeCustomPersonality("  concise\u0000, candid and\nanalytical  ");
-    assert.equal(normalized, "concise, candid and analytical");
+    assert.equal(normalized, "concise, candid and\nanalytical");
     assert.equal(normalizeCustomPersonality("x".repeat(MAX_CUSTOM_PERSONALITY_CHARS + 20)).length, MAX_CUSTOM_PERSONALITY_CHARS);
     assert.equal(normalizeCustomPersonality({ text: "not a string" }), "");
     const instruction = personalityInstruction("custom", "Be concise, candid and lightly humorous.");

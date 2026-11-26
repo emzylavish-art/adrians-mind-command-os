@@ -1,5 +1,6 @@
 import { haltIsOn } from "../halt.server.ts";
 import { requireUserId, UnauthorizedError } from "../../auth/verify.server";
+import { assertSameOrigin } from "../connectors/oauth-csrf.ts";
 import {
   mintPairingCode,
   exchangePairingCode,
@@ -53,6 +54,8 @@ export async function handlePairingStatus(request: Request) {
 }
 
 export async function handleMintPairingCode(request: Request) {
+  const origin = assertSameOrigin(request);
+  if (!origin.ok) return json({ ok: false, error: origin.error }, 403);
   try {
     const userId = await requireUserId(bearer(request));
     const key = readManagementKey();
@@ -116,6 +119,8 @@ export async function handleHeartbeat(request: Request) {
 }
 
 export async function handleSignAction(request: Request) {
+  const origin = assertSameOrigin(request);
+  if (!origin.ok) return json({ ok: false, error: origin.error }, 403);
   try {
     const userId = await requireUserId(bearer(request));
     const body = await readJson(request);
@@ -194,6 +199,8 @@ export async function handleReportAction(request: Request) {
 }
 
 export async function handleEmergencyStop(request: Request) {
+  const origin = assertSameOrigin(request);
+  if (!origin.ok) return json({ ok: false, error: origin.error }, 403);
   try {
     const body = await readJson(request);
     // Device can self-stop with its token; owner can stop via session.
@@ -225,6 +232,8 @@ export async function handleEmergencyStop(request: Request) {
 }
 
 export async function handleClearEmergencyStop(request: Request) {
+  const origin = assertSameOrigin(request);
+  if (!origin.ok) return json({ ok: false, error: origin.error }, 403);
   try {
     const userId = await requireUserId(bearer(request));
     const body = await readJson(request);

@@ -9,6 +9,7 @@ import {
 } from "./types.ts";
 import { getDurableAccessToken, hasDurableOAuthStore, readDurableConnection } from "../../connectors/durable-oauth.server.ts";
 import { localDataPath } from "../../../local-data.ts";
+import { resolveOAuthAccessToken } from "../../connectors/token-refresh.ts";
 
 let directory = localDataPath("mind-connectors");
 
@@ -61,8 +62,9 @@ export async function resolveCloudAccessToken(
     };
   }
   if (hasDurableOAuthStore()) {
-    const token = await getDurableAccessToken(ownerId, "google_drive");
-    if (token) return { ok: true, token };
+    const resolved = await resolveOAuthAccessToken({ ownerId, connector: "google_drive" });
+    if (resolved.ok) return { ok: true, token: resolved.token };
+    return { ok: false, error: resolved.error };
   }
   const record = readCloudConnectionRecord(ownerId, source);
   if (!record) {

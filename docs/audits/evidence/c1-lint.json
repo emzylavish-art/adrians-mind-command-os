@@ -1,0 +1,35 @@
+{
+  "command": "node_modules/.bin/eslint . --format json",
+  "exitCode": 1,
+  "baseSha": "18d5b9364e6bdcfec028eeccf56fe596946ed8ce",
+  "candidateRevision": "b17e90c5728f7f1a9f303f703fcf073cbdd2175e",
+  "baseErrors": 177,
+  "candidateErrors": 173,
+  "newErrorSignatures": [],
+  "removedErrorSignatures": [
+    [
+      "src/lib/mind/connected-mcp.test.ts",
+      "prefer-const",
+      "'approvalId' is never reassigned. Use 'const' instead."
+    ],
+    [
+      "src/lib/mind/mcp/tools.ts",
+      "no-useless-escape",
+      "Unnecessary escape character: \\/."
+    ],
+    [
+      "src/lib/mind/mcp/tools.ts",
+      "no-useless-escape",
+      "Unnecessary escape character: \\/."
+    ],
+    [
+      "src/lib/mind/mcp/tools.ts",
+      "prefer-const",
+      "'j' is never reassigned. Use 'const' instead."
+    ]
+  ],
+  "changedFilesInspected": 233,
+  "changedFileErrors": 0,
+  "changedFileWarnings": 80,
+  "candidateWarnings": 230
+}

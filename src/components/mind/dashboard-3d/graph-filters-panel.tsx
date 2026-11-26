@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useId, useMemo, useRef, useState } from "react";
 import type { Health } from "@/lib/mind/dashboard/types";
 import {
   DEFAULT_GRAPH_FILTER,
@@ -15,18 +15,27 @@ export function dispatchGraphFilter(filter: GraphFilterState) {
 type Props = {
   /** When true, render only the trigger (for mobile chrome). Body is portaled as sheet. */
   triggerOnly?: boolean;
+  filter?: GraphFilterState;
+  onFilterChange?: (filter: GraphFilterState) => void;
 };
 
-export function GraphFiltersPanel({ triggerOnly = false }: Props) {
+export function GraphFiltersPanel({ triggerOnly = false, filter: controlledFilter, onFilterChange }: Props) {
   const [open, setOpen] = useState(false);
-  const [filter, setFilter] = useState<GraphFilterState>(DEFAULT_GRAPH_FILTER);
+  const [localFilter, setLocalFilter] = useState<GraphFilterState>(DEFAULT_GRAPH_FILTER);
+  const filter = controlledFilter ?? localFilter;
+  const bodyId = useId();
+  const setFilter = (next: GraphFilterState | ((current: GraphFilterState) => GraphFilterState)) => {
+    const value = typeof next === "function" ? next(filter) : next;
+    if (onFilterChange) onFilterChange(value);
+    else setLocalFilter(value);
+  };
   const lanes = useMemo(() => laneOptions(), []);
   const sheetRef = useRef<HTMLDivElement | null>(null);
   const triggerRef = useRef<HTMLButtonElement | null>(null);
 
   useEffect(() => {
-    dispatchGraphFilter(filter);
-  }, [filter]);
+    if (!onFilterChange) dispatchGraphFilter(filter);
+  }, [filter, onFilterChange]);
 
   // Closed by default; Esc + outside tap close the sheet.
   useEffect(() => {
@@ -57,7 +66,7 @@ export function GraphFiltersPanel({ triggerOnly = false }: Props) {
     <div
       className="dash3d-graph-filters-body"
       data-testid="graph-filters-body"
-      id="dash3d-graph-filters-body"
+      id={bodyId}
     >
       <label className="dash3d-muted" style={{ fontSize: "0.68rem", display: "block" }}>
         Search
@@ -126,7 +135,7 @@ export function GraphFiltersPanel({ triggerOnly = false }: Props) {
       className="dash3d-pill"
       data-testid="graph-filters-toggle"
      aria-expanded={open}
-     aria-controls="dash3d-graph-filters-body"
+     aria-controls={bodyId}
       title="Search, health, lane, and orphans"
      onClick={() => setOpen((o) => !o)}
    >

@@ -1,0 +1,205 @@
+{
+  "schemaVersion": 1,
+  "repository": "emzylavish-art/adrians-mind-command-os",
+  "audit": "C1 \u2014 Notion Access Audit / Adrian Analysis",
+  "chapterId": "4231aa2763238138937ec5a478120d17",
+  "baseSha": "18d5b9364e6bdcfec028eeccf56fe596946ed8ce",
+  "implementationRevision": "b17e90c5728f7f1a9f303f703fcf073cbdd2175e",
+  "implementationCommitCleanAtStart": true,
+  "startedAt": "2026-11-26T03:42:24.865338+00:00",
+  "recordedAt": "2026-11-26T03:50:45.982753+00:00",
+  "node": "v24.22.3",
+  "deliveryNote": "Final delivery may add documentation/evidence only. Compare source/scripts/migrations/package files to implementationRevision; exact pushed head is supplied in the GitHub handoff. No deployment is claimed.",
+  "sourceTreeIds": {
+    "src": "fdb707a1682a5e56edb7d596e5b7c912969ceac1",
+    "scripts": "b17bc033c6b64dcb61e0d37291a817fed28640ae",
+    "migrations": "e3ceccedc63efd2b9dc4cef6f339fa8a39fa0178",
+    "package.json": "32fb3f609e05009b1b9203bee730e907913344ee",
+    "package-lock.json": "eb525ac5f096aabb38f22ca333f3564c703f586a"
+  },
+  "checks": [
+    {
+      "name": "normal discovered regression runner",
+      "command": "env -u DATABASE_URL -u POSTGRES_URL TMPDIR=<private test directory> npm test",
+      "exitCode": 0,
+      "regressionFiles": 416,
+      "passedFiles": 416,
+      "tests": 2299,
+      "pass": 2295,
+      "fail": 0,
+      "skipped": 4,
+      "cancelled": 0,
+      "todo": 0,
+      "evidence": "docs/audits/evidence/c1-tests.json"
+    },
+    {
+      "name": "TypeScript",
+      "command": "NODE_OPTIONS=--max-old-space-size=1400 node_modules/.bin/tsc --noEmit --pretty false",
+      "exitCode": 0,
+      "diagnostics": 0,
+      "logSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "name": "production bundle",
+      "command": "env -u DATABASE_URL -u POSTGRES_URL -u VERCEL TMPDIR=<private test directory> NODE_TEST_CONTEXT=mind-fixture NODE_OPTIONS=--max-old-space-size=1400 node_modules/.bin/vite build",
+      "exitCode": 0,
+      "artifact": {
+        "directory": ".vercel/output",
+        "files": 413,
+        "treeSha256": "2087281fc9f409f811fee6efd3bfd161d7005818e210d0d234e70c738e8c43af",
+        "scope": "Local production bundle only; not deployed; sorted relative paths and per-file SHA256 hashes"
+      },
+      "lazyChunks": [
+        "build-workspace-BknXhS_S.js",
+        "voice-cloning-studio-BVfU3e_R.js"
+      ],
+      "scope": "Local production bundle. npm run build migration/deployment stages were not invoked. Upstream bundler directives/chunk warnings remain warnings."
+    },
+    {
+      "name": "ESLint",
+      "command": "node_modules/.bin/eslint . --format json",
+      "exitCode": 1,
+      "baseErrors": 177,
+      "candidateErrors": 173,
+      "newErrorSignatures": [],
+      "changedFilesInspected": 233,
+      "changedFileErrors": 0,
+      "changedFileWarnings": 80,
+      "candidateWarnings": 230,
+      "evidence": "docs/audits/evidence/c1-lint.json",
+      "scope": "Full lint remains red from unchanged baseline errors; changed sources have zero errors. Existing warnings are not presented as clean."
+    },
+    {
+      "name": "changed CSS",
+      "command": "node_modules/.bin/stylelint src/components/mind/command-drawer-nav.css src/components/mind/code-ide-navigation.css",
+      "exitCode": 0,
+      "errors": 0,
+      "warnings": 36,
+      "scope": "Scoped important-declaration warnings; no waiver of observed contrast/layout defects."
+    },
+    {
+      "name": "repository JSON/bootstrap/manifest/Python",
+      "exitCode": 0,
+      "commands": 9,
+      "pythonTestsPassed": 97,
+      "evidence": "docs/audits/evidence/c1-repo-checks.json"
+    },
+    {
+      "name": "authentication build invariant",
+      "command": "BASE_URL=http://127.0.0.1:4199 npm run check:auth",
+      "exitCode": 0,
+      "scope": "Actual local preview sign-in-off agrees with build configuration; not authenticated-account evidence. Initial call without a running preview failed and was superseded by this executed sibling-preview check."
+    },
+    {
+      "name": "Chromium synthetic state catalog",
+      "exitCode": 0,
+      "statesPassed": 14,
+      "statesFailed": 0,
+      "axeViolations": 0,
+      "overflowFindings": 0,
+      "smallTargets": 0,
+      "exceptions": 0,
+      "revision": "b17e90c5728f7f1a9f303f703fcf073cbdd2175e",
+      "dirty": false,
+      "browser": "153.0.8010.0",
+      "evidence": "docs/audits/evidence/c1-local/report.json"
+    },
+    {
+      "name": "Chromium synthetic transitions",
+      "exitCode": 0,
+      "passed": 11,
+      "failed": 0,
+      "revision": "b17e90c5728f7f1a9f303f703fcf073cbdd2175e",
+      "dirty": false,
+      "evidence": "docs/audits/evidence/c1-local/transitions.json"
+    },
+    {
+      "name": "patch whitespace",
+      "command": "git diff 18d5b9364e6bdcfec028eeccf56fe596946ed8ce --check",
+      "exitCode": 0
+    },
+    {
+      "name": "metadata consistency",
+      "commands": [
+        "node --experimental-strip-types --test scripts/verification/evidence.test.mjs",
+        "node scripts/verification/validate.mjs --features docs/audits/evidence/c1-feature-evidence.json --revision b17e90c5728f7f1a9f303f703fcf073cbdd2175e --require-current",
+        "node scripts/verification/validate.mjs --environments docs/audits/evidence/c1-environment-evidence.json --revision b17e90c5728f7f1a9f303f703fcf073cbdd2175e"
+      ],
+      "exitCodes": [
+        0,
+        0,
+        0
+      ],
+      "unitTestsPassed": 4,
+      "scope": "Executed again after evidence packaging; genuine local evidence remains distinct from full-product templates and live release evidence."
+    },
+    {
+      "name": "published source tree equality",
+      "command": "git diff --exit-code b17e90c5728f7f1a9f303f703fcf073cbdd2175e d8b89bbe94291cf2d6d5d36236d03ea749988127",
+      "exitCode": 0,
+      "wholeTreeSha": "05e1aea8e09d6d1ec7b4fec36ab0352d86e3b704",
+      "githubRefVerified": "d8b89bbe94291cf2d6d5d36236d03ea749988127"
+    }
+  ],
+  "skips": [
+    "SKILL.md and AGENTS.md name the marker path and bound this script uses # skipping: gitignored .grok/skills/og is absent in this worktree",
+    "the sections that own the brand-task prohibition never affirm a wait # skipping: gitignored .grok/skills/og is absent in this worktree",
+    "SKILL.md tells the pass to self-check with the flag this CLI accepts # skipping: gitignored .grok/skills/og is absent in this worktree",
+    "every hand-over the og skill prints is one this script accepts # skipping: gitignored .grok/skills/og is absent in this worktree"
+  ],
+  "intermediateRuns": [
+    {
+      "regressionFiles": 400,
+      "passedFiles": 390,
+      "failedFilesCount": 10,
+      "status": "repaired and superseded"
+    },
+    {
+      "regressionFiles": 410,
+      "passedFiles": 409,
+      "failedFiles": [
+        "src/components/mind/surface-failure-host.test.ts"
+      ],
+      "status": "updated to assert structured recovery and superseded"
+    }
+  ],
+  "migrations": {
+    "files": [
+      "0017_c1_oauth_contract.sql",
+      "0018_c1_resource_authority.sql",
+      "0019_c1_media_operations.sql",
+      "0020_c1_device_coordination.sql",
+      "0021_c1_research_skills.sql"
+    ],
+    "proof": "scripts/c1-migration-upgrade.test.mjs applies real pre-C1 SQL, seeds legacy rows, upgrades, validates all 12 new tables and replays additive SQL preserving state. Normal runner passed.",
+    "productionApplied": false
+  },
+  "boundaries": {
+    "authenticatedAccountsTested": false,
+    "liveProviderCalls": 0,
+    "externalWrites": 0,
+    "physicalDevicesTested": false,
+    "deployed": false,
+    "merged": false,
+    "nativeInstallerChanged": false,
+    "githubCiUsedAsProof": false
+  },
+  "nextActions": [
+    "Combine exact-SHA branches and preserve behavioral regression tests.",
+    "Reconcile potentially competing migration numbers and schemas before integration.",
+    "Collect genuine authorized account/provider/device and release evidence after integration; local fixtures cannot establish it."
+  ],
+  "crossBranchOverlapEvidence": "docs/audits/evidence/c1-branch-overlap.json",
+  "publication": {
+    "localValidatedCommit": "b17e90c5728f7f1a9f303f703fcf073cbdd2175e",
+    "githubSourceCommit": "d8b89bbe94291cf2d6d5d36236d03ea749988127",
+    "identicalWholeTreeSha": "05e1aea8e09d6d1ec7b4fec36ab0352d86e3b704",
+    "localAndFetchedRemoteDiffExitCode": 0,
+    "publicationMethod": "Connected GitHub Git Data tools; normal shell push failed because no GitHub credential helper was configured. The connected GitHub tools assigned different commit metadata. No source bytes changed.",
+    "githubBranch": "audit/c1-notion-access-ef0782",
+    "branchRefReadBack": "d8b89bbe94291cf2d6d5d36236d03ea749988127",
+    "localCommitRecord": "docs/audits/evidence/c1-validated-source.commit.txt",
+    "metadataOnlyDelivery": true,
+    "notClaimed": "Raw test and browser reports retain the actual local commit they ran; they were not relabeled as runs on the API-assigned SHA."
+  }
+}

@@ -46,6 +46,17 @@ export async function finishTurnReceipt(sql: Sql, userId: string, operationId: s
   `;
 }
 
+export type TurnReceiptState = "not_received" | "not_dispatched" | "processing_or_unknown" | "responded";
+/** Read-only recovery. The caller must never submit the old request body to check status. */
+export async function readTurnReceipt(sql: Sql, userId: string, operationId: string): Promise<TurnReceiptState> {
+  const [row] = await sql<{ responded: boolean; retryable: boolean }>`
+    select responded, retryable from mind_turn_receipt where user_id = ${userId} and operation_id = ${operationId}
+  `;
+  if (!row) return "not_received";
+  if (row.retryable) return "not_dispatched";
+  return row.responded ? "responded" : "processing_or_unknown";
+}
+
 export async function pruneTurnReceipts(sql: Sql): Promise<void> {
   await sql`
     delete from mind_turn_receipt where (user_id, operation_id) in (

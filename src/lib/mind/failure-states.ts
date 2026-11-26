@@ -23,6 +23,8 @@
  */
 
 
+import { classifyStructuredFailure, readFailureEnvelope, type FailureEnvelope } from "./failure-envelope.ts";
+
 export type HonestFailureKind =
   | "model_unavailable"
   | "database_write_failed"
@@ -119,7 +121,7 @@ export const HONEST_FAILURE_MESSAGES = {
   /** Same sentence as notion.ts when fetch throws. */
   notion_unreachable: "Notion could not be reached. Nothing was changed.",
   /** Client budget exceeded — same idea as other connector/list timeouts, Notion-specific copy. */
-  notion_timeout: "Notion timed out. Nothing was searched or updated.",
+  notion_timeout: "Notion timed out. The result is unconfirmed; inspect the destination before repeating a write.",
   /** notionStatus() rejected or returned nothing. Already used by the Connected status catch. */
   notion_status_failed: "Notion status could not be read. Nothing was searched or updated.",
 } as const;
@@ -297,7 +299,11 @@ export function isNotionUnconfiguredNotice(message: string): boolean {
   return NOTION_UNCONFIGURED_MARKERS.some((marker) => text.includes(marker));
 }
 
-export function classifyHonestFailure(message: string): HonestFailureKind | null {
+export function classifyHonestFailure(message: string | FailureEnvelope): HonestFailureKind | null {
+  if (typeof message !== "string") {
+    const envelope = readFailureEnvelope(message);
+    return envelope ? classifyStructuredFailure(envelope) : null;
+  }
   const text = message.trim();
   if (!text) return null;
   if (text === HONEST_FAILURE_MESSAGES.emergency_stop_active || text.startsWith("Emergency stop is on.")) {
@@ -507,6 +513,8 @@ export function honestFailureAuditAction(kind: HonestFailureKind): string {
  * to pick the banner kind. Offline wins over a bare "Failed to fetch".
  */
 export function normalizeClientFailureMessage(caught: unknown): string {
+  const envelope = readFailureEnvelope(caught) ?? readFailureEnvelope(caught && typeof caught === "object" && "failureEnvelope" in caught ? caught.failureEnvelope : null);
+  if (envelope) return envelope.message;
   if (typeof navigator !== "undefined" && navigator && navigator.onLine === false) {
     return HONEST_FAILURE_MESSAGES.network_offline;
   }
