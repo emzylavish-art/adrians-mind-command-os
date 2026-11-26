@@ -87,13 +87,13 @@ export function paletteHits(input: PaletteInput): PaletteHit[] {
     }
   }
   for (const chat of input.chats) {
-    const message = chat.messages.find((item) => item.content.toLowerCase().includes(search));
-    if (chat.title.toLowerCase().includes(search) || message) {
-      const start = message ? Math.max(0, message.content.toLowerCase().indexOf(search) - 28) : 0;
+    const message = chat.messages.find((item) => matches(item.content, search));
+    if (matches(chat.title, search) || message) {
+      
       rows.push({
         key: chat.id, label: chat.title, meta: chat.humanCode ? "Intelligence" : "Chat",
         view: chat.humanCode ? "code" : "chat", ref: chat.id,
-        messageId: message?.id, excerpt: message?.content.slice(start, start + Math.max(search.length, 96)),
+        messageId: message?.id, excerpt: message ? excerpt(message.content, search) : undefined,
       });
     }
   }
