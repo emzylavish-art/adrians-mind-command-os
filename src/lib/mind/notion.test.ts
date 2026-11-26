@@ -95,11 +95,11 @@ describe("notion", () => {
     assert.equal(result.wrote, false);
   });
 
-  it("requires confirmation before an append and then verifies the text is on the page", async () => {
+  it("requires confirmation before an append and then verifies the new block by identity", async () => {
     const routes = {
       "POST /search": { body: { results: [page("p1", "Roadmap")] } },
-      "PATCH /blocks/p1/children": { body: { results: [] } },
-      "GET /blocks/p1/children?page_size=50": { body: { results: [{ type: "paragraph", paragraph: { rich_text: [{ plain_text: "today's priorities" }] } }] } },
+      "PATCH /blocks/p1/children": { body: { results: [{ id: "new-block", type: "paragraph", paragraph: { rich_text: [{ plain_text: "today's priorities" }] } }] } },
+      "GET /blocks/new-block": { body: { id: "new-block", type: "paragraph", paragraph: { rich_text: [{ plain_text: "today's priorities" }] } } },
     };
     const held = await runNotionTurn({ token: "secret", disabled: false, text: "Append today's priorities to the Notion page about roadmap", confirmed: false, pageId: null, fetch: fakeFetch(routes).fetch });
     assert.equal(held.needsConfirmation, true);
@@ -109,7 +109,7 @@ describe("notion", () => {
     assert.equal(done.wrote, true);
   });
 
-  it("does not call a write successful when the read-back misses the text", async () => {
+  it("leaves an append unconfirmed when Notion does not identify the created block", async () => {
     const result = await runNotionTurn({
       token: "secret",
       disabled: false,
@@ -119,12 +119,11 @@ describe("notion", () => {
       fetch: fakeFetch({
         "POST /search": { body: { results: [page("p1", "Roadmap")] } },
         "PATCH /blocks/p1/children": { body: { results: [] } },
-        "GET /blocks/p1/children?page_size=50": { body: { results: [] } },
       }).fetch,
     });
     assert.equal(result.ok, false);
     assert.equal(result.verified, false);
-    assert.match(result.error, /not found/);
+    assert.match(result.error, /unconfirmed/i);
   });
 
   it("reports an API error and does not invent pages", async () => {

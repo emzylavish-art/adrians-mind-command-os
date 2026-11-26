@@ -33,8 +33,8 @@ type BuildJob = {
 };
 
 type FileTarget = { workspace: string; cwd?: string };
-type EditorBuffer = FileTarget & { path: string; saved: string; draft: string };
-type FileResult = FileTarget & { files?: WorkspaceFile[]; matches?: { path: string }[]; path?: string; content?: string; before?: string; after?: string; truncated?: boolean };
+type EditorBuffer = FileTarget & { path: string; saved: string; draft: string; revision?: string };
+type FileResult = FileTarget & { files?: WorkspaceFile[]; matches?: { path: string }[]; path?: string; to?: string; content?: string; before?: string; after?: string; revision?: string; truncated?: boolean };
 function bufferKey(target: FileTarget, path: string) {
   return JSON.stringify([target.workspace, target.cwd || "", path]);
 }
@@ -184,7 +184,7 @@ export function BuildWorkspace(props: {
     }
   }
 
-  async function runFileOperation(operation: "list" | "read" | "write" | "search" | "rename" | "delete", path?: string, content?: string, extra?: { query?: string; to?: string; confirm?: boolean; workspace?: string; cwd?: string; expectedMissing?: boolean; expectedContent?: string }): Promise<FileResult | null> {
+  async function runFileOperation(operation: "list" | "read" | "write" | "search" | "rename" | "delete", path?: string, content?: string, extra?: { query?: string; to?: string; confirm?: boolean; workspace?: string; cwd?: string; expectedMissing?: boolean; expectedContent?: string; expectedRevision?: string }): Promise<FileResult | null> {
     setFileRequests((pending) => pending + 1);
     setFileNotice(null);
     try {
@@ -261,9 +261,9 @@ export function BuildWorkspace(props: {
     }
   }
 
-  function showFile(target: FileTarget, path: string, text: string) {
+  function showFile(target: FileTarget, path: string, text: string, revision?: string) {
     const key = bufferKey(target, path);
-    setBuffers((prev) => ({ ...prev, [key]: prev[key] ?? { ...target, path, saved: text, draft: text } }));
+    setBuffers((prev) => ({ ...prev, [key]: prev[key] ?? { ...target, path, saved: text, draft: text, revision } }));
     setTabs((prev) => prev.includes(key) ? prev : [...prev, key]);
     setSelectedFile(key);
     setPanel("editor");
@@ -278,7 +278,7 @@ export function BuildWorkspace(props: {
     }
     const result = await runFileOperation("read", path, undefined, target);
     if (result?.truncated) { setFileNotice("This file exceeds the editable size limit."); return; }
-    if (typeof result?.content === "string") showFile({ workspace: result.workspace, cwd: result.cwd }, path, result.content);
+    if (typeof result?.content === "string") showFile({ workspace: result.workspace, cwd: result.cwd }, path, result.content, result.revision);
   }
 
   function closeTab(path: string) {
@@ -307,7 +307,7 @@ export function BuildWorkspace(props: {
     if (!result?.path) return;
     const createdPath = result.path;
     setNewFileName("");
-    showFile({ workspace: result.workspace, cwd: result.cwd }, createdPath, "");
+    showFile({ workspace: result.workspace, cwd: result.cwd }, createdPath, "", result.revision);
     setPanel("editor");
     setFileNotice(`Created ${createdPath}. Type in the editor, then save.`);
   }
@@ -317,10 +317,10 @@ export function BuildWorkspace(props: {
     const buffer = buffers[selectedFile];
     if (!buffer) return;
     if (buffer.workspace !== "hosted" && !buffer.cwd) { setFileNotice("Update the companion and reopen the file to identify its workspace root before saving."); return; }
-    const result = await runFileOperation("write", buffer.path, editorText, { workspace: buffer.workspace, cwd: buffer.cwd, expectedContent: buffer.saved });
+    const result = await runFileOperation("write", buffer.path, editorText, { workspace: buffer.workspace, cwd: buffer.cwd, expectedContent: buffer.saved, expectedRevision: buffer.revision });
     if (result?.path) {
       const verified = result.after ?? editorText;
-      setBuffers((prev) => prev[selectedFile] ? { ...prev, [selectedFile]: { ...prev[selectedFile], saved: verified } } : prev);
+      setBuffers((prev) => prev[selectedFile] ? { ...prev, [selectedFile]: { ...prev[selectedFile], saved: verified, revision: result.revision } } : prev);
       setLastDiff({ path: result.path, before: result.before || "", after: verified });
       setFileNotice(`Saved ${result.path}. The before/after text is the reviewed result, not an assumed write.`);
     }
@@ -338,8 +338,58 @@ export function BuildWorkspace(props: {
       setFileNotice("Your draft was kept. Open Changes to compare it with the disk copy.");
       return;
     }
-    setBuffers((prev) => prev[selectedFile] ? { ...prev, [selectedFile]: { ...prev[selectedFile], saved: disk } } : prev);
+    setBuffers((prev) => prev[selectedFile] ? { ...prev, [selectedFile]: { ...prev[selectedFile], saved: disk, revision: result.revision } } : prev);
     setFileNotice(disk === buffer.draft ? "The verified disk copy matches the checked draft." : "Disk copy checked. Your draft is available for review.");
+  }
+
+  async function renameFile() {
+    const buffer = buffers[selectedFile];
+    if (!buffer) return;
+    if (buffer.draft !== buffer.saved) { setFileNotice("Save or discard this draft before renaming the file."); return; }
+    if (!buffer.revision) { setFileNotice("Read the file again before renaming it."); return; }
+    const to = window.prompt("New relative file path", buffer.path)?.trim().replace(/^\/+/, "");
+    if (!to || to === buffer.path) return;
+    if (to.includes("..") || to.includes("\\")) { setFileNotice("Use a destination inside this workspace."); return; }
+    if (!window.confirm(`Rename ${buffer.path} to ${to}?`)) return;
+    const result = await runFileOperation("rename", buffer.path, undefined, { ...buffer, to, confirm: true, expectedRevision: buffer.revision });
+    if (!result?.to) return;
+    const renamedPath = result.to;
+    const target = { workspace: result.workspace, cwd: result.cwd };
+    const oldKey = selectedFile;
+    const newKey = bufferKey(target, renamedPath);
+    setBuffers((prev) => {
+      const next = { ...prev };
+      delete next[oldKey];
+      next[newKey] = { ...buffer, ...target, path: renamedPath, revision: result.revision ?? buffer.revision };
+      return next;
+    });
+    setTabs((prev) => prev.map((id) => id === oldKey ? newKey : id));
+    setSelectedFile(newKey);
+    setWorkspaceFiles((prev) => prev.map((file) => file.path === buffer.path ? { ...file, path: renamedPath } : file));
+    setFileNotice(`Renamed ${buffer.path} to ${renamedPath}.`);
+  }
+
+  async function deleteFile() {
+    const buffer = buffers[selectedFile];
+    if (!buffer) return;
+    if (buffer.draft !== buffer.saved) { setFileNotice("Save or discard this draft before deleting the file."); return; }
+    if (!buffer.revision) { setFileNotice("Read the file again before deleting it."); return; }
+    if (!window.confirm(`Delete ${buffer.path}? This cannot be undone from the editor.`)) return;
+    const result = await runFileOperation("delete", buffer.path, undefined, { ...buffer, confirm: true, expectedRevision: buffer.revision });
+    if (!result?.path) return;
+    const oldKey = selectedFile;
+    setBuffers((prev) => {
+      const next = { ...prev };
+      delete next[oldKey];
+      return next;
+    });
+    setTabs((prev) => {
+      const next = prev.filter((id) => id !== oldKey);
+      setSelectedFile(next.at(-1) || "");
+      return next;
+    });
+    setWorkspaceFiles((prev) => prev.filter((file) => file.path !== buffer.path));
+    setFileNotice(`Deleted ${buffer.path}.`);
   }
 
   async function requestTerminalApproval() {
@@ -853,7 +903,7 @@ export function BuildWorkspace(props: {
             {panel === "changes" ? <GitReview report={gitReport} busy={fileBusy} onRead={() => void readGit(false)} onInit={() => void readGit(true)} onCommit={(message) => void commitGit(message)} onBranch={(name) => void branchGit(name)} onOpen={(path) => { setPanel("editor"); void openFile(path, { workspace: "hosted" }); }} /> : null}
             {panel === "changes" ? <div className="space-y-2">{changedFiles.map((path) => <div key={path} className="rounded-panel border border-line p-3 text-sm"><FileDiff className="mr-2 inline size-4 text-accent" />{path}<span className="ml-2 text-xs text-muted">written by ACP</span></div>)}{lastDiff ? <div className="rounded-panel border border-line p-3 text-xs"><p className="font-semibold">Reviewed save: {lastDiff.path}</p><p className="mt-2 whitespace-pre-wrap text-danger">{lastDiff.before}</p><hr className="my-2 border-line" /><p className="whitespace-pre-wrap text-success">{lastDiff.after}</p></div> : null}{!changedFiles.length && !lastDiff ? <p className="text-sm text-muted">No file-write events have been reported for this session.</p> : null}<p className="text-xs text-muted">Reviewed file saves return before/after content for bounded change review.</p></div> : null}
             {panel === "changes" ? <button type="button" className="min-h-11 rounded-panel border border-line px-3 text-sm" onClick={() => void restoreLatestCheckpoint()}>Restore last checkpoint</button> : null}
-            {panel === "editor" ? <CodeIde files={workspaceFiles} matches={searchMatches} tabs={tabs.map((id) => ({ id, path: buffers[id]?.path || "", workspace: buffers[id]?.workspace || "", cwd: buffers[id]?.cwd }))} dirty={dirtyTabs} selectedId={selectedFile} selected={buffers[selectedFile]?.path || ""} text={editorText} busy={fileBusy} notice={fileNotice} newName={newFileName} onNewName={setNewFileName} onCreate={() => void createFile()} onOpen={(path) => void openFile(path, listingTarget)} onOpenMatch={(path) => void openFile(path, matchTarget)} onSelectTab={setSelectedFile} onCloseTab={closeTab} onChange={(value) => setBuffers((prev) => prev[selectedFile] ? { ...prev, [selectedFile]: { ...prev[selectedFile], draft: value } } : prev)} onCheck={() => void checkFileState()} onSave={() => void saveFile()} /> : null}
+            {panel === "editor" ? <CodeIde files={workspaceFiles} matches={searchMatches} tabs={tabs.map((id) => ({ id, path: buffers[id]?.path || "", workspace: buffers[id]?.workspace || "", cwd: buffers[id]?.cwd }))} dirty={dirtyTabs} selectedId={selectedFile} selected={buffers[selectedFile]?.path || ""} text={editorText} busy={fileBusy} notice={fileNotice} newName={newFileName} onNewName={setNewFileName} onCreate={() => void createFile()} onOpen={(path) => void openFile(path, listingTarget)} onOpenMatch={(path) => void openFile(path, matchTarget)} onSelectTab={setSelectedFile} onCloseTab={closeTab} onChange={(value) => setBuffers((prev) => prev[selectedFile] ? { ...prev, [selectedFile]: { ...prev[selectedFile], draft: value } } : prev)} onCheck={() => void checkFileState()} onSave={() => void saveFile()} onRename={() => void renameFile()} onDelete={() => void deleteFile()} /> : null}
             {panel === "capabilities" ? <div className="space-y-2">{capabilities.map((item) => <div key={item.id} className="rounded-panel border border-line p-3 text-sm"><div className="flex items-center justify-between gap-2"><span className="font-medium">{item.label}</span><span className="text-xs text-muted">{item.status.replaceAll("_", " ")}</span></div><p className="mt-1 text-xs text-muted">{item.evidence}</p></div>)}{!capabilities.length ? <p className="text-sm text-muted">Capability inventory has not loaded.</p> : null}<div className="rounded-panel border border-line p-3 text-xs text-muted"><p>Projects: {projects.map((project) => project.label).join(", ") || "none"}</p><p>Sessions: {sessions.map((session) => session.name).join(", ") || "none"}</p><p>Providers: {providers.map((provider) => `${provider.model}${provider.hasKey ? " (key stored)" : ""} · ${provider.runtimeUse}`).join(", ") || "none"}</p></div></div> : null}
             {panel === "capabilities" ? <KimiPhase4Panel initializeResponse={null} updates={events} /> : null}
             {panel === "terminal" ? <div className="space-y-3"><input value={terminalCommand} onChange={(event) => setTerminalCommand(event.target.value)} placeholder="Command requiring explicit approval" className="min-h-11 w-full rounded-panel border border-line bg-transparent px-3 font-mono text-sm outline-none focus:border-accent" aria-label="Terminal command" /><div className="flex flex-wrap gap-2"><button type="button" disabled={terminalBusy || !terminalCommand.trim()} onClick={() => void requestTerminalApproval()} className="min-h-10 rounded-panel border border-line px-3 text-sm disabled:opacity-50">{terminalBusy ? "Requesting…" : "Request approval"}</button>{terminalApproval ? <button type="button" disabled={terminalBusy} onClick={() => void approveTerminal()} className="min-h-10 rounded-panel bg-accent px-3 text-sm font-semibold text-accent-ink disabled:opacity-50">Approve exact command</button> : null}</div>{terminalApproval ? <p className="rounded-panel border border-warning/40 bg-warning/10 p-3 text-xs">Pending approval: <code>{terminalApproval.command}</code>{terminalApproval.expiresAt ? ` · expires ${terminalApproval.expiresAt}` : ""} · hosted workspace</p> : null}<div className="min-h-40 whitespace-pre-wrap rounded-panel border border-line bg-black/20 p-4 font-mono text-xs text-muted">{terminalOutput || (deniedTerminals ? `${deniedTerminals} ACP terminal request${deniedTerminals === 1 ? "" : "s"} denied by the agent safety policy.` : "No approved terminal output yet.")}</div><p className="text-xs text-muted">The exact command runs only after you approve it. It runs in the hosted workspace when no computer is paired. Dangerous commands are refused by the server even after approval. {terminalHistory.map((item) => `${item.ok ? "ok" : "failed"}: ${item.command}`).join(" · ")}</p></div> : null}

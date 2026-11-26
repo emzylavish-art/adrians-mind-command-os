@@ -126,6 +126,23 @@ export function textFromBlocks(body: unknown): string {
   return lines.join("\n").slice(0, 4000);
 }
 
+function appendedBlockId(body: unknown): string | null {
+  if (!body || typeof body !== "object" || !Array.isArray((body as { results?: unknown }).results)) return null;
+  const first = (body as { results: unknown[] }).results[0];
+  if (!first || typeof first !== "object" || typeof (first as { id?: unknown }).id !== "string") return null;
+  return (first as { id: string }).id;
+}
+
+function textFromBlock(body: unknown): string {
+  if (!body || typeof body !== "object") return "";
+  const block = body as Record<string, unknown>;
+  const type = typeof block.type === "string" ? block.type : "";
+  const payload = type ? block[type] : null;
+  const rich = payload && typeof payload === "object" && "rich_text" in payload ? payload.rich_text : null;
+  if (!Array.isArray(rich)) return "";
+  return rich.map((part) => (part && typeof part === "object" && "plain_text" in part ? String(part.plain_text ?? "") : "")).join("").trim();
+}
+
 function empty(state: NotionTurn["state"], action: string, error: string): NotionTurn {
   return { ok: false, state, action, needsConfirmation: false, ambiguous: false, pages: [], content: "", error, wrote: false, verified: false };
 }
@@ -197,11 +214,15 @@ export async function runNotionTurn(input: {
     }),
   });
   if (!wrote.ok) return { ...empty("connected", "append", wrote.error), pages: [picked] };
-  const check = await callNotion(input.fetch, input.token, `/blocks/${picked.id}/children?page_size=50`, { method: "GET" });
-  const content = check.ok ? textFromBlocks(check.body) : "";
-  const verified = content.includes(note);
+  const blockId = appendedBlockId(wrote.body);
+  if (!blockId) {
+    return { ok: false, state: "connected", action: "append", needsConfirmation: false, ambiguous: false, pages: [picked], content: "", error: "Notion accepted a write but did not identify the new block. Its state is unconfirmed; do not retry until it is reconciled.", wrote: true, verified: false };
+  }
+  const check = await callNotion(input.fetch, input.token, `/blocks/${blockId}`, { method: "GET" });
+  const content = check.ok ? textFromBlock(check.body) : "";
+  const verified = check.ok && content === note;
   if (!check.ok || !verified) {
-    return { ok: false, state: "connected", action: "append", needsConfirmation: false, ambiguous: false, pages: [picked], content, error: "Notion accepted a write, but the text was not found when the page was read back.", wrote: true, verified: false };
+    return { ok: false, state: "connected", action: "append", needsConfirmation: false, ambiguous: false, pages: [picked], content, error: "Notion accepted a write, but the identified new block could not be confirmed. Its state is unconfirmed; do not retry until it is reconciled.", wrote: true, verified: false };
   }
   return { ok: true, state: "connected", action: "append", needsConfirmation: false, ambiguous: false, pages: [picked], content, error: "", wrote: true, verified: true };
 }

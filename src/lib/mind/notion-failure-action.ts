@@ -92,6 +92,11 @@ export function snapshotNotionFailureParams(params: NotionFailureParams): Notion
   };
 }
 
+/** A lost append acknowledgement is not safe to replay: the write may exist already. */
+export function canRetryNotionTurn(turn: Pick<NotionTurn, "action" | "wrote" | "verified">): boolean {
+  return !(turn.action === "append" && turn.wrote && !turn.verified);
+}
+
 /** Activity row id is `audit-${id}`. Invalid ids do not invent a link. */
 export function notionFailureLogHref(auditId: string): string | null {
   const id = auditId.trim();

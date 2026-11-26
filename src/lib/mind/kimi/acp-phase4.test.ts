@@ -6,6 +6,7 @@ import {
   normalizeSessionUpdate,
   type PublicMcpServer,
 } from "./acp-phase4.ts";
+import "./hosted-file-guards.test.ts";
 
 test("initialize inventory distinguishes reported support from unknown support", () => {
   const unknown = inventoryInitializeCapabilities({ agentInfo: { name: "Kimi", version: "1.2.3" } });

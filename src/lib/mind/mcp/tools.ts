@@ -54,6 +54,21 @@ function richText(body: unknown): string {
   return lines.join("\n");
 }
 
+function returnedBlockIds(body: unknown): string[] {
+  if (!body || typeof body !== "object" || !Array.isArray((body as { results?: unknown }).results)) return [];
+  return (body as { results: unknown[] }).results.flatMap((item) => item && typeof item === "object" && typeof (item as { id?: unknown }).id === "string" ? [(item as { id: string }).id] : []);
+}
+
+function blockText(body: unknown): string {
+  if (!body || typeof body !== "object") return "";
+  const block = body as Record<string, unknown>;
+  const type = typeof block.type === "string" ? block.type : "";
+  const payload = type ? block[type] : null;
+  const rich = payload && typeof payload === "object" && "rich_text" in payload ? payload.rich_text : null;
+  if (!Array.isArray(rich)) return "";
+  return rich.map((part) => part && typeof part === "object" && "plain_text" in part ? String(part.plain_text ?? "") : "").join("").trim();
+}
+
 async function notionApi(
   fetchImpl: NotionFetch,
   token: string,
@@ -148,7 +163,16 @@ export async function notionAppendSection(input: {
     }),
   });
   if (!wrote.ok) return { ok: false, status: "error", text: wrote.text };
-  return { ok: true, status: "ok", text: `Appended heading “${heading}” to page ${pageId}.`, data: { pageId, heading } };
+  const blockIds = returnedBlockIds(wrote.body);
+  if (blockIds.length !== 2 || new Set(blockIds).size !== 2) {
+    return { ok: false, status: "error", text: `Notion accepted the append but did not identify both new blocks. The result is unconfirmed; do not retry until it is reconciled.`, data: { pageId, heading, blockIds } };
+  }
+  const expected = [heading, markdown.slice(0, 1900)];
+  for (const [index, blockId] of blockIds.entries()) {
+    const check = await notionApi(fetchImpl, token, `/blocks/${blockId}`, { method: "GET" });
+    if (!check.ok || blockText(check.body) !== expected[index]) return { ok: false, status: "error", text: "Notion accepted the append but the identified new blocks could not be confirmed. The result is unconfirmed; do not retry until it is reconciled.", data: { pageId, heading, blockIds } };
+  }
+  return { ok: true, status: "ok", text: `Appended and confirmed heading “${heading}” on page ${pageId}.`, data: { pageId, heading, blockIds } };
 }
 
 /** Each pattern must match the WHOLE command (anchored both ends). */

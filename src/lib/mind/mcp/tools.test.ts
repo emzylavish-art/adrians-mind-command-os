@@ -34,6 +34,35 @@ describe("mcp tools", () => {
     assert.match(append.text, /not configured/i);
   });
 
+  it("marks a Notion append unconfirmed until both returned block identities can be read", async () => {
+    const requests: string[] = [];
+    const result = await notionAppendSection({
+      pageIdOrUrl: "40b1aa27632381768d58cde0731f142a",
+      heading: "H",
+      markdown: "Body",
+      token: "token",
+      fetch: async (url, init) => {
+        requests.push(`${init?.method ?? "GET"} ${url}`);
+        if (init?.method === "PATCH") return { ok: true, status: 200, json: async () => ({ results: [{ id: "heading" }, { id: "body" }] }) };
+        return { ok: true, status: 200, json: async () => url.endsWith("heading") ? { id: "heading", type: "heading_2", heading_2: { rich_text: [{ plain_text: "H" }] } } : { id: "body", type: "paragraph", paragraph: { rich_text: [{ plain_text: "Body" }] } } };
+      },
+    });
+    assert.equal(result.ok, true);
+    assert.equal(requests.filter((request) => request.startsWith("GET ")).length, 2);
+  });
+
+  it("does not invite a duplicate Notion append when the response has no block identities", async () => {
+    const result = await notionAppendSection({
+      pageIdOrUrl: "40b1aa27632381768d58cde0731f142a",
+      heading: "H",
+      markdown: "Body",
+      token: "token",
+      fetch: async (_url, init) => ({ ok: init?.method === "PATCH", status: init?.method === "PATCH" ? 200 : 404, json: async () => ({ results: [] }) }),
+    });
+    assert.equal(result.ok, false);
+    assert.match(result.text, /unconfirmed/i);
+  });
+
   it("returns no paired PC when the agent URL is unset", async () => {
     const result = await pcRunShell({ command: "pwd", env: {}, confirm: true });
     assert.equal(result.ok, false);

@@ -142,6 +142,8 @@ export function CodeIde(props: {
   onChange: (value: string) => void;
   onSave: () => void;
   onCheck: () => void;
+  onRename: () => void;
+  onDelete: () => void;
 }) {
   const tree = fileTree(props.files);
   const dirty = props.selected !== "" && props.dirty.includes(props.selectedId);
@@ -208,6 +210,8 @@ export function CodeIde(props: {
         <div className="code-ide-status">
           <button type="button" disabled={!props.selected || props.busy || !dirty} onClick={props.onSave}>{props.busy ? "Saving…" : "Save reviewed file"}</button>
           {props.selected && <button type="button" disabled={props.busy} onClick={props.onCheck}>Check disk copy</button>}
+          {props.selected && <button type="button" disabled={props.busy || dirty} onClick={props.onRename}>Rename reviewed file</button>}
+          {props.selected && <button type="button" disabled={props.busy || dirty} onClick={props.onDelete}>Delete reviewed file</button>}
           <span>{props.selected ? `${props.selected} · ${props.text.split("\n").length} lines · ${dirty ? "Unsaved" : "Matches last read or verified save"}` : "No file selected"}</span>
         </div>
         <div className="code-ide-tools">

@@ -4,11 +4,12 @@ import { requireUserId } from "../../auth/verify.server";
 import { assertSameOrigin } from "../connectors/oauth-csrf";
 import { haltIsOn } from "../halt.server";
 import { enqueueJob, listJobEvents, onlineAgents, readJob } from "../pc-pairing/store";
-import { mkdirSync, readdirSync, readFileSync, renameSync, rmSync, statSync, writeFileSync } from "node:fs";
+import { lstatSync, mkdirSync, readdirSync, readFileSync, renameSync, rmSync, writeFileSync } from "node:fs";
 import { dirname, join, relative, resolve } from "node:path";
 import { adrianHostedWorkspace } from "./hosted/acp-client.ts";
 import { branchHostedGit, commitHostedGit, initHostedGit, inspectHostedGit, listHostedCheckpoints, restoreHostedCheckpoint } from "./hosted/shell.server.ts";
 import { forgetWorkspaceFile, renameWorkspaceFile, restoreWorkspaceFiles, saveWorkspaceFile } from "./persist.ts";
+import { fileRevision, plainFile, safeWorkspaceFile } from "./hosted-file-guards.ts";
 
 const MAX_CWD = 500;
 const MAX_PATH = 1_000;
@@ -28,7 +29,7 @@ function inside(root: string, path: string): boolean {
   return path === root || path.startsWith(`${root}/`);
 }
 
-async function runHostedFileOperation(body: { operation?: unknown; path?: unknown; content?: unknown; query?: unknown; to?: unknown; confirm?: unknown; expectedContent?: unknown; expectedMissing?: unknown; expectedRevision?: unknown; workspace?: unknown }, ownerId: string): Promise<Response> {
+export async function runHostedFileOperation(body: { operation?: unknown; path?: unknown; content?: unknown; query?: unknown; to?: unknown; confirm?: unknown; expectedContent?: unknown; expectedMissing?: unknown; expectedRevision?: unknown; workspace?: unknown }, ownerId: string): Promise<Response> {
   if (ownerId !== "dev-user") {
     if (!OPERATIONS.has(String(body.operation))) return json({ ok: false, error: machineRequired }, 409);
     try { return await accountFileOperation(await getSql(), ownerId, body); }
@@ -57,64 +58,95 @@ async function runHostedFileOperation(body: { operation?: unknown; path?: unknow
   }
   const root = adrianHostedWorkspace();
   const operation = operationName;
+  if (!OPERATIONS.has(operation)) return json({ ok: false, error: "Unsupported hosted file operation." }, 400);
   const relativePath = typeof body.path === "string" ? body.path.replace(/^\/+/, "") : "";
+  if ((operation === "read" || operation === "write" || operation === "rename" || operation === "delete") && !relativePath) return json({ ok: false, error: "path is required." }, 400);
   const target = resolve(root, relativePath);
   if (!inside(root, target)) return json({ ok: false, error: "Path is outside the hosted workspace." }, 400);
+  if (!safeWorkspaceFile(root, target)) return json({ ok: false, error: "That path crosses a symbolic link. Nothing changed." }, 400);
   if (relativePath && blocked(relativePath)) return json({ ok: false, error: "That path is secret or outside the hosted workspace. Nothing changed." }, 400);
   if (operation === "list") {
     await restoreWorkspaceFiles(ownerId, root);
     const all = readdirSync(root, { recursive: true }).flatMap((entry) => {
       const name = String(entry);
       const path = join(root, name);
-      if (!statSync(path).isFile()) return [];
+      if (!plainFile(path)) return [];
       const relativePath = relative(root, path);
       if (relativePath.split("/").includes(".git") || /(^|\/)\.env($|\.)|(^|\/)credentials?\.(json|txt|pem)$/i.test(relativePath)) return [];
-      return [{ path: relative(root, path), bytes: statSync(path).size }];
+      return [{ path: relative(root, path), bytes: lstatSync(path).size }];
     });
     const files = all.slice(0, 200);
     return json({ ok: true, files, truncated: all.length > 200, total: all.length, result: { files, truncated: all.length > 200, total: all.length } });
   }
   if (operation === "read") {
-    if (!statSync(target, { throwIfNoEntry: false })?.isFile()) return json({ ok: false, error: `${relativePath || "That file"} is not in the hosted workspace.` }, 404);
+    if (!plainFile(target)) return json({ ok: false, error: `${relativePath || "That file"} is not in the hosted workspace.` }, 404);
     const content = readFileSync(target, "utf8");
-    return json({ ok: true, path: relativePath, content: content.slice(0, MAX_CONTENT), truncated: content.length > MAX_CONTENT, result: { content: content.slice(0, MAX_CONTENT), truncated: content.length > MAX_CONTENT } });
+    const revision = fileRevision(content);
+    return json({ ok: true, path: relativePath, content: content.slice(0, MAX_CONTENT), revision, truncated: content.length > MAX_CONTENT, result: { content: content.slice(0, MAX_CONTENT), revision, truncated: content.length > MAX_CONTENT } });
   }
   if (operation === "write") {
     if (typeof body.content !== "string" || body.content.length > MAX_CONTENT) return json({ ok: false, error: "content is required and must be at most 1 MB." }, 400);
-    const exists = Boolean(statSync(target, { throwIfNoEntry: false }));
+    const exists = Boolean(lstatSync(target, { throwIfNoEntry: false }));
+    if (exists && !plainFile(target)) return json({ ok: false, error: "That path is not a regular hosted file. Nothing changed." }, 400);
     const before = exists ? readFileSync(target, "utf8") : "";
-    if ((body.expectedMissing && exists) || (typeof body.expectedContent === "string" && (!exists || before !== body.expectedContent))) {
+    if ((body.expectedMissing && exists) || (typeof body.expectedContent === "string" && (!exists || before !== body.expectedContent)) || (typeof body.expectedRevision === "string" && (!exists || fileRevision(before) !== body.expectedRevision))) {
       return json({ ok: false, error: "The file changed on disk. Review the current file before saving." }, 409);
     }
     mkdirSync(dirname(target), { recursive: true });
     writeFileSync(target, body.content, { flag: body.expectedMissing ? "wx" : "w" });
     const saved = await saveWorkspaceFile(ownerId, relativePath, body.content);
-    if (!saved) return json({ ok: false, error: "The file was written on disk but was not saved to the account store. It will not survive a restart." }, 500);
-    return json({ ok: true, path: relativePath, before, after: body.content, result: { path: relativePath, before, after: body.content } });
+    if (!saved) {
+      if (exists) writeFileSync(target, before);
+      else rmSync(target);
+      return json({ ok: false, error: "The write was not saved to the account store. Nothing changed." }, 503);
+    }
+    const revision = fileRevision(body.content);
+    return json({ ok: true, path: relativePath, before, after: body.content, revision, result: { path: relativePath, before, after: body.content, revision } });
   }
   if (operation === "search") {
     const query = typeof body.query === "string" ? body.query.slice(0, 200) : "";
     const matches = readdirSync(root, { recursive: true }).flatMap((entry) => {
       const name = String(entry);
       const path = join(root, name);
-      if (!statSync(path).isFile()) return [];
+      const relativePath = relative(root, path);
+      if (blocked(relativePath) || !plainFile(path)) return [];
       const content = readFileSync(path, "utf8");
       return name.includes(query) || content.includes(query) ? [{ path: relative(root, path) }] : [];
     }).slice(0, 100);
     return json({ ok: true, matches, result: { matches } });
   }
   if ((operation === "rename" || operation === "delete") && body.confirm !== true) return json({ ok: false, error: "Explicit confirmation is required. Nothing changed." }, 400);
+  if ((operation === "rename" || operation === "delete") && typeof body.expectedRevision !== "string") return json({ ok: false, error: "Read the file again before confirming this change." }, 409);
+  if (operation === "rename" || operation === "delete") {
+    if (!plainFile(target)) return json({ ok: false, error: `${relativePath || "That file"} is not in the hosted workspace.` }, 404);
+    const current = readFileSync(target, "utf8");
+    if (fileRevision(current) !== body.expectedRevision) return json({ ok: false, error: "The file changed on disk. Read it again before confirming this change." }, 409);
+  }
   if (operation === "rename") {
-    const next = resolve(root, typeof body.to === "string" ? body.to.replace(/^\/+/, "") : "");
+    const nextRelativePath = typeof body.to === "string" ? body.to.trim().replace(/^\/+/, "") : "";
+    if (!nextRelativePath) return json({ ok: false, error: "to is required." }, 400);
+    if (blocked(nextRelativePath)) return json({ ok: false, error: "That destination is secret or outside the hosted workspace. Nothing changed." }, 400);
+    const next = resolve(root, nextRelativePath);
     if (!inside(root, next)) return json({ ok: false, error: "Destination is outside the hosted workspace." }, 400);
+    if (!safeWorkspaceFile(root, next)) return json({ ok: false, error: "That destination crosses a symbolic link. Nothing changed." }, 400);
+    if (lstatSync(next, { throwIfNoEntry: false })) return json({ ok: false, error: "A file already exists at that destination. Nothing changed." }, 409);
+    mkdirSync(dirname(next), { recursive: true });
     renameSync(target, next);
-    await renameWorkspaceFile(ownerId, relativePath, relative(root, next));
-    return json({ ok: true, path: relativePath, to: relative(root, next) });
+    const to = relative(root, next);
+    if (!await renameWorkspaceFile(ownerId, relativePath, to)) {
+      renameSync(next, target);
+      return json({ ok: false, error: "The rename was not saved to the account store. Nothing changed." }, 503);
+    }
+    return json({ ok: true, path: relativePath, to, revision: body.expectedRevision, result: { path: relativePath, to, revision: body.expectedRevision } });
   }
   if (operation === "delete") {
+    const deleted = readFileSync(target, "utf8");
     rmSync(target);
-    await forgetWorkspaceFile(ownerId, relativePath);
-    return json({ ok: true, path: relativePath });
+    if (!await forgetWorkspaceFile(ownerId, relativePath)) {
+      writeFileSync(target, deleted);
+      return json({ ok: false, error: "The deletion was not saved to the account store. Nothing changed." }, 503);
+    }
+    return json({ ok: true, path: relativePath, revision: body.expectedRevision, result: { path: relativePath, revision: body.expectedRevision } });
   }
   return json({ ok: false, error: "Unsupported hosted file operation." }, 400);
 }

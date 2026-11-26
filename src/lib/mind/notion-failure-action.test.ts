@@ -15,6 +15,7 @@ import {
   NOTION_COMMAND_TIMEOUT_MS,
   NotionFailureBanner,
   NotionUnconfiguredNoticeBanner,
+  canRetryNotionTurn,
   notionFailureFromCatch,
   notionFailureFromTurn,
   notionFailureLogHref,
@@ -53,6 +54,12 @@ const searchParams = (): NotionFailureParams => ({
 });
 
 describe("H33 Notion connector failure banners", () => {
+  it("does not retry an append whose acknowledgment could have been lost", () => {
+    assert.equal(canRetryNotionTurn(turn({ ok: false, state: "connected", action: "append", wrote: true, verified: false, error: "unconfirmed" })), false);
+    assert.equal(canRetryNotionTurn(turn({ ok: false, state: "connected", action: "append", wrote: false, verified: false, error: "rejected" })), true);
+    assert.equal(canRetryNotionTurn(turn({ ok: false, state: "connected", action: "read", wrote: false, verified: false, error: "unreachable" })), true);
+  });
+
   it("uses the real not-configured and disconnected sentences", () => {
     assert.equal(HONEST_FAILURE_MESSAGES.notion_not_configured, NOTION_SETUP);
     assert.equal(notionConnection(undefined, false).detail, HONEST_FAILURE_MESSAGES.notion_not_configured);
