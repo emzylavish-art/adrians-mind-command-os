@@ -41,8 +41,8 @@ describe("C4 provider execution receipts", () => {
     const routed = await routeSelectedModel({ id: "openrouter", prompt: "hello", env: { OPENROUTER_API_KEY: "fixture", OPENROUTER_MODEL: "vendor/request:free" },
       fetch: async () => Response.json({ id: "generation-id", model: "actual", usage: { prompt_tokens: 1, completion_tokens: 2 }, choices: [{ message: { content: "reply" } }] }) });
     assert.equal(routed.requestedModel, "vendor/request:free"); assert.equal(routed.model, "actual");
-    assert.equal(routed.requestId, "generation-id"); assert.deepEqual(routed.usage, { prompt_tokens: 1, completion_tokens: 2 });
-    const local = await routeSelectedModel({ id: "ollama", prompt: "hello", env: { LOCAL_MODEL_URL: "http://fixture.invalid", OLLAMA_MODEL: "requested" },
+    assert.equal(routed.requestId, null); assert.equal(routed.responseId, "generation-id"); assert.deepEqual(routed.usage, { prompt_tokens: 1, completion_tokens: 2 });
+    const local = await routeSelectedModel({ id: "ollama", prompt: "hello", env: { LOCAL_MODEL_URL: "http://127.0.0.1:11434/api/generate", OLLAMA_MODEL: "requested" },
       fetch: async () => Response.json({ model: "actual-local", response: "reply", prompt_eval_count: 5, eval_count: 3 }) });
     assert.equal(local.executionLocation, "local"); assert.equal(local.requestedModel, "requested");
     assert.deepEqual(local.usage, { prompt_tokens: 5, completion_tokens: 3 });
@@ -64,10 +64,10 @@ describe("C4 provider execution receipts", () => {
     assert.deepEqual(failed.usage, { prompt_tokens: 8 });
     const preflight = await invokeProviderRouter({ spec, env: {}, spawnImpl: async () => ({ code: 2, stdout: "", timedOut: false, stderr: JSON.stringify({ error: "Budget preflight failed.", dispatched: false }) }) });
     assert.equal(preflight.ok, false); assert.equal(preflight.dispatched, false);
-    const local = await routeSelectedModel({ id: "ollama", prompt: "hello", env: { LOCAL_MODEL_URL: "http://fixture.invalid", OLLAMA_MODEL: "selected" },
+    const local = await routeSelectedModel({ id: "ollama", prompt: "hello", env: { LOCAL_MODEL_URL: "http://127.0.0.1:11434/api/generate", OLLAMA_MODEL: "selected" },
       fetch: async () => Response.json({ model: "failed-local", prompt_eval_count: 9, id: "local-error" }, { status: 500 }) });
     assert.equal(local.ok, false); assert.equal(local.dispatched, true);
-    assert.equal(local.model, "failed-local"); assert.equal(local.requestId, "local-error");
+    assert.equal(local.model, "failed-local"); assert.equal(local.responseId, "local-error"); assert.equal(local.requestId, null);
     assert.deepEqual(local.usage, { prompt_tokens: 9 });
     assert.equal(local.executionLocation, "local");
   });
@@ -78,7 +78,7 @@ describe("C4 provider execution receipts", () => {
     const run = () => collectConsultHelp(plan, async (id) => id === "anthropic" ? { ok: false, text: "", dispatched: false }
       : { ok: id === "openai", text: id === "openai" ? "help" : "", model: `${id}-actual`, requestedModel: `${id}-requested`, usage: { prompt_tokens: 4 }, requestId: `${id}-request` },
     { parentOperationId: "parent-operation", onReceipt: (receipt) => { receipts.push(receipt); } });
-    assert.deepEqual(await run(), [{ id: "openai", text: "help" }]);
+    assert.deepEqual((await run()).filter(item => item.ok).map(({ id, text }) => ({ id, text })), [{ id: "openai", text: "help" }]);
     assert.deepEqual(receipts.map((row) => [row.executionId, row.outcome]), [["parent-operation:helper:0", "completed"], ["parent-operation:helper:1", "failed"]]);
     await run(); assert.equal(receipts[0].executionId, receipts[2].executionId);
   });
@@ -105,7 +105,7 @@ describe("C4 provider execution receipts", () => {
     const result = await collectConsultHelp({ orchestrator: "grok", available: ["openai", "gemini"], purpose: "synthesize", helpers: [{ id: "openai", request: "fixture" }, { id: "gemini", request: "fixture" }] },
       async (id) => { if (id === "openai") throw new Error("connection lost after dispatch"); return { ok: false, text: "", dispatched: false }; },
       { parentOperationId: "operation", onReceipt: (receipt) => { receipts.push(receipt); } });
-    assert.deepEqual(result, []);
+    assert.deepEqual(result.filter(item => item.ok), []);
     assert.equal(receipts.length, 1);
     assert.equal(receipts[0].outcome, "unknown");
     assert.equal(receipts[0].usage, null);

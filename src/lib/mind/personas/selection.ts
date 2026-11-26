@@ -58,7 +58,7 @@ function validSelection(value: unknown, now: number): PersonaSelection | null {
   };
 }
 
-function readHandoff(storage: Pick<Storage, "getItem">, ownerId: string, now: number): { present: boolean; handoff: PersonaHandoff | null } {
+export function readHandoff(storage: Pick<Storage, "getItem">, ownerId: string, now: number): { present: boolean; handoff: PersonaHandoff | null } {
   if (!ownerId) return { present: false, handoff: null };
   try {
     const raw = storage.getItem(personaSelectionKey(ownerId));
@@ -98,9 +98,15 @@ export type PersonaOpenStorage = Pick<Storage, "setItem">;
 export type PersistPersonaOpenResult = { ok: true } | { ok: false; workspacePersisted: false };
 
 /** Store only an account-scoped selection. Workspace changes go through useMindWorkspace. */
-export function persistPersonaOpen(storage: PersonaOpenStorage, _workspace: Workspace, selection: PersonaSelection): PersistPersonaOpenResult {
-  try { storage.setItem(PERSONA_SELECT_KEY, JSON.stringify(selection)); return { ok: true }; }
-  catch { return { ok: false, workspacePersisted: false }; }
+export function persistPersonaOpen(storage: PersonaOpenStorage, workspace: Workspace, selection: PersonaSelection, ownerId = "dev-user"): PersistPersonaOpenResult {
+  try {
+    const agent = workspace.agents.find((item) => item.id === selection.agentId && !item.archived);
+    if (!ownerId || !agent) return { ok: false, workspacePersisted: false };
+    storage.setItem(personaSelectionKey(ownerId), JSON.stringify({ version: 2, ownerId, selection, agent } satisfies PersonaHandoff));
+    return { ok: true };
+  } catch {
+    return { ok: false, workspacePersisted: false };
+  }
 }
 
 export type ConsumePersonaHandoffResult =
@@ -140,15 +146,14 @@ export function consumePersonaHandoff(
 }
 
 /** A pending template handoff may create only that template in the current owner workspace. */
-export function applyPersonaHandoff(ws: Workspace, selection: PersonaSelection | null, requestedId?: string | null): { ws: Workspace; agent: AgentDefinition | null } {
+export function applyPersonaHandoff(ws: Workspace, selection: PersonaSelection | null, requestedId?: string | null, savedAgent?: AgentDefinition): { ws: Workspace; agent: AgentDefinition | null } {
   const id = selection?.agentId || requestedId;
-  const existing = ws.agents.find((agent) => agent.id === id && !agent.archived);
-  if (existing) return { ws, agent: existing };
-  if (selection?.source !== "template" || !selection.templateName) return { ws, agent: null };
-  const matched = ws.agents.find((agent) => agent.name === selection.templateName && !agent.archived);
-  if (matched) return { ws, agent: matched };
-  const created = addAgentFromTemplate(ws, selection.templateName);
-  return created.ok ? { ws: created.ws, agent: created.agent } : { ws, agent: null };
+  const current = ws.agents.find(agent => agent.id === id);
+  if (current) return { ws, agent: current.archived ? null : current };
+  if (!selection?.materialized || selection.source !== "template" || !selection.templateId
+    || !savedAgent || savedAgent.archived || savedAgent.id !== id || savedAgent.templateId !== selection.templateId
+    || !AGENT_TEMPLATES.some(template => template.templateId === selection.templateId)) return { ws, agent: null };
+  return { ws: { ...ws, agents: [savedAgent, ...ws.agents] }, agent: savedAgent };
 }
 
 /** Templates use immutable origin IDs; a custom agent's display name never grants template identity. */

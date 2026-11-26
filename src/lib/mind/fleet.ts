@@ -472,6 +472,7 @@ export function readFleet(input: unknown): FleetShape {
     for (const row of input.agents) {
       if (!isRecord(row) || typeof row.id !== "string" || typeof row.name !== "string" || !row.name.trim()) continue;
       fleet.agents.push({
+        ...(typeof row.templateId === "string" && AGENT_TEMPLATES.some(template => template.templateId === row.templateId) ? { templateId: row.templateId } : {}),
         id: row.id,
         name: row.name.slice(0, 80),
         description: typeof row.description === "string" ? row.description.slice(0, 400) : "",

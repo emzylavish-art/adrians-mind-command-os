@@ -10,7 +10,15 @@ export function providerResponse<T extends { ok: boolean; error?: string }>(work
   return new Response(new ReadableStream<Uint8Array>({
     async start(stream) {
       const send = (event: string, value: unknown) => { if (!closed) stream.enqueue(encoder.encode(`event: ${event}\ndata: ${JSON.stringify(value)}\n\n`)); };
-      try { const result = await work((text) => { if (!controller.signal.aborted) send("delta", { text }); }, controller.signal); const status = (result as { httpStatus?: number }).httpStatus; if (controller.signal.aborted) send("canceled", { error: "Stopped. The unfinished reply was not saved.", code: "user_stopped", ...normalizeTurnCallEvidence(result) }); else if (result.ok) send("done", done(result)); else send("error", { error: result.error || "The selected provider did not complete this request.", code: providerErrorCode(status, (result as { code?: unknown }).code), ...normalizeTurnCallEvidence(result) }); }
+      try {
+        const result = await work((text) => { if (!controller.signal.aborted) send("delta", { text }); }, controller.signal);
+        const primary = result as T & { httpStatus?: number; code?: unknown; dispatched?: boolean };
+        const { dispatched: _wholeTurn, ...evidence } = normalizeTurnCallEvidence(result);
+        if (typeof primary.dispatched === "boolean") evidence.primaryDispatched = primary.dispatched;
+        if (controller.signal.aborted) send("canceled", { error: "Stopped. The unfinished reply was not saved.", code: "user_stopped", ...evidence });
+        else if (result.ok) send("done", done(result));
+        else send("error", { error: result.error || "The selected provider did not complete this request.", code: providerErrorCode(primary.httpStatus, primary.code), ...evidence });
+      }
       catch { send("error", { error: "The selected provider connection ended before completion. No fallback or repeat request was started.", code: "unknown" }); }
       finally { signal.removeEventListener("abort", stop); if (!closed) { closed = true; stream.close(); } }
     },

@@ -4,6 +4,7 @@ import { stripTypeScriptTypes } from "node:module";
 import { test } from "node:test";
 import { runInNewContext } from "node:vm";
 import ts from "typescript";
+import * as telemetry from "../../../lib/mind/dashboard/telemetry-display.ts";
 import { DEFAULT_GRAPH_FILTER, filterBotIds } from "../../../lib/mind/dashboard/graph-filters.ts";
 import { applyScrubToBots, scrubAt } from "../../../lib/mind/dashboard/time-scrub.ts";
 import { focusDashboardPanel } from "../../../lib/mind/dashboard/view-state.ts";
@@ -51,6 +52,7 @@ function dashboardFixture() {
     "./mobile-structure": { MobileChrome: "MobileChrome", MobilePanelCard: "MobilePanelCard", useMobilePanelFocus: () => ({ focused, setFocused(value: string | null) { focused = value; }, clear() { focused = null; } }) },
     "./operator-console": { OperatorConsole: "OperatorConsole", loadInitialOperatorPrefs: () => ({ layers: { sound: false, labels: true, charts: false, feed: true, time: true }, healthFilter: "all" }), useOperatorHotkey() {}, persistOperatorPrefs() {} },
     "@/lib/mind/dashboard/hud-order": { sortHudCards: (cards: any[]) => cards, hudDefaultOpen: () => false },
+    "@/lib/mind/dashboard/telemetry-display": telemetry,
     "@/lib/mind/dashboard/graph-filters": { DEFAULT_GRAPH_FILTER, filterBotIds },
     "@/lib/mind/dashboard/view-state": { focusDashboardPanel },
     "@/lib/mind/dashboard/time-scrub": { applyScrubToBots, scrubAt },

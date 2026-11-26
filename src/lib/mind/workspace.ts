@@ -907,7 +907,7 @@ function usageKind(prompt: unknown, completion: unknown): UsageEntry["kind"] {
 }
 
 export function pushUsage(ws: Workspace, entry: Omit<UsageEntry, "kind">): Workspace {
-  return { ...ws, usage: [{ ...entry, kind: usageKind(entry.promptTokens, entry.completionTokens) }, ...ws.usage.filter((row) => row.id !== entry.id)].slice(0, 200) };
+  return { ...ws, usage: mergeUsageEntries([{ ...entry, kind: usageKind(entry.promptTokens, entry.completionTokens) }, ...ws.usage]).slice(0, 200) };
 }
 
 export function addLocalFile(

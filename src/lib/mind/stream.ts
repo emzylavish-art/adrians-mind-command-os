@@ -41,6 +41,7 @@ export function normalizeTurnCallEvidence(value: unknown): TurnCallEvidence {
   if (typeof row.finishReason === "string") evidence.finishReason = row.finishReason.slice(0, 100);
   // Only a server's explicit whole-turn no-dispatch receipt permits exact replay.
   // Missing, truthy, or string values cannot establish that nothing was sent.
+  if (typeof row.primaryDispatched === "boolean") evidence.primaryDispatched = row.primaryDispatched;
   if (row.dispatched === false) evidence.dispatched = false;
   if (typeof row.actualCostMicros === "number" && Number.isSafeInteger(row.actualCostMicros) && row.actualCostMicros >= 0 && row.actualCostMicros <= 1_000_000_000_000 && row.currency === "USD") { evidence.actualCostMicros = row.actualCostMicros; evidence.currency = "USD"; }
   if (typeof row.approvalId === "string" && /^[a-f0-9]{64}$/.test(row.approvalId)) evidence.approvalId = row.approvalId;

@@ -3,7 +3,7 @@ import { describe, it } from "node:test";
 import { emptyFleet, addAgentFromTemplate, addCustomAgent, readFleet } from "../fleet.ts";
 import { accountWorkspaceKey, emptyWorkspace, normalizeWorkspace, WORKSPACE_KEY } from "../workspace.ts";
 import { buildPersonaDirectory } from "./directory.ts";
-import { PERSONA_SELECT_KEY, applyPersonaHandoff, clearPersonaSelection, persistPersonaOpen, personaChatHref, readPersonaSelection, selectPersona, writePersonaSelection, PERSONA_SELECTION_TTL_MS, consumePersonaHandoff, personaSelectionKey } from "./selection.ts";
+import { PERSONA_SELECT_KEY, readHandoff, applyPersonaHandoff, clearPersonaSelection, persistPersonaOpen, personaChatHref, readPersonaSelection, selectPersona, writePersonaSelection, PERSONA_SELECTION_TTL_MS, consumePersonaHandoff, personaSelectionKey } from "./selection.ts";
 
 const now = Date.parse("2026-11-26T10:00:00.000Z");
 const at = new Date(now).toISOString();
@@ -210,7 +210,9 @@ describe("persona selection", () => {
     assert.deepEqual(persistPersonaOpen(storage, picked.ws, picked.selection), { ok: true });
     assert.equal(values.get(WORKSPACE_KEY), "must remain untouched");
     const latest = emptyWorkspace(); latest.projects.push({ id: "new-project", name: "Created during handoff", description: "", createdAt: "2026-01-01" });
-    const applied = applyPersonaHandoff(latest, readPersonaSelection(storage));
+    const envelope = readHandoff(storage, "dev-user", Date.now()).handoff!;
+    const applied = applyPersonaHandoff(latest, envelope.selection, null, envelope.agent);
+    assert.equal(applied.agent?.id, picked.selection.agentId);
     assert.equal(applied.ws.projects[0]?.id, "new-project");
     assert.equal(applied.agent?.name, "Personal assistant");
     assert.equal(applyPersonaHandoff(applied.ws, readPersonaSelection(storage)).ws.agents.length, 1);
@@ -222,7 +224,7 @@ describe("persona selection", () => {
     const calls: string[] = [];
     const storage = { setItem(key: string) { calls.push(key); throw new Error("quota"); } };
     assert.deepEqual(persistPersonaOpen(storage, picked.ws, picked.selection), { ok: false, workspacePersisted: false });
-    assert.deepEqual(calls, [PERSONA_SELECT_KEY]);
+    assert.deepEqual(calls, [personaSelectionKey("dev-user")]);
   });
 
   it("a saved persona from another account does not import any workspace or agent", () => {
@@ -249,9 +251,9 @@ describe("persona selection", () => {
       agentName: "Research",
       mode: "agent",
       source: "saved",
-      at: "2026-11-01T13:00:00.000+01:00",
+      at: new Date().toISOString(),
     });
-    assert.equal(memory.has(PERSONA_SELECT_KEY), true);
+    assert.equal(memory.has(personaSelectionKey("dev-user")), true);
     const read = readPersonaSelection(storage);
     assert.equal(read?.agentId, "agent-1");
     assert.equal(read?.mode, "agent");

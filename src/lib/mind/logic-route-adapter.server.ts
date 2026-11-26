@@ -172,6 +172,7 @@ export async function invokeProviderRouter(input: {
   signal?: AbortSignal;
 }): Promise<AdapterInvokeResult> {
   const safeEnv = childEnv(input.env ?? process.env, input.spec.provider, input.endpoint ?? null);
+  if (input.signal?.aborted) return { ok: false, dispatched: false, error: "Canceled before dispatch." };
   const args = [ADAPTER, ...adapterCliArgs(input.spec)];
   let result: { code: number | null; stdout: string; stderr: string; timedOut: boolean };
   try {
@@ -184,7 +185,8 @@ export async function invokeProviderRouter(input: {
   }
   if (input.signal?.aborted) return { ok: false, error: "The model route was canceled. Provider outcome may be unknown." };
   if (result.timedOut) return { ok: false, error: "The model route timed out. Nothing was saved as a success." };
-  if (result.code !== 0) return { ok: false, error: adapterError(result.stdout, result.stderr) };
+  const receipt = adapterReceipt(input.spec, result.stdout, result.stderr);
+  if (result.code !== 0) return { ...receipt, ok: false, error: adapterError(result.stdout, result.stderr) };
   try {
     const parsed = JSON.parse(result.stdout) as { provider?: unknown; model?: unknown; content?: unknown; route?: { selected?: unknown } };
     if (parsed.provider !== input.spec.provider) {
@@ -197,7 +199,7 @@ export async function invokeProviderRouter(input: {
     if (typeof parsed.model !== "string" || !parsed.model.trim() || typeof parsed.content !== "string" || !parsed.content.trim()) {
       return { ok: false, error: "The model route returned an empty or unnamed reply. Nothing was saved as a success." };
     }
-    return { ok: true, provider: input.spec.provider, model: parsed.model.trim(), content: parsed.content.trim() };
+    return { ...receipt, ok: true, provider: input.spec.provider, model: parsed.model.trim(), content: parsed.content.trim() };
   } catch {
     return { ok: false, error: "The model route returned an unreadable reply. Nothing was saved as a success." };
   }
@@ -236,8 +238,9 @@ export async function runLogicRoute(input: {
   }
   const spec = modelGenerateArgs(input.route, input.messages, view.model);
   const invoked = await (input.invoke ?? invokeProviderRouter)({ spec, endpoint: view.endpoint, env, signal: input.signal });
-  if (!invoked.ok) return { ok: false, called: true, missing: [], error: invoked.error };
+  if (!invoked.ok) return { ...invoked, called: invoked.dispatched !== false, missing: [] };
   return {
+    ...invoked,
     ok: true,
     called: true,
     provider: invoked.provider,

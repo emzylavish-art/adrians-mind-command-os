@@ -39,3 +39,15 @@ If promotion fails after compatible SQL, leave the additive schema and new opera
 ## Remaining release gates
 
 Resolve the exact-head failures and rerun the complete pipeline. Exercise production-equivalent permission, reconnect, account-switch and scheduler scenarios with an approved staging account and isolated destinations. Check current production Git integration settings before deciding whether the merge itself creates the one production deployment. Record backup/restore and migration receipts before promotion. No approved staging identity, real delivery destination, verified paid invoice, physical-device result or production backup receipt has been established in this session.
+
+### Provider, image accounting, persona and Dashboard reconciliation
+
+Local fixture command on the application tree in this change:
+
+```sh
+node --experimental-strip-types --test src/lib/mind/{personas/selection,provider-receipt,usage-ledger,consultation-failure,media/spend-ledger,c2-model-provider-contract}.test.ts src/components/mind/dashboard-3d/c2-dashboard-recovery.test.ts
+```
+
+58 passed, 0 failed, 0 skipped. Coverage includes an already-completed helper followed by primary rejection, request and response IDs for buffered providers, loopback versus hosted execution, partial token counts, distinct operation stages, account-bound persona identity, and Dashboard filter/detail continuity. A separate image test exercised generation, edits and failed/uncertain provider responses with synthetic bytes. The Build portion of that test file still failed to load its runtime fixture. No paid provider or live owner data was used.
+
+Previous exact remote head `6cce23ec9dc956b059214d543ae9996e30c31653` ran 3,095 tests locally: 2,918 passed, 172 failed, 5 skipped. The PostgreSQL 17 CI rehearsal passed at that head. This branch remains held for full combined and staging verification.

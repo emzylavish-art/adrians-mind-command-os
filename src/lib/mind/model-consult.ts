@@ -176,7 +176,7 @@ function excerpt(text: string): { text: string; truncated: boolean } {
   return { text: `${text.slice(0, 1200)}\n[Middle omitted: incomplete contribution]\n${text.slice(-700)}`, truncated: true };
 }
 
-export type ConsultReply = { ok: boolean; text: string; error?: string; model?: string; provider?: string; requestId?: string | null; responseId?: string | null; usage?: ModelUsage | null; actualCostMicros?: number; currency?: "USD"; approvalId?: string };
+export type ConsultReply = { dispatched?: boolean; outcome?: "failed" | "unknown" | "stopped"; requestedModel?: string; executionLocation?: "local" | "hosted"; ok: boolean; text: string; error?: string; model?: string; provider?: string; requestId?: string | null; responseId?: string | null; usage?: ModelUsage | null; actualCostMicros?: number; currency?: "USD"; approvalId?: string };
 export type ConsultEvidence = ConsultReply & { id: string; originalCharacters: number; truncated: boolean };
 function consultReceipt(row: ConsultReply): Pick<ConsultReply, "model" | "provider" | "requestId" | "responseId" | "usage" | "actualCostMicros" | "currency" | "approvalId"> {
   const valid = (value: unknown) => typeof value === "number" && Number.isSafeInteger(value) && value >= 0;
@@ -332,7 +332,11 @@ export async function executeConsultPlan(
 }
 
 /** Bounded concurrent helper work; each selected call has its own result receipt. */
-export async function collectConsultHelp(plan: ConsultPlan, callHelper: (id: string, request: string) => Promise<ConsultReply>): Promise<ConsultEvidence[]> {
+export async function collectConsultHelp(plan: ConsultPlan, callHelper: (id: string, request: string) => Promise<ConsultReply>, options: {
+  parentOperationId?: string;
+  onReceipt?: (receipt: ConsultExecutionReceipt) => void | Promise<void>;
+} = {}): Promise<ConsultEvidence[]> {
+  const operation = options.parentOperationId ?? crypto.randomUUID();
   const replies: (ConsultReply & { id: string })[] = new Array(plan.helpers.length);
   let next = 0;
   await Promise.all(Array.from({ length: Math.min(2, plan.helpers.length) }, async () => {
@@ -340,8 +344,17 @@ export async function collectConsultHelp(plan: ConsultPlan, callHelper: (id: str
       const index = next++;
       const helper = plan.helpers[index]!;
       if (plan.purpose && helper.request.includes(plan.purpose)) { replies[index] = { id: helper.id, ok: false, text: "", error: "Helper request failed validation." }; continue; }
-      try { replies[index] = { id: helper.id, ...await callHelper(helper.id, helper.request) }; }
-      catch { replies[index] = { id: helper.id, ok: false, text: "", error: "The selected helper could not complete its request." }; }
+      let result: ConsultReply;
+      try { result = await callHelper(helper.id, helper.request); }
+      catch { result = { ok: false, text: "", error: "The selected helper outcome is unknown.", outcome: "unknown" }; }
+      replies[index] = { ...result, id: helper.id };
+      if (result.dispatched !== false && options.onReceipt) {
+        const receipt: ConsultExecutionReceipt = { executionId: `${operation}:helper:${index}`, parentOperationId: operation, role: "helper",
+          provider: result.provider ?? helper.id, requestedModel: result.requestedModel ?? null, model: result.model ?? "model unknown",
+          requestId: result.requestId ?? null, usage: result.usage ?? null, executionLocation: result.executionLocation ?? "hosted",
+          outcome: result.ok ? "completed" : result.outcome ?? "failed" };
+        await options.onReceipt(receipt);
+      }
     }
   }));
   return returnedHelp(replies);

@@ -1,3 +1,4 @@
+import { isLocalConsultRunner } from "./model-consult.ts";
 import { consumeProviderStream } from "./ai-provider-stream.ts";
 import { consumeOllamaStream, mergeProviderReceipt } from "./provider-call-stream.ts";
 /** Bounded provider-specific chat calls with normalised assistant text. */
@@ -176,30 +177,30 @@ export async function callConfiguredProvider(input: {
   if (response.status === 429) {
     const rawDelay = response.headers?.get("retry-after")?.trim();
     const retryAfter = rawDelay && (/^\d{1,8}$/.test(rawDelay) || (rawDelay.length <= 40 && Number.isFinite(Date.parse(rawDelay)))) ? rawDelay : undefined;
-    return { dispatched: true, ok: false, text: "", model: errorModel, ...responseReceipt, httpStatus: 429, retryAfter, error: input.id + " rate limited the request. Nothing was substituted." };
+    return { dispatched: true, executionLocation: "hosted", ok: false, text: "", model: errorModel, ...responseReceipt, httpStatus: 429, retryAfter, error: input.id + " rate limited the request. Nothing was substituted." };
   }
-  if (response.status === 401 || response.status === 403) return { dispatched: true, ok: false, text: "", model: errorModel, ...responseReceipt, httpStatus: response.status, error: input.id + " rejected the API key or account permissions." };
-  if (!response.ok) return { dispatched: true, ok: false, text: "", model: errorModel, ...responseReceipt, httpStatus: response.status >= 400 && response.status < 500 ? response.status : undefined, error: input.id + " returned HTTP " + response.status + ". Nothing was substituted." };
+  if (response.status === 401 || response.status === 403) return { dispatched: true, executionLocation: "hosted", ok: false, text: "", model: errorModel, ...responseReceipt, httpStatus: response.status, error: input.id + " rejected the API key or account permissions." };
+  if (!response.ok) return { dispatched: true, executionLocation: "hosted", ok: false, text: "", model: errorModel, ...responseReceipt, httpStatus: response.status >= 400 && response.status < 500 ? response.status : undefined, error: input.id + " returned HTTP " + response.status + ". Nothing was substituted." };
   if (input.onDelta && response.body && response.headers?.get("content-type")?.includes("text/event-stream")) {
     const kind = input.id === "anthropic" || input.id === "gemini" ? input.id : "openai";
     const parsed = await consumeProviderStream(kind, { getReader: () => response.body!.getReader() }, input.onDelta, event => {
       const payload = input.id === "anthropic" && event.type === "message_start" ? event.message : event;
       responseReceipt = mergeProviderReceipt(responseReceipt, readProviderReceipt(input.id, payload, response.headers));
     });
-    return parsed.ok ? { dispatched: true, ok: true, text: parsed.text, ...responseReceipt, usage: parsed.usage ?? responseReceipt.usage, model: parsed.model, delivery: "streamed", error: "" }
-      : { dispatched: true, ok: false, text: "", model: errorModel, ...responseReceipt, delivery: "streamed", error: parsed.error };
+    return parsed.ok ? { dispatched: true, executionLocation: "hosted", ok: true, text: parsed.text, ...responseReceipt, usage: parsed.usage ?? responseReceipt.usage, model: parsed.model, delivery: "streamed", error: "" }
+      : { dispatched: true, executionLocation: "hosted", ok: false, text: "", model: errorModel, ...responseReceipt, delivery: "streamed", error: parsed.error };
   }
   try {
     const raw = await response.text();
-    if (raw.length > 500_000) return { dispatched: true, ok: false, text: "", model: errorModel, ...responseReceipt, error: input.id + " returned a response larger than the supported limit." };
+    if (raw.length > 500_000) return { dispatched: true, executionLocation: "hosted", ok: false, text: "", model: errorModel, ...responseReceipt, error: input.id + " returned a response larger than the supported limit." };
     const payload = JSON.parse(raw);
     const parsed = payload && typeof payload === "object" ? extractAssistantText(input.id, payload) : "";
     const receipt = readProviderReceipt(input.id, payload, response.headers);
     if (parsed) input.onDelta?.(parsed);
-    return parsed ? { dispatched: true, ok: true, text: parsed, ...receipt, ...(input.onDelta ? { delivery: "buffered" as const } : {}), model: reportedModel(input.id === "gemini" ? payload.modelVersion : payload.model), error: "" } :
-      { dispatched: true, ok: false, text: "", ...receipt, error: input.id + " returned no assistant text or an unsupported response format." };
+    return parsed ? { dispatched: true, executionLocation: "hosted", ok: true, text: parsed, ...receipt, ...(input.onDelta ? { delivery: "buffered" as const } : {}), model: reportedModel(input.id === "gemini" ? payload.modelVersion : payload.model), error: "" } :
+      { dispatched: true, executionLocation: "hosted", ok: false, text: "", ...receipt, error: input.id + " returned no assistant text or an unsupported response format." };
   } catch {
-    return { dispatched: true, ok: false, text: "", model: errorModel, ...responseReceipt, error: input.id + " returned an unreadable response." };
+    return { dispatched: true, executionLocation: "hosted", ok: false, text: "", model: errorModel, ...responseReceipt, error: input.id + " returned an unreadable response." };
   }
 }
 export function httpStatusForProviderSelection(error: string): 400 | 503 {
@@ -248,30 +249,39 @@ export async function routeSelectedModel(input: {
   if (input.id === "ollama") {
     const url = input.env.LOCAL_MODEL_URL;
     if (!url) return { dispatched: false, ok: false, text: "", error: "Local model is selected, but no local runner is reachable. Nothing was sent and Grok was not substituted.", model: "ollama" };
+    const route = { requestedModel: input.env.OLLAMA_MODEL || "local", executionLocation: isLocalConsultRunner(url) ? "local" as const : "hosted" as const };
     let nativeOllama = false;
     try { nativeOllama = new URL(url).pathname.replace(/\/$/, "") === "/api/generate"; } catch { /* The existing runner connection reports invalid URL errors without dispatch fallback. */ }
-    if (controls.controls.answerTokens !== undefined && !nativeOllama) return { dispatched: false, ok: false, text: "", error: "The configured local runner does not declare the native Ollama answer-budget contract. Choose the provider default or configure its /api/generate endpoint. Nothing was sent.", model: "ollama", httpStatus: 400 };
+    if (controls.controls.answerTokens !== undefined && !nativeOllama) return { dispatched: false, ok: false, text: "", error: "The configured local runner does not declare the native Ollama answer-budget contract. Choose the provider default or configure its /api/generate endpoint. Nothing was sent.", model: "model unknown", httpStatus: 400 };
     if (input.signal?.aborted) return { dispatched: false, ok: false, text: "", error: "Canceled before dispatch.", model: "model unknown" };
     let response: Awaited<ReturnType<FetchLike>>;
     try {
       input.onDispatch?.();
       response = await input.fetch(url, { method: "POST", signal: input.signal ? AbortSignal.any([input.signal, AbortSignal.timeout(25_000)]) : AbortSignal.timeout(25_000), headers: { "content-type": "application/json" }, body: JSON.stringify({ model: input.env.OLLAMA_MODEL || "local", prompt, ...(input.systemPrompt ? { system: input.systemPrompt } : {}), ...(nativeOllama ? { stream: Boolean(input.onDelta), ...(controls.controls.answerTokens === undefined ? {} : { options: { num_predict: controls.controls.answerTokens } }) } : {}) }) });
     } catch {
-      return { dispatched: true, ok: false, text: "", error: "Local model runner could not be reached. Nothing was substituted.", model: "ollama" };
+      return { ...route, dispatched: true, ok: false, text: "", error: "Local model runner could not be reached. Nothing was substituted.", model: "model unknown" };
     }
     const responseReceipt = readProviderReceipt("ollama", null, response.headers);
-    if (!response.ok) return { dispatched: true, ok: false, text: "", ...responseReceipt, error: "Local model runner returned HTTP " + response.status + ". Nothing was substituted.", model: "ollama" };
-    if (nativeOllama && input.onDelta && response.body) return { ...await consumeOllamaStream({ getReader: () => response.body!.getReader() }, input.onDelta, response.headers), dispatched: true };
+    if (!response.ok) {
+      let payload: Record<string, unknown> | null = null;
+      try {
+        const raw = await response.text();
+        if (raw.length <= 500_000) payload = JSON.parse(raw);
+      } catch { /* The HTTP status remains available without a JSON receipt. */ }
+      return { ...route, dispatched: true, ok: false, text: "", ...readProviderReceipt("ollama", payload, response.headers),
+        error: "Local model runner returned HTTP " + response.status + ". Nothing was substituted.", model: reportedModel(payload?.model) };
+    }
+    if (nativeOllama && input.onDelta && response.body) return { ...await consumeOllamaStream({ getReader: () => response.body!.getReader() }, input.onDelta, response.headers), ...route, dispatched: true };
     try {
       const raw = await response.text();
-      if (raw.length > 500_000) return { dispatched: true, ok: false, text: "", ...responseReceipt, error: "Local model runner returned a response larger than the supported limit.", model: "ollama" };
+      if (raw.length > 500_000) return { ...route, dispatched: true, ok: false, text: "", ...responseReceipt, error: "Local model runner returned a response larger than the supported limit.", model: "model unknown" };
       const json = JSON.parse(raw) as { text?: unknown; response?: unknown; model?: unknown };
       const text = typeof json?.text === "string" ? json.text.trim() : nativeOllama && typeof json?.response === "string" ? json.response.trim() : "";
       const receipt = readProviderReceipt("ollama", json, response.headers);
       if (text) input.onDelta?.(text);
-      return text ? { dispatched: true, ok: true, text, error: "", ...receipt, ...(input.onDelta ? { delivery: "buffered" as const } : {}), model: reportedModel(json.model) } : { dispatched: true, ok: false, text: "", ...receipt, error: "Local model runner returned no text. Nothing was substituted.", model: "ollama" };
+      return text ? { ...route, dispatched: true, ok: true, text, error: "", ...receipt, ...(input.onDelta ? { delivery: "buffered" as const } : {}), model: reportedModel(json.model) } : { ...route, dispatched: true, ok: false, text: "", ...receipt, error: "Local model runner returned no text. Nothing was substituted.", model: "model unknown" };
     } catch {
-      return { dispatched: true, ok: false, text: "", ...responseReceipt, error: "Local model runner returned an unreadable response.", model: "ollama" };
+      return { ...route, dispatched: true, ok: false, text: "", ...responseReceipt, error: "Local model runner returned an unreadable response.", model: "model unknown" };
     }
   }
   return { dispatched: false, ok: false, text: "", error: "That model is not a routed runner. Nothing was substituted.", model: input.id };

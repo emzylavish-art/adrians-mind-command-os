@@ -118,7 +118,7 @@ export async function runHostedPrompt(prompt: string, command = adrianBuildComma
   return await exchange(command, cwd, [instructions.text], instructions.receipt);
 }
 
-async function exchange(command: string, cwd: string, prompts: string[]): Promise<KimiProbe & { output?: string }> {
+async function exchange(command: string, cwd: string, prompts: string[], instructionReceipt?: BuilderInstructionReceipt): Promise<KimiProbe & { output?: string }> {
   if (!command.trim()) return { status: "not_configured", command, error: "Kimi command is not configured.", runtimeVerified: false };
   return await new Promise((resolve) => {
     const script = command.endsWith(".mjs") || command.endsWith(".js");
@@ -173,7 +173,7 @@ async function exchange(command: string, cwd: string, prompts: string[]): Promis
           } else if (prompts.length && isObject(message.result)) {
             const sessionId = typeof message.result.sessionId === "string" ? message.result.sessionId : "";
             if (!sessionId) finish({ ...seen, status: "failed", error: "Kimi created a session without an id." });
-            else { seen.requestDispatched = true; child.stdin.write(`${JSON.stringify({ jsonrpc: "2.0", id: 3, method: "session/prompt", params: { sessionId, prompt: [{ type: "text", text: `${ADRIAN_OS_BUILDER_ORDER}\n\n${prompts[0]}` }] } })}\n`); }
+            else { seen.instructionReceipt = instructionReceipt; seen.requestDispatched = true; child.stdin.write(`${JSON.stringify({ jsonrpc: "2.0", id: 3, method: "session/prompt", params: { sessionId, prompt: [{ type: "text", text: `${ADRIAN_OS_BUILDER_ORDER}\n\n${prompts[0]}` }] } })}\n`); }
           } else {
             finish({ ...seen, status: "session_created", error: undefined });
           }

@@ -139,7 +139,7 @@ test("C2 AA044/090: the actual server consultation block consumes request consen
     const context: any = { body, userId: "owner-fixture", request: { signal: new AbortController().signal },
       parseModelTierField: () => ({ ok: true }), checkTurnSize: () => ({ ok: true }), sanitizeAttachments: () => [], isHistory: () => true, isNote: () => true,
       modulesConnectedNow: async () => builtinModules({ grokConfigured: true, providers: { openai: true } }),
-      primaryDispatchContext: undefined, initialHistory: [], anyDispatched: false, usage: null, taskId: "fixture",
+      persistExecution: undefined, isLocalConsultRunner, primaryDispatchContext: undefined, initialHistory: [], anyDispatched: false, usage: null, taskId: "fixture",
       controls: { controls: {} }, customSelection: null, inspectedLogic: undefined, environmentCatalogs: [],
       catalogForProvider: () => undefined, resolveXaiInferenceApiKey: () => ({ ok: true }), resolveModelTier, validatePrimaryConfiguration,
       validateEnvironmentModel: async () => ({ ok: true }), directTurnContext: () => ({ ok: true, messages: [] }), selectedCapabilities: undefined,

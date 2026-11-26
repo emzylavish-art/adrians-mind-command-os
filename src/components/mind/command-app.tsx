@@ -424,7 +424,7 @@ import {
 } from "@/lib/mind/workspace";
 import { WORKSPACE_ROUTE_LINKS } from "@/lib/mind/workspace-nav";
 import { CONVERSATIONAL_PERSONALITIES, isPersonalityId, personalityStatus, resolvePersonalityId, type PersonalityId } from "@/lib/mind/personalities";
-import { applyPersonaHandoff, clearPersonaSelection, readPersonaSelection } from "@/lib/mind/personas/selection";
+import { applyPersonaHandoff, clearPersonaSelection, readHandoff } from "@/lib/mind/personas/selection";
 
 type View =
   | "command"
@@ -1464,14 +1464,18 @@ function CommandSession({ account }: { account: ReturnType<typeof useCurrentUser
   const personaHandoffDone = useRef(false);
   useEffect(() => {
     if (!ready || personaHandoffDone.current || typeof window === "undefined") return;
-    const selection = readPersonaSelection(preferenceStorage);
+    const ownerId = account?.id;
+    if (!ownerId) return;
+    const pending = readHandoff(preferenceStorage, ownerId, Date.now());
+    const selection = pending.handoff?.selection ?? null;
     const params = new URLSearchParams(window.location.search);
     const agentId = selection?.agentId || params.get("agentId");
     if (!agentId || (params.get("mode") !== "agent" && !selection)) return;
     personaHandoffDone.current = true;
-    const handoff = applyPersonaHandoff(wsRef.current, selection, agentId);
+    const source = wsRef.current;
+    const handoff = applyPersonaHandoff(source, selection, agentId, pending.handoff?.agent);
     const agent = handoff.agent;
-    clearPersonaSelection(preferenceStorage);
+    clearPersonaSelection(preferenceStorage, ownerId);
     const url = new URL(window.location.href);
     url.searchParams.delete("mode");
     url.searchParams.delete("agentId");
@@ -1483,7 +1487,13 @@ function CommandSession({ account }: { account: ReturnType<typeof useCurrentUser
     const base = handoff.ws;
     const opened = openBotChat(base, agent.id);
     if (!opened) return;
-    if (opened.ws !== ws) setWs(() => opened.ws);
+    if (opened.ws !== source) setWs(current => {
+      if (current === source) return opened.ws;
+      const latest = applyPersonaHandoff(current, selection, agentId, pending.handoff?.agent);
+      if (!latest.agent || latest.agent.version !== agent.version || current.deletedChatIds?.includes(opened.chat.id)) return current;
+      if (latest.ws.chats.some(chat => chat.id === opened.chat.id)) return latest.ws;
+      return { ...latest.ws, chats: [opened.chat, ...latest.ws.chats] };
+    });
     setActiveId(opened.chat.id);
     setView("chat");
     setNotice(`${agent.name} is open in Chat.`);
@@ -3230,12 +3240,12 @@ function CommandSession({ account }: { account: ReturnType<typeof useCurrentUser
       if (turnAbort.current === controller) turnAbort.current = null;
       if (result.ok && result.provider) setNotice(`${result.provider} answered.`);
       // Helpers may have completed even when the primary answer failed or was stopped.
-      if (result.consultation?.length) setWs((current) => (result.consultation ?? []).reduce((next, helper, index) => pushUsage(next, {
-        id: `${request.id}:helper:${index}`, chatId: chat.id, at: new Date().toISOString(), provider: helper.provider ?? helper.id,
+      if (result.consultation?.length) setWs((current) => (result.consultation ?? []).filter(helper => helper.dispatched !== false).reduce((next, helper, index) => pushUsage(next, {
+        id: `${request.id}:helper:${index}`, operationId: request.id, stage: `helper:${helper.id}`, role: "helper", chatId: chat.id, at: new Date().toISOString(), provider: helper.provider ?? helper.id,
         model: helper.model || "model unknown", requestId: helper.requestId ?? null, promptTokens: helper.usage?.prompt_tokens ?? null, completionTokens: helper.usage?.completion_tokens ?? null,
       }), current));
       if (!result.ok && result.usage) setWs((current) => pushUsage(current, {
-        id: `${request.id}:primary`, chatId: chat.id, at: new Date().toISOString(), provider: result.provider,
+        id: `${request.id}:primary`, operationId: request.id, stage: "answer", role: "primary", chatId: chat.id, at: new Date().toISOString(), provider: result.provider,
         model: result.model || "model unknown", requestId: result.requestId ?? null, promptTokens: result.usage?.prompt_tokens ?? null, completionTokens: result.usage?.completion_tokens ?? null,
       }));
       if (!shouldStoreReply(result)) {
@@ -3312,7 +3322,7 @@ function CommandSession({ account }: { account: ReturnType<typeof useCurrentUser
         setNotice(`Ran ${tierLabel}.`);
         return pushAudit(
           pushUsage(next, {
-            id: `${request.id}:primary`,
+            id: `${request.id}:primary`, operationId: request.id, stage: "answer", role: "primary",
             chatId: chat.id,
             at: new Date().toISOString(),
             provider: result.provider || undefined,

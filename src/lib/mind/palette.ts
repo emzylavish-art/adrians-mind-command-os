@@ -102,7 +102,6 @@ export type PaletteInput = {
   files: { id: string; name: string; text: string }[];
   agents: { id: string; name: string; description: string; archived: boolean; version?: number }[];
   runs: { id: string; goal: string; state: string }[];
-  schedules?: { id: string; name: string; instruction?: string; timeZone: string }[];
   browserSessions?: { id: string; title: string; url: string; excerpt: string; lastAction: string }[];
   deployments?: { id: string; agentId: string; agentVersion: number; target: string; state: string; error: string }[];
 };

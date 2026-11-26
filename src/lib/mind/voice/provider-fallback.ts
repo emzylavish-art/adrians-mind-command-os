@@ -138,13 +138,18 @@ export async function transcribeWithFallback(input: {
   xaiKey?: string;
   openaiKey?: string;
   policy?: TranscriptionPolicy;
+  provider?: CloudSpeechProvider;
+  fallbackProvider?: CloudSpeechProvider | null;
   authorize?: (provider: AnswerProvider) => Promise<(ok: boolean) => Promise<void>>;
   filename?: string;
   mime?: string;
   fetchImpl?: typeof fetch;
 }): Promise<(FallbackOk<{ text: string }> | (FallbackFail & { code: NonNullable<Extract<SttResult, { ok: false }>["code"]> | "resource_policy" })) & { attempts: TranscriptionAttempt[] }> {
   const fetchImpl = input.fetchImpl ?? fetch;
-  const policy = input.policy ?? { provider: "xai", allowFallback: false };
+  const primary = input.provider ?? input.policy?.provider ?? "xai";
+  const fallback = input.fallbackProvider;
+  const allowFallback = fallback === undefined ? input.policy?.allowFallback === true : fallback !== null && fallback !== primary;
+  const policy = { provider: primary, allowFallback };
   const recipients = [policy.provider];
   if (policy.allowFallback) recipients.push(policy.provider === "xai" ? "openai" : "xai");
   const attempts: TranscriptionAttempt[] = [];

@@ -23,7 +23,7 @@ function Field({ label, value }: { label: string; value: string | null | undefin
   );
 }
 
-function BotDetailBody({ detail, spend, portraitSrc }: { detail: BotDetailView; spend?: SpendView | null; portraitSrc?: string | null }) {
+function BotDetailBody({ detail, spend, portraitSrc, healthTimeLabel }: { detail: BotDetailView; spend?: SpendView | null; portraitSrc?: string | null; healthTimeLabel?: string }) {
   return (
     <>
       <h2>Star detail</h2>
@@ -42,6 +42,7 @@ function BotDetailBody({ detail, spend, portraitSrc }: { detail: BotDetailView; 
         <span className={`dash3d-dot ${detail.health}`} /> Development status: <strong>{detail.health}</strong>
         <span className="dash3d-muted"> — {detail.reason || NO_SOURCE}</span>
       </p>
+      {healthTimeLabel && <p className="dash3d-muted" data-testid="detail-health-time">{healthTimeLabel}. Other fields show the latest received information.</p>}
       <p className="dash3d-muted">Runtime readiness is unverified by development activity.</p>
       <p className="dash3d-mono dash3d-muted" style={{ marginTop: "0.75rem" }}>
         <Field label="lane" value={detail.laneName ? `${detail.laneName}${detail.laneHealth ? ` · ${detail.laneHealth}` : ""}` : null} />

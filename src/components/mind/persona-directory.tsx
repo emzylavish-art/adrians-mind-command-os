@@ -32,7 +32,9 @@ export function PersonaDirectoryView({
   ws,
   setWs,
   onOpened,
+  ownerId,
 }: {
+  ownerId: string;
   ws: Workspace;
   setWs: (updater: (prev: Workspace) => Workspace) => void;
   /** Optional hook after a successful select (e.g. router navigate). */
@@ -68,7 +70,7 @@ export function PersonaDirectoryView({
     }
     let persisted: ReturnType<typeof persistPersonaOpen>;
     try {
-      persisted = persistPersonaOpen(preferences, result.ws, result.selection);
+      persisted = persistPersonaOpen(preferences, result.ws, result.selection, ownerId);
     } catch {
       const message = "Could not access local storage. Nothing was opened.";
       if (!emitFailure("persona", mountFailure({ message, action: "persona_open", target: "persona" }, () => openCard(card)))) {

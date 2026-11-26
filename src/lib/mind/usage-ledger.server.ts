@@ -77,7 +77,11 @@ export function trackUsageResponse(response: Response, initial: UsageReceipt, re
             terminal = true;
             await save({ ...initial, outcome: "completed", provider: event.provider ?? initial.provider, model: event.model, requestedModel: event.requestedModel ?? initial.requestedModel, requestId: event.requestId, promptTokens: event.usage?.prompt_tokens ?? null, completionTokens: event.usage?.completion_tokens ?? null });
           } else if (event.event === "error" || event.event === "canceled") {
-            terminal = true; await save({ ...initial, outcome: event.event === "canceled" ? "canceled" : "failed" });
+            terminal = true;
+            await save({ ...initial, outcome: event.dispatched === false ? "rejected_before_dispatch" : event.event === "canceled" ? "canceled" : "failed",
+              model: event.model || initial.model, provider: event.provider ?? initial.provider, requestedModel: event.requestedModel ?? initial.requestedModel,
+              requestId: event.requestId ?? initial.requestId, promptTokens: event.usage?.prompt_tokens ?? initial.promptTokens,
+              completionTokens: event.usage?.completion_tokens ?? initial.completionTokens });
           }
         }
         controller.enqueue(chunk.value);

@@ -1,3 +1,4 @@
+import { AccountPreferencesProvider } from "@/components/mind/account-preferences-context";
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import { PersonaDirectoryView } from "@/components/mind/persona-directory";
@@ -48,11 +49,13 @@ function ExplorePage() {
             <p className="text-sm text-muted">Filter local templates, save one, then open it in Chat. Nothing here starts a remote bot.</p>
           </div>
         </div>
+        <AccountPreferencesProvider ownerId={ownerId}>
         <PersonaDirectoryView
           ws={ws}
           setWs={setWs}
           ownerId={ownerId}
         />
+        </AccountPreferencesProvider>
       </div>
     </main>
   );

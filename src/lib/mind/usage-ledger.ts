@@ -12,7 +12,8 @@ export type UsageGrouping = "day" | "month" | "provider" | "channel";
 export type UsagePeriod = { from: string; to: string; entries: UsageEntry[]; nextOffset: number | null; complete: boolean };
 export type UsagePage = { entries: (UsageEntry | UsageReceipt)[]; nextOffset: number | null; from: string; to: string };
 
-export function usageIdentity(entry: Pick<UsageEntry, "id" | "operationId" | "stage">): string {
+export function usageIdentity(entry: Pick<UsageEntry, "id" | "operationId" | "stage" | "role">): string {
+  if (entry.role === "helper" && !entry.stage) return entry.id;
   return entry.operationId ? `${entry.operationId}/${entry.stage ?? "answer"}` : entry.id;
 }
 export function mergeUsageEntries(entries: (UsageEntry | UsageReceipt)[]): UsageEntry[] {

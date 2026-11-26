@@ -3,8 +3,8 @@ import { writeUsageReceipt, trackUsageResponse } from "./usage-ledger.server.ts"
 import type { UsageReceipt } from "./usage-ledger.ts";
 import { providerRequestId } from "./provider-usage.ts";
 import { withExecutionReceipts } from "./execution-response.ts";
-import { readModelExecutions, saveModelExecution } from "./model-execution.server.ts";
 import type { ConsultExecutionReceipt } from "./model-consult.ts";
+import { readModelExecutions, saveModelExecution } from "./model-execution.server.ts";
 import type { ProviderReceipt } from "./provider-receipt.ts";
 import { selectContextHistory } from "./context-budget.ts";
 import { modelExecutionPlan, type ModelExecutionPlan } from "./execution-plan.ts";
@@ -437,7 +437,7 @@ export async function handleMindTurn(request: Request): Promise<Response> {
   }
   let response: Response;
   try {
-    response = await dispatchMindTurn(request, userId, read.body, (stage) => { dispatched = true; if (stage === "answer") answerDispatched = true; }, usage, recordUsage);
+    response = await dispatchMindTurn(request, userId, read.body, (stage) => { dispatched = true; if (stage === "answer") answerDispatched = true; }, usage, recordUsage, receipt => saveModelExecution(sql, userId, receipt));
   } catch {
     response = json({ ok: false, error: "The request could not be completed. Check the conversation before sending again." }, 503);
   }
@@ -457,7 +457,7 @@ export async function handleMindTurn(request: Request): Promise<Response> {
   return recoverableTurnResponse({ response, sql, owner: userId, operation: operationId, retain: read.body.temporary !== true && read.body.retainResponse !== false, dispatched: streaming ? () => dispatched : dispatched });
 }
 
-async function dispatchMindTurn(request: Request, userId: string, data: Record<string, unknown>, onDispatched: (stage: "answer" | "helper") => void = () => {}, usage?: UsageReceipt, recordUsage?: (receipt: UsageReceipt) => Promise<void>): Promise<Response> {
+async function dispatchMindTurn(request: Request, userId: string, data: Record<string, unknown>, onDispatched: (stage: "answer" | "helper") => void = () => {}, usage?: UsageReceipt, recordUsage?: (receipt: UsageReceipt) => Promise<void>, persistExecution?: (receipt: ConsultExecutionReceipt) => Promise<void>): Promise<Response> {
   let anyDispatched = false;
   const markDispatched = (stage: "answer" | "helper" = "answer") => { anyDispatched = true; onDispatched(stage); };
   if (request.signal.aborted) return json({ ok: false, error: "This send was canceled before it started.", code: "user_stopped" }, 499);
@@ -587,6 +587,7 @@ async function dispatchMindTurn(request: Request, userId: string, data: Record<s
     });
   };
   setPrimaryContext(contextValidation.messages);
+  const executions: ConsultExecutionReceipt[] = [];
   let consultHelp = "";
   let consultation: Awaited<ReturnType<typeof collectConsultHelp>> = [];
   if (body.composerMode === "orchestrator") {
@@ -611,10 +612,12 @@ async function dispatchMindTurn(request: Request, userId: string, data: Record<s
     }
     const help = await collectConsultHelp(planned.plan, async (id, requestText) => {
       const configured = await validateHelperConfiguration(userId, id, requestText);
-      if (!configured.ok) return { ok: false, text: "", error: configured.error };
+      if (!configured.ok) return { ok: false, dispatched: false, text: "", error: configured.error };
       const entry = usage ? { ...usage, id: `${usage.operationId}/helper:${id}`, stage: `helper:${id}`,
         provider: configured.provider, requestedModel: configured.model } : undefined;
-      if (entry && recordUsage) await recordUsage(entry);
+      if (entry && recordUsage) {
+        try { await recordUsage(entry); } catch { return { ok: false, dispatched: false, text: "", error: "Helper accounting is unavailable. Nothing was sent." }; }
+      }
       let helperReservationId: string | undefined;
       const context = dispatchContext({ operationId: taskId, taskId, projectId: body.projectId, provider: financialProviderId(configured.provider), model: configured.model,
         stage: `helper-${id}`, args: { text: requestText, model: configured.model, system: ADRIAN_MIND_IDENTITY }, textOnly: true });
@@ -622,7 +625,7 @@ async function dispatchMindTurn(request: Request, userId: string, data: Record<s
       if (denied) {
         if (entry && recordUsage) await recordUsage({ ...entry, outcome: "rejected_before_dispatch" }).catch(() => undefined);
         const detail = await denied.json().catch(() => ({})) as { error?: string; approvalId?: string };
-        return { ok: false, text: "", error: detail.error || "Execution stopped before this helper was called.", approvalId: detail.approvalId };
+        return { ok: false, dispatched: false, text: "", error: detail.error || "Execution stopped before this helper was called.", approvalId: detail.approvalId };
       }
       let sent = false;
       const result = await runSettledDispatch(userId, helperReservationId, async () => {
@@ -632,8 +635,11 @@ async function dispatchMindTurn(request: Request, userId: string, data: Record<s
       if (entry && recordUsage) await recordUsage({ ...entry, dispatched: sent, outcome: result.ok ? "completed" : sent ? "unconfirmed" : "rejected_before_dispatch",
         model: result.model || "model unknown", requestId: result.requestId ?? null, promptTokens: result.usage?.prompt_tokens ?? null,
         completionTokens: result.usage?.completion_tokens ?? null }).catch(() => undefined);
-      return result;
-    });
+      return { ...result, requestedModel: configured.model, executionLocation: id === "ollama" && isLocalConsultRunner(process.env.LOCAL_MODEL_URL) ? "local" : "hosted" };
+    }, { parentOperationId: taskId, onReceipt: async receipt => {
+      executions.push(receipt);
+      await persistExecution?.(receipt).catch(() => undefined);
+    } });
     consultation = help;
     consultHelp = orchestratorInstruction(planned.plan, help);
     body = { ...body, provider: planned.plan.orchestrator, logicRoute: undefined };
@@ -814,7 +820,8 @@ async function dispatchMindTurn(request: Request, userId: string, data: Record<s
     try { return await finishPrimary(); }
     catch { await settlePrimary({ ok: false, dispatched: primaryDispatched }); return json({ ok: false, code: "unknown", error: "The selected request could not be completed. Its outcome is retained for review.", consultation }, 502); }
   };
-  return consultation.length ? consultationResponse(safePrimary, consultation, request.signal) : safePrimary();
+  const finished = consultation.length ? consultationResponse(safePrimary, consultation, request.signal) : await safePrimary();
+  return withExecutionReceipts(finished, executions);
 }
 
 /** Exported for scripts/tests that build a multimodal Direct turn without the HTTP handler. */

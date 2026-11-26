@@ -150,7 +150,8 @@ export async function generateImagineImages(
     endpoint?: string;
     lookup?: LookupFn;
     /** Required for production spend controls (rate limit + daily ledger). */
-    meter?: { ownerId: string; sessionId?: string; operationId?: string; taskId?: string; projectId?: string };
+    recordUsage?: UsageRecorder;
+    meter?: { ownerId: string; sessionId?: string; chatId?: string; operationId?: string; taskId?: string; projectId?: string };
     /** Test-only escape hatch — never set from HTTP/agent routes. */
     skipSpendControls?: boolean;
     /** Server/test dependency; cannot be supplied by an HTTP caller. */
@@ -178,17 +179,24 @@ export async function generateImagineImages(
   const fetchImpl = options.fetchImpl ?? fetch;
   const endpoint = options.endpoint ?? XAI_IMAGES_GENERATIONS_URL;
 
+  const attempt = imagineUsageAttempt({ ownerId: options.meter?.ownerId, chatId: options.meter?.chatId,
+    model, stage: "generation", operationId: options.meter?.operationId, record: options.recordUsage });
+  try { await attempt.prepare(); }
+  catch { return { ok: false, error: "Execution accounting is unavailable. The image provider was not contacted.", status: 503 }; }
   const reservation = options.skipSpendControls ? null : await reserveImageDispatch({
     ownerId: options.meter?.ownerId ?? "",
     model,
     n: n,
   }, dispatchContext({ operationId: options.meter?.operationId, taskId: options.meter?.taskId, projectId: options.meter?.projectId, provider: "xai", model, stage: "image-generate", args: { prompt: normalized.prompt, n, model, responseFormat }, textOnly: false }), options.reserveDispatch, options.settleDispatch);
-  if (reservation && !reservation.ok) return reservation;
+  if (reservation && !reservation.ok) return attempt.finish(reservation);
   let monetaryCompleted = false;
   let providerRequestId: string | null = null;
+  let response: Response | undefined;
+  let usagePayload: unknown;
+  const finish = (result: ImagineResult) => attempt.finish(result, response, usagePayload);
   try {
-  let response: Response;
   try {
+    attempt.dispatch();
     response = await fetchImpl(endpoint, {
       method: "POST",
       headers: {
@@ -203,7 +211,7 @@ export async function generateImagineImages(
       }),
     });
   } catch {
-    return { ok: false, error: "Could not reach the xAI image generation endpoint.", status: 502 };
+    return finish({ ok: false, error: "Could not reach the xAI image generation endpoint.", status: 502 });
   }
 
   providerRequestId = response.headers.get("x-request-id");
@@ -211,14 +219,15 @@ export async function generateImagineImages(
   try {
     body = await response.json();
   } catch {
-    return {
+    return finish({
       ok: false,
       error: `Image generation returned a non-JSON response (HTTP ${response.status}).`,
       status: response.status,
-    };
+    });
   }
 
   const record = body && typeof body === "object" ? (body as Record<string, unknown>) : {};
+  usagePayload = record;
   if (!response.ok) {
     const err = record.error;
     const raw =
@@ -227,12 +236,12 @@ export async function generateImagineImages(
         : err && typeof err === "object" && typeof (err as { message?: unknown }).message === "string"
           ? String((err as { message: string }).message)
           : `Image generation failed (HTTP ${response.status}).`;
-    return { ok: false, error: mapImagineHttpError(response.status, raw), status: response.status };
+    return finish({ ok: false, error: mapImagineHttpError(response.status, raw), status: response.status });
   }
 
   const rawData = Array.isArray(record.data) ? record.data : [];
   if (rawData.length === 0) {
-    return { ok: false, error: "Image generation returned no images.", status: response.status };
+    return finish({ ok: false, error: "Image generation returned no images.", status: response.status });
   }
 
   const images: ImagineImage[] = [];
@@ -241,31 +250,31 @@ export async function generateImagineImages(
     const row = item as Record<string, unknown>;
     if (typeof row.b64_json === "string" && row.b64_json) {
       const built = dataUrlFromB64(row.b64_json, typeof row.mime_type === "string" ? row.mime_type : undefined);
-      if (!built.ok) return { ok: false, error: built.error, status: response.status };
+      if (!built.ok) return finish({ ok: false, error: built.error, status: response.status });
       images.push({ dataUrl: built.dataUrl, mime: built.mime });
       continue;
     }
     if (typeof row.url === "string" && row.url) {
       const downloaded = await downloadUrlToDataUrl(row.url, fetchImpl, options.lookup);
-      if (!downloaded.ok) return { ok: false, error: downloaded.error, status: response.status };
+      if (!downloaded.ok) return finish({ ok: false, error: downloaded.error, status: response.status });
       images.push({ dataUrl: downloaded.dataUrl, mime: downloaded.mime, sourceUrl: row.url });
     }
   }
 
   if (images.length === 0) {
-    return { ok: false, error: "Image generation returned no usable image payloads.", status: response.status };
+    return finish({ ok: false, error: "Image generation returned no usable image payloads.", status: response.status });
   }
 
   const resolvedModel = typeof record.model === "string" && record.model ? record.model : model;
   await reservation?.confirm();
   monetaryCompleted = true;
-  return {
+  return finish({
     ok: true,
     model: resolvedModel,
     reportedModel: typeof record.model === "string" && record.model.trim() ? record.model : undefined,
     images,
     usage: record.usage,
-  };
+  });
   } finally {
     await settleDispatchResult(options.meter?.ownerId || "", reservation?.accountReservationId, { ok: monetaryCompleted, requestId: providerRequestId }, options.settleDispatch);
   }
@@ -307,7 +316,8 @@ export async function editImagineImage(
     fetchImpl?: FetchLike;
     endpoint?: string;
     lookup?: LookupFn;
-    meter?: { ownerId: string; sessionId?: string; operationId?: string; taskId?: string; projectId?: string };
+    recordUsage?: UsageRecorder;
+    meter?: { ownerId: string; sessionId?: string; chatId?: string; operationId?: string; taskId?: string; projectId?: string };
     skipSpendControls?: boolean;
     reserveDispatch?: ReserveDispatch;
     settleDispatch?: SettleDispatch;
@@ -352,17 +362,24 @@ export async function editImagineImage(
   if (imageUrls.length === 1) requestBody.image_url = imageUrls[0];
   else requestBody.image_urls = imageUrls;
 
+  const attempt = imagineUsageAttempt({ ownerId: options.meter?.ownerId, chatId: options.meter?.chatId,
+    model, stage: "edit", operationId: options.meter?.operationId, record: options.recordUsage });
+  try { await attempt.prepare(); }
+  catch { return { ok: false, error: "Execution accounting is unavailable. The image provider was not contacted.", status: 503 }; }
   const reservation = options.skipSpendControls ? null : await reserveImageDispatch({
     ownerId: options.meter?.ownerId ?? "",
     model,
     n: 1,
   }, dispatchContext({ operationId: options.meter?.operationId, taskId: options.meter?.taskId, projectId: options.meter?.projectId, provider: "xai", model, stage: "image-edit", args: requestBody, textOnly: false }), options.reserveDispatch, options.settleDispatch);
-  if (reservation && !reservation.ok) return reservation;
+  if (reservation && !reservation.ok) return attempt.finish(reservation);
   let monetaryCompleted = false;
   let providerRequestId: string | null = null;
+  let response: Response | undefined;
+  let usagePayload: unknown;
+  const finish = (result: ImagineResult) => attempt.finish(result, response, usagePayload);
   try {
-  let response: Response;
   try {
+    attempt.dispatch();
     response = await fetchImpl(endpoint, {
       method: "POST",
       headers: {
@@ -372,7 +389,7 @@ export async function editImagineImage(
       body: JSON.stringify(requestBody),
     });
   } catch {
-    return { ok: false, error: "Could not reach the xAI image edits endpoint.", status: 502 };
+    return finish({ ok: false, error: "Could not reach the xAI image edits endpoint.", status: 502 });
   }
 
   providerRequestId = response.headers.get("x-request-id");
@@ -380,14 +397,15 @@ export async function editImagineImage(
   try {
     responseJson = await response.json();
   } catch {
-    return {
+    return finish({
       ok: false,
       error: `Image editing returned a non-JSON response (HTTP ${response.status}).`,
       status: response.status,
-    };
+    });
   }
 
   const record = responseJson && typeof responseJson === "object" ? (responseJson as Record<string, unknown>) : {};
+  usagePayload = record;
   if (!response.ok) {
     const err = record.error;
     const raw =
@@ -396,12 +414,12 @@ export async function editImagineImage(
         : err && typeof err === "object" && typeof (err as { message?: unknown }).message === "string"
           ? String((err as { message: string }).message)
           : `Image editing failed (HTTP ${response.status}).`;
-    return { ok: false, error: mapImagineHttpError(response.status, raw), status: response.status };
+    return finish({ ok: false, error: mapImagineHttpError(response.status, raw), status: response.status });
   }
 
   const rawData = Array.isArray(record.data) ? record.data : [];
   if (rawData.length === 0) {
-    return { ok: false, error: "Image editing returned no images.", status: response.status };
+    return finish({ ok: false, error: "Image editing returned no images.", status: response.status });
   }
 
   const images: ImagineImage[] = [];
@@ -410,31 +428,31 @@ export async function editImagineImage(
     const row = item as Record<string, unknown>;
     if (typeof row.b64_json === "string" && row.b64_json) {
       const built = dataUrlFromB64(row.b64_json, typeof row.mime_type === "string" ? row.mime_type : undefined);
-      if (!built.ok) return { ok: false, error: built.error, status: response.status };
+      if (!built.ok) return finish({ ok: false, error: built.error, status: response.status });
       images.push({ dataUrl: built.dataUrl, mime: built.mime });
       continue;
     }
     if (typeof row.url === "string" && row.url) {
       const downloaded = await downloadUrlToDataUrl(row.url, fetchImpl, options.lookup);
-      if (!downloaded.ok) return { ok: false, error: downloaded.error, status: response.status };
+      if (!downloaded.ok) return finish({ ok: false, error: downloaded.error, status: response.status });
       images.push({ dataUrl: downloaded.dataUrl, mime: downloaded.mime, sourceUrl: row.url });
     }
   }
 
   if (images.length === 0) {
-    return { ok: false, error: "Image editing returned no usable image payloads.", status: response.status };
+    return finish({ ok: false, error: "Image editing returned no usable image payloads.", status: response.status });
   }
 
   const resolvedModel = typeof record.model === "string" && record.model ? record.model : model;
   await reservation?.confirm();
   monetaryCompleted = true;
-  return {
+  return finish({
     ok: true,
     model: resolvedModel,
     reportedModel: typeof record.model === "string" && record.model.trim() ? record.model : undefined,
     images,
     usage: record.usage,
-  };
+  });
   } finally {
     await settleDispatchResult(options.meter?.ownerId || "", reservation?.accountReservationId, { ok: monetaryCompleted, requestId: providerRequestId }, options.settleDispatch);
   }

@@ -86,8 +86,21 @@ test("only explicit whole-turn no-dispatch receipts permit exact retry through J
 
 test("the mounted whole-turn receipt observes helpers before primary preflight can refuse", () => {
   const source = readFileSync(new URL("./turn.server.ts", import.meta.url), "utf8");
-  assert.match(source, /const markDispatched = \(\) => \{ anyDispatched = true; onDispatched\(\); \}/);
+  assert.match(source, /const markDispatched = \(stage:[^)]*\) => \{ anyDispatched = true; onDispatched\(stage\); \}/);
   assert.match(source, /const markPrimaryDispatched = \(\) => \{ primaryDispatched = true; markDispatched\(\); \}/);
-  assert.match(source, /markDispatched\(\);\s*return runSettledDispatch\(userId, helperReservationId, \(\) => askConnectedModule/);
+  assert.match(source, /askConnectedModule\(userId, id, requestText, \(\) => \{ sent = true; markDispatched\("helper"\);/);
   assert.match(source, /approvalId: reservation\.approvalId, \.\.\.\(!anyDispatched \? \{ dispatched: false \} : \{\}\)/);
+});
+
+
+test("a rejected primary after a completed helper cannot authorize whole-turn replay", async () => {
+  const signal = new AbortController().signal;
+  const response = consultationResponse(async () => providerResponse(async () => ({
+    ok: false, dispatched: false, error: "Primary preflight rejected", httpStatus: 409,
+  }), () => ({}), signal), [helper], signal);
+  const result = await consume(response);
+  assert.equal(result.ok, false);
+  assert.equal(result.primaryDispatched, false);
+  assert.equal(result.dispatched, undefined);
+  assert.equal(result.consultation?.[0].requestId, "helper-request");
 });

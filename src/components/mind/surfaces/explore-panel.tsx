@@ -183,7 +183,7 @@ function readPins(known: Set<string>): string[] {
       return;
     }
     try {
-      const persisted = persistPersonaOpen(preferences, result.ws, result.selection);
+      const persisted = persistPersonaOpen(preferences, result.ws, result.selection, account.id);
       if (!persisted.ok) {
         setNext("Could not save this persona. Nothing was opened.");
         return;
