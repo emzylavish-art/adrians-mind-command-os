@@ -660,7 +660,7 @@
       "expected": "Returning to a workspace page restores its prior reading context rather than always scrolling to top.",
       "changed": "Production-used useViewScrollPosition captures last observed scrolling before DOM replacement; owner/view/Settings pane caches restore independently, with explicit page scroll anchoring.",
       "files": "src/lib/mind/use-view-scroll-position.ts; src/components/mind/command-app.tsx; src/components/mind/view-scroll-position.test.ts",
-      "proof": "view-scroll-position.test.ts2/2 mounted React cases plus actual Chromium Settings Data\u2192Projects\u2192Data restores exact1600px after async content. Pending restore cancels on real user input; owner/pane boundaries verified.",
+      "proof": "view-scroll-position.test.ts 2/2 mounted React cases plus actual Chromium Settings Data\u2192Projects\u2192Data restores exact1600px after async content. Pending restore cancels on real user input; owner/pane boundaries verified.",
       "remaining": "Physical Safari/PWA not tested. Restoring observes pending content only until the saved position becomes available or genuine user input cancels it."
     },
     {
@@ -756,7 +756,7 @@
       "expected": "Long conversations progressively mount messages while preserving all data, selection, links and accessibility.",
       "changed": "Default 80-message window and explicit earlier-message loading with scroll compensation; underlying messages are retained.",
       "files": "src/lib/mind/reading-position.ts; src/components/mind/command-app.tsx; src/lib/mind/reading-position.test.ts",
-      "proof": "Actual Chromium initially rendered80/180 messages, loaded160, then revealed/focused the oldest hidden message; source messages remained retained.",
+      "proof": "Actual Chromium initially rendered 80/180 messages, loaded 160, then revealed/focused the oldest hidden message; source messages remained retained.",
       "remaining": "This is bounded windowing with explicit earlier loading, not variable-height virtualization of every rendered message."
     },
     {
@@ -816,8 +816,8 @@
       "expected": "New authorized queued work starts from an event, with periodic reconciliation as fallback.",
       "changed": "Owner-scoped coalesced immediate worker pump wakes on queued work, preserves the safety reconciliation heartbeat and disposes listeners/timers on owner/unmount changes.",
       "files": "src/components/mind/command-app.tsx; src/lib/mind/worker-pass.ts; src/lib/mind/browser-work-pump.ts; src/lib/mind/browser-work-pump.test.ts",
-      "proof": "browser-work-pump.test.ts 3/3: actual Fleet tick dispatches on queued wake without waiting2seconds, coalesces bursts, and disposes stale owner/visibility subscriptions.",
-      "remaining": "Reconciliation heartbeat remains2seconds; the helper does not claim browser-closed execution."
+      "proof": "browser-work-pump.test.ts 3/3: actual Fleet tick dispatches on queued wake without waiting2 seconds, coalesces bursts, and disposes stale owner/visibility subscriptions.",
+      "remaining": "Reconciliation heartbeat remains2 seconds; the helper does not claim browser-closed execution."
     },
     {
       "id": "C1/AA-069",
@@ -985,7 +985,7 @@
       "changed": "Durable media operation claim/receipt/recovery endpoint and generation-history UI; accepted jobs resume status checks without resubmitting generation.",
       "files": "src/lib/mind/media/operations.server.ts; src/lib/mind/media/imagine-http.ts; src/components/mind/command-app.tsx; migrations/0019_c1_media_operations.sql",
       "proof": "media/operations.test.ts 4/4: accepted request recovers by stable operation ID, concurrent duplicates do not redispatch, owner isolation and temporary retention hold.",
-      "remaining": "Apply migration0019 before rollout; actual provider job completion remains unverified."
+      "remaining": "Apply migration 0019 before rollout; actual provider job completion remains unverified."
     },
     {
       "id": "C1/AA-083",
@@ -1020,7 +1020,7 @@
       "expected": "The interface should say submitting until provider acceptance is actually observed.",
       "changed": "Dedicated owner/login/chat-scoped video progress is visible outside the queued-message panel. Submitting/recovering cannot become accepted/rendering without a provider handle; rejected start removes progress. Generic busy copy does not infer stages from user text.",
       "files": "src/components/mind/command-app.tsx; src/lib/mind/media/imagine-http.ts; src/lib/mind/media/video-progress.ts; src/lib/mind/media/video-progress.test.ts",
-      "proof": "video-progress.test.ts2/2 plus real Chromium delayed rejected/accepted Home\u2192Video\u2192Chat flows: no premature acceptance/status poll, rejected start clears progress, accepted same operation/requestId gets one status and zero repeated starts.",
+      "proof": "video-progress.test.ts 2/2 plus real Chromium delayed rejected/accepted Home\u2192Video\u2192Chat flows: no premature acceptance/status poll, rejected start clears progress, accepted same operation/requestId gets one status and zero repeated starts.",
       "remaining": "Synthetic transport and clock only; no live generation, billing or physical device proof."
     },
     {
@@ -1160,12 +1160,12 @@
       "title": "The default test command can omit existing regression tests",
       "record": "C1/M20",
       "url": "https://app.notion.com/p/4231aa276323815eb1e9c95087daece4?pvs=204",
-      "status": "blocked with the exact missing step",
+      "status": "fixed and tested",
       "expected": "The default runner discovers every intended checked-in regression file and reports the inventory.",
       "changed": "Normal npm test recursively discovers every .test.ts/.test.mjs under src/scripts; shard runner shares inventory. Each file runs in its own process/private temp directory; all failures are reported.",
       "files": "scripts/test-inventory.mjs; scripts/test-inventory.test.mjs; scripts/run-tests.mjs; scripts/run-tests-shard.mjs; package.json",
-      "proof": "Inventory regression passed. First400-file run:390passed/10failed; next410-file run:409passed/1legacy research assertion failed. All identified regressions were repaired and separately retested; committed-candidate full run pending.",
-      "remaining": "Record the final full-run totals and failures after repairs. Do not replace the failed result with an earlier smaller pass."
+      "proof": "Final normal npm test on clean committed source b17e90c5728f7f1a9f303f703fcf073cbdd2175e:416/416 files passed;2,295 tests passed,0 failed,4 optional OG-skill tests skipped. Recursive inventory and shard inventory agree. Earlier400/410-file failures were fixed and superseded.",
+      "remaining": "Four optional tests require gitignored .grok/skills/og, absent from this checkout. CI/integration must rerun the discovered suite on the combined branch."
     },
     {
       "id": "C1/AA-098",
@@ -1368,8 +1368,39 @@
       "expected": "Preserve the existing stronger Notion request+connection-epoch+owner pattern and reuse its invariant elsewhere.",
       "changed": "Existing searchConnectedNotion current() checks retained; generalized operation scope applies that principle to media/research. This source entry was a positive control, not another invented Notion defect.",
       "files": "src/components/mind/command-app.tsx; src/lib/mind/operation-scope.ts; src/lib/mind/operation-scope.test.ts",
-      "proof": "Original Notion search current() guards retained; operation-scope.test.ts3/3 proves generalization used by media/research, including fresh same-owner session identity.",
+      "proof": "Original Notion search current() guards retained; operation-scope.test.ts 3/3 proves generalization used by media/research, including fresh same-owner session identity.",
       "remaining": "Positive control retained; no new Notion defect claimed. Live provider/device proof remains separate."
     }
-  ]
+  ],
+  "verification": {
+    "sourceRevision": "b17e90c5728f7f1a9f303f703fcf073cbdd2175e",
+    "evidence": "docs/audits/c1-validation.json",
+    "normalRunner": {
+      "regressionFiles": 416,
+      "tests": 2299,
+      "pass": 2295,
+      "fail": 0,
+      "skipped": 4,
+      "cancelled": 0,
+      "todo": 0
+    },
+    "localBrowser": {
+      "states": 14,
+      "transitions": 11,
+      "failed": 0
+    },
+    "releaseVerified": false
+  },
+  "publication": {
+    "localValidatedCommit": "b17e90c5728f7f1a9f303f703fcf073cbdd2175e",
+    "githubSourceCommit": "d8b89bbe94291cf2d6d5d36236d03ea749988127",
+    "identicalWholeTreeSha": "05e1aea8e09d6d1ec7b4fec36ab0352d86e3b704",
+    "localAndFetchedRemoteDiffExitCode": 0,
+    "publicationMethod": "Connected GitHub Git Data tools; normal shell push failed because no GitHub credential helper was configured. The connected GitHub tools assigned different commit metadata. No source bytes changed.",
+    "githubBranch": "audit/c1-notion-access-ef0782",
+    "branchRefReadBack": "d8b89bbe94291cf2d6d5d36236d03ea749988127",
+    "localCommitRecord": "docs/audits/evidence/c1-validated-source.commit.txt",
+    "metadataOnlyDelivery": true,
+    "notClaimed": "Raw test and browser reports retain the actual local commit they ran; they were not relabeled as runs on the API-assigned SHA."
+  }
 }

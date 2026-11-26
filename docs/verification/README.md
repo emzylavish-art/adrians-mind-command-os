@@ -63,3 +63,7 @@ node scripts/verification/validate.mjs --release artifacts/verification/release-
 ```
 
 Failed, skipped, canceled, missing, duplicate, or different-revision required checks block this gate. A READY deployment does not replace journey evidence. The validator checks supplied records for consistency; it does **not** fetch CI logs, authenticate screenshots, inspect branch protection, or prove remote facts. Preserve referenced artifacts and independently retrieve them during release review. This implementation does not claim the current deployment pipeline lacks other protections and does not change or trigger a deployment workflow.
+
+## Executed C1 candidate
+
+The C1 implementation revision `b17e90c5728f7f1a9f303f703fcf073cbdd2175e` has [scoped feature evidence](../audits/evidence/c1-feature-evidence.json), [scoped environment evidence](../audits/evidence/c1-environment-evidence.json), and a [complete validation record](../audits/c1-validation.json). The full-product JSON files in this directory remain templates; actual C1 records bind their evidence to the committed source and explicitly leave authenticated/live/physical environments unverified. Evidence packaging may be a later documentation-only commit.

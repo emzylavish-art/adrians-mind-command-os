@@ -14,24 +14,28 @@
 
 **Implementation branch:** [audit/c1-notion-access-ef0782](https://github.com/emzylavish-art/adrians-mind-command-os/tree/audit/c1-notion-access-ef0782).
 
-**Validated source revision:** Final committed-candidate verification pending; individual completed fixture results are recorded below.
+**Validated source revision:** b17e90c5728f7f1a9f303f703fcf073cbdd2175e
 
 ## Coverage and evidence
+
+[Published source `d8b89bbe94291cf2d6d5d36236d03ea749988127`](https://github.com/emzylavish-art/adrians-mind-command-os/commit/d8b89bbe94291cf2d6d5d36236d03ea749988127) is byte-for-byte tree-identical to the validated local source. [Publication identity proof](c1-publication.md) explains the different commit metadata and preserves the original tested commit object.
 
 All **24 C1 source records** were recovered and read: **22 substantive analysis passes and 114 unique original finding IDs**. M23/M24 are progress notes. Every original ID, title, source, expected behavior, changed files, implementation result and remaining boundary appears below. The complete machine-readable equivalent is [c1-checklist.json](c1-checklist.json).
 
 The status vocabulary is the user-requested set: **fixed and tested**, **already fixed with proof**, **duplicate with a link to its fix**, **proposal needing a decision**, or **blocked with the exact missing step**. “Fixed and tested” refers to the stated code/fixture boundary. It never promotes a fixture to a real account, provider, deployment, invoice or physical-device result. An original proposal is implemented to its explicitly stated compatible scope; remaining broader architecture is identified below rather than presented as shipped.
 
-Status totals: **112 fixed and tested**, **1 blocked with the exact missing step**, **1 already fixed with proof**.
+Status totals: **113 fixed and tested**, **1 already fixed with proof**.
 
 Final branch verification is recorded in [c1-validation.json](c1-validation.json). Detailed workstream evidence: [connectors and Build](c1-connectors.md), [privacy/synchronization/knowledge](../audit-c1-privacy-knowledge.md), [runtime/research/resources](c1-runtime.md), [request contracts and recovery](c1-security-recovery.md), and [verification infrastructure](c1-verification.md). Local synthetic browser evidence lives in [evidence/c1-local](evidence/c1-local/README.md).
 
-The initial complete 400-file run had390 passing files and10 failures. A later410-file run had409 passing files and one legacy assertion failure. These intermediate failures were repaired and retested; the final candidate result is recorded separately. Existing optional tests skipped because their gitignored OG skill is absent remain explicitly reported. No earlier release or production URL is used as evidence for this implementation.
+The initial complete 400-file run had 390 passing files and 10 failures. A later410-file run had 409 passing files and one legacy assertion failure. These intermediate failures were repaired and retested; the final candidate result is recorded separately. Existing optional tests skipped because their gitignored OG skill is absent remain explicitly reported. No earlier release or production URL is used as evidence for this implementation.
 
 ## Integration, migration and remaining architecture
 
+[Observed cross-branch overlap](c1-integration-overlap.md) records exact C2/C3/C4/C5 heads, shared files, competing tests and migration dependencies. None of those branches was merged or claimed tested here.
+
 - High-conflict shared files: `command-app.tsx`, `types.ts`, `workspace.ts`, `server.ts`, `turn.server.ts`, `fleet.ts`, `provider-call.ts`, `model-consult.ts`, `mcp/tools.ts`, Build/Kimi handlers, connector persistence and auth middleware. Keep distinct owner, permission, revision, cost, receipt and cancellation tests when combining branches.
-- Additive migrations0017–0021 introduce connector generation/status, resource and turn receipt authority, media operations, device coordination, and research/instruction persistence. The isolated upgrade fixture checks real pre-C1 records, all five migrations and replay preservation. Apply in order with one migrator, keep the encryption secret stable, and retain additive tables/columns during code rollback. Production migration and role/RLS configuration are separate release checks.
+- Additive migrations 0017–0021 introduce connector generation/status, resource and turn receipt authority, media operations, device coordination, and research/instruction persistence. The isolated upgrade fixture checks real pre-C1 records, all five migrations and replay preservation. Apply in order with one migrator, keep the encryption secret stable, and retain additive tables/columns during code rollback. Production migration and role/RLS configuration are separate release checks.
 - The paired-device legacy importer defaults to dry-run. Back up and pause old writers, review source fingerprint/counts, and authorize the explicit import into an empty destination later. No native companion or installer is changed by this website branch.
 - AA013/065 now use bounded record/message deltas and confirmed checkpoints. Fully independent paginated DB/browser reads remain a **proposal needing a decision** about the staged storage migration; compatibility snapshots still exist.
 - AA042 now has paginated file/content discovery, revision-aware writes and parser-backed current-buffer symbol/dependency navigation. A persistent whole-repository semantic index/dependency graph remains a **proposal needing a decision** about runtime/index ownership. Current-buffer navigation never claims whole-repository analysis.
@@ -810,7 +814,7 @@ The initial complete 400-file run had390 passing files and10 failures. A later41
 - **Expected behavior:** Returning to a workspace page restores its prior reading context rather than always scrolling to top.
 - **What actually changed:** Production-used useViewScrollPosition captures last observed scrolling before DOM replacement; owner/view/Settings pane caches restore independently, with explicit page scroll anchoring.
 - **Affected files:** `src/lib/mind/use-view-scroll-position.ts`; `src/components/mind/command-app.tsx`; `src/components/mind/view-scroll-position.test.ts`.
-- **Tests/evidence:** view-scroll-position.test.ts2/2 mounted React cases plus actual Chromium Settings Data→Projects→Data restores exact1600px after async content. Pending restore cancels on real user input; owner/pane boundaries verified.
+- **Tests/evidence:** view-scroll-position.test.ts 2/2 mounted React cases plus actual Chromium Settings Data→Projects→Data restores exact1600px after async content. Pending restore cancels on real user input; owner/pane boundaries verified.
 - **Still needed / boundary:** Physical Safari/PWA not tested. Restoring observes pending content only until the saved position becomes available or genuine user input cancels it.
 
 ### C1-AA-056
@@ -922,7 +926,7 @@ The initial complete 400-file run had390 passing files and10 failures. A later41
 - **Expected behavior:** Long conversations progressively mount messages while preserving all data, selection, links and accessibility.
 - **What actually changed:** Default 80-message window and explicit earlier-message loading with scroll compensation; underlying messages are retained.
 - **Affected files:** `src/lib/mind/reading-position.ts`; `src/components/mind/command-app.tsx`; `src/lib/mind/reading-position.test.ts`.
-- **Tests/evidence:** Actual Chromium initially rendered80/180 messages, loaded160, then revealed/focused the oldest hidden message; source messages remained retained.
+- **Tests/evidence:** Actual Chromium initially rendered 80/180 messages, loaded 160, then revealed/focused the oldest hidden message; source messages remained retained.
 - **Still needed / boundary:** This is bounded windowing with explicit earlier loading, not variable-height virtualization of every rendered message.
 
 ### C1-AA-064
@@ -992,8 +996,8 @@ The initial complete 400-file run had390 passing files and10 failures. A later41
 - **Expected behavior:** New authorized queued work starts from an event, with periodic reconciliation as fallback.
 - **What actually changed:** Owner-scoped coalesced immediate worker pump wakes on queued work, preserves the safety reconciliation heartbeat and disposes listeners/timers on owner/unmount changes.
 - **Affected files:** `src/components/mind/command-app.tsx`; `src/lib/mind/worker-pass.ts`; `src/lib/mind/browser-work-pump.ts`; `src/lib/mind/browser-work-pump.test.ts`.
-- **Tests/evidence:** browser-work-pump.test.ts 3/3: actual Fleet tick dispatches on queued wake without waiting2seconds, coalesces bursts, and disposes stale owner/visibility subscriptions.
-- **Still needed / boundary:** Reconciliation heartbeat remains2seconds; the helper does not claim browser-closed execution.
+- **Tests/evidence:** browser-work-pump.test.ts 3/3: actual Fleet tick dispatches on queued wake without waiting2 seconds, coalesces bursts, and disposes stale owner/visibility subscriptions.
+- **Still needed / boundary:** Reconciliation heartbeat remains2 seconds; the helper does not claim browser-closed execution.
 
 ### C1-AA-069
 
@@ -1189,7 +1193,7 @@ The initial complete 400-file run had390 passing files and10 failures. A later41
 - **What actually changed:** Durable media operation claim/receipt/recovery endpoint and generation-history UI; accepted jobs resume status checks without resubmitting generation.
 - **Affected files:** `src/lib/mind/media/operations.server.ts`; `src/lib/mind/media/imagine-http.ts`; `src/components/mind/command-app.tsx`; `migrations/0019_c1_media_operations.sql`.
 - **Tests/evidence:** media/operations.test.ts 4/4: accepted request recovers by stable operation ID, concurrent duplicates do not redispatch, owner isolation and temporary retention hold.
-- **Still needed / boundary:** Apply migration0019 before rollout; actual provider job completion remains unverified.
+- **Still needed / boundary:** Apply migration 0019 before rollout; actual provider job completion remains unverified.
 
 ### C1-AA-083
 
@@ -1230,7 +1234,7 @@ The initial complete 400-file run had390 passing files and10 failures. A later41
 - **Expected behavior:** The interface should say submitting until provider acceptance is actually observed.
 - **What actually changed:** Dedicated owner/login/chat-scoped video progress is visible outside the queued-message panel. Submitting/recovering cannot become accepted/rendering without a provider handle; rejected start removes progress. Generic busy copy does not infer stages from user text.
 - **Affected files:** `src/components/mind/command-app.tsx`; `src/lib/mind/media/imagine-http.ts`; `src/lib/mind/media/video-progress.ts`; `src/lib/mind/media/video-progress.test.ts`.
-- **Tests/evidence:** video-progress.test.ts2/2 plus real Chromium delayed rejected/accepted Home→Video→Chat flows: no premature acceptance/status poll, rejected start clears progress, accepted same operation/requestId gets one status and zero repeated starts.
+- **Tests/evidence:** video-progress.test.ts 2/2 plus real Chromium delayed rejected/accepted Home→Video→Chat flows: no premature acceptance/status poll, rejected start clears progress, accepted same operation/requestId gets one status and zero repeated starts.
 - **Still needed / boundary:** Synthetic transport and clock only; no live generation, billing or physical device proof.
 
 ### C1-AA-086
@@ -1393,13 +1397,13 @@ The initial complete 400-file run had390 passing files and10 failures. A later41
 
 **Source:** [C1/M20](https://app.notion.com/p/4231aa276323815eb1e9c95087daece4?pvs=204) · original ID `C1/AA-097`.
 
-**Status:** **blocked with the exact missing step**.
+**Status:** **fixed and tested**.
 
 - **Expected behavior:** The default runner discovers every intended checked-in regression file and reports the inventory.
 - **What actually changed:** Normal npm test recursively discovers every .test.ts/.test.mjs under src/scripts; shard runner shares inventory. Each file runs in its own process/private temp directory; all failures are reported.
 - **Affected files:** `scripts/test-inventory.mjs`; `scripts/test-inventory.test.mjs`; `scripts/run-tests.mjs`; `scripts/run-tests-shard.mjs`; `package.json`.
-- **Tests/evidence:** Inventory regression passed. First400-file run:390passed/10failed; next410-file run:409passed/1legacy research assertion failed. All identified regressions were repaired and separately retested; committed-candidate full run pending.
-- **Still needed / boundary:** Record the final full-run totals and failures after repairs. Do not replace the failed result with an earlier smaller pass.
+- **Tests/evidence:** Final normal npm test on clean committed source b17e90c5728f7f1a9f303f703fcf073cbdd2175e:416/416 files passed;2,295 tests passed,0 failed,4 optional OG-skill tests skipped. Recursive inventory and shard inventory agree. Earlier400/410-file failures were fixed and superseded.
+- **Still needed / boundary:** Four optional tests require gitignored .grok/skills/og, absent from this checkout. CI/integration must rerun the discovered suite on the combined branch.
 
 ### C1-AA-098
 
@@ -1636,5 +1640,5 @@ The initial complete 400-file run had390 passing files and10 failures. A later41
 - **Expected behavior:** Preserve the existing stronger Notion request+connection-epoch+owner pattern and reuse its invariant elsewhere.
 - **What actually changed:** Existing searchConnectedNotion current() checks retained; generalized operation scope applies that principle to media/research. This source entry was a positive control, not another invented Notion defect.
 - **Affected files:** `src/components/mind/command-app.tsx`; `src/lib/mind/operation-scope.ts`; `src/lib/mind/operation-scope.test.ts`.
-- **Tests/evidence:** Original Notion search current() guards retained; operation-scope.test.ts3/3 proves generalization used by media/research, including fresh same-owner session identity.
+- **Tests/evidence:** Original Notion search current() guards retained; operation-scope.test.ts 3/3 proves generalization used by media/research, including fresh same-owner session identity.
 - **Still needed / boundary:** Positive control retained; no new Notion defect claimed. Live provider/device proof remains separate.

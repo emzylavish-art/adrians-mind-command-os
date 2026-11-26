@@ -1,0 +1,6 @@
+tree 05e1aea8e09d6d1ec7b4fec36ab0352d86e3b704
+parent 18d5b9364e6bdcfec028eeccf56fe596946ed8ce
+author Codex <codex@openai.com> 1795664490 -0500
+committer Codex <codex@openai.com> 1795664533 -0500
+
+Implement recovered C1 audit findings with scoped regressions
