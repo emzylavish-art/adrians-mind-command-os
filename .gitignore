@@ -23,3 +23,11 @@ team/state/
 
 # Third-party source checkouts and package state created inside GitHub Codespaces
 .tools/
+
+# Generated server/launcher pairing identity; never hand-edit or reuse across builds.
+desktop/runtime-build.json
+
+.output/
+desktop/app-server/
+desktop/app-server.next-*/
+desktop/app-server.previous-*/

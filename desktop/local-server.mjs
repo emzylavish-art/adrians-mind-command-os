@@ -46,33 +46,9 @@ async function localText(text) {
 }
 
 async function grokText(text) {
-  const key = process.env.XAI_API_KEY;
-  if (!key) return "No connected model key was found. Nothing was invented.";
-  let response;
-  try {
-    response = await fetch("https://api.x.ai/v1/responses", {
-      method: "POST",
-      headers: { authorization: `Bearer ${key}`, "content-type": "application/json" },
-      body: JSON.stringify({
-        model: "grok-4.3",
-        input: [{ role: "user", content: [{ type: "input_text", text: `Reply in one short sentence. ${text}` }] }],
-      }),
-    });
-  } catch {
-    return "grok-4.3 could not be reached. Nothing was invented.";
-  }
-  const raw = await response.text();
-  if (!response.ok) return `grok-4.3 returned ${response.status}. Nothing was invented.`;
-  try {
-    const parsed = JSON.parse(raw);
-    const parts = (parsed.output || []).flatMap((item) => item.content || []).map((part) => part.text || "").filter(Boolean);
-    const reply = parts.join(" ").slice(0, 2000);
-    return reply ? `grok-4.3: ${reply}` : "grok-4.3 returned no reading. Nothing was invented.";
-  } catch {
-    return "grok-4.3 returned no reading. Nothing was invented.";
-  }
+  // Legacy fallback server cannot prove the selected provider/account. It must never silently dispatch Grok.
+  return "This fallback runtime cannot verify the selected provider. Open the packaged app server; no cloud model was called.";
 }
-
 async function serveFile(pathname) {
   const file = normalize(join(publicDir, pathname));
   if (!file.startsWith(normalize(publicDir))) return null;

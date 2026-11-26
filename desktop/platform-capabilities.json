@@ -1,0 +1,15 @@
+{
+  "schemaVersion": 1,
+  "product": "adrians-mind",
+  "targets": [
+    { "platform": "win32", "arch": "x64", "distribution": "nsis", "implementation": "configured", "releaseVerification": "unverified", "localFiles": "implemented", "desktopControls": "implemented", "offlineTextModel": "requires-healthy-local-engine", "speechInput": "requires-healthy-local-engine", "speechOutput": "requires-healthy-local-engine" },
+    { "platform": "win32", "arch": "arm64", "implementation": "unsupported", "releaseVerification": "not-tested" },
+    { "platform": "darwin", "arch": "arm64", "implementation": "unsupported", "releaseVerification": "not-tested" },
+    { "platform": "linux", "arch": "x64", "implementation": "unsupported", "releaseVerification": "not-tested" },
+    { "platform": "ios", "arch": "arm64", "implementation": "unimplemented", "releaseVerification": "not-tested" },
+    { "platform": "android", "arch": "arm64", "implementation": "unimplemented", "releaseVerification": "not-tested" }
+  ],
+  "browserResponsiveLayoutIsNativeAppProof": false,
+  "cloudRequired": ["connected-provider-inference", "oauth-refresh", "remote-sync", "release-feed"],
+  "localOnlyPolicy": "External inference and automatic provider fallbacks are prohibited; unavailable local engines require an explicit recovery action."
+}

@@ -1,13 +1,9 @@
 import assert from "node:assert/strict";
-import { describe, it } from "node:test";
+import test from "node:test";
 import { missingPcCapabilities, PC_CAPABILITIES } from "./pc-capability.ts";
-
-describe("PC capability record", () => {
-  it("does not mark unproven computer-use layers as coded", () => {
-    const missing = missingPcCapabilities();
-    for (const id of ["visual-understanding", "accessibility-tree", "window-management", "browser-automation", "background-worker", "robotics"]) {
-      assert.equal(missing.includes(id), true);
-    }
-    assert.equal(PC_CAPABILITIES.find((item) => item.id === "screen-capture")?.state, "coded");
-  });
+test("implemented adapters and required capabilities are separate from live-device proof", () => {
+  for (const id of ["screen-capture", "visual-understanding", "accessibility-tree", "window-management"]) assert.equal(PC_CAPABILITIES.find(item => item.id === id)?.state, "coded");
+  for (const id of ["browser-automation", "background-worker", "cross-device", "robotics"]) assert.equal(missingPcCapabilities().includes(id), true);
+  assert.equal(PC_CAPABILITIES.every(item => item.verification === "unverified"), true);
+  assert.equal(PC_CAPABILITIES.find(item => item.id === "offline-text")?.offline, "requires-local-engine");
 });

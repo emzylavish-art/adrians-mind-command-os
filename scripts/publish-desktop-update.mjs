@@ -48,10 +48,12 @@ async function main() {
     await rm(output, {recursive: true, force: true});
     throw error;
   }
-  console.log("Verified full installer and four parts in " + output);
+  console.log(`Verified full installer and ${pack.parts.length} parts in ${output}`);
   if (flag !== "--publish") return;
+  const authorization = rules.validateReleaseCandidate(manifest, { platform: "win32", arch: "x64" });
+  if (!authorization.ok) throw Error("Publishing requires independently trusted signed release metadata: " + authorization.detail);
   const repo = "emzylavish-art/adrians-mind-command-os";
-  const tag = "desktop-installer";
+  const tag = new URL(pack.parts[0].url).pathname.split("/").at(-2);
   const release = spawnSync("gh", ["api", "repos/" + repo + "/releases/tags/" + tag], { encoding: "utf8" });
   if (release.status !== 0) throw Error("Could not verify the existing release. No assets uploaded.");
   const { assets } = JSON.parse(release.stdout);

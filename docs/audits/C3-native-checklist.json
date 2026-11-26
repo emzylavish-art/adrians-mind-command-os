@@ -1,0 +1,456 @@
+{
+  "audit_chat": "Continue production analysis",
+  "chapter_id": "C3",
+  "base_sha": "18d5b9364e6bdcfec028eeccf56fe596946ed8ce",
+  "branch": "audit/continue-production-c3-native-20261125-659f",
+  "native_branch_separate_from_website": true,
+  "verification": {
+    "native_regressions": "48/48 pass (20 desktop CJS fixture tests + 28 TS tests), no skipped tests",
+    "full_typecheck": "passed",
+    "vite_build": "passed; sanitized environment; no migrations, provider calls or deployment",
+    "standalone_server_build": "passed again after final Tools device-panel addition; sanitized env; staged ignored desktop/app-server artifact; no runtime server, migration, provider or installer execution",
+    "syntax_and_diff": "node --check edited CJS/build scripts and git diff --check passed"
+  },
+  "findings": [
+    {
+      "id": "AA-066",
+      "title": "Desktop update validation is tied to a fixed four-part package",
+      "record": "C3/M16",
+      "source_url": "https://app.notion.com/p/4231aa27632381ea8ad7c936997e8d8a",
+      "status": "fixed and tested",
+      "expected_behavior": [
+        "</b> Test synthetic releases containing one, four and six package parts under a supported signed manifest format. Valid releases should be accepted, while unauthorized destinations, invalid signatures and inconsistent file sizes must be rejected. "
+      ],
+      "changes": "Versioned signed package contract accepts 1\u201364 ordered exact-name parts, with complete size/hash/URL consistency, and release review links derive from the authenticated package tag.",
+      "files": [
+        "desktop/update-contract.cjs",
+        "desktop/update-contract.d.cts",
+        "desktop/cloud-update.cjs",
+        "src/lib/mind/desktop-update.ts"
+      ],
+      "tests": [
+        "scripts/desktop/update-security.test.mjs",
+        "src/lib/mind/desktop-update.test.ts"
+      ],
+      "evidence_status": "Fixture reproduced; source-confirmed wiring; full TypeScript and standalone server build passed. No physical Windows/device/provider execution.",
+      "still_needed": "Run Windows install/update/recovery/permission and physical device acceptance on a disposable machine; fixture receipts are not live provider or device proof."
+    },
+    {
+      "id": "AA-067",
+      "title": "Release selection prioritizes build numbers without fully validating both candidates",
+      "record": "C3/M16",
+      "source_url": "https://app.notion.com/p/4231aa27632381ea8ad7c936997e8d8a",
+      "status": "fixed and tested",
+      "expected_behavior": [
+        "</b> Supply an incomplete newer manifest and a valid alternative manifest. Adrian should explain the incomplete release and identify any eligible alternative without installing anything automatically. "
+      ],
+      "changes": "Every source is authenticated and checked for platform/architecture/current-version eligibility before selecting the newest candidate. Invalid higher candidate cannot suppress valid lower candidate; no downgrade.",
+      "files": [
+        "desktop/update-contract.cjs",
+        "desktop/main.cjs"
+      ],
+      "tests": [
+        "scripts/desktop/update-security.test.mjs"
+      ],
+      "evidence_status": "Fixture reproduced; source-confirmed wiring; full TypeScript and standalone server build passed. No physical Windows/device/provider execution.",
+      "still_needed": "Run Windows install/update/recovery/permission and physical device acceptance on a disposable machine; fixture receipts are not live provider or device proof."
+    },
+    {
+      "id": "AA-068",
+      "title": "Update-feed failures lose their diagnostic information",
+      "record": "C3/M16",
+      "source_url": "https://app.notion.com/p/4231aa27632381ea8ad7c936997e8d8a",
+      "status": "fixed and tested",
+      "expected_behavior": [
+        "</b> Simulate offline connectivity, HTTP failure, malformed JSON, invalid manifest information and a valid current release. Each must produce a distinct and accurate update status. "
+      ],
+      "changes": "Per-feed network/timeout/HTTP/content-type/JSON/manifest/signature diagnostics remain distinct. Bounded feed body and timeout; unknown availability is explicit in desktop and website update review.",
+      "files": [
+        "desktop/update-contract.cjs",
+        "desktop/main.cjs",
+        "src/routes/api/mind/desktop-update.ts",
+        "src/components/mind/desktop-update-note.tsx"
+      ],
+      "tests": [
+        "scripts/desktop/update-security.test.mjs",
+        "src/lib/mind/desktop-update.test.ts"
+      ],
+      "evidence_status": "Fixture reproduced; source-confirmed wiring; full TypeScript and standalone server build passed. No physical Windows/device/provider execution.",
+      "still_needed": "Run Windows install/update/recovery/permission and physical device acceptance on a disposable machine; fixture receipts are not live provider or device proof."
+    },
+    {
+      "id": "AA-069",
+      "title": "Package integrity checks must not be confused with publisher authentication",
+      "record": "C3/M16",
+      "source_url": "https://app.notion.com/p/4231aa27632381ea8ad7c936997e8d8a",
+      "status": "fixed and tested",
+      "expected_behavior": [
+        "</b> A synthetic package with matching hashes but an invalid publisher signature must be rejected. Modified manifests and unauthorized signing identities must also be rejected. "
+      ],
+      "changes": "Independent Ed25519 metadata and pinned Windows Authenticode certificate checks gate installation. Publisher pins are deliberately empty; legacy unsigned metadata cannot authorize installation. Packaging forces signing and publication gate requires authenticated metadata.",
+      "files": [
+        "desktop/publisher-trust.json",
+        "desktop/update-contract.cjs",
+        "desktop/installer-auth.cjs",
+        "desktop/package.json",
+        "scripts/publish-desktop-update.mjs"
+      ],
+      "tests": [
+        "scripts/desktop/update-security.test.mjs",
+        "scripts/desktop/runtime-contract.test.mjs"
+      ],
+      "evidence_status": "Fixture reproduced; source-confirmed wiring; full TypeScript and standalone server build passed. No physical Windows/device/provider execution.",
+      "still_needed": "Provision an independently reviewed publisher public key and installer signer thumbprint, sign a schema-v2 manifest plus installer on the release pipeline, then run Windows signature/update acceptance. Do not promote current unsigned build 9 by changing trust rules."
+    },
+    {
+      "id": "AA-070",
+      "title": "Desktop updates need data-conscious download controls",
+      "record": "C3/M16",
+      "source_url": "https://app.notion.com/p/4231aa27632381ea8ad7c936997e8d8a",
+      "status": "fixed and tested",
+      "expected_behavior": [
+        "</b> Interrupt a synthetic multipart download after completing two parts. Restart the updater and verify that it reuses the validated parts instead of downloading them again unnecessarily. The actual Windows download implementation was not retrieved during this pass, so existing resume behavior remains unverified.\n"
+      ],
+      "changes": "Explicit byte/size and disk review, verified part reuse, exact range resumption, explicit restart consent when resume is unsupported, cancellation retaining verified parts, full assembly hash and separate owner install approval. Cached final installer skips unnecessary redownload.",
+      "files": [
+        "desktop/update-download.cjs",
+        "desktop/main.cjs"
+      ],
+      "tests": [
+        "scripts/desktop/update-security.test.mjs"
+      ],
+      "evidence_status": "Fixture reproduced; source-confirmed wiring; full TypeScript and standalone server build passed. No physical Windows/device/provider execution.",
+      "still_needed": "Run Windows install/update/recovery/permission and physical device acceptance on a disposable machine; fixture receipts are not live provider or device proof."
+    },
+    {
+      "id": "AA-071",
+      "title": "Missing distinction between installed software and hosted application versions",
+      "record": "C3/M16",
+      "source_url": "https://app.notion.com/p/4231aa27632381ea8ad7c936997e8d8a",
+      "status": "fixed and tested",
+      "expected_behavior": "Missing distinction between installed software and hosted application versions",
+      "changes": "Versions dialog distinguishes installed executable, bundled release metadata, compiled server artifact/source revision/dirty state, local authenticated readiness, hosted website and update feed result.",
+      "files": [
+        "desktop/main.cjs",
+        "scripts/native-build-identity.mjs",
+        "src/components/mind/desktop-update-note.tsx"
+      ],
+      "tests": [
+        "scripts/desktop/runtime-contract.test.mjs",
+        "scripts/desktop/launcher-lifecycle.test.mjs",
+        "src/lib/mind/desktop-update.test.ts"
+      ],
+      "evidence_status": "Fixture reproduced; source-confirmed wiring; full TypeScript and standalone server build passed. No physical Windows/device/provider execution.",
+      "still_needed": "Run Windows install/update/recovery/permission and physical device acceptance on a disposable machine; fixture receipts are not live provider or device proof."
+    },
+    {
+      "id": "AA-077",
+      "title": "Execution status can report ran: true even when nothing ran",
+      "record": "C3/M18",
+      "source_url": "https://app.notion.com/p/4231aa27632381ed9ac0e866811a05b0",
+      "status": "fixed and tested",
+      "expected_behavior": [
+        "</b> Submit synthetic operations while emergency stop is active. The resulting machine-readable receipt must identify them as blocked, with zero operating-system invocations. "
+      ],
+      "changes": "PC execution returns recognized/authorized/attempted/completed/verified separately; halted/policy/unsupported actions have ran=false and zero primitive invocations. Local PC receipts short-circuit chat rather than leaking local results into a cloud prompt.",
+      "files": [
+        "src/lib/mind/pc-action-plan.ts",
+        "src/lib/mind/adrian-pc.server.ts",
+        "src/lib/mind/turn.server.ts",
+        "src/routes/api/mind/pc/status.ts"
+      ],
+      "tests": [
+        "src/lib/mind/adrian-pc.test.ts",
+        "src/lib/mind/native-device-client.test.ts"
+      ],
+      "evidence_status": "Fixture reproduced; source-confirmed wiring; full TypeScript and standalone server build passed. No physical Windows/device/provider execution.",
+      "still_needed": "Run Windows install/update/recovery/permission and physical device acceptance on a disposable machine; fixture receipts are not live provider or device proof."
+    },
+    {
+      "id": "AA-078",
+      "title": "Finding a button and clicking a button are not sufficiently separated",
+      "record": "C3/M18",
+      "source_url": "https://app.notion.com/p/4231aa27632381ed9ac0e866811a05b0",
+      "status": "fixed and tested",
+      "expected_behavior": [
+        "</b> Use a synthetic Windows interface containing a uniquely named button. A discovery-only request must return the matching element without invoking it. An explicitly authorized interaction should use a separately validated action. "
+      ],
+      "changes": "Find button is read-only for zero/one/many matches. Explicit named click identifies exact window, re-resolves unique button, and rechecks current permission/halt before invocation.",
+      "files": [
+        "src/lib/mind/adrian-pc.server.ts",
+        "src/lib/mind/pc-action-plan.ts"
+      ],
+      "tests": [
+        "src/lib/mind/adrian-pc.test.ts"
+      ],
+      "evidence_status": "Fixture reproduced; source-confirmed wiring; full TypeScript and standalone server build passed. No physical Windows/device/provider execution.",
+      "still_needed": "Run Windows install/update/recovery/permission and physical device acceptance on a disposable machine; fixture receipts are not live provider or device proof."
+    },
+    {
+      "id": "AA-079",
+      "title": "Multi-action execution lacks a sufficiently structured action plan",
+      "record": "C3/M18",
+      "source_url": "https://app.notion.com/p/4231aa27632381ed9ac0e866811a05b0",
+      "status": "fixed and tested",
+      "expected_behavior": [
+        "</b> Execute a synthetic multi-step plan in which the second action fails. Verify that dependent actions do not proceed and that independent outcomes remain accurately recorded. "
+      ],
+      "changes": "Typed bounded ordered steps replace independent regex effects. Payloads remain opaque; right/double-click dispatch once; failed prerequisites stop dependents; exact targets/permission and per-step receipts retained. Owner path rejects traversal and symlink crossing.",
+      "files": [
+        "src/lib/mind/pc-action-plan.ts",
+        "src/lib/mind/adrian-pc.server.ts"
+      ],
+      "tests": [
+        "src/lib/mind/adrian-pc.test.ts"
+      ],
+      "evidence_status": "Fixture reproduced; source-confirmed wiring; full TypeScript and standalone server build passed. No physical Windows/device/provider execution.",
+      "still_needed": "Run Windows install/update/recovery/permission and physical device acceptance on a disposable machine; fixture receipts are not live provider or device proof."
+    },
+    {
+      "id": "AA-080",
+      "title": "Screenshot analysis can automatically change its model",
+      "record": "C3/M18",
+      "source_url": "https://app.notion.com/p/4231aa27632381ed9ac0e866811a05b0",
+      "status": "fixed and tested",
+      "expected_behavior": [
+        "</b> Simulate an unsupported-image response from the preferred model. Adrian must follow the configured fallback policy and report the actual model used. No additional external request should occur when fallback is prohibited. "
+      ],
+      "changes": "Tools device panel permits exact vision model, one-request external image approval, explicitly named optional fallback and cost notice. Server forbids implicit model fallback and requires actual model receipt match.",
+      "files": [
+        "src/lib/mind/pc-vision.ts",
+        "src/lib/mind/adrian-pc.server.ts",
+        "src/components/mind/native-device-panel.tsx",
+        "src/lib/mind/native-device-client.ts"
+      ],
+      "tests": [
+        "src/lib/mind/pc-vision.test.ts",
+        "src/lib/mind/native-device-client.test.ts"
+      ],
+      "evidence_status": "Fixture reproduced; source-confirmed wiring; full TypeScript and standalone server build passed. No physical Windows/device/provider execution.",
+      "still_needed": "Run Windows install/update/recovery/permission and physical device acceptance on a disposable machine; fixture receipts are not live provider or device proof."
+    },
+    {
+      "id": "AA-081",
+      "title": "Screen analysis needs bounded execution and cancellation",
+      "record": "C3/M18",
+      "source_url": "https://app.notion.com/p/4231aa27632381ed9ac0e866811a05b0",
+      "status": "fixed and tested",
+      "expected_behavior": [
+        "</b> Use a mocked vision provider that never returns. Adrian must terminate its local waiting state within the configured deadline, preserve an accurate execution receipt and avoid initiating an unauthorized retry. "
+      ],
+      "changes": "Single screenshot deadline and cancellation span capture/provider/body; ignored callbacks cannot late-dispatch another model. Unique capture temp files are cleaned; post-dispatch timeout is unknown with no automatic retry. UI prevents replay until device review.",
+      "files": [
+        "src/lib/mind/pc-vision.ts",
+        "src/lib/mind/adrian-pc.server.ts",
+        "src/lib/mind/native-device-client.ts",
+        "src/components/mind/native-device-panel.tsx"
+      ],
+      "tests": [
+        "src/lib/mind/adrian-pc.test.ts",
+        "src/lib/mind/pc-vision.test.ts",
+        "src/lib/mind/native-device-client.test.ts"
+      ],
+      "evidence_status": "Fixture reproduced; source-confirmed wiring; full TypeScript and standalone server build passed. No physical Windows/device/provider execution.",
+      "still_needed": "Run Windows install/update/recovery/permission and physical device acceptance on a disposable machine; fixture receipts are not live provider or device proof."
+    },
+    {
+      "id": "AA-082",
+      "title": "Paired-device status and local execution need clearer separation",
+      "record": "C3/M18",
+      "source_url": "https://app.notion.com/p/4231aa27632381ed9ac0e866811a05b0",
+      "status": "fixed and tested",
+      "expected_behavior": "Paired-device status and local execution need clearer separation",
+      "changes": "Paired online identities are separate from enabled current local executor. POST requires explicit current-device destination, same-origin/loopback and owner authorization; Tools panel shows actual device identity, capability requirements and operation receipts. No remote PC is silently selected.",
+      "files": [
+        "src/routes/api/mind/pc/status.ts",
+        "src/lib/mind/native-policy.server.ts",
+        "src/components/mind/native-device-panel.tsx",
+        "src/lib/mind/native-device-client.ts"
+      ],
+      "tests": [
+        "src/lib/mind/native-device-client.test.ts",
+        "src/lib/mind/pc-capability.test.ts"
+      ],
+      "evidence_status": "Fixture reproduced; source-confirmed wiring; full TypeScript and standalone server build passed. No physical Windows/device/provider execution.",
+      "still_needed": "Run Windows install/update/recovery/permission and physical device acceptance on a disposable machine; fixture receipts are not live provider or device proof."
+    },
+    {
+      "id": "AA-160",
+      "title": "Desktop startup readiness does not establish that the correct application server is operational",
+      "record": "C3/M30",
+      "source_url": "https://app.notion.com/p/4231aa27632381e7aa5ac10724d525c0",
+      "status": "fixed and tested",
+      "expected_behavior": [
+        "</b> Simulate an unrelated local HTTP response, an initialization failure and a successful Adrian startup. Only the correct initialized application should satisfy readiness. "
+      ],
+      "changes": "Dedicated no-store readiness endpoint checks initialized storage and compiled runtime identity, authenticated by per-child secret and fresh challenge. Wrong server/root HTML/login/404/foreign build cannot pass startup. Build artifact ID is compiled into server and packaged beside launcher.",
+      "files": [
+        "desktop/runtime-contract.cjs",
+        "desktop/main.cjs",
+        "src/routes/api/mind/local-readiness.ts",
+        "scripts/native-build-identity.mjs",
+        "scripts/build-desktop-server.mjs",
+        "desktop/check-build-identity.cjs"
+      ],
+      "tests": [
+        "scripts/desktop/runtime-contract.test.mjs",
+        "scripts/desktop/launcher-lifecycle.test.mjs"
+      ],
+      "evidence_status": "Fixture reproduced; source-confirmed wiring; full TypeScript and standalone server build passed. No physical Windows/device/provider execution.",
+      "still_needed": "Run Windows install/update/recovery/permission and physical device acceptance on a disposable machine; fixture receipts are not live provider or device proof."
+    },
+    {
+      "id": "AA-161",
+      "title": "Desktop startup failures fall back to plain-text error screens",
+      "record": "C3/M30",
+      "source_url": "https://app.notion.com/p/4231aa27632381e7aa5ac10724d525c0",
+      "status": "fixed and tested",
+      "expected_behavior": [
+        "</b> Launch a synthetic incomplete package. Verify that Adrian presents actionable diagnostics and recovery options rather than only displaying an error string. "
+      ],
+      "changes": "Structured recovery window provides bounded retry, safe diagnostic copy, repair instructions and explicit exit without deleting/resetting user data. Main renderer is preserved for copying unsaved work.",
+      "files": [
+        "desktop/main.cjs",
+        "desktop/runtime-contract.cjs"
+      ],
+      "tests": [
+        "scripts/desktop/launcher-lifecycle.test.mjs",
+        "scripts/desktop/runtime-contract.test.mjs"
+      ],
+      "evidence_status": "Fixture reproduced; source-confirmed wiring; full TypeScript and standalone server build passed. No physical Windows/device/provider execution.",
+      "still_needed": "Run Windows install/update/recovery/permission and physical device acceptance on a disposable machine; fixture receipts are not live provider or device proof."
+    },
+    {
+      "id": "AA-162",
+      "title": "The local server lacks an explicit post-startup supervision contract in the inspected launcher",
+      "record": "C3/M30",
+      "source_url": "https://app.notion.com/p/4231aa27632381e7aa5ac10724d525c0",
+      "status": "fixed and tested",
+      "expected_behavior": [
+        "</b> Terminate a synthetic local server after successful application startup. Verify that Adrian detects the failure, preserves recoverable work and provides an accurate recovery state. "
+      ],
+      "changes": "Owned child exit/error is supervised after startup; degradation opens recovery with no automatic action retry. Manual restart limited to three per five minutes; renderer stays intact until owner reloads.",
+      "files": [
+        "desktop/main.cjs",
+        "desktop/runtime-contract.cjs"
+      ],
+      "tests": [
+        "scripts/desktop/launcher-lifecycle.test.mjs",
+        "scripts/desktop/runtime-contract.test.mjs"
+      ],
+      "evidence_status": "Fixture reproduced; source-confirmed wiring; full TypeScript and standalone server build passed. No physical Windows/device/provider execution.",
+      "still_needed": "Run Windows install/update/recovery/permission and physical device acceptance on a disposable machine; fixture receipts are not live provider or device proof."
+    },
+    {
+      "id": "AA-163",
+      "title": "Closing the desktop window does not necessarily exit the application",
+      "record": "C3/M30",
+      "source_url": "https://app.notion.com/p/4231aa27632381e7aa5ac10724d525c0",
+      "status": "fixed and tested",
+      "expected_behavior": "Closing the desktop window does not necessarily exit the application",
+      "changes": "Close asks Cancel/Keep running in tray/Exit, optionally remembers owner choice; tray offers show/exit. Quitting flag prevents hide-on-quit loop and closes companion/owned child processes.",
+      "files": [
+        "desktop/main.cjs"
+      ],
+      "tests": [
+        "scripts/desktop/launcher-lifecycle.test.mjs"
+      ],
+      "evidence_status": "Fixture reproduced; source-confirmed wiring; full TypeScript and standalone server build passed. No physical Windows/device/provider execution.",
+      "still_needed": "Run Windows install/update/recovery/permission and physical device acceptance on a disposable machine; fixture receipts are not live provider or device proof."
+    },
+    {
+      "id": "AA-164",
+      "title": "The Windows installer does not permit installation-directory selection",
+      "record": "C3/M30",
+      "source_url": "https://app.notion.com/p/4231aa27632381e7aa5ac10724d525c0",
+      "status": "fixed and tested",
+      "expected_behavior": [
+        "</b> Install a synthetic package into an authorized alternative directory and verify that the local server, engines, updates and uninstall workflow continue functioning. "
+      ],
+      "changes": "Assisted NSIS allows directory choice; custom full installer has directory review and managed-folder marker, avoids forced elevated app launches and preserves separate user-data paths. Release preparation stages a node-server artifact and validates matching clean source identity.",
+      "files": [
+        "desktop/package.json",
+        "desktop/AdriansMind-full.nsi",
+        "desktop/main.cjs",
+        "desktop/check-build-identity.cjs",
+        "scripts/build-desktop-server.mjs"
+      ],
+      "tests": [
+        "scripts/desktop/runtime-contract.test.mjs",
+        "scripts/desktop/full-package.test.mjs"
+      ],
+      "evidence_status": "Fixture reproduced; source-confirmed wiring; full TypeScript and standalone server build passed. No physical Windows/device/provider execution.",
+      "still_needed": "Exercise assisted and custom NSIS directory selection on Windows, including alternate volume, empty target, legacy install with no marker, upgrade/rollback, shortcuts and uninstall preserving profile data. Current custom installer requires empty or explicitly marked target."
+    },
+    {
+      "id": "AA-165",
+      "title": "Desktop distribution needs a verified platform-compatibility matrix",
+      "record": "C3/M30",
+      "source_url": "https://app.notion.com/p/4231aa27632381e7aa5ac10724d525c0",
+      "status": "fixed and tested",
+      "expected_behavior": [
+        "</b> Present synthetic device environments with different operating systems and architectures. Adrian must recommend only compatible packages and must not imply native support that has not been established. "
+      ],
+      "changes": "Packaged capability matrix separates Windows x64 configured implementation from unverified device/release proof; unsupported architectures/platforms and unimplemented mobile apps remain explicit. Runtime feature statuses distinguish code, permission, engine and outcome.",
+      "files": [
+        "desktop/platform-capabilities.json",
+        "src/lib/mind/pc-capability.ts",
+        "src/lib/mind/client-runtime-contract.ts",
+        "src/components/mind/native-device-panel.tsx"
+      ],
+      "tests": [
+        "scripts/desktop/runtime-contract.test.mjs",
+        "src/lib/mind/pc-capability.test.ts",
+        "src/lib/mind/client-runtime-contract.test.ts"
+      ],
+      "evidence_status": "Fixture reproduced; source-confirmed wiring; full TypeScript and standalone server build passed. No physical Windows/device/provider execution.",
+      "still_needed": "Run Windows install/update/recovery/permission and physical device acceptance on a disposable machine; fixture receipts are not live provider or device proof."
+    },
+    {
+      "id": "AA-166",
+      "title": "Offline capabilities require explicit feature-level availability",
+      "record": "C3/M30",
+      "source_url": "https://app.notion.com/p/4231aa27632381e7aa5ac10724d525c0",
+      "status": "fixed and tested",
+      "expected_behavior": [
+        "</b> Disconnect a synthetic test environment from the network. Verify that supported local capabilities remain available, external operations report their connectivity requirements and queued synchronization respects account ownership.\n"
+      ],
+      "changes": "Per-feature offline requirements are exposed. Desktop starts local-only, reads policy on every fetch, blocks external renderer/HTTP/WebSocket requests and local-to-cloud fetch redirects. Chat allows explicit loopback Ollama only; legacy fallback cannot silently call Grok. Shared offline queue remains owner/workspace scoped.",
+      "files": [
+        "desktop/native-network.cjs",
+        "desktop/main.cjs",
+        "src/lib/mind/native-policy.server.ts",
+        "src/lib/mind/turn.server.ts",
+        "desktop/local-server.mjs",
+        "src/lib/mind/client-runtime-contract.ts"
+      ],
+      "tests": [
+        "scripts/desktop/runtime-contract.test.mjs",
+        "src/lib/mind/client-runtime-contract.test.ts"
+      ],
+      "evidence_status": "Fixture reproduced; source-confirmed wiring; full TypeScript and standalone server build passed. No physical Windows/device/provider execution.",
+      "still_needed": "Test offline Windows resources/engines and account reconnect on device. Local-only is the app provider/renderer transport policy; it is not an OS firewall for explicitly requested shell commands or external local-model services."
+    },
+    {
+      "id": "AA-167",
+      "title": "Native mobile readiness needs more than responsive browser layouts",
+      "record": "C3/M30",
+      "source_url": "https://app.notion.com/p/4231aa27632381e7aa5ac10724d525c0",
+      "status": "blocked with the exact missing step",
+      "expected_behavior": [
+        "</b> Execute the same synthetic conversation and workspace operations across supported web, Windows and future mobile clients. Verify consistent data ownership, operation semantics and recovery behavior. "
+      ],
+      "changes": "Implemented portable account/workspace/revision/idempotency contract and durable pre-dispatch queue claims, unknown-outcome quarantine and identical web/Windows/future-mobile adapter fixtures. Native iOS/Android shell, secure-store/media/notification adapters and signed device installation remain unimplemented; this source baseline contains no native mobile app/toolchain.",
+      "files": [
+        "src/lib/mind/client-runtime-contract.ts",
+        "desktop/platform-capabilities.json",
+        "src/routes/api/mind/pc/status.ts"
+      ],
+      "tests": [
+        "src/lib/mind/client-runtime-contract.test.ts"
+      ],
+      "evidence_status": "Fixture reproduced; source-confirmed wiring; full TypeScript and standalone server build passed. No physical Windows/device/provider execution.",
+      "still_needed": "Create platform-specific iOS/Android application containers and adapters against this shared contract in a native implementation phase, then compile/sign and test real-device lifecycle, secure auth, capture, sharing, notifications, installation and updates. No mobile readiness can be claimed from these fixtures."
+    }
+  ]
+}

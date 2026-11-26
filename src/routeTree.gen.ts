@@ -23,6 +23,7 @@ import { Route as AuthCallbackRouteImport } from './routes/auth/callback'
 import { Route as ApiAuthSplatRouteImport } from './routes/api/auth/$'
 import { Route as ApiMindAgentRouteImport } from './routes/api/mind/agent'
 import { Route as ApiMindDesktopUpdateRouteImport } from './routes/api/mind/desktop-update'
+import { Route as ApiMindLocalReadinessRouteImport } from './routes/api/mind/local-readiness'
 import { Route as ApiMindProvidersRouteImport } from './routes/api/mind/providers'
 import { Route as ApiMindReceiptsRouteImport } from './routes/api/mind/receipts'
 import { Route as ApiMindSkillsRouteImport } from './routes/api/mind/skills'
@@ -158,6 +159,11 @@ const ApiMindAgentRoute = ApiMindAgentRouteImport.update({
 const ApiMindDesktopUpdateRoute = ApiMindDesktopUpdateRouteImport.update({
   id: '/api/mind/desktop-update',
   path: '/api/mind/desktop-update',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ApiMindLocalReadinessRoute = ApiMindLocalReadinessRouteImport.update({
+  id: '/api/mind/local-readiness',
+  path: '/api/mind/local-readiness',
   getParentRoute: () => rootRouteImport,
 } as any)
 const ApiMindProvidersRoute = ApiMindProvidersRouteImport.update({
@@ -516,6 +522,7 @@ export interface FileRoutesByFullPath {
   '/api/auth/$': typeof ApiAuthSplatRoute
   '/api/mind/agent': typeof ApiMindAgentRoute
   '/api/mind/desktop-update': typeof ApiMindDesktopUpdateRoute
+  '/api/mind/local-readiness': typeof ApiMindLocalReadinessRoute
   '/api/mind/providers': typeof ApiMindProvidersRoute
   '/api/mind/receipts': typeof ApiMindReceiptsRoute
   '/api/mind/skills': typeof ApiMindSkillsRoute
@@ -598,6 +605,7 @@ export interface FileRoutesByTo {
   '/api/auth/$': typeof ApiAuthSplatRoute
   '/api/mind/agent': typeof ApiMindAgentRoute
   '/api/mind/desktop-update': typeof ApiMindDesktopUpdateRoute
+  '/api/mind/local-readiness': typeof ApiMindLocalReadinessRoute
   '/api/mind/providers': typeof ApiMindProvidersRoute
   '/api/mind/receipts': typeof ApiMindReceiptsRoute
   '/api/mind/skills': typeof ApiMindSkillsRoute
@@ -681,6 +689,7 @@ export interface FileRoutesById {
   '/api/auth/$': typeof ApiAuthSplatRoute
   '/api/mind/agent': typeof ApiMindAgentRoute
   '/api/mind/desktop-update': typeof ApiMindDesktopUpdateRoute
+  '/api/mind/local-readiness': typeof ApiMindLocalReadinessRoute
   '/api/mind/providers': typeof ApiMindProvidersRoute
   '/api/mind/receipts': typeof ApiMindReceiptsRoute
   '/api/mind/skills': typeof ApiMindSkillsRoute
@@ -765,6 +774,7 @@ export interface FileRouteTypes {
     | '/api/auth/$'
     | '/api/mind/agent'
     | '/api/mind/desktop-update'
+    | '/api/mind/local-readiness'
     | '/api/mind/providers'
     | '/api/mind/receipts'
     | '/api/mind/skills'
@@ -847,6 +857,7 @@ export interface FileRouteTypes {
     | '/api/auth/$'
     | '/api/mind/agent'
     | '/api/mind/desktop-update'
+    | '/api/mind/local-readiness'
     | '/api/mind/providers'
     | '/api/mind/receipts'
     | '/api/mind/skills'
@@ -929,6 +940,7 @@ export interface FileRouteTypes {
     | '/api/auth/$'
     | '/api/mind/agent'
     | '/api/mind/desktop-update'
+    | '/api/mind/local-readiness'
     | '/api/mind/providers'
     | '/api/mind/receipts'
     | '/api/mind/skills'
@@ -1012,6 +1024,7 @@ export interface RootRouteChildren {
   ApiAuthSplatRoute: typeof ApiAuthSplatRoute
   ApiMindAgentRoute: typeof ApiMindAgentRoute
   ApiMindDesktopUpdateRoute: typeof ApiMindDesktopUpdateRoute
+  ApiMindLocalReadinessRoute: typeof ApiMindLocalReadinessRoute
   ApiMindProvidersRoute: typeof ApiMindProvidersRoute
   ApiMindReceiptsRoute: typeof ApiMindReceiptsRoute
   ApiMindSkillsRoute: typeof ApiMindSkillsRoute
@@ -1178,6 +1191,13 @@ declare module '@tanstack/react-router' {
       path: '/api/mind/desktop-update'
       fullPath: '/api/mind/desktop-update'
       preLoaderRoute: typeof ApiMindDesktopUpdateRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/mind/local-readiness': {
+      id: '/api/mind/local-readiness'
+      path: '/api/mind/local-readiness'
+      fullPath: '/api/mind/local-readiness'
+      preLoaderRoute: typeof ApiMindLocalReadinessRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/api/mind/providers': {
@@ -1660,6 +1680,7 @@ const rootRouteChildren: RootRouteChildren = {
   ApiAuthSplatRoute: ApiAuthSplatRoute,
   ApiMindAgentRoute: ApiMindAgentRoute,
   ApiMindDesktopUpdateRoute: ApiMindDesktopUpdateRoute,
+  ApiMindLocalReadinessRoute: ApiMindLocalReadinessRoute,
   ApiMindProvidersRoute: ApiMindProvidersRoute,
   ApiMindReceiptsRoute: ApiMindReceiptsRoute,
   ApiMindSkillsRoute: ApiMindSkillsRoute,

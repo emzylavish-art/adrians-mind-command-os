@@ -18,7 +18,15 @@
       {
         "from": "../public/desktop-update.json",
         "to": "desktop-update.json"
-      }
+      },
+      "update-contract.cjs",
+      "update-download.cjs",
+      "installer-auth.cjs",
+      "runtime-contract.cjs",
+      "publisher-trust.json",
+      "platform-capabilities.json",
+      "native-network.cjs",
+      "runtime-build.json"
     ],
     "extraResources": [
       {
@@ -47,12 +55,12 @@
           ]
         }
       ],
-      "signAndEditExecutable": false
+      "signAndEditExecutable": true
     },
     "nsis": {
-      "oneClick": true,
+      "oneClick": false,
       "perMachine": false,
-      "allowToChangeInstallationDirectory": false,
+      "allowToChangeInstallationDirectory": true,
       "artifactName": "AdriansMind-Setup-Full.${ext}",
       "shortcutName": "Adrian's Mind",
       "uninstallDisplayName": "Adrian's Mind"
@@ -60,7 +68,9 @@
     "directories": {
       "output": "dist"
     },
-    "afterPack": "./check-windows-resources.cjs"
+    "afterPack": "./check-windows-resources.cjs",
+    "beforePack": "./check-build-identity.cjs",
+    "forceCodeSigning": true
   },
   "devDependencies": {
     "electron": "^33.4.11",
