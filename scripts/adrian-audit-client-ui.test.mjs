@@ -41,6 +41,7 @@ test("AA006/007/008: actual location effects preserve first Back entry, Settings
   const updateLocation = (path) => Object.assign(location, { pathname: new URL(path, location.href).pathname, search: new URL(path, location.href).search, hash: new URL(path, location.href).hash, href: new URL(path, location.href).href });
   const listeners = new Map();
   const frames = [];
+  let initialLocationResolved = false;
   const state = { view: "command", settingsPane: null, activeId: null, shareProjectId: null, openFileId: null, shareBotId: null };
   const context = {
     ready: true, applyingLocation: { current: false }, locationHistory: { current: "replace" },
@@ -53,6 +54,7 @@ test("AA006/007/008: actual location effects preserve first Back entry, Settings
       push: (path) => { entries.splice(index + 1); entries.push(path); index++; updateLocation(path); },
       replace: (path) => { entries[index] = path; updateLocation(path); },
     } },
+    setInitialLocationResolved: (value) => { initialLocationResolved = value; },
     setViewState: (value) => { state.view = value; }, setSettingsPane: (value) => { state.settingsPane = value; },
     setActiveId: (value) => { state.activeId = value; }, setShareProjectId: (value) => { state.shareProjectId = value; },
     setShareBotId: (value) => { state.shareBotId = value; }, setOpenFileId: (value) => { state.openFileId = value; },
@@ -62,6 +64,7 @@ test("AA006/007/008: actual location effects preserve first Back entry, Settings
   const flush = () => { while (frames.length) frames.shift()(); };
   const back = () => { index--; updateLocation(entries[index]); listeners.get("popstate")(); write(); flush(); };
   const cleanup = effectContaining("const applyLocation =", context).run();
+  assert.equal(initialLocationResolved, true);
   flush();
   state.view = "settings"; write();
   assert.deepEqual(entries, ["/", "/?section=settings"]);
