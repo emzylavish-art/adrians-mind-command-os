@@ -401,7 +401,7 @@ describe("custom connection blueprint regressions", { concurrency: false }, () =
         if (!saved.ok) continue;
         const before = calls;
         const result = await callCustomConnection({ db, userId: "owner", id: saved.connection.id, operation: "status", confirmed: true, fetch });
-        assert.equal(calls - before, 2, "one initialize and one call, not a retry");
+        assert.equal(calls - before, 3, "one initialize, definition verification, and one call; no retry");
         assert.equal(result.ok, false);
         assert.equal(result.status, "error");
         assert.equal(result.text, "The call failed.");

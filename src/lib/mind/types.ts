@@ -1,6 +1,9 @@
+import type { PdfEvidenceIndex } from "./pdf-evidence.ts";
+import type { ExecutionEvidence } from "./execution-evidence.ts";
 import type { PersonalityId } from "./personalities/index.ts";
 import type { BotModel } from "./bot-model.ts";
 import type { ModelTier } from "./model-tiers.ts";
+import type { HelperReceipt } from "./model-consult.ts";
 
 import type {
   AgentDefinition,
@@ -19,6 +22,12 @@ export type { AgentDefinition, AgentRun, BrowserSessionRecord, DeploymentRecord,
 export type Autonomy = "ask" | "automatic";
 
 export type MsgImage = {
+  assetId?: string;
+  parentAssetId?: string;
+  operationId?: string;
+  createdAt?: string;
+  editPrompt?: string;
+  preferred?: boolean;
   origin?: "attached" | "camera" | "generated" | "edited";
   /** Inline data URL when hydrated for display/send. May be omitted in persisted JSON when blobId is set. */
   dataUrl?: string;
@@ -29,6 +38,9 @@ export type MsgImage = {
 };
 
 export type Msg = {
+  helperReceipts?: HelperReceipt[];
+  executionId?: string;
+  executionEvidence?: ExecutionEvidence;
   id: string;
   role: "user" | "assistant";
   content: string;
@@ -48,9 +60,22 @@ export type Msg = {
   savedMemoryId?: string | null;
   /** Temporary https link returned by the video service. */
   videoUrl?: string;
+  videoOperationId?: string;
+  videoRetention?: "provider-temporary" | "local-download" | "account-storage";
+  videoExpiresAt?: string | null;
 };
 
 export type Retrieval = { at: string; ids: string[] };
+
+/** Independent context controls. Missing legacy fields retain their documented defaults. */
+export type ChatContextPolicy = {
+  history?: boolean;
+  botKnowledge?: boolean;
+  projectDocuments?: boolean;
+  projectConversations?: boolean;
+  research?: boolean;
+  saveMemories?: boolean;
+};
 
 export type Chat = {
   notionWorkspaceId?: string;
@@ -59,8 +84,12 @@ export type Chat = {
   botProvider?: NonNullable<BotModel["chatProvider"]>;
   botTier?: ModelTier;
   botKnowledge?: string;
+  botRevision?: number;
+  /** Stable references explain copied document text without implying deletion erases history. */
+  documentSources?: { fileId: string; revision: string; name: string; messageId?: string }[];
   title: string;
   memory: "off" | "on";
+  contextPolicy?: ChatContextPolicy;
   temporary: boolean;
   autonomy: Autonomy;
   personalityId?: PersonalityId;
@@ -95,9 +124,11 @@ export type Project = {
   name: string;
   description: string;
   createdAt: string;
+  archived?: boolean;
 };
 
 export type UsageEntry = {
+  executionId?: string;
   id: string;
   chatId: string;
   at: string;
@@ -119,6 +150,7 @@ export type AuditEntry = {
 };
 
 export type LocalFile = {
+  evidenceIndex?: PdfEvidenceIndex;
   id: string;
   name: string;
   text: string;
@@ -126,6 +158,13 @@ export type LocalFile = {
   partial?: boolean;
   projectId: string | null;
   createdAt: string;
+  textSha256?: string;
+  revision?: number;
+  previousVersionId?: string;
+  archived?: boolean;
+  retrievalDisabled?: boolean;
+  original?: { id: string; sha256: string; bytes: number; mime: string; storage: "browser" };
+  extraction?: { method: "plain-text" | "pdf-text" | "legacy"; extractedCharacters: number; retainedCharacters: number; coverage: string; at: string };
 };
 
 export type Workspace = {
@@ -147,6 +186,19 @@ export type Workspace = {
   schedules: ScheduleJob[];
   pins: FleetPin[];
   browserSessions: BrowserSessionRecord[];
+  syncConflicts?: WorkspaceConflict[];
+  toolPermissions?: Record<string, boolean>;
+};
+
+/** Both variants of a concurrent edit, preserved until the owner reviews them. */
+export type WorkspaceJsonValue = null | boolean | number | string | WorkspaceJsonValue[] | { [key: string]: WorkspaceJsonValue };
+export type WorkspaceConflict = {
+  id: string;
+  collection: string;
+  recordId: string;
+  field: string;
+  local: WorkspaceJsonValue;
+  remote: WorkspaceJsonValue;
 };
 
 export type MemoryNote = { id: string; text: string };

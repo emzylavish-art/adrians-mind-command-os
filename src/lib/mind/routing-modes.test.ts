@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import type { LogicRouteId } from "./logic-routes.ts";
-import { planRouting, readRoutingMode, readRoutingPanel, saveRating, writeRoutingMode, writeRoutingPanel, type RouteSeat } from "./routing-modes.ts";
+import { planRouting, readRatings, readRoutingMode, readRoutingPanel, saveRating, writeRoutingMode, writeRoutingPanel, type RouteSeat } from "./routing-modes.ts";
 
 function memory() {
   const store = new Map<string, string>();
@@ -58,4 +58,20 @@ describe("routing modes", () => {
     assert.equal(saved[0]?.score, 4);
     assert.equal(saved[0]?.model, "grok-2");
   });
+  it("AA108 retains subjective evaluation evidence against the actual execution without changing routing", () => {
+    const storage = memory();
+    writeRoutingMode(storage, "D");
+    writeRoutingPanel(storage, ["astra", "sol"]);
+    saveRating(storage, { messageId: "response", score: 5, model: "requested-model", reportedModel: "reported-model", executionId: "turn:answer:1", taskCategory: "conversation", provider: "fixture-provider", evidenceType: "subjective", mode: "D", at: "2026-11-10T00:00:00.000Z" }, "owner-a");
+    const [saved] = readRatings(storage, "owner-a");
+    assert.equal(saved.evidenceType, "subjective");
+    assert.equal(saved.executionId, "turn:answer:1");
+    assert.equal(saved.reportedModel, "reported-model");
+    assert.equal(saved.model, "requested-model");
+    assert.equal(saved.taskCategory, "conversation");
+    assert.deepEqual(readRatings(storage, "owner-b"), []);
+    assert.equal(readRoutingMode(storage), "D");
+    assert.deepEqual(readRoutingPanel(storage), ["astra", "sol"]);
+  });
+
 });

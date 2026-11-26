@@ -12,6 +12,12 @@ export type MultimodalContentPart = TextContentPart | ImageUrlContentPart;
 export type ChatContent = string | MultimodalContentPart[];
 
 export type ImageAttachment = {
+  assetId?: string;
+  parentAssetId?: string;
+  operationId?: string;
+  createdAt?: string;
+  editPrompt?: string;
+  preferred?: boolean;
   origin?: "attached" | "camera" | "generated" | "edited";
   /** data:image/...;base64,... */
   dataUrl: string;

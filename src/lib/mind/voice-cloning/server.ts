@@ -5,9 +5,10 @@
 import { createServerFn } from "@tanstack/react-start";
 import { authMiddleware } from "@/lib/auth/middleware";
 import { createVoiceCloningService } from "./service.ts";
+import { authorizeExternalResource } from "../external-resource-call.server.ts";
 
 function svc() {
-  return createVoiceCloningService();
+  return createVoiceCloningService({ authorize: ({ owner, provider, operation, free }) => authorizeExternalResource(owner, provider, `voice-clone:${operation}`, undefined, free) });
 }
 
 export const vcsProviderStatus = createServerFn({ method: "GET" }).handler(async () => {

@@ -41,6 +41,7 @@ const gmailProvider: OAuthProvider = {
     revokeUrl: "https://oauth2.googleapis.com/revoke",
   },
   scopes: [
+    "openid", "email",
     "https://www.googleapis.com/auth/gmail.readonly",
     "https://www.googleapis.com/auth/gmail.send",
   ],
@@ -75,7 +76,7 @@ const googleCalendarProvider: OAuthProvider = {
     tokenUrl: "https://oauth2.googleapis.com/token",
     revokeUrl: "https://oauth2.googleapis.com/revoke",
   },
-  scopes: ["https://www.googleapis.com/auth/calendar.events"],
+  scopes: ["openid", "email", "https://www.googleapis.com/auth/calendar.events"],
   pkce: true,
   tokenAuth: "body",
   revokeStyle: "form_token",
@@ -107,7 +108,7 @@ const googleDriveProvider: OAuthProvider = {
     tokenUrl: "https://oauth2.googleapis.com/token",
     revokeUrl: "https://oauth2.googleapis.com/revoke",
   },
-  scopes: ["https://www.googleapis.com/auth/drive.readonly"],
+  scopes: ["openid", "email", "https://www.googleapis.com/auth/drive.readonly"],
   pkce: true,
   tokenAuth: "body",
   revokeStyle: "form_token",
@@ -238,6 +239,7 @@ const youtubeProvider: OAuthProvider = {
     revokeUrl: "https://oauth2.googleapis.com/revoke",
   },
   scopes: [
+    "openid", "email",
     "https://www.googleapis.com/auth/youtube.readonly",
     "https://www.googleapis.com/auth/youtube.force-ssl",
     "https://www.googleapis.com/auth/youtube.upload",

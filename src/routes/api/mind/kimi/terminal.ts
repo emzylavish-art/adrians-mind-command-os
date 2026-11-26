@@ -4,7 +4,7 @@ import { requireUserId } from "@/lib/auth/verify.server";
 import { assertSameOrigin } from "@/lib/mind/connectors/oauth-csrf";
 import { haltIsOn } from "@/lib/mind/halt.server";
 import { createPcApproval } from "@/lib/mind/pc-pairing/approvals";
-import { onlineAgents } from "@/lib/mind/pc-pairing/store";
+import { onlineAgents } from "@/lib/mind/pc-pairing/coordination.server";
 import { createHostedTerminalApproval, runHostedTerminal } from "@/lib/mind/kimi/hosted/shell.server.ts";
 
 function json(body: unknown, status = 200) {
@@ -22,8 +22,13 @@ export const Route = createFileRoute("/api/mind/kimi/terminal")({
           const bearer = authorization?.toLowerCase().startsWith("bearer ") ? authorization.slice(7).trim() : undefined;
           const ownerId = await requireUserId(bearer);
           if (await haltIsOn(ownerId)) return json({ ok: false, error: "Emergency stop is on. Terminal approval was not created." }, 403);
-          const agent = onlineAgents(ownerId)[0];
-          const body = (await request.json().catch(() => ({}))) as { command?: unknown; confirm?: unknown; approvalId?: unknown; token?: unknown };
+          const body = (await request.json().catch(() => ({}))) as { command?: unknown; confirm?: unknown; approvalId?: unknown; token?: unknown; agentId?: unknown };
+          const online = await onlineAgents(ownerId);
+          const selected = typeof body.agentId === "string" ? body.agentId : "";
+          if (!selected && online.length > 1) return json({ ok: false, error: "Choose the intended computer. No default target was substituted." }, 409);
+          const agent = selected === "hosted" ? undefined : selected ? online.find((item) => item.id === selected) : online[0];
+          if (selected && selected !== "hosted" && !agent) return json({ ok: false, error: "The selected computer is unavailable. No replacement target was chosen." }, 409);
+          if (agent?.capabilities && (!agent.capabilities.shell || agent.capabilities.busy)) return json({ ok: false, error: "The selected computer is not ready for shell execution." }, 409);
           const command = typeof body.command === "string" ? body.command.trim().slice(0, 500) : "";
           if (!command) return json({ ok: false, error: "command is required." }, 400);
           if (!agent) {

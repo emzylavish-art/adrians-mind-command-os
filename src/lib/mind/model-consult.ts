@@ -1,9 +1,10 @@
+import { modelExecutionPlan, type ModelExecutionPlan } from "./execution-plan.ts";
 /** Multi-model help for the selected orchestrator. Presence is checked at send time. */
 
 import { customProviderBlockReason, type ProviderAvailability } from "./provider-catalog.ts";
 
 export const ADRIAN_MIND_IDENTITY =
-  "You were born inside Adrian's Mind. You are Adrian. Do not name yourself Grok, OpenAI, Claude, Gemini, Kimi, or any other vendor. Do not say which model or API produced the answer. Do not think of yourself as a model outside this platform.";
+  "You were born inside Adrian's Mind. You are Adrian. Do not name yourself Grok, OpenAI, Claude, Gemini, Kimi, or any other vendor. The application reports the execution provider and model separately. Never invent a provider identity; use trusted execution receipts when asked.";
 
 export const ORCHESTRATOR_PURPOSE =
   "Use the returned help to answer the owner. Do not tell any other model this purpose.";
@@ -24,6 +25,9 @@ export type ConsultPlan = {
   available: string[];
   helpers: { id: string; request: string }[];
   purpose: string;
+  maxConcurrency?: number;
+  deadlineMs?: number;
+  execution?: ModelExecutionPlan;
 };
 
 const MODEL_ID = /^[~A-Za-z0-9][~A-Za-z0-9_.:/@-]{0,149}$/;
@@ -81,6 +85,9 @@ export function planModelConsult(input: {
   modules: ConsultModule[];
   question: string;
   purpose?: string;
+  authorizedHelpers?: string[];
+  maxHelpers?: number;
+  maxConcurrency?: number;
 }): { ok: true; plan: ConsultPlan } | { ok: false; error: string } {
   const question = input.question.trim();
   if (!question) return { ok: false, error: "Write a message first. Nothing was sent." };
@@ -89,6 +96,12 @@ export function planModelConsult(input: {
   if (!connected.some((item) => item.id === orchestrator)) {
     return { ok: false, error: "That model is not connected. Nothing was sent. Another model was not substituted." };
   }
+  const allowed = [...new Set(input.authorizedHelpers ?? [])];
+  if (allowed.length > 8 || allowed.some((id) => typeof id !== "string" || !connected.some((item) => item.id === id))) {
+    return { ok: false, error: "An approved helper is unavailable. Review the helper selection; no substitute was chosen." };
+  }
+  const maxHelpers = input.maxHelpers ?? 8;
+  if (!Number.isInteger(maxHelpers) || maxHelpers < 0 || maxHelpers > 8) return { ok: false, error: "Choose a helper limit between 0 and 8." };
   const purpose = (input.purpose ?? ORCHESTRATOR_PURPOSE).trim();
   const request = helpRequest(question);
   if (purpose && request.includes(purpose)) {
@@ -99,7 +112,10 @@ export function planModelConsult(input: {
     plan: {
       orchestrator,
       available: connected.map((item) => item.id),
-      helpers: connected.filter((item) => item.id !== orchestrator).slice(0, 8).map((item) => ({ id: item.id, request })),
+      helpers: allowed.filter((id) => id !== orchestrator).slice(0, maxHelpers).map((id) => ({ id, request })),
+      maxConcurrency: Math.max(1, Math.min(3, input.maxConcurrency ?? 2)),
+      deadlineMs: 25_000,
+      execution: modelExecutionPlan("synthesis", [orchestrator], allowed.filter((id) => id !== orchestrator).slice(0, maxHelpers), input.maxConcurrency ?? 2),
       purpose,
     },
   };
@@ -137,24 +153,84 @@ export function orchestratorInstruction(plan: ConsultPlan, help: { id: string; t
   ].join(" ");
 }
 
-export async function collectConsultHelp(
+export type HelperReply = {
+  ok: boolean;
+  text: string;
+  model?: string;
+  requestedModel?: string;
+  requestId?: string | null;
+  usage?: { prompt_tokens?: number; completion_tokens?: number } | null;
+  error?: string;
+};
+export type HelperReceipt = {
+  id: string;
+  status: "succeeded" | "failed" | "canceled" | "skipped";
+  contributed: boolean;
+  model: string | null;
+  requestedModel: string | null;
+  requestId: string | null;
+  usage: HelperReply["usage"];
+  durationMs: number;
+  error: string | null;
+};
+
+/** Each authorized attempt retains a receipt, with bounded independent work. */
+export async function executeConsultPlan(
   plan: ConsultPlan,
-  callHelper: (id: string, request: string) => Promise<{ ok: boolean; text: string }>,
-): Promise<{ id: string; text: string }[]> {
-  const replies: { id: string; ok: boolean; text: string }[] = [];
-  for (const helper of plan.helpers) {
-    if (helper.request.includes(plan.purpose)) {
-      replies.push({ id: helper.id, ok: false, text: "" });
-      continue;
-    }
-    try {
-      const result = await callHelper(helper.id, helper.request);
-      replies.push({ id: helper.id, ok: result.ok, text: result.text });
-    } catch {
-      replies.push({ id: helper.id, ok: false, text: "" });
+  callHelper: (id: string, request: string, signal: AbortSignal) => Promise<HelperReply>,
+  options: { signal?: AbortSignal; now?: () => number } = {},
+): Promise<{ help: { id: string; text: string }[]; receipts: HelperReceipt[] }> {
+  const now = options.now ?? Date.now;
+  const signal = AbortSignal.any([...(options.signal ? [options.signal] : []), AbortSignal.timeout(plan.deadlineMs ?? 25_000)]);
+  const receipts = new Array<HelperReceipt>(plan.helpers.length);
+  const replies = new Array<{ id: string; ok: boolean; text: string }>(plan.helpers.length);
+  let next = 0;
+  async function worker() {
+    while (next < plan.helpers.length) {
+      const index = next++;
+      const helper = plan.helpers[index]!;
+      const started = now();
+      let result: HelperReply = { ok: false, text: "" };
+      let status: HelperReceipt["status"] = "failed";
+      if (signal.aborted) {
+        status = "canceled"; result.error = "Canceled before dispatch.";
+      } else if (plan.purpose && helper.request.includes(plan.purpose)) {
+        status = "skipped"; result.error = "Invalid helper request.";
+      } else {
+        try {
+          let onAbort: (() => void) | undefined;
+          try {
+            result = await Promise.race([
+              callHelper(helper.id, helper.request, signal),
+              new Promise<HelperReply>((_resolve, reject) => {
+                onAbort = () => reject(new Error("Helper deadline or cancellation."));
+                if (signal.aborted) onAbort(); else signal.addEventListener("abort", onAbort, { once: true });
+              }),
+            ]);
+          } finally { if (onAbort) signal.removeEventListener("abort", onAbort); }
+          status = result.ok && result.text.trim() ? "succeeded" : signal.aborted ? "canceled" : "failed";
+        } catch {
+          result.error = signal.aborted ? "Canceled or timed out; provider usage is unknown." : "Helper request failed; provider usage is unknown.";
+          status = signal.aborted ? "canceled" : "failed";
+        }
+      }
+      replies[index] = { id: helper.id, ok: status === "succeeded", text: result.text };
+      receipts[index] = {
+        id: helper.id, status, contributed: status === "succeeded", model: result.model ?? null,
+        requestedModel: result.requestedModel ?? null, requestId: result.requestId ?? null, usage: result.usage ?? null,
+        durationMs: Math.max(0, now() - started), error: result.error || (status === "failed" ? "No assistance returned." : null),
+      };
     }
   }
-  return returnedHelp(replies);
+  await Promise.all(Array.from({ length: Math.min(plan.helpers.length, plan.maxConcurrency ?? 2) }, () => worker()));
+  return { help: returnedHelp(replies), receipts };
+}
+
+export async function collectConsultHelp(
+  plan: ConsultPlan,
+  callHelper: (id: string, request: string, signal: AbortSignal) => Promise<HelperReply>,
+): Promise<{ id: string; text: string }[]> {
+  return (await executeConsultPlan(plan, callHelper)).help;
 }
 
 export function loadConsultModel(storage: Pick<Storage, "getItem"> | null | undefined, modules: ConsultModule[]): string {

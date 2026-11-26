@@ -32,11 +32,15 @@ type SpawnFn = (
   args: string[],
   env: NodeJS.ProcessEnv,
   timeoutMs: number,
+  signal?: AbortSignal,
 ) => Promise<{ code: number | null; stdout: string; stderr: string; timedOut: boolean }>;
 
-function spawnProcess(command: string, args: string[], env: NodeJS.ProcessEnv, timeoutMs: number) {
+function spawnProcess(command: string, args: string[], env: NodeJS.ProcessEnv, timeoutMs: number, signal?: AbortSignal) {
   return new Promise<{ code: number | null; stdout: string; stderr: string; timedOut: boolean }>((resolve) => {
+    if (signal?.aborted) { resolve({ code: null, stdout: "", stderr: "Canceled before dispatch.", timedOut: false }); return; }
     const child = spawn(command, args, { cwd: ROOT, env, stdio: ["ignore", "pipe", "pipe"] });
+    const abort = () => { child.kill("SIGTERM"); };
+    signal?.addEventListener("abort", abort, { once: true });
     let stdout = "";
     let stderr = "";
     let timedOut = false;
@@ -54,10 +58,12 @@ function spawnProcess(command: string, args: string[], env: NodeJS.ProcessEnv, t
     });
     child.on("error", () => {
       clearTimeout(timer);
+      signal?.removeEventListener("abort", abort);
       resolve({ code: null, stdout, stderr, timedOut });
     });
     child.on("close", (code) => {
       clearTimeout(timer);
+      signal?.removeEventListener("abort", abort);
       resolve({ code, stdout, stderr, timedOut });
     });
   });
@@ -148,18 +154,20 @@ export async function invokeProviderRouter(input: {
   endpoint?: string | null;
   env?: NodeJS.ProcessEnv;
   spawnImpl?: SpawnFn;
+  signal?: AbortSignal;
 }): Promise<AdapterInvokeResult> {
   const safeEnv = childEnv(input.env ?? process.env, input.spec.provider, input.endpoint ?? null);
   const args = [ADAPTER, ...adapterCliArgs(input.spec)];
   let result: { code: number | null; stdout: string; stderr: string; timedOut: boolean };
   try {
-    result = await (input.spawnImpl ?? spawnProcess)("python3", args, safeEnv, (input.spec.timeout_seconds + 5) * 1000);
+    result = await (input.spawnImpl ?? spawnProcess)("python3", args, safeEnv, (input.spec.timeout_seconds + 5) * 1000, input.signal);
   } catch {
     return { ok: false, error: "The model route could not be started. Nothing was sent." };
   }
   if (leakedSecret(result.stdout, safeEnv) || leakedSecret(result.stderr, safeEnv)) {
     return { ok: false, error: "The model route returned an unsafe response. Nothing was saved as a success." };
   }
+  if (input.signal?.aborted) return { ok: false, error: "The model route was canceled. Provider outcome may be unknown." };
   if (result.timedOut) return { ok: false, error: "The model route timed out. Nothing was saved as a success." };
   if (result.code !== 0) return { ok: false, error: adapterError(result.stdout, result.stderr) };
   try {
@@ -185,6 +193,7 @@ export async function runLogicRoute(input: {
   messages: AdapterMessage[];
   env?: NodeJS.ProcessEnv;
   invoke?: typeof invokeProviderRouter;
+  signal?: AbortSignal;
   inspect?: typeof inspectLogicRoutes;
 }): Promise<
   | {
@@ -211,7 +220,7 @@ export async function runLogicRoute(input: {
     };
   }
   const spec = modelGenerateArgs(input.route, input.messages, view.model);
-  const invoked = await (input.invoke ?? invokeProviderRouter)({ spec, endpoint: view.endpoint, env });
+  const invoked = await (input.invoke ?? invokeProviderRouter)({ spec, endpoint: view.endpoint, env, signal: input.signal });
   if (!invoked.ok) return { ok: false, called: true, missing: [], error: invoked.error };
   return {
     ok: true,

@@ -1,0 +1,236 @@
+{
+  "schemaVersion": 1,
+  "candidateBase": "18d5b9364e6bdcfec028eeccf56fe596946ed8ce",
+  "recordedAt": "2026-11-26T03:49:07.623731+00:00",
+  "note": "Scoped C1 local verification. Passed means the explicitly stated fixture/environment scope, not full live product qualification. The canonical full-product inventory remains a conservative template.",
+  "features": [
+    {
+      "id": "NAV",
+      "title": "Multi-surface navigation",
+      "status": "implemented with limitations",
+      "verification": {
+        "state": "passed",
+        "revision": "b17e90c5728f7f1a9f303f703fcf073cbdd2175e",
+        "environment": "local-browser-chromium",
+        "executedAt": "2026-11-26T03:44:44.359Z",
+        "evidence": [
+          "docs/audits/evidence/c1-local/report.json",
+          "docs/audits/evidence/c1-local/transitions.json"
+        ],
+        "blockers": [
+          "Only the14states and11transitions listed in the reports. Other routes, authenticated accounts and physical devices are not implied."
+        ]
+      }
+    },
+    {
+      "id": "WORKER",
+      "title": "Agent execution and worker lifecycle",
+      "status": "implemented with limitations",
+      "verification": {
+        "state": "passed",
+        "revision": "b17e90c5728f7f1a9f303f703fcf073cbdd2175e",
+        "environment": "unit-fixture",
+        "executedAt": "2026-11-26T03:49:08.258491+00:00",
+        "evidence": [
+          "docs/audits/c1-validation.json",
+          "docs/audits/evidence/c1-tests.json"
+        ],
+        "blockers": [
+          "Repeat the affected checks after cross-branch integration. Real service/device/deployment verification remains separate."
+        ],
+        "scope": "Immutable plans, actual local runtime receipts, occurrence/cancellation accounting and owner-scoped immediate worker pump."
+      }
+    },
+    {
+      "id": "PLAN",
+      "title": "Bounded model planner",
+      "status": "implemented with limitations",
+      "verification": {
+        "state": "passed",
+        "revision": "b17e90c5728f7f1a9f303f703fcf073cbdd2175e",
+        "environment": "unit-fixture",
+        "executedAt": "2026-11-26T03:49:08.258491+00:00",
+        "evidence": [
+          "docs/audits/c1-validation.json",
+          "docs/audits/evidence/c1-tests.json"
+        ],
+        "blockers": [
+          "Repeat the affected checks after cross-branch integration. Real service/device/deployment verification remains separate."
+        ],
+        "scope": "Reviewed permission/context snapshots, bounded planner dispatch and shared execution-plan receipts."
+      }
+    },
+    {
+      "id": "CHAT",
+      "title": "Selected-provider chat",
+      "status": "implemented with limitations",
+      "verification": {
+        "state": "passed",
+        "revision": "b17e90c5728f7f1a9f303f703fcf073cbdd2175e",
+        "environment": "unit-fixture",
+        "executedAt": "2026-11-26T03:49:08.258491+00:00",
+        "evidence": [
+          "docs/audits/c1-validation.json",
+          "docs/audits/evidence/c1-tests.json"
+        ],
+        "blockers": [
+          "Repeat the affected checks after cross-branch integration. Real service/device/deployment verification remains separate."
+        ],
+        "scope": "Selected-provider/usage/helper receipts, interrupted receipt recovery, bounded historical rendering and exact evaluation joins."
+      }
+    },
+    {
+      "id": "SEARCH",
+      "title": "Web research",
+      "status": "implemented with limitations",
+      "verification": {
+        "state": "passed",
+        "revision": "b17e90c5728f7f1a9f303f703fcf073cbdd2175e",
+        "environment": "unit-fixture",
+        "executedAt": "2026-11-26T03:49:08.258491+00:00",
+        "evidence": [
+          "docs/audits/c1-validation.json",
+          "docs/audits/evidence/c1-tests.json"
+        ],
+        "blockers": [
+          "Repeat the affected checks after cross-branch integration. Real service/device/deployment verification remains separate."
+        ],
+        "scope": "Synthetic provider evidence, configuration-bound retry, source inspection boundaries and durable report history."
+      }
+    },
+    {
+      "id": "GMAIL",
+      "title": "Google OAuth and mailboxes",
+      "status": "implemented with limitations",
+      "verification": {
+        "state": "passed",
+        "revision": "b17e90c5728f7f1a9f303f703fcf073cbdd2175e",
+        "environment": "unit-fixture",
+        "executedAt": "2026-11-26T03:49:08.258491+00:00",
+        "evidence": [
+          "docs/audits/c1-validation.json",
+          "docs/audits/evidence/c1-tests.json"
+        ],
+        "blockers": [
+          "Repeat the affected checks after cross-branch integration. Real service/device/deployment verification remains separate."
+        ],
+        "scope": "Synthetic Google identity continuity and refresh-token ownership only; no real mailbox operation."
+      }
+    },
+    {
+      "id": "SCHED",
+      "title": "Due schedules",
+      "status": "implemented with limitations",
+      "verification": {
+        "state": "passed",
+        "revision": "b17e90c5728f7f1a9f303f703fcf073cbdd2175e",
+        "environment": "unit-fixture",
+        "executedAt": "2026-11-26T03:49:08.258491+00:00",
+        "evidence": [
+          "docs/audits/c1-validation.json",
+          "docs/audits/evidence/c1-tests.json"
+        ],
+        "blockers": [
+          "Repeat the affected checks after cross-branch integration. Real service/device/deployment verification remains separate."
+        ],
+        "scope": "Synthetic scheduled occurrences, overlap policy, halt authority and count/receipt semantics."
+      }
+    },
+    {
+      "id": "CONN",
+      "title": "OAuth and custom provider connections",
+      "status": "implemented with limitations",
+      "verification": {
+        "state": "passed",
+        "revision": "b17e90c5728f7f1a9f303f703fcf073cbdd2175e",
+        "environment": "unit-fixture",
+        "executedAt": "2026-11-26T03:49:08.258491+00:00",
+        "evidence": [
+          "docs/audits/c1-validation.json",
+          "docs/audits/evidence/c1-tests.json"
+        ],
+        "blockers": [
+          "Repeat the affected checks after cross-branch integration. Real service/device/deployment verification remains separate."
+        ],
+        "scope": "Synthetic Notion/MCP/OAuth permission, definition/revision, saved status, fresh-approval and return-path contracts."
+      }
+    },
+    {
+      "id": "MEDIA",
+      "title": "Image and video",
+      "status": "implemented with limitations",
+      "verification": {
+        "state": "passed",
+        "revision": "b17e90c5728f7f1a9f303f703fcf073cbdd2175e",
+        "environment": "unit-fixture",
+        "executedAt": "2026-11-26T03:49:08.258491+00:00",
+        "evidence": [
+          "docs/audits/c1-validation.json",
+          "docs/audits/evidence/c1-tests.json"
+        ],
+        "blockers": [
+          "Repeat the affected checks after cross-branch integration. Real service/device/deployment verification remains separate."
+        ],
+        "scope": "Synthetic idempotent operations, accepted/unknown receipts, retained asset provenance/export and progress ownership."
+      }
+    },
+    {
+      "id": "VOICE",
+      "title": "Realtime and selected-provider voice",
+      "status": "implemented with limitations",
+      "verification": {
+        "state": "passed",
+        "revision": "b17e90c5728f7f1a9f303f703fcf073cbdd2175e",
+        "environment": "unit-fixture",
+        "executedAt": "2026-11-26T03:49:08.258491+00:00",
+        "evidence": [
+          "docs/audits/c1-validation.json",
+          "docs/audits/evidence/c1-tests.json"
+        ],
+        "blockers": [
+          "Repeat the affected checks after cross-branch integration. Real service/device/deployment verification remains separate."
+        ],
+        "scope": "Synthetic explicit transcription routing/fallback, selected-route preservation and resource boundaries; no microphone or real speech."
+      }
+    },
+    {
+      "id": "DB",
+      "title": "Durable account database",
+      "status": "implemented with limitations",
+      "verification": {
+        "state": "passed",
+        "revision": "b17e90c5728f7f1a9f303f703fcf073cbdd2175e",
+        "environment": "unit-fixture",
+        "executedAt": "2026-11-26T03:49:08.258491+00:00",
+        "evidence": [
+          "docs/audits/c1-validation.json",
+          "docs/audits/evidence/c1-tests.json"
+        ],
+        "blockers": [
+          "Repeat the affected checks after cross-branch integration. Real service/device/deployment verification remains separate."
+        ],
+        "scope": "Real isolated PGlite fresh/upgrade/reopen/CAS and legacy-row preservation, not a hosted production database."
+      }
+    },
+    {
+      "id": "PC",
+      "title": "Paired computer runtime",
+      "status": "implemented with limitations",
+      "verification": {
+        "state": "passed",
+        "revision": "b17e90c5728f7f1a9f303f703fcf073cbdd2175e",
+        "environment": "unit-fixture",
+        "executedAt": "2026-11-26T03:49:08.258491+00:00",
+        "evidence": [
+          "docs/audits/c1-validation.json",
+          "docs/audits/evidence/c1-tests.json"
+        ],
+        "blockers": [
+          "Repeat the affected checks after cross-branch integration. Real service/device/deployment verification remains separate."
+        ],
+        "scope": "Synthetic durable coordination, capability selection, cancellation/late result and legacy import protections; no native companion."
+      }
+    }
+  ],
+  "candidateRevision": "b17e90c5728f7f1a9f303f703fcf073cbdd2175e"
+}

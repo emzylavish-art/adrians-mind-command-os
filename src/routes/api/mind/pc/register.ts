@@ -1,7 +1,7 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { requireUserId } from "@/lib/auth/verify.server";
 import { assertSameOrigin } from "@/lib/mind/connectors/oauth-csrf";
-import { findAgentByToken, registerAgent, unregisterAgent } from "@/lib/mind/pc-pairing/store";
+import { findAgentByToken, registerAgent, unregisterAgent } from "@/lib/mind/pc-pairing/coordination.server";
 
 function json(body: unknown, status = 200) {
   return new Response(JSON.stringify(body), { status, headers: { "content-type": "application/json" } });
@@ -17,13 +17,13 @@ export const Route = createFileRoute("/api/mind/pc/register")({
           const bearer = /^Bearer (.+)$/i.exec(request.headers.get("authorization") ?? "")?.[1];
           const query = new URL(request.url).searchParams;
           if (query.get("self") === "1") {
-            const agent = bearer && findAgentByToken(bearer);
+            const agent = bearer && await findAgentByToken(bearer);
             if (!agent) return json({ ok: false, error: "Valid agent token required." }, 401);
-            return json({ ok: unregisterAgent(agent.ownerId, agent.id) });
+            return json({ ok: await unregisterAgent(agent.ownerId, agent.id) });
           }
           const ownerId = await requireUserId(bearer);
           const id = query.get("agentId") ?? "";
-          if (!unregisterAgent(ownerId, id)) return json({ ok: false, error: "Agent not found." }, 404);
+          if (!await unregisterAgent(ownerId, id)) return json({ ok: false, error: "Agent not found." }, 404);
           return json({ ok: true });
         } catch {
           return json({ ok: false, error: "Sign in is required." }, 401);
@@ -37,7 +37,7 @@ export const Route = createFileRoute("/api/mind/pc/register")({
           const bearer = authorization?.toLowerCase().startsWith("bearer ") ? authorization.slice(7).trim() : undefined;
           const userId = await requireUserId(bearer);
           const body = (await request.json().catch(() => ({}))) as { label?: string; pairingSecret?: string };
-          const result = registerAgent({
+          const result = await registerAgent({
             ownerId: userId,
             label: typeof body.label === "string" ? body.label : undefined,
             pairingSecret: typeof body.pairingSecret === "string" ? body.pairingSecret : undefined,

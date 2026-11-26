@@ -3,10 +3,11 @@ import { accountImageStore } from "./media/blob-store";
 import { clearAccountDrafts } from "./use-composer-draft";
 import { createWorkspaceCheckpoint } from "./workspace-checkpoint";
 import { loadMindCopy, saveMindCopy } from "./server";
-import { chooseServerSync } from "./sync";
+import { chooseServerSync, reconcileServerWorkspace, serverCheckpointKey } from "./sync";
 import type { Workspace } from "./types";
-import { accountWorkspaceKey, emptyWorkspace, mergeMemoryState, loadWorkspaceForAccount } from "./workspace";
-import { mergeWorkspaceEdits } from "./workspace-edits";
+import { accountWorkspaceKey, canonical, emptyWorkspace, mergeMemoryState, loadWorkspaceForAccount, normalizeWorkspace } from "./workspace";
+import { mergeWorkspaceEdits, resolveWorkspaceConflict } from "./workspace-edits";
+import { applyWorkspaceDelta, createWorkspaceDelta, deltaIsEmpty, splitWorkspaceDelta } from "./workspace-delta";
 import { SAVE_FAIL, saveFailureMessage } from "./save-error";
 
 function hasContent(ws: Workspace) {
@@ -22,7 +23,7 @@ function reconcileStoredRecords(ws: Workspace, stored: Workspace): Workspace {
 export function useMindWorkspace(userId: string | null = "dev-user", email: string | null = null) {
   const scope = useMemo(() => {
     const empty = emptyWorkspace();
-    return { userId, checkpoint: createWorkspaceCheckpoint(), images: accountImageStore(userId), empty, browserBase: empty, serverRevision: null as string | null };
+    return { userId, checkpoint: createWorkspaceCheckpoint(), images: accountImageStore(userId), empty, browserBase: empty, serverRevision: null as string | null, serverBase: null as Workspace | null, reconcileGeneration: 0 };
   }, [userId, email]);
   const [loaded, setLoaded] = useState<{ scope: typeof scope; workspace: Workspace } | null>(null);
   const ready = loaded?.scope === scope;
@@ -55,17 +56,45 @@ export function useMindWorkspace(userId: string | null = "dev-user", email: stri
         return { ok: false as const, error: "The account workspace changed before saving." };
       }
       if (!scope.serverRevision) return { ok: false as const, error: "Load the server copy before saving it. The browser copy was kept." };
-      const result = await saveMindCopy({ data: { workspace, ownerId: userId, expectedRevision: scope.serverRevision } });
-      if (result.ok) scope.serverRevision = result.revision;
-      else if ("conflict" in result && result.conflict && activeScope.current === scope && gen === persistGen.current) {
-        followServer.current = false;
-        setServerHeld(true);
+      const compact = await scope.checkpoint.compact(workspace, scope.images);
+      if (activeScope.current !== scope || gen !== persistGen.current) return { ok: false as const, error: "The account changed before saving. No workspace was sent." };
+      const changes = scope.serverBase ? createWorkspaceDelta(scope.serverBase, compact) : null;
+      if (changes && deltaIsEmpty(changes)) return { ok: true as const, revision: scope.serverRevision, storage: "local-server" as const };
+      const batches = changes ? splitWorkspaceDelta(changes) : [null];
+      let result: Awaited<ReturnType<typeof saveMindCopy>> | undefined;
+      for (const batch of batches) {
+        if (activeScope.current !== scope || gen !== persistGen.current) return { ok: false as const, error: "The account changed. Confirmed batches were saved; unsent changes remain in the browser copy." };
+        result = await saveMindCopy({ data: { ...(batch ? { changes: batch } : { workspace: compact }), ownerId: userId, expectedRevision: scope.serverRevision } });
+        if (!result.ok) break;
+        scope.serverRevision = result.revision;
+        scope.serverBase = batch ? applyWorkspaceDelta(scope.serverBase ?? emptyWorkspace(), batch) : compact;
+        try { localStorage.setItem(serverCheckpointKey(userId), JSON.stringify({ revision: result.revision, workspace: scope.serverBase })); }
+        catch { if (activeScope.current === scope) setSaveError("The account save succeeded, but this browser could not retain its synchronization checkpoint. Review divergent copies after reopening."); }
+      }
+      if (!result) return { ok: true as const, revision: scope.serverRevision, storage: "local-server" as const };
+      if (!result.ok && "conflict" in result && result.conflict && activeScope.current === scope && gen === persistGen.current) {
+        const fresh = await loadMindCopy({ data: { ownerId: userId } });
+        if (fresh.ok && fresh.workspace && activeScope.current === scope && gen === persistGen.current) {
+          const captured = latest.current;
+          const merged = reconcileServerWorkspace(scope.checkpoint.snapshot(captured), fresh.workspace as Workspace, scope.serverBase);
+          const hydrated = await scope.checkpoint.hydrate(merged.workspace, scope.images) as Workspace;
+          if (activeScope.current !== scope || gen !== persistGen.current) return result;
+          scope.serverRevision = fresh.revision;
+          scope.serverBase = fresh.workspace as Workspace;
+          setWs((current) => mergeWorkspaceEdits(hydrated, captured, current));
+          followServer.current = !merged.needsReview;
+          setServerHeld(merged.needsReview);
+          setSyncNote(merged.needsReview ? "Both versions of conflicting records were kept for review." : "Independent account changes were reconciled. Saving the combined copy next.");
+        } else {
+          followServer.current = false;
+          setServerHeld(true);
+        }
       }
       return result;
     });
     writeQueue.current = result.then(() => {}, () => {}).finally(() => { pendingWrites.current--; });
     return result;
-  }, [scope, userId]);
+  }, [scope, userId, setWs]);
 
   useEffect(() => {
     let cancel = false;
@@ -103,6 +132,7 @@ export function useMindWorkspace(userId: string | null = "dev-user", email: stri
           return;
         }
         scope.serverRevision = result.revision;
+        scope.serverBase = result.workspace ? result.workspace as Workspace : emptyWorkspace();
         const browser = latest.current === scope.empty ? local : latest.current;
         const choice = chooseServerSync(hasContent(browser), Boolean(result.workspace && hasContent(result.workspace)));
         if (choice === "use-server" && result.workspace) {
@@ -141,14 +171,24 @@ export function useMindWorkspace(userId: string | null = "dev-user", email: stri
           }
           return;
         }
-        if (choice === "keep-local") {
-          if (result.workspace) {
-            const server = result.workspace as Workspace;
-            setWs((current) => ({ ...current, ...mergeMemoryState(current, server) }));
-          }
-          followServer.current = false;
-          setServerHeld(true);
-          setSyncNote("This browser kept its own copy. The server copy was not overwritten.");
+        if (choice === "keep-local" && result.workspace) {
+          let common: Workspace | null = null;
+          try {
+            const saved = JSON.parse(localStorage.getItem(serverCheckpointKey(userId)) ?? "null");
+            if (saved && typeof saved.revision === "string" && saved.workspace) common = normalizeWorkspace(saved.workspace);
+          } catch { /* Without an ancestor, differences require explicit review. */ }
+          const captured = latest.current === scope.empty ? local : latest.current;
+          const reconciled = reconcileServerWorkspace(scope.checkpoint.snapshot(captured), result.workspace as Workspace, common);
+          const hydrated = await scope.checkpoint.hydrate(reconciled.workspace, scope.images) as Workspace;
+          if (cancel || loadGen !== persistGen.current) return;
+          setWs((current) => mergeWorkspaceEdits(hydrated, captured, current));
+          followServer.current = !reconciled.needsReview;
+          setServerHeld(reconciled.needsReview);
+          setSyncNote(reconciled.needsReview
+            ? "Both copies were preserved. Review the individual synchronization conflicts before saving."
+            : "Independent changes from this device and your account were reconciled.");
+          try { localStorage.setItem(serverCheckpointKey(userId), JSON.stringify({ revision: result.revision, workspace: result.workspace })); }
+          catch { setSaveError("The browser could not save its synchronization checkpoint. Current work remains in this session."); }
           return;
         }
         followServer.current = true;
@@ -170,17 +210,27 @@ export function useMindWorkspace(userId: string | null = "dev-user", email: stri
     if (!ready || !userId) return;
     const reconcile = (event: StorageEvent) => {
       if (event.key !== accountWorkspaceKey(userId) || event.storageArea !== localStorage) return;
+      const generation = ++scope.reconcileGeneration;
+      const captured = latest.current;
       const stored = loadWorkspaceForAccount(localStorage, userId, email);
-      setWs((current) => {
-        const next = mergeMemoryState(current, stored);
-        if (JSON.stringify(next.memories) === JSON.stringify(current.memories) &&
-            JSON.stringify(next.deletedMemoryIds ?? []) === JSON.stringify(current.deletedMemoryIds ?? [])) return current;
-        return { ...current, ...next };
-      });
+      const merged = mergeWorkspaceEdits(stored, scope.browserBase, scope.checkpoint.snapshot(captured));
+      void scope.checkpoint.hydrate(merged, scope.images).then((hydrated) => {
+        if (activeScope.current !== scope || generation !== scope.reconcileGeneration) return;
+        scope.browserBase = stored;
+        setWs((current) => {
+          const next = mergeWorkspaceEdits(hydrated as Workspace, captured, current);
+          return canonical(next) === canonical(current) ? current : next;
+        });
+        if (merged.syncConflicts?.length) {
+          followServer.current = false;
+          setServerHeld(true);
+          setSyncNote("Another tab changed the same records. Both variants are kept for review.");
+        }
+      }).catch(() => setSaveError("The other tab's workspace could not be reconciled. Your current copy was kept."));
     };
     window.addEventListener("storage", reconcile);
     return () => window.removeEventListener("storage", reconcile);
-  }, [ready, userId, email, setWs]);
+  }, [ready, userId, email, scope, setWs]);
 
   const flushPending = useRef<(() => void) | null>(null);
   useLayoutEffect(() => () => { flushPending.current?.(); }, [scope]);
@@ -193,8 +243,21 @@ export function useMindWorkspace(userId: string | null = "dev-user", email: stri
     const write = (copy: Workspace) => {
       if (!current()) return;
       const stored = loadWorkspaceForAccount(localStorage, userId, email);
-      localStorage.setItem(accountWorkspaceKey(userId), JSON.stringify(mergeWorkspaceEdits(stored, scope.browserBase, copy)));
-      scope.browserBase = copy;
+      const merged = mergeWorkspaceEdits(stored, scope.browserBase, copy);
+      localStorage.setItem(accountWorkspaceKey(userId), JSON.stringify(merged));
+      scope.browserBase = merged;
+      if (canonical(merged) !== canonical(copy)) {
+        const generation = ++scope.reconcileGeneration;
+        void scope.checkpoint.hydrate(merged, scope.images).then((hydrated) => {
+          if (activeScope.current !== scope || generation !== scope.reconcileGeneration) return;
+          setWs((current) => mergeWorkspaceEdits(hydrated as Workspace, ws, current));
+        }).catch(failure);
+      }
+      if (merged.syncConflicts?.length) {
+        followServer.current = false;
+        setServerHeld(true);
+        setSyncNote("Conflicting edits were preserved. Review them before synchronizing your account.");
+      }
     };
     const failure = () => {
       if (current()) setSaveError("This browser could not save the latest workspace. Its previous copy was kept.");
@@ -219,7 +282,7 @@ export function useMindWorkspace(userId: string | null = "dev-user", email: stri
       window.clearTimeout(id);
       window.removeEventListener("pagehide", flush);
     };
-  }, [ready, ws, userId, email, scope]);
+  }, [ready, ws, userId, email, scope, setWs]);
 
   useEffect(() => {
     if (!ready || !userId || !followServer.current) return;
@@ -252,6 +315,7 @@ export function useMindWorkspace(userId: string | null = "dev-user", email: stri
   async function publishServerCopy() {
     if (!ready || !userId || activeScope.current !== scope) return { ok: false as const, error: "Wait for the account workspace to load." };
     const current = latest.current;
+    if (current.syncConflicts?.length) return { ok: false as const, error: "Review the individual synchronization conflicts before saving. Both variants were kept." };
     const gen = persistGen.current;
     try {
       const result = await saveForOwner(current, gen);
@@ -308,5 +372,25 @@ export function useMindWorkspace(userId: string | null = "dev-user", email: stri
     }
   }
 
-  return { ws, ready, setWs, syncNote, serverHeld, publishServerCopy, saveError, retrySave, clearSaveError, clearStoredCopy };
+  function resolveSyncConflict(id: string, choice: "local" | "remote") {
+    setWs((current) => {
+      const next = resolveWorkspaceConflict(current, id, choice);
+      if (!next.syncConflicts?.length) {
+        followServer.current = true;
+        setServerHeld(false);
+        setSyncNote("All conflicting records were reviewed. Synchronization can continue.");
+      }
+      return next;
+    });
+  }
+
+  /** Save current privacy/data before a new memory-bearing request. Existing receipts may still be recovered without this. */
+  async function prepareMemoryDispatch(workspace: Workspace = latest.current) {
+    if (workspace.syncConflicts?.length) return { ok: false as const, error: "Review synchronization conflicts before using saved context." };
+    if (!ready || !userId || activeScope.current !== scope) return { ok: false as const, error: "Wait for the account workspace to load." };
+    try { return await saveForOwner(workspace, persistGen.current); }
+    catch { return { ok: false as const, error: "Current conversation privacy could not be saved. Your browser copy was kept; no new model request was sent." }; }
+  }
+
+  return { ws, ready, setWs, syncNote, serverHeld, publishServerCopy, saveError, retrySave, clearSaveError, clearStoredCopy, resolveSyncConflict, prepareMemoryDispatch };
 }

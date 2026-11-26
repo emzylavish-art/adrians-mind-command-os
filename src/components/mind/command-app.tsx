@@ -1,10 +1,36 @@
+import { ElapsedTime } from "@/components/mind/elapsed-time";
+import { createExecutionEvidence } from "@/lib/mind/execution-evidence";
+import { startBrowserWorkPump } from "@/lib/mind/browser-work-pump";
+import { subscribeVisibleClock } from "@/lib/mind/visible-clock";
+import { pollSavedVideo } from "@/lib/mind/media/video-poll";
+import { selectedVoiceRoute } from "@/lib/mind/voice/selected-route";
+import { InstructionLibrary, SkillPlanPreview } from "@/components/mind/instruction-library";
+import { defaultSkillPreferences, loadSkillPreferences, saveSkillPreferences, skillPreferenceKey, type SkillPreferences } from "@/lib/mind/skill-preferences";
+import type { TurnBody } from "@/lib/mind/turn.server";
+import { KnowledgeSettings } from "@/components/mind/knowledge-settings";
+import { ResearchEvidence, ResearchLibrary } from "@/components/mind/research-library";
+import { RetainedVideo } from "@/components/mind/retained-video";
+import { researchFollowupContext, mergeResearchEvidence } from "@/lib/mind/research-followup";
+import type { ResearchResult } from "@/lib/mind/research";
+import { identifyImages, prepareMediaExport } from "@/lib/mind/media/asset-lifecycle";
+import { accountImageStore } from "@/lib/mind/media/blob-store";
+import { saveDocumentOriginal } from "@/lib/mind/document-originals";
+import { retrieveProjectPassages, MAX_DOCUMENT_INPUT_BYTES, MAX_DOCUMENT_TEXT_CHARS, MAX_LIBRARY_FILES } from "@/lib/mind/knowledge";
+import { effectiveContextPolicy, freshContextPolicy, contextDisclosure } from "@/lib/mind/memory/context-policy";
+import { memoryPolicyRevision, validateMemoryDispatch } from "@/lib/mind/memory/dispatch-policy";
+import { messageWindow, nextReadingPosition } from "@/lib/mind/reading-position";
+import { beginIncidentRecovery, createIncident, incidentForOperation, incidentStorageKey, planIncidentRecovery, readIncidents, recordIncident, resolveIncident, verifyIncidentRecovery, type Incident, type RecoveryBindings, type RecoveryProof } from "@/lib/mind/incidents";
+import { failureEnvelopeFromAction, notionFailureEnvelope, readFailureEnvelope, type FailureDetails, type FailureEnvelope } from "@/lib/mind/failure-envelope";
+import { IncidentRecoveryCard } from "./incident-recovery-card";
+import { ResourceSettings } from "@/components/mind/resource-settings";
+import { createOperationScope } from "@/lib/mind/operation-scope";
 import { lazy, Suspense, useEffect, useLayoutEffect, useMemo, useRef, useState, type KeyboardEvent as ReactKeyboardEvent, type MouseEvent as ReactMouseEvent, type ReactNode, useSyncExternalStore } from "react";
 import { Link, useRouter } from "@tanstack/react-router";
-import "./command-drawer-nav.css";
 import "./command-search.css";
 import "./command-voice-mode.css";
 import "./gpt-shell.css";
 import "./visual-system.css";
+import "./command-drawer-nav.css";
 import { getBearerToken } from "@/lib/auth/client";
 import { loadMcpWithHttpFallback } from "@/lib/mind/mcp-list-http";
 import { getRecentChats } from "@/lib/mind/recent-chats";
@@ -63,7 +89,7 @@ import { CAPABILITIES, isVerifiedCapability, type CapabilityStatus } from "@/lib
 import { REQUIREMENTS, requirementCounts } from "@/lib/mind/requirements";
 import { consumeMindTurn, prepareTurnId, shouldStoreReply, STOPPED_REPLY } from "@/lib/mind/live-turn";
 import { boundAbortSignal } from "@/lib/mind/turn-timeouts";
-import { createVoiceClientSecret, mcpCommand, mcpList, mcpRemove, mcpRegistryList, mcpRegistryToggle, mcpSave, mindStatus, notionCommand, notionStatus, recordAgentExecution, searchWeb, setExecutionHalt, speakText } from "@/lib/mind/server";
+import { createVoiceClientSecret, mcpCommand, mcpList, mcpRemove, mcpRegistryList, mcpRegistryToggle, mcpSave, mindStatus, notionCommand, notionStatus, recordAgentExecution, searchWeb, readExecutionControl, setExecutionHalt, speakText } from "@/lib/mind/server";
 import { focusConnection } from "./focus-connection";
 import { listNotionWorkspaces } from "@/lib/mind/notion-workspaces";
 import { SafeKeysPanel } from "@/components/mind/safe-keys-panel";
@@ -74,7 +100,7 @@ import { VoiceLevelMeter } from "@/components/mind/voice-level-meter";
 import { VoiceLiveTranscript } from "@/components/mind/voice-live-transcript";
 import { VoicePicker } from "@/components/mind/voice-picker";
 import { LiveVoiceBar } from "@/components/mind/live-voice-bar";
-import { VoiceCloningStudioPage } from "@/components/mind/voice-cloning-studio/voice-cloning-studio";
+const VoiceCloningStudioPage = lazy(() => import("@/components/mind/voice-cloning-studio/voice-cloning-studio").then((module) => ({ default: module.VoiceCloningStudioPage })));
 import { DictationPill } from "@/components/mind/dictation-pill";
 import { VoiceModeOverlay, type VoiceOverlayPhase } from "@/components/mind/voice-mode-overlay";
 import { SpeakStage } from "@/components/mind/speak-stage";
@@ -94,7 +120,8 @@ import {
 const DashboardApp = lazy(() => import("@/components/mind/agent-command-center").then((mod) => ({ default: mod.AgentCommandCenter })));
 import { isLiveVoiceOccupied, LIVE_VOICE_BUSY_MESSAGE } from "@/lib/mind/voice-live/occupancy";
 import { probeOllamaConductor, runOllamaConductor } from "@/lib/mind/voice/ollama-conductor";
-import { DIRECT_FALLBACK_NOTICE, formatVoiceClientError, resolveVoiceMode } from "@/lib/mind/voice/errors";
+import { readTranscriptionPolicy, transcriptionPolicyKey, transcriptionRecipients, type TranscriptionPolicy } from "@/lib/mind/voice/transcription-policy";
+import { formatVoiceClientError, resolveVoiceMode } from "@/lib/mind/voice/errors";
 import { commitVoiceMode, toggleVoiceMode, type VoiceRoutingMode } from "@/lib/mind/voice/mode";
 import {
   getServerVoiceMode,
@@ -181,9 +208,12 @@ import type { Chat, Msg, Workspace } from "@/lib/mind/types";
 import { ServiceBoard } from "@/components/mind/service-board";
 import { EveWorkbench } from "@/components/mind/eve-workbench";
 import { FleetPanel } from "@/components/mind/fleet-panels";
-import { BuildWorkspace } from "@/components/mind/build-workspace";
+const BuildWorkspace = lazy(() => import("@/components/mind/build-workspace").then((module) => ({ default: module.BuildWorkspace })));
 import { ResearchPanel } from "@/components/mind/surfaces/research-panel";
-import { AnswerTabs, MessageBody } from "@/components/mind/message-body";
+import { MemoAnswerTabs, MemoMessageBody, useMessageMediaActions } from "@/components/mind/stable-message-body";
+import { useWorkspaceRecordSize } from "@/lib/mind/workspace-metrics";
+import { useViewScrollPosition } from "@/lib/mind/use-view-scroll-position";
+import { advanceVideoProgress, createVideoProgress, videoProgressMessage, type VideoProgress } from "@/lib/mind/media/video-progress";
 import { MemorySavedIndicator } from "@/components/mind/memory-saved-indicator";
 import { MemoryChatToggle } from "@/components/mind/memory-chat-toggle";
 import { AttachmentChips } from "@/components/mind/media/attachment-chips";
@@ -358,7 +388,7 @@ type Pending = {
 
 const EMPTY_DRAFT_IMAGES: ImageAttachment[] = [];
 
-type Staged = { name: string; text: string };
+type Staged = { name: string; text: string; source?: { fileId: string; revision: string; name: string } };
 
 function pinRailScroll(node: HTMLElement | null) {
   node?.style.setProperty("overflow-x", "hidden", "important");
@@ -742,7 +772,7 @@ function shownChatTitle(chat: { title?: string; messages?: { role: string; conte
 export function CommandApp() {
   const account = useCurrentUser();
   const loopback = typeof window !== "undefined" && (window.location.hostname === "127.0.0.1" || window.location.hostname === "localhost");
-  const { ws, setWs, ready, syncNote, serverHeld, saveError, retrySave, clearStoredCopy } = useMindWorkspace(account?.id ?? null, account?.emailVerified ? account.primaryEmail : null);
+  const { ws, setWs, ready, syncNote, serverHeld, saveError, retrySave, clearStoredCopy, resolveSyncConflict, prepareMemoryDispatch } = useMindWorkspace(account?.id ?? null, account?.emailVerified ? account.primaryEmail : null);
   const router = useRouter();
   const [view, setViewState] = useState<View>("command");
   const applyingLocation = useRef(false);
@@ -768,6 +798,7 @@ export function CommandApp() {
   const [cardFocus, setCardFocus] = useState<{ id: string } | null>(null);
   useEffect(() => {
     if (!cardFocus) return;
+    if (cardFocus.id.startsWith("message-")) window.dispatchEvent(new CustomEvent("adrian:reveal-message", { detail: cardFocus.id.slice(8) }));
     const frame = requestAnimationFrame(() => {
       const card = document.getElementById(cardFocus.id);
       if (card) {
@@ -796,10 +827,6 @@ export function CommandApp() {
   const [voiceSignInNotice, setVoiceSignInNotice] = useState(false);
   const pageScrollRef = useRef<HTMLDivElement>(null);
   useEffect(() => {
-    const scroller = pageScrollRef.current;
-    if (scroller) scroller.scrollTop = 0;
-  }, [view]);
-  useEffect(() => {
     if (!navOpen) {
       if (navWasOpenRef.current) {
         const trigger = navTriggerRef.current;
@@ -820,23 +847,6 @@ export function CommandApp() {
     navWasOpenRef.current = true;
     const previous = document.body.style.overflow;
     document.body.style.overflow = "hidden";
-    const drawer = navDrawerRef.current;
-    const phone = window.matchMedia("(max-width: 767px)").matches;
-    if (drawer && phone) {
-      const light = document.documentElement.dataset.theme === "light";
-      const reduce = document.documentElement.dataset.adrianMotion === "reduce" || window.matchMedia("(prefers-reduced-motion: reduce)").matches;
-      drawer.style.setProperty("inset", "0 auto 0 0", "important");
-      drawer.style.setProperty("width", "min(18.5rem, 84vw)", "important");
-      drawer.style.setProperty("height", "100dvh", "important");
-      drawer.style.setProperty("background", light ? "#f7f7f8" : "#161618", "important");
-      drawer.style.setProperty("color", light ? "#18181b" : "#fafafa", "important");
-      drawer.style.setProperty("border-radius", "0 22px 22px 0", "important");
-      drawer.style.setProperty("box-shadow", "18px 0 48px rgba(0, 0, 0, 0.38)", "important");
-      drawer.style.setProperty("z-index", "200", "important");
-      if (!reduce) drawer.style.setProperty("animation", "adrian-drawer-in 240ms cubic-bezier(0.22, 1, 0.36, 1)", "important");
-      const stage = document.querySelector(".main-stage");
-      if (stage instanceof HTMLElement) stage.style.setProperty("visibility", "visible", "important");
-    }
     navCloseRef.current?.focus();
     const onDrawerKeyDown = (event: KeyboardEvent) => {
       if (event.key === "Escape") {
@@ -874,17 +884,6 @@ export function CommandApp() {
     document.addEventListener("keydown", onDrawerKeyDown, true);
     return () => {
       document.body.style.overflow = previous;
-      drawer?.style.removeProperty("z-index");
-      drawer?.style.removeProperty("inset");
-      drawer?.style.removeProperty("width");
-      drawer?.style.removeProperty("height");
-      drawer?.style.removeProperty("background");
-      drawer?.style.removeProperty("color");
-      drawer?.style.removeProperty("border-radius");
-      drawer?.style.removeProperty("box-shadow");
-      drawer?.style.removeProperty("animation");
-      const stage = document.querySelector(".main-stage");
-      if (stage instanceof HTMLElement) stage.style.removeProperty("visibility");
       desktop.removeEventListener("change", closeAtDesktop);
       document.removeEventListener("keydown", onDrawerKeyDown, true);
     };
@@ -920,6 +919,8 @@ export function CommandApp() {
   const [activeId, setActiveId] = useState<string | null>(null);
   const [temporary, setTemporary] = useState(false);
   const draftOwner = account?.id ?? (loopback ? "dev-user" : null);
+  const rememberPageScroll = useViewScrollPosition(pageScrollRef, draftOwner, view === "settings" ? `${view}:${settingsPane ?? "root"}` : view);
+
   const personalityKey = "amcos.default-style." + (draftOwner ?? "guest");
   const [stylePreference, setStylePreference] = useState<{ key: string; id: PersonalityId } | null>(null);
   const defaultPersonalityId = stylePreference?.key === personalityKey ? stylePreference.id : "assistant";
@@ -947,6 +948,18 @@ export function CommandApp() {
   const listenRef = useRef<(opts?: { mode?: "toggle" | "start" | "stop" }) => void>(() => undefined);
   const voiceMode = useSyncExternalStore(subscribeVoiceMode, getVoiceMode, getServerVoiceMode);
   const voiceModeRef = useRef<VoiceRoutingMode>(voiceMode);
+  const [transcriptionPolicy, setTranscriptionPolicy] = useState<TranscriptionPolicy>({ provider: "xai", allowFallback: false });
+  useEffect(() => {
+    const refresh = () => setTranscriptionPolicy(readTranscriptionPolicy(localStorage, draftOwner));
+    refresh();
+    window.addEventListener("storage", refresh);
+    return () => window.removeEventListener("storage", refresh);
+  }, [draftOwner]);
+  function chooseTranscriptionPolicy(next: TranscriptionPolicy) {
+    setTranscriptionPolicy(next);
+    try { localStorage.setItem(transcriptionPolicyKey(draftOwner), JSON.stringify(next)); }
+    catch { setNotice("Transcription choice applies to this tab. Browser storage could not save it."); }
+  }
   const [voiceListening, setVoiceListening] = useState(false);
   const [voiceMuted, setVoiceMuted] = useState(false);
   const [voiceLevel, setVoiceLevel] = useState(0);
@@ -969,24 +982,19 @@ export function CommandApp() {
   const dictationBufferRef = useRef("");
   const dictationBaseRef = useRef<string | null>(null);
   const userStoppedDictationRef = useRef(false);
-  const [dictationElapsed, setDictationElapsed] = useState(0);
+  const [dictationStartedAt, setDictationStartedAt] = useState<number | null>(null);
   const [dictationLevel, setDictationLevel] = useState(0);
   const [voiceOverlayOpen, setVoiceOverlayOpen] = useState(false);
   const [speakStageOpen, setSpeakStageOpen] = useState(false);
   const taskRecorder = useRef(createTaskRecorder());
   const taskStream = useRef<MediaStream | null>(null);
   const [taskRecording, setTaskRecording] = useState(false);
-  const [taskSeconds, setTaskSeconds] = useState(0);
+  const [taskStartedAt, setTaskStartedAt] = useState<number | null>(null);
   const [speakCall, setSpeakCall] = useState({ heard: "", reply: "", error: "" });
   const speakStageOpenRef = useRef(false);
   useEffect(() => {
     speakStageOpenRef.current = speakStageOpen;
   }, [speakStageOpen]);
-  useEffect(() => {
-    if (!taskRecording) return;
-    const id = window.setInterval(() => setTaskSeconds(Math.round(taskRecorder.current.elapsed() / 1000)), 500);
-    return () => window.clearInterval(id);
-  }, [taskRecording]);
   useEffect(() => {
     const end = (event: Event) => {
       if (!recordingEndsWithDocument(event)) return;
@@ -994,7 +1002,7 @@ export function CommandApp() {
       taskStream.current = null;
       void taskRecorder.current.stop();
       setTaskRecording(false);
-      setTaskSeconds(0);
+      setTaskStartedAt(null);
     };
     window.addEventListener("pagehide", end);
     window.addEventListener("beforeunload", end);
@@ -1007,14 +1015,14 @@ export function CommandApp() {
     taskStream.current = stream;
     taskRecorder.current.start(stream);
     setTaskRecording(true);
-    setTaskSeconds(0);
+    setTaskStartedAt(Date.now());
   }
   async function stopTaskRecording() {
     const blob = await taskRecorder.current.stop();
     taskStream.current?.getTracks().forEach((track) => track.stop());
     taskStream.current = null;
     setTaskRecording(false);
-    setTaskSeconds(0);
+    setTaskStartedAt(null);
     setNotice(blob ? "Recording stopped in this tab. It cannot continue after the browser is closed." : "Recording was already stopped.");
   }
   const [surfaceMenu, setSurfaceMenu] = useState(false);
@@ -1074,6 +1082,9 @@ export function CommandApp() {
     paused?: boolean;
     dispatch: (chat: Chat, workspace: Workspace) => Promise<boolean>;
   };
+  const operations = useRef(createOperationScope());
+  const operationSession = account?.sessionEpoch ?? getBearerToken() ?? "";
+  operations.current.bind(draftOwner, operationSession);
   const turnOwner = useRef(draftOwner);
   turnOwner.current = draftOwner;
   const [turnChat, setTurnChat] = useState<{ ownerId: string | null; chatId: string } | null>(null);
@@ -1081,6 +1092,11 @@ export function CommandApp() {
   const [cued, setCued] = useState<QueuedChatMessage[]>([]);
   useEffect(() => {
     return () => {
+      operations.current.invalidate();
+      imagineInFlight.current = false;
+      videoInFlight.current = false;
+      researchFlight.current = false;
+      setResearchPending(false);
       turnGen.current++;
       turnAbort.current?.abort();
       turnAbort.current = null;
@@ -1092,10 +1108,28 @@ export function CommandApp() {
       setLiveText("");
       setTurnChat(null);
       setFailure(null);
+      desktopActedRef.current.clear();
     };
-  }, [draftOwner]);
+  }, [draftOwner, operationSession]);
   const imagineInFlight = useRef(false);
   const videoInFlight = useRef(false);
+  type SavedMediaOperation = { id: string; kind: "image" | "video"; chatId: string | null; state: string; result: { requestId?: string; model?: string; url?: string; images?: { dataUrl: string; name?: string }[] } | null };
+  const [mediaOperations, setMediaOperations] = useState<SavedMediaOperation[]>([]);
+  const [videoProgress, setVideoProgress] = useState<VideoProgress | null>(null);
+  const [imageCount, setImageCount] = useState(1);
+  const [videoDuration, setVideoDuration] = useState(5);
+  async function loadMediaOperations() {
+    const operation = operations.current.begin("media-history");
+    try {
+      const response = await fetch("/api/mind/media/generate", { method: "POST", credentials: "same-origin", headers: { "content-type": "application/json", ...(getBearerToken() ? { authorization: `Bearer ${getBearerToken()}` } : {}) }, body: JSON.stringify({ action: "recover" }) });
+      const body = await response.json();
+      if (!operations.current.current(operation)) return;
+      if (!response.ok || !body.ok) { setError(body.error || "Media history could not be read."); return; }
+      setMediaOperations(body.operations ?? []);
+    } catch { if (operations.current.current(operation)) setError("Media history could not be read. Generation was not repeated."); }
+    finally { operations.current.finish(operation); }
+  }
+  useEffect(() => { setMediaOperations([]); setVideoProgress(null); }, [draftOwner, operationSession]);
   const mcpInFlight = useRef(false);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
@@ -1104,10 +1138,32 @@ export function CommandApp() {
     window.addEventListener("adrian-draft-storage-full", warn);
     return () => window.removeEventListener("adrian-draft-storage-full", warn);
   }, []);
-  const [failure, setFailure] = useState<{ message: string; auditId: string; retry: (() => void) | null; kind: HonestFailureKind | null; action?: RouteFailureAction; chatId?: string } | null>(null);
+  const [failure, setFailure] = useState<{ message: string; auditId: string; retry: (() => void) | null; kind: HonestFailureKind | null; action?: RouteFailureAction; chatId?: string; target?: string; recovering?: boolean; envelope?: FailureEnvelope; bindings?: RecoveryBindings } | null>(null);
+  const [incidentRows, setIncidents] = useState<Incident[]>([]);
+  const incidents = incidentRows.filter((item) => item.recovery.ownerId === draftOwner);
+  const incidentOwnerRef = useRef(draftOwner);
+  incidentOwnerRef.current = draftOwner;
+  const incidentsRef = useRef(incidents);
+  incidentsRef.current = incidents;
+  useEffect(() => {
+    const refresh = () => setIncidents(readIncidents(localStorage, draftOwner));
+    refresh(); window.addEventListener("storage", refresh);
+    return () => window.removeEventListener("storage", refresh);
+  }, [draftOwner]);
+  function updateIncidentJournal(update: (current: Incident[]) => Incident[]) {
+    if (incidentOwnerRef.current !== draftOwner) return;
+    setIncidents((current) => {
+      if (incidentOwnerRef.current !== draftOwner) return current;
+      const next = update(current.filter((item) => item.recovery.ownerId === draftOwner));
+      incidentsRef.current = next;
+      try { localStorage.setItem(incidentStorageKey(draftOwner), JSON.stringify(next)); }
+      catch { /* Current-tab recovery remains visible if browser persistence fails. */ }
+      return next;
+    });
+  }
+
   const reportFailureRef = useRef<(message: string, action: string, target: string, retry: (() => void) | null) => void>(() => undefined);
   const [toolTimeline, setToolTimeline] = useState<ToolTimelineRow[]>([]);
-  const [timelineTickMs, setTimelineTickMs] = useState(0);
   const [statusSignedIn, setStatusSignedIn] = useState<boolean | null>(null);
   const [databaseConfigured, setDatabaseConfigured] = useState(false);
   const [focusAuditId, setFocusAuditId] = useState<string | null>(null);
@@ -1127,6 +1183,18 @@ export function CommandApp() {
   const [logicRoutes, setLogicRoutes] = useState<LogicRoutePublic[]>([]);
   const [composerEffort, setComposerEffort] = useState<ComposerModeId>("auto");
   const [consultModel, setConsultModel] = useState("");
+  const [consultHelpers, setConsultHelpers] = useState<string[]>([]);
+  useEffect(() => {
+    try { const value: unknown = JSON.parse(localStorage.getItem(`amcos.consult-helpers.v1:${draftOwner ?? "guest"}`) ?? "[]"); setConsultHelpers(Array.isArray(value) ? value.filter((id): id is string => typeof id === "string").slice(0, 8) : []); }
+    catch { setConsultHelpers([]); }
+  }, [draftOwner]);
+  function chooseConsultHelper(id: string, selected: boolean) {
+    setConsultHelpers((current) => {
+      const next = selected ? [...new Set([...current, id])].slice(0, 8) : current.filter((item) => item !== id);
+      try { localStorage.setItem(`amcos.consult-helpers.v1:${draftOwner ?? "guest"}`, JSON.stringify(next)); } catch { setNotice("Helper choice applies to this tab only."); }
+      return next;
+    });
+  }
   const [routingMode, setRoutingMode] = useState<RoutingMode>("A");
   const [routingPanel, setRoutingPanel] = useState<LogicRouteId[]>([]);
   const ratingOwner = account?.id ? "account:" + account.id : "device:guest";
@@ -1136,7 +1204,10 @@ export function CommandApp() {
   const [failoverPolicy, setFailoverPolicy] = useState<"none" | "grok">("none");
  const [researchCitations, setResearchCitations] = useState<{ title: string; url: string }[]>([]);
   const [researchReportQuestion, setResearchReportQuestion] = useState("");
-  type ResearchReport = { id: string; question: string; summary: string; citations: { title: string; url: string }[]; at: string; steps?: { query: string; ok: boolean; count: number }[] };
+  type ResearchReport = { id: string; question: string; summary: string; citations: { title: string; url: string }[]; at: string; steps?: { query: string; ok: boolean; count: number }[]; result?: ResearchResult };
+  const [researchResult, setResearchResult] = useState<ResearchResult | null>(null);
+  const [researchDepth, setResearchDepth] = useState<"quick" | "standard" | "deep">("standard");
+  const [researchRevision, setResearchRevision] = useState(0);
   const [researchHistory, setResearchHistory] = useState<ResearchReport[]>([]);
   const [researchSteps, setResearchSteps] = useState<ResearchReport["steps"]>([]);
   const [researchOwner, setResearchOwner] = useState<string | null>(null);
@@ -1385,18 +1456,7 @@ export function CommandApp() {
     voiceModeRef.current = voiceMode;
   }, [voiceMode]);
 
-  useEffect(() => {
-    if (dictation.phase !== "recording") {
-      setDictationElapsed(0);
-      return;
-    }
-    const started = Date.now();
-    setDictationElapsed(0);
-    const id = window.setInterval(() => {
-      setDictationElapsed(Math.floor((Date.now() - started) / 1000));
-    }, 250);
-    return () => window.clearInterval(id);
-  }, [dictation.phase]);
+  useEffect(() => { setDictationStartedAt(dictation.phase === "recording" ? Date.now() : null); }, [dictation.phase]);
 
   useEffect(() => {
     const onStorage = (event: StorageEvent) => {
@@ -1533,7 +1593,9 @@ export function CommandApp() {
     if (!reply || active?.temporary) return;
     try {
       const next = saveRating(localStorage, {
-        messageId, score, model, provider: reply.provider, mode: reply.routingMode ?? null, at: new Date().toISOString(),
+        messageId, score, model, reportedModel: reply.model ?? undefined, executionId: reply.executionId,
+        executionEvidence: reply.executionEvidence,
+        taskCategory: "conversation", evidenceType: "subjective", provider: reply.provider, mode: reply.routingMode ?? null, at: new Date().toISOString(),
       }, ratingOwner);
       setRatings(next);
     } catch {
@@ -1660,7 +1722,24 @@ export function CommandApp() {
   const [skillInventoryStatus, setSkillInventoryStatus] = useState("");
   const [skillRefreshNonce, setSkillRefreshNonce] = useState(0);
   const [skillBand, setSkillBand] = useState<"device" | "installed" | "missing">("device");
-  const [enabledSkills, setEnabledSkills] = useState<Record<string, boolean>>({});
+  const [enabledSkills, setEnabledSkills] = useState<Record<string, boolean>>(() => defaultSkillPreferences(draftOwner ?? "", true).manual);
+  const [skillPreferences, setSkillPreferences] = useState<SkillPreferences>(() => defaultSkillPreferences(draftOwner ?? "", true));
+  useEffect(() => {
+    const load = () => {
+      const result = loadSkillPreferences(draftOwner ?? "", localStorage);
+      setSkillPreferences(result.preferences); setEnabledSkills(result.preferences.manual); setSkillStorageError(result.error ?? "");
+    };
+    load();
+    const changed = (event: StorageEvent) => { if (event.key === null || event.key === skillPreferenceKey(draftOwner ?? "")) load(); };
+    window.addEventListener("storage", changed);
+    return () => window.removeEventListener("storage", changed);
+  }, [draftOwner]);
+  function updateSkillPreference(id: string, mode: "manual" | "automatic", enabled: boolean) {
+    try {
+      const next = saveSkillPreferences(draftOwner ?? "", { ...skillPreferences, [mode]: { ...skillPreferences[mode], [id]: enabled } }, localStorage);
+      setSkillPreferences(next); setEnabledSkills(next.manual); setSkillStorageError("");
+    } catch (caught) { setSkillStorageError(caught instanceof Error ? caught.message : "Skill settings could not be saved. No preference changed."); }
+  }
   const [skillNoteQuery, setSkillNoteQuery] = useState("");
   const [skillResult, setSkillResult] = useState<{ id: string; text: string } | null>(null);
   const [skillStorageError, setSkillStorageError] = useState("");
@@ -1692,7 +1771,7 @@ export function CommandApp() {
   const controlsModelLabel = effectiveProvider === "grok" ? grokModel ?? effectiveRoute.modelTier
     : providerOptions.find((option) => option.id === effectiveProvider)?.label
       ?? logicRoutes.find((option) => option.id === effectiveProvider)?.label ?? "Selected module unavailable";
-  const storedBytes = useMemo(() => new Blob([JSON.stringify(ws)]).size, [ws]);
+  const storedBytes = useWorkspaceRecordSize(ws, view, settingsPane);
 
   useEffect(() => {
     if (!focusAuditId || view !== "activity") return;
@@ -1755,13 +1834,6 @@ export function CommandApp() {
     };
   }, [view]);
 
-  const timelineRunning = useMemo(() => timelineCounts(toolTimeline).running, [toolTimeline]);
-  useEffect(() => {
-    if (!timelineRunning) return;
-    setTimelineTickMs(Date.now());
-    const id = window.setInterval(() => setTimelineTickMs(Date.now()), 250);
-    return () => window.clearInterval(id);
-  }, [timelineRunning]);
 
   useEffect(() => {
     if (!ready) return;
@@ -1869,16 +1941,6 @@ export function CommandApp() {
     };
     mcpReloadListsRef.current = loadMcpLists;
     loadMcpLists();
-    try {
-      const saved = localStorage.getItem("amcos.skills.v1");
-      if (saved !== null) {
-        const parsed: unknown = JSON.parse(saved);
-        if (isEnabledSkillMap(parsed)) setEnabledSkills(parsed);
-        else setSkillStorageError("Saved skill settings are invalid. The original data is preserved; skills use their default enabled state until this is repaired.");
-      }
-    } catch {
-      setSkillStorageError("Skill settings could not be read from browser storage. Existing data was not changed.");
-    }
     return () => {
       active = false;
       mcpOwnerActive.current = false;
@@ -1944,6 +2006,7 @@ export function CommandApp() {
   }, []);
 
   useEffect(() => {
+    if (!draftOwner) return;
     const step = () => {
       const current = wsRef.current;
       if (current.halted) return;
@@ -1961,9 +2024,13 @@ export function CommandApp() {
       const next = tickFleet(runDueSchedules(current, now), { now, workerId: "browser-worker" });
       setWs(next);
     };
-    const id = window.setInterval(step, 15000);
-    return () => window.clearInterval(id);
-  }, []);
+    const pump = startBrowserWorkPump({ step, timers: window, visible: () => document.visibilityState === "visible",
+      subscribeVisibility: (listener) => {
+        document.addEventListener("visibilitychange", listener);
+        return () => document.removeEventListener("visibilitychange", listener);
+      } });
+    return () => pump.dispose();
+  }, [draftOwner, operationSession, ws.runs.filter((run) => run.state === "queued").map((run) => run.id).join("|")]);
 
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => {
@@ -2042,6 +2109,7 @@ export function CommandApp() {
     setResearchNote(null);
     setResearchReportQuestion("");
     setResearchSteps([]);
+    setResearchResult(null);
     if (!draftOwner) return;
     try {
       const stored = JSON.parse(localStorage.getItem(`amcos.research.v2.${draftOwner}`) || "[]") as ResearchReport[];
@@ -2540,23 +2608,32 @@ export function CommandApp() {
     return true;
   }
 
-  async function runWebResearch(chat: Chat, query: string, action: "chat" | "voice" = "chat") {
+  async function runWebResearch(chat: Chat, query: string, action: "chat" | "voice" = "chat", retryResult?: ResearchReport["result"], recoveryOperationId?: string) {
     if (turnOwner.current !== draftOwner || !wsRef.current.chats.some((item) => item.id === chat.id)) return;
+    const operation = operations.current.begin("chat-research");
+    const researchOperationId = recoveryOperationId ?? retryResult?.persistence?.reportId ?? crypto.randomUUID();
+    const generation = turnGen.current;
+    const isCurrent = () => operations.current.current(operation) && !wsRef.current.halted && wsRef.current.chats.some((item) => item.id === chat.id);
     setBusy(true);
     setError(null);
     try {
-      const result = await searchWeb({ data: { query, freeOnly: researchFreeOnly } });
-      if (turnOwner.current !== draftOwner) return;
-      setBusy(false);
+      const result = await searchWeb({ data: { query, freeOnly: researchFreeOnly, depth: retryResult?.report?.depth,
+        researchConfigRevision: retryResult?.route?.configurationRevision,
+        reportId: retryResult?.persistence?.reportId, expectedRevision: retryResult?.persistence?.revision,
+        retryQueries: retryResult?.steps?.filter((step) => !step.ok).map((step) => step.query) ?? (retryResult?.route ? [query] : undefined),
+      } });
+      if (!isCurrent()) return;
+      if (generation === turnGen.current) setBusy(false);
       if (!wsRef.current.chats.some((item) => item.id === chat.id)) return;
+      setResearchResult(result);
       setResearchCitations(result.citations);
       setResearchReportQuestion(query);
       if (!result.ok) {
         const message = result.error;
         const retry = () => {
-          void runWebResearch(chat, query, action);
+          void runWebResearch(chat, query, action, result, researchOperationId);
         };
-        emitFailure("research", mountFailure({ message, action: "research_failed", target: "search", outcome: result }, retry));
+        reportFailure(message, "research_failed", "search", retry, "none", { operationId: researchOperationId, subsystem: "research", provider: result.route?.provider, stage: "response", outcome: result.partial ? "partial" : "unknown", operationKind: "generation", retryPolicy: "review", bindings: { chatId: chat.id, reportId: result.persistence?.reportId, revision: result.route?.configurationRevision }, temporary: chat.temporary });
         recordToolTurn(chat, query, result.error, undefined, { tool: "web_search", ok: false, action });
         setResearchNote(result.error);
         return;
@@ -2566,27 +2643,31 @@ export function CommandApp() {
         ...result.citations.map((item) => `- ${item.title} — ${item.url}`),
       ];
       recordToolTurn(chat, query, lines.join("\n"), undefined, { tool: "web_search", ok: true, action });
+      clearFailure("search", { ownerId: draftOwner, operationId: researchOperationId, bindings: { chatId: chat.id, reportId: result.persistence?.reportId, revision: result.route?.configurationRevision }, verified: result.ok && !result.partial, checks: ["same-owner", "current-authorization", "same-resource", "current-revision", "halt-clear", "fresh-approval", "actual-outcome"] });
       setResearchNote(result.summary || "");
       setNotice(`Research kept ${result.citations.length} http(s) citation${result.citations.length === 1 ? "" : "s"}.`);
     } catch {
-      if (turnOwner.current !== draftOwner) return;
-      setBusy(false);
+      if (!isCurrent()) return;
+      if (generation === turnGen.current) setBusy(false);
       if (!wsRef.current.chats.some((item) => item.id === chat.id)) return;
       const message = "The search provider could not be reached. No citations were created.";
       const retry = () => {
-        void runWebResearch(chat, query, action);
+        void runWebResearch(chat, query, action, retryResult, researchOperationId);
       };
-      emitFailure("research", mountFailure({ message, action: "research_failed", target: "search" }, retry));
+      reportFailure(message, "research_failed", "search", retry, "none", { operationId: researchOperationId, subsystem: "research", stage: "response", outcome: "unknown", operationKind: "generation", retryPolicy: "review", bindings: { chatId: chat.id, reportId: retryResult?.persistence?.reportId, revision: retryResult?.route?.configurationRevision }, temporary: chat.temporary });
       recordToolTurn(chat, query, message, undefined, { tool: "web_search", ok: false, action });
       setResearchNote(message);
+    } finally {
+      if (operations.current.finish(operation) && generation === turnGen.current) setBusy(false);
     }
   }
 
-  async function askNotion(chat: Chat, text: string, confirmed = false, pageId: string | null = null, workspaceId = chat.notionWorkspaceId) {
+  async function askNotion(chat: Chat, text: string, confirmed = false, pageId: string | null = null, workspaceId = chat.notionWorkspaceId, grantGeneration?: string, recoveryOperationId?: string) {
     if (turnOwner.current !== draftOwner || !wsRef.current.chats.some((item) => item.id === chat.id)) return;
     setBusy(true);
     setError(null);
     const epoch = notionEpoch.current;
+    const notionOperationId = recoveryOperationId ?? crypto.randomUUID();
     try {
       if (!workspaceId) {
         const spaces = await listNotionWorkspaces();
@@ -2604,7 +2685,7 @@ export function CommandApp() {
         });
         return;
       }
-      const result = await notionCommand({ data: { text, confirmed, pageId, workspaceId } });
+      const result = await notionCommand({ data: { text, confirmed, pageId, workspaceId, chatId: chat.id, grantGeneration } });
       if (turnOwner.current !== draftOwner) return;
       setBusy(false);
       if (epoch !== notionEpoch.current || !wsRef.current.chats.some((item) => item.id === chat.id)) return;
@@ -2618,15 +2699,17 @@ export function CommandApp() {
           detail: result.error,
           confirm: "Append",
           run: () => {
-            void askNotion(chat, text, true, target.id, workspaceId);
+            void askNotion(chat, text, true, target.id, workspaceId, result.grantGeneration);
           },
         });
         return;
       }
       if (!result.ok) {
         const message = result.error || "Notion did not complete the requested operation.";
-        const retry = () => { void askNotion(chat, text, false, pageId, workspaceId); };
-        reportFailure(message, "notion_operation_failed", "notion", retry, result.needsConfirmation ? "none" : "retry");
+        const retry = () => { void askNotion(chat, text, false, pageId, workspaceId, result.grantGeneration, notionOperationId); };
+        reportFailure(message, "notion_operation_failed", "notion", result.failure?.recovery === "review_access" || result.failure?.recovery === "inspect" ? null : retry, result.failure?.recovery === "review_access" || result.failure?.recovery === "inspect" ? "setup" : result.needsConfirmation ? "none" : "retry", {
+          envelope: notionFailureEnvelope(result, notionOperationId), bindings: { chatId: chat.id, workspaceId, pageId: pageId ?? result.pages[0]?.id, grantGeneration: result.grantGeneration }, temporary: chat.temporary,
+        });
         recordToolTurn(chat, text, message, undefined, { tool: "notion", ok: false, action: "chat" });
         return;
       }
@@ -2634,17 +2717,17 @@ export function CommandApp() {
       if (lines.length && epoch === notionEpoch.current) {
         setNotionPreview({ owner: draftOwner, chatId: chat.id, text: lines.join("\n") });
       }
+      clearFailure("notion", { ownerId: draftOwner, operationId: notionOperationId, bindings: { chatId: chat.id, workspaceId, pageId: pageId ?? result.pages[0]?.id, grantGeneration: result.grantGeneration }, verified: result.ok && (!result.wrote || result.verified), checks: ["same-owner", "current-authorization", "same-resource", "current-revision", ...(result.wrote && confirmed ? ["halt-clear", "fresh-approval", "actual-outcome"] as const : ["read-succeeded"] as const)] });
       recordToolTurn(chat, text, "Notion completed the request. Retrieved content is shown only in the current preview.");
     } catch {
       if (turnOwner.current !== draftOwner) return;
       setBusy(false);
       if (!wsRef.current.chats.some((item) => item.id === chat.id)) return;
-      const message = "Notion could not be reached. Nothing was changed.";
+      const message = confirmed ? "Notion write confirmation was lost. Inspect the destination before approving another append." : "Notion could not be reached. No result was confirmed.";
       const retry = () => {
-        void askNotion(chat, text, false, pageId, workspaceId);
+        void askNotion(chat, text, false, pageId, workspaceId, grantGeneration, notionOperationId);
       };
-      if (emitFailure("notion", mountFailure({ message, action: "notion_unreachable", target: "notion" }, retry))) return;
-      setError(message);
+      reportFailure(message, confirmed ? "notion_outcome_unconfirmed" : "notion_unreachable", "notion", confirmed ? null : retry, confirmed ? "setup" : "retry", { operationId: notionOperationId, subsystem: "notion", provider: "notion", operationKind: confirmed ? "write" : "unknown", outcome: "unknown", stage: "response", retryPolicy: confirmed ? "review" : "review", bindings: { chatId: chat.id, workspaceId, pageId: pageId ?? undefined, grantGeneration }, temporary: chat.temporary });
     }
   }
 
@@ -2652,6 +2735,7 @@ export function CommandApp() {
     if (turnOwner.current !== draftOwner || !wsRef.current.chats.some((item) => item.id === chat.id)) return;
     if (mcpInFlight.current) return;
     mcpInFlight.current = true;
+    const mcpOperationId = crypto.randomUUID();
     setBusy(true);
     setError(null);
     clearFailure();
@@ -2697,7 +2781,7 @@ export function CommandApp() {
       if (failure) {
         reportFailure(failure.message, failure.kind, failure.target, () => {
           void askMcp(chat, text, false);
-        });
+        }, "none", { operationId: mcpOperationId, subsystem: "mcp", operationKind: "unknown", outcome: "unknown", retryPolicy: "review", bindings: { chatId: chat.id, connectionId: approvalServerId }, temporary: chat.temporary });
       }
       recordToolTurn(chat, text, `[${status}] ${reply}`, undefined, { tool: "mcp", ok: result.ok, action: "chat" });
     } catch {
@@ -2708,13 +2792,13 @@ export function CommandApp() {
       const message = HONEST_FAILURE_MESSAGES.mcp_unreachable;
       reportFailure(message, "mcp_tool_failed", "mcp", () => {
         void askMcp(chat, text, false);
-      });
+      }, "none", { operationId: mcpOperationId, subsystem: "mcp", operationKind: "unknown", outcome: "unknown", retryPolicy: "review", bindings: { chatId: chat.id, connectionId: approvalServerId }, temporary: chat.temporary });
     } finally {
       mcpInFlight.current = false;
     }
   }
 
-  type TurnRequest = { id: string; body: ReturnType<typeof chatTurnBody> };
+  type TurnRequest = { id: string; body: ReturnType<typeof chatTurnBody> & TurnBody };
 
   async function deliver(
     chat: Chat,
@@ -2722,7 +2806,7 @@ export function CommandApp() {
     source: Workspace,
     resume = false,
     images: ImageAttachment[] = [],
-    options?: { logicRoute?: LogicRouteId | null; skipUserMessage?: boolean; isolateOutputs?: boolean; accessNotes?: { id: string; text: string }[]; request?: TurnRequest; operationId?: string; replaceReplyId?: string; recovery?: Msg["deliveryRoute"] },
+    options?: { logicRoute?: LogicRouteId | null; skipUserMessage?: boolean; isolateOutputs?: boolean; accessNotes?: { id: string; text: string }[]; request?: TurnRequest; operationId?: string; replaceReplyId?: string; recovery?: Msg["deliveryRoute"]; documentSource?: Staged["source"] },
   ): Promise<string | null> {
     if (turnInFlight.current || turnOwner.current !== draftOwner) return null;
     const snapped = snapshotImages(images);
@@ -2794,7 +2878,7 @@ export function CommandApp() {
     }
     const orchestrating = savedRoute ? savedRoute.orchestrated : resolveSendPath(composerEffort).path === "orchestrator";
     const consultPlan = orchestrating
-      ? planModelConsult({ orchestrator: savedRoute?.provider ?? consultModel, modules: consultModules, question: text })
+      ? planModelConsult({ orchestrator: savedRoute?.provider ?? consultModel, modules: consultModules, question: text, authorizedHelpers: consultHelpers, maxHelpers: consultHelpers.length })
       : null;
     if (consultPlan && !consultPlan.ok) {
       reportFailure(consultPlan.error, "model_unavailable", "provider", () => {
@@ -2822,14 +2906,38 @@ export function CommandApp() {
     }
     const messages = options?.replaceReplyId ? live.slice(0, -1) : selectRetryMessages(chat.messages, live);
     if (resume && messages.at(-1)?.role === "assistant") return null;
-    const history = historyForDeliver(messages, resume);
+    const contextPolicy = effectiveContextPolicy(chat);
+    const history = contextPolicy.history ? historyForDeliver(messages, resume) : [];
+    const preparation = operations.current.begin("chat-prepare");
+    turnInFlight.current = true;
+    let preparedRevision: string | undefined;
+    let projectContext: Awaited<ReturnType<typeof retrieveProjectPassages>> = [];
+    try {
+      if (!options?.request) {
+        if (chat.memory === "on" || chat.agentId || chat.contextPolicy || contextPolicy.projectDocuments || contextPolicy.projectConversations) {
+          const prepared = await prepareMemoryDispatch(source);
+          if (!prepared.ok) { if (operations.current.current(preparation)) setError(prepared.error); return null; }
+        }
+        [preparedRevision, projectContext] = await Promise.all([
+          memoryPolicyRevision(source, chat),
+          contextPolicy.projectDocuments ? retrieveProjectPassages(source, chat, text) : Promise.resolve([]),
+        ]);
+      }
+      if (!operations.current.current(preparation) || wsRef.current.halted) return null;
+    } catch (caught) {
+      if (operations.current.current(preparation)) setError(caught instanceof Error ? caught.message : "Request context could not be prepared. No model was called.");
+      return null;
+    } finally {
+      if (operations.current.finish(preparation)) turnInFlight.current = false;
+    }
+    // Existing IDs are reconciled before the server's new-dispatch privacy guard.
+    // This permits recovering a completed receipt without re-sending revoked context.
     const title = resume || messages.length > 0 ? chat.title : text.replace(/\s+/g, " ").slice(0, 48);
     const userMessageId = options?.skipUserMessage ? null : resume ? messages.at(-1)?.id ?? null : crypto.randomUUID();
     setTurnChat({ ownerId: draftOwner, chatId: chat.id });
     setBusy(true);
     setLiveText("");
     setError(null);
-    setFailure(null);
     setToolTimeline([]);
     turnAbort.current?.abort();
     const generation = ++turnGen.current;
@@ -2878,7 +2986,8 @@ export function CommandApp() {
       setWs((prev) => ({
         ...prev,
         chats: prev.chats.map((item) =>
-          item.id === chat.id ? { ...item, title, messages: [...item.messages, userMsg] } : item,
+          item.id === chat.id ? { ...item, title, messages: [...item.messages, userMsg],
+            ...(options?.documentSource ? { documentSources: [...(item.documentSources ?? []), { ...options.documentSource, messageId: userMsg.id }] } : {}) } : item,
         ),
       }));
     } else if (resume) {
@@ -2886,7 +2995,7 @@ export function CommandApp() {
     }
     const request: TurnRequest = options?.request ?? {
       id: operationId,
-      body: chatTurnBody({
+      body: { ...chatTurnBody({
           chatId: chat.id,
           text,
           memory: chat.memory,
@@ -2902,7 +3011,7 @@ export function CommandApp() {
             ...(options?.accessNotes ?? []),
             ...relevantMemories(memoriesForChat(source, chat), text).map((item) => ({ id: item.id, text: item.text })),
           ].slice(0, 12),
-          botKnowledge: chat.botKnowledge ?? "",
+          botKnowledge: contextPolicy.botKnowledge ? chat.botKnowledge ?? "" : "",
           provider: consultPlan && consultPlan.ok
             ? consultPlan.plan.orchestrator
             : activeLogic ?? (isCustomProvider || otherReady || routedRunner ? selectedProvider : (routed.ok ? routed.id : selectedProvider)),
@@ -2920,9 +3029,11 @@ export function CommandApp() {
           images: snapped.map((image) => ({ dataUrl: image.dataUrl, name: image.name, origin: image.origin })),
           personalityId: chat.personalityId ?? "assistant",
           customPersonality: chat.customPersonality ?? "",
-        }),
+        }), memoryPolicyRevision: preparedRevision, contextPolicy, temporary: chat.temporary,
+        projectContext,
+        freeOnly: currentFreeOnly.current, consultHelpers: orchestrating ? consultHelpers : [], maxHelpers: consultHelpers.length },
     };
-    function reportTurnError(message: string, deliveryUncertain: boolean) {
+    function reportTurnError(message: string, deliveryUncertain: boolean, envelope?: FailureEnvelope) {
       const useOriginal = deliveryUncertain || options?.request !== undefined || options?.operationId !== undefined;
       markDelivery(useOriginal ? "unconfirmed" : "failed");
       const retry = () => {
@@ -2940,10 +3051,16 @@ export function CommandApp() {
         });
       };
       const kind = classifyHonestFailure(message);
-      const description = useOriginal ? `${message} Retry uses the original send ID so the server can recognize an already received request.` : message;
-      reportFailure(description, kind ? honestFailureAuditAction(kind) : "chat_failed", chat.id, retry);
+      const canReplay = useOriginal && !["reauthenticate", "repair-permissions", "never", "wait"].includes(envelope?.retryPolicy ?? "");
+      const description = canReplay ? `${message} Retry uses the original send ID so the server can recognize an already received request.` : message;
+      reportFailure(description, kind ? honestFailureAuditAction(kind) : "chat_failed", chat.id, retry, "retry", {
+        envelope: envelope ? { ...envelope, message: description, operationId: request.id, retryPolicy: canReplay ? "replay-receipt" : envelope.retryPolicy } : undefined,
+        operationId: request.id, subsystem: "chat", provider: String(request.body.provider), stage: "response", operationKind: "generation", outcome: deliveryUncertain ? "unknown" : "failed", retryPolicy: canReplay ? "replay-receipt" : "review", bindings: { chatId: chat.id }, temporary: chat.temporary,
+      });
       setFailure((current) => current ? { ...current, chatId: chat.id } : current);
     }
+    let deltaFrame: number | null = null;
+    let pendingDeltas = "";
     try {
       const fingerprint = await sha256(JSON.stringify(request.body));
       if (savedRoute && fingerprint !== savedRoute.fingerprint) {
@@ -2969,21 +3086,35 @@ export function CommandApp() {
         body: request.body,
         onDelta: (chunk) => {
           if (generation !== turnGen.current || turnOwner.current !== draftOwner) return;
-          setLiveText((current) => current + chunk);
+          pendingDeltas += chunk;
+          if (deltaFrame === null) deltaFrame = requestAnimationFrame(() => {
+            deltaFrame = null;
+            const update = pendingDeltas; pendingDeltas = "";
+            if (generation === turnGen.current && turnOwner.current === draftOwner) setLiveText((current) => current + update);
+          });
         },
       });
+      if (deltaFrame !== null) cancelAnimationFrame(deltaFrame);
+      deltaFrame = null; pendingDeltas = "";
       if (generation !== turnGen.current || turnOwner.current !== draftOwner) return null;
       setBusy(false);
       setLiveText("");
       if (turnAbort.current === controller) turnAbort.current = null;
       if (result.ok && result.provider) setNotice(`${result.provider} answered.`);
       if (!shouldStoreReply(result)) {
+        if (!result.ok && result.helperReceipts?.length) {
+          const receipts = result.helperReceipts;
+          setWs((previous) => ({ ...previous, chats: previous.chats.map((item) => item.id !== chat.id ? item : {
+            ...item, messages: item.messages.map((message) => message.id === userMessageId
+              ? { ...message, executionId: operationId, helperReceipts: receipts } : message),
+          }) }));
+        }
         const message = result.ok ? "The provider returned an empty reply." : result.error;
         if (message === STOPPED_REPLY) {
           markDelivery("stopped");
           return null;
         }
-        reportTurnError(message, result.ok || result.deliveryUncertain === true);
+        reportTurnError(message, result.ok || result.deliveryUncertain === true, result.ok ? undefined : result.failureEnvelope);
         return null;
       }
       setWs((prev) => {
@@ -2999,11 +3130,14 @@ export function CommandApp() {
                       id: crypto.randomUUID(),
                       role: "assistant" as const,
                       content: result.text,
+                      executionId: operationId,
+                      executionEvidence: createExecutionEvidence(operationId, result),
                       at: new Date().toISOString(),
                       model: result.model,
                       routingMode,
                       ...(result.provider ? { provider: result.provider } : {}),
                       ...(result.requestedModel ? { requestedModel: result.requestedModel } : {}),
+                      ...(result.helperReceipts?.length ? { helperReceipts: result.helperReceipts } : {}),
                       ...(result.memorySaved === true
                         ? {
                             memorySaved: true as const,
@@ -3042,6 +3176,7 @@ export function CommandApp() {
         return pushAudit(
           pushUsage(next, {
             id: crypto.randomUUID(),
+            executionId: operationId,
             chatId: chat.id,
             at: new Date().toISOString(),
             provider: result.provider || undefined,
@@ -3056,6 +3191,7 @@ export function CommandApp() {
           tierLabel,
         );
       });
+      clearFailure(chat.id, { ownerId: draftOwner, operationId: request.id, bindings: { chatId: chat.id }, verified: true, checks: ["same-owner", "current-authorization", "same-resource", "actual-outcome"] });
       return result.text;
     } catch (caught) {
       if (generation !== turnGen.current || turnOwner.current !== draftOwner) return null;
@@ -3070,6 +3206,7 @@ export function CommandApp() {
       reportTurnError(message, true);
       return null;
     } finally {
+      if (deltaFrame !== null) cancelAnimationFrame(deltaFrame);
       clearTurnTimeout();
       if (generation === turnGen.current) {
         setBusy(false);
@@ -3187,9 +3324,12 @@ export function CommandApp() {
     });
   }
 
-  function exportActive(textOnly = false) {
+  async function exportActive(textOnly = false) {
     if (!active) return;
-    const packed = exportChat(ws, active.id);
+    const exportOwner = draftOwner;
+    const exported = await prepareMediaExport({ ...ws, chats: [active] }, accountImageStore(exportOwner));
+    if (turnOwner.current !== exportOwner) return;
+    const packed = exportChat(exported.workspace, active.id);
     if ("error" in packed) {
       setError(packed.error);
       return;
@@ -3199,7 +3339,7 @@ export function CommandApp() {
       return `${speaker}
 ${message.content}`;
     }).join("\n\n");
-    const blob = new Blob([textOnly ? plain : packed.json], { type: textOnly ? "text/plain;charset=utf-8" : "application/json" });
+    const blob = new Blob([textOnly ? plain : JSON.stringify({ ...JSON.parse(packed.json), assets: exported.assets }, null, 2)], { type: textOnly ? "text/plain;charset=utf-8" : "application/json" });
     const link = document.createElement("a");
     link.href = URL.createObjectURL(blob);
     link.download = textOnly ? packed.filename.replace(/\.json$/, ".txt") : packed.filename;
@@ -3225,7 +3365,7 @@ ${message.content}`;
     });
   }
 
-  async function deliverPlanned(chat: Chat, full: string, source: Workspace, images: ImageAttachment[]): Promise<boolean> {
+  async function deliverPlanned(chat: Chat, full: string, source: Workspace, images: ImageAttachment[], documentSource?: Staged["source"]): Promise<boolean> {
     if (turnOwner.current !== draftOwner) return false;
     deliverStoredUser.current = false;
     const bot = routeForBotChat(chat, { provider: providerChoice, modelTier });
@@ -3244,6 +3384,7 @@ ${message.content}`;
         ...(call.route ? { logicRoute: call.route } : {}),
         skipUserMessage: index > 0,
         isolateOutputs: index > 0,
+        ...(index === 0 ? { documentSource } : {}),
       });
       if (textOut == null) return false;
       if (index === plan.calls.length - 1 && textOut.trim() &&
@@ -3345,13 +3486,13 @@ ${message.content}`;
     setView("chat");
     setWs((prev) => {
       let next = { ...prev, chats: [made.chat, ...prev.chats] };
-      if (file && !made.chat.temporary) next = addLocalFile(next, { name: file.name, text: file.text, projectId: projectChoice || null });
+      if (file && !file.source && !made.chat.temporary) next = addLocalFile(next, { name: file.name, text: file.text, projectId: projectChoice || null });
       return pushAudit(next, "create_chat", made.chat.id, `memory ${made.chat.memory}; ${made.chat.autonomy}`);
     });
     if (settleIntent(made.chat, full, source)) return;
     const effortPath = resolveSendPath(composerEffort);
     if (effortPath.notice) setNotice(effortPath.notice);
-    const finished = await deliverPlanned(made.chat, full, { ...ws, chats: [made.chat, ...ws.chats] }, images);
+    const finished = await deliverPlanned(made.chat, full, { ...ws, chats: [made.chat, ...ws.chats] }, images, file?.source);
     if (!finished && !deliverStoredUser.current) {
       const scope = JSON.stringify([draftOwner, made.chat.id, made.chat.temporary]);
       const persist = Boolean(draftOwner) && !made.chat.temporary;
@@ -3372,42 +3513,56 @@ ${message.content}`;
       });
       return;
     }
+    const operation = operations.current.begin("research");
+    const researchOperationId = retry?.id ?? crypto.randomUUID();
+    const isCurrent = () => operations.current.current(operation) && !wsRef.current.halted;
     researchFlight.current = true;
     setResearchPending(true);
     try {
-      const result = await searchWeb({ data: { query, freeOnly: researchFreeOnly, retryQueries: retry?.steps?.filter((step) => !step.ok).map((step) => step.query) } });
-      if (!draftOwner || turnOwner.current !== draftOwner) return;
+      const fresh = await searchWeb({ data: { query, freeOnly: researchFreeOnly, depth: retry?.result?.report?.depth ?? researchDepth,
+        researchConfigRevision: retry?.result?.route?.configurationRevision,
+        reportId: retry?.result?.persistence?.reportId, expectedRevision: retry?.result?.persistence?.revision,
+        retryQueries: retry?.steps?.filter((step) => !step.ok).map((step) => step.query) } });
+      const result = retry?.result && fresh.ok ? mergeResearchEvidence(retry.result, fresh) : fresh;
+      if (!isCurrent()) return;
       setError(null);
       setWs((prev) => pushAudit(prev, result.configured && result.ok ? "research_result" : "research_refused", "search", result.ok ? `${result.citations.length} sources` : "no citation"));
       if (!result.ok) {
+        setResearchResult(result);
+        const failedReport: ResearchReport = { id: researchOperationId, question: query,
+          summary: result.summary ?? "", citations: result.citations, steps: result.steps, at: new Date().toISOString(), result };
         reportFailure(result.error || "Research refused. No citations were created.", "research_failed", "search", () => {
-          void startResearch(query, retry);
-        });
+          void startResearch(query, failedReport);
+        }, "none", { operationId: researchOperationId, subsystem: "research", provider: result.route?.provider, stage: "response", outcome: result.partial ? "partial" : "unknown", operationKind: "generation", retryPolicy: "review", bindings: { reportId: result.persistence?.reportId, revision: result.route?.configurationRevision } });
       } else {
         const steps = retry?.steps?.map((step) => result.steps?.find((current) => current.query === step.query) ?? step) ?? result.steps;
         const citations = [...new Map([...(retry?.citations ?? []), ...result.citations].map((item) => [item.url, item])).values()];
         const summary = retry && steps ? `${steps.filter((step) => step.ok).length} of ${steps.length} searches succeeded.` : result.summary || "";
-        const report: ResearchReport = { id: retry?.id ?? crypto.randomUUID(), question: query, steps, summary, citations, at: new Date().toISOString() };
+        const report: ResearchReport = { id: retry?.id ?? result.persistence?.reportId ?? crypto.randomUUID(), question: query, steps, summary, citations, at: new Date().toISOString(), result };
+        setResearchResult(result); setResearchRevision((value) => value + 1);
         setResearchReportQuestion(query);
         setResearchCitations(citations);
         setResearchNote(summary);
         setResearchSteps(steps);
         setResearchHistory((current) => {
-          if (turnOwner.current !== draftOwner) return current;
+          if (!isCurrent()) return current;
           const next = [report, ...current.filter((item) => item.id !== report.id)].slice(0, 8);
           try { localStorage.setItem(`amcos.research.v2.${draftOwner}`, JSON.stringify(next)); } catch { /* private mode */ }
           return next;
         });
-        clearFailure();
+        clearFailure("search", { ownerId: draftOwner, operationId: researchOperationId, bindings: { reportId: result.persistence?.reportId, revision: result.route?.configurationRevision }, verified: result.ok && !result.partial, checks: ["same-owner", "current-authorization", "same-resource", "current-revision", "halt-clear", "fresh-approval", "actual-outcome"] });
       }
     } catch (caught) {
+      if (!isCurrent()) return;
       const message = caught instanceof Error ? caught.message : "The search did not run. No citations were created.";
       reportFailure(message, "research_failed", "search", () => {
         void startResearch(query, retry);
-      });
+      }, "none", { operationId: researchOperationId, subsystem: "research", stage: "response", outcome: "unknown", operationKind: "generation", retryPolicy: "review", bindings: { reportId: retry?.result?.persistence?.reportId, revision: retry?.result?.route?.configurationRevision } });
     } finally {
-      researchFlight.current = false;
-      setResearchPending(false);
+      if (operations.current.finish(operation)) {
+        researchFlight.current = false;
+        setResearchPending(false);
+      }
     }
   }
 
@@ -3426,6 +3581,10 @@ ${message.content}`;
     setAgentNote(null);
     setAgentLog([]);
     setAgentImages([]);
+    if (active) {
+      const saved = await prepareMemoryDispatch(ws);
+      if (!saved.ok) { setAgentBusy(false); setAgentNote(saved.error); return; }
+    }
     const plannerScope = active ? workspaceForChat(ws, active) : emptyWorkspace();
     const plannerImages = pendingImages;
     setPendingImages([]);
@@ -3438,6 +3597,8 @@ ${message.content}`;
         headers: { "content-type": "application/json", ...(token ? { authorization: `Bearer ${token}` } : {}) },
         body: JSON.stringify({
           goal,
+          chatId: active?.id,
+          memoryPolicyRevision: active ? await memoryPolicyRevision(ws, active) : undefined,
           freeOnly: currentFreeOnly.current,
           projects: plannerScope.projects.map((project) => project.name),
           chats: plannerScope.chats.map((chat) => chat.title),
@@ -3607,16 +3768,16 @@ ${message.content}`;
     setPendingImages([]);
     const source = ws;
     if (settleIntent(active, full, source)) {
-      if (file && !active.temporary) setWs((prev) => addLocalFile(prev, { name: file.name, text: file.text, projectId: active.projectId }));
+      if (file && !file.source && !active.temporary) setWs((prev) => addLocalFile(prev, { name: file.name, text: file.text, projectId: active.projectId }));
       await releaseNextCue();
       return;
     }
-    if (file && !active.temporary) {
+    if (file && !file.source && !active.temporary) {
       setWs((prev) => addLocalFile(prev, { name: file.name, text: file.text, projectId: active.projectId }));
     }
     const effortPath = resolveSendPath(composerEffort);
     if (effortPath.notice) setNotice(effortPath.notice);
-    const finished = await deliverPlanned(active, full, ws, images);
+    const finished = await deliverPlanned(active, full, ws, images, file?.source);
     if (!finished && !deliverStoredUser.current) {
       setDraft((current) => current || text);
       if (file) setStaged((current) => current ?? file);
@@ -3643,6 +3804,7 @@ ${message.content}`;
     setError(null);
     setBusy(true);
     setLiveText("");
+    const mediaOperationId = opts?.retry ? [...(targetChat?.messages ?? [])].reverse().find((message) => message.role === "user" && message.content.startsWith("/imagine "))?.deliveryOperationId ?? crypto.randomUUID() : crypto.randomUUID();
     const token = getBearerToken();
     const prefix = previewPathPrefix(window.location.hostname, window.location.pathname) ?? "";
     let chat = targetChat;
@@ -3674,6 +3836,7 @@ ${message.content}`;
         id: crypto.randomUUID(),
         role: "user" as const,
         content: `/imagine ${prompt}`,
+        deliveryOperationId: mediaOperationId,
         at: new Date().toISOString(),
       };
       setWs((prev) => ({
@@ -3689,7 +3852,7 @@ ${message.content}`;
         ),
       }));
     }
-    const rememberImagineFailure = (failure: ReturnType<typeof imageGenerationFailure>) => {
+    const rememberImagineFailure = (failure: ReturnType<typeof imageGenerationFailure>, envelope?: FailureEnvelope) => {
       setWs((prev) => ({
         ...prev,
         chats: prev.chats.map((item) =>
@@ -3702,7 +3865,7 @@ ${message.content}`;
                     id: crypto.randomUUID(),
                     role: "assistant" as const,
                     kind: "error" as const,
-                    content: "Couldn't create the image. Nothing was saved. Try again, or edit your prompt.",
+                    content: "Image delivery was not confirmed. Open Library → Media → Generation history to inspect the saved operation before generating again.",
                     at: new Date().toISOString(),
                   },
                 ],
@@ -3710,8 +3873,11 @@ ${message.content}`;
             : item,
         ),
       }));
-      setWs((prev) => pushAudit(prev, "image_generation_failed", chatId, failure.message));
+      reportFailure(failure.message, "image_generation_failed", `imagine:${chatId}`, null, "none", { envelope, operationId: mediaOperationId, subsystem: "image", provider: "xai", stage: "response", outcome: "unknown", operationKind: "generation", bindings: { chatId }, temporary: chat?.temporary });
     };
+    const operation = operations.current.begin("image");
+    const chatGeneration = turnGen.current;
+    const isCurrent = () => operations.current.current(operation) && !wsRef.current.halted && wsRef.current.chats.some((item) => item.id === chatId);
     imagineInFlight.current = true;
     try {
       const response = await fetch(`${prefix}/api/mind/media/generate`, {
@@ -3720,15 +3886,16 @@ ${message.content}`;
           "content-type": "application/json",
           ...(token ? { authorization: `Bearer ${token}` } : {}),
         },
-        body: JSON.stringify({ prompt, n: 1, freeOnly: currentFreeOnly.current }),
+        body: JSON.stringify({ operationId: mediaOperationId, chatId, prompt, n: imageCount, retainResult: !chat.temporary, freeOnly: currentFreeOnly.current }),
       });
       const payload = (await response.json()) as {
         ok?: boolean;
         error?: string;
+        failureEnvelope?: unknown;
         model?: string;
         images?: { dataUrl: string; mime?: string; name?: string }[];
       };
-      if (turnOwner.current !== draftOwner) return;
+      if (!isCurrent()) return;
       if (!response.ok || !payload.ok || !payload.images?.length) {
         rememberImagineFailure(
           imageGenerationFailure({
@@ -3738,16 +3905,17 @@ ${message.content}`;
             serverError: payload.error || "",
             n: 1,
             target: `imagine:${chatId}`,
-          }),
+          }), readFailureEnvelope(payload.failureEnvelope) ?? undefined,
         );
         return;
       }
-      const images: ImageAttachment[] = payload.images.map((image, index) => ({
+      const images: ImageAttachment[] = await identifyImages(payload.images.map((image, index) => ({
         dataUrl: image.dataUrl,
-        origin: "generated",
+        origin: "generated" as const,
         name: image.name || `imagine-${index + 1}.jpg`,
         mime: image.mime,
-      }));
+      })), { operationId: mediaOperationId });
+      if (!isCurrent()) return;
       const model = payload.model?.trim();
       setImagesInScope(imageScope, persistImages, (previous) => {
         if (previous.length + images.length > 4) {
@@ -3757,7 +3925,7 @@ ${message.content}`;
         setNotice("Image created and added to the composer.");
         return [...previous, ...images];
       });
-      clearFailure();
+      clearFailure(`imagine:${chatId}`, { ownerId: draftOwner, operationId: mediaOperationId, bindings: { chatId }, verified: true, checks: ["same-owner", "current-authorization", "same-resource", "halt-clear", "fresh-approval", "actual-outcome"] });
       setWs((prev) => {
         const next = {
           ...prev,
@@ -3773,7 +3941,7 @@ ${message.content}`;
                       content: model ? `Generated with ${model}.` : "Image generated. The provider did not report a model.",
                       at: new Date().toISOString(),
                       model,
-                      images: images.map((image) => ({ dataUrl: image.dataUrl, name: image.name, origin: image.origin })),
+                      images: images.map((image) => ({ ...image })),
                     },
                   ],
                 }
@@ -3783,7 +3951,7 @@ ${message.content}`;
         return pushAudit(next, "imagine_generate", chatId, model || "model unreported");
       });
     } catch (caught) {
-      if (turnOwner.current !== draftOwner) return;
+      if (!isCurrent()) return;
       const normalized = normalizeClientFailureMessage(caught);
       const kind = classifyHonestFailure(normalized);
       rememberImagineFailure(
@@ -3796,16 +3964,18 @@ ${message.content}`;
         }),
       );
     } finally {
-      imagineInFlight.current = false;
-      setBusy(false);
-      setLiveText("");
+      if (operations.current.finish(operation)) {
+        imagineInFlight.current = false;
+        if (chatGeneration === turnGen.current) { setBusy(false); setLiveText(""); }
+      }
     }
   }
 
-  async function runVideo(promptRaw?: string) {
-    if (currentFreeOnly.current) { setError("Free-only mode is on. This action uses a separate xAI provider that may charge."); return; }
+  async function runVideo(promptRaw?: string, resume?: SavedMediaOperation) {
+    if (!resume && currentFreeOnly.current) { setError("Free-only mode is on. This action uses a separate xAI provider that may charge."); return; }
     if (videoInFlight.current) return;
-    const prompt = (promptRaw ?? draft).trim();
+    const prompt = resume ? "Saved video generation" : (promptRaw ?? draft).trim();
+    const mediaOperationId = resume?.id ?? crypto.randomUUID();
     if (!prompt) {
       setError("Write what the video should show, then send.");
       return;
@@ -3818,10 +3988,11 @@ ${message.content}`;
     }
     setDraft("");
     setError(null);
-    setNotice("Video started. A short clip usually takes about a minute.");
+    setNotice(null);
     const token = getBearerToken();
     const prefix = previewPathPrefix(window.location.hostname, window.location.pathname) ?? "";
-    let chat = active;
+    let chat = resume ? wsRef.current.chats.find((item) => item.id === resume.chatId) ?? null : active;
+    if (resume && !chat) { setError("The original conversation is unavailable. The generation remains in media history."); return; }
     if (!chat) {
       const made = createChat(ws, {
         memory: memoryChoice,
@@ -3846,7 +4017,7 @@ ${message.content}`;
       content: `/video ${prompt}`,
       at: new Date().toISOString(),
     };
-    setWs((prev) => ({
+    if (!resume) setWs((prev) => ({
       ...prev,
       chats: prev.chats.map((item) =>
         item.id === chatId
@@ -3858,9 +4029,20 @@ ${message.content}`;
           : item,
       ),
     }));
+    const operation = operations.current.begin("video");
+    const isCurrent = () => operations.current.current(operation) && !wsRef.current.halted && wsRef.current.chats.some((item) => item.id === chatId);
     videoInFlight.current = true;
-    const fail = (message: string) => {
-      setError(message);
+    let progress = createVideoProgress({ ownerId: draftOwner, session: operationSession, chatId, operationId: mediaOperationId }, Boolean(resume));
+    setVideoProgress(progress);
+    const publishProgress = (stage: "accepted" | "retrying" | "ready", requestId?: string) => {
+      if (!isCurrent()) return;
+      progress = advanceVideoProgress(progress, stage, requestId);
+      setVideoProgress(progress);
+    };
+    const fail = (message: string, envelope?: FailureEnvelope) => {
+      if (!isCurrent()) return;
+      setVideoProgress(null);
+      reportFailure(message, "video_failed", `video:${chatId}`, null, "none", { envelope, operationId: mediaOperationId, subsystem: "video", provider: "xai", stage: "response", outcome: "unknown", operationKind: "generation", bindings: { chatId }, temporary: chat?.temporary });
       setWs((prev) => ({
         ...prev,
         chats: prev.chats.map((item) =>
@@ -3874,68 +4056,77 @@ ${message.content}`;
       }));
     };
     try {
+      let started: { ok?: boolean; error?: string; requestId?: string; model?: string; failureEnvelope?: unknown } = resume ? { ok: true, requestId: resume.result?.requestId, model: resume.result?.model } : {};
+      if (!resume) {
       const start = await fetch(`${prefix}/api/mind/media/generate`, {
         method: "POST",
         headers: {
           "content-type": "application/json",
           ...(token ? { authorization: `Bearer ${token}` } : {}),
         },
-        body: JSON.stringify({ kind: "video", action: "start", prompt, duration: 5, freeOnly: currentFreeOnly.current }),
+        body: JSON.stringify({ operationId: mediaOperationId, chatId, kind: "video", action: "start", prompt, duration: videoDuration, retainResult: !chat.temporary, freeOnly: currentFreeOnly.current }),
       });
-      const started = (await start.json()) as { ok?: boolean; error?: string; requestId?: string; model?: string };
+      started = (await start.json()) as typeof started;
+      if (!isCurrent()) return;
       if (!start.ok || !started.ok || !started.requestId) {
-        fail(started.error || "Video did not start.");
+        fail(started.error || "Video did not start.", readFailureEnvelope(started.failureEnvelope) ?? undefined);
         return;
       }
+      }
+      if (!started.requestId) { fail("Provider acceptance is unknown. Inspect this saved operation before starting another video."); return; }
+      publishProgress("accepted", started.requestId);
       const requestId = started.requestId;
       const model = started.model || "grok-imagine-video";
-      const deadline = Date.now() + 8 * 60 * 1000;
-      while (Date.now() < deadline) {
-        await new Promise((resolve) => setTimeout(resolve, 5000));
-        const statusResponse = await fetch(`${prefix}/api/mind/media/generate`, {
-          method: "POST",
-          headers: {
-            "content-type": "application/json",
-            ...(token ? { authorization: `Bearer ${token}` } : {}),
-          },
-          body: JSON.stringify({ kind: "video", action: "status", requestId }),
-        });
-        const status = (await statusResponse.json()) as { ok?: boolean; error?: string; state?: string; url?: string; model?: string };
-        if (status.state === "done" && status.url) {
-          setNotice("Video is ready.");
+      const observed = await pollSavedVideo({ current: isCurrent,
+        onRetry: () => publishProgress("retrying"),
+        status: async () => {
+          const response = await fetch(`${prefix}/api/mind/media/generate`, {
+            method: "POST", signal: AbortSignal.timeout(20_000),
+            headers: { "content-type": "application/json", ...(token ? { authorization: `Bearer ${token}` } : {}) },
+            body: JSON.stringify({ operationId: mediaOperationId, kind: "video", action: "status", requestId }),
+          });
+          return { status: response.status, body: await response.json(), retryAfter: Number(response.headers.get("retry-after")) || undefined };
+        },
+      });
+      if (!isCurrent() || observed.kind === "stopped") return;
+      if (observed.kind === "done") {
+        const status = observed.status;
+          publishProgress("ready");
           setWs((prev) => ({
             ...prev,
             chats: prev.chats.map((item) =>
-              item.id === chatId
+              item.id === chatId && !item.messages.some((message) => message.id === `${mediaOperationId}-result`)
                 ? {
                     ...item,
                     messages: [
                       ...item.messages,
                       {
-                        id: crypto.randomUUID(),
+                        id: `${mediaOperationId}-result`,
                         role: "assistant" as const,
                         content: `Generated with ${status.model || model}. The clip is below. The link expires, so play or download it while it is here.`,
                         at: new Date().toISOString(),
                         model: status.model || model,
                         videoUrl: status.url,
+                        videoOperationId: mediaOperationId,
+                        videoRetention: "provider-temporary" as const,
+                        videoExpiresAt: null,
                       },
                     ],
                   }
                 : item,
             ),
           }));
-          return;
-        }
-        if (!statusResponse.ok || status.ok === false || status.state === "failed") {
-          fail(status.error || "Video generation failed.");
-          return;
-        }
+        clearFailure(`video:${chatId}`, { ownerId: draftOwner, operationId: mediaOperationId, bindings: { chatId }, verified: true, checks: ["same-owner", "current-authorization", "same-resource", "halt-clear", "fresh-approval", "actual-outcome"] });
+        return;
       }
-      fail("The video is still rendering. Nothing was invented in its place.");
+      fail(observed.error);
     } catch {
       fail("Could not reach the video service.");
     } finally {
-      videoInFlight.current = false;
+      if (operations.current.finish(operation)) {
+        videoInFlight.current = false;
+        if (wsRef.current.halted) setVideoProgress(null);
+      }
     }
   }
 
@@ -3970,8 +4161,12 @@ ${message.content}`;
     }
     setImagineEditError(null);
     setBusy(true);
+    const mediaOperationId = crypto.randomUUID();
     const token = getBearerToken();
     const prefix = previewPathPrefix(window.location.hostname, window.location.pathname) ?? "";
+    const operation = operations.current.begin("image");
+    const chatGeneration = turnGen.current;
+    const isCurrent = () => operations.current.current(operation) && !wsRef.current.halted;
     imagineInFlight.current = true;
     try {
       const response = await fetch(`${prefix}/api/mind/media/generate`, {
@@ -3980,15 +4175,16 @@ ${message.content}`;
           "content-type": "application/json",
           ...(token ? { authorization: `Bearer ${token}` } : {}),
         },
-        body: JSON.stringify({ prompt, image: imageDataUrl, mode: "edit", n: 1, freeOnly: currentFreeOnly.current }),
+        body: JSON.stringify({ operationId: mediaOperationId, chatId: active?.id, retainResult: !(active?.temporary ?? temporary), prompt, image: imageDataUrl, mode: "edit", n: 1, freeOnly: currentFreeOnly.current }),
       });
       const payload = (await response.json()) as {
         ok?: boolean;
         error?: string;
+        failureEnvelope?: unknown;
         model?: string;
         images?: { dataUrl: string; mime?: string; name?: string }[];
       };
-      if (turnOwner.current !== draftOwner) return;
+      if (!isCurrent()) return;
       if (!response.ok || !payload.ok || !payload.images?.length) {
         const failure = imageGenerationFailure({
           mode: "edit",
@@ -3999,15 +4195,16 @@ ${message.content}`;
           n: 1,
         });
         setImagineEditError(failure.message);
-        setWs((previous) => pushAudit(previous, failure.kind, failure.target, failure.message));
+        reportFailure(failure.message, failure.kind, `imagine-edit:${active?.id ?? "draft"}`, null, "none", { envelope: readFailureEnvelope(payload.failureEnvelope) ?? undefined, operationId: mediaOperationId, subsystem: "image", provider: "xai", stage: "response", outcome: "unknown", operationKind: "generation", bindings: { chatId: active?.id }, temporary: active?.temporary ?? temporary });
         return;
       }
-      const images: ImageAttachment[] = payload.images.map((image, index) => ({
+      const images: ImageAttachment[] = await identifyImages(payload.images.map((image, index) => ({
         dataUrl: image.dataUrl,
-        origin: "edited",
+        origin: "edited" as const,
         name: image.name || `imagine-edit-${index + 1}.jpg`,
         mime: image.mime,
-      }));
+      })), { operationId: mediaOperationId, parent: imageDataUrl, editPrompt: prompt });
+      if (!isCurrent()) return;
       if (!active) {
         setPendingImages((previous) => {
           if (previous.length + images.length > 4) {
@@ -4046,7 +4243,7 @@ ${message.content}`;
                       content: payload.model ? `Edited with ${payload.model}.` : "Image edited. The provider did not report a model.",
                       at: new Date().toISOString(),
                       model: payload.model,
-                      images: images.map((image) => ({ dataUrl: image.dataUrl, name: image.name, origin: image.origin })),
+                      images: images.map((image) => ({ ...image })),
                     },
                   ],
                 }
@@ -4055,7 +4252,7 @@ ${message.content}`;
         }));
       }
     } catch (caught) {
-      if (turnOwner.current !== draftOwner) return;
+      if (!isCurrent()) return;
       const normalized = normalizeClientFailureMessage(caught);
       const failure = imageGenerationFailure({
         mode: "edit",
@@ -4065,10 +4262,12 @@ ${message.content}`;
         n: 1,
       });
       setImagineEditError(failure.message);
-      setWs((previous) => pushAudit(previous, failure.kind, failure.target, failure.message));
+      reportFailure(failure.message, failure.kind, `imagine-edit:${active?.id ?? "draft"}`, null, "none", { operationId: mediaOperationId, subsystem: "image", provider: "xai", stage: "response", outcome: "unknown", operationKind: "generation", bindings: { chatId: active?.id }, temporary: active?.temporary ?? temporary });
     } finally {
-      imagineInFlight.current = false;
-      setBusy(false);
+      if (operations.current.finish(operation)) {
+        imagineInFlight.current = false;
+        if (chatGeneration === turnGen.current) setBusy(false);
+      }
     }
   }
   function enableMemory() {
@@ -4158,8 +4357,8 @@ ${message.content}`;
       await addImageAttachment(file);
       return;
     }
-    if (file.size > 400_000) {
-      setError("That file is too large to keep in this browser.");
+    if (file.size > MAX_DOCUMENT_INPUT_BYTES) {
+      setError("Choose a file smaller than 5 MB.");
       return;
     }
     if (/\.(heic)$/i.test(file.name)) {
@@ -4178,17 +4377,25 @@ ${message.content}`;
       return;
     }
     const coverage = pdf?.coverage ? `[Partial PDF: ${pdf.coverage}]\n` : "";
-    const stagedFile = { name: file.name, text: coverage + text.slice(0, 40000) };
-    const partial = pdf?.partial || text.length > stagedFile.text.length;
+    const stagedFile = { name: file.name, text: coverage + text.slice(0, MAX_DOCUMENT_TEXT_CHARS) };
+    const partial = Boolean(pdf?.partial) || text.length > MAX_DOCUMENT_TEXT_CHARS;
     if (view === "files") {
-      if (wsRef.current.files.length >= 40) {
-        setError("Library holds 40 text copies. Remove an existing copy before uploading another.");
+      if (wsRef.current.files.length >= MAX_LIBRARY_FILES) {
+        setError(`Library holds ${MAX_LIBRARY_FILES} documents. Remove an existing document before uploading another.`);
         return;
       }
       const savedId = crypto.randomUUID();
-      setWs((prev) => {
-        return addLocalFile(prev, { id: savedId, name: stagedFile.name, text: coverage + text, partial, projectId: libraryProjectId || projectChoice || null });
-      });
+      const uploadOwner = draftOwner;
+      if (!uploadOwner) { setError("Sign in before storing document originals."); return; }
+      const original = await saveDocumentOriginal(uploadOwner, file, savedId);
+      const retained = text.slice(0, MAX_DOCUMENT_TEXT_CHARS);
+      const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(retained));
+      const textSha256 = Array.from(new Uint8Array(digest), (value) => value.toString(16).padStart(2, "0")).join("");
+      if (turnOwner.current !== uploadOwner) return;
+      setWs((prev) => addLocalFile(prev, { id: savedId, name: stagedFile.name, text: retained, partial,
+        projectId: libraryProjectId || projectChoice || null, original, textSha256, evidenceIndex: pdf?.evidenceIndex,
+        extraction: { method: pdf ? "pdf-text" : "plain-text", extractedCharacters: pdf?.extractedCharacters ?? text.length, retainedCharacters: retained.length,
+          coverage: pdf?.coverage ?? (partial ? "Text truncated at the document limit." : "Complete text"), at: new Date().toISOString() } }));
       setOpenFileId(savedId);
       setLibraryBand("preview");
       const savedCopy = partial ? `a partial text copy of “${file.name}”` : pdf ? `extracted text from “${file.name}”` : `“${file.name}”`;
@@ -4210,7 +4417,11 @@ ${message.content}`;
   }
 
   async function downloadArchive() {
-    const pack = await packWorkspace(ws, includeTemporary);
+    const exportOwner = draftOwner;
+    const exported = await prepareMediaExport({ ...ws, chats: includeTemporary ? ws.chats : ws.chats.filter((chat) => !chat.temporary) }, accountImageStore(exportOwner));
+    if (turnOwner.current !== exportOwner) return;
+    const packed = await packWorkspace(exported.workspace, includeTemporary);
+    const pack = { ...packed, resources: { ...packed.resources, assets: exported.assets } };
     const blob = new Blob([JSON.stringify(pack, null, 2)], { type: "application/json" });
     const url = URL.createObjectURL(blob);
     const link = document.createElement("a");
@@ -4259,10 +4470,11 @@ ${message.content}`;
         schedules: stopped.schedules.map((job) => (job.enabled ? { ...job, enabled: false } : job)),
       };
     });
-    setNotice("Emergency stop is on. Open runs were canceled and schedules were paused. Logs and memory were kept.");
+    setNotice("Stop requested. This browser blocks new work and schedules are paused; waiting for the server to confirm.");
     try {
       const result = await setExecutionHalt({ data: { on: true } });
       if (!result.ok) setError(result.error);
+      else setNotice("Account emergency stop confirmed. New dispatches are blocked; requests already accepted by an external provider may still complete. Schedules remain paused.");
     } catch {
       setError("The server did not confirm the stop. Sends are blocked in this browser.");
     }
@@ -4270,7 +4482,9 @@ ${message.content}`;
   async function clearEmergencyStop() {
     setError(null);
     try {
-      const result = await setExecutionHalt({ data: { on: false } });
+      const control = await readExecutionControl();
+      if (control.revision === null) { setError("The account stop state could not be verified. Resume remains blocked."); return; }
+      const result = await setExecutionHalt({ data: { on: false, expectedRevision: control.revision } });
       if (!result.ok) {
         setError(result.error);
         setSpeakCall((current) => ({ ...current, error: result.error }));
@@ -4320,43 +4534,94 @@ ${message.content}`;
     reportFailure(message, "notion_search_failed", "notion:search", () => { void searchConnectedNotion(query); });
   }
 
-  function clearFailure() {
-    setFailure(null);
-    setError(null);
+  function clearFailure(target?: string, proof?: RecoveryProof) {
+    if (!target || !proof) return;
+    let confirmed = false;
+    updateIncidentJournal((current) => {
+      let next = current;
+      for (const item of current.filter((row) => row.target === target)) {
+        next = verifyIncidentRecovery(next, item.id, proof);
+        if (next.find((row) => row.id === item.id)?.state === "resolved" && item.id === failure?.auditId) confirmed = true;
+      }
+      return next;
+    });
+    // Temporary incidents are intentionally not persisted; keep their banner
+    // bound to the exact operation instead of another success in this chat.
+    if (failure?.target === target && failure.envelope?.operationId === proof.operationId && proof.verified) {
+      const local = createIncident({ id: failure.auditId, ownerId: draftOwner, envelope: failure.envelope, target, bindings: failure.bindings });
+      if (local && verifyIncidentRecovery([local], local.id, proof)[0]?.state === "resolved") confirmed = true;
+    }
+    if (confirmed) { setFailure(null); setError(null); }
+  }
+  function dismissFailure() {
+    if (failure) updateIncidentJournal((current) => resolveIncident(current, failure.auditId, "acknowledged"));
+    setFailure(null); setError(null);
+  }
+  function recoveryContext(item: Incident) {
+    const bindings = item.recovery.bindings ?? {};
+    // Compare only data whose current identity is available here. The server
+    // remains responsible for grant/revision/permission revalidation on review.
+    const currentBindings = { ...bindings };
+    if (bindings.chatId) {
+      const chat = wsRef.current.chats.find((row) => row.id === bindings.chatId);
+      currentBindings.chatId = chat?.id;
+      if (bindings.workspaceId && chat) currentBindings.workspaceId = chat.notionWorkspaceId ?? undefined;
+    }
+    return { ownerId: draftOwner, halted: wsRef.current.halted, currentBindings };
+  }
+  function openIncidentReview(item: Incident) {
+    const context = recoveryContext(item);
+    const begun = beginIncidentRecovery(incidentsRef.current, item.id, context);
+    const plan = begun.plan ?? planIncidentRecovery(item, context);
+    setNotice(plan.reason);
+    if (!plan.allowed) return;
+    updateIncidentJournal(() => begun.rows);
+    if (plan.chatId) setActiveId(plan.chatId);
+    setView(plan.view === "speak" ? "settings" : plan.view); setNavOpen(false);
+    if (plan.view === "speak") setSettingsPane("voice");
+    else if (plan.view === "settings") setSettingsPane(item.recovery.kind === "authentication" ? "general" : "data");
+    else setSettingsPane(null);
+    if (plan.view === "files") { setLibraryBand("media"); void loadMediaOperations(); }
+    if (plan.view === "research" && plan.bindings.reportId) {
+      const report = researchHistory.find((row) => row.id === plan.bindings.reportId);
+      if (report) { setResearchResult(report.result ?? null); setResearchReportQuestion(report.question); setResearchCitations(report.citations); setResearchNote(report.summary); }
+      else setNotice(`${plan.reason} Saved report: ${plan.bindings.reportId}. Open it in the research library.`);
+    }
   }
 
   function presentReportedFailure(outcome: McpReportedOutcome, auditId: string, retry: (() => void) | null) {
-    const { message, action, target, kind, failureAction } = outcome;
-    setWs((prev) => ({
+    const { action, target, failureAction } = outcome;
+    const envelope = outcome.envelope ?? failureEnvelopeFromAction({ action, target, message: outcome.message });
+    const kind = classifyHonestFailure(envelope);
+    const message = envelope.message;
+    const safeRetry = envelope.retryPolicy === "retry-read" || envelope.retryPolicy === "replay-receipt";
+    const bindings = outcome.bindings;
+    const conversation = bindings?.chatId ? wsRef.current.chats.find((chat) => chat.id === bindings.chatId) : null;
+    const privateOperation = outcome.temporary === true || conversation?.temporary === true;
+    if (!privateOperation) setWs((prev) => ({
       ...prev,
-      audit: retainActivity([{ id: auditId, at: new Date().toISOString(), action, target, result: message }, ...prev.audit]),
+      audit: retainActivity([{ id: auditId, at: new Date().toISOString(), action, target, result: message }, ...prev.audit.filter((row) => row.id !== auditId)]),
     }));
-   setFailure({ message, auditId, retry: onceRetry(retry), kind, action: failureAction });
-    setError(null);
-    setNotice(null);
+    setFailure({ message, auditId, retry: safeRetry ? onceRetry(retry) : null, kind, action: safeRetry ? failureAction : "none", target, envelope, bindings, chatId: bindings?.chatId });
+    const incident = createIncident({ id: auditId, ownerId: draftOwner, envelope, target, bindings, temporary: privateOperation });
+    if (incident) updateIncidentJournal((current) => recordIncident(current, incident));
+    setError(null); setNotice(null);
   }
 
   useMcpFailureMount(({ outcome, retry, localCorrelationId }) => {
     presentReportedFailure(outcome, localCorrelationId, outcome.retryable ? retry : null);
   });
 
-  function reportFailure(message: string, action: string, target: string, retry: (() => void) | null, failureAction: RouteFailureAction = "retry") {
-    const kind = classifyHonestFailure(message);
+  function reportFailure(message: string, action: string, target: string, retry: (() => void) | null, failureAction: RouteFailureAction = "retry", details: FailureDetails & { bindings?: RecoveryBindings; temporary?: boolean } = {}) {
+    const envelope = failureEnvelopeFromAction({ action, target, message, ...details });
+    const kind = classifyHonestFailure(envelope);
     const auditAction = kind ? honestFailureAuditAction(kind) : action;
-    const auditId = crypto.randomUUID();
+    const prior = incidentForOperation(incidentsRef.current, draftOwner, envelope);
+    const auditId = prior?.id ?? crypto.randomUUID();
     const surface = surfaceForReport(auditAction, target);
-    const outcome: McpReportedOutcome = { message, action: auditAction, target, kind, retryable: retry !== null && failureAction === "retry", failureAction };
-    if (
-      surface &&
-      emitFailure(
-        surface,
-        mountFailure(outcome, () => {
-          retry?.();
-        }, auditId),
-      )
-    ) {
-      return;
-    }
+    const safeRetry = envelope.retryPolicy === "retry-read" || envelope.retryPolicy === "replay-receipt";
+    const outcome: McpReportedOutcome = { message: envelope.message, action: auditAction, target, kind, retryable: safeRetry && retry !== null && failureAction === "retry", failureAction, envelope, bindings: details.bindings, temporary: details.temporary };
+    if (surface && emitFailure(surface, mountFailure(outcome, () => { if (safeRetry) retry?.(); }, auditId))) return;
     presentReportedFailure(outcome, auditId, outcome.retryable ? retry : null);
   }
   reportFailureRef.current = reportFailure;
@@ -4615,10 +4880,11 @@ ${message.content}`;
         baseUrl: (typeof localStorage !== "undefined" && localStorage.getItem("amcos.ollama.base")) || undefined,
         model: (typeof localStorage !== "undefined" && localStorage.getItem("amcos.ollama.model")) || undefined,
       });
-      const route = resolveVoiceMode("orchestrator", probe.ok);
-      if (route.fellBack) {
-        applyVoiceMode("direct");
-        setNotice(route.notice ?? DIRECT_FALLBACK_NOTICE);
+      const route = selectedVoiceRoute("orchestrator", probe.ok);
+      if (!route.ok) {
+        const error = "The selected local answer engine is unavailable. Orchestrator remains selected. Retry it or explicitly choose Direct.";
+        setError(error);
+        return { ok: false as const, error };
       }
     }
     interruptSpeakPlayback();
@@ -4655,7 +4921,7 @@ ${message.content}`;
               ...(token ? { Authorization: `Bearer ${token}` } : {}),
             },
             signal: abort.signal,
-            body: JSON.stringify({ audioBase64, mime, freeOnly: currentFreeOnly.current, filename: sanitizeAudioFilename("speak", mime) }),
+            body: JSON.stringify({ audioBase64, mime, transcriptionPolicy, freeOnly: currentFreeOnly.current, filename: sanitizeAudioFilename("speak", mime) }),
           });
           try {
             const body = (await response.json()) as { ok?: boolean; text?: string; error?: string; provider?: string };
@@ -5106,7 +5372,7 @@ ${message.content}`;
       await recorder.start();
       commitDictation({ type: "start" });
       dictationBaseRef.current = draftRef.current;
-      setNotice("This browser has no live speech recognition. Speak, then press Mic again. Words are inserted only after transcription. Nothing is sent.");
+      setNotice(`Recording for ${transcriptionRecipients(transcriptionPolicy)} transcription. Press Mic again to send the recording and insert text. Chat Send stays separate.`);
     } catch {
       serverDictationRef.current = null;
       commitDictation({
@@ -5138,13 +5404,13 @@ ${message.content}`;
         method: "POST",
         credentials: "same-origin",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ audioBase64, mime, freeOnly: currentFreeOnly.current, filename: sanitizeAudioFilename("dictation", mime) }),
+        body: JSON.stringify({ audioBase64, mime, transcriptionPolicy, freeOnly: currentFreeOnly.current, filename: sanitizeAudioFilename("dictation", mime) }),
       });
-      const body = await response.json() as { ok?: boolean; text?: string; error?: string };
+      const body = await response.json() as { ok?: boolean; text?: string; error?: string; provider?: string };
       const text = body.text?.trim() ?? "";
       if (response.ok && body.ok && text) {
         commitDictation({ type: "stop_inserted", text });
-        setNotice("Words inserted into the field. Press Send when you want a reply.");
+        setNotice(`${body.provider ?? "Selected provider"} transcribed this recording. Words are inserted. Press Send when you want a reply.`);
         return;
       }
       commitDictation({ type: "stop_error", message: body.error || "Nothing was transcribed." });
@@ -5359,12 +5625,12 @@ ${message.content}`;
           baseUrl: (typeof localStorage !== "undefined" && localStorage.getItem("amcos.ollama.base")) || undefined,
           model: (typeof localStorage !== "undefined" && localStorage.getItem("amcos.ollama.model")) || undefined,
         });
-        const route = resolveVoiceMode("orchestrator", probe.ok);
-        if (route.fellBack) {
-          applyVoiceMode("direct");
-          const notice = route.notice ?? DIRECT_FALLBACK_NOTICE;
-          setNotice(notice);
-          if (overlayOpenRef.current) setOverlayNotice(notice);
+        const route = selectedVoiceRoute("orchestrator", probe.ok);
+        if (!route.ok) {
+          const message = "The selected local answer engine is unavailable. Orchestrator remains selected. Retry it or choose Direct in Voice settings.";
+          noteConnectFailure("getting_session", message);
+          setSpeakCall((current) => ({ ...current, error: message }));
+          return;
         }
       }
 
@@ -5850,7 +6116,7 @@ ${message.content}`;
                 chats={ws.chats}
                 activeId={activeId}
                 titleFor={shownChatTitle}
-                projects={ws.projects.map((project) => ({ id: project.id, name: project.name }))}
+                projects={ws.projects.filter((project) => !project.archived).map((project) => ({ id: project.id, name: project.name }))}
                 pinnedIds={ws.pins.filter((pin) => pin.kind === "chat").map((pin) => pin.ref)}
                 scheduledChatIds={ws.schedules.flatMap((job) => job.chatId ? [job.chatId] : [])}
                 onOpen={(id) => {
@@ -6370,12 +6636,22 @@ ${message.content}`;
                 className="inline-flex min-h-11 items-center justify-center rounded-panel bg-accent px-4 text-sm font-semibold text-accent-ink"
                 onClick={() => {
                   const retry = failure.retry;
-                  clearFailure();
+                  const item = incidentsRef.current.find((row) => row.id === failure.auditId);
+                  if (item) {
+                    const begun = beginIncidentRecovery(incidentsRef.current, item.id, recoveryContext(item));
+                    if (!begun.plan?.allowed) { setNotice(begun.plan?.reason ?? "Recovery could not be verified."); return; }
+                    updateIncidentJournal(() => begun.rows);
+                  }
+                  setFailure((current) => current ? { ...current, recovering: true, retry: null } : null);
                   retry?.();
                 }}
               >
                 Retry
-              </button> : null}
+              </button> : <button type="button" className="min-h-11 text-accent" onClick={() => {
+                const item = incidentsRef.current.find((row) => row.id === failure.auditId);
+                if (item) openIncidentReview(item);
+                else { setNotice("This temporary operation was not stored. Inspect its current receipt before starting another action."); setView("activity"); }
+              }}>Review recovery</button>}
               <button
                 type="button"
                 data-testid="failure-view-log"
@@ -6393,7 +6669,7 @@ ${message.content}`;
                 type="button"
                 data-testid="failure-dismiss"
                 className="chat-button chat-button--ghost"
-                onClick={() => clearFailure()}
+                onClick={dismissFailure}
               >
                 Dismiss
               </button>
@@ -6417,7 +6693,7 @@ ${message.content}`;
         {notice && (notice.startsWith("This link points at") || notice.startsWith("That bot is archived") || notice.startsWith("Link copied") || notice.startsWith("Clipboard copy")) ? (
           <p role="status" data-testid="share-notice" className="mx-3 mb-2 rounded-panel border border-line px-3 py-2 text-sm text-muted">{notice}</p>
         ) : null}
-        <div ref={(node) => { pageScrollRef.current = node; pinPageScroller(node); }} className={`min-h-0 flex-1 ${view === "chat" || view === "dashboard" || view === "intelligence" ? "overflow-hidden" : "overflow-auto pb-24"}`}>
+        <div ref={(node) => { pageScrollRef.current = node; pinPageScroller(node); }} onScroll={rememberPageScroll} style={{ overflowAnchor: "none" }} className={`min-h-0 flex-1 ${view === "chat" || view === "dashboard" || view === "intelligence" ? "overflow-hidden" : "overflow-auto pb-24"}`}>
           {view === "intelligence" && (
             <EveWorkbench
               workspace={ws}
@@ -6465,7 +6741,7 @@ ${message.content}`;
               onOpenRuns={() => { setView("runs"); setNavOpen(false); }}
               onOpenConnections={() => { setView("connected"); setNavOpen(false); }}
               recording={taskRecording}
-              recordingSeconds={taskSeconds}
+              recordingStartedAt={taskStartedAt}
               onStopRecording={() => void stopTaskRecording()}
             />
           )}
@@ -6498,7 +6774,7 @@ ${message.content}`;
                           chats={getRecentChats(ws.chats, 6)}
                           activeId={activeId}
                           titleFor={shownChatTitle}
-                          projects={ws.projects.map((project) => ({ id: project.id, name: project.name }))}
+                          projects={ws.projects.filter((project) => !project.archived).map((project) => ({ id: project.id, name: project.name }))}
                           pinnedIds={ws.pins.filter((pin) => pin.kind === "chat").map((pin) => pin.ref)}
                           scheduledChatIds={ws.schedules.flatMap((job) => job.chatId ? [job.chatId] : [])}
                          onOpen={(id) => { setActiveId(id); setView("chat"); }}
@@ -6687,7 +6963,7 @@ ${message.content}`;
                     <div className="legacy-composer-voice"><VoiceLevelMeter level={voiceLevel} listening={voiceListening} className="mr-1" /><BrowserDictationControl
                       state={dictation.phase}
                       level={dictationLevel}
-                      elapsedSec={dictationElapsed}
+                      startedAt={dictationStartedAt}
                       disabled={dictationDisabled}
                       onMicClick={onDictationMic}
                       onStop={stopBrowserDictation}
@@ -6724,7 +7000,7 @@ ${message.content}`;
                       Project
                       <select value={projectChoice} onChange={(event) => setProjectChoice(event.target.value)} className="max-w-[60%] bg-transparent">
                         <option value="">None</option>
-                        {ws.projects.map((project) => (
+                        {ws.projects.filter((project) => !project.archived).map((project) => (
                           <option key={project.id} value={project.id}>
                             {project.name}
                           </option>
@@ -6820,7 +7096,7 @@ ${message.content}`;
                       <div className="skeleton h-3" style={{ width: "46%" }} />
                     </div>
                   )}
-                  {ready && ws.projects.length === 0 && (
+                  {ready && ws.projects.filter((project) => !project.archived).length === 0 && (
                     <div className="empty-state mt-3 text-sm text-muted" data-testid="projects-empty">
                       <p className="font-semibold text-fg">No projects yet</p>
                       <p>Create one and it stays on this device until you export it.</p>
@@ -6929,6 +7205,7 @@ ${message.content}`;
               draft={draft}
               error={error}
               notice={notice}
+              mediaNotice={videoProgressMessage(videoProgress, { ownerId: draftOwner, session: operationSession, chatId: active?.id })}
               setDraft={setDraft}
               onPickModule={pickModule}
               onPick={(id) => setActiveId(id)}
@@ -6952,7 +7229,7 @@ ${message.content}`;
               }}
               onDeleteChat={(id, title) => deleteSavedChats([id], `Delete “${title}”`)}
               onDeleteSection={(label, ids) => deleteSavedChats(ids, `Delete ${label}`)}
-              projects={ws.projects.map((project) => ({ id: project.id, name: project.name }))}
+              projects={ws.projects.filter((project) => !project.archived).map((project) => ({ id: project.id, name: project.name }))}
               pinnedIds={ws.pins.filter((pin) => pin.kind === "chat").map((pin) => pin.ref)}
               scheduledChatIds={ws.schedules.flatMap((job) => job.chatId ? [job.chatId] : [])}
               onConversationAction={runConversationAction}
@@ -6993,7 +7270,7 @@ ${message.content}`;
               onToggleMute={toggleVoiceMute}
               dictationState={dictation.phase}
               dictationLevel={dictationLevel}
-              dictationElapsed={dictationElapsed}
+              dictationStartedAt={dictationStartedAt}
               dictationDisabled={dictationDisabled}
               onDictationMic={onDictationMic}
               onDictationStop={stopBrowserDictation}
@@ -7077,7 +7354,6 @@ ${message.content}`;
               logicRoutes={logicRoutes}
               onChooseLogic={selectProviderInChat}
               toolTimeline={toolTimeline}
-              timelineNowMs={timelineTickMs || Date.now()}
               agentActivity={agentActivityFromTimeline(toolTimeline)}
               recentTasks={recentTasksFromAudit(ws.audit)}
               connectedServices={connectedServicesRail({
@@ -7117,17 +7393,17 @@ ${message.content}`;
                 </button>
               </div>
               <div className="mt-4 flex flex-wrap gap-2">
-                <span className="project-count px-3 py-2 text-sm">On this device ({ws.projects.length})</span>
+                <span className="project-count px-3 py-2 text-sm">Active on this device ({ws.projects.filter((project) => !project.archived).length})</span>
               </div>
               <div id="owner-projects">
-                {ws.projects.length === 0 && (
+                {ws.projects.filter((project) => !project.archived).length === 0 && (
                   <article className="empty-state lg:col-span-2">
                     <img src="/empty/empty-folder.svg" alt="" />
                     <p className="font-semibold">No projects on this device yet.</p>
                     <p className="text-sm text-muted">Create one to keep its chats, notes, and files apart. Progress, tasks, and cloud files are not invented.</p>
                   </article>
                 )}
-                {ws.projects.map((project) => {
+                {ws.projects.filter((project) => !project.archived).map((project) => {
                   const chats = ws.chats.filter((chat) => chat.projectId === project.id).length;
                   const notes = ws.memories.filter((item) => item.scope === "project" && item.projectId === project.id && !item.archived).length;
                   const files = ws.files.filter((file) => file.projectId === project.id).length;
@@ -7246,7 +7522,7 @@ ${message.content}`;
                   {memoryScope === "project" && (
                     <select aria-label="Memory project" value={memoryProject} onChange={(event) => setMemoryProject(event.target.value)} className="min-h-11 rounded-panel border border-line bg-surface px-3 text-sm">
                       <option value="">Choose project</option>
-                      {ws.projects.map((project) => (
+                      {ws.projects.filter((project) => !project.archived).map((project) => (
                         <option key={project.id} value={project.id}>{project.name}</option>
                       ))}
                     </select>
@@ -7583,7 +7859,7 @@ ${message.content}`;
           {view === "tools" && <FleetPanel mode="tools" ws={ws} setWs={setWs} onFailure={(message, retry, surface) => reportFailure(message, surface === "mcp" ? "mcp_tool_failed" : "open_page_failed", surface === "mcp" ? "mcp:tools" : "browser", retry)} />}
           {view === "build" && (
             <section className="page-shell">
-              <BuildWorkspace freeOnly={researchFreeOnly} key={draftOwner ?? "signed-out"} ownerId={draftOwner ?? undefined} onDiscuss={(text) => handToHumanCode(text, "From Build")} onResult={(text) => {
+              <Suspense fallback={<p role="status">Opening Build…</p>}><BuildWorkspace freeOnly={researchFreeOnly} key={draftOwner ?? "signed-out"} ownerId={draftOwner ?? undefined} onDiscuss={(text) => handToHumanCode(text, "From Build")} onResult={(text) => {
                 const id = sessionStorage.getItem(`adrian-human-return.${draftOwner || "signed-out"}`);
                 if (!id) { handToHumanCode(text, "Build result"); return; }
                 sessionStorage.removeItem(`adrian-human-return.${draftOwner || "signed-out"}`);
@@ -7591,7 +7867,7 @@ ${message.content}`;
                 setActiveId(id);
                 setView("code");
                 setNotice("Build result saved in the Intelligence thread.");
-              }} halted={ws.halted} recording={taskRecording} recordingSeconds={taskSeconds} onOpenSpeak={openSpeakStage} onToggleStop={() => { void toggleStop(); }} onStopRecording={() => void stopTaskRecording()} />
+              }} halted={ws.halted} recording={taskRecording} recordingStartedAt={taskStartedAt} onOpenSpeak={openSpeakStage} onToggleStop={() => { void toggleStop(); }} onStopRecording={() => void stopTaskRecording()} /></Suspense>
             </section>
           )}
           {view === "code" && (
@@ -7635,6 +7911,9 @@ ${message.content}`;
                 <button type="button" className="mt-3 min-h-11 rounded-panel bg-accent px-4 text-sm font-semibold text-accent-ink disabled:opacity-50" disabled={ws.halted || researchFreeOnly || searchProvider === "Unavailable" || searchProvider === "Checking search route" || researchPending || !researchText.trim()} onClick={() => void startResearch()}>
                   {researchPending ? "Searching…" : "Start research"}
                 </button>
+                <label className="ml-3 inline-flex items-center gap-2 text-sm">Depth<select value={researchDepth} disabled={researchPending} onChange={(event) => setResearchDepth(event.target.value as "quick" | "standard" | "deep")} className="rounded-panel border border-line bg-bg p-2"><option value="quick">Quick</option><option value="standard">Standard</option><option value="deep">Deep</option></select></label>
+                <p className="mt-2 text-xs text-muted">Deeper research runs more searches and inspects bounded source excerpts. Provider usage may increase; evidence limits are retained.</p>
+                {researchResult && <div className="mt-3"><ResearchEvidence result={researchResult} /></div>}
                 {researchReportQuestion && <h3 className="mt-3 font-semibold">{researchReportQuestion}</h3>}
                 {researchNote ? <p className="mt-3 text-sm text-muted">{researchNote}</p> : null}
                 {researchCitations.length === 0 && !researchNote ? (
@@ -7658,7 +7937,7 @@ ${message.content}`;
                 {researchCitations.length > 0 ? (
                   <button type="button" className="mt-3 min-h-11 rounded-panel border border-line px-3 text-sm" onClick={() => {
                     const sources = researchCitations.filter((item) => /^https?:\/\//i.test(item.url)).map((item) => `${item.title}: ${item.url}`).join("\n");
-                    setDraftInScope(JSON.stringify([draftOwner, active?.id ?? "home", followupPrivate]), Boolean(draftOwner) && !followupPrivate, (prior) => (prior ? prior + "\n\n" : "") + `Research report for: ${researchReportQuestion || researchText}\n${researchNote || ""}\n\nSources:\n${sources}\n\nFollow-up question: `);
+                    setDraftInScope(JSON.stringify([draftOwner, active?.id ?? "home", followupPrivate]), Boolean(draftOwner) && !followupPrivate, (prior) => (prior ? prior + "\n\n" : "") + (researchResult ? researchFollowupContext(researchReportQuestion || researchText, researchResult) : `Research report for: ${researchReportQuestion || researchText}\n${researchNote || ""}\n\nUninspected sources:\n${sources}`) + "\n\nFollow-up question: ");
                     setView("chat");
                     setNavOpen(false);
                   }}>Ask a follow-up in Chat</button>
@@ -7669,7 +7948,7 @@ ${message.content}`;
                     <ul className="mt-2 space-y-2">
                       {researchHistory.map((report) => (
                         <li key={report.id}>
-                          <button type="button" disabled={researchPending} className="min-h-11 text-left text-sm text-accent" onClick={() => { setResearchText(report.question); setResearchReportQuestion(report.question); setResearchNote(report.summary); setResearchCitations(report.citations); setResearchSteps(report.steps); setResearchBand("search"); }}>
+                          <button type="button" disabled={researchPending} className="min-h-11 text-left text-sm text-accent" onClick={() => { setResearchText(report.question); setResearchReportQuestion(report.question); setResearchNote(report.summary); setResearchCitations(report.citations); setResearchSteps(report.steps); setResearchResult(report.result ?? null); setResearchBand("search"); }}>
                             {report.question} · {report.citations.length} sources
                           </button>
                         </li>
@@ -7680,7 +7959,12 @@ ${message.content}`;
                 </div>
               </div>
               <div className="mt-4" hidden={researchBand !== "saved"}>
-                <ResearchPanel onUse={setResearchText} start="saved" />
+                <ResearchLibrary ownerKey={draftOwner} accessToken={getBearerToken()} refreshKey={researchRevision} onOpen={(report) => {
+                  setResearchText(report.question); setResearchReportQuestion(report.question); setResearchResult(report.result);
+                  setResearchNote(report.result.summary ?? ""); setResearchCitations(report.result.citations); setResearchSteps(report.result.steps); setResearchBand("search");
+                  setResearchHistory((previous) => [{ id: report.reportId, question: report.question, summary: report.result.summary ?? "", citations: report.result.citations, steps: report.result.steps, result: report.result, at: report.updatedAt }, ...previous.filter((item) => item.id !== report.reportId)].slice(0, 8));
+                }} />
+                <details className="mt-4"><summary>Legacy research tools</summary><ResearchPanel onUse={setResearchText} start="saved" /></details>
               </div>
               <div className="mt-4" hidden={researchBand !== "files"}>
                 <ReaPanel
@@ -7694,7 +7978,7 @@ ${message.content}`;
               </div>
             </section>
           )}
-          {view === "voice" ? <VoiceCloningStudioPage onBack={() => { setView("command"); setNavOpen(false); }} /> : null}
+          {view === "voice" ? <Suspense fallback={<p role="status">Opening Voice…</p>}><VoiceCloningStudioPage onBack={() => { setView("command"); setNavOpen(false); }} /></Suspense> : null}
           <section className={view === "skills" ? "page-shell space-y-4" : "hidden"}>
               <div className="page-hero">
                 <div className="flex items-center gap-3">
@@ -7736,6 +8020,8 @@ ${message.content}`;
                       </div>
                       <p className="mt-2 text-sm">{skill.description}</p>
                       <p className="mt-1 text-sm text-muted">{skill.needs}</p>
+                      {skill.kind !== "not-installed" && !required && <label className="mt-2 flex items-center gap-2 text-xs"><input type="checkbox" checked={skillPreferences.automatic[skill.id] === true} onChange={(event) => updateSkillPreference(skill.id, "automatic", event.target.checked)} />Allow automatic selection in suggested plans</label>}
+                      {skill.tool && <label className="mt-2 flex items-center gap-2 text-xs"><input type="checkbox" checked={ws.toolPermissions?.[skill.tool] !== false} onChange={(event) => { const permitted = event.target.checked; setWs((current) => ({ ...current, toolPermissions: { ...current.toolPermissions, [skill.tool!]: permitted } })); }} />Allow the {skill.tool} tool (separate from procedure selection)</label>}
                       {skill.tool === "search_notes" && <label className="mt-2 block text-sm">Words to find<input value={skillNoteQuery} onChange={(event) => setSkillNoteQuery(event.target.value)} className="mt-1 block min-h-11 w-full rounded-panel border border-line bg-bg px-3" /></label>}
                       <div className="mt-3 flex gap-2">
                         {skill.kind !== "not-installed" && !required ? (
@@ -7743,14 +8029,7 @@ ${message.content}`;
                             type="button"
                             className="min-h-11 rounded-panel border border-line px-3 text-sm"
                             onClick={() => {
-                              const next = { ...enabledSkills, [skill.id]: !on };
-                              setEnabledSkills(next);
-                              try {
-                                localStorage.setItem("amcos.skills.v1", JSON.stringify(next));
-                                setSkillStorageError("");
-                              } catch {
-                                setSkillStorageError("Skill setting changed in this tab but could not be saved to browser storage.");
-                              }
+                              updateSkillPreference(skill.id, "manual", !on);
                             }}
                           >
                             {on ? "Turn off" : "Turn on"}
@@ -7772,6 +8051,7 @@ ${message.content}`;
                 })}
                 {(skillQuery.trim() ? searchSkills(skillQuery) : SKILLS).filter((skill) => skillBand === "device" ? skill.kind === "built-in" : skillBand === "installed" ? skill.kind === "installed" : skill.kind === "not-installed").length === 0 && !(skillBand === "installed" && skillInventory.some((name) => name.toLowerCase().includes(skillQuery.trim().toLowerCase()))) && <p className="rounded-panel border border-line p-4 text-sm text-muted">No skills match “{skillQuery.trim()}” in this group.</p>}
               </div>
+              {view === "skills" && <div className="my-4 space-y-4"><SkillPlanPreview manual={enabledSkills} automatic={skillPreferences.automatic} toolPermissions={ws.toolPermissions} /><InstructionLibrary ownerKey={draftOwner} accessToken={getBearerToken()} agents={ws.agents} /></div>}
               {skillStorageError && <p className="rounded-panel border border-danger/40 p-3 text-sm text-danger" role="alert">{skillStorageError}</p>}
               {notice && <p className="voice-copy rounded-panel border border-line bg-surface px-3 py-2 text-sm text-muted">{presentVoiceCopy(notice)}</p>}
               <details className="owner-fold">
@@ -7844,14 +8124,20 @@ ${message.content}`;
                       <pre tabIndex={0} aria-label="File text" className="mt-3 max-h-[60dvh] overflow-auto break-words whitespace-pre-wrap rounded-panel bg-bg p-3 text-sm">{file.text}</pre>
                       <div className="mt-3 flex flex-wrap gap-2">
                         <button type="button" className="min-h-11 rounded-panel border border-line px-3" onClick={() => void inspectWithRea({ name: file.name, text: file.text }, "research")}>Inspect text with REA</button>
+                        <button type="button" className="min-h-11 rounded-panel border border-line px-3" onClick={async () => {
+                          const owner = draftOwner; const revision = file.textSha256 ?? await sha256(file.text);
+                          if (turnOwner.current !== owner) return;
+                          const copy: Staged = { name: file.name, text: file.text, source: { fileId: file.id, revision, name: file.name } };
+                          const remaining = Math.max(0, 8000 - (draft.trim() || "Read the attached file.").length - `\n\nAttached file ${file.name}:\n`.length);
+                          if (copy.text.length > remaining) setExcerpt({ scope: draftScope, file: copy, limit: remaining });
+                          else setStaged(copy);
+                          setView("chat"); setNotice("Document copy staged for this conversation. Sending it creates a copy that remains until the conversation is deleted.");
+                        }}>Attach copy in Chat</button>
                         <button
                           type="button"
                           className="min-h-11 rounded-panel border border-line px-3"
                           onClick={() =>
-                            requestProtected("delete", `delete-file:${file.id}`, `Delete “${file.name}”`, "The text copy in this browser is removed.", "Approve delete", () => {
-                              setOpenFileId(null);
-                              setWs((prev) => pushAudit({ ...prev, files: prev.files.filter((item) => item.id !== file.id) }, "delete_file", file.id, "approved"));
-                            })
+                            (() => { setSettingsPane("data"); setView("settings"); setNotice(`Review “${file.name}” under Knowledge and context before deleting its stored original and text. Existing conversation copies are listed there.`); })()
                           }
                         >
                           Delete
@@ -7862,6 +8148,35 @@ ${message.content}`;
                   ))}
                 </div>
                 <div className="dense-card p-4 text-sm" hidden={libraryBand !== "media"} data-testid="library-media">
+                  <section className="mb-4 space-y-3" aria-label="Creative generation settings">
+                    <h3 className="font-semibold">Creative settings</h3>
+                    <p className="text-xs text-muted">xAI is the implemented media provider. More outputs or longer video may increase usage. Your account spending policy still applies.</p>
+                    <label className="mr-3 inline-flex items-center gap-2">Images per generation<select value={imageCount} onChange={(event) => setImageCount(Number(event.target.value))} className="rounded border border-line bg-bg p-2">{[1, 2, 3, 4].map((count) => <option key={count} value={count}>{count}</option>)}</select></label>
+                    <label className="inline-flex items-center gap-2">Video duration<select value={videoDuration} onChange={(event) => setVideoDuration(Number(event.target.value))} className="rounded border border-line bg-bg p-2">{[1, 3, 5, 10, 15].map((duration) => <option key={duration} value={duration}>{duration} seconds</option>)}</select></label>
+                    <p className="text-xs text-muted">Image edits create one new derived version. Video uses the implemented 16:9, 480p route. Original assets remain unchanged.</p>
+                  </section>
+                  <section aria-label="Generation history" className="mb-5 space-y-2">
+                    <button type="button" className="min-h-11 rounded-panel border border-line px-3" onClick={() => void loadMediaOperations()}>Refresh generation history</button>
+                    <p className="text-xs text-muted">Saved operations recover accepted jobs without starting a new paid generation. Video links are retained as provider links; their expiry time is unknown.</p>
+                    {mediaOperations.map((operation) => <div key={operation.id} className="rounded-panel border border-line p-3">
+                      <p>{operation.kind} · {operation.state} · {operation.id}</p>
+                      {operation.kind === "video" && operation.result?.requestId && <button type="button" className="min-h-11 text-accent" onClick={() => void runVideo(undefined, operation)}>Check saved video status</button>}
+                      {operation.result?.url && <a href={operation.result.url} target="_blank" rel="noreferrer" className="text-accent">Open or download video</a>}
+                      {operation.result?.images?.map((image, index) => <a key={index} href={image.dataUrl} download={image.name ?? `image-${index + 1}.png`}><img src={image.dataUrl} alt={`Recovered generation ${index + 1}`} className="size-24 object-cover" /></a>)}
+                    </div>)}
+                  </section>
+                  <details className="mb-4 rounded-panel border border-line p-3"><summary>Image versions and preferred assets</summary>
+                    {ws.chats.flatMap((chat) => chat.messages.flatMap((message) => (message.images ?? []).filter((image) => image.assetId).map((image) => ({ chat, message, image })))).map(({ chat, message, image }, index, all) => {
+                      const parent = image.parentAssetId ? all.find((candidate) => candidate.image.assetId === image.parentAssetId)?.image : null;
+                      return <article key={`${chat.id}:${message.id}:${index}`} className="mt-3 border-t border-line pt-3">
+                        <p className="text-xs">{image.name ?? "Image"} · {image.origin ?? "attached"} · {image.createdAt ? stamp(image.createdAt) : "Date not recorded"}</p>
+                        <div className="flex gap-2">{parent?.dataUrl && <figure><img src={parent.dataUrl} alt="Original version" className="size-24 object-cover" /><figcaption className="text-xs">Parent</figcaption></figure>}{image.dataUrl ? <figure><img src={image.dataUrl} alt={image.name ?? "Image version"} className="size-24 object-cover" /><figcaption className="text-xs">This version</figcaption></figure> : <p className="text-xs">Local image bytes unavailable</p>}</div>
+                        {image.editPrompt && <p className="mt-1 text-xs">Edit: {image.editPrompt}</p>}
+                        {image.parentAssetId && !parent && <p className="text-xs text-muted">Parent asset {image.parentAssetId.slice(0, 18)} is not available in this account's current workspace.</p>}
+                        <label className="mt-2 flex gap-2 text-xs"><input type="checkbox" checked={image.preferred === true} onChange={(event) => { const preferred = event.target.checked; setWs((current) => ({ ...current, chats: current.chats.map((entry) => ({ ...entry, messages: entry.messages.map((msg) => ({ ...msg, images: msg.images?.map((asset) => asset.assetId === image.assetId ? { ...asset, preferred } : asset) })) })) })); }} />Preferred version</label>
+                      </article>;
+                    })}
+                  </details>
                   <p className="font-semibold">Chat images</p>
                   <p className="mt-1 text-xs text-muted">Grouped from saved chats. A picture is listed only when its image data is already in the chat.</p>
                   {(["attached", "camera", "generated"] as const).map((kind) => {
@@ -8153,6 +8468,11 @@ ${message.content}`;
                 </button>
               </div>
               {settingsPane === "connections" && <div id="settings-connections" className="space-y-4">
+                <section className="settings-card p-4 space-y-2" aria-label="Orchestrator helpers">
+                  <h3 className="font-semibold">Orchestrator helpers</h3>
+                  <p className="text-sm text-muted">Only checked models receive extra copies of an Orchestrator request. Each call uses the account resource policy. With none selected, only the primary answers.</p>
+                  {consultModules.map((module) => <label key={module.id} className="flex gap-2"><input type="checkbox" disabled={!module.connected} checked={consultHelpers.includes(module.id)} onChange={(event) => chooseConsultHelper(module.id, event.target.checked)} />{module.label ?? module.id}{!module.connected ? " — unavailable" : ""}</label>)}
+                </section>
               <div className="settings-card rounded-panel p-4 text-sm">
                 <p className="font-semibold">Provider failover</p>
                 <p>Selected: {controlsModelLabel}{providerModels[effectiveProvider] ? " · " + providerModels[effectiveProvider] : ""}</p>
@@ -8181,9 +8501,40 @@ ${message.content}`;
               </div>}
               {settingsPane === "voice" && <div id="settings-voice">
                 <VoiceSettingsBlock onReset={() => applyVoiceChoice(DEFAULT_XAI_VOICE)} />
+                <section className="settings-card rounded-panel p-4 space-y-3" aria-label="Voice provider choices">
+                  <label className="grid gap-2">Cloud transcription
+                    <select value={transcriptionPolicy.provider} onChange={(event) => chooseTranscriptionPolicy({ ...transcriptionPolicy, provider: event.target.value === "openai" ? "openai" : "xai" })}>
+                      <option value="xai">xAI</option><option value="openai">OpenAI</option>
+                    </select>
+                  </label>
+                  <label className="flex gap-2"><input type="checkbox" checked={transcriptionPolicy.allowFallback} onChange={(event) => chooseTranscriptionPolicy({ ...transcriptionPolicy, allowFallback: event.target.checked })} />Allow the other transcription provider if the selected one fails</label>
+                  <p className="text-sm text-muted">Audio recipients: {transcriptionRecipients(transcriptionPolicy)}. Requires a configured key. Free-only blocks cloud transcription. This choice does not change the chat answer model.</p>
+                  <label className="grid gap-2">Live answer route
+                    <select value={voiceMode} onChange={(event) => applyVoiceMode(event.target.value === "orchestrator" ? "orchestrator" : "direct")}>
+                      <option value="direct">Direct — xAI realtime</option><option value="orchestrator">Orchestrator — local Ollama answers; xAI voice</option>
+                    </select>
+                  </label>
+                  <p className="text-sm text-muted">An unavailable answer engine pauses the call. Your saved route stays selected.</p>
+                </section>
                 <SpeakPanel />
               </div>}
               <div id="settings-data" hidden={settingsPane !== "data"} className="space-y-4">
+              {active && <section className="settings-card p-4 space-y-2" aria-label="Conversation context controls">
+                <h3 className="font-semibold">Context for {active.title}</h3>
+                <p className="text-sm text-muted">{contextDisclosure(active)}</p>
+                {(["history", "botKnowledge", "projectDocuments", "projectConversations", "research", "saveMemories"] as const).map((key) => <label key={key} className="flex gap-2"><input type="checkbox" checked={effectiveContextPolicy(active)[key]} onChange={(event) => setWs((current) => ({ ...current, chats: current.chats.map((chat) => chat.id === active.id ? { ...chat, contextPolicy: { ...effectiveContextPolicy(chat), [key]: event.target.checked } } : chat) }))} />{{ history: "Conversation history", botKnowledge: "Bot knowledge", projectDocuments: "Project documents", projectConversations: "Project conversations", research: "Saved research", saveMemories: "Save new memories" }[key]}</label>)}
+                <button type="button" className="min-h-11 text-accent" onClick={() => setWs((current) => ({ ...current, chats: current.chats.map((chat) => chat.id === active.id ? { ...chat, memory: "off", contextPolicy: freshContextPolicy() } : chat) }))}>Use fresh context for the next request</button>
+              </section>}
+              {ws.syncConflicts?.length ? <section className="settings-card p-4 space-y-2" aria-label="Synchronization conflicts"><h3 className="font-semibold">Review saved differences</h3>{ws.syncConflicts.map((conflict) => <div key={conflict.id}><p>{conflict.collection} · {conflict.recordId} · {conflict.field}</p><button type="button" className="min-h-11 text-accent" onClick={() => resolveSyncConflict(conflict.id, "local")}>Keep this device's value</button><button type="button" className="min-h-11 ml-3 text-accent" onClick={() => resolveSyncConflict(conflict.id, "remote")}>Keep the account value</button></div>)}</section> : null}
+              {settingsPane === "data" && <>
+                <ResourceSettings ownerKey={draftOwner} accessToken={getBearerToken() ?? undefined} />
+                <KnowledgeSettings ws={ws} setWs={setWs} activeChatId={active?.id ?? null} owner={draftOwner} />
+              </>}
+              <section className="settings-card p-4 space-y-3" aria-label="Alerts and recovery">
+                <h3 className="font-semibold">Alerts and recovery</h3>
+                <p className="text-xs text-muted">Unresolved incidents remain after activity history rotates. Reopening a review never reuses an old write approval.</p>
+                {incidents.filter((item) => item.state === "open" || item.state === "recovering").map((item) => <IncidentRecoveryCard key={item.id} incident={item} plan={planIncidentRecovery(item, recoveryContext(item))} onReview={() => openIncidentReview(item)} onAcknowledge={() => updateIncidentJournal((rows) => resolveIncident(rows, item.id, "acknowledged"))} />)}
+              </section>
               <div className="settings-card rounded-panel p-4 text-sm">
                 <div className="settings-row">
                   <div>
@@ -8203,19 +8554,20 @@ ${message.content}`;
                   type="button"
                   className="min-h-11 rounded-panel border border-line px-3 text-sm"
                   onClick={() => {
+                    const saveOperationId = crypto.randomUUID();
                     const run = () => {
                       void retrySave()
                         .then((result) => {
                           const message = saveFailureMessage(result);
                           if (message) {
-                            reportFailure(message, "database_write_failed", "server-copy", run);
+                            reportFailure(message, "database_write_failed", "server-copy", null, "none", { operationId: saveOperationId, subsystem: "storage", operationKind: "write", stage: "persist", outcome: "unknown", retryPolicy: "review" });
                             return;
                           }
-                          clearFailure();
+                          clearFailure("server-copy", { ownerId: draftOwner, operationId: saveOperationId, verified: result.ok, checks: ["same-owner", "current-authorization", "same-resource", "halt-clear", "fresh-approval", "actual-outcome", "persistence-confirmed"] });
                         })
                         .catch(() => {
                           const message = saveFailureMessage({ ok: false });
-                          if (message) reportFailure(message, "database_write_failed", "server-copy", run);
+                          if (message) reportFailure(message, "database_write_failed", "server-copy", null, "none", { operationId: saveOperationId, subsystem: "storage", operationKind: "write", stage: "persist", outcome: "unknown", retryPolicy: "review" });
                         });
                     };
                     requestProtected("overwrite", "server-copy", "Replace server copy", "The server copy will be replaced with the chats, notes, and files in this browser. Export a workspace archive first if you want a separate copy of this browser’s data.", "Replace server copy", run);
@@ -8327,7 +8679,7 @@ ${message.content}`;
                 setError(`Select 1–${excerpt.limit} characters inside the file.`);
                 return;
               }
-              setStaged({ name: excerpt.file.name, text: selected }); setExcerpt(null); setError(null); setNotice("Selected excerpt attached.");
+              setStaged({ ...excerpt.file, text: selected }); setExcerpt(null); setError(null); setNotice("Selected excerpt attached.");
             }}>Attach selected text</button>
             <button type="button" className="min-h-11 rounded-panel px-3" onClick={() => setExcerpt(null)}>Cancel</button>
             {error && <p role="alert">{error}</p>}
@@ -8478,7 +8830,7 @@ ${message.content}`;
           const Icon = item.icon;
           const on = view === item.id;
           return (
-            <button key={item.id} type="button" className={`flex min-h-14 flex-1 flex-col items-center justify-center text-[11px] ${on ? "text-fg" : "text-muted"}`} onClick={() => { setView(item.id); setNavOpen(false); }}>
+            <button key={item.id} type="button" aria-current={on ? "page" : undefined} className={`flex min-h-14 flex-1 flex-col items-center justify-center text-[11px] ${on ? "text-fg" : "text-muted"}`} onClick={() => { setView(item.id); setNavOpen(false); }}>
               <Icon className="size-4" />
               {item.label}
             </button>
@@ -8496,7 +8848,7 @@ ${message.content}`;
           const Icon = item.icon;
           const on = view === item.id;
           return (
-            <button key={item.id} type="button" className={`flex min-h-14 flex-1 flex-col items-center justify-center text-[11px] ${on ? "text-fg" : "text-muted"}`} onClick={() => { setView(item.id); setNavOpen(false); }}>
+            <button key={item.id} type="button" aria-current={on ? "page" : undefined} className={`flex min-h-14 flex-1 flex-col items-center justify-center text-[11px] ${on ? "text-fg" : "text-muted"}`} onClick={() => { setView(item.id); setNavOpen(false); }}>
               <Icon className="size-4" />
               {item.label}
             </button>
@@ -8563,7 +8915,7 @@ ${message.content}`;
       />
       {taskRecording ? (
         <div className="fixed left-1/2 top-20 z-40 flex -translate-x-1/2 items-center gap-3 rounded-panel border border-line bg-surface px-4 py-2 shadow-lg" data-testid="task-recording" role="status">
-          <span className="text-sm">Recording this tab · {taskSeconds}s. Closing this tab stops it. It cannot continue after the tab closes.</span>
+          <span className="text-sm">Recording this tab · <ElapsedTime startedAt={taskStartedAt} />s. Closing this tab stops it. It cannot continue after the tab closes.</span>
           <button type="button" className="min-h-11 rounded-panel border border-line px-3 text-sm" onClick={() => void stopTaskRecording()}>Stop</button>
         </div>
       ) : null}
@@ -8622,7 +8974,8 @@ ${message.content}`;
 function BrowserDictationControl(props: {
   state: DictationMachineState["phase"];
   level: number;
-  elapsedSec: number;
+  elapsedSec?: number;
+  startedAt?: number | null;
   disabled?: boolean;
   compact?: boolean;
   onMicClick: () => void;
@@ -8630,20 +8983,21 @@ function BrowserDictationControl(props: {
   onCancel: () => void;
 }) {
   return (
-    <div className="inline-flex flex-wrap items-center gap-2" data-testid="browser-dictation" title="Browser speech, not a realtime voice session">
+    <div className="inline-flex flex-wrap items-center gap-2" data-testid="browser-dictation" title="Dictation inserts text into the composer; it never sends a chat message">
       <DictationPill
         state={props.state}
         level={props.level}
         elapsedSec={props.elapsedSec}
+        startedAt={props.startedAt}
         disabled={props.disabled}
         onMicClick={props.onMicClick}
         onStop={props.onStop}
         onCancel={props.onCancel}
       />
       {props.compact ? (
-        <span className="sr-only">Browser speech, not a realtime voice session.</span>
+        <span className="sr-only">Dictation inserts text into the composer.</span>
       ) : (
-        <span className="text-[10px] font-semibold uppercase tracking-wide text-muted">Browser speech</span>
+        <span className="text-[10px] font-semibold uppercase tracking-wide text-muted">Dictation input</span>
       )}
     </div>
   );
@@ -8812,6 +9166,7 @@ function ChatPane({
   draft,
   error,
   notice,
+  mediaNotice,
   setDraft,
   onPickModule,
   onPick,
@@ -8853,7 +9208,7 @@ function ChatPane({
   onToggleMute,
   dictationState,
   dictationLevel,
-  dictationElapsed,
+  dictationStartedAt,
   dictationDisabled,
   onDictationMic,
   onDictationStop,
@@ -8899,7 +9254,6 @@ function ChatPane({
   logicRoutes = [],
   onChooseLogic,
   toolTimeline,
-  timelineNowMs,
   agentActivity,
   recentTasks,
   connectedServices,
@@ -8923,6 +9277,7 @@ function ChatPane({
   draft: string;
   error: string | null;
   notice: string | null;
+  mediaNotice: string | null;
   setDraft: (value: string) => void;
   onPickModule?: (item: ModuleSuggestion) => void;
   onPick: (id: string) => void;
@@ -8964,7 +9319,7 @@ function ChatPane({
   onToggleMute: () => void;
   dictationState: DictationMachineState["phase"];
   dictationLevel: number;
-  dictationElapsed: number;
+  dictationStartedAt: number | null;
   dictationDisabled: boolean;
   onDictationMic: () => void;
   onDictationStop: () => void;
@@ -9010,7 +9365,6 @@ function ChatPane({
   logicRoutes?: LogicRoutePublic[];
   onChooseLogic?: (route: LogicRouteId) => void;
   toolTimeline: ToolTimelineRow[];
-  timelineNowMs: number;
   agentActivity: ReturnType<typeof agentActivityFromTimeline>;
   recentTasks: ReturnType<typeof recentTasksFromAudit>;
   connectedServices: ReturnType<typeof connectedServicesRail>;
@@ -9026,20 +9380,13 @@ function ChatPane({
   const [chromeNote, setChromeNote] = useState(
     "Voice chrome preview. Dictate uses this chat’s microphone. Speak, the live bar, and voice mode do not connect a provider.",
   );
-  const [dictationTick, setDictationTick] = useState(0);
+  const [liveDictationStartedAt, setLiveDictationStartedAt] = useState<number | null>(null);
   const [previewModel, setPreviewModel] = useState<ComposerModelId>("heavy");
   const [previewModelOpen, setPreviewModelOpen] = useState(false);
   useEffect(() => {
     setEditingId(null);
   }, [active?.id]);
-  useEffect(() => {
-    if (!voiceListening) {
-      setDictationTick(0);
-      return;
-    }
-    const id = window.setInterval(() => setDictationTick((n) => n + 1), 1000);
-    return () => window.clearInterval(id);
-  }, [voiceListening]);
+  useEffect(() => { setLiveDictationStartedAt(voiceListening ? Date.now() : null); }, [voiceListening]);
   const markPreview = (control: string) => {
     setChromeNote(`${control} is preview only. No voice provider is connected.`);
   };
@@ -9055,29 +9402,68 @@ function ChatPane({
   const groups = ["Today", "Yesterday", "This week", "Earlier"]
     .map((label) => ({ label, items: visible.filter((chat) => chatBucket(chat) === label) }))
     .filter((group) => group.items.length > 0);
+  const [timelineNowMs, setTimelineNowMs] = useState(Date.now);
+  const timelineRunning = timelineCounts(toolTimeline).running;
+  useEffect(() => {
+    if (!timelineRunning) return;
+    return subscribeVisibleClock({ tick: setTimelineNowMs, now: Date.now, timers: window,
+      visible: () => document.visibilityState === "visible", subscribeVisibility: (listener) => {
+        document.addEventListener("visibilitychange", listener);
+        return () => document.removeEventListener("visibilitychange", listener);
+      } });
+  }, [timelineRunning]);
   const transcript = useRef<HTMLDivElement>(null);
   const turns = useRef<HTMLDivElement>(null);
   const following = useRef(true);
   const previousScrollTop = useRef(0);
+  const manualScrollUntil = useRef(0);
+  const draggingTranscript = useRef(false);
+  const readingPositions = useRef(new Map<string, { top: number; following: boolean }>());
   const [detached, setDetached] = useState(false);
-
+  const [messageWindows, setMessageWindows] = useState<Record<string, number>>({});
+  const visibleCount = messageWindows[active?.id ?? ""] ?? 80;
+  useEffect(() => {
+    const reveal = (event: Event) => {
+      const id = (event as CustomEvent<string>).detail;
+      if (!active) return;
+      const index = active.messages.findIndex((message) => message.id === id);
+      if (index < 0) return;
+      following.current = false; setDetached(true);
+      setMessageWindows((current) => ({ ...current, [active.id]: Math.max(current[active.id] ?? 80, active.messages.length - index) }));
+      requestAnimationFrame(() => { const node = document.getElementById(`message-${id}`); node?.focus({ preventScroll: true }); node?.scrollIntoView({ block: "center" }); });
+    };
+    window.addEventListener("adrian:reveal-message", reveal);
+    return () => window.removeEventListener("adrian:reveal-message", reveal);
+  }, [active?.id, active?.messages]);
+  const { editImage, saveImage, downloadImage } = useMessageMediaActions({ onEditImagine, onSaveImage, onDownloadImage });
   useLayoutEffect(() => {
-    const pane = transcript.current;
-    const content = turns.current;
+    const pane = transcript.current; const content = turns.current;
     if (!pane || !content) return;
-    following.current = true;
-    setDetached(false);
-    function followTail() {
-      if (pane && following.current) {
-        pane.scrollTop = pane.scrollHeight;
-        previousScrollTop.current = pane.scrollTop;
+    const chatId = active?.id ?? "new";
+    const saved = readingPositions.current.get(chatId);
+    manualScrollUntil.current = 0;
+    draggingTranscript.current = false;
+    following.current = saved?.following ?? true;
+    pane.scrollTop = saved?.top ?? pane.scrollHeight;
+    previousScrollTop.current = pane.scrollTop;
+    setDetached(!following.current);
+    const followTail = () => {
+      if (following.current) { pane.scrollTop = pane.scrollHeight; previousScrollTop.current = pane.scrollTop; }
+    };
+    const selection = () => {
+      const selected = document.getSelection();
+      if (selected && !selected.isCollapsed && selected.anchorNode && content.contains(selected.anchorNode)) {
+        following.current = false; setDetached(true);
       }
-    }
-    followTail();
-    const observer = new ResizeObserver(followTail);
-    observer.observe(content);
-    observer.observe(pane);
-    return () => observer.disconnect();
+    };
+    const observer = new ResizeObserver(followTail); observer.observe(content); observer.observe(pane);
+    document.addEventListener("selectionchange", selection);
+    return () => {
+      // React may already have replaced the old conversation's DOM and clamped
+      // its scrollTop. Preserve the last observed position, not that new layout.
+      readingPositions.current.set(chatId, { top: previousScrollTop.current, following: following.current });
+      observer.disconnect(); document.removeEventListener("selectionchange", selection);
+    };
   }, [active?.id]);
   const lastReply = [...(active?.messages ?? [])].reverse().find((msg) => msg.role === "assistant");
   return (
@@ -9161,20 +9547,35 @@ function ChatPane({
             </div>
           )}
         </details>
-        <div ref={transcript} className="min-h-0 flex-1 overflow-auto p-4" onFocusCapture={(event) => {
+        <div ref={transcript} className="transcript-pane min-h-0 flex-1 overflow-auto p-4" role="region" aria-label="Conversation messages" tabIndex={0} data-following={!detached}
+        onWheelCapture={(event) => {
+          manualScrollUntil.current = Date.now() + 500;
+          if (event.deltaY < 0) { following.current = false; setDetached(true); }
+        }} onPointerDownCapture={(event) => {
+          draggingTranscript.current = !(event.target instanceof Element && event.target.closest("button,a,input,textarea,select"));
+          if (event.target === event.currentTarget) manualScrollUntil.current = Date.now() + 1000;
+        }} onPointerMoveCapture={(event) => {
+          if (draggingTranscript.current && (event.buttons !== 0 || event.pointerType === "touch")) manualScrollUntil.current = Date.now() + 500;
+        }} onPointerUpCapture={() => { draggingTranscript.current = false; }} onPointerCancelCapture={() => { draggingTranscript.current = false; }}
+        onKeyDownCapture={(event) => {
+          if (event.target instanceof Element && event.target.closest("button,a,input,textarea,select,[contenteditable=true]")) return;
+          if (["PageUp", "PageDown", "Home", "End", "ArrowUp", "ArrowDown", " "].includes(event.key)) manualScrollUntil.current = Date.now() + 500;
+          if (["PageUp", "Home", "ArrowUp"].includes(event.key)) { following.current = false; setDetached(true); }
+        }} onFocusCapture={(event) => {
           if (event.target instanceof HTMLElement && event.target.matches("article.turn[id^='message-']")) {
             following.current = false;
             setDetached(true);
           }
         }} onScroll={(event) => {
           const pane = event.currentTarget;
-          const end = Math.max(0, pane.scrollHeight - pane.clientHeight);
           const top = pane.scrollTop;
+          const selectedText = document.getSelection();
+          const userReading = Boolean(selectedText && !selectedText.isCollapsed && selectedText.anchorNode && pane.contains(selectedText.anchorNode));
           // Growing content can increase the distance from the tail before its resize callback.
           // Only an actual upward scroll should detach a reader who was following.
-          if (end - top < 32) following.current = true;
-          else if (top < Math.min(previousScrollTop.current, end) - 1) following.current = false;
+          following.current = nextReadingPosition({ top: previousScrollTop.current, following: following.current }, { top, height: pane.scrollHeight, viewport: pane.clientHeight, userReading, userInitiated: Date.now() < manualScrollUntil.current }).following;
           previousScrollTop.current = top;
+          if (active) readingPositions.current.set(active.id, { top, following: following.current });
           setDetached(!following.current);
         }}>
           <div ref={turns} className="space-y-3">
@@ -9187,7 +9588,13 @@ function ChatPane({
               />
             </div>
           )}
-          {active?.messages.map((msg) => {
+          {active && active.messages.length > visibleCount && <button type="button" className="min-h-11 text-accent" onClick={() => {
+            const pane = transcript.current; const before = pane?.scrollHeight ?? 0;
+            following.current = false; setDetached(true);
+            setMessageWindows((current) => ({ ...current, [active.id]: visibleCount + 80 }));
+            requestAnimationFrame(() => { if (pane) pane.scrollTop += pane.scrollHeight - before; });
+          }}>Show 80 earlier messages ({active.messages.length - visibleCount} hidden)</button>}
+          {active && messageWindow(active.messages, visibleCount).map((msg) => {
             const last = active.messages.at(-1);
             return (
             <article key={msg.id} id={"message-" + msg.id} tabIndex={-1} className={`turn w-full max-w-none px-1 py-2 text-sm ${msg.role === "user" ? "turn-user" : "turn-assistant"}`}>
@@ -9218,8 +9625,9 @@ function ChatPane({
                 </form>
               ) : (
                 <>
-                  {msg.role === "assistant" ? <AnswerTabs text={msg.content} images={msg.images} onEditImagine={(src) => onEditImagine(src)} onSaveImage={onSaveImage} onDownloadImage={onDownloadImage} /> : <MessageBody text={msg.content} images={msg.images} onEditImagine={(src) => onEditImagine(src)} onSaveImage={onSaveImage} onDownloadImage={onDownloadImage} />}
-                  {msg.videoUrl ? <video className="owner-video mt-2" src={msg.videoUrl} controls playsInline preload="metadata" /> : null}
+                  {msg.role === "assistant" ? <MemoAnswerTabs text={msg.content} images={msg.images} onEditImagine={editImage} onSaveImage={saveImage} onDownloadImage={downloadImage} /> : <MemoMessageBody text={msg.content} images={msg.images} onEditImagine={editImage} onSaveImage={saveImage} onDownloadImage={downloadImage} />}
+                  {msg.videoUrl ? <RetainedVideo key={msg.videoUrl} url={msg.videoUrl} /> : null}
+                  {!!msg.helperReceipts?.length && <details className="mt-2 text-xs text-muted"><summary>Consulted models ({msg.helperReceipts.length})</summary><ul className="mt-2 space-y-1">{msg.helperReceipts.map((receipt, index) => <li key={`${receipt.id}:${index}`}>{receipt.id} · {receipt.status} · requested {receipt.requestedModel ?? "not recorded"} · reported {receipt.model ?? "not reported"}</li>)}</ul></details>}
                 </>
               )}
               <div className="mt-2 flex flex-wrap items-center gap-2" role="toolbar" aria-label="Reply actions">
@@ -9254,9 +9662,9 @@ function ChatPane({
                 )}
                 {msg.role === "assistant" && (
                   <details className="relative">
-                    <summary className="chat-button chat-button--ghost" aria-label="More">⋯</summary>
+                    <summary className="chat-button chat-button--ghost reply-more-control" aria-label="More">⋯</summary>
                     <div className="absolute bottom-12 left-0 z-20 flex min-w-44 flex-col rounded-2xl border border-line bg-bg p-1">
-                      {!active.temporary && <label className="px-3 py-2 text-xs">Rate this reply
+                      {!active.temporary && <label className="px-3 py-2 text-xs">Your subjective rating
                         <select aria-label="Rate this reply" value={ratings.find((rating) => rating.messageId === msg.id)?.score ?? ""} onChange={(event) => {
                           const score = Number(event.target.value);
                           if (score >= 1 && score <= 5) onRate(msg.id, score as 1 | 2 | 3 | 4 | 5, msg.model ?? null);
@@ -9337,12 +9745,12 @@ function ChatPane({
           {busy && liveText && (
             <article className="turn turn-assistant w-full max-w-none px-1 py-2 text-sm">
               <p className="mb-1 text-xs text-muted">{modelTier} · writing</p>
-              <p className="whitespace-pre-wrap">{liveText}</p>
+              <MemoAnswerTabs text={liveText} onEditImagine={editImage} onSaveImage={saveImage} onDownloadImage={downloadImage} />
             </article>
           )}
           {busy && !liveText && toolTimeline.length === 0 && (
             <div className="turn turn-assistant w-full max-w-none space-y-2 px-1 py-2" aria-live="polite">
-              <p className="text-xs text-muted">{active?.messages.at(-1)?.content.startsWith("/video") ? "Rendering the video." : active?.messages.at(-1)?.content.startsWith("/imagine") ? "Creating the image." : "Waiting for the selected provider."}</p>
+              <p className="text-xs text-muted">Waiting for a response.</p>
               <div className="skeleton h-3" style={{ width: "75%" }} />
               <div className="skeleton h-3" style={{ width: "50%" }} />
               <div className="skeleton h-3" style={{ width: "66%" }} />
@@ -9356,6 +9764,7 @@ function ChatPane({
           setDetached(false);
           if (transcript.current) transcript.current.scrollTop = transcript.current.scrollHeight;
         }}>Jump to latest</button>}
+        {mediaNotice ? <p className="px-3 py-2 text-sm text-muted" role="status" data-testid="video-progress">{mediaNotice}</p> : null}
         {cue.length > 0 ? (
           <div className="rounded-panel border border-line p-2" data-testid="message-cue">
             <p className="text-xs uppercase tracking-wide text-muted">Next</p>
@@ -9496,7 +9905,7 @@ function ChatPane({
             <BrowserDictationControl
               state={dictationState}
               level={dictationLevel}
-              elapsedSec={dictationElapsed}
+              startedAt={dictationStartedAt}
               disabled={dictationDisabled}
               onMicClick={onDictationMic}
               onStop={onDictationStop}
@@ -9528,7 +9937,7 @@ function ChatPane({
               <PreviewDictationPill
                 state={voiceListening ? "recording" : "idle"}
                 level={voiceLevel}
-                elapsedSec={voiceListening ? dictationTick : 0}
+                startedAt={liveDictationStartedAt}
                 onStart={() => {
                   setChromeNote("Dictate uses this chat’s microphone. It does not start a live voice provider.");
                   onListen();

@@ -3,16 +3,19 @@ import { describe, it } from "node:test";
 import type { Sql } from "../db.ts";
 import { mergeWorkspaceEdits } from "./workspace-edits.ts";
 import { emptyWorkspace, normalizeWorkspace } from "./workspace.ts";
-import { readControl, readSnapshot, snapshotRevision, snapshotTooLarge, writeControl, writeSnapshot } from "./store.ts";
+import { readControl, readSnapshot, snapshotRevision, snapshotTooLarge, writeControl, writeSnapshot, writeSnapshotDelta } from "./store.ts";
+import { createWorkspaceDelta } from "./workspace-delta.ts";
 
 function memorySql() {
   const tables = new Map<string, Map<string, unknown>>();
+  const mutations: { query: string; values: unknown[] }[] = [];
   const bucket = (name: string) => {
     if (!tables.has(name)) tables.set(name, new Map());
     return tables.get(name)!;
   };
   const sql = (async (strings: TemplateStringsArray, ...values: unknown[]) => {
     const text = strings.join(" ").replace(/\s+/g, " ");
+    if (/^(insert|delete|update)/.test(text)) mutations.push({ query: text, values });
     const table = text.match(/\b(mind_[a-z_]+)\b/)?.[1] ?? "";
     if (text.startsWith("delete from")) {
       for (const [key, row] of bucket(table)) {
@@ -38,8 +41,13 @@ function memorySql() {
     }
     return [];
   }) as Sql;
-  sql.query = async () => [];
-  return { sql, tables };
+  sql.query = async (text, values = []) => {
+    mutations.push({ query: text, values });
+    const table = text.match(/delete from (mind_[a-z_]+)/)?.[1];
+    if (table) bucket(table).delete(`${values[0]}:${values[1]}`);
+    return [];
+  };
+  return { sql, tables, mutations };
 }
 
 describe("mind store", () => {
@@ -157,6 +165,23 @@ describe("mind store", () => {
     const ws = emptyWorkspace();
     ws.files.push({ id: "f", name: "big.txt", text: "x".repeat(1_500_000), bytes: 1_500_000, projectId: null, createdAt: "2026-01-01T00:00:00.000Z" });
     assert.equal(snapshotTooLarge(ws), true);
+  });
+
+  it("incremental updates preserve unrelated mirrors and allow a workspace larger than one request", async () => {
+    const { sql, mutations } = memorySql();
+    const before = emptyWorkspace();
+    before.projects = [{ id: "p", name: "Before", description: "", createdAt: "2026-01-01T00:00:00.000Z" }];
+    before.files = Array.from({ length: 45 }, (_, index) => ({ id: `f${index}`, name: `${index}.txt`, text: "x".repeat(39000), bytes: 39000, projectId: null, createdAt: "2026-01-01T00:00:00.000Z" }));
+    const revision = await writeSnapshot(sql, "owner", before);
+    mutations.length = 0;
+    const edited = { ...before, projects: [{ ...before.projects[0], name: "After" }] };
+    const saved = await writeSnapshotDelta(sql, "owner", createWorkspaceDelta(before, edited), revision!);
+    assert.equal(saved?.workspace.projects[0].name, "After");
+    assert.equal(saved?.workspace.files.length, 45);
+    assert.ok(!mutations.some((call) => /mind_file/.test(call.query)));
+    assert.equal(mutations.filter((call) => /delete from mind_project/.test(call.query)).length, 1);
+    assert.equal(await writeSnapshotDelta(sql, "owner", createWorkspaceDelta(before, edited), revision!), null);
+    assert.equal(await readSnapshot(sql, "other-owner"), null);
   });
 
   it("reloads a project after the file database is closed and opened again", async () => {

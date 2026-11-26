@@ -1,5 +1,4 @@
 import assert from "node:assert/strict";
-import { readFileSync } from "node:fs";
 import test from "node:test";
 import { HANDY_SOURCE, HANDY_WAVE_BARS, HANDY_WHISPER_URL, detectWithHandy, handyBarHeight, handyLiveLevels } from "./handy-dictation.ts";
 import { refreshSkills } from "./skill-refresh.ts";
@@ -20,7 +19,7 @@ test("Handy dictation uses the project wave and does not ask to refresh skills",
   assert.equal(voiceHostAllowed(REJECTED_GOOGLE_TRANSLATOR), true);
 });
 
-test("Opus-MT reports loaded weights for a sentence that is not a test phrase", async () => {
+test("Opus-MT adapter preserves a fixture receipt and reports an unavailable engine", async () => {
   const translated = await translateVoice("The harbor opens at dawn", "es", (async () => new Response(JSON.stringify({
     ok: true,
     weightsLoaded: true,
@@ -44,15 +43,29 @@ test("Opus-MT reports loaded weights for a sentence that is not a test phrase", 
   assert.equal(OPUS_MT_URL, "http://127.0.0.1:4197/opus-mt");
 });
 
-test("Speak detection asks the loaded Handy engine and does not invent words", async () => {
-  const audio = readFileSync("/tmp/handy-engine/harbor.wav").toString("base64");
-  const heard = await detectWithHandy(audio);
+test("Speak detection passes synthetic audio to Handy and preserves its fixture transcript", async () => {
+  // A deterministic transport fixture, not evidence of a loaded engine or microphone.
+  const audioBytes = new Uint8Array([82, 73, 70, 70, 4, 0, 0, 0, 87, 65, 86, 69]);
+  const audio = Buffer.from(audioBytes).toString("base64");
+  let calls = 0;
+  const fakeFetch = (async (url, init) => {
+    calls++;
+    assert.equal(url, HANDY_WHISPER_URL);
+    assert.equal(init?.method, "POST");
+    assert.deepEqual(new Uint8Array(init?.body as ArrayBuffer), audioBytes);
+    return new Response(JSON.stringify({ ok: true, text: "The harbor opens at dawn" }));
+  }) as typeof fetch;
+  const heard = await detectWithHandy(audio, fakeFetch);
   assert.equal(heard.ok, true);
   if (heard.ok) {
     assert.equal(heard.provider, "handy");
     assert.match(heard.text, /harbor/i);
     assert.notEqual(heard.text, "hello from handy");
   }
-  const missed = await detectWithHandy("", fetch);
+  const missed = await detectWithHandy("", fakeFetch);
   assert.equal(missed.ok, false);
+  assert.equal(calls, 1, "empty audio must not contact even the local engine");
+  const failed = await detectWithHandy(audio, (async () => { throw new Error("fixture engine unavailable"); }) as typeof fetch);
+  assert.equal(failed.ok, false);
+  if (!failed.ok) assert.match(failed.error, /Nothing was transcribed/);
 });

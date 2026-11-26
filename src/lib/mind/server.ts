@@ -1,3 +1,4 @@
+import { authorizeExternalResource, externalResourceCall } from "./external-resource-call.server";
 import { createMiddleware, createServerFn } from "@tanstack/react-start";
 import { authMiddleware } from "@/lib/auth/middleware";
 import { guardMindEnv } from "./isolation";
@@ -5,10 +6,10 @@ import { allowMindRequest } from "./limits";
 import { describePersistence } from "./persistence";
 import { modelTierCatalog } from "./model-tiers";
 import { configuredProviders, selectProvider, NEMOTRON_MODEL } from "./provider-call";
-import { performSearch } from "./research";
 import { interpretWorkerHealth } from "./worker-health";
 import { resolveXaiInferenceApiKey } from "./xai-adapter";
 import { resolveDatabaseUrl } from "../env.server.ts";
+import { parseHaltControlRequest } from "./halt-request.ts";
 
 const MODEL = "grok-4.5";
 
@@ -24,13 +25,15 @@ export const mindStatus = createServerFn({ method: "GET" }).handler(async () => 
   const gate = envCheck();
   const checkedAt = new Date().toISOString();
   let signedIn = false;
-  let executionHalted = false;
+  let executionHalted = true;
+  let executionHaltState: "on" | "off" | "unknown" = "unknown";
   try {
     const { requireUserId } = await import("../auth/verify.server");
     const userId = await requireUserId();
     signedIn = true;
-    const { haltIsOn } = await import("./halt.server");
-    executionHalted = await haltIsOn(userId);
+    const { readHaltState } = await import("./halt.server");
+    executionHaltState = await readHaltState(userId);
+    executionHalted = executionHaltState !== "off";
   } catch {
     signedIn = false;
   }
@@ -56,6 +59,7 @@ export const mindStatus = createServerFn({ method: "GET" }).handler(async () => 
       database: gate.error,
       isolation: "failed" as const,
       executionHalted,
+      executionHaltState,
       signedIn,
       persistence,
       databaseBackend,
@@ -77,6 +81,7 @@ export const mindStatus = createServerFn({ method: "GET" }).handler(async () => 
       : "No dedicated project yet. The free organization already holds two active projects.",
     isolation: "clear" as const,
     executionHalted,
+    executionHaltState,
     signedIn,
     persistence,
     databaseBackend,
@@ -132,35 +137,22 @@ export const workerHealth = createServerFn({ method: "GET" }).handler(async () =
 
 export const searchWeb = createServerFn({ method: "POST" })
   .middleware([authMiddleware])
-  .validator((input: { query: string; freeOnly?: boolean; retryQueries?: string[] }) => ({
-    query: typeof input.query === "string" ? input.query.trim() : "", freeOnly: input.freeOnly === true, retryQueries: Array.isArray(input.retryQueries) ? input.retryQueries.filter((q) => typeof q === "string" && q.length <= 330).slice(0, 3) : undefined,
-  }))
+  .validator((input: import("./research-service.server").ResearchRequest) => {
+    if (input.freeOnly !== undefined && typeof input.freeOnly !== "boolean") throw new Error("Free-only must be a boolean.");
+    if (input.depth !== undefined && !["quick", "standard", "deep"].includes(input.depth)) throw new Error("Unknown research depth.");
+    if (input.retryQueries !== undefined && (!Array.isArray(input.retryQueries) || input.retryQueries.length > 3 || input.retryQueries.some((q) => typeof q !== "string" || q.length > 350))) throw new Error("Invalid retry queries.");
+    return { query: typeof input.query === "string" ? input.query.trim() : "", freeOnly: input.freeOnly === true,
+      retryQueries: input.retryQueries, depth: input.depth,
+      researchConfigRevision: typeof input.researchConfigRevision === "string" ? input.researchConfigRevision.slice(0, 64) : undefined,
+      reportId: typeof input.reportId === "string" ? input.reportId.slice(0, 100) : undefined,
+      expectedRevision: Number.isSafeInteger(input.expectedRevision) ? input.expectedRevision : undefined,
+      projectId: typeof input.projectId === "string" ? input.projectId.slice(0, 100) : undefined,
+    };
+  })
   .handler(async ({ data, context }) => {
-    const { haltIsOn } = await import("./halt.server");
-    if (await haltIsOn(context.userId)) {
-      return { ok: false as const, configured: false, citations: [] as { title: string; url: string }[], error: "Emergency stop is on. No new action can run." };
-    }
-    if (data.freeOnly || data.query.length > 300) {
-      return { ok: false as const, configured: false, citations: [] as { title: string; url: string }[],
-        error: data.freeOnly ? "Free-only mode is active. No verified free web search route is available." : "Shorten the research question to 300 characters before searching." };
-    }
-    if (!allowMindRequest("search", context.userId, 6)) {
-      return { ok: false as const, configured: false, citations: [] as { title: string; url: string }[], error: "Too many searches. Wait a minute and try again." };
-    }
-    const endpoint = process.env.MIND_SEARCH_ENDPOINT?.trim();
-    const key = process.env.MIND_SEARCH_KEY?.trim();
-    if (endpoint && key) {
-      return performSearch({
-        query: data.query,
-        retryQueries: data.retryQueries,
-        deep: data.retryQueries ? true : undefined,
-        endpoint,
-        key,
-      });
-    }
-    if (data.retryQueries) return { ok: false as const, configured: false, citations: [], error: "The original research service is unavailable." };
-    const { searchWithGrok } = await import("./xai-search");
-    return searchWithGrok(data.query);
+    if (!allowMindRequest("search", context.userId, 6)) return { ok: false as const, configured: false, citations: [], error: "Too many searches. Wait a minute and try again." };
+    const { executeResearch } = await import("./research-service.server.ts");
+    return executeResearch(context.userId, data);
   });
 
 export const recordAgentExecution = createServerFn({ method: "POST" })
@@ -208,7 +200,9 @@ export const notionDisconnect = createServerFn({ method: "POST" })
 
 export const notionCommand = createServerFn({ method: "POST" })
   .middleware([authMiddleware])
-  .validator((input: { text?: string; confirmed?: boolean; pageId?: string | null; workspaceId?: string }) => ({
+  .validator((input: { text?: string; confirmed?: boolean; pageId?: string | null; workspaceId?: string; chatId?: string; grantGeneration?: string }) => ({
+    grantGeneration: typeof input.grantGeneration === "string" && /^[A-Za-z0-9-]{1,128}$/.test(input.grantGeneration) ? input.grantGeneration : undefined,
+    chatId: typeof input.chatId === "string" && /^[A-Za-z0-9][A-Za-z0-9._:-]{0,79}$/.test(input.chatId) ? input.chatId : undefined,
     text: typeof input.text === "string" ? input.text.slice(0, 2000) : "",
     workspaceId: typeof input.workspaceId === "string" ? input.workspaceId : undefined,
     confirmed: input.confirmed === true,
@@ -245,15 +239,33 @@ export const notionCommand = createServerFn({ method: "POST" })
       };
     }
     const { runNotionTurn } = await import("./notion");
-    const { resolveNotionTokenPersistent, resolveWorkspaceGrant } = await import("./connectors/notion-oauth");
+    const { resolveNotionGrantPersistent } = await import("./connectors/notion-oauth");
+    const { decryptSecret } = await import("./connectors/crypto");
+    const { observationFromTurn, saveNotionObservation, notionGrantGeneration } = await import("./connectors/notion-operation-status.server");
+    const operationStartedAt = new Date().toISOString();
+    const grant = await resolveNotionGrantPersistent(context.userId, data.workspaceId);
     const result = await runNotionTurn({
-      token: data.workspaceId ? await resolveWorkspaceGrant(context.userId, data.workspaceId) : await resolveNotionTokenPersistent(context.userId),
+      token: grant ? decryptSecret(grant.accessTokenEnc) ?? undefined : undefined,
       disabled: false,
       text: data.text,
       confirmed: data.confirmed,
+      grantGeneration: grant ? notionGrantGeneration(grant) : undefined,
+      reviewedGrantGeneration: data.grantGeneration,
       pageId: data.pageId,
       fetch: globalThis.fetch,
     });
+    if (grant) {
+      result.workspaceId = grant.workspaceId || "legacy";
+      result.grantGeneration = notionGrantGeneration(grant);
+      const observation = observationFromTurn(grant, result, data.chatId, operationStartedAt);
+      if (observation) {
+        try {
+          const { getSql } = await import("../db");
+          await saveNotionObservation(await getSql(), context.userId, observation);
+          result.statusSaved = true;
+        } catch { result.statusSaved = false; }
+      }
+    }
     try {
       const { randomUUID } = await import("node:crypto");
       const { writeToolRun } = await import("./notion-record");
@@ -263,7 +275,7 @@ export const notionCommand = createServerFn({ method: "POST" })
         tool: "notion",
         action: result.action,
         ok: result.ok,
-        detail: result.ok ? `Notion ${result.action} completed.` : `Notion ${result.action} did not complete.`,
+        detail: JSON.stringify({ operation: result.action, ok: result.ok, workspaceId: result.workspaceId, pageId: result.pages[0]?.id, failure: result.failure, wrote: result.wrote, verified: result.verified }),
       });
     } catch {
       /* the reply still reports the API result when the record cannot be saved */
@@ -365,7 +377,7 @@ export const analyzeImageFile = createServerFn({ method: "POST" })
     bytes: typeof input.bytes === "number" ? input.bytes : 0,
     imageBase64: typeof input.imageBase64 === "string" ? (input.imageBase64.length <= 533_336 ? input.imageBase64 : "") : "",
   }))
-  .handler(async ({ data }) => {
+  .handler(async ({ data, context }) => {
     const { analyzeImage } = await import("./image-analyze");
     return analyzeImage({
       name: data.name,
@@ -373,6 +385,7 @@ export const analyzeImageFile = createServerFn({ method: "POST" })
       imageBase64: data.imageBase64,
       visionKey: process.env.VISION_API_KEY,
       fetch: globalThis.fetch,
+      authorize: () => authorizeExternalResource(context.userId, "openai", "gpt-4.1-mini", undefined, false, true),
     });
   });
 
@@ -394,17 +407,22 @@ export const sendTurn = createServerFn({ method: "POST" })
     return completeModelReply(prepared);
   });
 
+export const readExecutionControl = createServerFn({ method: "GET" }).middleware([authMiddleware]).handler(async ({ context }) => {
+  const { readHaltSnapshot } = await import("./halt.server.ts");
+  return readHaltSnapshot(context.userId);
+});
+
 export const setExecutionHalt = createServerFn({ method: "POST" })
   .middleware([authMiddleware])
-  .validator((input: { on: boolean }) => ({ on: input.on === true }))
+  .validator((input: { on: boolean; expectedRevision?: string }) => parseHaltControlRequest(input))
   .handler(async ({ data, context }) => {
     const { setDurableHalt } = await import("./halt.server");
-    return setDurableHalt(context.userId, data.on);
+    return setDurableHalt(context.userId, data.on, data.expectedRevision);
   });
 
 export const saveMindCopy = createServerFn({ method: "POST" })
   .middleware([authMiddleware])
-  .validator((input: { workspace: unknown; ownerId?: string; expectedRevision?: string }) => input)
+  .validator((input: { workspace?: unknown; changes?: unknown; ownerId?: string; expectedRevision?: string }) => input)
   .handler(async ({ data, context }) => {
     if (data.ownerId !== undefined && data.ownerId !== context.userId) return { ok: false as const, error: "The signed-in account changed. The workspace was not saved." };
     if (typeof data.expectedRevision !== "string" || !/^[a-f0-9]{64}$/.test(data.expectedRevision)) {
@@ -412,12 +430,14 @@ export const saveMindCopy = createServerFn({ method: "POST" })
     }
     if (!allowMindRequest("save", context.userId, 20)) return { ok: false as const, error: "Too many saves. The browser copy was kept." };
     const { normalizeWorkspace } = await import("./workspace");
-    const { snapshotTooLarge, writeSnapshot } = await import("./store");
+    const { snapshotTooLarge, writeSnapshot, writeSnapshotDelta } = await import("./store");
     const { getSql } = await import("../db");
     const workspace = normalizeWorkspace(data.workspace);
-    if (snapshotTooLarge(workspace)) return { ok: false as const, error: "This workspace is too large to copy to the server. The browser copy was kept." };
+    if (data.changes === undefined && snapshotTooLarge(workspace)) return { ok: false as const, error: "This workspace is too large for a full-copy request. Use incremental synchronization. The browser copy was kept." };
     try {
-      const revision = await writeSnapshot(await getSql(), context.userId, workspace, data.expectedRevision);
+      const revision = data.changes !== undefined
+        ? (await writeSnapshotDelta(await getSql(), context.userId, data.changes, data.expectedRevision))?.revision
+        : await writeSnapshot(await getSql(), context.userId, workspace, data.expectedRevision);
       if (!revision) {
         return { ok: false as const, conflict: true as const, error: "The server copy changed in another session. Both copies were kept. Reload and review before replacing the server copy." };
       }
@@ -457,14 +477,14 @@ export const speakText = createServerFn({ method: "POST" })
     const text = parsed.text;
     const { resolveVoiceApiKey } = await import("./voice/keys");
     const { speakWithFallback } = await import("./voice/provider-fallback");
-    const spoken = await speakWithFallback({
+    const spoken = await externalResourceCall({ owner: context.userId, provider: "xai", model: "speech" }, () => speakWithFallback({
       text,
       voiceId: data.voiceId,
       xaiKey: resolveVoiceApiKey(process.env),
       // Speak honours the chosen xAI voice (Eve by default). A different
       // provider/voice is never substituted without explicit consent.
       openaiKey: undefined,
-    });
+    }));
     if (!spoken.ok) return { ok: false as const, error: spoken.error, provider: null };
     return { ok: true as const, audio: spoken.audio, mime: spoken.mime, provider: spoken.provider };
   });
@@ -480,13 +500,13 @@ export const createVoiceClientSecret = createServerFn({ method: "POST" })
       return { ok: false as const, error: "Too many voice requests. Wait a minute." };
     }
     const { mintRealtimeClientSecret } = await import("./voice/client-secret");
-    return mintRealtimeClientSecret({});
+    return externalResourceCall({ owner: context.userId, provider: "xai", model: "realtime-voice", unknownTokens: true }, () => mintRealtimeClientSecret({}));
   });
 
 /** Whisper Flow STT. The key stays on the server. Browser speech is not this path. */
 export const transcribeDictation = createServerFn({ method: "POST" })
   .middleware([authMiddleware])
-  .validator((input: { audioBase64: string; mime?: string; filename?: string }) => input)
+  .validator((input: { audioBase64: string; mime?: string; filename?: string; transcriptionPolicy?: { provider: "xai" | "openai"; allowFallback: boolean }; freeOnly?: boolean }) => input)
   .handler(async ({ data, context }) => {
     const { validateTranscribeAudioInput, decodeAudioBase64 } = await import("./voice/voice-input");
     const parsed = validateTranscribeAudioInput(data);
@@ -500,11 +520,16 @@ export const transcribeDictation = createServerFn({ method: "POST" })
     if (!allowMindRequest("stt", context.userId, 20)) {
       return { ok: false as const, error: "Too many speech-to-text requests. Wait a minute." };
     }
-    const { transcribeWhisperFlowAudio } = await import("./whisper-flow/provider");
-    const result = await transcribeWhisperFlowAudio({
-      bytes: new Uint8Array(decoded.bytes),
-      mime: parsed.mime,
-      filename: parsed.filename,
+    if (data.freeOnly === true) return { ok: false as const, error: "Free-only mode keeps cloud transcription off." };
+    const { transcribeWithFallback } = await import("./voice/provider-fallback");
+    const { parseTranscriptionPolicy } = await import("./voice/transcription-policy");
+    const { resolveVoiceApiKey } = await import("./voice/keys");
+    const policy = parseTranscriptionPolicy(data.transcriptionPolicy);
+    if (!policy) return { ok: false as const, error: "Choose a supported transcription policy." };
+    const result = await transcribeWithFallback({
+      bytes: new Uint8Array(decoded.bytes), mime: parsed.mime, filename: parsed.filename, policy,
+      xaiKey: resolveVoiceApiKey(process.env), openaiKey: process.env.OPENAI_API_KEY?.trim(),
+      authorize: (provider) => authorizeExternalResource(context.userId, provider.toLowerCase(), "transcription"),
     });
     if (!result.ok) return { ok: false as const, error: result.error };
     return { ok: true as const, text: result.text, provider: result.provider ?? "xai" };
@@ -532,7 +557,7 @@ export const refineDictationOptional = createServerFn({ method: "POST" })
       };
     }
     const { polishDictationWithXai } = await import("./whisper-flow/llm-refine");
-    const polished = await polishDictationWithXai({ text, apiKey: key.key });
+    const polished = await externalResourceCall({ owner: context.userId, provider: "xai", model: "dictation-refine", unknownTokens: true }, () => polishDictationWithXai({ text, apiKey: key.key }));
     if (!polished.ok) {
       return { ok: false as const, skipped: true as const, error: polished.error };
     }

@@ -25,16 +25,19 @@ npm run visual:css-debt
 npm run visual:css
 ```
 
-`visual:audit` captures desktop and mobile screenshots, checks visible-control
-overflow and touch-target sizes, and runs axe accessibility checks across safe
-navigation surfaces only. Results are written to `artifacts/visual-audit/`,
-which is ignored by Git.
+`visual:audit` captures desktop and mobile screenshots after destination and
+theme checks, collects layout and axe evidence, and defaults to report mode.
+Its zero exit is not a visual release guarantee. Explicit release thresholds,
+revision-bound reviewed exceptions, baseline comparisons, and isolated synthetic
+functional states are described in [the verification guide](verification/README.md).
+Results are written to `artifacts/visual-audit/`, which is ignored by Git.
 
 ## Tool roles
 
 - Playwright + axe: browser layout and accessibility evidence.
-- MSW: future deterministic API/MCP/provider success, loading, and failure
-  states without live credentials.
+- Playwright context routing: implemented local deterministic API/RPC states
+  without live credentials. Unrecognized calls are refused. The initial fixture
+  catalog and remaining state coverage are documented in the verification guide.
 - Unlighthouse: future whole-site performance sweep.
 - Stylelint, Knip, and PurgeCSS: CSS/code-debt reporting. PurgeCSS is audit
   only; it must never delete dynamic classes automatically.

@@ -1,4 +1,5 @@
 import { haltIsOn } from "@/lib/mind/halt.server";
+import { externalResourceCall } from "@/lib/mind/external-resource-call.server";
 import { createFileRoute } from "@tanstack/react-router";
 import { requireUserId } from "@/lib/auth/verify.server";
 import { assertSameOrigin } from "@/lib/mind/connectors/oauth-csrf";
@@ -80,7 +81,7 @@ export const Route = createFileRoute("/api/mind/nuance/session")({
           return reply({ ok: true, ended: active.ids.length });
         }
         if (await haltIsOn(user)) return reply({ ok: false, error: "Emergency stop is on or unavailable. Session was not started." }, 403);
-        const minted = await mintSavedNuanceSessionForPersona(user, camera, persona);
+        const minted = await externalResourceCall({ owner: user, provider: "nuance", model: persona, unknownTokens: true }, () => mintSavedNuanceSessionForPersona(user, camera, persona));
         if (!minted.ok) return reply({ ok: false, error: redactSecrets(minted.error) }, minted.status);
         return reply({ ok: true, token: minted.token, persona });
       },

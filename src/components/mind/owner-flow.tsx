@@ -1,20 +1,43 @@
+import { ElapsedTime } from "@/components/mind/elapsed-time";
 import { useState } from "react";
 import { CANNOT_RUN, DEMO_COMMAND, DEMO_FILE, DEMO_WRITE, DESKTOP_ACTIONS, HOSTED_ACTIONS, INSTALLER_HREF, canRunApproved, canRunDesktop, exactAction, exactDesktopAction, type HostedActionId } from "@/lib/mind/owner-flow";
 
 export function OwnerFlow(props: {
   halted: boolean;
   recording: boolean;
-  recordingSeconds: number;
+  recordingSeconds?: number;
+  recordingStartedAt?: number | null;
   onOpenSpeak: () => void;
   onToggleStop: () => void;
   onStopRecording: () => void;
 }) {
   const [approved, setApproved] = useState<Partial<Record<HostedActionId, string>>>({});
+  const [reviewed, setReviewed] = useState<Partial<Record<HostedActionId, { revision?: string; missing: boolean }>>>({});
   const [busy, setBusy] = useState<HostedActionId | null>(null);
   const [results, setResults] = useState<Partial<Record<HostedActionId, string>>>({});
 
   function setResult(id: HostedActionId, message: string) {
     setResults((prev) => ({ ...prev, [id]: message }));
+  }
+
+  async function approve(id: HostedActionId) {
+    if (props.halted || busy) return;
+    if (id !== "file_write" && id !== "file_delete") { setApproved((previous) => ({ ...previous, [id]: exactAction(id) })); return; }
+    setBusy(id);
+    setApproved((previous) => ({ ...previous, [id]: "" }));
+    try {
+      const response = await fetch("/api/mind/build/files", { method: "POST", credentials: "include", headers: { "content-type": "application/json" }, body: JSON.stringify({ operation: "read", workspace: "hosted", path: DEMO_FILE }) });
+      const data = await response.json();
+      const missing = response.status === 404;
+      if (missing && id === "file_delete") { setResult(id, "The file is missing. There is no reviewed revision to delete."); return; }
+      if ((!missing && (!response.ok || !data.ok || !data.revision)) || data.truncated) { setResult(id, data.error || "Read the complete current file before approving a change."); return; }
+      const detail = missing ? "The file does not exist. This action can only create a missing file." : `Current revision ${String(data.revision).slice(0, 12)}. Current content: ${String(data.content || "").slice(0, 500)}`;
+      setResult(id, detail);
+      if (!window.confirm(`${exactAction(id)} in your account/hosted workspace? ${detail}${id === "file_write" ? ` New content: ${DEMO_WRITE}` : ""}`)) return;
+      setReviewed((previous) => ({ ...previous, [id]: { missing, revision: missing ? undefined : data.revision } }));
+      setApproved((previous) => ({ ...previous, [id]: exactAction(id) }));
+    } catch { setResult(id, "The current file could not be reviewed. No mutation was approved."); }
+    finally { setBusy(null); }
   }
 
   async function run(id: HostedActionId) {
@@ -31,7 +54,7 @@ export function OwnerFlow(props: {
           method: "POST",
           credentials: "include",
           headers: { "content-type": "application/json" },
-          body: JSON.stringify({ command: DEMO_COMMAND }),
+          body: JSON.stringify({ command: DEMO_COMMAND, agentId: "hosted" }),
         });
         const pending = (await requested.json()) as { ok?: boolean; error?: string; approval?: { id: string; token: string; command: string } };
         if (!pending.approval) {
@@ -42,17 +65,19 @@ export function OwnerFlow(props: {
           method: "POST",
           credentials: "include",
           headers: { "content-type": "application/json" },
-          body: JSON.stringify({ command: pending.approval.command, confirm: true, approvalId: pending.approval.id, token: pending.approval.token }),
+          body: JSON.stringify({ command: pending.approval.command, agentId: "hosted", confirm: true, approvalId: pending.approval.id, token: pending.approval.token }),
         });
         const done = (await confirmed.json()) as { ok?: boolean; text?: string; error?: string };
         setResult(id, done.ok ? `Hosted terminal finished. ${done.text || "No output."}` : done.error || "Terminal did not finish. Nothing was marked complete.");
         return;
       }
+      const snapshot = reviewed[id];
+      if (id !== "file_read" && (!snapshot || (!snapshot.missing && !snapshot.revision))) { setResult(id, "Read and approve the current file revision first."); return; }
       const body = id === "file_read"
         ? { operation: "read", path: DEMO_FILE }
         : id === "file_write"
-          ? { operation: "write", path: DEMO_FILE, content: DEMO_WRITE }
-          : { operation: "delete", path: DEMO_FILE, confirm: true };
+          ? { operation: "write", path: DEMO_FILE, content: DEMO_WRITE, ...(snapshot?.missing ? { expectedMissing: true } : { expectedRevision: snapshot?.revision }) }
+          : { operation: "delete", path: DEMO_FILE, confirm: true, expectedRevision: snapshot?.revision };
       const response = await fetch("/api/mind/build/files", {
         method: "POST",
         credentials: "include",
@@ -70,6 +95,7 @@ export function OwnerFlow(props: {
     } finally {
       setBusy(null);
       setApproved((prev) => ({ ...prev, [id]: "" }));
+      setReviewed((prev) => ({ ...prev, [id]: undefined }));
     }
   }
 
@@ -88,7 +114,7 @@ export function OwnerFlow(props: {
         </div>
       </div>
       <p className="mt-3 text-sm" data-testid="owner-flow-recording" role="status">
-        {props.recording ? `Recording this tab · ${props.recordingSeconds}s. Closing this tab stops it. It cannot continue after the tab closes.` : "Microphone is off. Open Speak and press the mic. Recording stays in this tab only. Closing the tab stops it."}
+        {props.recording ? <>Recording this tab · <ElapsedTime startedAt={props.recordingStartedAt} seconds={props.recordingSeconds ?? 0} />s. Closing this tab stops it. It cannot continue after the tab closes.</> : "Microphone is off. Open Speak and press the mic. Recording stays in this tab only. Closing the tab stops it."}
       </p>
       {props.recording ? <button type="button" className="mt-2 inline-flex min-h-11 items-center rounded-panel border border-line px-3 text-sm" onClick={props.onStopRecording}>Stop recording</button> : null}
       <p className={"mt-3 text-sm font-semibold " + (props.halted ? "text-rose-300" : "text-emerald-300")} data-testid="owner-flow-halt">{props.halted ? "Emergency stop is on. EVE can press Clear on Speak." : "Emergency stop is off. Only you can press the stop. EVE can press Clear."}</p>
@@ -103,10 +129,10 @@ export function OwnerFlow(props: {
                 <p className="text-xs text-muted">{exactAction(action.id)}</p>
               </div>
               <div className="flex flex-wrap gap-2">
-                <button type="button" className="min-h-11 rounded-panel border border-line px-3 text-sm" disabled={props.halted || busy === action.id} onClick={() => setApproved((prev) => ({ ...prev, [action.id]: exactAction(action.id) }))} data-testid={`approve-${action.id}`}>
-                  {approved[action.id] === exactAction(action.id) ? "Approved" : "Approve"}
+                <button type="button" className="min-h-11 rounded-panel border border-line px-3 text-sm" disabled={props.halted || busy !== null} onClick={() => void approve(action.id)} data-testid={`approve-${action.id}`}>
+                  {approved[action.id] === exactAction(action.id) ? "Approved" : action.id === "file_write" || action.id === "file_delete" ? "Review and approve" : "Approve"}
                 </button>
-                <button type="button" className="min-h-11 rounded-panel bg-accent px-3 text-sm font-semibold text-accent-ink disabled:opacity-50" disabled={props.halted || busy === action.id || approved[action.id] !== exactAction(action.id)} onClick={() => void run(action.id)} data-testid={`run-${action.id}`}>
+                <button type="button" className="min-h-11 rounded-panel bg-accent px-3 text-sm font-semibold text-accent-ink disabled:opacity-50" disabled={props.halted || busy !== null || approved[action.id] !== exactAction(action.id)} onClick={() => void run(action.id)} data-testid={`run-${action.id}`}>
                   {busy === action.id ? "Running" : "Run"}
                 </button>
               </div>

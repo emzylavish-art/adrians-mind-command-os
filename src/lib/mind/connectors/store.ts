@@ -1,4 +1,4 @@
-import { createHash, randomBytes } from "node:crypto";
+import { createHash, randomBytes, randomUUID } from "node:crypto";
 import { mkdirSync, readFileSync, writeFileSync, unlinkSync, existsSync, readdirSync, renameSync } from "node:fs";
 import { join, resolve, relative, sep, isAbsolute } from "node:path";
 import { decryptSecret, encryptSecret } from "./crypto.ts";
@@ -34,6 +34,10 @@ export type StoredConnection = {
   connector: ConnectorId;
   ownerId: string;
   accessTokenEnc: string;
+  /** Unique authorization instance, independent of timestamps and labels. */
+  grantGeneration?: string;
+  /** Verified provider subject; display email is never an identity key. */
+  externalAccountId?: string;
   refreshTokenEnc?: string;
   workspaceName?: string;
   workspaceId?: string;
@@ -134,10 +138,10 @@ export function getRefreshToken(ownerId: string, connector: ConnectorId): string
   return decryptSecret(conn.refreshTokenEnc);
 }
 
-export function sameExternalAccount(previous: StoredConnection | null, incoming: { workspaceId?: string; accountLabel?: string }): boolean {
+export function sameExternalAccount(previous: StoredConnection | null, incoming: { workspaceId?: string; externalAccountId?: string; accountLabel?: string }): boolean {
   if (!previous) return false;
   if (previous.workspaceId || incoming.workspaceId) return Boolean(previous.workspaceId && previous.workspaceId === incoming.workspaceId);
-  return Boolean(previous.accountLabel?.includes("@") && previous.accountLabel === incoming.accountLabel);
+  return Boolean(previous.externalAccountId && previous.externalAccountId === incoming.externalAccountId);
 }
 
 function notionWorkspaceDir(owner: string) {
@@ -182,6 +186,7 @@ export function storeAccessToken(input: {
   workspaceId?: string;
   botId?: string;
   accountLabel?: string;
+  externalAccountId?: string;
   tokenType?: string;
   scopes?: string;
 }): StoredConnection {
@@ -199,6 +204,8 @@ export function storeAccessToken(input: {
     connector: input.connector,
     ownerId: input.ownerId,
     accessTokenEnc: access.ciphertext,
+    grantGeneration: randomUUID(),
+    externalAccountId: input.externalAccountId,
     refreshTokenEnc: refresh?.ciphertext,
     workspaceName: input.workspaceName,
     workspaceId: input.workspaceId,
@@ -347,7 +354,7 @@ export function toPublic(
   return {
     connector,
     state: "connected",
-    detail: `Connected to ${label}${conn.connectedAt ? ` · since ${conn.connectedAt}` : ""}. Tokens stay on the server.`,
+    detail: `Connected to ${label}${conn.connectedAt ? ` · since ${conn.connectedAt}` : ""}. Tokens stay on the server.${["gmail", "google_calendar", "google_drive", "youtube"].includes(connector) && !conn.externalAccountId ? " Account identity is unavailable; a reconnect may be needed before reusing this grant’s refresh credential." : ""}`,
     workspaceName: conn.workspaceName,
     accountLabel: conn.accountLabel,
     connectedAt: conn.connectedAt,

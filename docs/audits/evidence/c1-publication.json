@@ -1,0 +1,12 @@
+{
+  "localValidatedCommit": "b17e90c5728f7f1a9f303f703fcf073cbdd2175e",
+  "githubSourceCommit": "d8b89bbe94291cf2d6d5d36236d03ea749988127",
+  "identicalWholeTreeSha": "05e1aea8e09d6d1ec7b4fec36ab0352d86e3b704",
+  "localAndFetchedRemoteDiffExitCode": 0,
+  "publicationMethod": "Connected GitHub Git Data tools; normal shell push failed because no GitHub credential helper was configured. The connected GitHub tools assigned different commit metadata. No source bytes changed.",
+  "githubBranch": "audit/c1-notion-access-ef0782",
+  "branchRefReadBack": "d8b89bbe94291cf2d6d5d36236d03ea749988127",
+  "localCommitRecord": "docs/audits/evidence/c1-validated-source.commit.txt",
+  "metadataOnlyDelivery": true,
+  "notClaimed": "Raw test and browser reports retain the actual local commit they ran; they were not relabeled as runs on the API-assigned SHA."
+}

@@ -68,6 +68,7 @@ export function EveWorkbench({
   chatTitle,
   recording = false,
   recordingSeconds = 0,
+  recordingStartedAt,
   onStopRecording,
 }: {
   workspace: Workspace;
@@ -87,6 +88,7 @@ export function EveWorkbench({
   chatTitle?: string;
   recording?: boolean;
   recordingSeconds?: number;
+  recordingStartedAt?: number | null;
   onStopRecording?: () => void;
 }) {
   const runs = [...workspace.runs].sort((a, b) => Date.parse(b.updatedAt) - Date.parse(a.updatedAt));
@@ -344,7 +346,7 @@ export function EveWorkbench({
         <OwnerFlow
           halted={workspace.halted}
           recording={recording}
-          recordingSeconds={recordingSeconds}
+          recordingSeconds={recordingSeconds} recordingStartedAt={recordingStartedAt}
           onOpenSpeak={() => onTalk?.()}
           onToggleStop={onToggleStop}
           onStopRecording={() => onStopRecording?.()}

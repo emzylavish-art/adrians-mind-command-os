@@ -31,6 +31,10 @@ export function runLocalPlan(
 ): { ok: boolean; lines: string[] } {
   const lines: string[] = [];
   for (const step of steps) {
+    if (ws.toolPermissions?.[step.tool] === false) {
+      lines.push(`${step.tool}: this tool is turned off for the workspace. Nothing was read.`);
+      return { ok: false, lines };
+    }
     const decision = decide({
       autonomy: input.autonomy,
       kind: "lookup",

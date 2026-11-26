@@ -1,5 +1,16 @@
 import { createMiddleware } from "@tanstack/react-start";
 
+/** Origin protection for credential establishment and local-only operations.
+ * These operations must not require an already authenticated account, but they
+ * still must not accept a browser mutation from a sibling or external origin.
+ */
+export const isolationMiddleware = createMiddleware({ type: "function" })
+  .server(async ({ next }) => {
+    const { assertSameSiteRequest } = await import("./isolation.server");
+    assertSameSiteRequest();
+    return next();
+  });
+
 /**
  * Auth middleware for server functions — the standard way to get the caller's
  * verified user id. When deployed the session cookie is same-origin and rides

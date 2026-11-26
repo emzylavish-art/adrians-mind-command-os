@@ -1,3 +1,7 @@
+import { readHelperReceipts } from "./execution-evidence.ts";
+import { readFailureEnvelope, type FailureEnvelope } from "./failure-envelope.ts";
+import type { ModelExecutionPlan } from "./execution-plan.ts";
+import type { HelperReceipt } from "./model-consult.ts";
 import { pullMindEvents, type ModelUsage } from "./stream.ts";
 
 import { outcomeFromDoneEvent, rememberTierOutcome } from "./model-tier-memory.ts";
@@ -7,8 +11,8 @@ export const STOPPED_REPLY = "Stopped. The unfinished reply was not saved.";
 export { CHAT_TIMEOUT_REPLY, CHAT_DISCONNECT_REPLY };
 
 export type LiveTurnResult =
-  | { ok: true; text: string; model: string; usage: ModelUsage | null; usedIds: string[]; requestId: string | null; modelTier?: string; resolvedTier?: string; tierReason?: string; memorySaved?: boolean; savedMemoryId?: string | null; provider?: string; requestedModel?: string; credentialFallback?: string | null }
-  | { ok: false; error: string; deliveryUncertain?: true };
+  | { ok: true; text: string; model: string; usage: ModelUsage | null; usedIds: string[]; requestId: string | null; modelTier?: string; resolvedTier?: string; tierReason?: string; memorySaved?: boolean; savedMemoryId?: string | null; provider?: string; requestedModel?: string; credentialFallback?: string | null; helperReceipts?: HelperReceipt[]; executionPlan?: ModelExecutionPlan; resourceOperationId?: string }
+  | { ok: false; error: string; deliveryUncertain?: true; helperReceipts?: HelperReceipt[]; failureEnvelope?: FailureEnvelope };
 
 export function shouldStoreReply(result: LiveTurnResult): result is Extract<LiveTurnResult, { ok: true }> {
   return result.ok && result.text.trim().length > 0;
@@ -91,15 +95,19 @@ export async function consumeMindTurn(input: {
         : response.status === 429
           ? "Too many messages. Wait a minute and try again."
           : "The model service could not be reached.";
+    let helperReceipts: HelperReceipt[] = [];
+    let failureEnvelope: FailureEnvelope | null = null;
     let uncertain = response.status >= 500 || response.status === 409 || response.ok;
     try {
-      const payload = (await response.json()) as { error?: string; duplicate?: boolean };
+      const payload = (await response.json()) as { error?: string; duplicate?: boolean; helperReceipts?: unknown; failureEnvelope?: unknown };
+      helperReceipts = readHelperReceipts(payload.helperReceipts);
+      failureEnvelope = readFailureEnvelope(payload.failureEnvelope);
       uncertain ||= payload.duplicate === true;
       if (typeof payload.error === "string" && payload.error.trim()) message = payload.error;
     } catch {
       /* the status message stands */
     }
-    return { ok: false, error: message, ...(uncertain ? { deliveryUncertain: true } : {}) };
+    return { ok: false, error: message, ...(helperReceipts.length ? { helperReceipts } : {}), ...(failureEnvelope ? { failureEnvelope } : {}), ...(uncertain ? { deliveryUncertain: true } : {}) };
   }
   if (!response.body) return { ok: false, error: "The model service returned an empty reply.", deliveryUncertain: true };
   const reader = response.body.getReader();
@@ -135,7 +143,7 @@ export async function consumeMindTurn(input: {
       if (event.event === "delta") input.onDelta(event.text);
       if (event.event === "error" || event.event === "canceled") {
         await reader.cancel().catch(() => undefined);
-        return { ok: false, error: event.error, deliveryUncertain: true };
+        return { ok: false, error: event.error, deliveryUncertain: true, ...(event.helperReceipts?.length ? { helperReceipts: event.helperReceipts } : {}), ...(event.failureEnvelope ? { failureEnvelope: event.failureEnvelope } : {}) };
       }
       if (event.event === "done") {
         const finished: LiveTurnResult = {
@@ -153,6 +161,9 @@ export async function consumeMindTurn(input: {
           provider: event.provider,
           requestedModel: event.requestedModel,
           credentialFallback: event.credentialFallback ?? null,
+          helperReceipts: event.helperReceipts ?? [],
+          executionPlan: event.executionPlan,
+          resourceOperationId: event.resourceOperationId,
         };
         const outcome = outcomeFromDoneEvent(event);
         if (outcome) rememberTierOutcome(outcome);

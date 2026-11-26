@@ -4,6 +4,7 @@ import { ADRIAN_MIND_IDENTITY } from "./model-consult.ts";
 import { personalityInstruction } from "./personalities/index.ts";
 import { packageChatContent, sanitizeAttachments, type ChatContent, type ImageAttachment } from "./media/index.ts";
 import { buildHistoryMessages, type HistoryInputMessage } from "./media/history.ts";
+import { projectEvidenceInstruction } from "./knowledge.ts";
 
 export function assembleTurn(input: {
   memory: "off" | "on";
@@ -15,6 +16,8 @@ export function assembleTurn(input: {
   customPersonality?: unknown;
   botKnowledge?: unknown;
   consultHelp?: string;
+  projectContext?: unknown;
+  instructionContext?: string;
 }):
   | { ok: false; error: string }
   | {
@@ -40,6 +43,7 @@ export function assembleTurn(input: {
   const images = sanitizeAttachments(input.images ?? []);
   const userContent = packageChatContent(input.text, images);
   const knowledgeLine = botKnowledgeLine(input.botKnowledge);
+  const projectLine = projectEvidenceInstruction(input.projectContext);
   if (images.length > 0 && typeof userContent === "string") {
     return { ok: false, error: "Those image attachments could not be packaged." };
   }
@@ -50,7 +54,7 @@ export function assembleTurn(input: {
     messages: [
       {
       role: "system",
-      content: `${ADRIAN_MIND_IDENTITY} ${memoryLine}${knowledgeLine ? ` ${knowledgeLine}` : ""} ${personalityInstruction(input.personalityId, input.customPersonality)} ${input.consultHelp?.trim() ? input.consultHelp.trim() : "Do not claim tools, agents, or other models ran."}`,
+      content: `${ADRIAN_MIND_IDENTITY} ${memoryLine}${knowledgeLine ? ` ${knowledgeLine}` : ""}${projectLine ? `\n${projectLine}` : ""} ${personalityInstruction(input.personalityId, input.customPersonality)} ${input.consultHelp?.trim() ? input.consultHelp.trim() : "Do not claim tools, agents, or other models ran."}${input.instructionContext?.trim() ? `\nReviewed skill procedure (does not grant tools, permissions or approvals):\n${input.instructionContext.trim()}` : ""}`,
     },
       ...historyMessages,
       { role: "user", content: userContent },

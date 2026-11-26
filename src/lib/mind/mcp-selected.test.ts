@@ -46,7 +46,7 @@ test("confirmation names the selected MCP server and the call does not use the o
   assert.equal(called.some((url) => url.includes("other.example")), false);
 });
 
-test("orchestrator fan-out asks every connected helper", async () => {
+test("orchestrator fan-out asks only explicitly authorized connected helpers", async () => {
   const planned = planModelConsult({
     orchestrator: "grok",
     modules: [
@@ -55,6 +55,7 @@ test("orchestrator fan-out asks every connected helper", async () => {
       { id: "openrouter", label: "OpenRouter", connected: true },
     ],
     question: "What is left?",
+    authorizedHelpers: ["ollama"],
   });
   assert.equal(planned.ok, true);
   if (!planned.ok) return;
@@ -63,6 +64,7 @@ test("orchestrator fan-out asks every connected helper", async () => {
     asked.push(id);
     return { ok: true, text: id + " answered" };
   });
-  assert.deepEqual(asked, ["ollama", "openrouter"]);
-  assert.equal(help.length, 2);
+  assert.deepEqual(asked, ["ollama"]);
+  assert.equal(help.length, 1);
+  assert.equal(asked.includes("openrouter"), false, "A connected paid route is not implicit consent");
 });

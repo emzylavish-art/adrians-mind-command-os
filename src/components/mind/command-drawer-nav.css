@@ -7,7 +7,32 @@
  * is outside this query.
  */
 
+:root {
+  --mind-drawer-background: #161618;
+  --mind-drawer-foreground: #fafafa;
+  --mind-drawer-width: min(18.5rem, 84vw);
+  --mind-drawer-radius: 0 22px 22px 0;
+  --mind-drawer-shadow: 18px 0 48px rgb(0 0 0 / 38%);
+}
+html[data-theme="light"] {
+  --mind-drawer-background: #f7f7f8;
+  --mind-drawer-foreground: #18181b;
+}
+
 @media (max-width: 767.98px) {
+  html aside.rail.gpt-rail.nav-drawer-open.fixed.inset-0.z-40.flex {
+    inset: 0 auto 0 0 !important;
+    width: var(--mind-drawer-width) !important;
+    height: 100dvh !important;
+    background: var(--mind-drawer-background) !important;
+    color: var(--mind-drawer-foreground) !important;
+    border-radius: var(--mind-drawer-radius) !important;
+    box-shadow: var(--mind-drawer-shadow) !important;
+    z-index: 200 !important;
+    animation: adrian-drawer-in 240ms cubic-bezier(0.22, 1, 0.36, 1) !important;
+  }
+  body:has(aside.nav-drawer-open) .main-stage { visibility: visible !important; }
+  html[data-adrian-motion="reduce"] aside.rail.nav-drawer-open { animation: none !important; }
   aside.rail.nav-drawer-open a.nav-route-link {
     display: flex !important;
     visibility: visible !important;
@@ -16,5 +41,44 @@
     min-height: 2.75rem !important;
     height: auto !important;
     box-sizing: border-box;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  html aside.rail.gpt-rail.nav-drawer-open.fixed.inset-0.z-40.flex { animation: none !important; }
+}
+.reply-more-control {
+  display: inline-flex;
+  min-width: 44px;
+  min-height: 44px;
+  align-items: center;
+  justify-content: center;
+}
+
+.transcript-pane[data-following="true"] { overflow-anchor: none; }
+
+@media (max-width: 480px) {
+  #mind-workspace[data-view="chat"] .topbar {
+    gap: 4px !important;
+    padding-inline: 8px !important;
+  }
+
+  #mind-workspace[data-view="chat"] .topbar [data-testid="header-controls"] {
+    gap: 4px !important;
+  }
+
+  #mind-workspace .topbar [data-testid="open-chat-settings"] {
+    width: 44px !important;
+    min-width: 44px !important;
+    padding-inline: 0 !important;
+    justify-content: center;
+  }
+
+  #mind-workspace .topbar [data-testid="open-chat-settings"] > span,
+  #mind-workspace .topbar [data-testid="open-chat-settings"] .chat-settings-chevron {
+    display: none !important;
+  }
+
+  #mind-workspace .topbar [data-testid="open-chat-settings"] .chat-settings-icon {
+    display: block !important;
   }
 }

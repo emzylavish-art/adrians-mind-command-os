@@ -1,3 +1,4 @@
+import { ElapsedTime } from "@/components/mind/elapsed-time";
 import { VoiceWaveformVisual } from "./voice-waveform-visual";
 
 export type DictationUiState = "idle" | "recording" | "transcribing";
@@ -10,6 +11,7 @@ export function DictationPill(props: {
   state: DictationUiState;
   level?: number;
   elapsedSec?: number;
+  startedAt?: number | null;
   onStart?: () => void;
   onStop?: () => void;
   onConfirm?: () => void;
@@ -20,8 +22,6 @@ export function DictationPill(props: {
   const recording = props.state === "recording";
   const transcribing = props.state === "transcribing";
   const level = props.level ?? (recording ? 0.45 : 0);
-  const mm = Math.floor((props.elapsedSec ?? 0) / 60);
-  const ss = String((props.elapsedSec ?? 0) % 60).padStart(2, "0");
 
   if (props.state === "idle") {
     return (
@@ -49,7 +49,7 @@ export function DictationPill(props: {
     >
       <span className={`dictation-pill__dot ${recording ? "is-live" : ""}`} aria-hidden="true" />
       <VoiceWaveformVisual level={level} active={recording} bars={5} tone="listening" className="dictation-pill__wave" />
-      <span className="dictation-pill__timer font-mono">{transcribing ? "…" : `${mm}:${ss}`}</span>
+      <span className="dictation-pill__timer font-mono">{transcribing ? "…" : <ElapsedTime startedAt={props.startedAt} seconds={props.elapsedSec ?? 0} clock />}</span>
       <button type="button" className="dictation-pill__stop" onClick={props.onStop} aria-label="Stop dictation" data-testid="dictation-stop">
         Stop
       </button>

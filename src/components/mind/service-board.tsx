@@ -1,3 +1,4 @@
+import { rememberOAuthReturn } from "@/lib/mind/connectors/oauth-return";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { getBearerToken } from "@/lib/auth/client";
 import { focusConnection } from "./focus-connection";
@@ -204,7 +205,7 @@ export function ServiceBoard({
     return { name: service.name, state: board.state, detail: board.detail };
   });
 
-  function runOauthAction(params: ReturnType<typeof snapshotOauthBoardActionParams>) {
+  function runOauthAction(params: ReturnType<typeof snapshotOauthBoardActionParams>, returnTo?: string) {
     setBusy(params.name);
     setNote(null);
     setOauthActionState({ status: "running", action: params.action, name: params.name });
@@ -220,6 +221,7 @@ export function ServiceBoard({
         if (result.ok) {
           setOauthActionState({ status: "ok", note: result.note, name: result.name, redirectUrl: result.redirectUrl });
           if (params.action === "connect" && result.redirectUrl) {
+            try { rememberOAuthReturn(window.sessionStorage, params.path, result.redirectUrl, returnTo || window.location.pathname + window.location.search); } catch { /* OAuth still works when browser storage is denied; return to app manually. */ }
             window.location.assign(result.redirectUrl);
             return;
           }
@@ -258,10 +260,10 @@ export function ServiceBoard({
     });
   }
 
-  function connectOauth(name: string) {
+  function connectOauth(name: string, returnTo?: string) {
     const meta = OAUTH_BOARD[name];
     if (!meta) return;
-    runOauthAction(snapshotOauthBoardActionParams({ action: "connect", name, path: meta.path }));
+    runOauthAction(snapshotOauthBoardActionParams({ action: "connect", name, path: meta.path }), returnTo);
   }
 
   function disconnectOauth(name: string) {
@@ -419,7 +421,7 @@ export function ServiceBoard({
             )}
             </div>
             {service.name === "Notion" && oauth && (oauthConnected || showOauthConnect) &&
-              <NotionWorkspaces key={oauth.connectedAt || oauth.state} onAdd={() => connectOauth("Notion")} onSelect={() => refreshOne("Notion")} />}
+              <NotionWorkspaces key={oauth.connectedAt || oauth.state} onAdd={() => connectOauth("Notion")} onRepair={(returnTo) => connectOauth("Notion", returnTo)} onSelect={() => refreshOne("Notion")} />}
             {service.name === "MCP" ? (
               <div className="plugin-link__extra">
                 <button
