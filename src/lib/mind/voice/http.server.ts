@@ -19,7 +19,7 @@ import { readJsonObjectBody } from "../request-body.ts";
 import { consumeSharedMindRateLimit } from "../rate-limit.server.ts";
 import { mintRealtimeClientSecret } from "./client-secret.ts";
 import { resolveVoiceApiKey } from "./keys.ts";
-import { parseTranscriptionPolicy } from "./transcription-policy.ts";
+import { dispatchTranscription } from "./transcription-dispatch.server.ts";
 import { resolveSelectedSpeechCredential, speakSelected, transcribeSelected } from "./provider-selection.server.ts";
 import type { SelectedSpeechCredential } from "./provider-selection.ts";
 import { decodeAudioBase64, validateSpeakTextInput, validateTranscribeAudioInput } from "./voice-input.ts";
@@ -121,11 +121,12 @@ export async function handleVoiceSession(request: Request, deps: VoiceHttpDeps =
   const context = dispatchContext({ operationId: request.headers.get("x-mind-operation-id"), provider: "xai", model: "", stage: "realtime-session", args: { expiresAfter: 300 }, textOnly: false });
   const reserved = await reserveAudio(opened.userId, context, deps);
   if (!reserved.ok) return reserved.response;
-  const minted = await runSettledDispatch(opened.userId, reserved.reservationId, () => mintRealtimeClientSecret({
-    env: deps.env,
-    fetchImpl: deps.fetchImpl,
-    secretsPath: deps.secretsPath,
-  }), deps.settle);
+  const tracker = createVoiceUsageTracker(opened.userId, { operationId: context.operationId, fetchImpl: deps.fetchImpl, record: deps.recordUsage });
+  const minted = await runSettledDispatch(opened.userId, reserved.reservationId, async () => {
+    const reply = await mintRealtimeClientSecret({ env: deps.env, fetchImpl: tracker.fetch("realtime-session"), secretsPath: deps.secretsPath });
+    return tracker.error ? { ok: false as const, dispatched: false, error: tracker.error } : reply;
+  }, deps.settle);
+  if (tracker.error) return json({ ok: false, error: tracker.error, dispatched: false }, 503);
   if (!minted.ok) return providerOrNetwork(minted.error);
   if (voiceSecretExpired(minted.expiresAt, deps.now?.() ?? Date.now())) return coded("session_expired");
   return json({ ok: true, expiresAt: minted.expiresAt });
@@ -143,24 +144,9 @@ export async function handleVoiceStt(request: Request, deps: VoiceHttpDeps = {})
   if (!parsed.ok) return json({ ok: false, code: "empty_transcript", error: parsed.error, dispatched: false });
   const decoded = decodeAudioBase64(parsed.audioBase64);
   if (!decoded.ok) return json({ ok: false, code: "empty_transcript", error: decoded.error, dispatched: false });
-  const env = deps.env ?? process.env;
-  const selected = await resolveSelectedSpeechCredential(opened.userId, read.body.provider, { env, secretsPath: deps.secretsPath, customCredential: deps.customCredential });
-  if (!selected.ok) return json({ ok: false, code: "provider_not_configured", error: selected.error, dispatched: false });
-  const context = speechContext(request, read.body, selected, "stt", { audio: parsed.audioBase64, filename: parsed.filename, mime: parsed.mime });
-  const reserved = await reserveAudio(opened.userId, context, deps);
-  if (!reserved.ok) return reserved.response;
-  const transcribed = await runSettledDispatch(opened.userId, reserved.reservationId, () => transcribeSelected({
-    selected,
-    bytes: decoded.bytes,
-    filename: parsed.filename,
-    mime: parsed.mime,
-    fetchImpl: deps.fetchImpl,
-  }), deps.settle);
-  if (!transcribed.ok) {
-    if (/no words were recognized/i.test(transcribed.error)) return coded("empty_transcript");
-    return providerOrNetwork(transcribed.error);
-  }
-  return json({ ok: true, text: transcribed.text, provider: transcribed.provider });
+  const { result, status } = await dispatchTranscription(opened.userId, { ...read.body, operationId: request.headers.get("x-mind-operation-id") ?? read.body.operationId },
+    { ...parsed, bytes: decoded.bytes }, { allowHandy: false, deps });
+  return json(result, status);
 }
 
 export async function handleVoiceTts(request: Request, deps: VoiceHttpDeps = {}): Promise<Response> {
@@ -180,10 +166,12 @@ export async function handleVoiceTts(request: Request, deps: VoiceHttpDeps = {})
   const context = speechContext(request, read.body, selected, "tts", { text: parsed.text, voiceId });
   const reserved = await reserveAudio(opened.userId, context, deps);
   if (!reserved.ok) return reserved.response;
-  const spoken = await runSettledDispatch(opened.userId, reserved.reservationId, () => speakSelected({
-    selected, text: parsed.text, voiceId,
-    fetchImpl: deps.fetchImpl,
-  }), deps.settle);
+  const tracker = createVoiceUsageTracker(opened.userId, { operationId: context.operationId, fetchImpl: deps.fetchImpl, record: deps.recordUsage });
+  const spoken = await runSettledDispatch(opened.userId, reserved.reservationId, async () => {
+    const reply = await speakSelected({ selected, text: parsed.text, voiceId, fetchImpl: tracker.fetch("speech") });
+    return tracker.error ? { ok: false as const, dispatched: false, error: tracker.error } : reply;
+  }, deps.settle);
+  if (tracker.error) return json({ ok: false, error: tracker.error, dispatched: false }, 503);
   if (!spoken.ok) return providerOrNetwork(spoken.error);
   return json({ ok: true, audio: spoken.audio, mime: spoken.mime, provider: spoken.provider });
 }

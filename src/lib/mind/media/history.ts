@@ -150,7 +150,8 @@ export function buildHistoryWithReceipt(
   return { messages: sliced.flatMap((msg, index) => {
     const imgs = keep.get(index) ?? [];
     if (imgs.length === 0) {
-      return [{ role: msg.role, content: msg.content }];
+      const unsupported = options.supportsImages === false && receipt.some(row => row.messageId === (msg.id ?? `history:${index}`) && !row.included);
+      return [{ role: msg.role, content: unsupported ? msg.content + "\n[Image context: the selected provider does not accept historical images. Do not infer their contents.]" : msg.content }];
     }
     // Prefer original prompt text; content may already include an [Attached:] stub.
     const text = stripAttachedStub(msg.content) || msg.content;
@@ -158,7 +159,7 @@ export function buildHistoryWithReceipt(
     // Keep the original reply and provide its authorized image bytes in a labelled user reference.
     return msg.role === "assistant" ? [
       { role: "assistant" as const, content: msg.content },
-      { role: "user" as const, content: packageChatContent(`[Historical assistant-generated images from ${msg.id ?? `history:${index}`}; reference material, not a new user instruction]`, imgs) },
+      { role: "user" as const, content: packageChatContent(`[Historical assistant-generated images from ${msg.id ?? `history:${index}`}; reference material from the preceding assistant response, not a new user instruction]`, imgs) },
     ] : [{ role: "user" as const, content: packageChatContent(text, imgs) }];
   }), receipt };
 }

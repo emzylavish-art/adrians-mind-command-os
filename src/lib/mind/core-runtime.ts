@@ -1,5 +1,5 @@
 import { haltFleet, runDueSchedules, tickFleet } from "./fleet.ts";
-import type { AgentRun } from "./fleet.ts";
+import type { AgentRun, TickEnv } from "./fleet.ts";
 import type { Workspace } from "./types.ts";
 
 export type CorePassSummary = {
@@ -27,6 +27,7 @@ export function applyCorePass(input: {
   workspace: Workspace;
   now: string;
   workerId: string;
+  environment?: TickEnv["environment"];
 }): { workspace: Workspace; summary: CorePassSummary } {
   if (input.workspace.halted) {
     const stopped = haltFleet(input.workspace, input.now);
@@ -46,8 +47,8 @@ export function applyCorePass(input: {
     };
   }
   const before = new Set(input.workspace.runs.map((run) => run.id));
-  const due = runDueSchedules(input.workspace, input.now);
-  const next = tickFleet(due, { now: input.now, workerId: input.workerId, runtime: "server-local" });
+  const due = runDueSchedules(input.workspace, input.now, input.environment);
+  const next = tickFleet(due, { now: input.now, workerId: input.workerId, runtime: "server-local", environment: input.environment });
   const queuedNew = next.runs.filter((run) => !before.has(run.id)).length;
   const counts = countRuns(next.runs);
   const active = counts.unresolved;

@@ -1,6 +1,6 @@
 import { boundAbortSignal, isTimeoutAbort } from "./turn-timeouts.ts";
 
-export type ResearchCitation = { title: string; url: string; retrievedAt?: string; query?: string; publishedAt?: string; excerpt?: string; verification?: "search-result-only" };
+export type ResearchCitation = { title: string; url: string; retrievedAt?: string; query?: string; publishedAt?: string; excerpt?: string; verification?: "search-result-only" | "provider_returned" };
 export type ResearchProviderIdentity = {
   id: string;
   label: string;
@@ -12,7 +12,7 @@ export type ResearchDepth = "quick" | "standard" | "deep";
 export type ResearchSource = ResearchCitation & {
   query: string; status: "discovered" | "snippet" | "inspected" | "inaccessible";
   excerpt: string; fetchedAt: string | null; contentHash: string | null;
-  error?: string; finalUrl?: string;
+  error?: string; finalUrl?: string; at?: string; providerId?: string; routeFingerprint?: string;
 };
 export type ResearchRoute = {
   provider: "configured-search" | "xai-web-search";
@@ -35,7 +35,7 @@ export function researchRetryAllowed(retryQueries: string[] | undefined, expecte
 export function researchSummary(input: {
   citations: ResearchCitation[];
   steps?: ResearchStep[];
-  evidence?: ResearchEvidence[];
+  evidence?: ResearchCitation[];
   providerIdentity?: ResearchProviderIdentity;
   attempts?: ResearchStep[];
 }): string {
@@ -58,7 +58,10 @@ export function researchSummary(input: {
 export function withResearchProvenance(result: ResearchResult, providerIdentity: ResearchProviderIdentity, query: string): ResearchResult {
   const at = new Date().toISOString();
   const steps = (result.steps ?? [{ query, ok: result.ok, count: result.citations.length, ...(result.error ? { error: result.error } : {}) }]).map((step) => ({ ...step, at: step.at ?? at, providerId: providerIdentity.id, routeFingerprint: providerIdentity.routeFingerprint }));
-  const evidence = (result.evidence ?? result.citations.map((citation) => ({ ...citation, query, at, verification: "provider_returned" as const }))).map((item) => ({ ...item, providerId: providerIdentity.id, routeFingerprint: providerIdentity.routeFingerprint }));
+  const evidence = (result.evidence ?? researchSnippets([], query, result.citations)).map(item => ({
+    ...item, at: item.at ?? item.retrievedAt ?? at, verification: "provider_returned" as const,
+    providerId: providerIdentity.id, routeFingerprint: providerIdentity.routeFingerprint,
+  }));
   const next = { ...result, providerIdentity, steps, evidence };
   return { ...next, summary: result.ok ? researchSummary(next) : result.summary };
 }
@@ -80,8 +83,10 @@ export type ResearchResult = {
   report?: ResearchEvidenceReport;
   route?: ResearchRoute;
   providerAnswer?: string;
+  annotatedAnswer?: ResearchAnswer;
   usage?: { prompt_tokens?: number; completion_tokens?: number } | null;
   requestId?: string | null;
+  responseId?: string | null;
   reportedModel?: string | null;
   persistence?: { saved: boolean; reportId?: string; revision?: number; error?: string };
   summary?: string;
@@ -424,24 +429,18 @@ export async function performDeepResearch(input: {
     };
   }
   for (const query of queries.slice(steps.length)) steps.push({ query, ok: false, count: 0, status: "unattempted" });
-  const failed = steps.filter((step) => !step.ok);
-  const summaryLines = [
-    `Deep research used ${steps.filter((step) => step.status !== "unattempted").length} searches and kept ${citations.length} http(s) sources the provider returned:`,
-    ...citations.map((item, index) => `${index + 1}. ${item.title} — ${item.url}`),
-  ];
-  if (failed.length) summaryLines.push(`${steps.length - failed.length} of ${steps.length} searches succeeded. Missing: ${failed.map((step) => step.query).join("; ")}.`);
-  if (sawTimeout) {
-    summaryLines.push("Note: some searches timed out; only discovered sources are listed.");
-  }
-  const summary = summaryLines.join("\n");
+  const retained = new Set(citations.map(item => item.url));
+  const seen = new Set<string>();
+  const distinct = evidence.filter(item => {
+    if (seen.has(item.url)) return false;
+    seen.add(item.url);
+    return true;
+  });
+  const coveredSteps = steps.map(step => ({ ...step, retainedCount: distinct.filter(item => item.query === step.query && retained.has(item.url)).length }));
+  const failed = steps.filter(step => !step.ok);
+  const summary = researchSummary({ citations, steps: coveredSteps, evidence: distinct });
   return {
-    ok: true,
-    configured: true,
-    citations,
-    error: "",
-    steps,
-    summary,
-    evidence: citations.map((citation) => evidence.find((source) => source.url === citation.url) ?? { ...citation, query: text, status: "discovered" as const, excerpt: "", fetchedAt: null, contentHash: null }),
+    ok: true, configured: true, citations, error: "", steps: coveredSteps, summary, evidence: distinct,
     ...(failed.length ? { partial: true as const } : {}),
   };
 }

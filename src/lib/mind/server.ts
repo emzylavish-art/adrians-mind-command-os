@@ -625,7 +625,7 @@ export const createVoiceClientSecret = createServerFn({ method: "POST" })
 /** Whisper Flow STT. The key stays on the server. Browser speech is not this path. */
 export const transcribeDictation = createServerFn({ method: "POST" })
   .middleware([authMiddleware])
-  .validator((input: { audioBase64: string; mime?: string; filename?: string; provider?: string; freeOnly?: boolean; operationId?: string }) => input)
+  .validator((input: { audioBase64: string; mime?: string; filename?: string; provider?: string; fallbackProvider?: string | null; freeOnly?: boolean; operationId?: string }) => input)
   .handler(async ({ data, context }) => {
     const { validateTranscribeAudioInput, decodeAudioBase64 } = await import("./voice/voice-input");
     const parsed = validateTranscribeAudioInput(data);
@@ -639,24 +639,9 @@ export const transcribeDictation = createServerFn({ method: "POST" })
     if (!await allowMindRequest("stt", context.userId, 20)) {
       return { ok: false as const, error: "Too many speech-to-text requests. Wait a minute." };
     }
-    const bytes = new Uint8Array(decoded.bytes);
-    if (!data.provider || data.provider === "handy") {
-      // The dictation control promises local Handy input. Missing local service never permits a paid fallback.
-      const { transcribeWithHandy } = await import("./whisper-flow/provider");
-      return transcribeWithHandy(bytes, parsed.mime);
-    }
-    if (data.freeOnly) return { ok: false as const, error: "Free-only mode keeps cloud transcription off." };
-    const { resolveSelectedSpeechCredential, transcribeSelected } = await import("./voice/provider-selection.server");
-    const selected = await resolveSelectedSpeechCredential(context.userId, data.provider);
-    if (!selected.ok) return { ok: false as const, error: selected.error };
-    const { STT_MODEL } = await import("./voice/stt");
-    const { OPENAI_STT_MODEL } = await import("./voice/provider-fallback");
-    const { rpcOperationId, rpcDispatchContext, runOwnerProviderRequest } = await import("./rpc-provider-request.server");
-    const dispatch = rpcDispatchContext({ operationId: rpcOperationId(data.operationId, "dictation"),
-      provider: data.provider.startsWith("custom:") ? data.provider : selected.provider,
-      model: selected.provider === "xai" ? STT_MODEL : OPENAI_STT_MODEL, textOnly: false,
-    }, { audioBase64: parsed.audioBase64, mime: parsed.mime, filename: parsed.filename });
-    return runOwnerProviderRequest(context.userId, dispatch, () => transcribeSelected({ selected, bytes, mime: parsed.mime, filename: parsed.filename }));
+    const { dispatchTranscription } = await import("./voice/transcription-dispatch.server");
+    const { result } = await dispatchTranscription(context.userId, data, { ...parsed, bytes: decoded.bytes }, { allowHandy: true });
+    return result.ok ? { ...result, provider: result.provider.toLowerCase() } : result;
   });
 
 /** Optional polish after the local text is already inserted. It does not replace that text by itself. */

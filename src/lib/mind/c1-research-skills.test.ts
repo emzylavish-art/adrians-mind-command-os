@@ -42,7 +42,7 @@ test("AA024 bounded source inspection retains observed passages and does not fet
 });
 test("AA024/026 configured quick reports and xAI answers keep distinct truthful evidence", async () => {
   const result = await searchWithGrok("offline", { apiKey: "fixture-only", fetchImpl: async () => Response.json({ id: "fixture-request", model: "fixture-reported-model", output: [{ content: [{ text: "Offline operation depends on the feature.", annotations: [{ title: "Docs", url: source.url }] }] }], usage: { input_tokens: 12, output_tokens: 8 } }) });
-  assert.equal(result.providerAnswer, "Offline operation depends on the feature."); assert.equal(result.reportedModel, "fixture-reported-model"); assert.equal(result.requestId, "fixture-request"); assert.equal(result.usage?.completion_tokens, 8);
+  assert.equal(result.providerAnswer, "Offline operation depends on the feature."); assert.equal(result.reportedModel, "fixture-reported-model"); assert.equal(result.responseId, "fixture-request"); assert.equal(result.requestId, null); assert.equal(result.usage?.completion_tokens, 8);
   const enriched = await enrichResearchResult(result, "offline", "quick", { fetchSource: async () => { throw new Error("Quick search must not inspect pages"); } });
   assert.equal(enriched.evidence?.[0].status, "discovered"); assert.equal(enriched.report?.findings[0].status, "provider-synthesis");
 });

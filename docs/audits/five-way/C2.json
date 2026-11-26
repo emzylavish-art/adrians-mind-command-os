@@ -136,7 +136,13 @@
         "src/lib/mind/dashboard/spend.test.ts",
         "src/lib/mind/dashboard/time-scrub.test.ts"
       ],
-      "disposition": "Combined verification pending"
+      "disposition": "Combined verification pending",
+      "combinedFixtureEvidence": {
+        "commit": "af2bc424709e2a8574e743e598cf0f850abb8958",
+        "result": "Dashboard fallback, selected detail and search retained historical health at a selected time.",
+        "test": "src/components/mind/dashboard-3d/c2-dashboard-recovery.test.ts",
+        "scope": "Local fixtures. Full release remains gated by combined checks and staging."
+      }
     },
     {
       "finding": "C2/AA-009",
@@ -160,7 +166,13 @@
         "src/lib/mind/dashboard/spend.test.ts",
         "src/lib/mind/dashboard/time-scrub.test.ts"
       ],
-      "disposition": "Combined verification pending"
+      "disposition": "Combined verification pending",
+      "combinedFixtureEvidence": {
+        "commit": "af2bc424709e2a8574e743e598cf0f850abb8958",
+        "result": "Dashboard graph filters and selection survived WebGL retry.",
+        "test": "src/components/mind/dashboard-3d/c2-dashboard-recovery.test.ts",
+        "scope": "Local fixtures. Full release remains gated by combined checks and staging."
+      }
     },
     {
       "finding": "C2/AA-010",
@@ -181,7 +193,13 @@
         "src/lib/mind/dashboard/spend.test.ts",
         "src/lib/mind/dashboard/time-scrub.test.ts"
       ],
-      "disposition": "Combined verification pending"
+      "disposition": "Combined verification pending",
+      "combinedFixtureEvidence": {
+        "commit": "af2bc424709e2a8574e743e598cf0f850abb8958",
+        "result": "Mobile support content mounted before focus, with hidden layer feedback.",
+        "test": "src/components/mind/dashboard-3d/c2-dashboard-recovery.test.ts",
+        "scope": "Local fixtures. Full release remains gated by combined checks and staging."
+      }
     },
     {
       "finding": "C2/AA-011",

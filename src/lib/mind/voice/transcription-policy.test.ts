@@ -22,7 +22,7 @@ test("approved alternate records both attempts while silence does not trigger an
 });
 test("actual STT HTTP entry point applies selected recipient, attribution, malformed policy and free-only", async () => {
   let calls = 0;
-  const deps = { requireUser: async () => `fixture-${crypto.randomUUID()}`, halted: async () => false, authorize: async () => async () => {}, env: { XAI_API_KEY: "fake-a", OPENAI_API_KEY: "fake-b" }, fetchImpl: (async (url: string | URL | Request) => { calls++; assert.match(String(url), /api.openai.com/); return Response.json({ text: "synthetic" }); }) as typeof fetch };
+  const deps = { recordUsage: async () => {}, reserve: async () => ({ ok: true as const }), requireUser: async () => `fixture-${crypto.randomUUID()}`, halted: async () => false, authorize: async () => async () => {}, env: { XAI_API_KEY: "fake-a", OPENAI_API_KEY: "fake-b" }, fetchImpl: (async (url: string | URL | Request) => { calls++; assert.match(String(url), /api.openai.com/); return Response.json({ text: "synthetic" }); }) as typeof fetch };
   const request = (extra: object) => new Request("https://app.example/api/mind/voice/stt", { method: "POST", headers: { "content-type": "application/json", "sec-fetch-site": "same-origin" }, body: JSON.stringify({ audioBase64: Buffer.alloc(80).toString("base64"), mime: "audio/wav", ...extra }) });
   const ok = await (await handleVoiceStt(request({ transcriptionPolicy: { provider: "openai", allowFallback: false } }), deps)).json();
   assert.equal(ok.provider, "OpenAI"); assert.equal(calls, 1);

@@ -44,7 +44,7 @@ export function createVoiceUsageTracker(ownerId: string, deps: {
   return {
     operationId,
     get error(): string | null { return blocked ? failure : null; },
-    fetch(stage: VoiceUsageStage): typeof fetch {
+    fetch(stage: VoiceUsageStage, onDispatch?: () => void): typeof fetch {
       return (async (input: RequestInfo | URL, init?: RequestInit) => {
         if (blocked) throw new Error(failure);
         const url = new URL(input instanceof Request ? input.url : String(input));
@@ -60,7 +60,7 @@ export function createVoiceUsageTracker(ownerId: string, deps: {
         catch { blocked = true; throw new Error(failure); }
 
         let response: Response;
-        try { response = await transport(input, init); }
+        try { onDispatch?.(); response = await transport(input, init); }
         catch (error) {
           await record(ownerId, { ...initial, dispatched: true, providerDispatch: stage === "realtime-session" ? "unknown" : "sent", outcome: "unconfirmed" }).catch(() => undefined);
           throw error;

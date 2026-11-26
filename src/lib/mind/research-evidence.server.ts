@@ -107,6 +107,8 @@ export async function enrichResearchResult(result: ResearchResult, query: string
       evidence.splice(offset, inspected.length, ...inspected);
     }
   }
+  const displayedUrls = new Set(evidence.map(item => item.url));
+  evidence.push(...(result.evidence ?? []).filter(item => !displayedUrls.has(item.url)));
   const enriched = { ...result, evidence };
   return { ...enriched, report: buildEvidenceReport(enriched, depth) };
 }

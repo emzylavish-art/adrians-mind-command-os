@@ -124,7 +124,7 @@ export function researchEvidenceFromResponse(body: unknown, citations: ResearchC
 
 export async function searchWithGrok(
   query: string,
-  options: { fetchImpl?: typeof fetch; apiKey?: string; beforeDispatch?: () => Promise<string | null> } = {},
+  options: { fetchImpl?: typeof fetch; apiKey?: string; signal?: AbortSignal; beforeDispatch?: () => Promise<string | null> } = {},
 ): Promise<ResearchResult> {
   const text = query.trim();
   if (!text) return { ok: false, configured: false, citations: [], error: "Write what you want researched." };
@@ -153,7 +153,7 @@ export async function searchWithGrok(
         input: [{ role: "user", content: text }],
         tools: [{ type: "web_search" }],
       }),
-      signal: AbortSignal.timeout(25_000),
+      signal: options.signal ? AbortSignal.any([options.signal, AbortSignal.timeout(25_000)]) : AbortSignal.timeout(25_000),
     });
   } catch {
     return { ok: false, configured: true, citations: [], error: "The search provider did not answer. No citations were created." };
@@ -178,5 +178,15 @@ export async function searchWithGrok(
   if (!citations.length) {
     return { ok: false, configured: true, citations: [], error: "The search returned no usable sources. No citations were created." };
   }
-  return { ok: true, configured: true, citations, ...researchEvidenceFromResponse(body, citations), error: "" };
+  const annotatedAnswer = extractResearchAnswer(body);
+  const evidence = researchEvidenceFromResponse(body, citations);
+  const record = body as Record<string, unknown>;
+  const rawUsage = record.usage && typeof record.usage === "object" ? record.usage as Record<string, unknown> : {};
+  const token = (value: unknown) => typeof value === "number" && Number.isSafeInteger(value) && value >= 0 ? value : undefined;
+  const usage = { prompt_tokens: token(rawUsage.input_tokens ?? rawUsage.prompt_tokens), completion_tokens: token(rawUsage.output_tokens ?? rawUsage.completion_tokens) };
+  return { ok: true, configured: true, citations, ...evidence, evidence: researchSnippets([], text, citations),
+    steps: [{ query: text, ok: true, count: citations.length, status: "succeeded" }],
+    reportedModel: typeof record.model === "string" ? record.model.slice(0, 160) : null,
+    usage: usage.prompt_tokens !== undefined || usage.completion_tokens !== undefined ? usage : null, providerAnswer: annotatedAnswer.text || evidence.summary,
+    annotatedAnswer, requestId: response.headers.get("x-request-id"), responseId: typeof record.id === "string" ? record.id.slice(0, 200) : null, error: "" };
 }

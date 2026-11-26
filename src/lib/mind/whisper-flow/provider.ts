@@ -60,6 +60,7 @@ export async function transcribeWithHandy(
       body: new Blob([copy]),
       signal: AbortSignal.timeout(120_000),
     });
+    if (!response.ok) return { ok: false, code: response.status === 401 || response.status === 403 ? "provider_rejected" : "network_failure", status: response.status, error: `Handy returned HTTP ${response.status}.`, provider: "handy" };
     const body = await response.json() as { ok?: boolean; text?: string; error?: string };
     const text = body.text?.trim() ?? "";
     if (!response.ok || !body.ok || !text) {

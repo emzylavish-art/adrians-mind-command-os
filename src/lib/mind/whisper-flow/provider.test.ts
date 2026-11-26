@@ -4,6 +4,7 @@ import { runInNewContext } from "node:vm";
 import { describe, it } from "node:test";
 import ts from "typescript";
 import { parseWhisperFlowRoute, selectSttProvider, transcribeWhisperFlowAudio } from "./provider.ts";
+import { dispatchTranscription } from "../voice/transcription-dispatch.server.ts";
 import * as voiceInput from "../voice/voice-input.ts";
 
 const bytes = new Uint8Array(64).fill(7);
@@ -71,6 +72,9 @@ describe("C5 explicit legacy Whisper Flow destinations", () => {
     const fetchImpl: typeof fetch = async url => { calls.push(String(url)); return Response.json({ text: "fixture words" }); };
     const modules: Record<string, unknown> = {
       "./voice/voice-input": voiceInput,
+      "./voice/transcription-dispatch.server": { dispatchTranscription: (...args: Parameters<typeof dispatchTranscription>) => dispatchTranscription(args[0], args[1], args[2], {
+        ...args[3], deps: { env, fetchImpl, halted: async () => false, reserve: async () => ({ ok: true }), recordUsage: async () => {}, authorize: async () => async () => {} },
+      }) },
       "./halt.server": { haltIsOn: async () => false },
       "./voice/usage.server": { createVoiceUsageTracker: () => ({ fetch: () => fetchImpl, error: null }) },
       "./whisper-flow/provider": { parseWhisperFlowRoute, transcribeWhisperFlowAudio: (input: Parameters<typeof transcribeWhisperFlowAudio>[0]) => transcribeWhisperFlowAudio({ ...input, env, secretsPath: "/dev/null", handyFetchImpl: async () => assert.fail("selected cloud cannot try local") }) },

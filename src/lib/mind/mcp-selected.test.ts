@@ -51,8 +51,8 @@ test("orchestrator fan-out asks only explicitly selected helpers within its two-
     orchestrator: "grok",
     modules: [
       { id: "grok", label: "Grok", connected: true },
-      { id: "ollama", label: "Local model", connected: true },
-      { id: "openrouter", label: "OpenRouter", connected: true },
+      { id: "ollama", label: "Local model", connected: true, cost: "local" },
+      { id: "openrouter", label: "OpenRouter", connected: true, cost: "free" },
     ],
     question: "What is left?",
     helperIds: ["ollama", "openrouter"],
@@ -74,11 +74,11 @@ test("orchestrator fan-out asks only explicitly authorized connected helpers", a
     orchestrator: "grok",
     modules: [
       { id: "grok", label: "Grok", connected: true },
-      { id: "ollama", label: "Local model", connected: true },
-      { id: "openrouter", label: "OpenRouter", connected: true },
+      { id: "ollama", label: "Local model", connected: true, cost: "local" },
+      { id: "openrouter", label: "OpenRouter", connected: true, cost: "free" },
     ],
     question: "What is left?",
-    authorizedHelpers: ["ollama"],
+    helperIds: ["ollama"],
   });
   assert.equal(planned.ok, true);
   if (!planned.ok) return;
@@ -97,11 +97,11 @@ test("orchestrator asks only explicitly selected connected helpers", async () =>
     orchestrator: "grok",
     modules: [
       { id: "grok", label: "Grok", connected: true },
-      { id: "ollama", label: "Local model", connected: true },
-      { id: "openrouter", label: "OpenRouter", connected: true },
+      { id: "ollama", label: "Local model", connected: true, cost: "local" },
+      { id: "openrouter", label: "OpenRouter", connected: true, cost: "free" },
     ],
     question: "What is left?",
-    selectedHelpers: ["openrouter"],
+    helperIds: ["openrouter"],
   });
   assert.equal(planned.ok, true);
   if (!planned.ok) return;

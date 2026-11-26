@@ -13,7 +13,7 @@ function request(body: Record<string, unknown> = {}) {
 function setup(name: string, fetchImpl: typeof fetch) {
   const rows: UsageReceipt[] = [];
   const deps: VoiceHttpDeps = {
-    requireUser: async () => name, halted: async () => false,
+    reserve: async () => ({ ok: true }), authorize: async () => async () => {}, requireUser: async () => name, halted: async () => false,
     env: { XAI_API_KEY: "fixture-secret-not-for-ledger", OPENAI_API_KEY: "fixture-secret-not-for-ledger" },
     fetchImpl,
     recordUsage: async (owner, receipt) => { assert.equal(owner, name); rows.push(structuredClone(receipt)); },
@@ -104,4 +104,23 @@ test("C5 locally blocked speech creates no execution receipt and independent req
   await handleVoiceStt(request({ provider: "openai" }), f.deps);
   const final = f.rows.filter(row => row.dispatched);
   assert.equal(final.length, 2); assert.notEqual(final[0].operationId, final[1].operationId);
+});
+
+test("an approved alternate cannot repeat a transcription whose primary outcome is unknown", async () => {
+  const providers: string[] = [];
+  const reservations: string[] = [];
+  const f = setup("voice-uncertain-approved", async url => {
+    providers.push(new URL(String(url)).hostname);
+    throw new Error("synthetic lost response after dispatch");
+  });
+  f.deps.reserve = async (_owner, context) => {
+    reservations.push(context.operationId);
+    return { ok: true };
+  };
+  const result = await (await handleVoiceStt(request({ operationId: "recording-1", provider: "openai", fallbackProvider: "xai" }), f.deps)).json();
+  assert.equal(result.ok, false);
+  assert.equal(result.dispatched, undefined);
+  assert.deepEqual(providers, ["api.openai.com"]);
+  assert.deepEqual(reservations, ["recording-1:stt"]);
+  assert.equal(f.rows.at(-1)?.outcome, "unconfirmed");
 });

@@ -1,7 +1,7 @@
 import { nextClock } from "./schedule-clock.ts";
 
 export type ScheduleTiming = "fixed_rate" | "fixed_delay";
-export type MissedSchedulePolicy = "latest" | "skip" | "ask" | "all" | "once" | "review";
+export type MissedSchedulePolicy = "latest" | "skip" | "ask" | "all" | "once" | "review" | "catch-up" | "run-once";
 export type SchedulePolicyInput = {
   nextRunAt: string;
   intervalMinutes: number;
@@ -27,7 +27,8 @@ export function scheduleOccurrences(job: SchedulePolicyInput, now: string): {
     return { occurrences: [], nextRunAt: job.nextRunAt, missed: 0, needsReview: false };
   }
   const interval = Math.max(5, Math.min(10_080, job.intervalMinutes || 1440)) * 60_000;
-  const policy = job.missedPolicy === "review" ? "ask" : job.missedPolicy === "once" ? "latest" : job.missedPolicy ?? "latest";
+  const policy = job.missedPolicy === "review" ? "ask" : job.missedPolicy === "catch-up" ? "all" : job.missedPolicy === "run-once" || job.missedPolicy === "once" ? "latest" : job.missedPolicy ?? "latest";
+  const limit = job.missedPolicy === "catch-up" ? 3 : MAX_RECOVERED_OCCURRENCES;
   let due: string[] = [];
   let nextRunAt: string;
   let missed: number;
@@ -36,7 +37,7 @@ export function scheduleOccurrences(job: SchedulePolicyInput, now: string): {
     missed = Math.max(0, count - 1);
     const latest = new Date(dueMs + (count - 1) * interval).toISOString();
     due = policy === "all"
-      ? Array.from({ length: Math.min(count, MAX_RECOVERED_OCCURRENCES) }, (_, index) => new Date(dueMs + index * interval).toISOString())
+      ? Array.from({ length: Math.min(count, limit) }, (_, index) => new Date(dueMs + index * interval).toISOString())
       : [latest];
     nextRunAt = job.timing === "fixed_delay" && !(policy === "all" && count > due.length)
       ? new Date(nowMs + interval).toISOString()
@@ -49,7 +50,7 @@ export function scheduleOccurrences(job: SchedulePolicyInput, now: string): {
     // Bound work on corrupt or years-old imports. The remainder stays pending.
     while (cursor <= now && count < 366) {
       latest = cursor;
-      if (due.length < MAX_RECOVERED_OCCURRENCES) due.push(cursor);
+      if (due.length < limit) due.push(cursor);
       count++;
       cursor = nextClock(cursor, job.timeZone, job.clockHour, job.clockMinute ?? 0, cursor).at;
     }

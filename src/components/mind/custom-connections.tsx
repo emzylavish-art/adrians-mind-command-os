@@ -130,7 +130,8 @@ export function CustomConnections({ halted }: { halted: boolean }) {
                     setResult({ localAttemptId, upstreamRequestId: null, status: "running", text: "", retryable: false });
                     void callCustomConnectionFn({ data: { id: row.id, operation: operation.name, args: payload, expectedRevision: row.revision, confirmed: confirm || (row.kind === "http" && row.method === "GET") } }).then((called) => {
                       const next = acceptResult(activeAttempt.current, { localAttemptId, status: called.status, text: called.text });
-                      if (next !== "stale") setResult(next);
+                      if (next === "stale") return;
+                      setResult(next);
                       if (called.connection) setRows((current) => current.map((item) => item.id === called.connection?.id ? called.connection : item));
                     }).catch(() => {
                       const next = acceptResult(activeAttempt.current, { localAttemptId, status: "error", text: "The call did not complete." });
@@ -148,7 +149,7 @@ export function CustomConnections({ halted }: { halted: boolean }) {
       {result ? (
         <p className="whitespace-pre-wrap text-sm text-muted">
           Result ({result.status}): {result.text}
-          <button type="button" className="ml-3 min-h-11 rounded-panel border border-line px-3" onClick={() => setResult(dismissResult())}>Dismiss</button>
+          <button type="button" className="ml-3 min-h-11 rounded-panel border border-line px-3" onClick={() => setResult(dismissResult(activeAttempt))}>Dismiss</button>
         </p>
       ) : null}
     </div>

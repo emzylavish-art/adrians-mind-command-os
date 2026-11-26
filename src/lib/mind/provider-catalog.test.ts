@@ -51,7 +51,7 @@ it("C2 AA110–113: profiles retain metadata and explicit routing rejects incomp
   assert.equal(modelCompatibility(undefined, { input: ["text"] }).compatible, true);
   assert.equal(modelCompatibility({ ...profile, inputModalities: [] }, { input: ["audio"] }).compatible, false);
   assert.equal(modelCompatibility(profile, { freeOnly: true, tools: true }).compatible, true);
-  const found = discoveredCapabilities({ models: [{ id: "saved", label: "API", models: [profile.id], modelProfiles: [{ ...profile, lastExecution: { outcome: "rate_limited", at: "2026-11-25T00:00:00Z", requestedModel: profile.id } }], hasKey: true, status: "configured" }], mcp: [{ id: "tools", label: "Tools", state: "connected", tools: [{ name: "read_file", inputSchema: { type: "object" }, annotations: { readOnlyHint: true } }] }] });
+  const found = discoveredCapabilities({ models: [{ id: "12345678-1234-4234-8234-123456789abc", label: "API", models: [profile.id], modelProfiles: [{ ...profile, lastExecution: { outcome: "rate_limited", at: "2026-11-25T00:00:00Z", requestedModel: profile.id } }], hasKey: true, status: "configured" }], mcp: [{ id: "tools", label: "Tools", state: "connected", tools: [{ name: "read_file", inputSchema: { type: "object" }, annotations: { readOnlyHint: true } }] }] });
   assert.equal(found[0].readiness, "last_call_failed");
   assert.match(found[0].reason, /rate limited/);
   assert.equal(found[0].model?.contextTokens, 8192);

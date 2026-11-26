@@ -10,12 +10,14 @@ import { addCustomAgent, enqueueRun, tickFleet, approveRunAction } from "./fleet
 
 function memorySql() {
   const tables = new Map<string, Map<string, unknown>>();
+  const mutations: { query: string; values: unknown[] }[] = [];
   const bucket = (name: string) => {
     if (!tables.has(name)) tables.set(name, new Map());
     return tables.get(name)!;
   };
   const sql = (async (strings: TemplateStringsArray, ...values: unknown[]) => {
     const text = strings.join(" ").replace(/\s+/g, " ");
+    if (/^(insert|delete|update)/.test(text)) mutations.push({ query: text, values });
     const table = text.match(/\b(mind_[a-z_]+)\b/)?.[1] ?? "";
     if (text.startsWith("delete from")) {
       for (const [key, row] of bucket(table)) {
@@ -43,6 +45,7 @@ function memorySql() {
     return [];
   }) as Sql;
   sql.query = async (text, values = []) => {
+    if (/^(insert|delete|update)/.test(text)) mutations.push({ query: text, values });
     const table = text.match(/\b(mind_[a-z_]+)\b/)?.[1] ?? "";
     if (text.startsWith("delete from")) {
       for (const id of values[1] as string[]) bucket(table).delete(`${values[0]}:${id}`);
@@ -53,7 +56,7 @@ function memorySql() {
     const before = structuredClone(tables);
     try { return await fn(sql); } catch (error) { tables.clear(); for (const [key, value] of before) tables.set(key, value); throw error; }
   };
-  return { sql, tables };
+  return { sql, tables, mutations };
 }
 
 describe("mind store", () => {

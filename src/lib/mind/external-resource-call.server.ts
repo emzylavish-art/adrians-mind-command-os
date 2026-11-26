@@ -22,8 +22,8 @@ export async function authorizeExternalResource(owner: string, provider: string,
     await settleResourceOperation(reservation, { outcome: "not_dispatched" }).catch(() => {});
     throw new ResourceDispatchBlocked("Emergency stop changed before dispatch. The provider was not contacted.");
   }
-  return async (ok: boolean, requestId?: string) => {
-    await settleResourceOperation(reservation, { outcome: ok ? "succeeded" : "unknown", requestId }).catch(() => {});
+  return async (ok: boolean, requestId?: string, dispatched = true) => {
+    await settleResourceOperation(reservation, { outcome: !dispatched ? "not_dispatched" : ok ? "succeeded" : "unknown", requestId }).catch(() => {});
   };
 }
 export async function externalResourceCall<T extends { ok: boolean }>(input: { owner: string; provider: string; model: string; taskId?: string; free?: boolean; unknownTokens?: boolean }, run: () => Promise<T>): Promise<T | ResourceBlockedResult> {

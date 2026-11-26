@@ -375,7 +375,13 @@
       "expected": "Every dispatched helper must have its own deduplicated execution receipt.",
       "implementation": "docs/adrian-analysis-implementation-checklist.md#L64",
       "regression": "[G15](#g15-execution-receipts)",
-      "disposition": "Combined verification pending"
+      "disposition": "Combined verification pending",
+      "combinedFixtureEvidence": {
+        "commit": "af2bc424709e2a8574e743e598cf0f850abb8958",
+        "result": "Focused helpers recorded successful, refused and unconfirmed calls. Stable operation and stage identities merge duplicated browser observations.",
+        "test": "src/lib/mind/provider-receipt.test.ts",
+        "scope": "Local fixtures. Full release remains gated by combined checks and staging."
+      }
     },
     {
       "finding": "C4/AA-047",

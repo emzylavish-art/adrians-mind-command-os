@@ -51,3 +51,18 @@ node --experimental-strip-types --test src/lib/mind/{personas/selection,provider
 58 passed, 0 failed, 0 skipped. Coverage includes an already-completed helper followed by primary rejection, request and response IDs for buffered providers, loopback versus hosted execution, partial token counts, distinct operation stages, account-bound persona identity, and Dashboard filter/detail continuity. A separate image test exercised generation, edits and failed/uncertain provider responses with synthetic bytes. The Build portion of that test file still failed to load its runtime fixture. No paid provider or live owner data was used.
 
 Previous exact remote head `6cce23ec9dc956b059214d543ae9996e30c31653` ran 3,095 tests locally: 2,918 passed, 172 failed, 5 skipped. The PostgreSQL 17 CI rehearsal passed at that head. This branch remains held for full combined and staging verification.
+
+### Archive, connections, research, scheduling and recorded voice
+
+- Exact previous head `af2bc424709e2a8574e743e598cf0f850abb8958` ran 3,096 local tests: 2,938 passed, 153 failed and five skipped. [Failed test inventory](evidence/af2bc42-failures.json). CI passed the production build, interface inventory, PostgreSQL rehearsal and policy checks. [Production verification](https://github.com/emzylavish-art/adrians-mind-command-os/actions/runs/45839455362).
+- An isolated Chromium rerun on that exact head completed all 16 layout cases. The first attempt with a shared dependency cache failed to load a dynamic module at the narrow viewport. With a separate cache, LCP met 2,500 ms in 4/16, CLS met 0.1 in 4/16 and observed interaction met 200 ms in 3/16. [Per-case report](evidence/af2bc42-visual.json) and [390 × 844, 2,000-message chat](evidence/af2bc42-chromium-390x844-100-2000-turns.png).
+- This change ties archived chat memory to reviewed settings, preserves newer records, validates discovery updates against the saved account, and keeps the reported provider response ID distinct from its request ID. Research retains the selected eight citations as well as evidence from other queries. Scheduler claims use the selected execution environment. These changes have no live provider or terminal delivery receipt.
+- Named transcription alternates run only after an eligible primary rejection. Whole-operation dispatch evidence survives fallback rejection. Voice fixtures exercise a lost provider acknowledgment, an unavailable initial journal and a failed final journal. The exact provider, monetary reservation and usage observation are tested with synthetic inputs.
+
+Local checks for this application change: TypeScript exited successfully. The following focused run passed 151 tests with zero failures or skips.
+
+```sh
+node --experimental-strip-types --test src/lib/mind/{archive-review,audit-connection-integrity,custom-connection,connected-mcp,media/history-audit,kimi/hosted-files,provider-catalog,store,research,research-audit-recovery,research-reports,c1-research-skills,xai-search,mcp-selected,voice/usage,voice/http-budget,voice/explicit-provider,voice/transcription-policy,whisper-flow/provider}.test.ts
+```
+
+Deployment remains held. Scheduled run permissions, stale workspace handling, browser performance, authenticated staging and backup/restore verification still require evidence.

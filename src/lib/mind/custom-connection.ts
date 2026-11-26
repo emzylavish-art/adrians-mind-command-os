@@ -376,18 +376,25 @@ export async function saveCustomConnection(db: ConnectionDb | null, userId: stri
   return { ok: true, connection: listed.find((item) => item.id === row.id) ?? toPublic({ ...row, token: undefined, tokenEnc: token ? "sealed" : undefined })! };
 }
 
+async function publishDiscovery(db: ConnectionDb | null, owner: string, previous: RegistryRecord, next: RegistryRecord): Promise<boolean> {
+  if (db) {
+    const changed = await db.query("UPDATE mind_mcp_registry SET record = record || $3::jsonb WHERE user_id=$1 AND id=$2 AND record->>'url'=$4 AND record->>'tokenEnc' IS NOT DISTINCT FROM $5 AND record->'operations' IS NOT DISTINCT FROM $6::jsonb AND record->>'state' IS NOT DISTINCT FROM $7 AND record->>'enabled'='true' AND record->>'deleted' IS DISTINCT FROM 'true' RETURNING id",
+      [owner, previous.id, JSON.stringify({ operations: next.operations, state: next.state, error: next.error }), previous.url, previous.tokenEnc ?? null, previous.operations === undefined ? null : JSON.stringify(previous.operations), previous.state ?? null]);
+    return changed.length === 1;
+  }
+  const latest = (await loadRegistry(owner, db)).servers.find(item => item.id === previous.id);
+  if (!latest?.enabled || connectionRevision(latest) !== connectionRevision(previous)) return false;
+  return (await writeRow(db, owner, { ...latest, operations: next.operations, state: next.state, error: next.error })).ok;
+}
+
 export async function refreshMcp(db: ConnectionDb | null, userId: string, id: string, deps: { fetch?: FetchLike; lookup?: DnsLookupFn }): Promise<PublicConnection> {
   const loaded = await loadRegistry(userId, db);
   const row = loaded.servers.find((item) => item.id === id);
   if (!row?.url) return { id, label: "", kind: "mcp", host: "", method: "MCP", auth: "none", hasToken: false, state: "failed", operations: [], error: "That connection is not saved." };
   if (!row.enabled) return { ...toPublic(row)!, error: "This connection is disabled. No tools were refreshed." };
-  const fail = async (state: ConnectionState, error: string) => {
-    row.state = state;
-    row.operations = [];
-    row.error = error;
-    await writeRow(db, userId, row);
-    return toPublic(row)!;
-  };
+  const publish = async (next: RegistryRecord) => await publishDiscovery(db, userId, row, next) ? toPublic(next)!
+    : { ...toPublic(row)!, state: "failed" as const, operations: [], error: "The connection changed during discovery. Refresh its current state." };
+  const fail = (state: ConnectionState, error: string) => publish({ ...row, state, error });
   const opened = await send(row.url, {
     method: "POST",
     headers: { "content-type": "application/json", accept: "application/json, text/event-stream", ...(row.token ? { authorization: `Bearer ${row.token}` } : {}) },
@@ -428,11 +435,8 @@ export async function refreshMcp(db: ConnectionDb | null, userId: string, id: st
     if (operations.length > 256 || (cursor && (cursors.has(cursor) || cursors.size >= 15))) return fail("failed", "Tool discovery was incomplete. Check the server and test again.");
     if (cursor) cursors.add(cursor);
   } while (cursor);
-  row.operations = operations;
-  row.state = operations.some((item) => item.compatible) ? "ready" : "incompatible";
-  row.error = row.state === "incompatible" ? "No tool has a supported argument schema. Nested or composed schemas and complex patterns are not supported. Nothing was called." : "";
-  await writeRow(db, userId, row);
-  return toPublic(row)!;
+  const state = operations.some(item => item.compatible) ? "ready" : "incompatible";
+  return publish({ ...row, operations, state, error: state === "incompatible" ? "No tool has a supported argument schema. Nothing was called." : "" });
 }
 
 export async function callCustomConnection(input: {
@@ -443,6 +447,7 @@ export async function callCustomConnection(input: {
   args?: Record<string, unknown>;
   confirmed?: boolean;
   expectedRevision?: string;
+  reviewedRevision?: string;
   isHalted?: (userId: string) => boolean | Promise<boolean>;
   fetch?: FetchLike;
   lookup?: DnsLookupFn;
@@ -459,14 +464,17 @@ export async function callCustomConnection(input: {
   const stale = () => ({ ok: false, status: "incompatible" as const, text: "The connection or tool definition changed. Review the current connection and approve again. Nothing was called.", connection, transport: null, rpc: null });
   if (input.expectedRevision && input.expectedRevision !== revision) return stale();
   async function stillReviewed() {
-    const latest = (await loadRegistry(input.userId, input.db)).servers.find((item) => item.id === input.id);
-    return Boolean(latest?.enabled && connectionRevision(latest) === revision && !(input.isHalted && await input.isHalted(input.userId)));
+    try {
+      const latest = (await loadRegistry(input.userId, input.db)).servers.find((item) => item.id === input.id);
+      return Boolean(latest?.enabled && connectionRevision(latest) === revision && !(input.isHalted && await input.isHalted(input.userId)));
+    } catch { return false; }
   }
 
   if (input.operation.toLowerCase() === "model.generate") {
     return { ok: false, status: "incompatible", text: "model.generate is not a connectivity check. Nothing was called.", connection, transport: null, rpc: null };
   }
   const operation = connection.operations.find((item) => item.name === input.operation);
+  if (input.reviewedRevision && input.reviewedRevision !== operation?.revision) return stale();
   if (!operation?.compatible || !operation.inputSchema) {
     return { ok: false, status: "incompatible", text: "This operation has no compatible argument schema. Nothing was called.", connection, transport: null, rpc: null };
   }
@@ -498,6 +506,7 @@ export async function callCustomConnection(input: {
     return { ok: false, status: response.status, text: response.error, connection, transport: { ok: false, status: response.httpStatus, ms: Date.now() - started }, rpc: null };
   }
   if (connection.kind === "http" && connection.method === "GET") {
+    if (!await stillReviewed()) return stale();
     const url = new URL(row.url ?? "");
     for (const [key, value] of Object.entries(checked.args)) url.searchParams.set(key, String(value));
     const sent = await send(url.toString(), { method: "GET", headers }, input, token);
@@ -534,6 +543,7 @@ export async function callCustomConnection(input: {
   // Recheck the advertised definition in this exact session before a consequential call.
   const cursors = new Set<string>();
   let cursor: string | undefined;
+  const refreshed: PublicOperation[] = [];
   let currentOperation: PublicOperation | null = null;
   do {
     const listed = await send(row.url ?? "", {
@@ -545,6 +555,8 @@ export async function callCustomConnection(input: {
     if (!Array.isArray(catalogue?.tools)) return stale();
     for (const tool of catalogue.tools) {
       const candidate = operationFromTool(tool);
+      if (candidate) refreshed.push(candidate);
+      if (refreshed.length > 256) return stale();
       if (candidate?.name === operation.name) {
         if (currentOperation) return stale(); // ambiguous duplicate names are not executable
         currentOperation = candidate;
@@ -555,7 +567,14 @@ export async function callCustomConnection(input: {
     if (cursor) cursors.add(cursor);
   } while (cursor);
   // Legacy catalogues have no full-definition fingerprint and need rediscovery first.
-  if (!operation.definitionFingerprint || currentOperation?.definitionFingerprint !== operation.definitionFingerprint) return stale();
+  if (!operation.definitionFingerprint || currentOperation?.definitionFingerprint !== operation.definitionFingerprint) {
+    const next = { ...row, operations: refreshed, state: refreshed.some(item => item.compatible) ? "ready" : "incompatible", error: "" };
+    const published = await publishDiscovery(input.db, input.userId, row, next);
+    return { ...stale(), status: "definition_changed", connection: published ? toPublic(next) : null };
+  }
+  try {
+    if (await (input.isHalted ?? haltIsOn)(input.userId)) return { ...stale(), status: "error", text: "Emergency stop is on. No MCP tool was called." };
+  } catch { return { ...stale(), status: "error", text: "Emergency stop could not be verified. No MCP tool was called." }; }
   if (!await stillReviewed()) return stale();
   const called = await send(row.url ?? "", {
     method: "POST",

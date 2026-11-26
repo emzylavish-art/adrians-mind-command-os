@@ -123,7 +123,7 @@ describe("Connected durable backend", { concurrency: false }, () => {
     assert.equal(saved.servers[0].state, "connected");
     assert.equal(saved.servers[0].host, "localhost");
     const capabilities = discoveredCapabilities({ models: [], mcp: saved.servers });
-    assert.deepEqual(capabilities[0].tool?.inputSchema, operation.inputSchema);
+    assert.deepEqual(JSON.parse(JSON.stringify(capabilities[0].tool?.inputSchema)), operation.inputSchema);
     assert.equal(capabilities[0].tool?.readOnly, true);
     const raw = JSON.parse(db.rows.find((row) => row.id === saved.savedId)!.record);
     assert.equal(raw.token, undefined);

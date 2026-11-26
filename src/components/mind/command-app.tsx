@@ -1285,7 +1285,7 @@ function CommandSession({ account }: { account: ReturnType<typeof useCurrentUser
   const [projectAbout, setProjectAbout] = useState("");
   const [projectOpen, setProjectOpen] = useState(false);
   const [includeTemporary, setIncludeTemporary] = useState(false);
-  const [importPreview, setImportPreview] = useState<{ workspace: Workspace; name: string } | null>(null);
+  const [importPreview, setImportPreview] = useState<{ workspace: Workspace; name: string; memoryOnly: boolean } | null>(null);
   const messagePreview = importPreview ? archiveMessagePreview(ws, importPreview.workspace) : null;
   const importCounts = importPreview ? ([
     ["chats", "Chats"], ["memories", "Notes"], ["projects", "Projects"], ["files", "Files"], ["agents", "Bots"], ["runs", "Runs"], ["schedules", "Schedules"],
@@ -1294,7 +1294,11 @@ function CommandSession({ account }: { account: ReturnType<typeof useCurrentUser
     const incoming = importPreview.workspace[key];
     return { label, current: current.size, incoming: incoming.length, overlap: incoming.filter((item) => current.has(item.id)).length };
   }) : [];
+  const [restoreMemoryPreferences, setRestoreMemoryPreferences] = useState(false);
   const [archiveCategories, setArchiveCategories] = useState<ArchiveCategory[]>([...ARCHIVE_CATEGORIES]);
+  const importReview = useMemo(() => importPreview
+    ? archiveReview(ws, selectArchiveCategories(importPreview.workspace, archiveCategories))
+    : null, [ws, importPreview, archiveCategories]);
   const [importChecking, setImportChecking] = useState(false);
   const [importStatus, setImportStatus] = useState("");
   const [importError, setImportError] = useState<string | null>(null);
@@ -4430,8 +4434,8 @@ ${message.content}`;
     setNotice(`“${file.name}” is staged${partial ? " as a partial text copy" : pdf ? " as extracted text" : ""}. ${pdf?.coverage ?? ""} Press Send to include it, or Analyze File to run REA.`);
   }
 
-  async function downloadArchive() {
-    const pack = await packWorkspace(ws, includeTemporary);
+  async function downloadArchive(memoryOnly = false) {
+    const pack = memoryOnly ? await packMemoryOnly(ws) : await packWorkspace(ws, includeTemporary);
     const blob = new Blob([JSON.stringify(pack, null, 2)], { type: "application/json" });
     const url = URL.createObjectURL(blob);
     const link = document.createElement("a");
@@ -4448,12 +4452,17 @@ ${message.content}`;
     setImportError(null);
     setImportPreview(null);
     try {
-      const opened = await unpackWorkspace(await file.text());
+      const raw = await file.text();
+      const parsed = JSON.parse(raw);
+      const memoryOnly = parsed?.product === "adrians-mind-memory";
+      const opened = memoryOnly ? await unpackMemoryOnly(raw, wsRef.current) : await unpackWorkspace(raw);
       if (!opened.ok) {
         setImportError(opened.error);
         return;
       }
-      setImportPreview({ workspace: opened.workspace, name: file.name });
+      const checked = quarantineImportedMemory(opened.workspace, wsRef.current, unreviewedMemoryScopeIds(parsed?.workspace?.memories));
+      setArchiveCategories(memoryOnly ? ["memories"] : [...ARCHIVE_CATEGORIES]);
+      setImportPreview({ workspace: checked, name: file.name, memoryOnly });
     } catch {
       setImportError("This archive could not be read. Choose another file to try again.");
     } finally {
@@ -8577,6 +8586,7 @@ ${message.content}`;
                 <button type="button" className="mt-3 min-h-11 rounded-panel bg-accent px-4 text-sm font-semibold text-accent-ink" onClick={() => void downloadArchive()}>
                   Export archive
                 </button>
+                <button type="button" className="ml-2 min-h-11 underline" onClick={() => void downloadArchive(true)}>Export memory only</button>
                 <label className="mt-3 block text-sm">
                   Import archive
                   <input
@@ -8587,7 +8597,7 @@ ${message.content}`;
                     onChange={(event) => {
                       const file = event.target.files?.[0];
                       event.target.value = "";
-                      if (file) void onImportFile(file);
+                      if (file) { setRestoreMemoryPreferences(false); void onImportFile(file); }
                     }}
                   />
                 </label>
@@ -8605,19 +8615,23 @@ ${message.content}`;
                       </tbody>
                     </table>
                     <p className="mt-1 text-muted">Merge keeps {messagePreview?.kept} device-only messages in matching chats. For conflicting messages it keeps the device version. Conflicts in this archive: {messagePreview?.conflicts.join(", ") || "none"}.</p>
+                    {Boolean(importReview?.conflicts.length) && <p className="text-muted">Merge keeps the current version of these records: {importReview?.conflicts.map(row => `${row.category} ${row.id}`).join(", ")}.</p>}
+                    {Boolean(importReview?.privacy.length) && <p className="text-muted">Archived memory settings would enable memory for: {importReview?.privacy.map(chat => chat.title || chat.id).join(", ")}.</p>}
+                    {Boolean(importReview?.unresolved.length) && <p className="text-muted">{importReview?.unresolved.length} imported notes need a scope review before use.</p>}
                     <div className="mt-2 flex flex-wrap gap-2">
-                      <fieldset className="w-full"><legend className="font-semibold">Restore categories</legend><div className="flex flex-wrap gap-3">{ARCHIVE_CATEGORIES.map((category) => <label key={category} className="inline-flex min-h-11 items-center gap-2"><input type="checkbox" checked={archiveCategories.includes(category)} onChange={(event) => setArchiveCategories((current) => event.target.checked ? [...current, category] : current.filter((item) => item !== category))} />{category}</label>)}</div><p className="text-xs text-muted">Restored runs stay paused and schedules stay disabled until reviewed. Existing grants are not copied.</p></fieldset>
-                      <button type="button" className="min-h-11 rounded-panel border border-line px-3" disabled={archiveCategories.length === 0} onClick={() => requestProtected("overwrite", "import-merge", "Merge this archive", "Merge records from the archive. For saved memory, corrections and deletions are preserved.", "Merge archive", () => { setWs((prev) => pushAudit(mergeWorkspace(prev, selectArchiveCategories(importPreview.workspace, archiveCategories)), "import_merge", "archive", "merged")); setImportPreview(null); setImportStatus("Archive merged with this workspace."); })}>
+                      <label className="inline-flex min-h-11 items-center gap-2"><input type="checkbox" checked={restoreMemoryPreferences} onChange={event => setRestoreMemoryPreferences(event.target.checked)} />Restore archived chat memory settings, including chats with memory enabled</label>
+                      <fieldset className="w-full"><legend className="font-semibold">Restore categories</legend><div className="flex flex-wrap gap-3">{ARCHIVE_CATEGORIES.map((category) => <label key={category} className="inline-flex min-h-11 items-center gap-2"><input type="checkbox" disabled={importPreview.memoryOnly} checked={archiveCategories.includes(category)} onChange={(event) => setArchiveCategories((current) => event.target.checked ? [...current, category] : current.filter((item) => item !== category))} />{category}</label>)}</div><p className="text-xs text-muted">Restored runs stay paused and schedules stay disabled until reviewed. Existing grants are not copied.</p></fieldset>
+                      <button type="button" className="min-h-11 rounded-panel border border-line px-3" disabled={archiveCategories.length === 0} onClick={() => requestProtected("overwrite", "import-merge", "Merge this archive", "Merge records from the archive. For saved memory, corrections and deletions are preserved.", "Merge archive", () => { setWs((prev) => pushAudit(mergeWorkspace(prev, quarantineImportedMemory(selectArchiveCategories(importPreview.workspace, archiveCategories), prev), restoreMemoryPreferences), "import_merge", "archive", "merged")); setImportPreview(null); setImportStatus("Archive merged with this workspace."); })}>
                         Merge
                       </button>
                       <button
                         type="button"
                         className="min-h-11 rounded-panel border border-line px-3"
-                        disabled={archiveCategories.length !== ARCHIVE_CATEGORIES.length}
+                        disabled={importPreview.memoryOnly || archiveCategories.length !== ARCHIVE_CATEGORIES.length}
                         title="Replace requires every category; use Merge for selective recovery."
                         onClick={() =>
                           requestProtected("overwrite", `import-replace:${importPreview.workspace.version}`, "Replace this workspace", "Current chats, notes, projects, and files are replaced by the archive.", "Approve replace", () => {
-                            setWs((prev) => pushAudit(replaceFromArchive(prev, importPreview.workspace), "import_replace", "archive", "replaced"));
+                            setWs((prev) => pushAudit(replaceFromArchive(prev, quarantineImportedMemory(importPreview.workspace, emptyWorkspace()), restoreMemoryPreferences), "import_replace", "archive", "replaced"));
                             setImportPreview(null);
                             setImportStatus("Workspace replaced with the archive.");
                           })

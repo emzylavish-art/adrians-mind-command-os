@@ -11,7 +11,7 @@ test("STT and TTS enforce the account dispatch budget before the exact selected 
     const handler = kind === "stt" ? handleVoiceStt : handleVoiceTts;
     const body = kind === "stt" ? { provider: "openai", audioBase64: audio, mime: "audio/wav" } : { provider: "openai", text: "Fixture reply" };
     let reserves = 0, sends = 0;
-    const deps: VoiceHttpDeps = { requireUser: async () => `fixture-${kind}`, halted: async () => false, env: { OPENAI_API_KEY: "synthetic-key" }, reserve: async owner => { assert.equal(owner, `fixture-${kind}`); reserves++; return { ok: false, error: "Fixture budget exhausted", status: 429 }; }, fetchImpl: async () => { sends++; return Response.json({ text: "unexpected" }); } };
+    const deps: VoiceHttpDeps = { recordUsage: async () => {}, authorize: async () => async () => {}, requireUser: async () => `fixture-${kind}`, halted: async () => false, env: { OPENAI_API_KEY: "synthetic-key" }, reserve: async owner => { assert.equal(owner, `fixture-${kind}`); reserves++; return { ok: false, error: "Fixture budget exhausted", status: 429 }; }, fetchImpl: async () => { sends++; return Response.json({ text: "unexpected" }); } };
     const blocked = await handler(request(body), deps);
     assert.equal(blocked.status, 429); assert.equal(reserves, 1); assert.equal(sends, 0);
     assert.equal((await blocked.json()).dispatched, false);
@@ -25,7 +25,7 @@ test("STT and TTS enforce the account dispatch budget before the exact selected 
 
 test("invalid input, missing selected credential and free-only requests consume no dispatch reservation", async () => {
   resetMindRateLimitsForTests(); let reserves = 0, sends = 0;
-  const deps: VoiceHttpDeps = { requireUser: async () => "fixture-invalid", halted: async () => false, env: {}, reserve: async () => { reserves++; return { ok: true }; }, fetchImpl: async () => { sends++; return new Response(); } };
+  const deps: VoiceHttpDeps = { recordUsage: async () => {}, authorize: async () => async () => {}, requireUser: async () => "fixture-invalid", halted: async () => false, env: {}, reserve: async () => { reserves++; return { ok: true }; }, fetchImpl: async () => { sends++; return new Response(); } };
   for (const body of [{ provider: "openai", text: "" }, { provider: "openai", text: "Fixture" }, { provider: "openai", text: "Fixture", freeOnly: true }]) {
     const result = await (await handleVoiceTts(request(body), deps)).json();
     assert.equal(result.ok, false); assert.equal(result.dispatched, false);
@@ -35,7 +35,7 @@ test("invalid input, missing selected credential and free-only requests consume 
 
 test("speech gates explicitly distinguish known-unsent requests from failed provider outcomes", async () => {
   resetMindRateLimitsForTests(); let sends = 0;
-  const deps: VoiceHttpDeps = { requireUser: async () => "receipt-owner", halted: async () => false, env: { OPENAI_API_KEY: "synthetic-key" }, reserve: async () => ({ ok: true }), fetchImpl: async () => { sends++; return Response.json({ error: { message: "synthetic rejection" } }, { status: 503 }); } };
+  const deps: VoiceHttpDeps = { recordUsage: async () => {}, authorize: async () => async () => {}, requireUser: async () => "receipt-owner", halted: async () => false, env: { OPENAI_API_KEY: "synthetic-key" }, reserve: async () => ({ ok: true }), fetchImpl: async () => { sends++; return Response.json({ error: { message: "synthetic rejection" } }, { status: 503 }); } };
   const valid = { provider: "openai", audioBase64: audio, mime: "audio/wav" };
   for (const [incoming, overrides] of [
     [new Request("http://fixture.test/api/mind/voice"), {}],
@@ -59,7 +59,7 @@ test("speech gates explicitly distinguish known-unsent requests from failed prov
 
 test("realtime session mint respects the same owner dispatch budget and does not expose a secret", async () => {
   resetMindRateLimitsForTests(); let sends = 0;
-  const deps: VoiceHttpDeps = { requireUser: async () => "fixture-live", halted: async () => false, env: { XAI_API_KEY: "synthetic-key" }, reserve: async () => ({ ok: false, error: "Fixture budget exhausted", status: 429 }), fetchImpl: async () => { sends++; return Response.json({ value: "synthetic-ephemeral", expires_at: Math.floor(Date.now() / 1000) + 300 }); } };
+  const deps: VoiceHttpDeps = { recordUsage: async () => {}, authorize: async () => async () => {}, requireUser: async () => "fixture-live", halted: async () => false, env: { XAI_API_KEY: "synthetic-key" }, reserve: async () => ({ ok: false, error: "Fixture budget exhausted", status: 429 }), fetchImpl: async () => { sends++; return Response.json({ value: "synthetic-ephemeral", expires_at: Math.floor(Date.now() / 1000) + 300 }); } };
   assert.equal((await handleVoiceSession(request({}), deps)).status, 429); assert.equal(sends, 0);
   const result = await handleVoiceSession(request({}), { ...deps, reserve: async () => ({ ok: true }) });
   const output = await result.json(); assert.equal(output.ok, true); assert.equal(output.value, undefined); assert.equal(sends, 1);
@@ -70,7 +70,7 @@ test("speech reservations bind the selected connection, explicit operation and a
   const custom = "custom:11111111-1111-4111-8111-111111111111";
   const receipts: import("../financial-policy.ts").MonetarySettlement[] = [];
   const result = await handleVoiceStt(request({ provider: custom, operationId: "voice-operation", taskId: "voice-turn", audioBase64: audio, mime: "audio/wav" }), {
-    requireUser: async () => "voice-owner", halted: async () => false,
+    recordUsage: async () => {}, authorize: async () => async () => {}, requireUser: async () => "voice-owner", halted: async () => false,
     customCredential: async () => ({ ok: true, provider: "openai", key: "synthetic-key" }),
     reserve: async (owner, context) => { assert.equal(owner, "voice-owner"); assert.equal(context.provider, custom); assert.equal(context.model, "gpt-4o-mini-transcribe"); assert.equal(context.operationId, "voice-operation:stt"); assert.equal(context.taskId, "voice-turn"); assert.equal(context.textOnly, false); assert.equal(JSON.stringify(context).includes(audio), false); return { ok: true, reservationId: "speech-reservation" }; },
     settle: async (_owner, id, receipt) => { assert.equal(id, "speech-reservation"); receipts.push(receipt); },
@@ -83,7 +83,7 @@ test("speech reservations bind the selected connection, explicit operation and a
 test("model-less xAI TTS and realtime contracts remain unknown to monetary pricing", async () => {
   resetMindRateLimitsForTests(); let sends = 0;
   const deps: VoiceHttpDeps = {
-    requireUser: async () => "model-less", halted: async () => false, env: { XAI_API_KEY: "synthetic-key" },
+    recordUsage: async () => {}, authorize: async () => async () => {}, requireUser: async () => "model-less", halted: async () => false, env: { XAI_API_KEY: "synthetic-key" },
     reserve: async (_owner, context) => { assert.equal(context.provider, "xai"); assert.equal(context.model, ""); assert.equal(context.textOnly, false); return { ok: false, error: "Explicit priced contract required", status: 402 }; },
     fetchImpl: async () => { sends++; return new Response(); },
   };

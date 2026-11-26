@@ -175,7 +175,7 @@ describe("C2 fleet execution and approval regressions", () => {
     ws = applyWorkbenchCommand(ws, { type: "cancel", runId: id }, NOW).workspace;
     assert.equal(applyWorkbenchCommand(ws, { type: "cancel", runId: id }, NOW).ok, false);
     ws = tickFleet(queued("Browser operator", "https://example.com"), env());
-    assert.equal(applyWorkbenchCommand(ws, { type: "approve", runId: ws.runs[0]!.id, action: "gmail_send" }, NOW).ok, false);
+    assert.equal(applyWorkbenchCommand(ws, { type: "approve", runId: ws.runs[0]!.id, actionId: "gmail_send" }, NOW).ok, false);
   });
 
   it("AA-062/088 leased and empty fleets preserve identity and report no advancement", () => {

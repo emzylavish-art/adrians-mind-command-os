@@ -363,6 +363,7 @@ describe("C5 scheduled occurrences", () => {
     const ws = scheduled();
     ws.chats = ["A", "B"].map((id) => ({ id, title: id, memory: "off", temporary: false, autonomy: "ask", projectId: null, retrievalLog: [], messages: [] }));
     ws.schedules[0].chatId = "A";
+    ws.schedules[0].resultDelivery = "conversation";
     let next = runDueSchedules(ws, NOW);
     assert.equal(next.runs[0].chatId, "A");
     next = tick(tick(next));

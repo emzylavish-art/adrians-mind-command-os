@@ -709,7 +709,7 @@ export async function unpackWorkspace(raw: string): Promise<
   // can gain new policy defaults without making their integrity hash obsolete.
   const actual = await sha256(canonical(parsed.workspace));
   const workspace = normalizeWorkspace(parsed.workspace);
-  if (actual !== parsed.sha256) {
+  if (actual !== parsed.sha256 && (parsed.manifest !== undefined || await sha256(canonical(workspace)) !== parsed.sha256)) {
     return { ok: false, error: "Archive hash does not match. Nothing was imported." };
   }
   const attachments = attachmentManifest(workspace);
@@ -781,7 +781,7 @@ function inactiveArchive(archive: Workspace): Workspace {
 }
 
 /** Explicit replacement can restore forgotten content only as newly saved notes. */
-export function replaceFromArchive(current: Workspace, source: Workspace): Workspace {
+export function replaceFromArchive(current: Workspace, source: Workspace, restoreMemoryPreferences = false): Workspace {
   const archive = inactiveArchive(source);
   const deleted = new Set([...(current.deletedMemoryIds ?? []), ...(archive.deletedMemoryIds ?? [])]);
   const deletedFiles = new Set([...(current.deletedFileIds ?? []), ...(archive.deletedFileIds ?? [])]);
@@ -802,7 +802,8 @@ export function replaceFromArchive(current: Workspace, source: Workspace): Works
   const incomingChats = new Set(archive.chats.map((chat) => chat.id));
   for (const chat of current.chats) if (!incomingChats.has(chat.id)) deletedChats.add(chat.id);
   const restoredIds = new Map<string, string>();
-  const chats = archive.chats.map((chat) => {
+  const chats = archive.chats.map((original) => {
+    const chat = { ...original, memory: restoreMemoryPreferences ? original.memory : current.chats.find(row => row.id === original.id)?.memory ?? "off" as const };
     if (!deletedChats.has(chat.id)) return chat;
     const id = crypto.randomUUID();
     restoredIds.set(chat.id, id);
@@ -847,7 +848,7 @@ export function archiveMessagePreview(current: Workspace, incoming: Workspace) {
   return { kept, conflicts };
 }
 
-export function mergeWorkspace(current: Workspace, source: Workspace): Workspace {
+export function mergeWorkspace(current: Workspace, source: Workspace, restoreMemoryPreferences = false): Workspace {
   const incoming = inactiveArchive(source);
   const byId = <T extends { id: string }>(rows: T[]) => new Map(rows.map((row) => [row.id, row]));
   const merge = <T extends { id: string }>(left: T[], right: T[]) => [...byId([...left, ...right]).values()];
@@ -860,17 +861,18 @@ export function mergeWorkspace(current: Workspace, source: Workspace): Workspace
     ...deletionState,
     chats: deletionState.chats.map((chat) => {
       const archive = archivedChats.get(chat.id);
-      if (!archive || archive === chat) return chat;
+      if (!archive) return chat;
+      if (archive === chat) return { ...chat, memory: restoreMemoryPreferences ? archive.memory : "off" as const };
       const messages = merge(archive.messages, chat.messages).sort((a, b) => a.at.localeCompare(b.at));
-      return { ...chat, temporary: chat.temporary || archive.temporary, messages };
+      return { ...chat, memory: restoreMemoryPreferences ? archive.memory : chat.memory, temporary: chat.temporary || archive.temporary, messages };
     }),
     // Preserve the current resolution when an older archive contains the same operation.
     recovery: normalizeRecovery([...(current.recovery ?? []), ...(incoming.recovery ?? [])]),
     ...mergeMemoryState(current, incoming),
-    projects: merge(current.projects, incoming.projects),
+    projects: merge(incoming.projects, current.projects),
     files: merge(incoming.files, current.files).filter((file) => !deletedFiles.has(file.id)),
     ...(deletedFiles.size ? { deletedFileIds: [...deletedFiles] } : {}),
-    usage: merge(current.usage, incoming.usage).sort((a, b) => b.at.localeCompare(a.at)).slice(0, 200),
+    usage: mergeUsageEntries([...current.usage, ...incoming.usage]).slice(0, 200),
     audit: retainActivity(merge(current.audit, incoming.audit).sort((a, b) => b.at.localeCompare(a.at))),
     agents: merge(incoming.agents, current.agents),
     deployments: merge(incoming.deployments, current.deployments),

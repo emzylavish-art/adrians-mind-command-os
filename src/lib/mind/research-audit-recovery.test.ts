@@ -56,7 +56,7 @@ describe("C2 research recovery and evidence", () => {
     const attributed = withResearchProvenance(result, identity, "deep research harbor planning");
     assert.equal(calls, 1);
     assert.match(attributed.summary ?? "", /multi-query research plan was not executed/);
-    assert.equal(attributed.providerAnswer?.text, "Provider answer");
+    assert.equal(attributed.annotatedAnswer?.text, "Provider answer");
   });
 
   it("AA-043 preserves passage offsets across provider blocks and rejects unsafe citations", () => {

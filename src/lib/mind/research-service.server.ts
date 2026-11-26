@@ -1,5 +1,5 @@
 import { createHash, randomUUID } from "node:crypto";
-import { performSearch, shouldRunDeepResearch, planDeepQueries, fairResearchCitations, type ResearchDepth, type ResearchResult, type ResearchRoute } from "./research.ts";
+import { performSearch, shouldRunDeepResearch, planDeepQueries, fairResearchCitations, withResearchProvenance, type ResearchDepth, type ResearchResult, type ResearchRoute } from "./research.ts";
 import { searchWithGrok } from "./xai-search.ts";
 import { resolveXaiInferenceApiKey } from "./media/xai-key.ts";
 import { reserveResourceOperation, settleResourceOperation } from "./resource-governor.server.ts";
@@ -63,7 +63,7 @@ export async function executeResearch(owner: string, input: ResearchRequest): Pr
   };
   let result: ResearchResult;
   if (configured) result = await performSearch({ query: input.query, endpoint, key, deep: depth === "deep", retryQueries: input.retryQueries, fetchImpl: governedFetch });
-  else if (depth === "deep") {
+  else if (input.depth === "deep" || (previous?.result.providerIdentity?.strategy === "multi_query" && input.retryQueries)) {
     const queries = planDeepQueries(input.query).filter((query) => !input.retryQueries || input.retryQueries.includes(query));
     const overall = AbortSignal.timeout(45_000);
     const attempts: ResearchResult[] = [];
@@ -81,7 +81,10 @@ export async function executeResearch(owner: string, input: ResearchRequest): Pr
     };
   } else result = await searchWithGrok(input.query, { apiKey: xaiKey!, fetchImpl: governedFetch });
   const route: ResearchRoute = { provider, configurationRevision: revision, endpointOrigin: origin, reportedModel: result.reportedModel ?? null, requestId: result.requestId ?? null };
-  result = { ...result, route };
+  result = withResearchProvenance({ ...result, route }, {
+    id: provider, label: configured ? "Configured search" : "xAI web search", routeFingerprint: revision,
+    strategy: (result.steps?.length ?? 0) > 1 || previous?.result.providerIdentity?.strategy === "multi_query" ? "multi_query" : "single_query",
+  }, input.query);
   if (result.ok && !await haltIsOn(owner)) result = await enrichResearchResult(result, input.query, depth);
   else result.report = buildEvidenceReport(result, depth);
   if (previous && input.retryQueries) {

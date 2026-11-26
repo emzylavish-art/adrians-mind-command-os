@@ -174,20 +174,27 @@ const TOOL_NAME = /^[A-Za-z0-9_-]{1,80}$/;
 
 /** Models and MCP tools from a connection, with nothing dropped for being the wrong kind. */
 export function discoveredCapabilities(input: {
-  models: ({ id: string; label: string; models: string[] } & ProviderAvailability)[];
-  mcp: { id: string; label: string; state: string; tools: { name: string; description?: string }[] }[];
-  services?: { id: string; label: string; connected: boolean; opensWorkspace?: boolean }[];
+  models: ({ id: string; label: string; models: string[]; modelProfiles?: CatalogModelProfile[] } & ProviderAvailability)[];
+  mcp: { id: string; label: string; state: string; tools: { name: string; description?: string; inputSchema?: unknown; annotations?: { readOnlyHint?: boolean } }[] }[];
+  services?: { id: string; label: string; connected: boolean; opensWorkspace?: boolean; accountId?: string; operations?: string[] }[];
 }): DiscoveredCapability[] {
   const models = input.models.flatMap((row) => {
     return catalogModuleChoices([row]).map((item) => {
       const parsed = parseCustomProviderChoice(item.id);
-      const reason = customProviderBlockReason({ ...row, model: parsed.ok ? parsed.model : undefined });
-      return ({
-      ...item,
-      kind: "model" as const,
-      usable: !reason,
-      reason: reason ?? "Configured for this API. Sending will check the model's response.",
-      });
+      const modelId = parsed.ok ? parsed.model : undefined;
+      const reason = customProviderBlockReason({ ...row, model: modelId });
+      const model = row.modelProfiles?.find((profile) => profile.id === modelId);
+      const compatibility = modelCompatibility(model, { input: ["text"], output: ["text"] });
+      const last = model?.lastExecution;
+      const modelFailure = last && last.outcome !== "succeeded";
+      return {
+        ...item, kind: "model" as const, model,
+        usable: !reason && compatibility.compatible,
+        readiness: reason ? "unavailable" as const : modelFailure ? "last_call_failed" as const : last ? "last_call_succeeded" as const : "configured" as const,
+        reason: reason ?? (!compatibility.compatible ? compatibility.reason : last
+          ? `Last request ${last.outcome.replaceAll("_", " ")} at ${last.at}${last.reportedModel ? `; reported model ${last.reportedModel}` : "; reported model unknown"}. Sending checks availability again.`
+          : "Configured for this API; this model has no successful execution receipt. Sending will check the model's response."),
+      };
     });
   });
   const tools: DiscoveredCapability[] = [];
@@ -202,6 +209,8 @@ export function discoveredCapabilities(input: {
         id: `mcp:${server.id}:${encodeURIComponent(tool.name)}`,
         label: `${server.label}: ${tool.name}`,
         kind: "mcp-tool",
+        tool: { inputSchema: tool.inputSchema, readOnly: typeof tool.annotations?.readOnlyHint === "boolean" ? tool.annotations.readOnlyHint : null },
+        readiness: usable ? "discovered" : "unavailable",
         usable,
         reason: usable
           ? (tool.description || "Discovered MCP tool. Selecting it calls this tool. It is not sent to Grok.")

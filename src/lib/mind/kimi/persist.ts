@@ -110,10 +110,10 @@ export async function restoreWorkspaceFilesDetailed(userId: string, root: string
   } catch { return { ...result, ok: false, error: "Account recovery did not complete. Existing disk files were preserved. Review the reported partial result." }; }
 }
 
-export async function restoreWorkspaceFiles(userId: string, root: string): Promise<number> {
+export async function restoreWorkspaceFiles(userId: string, root: string, suppliedSql?: Sql): Promise<number> {
   if (!userId) return 0;
   try {
-    const sql = await getSql();
+    const sql = suppliedSql ?? await getSql();
     const rows = await sql.query<{ path: string; text_copy: string }>("select path, text_copy from mind_kimi_file where user_id = $1", [userId]);
     let count = 0;
     for (const row of rows) {

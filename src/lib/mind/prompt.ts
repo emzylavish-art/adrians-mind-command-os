@@ -12,6 +12,7 @@ import { allocateConversationContext, contextBudget, estimateTextTokens, extract
 export function assembleTurn(input: {
   memory: "off" | "on";
   history: HistoryInputMessage[];
+  allowHistoryImages?: boolean;
   text: string;
   memoryContext: MemoryNote[];
   images?: ImageAttachment[];
@@ -73,7 +74,7 @@ export function assembleTurn(input: {
   const reservedTokens = estimateTextTokens(system) + estimateTextTokens(input.text) + 128;
   if (reservedTokens > contextBudget(input.contextOptions).inputTokenBudget) return { ok: false, error: "The current message, instructions, and saved context exceed this model's text budget. Reduce attached context or choose a larger declared context budget. Nothing was truncated in storage." };
   const allocation = allocateConversationContext(input.history, input.text, { ...input.contextOptions, reservedTokens, checkpoints: input.checkpoints });
-  const historyBuilt = buildHistoryWithReceipt(allocation.history, { query: input.text, selectedImageMessageIds: input.contextOptions?.selectedImageMessageIds, supportsImages: input.contextOptions?.supportsImages });
+  const historyBuilt = buildHistoryWithReceipt(allocation.history, { query: input.text, selectedImageMessageIds: input.contextOptions?.selectedImageMessageIds, supportsImages: input.allowHistoryImages === false ? false : input.contextOptions?.supportsImages, maxImageChars: Math.max(0, MAX_HISTORY_IMAGE_CHARS - imagePayloadChars(images)) });
   const contextReceipt: ContextReceipt = { ...allocation.receipt, images: historyBuilt.receipt, memory: { includedIds: notes.map((note) => note.id), omittedIds: input.memoryContext.filter((note) => !notes.some((included) => included.id === note.id)).map((note) => note.id), method: "explicit-scoped-selection-with-character-budget" }, knowledge: [...(knowledge.knowledge ? passages.ranges.map((range) => ({ documentId: "bot-knowledge", ...range, quote: knowledge.knowledge.slice(range.start, range.end) })) : []), ...selectedKnowledge.passages.map((passage) => ({ documentId: passage.documentId, start: passage.start, end: passage.end, quote: passage.quote }))], projectInstructions: projectInstructions ? "included" : typeof input.projectInstructions === "string" && input.projectInstructions.trim() ? "memory-off" : "absent" };
   return {
     ok: true,
