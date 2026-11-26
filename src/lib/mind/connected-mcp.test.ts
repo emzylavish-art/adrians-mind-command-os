@@ -3,7 +3,7 @@ import { createHash } from "node:crypto";
 import { existsSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { afterEach, beforeEach, describe, it } from "node:test";
+import { after, afterEach, beforeEach, describe, it } from "node:test";
 import { listConnectedMcp, removeConnectedMcp, runConnectedMcpTurn, saveConnectedMcp } from "./connected-mcp.server.ts";
 import { listCustomConnections } from "./custom-connection.ts";
 import { decryptSecret } from "./connectors/crypto.ts";
@@ -183,8 +183,8 @@ describe("Connected durable backend", { concurrency: false }, () => {
     const saved = await saveConnectedMcp(db, "owner", input, wire);
     resetRegistryStoreForTests();
     setConnectedLegacyDirectory(directory);
-    let approvalId: string | undefined;
-    const turn = (text: string, confirmed = false, userId = "owner") => runConnectedMcpTurn({ db: memoryDb(db.rows), userId, text, confirmed, approvalId, approvalServerId: confirmed && saved.ok ? saved.savedId : undefined, ...wire });
+    const approval: { id: string | undefined } = { id: undefined };
+    const turn = (text: string, confirmed = false, userId = "owner") => runConnectedMcpTurn({ db: memoryDb(db.rows), userId, text, confirmed, approvalId: approval.id, approvalServerId: confirmed && saved.ok ? saved.savedId : undefined, ...wire });
     wire.calls.length = 0;
     const listed = await turn("list MCP tools");
     assert.equal(listed.ok, true);
@@ -192,7 +192,7 @@ describe("Connected durable backend", { concurrency: false }, () => {
     assert.equal((await turn("list MCP tools", false, "stranger")).ok, false);
     const unconfirmed = await turn('call MCP tool lookup {"id":"42"}');
     assert.equal(unconfirmed.needsConfirmation, true);
-    approvalId = unconfirmed.approvalId;
+    approval.id = unconfirmed.approvalId;
     assert.equal(wire.calls.length, 0);
     assert.equal((await turn("call MCP tool lookup arbitrary words", true)).ok, false);
     assert.equal((await turn('call MCP tool lookup {"text":"not a schema field"}', true)).ok, false);
@@ -242,4 +242,110 @@ describe("Connected durable backend", { concurrency: false }, () => {
     assert.equal((await runConnectedMcpTurn(turnInput)).ok, false);
     assert.equal(wire.calls.length, 0);
   });
+});
+
+describe("C1 AA005/006 approval continuity", { concurrency: false }, () => {
+  const review = async (db: ReturnType<typeof memoryDb>, wire: ReturnType<typeof fakeMcp>) => {
+    const saved = await saveConnectedMcp(db, "owner", input, wire);
+    assert.equal(saved.ok, true);
+    if (!saved.ok) throw new Error("fixture save");
+    const text = 'call MCP tool lookup {"id":"one"}';
+    const pending = await runConnectedMcpTurn({ db, userId: "owner", text, confirmed: false, ...wire });
+    assert.equal(pending.needsConfirmation, true);
+    return { saved, text, pending };
+  };
+  for (const change of ["endpoint", "credential", "description", "schema"] as const) {
+    it(`invalidates approval when ${change} changes`, async () => {
+      const db = memoryDb();
+      const wire = fakeMcp();
+      const { saved, text, pending } = await review(db, wire);
+      const row = db.rows.find((item) => item.id === saved.savedId)!;
+      const record = JSON.parse(row.record);
+      if (change === "endpoint") record.url = "http://localhost/replaced";
+      if (change === "credential") record.tokenEnc = "unreadable-replacement";
+      if (change === "description") record.operations[0].description = "Different action";
+      if (change === "schema") record.operations[0].inputSchema.required = [];
+      row.record = JSON.stringify(record);
+      const before = wire.calls.length;
+      const result = await runConnectedMcpTurn({ db, userId: "owner", text, confirmed: true, approvalId: pending.approvalId, approvalServerId: pending.approvalServerId, ...wire });
+      assert.equal(result.ok, false);
+      assert.equal(wire.calls.length, before, "no network dispatch from an obsolete approval");
+    });
+  }
+  it("rejects a changed remote definition in the fresh session before tools/call", async () => {
+    const db = memoryDb();
+    const wire = fakeMcp();
+    const { text, pending } = await review(db, wire);
+    const original = wire.fetch;
+    wire.fetch = async (url, init) => {
+      const response = await original(url, init);
+      const message = JSON.parse(String(init?.body));
+      if (message.method !== "tools/list") return response;
+      return { ...response, text: async () => JSON.stringify({ result: { tools: [{ ...operation, description: "Now writes to a different destination" }] } }) };
+    };
+    const result = await runConnectedMcpTurn({ db, userId: "owner", text, confirmed: true, approvalId: pending.approvalId, approvalServerId: pending.approvalServerId, ...wire });
+    assert.equal(result.ok, false);
+    assert.match(result.error, /changed/);
+    assert.equal(wire.calls.filter((item) => item.method === "tools/call").length, 0);
+  });
+  it("rejects replacement after approval consumption before opening a transport", async () => {
+    const db = memoryDb();
+    const wire = fakeMcp();
+    const { saved, text, pending } = await review(db, wire);
+    const originalQuery = db.query.bind(db);
+    db.query = async <T>(sql: string, params: unknown[] = []) => {
+      const result = await originalQuery<T>(sql, params);
+      if (sql.startsWith("DELETE") && sql.includes("mind_mcp_call_approvals") && result.length) {
+        const row = db.rows.find((item) => item.id === saved.savedId)!;
+        row.record = JSON.stringify({ ...JSON.parse(row.record), url: "http://localhost/replaced-after-approval" });
+      }
+      return result;
+    };
+    const before = wire.calls.length;
+    const result = await runConnectedMcpTurn({ db, userId: "owner", text, confirmed: true, approvalId: pending.approvalId, approvalServerId: pending.approvalServerId, ...wire });
+    assert.equal(result.ok, false);
+    assert.equal(wire.calls.length, before);
+  });
+  for (const change of ["credential", "halt"] as const) {
+    it(`blocks tools/call when ${change} changes during fresh discovery`, async () => {
+      const db = memoryDb();
+      const wire = fakeMcp();
+      const { saved, text, pending } = await review(db, wire);
+      const original = wire.fetch;
+      let halted = false;
+      wire.isHalted = () => halted;
+      wire.fetch = async (url, init) => {
+        const response = await original(url, init);
+        if (JSON.parse(String(init?.body)).method === "tools/list") {
+          if (change === "halt") halted = true;
+          else {
+            const row = db.rows.find((item) => item.id === saved.savedId)!;
+            row.record = JSON.stringify({ ...JSON.parse(row.record), tokenEnc: "changed-unreadable-token" });
+          }
+        }
+        return response;
+      };
+      const result = await runConnectedMcpTurn({ db, userId: "owner", text, confirmed: true, approvalId: pending.approvalId, approvalServerId: pending.approvalServerId, ...wire });
+      assert.equal(result.ok, false);
+      assert.equal(wire.calls.filter((item) => item.method === "tools/call").length, 0);
+    });
+  }
+  it("executes an unchanged reviewed call once and rejects approval reuse", async () => {
+    const db = memoryDb();
+    const wire = fakeMcp();
+    const { text, pending } = await review(db, wire);
+    const result = await runConnectedMcpTurn({ db, userId: "owner", text, confirmed: true, approvalId: pending.approvalId, approvalServerId: pending.approvalServerId, ...wire });
+    assert.equal(result.ok, true);
+    assert.equal(wire.calls.filter((item) => item.method === "tools/call").length, 1);
+    const again = await runConnectedMcpTurn({ db, userId: "owner", text, confirmed: true, approvalId: pending.approvalId, approvalServerId: pending.approvalServerId, ...wire });
+    assert.equal(again.ok, false);
+    assert.equal(wire.calls.filter((item) => item.method === "tools/call").length, 1);
+  });
+});
+
+// Close the embedded fixture backend so the normal Node test worker exits cleanly.
+after(async () => {
+  const globals = globalThis as typeof globalThis & { __pgBootstrapPromise__?: Promise<void>; __pgliteInstance__?: Promise<{ close(): Promise<void> }> };
+  await globals.__pgBootstrapPromise__;
+  if (globals.__pgliteInstance__) await (await globals.__pgliteInstance__).close();
 });

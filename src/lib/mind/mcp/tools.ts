@@ -152,7 +152,7 @@ export async function notionAppendSection(input: {
 }
 
 /** Each pattern must match the WHOLE command (anchored both ends). */
-const DEFAULT_SHELL_ALLOWLIST = [/^pwd$/, /^uname( -[a-z]+)?$/, /^echo [A-Za-z0-9 _.,:=+\/-]+$/, /^date$/, /^whoami$/];
+const DEFAULT_SHELL_ALLOWLIST = [/^pwd$/, /^uname( -[a-z]+)?$/, /^echo [A-Za-z0-9 _.,:=+/-]+$/, /^date$/, /^whoami$/];
 
 /**
  * Characters a paired agent's shell (sh, cmd.exe, PowerShell) could treat as
@@ -161,7 +161,7 @@ const DEFAULT_SHELL_ALLOWLIST = [/^pwd$/, /^uname( -[a-z]+)?$/, /^echo [A-Za-z0-
  * Allowlisted commands run WITHOUT human approval, so anything outside this
  * plain set must go through the approval flow instead.
  */
-const SHELL_SAFE_CHARS = /^[A-Za-z0-9 _.,:=+\/-]+$/;
+const SHELL_SAFE_CHARS = /^[A-Za-z0-9 _.,:=+/-]+$/;
 const SHELL_ALLOWLIST_MAX = 200;
 
 export function isShellAllowlisted(command: string, patterns: RegExp[] = DEFAULT_SHELL_ALLOWLIST): boolean {
@@ -242,8 +242,8 @@ export async function pcRunShell(input: {
     if (input.onlineAgents) {
       online = input.onlineAgents(input.ownerId);
     } else {
-      const { onlineAgents } = await import("../pc-pairing/store.ts");
-      online = onlineAgents(input.ownerId).map((a) => ({ id: a.id, label: a.label }));
+      const { onlineAgents } = await import("../pc-pairing/coordination.server.ts");
+      online = (await onlineAgents(input.ownerId)).map((a) => ({ id: a.id, label: a.label }));
     }
 
     if (online.length === 0) {
@@ -262,6 +262,7 @@ export async function pcRunShell(input: {
       };
     }
 
+    if (online.length > 1) return { ok: false, status: "error", text: "Choose the computer in Tools before approving this command. No alternate was selected." };
     const agent = online[0];
     let approvalId: string;
     if (input.createApproval) {
@@ -755,7 +756,7 @@ export function assertReadOnlySql(sql: string): { ok: true; sql: string; explain
   for (let i = 0; i < tokens.length; i += 1) {
     const tok = tokens[i];
     if (tok.kind !== "ident" || tok.value.toLowerCase() !== "generate_series") continue;
-    let j = i + 1;
+    const j = i + 1;
     // optional schema. prefix already consumed when this ident is the function name
     const open = nextNonOther(tokens, j);
     if (!open || open.tok.kind !== "punct" || open.tok.value !== "(") continue;

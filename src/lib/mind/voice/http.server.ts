@@ -1,3 +1,5 @@
+import { authorizeExternalResource, externalResourceCall } from "../external-resource-call.server.ts";
+import { withFailureEnvelope } from "../failure-envelope.ts";
 /**
  * Authenticated HTTP handlers for the Speak path.
  * POST /api/mind/voice/session — mint an ephemeral realtime client secret (value is not returned).
@@ -11,6 +13,7 @@ import { readJsonObjectBody } from "../request-body.ts";
 import { allowMindRequest } from "../limits.ts";
 import { mintRealtimeClientSecret } from "./client-secret.ts";
 import { resolveVoiceApiKey } from "./keys.ts";
+import { parseTranscriptionPolicy } from "./transcription-policy.ts";
 import { speakWithFallback, transcribeWithFallback } from "./provider-fallback.ts";
 import { decodeAudioBase64, validateSpeakTextInput, validateTranscribeAudioInput } from "./voice-input.ts";
 import { isSpeakCode, speakFailure, voiceSecretExpired, type SpeakCode } from "./speak-failures.ts";
@@ -22,10 +25,11 @@ export type VoiceHttpDeps = {
   secretsPath?: string;
   now?: () => number;
   halted?: (userId: string) => Promise<boolean>;
+  authorize?: (owner: string, provider: "xAI" | "OpenAI") => Promise<(ok: boolean) => Promise<void>>;
 };
 
 function json(body: unknown, status = 200) {
-  return new Response(JSON.stringify(body), {
+  return new Response(JSON.stringify(withFailureEnvelope(body, { subsystem: "voice", status, operationKind: "generation" })), {
     status,
     headers: { "content-type": "application/json", "cache-control": "no-store" },
   });
@@ -33,7 +37,8 @@ function json(body: unknown, status = 200) {
 
 function coded(code: SpeakCode, status = 200) {
   const failure = speakFailure(code);
-  return json({ ok: false, code: failure.code, error: failure.message }, status);
+  const preflight = ["unauthenticated", "emergency_stop", "provider_not_configured", "rate_limited"].includes(code);
+  return json({ ok: false, code: failure.code, error: failure.message, ...(preflight ? { dispatched: false } : {}) }, status);
 }
 
 async function defaultRequireUser(request: Request): Promise<string> {
@@ -86,12 +91,12 @@ export async function handleVoiceSession(request: Request, deps: VoiceHttpDeps =
   if (!opened.ok) return opened.response;
   const blocked = await haltOrLimit(opened.userId, "voice_secret", 20, deps);
   if (blocked) return blocked;
-  const minted = await mintRealtimeClientSecret({
+  const minted = await externalResourceCall({ owner: opened.userId, provider: "xai", model: "realtime-voice", unknownTokens: true }, () => mintRealtimeClientSecret({
     env: deps.env,
     fetchImpl: deps.fetchImpl,
     secretsPath: deps.secretsPath,
-  });
-  if (!minted.ok) return providerOrNetwork(minted.error);
+  }));
+  if (!minted.ok) return "dispatched" in minted ? json(minted, minted.status) : providerOrNetwork(minted.error);
   if (voiceSecretExpired(minted.expiresAt, deps.now?.() ?? Date.now())) return coded("session_expired");
   return json({ ok: true, expiresAt: minted.expiresAt });
 }
@@ -103,7 +108,9 @@ export async function handleVoiceStt(request: Request, deps: VoiceHttpDeps = {})
   if (blocked) return blocked;
   const read = await readJsonObjectBody(request, 6_000_000);
   if (!read.ok) return json({ ok: false, code: "network_failure", error: read.error }, read.status);
-  if (read.body.freeOnly === true) return json({ ok: false, error: "Free-only mode keeps cloud transcription off." });
+  if (read.body.freeOnly === true) return json({ ok: false, code: "free_only", dispatched: false, error: "Free-only mode keeps cloud transcription off." });
+  const policy = parseTranscriptionPolicy(read.body.transcriptionPolicy);
+  if (!policy) return json({ ok: false, code: "invalid_policy", error: "Choose a supported transcription provider and fallback policy." }, 400);
   const parsed = validateTranscribeAudioInput(read.body);
   if (!parsed.ok) return json({ ok: false, code: "empty_transcript", error: parsed.error });
   const decoded = decodeAudioBase64(parsed.audioBase64);
@@ -111,17 +118,16 @@ export async function handleVoiceStt(request: Request, deps: VoiceHttpDeps = {})
   const env = deps.env ?? process.env;
   const transcribed = await transcribeWithFallback({
     bytes: decoded.bytes,
+    policy,
+    authorize: (provider) => (deps.authorize ?? ((owner, name) => authorizeExternalResource(owner, name.toLowerCase(), "transcription")))(opened.userId, provider),
     xaiKey: resolveVoiceApiKey(env, deps.secretsPath),
     openaiKey: env.OPENAI_API_KEY?.trim() || undefined,
     filename: parsed.filename,
     mime: parsed.mime,
     fetchImpl: deps.fetchImpl,
   });
-  if (!transcribed.ok) {
-    if (/no words were recognized/i.test(transcribed.error)) return coded("empty_transcript");
-    return providerOrNetwork(transcribed.error);
-  }
-  return json({ ok: true, text: transcribed.text, provider: transcribed.provider });
+  if (!transcribed.ok) return json(transcribed);
+  return json({ ok: true, text: transcribed.text, provider: transcribed.provider, attempts: transcribed.attempts });
 }
 
 export async function handleVoiceTts(request: Request, deps: VoiceHttpDeps = {}): Promise<Response> {
@@ -136,7 +142,7 @@ export async function handleVoiceTts(request: Request, deps: VoiceHttpDeps = {})
   if (!parsed.ok) return json({ ok: false, code: "chat_failed", error: parsed.error });
   const env = deps.env ?? process.env;
   const voiceId = typeof read.body.voiceId === "string" ? read.body.voiceId : undefined;
-  const spoken = await speakWithFallback({
+  const spoken = await externalResourceCall({ owner: opened.userId, provider: "xai", model: "speech" }, () => speakWithFallback({
     text: parsed.text,
     voiceId,
     xaiKey: resolveVoiceApiKey(env, deps.secretsPath),
@@ -145,8 +151,8 @@ export async function handleVoiceTts(request: Request, deps: VoiceHttpDeps = {})
     // merely because the client omitted voiceId or xAI could not respond.
     openaiKey: undefined,
     fetchImpl: deps.fetchImpl,
-  });
-  if (!spoken.ok) return providerOrNetwork(spoken.error);
+  }));
+  if (!spoken.ok) return "dispatched" in spoken ? json(spoken, spoken.status) : providerOrNetwork(spoken.error);
   return json({ ok: true, audio: spoken.audio, mime: spoken.mime, provider: spoken.provider });
 }
 

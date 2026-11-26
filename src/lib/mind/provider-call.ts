@@ -1,8 +1,29 @@
 /** Bounded provider-specific chat calls with normalised assistant text. */
-import { reportedModel } from "./stream.ts";
+import { reportedModel, type ModelUsage } from "./stream.ts";
 import { isOpenRouterFreeModel, OPENROUTER_FREE_MODEL_REQUIRED, OPENROUTER_FREE_ROUTING } from "./provider-catalog.ts";
 
 export type ProviderName = "grok" | "openai" | "anthropic" | "gemini" | "openrouter";
+
+export type ProviderReceipt = {
+  usage?: ModelUsage | null;
+  requestId?: string | null;
+  finishReason?: string | null;
+};
+
+/** Missing or invalid counters remain unknown; zero is retained only when reported. */
+export function normalizeProviderReceipt(id: string, payload: Record<string, any>, headers?: Pick<Headers, "get">): ProviderReceipt {
+  const source = id === "gemini" ? payload.usageMetadata : id === "ollama" ? payload : payload.usage;
+  const count = (value: unknown) => typeof value === "number" && Number.isSafeInteger(value) && value >= 0 ? value : undefined;
+  const prompt_tokens = count(id === "gemini" ? source?.promptTokenCount : id === "anthropic" ? source?.input_tokens : id === "ollama" ? source?.prompt_eval_count : source?.prompt_tokens);
+  const completion_tokens = count(id === "gemini" ? source?.candidatesTokenCount : id === "anthropic" ? source?.output_tokens : id === "ollama" ? source?.eval_count : source?.completion_tokens);
+  const label = (value: unknown) => typeof value === "string" && value.trim() ? value.trim().slice(0, 200) : null;
+  return {
+    usage: prompt_tokens === undefined && completion_tokens === undefined ? null : { ...(prompt_tokens !== undefined ? { prompt_tokens } : {}), ...(completion_tokens !== undefined ? { completion_tokens } : {}) },
+    requestId: label(headers?.get("x-request-id")) ?? label(headers?.get("request-id")) ?? label(payload.id) ?? label(payload.responseId),
+    finishReason: label(id === "gemini" ? payload.candidates?.[0]?.finishReason : id === "anthropic" ? payload.stop_reason : id === "ollama" ? payload.done_reason : payload.choices?.[0]?.finish_reason),
+  };
+}
+
 type OtherProvider = Exclude<ProviderName, "grok">;
 type History = { role: "user" | "assistant"; content: string };
 const KEYS: Record<OtherProvider, string> = {
@@ -71,7 +92,7 @@ export async function callConfiguredProvider(input: {
   history?: History[];
   signal?: AbortSignal;
   fetch: FetchLike;
-}): Promise<{ ok: boolean; text: string; error: string; model?: string; httpStatus?: number; retryAfter?: string }> {
+}): Promise<ProviderReceipt & { ok: boolean; text: string; error: string; model?: string; httpStatus?: number; retryAfter?: string }> {
   if (!input.key) return { ok: false, text: "", error: "No " + input.id + " key is configured. Nothing was sent." };
   const prompt = input.prompt.trim();
   if (!prompt) return { ok: false, text: "", error: "Write a message first." };
@@ -91,7 +112,7 @@ export async function callConfiguredProvider(input: {
     openai: {
       url: "https://api.openai.com/v1/chat/completions",
       init: { headers: { authorization: "Bearer " + input.key, "content-type": "application/json" },
-        body: JSON.stringify({ model: models.openai, messages: completionMessages }) },
+        body: JSON.stringify({ model: models.openai, messages: completionMessages, max_completion_tokens: 1024 }) },
     },
     anthropic: {
       url: "https://api.anthropic.com/v1/messages",
@@ -102,13 +123,14 @@ export async function callConfiguredProvider(input: {
       url: "https://generativelanguage.googleapis.com/v1beta/models/" + models.gemini + ":generateContent",
       init: { headers: { "content-type": "application/json", "x-goog-api-key": input.key }, body: JSON.stringify({
         ...(systemPrompt ? { systemInstruction: { parts: [{ text: systemPrompt }] } } : {}),
+        generationConfig: { maxOutputTokens: 1024 },
         contents: messages.map((message) => ({ role: message.role === "assistant" ? "model" : "user", parts: [{ text: message.content }] })),
       }) },
     },
     openrouter: {
       url: "https://openrouter.ai/api/v1/chat/completions",
       init: { headers: { authorization: "Bearer " + input.key, "content-type": "application/json" },
-        body: JSON.stringify({ model: models.openrouter, messages: completionMessages, provider: OPENROUTER_FREE_ROUTING }) },
+        body: JSON.stringify({ model: models.openrouter, messages: completionMessages, max_tokens: 1024, provider: OPENROUTER_FREE_ROUTING }) },
     },
   };
   const target = endpoints[input.id];
@@ -130,7 +152,7 @@ export async function callConfiguredProvider(input: {
     if (raw.length > 500_000) return { ok: false, text: "", error: input.id + " returned a response larger than the supported limit." };
     const payload = JSON.parse(raw);
     const parsed = payload && typeof payload === "object" ? extractAssistantText(input.id, payload) : "";
-    return parsed ? { ok: true, text: parsed, model: reportedModel(input.id === "gemini" ? payload.modelVersion : payload.model), error: "" } :
+    return parsed ? { ok: true, text: parsed, model: reportedModel(input.id === "gemini" ? payload.modelVersion : payload.model), error: "", ...normalizeProviderReceipt(input.id, payload, response.headers) } :
       { ok: false, text: "", error: input.id + " returned no assistant text or an unsupported response format." };
   } catch {
     return { ok: false, text: "", error: input.id + " returned an unreadable response." };
@@ -153,7 +175,7 @@ export async function routeSelectedModel(input: {
   history?: History[];
   signal?: AbortSignal;
   fetch: FetchLike;
-}): Promise<{ ok: boolean; text: string; error: string; model: string; requestedModel?: string; httpStatus?: number; retryAfter?: string }> {
+}): Promise<ProviderReceipt & { ok: boolean; text: string; error: string; model: string; requestedModel?: string; httpStatus?: number; retryAfter?: string }> {
   const prompt = input.prompt.trim();
   if (!prompt) return { ok: false, text: "", error: "Write a message first. Nothing was sent.", model: input.id };
   if (input.id === "nemotron" || input.id === "openrouter") {
@@ -177,15 +199,15 @@ export async function routeSelectedModel(input: {
     if (!url) return { ok: false, text: "", error: "Local model is selected, but no local runner is reachable. Nothing was sent and Grok was not substituted.", model: "ollama" };
     let response: Awaited<ReturnType<FetchLike>>;
     try {
-      response = await input.fetch(url, { method: "POST", signal: input.signal, headers: { "content-type": "application/json" }, body: JSON.stringify({ model: input.env.OLLAMA_MODEL || "local", prompt, ...(input.systemPrompt ? { system: input.systemPrompt } : {}) }) });
+      response = await input.fetch(url, { method: "POST", signal: input.signal, headers: { "content-type": "application/json" }, body: JSON.stringify({ model: input.env.OLLAMA_MODEL || "local", prompt, options: { num_predict: 1024 }, ...(input.systemPrompt ? { system: input.systemPrompt } : {}) }) });
     } catch {
       return { ok: false, text: "", error: "Local model runner could not be reached. Nothing was substituted.", model: "ollama" };
     }
     if (!response.ok) return { ok: false, text: "", error: "Local model runner returned HTTP " + response.status + ". Nothing was substituted.", model: "ollama" };
     try {
-      const json = JSON.parse(await response.text()) as { text?: unknown; model?: unknown };
+      const json = JSON.parse(await response.text()) as Record<string, unknown>;
       const text = typeof json.text === "string" ? json.text.trim() : "";
-      return text ? { ok: true, text, error: "", model: reportedModel(json.model) } : { ok: false, text: "", error: "Local model runner returned no text. Nothing was substituted.", model: "ollama" };
+      return text ? { ok: true, text, error: "", model: reportedModel(json.model), requestedModel: input.env.OLLAMA_MODEL || "local", ...normalizeProviderReceipt("ollama", json, response.headers) } : { ok: false, text: "", error: "Local model runner returned no text. Nothing was substituted.", model: "ollama" };
     } catch {
       return { ok: false, text: "", error: "Local model runner returned an unreadable response.", model: "ollama" };
     }

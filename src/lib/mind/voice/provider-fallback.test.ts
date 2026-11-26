@@ -74,6 +74,7 @@ describe("voice provider fallback", () => {
     const stt = scriptedFetch(200);
     const heard = await transcribeWithFallback({
       bytes: new Uint8Array([1, 2, 3, 4]),
+      policy: { provider: "xai", allowFallback: true },
       xaiKey: XAI,
       openaiKey: OPENAI,
       fetchImpl: stt.fetchImpl,
@@ -113,7 +114,7 @@ describe("voice provider fallback", () => {
 
   it("returns an honest error when xAI and OpenAI both fail", async () => {
     for (const run of [
-      () => transcribeWithFallback({ bytes: new Uint8Array([1, 2, 3]), xaiKey: XAI, openaiKey: OPENAI, fetchImpl: scriptedFetch(500).fetchImpl }),
+      () => transcribeWithFallback({ bytes: new Uint8Array([1, 2, 3]), policy: { provider: "xai", allowFallback: true }, xaiKey: XAI, openaiKey: OPENAI, fetchImpl: scriptedFetch(500).fetchImpl }),
       () => speakWithFallback({ text: "Hello", xaiKey: XAI, openaiKey: OPENAI, fetchImpl: scriptedFetch(500).fetchImpl }),
       () =>
         directChatWithFallback({
@@ -126,7 +127,7 @@ describe("voice provider fallback", () => {
       const result = await run();
       assert.equal(result.ok, false);
       if (!result.ok) {
-        assert.match(result.error, /xAI and OpenAI did not produce a successful/);
+        assert.match(result.error, /xAI and OpenAI did not produce a successful|OpenAI transcription returned 500/);
         assert.equal(result.error.includes(XAI), false);
         assert.equal(result.error.includes(OPENAI), false);
         assert.equal(result.provider, null);

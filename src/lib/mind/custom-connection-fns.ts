@@ -36,11 +36,12 @@ export const saveCustomConnectionFn = createServerFn({ method: "POST" })
 
 export const callCustomConnectionFn = createServerFn({ method: "POST" })
   .middleware([authMiddleware])
-  .validator((input: { id?: string; operation?: string; args?: Record<string, unknown>; confirmed?: boolean }) => ({
+  .validator((input: { id?: string; operation?: string; args?: Record<string, unknown>; confirmed?: boolean; expectedRevision?: string }) => ({
     id: typeof input.id === "string" ? input.id.slice(0, 80) : "",
     operation: typeof input.operation === "string" ? input.operation.slice(0, 80) : "",
     args: input.args && typeof input.args === "object" && !Array.isArray(input.args) ? input.args : {},
     confirmed: input.confirmed === true,
+    expectedRevision: typeof input.expectedRevision === "string" && /^[a-f0-9]{64}$/.test(input.expectedRevision) ? input.expectedRevision : "",
   }))
   .handler(async ({ data, context }) => {
     const { haltIsOn } = await import("./halt.server");
@@ -50,6 +51,7 @@ export const callCustomConnectionFn = createServerFn({ method: "POST" })
     const { databaseConfigured } = await import("./mcp/registry-store");
     const { getSql } = await import("@/lib/db");
     const db = databaseConfigured() ? await getSql() : null;
+    if (!data.expectedRevision) return { ok: false as const, status: "incompatible" as const, text: "Reload the connection and review the call again. Nothing was called.", connection: null, transport: null, rpc: null };
     const { callCustomConnection } = await import("./custom-connection");
-    return callCustomConnection({ db, userId: context.userId, ...data });
+    return callCustomConnection({ db, userId: context.userId, ...data, isHalted: haltIsOn });
   });

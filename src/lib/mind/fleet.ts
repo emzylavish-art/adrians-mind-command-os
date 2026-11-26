@@ -28,7 +28,8 @@ export type RunState =
   | "paused"
   | "completed"
   | "failed"
-  | "canceled";
+  | "canceled"
+  | "cancel_requested";
 
 export type AgentDefinition = {
   id: string;
@@ -61,6 +62,8 @@ export type DeploymentRecord = {
   error: string;
 };
 
+export type RunDefinition = Pick<AgentDefinition, "version" | "tools" | "projectId" | "memory" | "approval" | "maxSteps">;
+export type RunCompletion = { execution: "finished" | "budget_exhausted" | "no_results"; objective: "unverified"; evidence: string[] };
 export type AgentRun = {
   id: string;
   agentId: string;
@@ -74,6 +77,10 @@ export type AgentRun = {
   leaseUntil: string | null;
   approvedActions: string[];
   plan: PlanStep[];
+  definition?: RunDefinition;
+  completion?: RunCompletion;
+  executionRuntime?: "browser-local" | "scheduled-local" | "server-local";
+  cancellation?: { requestedAt: string; acknowledgedAt: string | null; scope: "local-worker" };
   result: string;
   error: string;
   createdAt: string;
@@ -114,6 +121,9 @@ export type ScheduleJob = {
   instruction?: string;
   lastAttemptAt?: string;
   lastQueuedRunId?: string;
+  overlapPolicy?: "queue" | "skip" | "parallel";
+  maxParallel?: number;
+  occurrences?: { runId: string; scheduledAt: string; state: RunState; updatedAt: string }[];
   enabled: boolean;
   lastError: string;
   timeZone: string;
@@ -206,6 +216,7 @@ const NEXT_STATE: Record<RunState, readonly RunState[]> = {
   completed: [],
   failed: [],
   canceled: [],
+  cancel_requested: ["canceled", "failed"],
 };
 
 export function canTransition(from: RunState, to: RunState): boolean {
@@ -322,7 +333,7 @@ export function readFleet(input: unknown): FleetShape {
   if (Array.isArray(input.runs)) {
     for (const row of input.runs) {
       if (!isRecord(row) || typeof row.id !== "string" || typeof row.agentId !== "string") continue;
-      const state = typeof row.state === "string" && ["queued", "running", "waiting_approval", "waiting_external", "paused", "completed", "failed", "canceled"].includes(row.state)
+      const state = typeof row.state === "string" && ["queued", "running", "waiting_approval", "waiting_external", "paused", "completed", "failed", "canceled", "cancel_requested"].includes(row.state)
         ? (row.state as RunState)
         : "failed";
       fleet.runs.push({
@@ -338,6 +349,10 @@ export function readFleet(input: unknown): FleetShape {
         leaseUntil: typeof row.leaseUntil === "string" ? row.leaseUntil : null,
         approvedActions: Array.isArray(row.approvedActions) ? row.approvedActions.filter((item): item is string => typeof item === "string").slice(0, 12) : [],
         plan: readPlan(row.plan),
+        definition: readRunDefinition(row.definition),
+        completion: readCompletion(row.completion),
+        executionRuntime: row.executionRuntime === "scheduled-local" || row.executionRuntime === "server-local" ? row.executionRuntime : "browser-local",
+        cancellation: isRecord(row.cancellation) && typeof row.cancellation.requestedAt === "string" ? { requestedAt: row.cancellation.requestedAt, acknowledgedAt: typeof row.cancellation.acknowledgedAt === "string" ? row.cancellation.acknowledgedAt : null, scope: "local-worker" } : undefined,
         result: typeof row.result === "string" ? row.result.slice(0, 4000) : "",
         error: typeof row.error === "string" ? row.error.slice(0, 500) : "",
         createdAt: typeof row.createdAt === "string" ? row.createdAt : stamp(),
@@ -394,6 +409,9 @@ export function readFleet(input: unknown): FleetShape {
         chatId: typeof row.chatId === "string" ? row.chatId : undefined,
         instruction: typeof row.instruction === "string" ? row.instruction.slice(0, 2000) : undefined,
         lastQueuedRunId: typeof row.lastQueuedRunId === "string" ? row.lastQueuedRunId : undefined,
+        overlapPolicy: row.overlapPolicy === "parallel" || row.overlapPolicy === "skip" ? row.overlapPolicy : "queue",
+        maxParallel: typeof row.maxParallel === "number" ? Math.min(4, Math.max(1, Math.floor(row.maxParallel))) : 2,
+        occurrences: readOccurrences(row.occurrences),
         lastAttemptAt: typeof row.lastAttemptAt === "string" ? row.lastAttemptAt : undefined,
         lastRunAt: typeof row.lastRunAt === "string" ? row.lastRunAt : null,
         enabled: row.enabled !== false,
@@ -433,6 +451,24 @@ export function readFleet(input: unknown): FleetShape {
   fleet.mailboxes = fleet.mailboxes.slice(0, 500);
   fleet.runEvents = fleet.runEvents.slice(0, 400);
   return fleet;
+}
+
+function readRunDefinition(value: unknown): RunDefinition | undefined {
+  if (!isRecord(value) || !Number.isInteger(value.version) || !Array.isArray(value.tools)) return undefined;
+  return { version: value.version as number, tools: toolList(value.tools), projectId: typeof value.projectId === "string" ? value.projectId : null,
+    memory: value.memory === "on" ? "on" : "off", approval: value.approval === "automatic" ? "automatic" : "ask", maxSteps: typeof value.maxSteps === "number" ? Math.max(1, Math.min(20, Math.floor(value.maxSteps))) : 4 };
+}
+function readCompletion(value: unknown): RunCompletion | undefined {
+  if (!isRecord(value) || !["finished", "budget_exhausted", "no_results"].includes(String(value.execution))) return undefined;
+  return { execution: value.execution as RunCompletion["execution"], objective: "unverified", evidence: Array.isArray(value.evidence) ? value.evidence.filter((v): v is string => typeof v === "string").slice(0, 20) : [] };
+}
+function readOccurrences(value: unknown): NonNullable<ScheduleJob["occurrences"]> {
+  if (!Array.isArray(value)) return [];
+  return value.flatMap((row) => isRecord(row) && typeof row.runId === "string" && typeof row.scheduledAt === "string" && typeof row.updatedAt === "string" && typeof row.state === "string" && row.state in NEXT_STATE
+    ? [{ runId: row.runId, scheduledAt: row.scheduledAt, updatedAt: row.updatedAt, state: row.state as RunState }] : []).slice(-100);
+}
+function snapshotDefinition(agent: AgentDefinition): RunDefinition {
+  return { version: agent.version, tools: [...agent.tools], projectId: agent.projectId, memory: agent.memory, approval: agent.approval, maxSteps: agent.maxSteps };
 }
 
 function readPlan(value: unknown): PlanStep[] {
@@ -649,6 +685,8 @@ export function enqueueRun(ws: Workspace, agentId: string, goal: string, now?: s
     leaseUntil: null,
     approvedActions: [],
     plan: buildTaskPlan(text, agent.tools),
+    definition: snapshotDefinition(agent),
+    executionRuntime: runId.startsWith("scheduled:") ? "scheduled-local" : "browser-local",
     result: "",
     error: "",
     createdAt: at,
@@ -681,7 +719,7 @@ export function cancelRun(ws: Workspace, runId: string, now?: string): Workspace
   const runs = fleet.runs.map((run) => {
     if ((run.id !== runId && run.parentId !== runId) || !canTransition(run.state, "canceled")) return run;
     event(fleet, run.id, at, "canceled", "Stopped. Unfinished work was not marked complete.");
-    return { ...run, state: "canceled" as const, error: "Stopped.", updatedAt: at, leaseUntil: null };
+    return { ...run, state: "canceled" as const, error: "Local execution stopped. Completed actions were retained.", cancellation: { requestedAt: at, acknowledgedAt: at, scope: "local-worker" as const }, updatedAt: at, leaseUntil: null };
   });
   return withFleet(ws, { ...fleet, runs });
 }
@@ -698,6 +736,7 @@ export function haltFleet(ws: Workspace, now?: string): Workspace {
 }
 
 export type TickEnv = {
+  runtime?: AgentRun["executionRuntime"];
   now: string;
   workerId: string;
   browser?: (url: string) => { ok: true; title: string; excerpt: string } | { ok: false; error: string };
@@ -735,12 +774,24 @@ export function tickFleet(ws: Workspace, env: TickEnv): Workspace {
       event(fleet, run.id, at, "failed", reason);
       return finish(run, "failed", at, reason);
     }
-    const claimed = { ...run, state: "running" as const, workerId: env.workerId, leaseUntil: new Date(Date.parse(at) + 30_000).toISOString(), updatedAt: at };
-    const tool = agent.tools[claimed.step];
+    const claimed = { ...run, executionRuntime: env.runtime ?? run.executionRuntime ?? "browser-local", state: "running" as const, workerId: env.workerId, leaseUntil: new Date(Date.parse(at) + 30_000).toISOString(), updatedAt: at };
+    if (run.state === "cancel_requested") return finish({ ...claimed, cancellation: { requestedAt: run.cancellation?.requestedAt ?? at, acknowledgedAt: at, scope: "local-worker" } }, "canceled", at, "Local worker acknowledged cancellation.");
+    const definition = run.definition;
+    if (!definition) {
+      event(fleet, run.id, at, "plan_review_required", "This legacy run has no immutable agent snapshot. Start a reviewed new run.");
+      return finish(claimed, "paused", at, "Legacy execution plan requires review; nothing was dispatched.");
+    }
+    if (definition.projectId !== agent.projectId) return finish(claimed, "paused", at, "Project scope changed. Review this run before continuing.");
+    const tool = definition.tools[claimed.step];
+    if (tool && !agent.tools.includes(tool)) return finish(claimed, "paused", at, "The planned tool was removed. Nothing was substituted.");
     if (!tool || claimed.step >= claimed.maxSteps) {
       const lines = fleet.runEvents.filter((item) => item.runId === claimed.id && item.kind === "tool_result").map((item) => item.detail);
-      event(fleet, claimed.id, at, "completed", lines.length ? "Finished from tool results." : "Finished with no tool results.");
-      return finish({ ...claimed, result: claimed.result || lines.join("\n").slice(0, 4000) || "Finished with no tool results." }, "completed", at);
+      const execution = tool && claimed.step >= claimed.maxSteps ? "budget_exhausted" : lines.length || claimed.result ? "finished" : "no_results";
+      const completion: RunCompletion = { execution, objective: "unverified", evidence: lines.slice(0, 20) };
+      const detail = execution === "budget_exhausted" ? "Step budget exhausted; objective remains unverified." : execution === "no_results" ? "No tool results; objective incomplete." : "Execution sequence finished; objective has not been independently verified.";
+      const state = execution === "finished" ? "completed" : "failed";
+      event(fleet, claimed.id, at, state, detail);
+      return finish({ ...claimed, completion, result: claimed.result || lines.join("\n").slice(0, 4000) }, state, at, state === "failed" ? detail : "");
     }
     if (tool === "delegate") {
       if (claimed.depth >= 1) {
@@ -775,7 +826,8 @@ export function tickFleet(ws: Workspace, env: TickEnv): Workspace {
             createdAt: at,
             updatedAt: at,
             approvedActions: [],
-            plan: buildTaskPlan(part, agent.tools),
+            plan: buildTaskPlan(part, definition.tools),
+            definition: { ...definition, tools: [...definition.tools] },
           };
           extra.push(child);
           event(fleet, child.id, at, "task_created", "Delegated from the parent run.");
@@ -800,7 +852,7 @@ export function tickFleet(ws: Workspace, env: TickEnv): Workspace {
         ...ws,
         projects: agent.projectId ? ws.projects.filter((project) => project.id === agent.projectId) : ws.projects,
         chats: agent.projectId ? ws.chats.filter((chat) => chat.projectId === agent.projectId) : ws.chats,
-        memories: agent.memory === "on" ? ws.memories.filter((note) => note.scope === "global" || (note.scope === "project" && !!agent.projectId && note.projectId === agent.projectId)) : [],
+        memories: definition.memory === "on" && agent.memory === "on" ? ws.memories.filter((note) => note.scope === "global" || (note.scope === "project" && !!agent.projectId && note.projectId === agent.projectId)) : [],
       };
       const executed = runLocalPlan(scope, [{ id: local, tool: local, query: claimed.goal }], { autonomy: "automatic", halted: false, tokens: {} });
       const detail = executed.lines.join(" ");
@@ -810,7 +862,7 @@ export function tickFleet(ws: Workspace, env: TickEnv): Workspace {
     }
     if (tool === "browser" || tool === "gmail_send") {
       const decision = decide({
-        autonomy: agent.approval,
+        autonomy: definition.approval === "ask" || agent.approval === "ask" ? "ask" : "automatic",
         kind: "publish",
         halted: false,
         approvalToken: claimed.approvedActions.includes(tool) ? `approve:${claimed.id}:${tool}` : null,
@@ -872,6 +924,11 @@ export function tickFleet(ws: Workspace, env: TickEnv): Workspace {
     return finish(claimed, "waiting_external", at, error);
   });
   const schedules = fleet.schedules.map((job) => {
+    const occurrences = (job.occurrences ?? []).map((occurrence) => {
+      const current = runs.find((item) => item.id === occurrence.runId);
+      return current ? { ...occurrence, state: current.state, updatedAt: current.updatedAt } : occurrence;
+    });
+    job = { ...job, occurrences };
     if (!job.lastQueuedRunId) return job;
     const run = runs.find((item) => item.id === job.lastQueuedRunId);
     if (!run || !TERMINAL.has(run.state)) return job;
@@ -892,13 +949,21 @@ export function runDueSchedules(ws: Workspace, now: string): Workspace {
     }
     const agent = next.agents.find((item) => item.id === job.agentId && !item.archived);
     if (!agent) return { ...job, enabled: false, lastAttemptAt: now, lastError: "That agent is not on this device. Nothing was queued." };
+    const open = next.runs.filter((run) => run.id.startsWith("scheduled:" + job.id + ":") && !TERMINAL.has(run.state));
+    const policy = job.overlapPolicy ?? "queue";
+    if (open.length && policy === "queue") return { ...job, lastAttemptAt: now, lastError: "Previous occurrence is still active; this occurrence is waiting in order." };
+    if (open.length && policy === "skip") {
+      const clock = job.clockHour == null ? null : nextClock(now, job.timeZone || "UTC", job.clockHour, job.clockMinute ?? 0, job.nextRunAt);
+      return { ...job, lastAttemptAt: now, lastError: "Skipped overlapping occurrence by policy.", nextRunAt: clock?.at ?? new Date(Date.parse(now) + job.intervalMinutes * 60_000).toISOString() };
+    }
+    if (policy === "parallel" && open.length >= (job.maxParallel ?? 2)) return { ...job, lastAttemptAt: now, lastError: "Parallel occurrence limit reached; waiting for capacity." };
     const occurrenceId = "scheduled:" + job.id + ":" + job.nextRunAt;
     const existing = next.runs.find((run) => run.id === occurrenceId);
     const queued = existing ? { ok: true as const, ws: next, run: existing } : enqueueRun(next, agent.id, job.instruction || job.name, now, null, 0, occurrenceId);
     if (!queued.ok) return { ...job, enabled: false, lastAttemptAt: now, lastError: queued.error };
     next = queued.ws;
     const clock = job.clockHour == null ? null : nextClock(now, job.timeZone || "UTC", job.clockHour, job.clockMinute ?? 0, job.nextRunAt);
-    return { ...job, lastAttemptAt: now, lastQueuedRunId: queued.run.id, lastError: "", nextRunAt: clock?.at ?? new Date(Date.parse(now) + job.intervalMinutes * 60_000).toISOString() };
+    return { ...job, lastAttemptAt: now, lastQueuedRunId: queued.run.id, occurrences: [...(job.occurrences ?? []).filter((item) => item.runId !== queued.run.id), { runId: queued.run.id, scheduledAt: job.nextRunAt, state: queued.run.state, updatedAt: now }].slice(-100), lastError: "", nextRunAt: clock?.at ?? new Date(Date.parse(now) + job.intervalMinutes * 60_000).toISOString() };
   });
   return { ...next, schedules: jobs };
 }

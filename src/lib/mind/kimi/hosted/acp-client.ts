@@ -5,7 +5,7 @@ import { dirname, join, relative, resolve } from "node:path";
 import { resolveXaiInferenceApiKey } from "../../media/xai-key.ts";
 import { installCodingExtensions } from "./coding-extensions.server.ts";
 import { codingSearchUrl } from "./coding-search-bridge.server.ts";
-import { ADRIAN_OS_BUILDER_ORDER } from "../../adrian-os-skill.ts";
+import { builderInstructions, type BuilderInstructionReceipt } from "./builder-instructions.ts";
 import { localDataPath } from "../../../local-data.ts";
 
 export type KimiProbe = {
@@ -18,6 +18,7 @@ export type KimiProbe = {
   forkAdvertised?: boolean;
   error?: string;
   runtimeVerified: false;
+  instructionReceipt?: BuilderInstructionReceipt;
 };
 
 type JsonObject = Record<string, unknown>;
@@ -117,10 +118,11 @@ export async function probeKimiAcp(command = adrianBuildCommand(), cwd = process
 }
 
 export async function runHostedPrompt(prompt: string, command = adrianBuildCommand(), cwd = process.cwd()): Promise<KimiProbe & { output?: string }> {
-  return await exchange(command, cwd, [prompt]);
+  const instructions = builderInstructions(prompt);
+  return await exchange(command, cwd, [instructions.text], instructions.receipt);
 }
 
-async function exchange(command: string, cwd: string, prompts: string[]): Promise<KimiProbe & { output?: string }> {
+async function exchange(command: string, cwd: string, prompts: string[], instructionReceipt?: BuilderInstructionReceipt): Promise<KimiProbe & { output?: string }> {
   if (!command.trim()) return { status: "not_configured", command, error: "Kimi command is not configured.", runtimeVerified: false };
   return await new Promise((resolve) => {
     const script = command.endsWith(".mjs") || command.endsWith(".js");
@@ -175,7 +177,10 @@ async function exchange(command: string, cwd: string, prompts: string[]): Promis
           } else if (prompts.length && isObject(message.result)) {
             const sessionId = typeof message.result.sessionId === "string" ? message.result.sessionId : "";
             if (!sessionId) finish({ ...seen, status: "failed", error: "Kimi created a session without an id." });
-            else child.stdin.write(`${JSON.stringify({ jsonrpc: "2.0", id: 3, method: "session/prompt", params: { sessionId, prompt: [{ type: "text", text: prompts[0] }] } })}\n`);
+            else {
+              child.stdin.write(`${JSON.stringify({ jsonrpc: "2.0", id: 3, method: "session/prompt", params: { sessionId, prompt: [{ type: "text", text: prompts[0] }] } })}\n`);
+              seen.instructionReceipt = instructionReceipt;
+            }
           } else {
             finish({ ...seen, status: "session_created", error: undefined });
           }
@@ -215,6 +220,7 @@ export type CodingTurn = {
   mcpServers: number;
   clientCalls?: string[];
   processNote?: string;
+  instructionReceipt?: BuilderInstructionReceipt;
 };
 
 type LiveHandle = {
@@ -424,11 +430,14 @@ export async function runCodingTurn(input: { prompt: string; cwd: string; mode?:
   const run = async (): Promise<CodingTurn> => {
     const { handle, sessionId, reused } = opened;
     handle.output = "";
-    const prompted = await sendLive(handle, "session/prompt", { sessionId, prompt: [{ type: "text", text: `${ADRIAN_OS_BUILDER_ORDER}\n\n${input.prompt}` }] });
-    if (handle.closed) return { ...empty, sessionId, error: "The coding process closed before the reply. Nothing further was assumed." };
+    const instructions = builderInstructions(input.prompt);
+    if (handle.closed) return { ...empty, sessionId, error: "The coding process closed before dispatch." };
+    const prompted = await sendLive(handle, "session/prompt", { sessionId, prompt: [{ type: "text", text: instructions.text }] });
+    const sent = { ...empty, instructionReceipt: instructions.receipt };
+    if (handle.closed) return { ...sent, sessionId, error: "The coding process closed before the reply. Nothing further was assumed." };
     if (isObject(prompted.error)) {
       const text = typeof prompted.error.message === "string" ? prompted.error.message : "The coding task was not accepted.";
-      return { ...empty, sessionId, pid: handle.pid, processAlive: handle.child.exitCode == null, reused, error: publicError(text) };
+      return { ...sent, sessionId, pid: handle.pid, processAlive: handle.child.exitCode == null, reused, error: publicError(text) };
     }
     const text = textFrom(prompted.result).trim();
     if (text) handle.output = `${handle.output}${text}\n`.slice(0, 4000);
@@ -439,12 +448,12 @@ export async function runCodingTurn(input: { prompt: string; cwd: string; mode?:
       if (forkedSessionId) liveSessions.set(forkedSessionId, handle);
       if (!forkedSessionId) {
         const message = isObject(forked.error) && typeof forked.error.message === "string" ? forked.error.message : "The session was not forked.";
-        return { ...empty, sessionId, pid: handle.pid, processAlive: true, reused, error: publicError(message) };
+        return { ...sent, sessionId, pid: handle.pid, processAlive: true, reused, error: publicError(message) };
       }
     }
     touchLive(handle);
     return {
-      ...empty,
+      ...sent,
       ok: true,
       sessionId,
       resumed: Boolean(input.resumeSessionId),

@@ -4,6 +4,7 @@
  * model.generate is refused. Gmail OAuth is not started here.
  */
 import { randomUUID } from "node:crypto";
+import { connectionRevision, toolDefinitionFingerprint } from "./mcp/approval-snapshot.ts";
 import {
   isLocalHostname,
   isPrivateAddressLiteral,
@@ -28,11 +29,14 @@ export type PublicOperation = {
   description: string;
   inputSchema: OperationSchema | null;
   compatible: boolean;
+  /** Full advertised definition, including constraints not represented in the form. */
+  definitionFingerprint?: string;
 };
 
 export type ConnectionState = "unchecked" | "ready" | "unauthorized" | "missing_config" | "incompatible" | "failed";
 
 export type PublicConnection = {
+  revision?: string;
   enabled?: boolean;
   id: string;
   label: string;
@@ -69,8 +73,10 @@ function toPublic(server: RegistryRecord): PublicConnection | null {
   if (!server.url || server.kind === "builtin" || server.kind === "command") return null;
   const kind = server.protocol === "http" ? "http" : "mcp";
   const operations = Array.isArray(server.operations) ? server.operations as PublicOperation[] : [];
+  const needsDiscovery = kind === "mcp" && operations.some((operation) => operation.compatible && !operation.definitionFingerprint);
   return {
     enabled: server.enabled,
+    revision: connectionRevision(server),
     id: server.id,
     label: server.label,
     kind,
@@ -78,9 +84,9 @@ function toPublic(server: RegistryRecord): PublicConnection | null {
     method: kind === "http" ? (server.httpMethod === "POST" ? "POST" : "GET") : "MCP",
     auth: server.token || server.tokenEnc ? "bearer" : "none",
     hasToken: Boolean(server.token || server.tokenEnc),
-    state: (server.state as ConnectionState) || "unchecked",
+    state: needsDiscovery ? "unchecked" : (server.state as ConnectionState) || "unchecked",
     operations,
-    error: server.secretUnreadable ? "The saved credential cannot be decrypted. Nothing was called." : server.error ?? "",
+    error: server.secretUnreadable ? "The saved credential cannot be decrypted. Nothing was called." : needsDiscovery ? "Refresh tools to review the current full definitions before calling this connection." : server.error ?? "",
   };
 }
 
@@ -242,6 +248,7 @@ function operationFromTool(tool: { name?: unknown; description?: unknown; inputS
   const schema = readOperationSchema(tool.inputSchema);
   return {
     name: tool.name,
+    definitionFingerprint: toolDefinitionFingerprint(tool),
     description: typeof tool.description === "string" ? tool.description.slice(0, 180) : "",
     inputSchema: schema,
     compatible: Boolean(schema),
@@ -365,6 +372,8 @@ export async function callCustomConnection(input: {
   operation: string;
   args?: Record<string, unknown>;
   confirmed?: boolean;
+  expectedRevision?: string;
+  isHalted?: (userId: string) => boolean | Promise<boolean>;
   fetch?: FetchLike;
   lookup?: DnsLookupFn;
   timeoutMs?: number;
@@ -376,6 +385,14 @@ export async function callCustomConnection(input: {
   const connection = row ? toPublic(row) : null;
   if (!row || !connection) return { ok: false, status: "error", text: "That connection is not saved. Nothing was called.", connection: null, transport: null, rpc: null };
   if (!row.enabled) return { ok: false, status: "error", text: "This connection is disabled.", connection, transport: null, rpc: null };
+  const revision = connectionRevision(row);
+  const stale = () => ({ ok: false, status: "incompatible" as const, text: "The connection or tool definition changed. Review the current connection and approve again. Nothing was called.", connection, transport: null, rpc: null });
+  if (input.expectedRevision && input.expectedRevision !== revision) return stale();
+  async function stillReviewed() {
+    const latest = (await loadRegistry(input.userId, input.db)).servers.find((item) => item.id === input.id);
+    return Boolean(latest?.enabled && connectionRevision(latest) === revision && !(input.isHalted && await input.isHalted(input.userId)));
+  }
+
   if (input.operation.toLowerCase() === "model.generate") {
     return { ok: false, status: "incompatible", text: "model.generate is not a connectivity check. Nothing was called.", connection, transport: null, rpc: null };
   }
@@ -419,6 +436,7 @@ export async function callCustomConnection(input: {
     return { ok: true, status: "ok", text: sent.text.slice(0, 8000), connection, transport: { ok: true, status: sent.status, ms: Date.now() - started }, rpc: null };
   }
   if (connection.kind === "http") {
+    if (!await stillReviewed()) return stale();
     const sent = await send(row.url ?? "", { method: "POST", headers: { ...headers, "content-type": "application/json" }, body: JSON.stringify(checked.args) }, input, token);
     if (!sent.ok) return reportTransportFailure(sent);
     await recordAccess("ready", "");
@@ -443,6 +461,32 @@ export async function callCustomConnection(input: {
     }, input, token);
     if (!ready.ok) return reportTransportFailure(ready);
   }
+  // Recheck the advertised definition in this exact session before a consequential call.
+  const cursors = new Set<string>();
+  let cursor: string | undefined;
+  let currentOperation: PublicOperation | null = null;
+  do {
+    const listed = await send(row.url ?? "", {
+      method: "POST", headers: { ...headers, "content-type": "application/json", accept: "application/json, text/event-stream", ...protocolHeaders },
+      body: JSON.stringify({ jsonrpc: "2.0", id: 10 + cursors.size, method: "tools/list", params: cursor ? { cursor } : {} }),
+    }, input, token);
+    if (!listed.ok) return reportTransportFailure(listed);
+    const catalogue = rpcEnvelope(listed.text).result as { tools?: Parameters<typeof operationFromTool>[0][]; nextCursor?: unknown } | undefined;
+    if (!Array.isArray(catalogue?.tools)) return stale();
+    for (const tool of catalogue.tools) {
+      const candidate = operationFromTool(tool);
+      if (candidate?.name === operation.name) {
+        if (currentOperation) return stale(); // ambiguous duplicate names are not executable
+        currentOperation = candidate;
+      }
+    }
+    cursor = typeof catalogue.nextCursor === "string" ? catalogue.nextCursor : undefined;
+    if (cursor && (cursors.has(cursor) || cursors.size >= 15)) return stale();
+    if (cursor) cursors.add(cursor);
+  } while (cursor);
+  // Legacy catalogues have no full-definition fingerprint and need rediscovery first.
+  if (!operation.definitionFingerprint || currentOperation?.definitionFingerprint !== operation.definitionFingerprint) return stale();
+  if (!await stillReviewed()) return stale();
   const called = await send(row.url ?? "", {
     method: "POST",
     headers: { ...headers, "content-type": "application/json", accept: "application/json, text/event-stream", ...protocolHeaders },

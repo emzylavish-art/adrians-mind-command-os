@@ -189,7 +189,7 @@ describe("H33 Notion connector failure banners", () => {
     assert.equal(notionFailureLogHref("11111111-2222-4333-8444-555555555555"), "#audit-11111111-2222-4333-8444-555555555555");
   });
 
-  it("Retry of a 404 re-executes notionCommand with the same text, confirmed, and pageId", () => {
+  it("Retry of a 404 preserves text and destination but requires fresh confirmation", () => {
     const params = snapshotNotionFailureParams({
       text: "Read the Notion page about roadmap",
       confirmed: true,
@@ -209,7 +209,7 @@ describe("H33 Notion connector failure banners", () => {
     });
     retry?.();
     retry?.();
-    assert.deepEqual(seen, [{ text: params.text, confirmed: true, pageId: "p1" }]);
+    assert.deepEqual(seen, [{ text: params.text, confirmed: false, pageId: "p1" }]);
     const html = renderToStaticMarkup(
       createElement(NotionFailureBanner, {
         failure: outcome.failure,

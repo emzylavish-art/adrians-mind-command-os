@@ -86,7 +86,7 @@ function oneLine(value: string): string {
 export function snapshotNotionFailureParams(params: NotionFailureParams): NotionFailureParams {
   return {
     text: params.text,
-    confirmed: params.confirmed === true,
+    confirmed: false,
     pageId: params.pageId ?? null,
     surface: params.surface,
   };

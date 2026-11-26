@@ -15,6 +15,12 @@ export type MediaBlobStore = {
 };
 
 export type ImageRef = {
+  assetId?: string;
+  parentAssetId?: string;
+  operationId?: string;
+  createdAt?: string;
+  editPrompt?: string;
+  preferred?: boolean;
   origin?: "attached" | "camera" | "generated" | "edited";
   dataUrl?: string;
   blobId?: string;
@@ -79,47 +85,45 @@ export function createIndexedDbBlobStore(name = MEDIA_BLOB_DB): MediaBlobStore {
   return {
     async put(id, dataUrl) {
       const db = await openDb(name);
-      await new Promise<void>((resolve, reject) => {
+      try { await new Promise<void>((resolve, reject) => {
         const tx = db.transaction(MEDIA_BLOB_STORE, "readwrite");
         tx.objectStore(MEDIA_BLOB_STORE).put(dataUrl, id);
         tx.oncomplete = () => resolve();
         tx.onerror = () => reject(tx.error ?? new Error("IndexedDB put failed."));
-      });
-      db.close();
+        tx.onabort = () => reject(tx.error ?? new Error("IndexedDB put aborted."));
+      }); } finally { db.close(); }
     },
     async get(id) {
       const db = await openDb(name);
-      const value = await new Promise<string | undefined>((resolve, reject) => {
+      try { return await new Promise<string | undefined>((resolve, reject) => {
         const tx = db.transaction(MEDIA_BLOB_STORE, "readonly");
         const req = tx.objectStore(MEDIA_BLOB_STORE).get(id);
         req.onsuccess = () => resolve(typeof req.result === "string" ? req.result : undefined);
         req.onerror = () => reject(req.error ?? new Error("IndexedDB get failed."));
-      });
-      db.close();
-      return value;
+        tx.onabort = () => reject(tx.error ?? new Error("IndexedDB get aborted."));
+      }); } finally { db.close(); }
     },
     async delete(id) {
       const db = await openDb(name);
-      await new Promise<void>((resolve, reject) => {
+      try { await new Promise<void>((resolve, reject) => {
         const tx = db.transaction(MEDIA_BLOB_STORE, "readwrite");
         tx.objectStore(MEDIA_BLOB_STORE).delete(id);
         tx.oncomplete = () => resolve();
         tx.onerror = () => reject(tx.error ?? new Error("IndexedDB delete failed."));
-      });
-      db.close();
+        tx.onabort = () => reject(tx.error ?? new Error("IndexedDB delete aborted."));
+      }); } finally { db.close(); }
     },
   };
 }
 
-/** New attachments live in the account database. Existing snapshots can still resolve legacy IDs. */
+/** Account blobs never fall back to the unowned legacy database. Legacy inline pixels still migrate normally. */
 export function accountImageStore(owner: string | null) {
   const name = MEDIA_BLOB_DB + ".owner." + encodeURIComponent(owner ?? "");
   const scoped = createIndexedDbBlobStore(name);
-  const legacy = createIndexedDbBlobStore();
   return {
     put: scoped.put,
     async get(id: string) {
-      return (await scoped.get(id)) ?? (await legacy.get(id));
+      return scoped.get(id);
     },
     async clear() {
       if (typeof indexedDB === "undefined") return;
@@ -150,10 +154,10 @@ export async function hydrateImageRefs(images: ImageRef[] | undefined, store: Me
           continue;
         }
         // Missing blob on reload — keep the ref so UI can show an honest placeholder.
-        out.push({ blobId: image.blobId, name: image.name, mime: image.mime, ...(image.origin ? { origin: image.origin } : {}) });
+        out.push({ ...image, dataUrl: undefined });
         continue;
       } catch {
-        out.push({ blobId: image.blobId, name: image.name, mime: image.mime, ...(image.origin ? { origin: image.origin } : {}) });
+        out.push({ ...image, dataUrl: undefined });
         continue;
       }
     }
@@ -174,10 +178,10 @@ export async function compactImageRefs(images: ImageRef[] | undefined, store: Me
     if (image.blobId && image.dataUrl && shouldOffloadDataUrl(image.dataUrl)) {
       try {
         await store.put(image.blobId, image.dataUrl);
-        out.push({ blobId: image.blobId, name: image.name, mime: image.mime, ...(image.origin ? { origin: image.origin } : {}) });
+        out.push({ ...image, dataUrl: undefined });
       } catch (error) {
         // Quota / private mode — keep inline rather than lose the image.
-        out.push({ dataUrl: image.dataUrl, blobId: image.blobId, name: image.name, mime: image.mime, ...(image.origin ? { origin: image.origin } : {}) });
+        out.push({ ...image });
         if (!isQuotaExceededError(error)) {
           /* still degraded */
         }
@@ -188,15 +192,15 @@ export async function compactImageRefs(images: ImageRef[] | undefined, store: Me
       const blobId = newMediaBlobId();
       try {
         await store.put(blobId, image.dataUrl!);
-        out.push({ blobId, name: image.name, mime: image.mime, ...(image.origin ? { origin: image.origin } : {}) });
+        out.push({ ...image, blobId, dataUrl: undefined });
       } catch {
-        out.push({ dataUrl: image.dataUrl, name: image.name, mime: image.mime, ...(image.origin ? { origin: image.origin } : {}) });
+        out.push({ ...image });
       }
       continue;
     }
     // Small / already-compact / legacy inline-only
-    if (image.dataUrl) out.push({ dataUrl: image.dataUrl, blobId: image.blobId, name: image.name, mime: image.mime, ...(image.origin ? { origin: image.origin } : {}) });
-    else if (image.blobId) out.push({ blobId: image.blobId, name: image.name, mime: image.mime, ...(image.origin ? { origin: image.origin } : {}) });
+    if (image.dataUrl) out.push({ ...image });
+    else if (image.blobId) out.push({ ...image, dataUrl: undefined });
   }
   return out;
 }

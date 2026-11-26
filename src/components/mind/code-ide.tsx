@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { EditorState } from "@codemirror/state";
 import { EditorView, lineNumbers } from "@codemirror/view";
 import { javascript } from "@codemirror/lang-javascript";
@@ -8,6 +8,8 @@ import { css } from "@codemirror/lang-css";
 import { html } from "@codemirror/lang-html";
 import { python } from "@codemirror/lang-python";
 import { oneDark } from "@codemirror/theme-one-dark";
+import { inspectCodeBuffer, resolveKnownDependency, type CodeBufferSource } from "@/lib/mind/kimi/code-navigation";
+import "./code-ide-navigation.css";
 
 type IdeFile = { path: string; bytes: number };
 
@@ -58,11 +60,11 @@ function fileTree(files: IdeFile[]): TreeNode[] {
 
 function TreeRows(props: { nodes: TreeNode[]; depth: number; selected: string; onOpen: (path: string) => void }) {
   return (
-    <ul className="code-ide-tree" role="group">
+    <ul className="code-ide-tree">
       {props.nodes.map((node) => (
         <li key={`${node.file ? "f" : "d"}:${node.path}`}>
           {node.file ? (
-            <button type="button" role="treeitem" aria-selected={node.path === props.selected} className={node.path === props.selected ? "is-selected" : ""} style={{ paddingLeft: `${0.5 + props.depth * 0.75}rem` }} onClick={() => props.onOpen(node.path)}>
+            <button type="button" aria-current={node.path === props.selected ? "page" : undefined} className={node.path === props.selected ? "is-selected" : ""} style={{ paddingLeft: `${0.5 + props.depth * 0.75}rem` }} onClick={() => props.onOpen(node.path)}>
               {node.name}
             </button>
           ) : (
@@ -77,7 +79,7 @@ function TreeRows(props: { nodes: TreeNode[]; depth: number; selected: string; o
   );
 }
 
-function HighlightedEditor(props: { path: string; text: string; disabled: boolean; onChange: (value: string) => void }) {
+function HighlightedEditor(props: { path: string; text: string; disabled: boolean; onChange: (value: string) => void; jumpTo?: { from: number; to: number; request: number } }) {
   const host = useRef<HTMLDivElement>(null);
   const viewRef = useRef<EditorView | null>(null);
   const onChange = useRef(props.onChange);
@@ -119,10 +121,25 @@ function HighlightedEditor(props: { path: string; text: string; disabled: boolea
     editor.dispatch({ changes: { from: 0, to: shown.length, insert: props.text } });
   }, [props.text]);
 
+  useEffect(() => {
+    const editor = viewRef.current;
+    if (!editor || !props.jumpTo) return;
+    const from = Math.max(0, Math.min(props.jumpTo.from, editor.state.doc.length));
+    const to = Math.max(from, Math.min(props.jumpTo.to, editor.state.doc.length));
+    editor.dispatch({ selection: { anchor: from, head: to }, scrollIntoView: true });
+    editor.focus();
+  }, [props.jumpTo]);
+
   return <div ref={host} className="code-ide-editor" data-testid="code-ide-editor" />;
 }
 
 export function CodeIde(props: {
+  bufferSource?: CodeBufferSource;
+  relatedFiles?: IdeFile[];
+  onOpenRelated?: (path: string, source: CodeBufferSource) => void;
+  canDebug?: boolean;
+  onRename?: () => void;
+  onDelete?: () => void;
   files: IdeFile[];
   matches: string[];
   tabs: { id: string; path: string; workspace: string; cwd?: string }[];
@@ -144,6 +161,9 @@ export function CodeIde(props: {
   onCheck: () => void;
 }) {
   const tree = fileTree(props.files);
+  const outline = useMemo(() => inspectCodeBuffer({ path: props.selected, text: props.text, revision: props.bufferSource?.revision }), [props.selected, props.text, props.bufferSource?.revision]);
+  const [jump, setJump] = useState<{ id: string; bufferRevision: string; from: number; to: number; request: number }>();
+  const navigate = (from: number, to: number) => setJump((current) => ({ id: props.selectedId, bufferRevision: outline.bufferRevision, from, to, request: (current?.request ?? 0) + 1 }));
   const dirty = props.selected !== "" && props.dirty.includes(props.selectedId);
   const [completions, setCompletions] = useState<string[]>([]);
   const [debugText, setDebugText] = useState("");
@@ -189,25 +209,42 @@ export function CodeIde(props: {
         {props.matches.map((path) => <button key={path} type="button" className="code-ide-match" onClick={() => props.onOpenMatch(path)}>Match: {path}</button>)}
       </aside>
       <section>
-        <div className="code-ide-tabs" role="tablist" aria-label="Open files">
+        <nav className="code-ide-tabs" aria-label="Open files">
           {props.tabs.map(({ id, path, workspace, cwd }) => (
             <div key={id} className="code-ide-tab" title={`${workspace} ${cwd || ""} ${path}`}>
-              <button type="button" role="tab" aria-selected={id === props.selectedId} onClick={() => props.onSelectTab(id)}>
+              <button type="button" aria-pressed={id === props.selectedId} onClick={() => props.onSelectTab(id)}>
                 {path.split("/").at(-1)}{props.dirty.includes(id) ? " •" : ""}
               </button>
               <button type="button" aria-label={`Close ${path}`} onClick={() => props.onCloseTab(id)}>×</button>
             </div>
           ))}
           {!props.tabs.length ? <span className="code-ide-empty">No file open</span> : null}
-        </div>
+        </nav>
         {props.selected ? (
-          <HighlightedEditor key={props.selectedId} path={props.selected} text={props.text} disabled={props.busy} onChange={props.onChange} />
+          <HighlightedEditor key={props.selectedId} path={props.selected} text={props.text} disabled={props.busy} onChange={props.onChange} jumpTo={jump?.id === props.selectedId && jump.bufferRevision === outline.bufferRevision ? jump : undefined} />
         ) : (
           <p className="code-ide-empty">Select a file from the tree.</p>
         )}
+        {props.selected && <details className="code-ide-navigation">
+          <summary>Symbols and dependencies · current buffer</summary>
+          <p>{outline.detail}</p>
+          <p className="break-all">Workspace: {props.bufferSource?.workspace ?? "not recorded"}{props.bufferSource?.cwd ? ` · ${props.bufferSource.cwd}` : ""}. Reviewed file revision: {outline.savedRevision ?? "not recorded"}. {dirty ? "Showing unsaved draft syntax." : "Showing the last loaded buffer."}</p>
+          {outline.status === "parsed" && <>
+            <h4>Definitions ({outline.symbols.length})</h4>
+            {outline.symbols.length ? <ul>{outline.symbols.map((symbol) => <li key={`${symbol.kind}:${symbol.from}`}><button type="button" onClick={() => navigate(symbol.from, symbol.to)}>{symbol.name} · {symbol.kind}{symbol.exported ? " · exported" : ""} · line {symbol.line}</button></li>)}</ul> : <p>No supported declaration nodes were found.</p>}
+            <h4>Declared module relationships ({outline.dependencies.length})</h4>
+            <p>Opening is limited to matching files already loaded or listed for this buffer's workspace. Package aliases and runtime resolution require separate analysis.</p>
+            <ul>{outline.dependencies.map((dependency) => {
+              const resolved = resolveKnownDependency(props.selected, dependency, props.relatedFiles ?? []);
+              return <li key={`${dependency.kind}:${dependency.from}`}><button type="button" onClick={() => navigate(dependency.from, dependency.to)}>{dependency.specifier} · {dependency.kind} · line {dependency.line}</button>{resolved.status === "resolved" && props.bufferSource && props.onOpenRelated ? <button type="button" disabled={props.busy} onClick={() => props.onOpenRelated?.(resolved.path, props.bufferSource!)}>Open {resolved.path}</button> : <span>{resolved.status === "unavailable" ? resolved.reason : "The source workspace is unavailable."}</span>}</li>;
+            })}</ul>
+          </>}
+        </details>}
         <div className="code-ide-status">
           <button type="button" disabled={!props.selected || props.busy || !dirty} onClick={props.onSave}>{props.busy ? "Saving…" : "Save reviewed file"}</button>
           {props.selected && <button type="button" disabled={props.busy} onClick={props.onCheck}>Check disk copy</button>}
+          {props.onRename && <button type="button" disabled={!props.selected || props.busy || dirty} onClick={props.onRename}>Rename reviewed file</button>}
+          {props.onDelete && <button type="button" disabled={!props.selected || props.busy || dirty} onClick={props.onDelete}>Delete reviewed file</button>}
           <span>{props.selected ? `${props.selected} · ${props.text.split("\n").length} lines · ${dirty ? "Unsaved" : "Matches last read or verified save"}` : "No file selected"}</span>
         </div>
         <div className="code-ide-tools">
@@ -216,7 +253,7 @@ export function CodeIde(props: {
             Breakpoint line
             <input aria-label="Breakpoint line" type="number" min={1} value={breakLine} onChange={(event) => setBreakLine(Number(event.target.value) || 1)} />
           </label>
-          <button type="button" disabled={!props.selected || props.busy || dirty || props.tabs.find((tab) => tab.id === props.selectedId)?.workspace !== "hosted"} title="Debug runs the saved hosted file" onClick={() => void debug()}>Debug</button>
+          <button type="button" disabled={!props.canDebug || !props.selected || props.busy || dirty || props.tabs.find((tab) => tab.id === props.selectedId)?.workspace !== "hosted"} title="Debug runs the saved hosted file" onClick={() => void debug()}>Debug</button>
         </div>
         <div className="code-ide-results">
           {completions.length ? <ul data-testid="completions">{completions.map((name) => <li key={name}>{name}</li>)}</ul> : null}

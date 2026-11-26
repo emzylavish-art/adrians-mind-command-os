@@ -54,6 +54,7 @@ export function buildProviderChatRequest(
       headers: { ...modelDiscoveryHeaders(kind, key), "content-type": "application/json" },
       body: JSON.stringify({
         ...(systemText ? { systemInstruction: { parts: [{ text: systemText }] } } : {}),
+        generationConfig: { maxOutputTokens: 2048 },
         contents: conversational.map((m) => ({
           role: m.role === "assistant" ? "model" : "user",
           parts: [{ text: m.content }],
@@ -64,7 +65,7 @@ export function buildProviderChatRequest(
   return {
     path: "chat/completions",
     headers: { ...modelDiscoveryHeaders(kind, key), "content-type": "application/json" },
-    body: JSON.stringify({ model, messages, stream: false, ...(freeOpenRouter ? { provider: OPENROUTER_FREE_ROUTING } : {}) }),
+    body: JSON.stringify({ model, messages, max_tokens: 2048, stream: false, ...(freeOpenRouter ? { provider: OPENROUTER_FREE_ROUTING } : {}) }),
   };
 }
 

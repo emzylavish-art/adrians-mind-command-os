@@ -92,7 +92,7 @@ export function CustomConnections({ halted }: { halted: boolean }) {
             <p className="text-xs text-muted">{row.kind} · {row.method} · {row.auth} · token {row.hasToken ? "stored" : "none"} · {row.host} · {row.state}</p>
             {row.error ? <p className="text-muted">{row.error}</p> : null}
             {row.operations.map((operation) => {
-              const approval = JSON.stringify([row.id, operation.name, operation.inputSchema, args]);
+              const approval = JSON.stringify([row.id, row.revision, operation.name, operation.inputSchema, args]);
               const confirm = approved === approval;
               return (
               <div key={operation.name} className="mt-2">
@@ -127,7 +127,7 @@ export function CustomConnections({ halted }: { halted: boolean }) {
                     const localAttemptId = crypto.randomUUID();
                     activeAttempt.current = localAttemptId;
                     setResult({ localAttemptId, upstreamRequestId: null, status: "running", text: "", retryable: false });
-                    void callCustomConnectionFn({ data: { id: row.id, operation: operation.name, args: payload, confirmed: confirm || (row.kind === "http" && row.method === "GET") } }).then((called) => {
+                    void callCustomConnectionFn({ data: { id: row.id, operation: operation.name, args: payload, expectedRevision: row.revision, confirmed: confirm || (row.kind === "http" && row.method === "GET") } }).then((called) => {
                       const next = acceptResult(activeAttempt.current, { localAttemptId, status: called.status, text: called.text });
                       if (next !== "stale") setResult(next);
                       if (called.connection) setRows((current) => current.map((item) => item.id === called.connection?.id ? called.connection : item));

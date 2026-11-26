@@ -25,6 +25,8 @@ import { Route as ApiMindAgentRouteImport } from './routes/api/mind/agent'
 import { Route as ApiMindDesktopUpdateRouteImport } from './routes/api/mind/desktop-update'
 import { Route as ApiMindProvidersRouteImport } from './routes/api/mind/providers'
 import { Route as ApiMindReceiptsRouteImport } from './routes/api/mind/receipts'
+import { Route as ApiMindResearchReportsRouteImport } from './routes/api/mind/research-reports'
+import { Route as ApiMindResourcesRouteImport } from './routes/api/mind/resources'
 import { Route as ApiMindSkillsRouteImport } from './routes/api/mind/skills'
 import { Route as ApiMindTurnRouteImport } from './routes/api/mind/turn'
 import { Route as ApiMindBuildBrowserRouteImport } from './routes/api/mind/build/browser'
@@ -168,6 +170,16 @@ const ApiMindProvidersRoute = ApiMindProvidersRouteImport.update({
 const ApiMindReceiptsRoute = ApiMindReceiptsRouteImport.update({
   id: '/api/mind/receipts',
   path: '/api/mind/receipts',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ApiMindResearchReportsRoute = ApiMindResearchReportsRouteImport.update({
+  id: '/api/mind/research-reports',
+  path: '/api/mind/research-reports',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ApiMindResourcesRoute = ApiMindResourcesRouteImport.update({
+  id: '/api/mind/resources',
+  path: '/api/mind/resources',
   getParentRoute: () => rootRouteImport,
 } as any)
 const ApiMindSkillsRoute = ApiMindSkillsRouteImport.update({
@@ -518,6 +530,8 @@ export interface FileRoutesByFullPath {
   '/api/mind/desktop-update': typeof ApiMindDesktopUpdateRoute
   '/api/mind/providers': typeof ApiMindProvidersRoute
   '/api/mind/receipts': typeof ApiMindReceiptsRoute
+  '/api/mind/research-reports': typeof ApiMindResearchReportsRoute
+  '/api/mind/resources': typeof ApiMindResourcesRoute
   '/api/mind/skills': typeof ApiMindSkillsRoute
   '/api/mind/turn': typeof ApiMindTurnRoute
   '/api/mind/build/browser': typeof ApiMindBuildBrowserRoute
@@ -600,6 +614,8 @@ export interface FileRoutesByTo {
   '/api/mind/desktop-update': typeof ApiMindDesktopUpdateRoute
   '/api/mind/providers': typeof ApiMindProvidersRoute
   '/api/mind/receipts': typeof ApiMindReceiptsRoute
+  '/api/mind/research-reports': typeof ApiMindResearchReportsRoute
+  '/api/mind/resources': typeof ApiMindResourcesRoute
   '/api/mind/skills': typeof ApiMindSkillsRoute
   '/api/mind/turn': typeof ApiMindTurnRoute
   '/api/mind/build/browser': typeof ApiMindBuildBrowserRoute
@@ -683,6 +699,8 @@ export interface FileRoutesById {
   '/api/mind/desktop-update': typeof ApiMindDesktopUpdateRoute
   '/api/mind/providers': typeof ApiMindProvidersRoute
   '/api/mind/receipts': typeof ApiMindReceiptsRoute
+  '/api/mind/research-reports': typeof ApiMindResearchReportsRoute
+  '/api/mind/resources': typeof ApiMindResourcesRoute
   '/api/mind/skills': typeof ApiMindSkillsRoute
   '/api/mind/turn': typeof ApiMindTurnRoute
   '/api/mind/build/browser': typeof ApiMindBuildBrowserRoute
@@ -767,6 +785,8 @@ export interface FileRouteTypes {
     | '/api/mind/desktop-update'
     | '/api/mind/providers'
     | '/api/mind/receipts'
+    | '/api/mind/research-reports'
+    | '/api/mind/resources'
     | '/api/mind/skills'
     | '/api/mind/turn'
     | '/api/mind/build/browser'
@@ -849,6 +869,8 @@ export interface FileRouteTypes {
     | '/api/mind/desktop-update'
     | '/api/mind/providers'
     | '/api/mind/receipts'
+    | '/api/mind/research-reports'
+    | '/api/mind/resources'
     | '/api/mind/skills'
     | '/api/mind/turn'
     | '/api/mind/build/browser'
@@ -931,6 +953,8 @@ export interface FileRouteTypes {
     | '/api/mind/desktop-update'
     | '/api/mind/providers'
     | '/api/mind/receipts'
+    | '/api/mind/research-reports'
+    | '/api/mind/resources'
     | '/api/mind/skills'
     | '/api/mind/turn'
     | '/api/mind/build/browser'
@@ -1014,6 +1038,8 @@ export interface RootRouteChildren {
   ApiMindDesktopUpdateRoute: typeof ApiMindDesktopUpdateRoute
   ApiMindProvidersRoute: typeof ApiMindProvidersRoute
   ApiMindReceiptsRoute: typeof ApiMindReceiptsRoute
+  ApiMindResearchReportsRoute: typeof ApiMindResearchReportsRoute
+  ApiMindResourcesRoute: typeof ApiMindResourcesRoute
   ApiMindSkillsRoute: typeof ApiMindSkillsRoute
   ApiMindTurnRoute: typeof ApiMindTurnRoute
   ApiMindBuildBrowserRoute: typeof ApiMindBuildBrowserRoute
@@ -1192,6 +1218,20 @@ declare module '@tanstack/react-router' {
       path: '/api/mind/receipts'
       fullPath: '/api/mind/receipts'
       preLoaderRoute: typeof ApiMindReceiptsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/mind/research-reports': {
+      id: '/api/mind/research-reports'
+      path: '/api/mind/research-reports'
+      fullPath: '/api/mind/research-reports'
+      preLoaderRoute: typeof ApiMindResearchReportsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/mind/resources': {
+      id: '/api/mind/resources'
+      path: '/api/mind/resources'
+      fullPath: '/api/mind/resources'
+      preLoaderRoute: typeof ApiMindResourcesRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/api/mind/skills': {
@@ -1662,6 +1702,8 @@ const rootRouteChildren: RootRouteChildren = {
   ApiMindDesktopUpdateRoute: ApiMindDesktopUpdateRoute,
   ApiMindProvidersRoute: ApiMindProvidersRoute,
   ApiMindReceiptsRoute: ApiMindReceiptsRoute,
+  ApiMindResearchReportsRoute: ApiMindResearchReportsRoute,
+  ApiMindResourcesRoute: ApiMindResourcesRoute,
   ApiMindSkillsRoute: ApiMindSkillsRoute,
   ApiMindTurnRoute: ApiMindTurnRoute,
   ApiMindBuildBrowserRoute: ApiMindBuildBrowserRoute,

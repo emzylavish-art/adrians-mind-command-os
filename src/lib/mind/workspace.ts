@@ -1,8 +1,12 @@
+import { readPdfEvidenceIndex } from "./pdf-evidence.ts";
+import { readExecutionEvidence } from "./execution-evidence.ts";
 import { retainActivity } from "./connection-attention.ts";
 import { isModelTier } from "./model-tiers.ts";
 import { emptyFleet, readFleet } from "./fleet.ts";
 import { normalizeBotModel } from "./bot-model.ts";
 import { normalizeBotKnowledge } from "./bot-model.ts";
+import { effectiveContextPolicy, normalizeContextPolicy } from "./memory/context-policy.ts";
+import { MAX_DOCUMENT_TEXT_CHARS, MAX_LIBRARY_FILES } from "./knowledge-limits.ts";
 import { DEFAULT_PERSONALITY_ID, normalizeCustomPersonality, resolvePersonalityId } from "./personalities/index.ts";
 import type {
   AuditEntry,
@@ -15,6 +19,7 @@ import type {
   Project,
   UsageEntry,
   Workspace,
+  WorkspaceJsonValue,
 } from "./types";
 
 export const PROJECT_NAME_MAX = 80;
@@ -84,18 +89,29 @@ export function memoriesForChat(ws: Workspace, chat: Chat): MemoryItem[] {
 /** Data a conversational tool or voice assistant may read in this chat. */
 export function workspaceForChat(ws: Workspace, chat: Chat): Workspace {
   const context = chat.memory === "on" && !chat.temporary;
+  const policy = effectiveContextPolicy(chat);
+  const projectContext = chat.contextPolicy?.projectDocuments === undefined ? context : policy.projectDocuments;
   return {
     ...ws,
     memories: memoriesForChat(ws, chat),
     chats: context ? ws.chats.filter((row) => row.id === chat.id) : [],
-    projects: context ? ws.projects.filter((row) => row.id === chat.projectId) : [],
-    files: context && chat.projectId ? ws.files.filter((row) => row.projectId === chat.projectId) : [],
+    projects: projectContext ? ws.projects.filter((row) => row.id === chat.projectId) : [],
+    files: projectContext && chat.projectId ? ws.files.filter((row) => row.projectId === chat.projectId && !row.archived && !row.retrievalDisabled) : [],
     agents: [], connections: [], schedules: [],
   };
 }
 
 export function canonical(value: unknown): string {
   return JSON.stringify(sortValue(value));
+}
+
+/** Conflict variants cross the server-function boundary as explicit JSON data. */
+export function workspaceJsonValue(value: unknown): WorkspaceJsonValue {
+  if (value === null || typeof value === "string" || typeof value === "boolean") return value;
+  if (typeof value === "number") return Number.isFinite(value) ? value : null;
+  if (Array.isArray(value)) return value.map(workspaceJsonValue);
+  if (isRecord(value)) return Object.fromEntries(Object.entries(value).filter(([, entry]) => entry !== undefined).map(([key, entry]) => [key, workspaceJsonValue(entry)]));
+  return null;
 }
 
 function sortValue(value: unknown): unknown {
@@ -117,6 +133,14 @@ export function normalizeWorkspace(input: unknown): Workspace {
   const base = emptyWorkspace();
   if (!isRecord(input)) return base;
   base.halted = input.halted === true;
+  if (isRecord(input.toolPermissions)) {
+    const permissions = input.toolPermissions;
+    base.toolPermissions = Object.fromEntries(["list_projects", "list_chats", "search_notes"].filter((key) => typeof permissions[key] === "boolean").map((key) => [key, permissions[key] as boolean]));
+  }
+  if (Array.isArray(input.syncConflicts)) {
+    base.syncConflicts = input.syncConflicts.filter((row) => isRecord(row) && typeof row.id === "string" && typeof row.collection === "string" && typeof row.recordId === "string" && typeof row.field === "string" && !["__proto__", "constructor", "prototype"].includes(row.field))
+      .map((row) => ({ id: String(row.id), collection: String(row.collection), recordId: String(row.recordId), field: String(row.field), local: workspaceJsonValue(row.local), remote: workspaceJsonValue(row.remote) }));
+  }
   if (Array.isArray(input.projects)) {
     for (const row of input.projects) {
       if (!isRecord(row) || !str(row.id) || !str(row.name)) continue;
@@ -125,6 +149,7 @@ export function normalizeWorkspace(input: unknown): Workspace {
         name: str(row.name).slice(0, PROJECT_NAME_MAX),
         description: str(row.description).slice(0, 400),
         createdAt: str(row.createdAt, new Date(0).toISOString()),
+        ...(row.archived === true ? { archived: true } : {}),
       });
     }
   }
@@ -154,6 +179,7 @@ export function normalizeWorkspace(input: unknown): Workspace {
     for (const row of input.usage) {
       if (!isRecord(row) || !str(row.id)) continue;
       base.usage.push({
+        ...(typeof row.executionId === "string" && row.executionId.length <= 200 ? { executionId: row.executionId } : {}),
         id: str(row.id),
         chatId: str(row.chatId),
         at: str(row.at),
@@ -198,6 +224,15 @@ function normalizeChat(row: unknown): Chat | null {
         ? { provider: route.provider, tier: route.tier, model: typeof route.model === "string" ? route.model.slice(0, 150) : null,
             orchestrated: route.orchestrated === true, fingerprint: route.fingerprint } : null;
       messages.push({
+        ...(readExecutionEvidence(msg.executionEvidence, typeof msg.executionId === "string" ? msg.executionId : undefined) ? { executionEvidence: readExecutionEvidence(msg.executionEvidence, typeof msg.executionId === "string" ? msg.executionId : undefined) } : {}),
+        ...(typeof msg.executionId === "string" && msg.executionId.length > 0 && msg.executionId.length <= 200 ? { executionId: msg.executionId } : {}),
+        ...(Array.isArray(msg.helperReceipts) ? { helperReceipts: msg.helperReceipts.filter((receipt) => isRecord(receipt) && typeof receipt.id === "string" && ["succeeded", "failed", "canceled", "skipped"].includes(String(receipt.status))).slice(0, 8).map((receipt) => ({
+          id: String(receipt.id).slice(0, 600), status: receipt.status as "succeeded" | "failed" | "canceled" | "skipped", contributed: receipt.contributed === true,
+          model: typeof receipt.model === "string" ? receipt.model.slice(0, 200) : null, requestedModel: typeof receipt.requestedModel === "string" ? receipt.requestedModel.slice(0, 200) : null,
+          requestId: typeof receipt.requestId === "string" ? receipt.requestId.slice(0, 200) : null, durationMs: typeof receipt.durationMs === "number" && Number.isFinite(receipt.durationMs) ? Math.max(0, receipt.durationMs) : 0,
+          error: typeof receipt.error === "string" ? receipt.error.slice(0, 500) : null,
+          usage: isRecord(receipt.usage) ? { ...(typeof receipt.usage.prompt_tokens === "number" ? { prompt_tokens: receipt.usage.prompt_tokens } : {}), ...(typeof receipt.usage.completion_tokens === "number" ? { completion_tokens: receipt.usage.completion_tokens } : {}) } : null,
+        })) } : {}),
         ...(recovery ? { deliveryRoute: recovery } : {}),
         id: str(msg.id, crypto.randomUUID()),
         role: msg.role,
@@ -211,6 +246,9 @@ function normalizeChat(row: unknown): Chat | null {
         ...(msg.role === "user" && (msg.delivery === "submitted" || msg.delivery === "unconfirmed" || msg.delivery === "stopped" || msg.delivery === "failed") ? { delivery: msg.delivery } : {}),
         ...publicImages(msg.images),
         ...publicVideo(msg.videoUrl),
+        ...(typeof msg.videoOperationId === "string" && msg.videoOperationId.length <= 200 ? { videoOperationId: msg.videoOperationId } : {}),
+        ...(["provider-temporary", "local-download", "account-storage"].includes(String(msg.videoRetention)) ? { videoRetention: msg.videoRetention as "provider-temporary" | "local-download" | "account-storage" } : {}),
+        ...(msg.videoExpiresAt === null || (typeof msg.videoExpiresAt === "string" && msg.videoExpiresAt.length <= 100) ? { videoExpiresAt: msg.videoExpiresAt } : {}),
         ...(msg.memorySaved === true
           ? {
               memorySaved: true as const,
@@ -231,8 +269,11 @@ function normalizeChat(row: unknown): Chat | null {
     title: str(row.title, "New session").slice(0, 80),
     ...(typeof row.notionWorkspaceId === "string" && row.notionWorkspaceId.length <= 200 ? { notionWorkspaceId: row.notionWorkspaceId } : {}),
     ...(typeof row.agentId === "string" && row.agentId ? { agentId: row.agentId } : {}),
+    ...(typeof row.botRevision === "number" && Number.isSafeInteger(row.botRevision) ? { botRevision: row.botRevision } : {}),
+    ...(Array.isArray(row.documentSources) ? { documentSources: row.documentSources.filter((item) => isRecord(item) && typeof item.fileId === "string" && typeof item.revision === "string" && typeof item.name === "string").map((item) => ({ fileId: String(item.fileId), revision: String(item.revision), name: String(item.name), ...(typeof item.messageId === "string" ? { messageId: item.messageId } : {}) })) } : {}),
     ...chatBotModel(row),
     memory,
+    ...(normalizeContextPolicy(row.contextPolicy) ? { contextPolicy: normalizeContextPolicy(row.contextPolicy) } : {}),
     temporary: row.temporary === true,
     autonomy,
     personalityId: resolvePersonalityId(row.personalityId),
@@ -247,15 +288,25 @@ function normalizeChat(row: unknown): Chat | null {
 
 function normalizeFile(row: unknown): LocalFile | null {
   if (!isRecord(row) || !str(row.id) || typeof row.text !== "string" || !row.text.trim()) return null;
-  const text = row.text.slice(0, 40000);
+  const text = row.text.slice(0, MAX_DOCUMENT_TEXT_CHARS);
   return {
     id: str(row.id),
     name: str(row.name, "untitled.txt"),
+    ...(readPdfEvidenceIndex(row.evidenceIndex, text.length) ? { evidenceIndex: readPdfEvidenceIndex(row.evidenceIndex, text.length) } : {}),
     text,
     bytes: typeof row.bytes === "number" ? row.bytes : text.length,
     ...(row.partial === true || row.text.length > text.length ? { partial: true } : {}),
     projectId: typeof row.projectId === "string" ? row.projectId : null,
     createdAt: str(row.createdAt, new Date(0).toISOString()),
+    ...(row.text.length === text.length && typeof row.textSha256 === "string" && /^[a-f0-9]{64}$/.test(row.textSha256) ? { textSha256: row.textSha256 } : {}),
+    ...(typeof row.revision === "number" && Number.isSafeInteger(row.revision) && row.revision > 0 ? { revision: row.revision } : {}),
+    ...(typeof row.previousVersionId === "string" ? { previousVersionId: row.previousVersionId } : {}),
+    ...(row.archived === true ? { archived: true } : {}),
+    ...(row.retrievalDisabled === true ? { retrievalDisabled: true } : {}),
+    ...(isRecord(row.original) && typeof row.original.id === "string" && typeof row.original.sha256 === "string" && /^[a-f0-9]{64}$/.test(row.original.sha256) && typeof row.original.bytes === "number" && typeof row.original.mime === "string" && row.original.storage === "browser"
+      ? { original: { id: row.original.id, sha256: row.original.sha256, bytes: row.original.bytes, mime: row.original.mime, storage: "browser" as const } } : {}),
+    ...(isRecord(row.extraction) && ["plain-text", "pdf-text", "legacy"].includes(String(row.extraction.method)) && typeof row.extraction.extractedCharacters === "number" && typeof row.extraction.retainedCharacters === "number"
+      ? { extraction: { method: row.extraction.method as "plain-text" | "pdf-text" | "legacy", extractedCharacters: row.extraction.extractedCharacters, retainedCharacters: row.extraction.retainedCharacters, coverage: str(row.extraction.coverage), at: str(row.extraction.at) } } : {}),
   };
 }
 
@@ -268,6 +319,9 @@ function publicImages(value: unknown): { images: NonNullable<Msg["images"]> } | 
     const blobId = typeof item.blobId === "string" && item.blobId.length > 0 && item.blobId.length < 200 ? item.blobId : undefined;
     if (!dataUrl && !blobId) continue;
     images.push({
+      ...Object.fromEntries(["assetId", "parentAssetId", "operationId", "createdAt"].filter((key) => typeof item[key] === "string" && (item[key] as string).length > 0 && (item[key] as string).length <= 200).map((key) => [key, item[key]])),
+      ...(typeof item.editPrompt === "string" ? { editPrompt: item.editPrompt.slice(0, 6000) } : {}),
+      ...(typeof item.preferred === "boolean" ? { preferred: item.preferred } : {}),
       dataUrl,
       blobId,
       ...(item.origin === "attached" || item.origin === "camera" || item.origin === "generated" || item.origin === "edited" ? { origin: item.origin } : {}),
@@ -366,7 +420,7 @@ export function openBotChat(ws: Workspace, agentId: string, newThread = false): 
     personalityId: "custom",
     customPersonality: agent.instructions,
   });
-  const linked = { ...chat, title: agent.name, agentId };
+  const linked = { ...chat, title: agent.name, agentId, botRevision: agent.version };
   const model = normalizeBotModel(agent);
   if (model.chatProvider) linked.botProvider = model.chatProvider;
   if (model.chatTier) linked.botTier = model.chatTier;
@@ -468,6 +522,10 @@ export async function packWorkspace(ws: Workspace, includeTemporary: boolean) {
     format: 1 as const,
     sha256: await sha256(canonical(workspace)),
     counts: counts(workspace),
+    resources: {
+      extractedDocuments: workspace.files.map((file) => ({ id: file.id, name: file.name, partial: file.partial === true, revision: file.textSha256 ?? null })),
+      excludedOriginals: workspace.files.filter((file) => file.original).map((file) => ({ fileId: file.id, name: file.name, reason: "Original bytes are stored on this browser and are not embedded in this JSON archive." })),
+    },
     workspace,
   };
 }
@@ -600,21 +658,63 @@ export function pushUsage(ws: Workspace, entry: Omit<UsageEntry, "kind">): Works
 
 export function addLocalFile(
   ws: Workspace,
-  input: { id?: string; name: string; text: string; partial?: boolean; projectId: string | null },
+  input: { id?: string; name: string; text: string; partial?: boolean; projectId: string | null; textSha256?: string; original?: LocalFile["original"]; extraction?: LocalFile["extraction"]; evidenceIndex?: LocalFile["evidenceIndex"]; previousVersionId?: string },
 ): Workspace {
-  if (ws.files.length >= 40) return ws;
-  const text = input.text.slice(0, 40000);
+  if (ws.files.length >= MAX_LIBRARY_FILES) return ws;
+  const text = input.text.slice(0, MAX_DOCUMENT_TEXT_CHARS);
   if (!text.trim()) return ws;
   const file: LocalFile = {
     id: input.id || crypto.randomUUID(),
     name: input.name || "untitled.txt",
+    ...(readPdfEvidenceIndex(input.evidenceIndex, text.length) ? { evidenceIndex: readPdfEvidenceIndex(input.evidenceIndex, text.length) } : {}),
     text,
     bytes: new TextEncoder().encode(text).length,
     ...(input.partial || input.text.length > text.length ? { partial: true } : {}),
     projectId: input.projectId,
     createdAt: new Date().toISOString(),
+    revision: input.previousVersionId ? (ws.files.find((row) => row.id === input.previousVersionId)?.revision ?? 1) + 1 : 1,
+    ...(input.text.length === text.length && input.textSha256 ? { textSha256: input.textSha256 } : {}),
+    ...(input.original ? { original: input.original } : {}),
+    ...(input.extraction ? { extraction: input.extraction } : {}),
+    ...(input.previousVersionId ? { previousVersionId: input.previousVersionId } : {}),
   };
-  return { ...ws, files: [file, ...ws.files] };
+  return { ...ws, files: [file, ...ws.files.map((row) => row.id === input.previousVersionId ? { ...row, archived: true } : row)] };
+}
+
+export function setProjectArchived(ws: Workspace, id: string, archived: boolean): Workspace {
+  return { ...ws, projects: ws.projects.map((project) => project.id === id ? { ...project, archived } : project) };
+}
+
+/** Deletion removes organization, preserves history and revokes future project execution. */
+export function deleteProject(ws: Workspace, id: string): Workspace {
+  const affected = new Set(ws.agents.filter((agent) => agent.projectId === id).map((agent) => agent.id));
+  return {
+    ...ws,
+    projects: ws.projects.filter((project) => project.id !== id),
+    chats: ws.chats.map((chat) => chat.projectId === id ? { ...chat, projectId: null, contextPolicy: { ...chat.contextPolicy, projectDocuments: false, projectConversations: false } } : chat),
+    files: ws.files.map((file) => file.projectId === id ? { ...file, projectId: null } : file),
+    // Former-project notes retain their original scope; never broaden them to global.
+    agents: ws.agents.map((agent) => affected.has(agent.id) ? { ...agent, projectId: null, archived: true, version: agent.version + 1, updatedAt: new Date().toISOString() } : agent),
+    schedules: ws.schedules.map((schedule) => schedule.agentId && affected.has(schedule.agentId) ? { ...schedule, enabled: false } : schedule),
+  };
+}
+
+export function botConversationRevision(ws: Workspace, chat: Chat) {
+  const agent = ws.agents.find((item) => item.id === chat.agentId);
+  return { current: agent?.version ?? null, pinned: chat.botRevision ?? null, unavailable: !agent || agent.archived,
+    requiresReview: Boolean(chat.agentId && (!agent || agent.archived || chat.botRevision !== agent.version)) };
+}
+
+/** Explicit adoption preserves messages; it never changes an existing conversation silently. */
+export function adoptBotConfiguration(ws: Workspace, chatId: string): Workspace {
+  const chat = ws.chats.find((row) => row.id === chatId);
+  const agent = ws.agents.find((row) => row.id === chat?.agentId && !row.archived);
+  if (!chat || !agent) return ws;
+  const model = normalizeBotModel(agent);
+  const knowledge = normalizeBotKnowledge(agent.knowledge).knowledge;
+  return { ...ws, chats: ws.chats.map((row) => row.id === chatId ? { ...row, botRevision: agent.version,
+    botKnowledge: knowledge || undefined, botProvider: model.chatProvider ?? undefined, botTier: model.chatTier ?? undefined,
+    customPersonality: normalizeCustomPersonality(agent.instructions), personalityId: "custom", memory: agent.memory, autonomy: agent.approval, projectId: agent.projectId } : row) };
 }
 
 export function addProject(ws: Workspace, name: string, description: string): { ws: Workspace; project: Project } {

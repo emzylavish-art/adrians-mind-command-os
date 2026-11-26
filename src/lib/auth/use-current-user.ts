@@ -1,5 +1,6 @@
 import { useMemo } from "react";
 import { authClient, authEnabled } from "./client";
+import { sessionInstanceId } from "./session-identity";
 
 /** Normalized user shape used across the app, auth on or off. */
 export type AppUser = {
@@ -10,6 +11,8 @@ export type AppUser = {
   profileImageUrl: string | null;
   /** True when this is the sandbox/dev fallback (auth not configured). */
   isDevFallback: boolean;
+  /** Ephemeral login identity for stale-callback guards; never a bearer or credential. */
+  sessionEpoch?: string | null;
 };
 
 /**
@@ -25,6 +28,7 @@ export const DEV_USER: AppUser = {
   primaryEmail: "dev@example.com",
   profileImageUrl: null,
   isDevFallback: true,
+  sessionEpoch: "local-preview",
 };
 
 /** `useCurrentUserState()` result: the user plus the session-loading flag. */
@@ -71,9 +75,10 @@ function useSessionUserState(): CurrentUserState {
   const primaryEmail = data?.user.email ?? null;
   const emailVerified = data?.user.emailVerified === true;
   const profileImageUrl = data?.user.image ?? null;
+  const sessionEpoch = sessionInstanceId(data?.session);
   const user = useMemo<AppUser | null>(
-    () => (id ? { id, displayName, primaryEmail, emailVerified, profileImageUrl, isDevFallback: false } : null),
-    [id, displayName, primaryEmail, emailVerified, profileImageUrl],
+    () => (id ? { id, displayName, primaryEmail, emailVerified, profileImageUrl, isDevFallback: false, sessionEpoch } : null),
+    [id, displayName, primaryEmail, emailVerified, profileImageUrl, sessionEpoch],
   );
   return useMemo(() => ({ user, isPending }), [user, isPending]);
 }

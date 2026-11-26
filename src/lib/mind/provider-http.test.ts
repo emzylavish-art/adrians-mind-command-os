@@ -50,15 +50,21 @@ describe("non-Grok provider path rate limit", () => {
   it("checks the request preflight before consulting helpers and dispatching direct providers", () => {
     const source = readFileSync(new URL("./turn.server.ts", import.meta.url), "utf8");
     for (const [branch, call] of [
-      ['if (body.composerMode === "orchestrator")', "await collectConsultHelp("],
-      ['if (requestedProvider === "nemotron"', "await routeSelectedModel("],
-      ['if (selected.id !== "grok")', "await callConfiguredProvider("],
+      ['if (body.composerMode === "orchestrator")', "await executeConsultPlan("],
+      ['if (requestedProvider === "nemotron"', "() => routeSelectedModel("],
+      ['if (selected.id !== "grok")', "() => callConfiguredProvider("],
     ]) {
       const start = source.indexOf(branch);
       const dispatch = source.indexOf(call, start);
       assert.ok(start >= 0 && dispatch > start);
       assert.match(source.slice(start, dispatch), /const blocked = await preflight\(\);\s*if \(blocked\) return blocked;/);
     }
+    const callback = source.slice(source.indexOf("const collected = await executeConsultPlan("), source.indexOf("helperReceipts.push"));
+    assert.match(callback, /if \(await preflight\(\)\) return/);
+    assert.match(callback, /return govern\(helperProvider, helperModel/);
+    const preflight = source.slice(source.indexOf("const preflight = async () =>"), source.indexOf("const taskId =", source.indexOf("const preflight = async () =>")));
+    assert.match(preflight, /await checkStop\(\)/);
+    assert.match(preflight, /await assertCurrentMemoryContext\(userId, body\)/);
   });
 
   it("charges once per turn, checks for a later stop and blocks the next turn over budget", async () => {

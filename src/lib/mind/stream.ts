@@ -1,3 +1,7 @@
+import { readHelperReceipts } from "./execution-evidence.ts";
+import { readFailureEnvelope, type FailureEnvelope } from "./failure-envelope.ts";
+import { readModelExecutionPlan, type ModelExecutionPlan } from "./execution-plan.ts";
+import type { HelperReceipt } from "./model-consult.ts";
 /** Honest label when a done event did not confirm which model answered. */
 export const UNKNOWN_MODEL_LABEL = "model unknown";
 
@@ -71,9 +75,9 @@ export function pushSse(feed: SseFeed, chunk: string): SseFeed & { deltas: strin
 
 export type MindClientEvent =
   | { event: "delta"; text: string }
-  | { event: "done"; text: string; model: string; usage: ModelUsage | null; usedIds: string[]; requestId: string | null; modelTier?: string; resolvedTier?: string; tierReason?: string; memorySaved?: boolean; savedMemoryId?: string | null; provider?: string; requestedModel?: string; credentialFallback?: string | null }
-  | { event: "error"; error: string }
-  | { event: "canceled"; error: string };
+  | { event: "done"; text: string; model: string; usage: ModelUsage | null; usedIds: string[]; requestId: string | null; modelTier?: string; resolvedTier?: string; tierReason?: string; memorySaved?: boolean; savedMemoryId?: string | null; provider?: string; requestedModel?: string; credentialFallback?: string | null; helperReceipts?: HelperReceipt[]; finishReason?: string | null; resourceOperationId?: string; executionPlan?: ModelExecutionPlan }
+  | { event: "error"; error: string; helperReceipts?: HelperReceipt[]; failureEnvelope?: FailureEnvelope }
+  | { event: "canceled"; error: string; helperReceipts?: HelperReceipt[]; failureEnvelope?: FailureEnvelope };
 
 export function pullMindEvents(buffer: string): { events: MindClientEvent[]; rest: string } {
   const complete = buffer.endsWith("\n\n");
@@ -99,8 +103,8 @@ export function pullMindEvents(buffer: string): { events: MindClientEvent[]; res
     if (!parsed || typeof parsed !== "object") continue;
     const record = parsed as Record<string, unknown>;
     if (name === "delta" && typeof record.text === "string") events.push({ event: "delta", text: record.text });
-    else if (name === "error" && typeof record.error === "string") events.push({ event: "error", error: record.error });
-    else if (name === "canceled" && typeof record.error === "string") events.push({ event: "canceled", error: record.error });
+    else if (name === "error" && typeof record.error === "string") events.push({ event: "error", error: record.error, helperReceipts: readHelperReceipts(record.helperReceipts), ...(readFailureEnvelope(record.failureEnvelope) ? { failureEnvelope: readFailureEnvelope(record.failureEnvelope)! } : {}) });
+    else if (name === "canceled" && typeof record.error === "string") events.push({ event: "canceled", error: record.error, helperReceipts: readHelperReceipts(record.helperReceipts), ...(readFailureEnvelope(record.failureEnvelope) ? { failureEnvelope: readFailureEnvelope(record.failureEnvelope)! } : {}) });
     else if (name === "done" && typeof record.text === "string") {
       const modelRaw = typeof record.model === "string" ? record.model.trim() : "";
       events.push({
@@ -118,6 +122,10 @@ export function pullMindEvents(buffer: string): { events: MindClientEvent[]; res
         provider: typeof record.provider === "string" ? record.provider : undefined,
         requestedModel: typeof record.requestedModel === "string" ? record.requestedModel : undefined,
         credentialFallback: typeof record.credentialFallback === "string" ? record.credentialFallback : null,
+        helperReceipts: readHelperReceipts(record.helperReceipts),
+        finishReason: typeof record.finishReason === "string" ? record.finishReason : null,
+        resourceOperationId: typeof record.resourceOperationId === "string" ? record.resourceOperationId : undefined,
+        executionPlan: readModelExecutionPlan(record.executionPlan) ?? undefined,
       });
     }
   }

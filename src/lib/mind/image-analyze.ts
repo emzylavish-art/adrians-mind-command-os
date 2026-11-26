@@ -10,6 +10,7 @@ export async function analyzeImage(input: {
   imageBase64: string;
   visionKey: string | undefined;
   fetch: FetchLike;
+  authorize?: () => Promise<(ok: boolean) => Promise<void>>;
 }): Promise<ImageAnalysis> {
   if (!input.visionKey) {
     return { ok: false, analyzed: false, provider: null, text: "", error: "No vision key is configured. The chat key is not used for images. Nothing was analyzed." };
@@ -29,6 +30,9 @@ export async function analyzeImage(input: {
     return { ok: false, analyzed: false, provider: null, text: "", error: "The complete supported image is required. Nothing was analyzed." };
   }
   let response: Awaited<ReturnType<FetchLike>>;
+  let settle: ((ok: boolean) => Promise<void>) | undefined;
+  try { settle = await input.authorize?.(); }
+  catch (error) { return { ok: false, analyzed: false, provider: null, text: "", error: error instanceof Error ? error.message : "Resource authorization failed. The image was not sent." }; }
   try {
     response = await input.fetch("https://api.openai.com/v1/chat/completions", {
       method: "POST",
@@ -39,8 +43,10 @@ export async function analyzeImage(input: {
       }),
     });
   } catch {
+    await settle?.(false);
     return { ok: false, analyzed: false, provider: "openai", text: "", error: "The vision provider could not be reached. Nothing was invented." };
   }
+  await settle?.(response.ok);
   if (!response.ok) return { ok: false, analyzed: false, provider: "openai", text: "", error: `Vision returned ${response.status}. Nothing was invented.` };
   const text = parseProviderText("openai", await response.text()).slice(0, 2000);
   if (!text.trim()) return { ok: false, analyzed: false, provider: "openai", text: "", error: "Vision returned an empty reply. Nothing was invented." };

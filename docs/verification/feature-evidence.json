@@ -1,0 +1,263 @@
+{
+  "schemaVersion": 1,
+  "candidateBase": "18d5b9364e6bdcfec028eeccf56fe596946ed8ce",
+  "recordedAt": "2026-11-26T00:00:00.000Z",
+  "note": "Candidate working-tree implementation inventory. No uncommitted test is attributed to a Git SHA. Fill verification only after running against an exact committed revision. Earlier completion claims are archived separately.",
+  "features": [
+    {
+      "id": "NAV",
+      "title": "Multi-surface navigation",
+      "status": "implemented with limitations",
+      "verification": {
+        "state": "unverified",
+        "revision": null,
+        "environment": null,
+        "executedAt": null,
+        "evidence": [],
+        "blockers": [
+          "Run destination-verified local and signed-in navigation checks on the committed candidate."
+        ]
+      }
+    },
+    {
+      "id": "WORKER",
+      "title": "Agent execution and worker lifecycle",
+      "status": "implemented with limitations",
+      "verification": {
+        "state": "unverified",
+        "revision": null,
+        "environment": null,
+        "executedAt": null,
+        "evidence": [],
+        "blockers": [
+          "Run discovered lifecycle regressions and an authorized hosted worker smoke on the committed candidate."
+        ]
+      }
+    },
+    {
+      "id": "HOST",
+      "title": "Hosted worker runtime",
+      "status": "implemented with limitations",
+      "verification": {
+        "state": "unverified",
+        "revision": null,
+        "environment": null,
+        "executedAt": null,
+        "evidence": [],
+        "blockers": [
+          "Verify configured database, actual worker process and task receipt in the intended environment."
+        ]
+      }
+    },
+    {
+      "id": "PLAN",
+      "title": "Bounded model planner",
+      "status": "implemented with limitations",
+      "verification": {
+        "state": "unverified",
+        "revision": null,
+        "environment": null,
+        "executedAt": null,
+        "evidence": [],
+        "blockers": [
+          "Run fake-model regressions; use an authorized provider receipt before claiming live execution."
+        ]
+      }
+    },
+    {
+      "id": "CHAT",
+      "title": "Selected-provider chat",
+      "status": "implemented with limitations",
+      "verification": {
+        "state": "unverified",
+        "revision": null,
+        "environment": null,
+        "executedAt": null,
+        "evidence": [],
+        "blockers": [
+          "Verify selected model routing, provider receipt and interrupted-turn recovery."
+        ]
+      }
+    },
+    {
+      "id": "SEARCH",
+      "title": "Web research",
+      "status": "implemented with limitations",
+      "verification": {
+        "state": "unverified",
+        "revision": null,
+        "environment": null,
+        "executedAt": null,
+        "evidence": [],
+        "blockers": [
+          "Verify stored source evidence, partial outcomes and configured search provider receipts."
+        ]
+      }
+    },
+    {
+      "id": "GMAIL",
+      "title": "Google OAuth and mailboxes",
+      "status": "implemented with limitations",
+      "verification": {
+        "state": "unverified",
+        "revision": null,
+        "environment": null,
+        "executedAt": null,
+        "evidence": [],
+        "blockers": [
+          "Verify account selection and permissions with a disposable authorized account; fixtures cannot prove live OAuth."
+        ]
+      }
+    },
+    {
+      "id": "BROWSER",
+      "title": "Browser page driver",
+      "status": "implemented with limitations",
+      "verification": {
+        "state": "unverified",
+        "revision": null,
+        "environment": null,
+        "executedAt": null,
+        "evidence": [],
+        "blockers": [
+          "Verify intended destination and read-only result in the selected environment."
+        ]
+      }
+    },
+    {
+      "id": "SCHED",
+      "title": "Due schedules",
+      "status": "implemented with limitations",
+      "verification": {
+        "state": "unverified",
+        "revision": null,
+        "environment": null,
+        "executedAt": null,
+        "evidence": [],
+        "blockers": [
+          "Verify durable ownership, runner scheduling and one-operation execution receipts."
+        ]
+      }
+    },
+    {
+      "id": "CONN",
+      "title": "OAuth and custom provider connections",
+      "status": "implemented with limitations",
+      "verification": {
+        "state": "unverified",
+        "revision": null,
+        "environment": null,
+        "executedAt": null,
+        "evidence": [],
+        "blockers": [
+          "Run connection revision and permission regressions; verify live connection only after approval."
+        ]
+      }
+    },
+    {
+      "id": "MEDIA",
+      "title": "Image and video",
+      "status": "implemented with limitations",
+      "verification": {
+        "state": "unverified",
+        "revision": null,
+        "environment": null,
+        "executedAt": null,
+        "evidence": [],
+        "blockers": [
+          "Run synthetic job/asset retention tests; obtain live provider evidence only when authorized."
+        ]
+      }
+    },
+    {
+      "id": "VOICE",
+      "title": "Realtime and selected-provider voice",
+      "status": "implemented with limitations",
+      "verification": {
+        "state": "unverified",
+        "revision": null,
+        "environment": null,
+        "executedAt": null,
+        "evidence": [],
+        "blockers": [
+          "Run routing/timing fixtures and record microphone, speaker and interruption behavior on actual devices."
+        ]
+      }
+    },
+    {
+      "id": "REA",
+      "title": "REA native engines",
+      "status": "blocked",
+      "verification": {
+        "state": "unverified",
+        "revision": null,
+        "environment": null,
+        "executedAt": null,
+        "evidence": [],
+        "blockers": [
+          "Inspect current native engine readiness in a separately authorized environment; the historical doctor result is not current proof."
+        ]
+      }
+    },
+    {
+      "id": "DB",
+      "title": "Durable account database",
+      "status": "implemented with limitations",
+      "verification": {
+        "state": "unverified",
+        "revision": null,
+        "environment": null,
+        "executedAt": null,
+        "evidence": [],
+        "blockers": [
+          "Apply and test migrations in an isolated database; independently verify target environment compatibility before release."
+        ]
+      }
+    },
+    {
+      "id": "PHONE",
+      "title": "Physical iPhone and installed PWA",
+      "status": "blocked",
+      "verification": {
+        "state": "unverified",
+        "revision": null,
+        "environment": null,
+        "executedAt": null,
+        "evidence": [],
+        "blockers": [
+          "Run a physical iPhone/Safari/PWA check and record device, OS, browser, revision and evidence."
+        ]
+      }
+    },
+    {
+      "id": "PC",
+      "title": "Paired computer runtime",
+      "status": "implemented with limitations",
+      "verification": {
+        "state": "unverified",
+        "revision": null,
+        "environment": null,
+        "executedAt": null,
+        "evidence": [],
+        "blockers": [
+          "Run coordination fixtures and separately verify the actual paired runtime and native capabilities."
+        ]
+      }
+    },
+    {
+      "id": "ZAPIA",
+      "title": "Zapia integration",
+      "status": "deferred",
+      "verification": {
+        "state": "unverified",
+        "revision": null,
+        "environment": null,
+        "executedAt": null,
+        "evidence": [],
+        "blockers": [
+          "Confirm product scope before implementation; no current live integration evidence is attached."
+        ]
+      }
+    }
+  ]
+}

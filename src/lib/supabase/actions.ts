@@ -3,6 +3,7 @@
  * Session cookies are written only on the server (HttpOnly).
  */
 import { createServerFn } from "@tanstack/react-start";
+import { isolationMiddleware } from "@/lib/auth/middleware";
 import { redirect } from "@tanstack/react-router";
 import { safeRedirectPath } from "./safe-redirect";
 import { buildAuthCallbackUrl } from "./oauth-redirect";
@@ -95,6 +96,7 @@ export const requireDashboardUser = createServerFn({ method: "GET" }).handler(
 );
 
 export const signInWithPassword = createServerFn({ method: "POST" })
+  .middleware([isolationMiddleware])
   .validator((input: { email?: string; password?: string; next?: string }) => ({
     email: asString(input.email, 320),
     password: asString(input.password, 200),
@@ -126,6 +128,7 @@ export const signInWithPassword = createServerFn({ method: "POST" })
   });
 
 export const signUpWithPassword = createServerFn({ method: "POST" })
+  .middleware([isolationMiddleware])
   .validator((input: { email?: string; password?: string; next?: string }) => ({
     email: asString(input.email, 320),
     password: asString(input.password, 200),
@@ -175,6 +178,7 @@ export const signUpWithPassword = createServerFn({ method: "POST" })
   });
 
 export const startOAuth = createServerFn({ method: "POST" })
+  .middleware([isolationMiddleware])
   .validator(
     (input: {
       provider?: string;
@@ -224,7 +228,7 @@ export const startOAuth = createServerFn({ method: "POST" })
     return { ok: true as const, url: oauth.url };
   });
 
-export const signOutSupabase = createServerFn({ method: "POST" }).handler(
+export const signOutSupabase = createServerFn({ method: "POST" }).middleware([isolationMiddleware]).handler(
   async () => {
     const { readSupabaseEnv, createSupabaseServerClient } = await loadServer();
     if (readSupabaseEnv()) {

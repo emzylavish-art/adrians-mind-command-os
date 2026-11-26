@@ -212,6 +212,7 @@ export async function runBoundedAgent(input: {
   imagineSessionId?: string;
   /** Max Imagine tool invocations in this run (default AGENT_MAX_IMAGINE_PER_RUN). */
   maxImaginePerRun?: number;
+  beforeStep?: () => Promise<void>;
   execute?: (ws: Workspace, tool: AgentToolName, args: AgentToolArgs) => AgentToolResult | Promise<AgentToolResult>;
 }): Promise<AgentRunResult> {
   const maxSteps = input.maxSteps ?? AGENT_MAX_STEPS;
@@ -247,6 +248,7 @@ export async function runBoundedAgent(input: {
     if (now() >= deadline) return { ok: false, text: "", log, error: "The agent stopped because it ran out of time. Nothing was marked finished.", images: collectedImages.length ? collectedImages : undefined };
     let reply: { text: string; toolCalls: AgentToolCall[] };
     try {
+      await input.beforeStep?.();
       reply = await input.model({ messages, signal: input.signal });
     } catch {
       return { ok: false, text: "", log, error: input.signal.aborted ? STOPPED : "The model did not answer. Nothing was marked finished.", images: collectedImages.length ? collectedImages : undefined };
@@ -273,6 +275,7 @@ export async function runBoundedAgent(input: {
       }
       imagineCalls += 1;
     }
+    try { await input.beforeStep?.(); } catch (error) { return { ok: false, text: "", log, error: error instanceof Error ? error.message : "Agent authorization changed.", images: collectedImages.length ? collectedImages : undefined }; }
     const executed = await Promise.resolve(
       execute(input.ws, parsed.tool, { query: parsed.query, prompt: parsed.prompt }),
     );

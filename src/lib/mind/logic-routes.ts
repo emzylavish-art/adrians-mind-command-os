@@ -334,6 +334,7 @@ export function activePickerLabel(input: {
 }
 
 export type ChatTurnBodyInput = {
+  projectContext?: unknown;
   chatId?: string;
   text: string;
   memory: "off" | "on";
@@ -363,6 +364,7 @@ export function chatTurnBody(input: ChatTurnBodyInput): Record<string, unknown> 
     halted: input.halted,
     history: input.history.slice(-12),
     memoryContext: input.memoryContext,
+    ...(input.projectContext !== undefined ? { projectContext: input.projectContext } : {}),
     ...(normalizeBotKnowledge(input.botKnowledge).knowledge ? { botKnowledge: normalizeBotKnowledge(input.botKnowledge).knowledge } : {}),
     personalityId: input.personalityId ?? "assistant",
     customPersonality: input.customPersonality ?? "",

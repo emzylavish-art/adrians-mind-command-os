@@ -1,12 +1,14 @@
+import { buildRuntimeCapabilities } from "./runtime-capabilities.ts";
 import { machineRequired } from "./account-workspace.ts";
 import { requireUserId } from "../../auth/verify.server";
 import { assertSameOrigin } from "../connectors/oauth-csrf";
 import { haltIsOn } from "../halt.server";
-import { enqueueJob, onlineAgents, readJob } from "../pc-pairing/store";
+import { enqueueJob, onlineAgents, readJob } from "../pc-pairing/coordination.server.ts";
 import { KIMI_CAPABILITIES, capabilitySummary } from "./capabilities";
 import { archiveProject, listAudit, listProjects, listProviders, listSessions, saveProject, saveProvider, saveSessionMeta } from "./build-store";
 import { adrianHostedWorkspace, packageLabel, resolveBuildWorkspace, runCodingTurn } from "./hosted/acp-client.ts";
 import { recordKimiAttempt } from "./persist.ts";
+import { runGovernedHostedCoding } from "./hosted/resource-dispatch.server.ts";
 
 function json(body: unknown, status = 200) {
   return new Response(JSON.stringify(body), { status, headers: { "content-type": "application/json; charset=utf-8", "cache-control": "no-store" } });
@@ -25,9 +27,9 @@ function fail(error: unknown) {
 
 export async function handleKimiCapabilities(request: Request): Promise<Response> {
   try {
-    await owner(request);
+    const ownerId = await owner(request);
     if (request.method !== "GET") return json({ ok: false, error: "Method not allowed." }, 405);
-    return json({ ok: true, capabilities: KIMI_CAPABILITIES, summary: capabilitySummary(), runtimeVerified: false });
+    return json({ ok: true, capabilities: KIMI_CAPABILITIES, summary: capabilitySummary(), runtimeVerified: false, runtimes: buildRuntimeCapabilities(ownerId, await onlineAgents(ownerId)) });
   } catch (error) { return fail(error); }
 }
 
@@ -44,7 +46,7 @@ export async function handleKimiProjects(request: Request): Promise<Response> {
       return json({ ok, error: ok ? undefined : "Project not found." }, ok ? 200 : 404);
     }
     if (body.action === "session") {
-      const job = readJob(body.jobId || "");
+      const job = await readJob(body.jobId || "");
       if (!job || job.ownerId !== ownerId) return json({ ok: false, error: "Session not found." }, 404);
       return json({ ok: true, session: saveSessionMeta({ ownerId, jobId: job.id, name: body.name, archived: body.archived }) });
     }
@@ -72,8 +74,11 @@ export async function handleKimiVoice(request: Request): Promise<Response> {
   try {
     const ownerId = await owner(request);
     if (await haltIsOn(ownerId)) return json({ ok: false, error: "Emergency stop is on. Voice task was not queued." }, 403);
-    const agent = onlineAgents(ownerId)[0];
-    const body = (await request.json().catch(() => ({}))) as { transcript?: string; cwd?: string; instructions?: string };
+    const agents = await onlineAgents(ownerId);
+    const body = (await request.json().catch(() => ({}))) as { transcript?: string; cwd?: string; instructions?: string; agentId?: string };
+    if (body.agentId === undefined && agents.length > 1) return json({ ok: false, error: "Choose a computer before submitting the voice task. No alternate was selected." }, 409);
+    const agent = body.agentId === "hosted" ? undefined : body.agentId === undefined ? agents[0] : agents.find((item) => item.id === body.agentId);
+    if (body.agentId !== undefined && body.agentId !== "hosted" && !agent) return json({ ok: false, error: "The selected computer is unavailable. No alternate was selected." }, 409);
     const transcript = body.transcript?.trim().slice(0, 4_000) || "";
     if (!transcript) return json({ ok: false, error: "transcript is required." }, 400);
     const instructions = body.instructions?.trim().slice(0, 2_000) || "";
@@ -81,11 +86,13 @@ export async function handleKimiVoice(request: Request): Promise<Response> {
     if (!agent) {
       if (ownerId !== "dev-user") return json({ ok: false, executed: false, error: machineRequired }, 409);
       const workspace = resolveBuildWorkspace(body.cwd) || adrianHostedWorkspace();
-      const turn = await runCodingTurn({ prompt, cwd: workspace, mode: "auto" });
+      const { result: turn, resourceReceipt } = await runGovernedHostedCoding(ownerId,
+        () => runCodingTurn({ prompt, cwd: workspace, mode: "auto" }), (result) => result.ok);
       await recordKimiAttempt({ ownerId, status: turn.ok ? "session_created" : "failed", error: turn.error });
-      return json({ ok: turn.ok, executed: turn.ok, output: turn.output || "", sessionId: turn.sessionId, package: packageLabel(turn.command), limitation: "Audio was not sent to Kimi. The transcript ran in the hosted Build workspace." }, turn.ok ? 200 : 409);
+      return json({ ok: turn.ok, executed: turn.ok, output: turn.output || "", sessionId: turn.sessionId, instructionReceipt: turn.instructionReceipt, resourceReceipt, package: packageLabel(turn.command), limitation: "Audio was not sent to Kimi. The transcript ran in the hosted Build workspace." }, turn.ok ? 200 : 409);
     }
-    const job = enqueueJob({ ownerId, agentId: agent.id, kind: "kimi-acp", command: "kimi acp", confirm: false, payload: { prompt, cwd: body.cwd?.trim().slice(0, 500) || undefined, source: "adrian-speak" } });
+    if (!buildRuntimeCapabilities(ownerId, [agent])[1]?.coding) return json({ ok: false, error: "The selected computer has not reported an available coding runtime." }, 409);
+    const job = await enqueueJob({ ownerId, agentId: agent.id, kind: "kimi-acp", command: "kimi acp", confirm: false, payload: { prompt, cwd: body.cwd?.trim().slice(0, 500) || undefined, source: "adrian-speak" } });
     return json({ ok: true, jobId: job.id, status: job.status, limitation: "Audio was not sent to Kimi. The transcript uses the same Build session queue." }, 202);
   } catch (error) { return fail(error); }
 }

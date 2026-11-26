@@ -1,3 +1,4 @@
+import { classifyNotionFailure, type NotionFailureEvidence, type NotionOperation } from "./notion-operation-status.ts";
 import { createHash } from "node:crypto";
 import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
@@ -15,6 +16,10 @@ export type NotionIntent =
   | { action: "unclear" };
 
 export type NotionTurn = {
+  failure?: NotionFailureEvidence;
+  workspaceId?: string;
+  grantGeneration?: string;
+  statusSaved?: boolean;
   ok: boolean;
   state: "unconfigured" | "disconnected" | "connected";
   action: string;
@@ -130,7 +135,7 @@ function empty(state: NotionTurn["state"], action: string, error: string): Notio
   return { ok: false, state, action, needsConfirmation: false, ambiguous: false, pages: [], content: "", error, wrote: false, verified: false };
 }
 
-async function callNotion(fetchImpl: FetchLike, token: string, path: string, init: RequestInit): Promise<{ ok: true; body: unknown } | { ok: false; error: string }> {
+async function callNotion(fetchImpl: FetchLike, token: string, path: string, init: RequestInit, operation: NotionOperation): Promise<{ ok: true; body: unknown } | { ok: false; error: string; failure: NotionFailureEvidence }> {
   let response: { ok: boolean; status: number; json: () => Promise<unknown> };
   try {
     response = await fetchImpl(`https://api.notion.com/v1${path}`, {
@@ -142,12 +147,12 @@ async function callNotion(fetchImpl: FetchLike, token: string, path: string, ini
       },
     });
   } catch {
-    return { ok: false, error: "Notion could not be reached. Nothing was changed." };
+    return { ok: false, error: "Notion could not be reached. The outcome is unverified; inspect the page before repeating a write.", failure: classifyNotionFailure(operation, 0, null) };
   }
   const body = await response.json().catch(() => null);
   if (!response.ok) {
     const message = body && typeof body === "object" && typeof (body as { message?: unknown }).message === "string" ? (body as { message: string }).message : `Notion returned ${response.status}.`;
-    return { ok: false, error: `${message} Nothing was invented.` };
+    return { ok: false, error: `${message.split(token).join("[redacted]").slice(0, 500)} Nothing was invented.`, failure: classifyNotionFailure(operation, response.status, body) };
   }
   return { ok: true, body };
 }
@@ -157,6 +162,8 @@ export async function runNotionTurn(input: {
   disabled: boolean;
   text: string;
   confirmed: boolean;
+  grantGeneration?: string;
+  reviewedGrantGeneration?: string;
   pageId: string | null;
   fetch: FetchLike;
 }): Promise<NotionTurn> {
@@ -170,8 +177,8 @@ export async function runNotionTurn(input: {
   const found = await callNotion(input.fetch, input.token, "/search", {
     method: "POST",
     body: JSON.stringify({ query: query.slice(0, 200), page_size: 8 }),
-  });
-  if (!found.ok) return empty("connected", intent.action, found.error);
+  }, "search");
+  if (!found.ok) return { ...empty("connected", intent.action, found.error), failure: found.failure };
   let pages = pagesFromSearch(found.body);
   if (input.pageId) pages = pages.filter((page) => page.id === input.pageId).concat(pages.filter((page) => page.id !== input.pageId));
   const picked = input.pageId ? pages.find((page) => page.id === input.pageId) ?? null : pages.length === 1 ? pages[0] : null;
@@ -182,11 +189,11 @@ export async function runNotionTurn(input: {
     return { ok: false, state: "connected", action: intent.action, needsConfirmation: false, ambiguous: pages.length > 1, pages, content: "", error: pages.length ? "More than one Notion result matches. Pick one. Nothing was changed." : "Notion returned no matching page. Nothing was changed.", wrote: false, verified: false };
   }
   if (intent.action === "read") {
-    const blocks = await callNotion(input.fetch, input.token, `/blocks/${picked.id}/children?page_size=20`, { method: "GET" });
-    if (!blocks.ok) return { ...empty("connected", "read", blocks.error), pages: [picked] };
+    const blocks = await callNotion(input.fetch, input.token, `/blocks/${picked.id}/children?page_size=20`, { method: "GET" }, "read");
+    if (!blocks.ok) return { ...empty("connected", "read", blocks.error), failure: blocks.failure, pages: [picked] };
     return { ok: true, state: "connected", action: "read", needsConfirmation: false, ambiguous: false, pages: [picked], content: textFromBlocks(blocks.body), error: "", wrote: false, verified: false };
   }
-  if (!input.confirmed) {
+  if (!input.confirmed || (input.grantGeneration && input.reviewedGrantGeneration !== input.grantGeneration)) {
     return { ok: false, state: "connected", action: "append", needsConfirmation: true, ambiguous: false, pages: [picked], content: "", error: `Append to “${picked.title}” only after you confirm. Nothing was written.`, wrote: false, verified: false };
   }
   const note = intent.note.slice(0, 1500);
@@ -195,9 +202,9 @@ export async function runNotionTurn(input: {
     body: JSON.stringify({
       children: [{ object: "block", type: "paragraph", paragraph: { rich_text: [{ type: "text", text: { content: note } }] } }],
     }),
-  });
-  if (!wrote.ok) return { ...empty("connected", "append", wrote.error), pages: [picked] };
-  const check = await callNotion(input.fetch, input.token, `/blocks/${picked.id}/children?page_size=50`, { method: "GET" });
+  }, "append");
+  if (!wrote.ok) return { ...empty("connected", "append", wrote.error), failure: wrote.failure, pages: [picked] };
+  const check = await callNotion(input.fetch, input.token, `/blocks/${picked.id}/children?page_size=50`, { method: "GET" }, "read");
   const content = check.ok ? textFromBlocks(check.body) : "";
   const verified = content.includes(note);
   if (!check.ok || !verified) {

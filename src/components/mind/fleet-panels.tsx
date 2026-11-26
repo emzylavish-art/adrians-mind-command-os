@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import { RunCountsView, RunEvidence } from "./run-evidence";
 import { conversationSharePath } from "@/lib/mind/conversation-actions";
 import { BotBuilder } from "@/components/mind/bot-builder";
 import { zoneIsValid } from "@/lib/mind/schedule-clock";
@@ -110,6 +111,7 @@ function botAvatarSrc(name: string) {
 }
 
 function readLocalTool(id: string, ws: Workspace): string {
+  if (ws.toolPermissions?.[id] === false) return "This tool is turned off for this workspace. Nothing was read.";
   if (id === "list_projects") {
     if (ws.projects.length === 0) return "No projects stored in this browser.";
     return ws.projects.map((project) => project.name).join("\n");
@@ -538,7 +540,7 @@ export function FleetPanel({
   }
 
   if (mode === "runs") {
-    const needsAttention = ws.runs.filter((run) => run.state === "waiting_approval" || run.state === "waiting_external" || run.state === "failed");
+    const needsAttention = ws.runs.filter((run) => run.state === "waiting_approval" || run.state === "waiting_external" || run.state === "failed" || run.state === "paused" || run.state === "cancel_requested");
     const ordered = runFilter === "attention" ? needsAttention : ws.runs;
     const selected = ws.runs.find((run) => run.id === focusRunId);
     const runs = selected ? [selected, ...ordered.filter((run) => run.id !== selected.id)] : ordered;
@@ -580,6 +582,7 @@ export function FleetPanel({
         </div>
         {mutationBanner()}
         {note && mutationState.status !== "error" ? <p className="mt-3 text-sm text-muted">{note}</p> : null}
+        <RunCountsView runs={ws.runs} />
         <div className="mt-4 flex flex-wrap gap-2" aria-label="Run filters" role="group">
           <button type="button" aria-pressed={runFilter === "all"} className="min-h-11 rounded-panel border border-line px-3 text-sm" onClick={() => setRunFilter("all")}>All runs ({ws.runs.length})</button>
           <button type="button" aria-pressed={runFilter === "attention"} className="min-h-11 rounded-panel border border-line px-3 text-sm" onClick={() => setRunFilter("attention")}>Needs attention ({needsAttention.length})</button>
@@ -599,6 +602,7 @@ export function FleetPanel({
             <li key={run.id} id={`run-${run.id}`} tabIndex={-1} className={`rounded-panel border bg-surface p-3 text-sm ${run.id === focusRunId ? "border-accent" : "border-line"}`}>
               <p className="break-words font-semibold">{run.goal}</p>
               <p className="text-muted">{ws.agents.find((agent) => agent.id === run.agentId)?.name ?? "Agent"} · {run.state.replaceAll("_", " ")}</p>
+              <RunEvidence run={run} />
               {run.plan.length > 0 && <p className="mt-1 text-xs text-muted">Plan: {run.plan.map((step) => step.tool).join(" → ")}. Missing tools wait. They are not marked done.</p>}
               {run.result ? <p className="mt-1 whitespace-pre-wrap">{run.result}</p> : null}
               {run.error ? <p className="mt-1 text-danger">{run.error}</p> : null}
@@ -811,6 +815,17 @@ export function FleetPanel({
               <p className="text-sm text-muted">{job.clockHour == null ? `Every ${job.intervalMinutes} minutes` : `Daily at ${String(job.clockHour).padStart(2, "0")}:${String(job.clockMinute ?? 0).padStart(2, "0")} ${job.timeZone || "UTC"}`}</p>
               {blocked ? <p className="text-sm text-danger">{bot?.archived ? "Agent archived" : "Agent unavailable"}</p> : <p className="text-sm text-muted">Next due in your local time <time dateTime={job.nextRunAt}>{new Date(job.nextRunAt).toLocaleString()}</time></p>}
               {job.chatId && ws.chats.some((chat) => chat.id === job.chatId) && <a className="underline" href={conversationSharePath(job.chatId, ["chat"])}>Open conversation</a>}
+              <label className="mt-2 block text-xs">When a previous occurrence is active
+                <select value={job.overlapPolicy ?? "queue"} className="ml-2 min-h-11 rounded-panel border border-line bg-surface px-2" onChange={(event) => {
+                  const policy = event.target.value as "queue" | "skip" | "parallel";
+                  setWs((prev) => ({ ...prev, schedules: prev.schedules.map((item) => item.id === job.id ? { ...item, overlapPolicy: policy, maxParallel: item.maxParallel ?? 2 } : item) }));
+                }}><option value="queue">Wait for the previous run</option><option value="skip">Skip this occurrence</option><option value="parallel">Allow bounded parallel runs</option></select>
+              </label>
+              {job.overlapPolicy === "parallel" && <label className="mt-2 block text-xs">Maximum concurrent occurrences <input type="number" min={1} max={4} value={job.maxParallel ?? 2} className="ml-2 min-h-11 w-20 rounded-panel border border-line bg-surface px-2" onChange={(event) => {
+                const maximum = Math.max(1, Math.min(4, Number(event.target.value) || 1));
+                setWs((prev) => ({ ...prev, schedules: prev.schedules.map((item) => item.id === job.id ? { ...item, maxParallel: maximum } : item) }));
+              }} /></label>}
+              {!!job.occurrences?.length && <details className="mt-2"><summary className="min-h-11 cursor-pointer py-2">Occurrence history · {job.occurrences.length} retained</summary><ul className="space-y-1 text-xs text-muted">{job.occurrences.slice(-10).reverse().map((occurrence) => <li key={occurrence.runId}><time dateTime={occurrence.scheduledAt}>{new Date(occurrence.scheduledAt).toLocaleString()}</time> · {occurrence.state.replaceAll("_", " ")} · <span className="break-all">{occurrence.runId}</span></li>)}</ul></details>}
               {job.lastQueuedRunId && <p>Last occurrence: {ws.runs.find((run) => run.id === job.lastQueuedRunId)?.state ?? "Run record unavailable"}</p>}
               {job.lastRunAt && <p>Last completed: {new Date(job.lastRunAt).toLocaleString()}</p>}
               {job.lastAttemptAt && <p>Last attempt: {new Date(job.lastAttemptAt).toLocaleString()}</p>}

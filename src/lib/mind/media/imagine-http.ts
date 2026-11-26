@@ -1,3 +1,6 @@
+import { externalResourceCall } from "../external-resource-call.server.ts";
+import { withFailureEnvelope } from "../failure-envelope.ts";
+import { durableMediaOperations, mediaPayloadHash, runMediaOnce, validMediaOperationId, type MediaOperationStore } from "./operations.server.ts";
 import { haltIsOn } from "../halt.server.ts";
 import { requireUserId } from "@/lib/auth/verify.server";
 import { decideFetchSite } from "@/lib/mind/request-guard";
@@ -12,18 +15,21 @@ import { editImagineImage, generateImagineImages, normalizeImaginePrompt, resolv
 import { readOwnerVideo, startOwnerVideo } from "./video.ts";
 import { normalizeImageDataUrl } from "./data-url.ts";
 import { MAX_DATA_URL_CHARS } from "./types.ts";
+import { validateCreativeParameters } from "./asset-lifecycle.ts";
 
 try {
   setImagineRateLimitStore(createFileRateLimitStore(DEFAULT_IMAGINE_RATE_LIMIT_PATH));
 } catch {
   /* memory store remains the default */
 }
-function json(body: unknown, status = 200) {
-  return new Response(JSON.stringify(body), {
+function mediaJson(body: unknown, status = 200, subsystem: "image" | "video" = "image", operationKind: "read" | "generation" = "generation") {
+  const subject = body && typeof body === "object" && "kind" in body && body.kind === "video" ? "video" : subsystem;
+  return new Response(JSON.stringify(withFailureEnvelope(body, { subsystem: subject, status, operationKind })), {
     status,
     headers: { "content-type": "application/json", "cache-control": "no-store" },
   });
 }
+const json = mediaJson;
 
 function guardSite(request: Request): Response | null {
   if (
@@ -96,14 +102,24 @@ export async function handleImagineGenerate(request: Request): Promise<Response>
   // via meter.ownerId so custom execute paths cannot bypass.
 
   const record = body && typeof body === "object" ? (body as Record<string, unknown>) : {};
-  if (record.kind === "video" && record.action === "status") return handleOwnerVideo(record);
-  if (record.freeOnly === true) return json({ ok: false, error: "Free-only mode prevents a paid image or video request." }, 403);
-  if (await haltIsOn(userId)) return json({ ok: false, error: "Emergency stop is on or unavailable. Generation was blocked." }, 403);
-  if (record.kind === "video") return handleOwnerVideo(record);
+  if (record.action === "recover") {
+    const store = await durableMediaOperations();
+    if (validMediaOperationId(record.operationId)) {
+      const operation = await store.get(userId, record.operationId);
+      return operation ? json({ ok: true, operation }) : json({ ok: false, error: "Media operation not found." }, 404);
+    }
+    return json({ ok: true, operations: await store.list(userId) });
+  }
+  if (record.kind === "video" && record.action === "status") return handleOwnerVideo(record, userId);
+  if (record.freeOnly === true) return json({ ok: false, code: "free_only", dispatched: false, kind: record.kind === "video" ? "video" : "image", error: "Free-only mode prevents a paid image or video request." }, 403);
+  if (await haltIsOn(userId)) return json({ ok: false, code: "emergency_stop", dispatched: false, kind: record.kind === "video" ? "video" : "image", error: "Emergency stop is on or unavailable. Generation was blocked." }, 403);
+  if (record.kind === "video") return handleOwnerVideo(record, userId);
   const normalized = normalizeImaginePrompt(record.prompt);
   if (!normalized.ok) return json({ ok: false, error: normalized.error }, 400);
 
   const n = typeof record.n === "number" ? record.n : typeof record.count === "number" ? record.count : 1;
+  const invalid = validateCreativeParameters({ kind: "image", count: n });
+  if (invalid) return json({ ok: false, error: invalid, dispatched: false }, 400);
   // H4: allowlist only — unknown models collapse to grok-imagine-image
   const model = resolveImagineModel(record.model);
   const rawImage = typeof record.image === "string" ? record.image : typeof record.imageDataUrl === "string" ? record.imageDataUrl : "";
@@ -133,7 +149,7 @@ export async function handleImagineGenerate(request: Request): Promise<Response>
   }
 
   const meter = { ownerId: userId, sessionId };
-  const result =
+  const dispatch = async () =>
     mode === "edit"
       ? await editImagineImage(
           {
@@ -155,36 +171,53 @@ export async function handleImagineGenerate(request: Request): Promise<Response>
           { meter },
         );
 
-  if (!result.ok) {
-    const status = clientErrorStatus(result);
-    const error = mapImagineHttpError(status, result.error);
-    // Do not echo the requested arbitrary model id back when rejecting — return allowlisted model only.
-    return json({ ok: false, error, model }, status);
-  }
-
-  return json({
-    ok: true,
-    model: result.reportedModel,
-    requestedModel: model,
-    images: result.images.map((image, index) => ({
-      dataUrl: image.dataUrl,
-      mime: image.mime,
-      name: `imagine-${index + 1}.${image.mime === "image/png" ? "png" : image.mime === "image/webp" ? "webp" : "jpg"}`,
-    })),
+  const operationId = validMediaOperationId(record.operationId) ? record.operationId : crypto.randomUUID();
+  const result = await runMediaOnce(await durableMediaOperations(), userId, {
+    id: operationId, kind: "image", payloadHash: mediaPayloadHash({ mode, prompt: normalized.prompt, imageDataUrl, imageDataUrls, model, n }),
+    chatId: record.retainResult === false ? null : typeof record.chatId === "string" ? record.chatId : null, state: "dispatching", result: null, retainResult: record.retainResult !== false,
+  }, async () => {
+    const generated = await externalResourceCall({ owner: userId, provider: "xai", model, taskId: operationId }, dispatch);
+    if (!generated.ok) return { ...generated };
+    return { ...generated, model: generated.reportedModel, images: generated.images };
   });
+  if (result.ok !== true) return json(result, typeof result.status === "number" ? result.status : 502);
+  return json({ ...result, requestedModel: model });
 }
 
-async function handleOwnerVideo(record: Record<string, unknown>): Promise<Response> {
+async function handleOwnerVideo(record: Record<string, unknown>, owner: string): Promise<Response> {
+  const json = (body: unknown, status = 200) => mediaJson(body, status, "video", record.action === "status" ? "read" : "generation");
+  let store: MediaOperationStore;
+  try { store = await durableMediaOperations(); }
+  catch { return json({ ok: false, error: "Durable media recovery storage is unavailable. No generation started." }, 503); }
   if (record.action === "status") {
-    const requestId = typeof record.requestId === "string" ? record.requestId : "";
+    if (!validMediaOperationId(record.operationId)) return json({ ok: false, error: "Select a saved video operation to check its status." }, 400);
+    const op = await store.get(owner, record.operationId);
+    if (!op || op.kind !== "video") return json({ ok: false, error: "Video operation not found." }, 404);
+    if (op.state === "completed" || op.state === "failed") return json(op.result);
+    const requestId = op.result?.requestId;
+    if (typeof requestId !== "string") return json({ ok: false, state: "unknown", error: "Provider acceptance was not confirmed. Do not start another generation automatically." }, 409);
     const result = await readOwnerVideo(requestId);
-    return json(result, result.ok ? 200 : result.status);
+    if (result.ok && result.state === "done") {
+      const temporary = (op.result?.receipt as { retention?: string } | undefined)?.retention === "temporary_not_retained";
+      op.state = "completed"; op.result = temporary
+        ? { ok: false, code: "temporary_result_not_retained", status: 409, receipt: op.result?.receipt, error: "The temporary video result was delivered but its link was not retained." }
+        : { ...op.result, ...result, retention: "provider_url_expires", expiresAt: null };
+      await store.save(owner, op);
+    } else if (!result.ok && result.state === "failed") {
+      op.state = "failed"; op.result = { ...op.result, ...result }; await store.save(owner, op);
+    }
+    return json({ ...result, operationId: op.id }, result.ok ? 200 : result.status);
   }
-  const result = await startOwnerVideo({
-    prompt: typeof record.prompt === "string" ? record.prompt : "",
-    duration: typeof record.duration === "number" ? record.duration : 5,
-  });
-  return json(result, result.ok ? 200 : result.status);
+  const operationId = validMediaOperationId(record.operationId) ? record.operationId : crypto.randomUUID();
+  const prompt = typeof record.prompt === "string" ? record.prompt : "";
+  const duration = typeof record.duration === "number" ? record.duration : 5;
+  const invalid = validateCreativeParameters({ kind: "video", duration });
+  if (invalid) return json({ ok: false, error: invalid, dispatched: false }, 400);
+  const result = await runMediaOnce(store, owner, {
+    id: operationId, kind: "video", payloadHash: mediaPayloadHash({ prompt, duration }),
+    chatId: record.retainResult === false ? null : typeof record.chatId === "string" ? record.chatId : null, state: "dispatching", result: null, retainResult: record.retainResult !== false,
+  }, () => externalResourceCall({ owner, provider: "xai", model: "grok-imagine-video-1.5-lite", taskId: operationId }, () => startOwnerVideo({ prompt, duration })));
+  return json(result, result.ok ? 200 : typeof result.status === "number" ? result.status : 502);
 }
 
 export async function handleImagineStatus(request: Request): Promise<Response> {

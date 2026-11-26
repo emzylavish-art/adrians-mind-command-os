@@ -2,6 +2,7 @@ import { getRequest } from "@tanstack/react-start/server";
 import { localPreviewIdentityAllowed } from "./session-user.ts";
 import { gateIdentityEnabled } from "./gate-identity.server";
 import { auth, authConfigured } from "./server";
+import { hasSupabaseCredential, identitiesAgree } from "./identity-continuity.ts";
 
 /**
  * Server-side session resolution (server-only).
@@ -81,10 +82,16 @@ export async function getSessionUser(
 ): Promise<VerifiedUser | null> {
   const { pickSessionUser } = await import("./session-user");
   const supabaseUser = await readSupabaseSessionUser();
+  const presented = hasSupabaseCredential(getRequest()?.headers.get("cookie") ?? null);
+  if (presented && !supabaseUser) return null;
   // When Supabase Auth is configured and has a user, that is the owner session
   // MCP list / turn / halt endpoints accept. Better Auth remains a fallback for
   // existing broker sessions.
   if (supabaseUser) {
+    if (bearerToken) {
+      const bearerUser = await readBetterAuthSessionUser(bearerToken);
+      if (!bearerUser || !identitiesAgree(supabaseUser.id, bearerUser.id)) return null;
+    }
     return pickSessionUser({ supabaseUser, betterAuthUser: null });
   }
   const betterAuthUser = await readBetterAuthSessionUser(bearerToken);

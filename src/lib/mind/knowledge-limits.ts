@@ -1,0 +1,5 @@
+export const MAX_DOCUMENT_INPUT_BYTES = 5_000_000;
+export const MAX_DOCUMENT_TEXT_CHARS = 400_000;
+export const MAX_LIBRARY_FILES = 1000;
+export const MAX_PROJECT_PASSAGES = 6;
+export const MAX_PROJECT_CONTEXT_CHARS = 6000;

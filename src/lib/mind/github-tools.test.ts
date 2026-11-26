@@ -14,9 +14,11 @@ describe("GitHub tools", () => {
     assert.match(listed, /LibreTranslate is not installed/);
   });
 
-  it("refuses translation without LibreTranslate", () => {
-    const result = runGitHubTool("translate hello");
-    assert.match(result ?? "", /No text was translated/);
+  it("leaves incomplete translation to the caller and refuses an unsupported language", () => {
+    assert.equal(runGitHubTool("translate hello"), null);
+    const result = runGitHubTool("translate hello to klingon");
+    assert.match(result ?? "", /No installed language package was selected/);
+    assert.match(result ?? "", /Nothing was translated/);
   });
 
   it("runs restic and OpenSCAD when the binaries exist", async () => {

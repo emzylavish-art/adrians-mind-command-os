@@ -55,6 +55,7 @@ export async function startOwnerVideo(
   try {
     response = await fetchImpl(VIDEO_START_URL, {
       method: "POST",
+      signal: AbortSignal.timeout(30_000),
       headers: {
         authorization: `Bearer ${apiKey}`,
         "content-type": "application/json",

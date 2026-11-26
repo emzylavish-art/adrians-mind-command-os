@@ -5,11 +5,13 @@ import { AGENT_TIMEOUT_REPLY, agentRunTimeoutMs, boundAbortSignal, isTimeoutAbor
 import { guardMindEnv } from "./isolation";
 import { AGENT_RATE_LIMIT_REPLY, consumeMindRateLimit, jsonRateLimited } from "./limits";
 import { decideFetchSite } from "./request-guard";
-import { emptyWorkspace } from "./workspace";
 import { sanitizeAttachments } from "./media/index.ts";
 import { resolveXaiInferenceApiKey } from "./xai-adapter";
 import { parseModelTierField, readJsonObjectBody } from "./request-body";
 import { resolveDatabaseUrl } from "../env.server.ts";
+import { governedModelCall } from "./resource-governor.server.ts";
+import { normalizeProviderReceipt } from "./provider-call.ts";
+import { readAuthorizedAgentContext } from "./memory/dispatch-policy.server.ts";
 
 const MAX_BODY = 2_500_000;
 
@@ -20,13 +22,11 @@ function json(body: unknown, status = 200) {
   });
 }
 
-function names(value: unknown, limit: number) {
-  if (!Array.isArray(value)) return [];
-  return value.filter((item): item is string => typeof item === "string").map((item) => item.trim().slice(0, 200)).filter(Boolean).slice(0, limit);
-}
 
 function grokModel(
   apiKey: string,
+  owner: string,
+  taskId: string,
   parent: AbortSignal,
   options: {
     model: string;
@@ -37,21 +37,20 @@ function grokModel(
 ): AgentModel {
   return async ({ messages, signal }) => {
     const linked = typeof AbortSignal.any === "function" ? AbortSignal.any([parent, signal]) : parent;
-    const response = await fetch("https://api.x.ai/v1/chat/completions", {
-      method: "POST",
-      signal: linked,
-      headers: { "content-type": "application/json", authorization: `Bearer ${apiKey}` },
-      body: JSON.stringify(
-        buildAgentModelBody(messages, {
-          model: options.model,
-          temperature: options.temperature,
-          max_tokens: options.max_tokens,
-          reasoning_effort: options.reasoning_effort,
-        }),
-      ),
+    const result = await governedModelCall({ owner, taskId, provider: "grok", model: options.model,
+      inputChars: JSON.stringify(messages).length, outputTokens: options.max_tokens, signal: linked,
+      call: async () => {
+        const response = await fetch("https://api.x.ai/v1/chat/completions", {
+          method: "POST", signal: linked,
+          headers: { "content-type": "application/json", authorization: `Bearer ${apiKey}` },
+          body: JSON.stringify(buildAgentModelBody(messages, { model: options.model, temperature: options.temperature, max_tokens: options.max_tokens, reasoning_effort: options.reasoning_effort })),
+        });
+        const payload = await response.json() as Record<string, unknown>;
+        return { ok: response.ok, payload, ...normalizeProviderReceipt("grok", payload, response.headers) };
+      },
     });
-    if (!response.ok) throw new Error(`status ${response.status}`);
-    return readAgentMessage(await response.json());
+    if (!result.ok) throw new Error("error" in result ? result.error : "The selected agent model did not finish.");
+    return readAgentMessage(result.payload);
   };
 }
 
@@ -96,31 +95,9 @@ export async function handleAgentRun(request: Request): Promise<Response> {
   const keyed = resolveXaiInferenceApiKey(process.env);
   if (!keyed.ok) return json({ ok: false, error: keyed.error, log: [] });
   const apiKey = keyed.key;
-  const ws = emptyWorkspace();
-  const stamp = "2026-01-01T00:00:00.000Z";
-  ws.projects = names(body.projects, 20).map((name, index) => ({ id: `p${index}`, name, description: "", createdAt: stamp }));
-  ws.chats = names(body.chats, 20).map((title, index) => ({
-    id: `c${index}`,
-    title,
-    memory: "off" as const,
-    temporary: false,
-    autonomy: "ask" as const,
-    projectId: null,
-    retrievalLog: [],
-    messages: [],
-  }));
-  ws.memories = names(body.notes, 12).map((text, index) => ({
-    id: `n${index}`,
-    scope: "global" as const,
-    projectId: null,
-    chatId: null,
-    text,
-    source: "owner",
-    createdAt: stamp,
-    updatedAt: stamp,
-    archived: false,
-    versions: [],
-  }));
+  const currentContext = await readAuthorizedAgentContext(userId, read.body);
+  if (!currentContext.ok) return json({ ...currentContext, log: [] }, 409);
+  const ws = currentContext.workspace;
   const goal = typeof body.goal === "string" ? body.goal : "";
   const tier = resolveModelTier(tierField.tier, goal || (Array.isArray(body.images) && body.images.length ? "image" : ""), process.env);
   const images = sanitizeAttachments(body.images);
@@ -129,7 +106,7 @@ export async function handleAgentRun(request: Request): Promise<Response> {
     const result = await runBoundedAgent({
       ws,
       goal: goal || (images.length ? "Describe the attached image and use tools only if needed." : ""),
-      model: grokModel(apiKey, bound.signal, {
+      model: grokModel(apiKey, userId, crypto.randomUUID(), bound.signal, {
         model: tier.model,
         temperature: tier.params.temperature,
         max_tokens: tier.params.max_tokens,
@@ -140,6 +117,12 @@ export async function handleAgentRun(request: Request): Promise<Response> {
       halted: false,
       approved: true,
       images,
+      beforeStep: async () => {
+        if (await haltIsOn(userId)) throw new Error("Emergency stop is on. No new agent step can run.");
+        const current = await readAuthorizedAgentContext(userId, read.body);
+        if (!current.ok) throw new Error(current.error);
+        Object.assign(ws, current.workspace);
+      },
     });
     if (!result.ok && isTimeoutAbort(bound.signal, bound.signal.reason)) {
       return json({

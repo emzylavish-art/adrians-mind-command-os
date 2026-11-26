@@ -1,3 +1,5 @@
+import { modelExecutionPlan, type ModelExecutionPlan } from "./execution-plan.ts";
+import { withFailureEnvelope } from "./failure-envelope.ts";
 import { DEV_USER_ID, isLoopbackPreview, requireUserId } from "../auth/verify.server";
 import { guardMindEnv } from "./isolation";
 import { checkTurnSize, createChatTurnPreflight } from "./limits";
@@ -10,14 +12,15 @@ import { allowedModelIds, isConnectedGrokModel, resolveModelTier, type ResolvedM
 import { assertLiveProvider } from "./providers";
 import { callConfiguredProvider, httpStatusForProviderSelection, routeSelectedModel, selectProvider } from "./provider-call";
 import { configuredProviders } from "./provider-call";
-import { ADRIAN_MIND_IDENTITY, builtinModules, collectConsultHelp, customModules, orchestratorInstruction, planModelConsult } from "./model-consult.ts";
+import { ADRIAN_MIND_IDENTITY, builtinModules, executeConsultPlan, type HelperReceipt, type HelperReply, customModules, orchestratorInstruction, planModelConsult } from "./model-consult.ts";
 import { adrianPcEnabled, runAdrianPc } from "./adrian-pc.server.ts";
+import { ownerScreenshotReader } from "./pc-vision.server.ts";
 import { consequentialSpeechRefusal } from "./frontier-2031.ts";
 import { destructiveSpeechRefusal } from "./reversibility.ts";
 import { ensureLocalCapabilityFile, runLocalCommand } from "./local-capabilities.ts";
 import path from "node:path";
 import { buildRelayModelBody, relayModelStream } from "./relay";
-import { CHAT_TIMEOUT_REPLY, chatTurnTimeoutMs } from "./turn-timeouts";
+import { chatTurnTimeoutMs } from "./turn-timeouts";
 import { decideFetchSite } from "./request-guard";
 import { parseModelTierField, readJsonObjectBody } from "./request-body";
 import { readModelPayload, reportedModel } from "./stream";
@@ -25,7 +28,11 @@ import { resolveDatabaseUrl } from "../env.server.ts";
 import { LOGIC_ROUTE_LABEL, resolveRequestedRoute, toAdapterMessages, type LogicRouteId } from "./logic-routes.ts";
 import { inspectLogicRoutes, runLogicRoute } from "./logic-route-adapter.server.ts";
 import { parseCustomProviderChoice, executeCustomChat } from "./ai-provider-config.server.ts";
-import { claimTurn, finishTurnReceipt, pruneTurnReceipts, turnOperationExpiry } from "./turn-receipt.ts";
+import { claimTurn, pruneTurnReceipts, turnOperationExpiry } from "./turn-receipt.ts";
+import { readTurnRecovery, recoverableTurnResponse } from "./turn-recovery.ts";
+import { governedModelCall, reserveResourceOperation, settleResourceOperation, settleResourceStream } from "./resource-governor.server.ts";
+import { assertCurrentMemoryContext } from "./memory/dispatch-policy.server.ts";
+import { resolveTurnInstructions, instructionContext, recordLoadedInstructions, type LoadedInstruction } from "./skill-instructions.server.ts";
 import type { Sql } from "../db";
 
 /** Default Expert model id — kept for status/docs; live turns use resolveModelTier. */
@@ -58,6 +65,13 @@ export type TurnBody = {
   botKnowledge?: unknown;
   composerMode?: unknown;
   orchestrator?: unknown;
+  consultHelpers?: unknown;
+  maxHelpers?: unknown;
+  freeOnly?: unknown;
+  temporary?: unknown;
+  memoryPolicyRevision?: unknown;
+  contextPolicy?: unknown;
+  projectContext?: unknown;
 };
 
 function isHistory(item: unknown): item is HistoryInputMessage {
@@ -74,13 +88,13 @@ function isNote(item: unknown): item is NoteItem {
   return typeof record.id === "string" && typeof record.text === "string";
 }
 
-function directTurnContext(body: TurnBody, text: string, history: HistoryInputMessage[], consultHelp: string) {
+function directTurnContext(body: TurnBody, text: string, history: HistoryInputMessage[], consultHelp: string, skillInstructions = "") {
   if (body.memory !== undefined && body.memory !== "on" && body.memory !== "off") return { ok: false as const, error: "Invalid memory setting." };
   const memoryContext = Array.isArray(body.memoryContext) ? body.memoryContext.filter(isNote).slice(0, 12) : [];
   const sized = checkTurnSize({ text, history, memoryContext, images: [] });
   if (!sized.ok) return sized;
   const assembled = assembleTurn({ text, history: [], memory: body.memory === "on" ? "on" : "off", memoryContext,
-    personalityId: body.personalityId, customPersonality: body.customPersonality, botKnowledge: body.botKnowledge, consultHelp });
+    personalityId: body.personalityId, customPersonality: body.customPersonality, botKnowledge: body.botKnowledge, projectContext: body.projectContext, instructionContext: skillInstructions, consultHelp });
   if (!assembled.ok) return assembled;
   return { ok: true as const, systemPrompt: String(assembled.messages[0].content), usedIds: assembled.usedIds };
 }
@@ -97,11 +111,16 @@ export async function prepareMindTurn(userId: string, data: TurnBody) {
   return prepareMindTurnWithHelp(userId, data, "");
 }
 
-export async function prepareMindTurnWithHelp(userId: string, data: TurnBody, consultHelp = "") {
+export async function prepareMindTurnWithHelp(userId: string, data: TurnBody, consultHelp = "", resolvedInstructions?: LoadedInstruction[]) {
   const { haltIsOn } = await import("./halt.server");
   if ((await haltIsOn(userId)) || data.halted === true) {
     return { ok: false as const, error: "Emergency stop is on. No new action can run." };
   }
+  const permission = await assertCurrentMemoryContext(userId, data);
+  if (!permission.ok) return permission;
+  let instructions: LoadedInstruction[];
+  try { instructions = resolvedInstructions ?? await resolveTurnInstructions(userId, data.chatId); }
+  catch (error) { return { ok: false as const, error: error instanceof Error ? error.message : "Assigned instructions could not be verified." }; }
   const spoken = typeof data.text === "string" ? data.text : "";
   const refused = consequentialSpeechRefusal(spoken);
   if (refused) return { ok: false as const, error: refused };
@@ -138,6 +157,8 @@ export async function prepareMindTurnWithHelp(userId: string, data: TurnBody, co
     personalityId: data.personalityId,
     customPersonality: data.customPersonality,
     botKnowledge: data.botKnowledge,
+    projectContext: data.projectContext,
+    instructionContext: instructionContext(instructions),
     consultHelp,
   });
   if (!assembled.ok) return { ok: false as const, error: assembled.error };
@@ -158,6 +179,8 @@ export async function prepareMindTurnWithHelp(userId: string, data: TurnBody, co
     saveMemoryText,
     chatId,
     userId,
+    dispatchBody: data,
+    instructions,
   };
 }
 
@@ -166,6 +189,9 @@ export async function completeModelReply(prepared: {
   memory: "off" | "on";
   model: string;
   modelTier: ResolvedModelTier;
+  userId: string;
+  dispatchBody?: TurnBody;
+  instructions?: LoadedInstruction[];
 }) {
   if (!allowedModelIds(process.env).has(prepared.model)) {
     return { ok: false as const, error: "That model is not available. Another provider is not substituted." };
@@ -173,23 +199,27 @@ export async function completeModelReply(prepared: {
   const keyed = resolveXaiInferenceApiKey(process.env);
   if (!keyed.ok) return { ok: false as const, error: keyed.error };
   const apiKey = keyed.key;
-  let res: Response;
-  try {
-    res = await fetch("https://api.x.ai/v1/chat/completions", {
-      method: "POST",
-      signal: AbortSignal.timeout(25_000),
-      headers: { "Content-Type": "application/json", Authorization: `Bearer ${apiKey}` },
-      body: JSON.stringify(
-        buildRelayModelBody(prepared.model, prepared.assembled.messages, {
-          temperature: prepared.modelTier.params.temperature,
-          max_tokens: prepared.modelTier.params.max_tokens,
-          reasoning_effort: prepared.modelTier.params.reasoning_effort,
-        }),
-      ),
-    });
-  } catch {
-    return { ok: false as const, error: CHAT_TIMEOUT_REPLY };
-  }
+  const permission = await assertCurrentMemoryContext(prepared.userId, prepared.dispatchBody ?? {});
+  if (!permission.ok) return permission;
+  const ran = await governedModelCall({ owner: prepared.userId, taskId: crypto.randomUUID(), provider: "grok", model: prepared.model,
+    inputChars: JSON.stringify(prepared.assembled.messages).length, outputTokens: prepared.modelTier.params.max_tokens,
+    freeOnly: prepared.dispatchBody?.freeOnly === true,
+    call: async () => {
+      if (prepared.instructions?.length) await recordLoadedInstructions(prepared.userId, prepared.instructions);
+      const response = await fetch("https://api.x.ai/v1/chat/completions", {
+        method: "POST", signal: AbortSignal.timeout(25_000),
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${apiKey}` },
+        body: JSON.stringify(buildRelayModelBody(prepared.model, prepared.assembled.messages, {
+          temperature: prepared.modelTier.params.temperature, max_tokens: prepared.modelTier.params.max_tokens, reasoning_effort: prepared.modelTier.params.reasoning_effort,
+        })),
+      });
+      const raw = await response.text();
+      const parsed = readModelPayload(raw);
+      return { ok: response.ok, response: new Response(raw, { status: response.status, headers: response.headers }), usage: parsed.usage, requestId: response.headers.get("x-request-id") };
+    },
+  });
+  if (!ran.ok) return { ok: false as const, error: "error" in ran ? ran.error : "The selected provider did not complete this request." };
+  const res = ran.response;
   if (!res.ok) return { ok: false as const, error: `Grok returned ${res.status}. Nothing was saved as a success.` };
   const parsed = readModelPayload(await res.text());
   if (!parsed.text) return { ok: false as const, error: "Grok returned an empty reply." };
@@ -210,7 +240,9 @@ export async function completeModelReply(prepared: {
 }
 
 function json(body: unknown, status = 200, retryAfter?: string) {
-  return new Response(JSON.stringify(body), {
+  const seconds = retryAfter && /^\d+$/.test(retryAfter) ? Number(retryAfter) : NaN;
+  const delay = Number.isFinite(seconds) && seconds >= 0 && seconds <= 604_800 ? new Date(Date.now() + seconds * 1000).toISOString() : undefined;
+  return new Response(JSON.stringify(withFailureEnvelope(body, { subsystem: "chat", status, operationKind: "generation", ...(delay ? { retryAfterAt: delay } : {}) })), {
     status,
     headers: { "content-type": "application/json", "cache-control": "no-store", ...(retryAfter ? { "retry-after": retryAfter } : {}) },
   });
@@ -223,6 +255,7 @@ function logicSse(input: {
   route: LogicRouteId;
   usedIds: string[];
   credentialFallback: "OPENAI_API_KEY" | null;
+  resourceOperationId?: string;
 }): Response {
   const label = LOGIC_ROUTE_LABEL[input.route];
   const done = {
@@ -234,6 +267,8 @@ function logicSse(input: {
     usedIds: input.usedIds,
     requestId: null,
     logicRoute: input.route,
+    resourceOperationId: input.resourceOperationId,
+    executionPlan: modelExecutionPlan("independent", [input.route]),
     credentialFallback: input.credentialFallback,
     tierReason: `Owner selected ${label}.`,
   };
@@ -243,7 +278,7 @@ function logicSse(input: {
   });
 }
 
-async function handleLogicTurn(userId: string, data: TurnBody, route: LogicRouteId, preflight: () => Promise<Response | null>, markDispatched: () => void): Promise<Response> {
+async function handleLogicTurn(userId: string, data: TurnBody, route: LogicRouteId, preflight: () => Promise<Response | null>, markDispatched: () => void, taskId: string, signal: AbortSignal, instructions: LoadedInstruction[]): Promise<Response> {
   const label = LOGIC_ROUTE_LABEL[route];
   const images = sanitizeAttachments(data.images);
   if (images.length > 0) {
@@ -267,7 +302,7 @@ async function handleLogicTurn(userId: string, data: TurnBody, route: LogicRoute
   if (!memory) return json({ ok: false, error: "Memory setting is invalid." }, 400);
   const gate = envCheck();
   if (!gate.ok) return json({ ok: false, error: gate.error });
-  const assembled = assembleTurn({ memory, history, text, memoryContext, images: [], personalityId: data.personalityId, customPersonality: data.customPersonality, botKnowledge: data.botKnowledge });
+  const assembled = assembleTurn({ memory, history, text, memoryContext, images: [], personalityId: data.personalityId, customPersonality: data.customPersonality, botKnowledge: data.botKnowledge, projectContext: data.projectContext, instructionContext: instructionContext(instructions) });
   if (!assembled.ok) return json({ ok: false, error: assembled.error }, 400);
   const flat = toAdapterMessages(assembled.messages);
   if (!flat.ok) return json({ ok: false, error: flat.error }, 400);
@@ -284,13 +319,14 @@ async function handleLogicTurn(userId: string, data: TurnBody, route: LogicRoute
   const blocked = await preflight();
   if (blocked) return blocked;
   markDispatched();
-  const ran = await runLogicRoute({
+  const ran = await governedModelCall({ owner: userId, taskId, provider: route, model: view.model || route, unknownTokens: true, unknownCost: true, inputChars: JSON.stringify(flat.messages).length, freeOnly: data.freeOnly === true, signal, call: async () => { if (instructions.length) await recordLoadedInstructions(userId, instructions, taskId); return runLogicRoute({
+    signal,
     route,
     messages: flat.messages,
     env: process.env,
     inspect: async () => inspected,
-  });
-  if (!ran.ok) return json({ ok: false, error: ran.error, logicRoute: route, provider: route }, ran.called ? 502 : 503);
+  }); } });
+  if (!ran.ok) return json({ ok: false, error: ran.error, logicRoute: route, provider: route }, "called" in ran && ran.called ? 502 : 503);
   return logicSse({
     text: ran.content,
     model: ran.model,
@@ -298,6 +334,7 @@ async function handleLogicTurn(userId: string, data: TurnBody, route: LogicRoute
     route: ran.provider,
     usedIds: assembled.usedIds,
     credentialFallback: ran.credentialFallback,
+    resourceOperationId: ran.resourceOperationId,
   });
 }
 
@@ -339,6 +376,10 @@ export async function handleMindTurn(request: Request): Promise<Response> {
     sql = await getSql();
     const receipt = await claimTurn(sql, userId, operationId, read.body, expiresAt);
     if (receipt !== "claimed") {
+      if (receipt === "responded" && read.body.temporary !== true) {
+        const recovered = await readTurnRecovery(sql, userId, operationId);
+        if (recovered) return recovered;
+      }
       const error = receipt === "different"
         ? "This send ID already belongs to a different request."
         : receipt === "waiting"
@@ -353,12 +394,11 @@ export async function handleMindTurn(request: Request): Promise<Response> {
   const response = await dispatchMindTurn(request, userId, read.body, () => { dispatched = true; });
   // The insert is the protection. A failed audit update must not hide a real reply.
   try {
-    await finishTurnReceipt(sql, userId, operationId, !dispatched);
     await pruneTurnReceipts(sql);
   } catch {
     // The existing receipt keeps later deliveries from starting another call.
   }
-  return response;
+  return recoverableTurnResponse({ response, sql, owner: userId, operation: operationId, retain: read.body.temporary !== true && read.body.retainResponse !== false, dispatched });
 }
 
 async function dispatchMindTurn(request: Request, userId: string, data: Record<string, unknown>, markDispatched: () => void = () => {}): Promise<Response> {
@@ -377,7 +417,7 @@ async function dispatchMindTurn(request: Request, userId: string, data: Record<s
   if (stopped) return stopped;
   const localOwner = userId === DEV_USER_ID && isLoopbackPreview() && !process.env.VERCEL;
   if (localOwner && adrianPcEnabled() && typeof body.text === "string" && body.text.trim()) {
-    const pc = await runAdrianPc({ text: body.text, halted: false });
+    const pc = await runAdrianPc({ text: body.text, halted: false, readImage: ownerScreenshotReader(userId) });
     if (pc.ran) {
       markDispatched();
       body = { ...body, text: `${body.text}\n\nAdrian PC result: ${pc.output}` };
@@ -397,8 +437,36 @@ async function dispatchMindTurn(request: Request, userId: string, data: Record<s
       return new Response(stream, { headers: { "content-type": "text/event-stream", "cache-control": "no-store" } });
     }
   }
+  const helperReceipts: HelperReceipt[] = [];
+  const withHelperReceipts = async (response: Response | null) => response && helperReceipts.length ? json({ ...await response.json(), helperReceipts }, response.status, response.headers.get("retry-after") ?? undefined) : response;
   const ratePreflight = createChatTurnPreflight(userId, async () => false);
-  const preflight = async () => (await checkStop()) ?? ratePreflight();
+  const preflight = async () => {
+    if (request.signal.aborted) return withHelperReceipts(json({ ok: false, error: "This send was canceled before dispatch." }, 499));
+    const stop = await checkStop();
+    if (stop) return withHelperReceipts(stop);
+    const memory = await assertCurrentMemoryContext(userId, body);
+    if (!memory.ok) return withHelperReceipts(json(memory, 409));
+    return withHelperReceipts(await ratePreflight());
+  };
+  const taskId = request.headers.get("x-mind-turn-id") || crypto.randomUUID();
+  let instructions: LoadedInstruction[];
+  try { instructions = await resolveTurnInstructions(userId, body.chatId); }
+  catch (error) { return json({ ok: false, error: error instanceof Error ? error.message : "Assigned instructions could not be verified." }, 409); }
+  const skillInstructions = instructionContext(instructions);
+  const govern = <T extends { ok: boolean; usage?: { prompt_tokens?: number; completion_tokens?: number } | null; requestId?: string | null }>(provider: string, model: string, call: () => Promise<T>) => governedModelCall({ owner: userId, taskId, provider, model, inputChars: JSON.stringify(body).length + skillInstructions.length, outputTokens: provider.startsWith("custom:") ? 2048 : 1024, freeOnly: body.freeOnly === true, signal: request.signal, call: async () => { if (instructions.length) await recordLoadedInstructions(userId, instructions, taskId); return call(); } });
+  let executionPlan: ModelExecutionPlan | undefined;
+  const turnJson = (value: Record<string, unknown>, status = 200, retryAfter?: string) => json({ ...value, operationId: taskId, helperReceipts }, status, retryAfter);
+  // Validate before contacting any helper. Invalid turns cannot incur helper costs.
+  if (body.freeOnly !== undefined && typeof body.freeOnly !== "boolean") return turnJson({ ok: false, error: "Invalid spending policy." }, 400);
+  if (body.consultHelpers !== undefined && (!Array.isArray(body.consultHelpers) || body.consultHelpers.some((id) => typeof id !== "string"))) return turnJson({ ok: false, error: "Invalid helper selection." }, 400);
+  const initialText = typeof body.text === "string" ? body.text.trim() : "";
+  const initialContext = directTurnContext(body, initialText || "Describe the attached image.", Array.isArray(body.history) ? body.history.filter(isHistory) : [], "");
+  if (!initialContext.ok) return turnJson(initialContext, 400);
+  const initialTier = parseModelTierField(body.modelTier);
+  if (!initialTier.ok) return turnJson(initialTier, 400);
+  const freeRoute = (id: unknown) => id === "ollama" || id === "nemotron" || id === "openrouter";
+  const requestedPrimary = body.composerMode === "orchestrator" ? body.orchestrator || body.provider : body.logicRoute || body.provider || "grok";
+  if (body.freeOnly === true && (!freeRoute(requestedPrimary) || (Array.isArray(body.consultHelpers) && body.consultHelpers.some((id) => !freeRoute(id))))) return turnJson({ ok: false, error: "Free-only blocks this provider plan. Choose a verified free OpenRouter route or your local model." }, 403);
   let consultHelp = "";
   if (body.composerMode === "orchestrator") {
     const asked = typeof body.text === "string" ? body.text.trim() : "";
@@ -406,10 +474,10 @@ async function dispatchMindTurn(request: Request, userId: string, data: Record<s
       ? body.orchestrator
       : typeof body.provider === "string" ? body.provider : "";
     const modules = await modulesConnectedNow(userId);
-    const planned = planModelConsult({ orchestrator, modules, question: asked });
-    if (!planned.ok) return json({ ok: false, error: planned.error, provider: orchestrator }, 400);
+    const planned = planModelConsult({ orchestrator, modules, question: asked, authorizedHelpers: body.consultHelpers as string[] | undefined, maxHelpers: typeof body.maxHelpers === "number" ? body.maxHelpers : undefined });
+    if (!planned.ok) return turnJson({ ok: false, error: planned.error, provider: orchestrator }, 400);
     if (sanitizeAttachments(body.images).length && planned.plan.orchestrator !== "grok") {
-      return json({
+      return turnJson({
         ok: false,
         error: "That connected model cannot see images in this app. Remove the images or choose a connected model that can. Another model was not substituted.",
         provider: planned.plan.orchestrator,
@@ -417,58 +485,64 @@ async function dispatchMindTurn(request: Request, userId: string, data: Record<s
     }
     const blocked = await preflight();
     if (blocked) return blocked;
-    const help = await collectConsultHelp(planned.plan, async (id, requestText) => {
-      if (await preflight()) return { ok: false, text: "" };
+    executionPlan = planned.plan.execution;
+    const collected = await executeConsultPlan(planned.plan, async (id, requestText, signal) => {
+      if (await preflight()) return { ok: false, text: "", error: "Dispatch no longer authorized." };
       markDispatched();
-      return askConnectedModule(userId, id, requestText);
-    });
-    consultHelp = orchestratorInstruction(planned.plan, help);
+      const custom = id.startsWith("custom:") ? parseCustomProviderChoice(id) : null;
+      const configured = selectProvider(id, process.env);
+      const helperProvider = custom?.ok ? `custom:${custom.id}` : id === "nemotron" ? "openrouter" : id;
+      const helperModel = custom?.ok ? custom.model : id === "grok" ? "grok-4.5" : id === "nemotron" ? "nvidia/nemotron-nano-9b-v2:free" : id === "ollama" ? process.env.OLLAMA_MODEL || "local" : configured.ok ? configured.model : id;
+      return govern(helperProvider, helperModel, () => askConnectedModule(userId, id, `${requestText}\n\n${skillInstructions}`, signal));
+    }, { signal: request.signal });
+    helperReceipts.push(...collected.receipts);
+    consultHelp = orchestratorInstruction(planned.plan, collected.help);
     body = { ...body, provider: planned.plan.orchestrator, logicRoute: undefined };
   }
   const tierField = parseModelTierField(body.modelTier);
-  if (!tierField.ok) return json({ ok: false, error: tierField.error }, 400);
+  if (!tierField.ok) return turnJson({ ok: false, error: tierField.error }, 400);
   const logicField = resolveRequestedRoute({ logicRoute: body.logicRoute, provider: body.provider });
-  if (!logicField.ok) return json({ ok: false, error: logicField.error }, 400);
-  if (logicField.route) return handleLogicTurn(userId, body, logicField.route, preflight, markDispatched);
+  if (!logicField.ok) return turnJson({ ok: false, error: logicField.error }, 400);
+  if (logicField.route) return handleLogicTurn(userId, body, logicField.route, preflight, markDispatched, taskId, request.signal, instructions);
   if (typeof body.provider === "string" && body.provider.startsWith("custom:")) {
     const chosen = parseCustomProviderChoice(body.provider);
-    if (!chosen.ok) return json(chosen, 400);
+    if (!chosen.ok) return turnJson(chosen, 400);
     const { haltIsOn } = await import("./halt.server.ts");
-    if (await haltIsOn(userId) || body.halted === true) return json({ ok: false, error: "Emergency stop is on." }, 403);
+    if (await haltIsOn(userId) || body.halted === true) return turnJson({ ok: false, error: "Emergency stop is on." }, 403);
     const images = sanitizeAttachments(body.images);
-    if (images.length) return json({ ok: false, error: "This custom API route currently supports text only. Remove image attachments." }, 400);
+    if (images.length) return turnJson({ ok: false, error: "This custom API route currently supports text only. Remove image attachments." }, 400);
     const text = typeof body.text === "string" ? body.text.trim() : "";
-    if (!text) return json({ ok: false, error: "Write a message first." }, 400);
+    if (!text) return turnJson({ ok: false, error: "Write a message first." }, 400);
     const memory = body.memory === "on" ? "on" : body.memory === "off" ? "off" : null;
-    if (!memory) return json({ ok: false, error: "Invalid memory setting." }, 400);
+    if (!memory) return turnJson({ ok: false, error: "Invalid memory setting." }, 400);
     const history = Array.isArray(body.history) ? body.history.filter(isHistory).slice(-12) : [];
     const memoryContext = Array.isArray(body.memoryContext) ? body.memoryContext.filter(isNote).slice(0, 12) : [];
     const sized = checkTurnSize({ text, history, memoryContext, images: [] });
-    if (!sized.ok) return json(sized, 400);
+    if (!sized.ok) return turnJson(sized, 400);
     const gate = envCheck();
-    if (!gate.ok) return json({ ok: false, error: gate.error }, 503);
-    const assembled = assembleTurn({ memory, history, text, memoryContext, images: [], personalityId: body.personalityId, customPersonality: body.customPersonality, botKnowledge: body.botKnowledge, consultHelp });
-    if (!assembled.ok) return json({ ok: false, error: assembled.error }, 400);
+    if (!gate.ok) return turnJson({ ok: false, error: gate.error }, 503);
+    const assembled = assembleTurn({ memory, history, text, memoryContext, images: [], personalityId: body.personalityId, customPersonality: body.customPersonality, botKnowledge: body.botKnowledge, projectContext: body.projectContext, instructionContext: skillInstructions, consultHelp });
+    if (!assembled.ok) return turnJson({ ok: false, error: assembled.error }, 400);
     const formatted = toAdapterMessages(assembled.messages);
-    if (!formatted.ok) return json({ ok: false, error: formatted.error }, 400);
+    if (!formatted.ok) return turnJson({ ok: false, error: formatted.error }, 400);
     const blocked = await preflight();
     if (blocked) return blocked;
     try {
       markDispatched();
-      const result = await executeCustomChat(userId, chosen, formatted.messages, request.signal);
-      if (!result.ok) return json(result, result.httpStatus ?? 502);
-      const done = { text: result.text, model: result.model, provider: result.provider, requestedModel: chosen.model, usedIds: assembled.usedIds, usage: result.usage, requestId: result.requestId };
+      const result = await govern("custom:" + chosen.id, chosen.model, () => executeCustomChat(userId, chosen, formatted.messages, request.signal));
+      if (!result.ok) return turnJson(result, result.httpStatus ?? 502);
+      const done = { executionPlan: executionPlan ?? modelExecutionPlan("independent", [body.provider]), resourceOperationId: result.resourceOperationId, text: result.text, model: result.model, provider: result.provider, requestedModel: chosen.model, helperReceipts, usedIds: assembled.usedIds, usage: result.usage, requestId: result.requestId };
       const stream = `event: delta\ndata: ${JSON.stringify({ text: result.text })}\n\nevent: done\ndata: ${JSON.stringify(done)}\n\n`;
       return new Response(stream, { headers: { "content-type": "text/event-stream", "cache-control": "no-store" } });
     } catch {
-      return json({ ok: false, error: "The custom API or provider database is unavailable." }, 503);
+      return turnJson({ ok: false, error: "The custom API or provider database is unavailable." }, 503);
     }
   }
   const pendingImages = sanitizeAttachments(body.images);
   const requestedProvider = body.provider == null || body.provider === "" ? "grok" : body.provider;
   // Prefer vision honesty over missing-key when a non-Grok provider is requested with images.
   if (pendingImages.length > 0 && typeof requestedProvider === "string" && requestedProvider !== "grok") {
-    return json({
+    return turnJson({
       ok: false,
       error: `${requestedProvider} cannot see images in this app. Choose Grok, or remove the attached images. Another provider is not substituted.`,
       provider: requestedProvider,
@@ -476,21 +550,21 @@ async function dispatchMindTurn(request: Request, userId: string, data: Record<s
   }
   const selected = selectProvider(body.provider, process.env);
   if (selected.ok && selected.id !== "grok" && typeof body.requestedModel === "string" && body.requestedModel !== selected.model) {
-    return json({ ok: false, error: "The configured model changed. Choose the current model before sending again." }, 409);
+    return turnJson({ ok: false, error: "The configured model changed. Choose the current model before sending again." }, 409);
   }
   if (requestedProvider === "nemotron" || requestedProvider === "ollama" || requestedProvider === "openrouter") {
     const text = typeof body.text === "string" ? body.text.trim() : "";
-    if (!text) return json({ ok: false, error: "Write a message first." }, 400);
+    if (!text) return turnJson({ ok: false, error: "Write a message first." }, 400);
     const history = Array.isArray(body.history) ? body.history.filter(isHistory) : [];
-    const context = directTurnContext(body, text, history, consultHelp);
-    if (!context.ok) return json(context, 400);
+    const context = directTurnContext(body, text, history, consultHelp, skillInstructions);
+    if (!context.ok) return turnJson(context, 400);
     const blocked = await preflight();
     if (blocked) return blocked;
     if ((requestedProvider === "nemotron" || requestedProvider === "openrouter") && !process.env.OPENROUTER_API_KEY?.trim()) {
-      return json({ ok: false, error: "OpenRouter is selected, but no OpenRouter key is connected. Nothing was sent.", provider: requestedProvider }, 503);
+      return turnJson({ ok: false, error: "OpenRouter is selected, but no OpenRouter key is connected. Nothing was sent.", provider: requestedProvider }, 503);
     }
     markDispatched();
-    const routed = await routeSelectedModel({
+    const routed = await govern(requestedProvider === "nemotron" ? "openrouter" : requestedProvider, requestedProvider === "nemotron" ? "nvidia/nemotron-nano-9b-v2:free" : requestedProvider === "openrouter" ? process.env.OPENROUTER_MODEL || "" : process.env.OLLAMA_MODEL || "local", () => routeSelectedModel({
       id: requestedProvider,
       systemPrompt: context.systemPrompt,
       history,
@@ -498,33 +572,33 @@ async function dispatchMindTurn(request: Request, userId: string, data: Record<s
       env: process.env,
       signal: request.signal,
       fetch: globalThis.fetch,
-    });
-    if (!routed.ok) return json({ ok: false, error: routed.error, provider: requestedProvider }, routed.httpStatus ?? 502, routed.retryAfter);
-    const done = { text: routed.text, model: routed.model, requestedModel: routed.requestedModel, provider: requestedProvider === "nemotron" ? "openrouter" : requestedProvider, usage: null, usedIds: context.usedIds, requestId: null };
+    }));
+    if (!routed.ok) return turnJson({ ok: false, error: routed.error, provider: requestedProvider }, routed.httpStatus ?? 502, "retryAfter" in routed ? routed.retryAfter : undefined);
+    const done = { executionPlan: executionPlan ?? modelExecutionPlan("independent", [requestedProvider]), resourceOperationId: routed.resourceOperationId, text: routed.text, model: routed.model, requestedModel: routed.requestedModel, provider: requestedProvider === "nemotron" ? "openrouter" : requestedProvider, usage: routed.usage ?? null, usedIds: context.usedIds, requestId: routed.requestId ?? null, finishReason: routed.finishReason ?? null, helperReceipts };
     const stream = "event: delta\ndata: " + JSON.stringify({ text: routed.text }) + "\n\nevent: done\ndata: " + JSON.stringify(done) + "\n\n";
     return new Response(stream, { headers: { "content-type": "text/event-stream", "cache-control": "no-store" } });
   }
   if (!selected.ok) {
     // If images somehow accompany a failed non-Grok selection, still prefer cannot-see copy.
     if (pendingImages.length > 0 && requestedProvider !== "grok") {
-      return json({
+      return turnJson({
         ok: false,
         error: `${requestedProvider} cannot see images in this app. Choose Grok, or remove the attached images. Another provider is not substituted.`,
         provider: requestedProvider,
       }, 400);
     }
-    return json(selected, httpStatusForProviderSelection(selected.error));
+    return turnJson(selected, httpStatusForProviderSelection(selected.error));
   }
   if (selected.id !== "grok") {
     if (pendingImages.length > 0) {
-      return json({
+      return turnJson({
         ok: false,
         error: `${selected.id} cannot see images in this app. Choose Grok, or remove the attached images. Another provider is not substituted.`,
         provider: selected.id,
       }, 400);
     }
     const { haltIsOn } = await import("./halt.server");
-    if ((await haltIsOn(userId)) || body.halted === true) return json({ ok: false, error: "Emergency stop is on. No new action can run." }, 403);
+    if ((await haltIsOn(userId)) || body.halted === true) return turnJson({ ok: false, error: "Emergency stop is on. No new action can run." }, 403);
     // Same chat rate limit as Grok — non-Grok must not skip the token bucket.
     const blocked = await preflight();
     if (blocked) return blocked;
@@ -533,12 +607,13 @@ async function dispatchMindTurn(request: Request, userId: string, data: Record<s
       ? body.history.filter(isHistory).map((item) => ({ role: item.role, content: item.content }))
       : [];
     const text = typeof body.text === "string" ? body.text.trim() : "";
-    if (!text) return json({ ok: false, error: "Write a message first." }, 400);
-    const context = directTurnContext(body, text, history, consultHelp);
-    if (!context.ok) return json(context, 400);
+    if (!text) return turnJson({ ok: false, error: "Write a message first." }, 400);
+    const context = directTurnContext(body, text, history, consultHelp, skillInstructions);
+    if (!context.ok) return turnJson(context, 400);
     markDispatched();
-    const called = await callConfiguredProvider({
-      id: selected.id,
+    const providerId = selected.id;
+    const called = await govern(providerId, selected.model, () => callConfiguredProvider({
+      id: providerId,
       model: selected.model,
       key,
       prompt: text,
@@ -546,24 +621,24 @@ async function dispatchMindTurn(request: Request, userId: string, data: Record<s
       history,
       signal: request.signal,
       fetch: globalThis.fetch,
-    });
-    if (!called.ok) return json({ ok: false, error: called.error, provider: selected.id }, called.httpStatus ?? 502, called.retryAfter);
+    }));
+    if (!called.ok) return turnJson({ ok: false, error: called.error, provider: selected.id }, called.httpStatus ?? 502, "retryAfter" in called ? called.retryAfter : undefined);
     // Use the same SSE contract as the Grok and custom-provider chat paths.
-    const done = { text: called.text, model: reportedModel(called.model), requestedModel: selected.model, provider: selected.id, usage: null, usedIds: context.usedIds, requestId: null };
+    const done = { executionPlan: executionPlan ?? modelExecutionPlan("independent", [providerId]), resourceOperationId: called.resourceOperationId, text: called.text, model: reportedModel(called.model), requestedModel: selected.model, provider: selected.id, usage: called.usage ?? null, usedIds: context.usedIds, requestId: called.requestId ?? null, finishReason: called.finishReason ?? null, helperReceipts };
     const stream = "event: delta\ndata: " + JSON.stringify({ text: called.text }) +
       "\n\nevent: done\ndata: " + JSON.stringify(done) + "\n\n";
     return new Response(stream, { headers: { "content-type": "text/event-stream", "cache-control": "no-store" } });
   }
-  const prepared = await prepareMindTurnWithHelp(userId, body, consultHelp);
-  if (!prepared.ok) return json(prepared);
+  const prepared = await prepareMindTurnWithHelp(userId, body, consultHelp, instructions);
+  if (!prepared.ok) return turnJson(prepared);
   if (!allowedModelIds(process.env).has(prepared.model)) {
-    return json({ ok: false, error: "That model is not available. Another provider is not substituted." });
+    return turnJson({ ok: false, error: "That model is not available. Another provider is not substituted." });
   }
   const blocked = await preflight();
   if (blocked) return blocked;
   const keyed = resolveXaiInferenceApiKey(process.env);
   if (!keyed.ok) {
-    return json({ ok: false, error: keyed.error, provider: "grok" }, 503);
+    return turnJson({ ok: false, error: keyed.error, provider: "grok" }, 503);
   }
   const apiKey = keyed.key;
   let memorySaved = false;
@@ -584,8 +659,15 @@ async function dispatchMindTurn(request: Request, userId: string, data: Record<s
     memorySaved = signal.memorySaved;
     savedMemoryId = signal.savedMemoryId;
   }
+  let resource;
+  try {
+    resource = await reserveResourceOperation({ owner: userId, taskId, provider: "grok", model: prepared.model, free: false, freeOnly: body.freeOnly === true, inputTokens: Math.ceil(JSON.stringify(prepared.assembled.messages).length / 3), outputTokens: prepared.modelTier.params.max_tokens ?? 1024 });
+  } catch (error) { return turnJson({ ok: false, error: error instanceof Error ? error.message : "Resource authorization unavailable." }, 403); }
+  const finalCheck = await preflight();
+  if (finalCheck) { await settleResourceOperation(resource, { outcome: "not_dispatched" }).catch(() => {}); return finalCheck; }
+  if (instructions.length) await recordLoadedInstructions(userId, instructions, taskId);
   markDispatched();
-  return relayModelStream({
+  const relayed = relayModelStream({
     apiKey,
     model: prepared.model,
     messages: prepared.assembled.messages,
@@ -598,6 +680,9 @@ async function dispatchMindTurn(request: Request, userId: string, data: Record<s
       reasoning_effort: prepared.modelTier.params.reasoning_effort,
     },
     meta: {
+      helperReceipts,
+      executionPlan: executionPlan ?? modelExecutionPlan("independent", ["grok"]),
+      resourceOperationId: resource.operationId,
       modelTier: prepared.modelTier.selected,
       resolvedTier: prepared.modelTier.resolved,
       tierReason: prepared.modelTier.reason,
@@ -606,6 +691,7 @@ async function dispatchMindTurn(request: Request, userId: string, data: Record<s
       savedMemoryId,
     },
   });
+  return settleResourceStream(relayed, resource);
 }
 
 /** Exported for scripts/tests that build a multimodal Direct turn without the HTTP handler. */
@@ -627,15 +713,15 @@ async function modulesConnectedNow(userId: string) {
   return modules;
 }
 
-async function askConnectedModule(userId: string, id: string, requestText: string): Promise<{ ok: boolean; text: string }> {
+async function askConnectedModule(userId: string, id: string, requestText: string, signal: AbortSignal): Promise<HelperReply> {
   if (id.startsWith("custom:")) {
     const chosen = parseCustomProviderChoice(id);
     if (!chosen.ok) return { ok: false, text: "" };
     const result = await executeCustomChat(userId, chosen, [
       { role: "system", content: ADRIAN_MIND_IDENTITY },
       { role: "user", content: requestText },
-    ]);
-    return result.ok ? { ok: true, text: result.text } : { ok: false, text: "" };
+    ], signal);
+    return result.ok ? { ...result, ok: true } : { ok: false, text: "", error: result.error };
   }
   if (id === "grok") {
     const keyed = resolveXaiInferenceApiKey(process.env);
@@ -643,7 +729,7 @@ async function askConnectedModule(userId: string, id: string, requestText: strin
     try {
       const res = await fetch("https://api.x.ai/v1/chat/completions", {
         method: "POST",
-        signal: AbortSignal.timeout(20_000),
+        signal: AbortSignal.any([signal, AbortSignal.timeout(20_000)]),
         headers: { "content-type": "application/json", authorization: `Bearer ${keyed.key}` },
         body: JSON.stringify({
           model: "grok-4.5",
@@ -657,14 +743,14 @@ async function askConnectedModule(userId: string, id: string, requestText: strin
       });
       if (!res.ok) return { ok: false, text: "" };
       const parsed = readModelPayload(await res.text());
-      return parsed.text ? { ok: true, text: parsed.text } : { ok: false, text: "" };
+      return parsed.text ? { ok: true, text: parsed.text, model: parsed.model, requestedModel: "grok-4.5", usage: parsed.usage, requestId: res.headers.get("x-request-id") } : { ok: false, text: "", error: "No assistant text returned." };
     } catch {
       return { ok: false, text: "" };
     }
   }
   if (id === "nemotron" || id === "ollama" || id === "openrouter") {
-    const result = await routeSelectedModel({ id, prompt: requestText, env: process.env, fetch: globalThis.fetch });
-    return { ok: result.ok, text: result.text };
+    const result = await routeSelectedModel({ id, prompt: requestText, env: process.env, signal, fetch: globalThis.fetch });
+    return result;
   }
   const selected = selectProvider(id, process.env);
   if (!selected.ok || selected.id === "grok") return { ok: false, text: "" };
@@ -674,9 +760,11 @@ async function askConnectedModule(userId: string, id: string, requestText: strin
   const called = await callConfiguredProvider({
     id: selected.id,
     key,
+    model: selected.model,
     prompt: requestText,
     systemPrompt: ADRIAN_MIND_IDENTITY,
+    signal,
     fetch: globalThis.fetch,
   });
-  return called.ok ? { ok: true, text: called.text } : { ok: false, text: "" };
+  return { ...called, requestedModel: selected.model };
 }
