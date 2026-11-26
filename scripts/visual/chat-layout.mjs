@@ -62,6 +62,12 @@ for (const [width, height, rootPercent] of viewports) {
       });
       await context.addInitScript(({ appOrigin, counts, rootPercent, skillReceipts }) => {
         if (location.origin !== appOrigin) return;
+        if (new URLSearchParams(location.search).get("section") === "chat") {
+          window.__mindFixtureHomeMounted = false;
+          new MutationObserver(() => {
+            if (document.getElementById("command-home")) window.__mindFixtureHomeMounted = true;
+          }).observe(document, { childList: true, subtree: true });
+        }
         const metrics = { supported: PerformanceObserver.supportedEntryTypes ?? [], lcpMs: null, cls: 0, layoutShifts: [], interactions: [], longTasks: [], observedAt: 0 };
         window.__mindFixturePerformance = metrics;
         let clsWindowStart = 0, clsLast = 0, clsWindowValue = 0;
@@ -124,6 +130,7 @@ for (const [width, height, rootPercent] of viewports) {
         await page.goto(origin + "/?section=chat&chat=layout-" + count);
         await page.locator('#mind-workspace[data-workspace-ready="true"]').waitFor();
         await page.locator(`#message-turn-${count - 1}`).waitFor({ state: "attached" });
+        assert.equal(await page.evaluate(() => window.__mindFixtureHomeMounted), false, "A direct conversation link must open without mounting Home first.");
         const navigationMs = performance.now() - startedAt;
         assert.equal(await page.locator("article.turn").count(), Math.min(count, 100), "The initial transcript render must stay bounded.");
         await page.waitForFunction((percent) => Math.abs(parseFloat(getComputedStyle(document.documentElement).fontSize) - 16 * percent / 100) < 0.1, rootPercent);

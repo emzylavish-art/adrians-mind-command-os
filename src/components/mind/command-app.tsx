@@ -62,7 +62,7 @@ import type { NotionPage } from "@/lib/mind/notion";
 import { AccountPreferencesProvider, useAccountPreferences } from "./account-preferences-context";
 import { accountPreferenceKey } from "@/lib/mind/account-preferences";
 import { lazy, Suspense, useEffect, useLayoutEffect, useMemo, useRef, useState, type KeyboardEvent as ReactKeyboardEvent, type MouseEvent as ReactMouseEvent, type ReactNode, useSyncExternalStore, useDeferredValue } from "react";
-import { Link, useRouter } from "@tanstack/react-router";
+import { Link, useRouter, useRouterState } from "@tanstack/react-router";
 import "./command-drawer-nav.css";
 import "./command-search.css";
 import "./command-voice-mode.css";
@@ -791,6 +791,11 @@ function CommandSession({ account, accountPending }: { account: ReturnType<typeo
   useEffect(() => { applyAccessibility(readAccessibility(preferenceStorage.getItem(ACCESSIBILITY_KEY))); return () => { document.documentElement.style.removeProperty("--mind-text-scale"); delete document.documentElement.dataset.contrast; delete document.documentElement.dataset.readingSpacing; }; }, [preferenceStorage]);
   const router = useRouter();
   const chromeMenus = useExclusiveMenus();
+  const locationSearch = useRouterState({ select: (state) => state.location.searchStr });
+  const [initialLocationResolved, setInitialLocationResolved] = useState(() => {
+    const params = new URLSearchParams(locationSearch);
+    return !["section", "chat", "project", "file", "bot", "agentId"].some((key) => params.has(key));
+  });
   const [view, setViewState] = useState<View>("command");
   const applyingLocation = useRef(false);
   const locationHistory = useRef<"push" | "replace">("push");
@@ -1387,7 +1392,10 @@ function CommandSession({ account, accountPending }: { account: ReturnType<typeo
     const known = Object.keys(TITLES);
     const applyLocation = () => {
       const params = new URLSearchParams(window.location.search);
-      if (params.get("mode") === "agent" && params.get("agentId")) return;
+      if (params.get("mode") === "agent" && params.get("agentId")) {
+        setInitialLocationResolved(true);
+        return;
+      }
       applyingLocation.current = true;
       locationHistory.current = "push";
       const resolved = resolveShare(window.location.search, wsRef.current, known);
@@ -1413,6 +1421,7 @@ function CommandSession({ account, accountPending }: { account: ReturnType<typeo
       if (resolved.focusId) setCardFocus({ id: resolved.focusId });
       if (resolved.missing.length) setNotice(shareMissLabel(resolved.missing));
       else if (resolved.botArchived) setNotice("That bot is archived on this device. Its history was kept.");
+      setInitialLocationResolved(true);
       requestAnimationFrame(() => {
         applyingLocation.current = false;
       });
@@ -6175,6 +6184,10 @@ ${message.content}`;
   closeVoiceOverlayRef.current = closeVoiceOverlay;
   cancelDictationRef.current = cancelBrowserDictation;
   const dictationDisabled = ws.halted || voiceListening || voiceOverlayOpen;
+
+  if (!initialLocationResolved) {
+    return <main className="flex min-h-dvh items-center justify-center bg-bg p-4 text-fg" role="status">Opening workspace…</main>;
+  }
 
   return (
     <div id="mind-workspace" data-workspace-ready={ready ? "true" : "false"} className="shell flex h-dvh flex-col bg-bg text-fg md:flex-row" data-view={view} data-search={paletteOpen ? "open" : "closed"}>
