@@ -1,0 +1,20 @@
+{
+  "base_sha": "18d5b9364e6bdcfec028eeccf56fe596946ed8ce",
+  "baseline": {
+    "errors": 177,
+    "warnings": 215
+  },
+  "candidate": {
+    "errors": 176,
+    "warnings": 270
+  },
+  "introduced_errors": [],
+  "fixed_baseline_errors": [
+    {
+      "file": "src/lib/mind/ai-provider-config.server.ts",
+      "rule": "no-control-regex",
+      "message": "Unexpected control character(s) in regular expression: \\x00, \\x1f.",
+      "count": 1
+    }
+  ]
+}

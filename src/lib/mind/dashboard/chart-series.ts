@@ -249,7 +249,7 @@ export function buildSpendSeries(money: MoneyView | null | undefined): ChartSeri
 
 /** Bots counted by current health state (real status payload only). */
 export function buildBotHealthCounts(bots: readonly BotNode[] | null | undefined): ChartSeries {
-  const title = "Bot health (count)";
+  const title = "Development activity (lane count)";
   if (!bots || !bots.length) {
     return {
       id: "bot-health",

@@ -27,10 +27,11 @@ export function groupConversationSections<T extends TimedChat>(chats: readonly T
     .filter((group) => group.items.length > 0);
 }
 
-export function removeConversations<T extends { chats: { id: string }[]; pins: { kind: string; ref: string }[] }>(ws: T, ids: readonly string[]): T {
+export function removeConversations<T extends { chats: { id: string }[]; pins: { kind: string; ref: string }[]; deletedChatIds?: string[] }>(ws: T, ids: readonly string[]): T {
   const gone = new Set(ids);
   return {
     ...ws,
+    deletedChatIds: [...new Set([...(ws.deletedChatIds ?? []), ...ws.chats.filter((chat) => gone.has(chat.id)).map((chat) => chat.id)])],
     chats: ws.chats.filter((chat) => !gone.has(chat.id)),
     pins: ws.pins.filter((pin) => !(pin.kind === "chat" && gone.has(pin.ref))),
   };

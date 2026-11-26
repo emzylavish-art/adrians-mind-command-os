@@ -70,7 +70,7 @@ describe("live turn", () => {
       onDelta: () => undefined,
       fetchImpl: async () => new Response(JSON.stringify({ error: "Sign in is required." }), { status: 401, headers: { "content-type": "application/json" } }),
     });
-    assert.deepEqual(result, { ok: false, error: "Sign in is required." });
+    assert.deepEqual(result, { ok: false, error: "Sign in is required.", code: "auth_required" });
     assert.equal(shouldStoreReply(result), false);
   });
 

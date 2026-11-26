@@ -206,7 +206,6 @@ html[data-theme="light"] .gpt-rail nav a.nav-item {
 .gpt-home {
   min-height: calc(100dvh - 4.25rem);
   background: #000;
-  justify-content: flex-end;
 }
 
 .main-stage:has(.gpt-home) {

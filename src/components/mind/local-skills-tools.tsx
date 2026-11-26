@@ -4,7 +4,9 @@ import {
   createDraft, reviseDraft, reviewDraft, suggestCuration,
 } from "@/lib/mind/skill-library";
 import type { DraftContent, SkillLibrary } from "@/lib/mind/skill-library";
-import { decide } from "@/lib/mind/decision-router";
+import { decide, suggestSkills } from "@/lib/mind/decision-router";
+import { useAccountPreferences } from "@/components/mind/account-preferences-context";
+import { SKILL_ACTIVATIONS_KEY, loadSkillActivations, validateSkillFixture, activateReviewedSkill, activeAccountSkills, type SkillActivation, type SkillValidation, type SkillScope } from "@/lib/mind/skill-activation";
 import type { Skill, Decision } from "@/lib/mind/decision-router";
 
 type Props = {
@@ -17,6 +19,16 @@ const message = (error: unknown) =>
   error instanceof Error ? error.message : "Operation failed";
 
 export default function LocalSkillsTools({ skills, enabledSkills }: Props) {
+  const storage = useAccountPreferences();
+  const [activationBaseline, setActivationBaseline] = useState<string | null>(null);
+  const [activations, setActivations] = useState<SkillActivation[]>([]);
+  const [validation, setValidation] = useState<SkillValidation | null>(null);
+  const [fixtureTask, setFixtureTask] = useState("");
+  const [activationScope, setActivationScope] = useState<SkillScope>("chat");
+  const [activationApproved, setActivationApproved] = useState(false);
+  const [suggestions, setSuggestions] = useState<{ skillId: string; score: number; reason: string }[]>([]);
+  const activeSkills = activeAccountSkills(storage, enabledSkills);
+  const catalog = [...skills, ...activeSkills.filter(item => !skills.some(skill => skill.id === item.id))];
   const [decision, setDecision] = useState<Decision | null>(null);
   const [decisionKey, setDecisionKey] = useState<string | null>(null);
   const [request, setRequest] = useState("");
@@ -35,7 +47,7 @@ export default function LocalSkillsTools({ skills, enabledSkills }: Props) {
   const editorDirty = (Object.keys(blank) as (keyof DraftContent)[])
     .some(field => content[field] !== editorBaseline[field]);
   const routingKey = JSON.stringify([
-    skills.map(({ id, name, kind }) => [id, name, kind]),
+    catalog.map(({ id, name, kind }) => [id, name, kind]),
     Object.keys(enabledSkills).filter(id => enabledSkills[id] === false).sort(),
   ]);
   useEffect(() => { setDecision(null); setDecisionKey(null); }, [routingKey]);
@@ -44,7 +56,10 @@ export default function LocalSkillsTools({ skills, enabledSkills }: Props) {
 
   useEffect(() => {
     try {
-      const raw = window.localStorage.getItem(STORAGE_KEY);
+      const raw = storage.getItem(STORAGE_KEY);
+      const activationRaw = storage.getItem(SKILL_ACTIVATIONS_KEY);
+      setActivationBaseline(activationRaw);
+      setActivations(loadSkillActivations(activationRaw));
       setLoadedRaw(raw);
       const result = loadLibrary(raw);
       if (!result.ok) {
@@ -56,10 +71,11 @@ export default function LocalSkillsTools({ skills, enabledSkills }: Props) {
     } catch (cause) {
       setError(`Storage unavailable: ${message(cause)}`);
     }
-  }, []);
+  }, [storage]);
 
   function change(operation: () => SkillLibrary, successNotice = "Draft library changed in memory; select Save locally to persist it.") {
     if (locked) return;
+    setValidation(null); setActivationApproved(false);
     try {
       setLibrary(operation());
       setLibraryDirty(true);
@@ -80,15 +96,15 @@ export default function LocalSkillsTools({ skills, enabledSkills }: Props) {
     savingRef.current = true;
     setSaving(true);
     try {
-      await navigator.locks.request(`zapia:${STORAGE_KEY}`, async () => {
-        const current = window.localStorage.getItem(STORAGE_KEY);
+      await navigator.locks.request(`zapia:${storage.keyFor?.(STORAGE_KEY) || STORAGE_KEY}`, async () => {
+        const current = storage.getItem(STORAGE_KEY);
         if (current !== loadedRaw) {
           setConflict(true);
           setError("Draft storage changed in another tab. Nothing was overwritten; your changes remain here. Download these local changes before reconciling.");
           return;
         }
         const serialized = serializeLibrary(library);
-        window.localStorage.setItem(STORAGE_KEY, serialized);
+        storage.setItem(STORAGE_KEY, serialized);
         setLoadedRaw(serialized);
         setConflict(false);
         setLibraryDirty(false);
@@ -105,6 +121,23 @@ export default function LocalSkillsTools({ skills, enabledSkills }: Props) {
     }
   }
 
+  async function saveActivation(next: SkillActivation[], success: string) {
+    if (locked || savingRef.current || libraryDirty || editorDirty || loadedRaw === undefined) { setError("Save the exact reviewed library before changing activation."); return; }
+    if (!navigator.locks?.request) { setError("This browser cannot safely coordinate activation across tabs."); return; }
+    savingRef.current = true; setSaving(true);
+    try {
+      await navigator.locks.request(`zapia:${storage.keyFor?.(STORAGE_KEY) || STORAGE_KEY}`, async () => {
+        if (storage.getItem(STORAGE_KEY) !== loadedRaw) throw new Error("Draft versions changed in another tab. Reload and review before activation.");
+        if (storage.getItem(SKILL_ACTIVATIONS_KEY) !== activationBaseline) throw new Error("Activation changed in another tab. Reload before changing it.");
+        const serialized = JSON.stringify(next);
+        storage.setItem(SKILL_ACTIVATIONS_KEY, serialized);
+        setActivationBaseline(serialized);
+        setActivations(next); setNotice(success); setError(""); setValidation(null); setActivationApproved(false);
+        window.dispatchEvent(new Event("adrian-skills-changed"));
+      });
+    } catch (cause) { setError(message(cause)); }
+    finally { savingRef.current = false; setSaving(false); }
+  }
   const target = library.drafts.find(draft => draft.id === selected);
   const full = !!target && target.versions.length >= LIMITS.versions;
   const fieldClass = "w-full rounded-panel border border-line bg-bg p-2";
@@ -114,7 +147,7 @@ export default function LocalSkillsTools({ skills, enabledSkills }: Props) {
       <header>
         <h2 className="font-semibold">Local skills tools</h2>
         <p className="text-sm text-muted">
-          Suggestions and inert drafts only. Nothing runs or becomes active.
+          Review, validate and explicitly activate account-owned instructions. Tool permissions and execution approval remain separate.
         </p>
       </header>
 
@@ -124,7 +157,8 @@ export default function LocalSkillsTools({ skills, enabledSkills }: Props) {
           event.preventDefault();
           const form = event.currentTarget;
           const text = new FormData(form).get("request");
-          setDecision(decide(typeof text === "string" ? text : "", skills, enabledSkills));
+          setDecision(decide(typeof text === "string" ? text : "", catalog, enabledSkills));
+          setSuggestions(suggestSkills(typeof text === "string" ? text : "", catalog, enabledSkills));
           setDecisionKey(routingKey);
           setRequest("");
         }}
@@ -135,7 +169,7 @@ export default function LocalSkillsTools({ skills, enabledSkills }: Props) {
         </label>
         <div className="local-skills-actions flex gap-3">
           <button type="submit">Classify locally</button>
-          <button type="button" onClick={() => { setRequest(""); setDecision(null); }}>Clear</button>
+          <button type="button" onClick={() => { setRequest(""); setDecision(null); setSuggestions([]); }}>Clear</button>
         </div>
         <p className="text-sm text-muted">
           Request text is not saved and is cleared after classification.
@@ -143,17 +177,17 @@ export default function LocalSkillsTools({ skills, enabledSkills }: Props) {
         {decision && decisionKey === routingKey && (
           <p role="status">
             {decision.type === "suggestion"
-              ? `Suggestion only: ${skills.find(s => s.id === decision.skillId)?.name ?? decision.skillId}`
+              ? `Suggestion only: ${catalog.find(s => s.id === decision.skillId)?.name ?? decision.skillId}`
               : `No suggestion: ${decision.reason}`}
           </p>
         )}
+        {suggestions.length > 0 && <ul className="text-sm text-muted">{suggestions.map(item => <li key={item.skillId}>{catalog.find(skill => skill.id === item.skillId)?.name || item.skillId}: {item.reason}</li>)}</ul>}
       </form>
 
       <div className="space-y-3 rounded-panel border border-line bg-bg p-3">
         <h3 className="font-semibold">Draft library</h3>
         <p className="text-sm text-muted">
-          Edits remain in memory until Save. Reviewed drafts are reviewed-inactive,
-          never executable.
+          Edits remain in memory until Save. Reviewed versions remain inactive until exact-version validation and approval. Activating instructions never installs executable code.
         </p>
         {error && <p role="alert">{error}</p>}
         {notice && <p role="status">{notice}</p>}
@@ -170,6 +204,7 @@ export default function LocalSkillsTools({ skills, enabledSkills }: Props) {
                 if (editorDirty && !window.confirm("Discard unappended editor text?")) return;
                 const draft = library.drafts.find(item => item.id === id);
                 const nextContent = draft ? draft.versions[draft.versions.length - 1].content : blank;
+                setValidation(null); setActivationApproved(false);
                 setSelected(id);
                 setContent(nextContent);
                 setEditorBaseline(nextContent);
@@ -251,6 +286,17 @@ export default function LocalSkillsTools({ skills, enabledSkills }: Props) {
         <p className="text-sm text-muted">
           Review preserves the latest library content, not unappended editor changes.
         </p>
+        <fieldset disabled={locked || saving || libraryDirty || editorDirty} className="space-y-3 rounded-panel border border-line p-3">
+          <legend className="px-1 font-semibold">Activate a reviewed version</legend>
+          <p className="text-sm text-muted">Validation checks local task matching and unchanged reviewed content. It does not prove an AI outcome or perform external work. Scope grants instructions only, with no new tool permissions.</p>
+          <label className="grid gap-1 text-sm">Representative task<input className={fieldClass} value={fixtureTask} maxLength={2000} onChange={event => { setFixtureTask(event.target.value); setValidation(null); setActivationApproved(false); }} /></label>
+          <button type="button" disabled={!target || !fixtureTask.trim()} className="min-h-11 rounded-panel border border-line px-3 text-sm" onClick={() => { const result = validateSkillFixture(library, selected, fixtureTask); setValidation(result); setActivationApproved(false); }}>Validate selection fixture</button>
+          {validation && <p role="status" className="text-sm">{validation.ok ? `Reviewed version ${validation.version}: local selection fixture passed. No provider or tool was called.` : validation.error}</p>}
+          <label className="grid gap-1 text-sm">Application scope<select className={fieldClass} value={activationScope} onChange={event => { setActivationScope(event.target.value as SkillScope); setActivationApproved(false); }}><option value="chat">Chat</option><option value="build">Build</option><option value="both">Chat and Build</option></select></label>
+          <label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={activationApproved} onChange={event => setActivationApproved(event.target.checked)} />I reviewed this exact version and authorize its instructions for this scope.</label>
+          <button type="button" disabled={!validation?.ok || !activationApproved} className="min-h-11 rounded-panel border border-line px-3 text-sm" onClick={() => { try { void saveActivation(activateReviewedSkill(library, activations, selected, validation, activationScope, activationApproved), "Approved instruction version activated for this account. Future unapproved revisions remain inactive."); } catch (cause) { setError(message(cause)); } }}>Activate reviewed instructions</button>
+          {activations.length > 0 && <ul className="space-y-2 text-sm">{activations.map(item => <li key={item.draftId} className="flex flex-wrap items-center gap-2"><span>{item.content.title} · v{item.version} · {item.scope} · {item.enabled ? "active instructions" : "disabled"}</span><button type="button" className="min-h-11 rounded-panel border border-line px-3" onClick={() => void saveActivation(activations.map(current => current.draftId === item.draftId ? { ...current, enabled: false } : current), "Instructions disabled for future application. Previous execution receipts remain unchanged.")}>Disable</button></li>)}</ul>}
+        </fieldset>
         {conflict && <button type="button" onClick={() => {
           try {
             const recovery = { library: JSON.parse(serializeLibrary(library)), unappendedEditor: editorDirty ? content : null };

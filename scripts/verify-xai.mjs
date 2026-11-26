@@ -31,6 +31,9 @@ function toSql(pg) {
     return result.rows;
   };
   sql.query = async (text, params = []) => (await pg.query(text, params)).rows;
+  if (typeof pg.transaction === "function") {
+    sql.transaction = (callback) => pg.transaction((tx) => callback(toSql(tx)));
+  }
   return sql;
 }
 
@@ -79,7 +82,7 @@ const {
 } = await loadTs("src/lib/mind/xai-adapter.ts");
 const { relayModelStream } = await loadTs("src/lib/mind/relay.ts");
 const { pullMindEvents } = await loadTs("src/lib/mind/stream.ts");
-const { writeSnapshot, readSnapshot } = await loadTs("src/lib/mind/store.ts");
+const { writeSnapshot, readSnapshot, snapshotRevision } = await loadTs("src/lib/mind/store.ts");
 const { emptyWorkspace, normalizeWorkspace } = await loadTs("src/lib/mind/workspace.ts");
 const { applyAgentTurn } = await loadTs("src/lib/mind/agent-session.ts");
 const { shouldStoreReply } = await loadTs("src/lib/mind/live-turn.ts");
@@ -281,7 +284,7 @@ if (!LIVE) {
           ...ws.usage,
         ],
       };
-      await writeSnapshot(sql, "xai-owner", ws);
+      await writeSnapshot(sql, "xai-owner", ws, snapshotRevision(await readSnapshot(sql, "xai-owner")));
       const loadedWs = normalizeWorkspace(await readSnapshot(sql, "xai-owner"));
       const back = loadedWs.chats[0]?.messages.find((m) => m.role === "assistant")?.content ?? "";
       const match = {
@@ -297,7 +300,7 @@ if (!LIVE) {
       report.stopPoint = "complete";
       console.log(`persistence: byte-for-byte match sha256=${rawSha} len=${raw.length}`);
     } else {
-      await writeSnapshot(sql, "xai-owner", emptyWorkspace());
+      await writeSnapshot(sql, "xai-owner", emptyWorkspace(), snapshotRevision(await readSnapshot(sql, "xai-owner")));
       const loadedWs = normalizeWorkspace(await readSnapshot(sql, "xai-owner"));
       assert.equal(loadedWs.chats.length, 0);
       report.persistence = { persisted: false, match: null, backend: "pglite-file", liveReply: false };
@@ -335,7 +338,7 @@ if (!report.persistence) {
       now,
       complete: () => ({ ok: true, text: raw }),
     }).ws;
-    await writeSnapshot(sql, "xai-owner", ws);
+    await writeSnapshot(sql, "xai-owner", ws, snapshotRevision(await readSnapshot(sql, "xai-owner")));
     const loaded = normalizeWorkspace(await readSnapshot(sql, "xai-owner"));
     const back = loaded.chats[0]?.messages.find((m) => m.role === "assistant")?.content ?? "";
     const match = {

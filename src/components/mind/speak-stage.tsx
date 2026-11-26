@@ -1,3 +1,4 @@
+import { useAccountPreferences } from "./account-preferences-context";
 import { useEffect, useRef, useState } from "react";
 import { loadVoiceSettings, saveVoiceSettings } from "@/lib/mind/voice/settings";
 import { createPortal } from "react-dom";
@@ -50,11 +51,15 @@ export function SpeakStage(props: {
   onClose: () => void;
   onSignIn: () => void;
   onLive: () => Promise<void>;
+  onSelectedSpeak?: () => Promise<void>;
+  selectedBusy?: boolean;
+  selectedRoute?: string;
+  onStopSelected?: () => void;
   onVoice: (voice: XaiBuiltinVoice) => void;
   micMuted: boolean;
   onMicMute: (muted: boolean) => void;
   recording: boolean;
-  onAsk?: (text: string) => Promise<string | null | { reply?: string; error?: string }>;
+  onAsk?: (text: string, playback: { canSpeak: () => boolean }) => Promise<string | null | { reply?: string; error?: string }>;
   onKeepRecording?: (stream: MediaStream) => void;
   onEmergencyStop?: () => void;
   halted?: boolean;
@@ -65,6 +70,7 @@ export function SpeakStage(props: {
   spoken?: string;
   callError?: string;
 }) {
+  const preferenceStorage = useAccountPreferences();
   const dialogRef = useRef<HTMLDivElement>(null);
   const settingsButton = useRef<HTMLButtonElement>(null);
   const closeSettingsButton = useRef<HTMLButtonElement>(null);
@@ -89,6 +95,9 @@ export function SpeakStage(props: {
   const [uploadName, setUploadName] = useState<string | null>(null);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [speakerMuted, setSpeakerMuted] = useState(false);
+  const speakerMutedRef = useRef(false);
+  speakerMutedRef.current = speakerMuted;
+  const outputGeneration = useRef(0);
   const [showTranscript, setShowTranscript] = useState(false);
   const [style, setStyle] = useState<StyleId>("Storyteller");
   const [activation, setActivation] = useState<ActivationId>("default");
@@ -103,6 +112,7 @@ export function SpeakStage(props: {
     mediaGeneration.current++;
     stopVideo();
     sharedAudioOutput.interrupt();
+    props.onStopSelected?.();
     window.speechSynthesis?.cancel();
     setReply("");
     setConnecting(false);
@@ -134,14 +144,14 @@ export function SpeakStage(props: {
 
   useEffect(() => {
     if (!props.open) return;
-    setVoice(readStoredVoiceChoice(window.localStorage));
-    const saved = window.localStorage.getItem("adrian-speak-rate");
+    setVoice(readStoredVoiceChoice(preferenceStorage));
+    const saved = preferenceStorage.getItem("adrian-speak-rate");
     if (saved === "slow" || saved === "natural" || saved === "brisk") setRate(saved);
-    const savedStyle = window.localStorage.getItem("adrian-speak-style");
+    const savedStyle = preferenceStorage.getItem("adrian-speak-style");
     if (savedStyle === "Storyteller" || savedStyle === "Supportive" || savedStyle === "Playful" || savedStyle === "Calm" || savedStyle === "Unhinged") setStyle(savedStyle);
-    const savedVolume = Number(window.localStorage.getItem("adrian-speak-volume") ?? "100");
+    const savedVolume = Number(preferenceStorage.getItem("adrian-speak-volume") ?? "100");
     if (Number.isFinite(savedVolume)) setVolume(Math.min(100, Math.max(0, savedVolume)));
-    const savedActivation = loadVoiceSettings(window.localStorage).activation;
+    const savedActivation = loadVoiceSettings(preferenceStorage).activation;
     setActivation(savedActivation === "push_to_talk" ? "push" : savedActivation);
   }, [props.open]);
 
@@ -174,10 +184,14 @@ export function SpeakStage(props: {
       stopVideo();
       setSettingsOpen(false);
       setConnecting(false);
+      setAsking(false);
       setRecordingPending(false);
       setReply("");
       setNotice(null);
       setSpeakerMuted(false);
+      speakerMutedRef.current = false;
+      outputGeneration.current++;
+      props.onStopSelected?.();
       document.documentElement.classList.remove("eve-call-open");
       if (opener?.isConnected) opener.focus({ preventScroll: true });
     };
@@ -259,17 +273,17 @@ export function SpeakStage(props: {
   }
 
   function chooseVoice(next: XaiBuiltinVoice) {
-    const stored = writeStoredVoiceChoice(next, window.localStorage);
+    const stored = writeStoredVoiceChoice(next, preferenceStorage);
     setVoice(stored);
     props.onVoice(stored);
-    setNotice(`${voiceDisplayName(stored)} is saved for Speak.`);
+    setNotice(`${voiceDisplayName(stored)} is selected for xAI speech. OpenAI output uses its own Alloy voice.`);
   }
 
   function chooseRate(next: RateId) {
     setRate(next);
     try {
-      window.localStorage.setItem("adrian-speak-rate", next);
-      saveVoiceSettings(window.localStorage, { ...loadVoiceSettings(window.localStorage), speed: next === "natural" ? "normal" : next === "brisk" ? "fast" : "slow" });
+      preferenceStorage.setItem("adrian-speak-rate", next);
+      saveVoiceSettings(preferenceStorage, { ...loadVoiceSettings(preferenceStorage), speed: next === "natural" ? "normal" : next === "brisk" ? "fast" : "slow" });
     } catch {
       /* private mode */
     }
@@ -278,7 +292,7 @@ export function SpeakStage(props: {
 
   function chooseStyle(next: StyleId) {
     setStyle(next);
-    try { window.localStorage.setItem("adrian-speak-style", next); } catch { /* private mode */ }
+    try { preferenceStorage.setItem("adrian-speak-style", next); } catch { /* private mode */ }
     props.onStyle?.(next);
     setNotice(`${next} is saved for this call.`);
   }
@@ -286,20 +300,23 @@ export function SpeakStage(props: {
   function chooseVolume(next: number) {
     const level = Math.min(100, Math.max(0, next));
     setVolume(level);
-    try { window.localStorage.setItem("adrian-speak-volume", String(level)); } catch { /* private mode */ }
+    try { preferenceStorage.setItem("adrian-speak-volume", String(level)); } catch { /* private mode */ }
     setNotice(level === 0 ? "Speaker volume is off." : `Speaker volume is ${level}.`);
   }
 
   function chooseActivation(next: ActivationId) {
     setActivation(next);
     if (props.live) props.onMicMute(next === "push");
-    saveVoiceSettings(window.localStorage, { ...loadVoiceSettings(window.localStorage), activation: next === "push" ? "push_to_talk" : next });
+    saveVoiceSettings(preferenceStorage, { ...loadVoiceSettings(preferenceStorage), activation: next === "push" ? "push_to_talk" : next });
     setNotice(next === "push" ? "Push to talk is saved. Hold the microphone to talk." : next === "isolation" ? "Voice isolation is saved for the next microphone open." : "Default voice activation is saved.");
   }
 
   function toggleSpeaker() {
     const next = !speakerMuted;
+    speakerMutedRef.current = next;
+    if (next) outputGeneration.current++;
     setSpeakerMuted(next);
+    if (next) props.onStopSelected?.();
     if (next) window.speechSynthesis?.cancel();
     setNotice(next ? "Speaker muted for this call." : "Speaker on.");
   }
@@ -308,12 +325,16 @@ export function SpeakStage(props: {
     const text = line.trim();
     if (!text || !props.onAsk || asking || props.halted) return;
     if (!props.signedIn) { props.onSignIn(); return; }
+    const generation = callGeneration.current, output = outputGeneration.current;
+    const isCurrent = () => openRef.current && generation === callGeneration.current && !speechCutRef.current;
+    const canSpeak = () => isCurrent() && output === outputGeneration.current && !speakerMutedRef.current;
     setAsking(true);
     setShowTranscript(true);
     setReply("");
-    setNotice("Adrian is answering. The reply will be spoken.");
+    setNotice(speakerMutedRef.current ? "Adrian is answering. The reply will remain written while the speaker is muted." : "Adrian is answering. The reply will be spoken.");
     try {
-      const result = await props.onAsk(text);
+      const result = await props.onAsk(text, { canSpeak });
+      if (!isCurrent()) return;
       if (result && typeof result === "object") {
         setReply(result.reply ?? "");
         setNotice(result.error ?? (result.reply ? "Spoken." : "The reply did not include text."));
@@ -324,10 +345,11 @@ export function SpeakStage(props: {
         if (!result) setLine("");
       }
     } catch {
+      if (!isCurrent()) return;
       setReply("");
       setNotice("The reply did not finish. Nothing was spoken.");
     } finally {
-      setAsking(false);
+      if (isCurrent()) setAsking(false);
     }
   }
 
@@ -356,7 +378,7 @@ export function SpeakStage(props: {
     >
       <video ref={videoRef} className={source === "none" ? "is-hidden" : source} playsInline muted autoPlay />
       <div className="speak-call__top">
-        <span>Adrian’s Mind <span className="speak-call__provider">/ {props.freeOnly ? "Free-only · cloud voice off" : "xAI realtime"}</span></span>
+        <span>Adrian’s Mind <span className="speak-call__provider">/ {props.freeOnly ? "Free-only · cloud voice off" : props.live ? "xAI realtime" : "Selected speech providers"}</span></span>
         <div className="speak-call__safety">
           <button type="button" data-testid="speak-emergency-stop" onClick={() => cutSpeechRef.current("owner")}>Emergency stop</button>
           {props.halted && <button type="button" data-testid="speak-clear-stop" onClick={clearStop}>Clear stop</button>}
@@ -366,7 +388,9 @@ export function SpeakStage(props: {
         <div className="speak-call__symbol" aria-hidden="true"><AudioLines /></div>
         <h2>Speak with Adrian</h2>
         <p role="status" data-testid="speak-status">{status}</p>
-        {!props.live && <button type="button" className="speak-call__place" disabled={props.halted || connecting || recordingPending || props.recording} onClick={() => void startLive()}>{!props.signedIn ? "Sign in to speak" : connecting ? "Connecting…" : props.callError ? "Retry live conversation" : "Start live conversation"}</button>}
+        {!props.live && props.onSelectedSpeak && <button type="button" className="speak-call__place" disabled={props.freeOnly || props.halted || connecting || recordingPending || props.recording || speakerMuted} onClick={() => { if (!props.signedIn) props.onSignIn(); else if (props.selectedBusy) props.onStopSelected?.(); else void props.onSelectedSpeak?.(); }}>{props.selectedBusy ? "Stop selected voice turn" : "Speak with chat model"}</button>}
+        {!props.live && props.selectedRoute && <p className="speak-call__transcript">{props.selectedRoute}. One recorded turn uses these selected stages. Playback and transcription are reported separately.</p>}
+        {!props.live && <button type="button" className="min-h-11 rounded-panel border border-line px-3 text-sm" disabled={props.halted || props.selectedBusy || connecting || recordingPending || props.recording} onClick={() => void startLive()}>{!props.signedIn ? "Sign in for xAI realtime" : connecting ? "Connecting to xAI…" : "Start xAI realtime"}</button>}
         {props.callError && <p className="speak-call__transcript" role="alert">{props.callError}</p>}
         {notice && <p className="speak-call__transcript" data-testid="speak-speech-cut" role="status">{notice}</p>}
         {showTranscript && transcript && <p className="speak-call__transcript" data-testid="speak-transcript">{transcript}</p>}
@@ -401,11 +425,11 @@ export function SpeakStage(props: {
             <h2>Voice settings</h2>
           </header>
           <button type="button" className="speak-sheet__voice" onClick={() => chooseVoice(VOICES[(VOICES.findIndex((item) => item.id === voice) + 1) % VOICES.length].id)}>
-            <span>Voice</span>
+            <span>xAI voice</span>
             <strong>{voiceDisplayName(voice)}</strong>
           </button>
           <p>Personality</p>
-          <p className="text-xs text-muted">Personality changes how the reply is written. Voice changes who speaks it.</p>
+          <p className="text-xs text-muted">Personality changes how the reply is written. This voice choice applies to xAI output; OpenAI output uses Alloy.</p>
           <div className="speak-sheet__styles">
             {STYLES.map((item) => <button key={item} type="button" aria-pressed={style === item} onClick={() => chooseStyle(item)}>{item}</button>)}
           </div>

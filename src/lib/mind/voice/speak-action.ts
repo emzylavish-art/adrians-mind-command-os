@@ -11,6 +11,8 @@
  */
 import { CHAT_TIMEOUT_REPLY, HONEST_FAILURE_MESSAGES, type HonestFailureKind } from "../failure-states.ts";
 import { onceRetry } from "../retry-fidelity.ts";
+import { normalizeVoiceStagesReceipt, type VoiceStagesReceipt } from "./stage-receipts.ts";
+import { isAllowedAudioMime, MAX_AUDIO_BASE64_CHARS } from "./voice-input.ts";
 import {
   VOICE_CONNECTION_DROPPED,
   VOICE_MIC_DENIED,
@@ -36,6 +38,18 @@ export type SpeakRetryParams = {
   messageId: string;
   /** Voice id captured with the attempt. Not trimmed. */
   voiceId: string;
+  inputProvider?: string;
+  answerProvider?: string;
+  outputProvider?: string;
+  voiceStages?: VoiceStagesReceipt;
+  projectId?: string | null;
+  replyTarget?: { chatId: string; messageId: string };
+  /** Ephemeral capture retained only while a server-confirmed unsent input can retry. Never persist. */
+  inputAudio?: { audioBase64: string; mime: string };
+  /** The input may have dispatched, or its exact retry snapshot was unavailable. */
+  inputDeliveryUncertain?: true;
+  /** Exact ephemeral request retained only after the answer server confirms dispatched:false. */
+  answerRequest?: { chatId: string; operationId: string; body: Record<string, unknown> };
 };
 
 export type SpeakActionDeps = {
@@ -142,6 +156,32 @@ export function classifySpeakFailure(caught: unknown): SpeakFailureClass {
   return { kind, message: failureMessage(kind, text) };
 }
 
+const MAX_ANSWER_RETRY_JSON_CHARS = 1_000_000;
+
+function snapshotInputAudio(value: unknown): SpeakRetryParams["inputAudio"] {
+  const rec = asRecord(value);
+  if (!rec || typeof rec.audioBase64 !== "string" || !rec.audioBase64.trim() || rec.audioBase64.length > MAX_AUDIO_BASE64_CHARS ||
+      typeof rec.mime !== "string" || rec.mime.length > 200 || !isAllowedAudioMime(rec.mime)) return undefined;
+  // Preserve whitespace and MIME parameters: the retry must reproduce the original request hash.
+  return { audioBase64: rec.audioBase64, mime: rec.mime };
+}
+
+function snapshotAnswerRequest(value: unknown): SpeakRetryParams["answerRequest"] {
+  const rec = asRecord(value);
+  if (!rec || typeof rec.chatId !== "string" || !rec.chatId || rec.chatId.length > 160 ||
+      typeof rec.operationId !== "string" || !rec.operationId || rec.operationId.length > 180 ||
+      !asRecord(rec.body) || Array.isArray(rec.body)) return undefined;
+  try {
+    const json = JSON.stringify(rec.body);
+    if (!json || json.length > MAX_ANSWER_RETRY_JSON_CHARS) return undefined;
+    const body: unknown = JSON.parse(json);
+    if (!asRecord(body) || Array.isArray(body)) return undefined;
+    return { chatId: rec.chatId, operationId: rec.operationId, body: body as Record<string, unknown> };
+  } catch {
+    return undefined;
+  }
+}
+
 export function snapshotSpeakRetryParams(input: {
   correlationId?: string;
   chatCommitted?: boolean;
@@ -151,16 +191,38 @@ export function snapshotSpeakRetryParams(input: {
   text?: string;
   messageId?: string;
   voiceId?: string;
+  inputProvider?: string;
+  answerProvider?: string;
+  outputProvider?: string;
+  voiceStages?: VoiceStagesReceipt;
+  projectId?: string | null;
+  replyTarget?: { chatId: string; messageId: string };
+  inputAudio?: SpeakRetryParams["inputAudio"];
+  inputDeliveryUncertain?: true;
+  answerRequest?: SpeakRetryParams["answerRequest"];
 }): SpeakRetryParams {
+  const inputAudio = snapshotInputAudio(input.inputAudio);
+  const answerRequest = snapshotAnswerRequest(input.answerRequest);
+  const invalidInputSnapshot = input.inputAudio !== undefined && !inputAudio;
+  const invalidAnswerSnapshot = input.answerRequest !== undefined && !answerRequest;
   return {
     correlationId: typeof input.correlationId === "string" && input.correlationId.length > 0 ? input.correlationId : crypto.randomUUID(),
-    chatCommitted: input.chatCommitted === true,
+    chatCommitted: input.chatCommitted === true || invalidAnswerSnapshot,
     transcript: input.transcript == null ? null : input.transcript,
     reply: input.reply == null ? null : input.reply,
     audio: input.audio == null ? null : input.audio,
     text: typeof input.text === "string" ? input.text : "",
     messageId: typeof input.messageId === "string" ? input.messageId : "",
     voiceId: typeof input.voiceId === "string" ? input.voiceId : "",
+    ...(typeof input.inputProvider === "string" ? { inputProvider: input.inputProvider } : {}),
+    ...(typeof input.answerProvider === "string" ? { answerProvider: input.answerProvider } : {}),
+    ...(typeof input.outputProvider === "string" ? { outputProvider: input.outputProvider } : {}),
+    ...(normalizeVoiceStagesReceipt(input.voiceStages) ? { voiceStages: normalizeVoiceStagesReceipt(input.voiceStages)! } : {}),
+    ...(input.projectId === null || typeof input.projectId === "string" && input.projectId.length <= 160 ? { projectId: input.projectId } : {}),
+    ...(input.replyTarget && typeof input.replyTarget.chatId === "string" && typeof input.replyTarget.messageId === "string" ? { replyTarget: { ...input.replyTarget } } : {}),
+    ...(inputAudio ? { inputAudio } : {}),
+    ...(input.inputDeliveryUncertain === true || invalidInputSnapshot ? { inputDeliveryUncertain: true as const } : {}),
+    ...(answerRequest ? { answerRequest } : {}),
   };
 }
 
@@ -191,8 +253,11 @@ function failed(result: unknown): boolean {
  */
 export async function runSpeakAction(params: SpeakRetryParams, deps: SpeakActionDeps = {}): Promise<SpeakActionResult> {
   const snap = snapshotSpeakRetryParams(params);
+  if (snap.inputDeliveryUncertain) {
+    return { ok: false, noop: true, kind: "network_failure", message: "The input request cannot be safely retried. Start a new Speak attempt.", params: snap };
+  }
   if (snap.chatCommitted) {
-    if (snap.reply && deps.synthesize && deps.play) {
+    if (snap.reply && deps.synthesize && deps.play && !snap.audio) {
       try {
         const spoken = await deps.synthesize(snap.reply, snap.voiceId);
         if (failed(spoken)) {
@@ -200,7 +265,9 @@ export async function runSpeakAction(params: SpeakRetryParams, deps: SpeakAction
           return { ok: false, noop: false, ...classified, params: snap };
         }
         const audio = asRecord(spoken) && typeof asRecord(spoken)?.audio === "string" ? String(asRecord(spoken)?.audio) : snap.audio;
-        if (audio) await deps.play(audio);
+        if (!audio?.trim()) throw new Error("Speech output returned no playable audio. The answer is preserved; retry speech only.");
+        snap.audio = audio;
+        await deps.play(audio);
         return { ok: true, replayed: true, params: { ...snap, audio: audio ?? snap.audio } };
       } catch (caught) {
         const classified = classifySpeakFailure(caught);
@@ -239,9 +306,9 @@ export async function runSpeakAction(params: SpeakRetryParams, deps: SpeakAction
     const failure = await step(deps.session);
     if (failure) return { ok: false, noop: false, ...failure, params: snap };
   }
-  let audioIn = "";
-  let mime = "audio/webm";
-  if (deps.capture) {
+  let audioIn = snap.inputAudio?.audioBase64 ?? "";
+  let mime = snap.inputAudio?.mime ?? "audio/webm";
+  if (!snap.transcript && !snap.inputAudio && deps.capture) {
     try {
       const captured = await deps.capture();
       if (failed(captured)) {
@@ -257,26 +324,46 @@ export async function runSpeakAction(params: SpeakRetryParams, deps: SpeakAction
     }
   }
   let transcript = snap.transcript;
-  if (deps.transcribe) {
+  if (!transcript && deps.transcribe) {
+    const inputAudio = snapshotInputAudio({ audioBase64: audioIn, mime });
+    const uncertainInput = (): SpeakRetryParams => {
+      const stopped = { ...snap, inputDeliveryUncertain: true as const };
+      delete stopped.inputAudio;
+      return stopped;
+    };
     try {
       const transcribed = await deps.transcribe(audioIn, mime);
       if (failed(transcribed)) {
         const classified = classifySpeakFailure(transcribed);
-        return { ok: false, noop: false, ...classified, params: snap };
+        const retry = asRecord(transcribed)?.dispatched === false && inputAudio
+          ? { ...snap, inputAudio }
+          : uncertainInput();
+        return { ok: false, noop: false, ...classified, params: retry };
       }
       transcript = payloadText(transcribed) || transcript;
+      if (!transcript) {
+        return { ok: false, noop: false, kind: "network_failure", message: "No words were recognized. Start a new Speak attempt.", params: uncertainInput() };
+      }
+      snap.transcript = transcript;
+      delete snap.inputAudio;
     } catch (caught) {
       const classified = classifySpeakFailure(caught);
-      return { ok: false, noop: false, ...classified, params: snap };
+      return { ok: false, noop: false, ...classified, params: uncertainInput() };
     }
   }
+  if (transcript) delete snap.inputAudio;
   let reply = snap.reply;
   if (deps.chatTurn && transcript) {
     const sent: SpeakRetryParams = { ...snap, chatCommitted: true, transcript, reply };
+    delete sent.answerRequest;
     try {
       const chat = await deps.chatTurn(transcript);
       if (failed(chat)) {
         const classified = classifySpeakFailure(chat);
+        const answerRequest = asRecord(chat)?.dispatched === false ? snapshotAnswerRequest(asRecord(chat)?.answerRequest) : undefined;
+        if (answerRequest) {
+          return { ok: false, noop: false, ...classified, params: { ...snap, chatCommitted: false, transcript, reply: null, answerRequest } };
+        }
         return { ok: false, noop: false, ...classified, params: sent };
       }
       reply = payloadText(chat) || reply;
@@ -291,6 +378,8 @@ export async function runSpeakAction(params: SpeakRetryParams, deps: SpeakAction
     transcript,
     reply,
   };
+  delete committed.inputAudio;
+  delete committed.answerRequest;
   if (reply && deps.synthesize && deps.play) {
     try {
       const spoken = await deps.synthesize(reply, committed.voiceId);
@@ -299,12 +388,15 @@ export async function runSpeakAction(params: SpeakRetryParams, deps: SpeakAction
         return { ok: false, noop: false, ...classified, params: committed };
       }
       const audio = asRecord(spoken) && typeof asRecord(spoken)?.audio === "string" ? String(asRecord(spoken)?.audio) : null;
-      if (audio) await deps.play(audio);
+      if (!audio?.trim()) throw new Error("Speech output returned no playable audio. The answer is preserved; retry speech only.");
+      committed.audio = audio;
+      await deps.play(audio);
       return { ok: true, replayed: false, params: { ...committed, audio } };
     } catch (caught) {
       const classified = classifySpeakFailure(caught);
       return { ok: false, noop: false, ...classified, params: committed };
     }
   }
+  if (deps.synthesize || deps.play) return { ok: false, noop: false, kind: "model_unavailable", message: "Speech output is unavailable. The answer is preserved. Choose a connected speech provider.", params: committed };
   return { ok: true, replayed: false, params: committed };
 }

@@ -1,7 +1,7 @@
 import type { Sql } from "../db.ts";
 import { haltFleet, runDueSchedules, tickFleet, type AgentRun, type ScheduleJob } from "./fleet.ts";
 import { readHaltState } from "./halt.server.ts";
-import { nextClock } from "./schedule-clock.ts";
+import { scheduleOccurrences } from "./schedule-policy.ts";
 import { updateOwnerWorkspace } from "./store.ts";
 import type { AuditEntry } from "./types.ts";
 
@@ -19,8 +19,7 @@ function later(now: string, minutes: number) {
 }
 
 function advance(job: ScheduleJob, now: string) {
-  if (job.clockHour == null) return later(now, job.intervalMinutes);
-  return nextClock(now, job.timeZone || "UTC", job.clockHour, job.clockMinute ?? 0, job.nextRunAt).at;
+  return scheduleOccurrences(job, now).nextRunAt;
 }
 
 export function claimSchedules(jobs: ScheduleJob[], now: string, workerId: string): Claim {
@@ -60,7 +59,8 @@ export async function runWorkerPass(
     for (const id of claim.claimed) {
       const job = claim.jobs.find((item) => item.id === id);
       if (!job) continue;
-      outcomes.set(id, run(job));
+      try { outcomes.set(id, run(job)); }
+      catch { outcomes.set(id, { ok: false, detail: "The executor threw after dispatch. Its outcome is unknown; reconcile before another attempt." }); }
     }
     const audit: AuditEntry[] = [...outcomes.entries()].map(([id, outcome]) => ({
       id: `audit-${leaseKey(row.user_id, id)}-${now}`,

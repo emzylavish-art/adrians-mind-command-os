@@ -3,6 +3,8 @@ import { ActionOverlay, rememberMenuAnchor } from "@/components/mind/conversatio
 import { customProviderBlockReason } from "@/lib/mind/provider-catalog";
 import { getBearerToken } from "@/lib/auth/client";
 import type { PublicAiProvider } from "@/lib/mind/ai-provider-config.server";
+import { normalizeEnvironmentCatalog, type EnvironmentModelCatalog } from "@/lib/mind/environment-model-catalog";
+import { EnvironmentModelCatalogPanel } from "./environment-model-catalog";
 
 type PublicRow = PublicAiProvider;
 type ProviderKind = "openai" | "xai" | "openrouter" | "anthropic" | "gemini" | "compatible";
@@ -50,6 +52,7 @@ async function api(action: Record<string, unknown> | null): Promise<Record<strin
 /** Account-owned, server-encrypted API configurations. Never echoes or stores secret input. */
 export function AiProviderConnections({ onChange, onUseModel }: { onChange?: (rows: PublicRow[]) => void; onUseModel?: (choice: string) => void }) {
   const [rows, setRows] = useState<PublicRow[]>([]);
+  const [environmentCatalogs, setEnvironmentCatalogs] = useState<EnvironmentModelCatalog[]>([]);
   const [loadedOnce, setLoadedOnce] = useState(false);
   const [kind, setKind] = useState<ProviderKind>("openai");
   const [label, setLabel] = useState("OpenAI");
@@ -57,6 +60,7 @@ export function AiProviderConnections({ onChange, onUseModel }: { onChange?: (ro
   const [apiKey, setApiKey] = useState("");
   const [initialModel, setInitialModel] = useState("");
   const [manual, setManual] = useState<Record<string, string>>({});
+  const [replacementKeys, setReplacementKeys] = useState<Record<string, string>>({});
   const [loading, setLoading] = useState(false);
   const [rowMenu, setRowMenu] = useState<string | null>(null);
   const rowTrigger = useRef<HTMLButtonElement | null>(null);
@@ -74,6 +78,8 @@ export function AiProviderConnections({ onChange, onUseModel }: { onChange?: (ro
     const data = await api(null);
     const next = Array.isArray(data.providers) ? data.providers as PublicRow[] : [];
     setRows(next);
+    const catalogs = Array.isArray(data.environmentCatalogs) ? data.environmentCatalogs.flatMap(value => { const catalog = normalizeEnvironmentCatalog(value); return catalog ? [catalog] : []; }) : [];
+    setEnvironmentCatalogs(catalogs);
     setLoadedOnce(true);
     onChange?.(next);
   };
@@ -105,6 +111,7 @@ export function AiProviderConnections({ onChange, onUseModel }: { onChange?: (ro
     try {
       const data = await api(action);
       if (action.action === "save") setApiKey("");
+      if (action.action === "rotate-key" && typeof action.id === "string") setReplacementKeys(old => ({ ...old, [String(action.id)]: "" }));
       try {
         await load();
       } catch {
@@ -113,15 +120,32 @@ export function AiProviderConnections({ onChange, onUseModel }: { onChange?: (ro
         return;
       }
       const provider = data.provider as PublicRow | undefined;
-      setNotice(provider?.lastError ? success + " " + provider.lastError : success);
+      const discovery = data.discovery as { ok?: boolean; error?: string } | undefined;
+      setNotice(discovery?.ok === false ? `Credential saved. Model discovery failed: ${discovery.error || "readiness unavailable"}. Inference was not verified.` : provider?.lastError ? success + " " + provider.lastError : success);
     } catch (error) {
       setNotice(error instanceof Error ? error.message : "The provider operation did not complete.");
-    } finally { setLoading(false); }
+      await load().catch(() => setLoadedOnce(false));
+    } finally { setLoading(false); if (action.action === "discover-environment") window.dispatchEvent(new Event("adrian-model-catalog-changed")); }
+  }
+  async function removeConnection(id: string) {
+    if (loading) return;
+    setLoading(true);
+    try {
+      const data = await api({ action: "dependencies", id });
+      const dependencies = Array.isArray(data.dependencies) ? data.dependencies as { kind: string; label: string }[] : [];
+      const impact = dependencies.length ? dependencies.map(item => `${item.kind}: ${item.label}`).join("\n") : "No references were found in the saved workspace.";
+      if (!confirm(`Remove this AI API connection?\n\n${impact}\n\nBrowser selections may also reference this connection. Dependent choices remain unavailable until you explicitly replace them; no provider or paid fallback is selected automatically.`)) return;
+      await api({ action: "delete", id });
+      await load();
+      setNotice("Connection removed. Dependent selections were preserved as unavailable; choose their replacements explicitly.");
+    } catch (error) { setNotice(error instanceof Error ? error.message : "Removal could not complete."); }
+    finally { setLoading(false); }
   }
   return (
     <section id="owner-api-connect" className="settings-card adrian-layer rounded-panel p-4 text-sm" aria-label="Custom AI API providers" data-testid="custom-ai-providers">
       <h3 className="font-semibold">Custom AI APIs and models</h3>
       <p className="mt-1 text-muted">Connect OpenAI-compatible, Anthropic or Gemini APIs, discover supported models, then choose a model from chat. Your key is encrypted on the server. Some providers require a manually entered model ID.</p>
+      <EnvironmentModelCatalogPanel catalogs={environmentCatalogs} busy={loading} onRefresh={provider => { void run({ action: "discover-environment", provider }, "Provider model metadata refreshed. No inference was run; your selected model was preserved."); }} />
       <div className="provider-identity mt-4" aria-live="polite">
         {PROVIDER_LOGOS[kind] ? <img src={PROVIDER_LOGOS[kind]} alt="" width={28} height={28} /> : <span className="provider-identity__custom" aria-hidden="true">API</span>}
         <div><p className="font-semibold">{label || "Custom API"}</p><p className="text-xs text-muted">Select a provider, then add only the credentials you intend to use.</p></div>
@@ -192,10 +216,14 @@ export function AiProviderConnections({ onChange, onUseModel }: { onChange?: (ro
               {providerLogo(`${row.label} ${row.host}`) ? <img className="size-7 shrink-0 rounded" src={providerLogo(`${row.label} ${row.host}`)!} alt="" width={28} height={28} /> : <span className="provider-identity__custom shrink-0" aria-hidden="true">API</span>}
               <div className="min-w-0 flex-1 [overflow-wrap:anywhere]">
                 <p className="font-semibold">{row.label}</p>
-                <p className="text-xs text-muted">{row.host} · {row.status} · {row.models.length} model(s)</p>
+                <p className="text-xs text-muted">{row.host} · {row.status.replaceAll("_", " ")} · {row.models.length} model(s)</p>
               </div>
               <button type="button" data-provider-actions aria-label={`Actions for ${row.label}`} aria-haspopup="dialog" aria-expanded={rowMenu === row.id} className="min-h-11 shrink-0 rounded-panel border border-line px-3" onClick={(event) => openRowMenu(row.id, event.currentTarget)}>Actions</button>
             </div>
+            <p className="mt-2 text-xs text-muted">Catalogue checked: {row.catalogCheckedAt ? new Date(row.catalogCheckedAt).toLocaleString() : "not checked"}. Last successful answer: {row.inferenceVerifiedAt ? `${row.inferenceModel || "model reported unknown"} · ${new Date(row.inferenceVerifiedAt).toLocaleString()}` : "not verified"}.</p>
+            {row.selectedModelAvailable === false && row.defaultModel ? <p className="mt-2 text-xs text-warning">Selected model {row.defaultModel} is no longer listed. Your selection was preserved; choose another model explicitly.</p> : null}
+            {row.retryAt ? <p className="mt-2 text-xs text-muted">Rate limit for {row.rateLimitedModel || "this connection"}; explicit retry after {new Date(row.retryAt).toLocaleString()}. No retry or paid fallback is scheduled.</p> : null}
+            <details className="mt-2 text-xs text-muted"><summary>Implemented capabilities</summary><p>Text answers: implemented; image adapter: {row.capabilities?.images || "unknown"}; streaming adapter: {row.capabilities?.streaming || "unknown"}. Transcription: {row.capabilities?.transcription || "unknown"}; speech: {row.capabilities?.speech || "unknown"}. A catalogue listing does not prove account access or a successful answer.</p></details>
             {row.lastError && <p role="status" className="mt-2 text-xs text-muted">{row.lastError}</p>}
             {row.models.length > 0 && <label className="mt-3 block text-sm">Default model
               <select disabled={loading} value={row.defaultModel || ""} className="mt-1 block min-h-11 w-full rounded-panel border border-line bg-bg px-2" onChange={(event) => void run({ action: "model", id: row.id, model: event.target.value }, "Default model updated.")}>
@@ -216,11 +244,11 @@ export function AiProviderConnections({ onChange, onUseModel }: { onChange?: (ro
                         onClick={() => void run({ action: "model", id: row.id, model: id }, "Default model updated.")}
                       >
                         <span aria-hidden="true" className="grid size-7 shrink-0 place-items-center rounded-full bg-surface text-[0.7rem]">{index + 1}</span>
-                        <span className="min-w-0 flex-1 break-all">{id}</span>
+                        <span className="min-w-0 flex-1 break-all">{id}<span className="block text-muted">Images: {row.modelCapabilities?.[id]?.imageInput || "unconfirmed"} · {row.modelCapabilities?.[id]?.source?.replaceAll("_", " ") || "capability not discovered"}</span></span>
                         {id.endsWith(":free") ? <span className="shrink-0 rounded-full border border-line px-2 py-1">free</span> : null}
                       </button>
                       {onUseModel && (
-                        <button type="button" className="min-h-11 shrink-0 rounded-panel border border-line px-3 text-xs" disabled={Boolean(customProviderBlockReason(row))} title={customProviderBlockReason(row) ?? undefined} aria-label={`Use ${row.label} ${id} in chat`} onClick={() => onUseModel(`custom:${row.id}:${encodeURIComponent(id)}`)}>
+                        <button type="button" className="min-h-11 shrink-0 rounded-panel border border-line px-3 text-xs" disabled={Boolean(customProviderBlockReason({ ...row, model: id }))} title={customProviderBlockReason({ ...row, model: id }) ?? undefined} aria-label={`Use ${row.label} ${id} in chat`} onClick={() => onUseModel(`custom:${row.id}:${encodeURIComponent(id)}`)}>
                           Use in chat
                         </button>
                       )}
@@ -236,12 +264,13 @@ export function AiProviderConnections({ onChange, onUseModel }: { onChange?: (ro
               <input aria-label={"Manual model for " + row.label} value={manual[row.id] || ""} onChange={(event) => setManual((old) => ({ ...old, [row.id]: event.target.value }))} placeholder="Additional model ID" className="min-w-0 flex-1 rounded-panel border border-line bg-bg px-3" />
               <button disabled={loading || !(manual[row.id] || "").trim()} type="submit" className="rounded-panel border border-line px-3 py-2">Add model</button>
             </form>
+            <details className="mt-3"><summary className="cursor-pointer text-sm">Replace credential</summary><form className="mt-2 flex flex-wrap gap-2" onSubmit={event => { event.preventDefault(); void run({ action: "rotate-key", id: row.id, apiKey: replacementKeys[row.id] || "" }, "Credential replaced on the same connection. Saved selections were preserved; inference is unverified."); }}><input aria-label={`Replacement key for ${row.label}`} type="password" autoComplete="off" value={replacementKeys[row.id] || ""} onChange={event => setReplacementKeys(old => ({ ...old, [row.id]: event.target.value }))} className="min-h-11 min-w-0 flex-1 rounded-panel border border-line bg-bg px-3" /><button type="submit" disabled={loading || !replacementKeys[row.id]?.trim()} className="min-h-11 rounded-panel border border-line px-3">Replace key</button></form></details>
           </article>
         ))}
         {rowMenu && rows.some((row) => row.id === rowMenu) ? (
           <ActionOverlay label={`Actions for ${rows.find((row) => row.id === rowMenu)?.label || "connection"}`} title={rows.find((row) => row.id === rowMenu)?.label || "Connection"} onClose={closeRowMenu}>
             <button type="button" disabled={loading} className="flex min-h-11 w-full items-center rounded-2xl px-3 text-left text-sm" onClick={() => { const id = rowMenu; closeRowMenu(); void run({ action: "discover", id }, "Model catalogue refreshed."); }}>Refresh models</button>
-            <button type="button" disabled={loading} className="flex min-h-11 w-full items-center rounded-2xl px-3 text-left text-sm" style={{ color: "rgb(248 113 113)" }} onClick={() => { const id = rowMenu; closeRowMenu(); if (confirm("Remove this AI API connection?")) void run({ action: "delete", id }, "Connection removed."); }}>Remove</button>
+            <button type="button" disabled={loading} className="flex min-h-11 w-full items-center rounded-2xl px-3 text-left text-sm" style={{ color: "rgb(248 113 113)" }} onClick={() => { const id = rowMenu; closeRowMenu(); void removeConnection(id); }}>Remove</button>
           </ActionOverlay>
         ) : null}
         {loadedOnce && rows.length === 0 && <p className="text-xs text-muted">No custom AI API is saved yet.</p>}

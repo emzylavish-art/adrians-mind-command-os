@@ -137,13 +137,22 @@ export async function listRegistryServers(userId: string, db?: RegistryDb | null
   return (await readServers(userId, db)).map(toPublic);
 }
 
+async function invalidatePendingApprovals(userId: string, db?: RegistryDb | null) {
+  const target = db || (databaseConfigured() ? await (await import("../../db.ts")).getSql() : null);
+  // Existing approval records are owner/request-bound but not connection indexed.
+  // Revoking all pending MCP reviews for this owner is conservative; new reviews
+  // remain possible after the explicitly changed connection is re-enabled.
+  if (target) await target.query("DELETE FROM mind_mcp_call_approvals WHERE owner_id = $1", [userId]);
+}
+
 export async function setServerEnabled(userId: string, id: string, enabled: boolean, db?: RegistryDb | null): Promise<RegistryServerPublic[]> {
   const servers = await readServers(userId, db);
   const server = servers.find((item) => item.id === id);
-  if (!server) return servers.map(toPublic);
+  if (!server) throw new Error("This MCP connection is no longer saved for this account.");
+  await invalidatePendingApprovals(userId, db);
   server.enabled = enabled === true;
   const saved = await saveRegistry(userId, servers, db);
-  if (!saved.ok) return (await readServers(userId, db)).map(toPublic);
+  if (!saved.ok) throw new Error(saved.error);
   return servers.map(toPublic);
 }
 
@@ -208,6 +217,7 @@ export async function registerExternalServer(
 export async function removeRegistryServer(userId: string, id: string, db?: RegistryDb | null): Promise<RegistryServerPublic[]> {
   const servers = await readServers(userId, db);
   if (id === BUILTIN_ID) return servers.map(toPublic);
+  await invalidatePendingApprovals(userId, db);
   const { deleteRegistryServer } = await import("./registry-store.ts");
   const removed = await deleteRegistryServer(userId, id, db);
   if (!removed.ok) throw new Error(removed.error);

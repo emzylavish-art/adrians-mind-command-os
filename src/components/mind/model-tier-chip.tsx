@@ -7,10 +7,12 @@ import {
   selectModelTier,
   type ConcreteModelTier,
   type ModelTier,
+  type ModelTierCatalogRow,
 } from "@/lib/mind/model-tiers";
 import { readTierOutcome } from "@/lib/mind/model-tier-memory";
 import { LOGIC_ROUTES, activePickerLabel, logicMenuState, type LogicRouteId, type LogicRoutePublic } from "@/lib/mind/logic-routes";
 import { finishMenu } from "@/components/mind/menu-material";
+import { environmentModelChoices, environmentModelReadiness, type EnvironmentModelCatalog } from "@/lib/mind/environment-model-catalog";
 
 export type ModelTierChipProps = {
   tier: ModelTier;
@@ -27,6 +29,8 @@ export type ModelTierChipProps = {
   grokModel?: string | null;
   onChooseGrokModel?: (model: string) => void;
   presentation?: "menu" | "rows";
+  catalog?: EnvironmentModelCatalog;
+  tierCatalog?: readonly ModelTierCatalogRow[];
 };
 
 /**
@@ -46,6 +50,8 @@ export function ModelTierChip({
   grokModel = null,
   onChooseGrokModel,
   presentation = "menu",
+  catalog,
+  tierCatalog = [],
 }: ModelTierChipProps) {
   const [open, setOpen] = useState(false);
   const rootRef = useRef<HTMLDivElement | null>(null);
@@ -82,12 +88,18 @@ export function ModelTierChip({
 
   const choices = (
     <>
-      {MODEL_TIERS.map((item) => (
+      {MODEL_TIERS.map((item) => {
+        const configured = tierCatalog.find(row => row.id === item);
+        const readiness = item !== "Auto" && configured?.model ? environmentModelReadiness(catalog, configured.model) : null;
+        const autoBlocked = item === "Auto" && configured && ["unavailable", "stale", "unconfigured"].includes(configured.availability);
+        return (
         <button
           key={item}
           type="button"
           role="menuitemradio"
           aria-checked={logicRoute == null && tier === item}
+          disabled={readiness?.ok === false || Boolean(autoBlocked)}
+          title={readiness?.ok === false ? readiness.error : configured?.note}
           className={`flex min-h-11 items-center rounded-xl px-3 text-left text-sm ${logicRoute == null && tier === item ? "bg-white/10" : ""}`}
           style={{ flex: "1 1 7.5rem", width: "auto", maxWidth: "100%", minWidth: "7.25rem" }}
           onClick={() => {
@@ -95,23 +107,25 @@ export function ModelTierChip({
             setOpen(false);
           }}
         >
-          {item}
+          {item}{readiness?.ok === false ? ` · ${readiness.availability}` : autoBlocked ? ` · ${configured.availability}` : ""}
         </button>
-      ))}
-      {onChooseGrokModel ? CONNECTED_GROK_MODELS.map((model) => (
+      ); })}
+      {onChooseGrokModel ? environmentModelChoices(catalog, [...CONNECTED_GROK_MODELS, ...tierCatalog.flatMap(row => row.model ? [row.model] : [])], grokModel).slice(0, 200).map((choice) => (
         <button
-          key={model}
+          key={choice.model}
           type="button"
           role="menuitemradio"
-          aria-checked={grokModel === model}
-          data-testid={`grok-model-${model}`}
-          className={`flex min-h-11 items-center rounded-xl px-3 text-left text-sm ${grokModel === model ? "bg-white/10" : ""}`}
+          aria-checked={grokModel === choice.model}
+          disabled={!choice.ok}
+          title={choice.ok ? "Catalogue presence is not proof of a successful inference." : choice.error}
+          data-testid={`grok-model-${choice.model}`}
+          className={`flex min-h-11 items-center rounded-xl px-3 text-left text-sm ${grokModel === choice.model ? "bg-white/10" : ""}`}
           onClick={() => {
-            onChooseGrokModel(model);
+            onChooseGrokModel(choice.model);
             setOpen(false);
           }}
         >
-          {model}
+          <span className="min-w-0 break-words">{choice.model}<span className="block text-xs text-muted">{choice.availability} · inference unverified</span></span>
         </button>
       )) : null}
       {LOGIC_ROUTES.filter((id) => {

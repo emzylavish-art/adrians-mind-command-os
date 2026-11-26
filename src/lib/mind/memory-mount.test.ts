@@ -14,12 +14,16 @@ import {
 
 const root = join(dirname(fileURLToPath(import.meta.url)), "../..");
 const commandApp = readFileSync(join(root, "components/mind/command-app.tsx"), "utf8");
+const chatPane = readFileSync(join(root, "components/mind/chat-pane.tsx"), "utf8");
+const commandSurface = [commandApp, chatPane].join("\n");
 const indicatorSrc = readFileSync(join(root, "components/mind/memory-saved-indicator.tsx"), "utf8");
 const toggleSrc = readFileSync(join(root, "components/mind/memory-chat-toggle.tsx"), "utf8");
 const memoryManagerSrc = readFileSync(join(root, "components/mind/memory-manager.tsx"), "utf8");
 
 describe("memory UX mount in command-app", () => {
   it("imports and mounts MemorySavedIndicator + MemoryChatToggle", () => {
+    assert.match(commandApp, /import \{ ChatPane \} from "\.\/chat-pane"/);
+    assert.match(commandApp, /<ChatPane\b/);
     for (const needle of [
       'from "@/components/mind/memory-saved-indicator"',
       'from "@/components/mind/memory-chat-toggle"',
@@ -31,7 +35,7 @@ describe("memory UX mount in command-app", () => {
       "result.memorySaved === true",
       "msg.memorySaved === true",
     ]) {
-      assert.match(commandApp, new RegExp(needle.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")));
+      assert.match(commandSurface, new RegExp(needle.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")));
     }
   });
 

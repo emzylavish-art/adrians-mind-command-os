@@ -6,6 +6,7 @@ import { fileURLToPath } from "node:url";
 
 const here = dirname(fileURLToPath(import.meta.url));
 const app = readFileSync(join(here, "../src/components/mind/command-app.tsx"), "utf8");
+const chatPane = readFileSync(join(here, "../src/components/mind/chat-pane.tsx"), "utf8");
 
 describe("mobile workspace drawer", () => {
   it("labels the open navigation as a modal and restores focus to its trigger", () => {
@@ -54,8 +55,8 @@ describe("composer send guards", () => {
   });
 
   it("keeps Stop actionable during generation and guards empty Chat submissions", () => {
-    assert.match(app, /type=\{busy \? "button" : "submit"\} onClick=\{busy \? onStop : undefined\}/);
-    assert.match(app, /disabled=\{halted \|\| \(!busy && !draft\.trim\(\) && pendingImages\.length === 0 && !stagedName\)\}/);
+    assert.match(chatPane, /type=\{busy \? "button" : "submit"\} onClick=\{busy \? onStop : undefined\}/);
+    assert.match(chatPane, /disabled=\{halted \|\| \(!busy && !draft\.trim\(\) && pendingImages\.length === 0 && !stagedName\)\}/);
   });
 });
 

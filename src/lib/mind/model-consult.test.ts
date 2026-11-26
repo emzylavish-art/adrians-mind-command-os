@@ -24,6 +24,7 @@ describe("model consult", () => {
       modules,
       question: "What file formats last?",
       purpose: ORCHESTRATOR_PURPOSE,
+      selectedHelpers: ["grok", "custom:saved:desk-model"],
     });
     assert.equal(planned.ok, true);
     if (!planned.ok) return;
@@ -50,6 +51,7 @@ describe("model consult", () => {
       orchestrator: "grok",
       modules: builtinModules({ grokConfigured: true, providers: { openai: true, openrouter: true } }),
       question: "Name a durable format.",
+      selectedHelpers: ["openai", "openrouter", "nemotron"],
     });
     assert.equal(planned.ok, true);
     if (!planned.ok) return;
@@ -61,7 +63,7 @@ describe("model consult", () => {
       return { ok: true, text: `${id} help` };
     });
     assert.deepEqual(called, ["openai", "openrouter", "nemotron"]);
-    assert.deepEqual(help.map((item) => item.id), ["openai", "nemotron"]);
+    assert.deepEqual(help.filter((item) => item.ok).map((item) => item.id), ["openai", "nemotron"]);
     const instruction = orchestratorInstruction(planned.plan, help);
     assert.match(instruction, /born inside Adrian's Mind/);
     assert.match(instruction, /openrouter/);

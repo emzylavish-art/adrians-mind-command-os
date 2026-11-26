@@ -134,10 +134,11 @@ describe("mcpRegistryList wiring uses shared session helper", () => {
     assert.match(server, /export const mcpRegistryCall[\s\S]*?\.middleware\(\[authMiddleware\]/);
     assert.match(middleware, /requireUserId\(context\.bearerToken\)/);
     assert.match(verify, /readSupabaseSessionUser/);
-    assert.match(verify, /pickSessionUser/);
-    // Supabase preferred before Better Auth
+    assert.match(verify, /reconcileSessionReads/);
+    // Both read results must be reconciled; conflicting identities cannot silently pick an owner.
     const getSessionIdx = verify.indexOf("export async function getSessionUser");
     const body = verify.slice(getSessionIdx, getSessionIdx + 900);
-    assert.ok(body.indexOf("readSupabaseSessionUser") < body.indexOf("readBetterAuthSessionUser"));
+    assert.match(body, /Promise\.all\(\[readSupabaseSessionUser\(\), readBetterAuthSessionUser\(bearerToken\)\]\)/);
+    assert.match(body, /return reconcileSessionReads\(primary, secondary\)/);
   });
 });

@@ -1,3 +1,4 @@
+import type { ImagePreparationReceipt, ImageEditLineage } from "./image-metadata.ts";
 /** OpenAI-compatible multimodal content parts for chat completions. */
 
 export type TextContentPart = { type: "text"; text: string };
@@ -12,6 +13,8 @@ export type MultimodalContentPart = TextContentPart | ImageUrlContentPart;
 export type ChatContent = string | MultimodalContentPart[];
 
 export type ImageAttachment = {
+  preparation?: ImagePreparationReceipt;
+  lineage?: ImageEditLineage;
   origin?: "attached" | "camera" | "generated" | "edited";
   /** data:image/...;base64,... */
   dataUrl: string;

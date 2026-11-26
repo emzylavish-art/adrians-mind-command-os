@@ -1,0 +1,112 @@
+/* Shared viewport and navigation contract. Components own their scroll region. */
+#mind-workspace #command-home { justify-content: flex-start !important; }
+#mind-workspace #chat-thread > section {
+  display: flex !important;
+  flex-direction: column !important;
+  min-height: 0 !important;
+  overflow: hidden !important;
+}
+
+#mind-workspace #chat-thread form.thread-composer {
+  display: flex !important;
+  flex-direction: column !important;
+  flex-wrap: nowrap !important;
+  flex: 0 1 auto !important;
+  min-height: min(100%, 7.5rem) !important;
+  max-height: min(68%, 330px) !important;
+  overflow: hidden !important;
+}
+
+#mind-workspace #chat-thread form.thread-composer > .thread-draft {
+  flex: 1 1 auto;
+  min-height: 2.75rem;
+  overflow-y: auto;
+  overscroll-behavior-y: contain;
+}
+
+#mind-workspace #chat-thread form.thread-composer > .composer-toolbar {
+  flex: 0 0 auto !important;
+  min-height: 2.75rem;
+  position: sticky;
+  bottom: 0;
+}
+
+@media (min-width: 768px) {
+  #mind-workspace .topbar > button[aria-label="Open menu"] { display: none !important; }
+}
+
+#mind-workspace .rail.nav-drawer-open {
+  color: var(--mind-copy, #fafafa);
+}
+
+#mind-workspace .rail nav {
+  padding-inline: 12px !important;
+}
+
+#mind-workspace .rail nav .nav-item {
+  height: auto !important;
+  padding-inline: 12px !important;
+  gap: 12px !important;
+  white-space: normal !important;
+  overflow-wrap: anywhere;
+  text-align: start;
+}
+
+#mind-workspace #chat-thread .next-guesses {
+  height: auto !important;
+  max-height: none !important;
+  display: flex !important;
+  flex-wrap: nowrap;
+  overflow-x: auto;
+  overscroll-behavior-x: contain;
+}
+
+#mind-workspace #chat-thread .next-guesses .suggestion-chip {
+  flex: 0 0 auto;
+  min-height: 44px;
+  max-width: 80vw;
+  white-space: normal;
+}
+
+@media (max-width: 767px) {
+  #mind-workspace .rail.nav-drawer-open {
+    inset: 0 auto 0 0 !important;
+    width: min(18.5rem, 84vw) !important;
+    height: 100dvh !important;
+    background: #161618 !important;
+    color: #fafafa !important;
+    border-radius: 0 22px 22px 0 !important;
+    box-shadow: 18px 0 48px rgb(0 0 0 / 38%) !important;
+    z-index: 200 !important;
+  }
+
+  html[data-theme="light"] #mind-workspace .rail.nav-drawer-open {
+    background: #f7f7f8 !important;
+    color: #18181b !important;
+  }
+
+  #mind-workspace #chat-thread form.thread-composer {
+    min-height: min(100%, 9.75rem) !important;
+    max-height: min(44%, 250px) !important;
+  }
+
+  #mind-workspace #chat-thread form.thread-composer[data-expanded="true"] {
+    max-height: min(72%, 500px) !important;
+  }
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  html:not([data-adrian-motion="reduce"]) #mind-workspace .rail.nav-drawer-open {
+    animation: adrian-drawer-in 240ms cubic-bezier(0.22, 1, 0.36, 1);
+  }
+}
+
+/* Account-owned accessibility preferences use the existing visual tokens. */
+html { font-size: calc(16px * var(--mind-text-scale, 1)); }
+html[data-contrast="high"] { --color-muted: #c8cfd9; --color-line: #a4acba; }
+html[data-theme="light"][data-contrast="high"] { --color-muted: #374151; --color-line: #4b5563; }
+html[data-reading-spacing="comfortable"] .turn { line-height: 1.85; letter-spacing: .015em; }
+:where(button, a, input, select, textarea, summary):focus-visible { outline: 2px solid var(--color-accent, currentColor); outline-offset: 3px; }
+
+/* An inactive popover must not inherit the legacy inline-menu display rule. */
+#mind-workspace .composer-more__menu[popover]:not(:popover-open) { display: none !important; }

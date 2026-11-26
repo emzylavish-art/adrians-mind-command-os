@@ -1,6 +1,8 @@
 import { useEffect, useMemo, useState } from "react";
 import { shouldRunDeepResearch } from "@/lib/mind/research";
-import { emptyWorkspace, loadWorkspace } from "@/lib/mind/workspace";
+import type { Workspace } from "@/lib/mind/types";
+import type { PreferenceStorage } from "@/lib/mind/account-preferences";
+import { useAccountPreferences } from "@/components/mind/account-preferences-context";
 
 const DEPTH_KEY = "adrian-research-depth";
 const FOCUS_KEY = "adrian-research-focus";
@@ -54,17 +56,17 @@ const STARTERS: LocalQuestion[] = [
 const DEFAULT_NEXT =
   "Next: type a question in What do you want to research?, then press Start research. A blank question is not searched. If the saved Grok key cannot search, Start research refuses and creates no citations.";
 
-function readKey(key: string): string | null {
+function readKey(storage: PreferenceStorage, key: string): string | null {
   try {
-    return window.localStorage.getItem(key);
+    return storage.getItem(key);
   } catch {
     return null;
   }
 }
 
-function writeKey(key: string, value: string): boolean {
+function writeKey(storage: PreferenceStorage, key: string, value: string): boolean {
   try {
-    window.localStorage.setItem(key, value);
+    storage.setItem(key, value);
     return true;
   } catch {
     return false;
@@ -160,8 +162,8 @@ function fileStep(): string {
   return "Next: stage a text file, then press Inspect staged file under File inspection. Web pages are not fetched. Press Run REA doctor only for the doctor check. A report appears only after one of those buttons runs.";
 }
 
-function readQuestions(): LocalQuestion[] {
-  const raw = readKey(QUESTIONS_KEY);
+function readQuestions(storage: PreferenceStorage): LocalQuestion[] {
+  const raw = readKey(storage, QUESTIONS_KEY);
   if (!raw) return [];
   try {
     const parsed = JSON.parse(raw) as unknown;
@@ -186,8 +188,8 @@ function readQuestions(): LocalQuestion[] {
   }
 }
 
-function readPins(known: Set<string>): string[] {
-  const raw = readKey(PINS_KEY);
+function readPins(storage: PreferenceStorage, known: Set<string>): string[] {
+  const raw = readKey(storage, PINS_KEY);
   if (!raw) return [];
   try {
     const parsed = JSON.parse(raw) as unknown;
@@ -209,7 +211,9 @@ function compareQuestions(sort: SortId) {
  * Research page controls. Preferences and questions stay on this device.
  * Start research on the page still owns the search. This panel never fetches or invents a citation.
  */
-export function ResearchPanel({ onUse, start = "ask" }: { onUse?: (text: string) => void; start?: "ask" | "preferences" | "saved" } = {}) {
+export function ResearchPanel({ workspace, onUse, start = "ask" }: { workspace?: Pick<Workspace, "halted">; onUse?: (text: string) => void; start?: "ask" | "preferences" | "saved" } = {}) {
+  const storage = useAccountPreferences();
+  const halted = workspace?.halted !== false;
   const [depth, setDepth] = useState<DepthId>("single");
   const [focus, setFocus] = useState<FocusId>("plain");
   const [sort, setSort] = useState<SortId>("recent");
@@ -217,31 +221,25 @@ export function ResearchPanel({ onUse, start = "ask" }: { onUse?: (text: string)
   const [pins, setPins] = useState<string[]>([]);
   const [mine, setMine] = useState<LocalQuestion[]>([]);
   const [draft, setDraft] = useState("");
-  const [halted, setHalted] = useState(false);
   const [next, setNext] = useState(DEFAULT_NEXT);
   const [savedNote, setSavedNote] = useState("Preferences load from this browser.");
   const [band, setBand] = useState<"ask" | "preferences" | "saved">(start);
 
   useEffect(() => {
-    const storedDepth = readKey(DEPTH_KEY);
-    const storedFocus = readKey(FOCUS_KEY);
-    const storedSort = readKey(SORT_KEY);
-    const storedFilter = readKey(FILTER_KEY);
-    const storedMine = readQuestions();
+    const storedDepth = readKey(storage, DEPTH_KEY);
+    const storedFocus = readKey(storage, FOCUS_KEY);
+    const storedSort = readKey(storage, SORT_KEY);
+    const storedFilter = readKey(storage, FILTER_KEY);
+    const storedMine = readQuestions(storage);
     const known = new Set([...STARTERS, ...storedMine].map((item) => item.id));
     if (isDepth(storedDepth)) setDepth(storedDepth);
     if (isFocus(storedFocus)) setFocus(storedFocus);
     if (isSort(storedSort)) setSort(storedSort);
     if (isFilter(storedFilter)) setFilter(storedFilter);
     setMine(storedMine);
-    setPins(readPins(known));
-    try {
-      setHalted(loadWorkspace(window.localStorage).halted === true);
-    } catch {
-      setHalted(emptyWorkspace().halted);
-    }
+    setPins(readPins(storage, known));
     setSavedNote("Loaded depth, focus, sort, filter, and saved questions already stored in this browser.");
-  }, []);
+  }, [storage]);
 
   const visible = useMemo(() => {
     return [...STARTERS, ...mine]
@@ -262,41 +260,34 @@ export function ResearchPanel({ onUse, start = "ask" }: { onUse?: (text: string)
   function chooseDepth(nextDepth: DepthId) {
     setDepth(nextDepth);
     const label = DEPTHS.find((item) => item.id === nextDepth)?.label ?? nextDepth;
-    noteSaved(`${label} as the research depth`, writeKey(DEPTH_KEY, nextDepth));
+    noteSaved(`${label} as the research depth`, writeKey(storage, DEPTH_KEY, nextDepth));
     setNext(checkStep(draft, nextDepth, focus, halted));
   }
 
   function chooseFocus(nextFocus: FocusId) {
     setFocus(nextFocus);
-    noteSaved(`${focusLabel(nextFocus)} as the research focus`, writeKey(FOCUS_KEY, nextFocus));
+    noteSaved(`${focusLabel(nextFocus)} as the research focus`, writeKey(storage, FOCUS_KEY, nextFocus));
     setNext(checkStep(draft, depth, nextFocus, halted));
   }
 
   function chooseSort(nextSort: SortId) {
     setSort(nextSort);
     const label = SORTS.find((item) => item.id === nextSort)?.label ?? nextSort;
-    noteSaved(`${label} sort`, writeKey(SORT_KEY, nextSort));
+    noteSaved(`${label} sort`, writeKey(storage, SORT_KEY, nextSort));
   }
 
   function chooseFilter(nextFilter: FilterId) {
     setFilter(nextFilter);
-    noteSaved(`${filterLabel(nextFilter)} as the question filter`, writeKey(FILTER_KEY, nextFilter));
+    noteSaved(`${filterLabel(nextFilter)} as the question filter`, writeKey(storage, FILTER_KEY, nextFilter));
   }
 
   function reloadLocal() {
-    const storedMine = readQuestions();
+    const storedMine = readQuestions(storage);
     const known = new Set([...STARTERS, ...storedMine].map((item) => item.id));
     setMine(storedMine);
-    setPins(readPins(known));
-    let stop = false;
-    try {
-      stop = loadWorkspace(window.localStorage).halted === true;
-      setHalted(stop);
-      setSavedNote("Reloaded saved questions and Emergency stop from this browser.");
-    } catch {
-      setHalted(false);
-      setSavedNote("Reloaded saved questions. This browser blocked workspace storage, so Emergency stop could not be read.");
-    }
+    setPins(readPins(storage, known));
+    const stop = halted;
+    setSavedNote("Reloaded this account’s saved questions. Emergency stop follows the current workspace.");
     setNext(
       storedMine.length === 0
         ? "Next: type a question in Question to save, then press Save this question. Nothing was searched."
@@ -329,7 +320,7 @@ export function ResearchPanel({ onUse, start = "ask" }: { onUse?: (text: string)
     const nextMine = [added, ...mine].slice(0, QUESTION_LIMIT);
     setMine(nextMine);
     setDraft("");
-    noteSaved(`“${text}”`, writeKey(QUESTIONS_KEY, JSON.stringify(nextMine.map(({ id, text: saved, focus: savedFocus, createdAt }) => ({ id, text: saved, focus: savedFocus, createdAt })))));
+    noteSaved(`“${text}”`, writeKey(storage, QUESTIONS_KEY, JSON.stringify(nextMine.map(({ id, text: saved, focus: savedFocus, createdAt }) => ({ id, text: saved, focus: savedFocus, createdAt })))));
     setNext(checkStep(text, depth, focus, halted));
   }
 
@@ -338,11 +329,11 @@ export function ResearchPanel({ onUse, start = "ask" }: { onUse?: (text: string)
     const nextPins = pins.filter((id) => id !== question.id);
     setMine(nextMine);
     setPins(nextPins);
-    const savedList = writeKey(
+    const savedList = writeKey(storage,
       QUESTIONS_KEY,
       JSON.stringify(nextMine.map(({ id, text, focus: savedFocus, createdAt }) => ({ id, text, focus: savedFocus, createdAt }))),
     );
-    const savedPins = writeKey(PINS_KEY, JSON.stringify(nextPins));
+    const savedPins = writeKey(storage, PINS_KEY, JSON.stringify(nextPins));
     noteSaved(`removal of “${question.text}”`, savedList && savedPins);
     setNext("Next: type another question in Question to save, or press Use this question next on a row that is still listed.");
   }
@@ -350,7 +341,7 @@ export function ResearchPanel({ onUse, start = "ask" }: { onUse?: (text: string)
   function togglePin(question: LocalQuestion) {
     const nextPins = pins.includes(question.id) ? pins.filter((id) => id !== question.id) : [...pins, question.id];
     setPins(nextPins);
-    noteSaved(`“${question.text}”`, writeKey(PINS_KEY, JSON.stringify(nextPins)));
+    noteSaved(`“${question.text}”`, writeKey(storage, PINS_KEY, JSON.stringify(nextPins)));
   }
 
   const emptyCopy =

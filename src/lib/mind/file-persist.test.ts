@@ -10,10 +10,10 @@ import { applyAgentTurn } from "./agent-session.ts";
 import { safeToResume, voiceProviderStatus } from "./memory/index.ts";
 import type { AgentTool } from "./orchestrator.ts";
 import { readToolRuns, writeToolRun } from "./notion-record.ts";
-import { readSnapshot, writeSnapshot } from "./store.ts";
+import { readSnapshot, snapshotRevision, writeSnapshot } from "./store.ts";
 import { addMemory, emptyWorkspace, normalizeWorkspace, reviseMemory } from "./workspace.ts";
 
-function toSql(pg: PGlite): Sql {
+function toSql(pg: Pick<PGlite, "query"> & Partial<Pick<PGlite, "transaction">>): Sql {
   const sql = (async (strings: TemplateStringsArray, ...values: unknown[]) => {
     let text = strings[0] ?? "";
     for (let index = 0; index < values.length; index += 1) text += `$${index + 1}${strings[index + 1] ?? ""}`;
@@ -21,6 +21,7 @@ function toSql(pg: PGlite): Sql {
     return result.rows;
   }) as Sql;
   sql.query = async <T = Record<string, unknown>>(text: string, params: unknown[] = []) => (await pg.query(text, params)).rows as T[];
+  if (pg.transaction) sql.transaction = (fn) => pg.transaction!((tx) => fn(toSql(tx)));
   return sql;
 }
 
@@ -129,7 +130,7 @@ describe("file database", () => {
         },
       });
       assert.equal(afterDelete.ws.memories[0]?.archived, true);
-      await writeSnapshot(toSql(second), "owner-a", afterDelete.ws);
+      await writeSnapshot(toSql(second), "owner-a", afterDelete.ws, snapshotRevision(await readSnapshot(toSql(second), "owner-a")));
       await second.close();
       const third = await openDatabase(dir);
       const again = normalizeWorkspace(await readSnapshot(toSql(third), "owner-a"));

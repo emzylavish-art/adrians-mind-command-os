@@ -23,9 +23,15 @@ export const PALETTE_DESTINATIONS = [
   { id: "settings", label: "Settings" },
 ] as const;
 
-function destinationMatches(item: { label: string; aliases?: readonly string[] }, search: string) {
-  if (!search) return true;
-  return [item.label, ...(item.aliases ?? [])].join(" ").toLowerCase().includes(search);
+export function searchTerms(value: string): string[] {
+  return value.normalize("NFKD").replace(/\p{M}/gu, "").toLowerCase().match(/[\p{L}\p{N}_+#.-]+/gu) ?? [];
+}
+export function searchScore(label: string, content: string, query: string): number {
+  const terms = searchTerms(query); if (!terms.length) return 1;
+  const title = searchTerms(label).join(" "); const body = searchTerms(content).join(" ");
+  const queryText = terms.join(" ");
+  if (!terms.every((term) => `${title} ${body}`.includes(term))) return 0;
+  return (title === queryText ? 1000 : title.startsWith(queryText) ? 300 : title.includes(queryText) ? 150 : 0) + terms.filter((term) => title.split(" ").includes(term)).length * 40 + (body.includes(queryText) ? 10 : 1);
 }
 
 export type PaletteHit = {
@@ -38,10 +44,16 @@ export type PaletteHit = {
   messageId?: string;
 };
 
-type PaletteInput = {
+export type PaletteInput = {
+  filter?: PaletteHit["view"] | "all";
+  schedules?: { id: string; goal?: string; task?: string; prompt?: string; name?: string; enabled: boolean }[];
+  research?: { id: string; question: string; summary: string; at?: string }[];
+  activity?: { id: string; action: string; target: string; result: string; at?: string }[];
+  connections?: { id: string; name?: string; label?: string; status?: string; state?: string }[];
+  skills?: { id: string; name: string; description?: string }[];
   query: string;
   projects: { id: string; name: string; description: string }[];
-  chats: { id: string; title: string; messages: { id?: string; content: string }[]; humanCode?: boolean }[];
+  chats: { id: string; title: string; messages: { id?: string; content: string; at?: string }[]; humanCode?: boolean }[];
   memories: { id: string; text: string; archived: boolean }[];
   files: { id: string; name: string; text: string }[];
   agents: { id: string; name: string; description: string; archived: boolean }[];
@@ -49,54 +61,32 @@ type PaletteInput = {
 };
 
 export function paletteHits(input: PaletteInput): PaletteHit[] {
-  const search = input.query.trim().toLowerCase();
-  const rows: PaletteHit[] = [];
-  for (const item of PALETTE_DESTINATIONS) {
-    if (destinationMatches(item, search)) {
-      rows.push({ key: `nav-${item.id}`, label: item.label, meta: "Go to", view: item.id, ref: "" });
-    }
-  }
-  if (!search) return rows;
-  for (const agent of input.agents) {
-    if (agent.archived) continue;
-    if (`${agent.name} ${agent.description}`.toLowerCase().includes(search)) {
-      rows.push({ key: agent.id, label: agent.name, meta: "Agent", view: "agents", ref: agent.id });
-    }
-  }
-  for (const run of input.runs) {
-    if (`${run.goal} ${run.state}`.toLowerCase().includes(search)) {
-      rows.push({ key: run.id, label: run.goal.slice(0, 80), meta: `Run · ${run.state}`, view: "runs", ref: run.id });
-    }
-  }
-  for (const project of input.projects) {
-    if (`${project.name} ${project.description}`.toLowerCase().includes(search)) {
-      rows.push({ key: project.id, label: project.name, meta: "Project", view: "projects", ref: project.id });
-    }
-  }
-  for (const chat of input.chats) {
-    const message = chat.messages.find((item) => item.content.toLowerCase().includes(search));
-    if (chat.title.toLowerCase().includes(search) || message) {
-      const start = message ? Math.max(0, message.content.toLowerCase().indexOf(search) - 28) : 0;
-      rows.push({
-        key: chat.id, label: chat.title, meta: chat.humanCode ? "Intelligence" : "Chat",
-        view: chat.humanCode ? "code" : "chat", ref: chat.id,
-        messageId: message?.id, excerpt: message?.content.slice(start, start + Math.max(search.length, 96)),
-      });
-    }
-  }
-  for (const note of input.memories) {
-    if (!note.archived && note.text.toLowerCase().includes(search)) {
-      rows.push({ key: note.id, label: note.text.slice(0, 80), meta: "Note", view: "memory", ref: note.id });
-    }
-  }
-  for (const file of input.files) {
-    if (`${file.name} ${file.text}`.toLowerCase().includes(search)) {
-      rows.push({ key: file.id, label: file.name, meta: "File", view: "files", ref: file.id });
-    }
-  }
-  const rank = (row: PaletteHit) => {
-    if (row.label.toLowerCase() !== search) return 0;
-    return row.ref && (row.view === "chat" || row.view === "code") ? 2 : 1;
+  const search = input.query.trim();
+  const rows: (PaletteHit & { score: number; at?: string })[] = [];
+  const add = (row: PaletteHit, content = "", at?: string) => {
+    const score = searchScore(row.label, content, search);
+    if (score && (!input.filter || input.filter === "all" || input.filter === row.view)) rows.push({ ...row, score, at });
   };
-  return rows.sort((a, b) => rank(b) - rank(a));
+  for (const item of PALETTE_DESTINATIONS) add({ key: `nav-${item.id}`, label: item.label, meta: "Go to", view: item.id, ref: "" }, "aliases" in item ? item.aliases.join(" ") : "");
+  if (!search) return rows;
+  for (const agent of input.agents) if (!agent.archived) add({ key: `agent:${agent.id}`, label: agent.name, meta: "Agent", view: "agents", ref: agent.id }, agent.description);
+  for (const run of input.runs) add({ key: `run:${run.id}`, label: run.goal.slice(0, 100), meta: `Run · ${run.state}`, view: "runs", ref: run.id }, `${run.goal} ${run.state}`);
+  for (const project of input.projects) add({ key: `project:${project.id}`, label: project.name, meta: "Project", view: "projects", ref: project.id }, project.description);
+  for (const chat of input.chats) {
+    const messages = chat.messages.filter((message) => searchScore("", message.content, search) > 0);
+    if (!messages.length) add({ key: `chat:${chat.id}`, label: chat.title, meta: chat.humanCode ? "Intelligence" : "Chat", view: chat.humanCode ? "code" : "chat", ref: chat.id });
+    for (const message of messages) {
+      const normalized = message.content.toLowerCase(); const first = searchTerms(search)[0] ?? "";
+      const start = Math.max(0, normalized.indexOf(first) - 28);
+      add({ key: `chat:${chat.id}:message:${message.id ?? chat.messages.indexOf(message)}`, label: chat.title, meta: chat.humanCode ? "Intelligence" : "Chat", view: chat.humanCode ? "code" : "chat", ref: chat.id, messageId: message.id, excerpt: message.content.slice(start, start + 160) }, message.content, message.at);
+    }
+  }
+  for (const note of input.memories) if (!note.archived) add({ key: `memory:${note.id}`, label: note.text.slice(0, 100), meta: "Note", view: "memory", ref: note.id }, note.text);
+  for (const file of input.files) add({ key: `file:${file.id}`, label: file.name, meta: "File", view: "files", ref: file.id }, file.text);
+  for (const job of input.schedules ?? []) add({ key: `schedule:${job.id}`, label: job.name || (job.goal || job.task || job.prompt || "Scheduled task").slice(0, 100), meta: `Schedule · ${job.enabled ? "enabled" : "paused"}`, view: "scheduled", ref: job.id }, job.goal || job.task || job.prompt || "");
+  for (const report of input.research ?? []) add({ key: `research:${report.id}`, label: report.question, meta: "Research report", view: "research", ref: report.id }, report.summary, report.at);
+  for (const item of input.activity ?? []) add({ key: `activity:${item.id}`, label: item.action.replace(/_/g, " "), meta: "Activity", view: "activity", ref: item.id }, `${item.target} ${item.result}`, item.at);
+  for (const item of input.connections ?? []) add({ key: `connection:${item.id}`, label: item.label || item.name || item.id, meta: "Connection", view: "connected", ref: item.id }, `${item.status || item.state || ""}`);
+  for (const item of input.skills ?? []) add({ key: `skill:${item.id}`, label: item.name, meta: "Skill", view: "skills", ref: item.id }, item.description);
+  return rows.sort((a, b) => b.score - a.score || Date.parse(b.at || "1970-01-01") - Date.parse(a.at || "1970-01-01") || a.key.localeCompare(b.key));
 }

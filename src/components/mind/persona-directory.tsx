@@ -1,3 +1,4 @@
+import { useAccountPreferences } from "./account-preferences-context";
 import { useMemo, useRef, useState } from "react";
 import { Link, useNavigate } from "@tanstack/react-router";
 import {
@@ -37,6 +38,7 @@ export function PersonaDirectoryView({
   /** Optional hook after a successful select (e.g. router navigate). */
   onOpened?: (href: string, card: PersonaCard) => void;
 }) {
+  const preferences = useAccountPreferences();
   const [category, setCategory] = useState<PersonaCategoryId | "all">("official");
   const [query, setQuery] = useState("");
   const [note, setNote] = useState<string | null>(null);
@@ -66,7 +68,7 @@ export function PersonaDirectoryView({
     }
     let persisted: ReturnType<typeof persistPersonaOpen>;
     try {
-      persisted = persistPersonaOpen(window.localStorage, result.ws, result.selection);
+      persisted = persistPersonaOpen(preferences, result.ws, result.selection);
     } catch {
       const message = "Could not access local storage. Nothing was opened.";
       if (!emitFailure("persona", mountFailure({ message, action: "persona_open", target: "persona" }, () => openCard(card)))) {
@@ -77,7 +79,7 @@ export function PersonaDirectoryView({
     if (!persisted.ok) {
       if (persisted.workspacePersisted) {
         latestWorkspace.current = result.ws;
-        setWs(() => result.ws);
+        setWs((current) => ({ ...current, agents: [...current.agents, ...result.ws.agents.filter((agent) => !current.agents.some((row) => row.id === agent.id))] }));
       }
       const message = persisted.workspacePersisted
         ? "The persona was saved, but its selection could not be saved. Nothing was opened."
@@ -88,7 +90,7 @@ export function PersonaDirectoryView({
       return;
     }
     latestWorkspace.current = result.ws;
-    setWs(() => result.ws);
+    setWs((current) => ({ ...current, agents: [...current.agents, ...result.ws.agents.filter((agent) => !current.agents.some((row) => row.id === agent.id))] }));
     setNote(
       `Saved ${result.selection.agentName} locally. Opening Chat with this agent's saved instructions.`,
     );

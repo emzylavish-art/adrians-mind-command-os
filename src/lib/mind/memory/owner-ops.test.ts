@@ -31,7 +31,8 @@ function memorySql() {
       return [];
     }
     if (text.startsWith("insert into mind_snapshot") || text.startsWith("insert into mind_control")) {
-      bucket(table).set(String(values[0]), { user_id: values[0], payload: values[1], halted: values[1] });
+      if (text.includes("on conflict (user_id) do nothing") && bucket(table).has(String(values[0]))) return [];
+      bucket(table).set(String(values[0]), { user_id: values[0], payload: values[1] ?? "{}", halted: values[1] });
       return [];
     }
     if (text.startsWith("insert into")) {
@@ -48,7 +49,17 @@ function memorySql() {
     }
     return [];
   }) as Sql;
-  sql.query = async () => [];
+  sql.query = async (text, values = []) => {
+    const table = text.match(/\b(mind_[a-z_]+)\b/)?.[1] ?? "";
+    if (text.startsWith("delete from")) {
+      for (const id of values[1] as string[]) bucket(table).delete(`${values[0]}:${id}`);
+    }
+    return [];
+  };
+  sql.transaction = async (fn) => {
+    const before = structuredClone(tables);
+    try { return await fn(sql); } catch (error) { tables.clear(); for (const [key, value] of before) tables.set(key, value); throw error; }
+  };
   return { sql, tables };
 }
 

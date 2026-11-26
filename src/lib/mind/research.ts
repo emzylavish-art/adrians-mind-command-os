@@ -1,6 +1,6 @@
 import { boundAbortSignal, isTimeoutAbort } from "./turn-timeouts.ts";
 
-export type ResearchCitation = { title: string; url: string };
+export type ResearchCitation = { title: string; url: string; retrievedAt?: string; query?: string; publishedAt?: string; excerpt?: string; verification?: "search-result-only" };
 
 export type ResearchResult = {
   ok: boolean;
@@ -10,6 +10,8 @@ export type ResearchResult = {
   /** Present when deep research ran multiple searches. */
   steps?: { query: string; ok: boolean; count: number }[];
   summary?: string;
+  /** Only explicit provider citation spans; absence is not evidence for every summary claim. */
+  claims?: { text: string; sourceUrls: string[]; kind: "provider-cited" }[];
   /** True when some deep-research queries timed out but real citations were kept. */
   partial?: boolean;
 };
@@ -59,13 +61,13 @@ function parseSafeHttpUrl(raw: string): { href: string; key: string } | null {
 }
 
 /** Keep only titles and absolute http(s) URLs that the provider actually returned. */
-export function normalizeCitations(hits: unknown): ResearchCitation[] {
+export function normalizeCitations(hits: unknown, retrieval?: { query: string; retrievedAt: string }): ResearchCitation[] {
   if (!Array.isArray(hits)) return [];
   const citations: ResearchCitation[] = [];
   const seen = new Set<string>();
   for (const hit of hits) {
     if (!hit || typeof hit !== "object") continue;
-    const record = hit as { title?: unknown; url?: unknown };
+    const record = hit as { title?: unknown; url?: unknown; snippet?: unknown; description?: unknown; publishedAt?: unknown; published_at?: unknown };
     const title = typeof record.title === "string" ? sanitizeTitle(record.title) : "";
     const url = typeof record.url === "string" ? record.url.trim() : "";
     if (!title || !url) continue;
@@ -73,7 +75,13 @@ export function normalizeCitations(hits: unknown): ResearchCitation[] {
     if (!safe) continue;
     if (seen.has(safe.key)) continue;
     seen.add(safe.key);
-    citations.push({ title, url: safe.href });
+    const excerpt = typeof record.snippet === "string" ? record.snippet : typeof record.description === "string" ? record.description : "";
+    const publication = typeof record.publishedAt === "string" ? record.publishedAt : typeof record.published_at === "string" ? record.published_at : "";
+    citations.push({ title, url: safe.href,
+      ...(retrieval ? { query: retrieval.query, retrievedAt: retrieval.retrievedAt, verification: "search-result-only" as const } : {}),
+      ...(excerpt.trim() ? { excerpt: excerpt.trim().slice(0, 2000) } : {}),
+      ...(publication && Number.isFinite(Date.parse(publication)) ? { publishedAt: publication.slice(0, 100) } : {}),
+    });
     if (citations.length === 8) break;
   }
   return citations;
@@ -87,7 +95,7 @@ function dedupeCitations(items: ResearchCitation[], limit = 8): ResearchCitation
     const key = safe?.key ?? item.url.toLowerCase();
     if (seen.has(key)) continue;
     seen.add(key);
-    out.push(safe ? { title: item.title, url: safe.href } : item);
+    out.push(safe ? { ...item, url: safe.href } : item);
     if (out.length === limit) break;
   }
   return out;
@@ -152,6 +160,7 @@ export async function performSearch(input: {
   timeoutMs?: number;
   deepTimeoutMs?: number;
   retryQueries?: string[];
+  beforeDispatch?: () => Promise<string | null>;
 }): Promise<ResearchResult> {
   const text = queryText(input.query);
   if (!text) return { ok: false, configured: false, citations: [], error: "Write what you want researched." };
@@ -180,8 +189,13 @@ async function performSingleSearch(input: {
   fetchImpl?: typeof fetch;
   signal?: AbortSignal;
   timeoutMs?: number;
+  beforeDispatch?: () => Promise<string | null>;
 }): Promise<ResearchResult> {
   const text = queryText(input.query);
+  if (input.beforeDispatch) {
+    const blocked = await input.beforeDispatch();
+    if (blocked) return { ok: false, configured: true, citations: [], error: blocked };
+  }
   const budget = input.timeoutMs ?? searchTimeoutMs();
   const bound = combineSignals(input.signal, budget);
   let response: Response;
@@ -226,7 +240,7 @@ async function performSingleSearch(input: {
       payload && typeof payload === "object" && Array.isArray((payload as { results?: unknown }).results)
         ? (payload as { results: unknown }).results
         : [];
-    const citations = normalizeCitations(hits);
+    const citations = normalizeCitations(hits, { query: text, retrievedAt: new Date().toISOString() });
     if (!citations.length) {
       return { ok: false, configured: true, citations: [], error: "The search returned no usable sources. No citations were created." };
     }
@@ -246,6 +260,7 @@ export async function performDeepResearch(input: {
   timeoutMs?: number;
   deepTimeoutMs?: number;
   retryQueries?: string[];
+  beforeDispatch?: () => Promise<string | null>;
 }): Promise<ResearchResult> {
   const text = queryText(input.query);
   if (!text) return { ok: false, configured: false, citations: [], error: "Write what you want researched." };

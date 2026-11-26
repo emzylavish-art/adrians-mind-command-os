@@ -19,6 +19,9 @@ const personasRoute = readFileSync(join(root, "src/routes/personas.tsx"), "utf8"
 const directoryUi = readFileSync(join(root, "src/components/mind/persona-directory.tsx"), "utf8");
 const routeTree = readFileSync(join(root, "src/routeTree.gen.ts"), "utf8");
 const commandApp = readFileSync(join(root, "src/components/mind/command-app.tsx"), "utf8");
+const chatPane = readFileSync(join(root, "src/components/mind/chat-pane.tsx"), "utf8");
+const chatControls = readFileSync(join(root, "src/components/mind/chat-controls.tsx"), "utf8");
+const commandSurface = [commandApp, chatPane, chatControls].join("\n");
 const research = existsSync(join(root, "src/lib/mind/research.ts"))
   ? readFileSync(join(root, "src/lib/mind/research.ts"), "utf8")
   : "";
@@ -53,8 +56,8 @@ describe("integration persona directory survives merge", () => {
     assert.match(actionSrc, /onceRetry/);
   });
 
-  it("persists the persona synchronously and has no delayed Explore writer", () => {
-    assert.match(directoryUi, /persistPersonaOpen\(window\.localStorage, result\.ws, result\.selection\)/);
+  it("persists the account-owned persona selection without a delayed workspace writer", () => {
+    assert.match(directoryUi, /persistPersonaOpen\(preferences, result\.ws, result\.selection\)/);
     assert.match(directoryUi, /if \(!persisted\.ok\)/);
     assert.match(directoryUi, /Nothing was opened/);
     assert.match(directoryUi, /opens Chat with that agent's saved instructions/);
@@ -95,7 +98,7 @@ describe("integration persona directory survives merge", () => {
       "mcpToolFailure",
       "ServiceBoard",
     ]) {
-      assert.match(commandApp, new RegExp(needle.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")));
+      assert.match(commandSurface, new RegExp(needle.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")));
     }
   });
 });

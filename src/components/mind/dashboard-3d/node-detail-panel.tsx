@@ -39,9 +39,10 @@ function BotDetailBody({ detail, spend, portraitSrc }: { detail: BotDetailView; 
       ) : null}
       <p className="dash3d-title">{detail.name}</p>
       <p>
-        <span className={`dash3d-dot ${detail.health}`} /> <strong>{detail.health}</strong>
+        <span className={`dash3d-dot ${detail.health}`} /> Development status: <strong>{detail.health}</strong>
         <span className="dash3d-muted"> — {detail.reason || NO_SOURCE}</span>
       </p>
+      <p className="dash3d-muted">Runtime readiness is unverified by development activity.</p>
       <p className="dash3d-mono dash3d-muted" style={{ marginTop: "0.75rem" }}>
         <Field label="lane" value={detail.laneName ? `${detail.laneName}${detail.laneHealth ? ` · ${detail.laneHealth}` : ""}` : null} />
         <Field label="lock" value={detail.lockFile} />

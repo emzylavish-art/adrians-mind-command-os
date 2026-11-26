@@ -1,7 +1,9 @@
 import { createSseFeed, pushSse, reportedModel, type ModelUsage } from "./stream.ts";
 import { CHAT_DISCONNECT_REPLY, CHAT_TIMEOUT_REPLY, chatTurnTimeoutMs } from "./turn-timeouts.ts";
 export { CHAT_DISCONNECT_REPLY };
+import type { DispatchOutcome } from "./dispatch-attempt.ts";
 import type { ChatContent } from "./media/types.ts";
+import { providerErrorCode } from "./turn-error.ts";
 
 export const STOPPED_REPLY = "Stopped. The unfinished reply was not saved.";
 const PROVIDER_URL = "https://api.x.ai/v1/chat/completions";
@@ -68,6 +70,8 @@ export function relayModelStream(input: {
   params?: RelayModelParams;
   /** Optional metadata echoed on the done event (e.g. selected/resolved tier). */
   meta?: Record<string, unknown>;
+  /** Exactly once for success, interruption or cancellation; absent money remains unknown. */
+  onSettled?: (result: DispatchOutcome) => Promise<void>;
   /** Called only after an xAI 401 or 400 auth failure. Must not receive the key. */
   authFallback?: () => Promise<{ ok: true; text: string; model: string; provider: string } | { ok: false; error: string }>;
 }): Response {
@@ -75,6 +79,14 @@ export function relayModelStream(input: {
   const encoder = new TextEncoder();
   let reader: ReadableStreamDefaultReader<Uint8Array> | null = null;
   let closed = false;
+  let dispatched = false;
+  let requestId: string | null = null;
+  let settled = false;
+  const settle = async (ok: boolean) => {
+    if (settled) return;
+    settled = true;
+    try { await input.onSettled?.({ ok, dispatched, requestId }); } catch { /* Reservation remains held; response delivery is preserved. */ }
+  };
 
   const stream = new ReadableStream<Uint8Array>({
     async start(controller) {
@@ -82,7 +94,8 @@ export function relayModelStream(input: {
         if (closed) return;
         controller.enqueue(encoder.encode(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`));
       };
-      const finish = () => {
+      const finish = async (ok = false) => {
+        await settle(ok);
         if (closed) return;
         closed = true;
         linked.stop();
@@ -98,8 +111,8 @@ export function relayModelStream(input: {
         } catch {
           /* the provider reader is already closed */
         }
-        send("canceled", { error: STOPPED_REPLY });
-        finish();
+        send("canceled", { error: STOPPED_REPLY, code: "user_stopped" });
+        await finish();
       };
       const stopped = async () => {
         if (linked.reason() === "timeout") {
@@ -108,8 +121,8 @@ export function relayModelStream(input: {
           } catch {
             /* the provider reader is already closed */
           }
-          send("error", { error: CHAT_TIMEOUT_REPLY });
-          finish();
+          send("error", { error: CHAT_TIMEOUT_REPLY, code: "chat_timeout" });
+          await finish();
           return;
         }
         await canceled();
@@ -124,12 +137,14 @@ export function relayModelStream(input: {
           return;
         }
         const fetchImpl = input.fetchImpl ?? fetch;
+        dispatched = true;
         const res = await fetchImpl(input.url ?? PROVIDER_URL, {
           method: "POST",
           signal: linked.signal,
           headers: { "Content-Type": "application/json", Authorization: `Bearer ${input.apiKey}` },
           body: JSON.stringify(buildRelayModelBody(input.model, input.messages, input.params ?? {})),
         });
+        requestId = res.headers.get("x-request-id");
         if (linked.signal.aborted) {
           await res.body?.cancel().catch(() => undefined);
           await stopped();
@@ -151,17 +166,17 @@ export function relayModelStream(input: {
                 ...(input.meta ?? {}),
               });
             } else {
-              send("error", { error: alt.error });
+              send("error", { error: alt.error, code: "unknown" });
             }
-            finish();
+            await finish();
             return;
           }
           const error =
             res.status === 404
               ? "That model is not available. Nothing was saved as a success."
               : `Grok returned ${res.status}. Nothing was saved as a success.`;
-          send("error", { error });
-          finish();
+          send("error", { error, code: providerErrorCode(res.status) });
+          await finish();
           return;
         }
         reader = res.body.getReader();
@@ -178,8 +193,8 @@ export function relayModelStream(input: {
           const pushed = pushSse(feed, decoder.decode(step.value, { stream: true }));
           if (pushed.bad) {
             await reader.cancel().catch(() => undefined);
-            send("error", { error: "Grok returned a broken stream. Nothing was saved as a success." });
-            finish();
+            send("error", { error: "Grok returned a broken stream. Nothing was saved as a success.", code: "invalid_response" });
+            await finish();
             return;
           }
           for (const text of pushed.deltas) send("delta", { text });
@@ -192,8 +207,9 @@ export function relayModelStream(input: {
         if (tail.bad || !feed.text.trim()) {
           send("error", {
             error: tail.bad ? "Grok returned a broken stream. Nothing was saved as a success." : "Grok returned an empty reply.",
+            code: "invalid_response",
           });
-          finish();
+          await finish();
           return;
         }
         const usage: ModelUsage | null = feed.usage;
@@ -206,15 +222,15 @@ export function relayModelStream(input: {
           requestId: res.headers.get("x-request-id"),
           ...(input.meta ?? {}),
         });
-        finish();
+        await finish(true);
       } catch (caught) {
         if (linked.signal.aborted) await stopped();
         else {
           // Network / mid-stream drop — never mislabel as a turn timeout.
           const msg = caught instanceof Error ? caught.message : "";
           void msg;
-          send("error", { error: CHAT_DISCONNECT_REPLY });
-          finish();
+          send("error", { error: CHAT_DISCONNECT_REPLY, code: "network_failure" });
+          await finish();
         }
       } finally {
         linked.signal.removeEventListener("abort", onAbort);
@@ -229,6 +245,7 @@ export function relayModelStream(input: {
       }
       closed = true;
       linked.stop();
+      await settle(false);
     },
   });
 

@@ -25,6 +25,7 @@ export type NotionTurn = {
   error: string;
   wrote: boolean;
   verified: boolean;
+  nextCursor?: string | null;
 };
 
 type FetchLike = (url: string, init?: RequestInit) => Promise<{ ok: boolean; status: number; json: () => Promise<unknown> }>;
@@ -159,6 +160,7 @@ export async function runNotionTurn(input: {
   confirmed: boolean;
   pageId: string | null;
   fetch: FetchLike;
+  cursor?: string | null;
 }): Promise<NotionTurn> {
   const connection = notionConnection(input.token, input.disabled);
   if (connection.state !== "connected" || !input.token) return empty(connection.state, "none", connection.detail);
@@ -166,20 +168,32 @@ export async function runNotionTurn(input: {
   if (intent.action === "unclear") {
     return empty("connected", "unclear", "Say whether to search, read, or append, and name the page. Nothing was called.");
   }
-  const query = intent.action === "search" ? intent.query : intent.query;
-  const found = await callNotion(input.fetch, input.token, "/search", {
-    method: "POST",
-    body: JSON.stringify({ query: query.slice(0, 200), page_size: 8 }),
-  });
-  if (!found.ok) return empty("connected", intent.action, found.error);
-  let pages = pagesFromSearch(found.body);
-  if (input.pageId) pages = pages.filter((page) => page.id === input.pageId).concat(pages.filter((page) => page.id !== input.pageId));
-  const picked = input.pageId ? pages.find((page) => page.id === input.pageId) ?? null : pages.length === 1 ? pages[0] : null;
+  let pages: NotionPage[] = [];
+  let nextCursor: string | null = null;
+  if (input.pageId && intent.action !== "search") {
+    if (!/^[a-zA-Z0-9-]{1,80}$/.test(input.pageId)) return empty("connected", intent.action, "The selected Notion page ID is invalid. Nothing was changed.");
+    // Selection is an exact destination. Search ordering and changed page grants
+    // must never replace it or make it disappear from the first result page.
+    const selected = await callNotion(input.fetch, input.token, `/pages/${encodeURIComponent(input.pageId)}`, { method: "GET" });
+    if (!selected.ok) return empty("connected", intent.action, selected.error);
+    pages = pagesFromSearch({ results: [selected.body] });
+    if (pages[0]?.id !== input.pageId) return empty("connected", intent.action, "The selected page is unavailable in this workspace. Reconnect the required page; no other page was used.");
+  } else {
+    const found = await callNotion(input.fetch, input.token, "/search", {
+      method: "POST",
+      body: JSON.stringify({ query: intent.query.slice(0, 200), page_size: 25, ...(input.cursor ? { start_cursor: input.cursor } : {}) }),
+    });
+    if (!found.ok) return empty("connected", intent.action, found.error);
+    pages = pagesFromSearch(found.body);
+    const body = found.body as { has_more?: boolean; next_cursor?: unknown } | null;
+    nextCursor = body?.has_more && typeof body.next_cursor === "string" ? body.next_cursor : null;
+  }
+  const picked = input.pageId ? pages.find((page) => page.id === input.pageId) ?? null : pages.length === 1 && !nextCursor && !input.cursor ? pages[0] : null;
   if (intent.action === "search") {
-    return { ok: true, state: "connected", action: "search", needsConfirmation: false, ambiguous: false, pages, content: "", error: pages.length ? "" : "Notion returned no matching pages.", wrote: false, verified: false };
+    return { ok: true, state: "connected", action: "search", needsConfirmation: false, ambiguous: false, pages, nextCursor, content: "", error: pages.length ? "" : "Notion returned no matching pages.", wrote: false, verified: false };
   }
   if (!picked) {
-    return { ok: false, state: "connected", action: intent.action, needsConfirmation: false, ambiguous: pages.length > 1, pages, content: "", error: pages.length ? "More than one Notion result matches. Pick one. Nothing was changed." : "Notion returned no matching page. Nothing was changed.", wrote: false, verified: false };
+    return { ok: false, state: "connected", action: intent.action, needsConfirmation: false, ambiguous: pages.length > 1 || Boolean(nextCursor) || Boolean(input.cursor), pages, nextCursor, content: "", error: pages.length ? "More than one Notion result matches. Pick one. Nothing was changed." : "Notion returned no matching page. Nothing was changed.", wrote: false, verified: false };
   }
   if (intent.action === "read") {
     const blocks = await callNotion(input.fetch, input.token, `/blocks/${picked.id}/children?page_size=20`, { method: "GET" });

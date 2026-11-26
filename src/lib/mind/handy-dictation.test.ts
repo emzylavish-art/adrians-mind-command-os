@@ -44,7 +44,7 @@ test("Opus-MT reports loaded weights for a sentence that is not a test phrase", 
   assert.equal(OPUS_MT_URL, "http://127.0.0.1:4197/opus-mt");
 });
 
-test("Speak detection asks the loaded Handy engine and does not invent words", async () => {
+test("Speak detection asks the loaded Handy engine and does not invent words", { skip: process.env.MIND_TEST_HANDY_LIVE !== "1" ? "Requires explicit MIND_TEST_HANDY_LIVE=1 and a local audio fixture; no live service called by normal tests" : false }, async () => {
   const audio = readFileSync("/tmp/handy-engine/harbor.wav").toString("base64");
   const heard = await detectWithHandy(audio);
   assert.equal(heard.ok, true);

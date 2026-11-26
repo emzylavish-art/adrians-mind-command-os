@@ -1,7 +1,7 @@
 /**
  * OAuth PKCE callback — exchange code server-side, set HttpOnly cookies, redirect.
  */
-import { safeRedirectPath } from "./safe-redirect";
+import { safeRedirectPath } from "./safe-redirect.ts";
 
 export async function handleAuthCallback(request: Request): Promise<Response> {
   const url = new URL(request.url);
@@ -27,7 +27,7 @@ export async function handleAuthCallback(request: Request): Promise<Response> {
   }
 
   const { readSupabaseEnv, createSupabaseServerClient } = await import(
-    "./server"
+    "./server.ts"
   );
   if (!readSupabaseEnv()) {
     return loginError("Sign-in isn't configured yet.");

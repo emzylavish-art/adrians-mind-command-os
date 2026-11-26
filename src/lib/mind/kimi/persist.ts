@@ -1,7 +1,6 @@
 import { randomBytes } from "node:crypto";
-import { mkdirSync, writeFileSync } from "node:fs";
-import { dirname, resolve } from "node:path";
 import { getSql } from "../../db.ts";
+import { restoreMissingWorkspaceFile } from "./file-recovery.ts";
 
 const SECRET = /(^|\/)\.env($|\.)|(^|\/)credentials?\.(json|txt|pem)$/i;
 
@@ -82,11 +81,7 @@ export async function restoreWorkspaceFiles(userId: string, root: string): Promi
     for (const row of rows) {
       const clean = safePath(row.path);
       if (!clean || typeof row.text_copy !== "string") continue;
-      const target = resolve(root, clean);
-      if (target !== root && !target.startsWith(`${root}/`)) continue;
-      mkdirSync(dirname(target), { recursive: true });
-      writeFileSync(target, row.text_copy);
-      count += 1;
+      if (restoreMissingWorkspaceFile(root, clean, row.text_copy)) count += 1;
     }
     return count;
   } catch {

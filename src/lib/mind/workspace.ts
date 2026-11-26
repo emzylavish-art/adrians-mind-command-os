@@ -1,3 +1,10 @@
+import { normalizeSkillReceipts } from "./skill-activation.ts";
+import { normalizeVoiceStagesReceipt } from "./voice/stage-receipts.ts";
+import { imageMetadata } from "./media/image-metadata.ts";
+import { normalizeProjectDetails } from "./project-workspace.ts";
+import { normalizeCheckpoints, normalizeContextReceipt } from "./conversation-context.ts";
+import { normalizeMemoryMetadata } from "./memory/maintenance.ts";
+import { normalizeConsultation } from "./model-consult.ts";
 import { retainActivity } from "./connection-attention.ts";
 import { isModelTier } from "./model-tiers.ts";
 import { emptyFleet, readFleet } from "./fleet.ts";
@@ -9,6 +16,7 @@ import type {
   Autonomy,
   Chat,
   LocalFile,
+  LocalFileOriginal,
   MemoryItem,
   MemoryScope,
   Msg,
@@ -37,16 +45,20 @@ export function loadWorkspaceForAccount(
   userId: string | null | undefined,
   verifiedEmail?: string | null,
 ): Workspace {
-  if (!userId) return emptyWorkspace();
-  const key = accountWorkspaceKey(userId);
-  const current = storage.getItem(key);
-  const raw = current ?? (userId !== "dev-user" && isPrimaryOwner(verifiedEmail) ? storage.getItem(WORKSPACE_KEY) : null);
+  const raw = readWorkspaceRawForAccount(storage, userId, verifiedEmail);
   if (!raw) return emptyWorkspace();
   try {
     return normalizeWorkspace(JSON.parse(raw));
   } catch {
     return emptyWorkspace();
   }
+}
+
+/** Read the complete authorized snapshot bytes without parsing on the UI thread. */
+export function readWorkspaceRawForAccount(storage: Pick<Storage, "getItem">, userId: string | null | undefined, verifiedEmail?: string | null): string | null {
+  if (!userId) return null;
+  const current = storage.getItem(accountWorkspaceKey(userId));
+  return current ?? (userId !== "dev-user" && isPrimaryOwner(verifiedEmail) ? storage.getItem(WORKSPACE_KEY) : null);
 }
 
 export function emptyWorkspace(): Workspace {
@@ -121,6 +133,7 @@ export function normalizeWorkspace(input: unknown): Workspace {
     for (const row of input.projects) {
       if (!isRecord(row) || !str(row.id) || !str(row.name)) continue;
       base.projects.push({
+        ...normalizeProjectDetails(row),
         id: str(row.id),
         name: str(row.name).slice(0, PROJECT_NAME_MAX),
         description: str(row.description).slice(0, 400),
@@ -128,10 +141,12 @@ export function normalizeWorkspace(input: unknown): Workspace {
       });
     }
   }
+  const deletedChats = new Set(validIds(input.deletedChatIds));
+  if (deletedChats.size) base.deletedChatIds = [...deletedChats];
   if (Array.isArray(input.chats)) {
     for (const row of input.chats) {
       const chat = normalizeChat(row);
-      if (chat) base.chats.push(chat);
+      if (chat && !deletedChats.has(chat.id)) base.chats.push(chat);
     }
   }
   const deleted = new Set(Array.isArray(input.deletedMemoryIds)
@@ -175,6 +190,7 @@ export function normalizeWorkspace(input: unknown): Workspace {
         at: str(row.at),
         action: str(row.action),
         target: str(row.target),
+        ...(validIds(row.targetIds).length ? { targetIds: validIds(row.targetIds) } : {}),
         result: str(row.result),
       });
     }
@@ -184,7 +200,7 @@ export function normalizeWorkspace(input: unknown): Workspace {
 
 function normalizeChat(row: unknown): Chat | null {
   if (!isRecord(row) || !str(row.id)) return null;
-  const memory = row.memory === "on" ? "on" : "off";
+  const memory = row.memory === "on" && row.temporary !== true ? "on" : "off";
   const autonomy: Autonomy = row.autonomy === "automatic" ? "automatic" : "ask";
   const messages: Msg[] = [];
   if (Array.isArray(row.messages)) {
@@ -204,9 +220,34 @@ function normalizeChat(row: unknown): Chat | null {
         content: msg.content,
         at: str(msg.at, new Date(0).toISOString()),
         model: typeof msg.model === "string" ? msg.model : undefined,
+        ...(isModelTier(msg.resolvedTier) && msg.resolvedTier !== "Auto" ? { resolvedTier: msg.resolvedTier } : {}),
+        ...(normalizeContextReceipt(msg.contextReceipt) ? { contextReceipt: normalizeContextReceipt(msg.contextReceipt)! } : {}),
+        ...(normalizeSkillReceipts(msg.skillReceipts) ? { skillReceipts: normalizeSkillReceipts(msg.skillReceipts)! } : {}),
+        ...(normalizeVoiceStagesReceipt(msg.voiceStages) ? { voiceStages: normalizeVoiceStagesReceipt(msg.voiceStages)! } : {}),
+        ...(normalizeConsultation(msg.consultation) ? { consultation: normalizeConsultation(msg.consultation)! } : {}),
+        ...(msg.deliveryMode === "streamed" || msg.deliveryMode === "buffered" ? { deliveryMode: msg.deliveryMode } : {}),
         ...(typeof msg.provider === "string" && msg.provider.trim() ? { provider: msg.provider.trim() } : {}),
         ...(msg.routingMode === "A" || msg.routingMode === "B" || msg.routingMode === "C" || msg.routingMode === "D" ? { routingMode: msg.routingMode } : {}),
         ...(typeof msg.requestedModel === "string" && msg.requestedModel.trim() ? { requestedModel: msg.requestedModel.trim().slice(0, 150) } : {}),
+        ...(Array.isArray(msg.researchRefs) ? { researchRefs: msg.researchRefs.flatMap((reference) => {
+          if (!isRecord(reference) || !str(reference.reportId) || !Number.isSafeInteger(reference.version) || Number(reference.version) < 1) return [];
+          return [{ reportId: str(reference.reportId).slice(0, 200), version: Number(reference.version), question: str(reference.question).slice(0, 300), at: str(reference.at) }];
+        }) } : {}),
+        ...(isRecord(msg.inheritedFrom) && str(msg.inheritedFrom.chatId) && str(msg.inheritedFrom.messageId) ? { inheritedFrom: { chatId: str(msg.inheritedFrom.chatId).slice(0, 200), messageId: str(msg.inheritedFrom.messageId).slice(0, 200) } } : {}),
+        ...(msg.role === "assistant" && Array.isArray(msg.replyVersions) ? { replyVersions: msg.replyVersions.flatMap((version) => {
+          if (!isRecord(version) || !str(version.id) || typeof version.content !== "string") return [];
+          return [{ id: str(version.id).slice(0, 200), content: version.content, at: str(version.at),
+            ...(typeof version.provider === "string" ? { provider: version.provider } : {}),
+            ...(typeof version.model === "string" ? { model: version.model } : {}),
+            ...(typeof version.requestedModel === "string" ? { requestedModel: version.requestedModel } : {}),
+            ...(version.routingMode === "A" || version.routingMode === "B" || version.routingMode === "C" || version.routingMode === "D" ? { routingMode: version.routingMode as Msg["routingMode"] } : {}),
+            ...(validIds(version.memoryUsedIds).length ? { memoryUsedIds: validIds(version.memoryUsedIds) } : {}),
+            ...publicImages(version.images), ...publicVideo(version.videoUrl) }];
+        }), ...(typeof msg.selectedReplyVersionId === "string" ? { selectedReplyVersionId: msg.selectedReplyVersionId } : {}) } : {}),
+        ...(msg.role === "user" && typeof msg.partialReply === "string" && msg.partialReply ? { partialReply: msg.partialReply.slice(0, 100_000) } : {}),
+        ...(validIds(msg.memoryUsedIds).length ? { memoryUsedIds: validIds(msg.memoryUsedIds) } : {}),
+        ...(msg.role === "assistant" && msg.kind === "error" ? { kind: "error" as const } : {}),
+        ...(typeof msg.mediaOperationId === "string" && /^[A-Za-z0-9:_-]{1,180}$/.test(msg.mediaOperationId) ? { mediaOperationId: msg.mediaOperationId } : {}),
         ...(msg.role === "user" && typeof msg.deliveryOperationId === "string" && /^\d{13}-[a-f0-9-]{36}$/i.test(msg.deliveryOperationId) ? { deliveryOperationId: msg.deliveryOperationId } : {}),
         ...(msg.role === "user" && (msg.delivery === "submitted" || msg.delivery === "unconfirmed" || msg.delivery === "stopped" || msg.delivery === "failed") ? { delivery: msg.delivery } : {}),
         ...publicImages(msg.images),
@@ -229,10 +270,17 @@ function normalizeChat(row: unknown): Chat | null {
   return {
     id: str(row.id),
     title: str(row.title, "New session").slice(0, 80),
+    ...(isRecord(row.branchFrom) && str(row.branchFrom.chatId) && str(row.branchFrom.messageId) && /^[a-f0-9]{64}$/.test(str(row.branchFrom.sourceRevision)) ? {
+      branchFrom: { chatId: str(row.branchFrom.chatId).slice(0, 200), messageId: str(row.branchFrom.messageId).slice(0, 200), createdAt: str(row.branchFrom.createdAt), sourceRevision: str(row.branchFrom.sourceRevision), reason: "edit" as const },
+    } : {}),
+    ...(isRecord(row.quotedFrom) && str(row.quotedFrom.chatId) ? {
+      quotedFrom: { chatId: str(row.quotedFrom.chatId).slice(0, 200), messageIds: validIds(row.quotedFrom.messageIds), quotedAt: str(row.quotedFrom.quotedAt) },
+    } : {}),
     ...(typeof row.notionWorkspaceId === "string" && row.notionWorkspaceId.length <= 200 ? { notionWorkspaceId: row.notionWorkspaceId } : {}),
     ...(typeof row.agentId === "string" && row.agentId ? { agentId: row.agentId } : {}),
     ...chatBotModel(row),
     memory,
+    ...(row.temporary === true ? { requestedMemory: row.requestedMemory === "on" || (row.requestedMemory === undefined && row.memory === "on") ? "on" as const : "off" as const } : {}),
     temporary: row.temporary === true,
     autonomy,
     personalityId: resolvePersonalityId(row.personalityId),
@@ -240,23 +288,41 @@ function normalizeChat(row: unknown): Chat | null {
     projectId: typeof row.projectId === "string" ? row.projectId : null,
     messages,
     retrievalLog,
+    ...(normalizeCheckpoints(row.checkpoints, new Set(messages.map((message) => message.id))).length ? { checkpoints: normalizeCheckpoints(row.checkpoints, new Set(messages.map((message) => message.id))) } : {}),
+    ...(validIds(row.knowledgeDocumentIds).length ? { knowledgeDocumentIds: validIds(row.knowledgeDocumentIds).slice(0, 100) } : {}),
     ...(row.favorite === true ? { favorite: true as const } : {}),
     ...(row.archived === true ? { archived: true as const } : {}),
   };
 }
 
 function normalizeFile(row: unknown): LocalFile | null {
-  if (!isRecord(row) || !str(row.id) || typeof row.text !== "string" || !row.text.trim()) return null;
+  if (!isRecord(row) || !str(row.id) || typeof row.text !== "string" || (!row.text.trim() && !normalizeOriginal(row.original))) return null;
   const text = row.text.slice(0, 40000);
   return {
     id: str(row.id),
     name: str(row.name, "untitled.txt"),
+    ...(normalizeOriginal(row.original) ? { original: normalizeOriginal(row.original)! } : {}),
+    ...(str(row.versionId) ? { versionId: str(row.versionId).slice(0, 200) } : {}),
+    ...(str(row.updatedAt) ? { updatedAt: str(row.updatedAt) } : {}),
+    ...(str(row.extraction) ? { extraction: str(row.extraction).slice(0, 1000) } : {}),
+    ...(str(row.sourceChatId) ? { sourceChatId: str(row.sourceChatId).slice(0, 200) } : {}),
+    ...(str(row.sourceMessageId) ? { sourceMessageId: str(row.sourceMessageId).slice(0, 200) } : {}),
+    ...(Array.isArray(row.versions) ? { versions: row.versions.flatMap((version) => {
+      if (!isRecord(version) || !str(version.versionId) || typeof version.text !== "string") return [];
+      return [{ versionId: str(version.versionId).slice(0, 200), name: str(version.name), text: version.text.slice(0, 40000), bytes: typeof version.bytes === "number" ? version.bytes : version.text.length, at: str(version.at),
+        ...(normalizeOriginal(version.original) ? { original: normalizeOriginal(version.original)! } : {}), ...(version.partial === true ? { partial: true } : {}), ...(str(version.extraction) ? { extraction: str(version.extraction).slice(0, 1000) } : {}) }];
+    }) } : {}),
     text,
     bytes: typeof row.bytes === "number" ? row.bytes : text.length,
     ...(row.partial === true || row.text.length > text.length ? { partial: true } : {}),
     projectId: typeof row.projectId === "string" ? row.projectId : null,
     createdAt: str(row.createdAt, new Date(0).toISOString()),
   };
+}
+
+function normalizeOriginal(value: unknown): LocalFileOriginal | null {
+  if (!isRecord(value) || !/^document_[a-f0-9]{64}$/.test(str(value.blobId)) || !/^[a-f0-9]{64}$/.test(str(value.sha256)) || !Number.isSafeInteger(value.bytes) || Number(value.bytes) < 0) return null;
+  return { blobId: str(value.blobId), sha256: str(value.sha256), bytes: Number(value.bytes), mime: str(value.mime, "application/octet-stream").slice(0, 100), name: str(value.name).slice(0, 1000) };
 }
 
 function publicImages(value: unknown): { images: NonNullable<Msg["images"]> } | Record<string, never> {
@@ -270,6 +336,7 @@ function publicImages(value: unknown): { images: NonNullable<Msg["images"]> } | 
     images.push({
       dataUrl,
       blobId,
+      ...imageMetadata(item),
       ...(item.origin === "attached" || item.origin === "camera" || item.origin === "generated" || item.origin === "edited" ? { origin: item.origin } : {}),
       name: typeof item.name === "string" ? item.name.slice(0, 120) : undefined,
       mime: typeof item.mime === "string" ? item.mime.slice(0, 40) : undefined,
@@ -311,6 +378,7 @@ function normalizeMemory(row: unknown): MemoryItem | null {
     archived: row.archived === true,
     versions,
     ...(row.alwaysApply === true ? { alwaysApply: true } : {}),
+    ...normalizeMemoryMetadata(row),
   };
 }
 
@@ -340,7 +408,8 @@ export function createChat(
   const chat: Chat = {
     id: crypto.randomUUID(),
     title: "New session",
-    memory: input.memory,
+    memory: input.temporary ? "off" : input.memory,
+    ...(input.temporary ? { requestedMemory: input.memory } : {}),
     temporary: input.temporary,
     autonomy: input.autonomy,
     personalityId: resolvePersonalityId(input.personalityId ?? DEFAULT_PERSONALITY_ID),
@@ -367,6 +436,7 @@ export function openBotChat(ws: Workspace, agentId: string, newThread = false): 
     customPersonality: agent.instructions,
   });
   const linked = { ...chat, title: agent.name, agentId };
+  if (agent.knowledgeDocumentIds?.length) linked.knowledgeDocumentIds = [...agent.knowledgeDocumentIds];
   const model = normalizeBotModel(agent);
   if (model.chatProvider) linked.botProvider = model.chatProvider;
   if (model.chatTier) linked.botTier = model.chatTier;
@@ -458,16 +528,30 @@ export function counts(ws: Workspace) {
   };
 }
 
-export async function packWorkspace(ws: Workspace, includeTemporary: boolean) {
-  const workspace = normalizeWorkspace({
+/** Exclude known resources belonging to temporary chats without deleting unrelated saved data. */
+export function archiveWorkspace(ws: Workspace, includeTemporary: boolean): Workspace {
+  if (includeTemporary) return normalizeWorkspace(ws);
+  const excluded = new Set(ws.chats.filter((chat) => chat.temporary).map((chat) => chat.id));
+  return normalizeWorkspace({
     ...ws,
-    chats: includeTemporary ? ws.chats : ws.chats.filter((chat) => !chat.temporary),
+    chats: ws.chats.filter((chat) => !chat.temporary),
+    memories: ws.memories.filter((note) => !note.chatId || !excluded.has(note.chatId)),
+    files: ws.files.filter((file) => !file.sourceChatId || !excluded.has(file.sourceChatId)),
+    usage: ws.usage.filter((entry) => !excluded.has(entry.chatId)),
+    audit: ws.audit.filter((entry) => !excluded.has(entry.target) && !entry.targetIds?.some((id) => excluded.has(id))),
+    schedules: ws.schedules.filter((job) => !job.chatId || !excluded.has(job.chatId)),
+    pins: ws.pins.filter((pin) => pin.kind !== "chat" || !excluded.has(pin.ref)),
   });
+}
+
+export async function packWorkspace(ws: Workspace, includeTemporary: boolean) {
+  const workspace = archiveWorkspace(ws, includeTemporary);
   return {
     product: "adrians-mind" as const,
     format: 1 as const,
     sha256: await sha256(canonical(workspace)),
     counts: counts(workspace),
+    originals: { included: false, references: workspace.files.filter((file) => file.original).length, note: "Original documents are saved separately in the originating account on this device. This archive contains references and extracted previews; download originals separately." },
     workspace,
   };
 }
@@ -486,12 +570,24 @@ export async function unpackWorkspace(raw: string): Promise<
     return { ok: false, error: "This is not an Adrian's Mind archive." };
   }
   if (typeof parsed.sha256 !== "string") return { ok: false, error: "The archive has no integrity hash." };
+  // Verify the original payload before current normalization. Older valid archives
+  // can gain new policy defaults without making their integrity hash obsolete.
+  const actual = await sha256(canonical(parsed.workspace));
   const workspace = normalizeWorkspace(parsed.workspace);
-  const actual = await sha256(canonical(workspace));
   if (actual !== parsed.sha256) {
     return { ok: false, error: "Archive hash does not match. Nothing was imported." };
   }
   return { ok: true, workspace, counts: counts(workspace) };
+}
+
+function validIds(value: unknown): string[] {
+  return Array.isArray(value) ? [...new Set(value.filter((id): id is string => typeof id === "string" && id.length > 0 && id.length <= 200))] : [];
+}
+
+/** Retain the first workspace's content while applying deletion knowledge from both copies. */
+export function mergeChatDeletionState(current: Workspace, incoming: Workspace): Pick<Workspace, "chats" | "deletedChatIds"> {
+  const deleted = new Set([...(current.deletedChatIds ?? []), ...(incoming.deletedChatIds ?? [])]);
+  return { chats: current.chats.filter((chat) => !deleted.has(chat.id)), ...(deleted.size ? { deletedChatIds: [...deleted] } : {}) };
 }
 
 export function mergeMemoryState(current: Workspace, incoming: Workspace): Pick<Workspace, "memories" | "deletedMemoryIds"> {
@@ -509,8 +605,41 @@ export function mergeMemoryState(current: Workspace, incoming: Workspace): Pick<
   return { memories: [...memories.values()], ...(deleted.size ? { deletedMemoryIds: [...deleted] } : {}) };
 }
 
+export const ARCHIVE_CATEGORIES = ["chats", "memories", "projects", "files", "agents", "activity"] as const;
+export type ArchiveCategory = typeof ARCHIVE_CATEGORIES[number];
+
+/** A selection is an import payload, never a replacement for unrelated current data. */
+export function selectArchiveCategories(archive: Workspace, categories: readonly ArchiveCategory[]): Workspace {
+  const selected = new Set(categories);
+  const result = emptyWorkspace();
+  if (selected.has("chats")) { result.chats = archive.chats; result.deletedChatIds = archive.deletedChatIds; result.pins = archive.pins.filter((pin) => pin.kind === "chat"); }
+  if (selected.has("memories")) { result.memories = archive.memories; result.deletedMemoryIds = archive.deletedMemoryIds; }
+  if (selected.has("projects")) result.projects = archive.projects;
+  if (selected.has("files")) result.files = archive.files;
+  if (selected.has("agents")) {
+    result.agents = archive.agents; result.runs = archive.runs; result.runEvents = archive.runEvents;
+    result.schedules = archive.schedules; result.deployments = archive.deployments;
+    result.connections = archive.connections; result.mailboxes = archive.mailboxes; result.browserSessions = archive.browserSessions;
+  }
+  if (selected.has("activity")) { result.usage = archive.usage; result.audit = archive.audit; }
+  return result;
+}
+
+/** Saved configuration is not current authorization or a live connection. */
+function inactiveArchive(archive: Workspace): Workspace {
+  return {
+    ...archive,
+    runs: archive.runs.map((run) => ({ ...run, state: ["completed", "failed", "canceled"].includes(run.state) ? run.state : "paused", workerId: null, leaseUntil: null, approvedActions: [], pendingApproval: undefined })),
+    schedules: archive.schedules.map((job) => ({ ...job, enabled: false, leaseWorker: null, leaseUntil: null })),
+    deployments: archive.deployments.map((row) => ({ ...row, state: "external-required", workerId: null, heartbeatAt: null, error: "Imported configuration. Verify a worker before deployment." })),
+    connections: archive.connections.map((row) => ({ ...row, status: "unconfigured", secretStored: false })),
+    browserSessions: archive.browserSessions.map((row) => ({ ...row, status: row.status === "failed" ? "failed" : "closed" })),
+  };
+}
+
 /** Explicit replacement can restore forgotten content only as newly saved notes. */
-export function replaceFromArchive(current: Workspace, archive: Workspace): Workspace {
+export function replaceFromArchive(current: Workspace, source: Workspace): Workspace {
+  const archive = inactiveArchive(source);
   const deleted = new Set([...(current.deletedMemoryIds ?? []), ...(archive.deletedMemoryIds ?? [])]);
   const incoming = new Set(archive.memories.map((note) => note.id));
   for (const note of current.memories) if (!incoming.has(note.id)) deleted.add(note.id);
@@ -523,7 +652,24 @@ export function replaceFromArchive(current: Workspace, archive: Workspace): Work
     }
     return note;
   });
-  return { ...archive, memories, deletedMemoryIds: [...deleted], halted: current.halted || archive.halted };
+  const deletedChats = new Set([...(current.deletedChatIds ?? []), ...(archive.deletedChatIds ?? [])]);
+  const incomingChats = new Set(archive.chats.map((chat) => chat.id));
+  for (const chat of current.chats) if (!incomingChats.has(chat.id)) deletedChats.add(chat.id);
+  const restoredIds = new Map<string, string>();
+  const chats = archive.chats.map((chat) => {
+    if (!deletedChats.has(chat.id)) return chat;
+    const id = crypto.randomUUID();
+    restoredIds.set(chat.id, id);
+    return { ...chat, id };
+  });
+  return {
+    ...archive, chats,
+    memories: memories.map((note) => note.chatId && restoredIds.has(note.chatId) ? { ...note, chatId: restoredIds.get(note.chatId)! } : note),
+    deletedMemoryIds: [...deleted], ...(deletedChats.size ? { deletedChatIds: [...deletedChats] } : {}),
+    pins: archive.pins.map((pin) => pin.kind === "chat" && restoredIds.has(pin.ref) ? { ...pin, ref: restoredIds.get(pin.ref)! } : pin),
+    schedules: archive.schedules.map((job) => ({ ...job, enabled: false, leaseWorker: null, leaseUntil: null, ...(job.chatId && restoredIds.has(job.chatId) ? { chatId: restoredIds.get(job.chatId)! } : {}) })),
+    halted: current.halted || archive.halted,
+  };
 }
 
 export function archiveMessagePreview(current: Workspace, incoming: Workspace) {
@@ -543,14 +689,17 @@ export function archiveMessagePreview(current: Workspace, incoming: Workspace) {
   return { kept, conflicts };
 }
 
-export function mergeWorkspace(current: Workspace, incoming: Workspace): Workspace {
+export function mergeWorkspace(current: Workspace, source: Workspace): Workspace {
+  const incoming = inactiveArchive(source);
   const byId = <T extends { id: string }>(rows: T[]) => new Map(rows.map((row) => [row.id, row]));
   const merge = <T extends { id: string }>(left: T[], right: T[]) => [...byId([...left, ...right]).values()];
   const archivedChats = byId(incoming.chats);
+  const deletionState = mergeChatDeletionState({ ...current, chats: [...byId([...incoming.chats, ...current.chats]).values()] }, incoming);
   return {
     version: 1,
     halted: current.halted,
-    chats: [...byId([...incoming.chats, ...current.chats]).values()].map((chat) => {
+    ...deletionState,
+    chats: deletionState.chats.map((chat) => {
       const archive = archivedChats.get(chat.id);
       if (!archive || archive === chat) return chat;
       const messages = merge(archive.messages, chat.messages).sort((a, b) => a.at.localeCompare(b.at));
@@ -561,31 +710,32 @@ export function mergeWorkspace(current: Workspace, incoming: Workspace): Workspa
     files: merge(current.files, incoming.files),
     usage: merge(current.usage, incoming.usage).sort((a, b) => b.at.localeCompare(a.at)).slice(0, 200),
     audit: retainActivity(merge(current.audit, incoming.audit).sort((a, b) => b.at.localeCompare(a.at))),
-    agents: merge(current.agents, incoming.agents),
-    deployments: merge(current.deployments, incoming.deployments),
-    runs: merge(current.runs, incoming.runs),
+    agents: merge(incoming.agents, current.agents),
+    deployments: merge(incoming.deployments, current.deployments),
+    runs: merge(incoming.runs, current.runs),
     runEvents: merge(current.runEvents, incoming.runEvents),
-    connections: merge(current.connections, incoming.connections),
-    mailboxes: merge(current.mailboxes, incoming.mailboxes),
-    schedules: merge(current.schedules, incoming.schedules),
+    connections: merge(incoming.connections, current.connections),
+    mailboxes: merge(incoming.mailboxes, current.mailboxes),
+    schedules: merge(incoming.schedules, current.schedules),
     pins: merge(current.pins, incoming.pins),
-    browserSessions: merge(current.browserSessions, incoming.browserSessions),
+    browserSessions: merge(incoming.browserSessions, current.browserSessions),
   };
 }
 
-export function recordAudit(ws: Workspace, action: string, target: string, result: string): { ws: Workspace; entry: AuditEntry } {
+export function recordAudit(ws: Workspace, action: string, target: string, result: string, targetIds?: readonly string[]): { ws: Workspace; entry: AuditEntry } {
   const entry: AuditEntry = {
     id: crypto.randomUUID(),
     at: new Date().toISOString(),
     action,
     target,
+    ...(targetIds?.length ? { targetIds: validIds(targetIds) } : {}),
     result,
   };
   return { ws: { ...ws, audit: retainActivity([entry, ...ws.audit]) }, entry };
 }
 
-export function pushAudit(ws: Workspace, action: string, target: string, result: string): Workspace {
-  return recordAudit(ws, action, target, result).ws;
+export function pushAudit(ws: Workspace, action: string, target: string, result: string, targetIds?: readonly string[]): Workspace {
+  return recordAudit(ws, action, target, result, targetIds).ws;
 }
 
 function usageKind(prompt: unknown, completion: unknown): UsageEntry["kind"] {
@@ -595,7 +745,7 @@ function usageKind(prompt: unknown, completion: unknown): UsageEntry["kind"] {
 }
 
 export function pushUsage(ws: Workspace, entry: Omit<UsageEntry, "kind">): Workspace {
-  return { ...ws, usage: [{ ...entry, kind: usageKind(entry.promptTokens, entry.completionTokens) }, ...ws.usage].slice(0, 200) };
+  return { ...ws, usage: [{ ...entry, kind: usageKind(entry.promptTokens, entry.completionTokens) }, ...ws.usage.filter((row) => row.id !== entry.id)].slice(0, 200) };
 }
 
 export function addLocalFile(

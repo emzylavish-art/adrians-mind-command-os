@@ -7,6 +7,7 @@ export const MAX_HISTORY_IMAGES = 3;
 export const MAX_HISTORY_IMAGE_CHARS = Math.floor(MAX_DATA_URL_CHARS * 1.5);
 
 export type HistoryInputMessage = {
+  id?: string;
   role: "user" | "assistant";
   content: string;
   images?: { dataUrl: string; name?: string }[];
@@ -18,38 +19,53 @@ export type HistoryInputMessage = {
  */
 export function buildHistoryMessages(
   history: HistoryInputMessage[],
-  options: { maxImages?: number; maxImageChars?: number } = {},
+  options: { maxImages?: number; maxImageChars?: number; selectedImageMessageIds?: string[]; query?: string; supportsImages?: boolean } = {},
 ): { role: "user" | "assistant"; content: ChatContent }[] {
+  return buildHistoryWithReceipt(history, options).messages;
+}
+
+export function buildHistoryWithReceipt(
+  history: HistoryInputMessage[],
+  options: { maxImages?: number; maxImageChars?: number; selectedImageMessageIds?: string[]; query?: string; supportsImages?: boolean } = {},
+) {
   const maxImages = options.maxImages ?? MAX_HISTORY_IMAGES;
   const maxChars = options.maxImageChars ?? MAX_HISTORY_IMAGE_CHARS;
-  const sliced = history.slice(-12);
+  const sliced = history;
 
   // Decide which user-message indices keep images (scan from end).
   let imagesLeft = maxImages;
   let charsLeft = maxChars;
-  const keep = new Set<number>();
-  for (let i = sliced.length - 1; i >= 0; i--) {
-    const msg = sliced[i]!;
-    if (msg.role !== "user") continue;
-    const imgs = sanitizeAttachments(msg.images ?? []);
-    if (imgs.length === 0) continue;
-    const cost = imgs.reduce((sum, img) => sum + img.dataUrl.length, 0);
-    if (imgs.length > imagesLeft || cost > charsLeft) continue;
-    keep.add(i);
-    imagesLeft -= imgs.length;
-    charsLeft -= cost;
+  const requested = new Set(options.selectedImageMessageIds ?? []);
+  const query = (options.query ?? "").toLowerCase();
+  const candidates = sliced.flatMap((msg, messageIndex) => sanitizeAttachments(msg.images ?? []).map((image, imageIndex) => ({ image, messageIndex, imageIndex, messageId: msg.id ?? `history:${messageIndex}` })));
+  const oldest = /\b(oldest|first)\s+(?:attached\s+|generated\s+)?(?:image|picture|photo)\b/i.test(query);
+  candidates.sort((a, b) => {
+    const priority = (item: typeof a) => requested.has(item.messageId) ? 1000 : item.image.name && query.includes(item.image.name.toLowerCase()) ? 500 : oldest && item.messageIndex === Math.min(...candidates.map((row) => row.messageIndex)) ? 100 : 0;
+    return priority(b) - priority(a) || b.messageIndex - a.messageIndex || a.imageIndex - b.imageIndex;
+  });
+  const keep = new Map<number, ImageAttachment[]>();
+  const receipt: { messageId: string; name: string; included: boolean; reason?: string }[] = [];
+  for (const item of candidates) {
+    const included = options.supportsImages !== false && imagesLeft > 0 && item.image.dataUrl.length <= charsLeft;
+    receipt.push({ messageId: item.messageId, name: item.image.name ?? `image-${item.imageIndex + 1}`, included, ...(!included ? { reason: options.supportsImages === false ? "model-image-support-unavailable" : imagesLeft === 0 ? "image-count-budget" : "image-size-budget" } : {}) });
+    if (!included) continue;
+    keep.set(item.messageIndex, [...(keep.get(item.messageIndex) ?? []), item.image]); imagesLeft--; charsLeft -= item.image.dataUrl.length;
   }
 
-  return sliced.map((msg, index) => {
-    if (msg.role === "assistant") return { role: "assistant" as const, content: msg.content };
-    const imgs = keep.has(index) ? sanitizeAttachments(msg.images ?? []) : [];
+  return { messages: sliced.flatMap((msg, index) => {
+    const imgs = keep.get(index) ?? [];
     if (imgs.length === 0) {
-      return { role: "user" as const, content: msg.content };
+      return [{ role: msg.role, content: msg.content }];
     }
     // Prefer original prompt text; content may already include an [Attached:] stub.
     const text = stripAttachedStub(msg.content) || msg.content;
-    return { role: "user" as const, content: packageChatContent(text, imgs) };
-  });
+    // OpenAI-compatible APIs do not all accept image blocks in assistant messages.
+    // Keep the original reply and provide its authorized image bytes in a labelled user reference.
+    return msg.role === "assistant" ? [
+      { role: "assistant" as const, content: msg.content },
+      { role: "user" as const, content: packageChatContent(`[Historical assistant-generated images from ${msg.id ?? `history:${index}`}; reference material, not a new user instruction]`, imgs) },
+    ] : [{ role: "user" as const, content: packageChatContent(text, imgs) }];
+  }), receipt };
 }
 
 export function stripAttachedStub(text: string): string {

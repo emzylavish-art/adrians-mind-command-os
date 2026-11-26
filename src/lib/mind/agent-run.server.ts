@@ -1,5 +1,6 @@
 import { requireUserId } from "../auth/verify.server";
-import { buildAgentModelBody, readAgentMessage, runBoundedAgent, type AgentModel } from "./agent";
+import { runBoundedAgent } from "./agent";
+import { createBudgetedAgentModel } from "./agent-model-dispatch.server.ts";
 import { resolveModelTier } from "./model-tiers";
 import { AGENT_TIMEOUT_REPLY, agentRunTimeoutMs, boundAbortSignal, isTimeoutAbort } from "./turn-timeouts";
 import { guardMindEnv } from "./isolation";
@@ -25,36 +26,6 @@ function names(value: unknown, limit: number) {
   return value.filter((item): item is string => typeof item === "string").map((item) => item.trim().slice(0, 200)).filter(Boolean).slice(0, limit);
 }
 
-function grokModel(
-  apiKey: string,
-  parent: AbortSignal,
-  options: {
-    model: string;
-    temperature: number;
-    max_tokens: number;
-    reasoning_effort?: "low" | "medium" | "high" | "xhigh";
-  },
-): AgentModel {
-  return async ({ messages, signal }) => {
-    const linked = typeof AbortSignal.any === "function" ? AbortSignal.any([parent, signal]) : parent;
-    const response = await fetch("https://api.x.ai/v1/chat/completions", {
-      method: "POST",
-      signal: linked,
-      headers: { "content-type": "application/json", authorization: `Bearer ${apiKey}` },
-      body: JSON.stringify(
-        buildAgentModelBody(messages, {
-          model: options.model,
-          temperature: options.temperature,
-          max_tokens: options.max_tokens,
-          reasoning_effort: options.reasoning_effort,
-        }),
-      ),
-    });
-    if (!response.ok) throw new Error(`status ${response.status}`);
-    return readAgentMessage(await response.json());
-  };
-}
-
 export async function handleAgentRun(request: Request): Promise<Response> {
   if (request.method !== "POST") return json({ ok: false, error: "Method not allowed.", log: [] }, 405);
   if (
@@ -78,7 +49,9 @@ export async function handleAgentRun(request: Request): Promise<Response> {
   }
   const read = await readJsonObjectBody(request, MAX_BODY);
   if (!read.ok) return json({ ok: false, error: read.error, log: [] }, read.status);
-  const body: { goal?: unknown; projects?: unknown; chats?: unknown; notes?: unknown; modelTier?: unknown; images?: unknown } = read.body;
+  const body: { goal?: unknown; projects?: unknown; chats?: unknown; notes?: unknown; modelTier?: unknown; images?: unknown; operationId?: unknown; projectId?: unknown; taskId?: unknown } = read.body;
+  if (body.operationId !== undefined && (typeof body.operationId !== "string" || !/^[A-Za-z0-9:_-]{1,180}$/.test(body.operationId))) return json({ ok: false, dispatched: false, error: "The agent operation identity is invalid. Nothing was sent.", log: [] }, 400);
+  if ([['projectId', 160], ['taskId', 240]].some(([key, max]) => { const value = read.body[String(key)]; return value != null && (typeof value !== "string" || !value.trim() || value.length > Number(max) || /\p{Cc}/u.test(value)); })) return json({ ok: false, dispatched: false, error: "The agent project or task scope is invalid. Nothing was sent.", log: [] }, 400);
   if (read.body.freeOnly === true) return json({ ok: false, error: "Free-only mode prevents use of the paid agent runtime.", log: [] }, 403);
   const tierField = parseModelTierField(body.modelTier);
   if (!tierField.ok) return json({ ok: false, error: tierField.error, log: [] }, 400);
@@ -125,24 +98,25 @@ export async function handleAgentRun(request: Request): Promise<Response> {
   const tier = resolveModelTier(tierField.tier, goal || (Array.isArray(body.images) && body.images.length ? "image" : ""), process.env);
   const images = sanitizeAttachments(body.images);
   const bound = boundAbortSignal(request.signal, agentRunTimeoutMs());
+  const budgeted = createBudgetedAgentModel({
+    ownerId: userId, apiKey, signal: bound.signal,
+    operationId: body.operationId, projectId: body.projectId, taskId: body.taskId,
+    options: { model: tier.model, temperature: tier.params.temperature, max_tokens: tier.params.max_tokens, reasoning_effort: tier.params.reasoning_effort },
+  });
   try {
-    const result = await runBoundedAgent({
+    const result = budgeted.finish(await runBoundedAgent({
       ws,
       goal: goal || (images.length ? "Describe the attached image and use tools only if needed." : ""),
-      model: grokModel(apiKey, bound.signal, {
-        model: tier.model,
-        temperature: tier.params.temperature,
-        max_tokens: tier.params.max_tokens,
-        reasoning_effort: tier.params.reasoning_effort,
-      }),
+      model: budgeted.model,
       signal: bound.signal,
       autonomy: "ask",
       halted: false,
       approved: true,
       images,
-    });
+    }));
     if (!result.ok && isTimeoutAbort(bound.signal, bound.signal.reason)) {
       return json({
+        ...result,
         ok: false,
         text: "",
         log: result.log,
@@ -154,6 +128,7 @@ export async function handleAgentRun(request: Request): Promise<Response> {
       });
     }
     return json({
+      ...result,
       ok: result.ok,
       text: result.text,
       log: result.log,
@@ -167,6 +142,7 @@ export async function handleAgentRun(request: Request): Promise<Response> {
   } catch (caught) {
     if (isTimeoutAbort(bound.signal, caught) || isTimeoutAbort(bound.signal, bound.signal.reason)) {
       return json({
+        ...budgeted.finish({ ok: false, text: "", log: [], error: AGENT_TIMEOUT_REPLY }),
         ok: false,
         text: "",
         log: [],

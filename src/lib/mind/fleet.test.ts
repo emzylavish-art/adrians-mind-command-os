@@ -56,6 +56,10 @@ describe("local agent worker", () => {
   it("does not call search or invent a citation when no provider is passed", () => {
     let ws = started("Research", "pier");
     ws = tick(ws);
+    ws = approveRunAction(ws, ws.runs[0]!.id, ws.runs[0]!.pendingApproval!.id, LATER);
+    ws = tick(ws);
+    ws = tick(ws, "2026-04-01T12:01:00.000Z");
+    ws = approveRunAction(ws, ws.runs[0]!.id, ws.runs[0]!.pendingApproval!.id, "2026-04-01T12:01:00.000Z");
     ws = tick(ws, "2026-04-01T12:01:00.000Z");
     const run = ws.runs[0];
     assert.equal(run?.state, "waiting_external");
@@ -68,7 +72,7 @@ describe("local agent worker", () => {
     ws = tick(ws);
     assert.equal(ws.runs[0]?.state, "waiting_approval");
     assert.equal(ws.browserSessions.length, 0);
-    ws = approveRunAction(ws, ws.runs[0]!.id, "browser");
+    ws = approveRunAction(ws, ws.runs[0]!.id, ws.runs[0]!.pendingApproval!.id, LATER);
     ws = tick(ws, "2026-04-01T12:01:00.000Z", {
       browser: () => ({ ok: true, title: "Pier", excerpt: "Water is low." }),
     });
@@ -96,7 +100,7 @@ describe("local agent worker", () => {
     if (!queued.ok) return;
     let next = tick(queued.ws);
     assert.equal(next.runs[0]?.state, "waiting_approval");
-    next = approveRunAction(next, next.runs[0]!.id, "gmail_send");
+    next = approveRunAction(next, next.runs[0]!.id, next.runs[0]!.pendingApproval!.id, LATER);
     next = tick(next, "2026-04-01T12:01:00.000Z");
     assert.equal(next.runs[0]?.state, "waiting_external");
     assert.match(next.runs[0]?.error ?? "", /Nothing was read or sent/);
@@ -172,13 +176,15 @@ describe("local agent worker", () => {
     const queued = enqueueRun(made.ws, made.ws.agents[0]!.id, "Think", NOW);
     assert.equal(queued.ok, true);
     if (!queued.ok) return;
-    const ws = tick(queued.ws);
+    let ws = tick(queued.ws);
+    ws = approveRunAction(ws, ws.runs[0]!.id, ws.runs[0]!.pendingApproval!.id, LATER);
+    ws = tick(ws);
     assert.match(ws.runs[0]?.error ?? "", /does not call a model/);
   });
 
   it("builds an ordered plan and refuses a finished run going back to running", () => {
     const plan = buildTaskPlan("pier", ["list_projects", "search_notes", "delegate"]);
-    assert.deepEqual(plan.map((step) => step.tool), ["list_projects", "search_notes"]);
+    assert.deepEqual(plan.map((step) => step.tool), ["list_projects", "search_notes", "delegate"]);
     assert.deepEqual(plan[1]?.dependsOn, ["step-1"]);
     assert.equal(plan.every((step) => step.need === "none"), true);
     assert.equal(canTransition("completed", "running"), false);

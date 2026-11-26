@@ -1,4 +1,4 @@
-import { useEffect, useRef, type CSSProperties, type ReactNode, type RefObject } from "react";
+import { useEffect, useRef, useState, type CSSProperties, type ReactNode, type RefObject } from "react";
 import { createPortal } from "react-dom";
 
 export function MenuMotion() {
@@ -154,6 +154,7 @@ export function MenuCluster({ label, wide = false, children }: { label: string; 
 export function ComposerMore({ children, testId, onOpen }: { children: ReactNode; testId: string; onOpen?: () => void }) {
   const trigger = useRef<HTMLDetailsElement>(null);
   const panel = useRef<HTMLDivElement>(null);
+  const [open, setOpen] = useState(false);
   useEffect(() => {
     const details = trigger.current;
     const menu = panel.current;
@@ -175,37 +176,31 @@ export function ComposerMore({ children, testId, onOpen }: { children: ReactNode
       menu.style.setProperty("--menu-height", `${Math.max(44, opensAbove ? above : below)}px`);
       menu.style.setProperty("--menu-top", `${opensAbove ? Math.max(gap, anchor.top - menu.offsetHeight - gap) : anchor.bottom + gap}px`);
     };
-    const sync = () => {
-      if (details.open) {
-        if (!menu.matches(":popover-open")) menu.showPopover();
-        position();
-      } else if (menu.matches(":popover-open")) menu.hidePopover();
+    if (open) { if (!menu.matches(":popover-open")) menu.showPopover(); position(); }
+    else if (menu.matches(":popover-open")) menu.hidePopover();
+    const dismiss = () => { setOpen(false); if (menu.matches(":popover-open")) menu.hidePopover(); };
+    const closeOutside = (event: PointerEvent) => { if (open && !details.contains(event.target as Node)) dismiss(); };
+    const closeEscape = (event: KeyboardEvent) => {
+      if (event.key !== "Escape" || !open) return;
+      event.preventDefault(); event.stopPropagation(); dismiss(); details.querySelector("summary")?.focus();
     };
-    const closeOutside = (event: PointerEvent) => {
-      if (details.open && !details.contains(event.target as Node)) details.open = false;
-    };
-    details.addEventListener("toggle", sync);
     document.addEventListener("pointerdown", closeOutside);
+    document.addEventListener("keydown", closeEscape, true);
     window.addEventListener("resize", position);
     window.visualViewport?.addEventListener("resize", position);
     document.addEventListener("scroll", position, true);
     return () => {
-      details.removeEventListener("toggle", sync);
       document.removeEventListener("pointerdown", closeOutside);
+      document.removeEventListener("keydown", closeEscape, true);
       window.removeEventListener("resize", position);
       window.visualViewport?.removeEventListener("resize", position);
       document.removeEventListener("scroll", position, true);
     };
-  }, []);
-  return <details ref={trigger} className="composer-more" onToggle={(event) => {
-    if (event.target === event.currentTarget && event.currentTarget.open) onOpen?.();
-  }} onKeyDown={(event) => {
-    if (event.key !== "Escape" || !event.currentTarget.open) return;
-    event.stopPropagation();
-    event.currentTarget.open = false;
-    event.currentTarget.querySelector("summary")?.focus();
+  }, [open]);
+  return <details ref={trigger} className="composer-more" open={open} onToggle={(event) => {
+    if (event.target === event.currentTarget && event.currentTarget.open !== open) setOpen(event.currentTarget.open);
   }}>
-    <summary>More</summary>
+    <summary aria-expanded={open} onClick={(event) => { event.preventDefault(); if (!open) onOpen?.(); setOpen(!open); }}>More</summary>
     <div ref={panel} popover="manual" className="composer-more__menu" data-testid={testId}>{children}</div>
   </details>;
 }

@@ -38,7 +38,7 @@ function honestBoth(action: string): string {
   return `xAI and OpenAI did not produce a successful ${result}.`;
 }
 
-async function openAiSpeech(input: {
+export async function openAiSpeech(input: {
   text: string;
   apiKey: string;
   fetchImpl: typeof fetch;
@@ -60,7 +60,7 @@ async function openAiSpeech(input: {
   return { ok: true, audio: bytes.toString("base64") };
 }
 
-async function openAiTranscribe(input: {
+export async function openAiTranscribe(input: {
   bytes: Uint8Array;
   apiKey: string;
   filename?: string;

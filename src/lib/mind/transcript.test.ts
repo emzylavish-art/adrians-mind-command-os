@@ -116,3 +116,60 @@ describe("transcript edits", () => {
   });
 
 });
+
+describe("conversation lineage and reply alternatives", () => {
+  it("rejects oversize edits without losing a trailing requirement", () => {
+    const ws = sample();
+    const text = "x".repeat(9000) + "FINAL_REQUIREMENT";
+    const before = JSON.stringify(ws);
+    const result = reviseUserTurn(ws, "c1", "u1", text);
+    assert.ok("error" in result && /not been truncated/.test(result.error));
+    assert.equal(JSON.stringify(ws), before);
+  });
+
+  it("branches at an exact message and strips pending delivery authority", async () => {
+    const { createEditedBranch } = await import("./transcript.ts");
+    const { normalizeWorkspace, sha256, canonical } = await import("./workspace.ts");
+    const ws = sample();
+    ws.chats[0].messages[2] = { ...ws.chats[0].messages[2], delivery: "unconfirmed", deliveryOperationId: "1760000000000-12345678-1234-1234-1234-123456789abc", partialReply: "incomplete", deliveryRoute: { provider: "grok", tier: "Fast", model: "grok", orchestrated: false, fingerprint: "a".repeat(64) } };
+    const expected = await sha256(canonical(ws.chats[0]));
+    const result = await createEditedBranch(ws, "c1", "u2", "Edited second");
+    assert.ok(!("error" in result));
+    if ("error" in result) return;
+    const chat = normalizeWorkspace(result.ws).chats[0];
+    assert.deepEqual(chat.branchFrom, { chatId: "c1", messageId: "u2", reason: "edit", createdAt: chat.branchFrom?.createdAt, sourceRevision: expected });
+    assert.deepEqual(chat.messages[2].inheritedFrom, { chatId: "c1", messageId: "u2" });
+    for (const message of chat.messages) {
+      assert.equal(message.deliveryOperationId, undefined);
+      assert.equal(message.deliveryRoute, undefined);
+      assert.equal(message.delivery, undefined);
+      assert.equal(message.partialReply, undefined);
+    }
+    assert.equal(chat.messages[1].model, "grok-4.5");
+    assert.equal(ws.chats[0].messages[2].content, "Second");
+  });
+
+  it("retains three regenerated versions and continues from only the selected answer", async () => {
+    const { withReplyVersion, selectReplyVersion } = await import("./transcript.ts");
+    const { normalizeWorkspace } = await import("./workspace.ts");
+    const ws = sample();
+    let reply = ws.chats[0].messages[1];
+    for (let i = 1; i <= 3; i++) reply = withReplyVersion(reply, { id: `v${i}`, role: "assistant", content: `Answer ${i}`, at: `2026-01-0${i}`, provider: `fixture-${i}` });
+    ws.chats[0].messages[1] = reply;
+    assert.equal(reply.replyVersions?.length, 4);
+    const selected = normalizeWorkspace(selectReplyVersion(ws, "c1", "v3", "a1"));
+    assert.equal(selected.chats[0].messages[1].content, "Answer");
+    assert.equal(selected.chats[0].messages[1].model, "grok-4.5");
+    assert.equal(selected.chats[0].messages[1].provider, undefined);
+    assert.equal(selected.chats[0].messages[1].replyVersions?.length, 4);
+    const packed = exportChat(selected, "c1");
+    assert.ok(!("error" in packed));
+    if ("error" in packed) return;
+    const doc = JSON.parse(packed.json);
+    assert.equal(doc.version, 2);
+    assert.equal(doc.chat.messages[1].id, "v3");
+    assert.equal(doc.chat.messages[1].replyVersions.length, 4);
+    assert.equal(doc.exportKind, "structured-transcript");
+    assert.ok(doc.limitations.some((line: string) => /Blob identifiers/.test(line)));
+  });
+});

@@ -12,6 +12,10 @@ import { editImagineImage, generateImagineImages, normalizeImaginePrompt, resolv
 import { readOwnerVideo, startOwnerVideo } from "./video.ts";
 import { normalizeImageDataUrl } from "./data-url.ts";
 import { MAX_DATA_URL_CHARS } from "./types.ts";
+import { randomUUID } from "node:crypto";
+import { durableVideoJobs } from "./video-job-store.server.ts";
+import { pollVideoJob, startVideoJob } from "./video-jobs.ts";
+import { downloadOwnedVideo } from "./video-download.server.ts";
 
 try {
   setImagineRateLimitStore(createFileRateLimitStore(DEFAULT_IMAGINE_RATE_LIMIT_PATH));
@@ -96,10 +100,10 @@ export async function handleImagineGenerate(request: Request): Promise<Response>
   // via meter.ownerId so custom execute paths cannot bypass.
 
   const record = body && typeof body === "object" ? (body as Record<string, unknown>) : {};
-  if (record.kind === "video" && record.action === "status") return handleOwnerVideo(record);
+  if (record.kind === "video" && ["status", "list", "download"].includes(String(record.action))) return handleOwnerVideo(userId, record);
   if (record.freeOnly === true) return json({ ok: false, error: "Free-only mode prevents a paid image or video request." }, 403);
   if (await haltIsOn(userId)) return json({ ok: false, error: "Emergency stop is on or unavailable. Generation was blocked." }, 403);
-  if (record.kind === "video") return handleOwnerVideo(record);
+  if (record.kind === "video") return handleOwnerVideo(userId, record);
   const normalized = normalizeImaginePrompt(record.prompt);
   if (!normalized.ok) return json({ ok: false, error: normalized.error }, 400);
 
@@ -111,6 +115,9 @@ export async function handleImagineGenerate(request: Request): Promise<Response>
     return json({ ok: false, error: "That edit image is too large." }, 413);
   }
   const imageDataUrl = rawImage ? normalizeImageDataUrl(rawImage) || "" : "";
+  const rawImages = record.images ?? record.imageDataUrls;
+  if (rawImages !== undefined && (!Array.isArray(rawImages) || rawImages.length > 4)) return json({ ok: false, error: "Choose at most four image inputs; the selection was not changed." }, 400);
+  if (Array.isArray(rawImages) && rawImages.some(item => typeof item !== "string" || item.length > MAX_DATA_URL_CHARS || !normalizeImageDataUrl(item))) return json({ ok: false, error: "Every selected edit image must be valid. No image was silently omitted." }, 400);
   const imageDataUrls = (
     Array.isArray(record.images)
       ? record.images
@@ -132,7 +139,8 @@ export async function handleImagineGenerate(request: Request): Promise<Response>
     return json({ ok: false, error: "Edit with Imagine needs at least one image data URL as input." }, 400);
   }
 
-  const meter = { ownerId: userId, sessionId };
+  const meter = { ownerId: userId, sessionId, operationId: typeof record.operationId === "string" ? record.operationId : request.headers.get("x-mind-operation-id") || undefined, taskId: typeof record.taskId === "string" ? record.taskId : undefined, projectId: typeof record.projectId === "string" ? record.projectId : undefined };
+  // Shared adapter enforces account requests and image allowance for HTTP and agent paths exactly once.
   const result =
     mode === "edit"
       ? await editImagineImage(
@@ -159,7 +167,7 @@ export async function handleImagineGenerate(request: Request): Promise<Response>
     const status = clientErrorStatus(result);
     const error = mapImagineHttpError(status, result.error);
     // Do not echo the requested arbitrary model id back when rejecting — return allowlisted model only.
-    return json({ ok: false, error, model }, status);
+    return json({ ok: false, error, model, approvalId: result.approvalId }, status);
   }
 
   return json({
@@ -174,17 +182,26 @@ export async function handleImagineGenerate(request: Request): Promise<Response>
   });
 }
 
-async function handleOwnerVideo(record: Record<string, unknown>): Promise<Response> {
-  if (record.action === "status") {
-    const requestId = typeof record.requestId === "string" ? record.requestId : "";
-    const result = await readOwnerVideo(requestId);
+async function handleOwnerVideo(userId: string, record: Record<string, unknown>): Promise<Response> {
+  try {
+    const store = await durableVideoJobs();
+    if (record.action === "list") return json({ ok: true, jobs: await store.list(userId) });
+    if (record.action === "download") {
+      const result = await downloadOwnedVideo(userId, typeof record.operationId === "string" ? record.operationId : "", store);
+      if (!result.ok) return json(result, result.status);
+      return new Response(new Uint8Array(result.bytes).buffer, { headers: { "content-type": result.mime, "cache-control": "no-store", "content-disposition": 'attachment; filename="adrian-video.' + (result.mime === "video/mp4" ? "mp4" : "webm") + '"' } });
+    }
+    if (record.action === "status") {
+      const result = await pollVideoJob(userId, { operationId: typeof record.operationId === "string" ? record.operationId : undefined, requestId: typeof record.requestId === "string" ? record.requestId : undefined }, { store, status: readOwnerVideo });
+      return json(result, result.ok ? 200 : result.status);
+    }
+    if (record.action !== "start" && record.action !== "retry_blocked" && record.action !== undefined) return json({ ok: false, error: "Unknown video operation." }, 400);
+    const operationId = typeof record.operationId === "string" ? record.operationId : randomUUID();
+    const result = await startVideoJob(userId, { operationId, retryBlocked: record.action === "retry_blocked", projectId: typeof record.projectId === "string" ? record.projectId : undefined, taskId: typeof record.taskId === "string" ? record.taskId : undefined, chatId: typeof record.chatId === "string" ? record.chatId : "", prompt: record.prompt, duration: record.duration, aspectRatio: record.aspectRatio, resolution: record.resolution, temporary: record.temporary === true }, { store, start: input => startOwnerVideo(input, { ownerId: userId, operationId, taskId: typeof record.taskId === "string" ? record.taskId : operationId, projectId: typeof record.projectId === "string" ? record.projectId : undefined }) });
     return json(result, result.ok ? 200 : result.status);
+  } catch {
+    return json({ ok: false, error: "Media recovery storage is unavailable or its update could not be confirmed. The original provider request may still be active. Do not submit another generation before reconciling it." }, 503);
   }
-  const result = await startOwnerVideo({
-    prompt: typeof record.prompt === "string" ? record.prompt : "",
-    duration: typeof record.duration === "number" ? record.duration : 5,
-  });
-  return json(result, result.ok ? 200 : result.status);
 }
 
 export async function handleImagineStatus(request: Request): Promise<Response> {

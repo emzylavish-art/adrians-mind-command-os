@@ -1,3 +1,5 @@
+import { imageMetadata } from "./image-metadata.ts";
+import type { ImagePreparationReceipt, ImageEditLineage } from "./image-metadata.ts";
 /**
  * Client-side image blob store (IndexedDB) to keep large data-URLs out of workspace JSON.
  * Backward compatible: messages with only `dataUrl` continue to work without a blobId.
@@ -15,6 +17,8 @@ export type MediaBlobStore = {
 };
 
 export type ImageRef = {
+  preparation?: ImagePreparationReceipt;
+  lineage?: ImageEditLineage;
   origin?: "attached" | "camera" | "generated" | "edited";
   dataUrl?: string;
   blobId?: string;
@@ -118,6 +122,7 @@ export function accountImageStore(owner: string | null) {
   const legacy = createIndexedDbBlobStore();
   return {
     put: scoped.put,
+    getOwned: scoped.get,
     async get(id: string) {
       return (await scoped.get(id)) ?? (await legacy.get(id));
     },
@@ -150,10 +155,10 @@ export async function hydrateImageRefs(images: ImageRef[] | undefined, store: Me
           continue;
         }
         // Missing blob on reload — keep the ref so UI can show an honest placeholder.
-        out.push({ blobId: image.blobId, name: image.name, mime: image.mime, ...(image.origin ? { origin: image.origin } : {}) });
+        out.push({ blobId: image.blobId, name: image.name, mime: image.mime, ...(image.origin ? { origin: image.origin } : {}), ...imageMetadata(image) });
         continue;
       } catch {
-        out.push({ blobId: image.blobId, name: image.name, mime: image.mime, ...(image.origin ? { origin: image.origin } : {}) });
+        out.push({ blobId: image.blobId, name: image.name, mime: image.mime, ...(image.origin ? { origin: image.origin } : {}), ...imageMetadata(image) });
         continue;
       }
     }
@@ -174,10 +179,10 @@ export async function compactImageRefs(images: ImageRef[] | undefined, store: Me
     if (image.blobId && image.dataUrl && shouldOffloadDataUrl(image.dataUrl)) {
       try {
         await store.put(image.blobId, image.dataUrl);
-        out.push({ blobId: image.blobId, name: image.name, mime: image.mime, ...(image.origin ? { origin: image.origin } : {}) });
+        out.push({ blobId: image.blobId, name: image.name, mime: image.mime, ...(image.origin ? { origin: image.origin } : {}), ...imageMetadata(image) });
       } catch (error) {
         // Quota / private mode — keep inline rather than lose the image.
-        out.push({ dataUrl: image.dataUrl, blobId: image.blobId, name: image.name, mime: image.mime, ...(image.origin ? { origin: image.origin } : {}) });
+        out.push({ dataUrl: image.dataUrl, blobId: image.blobId, name: image.name, mime: image.mime, ...(image.origin ? { origin: image.origin } : {}), ...imageMetadata(image) });
         if (!isQuotaExceededError(error)) {
           /* still degraded */
         }
@@ -188,15 +193,15 @@ export async function compactImageRefs(images: ImageRef[] | undefined, store: Me
       const blobId = newMediaBlobId();
       try {
         await store.put(blobId, image.dataUrl!);
-        out.push({ blobId, name: image.name, mime: image.mime, ...(image.origin ? { origin: image.origin } : {}) });
+        out.push({ blobId, name: image.name, mime: image.mime, ...(image.origin ? { origin: image.origin } : {}), ...imageMetadata(image) });
       } catch {
-        out.push({ dataUrl: image.dataUrl, name: image.name, mime: image.mime, ...(image.origin ? { origin: image.origin } : {}) });
+        out.push({ dataUrl: image.dataUrl, name: image.name, mime: image.mime, ...(image.origin ? { origin: image.origin } : {}), ...imageMetadata(image) });
       }
       continue;
     }
     // Small / already-compact / legacy inline-only
-    if (image.dataUrl) out.push({ dataUrl: image.dataUrl, blobId: image.blobId, name: image.name, mime: image.mime, ...(image.origin ? { origin: image.origin } : {}) });
-    else if (image.blobId) out.push({ blobId: image.blobId, name: image.name, mime: image.mime, ...(image.origin ? { origin: image.origin } : {}) });
+    if (image.dataUrl) out.push({ dataUrl: image.dataUrl, blobId: image.blobId, name: image.name, mime: image.mime, ...(image.origin ? { origin: image.origin } : {}), ...imageMetadata(image) });
+    else if (image.blobId) out.push({ blobId: image.blobId, name: image.name, mime: image.mime, ...(image.origin ? { origin: image.origin } : {}), ...imageMetadata(image) });
   }
   return out;
 }
@@ -244,7 +249,7 @@ export async function imagesForExport(images: ImageRef[] | undefined, store: Med
   const hydrated = await hydrateImageRefs(images, store);
   return hydrated
     .filter((image): image is ImageRef & { dataUrl: string } => typeof image.dataUrl === "string" && image.dataUrl.startsWith("data:image/"))
-    .map((image) => ({ dataUrl: image.dataUrl, name: image.name ?? null, ...(image.origin ? { origin: image.origin } : {}) }));
+    .map((image) => ({ dataUrl: image.dataUrl, name: image.name ?? null, ...(image.origin ? { origin: image.origin } : {}), ...imageMetadata(image) }));
 }
 
 /** Prefer IndexedDB; fall back to memory when private mode / no IDB. */

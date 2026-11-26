@@ -4,14 +4,39 @@
  * Host and HTTPS/DNS validation happens in requestProvider() before dispatch.
  */
 import { reportedModel } from "./stream.ts";
+import { sanitizeAttachments } from "./media/pack.ts";
+import { MAX_DATA_URL_CHARS, type ChatContent, type ImageAttachment } from "./media/types.ts";
+import type { ModelControls } from "./model-tiers.ts";
 import { OPENROUTER_FREE_ROUTING } from "./provider-catalog.ts";
 
 export type AiWireProtocol = "openai" | "anthropic" | "gemini";
-export type TextTurn = { role: "system" | "user" | "assistant"; content: string };
+export type TextTurn = { role: "system" | "user" | "assistant"; content: string; images?: ImageAttachment[] };
 export type ProviderRequest = { path: string; headers: Record<string, string>; body: string };
+export type ProviderChatOptions = { stream?: boolean; images?: ImageAttachment[]; controls?: ModelControls };
 export type ParsedAnswer =
   | { ok: true; text: string; model: string; usage: { prompt_tokens?: number; completion_tokens?: number } | null }
   | { ok: false; error: string };
+
+/** Preserve historical source labels and turn position; resolve no external image URLs. */
+export function toNativeProviderTurns(messages: { role: "system" | "user" | "assistant"; content: ChatContent }[]): { ok: true; messages: TextTurn[] } | { ok: false; error: string } {
+  const turns: TextTurn[] = [];
+  let imageCount = 0, imageChars = 0;
+  for (const message of messages) {
+    if (typeof message.content === "string") { turns.push({ role: message.role, content: message.content }); continue; }
+    const text: string[] = [], images: ImageAttachment[] = [];
+    for (const part of message.content) {
+      if (part.type === "text") text.push(part.text);
+      else if (part.type === "image_url") {
+        const safe = sanitizeAttachments([{ dataUrl: part.image_url.url }]);
+        if (safe.length !== 1 || message.role !== "user") return { ok: false, error: "Historical image content must use validated embedded data in a labelled user reference. Nothing was sent." };
+        images.push(safe[0]); imageCount++; imageChars += safe[0].dataUrl.length;
+      } else return { ok: false, error: "The provider adapter does not support one of the message content parts. Nothing was sent." };
+    }
+    if (imageCount > 7 || imageChars > MAX_DATA_URL_CHARS * 3) return { ok: false, error: "Historical and current images exceed this adapter's bounded image context. Choose fewer image references explicitly." };
+    turns.push({ role: message.role, content: text.join("\n"), ...(images.length ? { images } : {}) });
+  }
+  return { ok: true, messages: turns };
+}
 
 export function providerWireProtocol(baseUrl: string): AiWireProtocol {
   let host = "";
@@ -30,41 +55,60 @@ export function modelDiscoveryHeaders(kind: AiWireProtocol, key: string): Record
 }
 
 export function buildProviderChatRequest(
-  kind: AiWireProtocol, key: string, model: string, turns: TextTurn[], freeOpenRouter = false,
+  kind: AiWireProtocol, key: string, model: string, turns: TextTurn[], freeOpenRouter = false, options: ProviderChatOptions = {},
 ): ProviderRequest {
-  const messages = turns.slice(-15);
+  const messages = turns;
   const systemText = messages.filter((m) => m.role === "system").map((m) => m.content).join("\n\n");
   const conversational = messages.filter((m) => m.role !== "system");
+  const lastUser = messages.map(turn => turn.role).lastIndexOf("user");
+  if (options.images?.length && lastUser < 0) throw new Error("Image input requires a user message.");
+  let imageCount = 0, imageChars = 0;
+  const imageParts = new Map<TextTurn, { mime: string; data: string; dataUrl: string }[]>();
+  messages.forEach((message, index) => {
+    const supplied = [...(message.images || []), ...(index === lastUser ? options.images || [] : [])];
+    const images = sanitizeAttachments(supplied);
+    if (images.length !== supplied.length || (images.length && message.role !== "user")) throw new Error("One or more images could not be validated at their source turn. Nothing was sent.");
+    imageCount += images.length; imageChars += images.reduce((sum, image) => sum + image.dataUrl.length, 0);
+    imageParts.set(message, images.map(image => {
+      const match = /^data:(image\/(?:png|jpeg|webp|gif));base64,([A-Za-z0-9+/=]+)$/.exec(image.dataUrl);
+      if (!match) throw new Error("An image is not supported by this provider adapter.");
+      return { mime: match[1], data: match[2], dataUrl: image.dataUrl };
+    }));
+  });
+  if (imageCount > 7 || imageChars > MAX_DATA_URL_CHARS * 3) throw new Error("The selected image context exceeds this provider adapter's supported bound. Nothing was sent.");
+  const answerTokens = options.controls?.answerTokens;
+  if (answerTokens !== undefined && (!Number.isInteger(answerTokens) || answerTokens < 128 || answerTokens > 16384)) throw new Error("Invalid answer token budget.");
   if (kind === "anthropic") {
     return {
       path: "messages",
       headers: { ...modelDiscoveryHeaders(kind, key), "content-type": "application/json" },
       body: JSON.stringify({
-        model, max_tokens: 2048,
+        model, max_tokens: answerTokens ?? 2048,
         ...(systemText ? { system: systemText } : {}),
-        messages: conversational.map((m) => ({ role: m.role, content: m.content })),
-        stream: false,
+        messages: conversational.map(m => { const parts = imageParts.get(m) || []; return { role: m.role, content: parts.length ? [{ type: "text", text: m.content }, ...parts.map(image => ({ type: "image", source: { type: "base64", media_type: image.mime, data: image.data } }))] : m.content }; }),
+        stream: options.stream === true,
       }),
     };
   }
   if (kind === "gemini") {
     const id = model.startsWith("models/") ? model.slice("models/".length) : model;
     return {
-      path: "models/" + encodeURIComponent(id) + ":generateContent",
+      path: "models/" + encodeURIComponent(id) + (options.stream ? ":streamGenerateContent?alt=sse" : ":generateContent"),
       headers: { ...modelDiscoveryHeaders(kind, key), "content-type": "application/json" },
       body: JSON.stringify({
         ...(systemText ? { systemInstruction: { parts: [{ text: systemText }] } } : {}),
-        contents: conversational.map((m) => ({
+        contents: conversational.map(m => ({
           role: m.role === "assistant" ? "model" : "user",
-          parts: [{ text: m.content }],
+          parts: [{ text: m.content }, ...(imageParts.get(m) || []).map(image => ({ inlineData: { mimeType: image.mime, data: image.data } }))],
         })),
+        ...(answerTokens ? { generationConfig: { maxOutputTokens: answerTokens } } : {}),
       }),
     };
   }
   return {
     path: "chat/completions",
     headers: { ...modelDiscoveryHeaders(kind, key), "content-type": "application/json" },
-    body: JSON.stringify({ model, messages, stream: false, ...(freeOpenRouter ? { provider: OPENROUTER_FREE_ROUTING } : {}) }),
+    body: JSON.stringify({ model, messages: messages.map(message => { const parts = imageParts.get(message) || []; return { role: message.role, content: parts.length ? [{ type: "text", text: message.content }, ...parts.map(image => ({ type: "image_url", image_url: { url: image.dataUrl } }))] : message.content }; }), stream: options.stream === true, ...(options.stream ? { stream_options: { include_usage: true } } : {}), ...(answerTokens ? { max_tokens: answerTokens } : {}), ...(freeOpenRouter ? { provider: OPENROUTER_FREE_ROUTING } : {}) }),
   };
 }
 
@@ -102,7 +146,7 @@ export function parseProviderText(kind: AiWireProtocol, raw: string): ParsedAnsw
     const content = first.content && typeof first.content === "object" ? first.content as Record<string, unknown> : {};
     const parts = Array.isArray(content.parts) ? content.parts as Record<string, unknown>[] : [];
     if (parts.some((p) => p && "functionCall" in p)) return toolRefused;
-    text = parts.map((p) => trimmedText(p?.text)).filter(Boolean).join("\n").trim();
+    text = parts.filter((p) => p?.thought !== true).map((p) => trimmedText(p?.text)).filter(Boolean).join("\n").trim();
     const u = body.usageMetadata && typeof body.usageMetadata === "object" ? body.usageMetadata as Record<string, unknown> : {};
     usage = usagePair(u.promptTokenCount, u.candidatesTokenCount);
   } else {

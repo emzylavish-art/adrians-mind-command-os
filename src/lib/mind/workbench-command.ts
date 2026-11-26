@@ -13,7 +13,7 @@ export type WorkbenchCommand =
   | { type: "pause"; runId: string }
   | { type: "resume"; runId: string }
   | { type: "cancel"; runId: string }
-  | { type: "approve"; runId: string; action: "browser" | "gmail_send" }
+  | { type: "approve"; runId: string; actionId: string }
   | { type: "step" }
   | { type: "enqueue"; agentId: string; goal: string }
   | { type: "set_schedule"; id: string; enabled: boolean };
@@ -69,10 +69,12 @@ export function applyWorkbenchCommand(
     if (!run || run.state !== "waiting_approval") {
       return { ok: false, message: "Nothing is waiting for that approval.", workspace };
     }
-    const next = approveRunAction(workspace, command.runId, command.action);
+    const next = approveRunAction(workspace, command.runId, command.actionId, now);
+    const approved = next.runs.find(item => item.id === run.id)?.pendingApproval;
+    if (approved?.state !== "granted" || approved.id !== command.actionId) return { ok: false, message: "The pending action changed or expired. Review its current destination before approving.", workspace: next };
     return {
       ok: true,
-      message: `Approved ${command.action.replaceAll("_", " ")} for this run. The action still waits for a worker step and a real driver.`,
+      message: `Approved ${approved.tool.replaceAll("_", " ")} once for ${approved.destination}. The action still waits for its worker and adapter.`,
       workspace: next,
     };
   }

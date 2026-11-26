@@ -72,6 +72,7 @@ export function quoteIntoNewChat(ws: Workspace, source: Chat): { ws: Workspace; 
   const quoted: Chat = {
     ...made.chat,
     title: `Quote: ${source.title}`.slice(0, 80),
+    quotedFrom: { chatId: source.id, messageIds: source.messages.map((message) => message.id), quotedAt: new Date().toISOString() },
     messages: [{ id: crypto.randomUUID(), role: "user", content: quoteText(source), at: new Date().toISOString() }],
   };
   return {

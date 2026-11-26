@@ -1,12 +1,15 @@
+import { dispatchContext, reserveDispatchAttempt, settleDispatchResult, type ReserveDispatch, type SettleDispatch } from "../dispatch-attempt.ts";
 import { resolveVideoApiKey } from "./xai-key.ts";
+import { VIDEO_MODEL, normalizeVideoPrompt, validateVideoSettings, type VideoSettings } from "./video-settings.ts";
+export { VIDEO_MODEL, normalizeVideoPrompt, clampVideoDuration, validateVideoSettings } from "./video-settings.ts";
+export type { VideoSettings } from "./video-settings.ts";
 
 const VIDEO_START_URL = "https://api.x.ai/v1/videos/generations";
-const VIDEO_MODEL = "grok-imagine-video-1.5-lite";
 const REQUEST_ID = /^[A-Za-z0-9-]{8,80}$/;
 
 export type VideoStartResult =
   | { ok: true; requestId: string; model: string; state: "pending" }
-  | { ok: false; error: string; status: number };
+  | { ok: false; error: string; status: number; dispatched?: boolean; approvalId?: string };
 
 export type VideoStatusResult =
   | { ok: true; state: "pending" | "done"; url?: string; model?: string }
@@ -28,33 +31,28 @@ function errorMessage(body: unknown, status: number, fallback: string): string {
   return publicError(raw || `Video generation failed (HTTP ${status}).`);
 }
 
-export function normalizeVideoPrompt(value: unknown): { ok: true; prompt: string } | { ok: false; error: string } {
-  if (typeof value !== "string") return { ok: false, error: "Write what the video should show." };
-  const prompt = value.trim().replace(/\s+/g, " ");
-  if (!prompt) return { ok: false, error: "Write what the video should show." };
-  if (prompt.length > 2000) return { ok: false, error: "That video prompt is too long." };
-  return { ok: true, prompt };
-}
-
-export function clampVideoDuration(value: unknown): number {
-  const parsed = typeof value === "number" ? value : 5;
-  if (!Number.isFinite(parsed)) return 5;
-  return Math.min(15, Math.max(1, Math.round(parsed)));
-}
-
 export async function startOwnerVideo(
-  input: { prompt: string; duration?: number },
-  options: { fetchImpl?: typeof fetch; apiKey?: string } = {},
+  input: { prompt: string; duration?: number; aspectRatio?: VideoSettings["aspectRatio"]; resolution?: VideoSettings["resolution"] },
+  options: { fetchImpl?: typeof fetch; apiKey?: string; ownerId?: string; operationId?: string; taskId?: string; projectId?: string; reserve?: ReserveDispatch; settle?: SettleDispatch } = {},
 ): Promise<VideoStartResult> {
   const normalized = normalizeVideoPrompt(input.prompt);
-  if (!normalized.ok) return { ok: false, error: normalized.error, status: 400 };
+  if (!normalized.ok) return { ok: false, error: normalized.error, status: 400, dispatched: false };
+  const validated = validateVideoSettings(input);
+  if (!validated.ok) return { ok: false, error: validated.error, status: 400, dispatched: false };
   const apiKey = options.apiKey ?? resolveVideoApiKey();
-  if (!apiKey) return { ok: false, error: "Video generation is not configured on the server.", status: 503 };
+  if (!apiKey) return { ok: false, error: "Video generation is not configured on the server.", status: 503, dispatched: false };
+  const context = dispatchContext({ operationId: options.operationId, taskId: options.taskId, projectId: options.projectId, provider: "xai", model: VIDEO_MODEL, stage: "video-start", args: { prompt: normalized.prompt, ...validated.settings }, textOnly: false });
+  const reserved = options.ownerId ? await reserveDispatchAttempt(options.ownerId, context, options.reserve) : { ok: true as const, reservationId: undefined };
+  if (!reserved.ok) return { ok: false, error: reserved.error, status: reserved.status, approvalId: reserved.approvalId, dispatched: false };
+  let completed = false;
+  let providerRequestId: string | null = null;
+  try {
   const fetchImpl = options.fetchImpl ?? fetch;
   let response: Response;
   try {
     response = await fetchImpl(VIDEO_START_URL, {
       method: "POST",
+      signal: AbortSignal.timeout(30_000),
       headers: {
         authorization: `Bearer ${apiKey}`,
         "content-type": "application/json",
@@ -62,14 +60,15 @@ export async function startOwnerVideo(
       body: JSON.stringify({
         model: VIDEO_MODEL,
         prompt: normalized.prompt,
-        duration: clampVideoDuration(input.duration),
-        aspect_ratio: "16:9",
-        resolution: "480p",
+        duration: validated.settings.duration,
+        aspect_ratio: validated.settings.aspectRatio,
+        resolution: validated.settings.resolution,
       }),
     });
   } catch {
     return { ok: false, error: "Could not reach the video service.", status: 502 };
   }
+  providerRequestId = response.headers.get("x-request-id");
   let body: unknown;
   try {
     body = await response.json();
@@ -84,7 +83,12 @@ export async function startOwnerVideo(
   if (!REQUEST_ID.test(requestId)) {
     return { ok: false, error: "Video generation did not return a request.", status: 502 };
   }
+  completed = true;
+  providerRequestId = requestId;
   return { ok: true, requestId, model: VIDEO_MODEL, state: "pending" };
+  } finally {
+    await settleDispatchResult(options.ownerId || "", reserved.reservationId, { ok: completed, requestId: providerRequestId }, options.settle);
+  }
 }
 
 export async function readOwnerVideo(
@@ -99,6 +103,7 @@ export async function readOwnerVideo(
   try {
     response = await fetchImpl(`https://api.x.ai/v1/videos/${encodeURIComponent(requestId)}`, {
       headers: { authorization: `Bearer ${apiKey}` },
+      signal: AbortSignal.timeout(20_000),
     });
   } catch {
     return { ok: false, error: "Could not reach the video service.", status: 502 };

@@ -1,3 +1,7 @@
+import { normalizeSkillReceipts, type SkillApplicationReceipt } from "./skill-activation.ts";
+import { normalizeContextReceipt, type ContextReceipt } from "./conversation-context.ts";
+import { normalizeConsultation, type ConsultEvidence } from "./model-consult.ts";
+import { turnErrorCode, type TurnErrorCode } from "./turn-error.ts";
 /** Honest label when a done event did not confirm which model answered. */
 export const UNKNOWN_MODEL_LABEL = "model unknown";
 
@@ -6,6 +10,33 @@ export function reportedModel(value: unknown): string {
 }
 
 export type ModelUsage = { prompt_tokens?: number; completion_tokens?: number };
+
+/** Receipts describe calls that actually returned, even when the answer did not finish. */
+export type TurnCallEvidence = { consultation?: ConsultEvidence[]; usage?: ModelUsage | null; model?: string; provider?: string; requestId?: string | null; responseId?: string | null; actualCostMicros?: number; currency?: "USD"; approvalId?: string; dispatched?: false };
+export function normalizeTurnCallEvidence(value: unknown): TurnCallEvidence {
+  if (!value || typeof value !== "object") return {};
+  const row = value as Record<string, unknown>;
+  const evidence: TurnCallEvidence = {};
+  // Only a server's explicit whole-turn no-dispatch receipt permits exact replay.
+  // Missing, truthy, or string values cannot establish that nothing was sent.
+  if (row.dispatched === false) evidence.dispatched = false;
+  if (typeof row.actualCostMicros === "number" && Number.isSafeInteger(row.actualCostMicros) && row.actualCostMicros >= 0 && row.actualCostMicros <= 1_000_000_000_000 && row.currency === "USD") { evidence.actualCostMicros = row.actualCostMicros; evidence.currency = "USD"; }
+  if (typeof row.approvalId === "string" && /^[a-f0-9]{64}$/.test(row.approvalId)) evidence.approvalId = row.approvalId;
+  const consultation = normalizeConsultation(row.consultation);
+  if (consultation) evidence.consultation = consultation;
+  if ("usage" in row) {
+    const raw = row.usage && typeof row.usage === "object" ? row.usage as Record<string, unknown> : {};
+    const usage: ModelUsage = {};
+    for (const key of ["prompt_tokens", "completion_tokens"] as const) if (typeof raw[key] === "number" && Number.isSafeInteger(raw[key]) && raw[key] >= 0) usage[key] = raw[key];
+    evidence.usage = Object.keys(usage).length ? usage : null;
+  }
+  for (const key of ["model", "provider", "requestId", "responseId"] as const) {
+    const item = row[key];
+    if (typeof item === "string" && item.trim() && !/\p{Cc}/u.test(item)) evidence[key] = item.slice(0, 300);
+    else if ((key === "requestId" || key === "responseId") && item === null) evidence[key] = null;
+  }
+  return evidence;
+}
 
 export function readModelPayload(raw: string): { text: string; model?: string; streamed: boolean; usage: ModelUsage | null } {
   const body = raw.trim();
@@ -71,9 +102,10 @@ export function pushSse(feed: SseFeed, chunk: string): SseFeed & { deltas: strin
 
 export type MindClientEvent =
   | { event: "delta"; text: string }
-  | { event: "done"; text: string; model: string; usage: ModelUsage | null; usedIds: string[]; requestId: string | null; modelTier?: string; resolvedTier?: string; tierReason?: string; memorySaved?: boolean; savedMemoryId?: string | null; provider?: string; requestedModel?: string; credentialFallback?: string | null }
-  | { event: "error"; error: string }
-  | { event: "canceled"; error: string };
+  | { event: "consultation"; consultation: ConsultEvidence[] }
+  | { event: "done"; text: string; model: string; usage: ModelUsage | null; usedIds: string[]; requestId: string | null; modelTier?: string; resolvedTier?: string; tierReason?: string; memorySaved?: boolean; savedMemoryId?: string | null; provider?: string; requestedModel?: string; credentialFallback?: string | null; contextReceipt?: ContextReceipt; consultation?: ConsultEvidence[]; skillReceipts?: SkillApplicationReceipt[]; delivery?: "streamed" | "buffered"; actualCostMicros?: number; currency?: "USD" }
+  | ({ event: "error"; error: string; code?: TurnErrorCode } & TurnCallEvidence)
+  | ({ event: "canceled"; error: string; code?: TurnErrorCode } & TurnCallEvidence);
 
 export function pullMindEvents(buffer: string): { events: MindClientEvent[]; rest: string } {
   const complete = buffer.endsWith("\n\n");
@@ -93,18 +125,24 @@ export function pullMindEvents(buffer: string): { events: MindClientEvent[]; res
     try {
       parsed = JSON.parse(dataLines.join("\n"));
     } catch {
-      events.push({ event: "error", error: "The reply stream was unreadable. Nothing was saved as a success." });
+      events.push({ event: "error", error: "The reply stream was unreadable. Nothing was saved as a success.", code: "invalid_response" });
       continue;
     }
     if (!parsed || typeof parsed !== "object") continue;
     const record = parsed as Record<string, unknown>;
     if (name === "delta" && typeof record.text === "string") events.push({ event: "delta", text: record.text });
-    else if (name === "error" && typeof record.error === "string") events.push({ event: "error", error: record.error });
-    else if (name === "canceled" && typeof record.error === "string") events.push({ event: "canceled", error: record.error });
+    else if (name === "consultation") events.push({ event: "consultation", consultation: normalizeConsultation(record.consultation) ?? [] });
+    else if (name === "error" && typeof record.error === "string") events.push({ event: "error", error: record.error, ...(record.code !== undefined || typeof record.status === "number" ? { code: turnErrorCode(record.code, typeof record.status === "number" ? record.status : undefined) } : {}), ...normalizeTurnCallEvidence(record) });
+    else if (name === "canceled" && typeof record.error === "string") events.push({ event: "canceled", error: record.error, ...(record.code !== undefined ? { code: turnErrorCode(record.code) } : {}), ...normalizeTurnCallEvidence(record) });
     else if (name === "done" && typeof record.text === "string") {
       const modelRaw = typeof record.model === "string" ? record.model.trim() : "";
       events.push({
         event: "done",
+        contextReceipt: normalizeContextReceipt(record.contextReceipt),
+        consultation: normalizeConsultation(record.consultation),
+        ...normalizeTurnCallEvidence(record),
+        skillReceipts: normalizeSkillReceipts(record.skillReceipts),
+        delivery: record.delivery === "streamed" || record.delivery === "buffered" ? record.delivery : undefined,
         text: record.text,
         model: modelRaw || UNKNOWN_MODEL_LABEL,
         usage: record.usage && typeof record.usage === "object" ? (record.usage as ModelUsage) : null,

@@ -79,11 +79,17 @@ export function catalogModuleChoices(rows: { id: string; label: string; models: 
   return out;
 }
 
-export type ProviderAvailability = { hasKey: boolean; status: string };
+export type ProviderAvailability = { hasKey: boolean; status: string; retryAt?: string | null; rateLimitedModel?: string; model?: string };
 
 export function customProviderBlockReason(row: ProviderAvailability): string | null {
   if (!row.hasKey) return "The provider needs a saved credential.";
   if (row.status === "catalogued" || row.status === "configured") return null;
+  if (row.status === "billing_required") return "The provider requires billing or API credit. No paid fallback was selected.";
+  if (row.status === "rate_limited") {
+    if (row.model && row.rateLimitedModel && row.model !== row.rateLimitedModel) return null;
+    if (row.retryAt && Date.parse(row.retryAt) <= Date.now()) return null;
+    return row.retryAt ? `The selected model is temporarily rate limited. Try again explicitly after ${row.retryAt}.` : "The provider is rate limited. Refresh its status before an explicit retry.";
+  }
   if (row.status === "quota_or_rate_limited") return "The provider reported a billing or rate limit. Refresh its connection before sending.";
   if (row.status === "credentials_rejected") return "The provider rejected its credential or permissions. Check the connection before sending.";
   if (row.status === "unavailable") return "The provider is unavailable. Refresh its connection before sending.";
@@ -107,13 +113,16 @@ export function discoveredCapabilities(input: {
   services?: { id: string; label: string; connected: boolean; opensWorkspace?: boolean }[];
 }): DiscoveredCapability[] {
   const models = input.models.flatMap((row) => {
-    const reason = customProviderBlockReason(row);
-    return catalogModuleChoices([row]).map((item) => ({
+    return catalogModuleChoices([row]).map((item) => {
+      const parsed = parseCustomProviderChoice(item.id);
+      const reason = customProviderBlockReason({ ...row, model: parsed.ok ? parsed.model : undefined });
+      return ({
       ...item,
       kind: "model" as const,
       usable: !reason,
       reason: reason ?? "Configured for this API. Sending will check the model's response.",
-    }));
+      });
+    });
   });
   const tools: DiscoveredCapability[] = [];
   const seen = new Set<string>();

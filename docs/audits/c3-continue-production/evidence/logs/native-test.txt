@@ -1,0 +1,69 @@
+npm warn Unknown env config "http-proxy". This will stop working in the next major version of npm. See `npm help npmrc` for supported config options.
+
+> test:native-audit
+> node --test --test-concurrency=1 scripts/desktop/*.test.mjs && node --experimental-strip-types --test --test-concurrency=1 src/lib/mind/adrian-pc.test.ts src/lib/mind/pc-vision.test.ts src/lib/mind/pc-capability.test.ts src/lib/mind/desktop-update.test.ts src/lib/mind/client-runtime-contract.test.ts src/lib/mind/native-device-client.test.ts
+
+✔ staging splits and verifies bytes in order without a release upload (18.84128ms)
+✔ incomplete engine resources cannot be packaged as the full Windows build (3.28982ms)
+✔ missing package opens actionable recovery without starting server or deleting data (11.172581ms)
+✔ verified startup loads local app, later child death opens recovery without replacing renderer (3.28419ms)
+✔ close explicitly asks or hides, but actual quit closes window and kills owned child (3.42267ms)
+✔ readiness accepts only child-authenticated exact identity with initialized storage (1.754104ms)
+✔ local readiness does not accept login, redirect, root HTML, 404 or foreign server (6.376191ms)
+✔ startup observes dead child and bounds a read that never resolves (9.271355ms)
+✔ restart budget is bounded and diagnostics remove credential-like output (0.776ms)
+✔ local-only policy updates without restart and rejects external fetch or local redirect fallback (0.576089ms)
+✔ network policy missing/corrupt file fails closed and native platforms stay unverified (6.92211ms)
+✔ release packaging rejects wrong version, missing source identity or dirty source (5.076192ms)
+✔ signed release parts support 1, 4 and 6 chunks and reject reordered/missing/modified bytes metadata (8.202243ms)
+✔ independent publisher pins, platform, expiry and downgrade are enforced before selection (1.809488ms)
+✔ feed failures remain distinct and timeouts bound fetches that ignore AbortSignal (15.194163ms)
+✔ interrupted full download resumes verified parts without repeating them or installing (17.047146ms)
+✔ partial resume uses exact range and requires a new decision before restarting its bytes (4.771763ms)
+✔ disk limits, wrong bytes and cancellation never produce a verified installer (3.067554ms)
+✔ hash-matching installer still needs trusted Windows Authenticode identity (0.45782ms)
+✔ a complete verified cached installer needs no new download or assembly disk reserve (2.747602ms)
+ℹ tests 20
+ℹ suites 0
+ℹ pass 20
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 472.7184
+✔ halt and policy refusal are recognized without dispatch or false ran success (5.301562ms)
+✔ normal text does not become a computer request (0.244999ms)
+✔ local files work in an isolated folder and payload words never dispatch extra actions (19.687656ms)
+✔ owner path rejects parent symlink and traversal before reading or writing (2.764257ms)
+✔ unsupported Windows primitive is blocked with zero attempts (0.838354ms)
+✔ finding zero, one or multiple buttons is always read-only (0.53011ms)
+✔ explicit named click targets exact window and rechecks halt before invocation (0.547976ms)
+✔ right and double click each invoke only their typed primitive (1.118707ms)
+✔ failed or thrown prerequisite blocks dependent action; permission is rechecked each step (0.751403ms)
+✔ capture requires explicit external policy and never invents a missing reading (1.334251ms)
+✔ capture timeout cannot late-dispatch a model; late provider result is unconfirmed (16.43962ms)
+✔ the same synthetic operation keeps ownership/semantics across platform adapters (2.979751ms)
+✔ queued operation never silently switches account/workspace when connectivity returns (0.387785ms)
+✔ unknown outcome is durably held for reconciliation and cannot replay on next flush (0.903983ms)
+✔ account switch during permission check prevents a queued write from dispatching (0.315185ms)
+✔ TS web check and desktop launcher share exact signed update policy (16.302083ms)
+✔ legacy published hash metadata cannot authorize an installation or silent website switch (0.372682ms)
+✔ native device UI sends only explicit current-device request and preserves refusal receipt (4.356566ms)
+✔ unavailable, halted, missing owner and unapproved screenshot do not dispatch (0.29842ms)
+✔ native UI failure is unknown with exactly one attempt and never automatic retry (0.467074ms)
+✔ implemented adapters and required capabilities are separate from live-device proof (1.892392ms)
+✔ vision selected model is exact, receipt attributed, and no implicit fallback is paid (4.044717ms)
+✔ only an explicitly allowed compatible fallback is attempted (0.973628ms)
+✔ missing/mismatched model receipt cannot claim selected provider success (0.836641ms)
+✔ image authorization loss blocks first or second model with zero extra dispatch (1.655796ms)
+✔ provider and body timeouts are bounded even when callbacks ignore AbortSignal (17.052544ms)
+✔ a pre-canceled request captures no external processing (0.474625ms)
+✔ truthy strings and invalid model types cannot authorize image processing (0.168404ms)
+ℹ tests 28
+ℹ suites 0
+ℹ pass 28
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 1284.692541

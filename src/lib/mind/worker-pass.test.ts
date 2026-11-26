@@ -29,10 +29,12 @@ function db(initial: { userId: string; ws: Workspace }[]) {
     const text = strings.join(" ");
     if (text.includes("select user_id")) return [...snaps.entries()].map(([user_id, payload]) => ({ user_id, payload }));
     if (text.includes("select payload")) return [{ payload: snaps.get(String(values[0])) }];
-    if (text.includes("insert into mind_snapshot")) snaps.set(String(values[0]), String(values[1]));
+    if (text.includes("insert into mind_snapshot") && values.length > 1) snaps.set(String(values[0]), String(values[1]));
+    if (text.includes("on conflict (user_id) do nothing") && !snaps.has(String(values[0]))) snaps.set(String(values[0]), "{}");
     return [];
   }) as Sql;
   sql.query = async () => [];
+  sql.transaction = async (fn) => fn(sql);
   return { sql, snaps };
 }
 

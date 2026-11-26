@@ -1,4 +1,4 @@
-import { useMemo } from "react";
+import { useMemo, useRef } from "react";
 import { authClient, authEnabled } from "./client";
 
 /** Normalized user shape used across the app, auth on or off. */
@@ -33,6 +33,7 @@ export type CurrentUserState = {
   user: AppUser | null;
   /** True while the session is still resolving — don't treat `user: null` as signed out yet. */
   isPending: boolean;
+  error?: string | null;
 };
 
 const DEV_STATE: CurrentUserState = { user: DEV_USER, isPending: false };
@@ -65,7 +66,8 @@ export function useCurrentUserState(): CurrentUserState {
 }
 
 function useSessionUserState(): CurrentUserState {
-  const { data, isPending } = authClient.useSession();
+  const { data, isPending, error } = authClient.useSession();
+  const lastVerified = useRef<AppUser | null>(null);
   const id = data?.user.id;
   const displayName = data?.user.name ?? null;
   const primaryEmail = data?.user.email ?? null;
@@ -75,7 +77,10 @@ function useSessionUserState(): CurrentUserState {
     () => (id ? { id, displayName, primaryEmail, emailVerified, profileImageUrl, isDevFallback: false } : null),
     [id, displayName, primaryEmail, emailVerified, profileImageUrl],
   );
-  return useMemo(() => ({ user, isPending }), [user, isPending]);
+  if (user) lastVerified.current = user;
+  else if (!isPending && !error) lastVerified.current = null;
+  const preserved = user ?? (error ? lastVerified.current : null);
+  return useMemo(() => ({ user: preserved, isPending, error: error ? "Session verification is temporarily unavailable. Saved work is kept. Retry verification before sending again." : null }), [preserved, isPending, error]);
 }
 
 /**

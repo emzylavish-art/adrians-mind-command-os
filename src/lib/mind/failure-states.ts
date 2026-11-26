@@ -688,11 +688,11 @@ export function imagineRetryParams(failure: Pick<ImageGenerationFailure, "mode" 
 }
 
 export function imageRetryPlan(
-  messages: { role: string; kind?: string; content: string }[],
+  messages: { role: string; kind?: string; content: string; mediaOperationId?: string }[],
   chatId: string,
-): { chatId: string; prompt: string; newChat: false } | null {
+): { chatId: string; prompt: string; newChat: false; operationId?: string } | null {
   const last = messages.at(-1);
   const user = [...messages].reverse().find((message) => message.role === "user");
   if (last?.kind !== "error" || !user?.content.startsWith("/imagine")) return null;
-  return { chatId, prompt: user.content.replace(/^\/imagine\s*/, "").trim(), newChat: false };
+  return { chatId, prompt: user.content.replace(/^\/imagine\s*/, "").trim(), newChat: false, ...(user.mediaOperationId ? { operationId: user.mediaOperationId } : {}) };
 }

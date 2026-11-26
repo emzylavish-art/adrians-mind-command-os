@@ -7,7 +7,8 @@ import type { BotNode } from "@/lib/mind/dashboard/types";
 import type { NotionSnapPage } from "@/lib/mind/dashboard/notion-graph-core";
 import { NodeDetailPanel, resolveNotionNeighbors } from "./node-detail-panel";
 const FleetForceGraph = lazy(() => import("./fleet-force-graph").then((module) => ({ default: module.FleetForceGraph })));
-import { useDashboardStatus } from "./use-dashboard-status";
+import { useDashboardStatus, type DashboardStatusController } from "./use-dashboard-status";
+import { selectedBotFromSnapshot, telemetryDisplay } from "@/lib/mind/dashboard/telemetry-display";
 import { BuildingInteriorPanel, FlyoverHud, sendFly } from "./flyover-hud";
 import { FLY_HOME, type FlyState } from "@/lib/mind/dashboard/flyover-fsm";
 import { buildCityLayout, type CityLayout } from "@/lib/mind/dashboard/city-layout";
@@ -45,8 +46,10 @@ function ClientUniverseScene(props: UniverseProps) {
   return <Component {...props} />;
 }
 
-export function DashboardApp({ embedded = false }: { embedded?: boolean }) {
-  const { state, refresh } = useDashboardStatus();
+export function DashboardApp({ embedded = false, status }: { embedded?: boolean; status?: DashboardStatusController }) {
+  const ownStatus = useDashboardStatus(!status);
+  const { state, refresh, refreshing } = status ?? ownStatus;
+  const telemetry = telemetryDisplay(state, refreshing);
   const [selectedBotId, setSelectedBotId] = useState<string | null>(null);
   const [notionPage, setNotionPage] = useState<NotionSnapPage | null>(null);
   const [webglError, setWebglError] = useState<string | null>(null);
@@ -182,7 +185,7 @@ export function DashboardApp({ embedded = false }: { embedded?: boolean }) {
 
   const sceneData = scrubView.data;
   const selected = selectedBotId && state.status === "ready"
-    ? state.data.bots.find((bot) => bot.id === selectedBotId) ?? null
+    ? selectedBotFromSnapshot(state.data.bots, selectedBotId)
     : null;
 
   useEffect(() => {
@@ -241,10 +244,14 @@ export function DashboardApp({ embedded = false }: { embedded?: boolean }) {
             <p className="dash3d-muted" style={{ margin: "0.15rem 0 0", fontSize: "0.72rem" }}>
               Drag rotate · scroll zoom · click node · Cmd/Ctrl-K search
             </p>
+            <p className="dash3d-muted" role="status" data-telemetry-state={telemetry.tone} style={{ margin: "0.2rem 0 0", fontSize: "0.72rem", color: telemetry.tone === "stale" ? "#fbbf24" : undefined }}>
+              {telemetry.label}. Development activity; runtime readiness unverified.
+              {state.data.sources.commitsSource === "snapshot" ? ` Historical commits: ${state.data.sources.commitsSnapshotAt || "date unknown"}.` : ""}
+            </p>
             <p className="dash3d-muted" style={{ margin: "0.2rem 0 0", fontSize: "0.72rem" }}>
               {state.data.notionGraph.pages.length
                 ? `${state.data.notionGraph.pages.length} Notion pages · ${state.data.notionGraph.mode}`
-                : "Notion pages are not connected."}
+                : "Private Notion pages are not shown in this public development map."}
             </p>
           </div>
           <div className="dash3d-graph-chrome-tools">

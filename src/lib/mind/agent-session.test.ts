@@ -3,7 +3,7 @@ import { describe, it } from "node:test";
 import type { Sql } from "../db.ts";
 import { applyAgentTurn } from "./agent-session.ts";
 import type { AgentTool } from "./orchestrator.ts";
-import { readSnapshot, writeSnapshot } from "./store.ts";
+import { readSnapshot, snapshotRevision, writeSnapshot } from "./store.ts";
 import { readToolRuns, writeToolRun } from "./notion-record.ts";
 import { normalizeWorkspace, emptyWorkspace } from "./workspace.ts";
 
@@ -12,7 +12,7 @@ function db() {
   const runs: { user_id: string; id: string; detail: string }[] = [];
   const sql = (async (strings: TemplateStringsArray, ...values: unknown[]) => {
     const text = strings.join(" ");
-    if (text.includes("insert into mind_snapshot")) snaps.set(String(values[0]), String(values[1]));
+    if (text.includes("insert into mind_snapshot") && (!text.includes("do nothing") || !snaps.has(String(values[0])))) snaps.set(String(values[0]), String(values[1] ?? "{}"));
     if (text.includes("insert into mind_tool_run")) runs.push({ user_id: String(values[0]), id: String(values[1]), detail: String(values[5]) });
     if (text.includes("select payload")) {
       const payload = snaps.get(String(values[0]));
@@ -22,6 +22,7 @@ function db() {
     return [];
   }) as Sql;
   sql.query = async () => [];
+  sql.transaction = async (fn) => fn(sql);
   return { sql, runs };
 }
 
@@ -63,7 +64,7 @@ describe("agent session reload", () => {
       toolId: "list_projects",
       now: "2026-04-01T12:05:00.000Z",
     });
-    await writeSnapshot(sql, "owner-a", voice.ws);
+    await writeSnapshot(sql, "owner-a", voice.ws, snapshotRevision(await readSnapshot(sql, "owner-a")));
     if (voice.run) await writeToolRun(sql, "owner-a", voice.run);
     const loaded = normalizeWorkspace(await readSnapshot(sql, "owner-a"));
     assert.equal(loaded.chats[0]?.messages.at(-1)?.content, "Harbor");

@@ -8,7 +8,7 @@ import {
   classifyHonestFailure,
   type HonestFailureKind,
 } from "./failure-states.ts";
-import type { FleetTool, ProviderConnection } from "./fleet.ts";
+import type { FleetTool, ProviderConnection, PlanStep } from "./fleet.ts";
 import { onceRetry } from "./retry-fidelity.ts";
 import type { Workspace } from "./types.ts";
 
@@ -16,7 +16,7 @@ export type FleetMutationParams =
   | { kind: "add_template"; templateName: string }
   | { kind: "add_custom"; name: string; instructions: string; tools: FleetTool[] }
   | { kind: "deploy"; agentId: string; target: "local-worker" | "hosted-worker" }
-  | { kind: "enqueue"; agentId: string; goal: string }
+  | { kind: "enqueue"; agentId: string; goal: string; inputs?: Partial<Record<FleetTool, PlanStep["input"]>> }
   | { kind: "enqueue_no_agent"; goal: string }
   | { kind: "add_connection"; provider: ProviderConnection["provider"]; label: string }
   | { kind: "add_mailbox"; label: string; address: string }
@@ -49,7 +49,7 @@ export function snapshotFleetMutationParams(params: FleetMutationParams): FleetM
     case "deploy":
       return { kind: "deploy", agentId: params.agentId, target: params.target };
     case "enqueue":
-      return { kind: "enqueue", agentId: params.agentId, goal: params.goal };
+      return { kind: "enqueue", agentId: params.agentId, goal: params.goal, ...(params.inputs ? { inputs: structuredClone(params.inputs) } : {}) };
     case "enqueue_no_agent":
       return { kind: "enqueue_no_agent", goal: params.goal };
     case "add_connection":

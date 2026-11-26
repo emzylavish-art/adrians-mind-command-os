@@ -75,7 +75,7 @@ export function consumeMindRateLimit(
   return result;
 }
 
-/** Share a single chat token across the helper and final calls of one HTTP turn. */
+/** Charge one turn token and a separate bounded slot for every provider dispatch. */
 export function createChatTurnPreflight(userId: string, isHalted: () => Promise<boolean>) {
   let charged = false;
   return async (): Promise<Response | null> => {
@@ -87,6 +87,8 @@ export function createChatTurnPreflight(userId: string, isHalted: () => Promise<
       if (!limit.ok) return jsonRateLimited(CHAT_RATE_LIMIT_REPLY, limit.retryAfterSec);
       charged = true;
     }
+    const dispatch = consumeMindRateLimit("provider-dispatch", userId, 24);
+    if (!dispatch.ok) return jsonRateLimited("Provider call limit reached. No additional helper or answer call was sent.", dispatch.retryAfterSec);
     return null;
   };
 }
@@ -131,11 +133,13 @@ export function checkTurnSize(input: {
   images?: { dataUrl?: string }[];
 }): { ok: true } | { ok: false; error: string } {
   if (input.text.length > 8000) return { ok: false, error: "That message is too long." };
-  if (input.history.length > 12) return { ok: false, error: "That conversation history is too long." };
-  if (input.history.some((item) => (item.content ?? "").length > 8000)) {
-    return { ok: false, error: "A previous message is too long." };
+  // Payload safety is separate from model context allocation. A long stored reply
+  // is allowed as a candidate; assembleTurn prepares a bounded extractive view.
+  if (input.history.length > 10000 || input.history.reduce((sum, item) => sum + (item.content ?? "").length, 0) > 1_000_000) return { ok: false, error: "That history exceeds the request envelope. Select the relevant conversation range; the original remains saved." };
+  if (input.history.some((item) => (item.content ?? "").length > 500_000)) {
+    return { ok: false, error: "A previous message exceeds the safe request envelope. Attach the relevant passage; the original remains saved." };
   }
-  if (input.memoryContext.length > 12) return { ok: false, error: "Too many notes were attached." };
+  if (input.memoryContext.length > 64) return { ok: false, error: "Too many notes were attached." };
   if (input.memoryContext.some((item) => (item.text ?? "").length > 2000)) {
     return { ok: false, error: "A note is too long to send." };
   }

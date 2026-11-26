@@ -1,3 +1,4 @@
+import { reconcileSessionReads, classifySessionError, type SessionRead } from "./session-resolution.ts";
 import { getRequest } from "@tanstack/react-start/server";
 import { localPreviewIdentityAllowed } from "./session-user.ts";
 import { gateIdentityEnabled } from "./gate-identity.server";
@@ -43,52 +44,30 @@ export type VerifiedUser = { id: string; email: string | null };
  * as a bearer token, which we present as `Authorization: Bearer …` (the `bearer`
  * plugin resolves it). When deployed no token is passed and the cookie is used.
  */
-async function readSupabaseSessionUser(): Promise<VerifiedUser | null> {
-  try {
-    const { readSupabaseEnv, createSupabaseServerClient } = await import(
-      "../supabase/server"
-    );
-    if (!readSupabaseEnv()) return null;
-    const supabase = createSupabaseServerClient();
-    const { data, error } = await supabase.auth.getUser();
-    if (error || !data.user?.id) return null;
-    return { id: data.user.id, email: data.user.email ?? null };
-  } catch {
-    return null;
-  }
-}
-
-async function readBetterAuthSessionUser(
-  bearerToken?: string,
-): Promise<VerifiedUser | null> {
-  if (!authConfigured && !gateIdentityEnabled()) return null;
+async function readSupabaseSessionUser(): Promise<SessionRead> {
   const request = getRequest();
-  if (!request) return null;
-  let headers = request.headers;
-  if (bearerToken) {
-    headers = new Headers(request.headers);
-    headers.set("Authorization", `Bearer ${bearerToken}`);
-  }
-  // The UI can use the signed cache for rendering. Authority for server-side work
-  // must come from the current session record, including after revocation.
-  const session = await auth.api.getSession({ headers, query: { disableCookieCache: true } });
-  if (!session?.user?.id) return null;
-  return { id: session.user.id, email: session.user.email ?? null };
+  const hasCredential = /(?:^|;\s*)sb-[^=;]*auth-token/i.test(request?.headers.get("cookie") ?? "");
+  try {
+    const { readSupabaseEnv, createSupabaseServerClient } = await import("../supabase/server");
+    if (!readSupabaseEnv()) return { state: "absent" };
+    const { data, error } = await createSupabaseServerClient().auth.getUser();
+    if (error) return classifySessionError(error, hasCredential);
+    return data.user?.id ? { state: "verified", user: { id: data.user.id, email: data.user.email ?? null } } : { state: hasCredential ? "rejected" : "absent" };
+  } catch (error) { return classifySessionError(error, hasCredential); }
 }
-
-export async function getSessionUser(
-  bearerToken?: string,
-): Promise<VerifiedUser | null> {
-  const { pickSessionUser } = await import("./session-user");
-  const supabaseUser = await readSupabaseSessionUser();
-  // When Supabase Auth is configured and has a user, that is the owner session
-  // MCP list / turn / halt endpoints accept. Better Auth remains a fallback for
-  // existing broker sessions.
-  if (supabaseUser) {
-    return pickSessionUser({ supabaseUser, betterAuthUser: null });
-  }
-  const betterAuthUser = await readBetterAuthSessionUser(bearerToken);
-  return pickSessionUser({ supabaseUser: null, betterAuthUser });
+async function readBetterAuthSessionUser(bearerToken?: string): Promise<SessionRead> {
+  if (!authConfigured && !gateIdentityEnabled()) return { state: "absent" };
+  const request = getRequest(); if (!request) return { state: "absent" };
+  const headers = new Headers(request.headers); if (bearerToken) headers.set("Authorization", `Bearer ${bearerToken}`);
+  const credentialPresent = !!bearerToken || /(?:^|;\s*)(?:__Host-)?(?:grok-auth|better-auth)\./i.test(headers.get("cookie") ?? "");
+  try {
+    const session = await auth.api.getSession({ headers, query: { disableCookieCache: true } });
+    return session?.user?.id ? { state: "verified", user: { id: session.user.id, email: session.user.email ?? null } } : { state: credentialPresent ? "rejected" : "absent" };
+  } catch (error) { return classifySessionError(error, credentialPresent); }
+}
+export async function getSessionUser(bearerToken?: string): Promise<VerifiedUser | null> {
+  const [primary, secondary] = await Promise.all([readSupabaseSessionUser(), readBetterAuthSessionUser(bearerToken)]);
+  return reconcileSessionReads(primary, secondary);
 }
 
 /**
@@ -109,7 +88,7 @@ export function isLoopbackPreview(): boolean {
   try {
     const headers = getRequest().headers;
     if (headers.has("authorization") || headers.has("x-grok-identity")) return false;
-    if (/(?:^|;\s*)(?:__Host-grok-auth\.|sb-[^=;]*auth-token)/i.test(headers.get("cookie") ?? "")) return false;
+    if (/(?:^|;\s*)(?:(?:__Host-)?(?:grok-auth|better-auth)\.|sb-[^=;]*auth-token)/i.test(headers.get("cookie") ?? "")) return false;
     return localPreviewIdentityAllowed(headers.get("host") ?? "", process.env);
   } catch {
     return false;

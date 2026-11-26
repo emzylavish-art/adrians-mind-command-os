@@ -1,6 +1,6 @@
 import { addAgentFromTemplate, type AgentDefinition } from "../fleet.ts";
 import type { Workspace } from "../types.ts";
-import { WORKSPACE_KEY } from "../workspace.ts";
+
 import type { PersonaCard } from "./directory.ts";
 
 export const PERSONA_SELECT_KEY = "amcos.persona.select.v1";
@@ -64,21 +64,22 @@ export type PersistPersonaOpenResult =
   | { ok: true }
   | { ok: false; workspacePersisted: boolean };
 
-/** Save the updated local workspace and persona handoff before leaving Explore. */
-export function persistPersonaOpen(
-  storage: PersonaOpenStorage,
-  workspace: Workspace,
-  selection: PersonaSelection,
-): PersistPersonaOpenResult {
-  let workspacePersisted = false;
-  try {
-    storage.setItem(WORKSPACE_KEY, JSON.stringify(workspace));
-    workspacePersisted = true;
-    storage.setItem(PERSONA_SELECT_KEY, JSON.stringify(selection));
-    return { ok: true };
-  } catch {
-    return { ok: false, workspacePersisted };
-  }
+/** Store only an account-scoped selection. Workspace changes go through useMindWorkspace. */
+export function persistPersonaOpen(storage: PersonaOpenStorage, _workspace: Workspace, selection: PersonaSelection): PersistPersonaOpenResult {
+  try { storage.setItem(PERSONA_SELECT_KEY, JSON.stringify(selection)); return { ok: true }; }
+  catch { return { ok: false, workspacePersisted: false }; }
+}
+
+/** A pending template handoff may create only that template in the current owner workspace. */
+export function applyPersonaHandoff(ws: Workspace, selection: PersonaSelection | null, requestedId?: string | null): { ws: Workspace; agent: AgentDefinition | null } {
+  const id = selection?.agentId || requestedId;
+  const existing = ws.agents.find((agent) => agent.id === id && !agent.archived);
+  if (existing) return { ws, agent: existing };
+  if (selection?.source !== "template" || !selection.templateName) return { ws, agent: null };
+  const matched = ws.agents.find((agent) => agent.name === selection.templateName && !agent.archived);
+  if (matched) return { ws, agent: matched };
+  const created = addAgentFromTemplate(ws, selection.templateName);
+  return created.ok ? { ws: created.ws, agent: created.agent } : { ws, agent: null };
 }
 
 /**

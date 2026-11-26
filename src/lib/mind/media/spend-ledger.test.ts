@@ -23,7 +23,7 @@ describe("adversarial: Imagine spend controls inside generateImagineImages", () 
     const result = await generateImagineImages(
       { prompt: "no owner" },
       {
-        apiKey: "test-key",
+        apiKey: "test-key", reserveDispatch: async () => ({ ok: true }),
         fetchImpl: async () => {
           throw new Error("must not fetch without owner");
         },
@@ -50,7 +50,7 @@ describe("adversarial: Imagine spend controls inside generateImagineImages", () 
     const result = await generateImagineImages(
       { prompt: "over cap" },
       {
-        apiKey: "test-key",
+        apiKey: "test-key", reserveDispatch: async () => ({ ok: true }),
         meter: { ownerId: owner, sessionId: "s1" },
         fetchImpl: async () => {
           throw new Error("must not fetch over daily cap");
@@ -77,7 +77,7 @@ describe("adversarial: Imagine spend controls inside generateImagineImages", () 
     const result = await generateImagineImages(
       { prompt: "ok", n: 1 },
       {
-        apiKey: "test-key",
+        apiKey: "test-key", reserveDispatch: async () => ({ ok: true }),
         meter: { ownerId: owner, sessionId: "s1" },
         fetchImpl: async () =>
           new Response(JSON.stringify({ data: [{ b64_json: TINY_PNG_B64 }], model: "grok-imagine-image" }), {

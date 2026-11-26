@@ -203,18 +203,18 @@ export function BuildingInteriorPanel({
                   </li>
                 ))
               ) : (
-                <li className="dash3d-muted">No runs recorded.</li>
+                <li className="dash3d-muted">No development events recorded.</li>
               )}
             </ul>
 
-            <h3>Contributing bots</h3>
+            <h3>Development contributors</h3>
             <ul className="dash3d-list">
               {agents.length ? (
                 agents.map((a) => (
                   <li key={a.botId}>
                     <span className={`dash3d-dot ${a.health}`} /> {a.name}
                     <span className="dash3d-muted dash3d-mono">
-                      {" "}· runs {a.runs} · ok {a.success} · fail {a.failure} · {a.branch ?? "no branch"}
+                      {" "}· development references {a.runs} · released {a.success} · blocked {a.failure} · {a.branch ?? "no branch"}
                     </span>
                   </li>
                 ))

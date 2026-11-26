@@ -14,7 +14,7 @@ export function sortHudCards<T extends HudOrderItem>(items: readonly T[]): T[] {
 }
 
 export function hudDefaultOpen(index: number): boolean {
-  // Graph canvas is the primary experience; supporting cards stay collapsed until opened.
-  void index;
-  return false;
+  // Show the first two priority cards so warnings are visible without discovery.
+  // Remaining supporting charts stay collapsed beside the graph.
+  return Number.isInteger(index) && index >= 0 && index < 2;
 }

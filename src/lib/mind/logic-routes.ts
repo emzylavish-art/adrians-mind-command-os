@@ -5,8 +5,9 @@ import { MIND_MAX_BODY_BYTES } from "./request-body.ts";
  * names the selection, the payload, and the honest not-ready copy.
  */
 
-import { isConnectedGrokModel, type ModelTier } from "./model-tiers.ts";
+import { isValidModelId, type ModelTier, type ModelControls } from "./model-tiers.ts";
 import { normalizeBotKnowledge, normalizeBotModel } from "./bot-model.ts";
+import type { ConversationCheckpoint } from "./conversation-context.ts";
 
 export type { ModelTier };
 
@@ -209,7 +210,7 @@ export function readSelection(storage: Pick<Storage, "getItem"> | null | undefin
     if (tier === "Auto" || tier === "Fast" || tier === "Expert" || tier === "Heavy" || tier === "Build") modelTier = tier;
     logicRoute = readStoredLogicRoute(storage?.getItem(LOGIC_ROUTE_STORAGE_KEY) ?? null);
     const grokModel = storage?.getItem(GROK_MODEL_STORAGE_KEY);
-    if (provider === "grok" && !logicRoute && isConnectedGrokModel(grokModel)) {
+    if (provider === "grok" && !logicRoute && typeof grokModel === "string" && isValidModelId(grokModel)) {
       return { provider, modelTier, logicRoute, grokModel };
     }
   } catch {
@@ -223,7 +224,7 @@ export function writeSelection(storage: Pick<Storage, "setItem" | "removeItem"> 
   try {
     storage.setItem(PROVIDER_STORAGE_KEY, readStoredProvider(selection.provider));
     storage.setItem(MODEL_TIER_STORAGE_KEY, selection.modelTier);
-    if (selection.provider === "grok" && !selection.logicRoute && isConnectedGrokModel(selection.grokModel)) {
+    if (selection.provider === "grok" && !selection.logicRoute && typeof selection.grokModel === "string" && isValidModelId(selection.grokModel)) {
       storage.setItem(GROK_MODEL_STORAGE_KEY, selection.grokModel);
     } else {
       storage.removeItem(GROK_MODEL_STORAGE_KEY);
@@ -334,6 +335,8 @@ export function activePickerLabel(input: {
 }
 
 export type ChatTurnBodyInput = {
+  projectId?: string | null;
+  taskId?: string;
   chatId?: string;
   text: string;
   memory: "off" | "on";
@@ -341,10 +344,17 @@ export type ChatTurnBodyInput = {
   history: unknown[];
   memoryContext: unknown[];
   botKnowledge?: unknown;
+  projectInstructions?: string;
+  knowledgePassages?: unknown;
+  skillApplications?: unknown;
+  checkpoints?: ConversationCheckpoint[];
+  selectedImageMessageIds?: string[];
   provider: string;
   personalityId?: string;
   customPersonality?: string;
   modelTier: ModelTier;
+  modelControls?: ModelControls;
+  previousTier?: unknown;
   requestedModel?: string | null;
   logicRoute: LogicRouteId | null;
   orchestrator?: string | null;
@@ -359,15 +369,24 @@ export function chatTurnBody(input: ChatTurnBodyInput): Record<string, unknown> 
   const body = {
     text: input.text,
     ...(input.chatId ? { chatId: input.chatId } : {}),
+    ...(input.projectId ? { projectId: input.projectId } : {}),
+    ...(input.taskId ? { taskId: input.taskId } : {}),
     memory: input.memory,
     halted: input.halted,
-    history: input.history.slice(-12),
+    history: [...input.history],
     memoryContext: input.memoryContext,
+    ...(input.projectInstructions ? { projectInstructions: input.projectInstructions } : {}),
+    ...(input.knowledgePassages ? { knowledgePassages: input.knowledgePassages } : {}),
+    ...(input.skillApplications ? { skillApplications: input.skillApplications } : {}),
+    ...(input.checkpoints?.length ? { checkpoints: input.checkpoints } : {}),
+    ...(input.selectedImageMessageIds?.length ? { selectedImageMessageIds: input.selectedImageMessageIds } : {}),
     ...(normalizeBotKnowledge(input.botKnowledge).knowledge ? { botKnowledge: normalizeBotKnowledge(input.botKnowledge).knowledge } : {}),
     personalityId: input.personalityId ?? "assistant",
     customPersonality: input.customPersonality ?? "",
     provider: input.logicRoute ?? input.provider,
     modelTier: input.modelTier,
+    ...(input.modelControls ? { modelControls: input.modelControls } : {}),
+    ...(input.previousTier !== undefined ? { previousTier: input.previousTier } : {}),
     ...(input.requestedModel ? { requestedModel: input.requestedModel } : {}),
     ...(input.logicRoute ? { logicRoute: input.logicRoute } : {}),
     ...(input.orchestrator ? { orchestrator: input.orchestrator } : {}),

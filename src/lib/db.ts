@@ -1,10 +1,11 @@
-import { pendingMigrations } from "../../scripts/migration-plan.mjs";
-import { mkdirSync, readdirSync, readFileSync } from "node:fs";
+import { applyMigrationSet } from "../../scripts/migration-runner.mjs";
+import { mkdirSync, mkdtempSync, rmSync, readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { postgresPool } from "./auth/pg-pool.ts";
 import { resolveDatabaseUrl } from "./env.server.ts";
 import { localDataPath } from "./local-data.ts";
+import { verifyDatabaseReadiness } from "./database-readiness.ts";
 
 /** Which database backend is active. */
 export type DbSource = "neon" | "pglite";
@@ -161,8 +162,13 @@ async function createPgliteSql(): Promise<Sql> {
     // Each Node test file has a separate worker process. Share one DB within
     // the process, but never collide on the same PGLite files across workers.
     const dataDir = process.env.NODE_TEST_CONTEXT
-      ? join(tmpdir(), "adrians-mind-pglite-test-" + process.pid)
+      ? mkdtempSync(join(tmpdir(), "adrians-mind-pglite-test-"))
       : localDataPath("pglite");
+    if (process.env.NODE_TEST_CONTEXT) {
+      // Random directory avoids PID reuse/collisions across parallel executor namespaces.
+      // Disposable tests never leave a 40 MB database behind after a normal worker exit.
+      process.once("exit", () => { rmSync(dataDir, { recursive: true, force: true }); });
+    }
     mkdirSync(dataDir, { recursive: true });
     const pg = new PGlite({
       dataDir,
@@ -213,18 +219,9 @@ async function createPgliteSql(): Promise<Sql> {
           .map((name) => ["/migrations/" + name, readFileSync(join(folder, name), "utf8")]),
       );
     }
-    const doneRows = await pg.query<{ name: string }>(
-      "select name from _migrations",
-    );
-    const done = doneRows.rows.map((r) => r.name);
-    for (const { name, path } of pendingMigrations(Object.keys(migrations), done)) {
-      // Apply + record atomically (parity with scripts/migrate.mjs) so a failed
-      // statement can't leave a file half-applied but untracked.
-      await pg.transaction(async (tx) => {
-        await tx.exec(migrations[path]);
-        await tx.query("insert into _migrations (name) values ($1)", [name]);
-      });
-    }
+    await pg.transaction(async (tx) => {
+      await applyMigrationSet(tx, migrations);
+    });
   };
   const pass = (globalRef.__pgliteMigrateChain__ ?? Promise.resolve())
     .catch(() => undefined) // an earlier failed pass must not wedge the chain
@@ -293,25 +290,14 @@ export async function getPglite(): Promise<import("@electric-sql/pglite").PGlite
  *
  * - **PGLite** (preview / no hosted URL): open the file database under `.data/pglite` and apply
  *   `migrations/*.sql`. Idempotent — concurrent callers share one promise.
- * - **Neon**: no-op (pool is created lazily on first query).
+ * - **Neon/Postgres**: read-only connectivity and workspace schema checks.
+ *   This does not prove backup recovery, provider availability or migrations outside this schema.
  *
- * Vite `configureServer` awaits this at dev startup; production imports of this
- * module kick it off immediately (see bottom of file).
+ * Vite `configureServer` awaits this at dev startup. Production callers explicitly
+ * initialize on first query; merely importing types/helpers never starts a database.
  */
 export function ensureDbReady(): Promise<void> {
-  if (dbSource !== "pglite") return Promise.resolve();
-  return getSql().then(() => undefined);
-}
-
-// Server-only eager start: kick PGLite bootstrap as soon as this module loads in
-// Node. Client bundles never hit this path (`getSql` throws in the browser).
-const globalBoot = globalThis as typeof globalThis & {
-  __pgBootstrapPromise__?: Promise<void>;
-};
-if (typeof window === "undefined" && dbSource === "pglite") {
-  globalBoot.__pgBootstrapPromise__ ??= ensureDbReady().catch((err) => {
-    globalBoot.__pgBootstrapPromise__ = undefined;
-    console.error("[db] PGLite bootstrap failed:", err);
-    throw err;
+  return getSql().then(async (sql) => {
+    await verifyDatabaseReadiness(sql);
   });
 }

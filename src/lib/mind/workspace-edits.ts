@@ -1,5 +1,5 @@
 import type { Chat, Workspace } from "./types.ts";
-import { canonical, mergeMemoryState } from "./workspace.ts";
+import { canonical, mergeChatDeletionState, mergeMemoryState } from "./workspace.ts";
 
 function same(left: unknown, right: unknown): boolean {
   return left === right || canonical(left) === canonical(right);
@@ -43,7 +43,7 @@ export function mergeWorkspaceEdits(stored: Workspace, base: Workspace, edited: 
     ...stored,
     ...mergeMemoryState(stored, edited),
     halted: edited.halted === base.halted ? stored.halted : edited.halted,
-    chats: mergeRows(stored.chats, base.chats, edited.chats, mergeChat),
+    ...mergeChatDeletionState({ ...edited, chats: mergeRows(stored.chats, base.chats, edited.chats, mergeChat) }, stored),
     projects: mergeRows(stored.projects, base.projects, edited.projects),
     files: mergeRows(stored.files, base.files, edited.files),
     usage: [...mergeRows(stored.usage, base.usage, edited.usage)].sort((a, b) => b.at.localeCompare(a.at)).slice(0, 200),

@@ -1,7 +1,7 @@
-import { decide } from "./policy.ts";
 import { runLocalPlan, type LocalTool } from "./local-tools.ts";
 import { nextClock, zoneIsValid } from "./schedule-clock.ts";
-import { normalizeBotModel, type BotProvider } from "./bot-model.ts";
+import { scheduleOccurrences, type ScheduleTiming, type MissedSchedulePolicy } from "./schedule-policy.ts";
+import { normalizeBotModel } from "./bot-model.ts";
 import { normalizeBotKnowledge } from "./bot-model.ts";
 import type { ModelTier } from "./model-tiers.ts";
 import type { Workspace } from "./types.ts";
@@ -48,6 +48,7 @@ export type AgentDefinition = {
   chatProvider?: string | null;
   chatTier?: ModelTier | null;
   knowledge?: string;
+  knowledgeDocumentIds?: string[];
 };
 
 export type DeploymentRecord = {
@@ -73,12 +74,48 @@ export type AgentRun = {
   workerId: string | null;
   leaseUntil: string | null;
   approvedActions: string[];
+  /** Legacy approvedActions are never authority. New grants bind this exact request. */
+  pendingApproval?: RunApproval;
+  approvalHistory?: RunApproval[];
+  configuration?: RunConfiguration;
+  stepResults?: FleetStepResult[];
+  verification?: { state: "unverified" | "verified" | "not_met"; detail: string };
+  externalOperation?: { id: string; stepId: string; state: "dispatching" | "succeeded" | "failed" | "unknown" | "not_sent"; startedAt: string; finishedAt?: string };
+  delegationScope?: { tools: FleetTool[]; projectId: string | null; memory: "on" | "off" };
   plan: PlanStep[];
   result: string;
   error: string;
   createdAt: string;
   updatedAt: string;
 };
+
+export type RunConfiguration = Pick<AgentDefinition, "version" | "instructions" | "tools" | "projectId" | "memory" | "approval" | "chatProvider" | "chatTier" | "knowledge" | "knowledgeDocumentIds">;
+export type RunApproval = {
+  id: string;
+  tool: FleetTool;
+  stepId: string;
+  binding: string;
+  destination: string;
+  requestedAt: string;
+  expiresAt: string;
+  state: "requested" | "granted" | "consumed" | "expired" | "revoked" | "superseded";
+  updatedAt: string;
+  batchId?: string;
+};
+export type FleetStepResult = {
+  id: string;
+  stepId: string;
+  tool: FleetTool;
+  at: string;
+  status: "success" | "empty";
+  text: string;
+  originalLength: number;
+  truncated: boolean;
+  sources: { id: string; title: string; url: string; excerpt?: string }[];
+  receipt?: { provider?: string; model?: string; accountId?: string; operationId?: string };
+};
+export const RUN_APPROVAL_TTL_MS = 5 * 60_000;
+export const RUN_EVIDENCE_MAX_CHARS = 20_000;
 
 export type RunEvent = {
   id: string;
@@ -122,6 +159,13 @@ export type ScheduleJob = {
   leaseWorker: string | null;
   leaseUntil: string | null;
   lastStatus: "" | "ran" | "failed";
+  timing?: ScheduleTiming;
+  missedPolicy?: MissedSchedulePolicy;
+  missedOccurrences?: number;
+  recoveryPending?: boolean;
+  recoveryApprovalFor?: string;
+  executionEnvironment?: "device";
+  lastVerification?: "unverified" | "verified" | "not_met";
 };
 
 export type PlanNeed = "none" | "search" | "browser" | "gmail" | "model";
@@ -132,6 +176,7 @@ export type PlanStep = {
   tool: FleetTool;
   dependsOn: string[];
   need: PlanNeed;
+  input?: { url?: string; accountId?: string; connectionVersion?: string; recipients?: string[]; subject?: string; body?: string };
 };
 
 export type FleetPin = { id: string; kind: "project" | "agent" | "chat" | "file"; ref: string };
@@ -144,6 +189,8 @@ export type BrowserSessionRecord = {
   status: "open" | "failed" | "closed";
   lastAction: string;
   excerpt: string;
+  excerptTruncated?: boolean;
+  evidenceId?: string;
   updatedAt: string;
 };
 
@@ -177,7 +224,6 @@ function needOf(tool: FleetTool): PlanNeed {
 export function buildTaskPlan(goal: string, tools: FleetTool[]): PlanStep[] {
   const title = goal.trim().slice(0, 160);
   return tools
-    .filter((tool) => tool !== "delegate")
     .slice(0, 8)
     .map((tool, index) => ({
       id: `step-${index + 1}`,
@@ -253,6 +299,66 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return !!value && typeof value === "object" && !Array.isArray(value);
 }
 
+function configurationOf(agent: AgentDefinition): RunConfiguration {
+  return {
+    version: agent.version, instructions: agent.instructions, tools: [...agent.tools],
+    projectId: agent.projectId, memory: agent.memory, approval: agent.approval,
+    chatProvider: agent.chatProvider ?? null, chatTier: agent.chatTier ?? null,
+    knowledge: agent.knowledge ?? "",
+    knowledgeDocumentIds: [...(agent.knowledgeDocumentIds ?? [])].sort(),
+  };
+}
+
+function readConfiguration(value: unknown): RunConfiguration | undefined {
+  if (!isRecord(value) || typeof value.version !== "number") return undefined;
+  return {
+    version: value.version,
+    instructions: typeof value.instructions === "string" ? value.instructions.slice(0, 2000) : "",
+    tools: toolList(value.tools), projectId: typeof value.projectId === "string" ? value.projectId : null,
+    memory: value.memory === "on" ? "on" : "off", approval: value.approval === "ask" ? "ask" : "automatic",
+    ...normalizeBotModel(value), knowledge: normalizeBotKnowledge(value.knowledge).knowledge,
+    knowledgeDocumentIds: Array.isArray(value.knowledgeDocumentIds) ? [...new Set(value.knowledgeDocumentIds.filter((id): id is string => typeof id === "string" && id.length <= 200))].slice(0, 100).sort() : [],
+  };
+}
+
+function readApproval(value: unknown): RunApproval | undefined {
+  if (!isRecord(value) || typeof value.id !== "string" || typeof value.tool !== "string" || !FLEET_TOOLS.includes(value.tool as FleetTool)
+    || typeof value.stepId !== "string" || typeof value.binding !== "string" || value.binding.length > 140_000
+    || typeof value.requestedAt !== "string" || typeof value.expiresAt !== "string" || !Number.isFinite(Date.parse(value.expiresAt))) return undefined;
+  return {
+    id: value.id, tool: value.tool as FleetTool, stepId: value.stepId, binding: value.binding,
+    destination: typeof value.destination === "string" ? value.destination.slice(0, 2000) : "",
+    requestedAt: value.requestedAt, expiresAt: value.expiresAt,
+    state: ["granted", "consumed", "expired", "revoked", "superseded"].includes(String(value.state)) ? value.state as RunApproval["state"] : "requested",
+    updatedAt: typeof value.updatedAt === "string" ? value.updatedAt : value.requestedAt,
+    batchId: typeof value.batchId === "string" ? value.batchId : undefined,
+  };
+}
+
+function readStepResults(value: unknown): FleetStepResult[] {
+  if (!Array.isArray(value)) return [];
+  return value.filter(isRecord).filter(row => typeof row.id === "string" && typeof row.stepId === "string" && FLEET_TOOLS.includes(row.tool as FleetTool)).slice(0, 20).map(row => {
+    const text = typeof row.text === "string" ? row.text : "";
+    return {
+      id: String(row.id), stepId: String(row.stepId), tool: row.tool as FleetTool,
+      at: typeof row.at === "string" ? row.at : "", status: row.status === "empty" ? "empty" : "success",
+      text: text.slice(0, RUN_EVIDENCE_MAX_CHARS), originalLength: typeof row.originalLength === "number" ? row.originalLength : text.length,
+      truncated: row.truncated === true || text.length > RUN_EVIDENCE_MAX_CHARS,
+      receipt: isRecord(row.receipt) ? {
+        ...(typeof row.receipt.provider === "string" ? { provider: row.receipt.provider.slice(0, 300) } : {}),
+        ...(typeof row.receipt.model === "string" ? { model: row.receipt.model.slice(0, 200) } : {}),
+        ...(typeof row.receipt.accountId === "string" ? { accountId: row.receipt.accountId.slice(0, 200) } : {}),
+        ...(typeof row.receipt.operationId === "string" ? { operationId: row.receipt.operationId.slice(0, 300) } : {}),
+      } : undefined,
+      sources: Array.isArray(row.sources) ? row.sources.filter(isRecord).slice(0, 30).map(source => ({
+        id: typeof source.id === "string" ? source.id : "", title: typeof source.title === "string" ? source.title.slice(0, 300) : "",
+        url: typeof source.url === "string" ? source.url.slice(0, 2000) : "",
+        ...(typeof source.excerpt === "string" ? { excerpt: source.excerpt.slice(0, 2000) } : {}),
+      })) : [],
+    };
+  });
+}
+
 function toolList(value: unknown): FleetTool[] {
   if (!Array.isArray(value)) return [];
   const tools: FleetTool[] = [];
@@ -301,6 +407,7 @@ export function readFleet(input: unknown): FleetShape {
         updatedAt: typeof row.updatedAt === "string" ? row.updatedAt : stamp(),
         ...normalizeBotModel(row),
         knowledge: normalizeBotKnowledge(row.knowledge).knowledge,
+        ...(Array.isArray(row.knowledgeDocumentIds) ? { knowledgeDocumentIds: [...new Set(row.knowledgeDocumentIds.filter((id): id is string => typeof id === "string" && id.length <= 200))].slice(0, 100) } : {}),
       });
     }
   }
@@ -337,6 +444,18 @@ export function readFleet(input: unknown): FleetShape {
         workerId: typeof row.workerId === "string" ? row.workerId : null,
         leaseUntil: typeof row.leaseUntil === "string" ? row.leaseUntil : null,
         approvedActions: Array.isArray(row.approvedActions) ? row.approvedActions.filter((item): item is string => typeof item === "string").slice(0, 12) : [],
+        pendingApproval: readApproval(row.pendingApproval),
+        approvalHistory: Array.isArray(row.approvalHistory) ? row.approvalHistory.map(readApproval).filter((approval): approval is RunApproval => !!approval).slice(-40) : [],
+        configuration: readConfiguration(row.configuration),
+        stepResults: readStepResults(row.stepResults),
+        verification: isRecord(row.verification) ? { state: row.verification.state === "verified" ? "verified" : row.verification.state === "not_met" ? "not_met" : "unverified", detail: typeof row.verification.detail === "string" ? row.verification.detail.slice(0, 500) : "" } : undefined,
+        externalOperation: isRecord(row.externalOperation) && typeof row.externalOperation.id === "string" && typeof row.externalOperation.stepId === "string" ? {
+          id: row.externalOperation.id, stepId: row.externalOperation.stepId,
+          state: row.externalOperation.state === "succeeded" || row.externalOperation.state === "failed" || row.externalOperation.state === "unknown" || row.externalOperation.state === "not_sent" ? row.externalOperation.state : "dispatching",
+          startedAt: typeof row.externalOperation.startedAt === "string" ? row.externalOperation.startedAt : "",
+          ...(typeof row.externalOperation.finishedAt === "string" ? { finishedAt: row.externalOperation.finishedAt } : {}),
+        } : undefined,
+        delegationScope: isRecord(row.delegationScope) ? { tools: toolList(row.delegationScope.tools), projectId: typeof row.delegationScope.projectId === "string" ? row.delegationScope.projectId : null, memory: row.delegationScope.memory === "on" ? "on" : "off" } : undefined,
         plan: readPlan(row.plan),
         result: typeof row.result === "string" ? row.result.slice(0, 4000) : "",
         error: typeof row.error === "string" ? row.error.slice(0, 500) : "",
@@ -404,6 +523,13 @@ export function readFleet(input: unknown): FleetShape {
         leaseWorker: typeof row.leaseWorker === "string" ? row.leaseWorker.slice(0, 80) : null,
         leaseUntil: typeof row.leaseUntil === "string" ? row.leaseUntil : null,
         lastStatus: row.lastStatus === "ran" || row.lastStatus === "failed" ? row.lastStatus : "",
+        timing: row.timing === "fixed_delay" ? "fixed_delay" : "fixed_rate",
+        missedPolicy: row.missedPolicy === "skip" || row.missedPolicy === "ask" || row.missedPolicy === "all" ? row.missedPolicy : "latest",
+        missedOccurrences: typeof row.missedOccurrences === "number" ? Math.max(0, row.missedOccurrences) : 0,
+        recoveryPending: row.recoveryPending === true,
+        recoveryApprovalFor: typeof row.recoveryApprovalFor === "string" ? row.recoveryApprovalFor : undefined,
+        executionEnvironment: "device",
+        lastVerification: row.lastVerification === "verified" || row.lastVerification === "not_met" ? row.lastVerification : "unverified",
       });
     }
   }
@@ -426,6 +552,8 @@ export function readFleet(input: unknown): FleetShape {
         status: row.status === "open" ? "open" : row.status === "closed" ? "closed" : "failed",
         lastAction: typeof row.lastAction === "string" ? row.lastAction.slice(0, 300) : "",
         excerpt: typeof row.excerpt === "string" ? row.excerpt.slice(0, 500) : "",
+        excerptTruncated: row.excerptTruncated === true || (typeof row.excerpt === "string" && row.excerpt.length > 500),
+        evidenceId: typeof row.evidenceId === "string" ? row.evidenceId : undefined,
         updatedAt: typeof row.updatedAt === "string" ? row.updatedAt : stamp(),
       });
     }
@@ -439,8 +567,8 @@ function readPlan(value: unknown): PlanStep[] {
   if (!Array.isArray(value)) return [];
   const steps: PlanStep[] = [];
   for (const row of value) {
-    if (!isRecord(row) || typeof row.id !== "string" || typeof row.tool !== "string") continue;
-    if (!(FLEET_TOOLS as readonly string[]).includes(row.tool)) continue;
+    if (!isRecord(row) || typeof row.id !== "string" || typeof row.tool !== "string") return [];
+    if (!(FLEET_TOOLS as readonly string[]).includes(row.tool)) return [];
     const dependsOn = Array.isArray(row.dependsOn) ? row.dependsOn.filter((item): item is string => typeof item === "string").slice(0, 8) : [];
     steps.push({
       id: row.id.slice(0, 40),
@@ -448,6 +576,14 @@ function readPlan(value: unknown): PlanStep[] {
       tool: row.tool as FleetTool,
       dependsOn,
       need: row.need === "search" || row.need === "browser" || row.need === "gmail" || row.need === "model" ? row.need : "none",
+      ...(isRecord(row.input) ? { input: {
+        ...(typeof row.input.url === "string" ? { url: row.input.url.slice(0, 2000) } : {}),
+        ...(typeof row.input.accountId === "string" ? { accountId: row.input.accountId.slice(0, 200) } : {}),
+        ...(typeof row.input.connectionVersion === "string" ? { connectionVersion: row.input.connectionVersion.slice(0, 100) } : {}),
+        ...(Array.isArray(row.input.recipients) ? { recipients: row.input.recipients.filter((value): value is string => typeof value === "string").slice(0, 50) } : {}),
+        ...(typeof row.input.subject === "string" ? { subject: row.input.subject.slice(0, 1000) } : {}),
+        ...(typeof row.input.body === "string" ? { body: row.input.body.slice(0, 8000) } : {}),
+      } } : {}),
     });
   }
   return steps.slice(0, 8);
@@ -479,6 +615,7 @@ export type BotDraft = {
   chatProvider?: string | null;
   chatTier?: ModelTier | null;
   knowledge?: string;
+  knowledgeDocumentIds?: string[];
 };
 
 export function addCustomAgent(
@@ -488,6 +625,7 @@ export function addCustomAgent(
 ): { ok: true; ws: Workspace; agent: AgentDefinition } | { ok: false; error: string } {
   const name = input.name.trim().slice(0, 80);
   if (!name) return { ok: false, error: "Name the agent." };
+  if (input.instructions.trim().length > 2000) return { ok: false, error: "Agent instructions exceed 2,000 characters. Shorten them before saving; nothing was truncated or saved." };
   const tools = toolList(input.tools);
   if (tools.length === 0) return { ok: false, error: "Choose at least one tool." };
   const at = stamp(now);
@@ -510,6 +648,7 @@ export function addCustomAgent(
     updatedAt: at,
     ...normalizeBotModel(input),
     knowledge: knowledge.knowledge,
+    knowledgeDocumentIds: [...new Set((input.knowledgeDocumentIds ?? []).filter((id) => typeof id === "string" && id.length <= 200))].slice(0, 100),
   };
   return { ok: true, agent, ws: { ...ws, agents: [agent, ...ws.agents] } };
 }
@@ -532,6 +671,7 @@ export function editBot(ws: Workspace, id: string, draft: BotDraft): ReturnType<
     chatProvider: checked.agent.chatProvider ?? null,
     chatTier: checked.agent.chatTier ?? null,
     knowledge: checked.agent.knowledge ?? "",
+    knowledgeDocumentIds: checked.agent.knowledgeDocumentIds ?? [],
     approval: original.approval === "ask" ? "ask" as const : checked.agent.approval,
     maxSteps: checked.agent.maxSteps,
     updatedAt: checked.agent.updatedAt,
@@ -602,6 +742,10 @@ export function addSchedule(ws: Workspace, name: string, agentId: string | null,
     leaseWorker: null,
     leaseUntil: null,
     lastStatus: "",
+    timing: "fixed_rate",
+    missedPolicy: "latest",
+    missedOccurrences: 0,
+    executionEnvironment: "device",
   };
   return { ok: true, ws: { ...ws, schedules: [job, ...ws.schedules] } };
 }
@@ -614,7 +758,7 @@ export function setScheduleEnabled(ws: Workspace, id: string, enabled: boolean, 
       nextRunAt = job.clockHour == null ? new Date(Date.parse(now) + job.intervalMinutes * 60_000).toISOString()
         : nextClock(now, job.timeZone, job.clockHour, job.clockMinute ?? 0).at;
     }
-    return { ...job, enabled, nextRunAt };
+    return { ...job, enabled, nextRunAt, recoveryPending: false };
   }) };
 }
 
@@ -632,7 +776,8 @@ export function enqueueRun(ws: Workspace, agentId: string, goal: string, now?: s
   if (ws.halted) return { ok: false, error: "Emergency stop is on. No new action can run." };
   const agent = ws.agents.find((item) => item.id === agentId && !item.archived);
   if (!agent) return { ok: false, error: "That agent is not on this device." };
-  const text = goal.trim().slice(0, 2000);
+  if (goal.trim().length > 2000) return { ok: false, error: "The task exceeds 2,000 characters. Shorten it before queueing; nothing was truncated or queued." };
+  const text = goal.trim();
   if (!text) return { ok: false, error: "Write what the agent should do." };
   if (ws.runs.length >= 200) return { ok: false, error: "Too many runs are stored on this device." };
   const at = stamp(now);
@@ -648,6 +793,10 @@ export function enqueueRun(ws: Workspace, agentId: string, goal: string, now?: s
     workerId: null,
     leaseUntil: null,
     approvedActions: [],
+    configuration: configurationOf(agent),
+    stepResults: [],
+    approvalHistory: [],
+    verification: { state: "unverified", detail: "The requested objective has not been verified." },
     plan: buildTaskPlan(text, agent.tools),
     result: "",
     error: "",
@@ -659,10 +808,79 @@ export function enqueueRun(ws: Workspace, agentId: string, goal: string, now?: s
   return { ok: true, run, ws: withFleet(ws, { ...fleet, runs: [run, ...fleet.runs] }) };
 }
 
-export function approveRunAction(ws: Workspace, runId: string, action: string): Workspace {
-  return {
-    ...ws,
-    runs: ws.runs.map((run) => (run.id === runId ? { ...run, approvedActions: [...run.approvedActions, action], state: run.state === "waiting_approval" ? "queued" : run.state, updatedAt: stamp() } : run)),
+export function enqueueConfiguredRun(ws: Workspace, agentId: string, goal: string, inputs?: Partial<Record<FleetTool, PlanStep["input"]>>, now?: string): ReturnType<typeof enqueueRun> {
+  const agent = ws.agents.find(item => item.id === agentId);
+  if (agent?.tools.includes("model") && !agent.chatProvider) return { ok: false, error: "Select a connected answer provider in this bot's configuration before queueing a model step." };
+  for (const tool of ["gmail_read", "gmail_send"] as const) {
+    if (!agent?.tools.includes(tool)) continue;
+    const input = inputs?.[tool];
+    if (!input?.accountId || !EMAIL.test(input.accountId) || !input.connectionVersion) return { ok: false, error: "Select the current connected Gmail account before queueing this step." };
+    if (tool === "gmail_send" && (!input.recipients?.length || input.recipients.length > 50 || input.recipients.some(recipient => !EMAIL.test(recipient) || /[\r\n<>;,]/.test(recipient)) || !input.body?.trim() || input.body.length > 8000 || (input.subject?.length ?? 0) > 1000 || /[\r\n]/.test(input.subject ?? ""))) return { ok: false, error: "Review the recipients, subject and message (up to 8,000 characters). Nothing was queued." };
+  }
+  const made = enqueueRun(ws, agentId, goal, now);
+  if (!made.ok) return made;
+  const run = { ...made.run, plan: made.run.plan.map(step => ({ ...step, ...(inputs?.[step.tool] ? { input: { ...inputs[step.tool], ...(inputs[step.tool]?.recipients ? { recipients: [...inputs[step.tool]!.recipients!] } : {}) } } : {}) })) };
+  return { ...made, run, ws: { ...made.ws, runs: made.ws.runs.map(item => item.id === run.id ? run : item) } };
+}
+
+export function approveRunAction(ws: Workspace, runId: string, actionId: string, now = stamp()): Workspace {
+  if (ws.halted) return ws;
+  return { ...ws, runs: ws.runs.map((run) => {
+    const pending = run.pendingApproval;
+    const agent = ws.agents.find((item) => item.id === run.agentId && !item.archived);
+    const step = run.plan[run.step];
+    if (run.id !== runId || run.state !== "waiting_approval" || !pending || pending.state !== "requested" || pending.id !== actionId || !agent || !step) return run;
+    if (pending.expiresAt <= now || pending.binding !== actionBinding(run, agent, step)) {
+      return { ...run, pendingApproval: { ...pending, state: pending.expiresAt <= now ? "expired" as const : "superseded" as const, updatedAt: now }, state: "queued" as const, error: "The reviewed action expired or changed. Review the new request before it runs.", updatedAt: now };
+    }
+    return { ...run, approvedActions: [], pendingApproval: { ...pending, state: "granted" as const, updatedAt: now }, state: "queued" as const, error: "", updatedAt: now };
+  }) };
+}
+
+export function revokeRunApproval(ws: Workspace, runId: string, now = stamp()): Workspace {
+  return { ...ws, runs: ws.runs.map((run) => run.id === runId && run.pendingApproval && ["requested", "granted"].includes(run.pendingApproval.state)
+    ? { ...run, pendingApproval: { ...run.pendingApproval, state: "revoked", updatedAt: now }, approvedActions: [], state: "paused", updatedAt: now, error: "Authorization revoked. Resume to request a new review." }
+    : run) };
+}
+
+/** A batch authorizes only the exact pending requests shown in its review. */
+export function approveRunBatch(ws: Workspace, requests: { runId: string; approvalId: string }[], projectId: string | null, maximum: number, now = stamp()): { ok: true; ws: Workspace; batchId: string } | { ok: false; error: string } {
+  if (ws.halted || !Number.isInteger(maximum) || maximum < 1 || maximum > 50 || requests.length < 1 || requests.length > maximum || new Set(requests.map(item => item.runId)).size !== requests.length) return { ok: false, error: "Review between one and fifty distinct operations within the selected batch limit." };
+  let next = ws;
+  const batchId = nid("authorization-batch");
+  for (const request of requests) {
+    const before = next.runs.find(run => run.id === request.runId);
+    if (!before || before.configuration?.projectId !== projectId) return { ok: false, error: "Every operation in a batch must belong to the reviewed project scope. Nothing was authorized." };
+    next = approveRunAction(next, request.runId, request.approvalId, now);
+    const granted = next.runs.find(run => run.id === request.runId);
+    if (granted?.pendingApproval?.state !== "granted" || granted.pendingApproval.id !== request.approvalId) return { ok: false, error: "A reviewed operation changed or expired. Nothing in the batch was authorized." };
+    next = { ...next, runs: next.runs.map(run => run.id === request.runId ? { ...run, pendingApproval: { ...run.pendingApproval!, batchId } } : run) };
+  }
+  return { ok: true, ws: next, batchId };
+}
+
+export function selectDelegatedAgent(agents: AgentDefinition[], parent: AgentDefinition, goal: string): AgentDefinition {
+  const words = new Set(goal.toLowerCase().match(/[a-z0-9]{3,}/g) ?? []);
+  const wanted: FleetTool[] = /\b(search|research|sources)\b/i.test(goal) ? ["web_search", "search_notes"]
+    : /\b(inbox|mail|email)\b/i.test(goal) ? ["gmail_read"] : /\b(analy[sz]e|reason|write)\b/i.test(goal) ? ["model"] : [];
+  const eligible = agents.filter(agent => agent.id !== parent.id && !agent.archived && agent.projectId === parent.projectId
+    && (parent.memory === "on" || agent.memory === "off") && agent.tools.some(tool => tool !== "delegate")
+    && agent.tools.every(tool => tool !== "delegate" && parent.tools.includes(tool))
+    && (!agent.tools.includes("model") || (agent.chatProvider === parent.chatProvider && agent.chatTier === parent.chatTier)));
+  const score = (agent: AgentDefinition) => [...new Set(`${agent.name} ${agent.role}`.toLowerCase().match(/[a-z0-9]{3,}/g) ?? [])].filter(word => words.has(word)).length * 4 + wanted.filter(tool => agent.tools.includes(tool)).length * 5;
+  return eligible.map(agent => ({ agent, score: score(agent) })).filter(item => item.score > 0).sort((a, b) => b.score - a.score || a.agent.tools.length - b.agent.tools.length || a.agent.id.localeCompare(b.agent.id))[0]?.agent ?? parent;
+}
+
+/** Clear only explicitly selected terminal records; unresolved dispatches and active parents retain evidence. */
+export function clearFinishedRuns(ws: Workspace, ids: string[]): Workspace {
+  const selected = new Set(ids);
+  const active = new Set(ws.runs.filter(run => !TERMINAL.has(run.state)).map(run => run.id));
+  const removed = new Set(ws.runs.filter(run => selected.has(run.id) && TERMINAL.has(run.state) && run.externalOperation?.state !== "unknown" && run.externalOperation?.state !== "dispatching" && (!run.parentId || !active.has(run.parentId))).map(run => run.id));
+  return { ...ws,
+    runs: ws.runs.filter(run => !removed.has(run.id)),
+    runEvents: ws.runEvents.filter(event => !removed.has(event.runId)),
+    browserSessions: ws.browserSessions.filter(session => !session.runId || !removed.has(session.runId)),
+    schedules: ws.schedules.map(job => job.lastQueuedRunId && removed.has(job.lastQueuedRunId) ? { ...job, lastQueuedRunId: undefined } : job),
   };
 }
 
@@ -681,7 +899,7 @@ export function cancelRun(ws: Workspace, runId: string, now?: string): Workspace
   const runs = fleet.runs.map((run) => {
     if ((run.id !== runId && run.parentId !== runId) || !canTransition(run.state, "canceled")) return run;
     event(fleet, run.id, at, "canceled", "Stopped. Unfinished work was not marked complete.");
-    return { ...run, state: "canceled" as const, error: "Stopped.", updatedAt: at, leaseUntil: null };
+    return { ...run, state: "canceled" as const, error: "Stopped.", updatedAt: at, leaseUntil: null, approvedActions: [], pendingApproval: run.pendingApproval ? { ...run.pendingApproval, state: "revoked" as const, updatedAt: at } : undefined };
   });
   return withFleet(ws, { ...fleet, runs });
 }
@@ -692,7 +910,7 @@ export function haltFleet(ws: Workspace, now?: string): Workspace {
   const runs = fleet.runs.map((run) => {
     if (TERMINAL.has(run.state)) return run;
     event(fleet, run.id, at, "emergency_stop", "Emergency stop canceled this run.");
-    return { ...run, state: "canceled" as const, error: "Emergency stop is on.", updatedAt: at, leaseUntil: null };
+    return { ...run, state: "canceled" as const, error: "Emergency stop is on.", updatedAt: at, leaseUntil: null, approvedActions: [], pendingApproval: run.pendingApproval ? { ...run.pendingApproval, state: "revoked" as const, updatedAt: at } : undefined };
   });
   return withFleet(ws, { ...fleet, runs });
 }
@@ -701,7 +919,17 @@ export type TickEnv = {
   now: string;
   workerId: string;
   browser?: (url: string) => { ok: true; title: string; excerpt: string } | { ok: false; error: string };
-  search?: (query: string) => { ok: boolean; citations: { title: string; url: string }[]; error: string };
+  search?: (query: string) => { ok: boolean; citations: { id?: string; title: string; url: string; excerpt?: string }[]; error: string };
+  /** Adapters must resolve owner credentials and validate capabilities before dispatch. */
+  model?: (request: FleetExternalRequest) => { ok: true; text: string; provider: string; model: string } | { ok: false; error: string };
+  gmail?: (request: FleetExternalRequest & { action: "gmail_read" | "gmail_send"; accountId: string }) => { ok: true; text: string; accountId: string; operationId: string } | { ok: false; error: string };
+  verify?: (run: AgentRun) => { met: boolean; detail: string };
+};
+
+export type FleetExternalRequest = {
+  runId: string; stepId: string; goal: string; instructions: string; projectId?: string | null; taskId?: string;
+  provider: string | null; modelTier: ModelTier | null;
+  results: FleetStepResult[]; input: PlanStep["input"];
 };
 
 function finish(run: AgentRun, state: RunState, at: string, error = ""): AgentRun {
@@ -716,7 +944,51 @@ function advanceWithResult(run: AgentRun, detail: string): AgentRun {
 }
 
 function quoteUrl(goal: string) {
-  return goal.split(/\s+/).find((part) => HTTP.test(part)) ?? "";
+  const urls = [...new Set(goal.split(/\s+/).filter((part) => HTTP.test(part)))];
+  if (urls.length !== 1) return "";
+  try {
+    const parsed = new URL(urls[0]!);
+    return ["http:", "https:"].includes(parsed.protocol) && !parsed.username && !parsed.password ? parsed.href : "";
+  } catch { return ""; }
+}
+
+function destinationFor(run: AgentRun, step: PlanStep): string {
+  if (step.tool === "browser") return quoteUrl(step.input?.url ?? run.goal);
+  if (step.tool === "gmail_read" || step.tool === "gmail_send") return `${step.input?.accountId ?? "No account selected"}${step.tool === "gmail_send" ? ` → ${(step.input?.recipients ?? []).join(", ")}` : ""}`;
+  if (step.tool === "model") return run.configuration?.chatProvider ?? "No provider selected";
+  return run.configuration?.projectId ?? "Permitted workspace records";
+}
+
+function actionBinding(run: AgentRun, agent: AgentDefinition, step: PlanStep): string {
+  return JSON.stringify({ runId: run.id, agentId: agent.id, configuration: configurationOf(agent), step: run.step, operation: step, goal: run.goal, destination: destinationFor(run, step) });
+}
+
+function requestApproval(run: AgentRun, agent: AgentDefinition, step: PlanStep, at: string): AgentRun {
+  const previous = run.pendingApproval;
+  const history = previous ? [...(run.approvalHistory ?? []), { ...previous, state: previous.expiresAt <= at ? "expired" as const : previous.state === "granted" ? "superseded" as const : previous.state, updatedAt: at }].slice(-40) : run.approvalHistory ?? [];
+  return finish({ ...run, approvedActions: [], approvalHistory: history, pendingApproval: {
+    id: nid("approval"), tool: step.tool, stepId: step.id, binding: actionBinding(run, agent, step),
+    destination: destinationFor(run, step), requestedAt: at, expiresAt: new Date(Date.parse(at) + RUN_APPROVAL_TTL_MS).toISOString(), state: "requested", updatedAt: at,
+  } }, "waiting_approval", at, "Review this exact action before it runs. Authorization lasts five minutes and is used once.");
+}
+
+function consumeApproval(run: AgentRun, at: string): AgentRun {
+  if (!run.pendingApproval || run.pendingApproval.state !== "granted") return run;
+  return { ...run, approvedActions: [], approvalHistory: [...(run.approvalHistory ?? []), { ...run.pendingApproval, state: "consumed" as const, updatedAt: at }].slice(-40), pendingApproval: undefined };
+}
+
+function recordStep(run: AgentRun, step: PlanStep, at: string, text: string, sources: FleetStepResult["sources"] = [], empty = false, receipt?: FleetStepResult["receipt"]): AgentRun {
+  const result: FleetStepResult = { id: `${run.id}:${step.id}`, stepId: step.id, tool: step.tool, at, status: empty ? "empty" : "success", text: text.slice(0, RUN_EVIDENCE_MAX_CHARS), originalLength: text.length, truncated: text.length > RUN_EVIDENCE_MAX_CHARS, sources: sources.slice(0, 30), receipt };
+  return advanceWithResult({ ...run, stepResults: [...(run.stepResults ?? []).filter((item) => item.stepId !== step.id), result] }, text);
+}
+
+function validRunPlan(run: AgentRun, agent: AgentDefinition): boolean {
+  const seen = new Set<string>();
+  return run.plan.length > 0 && run.plan.every((step) => {
+    if (!step.id || seen.has(step.id) || !agent.tools.includes(step.tool) || (run.configuration && !run.configuration.tools.includes(step.tool)) || (run.delegationScope && !run.delegationScope.tools.includes(step.tool)) || step.dependsOn.some(id => !seen.has(id))) return false;
+    seen.add(step.id);
+    return true;
+  });
 }
 
 export function tickFleet(ws: Workspace, env: TickEnv): Workspace {
@@ -726,7 +998,9 @@ export function tickFleet(ws: Workspace, env: TickEnv): Workspace {
   const extra: AgentRun[] = [];
   let processed = 0;
   const runs = fleet.runs.map((run) => {
-    if (processed >= 4 || TERMINAL.has(run.state) || run.state === "paused" || run.state === "waiting_approval" || run.state === "waiting_external") return run;
+    if (processed >= 4 || TERMINAL.has(run.state) || run.state === "paused" || run.state === "waiting_external") return run;
+    if (run.externalOperation?.state === "dispatching" || run.externalOperation?.state === "unknown") return run;
+    if (run.state === "waiting_approval" && run.pendingApproval?.state === "requested" && run.pendingApproval.expiresAt > at) return run;
     if (run.leaseUntil && run.leaseUntil > at && run.workerId && run.workerId !== env.workerId) return run;
     processed += 1;
     const agent = fleet.agents.find((item) => item.id === run.agentId);
@@ -735,170 +1009,187 @@ export function tickFleet(ws: Workspace, env: TickEnv): Workspace {
       event(fleet, run.id, at, "failed", reason);
       return finish(run, "failed", at, reason);
     }
-    const claimed = { ...run, state: "running" as const, workerId: env.workerId, leaseUntil: new Date(Date.parse(at) + 30_000).toISOString(), updatedAt: at };
-    const tool = agent.tools[claimed.step];
-    if (!tool || claimed.step >= claimed.maxSteps) {
-      const lines = fleet.runEvents.filter((item) => item.runId === claimed.id && item.kind === "tool_result").map((item) => item.detail);
-      event(fleet, claimed.id, at, "completed", lines.length ? "Finished from tool results." : "Finished with no tool results.");
-      return finish({ ...claimed, result: claimed.result || lines.join("\n").slice(0, 4000) || "Finished with no tool results." }, "completed", at);
+    // Legacy records acquire a snapshot before further execution. They never inherit a legacy grant.
+    let claimed: AgentRun = { ...run, configuration: run.configuration ?? configurationOf(agent), approvedActions: [], state: "running", workerId: env.workerId, leaseUntil: new Date(Date.parse(at) + 30_000).toISOString(), updatedAt: at };
+    const fail = (error: string, state: RunState = "failed") => {
+      event(fleet, claimed.id, at, state, error);
+      return finish(claimed, state, at, error);
+    };
+    if (!validRunPlan(claimed, agent)) return fail("The saved plan is invalid or requests a capability this agent no longer has. Queue a reviewed replacement.");
+    if (JSON.stringify(claimed.configuration) !== JSON.stringify(configurationOf(agent))) return fail("The agent configuration changed after this run was queued. Queue a new run with the reviewed configuration.");
+    if (claimed.delegationScope && (agent.projectId !== claimed.delegationScope.projectId || (agent.memory === "on" && claimed.delegationScope.memory !== "on"))) return fail("The child agent's resource scope exceeds its delegation grant. Nothing was dispatched.");
+    if (claimed.step >= claimed.plan.length) {
+      if (!(claimed.stepResults?.length)) return fail("Execution ended without a confirmed tool result. The objective was not verified.");
+      let verification: AgentRun["verification"] = { state: "unverified", detail: "Execution steps finished. The requested objective still needs verification." };
+      if (env.verify) {
+        try {
+          const checked = env.verify(claimed);
+          verification = { state: checked.met ? "verified" : "not_met", detail: checked.detail.slice(0, 500) };
+        } catch { return fail("Objective verification failed. Tool results were retained; the objective was not marked verified."); }
+      }
+      event(fleet, claimed.id, at, verification.state === "not_met" ? "failed" : "completed", verification.detail);
+      return finish({ ...claimed, verification }, verification.state === "not_met" ? "failed" : "completed", at, verification.state === "not_met" ? verification.detail : "");
+    }
+    if (claimed.step >= claimed.maxSteps) return fail("The step limit was reached with unfinished plan steps. Partial results were retained.");
+    const step = claimed.plan[claimed.step]!;
+    const tool = step.tool;
+    if (step.dependsOn.some(id => !claimed.stepResults?.some(result => result.stepId === id))) return fail("A required prior step has no confirmed result. This step was not dispatched.");
+    if (tool === "browser" && !destinationFor(claimed, step)) return fail("Choose one exact http(s) URL before requesting browser approval. No page was opened.");
+    const requiresReview = tool === "browser" || tool === "gmail_read" || tool === "gmail_send" || tool === "model" || (agent.approval === "ask" && tool !== "delegate");
+    if (requiresReview) {
+      const grant = claimed.pendingApproval;
+      if (!grant || grant.state !== "granted" || grant.expiresAt <= at || grant.binding !== actionBinding(claimed, agent, step)) {
+        const requested = requestApproval(claimed, agent, step, at);
+        event(fleet, claimed.id, at, "approval_requested", `${tool}: ${requested.pendingApproval!.destination}. Nothing was dispatched.`);
+        return requested;
+      }
     }
     if (tool === "delegate") {
-      if (claimed.depth >= 1) {
-        event(fleet, claimed.id, at, "tool_result", "Child runs do not delegate again.");
-        return advanceWithResult(claimed, "Child runs do not delegate again.");
-      }
+      if (claimed.depth >= 1) return fail("Delegated runs cannot delegate again.");
       const kids = [...fleet.runs, ...extra].filter((item) => item.parentId === claimed.id);
-      const open = kids.filter((item) => !TERMINAL.has(item.state));
       if (kids.length === 0) {
         const goals = delegationGoals(claimed.goal);
-        const plan = goals.map((part, index) => ({
-          id: `child-${index + 1}`,
-          title: part.slice(0, 160),
-          tool: "delegate" as const,
-          dependsOn: [] as string[],
-          need: "none" as const,
-        }));
-        event(fleet, claimed.id, at, "plan_generated", JSON.stringify(plan));
+        const childPlan = buildTaskPlan(claimed.goal, agent.tools.filter(item => item !== "delegate"));
+        if (!childPlan.length) return fail("Delegation has no permitted child capability. Choose a read or analysis tool before queueing.");
+        if (fleet.runs.length + extra.length + goals.length > 200) return fail("Delegation would exceed the saved run limit. Export and clear finished history before queueing a replacement.");
         for (const part of goals) {
+          const specialist = selectDelegatedAgent(fleet.agents, agent, part);
           const child: AgentRun = {
-            ...claimed,
-            id: nid("run"),
-            parentId: claimed.id,
-            depth: 1,
-            goal: part,
-            state: "queued",
-            step: 0,
-            workerId: null,
-            leaseUntil: null,
-            result: "",
-            error: "",
-            createdAt: at,
-            updatedAt: at,
-            approvedActions: [],
-            plan: buildTaskPlan(part, agent.tools),
+            ...claimed, id: nid("run"), parentId: claimed.id, depth: 1, goal: part, state: "queued", step: 0,
+            agentId: specialist.id, configuration: configurationOf(specialist), maxSteps: specialist.maxSteps,
+            delegationScope: { tools: agent.tools.filter(item => item !== "delegate"), projectId: agent.projectId, memory: agent.memory },
+            workerId: null, leaseUntil: null, result: "", error: "", createdAt: at, updatedAt: at,
+            approvedActions: [], pendingApproval: undefined, approvalHistory: [], stepResults: [],
+            verification: { state: "unverified", detail: "The delegated objective has not been verified." },
+            plan: buildTaskPlan(part, specialist.tools.filter(item => item !== "delegate")),
           };
           extra.push(child);
-          event(fleet, child.id, at, "task_created", "Delegated from the parent run.");
+          event(fleet, child.id, at, "task_created", "Delegated within the parent capability and project scope. No parent approval was inherited.");
         }
-        event(fleet, claimed.id, at, "delegated", `Delegated ${goals.length} child run${goals.length === 1 ? "" : "s"}.`);
-        return { ...claimed, plan };
+        event(fleet, claimed.id, at, "plan_generated", JSON.stringify(goals));
+        event(fleet, claimed.id, at, "delegated", `Delegated ${goals.length} child runs with the parent's capability ceiling.`);
+        return claimed;
       }
-      if (open.length) return claimed;
-      const detail = kids.map((item) => item.result || item.error || item.state).join(" | ");
-      if (kids.some((child) => child.state !== "completed")) {
-        const state = kids.every((child) => child.state === "canceled") ? "canceled" : "failed";
-        const outcome = kids.map((child) => child.id + ": " + child.state).join(", ");
-        event(fleet, claimed.id, at, state, outcome);
-        return finish({ ...claimed, result: detail }, state, at, outcome);
-      }
-      event(fleet, claimed.id, at, "tool_result", detail || "Child runs finished.");
-      return advanceWithResult(claimed, detail);
+      if (kids.some(item => !TERMINAL.has(item.state))) return claimed;
+      const detail = kids.map(item => item.result || item.error || item.state).join(" | ");
+      if (kids.some(child => child.state !== "completed")) return fail(kids.map(child => `${child.id}: ${child.state}`).join(", "), kids.every(child => child.state === "canceled") ? "canceled" : "failed");
+      event(fleet, claimed.id, at, "tool_result", detail);
+      return recordStep(claimed, step, at, detail);
     }
     if (LOCAL.has(tool)) {
       const local = tool as LocalTool;
       const scope = {
         ...ws,
-        projects: agent.projectId ? ws.projects.filter((project) => project.id === agent.projectId) : ws.projects,
-        chats: agent.projectId ? ws.chats.filter((chat) => chat.projectId === agent.projectId) : ws.chats,
-        memories: agent.memory === "on" ? ws.memories.filter((note) => note.scope === "global" || (note.scope === "project" && !!agent.projectId && note.projectId === agent.projectId)) : [],
+        projects: agent.projectId ? ws.projects.filter(project => project.id === agent.projectId) : ws.projects,
+        chats: (agent.projectId ? ws.chats.filter(chat => chat.projectId === agent.projectId) : ws.chats).filter(chat => !chat.temporary),
+        memories: agent.memory === "on" ? ws.memories.filter(note => note.scope === "global" || (note.scope === "project" && !!agent.projectId && note.projectId === agent.projectId)) : [],
       };
-      const executed = runLocalPlan(scope, [{ id: local, tool: local, query: claimed.goal }], { autonomy: "automatic", halted: false, tokens: {} });
+      claimed = consumeApproval(claimed, at);
+      const executed = runLocalPlan(scope, [{ id: local, tool: local, query: claimed.goal }], { autonomy: agent.approval, halted: ws.halted, tokens: requiresReview ? { [local]: `approve:${local}` } : {} });
       const detail = executed.lines.join(" ");
-      event(fleet, claimed.id, at, executed.ok ? "tool_result" : "failed", detail);
-      if (!executed.ok) return finish(claimed, "failed", at, detail);
-      return advanceWithResult(claimed, detail);
-    }
-    if (tool === "browser" || tool === "gmail_send") {
-      const decision = decide({
-        autonomy: agent.approval,
-        kind: "publish",
-        halted: false,
-        approvalToken: claimed.approvedActions.includes(tool) ? `approve:${claimed.id}:${tool}` : null,
-        expectedToken: `approve:${claimed.id}:${tool}`,
-      });
-      if (decision.decision !== "allow") {
-        event(fleet, claimed.id, at, "approval_requested", `${tool} needs approval. Nothing was sent or opened.`);
-        return finish({ ...claimed, state: "waiting_approval" }, "waiting_approval", at, decision.reason);
-      }
-    }
-    if (tool === "web_search") {
-      const result = env.search?.(claimed.goal) ?? { ok: false, citations: [], error: "No search provider is configured. Nothing was searched and no citations were created." };
-      if (!result.ok || result.citations.length === 0) {
-        event(fleet, claimed.id, at, "waiting_external", result.error);
-        return finish(claimed, "waiting_external", at, result.error);
-      }
-      const detail = result.citations.map((item) => `${item.title} ${item.url}`).join(" | ");
+      if (!executed.ok) return fail(detail);
       event(fleet, claimed.id, at, "tool_result", detail);
-      return advanceWithResult(claimed, detail);
+      return recordStep(claimed, step, at, detail);
+    }
+    // Exception boundaries are per operation: another queued run still receives its turn.
+    if (tool === "web_search") {
+      if (!env.search) return fail("No search provider is configured. Nothing was searched and no citations were created.", "waiting_external");
+      claimed = consumeApproval(claimed, at);
+      try {
+        const result = env.search(claimed.goal);
+        if (!result.ok) return fail(result.error || "Search failed. No successful result was recorded.", "waiting_external");
+        const sources = result.citations.slice(0, 30).map((item, index) => ({ id: item.id ?? `${claimed.id}:${step.id}:source-${index + 1}`, title: item.title.slice(0, 300), url: item.url.slice(0, 2000), ...(item.excerpt ? { excerpt: item.excerpt.slice(0, 2000) } : {}) }));
+        const detail = sources.length ? sources.map(item => `${item.title} ${item.url}${item.excerpt ? `\n${item.excerpt}` : ""}`).join("\n\n") : "Search completed with no matching sources.";
+        event(fleet, claimed.id, at, "tool_result", detail);
+        return recordStep(claimed, step, at, detail, sources, sources.length === 0);
+      } catch { return fail("The search adapter threw an exception. No search result was confirmed; other runs can continue."); }
     }
     if (tool === "browser") {
-      if (!env.browser) {
-        const error = "No browser driver is attached. No page was opened.";
-        event(fleet, claimed.id, at, "waiting_external", error);
-        return finish(claimed, "waiting_external", at, error);
-      }
-      const url = quoteUrl(claimed.goal);
-      if (!url) {
-        const error = "The goal has no http(s) URL. No page was opened.";
-        event(fleet, claimed.id, at, "failed", error);
-        return finish(claimed, "failed", at, error);
-      }
-      const opened = env.browser(url);
-      fleet.browserSessions.unshift({
-        id: nid("tab"),
-        runId: claimed.id,
-        url,
-        title: opened.ok ? opened.title : "",
-        status: opened.ok ? "open" : "failed",
-        lastAction: opened.ok ? "Opened the page." : opened.error,
-        excerpt: opened.ok ? opened.excerpt.slice(0, 500) : "",
-        updatedAt: at,
-      });
-      if (!opened.ok) {
-        event(fleet, claimed.id, at, "failed", opened.error);
-        return finish(claimed, "failed", at, opened.error);
-      }
-      const detail = `${opened.title} ${url}`;
-      event(fleet, claimed.id, at, "tool_result", detail);
-      return advanceWithResult(claimed, detail);
+      if (!env.browser) return fail("No browser driver is attached. No page was opened.", "waiting_external");
+      const url = destinationFor(claimed, step);
+      claimed = consumeApproval(claimed, at);
+      try {
+        const opened = env.browser(url);
+        const evidenceId = `${claimed.id}:${step.id}`;
+        fleet.browserSessions.unshift({ id: nid("tab"), runId: claimed.id, url, title: opened.ok ? opened.title : "", status: opened.ok ? "open" : "failed", lastAction: opened.ok ? "Opened the page; extraction is retained with the run." : opened.error, excerpt: opened.ok ? opened.excerpt.slice(0, 500) : "", excerptTruncated: opened.ok && opened.excerpt.length > 500, evidenceId: opened.ok ? evidenceId : undefined, updatedAt: at });
+        if (!opened.ok) return fail(opened.error);
+        const detail = `${opened.title} ${url}\n${opened.excerpt}`;
+        event(fleet, claimed.id, at, "tool_result", detail);
+        return recordStep(claimed, step, at, detail, [{ id: evidenceId, title: opened.title, url }]);
+      } catch { return fail("The browser adapter threw after dispatch. Its outcome is unknown; inspect the browser before starting a replacement run."); }
     }
+    const request: FleetExternalRequest = { runId: claimed.id, stepId: step.id, goal: claimed.goal, instructions: agent.instructions, projectId: agent.projectId, taskId: claimed.parentId ?? claimed.id, provider: agent.chatProvider ?? null, modelTier: agent.chatTier ?? null, results: claimed.stepResults ?? [], input: step.input };
     if (tool === "gmail_read" || tool === "gmail_send") {
-      const error = "No Gmail account is connected. Nothing was read or sent.";
-      event(fleet, claimed.id, at, "waiting_external", error);
-      return finish(claimed, "waiting_external", at, error);
+      if (!env.gmail) return fail("No Gmail execution adapter is attached to this worker. Nothing was read or sent.", "waiting_external");
+      if (!step.input?.accountId) return fail("Select the exact Gmail account for this operation. Nothing was read or sent.");
+      if (tool === "gmail_send" && (!step.input.recipients?.length || step.input.recipients.some(recipient => !EMAIL.test(recipient)) || !step.input.body?.trim())) return fail("Review valid recipients and the exact message before sending. Nothing was sent.");
+      claimed = consumeApproval(claimed, at);
+      try {
+        const outcome = env.gmail({ ...request, action: tool, accountId: step.input.accountId });
+        if (!outcome.ok) return fail(outcome.error);
+        if (outcome.accountId !== step.input.accountId || !outcome.operationId) return fail("The Gmail adapter did not confirm the selected account and operation. Reconcile its outcome before another attempt.");
+        event(fleet, claimed.id, at, "tool_result", outcome.text);
+        return recordStep(claimed, step, at, outcome.text, [], false, { accountId: outcome.accountId, operationId: outcome.operationId });
+      } catch { return fail("The Gmail adapter threw after dispatch. Its outcome is unknown; reconcile the selected mailbox before another attempt."); }
     }
-    const error = "This worker does not call a model. Nothing was sent.";
-    event(fleet, claimed.id, at, "waiting_external", error);
-    return finish(claimed, "waiting_external", at, error);
+    if (!env.model) return fail("This worker does not call a model without an attached adapter. Nothing was sent.", "waiting_external");
+    if (!request.provider) return fail("Select a provider for this agent before model execution. Nothing was sent.");
+    claimed = consumeApproval(claimed, at);
+    try {
+      const outcome = env.model(request);
+      if (!outcome.ok) return fail(outcome.error);
+      if (outcome.provider !== request.provider || !outcome.model || !outcome.text.trim()) return fail("The model adapter did not return a valid answer with the selected provider identity. No fallback was accepted.");
+      event(fleet, claimed.id, at, "tool_result", `${outcome.provider} · ${outcome.model}: ${outcome.text}`);
+      return recordStep(claimed, step, at, outcome.text, [], false, { provider: outcome.provider, model: outcome.model });
+    } catch { return fail("The model adapter threw after dispatch. A billable outcome may be unknown; inspect the provider receipt before retrying."); }
   });
-  const schedules = fleet.schedules.map((job) => {
+  const schedules = fleet.schedules.map(job => {
     if (!job.lastQueuedRunId) return job;
-    const run = runs.find((item) => item.id === job.lastQueuedRunId);
+    const run = runs.find(item => item.id === job.lastQueuedRunId);
     if (!run || !TERMINAL.has(run.state)) return job;
     return run.state === "completed"
-      ? { ...job, lastRunAt: run.updatedAt, lastStatus: "ran" as const }
-      : { ...job, lastStatus: "failed" as const, lastError: run.error || run.state };
+      ? { ...job, lastRunAt: run.updatedAt, lastStatus: "ran" as const, lastError: "", lastVerification: run.verification?.state ?? "unverified" as const }
+      : { ...job, lastStatus: "failed" as const, lastError: run.error || run.state, lastVerification: run.verification?.state ?? "not_met" as const };
   });
   return withFleet(ws, { ...fleet, schedules, runs: [...extra, ...runs] });
+}
+
+export function configureSchedulePolicy(ws: Workspace, id: string, policy: { timing?: ScheduleTiming; missedPolicy?: MissedSchedulePolicy }): Workspace {
+  return { ...ws, schedules: ws.schedules.map(job => job.id === id ? { ...job, ...policy } : job) };
+}
+
+export function reviewMissedSchedule(ws: Workspace, id: string, runLatest: boolean, now = stamp()): Workspace {
+  if (ws.halted) return ws;
+  return { ...ws, schedules: ws.schedules.map(job => {
+    if (job.id !== id || !job.recoveryPending) return job;
+    const latest = scheduleOccurrences({ ...job, missedPolicy: runLatest ? "latest" : "skip" }, now);
+    const nextRunAt = runLatest ? latest.occurrences[0] ?? latest.nextRunAt : latest.nextRunAt;
+    return { ...job, enabled: true, recoveryPending: false, lastError: "", nextRunAt, recoveryApprovalFor: runLatest ? nextRunAt : undefined };
+  }) };
 }
 
 export function runDueSchedules(ws: Workspace, now: string): Workspace {
   if (ws.halted) return ws;
   let next = ws;
-  const jobs = ws.schedules.map((job) => {
+  const jobs = ws.schedules.map(job => {
     if (!job.enabled || job.nextRunAt > now) return job;
-    if (job.chatId && !next.chats.some((chat) => chat.id === job.chatId && !chat.temporary)) {
+    if (job.chatId && !next.chats.some(chat => chat.id === job.chatId && !chat.temporary)) {
       return { ...job, enabled: false, lastAttemptAt: now, lastError: "The scheduled conversation is unavailable." };
     }
-    const agent = next.agents.find((item) => item.id === job.agentId && !item.archived);
+    const agent = next.agents.find(item => item.id === job.agentId && !item.archived);
     if (!agent) return { ...job, enabled: false, lastAttemptAt: now, lastError: "That agent is not on this device. Nothing was queued." };
-    const occurrenceId = "scheduled:" + job.id + ":" + job.nextRunAt;
-    const existing = next.runs.find((run) => run.id === occurrenceId);
-    const queued = existing ? { ok: true as const, ws: next, run: existing } : enqueueRun(next, agent.id, job.instruction || job.name, now, null, 0, occurrenceId);
-    if (!queued.ok) return { ...job, enabled: false, lastAttemptAt: now, lastError: queued.error };
-    next = queued.ws;
-    const clock = job.clockHour == null ? null : nextClock(now, job.timeZone || "UTC", job.clockHour, job.clockMinute ?? 0, job.nextRunAt);
-    return { ...job, lastAttemptAt: now, lastQueuedRunId: queued.run.id, lastError: "", nextRunAt: clock?.at ?? new Date(Date.parse(now) + job.intervalMinutes * 60_000).toISOString() };
+    const recovery = scheduleOccurrences(job.recoveryApprovalFor === job.nextRunAt ? { ...job, missedPolicy: "latest" } : job, now);
+    if (recovery.needsReview) return { ...job, enabled: false, recoveryPending: true, missedOccurrences: recovery.missed, lastAttemptAt: now, lastError: "This schedule missed its time. Review the missed occurrence before resuming." };
+    let lastQueuedRunId = job.lastQueuedRunId;
+    for (const occurrence of recovery.occurrences) {
+      const occurrenceId = "scheduled:" + job.id + ":" + occurrence;
+      const existing = next.runs.find(run => run.id === occurrenceId);
+      const queued = existing ? { ok: true as const, ws: next, run: existing } : enqueueRun(next, agent.id, job.instruction || job.name, now, null, 0, occurrenceId);
+      if (!queued.ok) return { ...job, enabled: false, nextRunAt: occurrence, lastQueuedRunId, lastAttemptAt: now, lastError: queued.error };
+      next = queued.ws;
+      lastQueuedRunId = queued.run.id;
+    }
+    return { ...job, recoveryPending: false, recoveryApprovalFor: undefined, missedOccurrences: recovery.missed, lastAttemptAt: now, lastQueuedRunId, lastError: "", nextRunAt: recovery.nextRunAt };
   });
   return { ...next, schedules: jobs };
 }

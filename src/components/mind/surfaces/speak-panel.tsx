@@ -1,3 +1,4 @@
+import { useAccountPreferences } from "../account-preferences-context";
 import { useEffect, useMemo, useState } from "react";
 import {
   readStoredVoiceChoice,
@@ -37,9 +38,23 @@ const LINES: { id: string; kind: LineKind; text: string }[] = [
 
 const DEFAULT_NEXT = "Next: press the round Speak button in the composer, then allow the microphone if the browser asks.";
 
+function isStyle(value: string | null): value is VoiceStyle {
+  return value !== null && (VOICE_STYLES as readonly string[]).includes(value);
+}
+
+function isRate(value: string | null): value is RateId {
+  return value !== null && RATES.some((rate) => rate.id === value);
+}
+
+/**
+ * Speak page controls. Preferences belong to the signed-in account on this device.
+ * Voice choice uses the same storage key the composer picker already reads.
+ */
+export function SpeakPanel() {
+  const preferenceStorage = useAccountPreferences();
 function readKey(key: string): string | null {
   try {
-    return window.localStorage.getItem(key);
+    return preferenceStorage.getItem(key);
   } catch {
     return null;
   }
@@ -47,7 +62,7 @@ function readKey(key: string): string | null {
 
 function writeKey(key: string, value: string): boolean {
   try {
-    window.localStorage.setItem(key, value);
+    preferenceStorage.setItem(key, value);
     return true;
   } catch {
     return false;
@@ -67,19 +82,7 @@ function readPins(): string[] {
   }
 }
 
-function isStyle(value: string | null): value is VoiceStyle {
-  return value !== null && (VOICE_STYLES as readonly string[]).includes(value);
-}
 
-function isRate(value: string | null): value is RateId {
-  return value !== null && RATES.some((rate) => rate.id === value);
-}
-
-/**
- * Speak page controls. Preferences stay on this device.
- * Voice choice uses the same storage key the composer picker already reads.
- */
-export function SpeakPanel() {
   const [voice, setVoice] = useState<XaiBuiltinVoice>("eve");
   const [style, setStyle] = useState<VoiceStyle>("Warm");
   const [rate, setRate] = useState<RateId>("natural");
@@ -91,7 +94,7 @@ export function SpeakPanel() {
   const [savedNote, setSavedNote] = useState("Preferences load from this browser.");
 
   useEffect(() => {
-    const storedVoice = readStoredVoiceChoice(window.localStorage);
+    const storedVoice = readStoredVoiceChoice(preferenceStorage);
     const storedStyle = readKey(STYLE_KEY);
     const storedRate = readKey(RATE_KEY);
     const storedAuto = readKey(AUTO_READ_KEY);
@@ -121,7 +124,7 @@ export function SpeakPanel() {
   }
 
   function chooseVoice(nextVoice: XaiBuiltinVoice) {
-    const stored = writeStoredVoiceChoice(nextVoice, window.localStorage);
+    const stored = writeStoredVoiceChoice(nextVoice, preferenceStorage);
     setVoice(stored);
     noteSaved(`${voiceDisplayName(stored)} as the Speak voice`, stored === nextVoice);
   }

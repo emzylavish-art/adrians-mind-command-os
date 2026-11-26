@@ -395,7 +395,6 @@ html[data-theme="light"] .provider-identity {
 @media (max-width: 767.98px) {
   .gpt-home {
     min-height: calc(100dvh - 3.75rem) !important;
-    justify-content: flex-end !important;
     padding: 1rem !important;
   }
 
@@ -479,7 +478,6 @@ html[data-theme="light"] .provider-identity {
 }
 #chat-thread form.thread-composer {
   flex: 0 0 auto !important;
-  max-height: min(68%, 330px) !important;
   padding: 6px 10px !important;
   gap: 4px !important;
   overflow-y: auto !important;
@@ -489,7 +487,6 @@ html[data-theme="light"] .provider-identity {
   inset: auto !important;
   flex: 0 0 auto !important;
   height: auto !important;
-  max-height: 44px !important;
 }
 #chat-thread .jump-to-latest {
   align-self: center;
@@ -565,9 +562,6 @@ html[data-theme="light"] .provider-identity {
 :is(#chat-thread, #command-home) .composer-more__menu > section { flex: none !important; }
 @media (min-width: 768px) {
   #mind-workspace:is([data-view="command"], [data-view="chat"]) > .rail { max-width: 27vw !important; }
-}
-@media (max-height: 540px) {
-  #chat-thread .next-guesses { max-height: 36px !important; }
 }
 
 

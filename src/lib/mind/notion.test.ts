@@ -19,7 +19,9 @@ function fakeFetch(routes: Record<string, { status?: number; body: unknown }>) {
   const fetch = async (url: string, init?: RequestInit) => {
     calls.push(`${init?.method ?? "GET"} ${url}`);
     const key = `${init?.method ?? "GET"} ${url.replace("https://api.notion.com/v1", "")}`;
-    const hit = routes[key] ?? { status: 404, body: { message: "missing" } };
+    const searched = routes["POST /search"]?.body as { results?: { id: string }[] } | undefined;
+    const selected = key.startsWith("GET /pages/") ? searched?.results?.find((p) => p.id === key.slice("GET /pages/".length)) : undefined;
+    const hit = routes[key] ?? (selected ? { body: selected } : { status: 404, body: { message: "missing" } });
     return { ok: (hit.status ?? 200) < 400, status: hit.status ?? 200, json: async () => hit.body };
   };
   return { fetch, calls };

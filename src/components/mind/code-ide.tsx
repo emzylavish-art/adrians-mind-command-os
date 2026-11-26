@@ -8,6 +8,7 @@ import { css } from "@codemirror/lang-css";
 import { html } from "@codemirror/lang-html";
 import { python } from "@codemirror/lang-python";
 import { oneDark } from "@codemirror/theme-one-dark";
+import { normalizeBuildSelection, type BuildEditorSelection } from "@/lib/mind/kimi/build-review";
 
 type IdeFile = { path: string; bytes: number };
 
@@ -77,11 +78,13 @@ function TreeRows(props: { nodes: TreeNode[]; depth: number; selected: string; o
   );
 }
 
-function HighlightedEditor(props: { path: string; text: string; disabled: boolean; onChange: (value: string) => void }) {
+function HighlightedEditor(props: { path: string; text: string; disabled: boolean; selection?: BuildEditorSelection; onSelectionChange?: (selection: BuildEditorSelection) => void; onChange: (value: string) => void }) {
   const host = useRef<HTMLDivElement>(null);
   const viewRef = useRef<EditorView | null>(null);
   const onChange = useRef(props.onChange);
   onChange.current = props.onChange;
+  const onSelectionChange = useRef(props.onSelectionChange);
+  onSelectionChange.current = props.onSelectionChange;
 
   useEffect(() => {
     if (!host.current) return;
@@ -90,6 +93,7 @@ function HighlightedEditor(props: { path: string; text: string; disabled: boolea
       parent: host.current,
       state: EditorState.create({
         doc: props.text,
+        selection: normalizeBuildSelection(props.selection, props.text.length),
         extensions: [
           lineNumbers(),
           oneDark,
@@ -98,6 +102,7 @@ function HighlightedEditor(props: { path: string; text: string; disabled: boolea
           ...(language ? [language] : []),
           EditorView.updateListener.of((update) => {
             if (update.docChanged) onChange.current(update.state.doc.toString());
+            if (update.selectionSet || update.docChanged) onSelectionChange.current?.({ anchor: update.state.selection.main.anchor, head: update.state.selection.main.head });
           }),
         ],
       }),
@@ -132,6 +137,8 @@ export function CodeIde(props: {
   dirty: string[];
   selected: string;
   text: string;
+  selection?: BuildEditorSelection;
+  onSelectionChange?: (selection: BuildEditorSelection) => void;
   busy: boolean;
   notice: string | null;
   newName: string;
@@ -201,7 +208,7 @@ export function CodeIde(props: {
           {!props.tabs.length ? <span className="code-ide-empty">No file open</span> : null}
         </div>
         {props.selected ? (
-          <HighlightedEditor key={props.selectedId} path={props.selected} text={props.text} disabled={props.busy} onChange={props.onChange} />
+          <HighlightedEditor key={props.selectedId} path={props.selected} text={props.text} selection={props.selection} onSelectionChange={props.onSelectionChange} disabled={props.busy} onChange={props.onChange} />
         ) : (
           <p className="code-ide-empty">Select a file from the tree.</p>
         )}

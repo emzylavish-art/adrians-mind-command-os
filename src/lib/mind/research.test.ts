@@ -70,7 +70,10 @@ describe("research gate", () => {
       },
     });
     assert.equal(result.ok, true);
-    assert.deepEqual(result.citations, [{ title: "Pier guide", url: "https://example.com/pier" }]);
+    assert.deepEqual(result.citations.map(({ title, url }) => ({ title, url })), [{ title: "Pier guide", url: "https://example.com/pier" }]);
+    assert.equal(result.citations[0].query, "pier");
+    assert.equal(result.citations[0].verification, "search-result-only");
+    assert.ok(Number.isFinite(Date.parse(result.citations[0].retrievedAt!)));
     assert.equal(JSON.stringify(result).includes("test-key"), false);
   });
 

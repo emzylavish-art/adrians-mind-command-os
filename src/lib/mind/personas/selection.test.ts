@@ -5,6 +5,7 @@ import { emptyWorkspace, WORKSPACE_KEY } from "../workspace.ts";
 import { buildPersonaDirectory } from "./directory.ts";
 import {
   PERSONA_SELECT_KEY,
+  applyPersonaHandoff,
   clearPersonaSelection,
   persistPersonaOpen,
   personaChatHref,
@@ -43,56 +44,36 @@ describe("persona selection", () => {
     assert.equal(result.selection.agentId, made.agent.id);
   });
 
-  it("persists workspace before persona handoff, so an immediate reload retains a template agent", () => {
-    const card = buildPersonaDirectory(emptyFleet()).cards.find((item) => item.templateName === "Personal assistant");
-    assert.ok(card);
-    const picked = selectPersona(emptyWorkspace(), card!, "2026-11-04T08:00:00.000Z");
-    assert.equal(picked.ok, true);
-    if (!picked.ok) return;
-    const values = new Map<string, string>();
-    const calls: string[] = [];
-    const storage = {
-      getItem: (key: string) => values.get(key) ?? null,
-      setItem: (key: string, value: string) => { calls.push(key); values.set(key, value); },
-      removeItem: (key: string) => { values.delete(key); },
-    };
+  it("persists only the selection and applies a template to the latest workspace", () => {
+    const card = buildPersonaDirectory(emptyFleet()).cards.find((item) => item.templateName === "Personal assistant")!;
+    const picked = selectPersona(emptyWorkspace(), card);
+    assert.equal(picked.ok, true); if (!picked.ok) return;
+    const values = new Map<string, string>([[WORKSPACE_KEY, "must remain untouched"]]);
+    const storage = { getItem: (key: string) => values.get(key) ?? null, setItem: (key: string, value: string) => { values.set(key, value); } };
     assert.deepEqual(persistPersonaOpen(storage, picked.ws, picked.selection), { ok: true });
-    assert.equal(calls[0], WORKSPACE_KEY);
-    assert.equal(calls[1], PERSONA_SELECT_KEY);
-    const restored = JSON.parse(values.get(WORKSPACE_KEY) ?? "{}") as ReturnType<typeof emptyWorkspace>;
-    assert.ok(restored.agents.some((item) => item.id === picked.selection.agentId));
-    assert.equal(readPersonaSelection(storage)?.agentId, picked.selection.agentId);
+    assert.equal(values.get(WORKSPACE_KEY), "must remain untouched");
+    const latest = emptyWorkspace(); latest.projects.push({ id: "new-project", name: "Created during handoff", description: "", createdAt: "2026-01-01" });
+    const applied = applyPersonaHandoff(latest, readPersonaSelection(storage));
+    assert.equal(applied.ws.projects[0]?.id, "new-project");
+    assert.equal(applied.agent?.name, "Personal assistant");
+    assert.equal(applyPersonaHandoff(applied.ws, readPersonaSelection(storage)).ws.agents.length, 1);
   });
 
-  it("reports workspace persistence failure", () => {
-    const card = buildPersonaDirectory(emptyFleet()).cards[0]!;
-    const picked = selectPersona(emptyWorkspace(), card);
-    assert.equal(picked.ok, true);
-    if (!picked.ok) return;
+  it("failed selection storage never replaces or partially writes a workspace", () => {
+    const picked = selectPersona(emptyWorkspace(), buildPersonaDirectory(emptyFleet()).cards[0]!);
+    assert.equal(picked.ok, true); if (!picked.ok) return;
     const calls: string[] = [];
     const storage = { setItem(key: string) { calls.push(key); throw new Error("quota"); } };
     assert.deepEqual(persistPersonaOpen(storage, picked.ws, picked.selection), { ok: false, workspacePersisted: false });
-    assert.deepEqual(calls, [WORKSPACE_KEY]);
+    assert.deepEqual(calls, [PERSONA_SELECT_KEY]);
   });
 
-  it("retains the agent and reports partial persistence if selection storage fails", () => {
-    const card = buildPersonaDirectory(emptyFleet()).cards[0]!;
-    const picked = selectPersona(emptyWorkspace(), card);
-    assert.equal(picked.ok, true);
-    if (!picked.ok) return;
-    const values = new Map<string, string>();
-    const calls: string[] = [];
-    const storage = { setItem(key: string, value: string) { calls.push(key); if (key === PERSONA_SELECT_KEY) throw new Error("denied"); values.set(key, value); } };
-    assert.deepEqual(persistPersonaOpen(storage, picked.ws, picked.selection), { ok: false, workspacePersisted: true });
-    assert.deepEqual(calls, [WORKSPACE_KEY, PERSONA_SELECT_KEY]);
-    const restored = JSON.parse(values.get(WORKSPACE_KEY) ?? "{}") as ReturnType<typeof emptyWorkspace>;
-    assert.ok(restored.agents.some((item) => item.id === picked.selection.agentId));
-    const retried = selectPersona(restored, card);
-    assert.equal(retried.ok, true);
-    if (retried.ok) {
-      assert.equal(retried.selection.agentId, picked.selection.agentId);
-      assert.equal(retried.ws.agents.length, 1);
-    }
+  it("a saved persona from another account does not import any workspace or agent", () => {
+    const current = emptyWorkspace();
+    const result = applyPersonaHandoff(current, { agentId: "other-account-agent", agentName: "Other", source: "saved", mode: "agent", at: "2026-01-01" });
+    assert.equal(result.ws, current);
+    assert.equal(result.agent, null);
+    assert.equal(current.agents.length, 0);
   });
 
   it("persists selection for the pending CommandApp mount", () => {

@@ -49,10 +49,17 @@ describe("provider selection HTTP status", () => {
 describe("non-Grok provider path rate limit", () => {
   it("checks the request preflight before consulting helpers and dispatching direct providers", () => {
     const source = readFileSync(new URL("./turn.server.ts", import.meta.url), "utf8");
+    const helper = source.slice(source.indexOf("const help = await collectConsultHelp"), source.indexOf("consultation = help"));
+    const preflight = helper.indexOf("const denied = await preflight(context,");
+    const denial = helper.indexOf("if (denied)");
+    const failure = helper.indexOf("return { ok: false", denial);
+    const dispatch = helper.indexOf("markDispatched();", failure);
+    const invoke = helper.indexOf("askConnectedModule(", dispatch);
+    assert.ok(preflight >= 0 && denial > preflight && failure > denial && dispatch > failure && invoke > dispatch, "each helper checks its exact dispatch context and returns a denial before invoking its adapter");
+    assert.ok(source.indexOf("contextValidation") < source.indexOf("const help = await collectConsultHelp"));
     for (const [branch, call] of [
-      ['if (body.composerMode === "orchestrator")', "await collectConsultHelp("],
-      ['if (requestedProvider === "nemotron"', "await routeSelectedModel("],
-      ['if (selected.id !== "grok")', "await callConfiguredProvider("],
+      ['if (requestedProvider === "nemotron"', "() => routeSelectedModel("],
+      ['if (selected.id !== "grok")', "() => callConfiguredProvider("],
     ]) {
       const start = source.indexOf(branch);
       const dispatch = source.indexOf(call, start);

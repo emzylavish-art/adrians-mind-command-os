@@ -2,8 +2,11 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { describe, it } from "node:test";
 
-const app = readFileSync(new URL("../../components/mind/command-app.tsx", import.meta.url), "utf8");
+const shell = readFileSync(new URL("../../components/mind/command-app.tsx", import.meta.url), "utf8");
+const chatPane = readFileSync(new URL("../../components/mind/chat-pane.tsx", import.meta.url), "utf8");
+const app = [shell, chatPane].join("\n");
 const css = readFileSync(new URL("../../styles.css", import.meta.url), "utf8");
+const layout = readFileSync(new URL("../../components/mind/workspace-layout.css", import.meta.url), "utf8");
 const login = readFileSync(new URL("../../routes/login.tsx", import.meta.url), "utf8");
 
 describe("visual polish contract", () => {
@@ -44,5 +47,13 @@ describe("visual polish contract", () => {
     assert.doesNotMatch(login, /min-h-9/);
     assert.match(login, /min-h-11 rounded-\[calc\(var\(--radius-panel\)-0\.15rem\)\] bg-fg/);
     assert.match(login, /Dismiss/);
+  });
+
+  it("preserves the independently scrollable draft and responsive navigation guards verified by the browser matrix", () => {
+    assert.match(layout, /form\.thread-composer\s*>\s*\.thread-draft\s*\{[^}]*overflow-y:\s*auto/);
+    assert.match(layout, /form\.thread-composer\s*>\s*\.composer-toolbar\s*\{[^}]*flex:\s*0 0 auto/);
+    assert.match(layout, /@media\s*\(min-width:\s*768px\)\s*\{[^}]*button\[aria-label="Open menu"\]\s*\{[^}]*display:\s*none\s*!important/);
+    assert.match(layout, /\.rail nav \.nav-item\s*\{[^}]*white-space:\s*normal[^}]*overflow-wrap:\s*anywhere/);
+    assert.ok(chatPane.indexOf('<ConversationComparison') > chatPane.indexOf('<details id="thread-chat-settings"'), "Comparison belongs in settings, leaving the transcript's ordinary layout bounded.");
   });
 });
