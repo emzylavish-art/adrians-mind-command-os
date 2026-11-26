@@ -1,6 +1,7 @@
 import { DEV_USER_ID, isLoopbackPreview, requireUserId } from "../auth/verify.server";
 import { guardMindEnv } from "./isolation";
 import { checkTurnSize, createChatTurnPreflight } from "./limits";
+import { consumeSharedMindRateLimit } from "./rate-limit.server.ts";
 import { assembleTurn } from "./prompt";
 import { sanitizeAttachments, type ImageAttachment } from "./media";
 import type { ChatContent } from "./media/types";
@@ -10,7 +11,7 @@ import { allowedModelIds, isConnectedGrokModel, resolveModelTier, type ResolvedM
 import { assertLiveProvider } from "./providers";
 import { callConfiguredProvider, httpStatusForProviderSelection, routeSelectedModel, selectProvider } from "./provider-call";
 import { configuredProviders } from "./provider-call";
-import { ADRIAN_MIND_IDENTITY, builtinModules, collectConsultHelp, customModules, orchestratorInstruction, planModelConsult } from "./model-consult.ts";
+import { ADRIAN_MIND_IDENTITY, builtinModules, collectConsultReport, customModules, isLocalConsultRunner, orchestratorInstruction, planModelConsult, type ConsultAttempt, type ConsultHelperReply } from "./model-consult.ts";
 import { adrianPcEnabled, runAdrianPc } from "./adrian-pc.server.ts";
 import { consequentialSpeechRefusal } from "./frontier-2031.ts";
 import { destructiveSpeechRefusal } from "./reversibility.ts";
@@ -58,6 +59,8 @@ export type TurnBody = {
   botKnowledge?: unknown;
   composerMode?: unknown;
   orchestrator?: unknown;
+  consult?: unknown;
+  freeOnly?: unknown;
 };
 
 function isHistory(item: unknown): item is HistoryInputMessage {
@@ -79,7 +82,7 @@ function directTurnContext(body: TurnBody, text: string, history: HistoryInputMe
   const memoryContext = Array.isArray(body.memoryContext) ? body.memoryContext.filter(isNote).slice(0, 12) : [];
   const sized = checkTurnSize({ text, history, memoryContext, images: [] });
   if (!sized.ok) return sized;
-  const assembled = assembleTurn({ text, history: [], memory: body.memory === "on" ? "on" : "off", memoryContext,
+  const assembled = assembleTurn({ text, allowHistoryImages: false, history: [], memory: body.memory === "on" ? "on" : "off", memoryContext,
     personalityId: body.personalityId, customPersonality: body.customPersonality, botKnowledge: body.botKnowledge, consultHelp });
   if (!assembled.ok) return assembled;
   return { ok: true as const, systemPrompt: String(assembled.messages[0].content), usedIds: assembled.usedIds };
@@ -267,7 +270,8 @@ async function handleLogicTurn(userId: string, data: TurnBody, route: LogicRoute
   if (!memory) return json({ ok: false, error: "Memory setting is invalid." }, 400);
   const gate = envCheck();
   if (!gate.ok) return json({ ok: false, error: gate.error });
-  const assembled = assembleTurn({ memory, history, text, memoryContext, images: [], personalityId: data.personalityId, customPersonality: data.customPersonality, botKnowledge: data.botKnowledge });
+  const assembled = assembleTurn({
+    allowHistoryImages: false, memory, history, text, memoryContext, images: [], personalityId: data.personalityId, customPersonality: data.customPersonality, botKnowledge: data.botKnowledge });
   if (!assembled.ok) return json({ ok: false, error: assembled.error }, 400);
   const flat = toAdapterMessages(assembled.messages);
   if (!flat.ok) return json({ ok: false, error: flat.error }, 400);
@@ -397,17 +401,52 @@ async function dispatchMindTurn(request: Request, userId: string, data: Record<s
       return new Response(stream, { headers: { "content-type": "text/event-stream", "cache-control": "no-store" } });
     }
   }
-  const ratePreflight = createChatTurnPreflight(userId, async () => false);
-  const preflight = async () => (await checkStop()) ?? ratePreflight();
+  if (body.freeOnly !== undefined && typeof body.freeOnly !== "boolean") return json({ ok: false, error: "Invalid free-only setting. Nothing was sent." }, 400);
+  if (body.freeOnly === true && body.composerMode !== "orchestrator") {
+    const selected = typeof body.provider === "string" ? body.provider : "grok";
+    if (body.logicRoute || (!selected.startsWith("custom:") && !["openrouter", "nemotron", "ollama"].includes(selected))) {
+      return json({ ok: false, error: "Free-only mode does not authorize this provider's pricing. Choose an explicit free or local route. Nothing was sent." }, 400);
+    }
+    if (selected === "ollama" && !isLocalConsultRunner(process.env.LOCAL_MODEL_URL)) return json({ ok: false, error: "Free-only mode cannot establish that this runner is local. Configure a loopback runner or explicitly allow the selected route. Nothing was sent." }, 400);
+  }
+  const ratePreflight = createChatTurnPreflight(userId, async () => false, consumeSharedMindRateLimit);
+  const preflight = async () => {
+    if (request.signal.aborted) return json({ ok: false, error: "This send was canceled. No further provider calls were sent." }, 499);
+    const blocked = (await checkStop()) ?? await ratePreflight();
+    if (blocked) return blocked;
+    const calls = await consumeSharedMindRateLimit("provider-call", userId, 12);
+    if (!calls.ok) return json({ ok: false, error: "unavailable" in calls && calls.unavailable ? "Provider call limits could not be checked. Nothing further was sent." : "Provider call limit reached. Helpers and final answers each count toward this limit." }, "unavailable" in calls && calls.unavailable ? 503 : 429, String(calls.retryAfterSec));
+    return null;
+  };
   let consultHelp = "";
+  let consultAttempts: ConsultAttempt[] = [];
   if (body.composerMode === "orchestrator") {
     const asked = typeof body.text === "string" ? body.text.trim() : "";
     const orchestrator = typeof body.orchestrator === "string" && body.orchestrator
       ? body.orchestrator
       : typeof body.provider === "string" ? body.provider : "";
+    const tierCheck = parseModelTierField(body.modelTier);
+    if (!tierCheck.ok) return json({ ok: false, error: tierCheck.error }, 400);
+    if (body.memory !== undefined && body.memory !== "on" && body.memory !== "off") return json({ ok: false, error: "Invalid memory setting. Nothing was sent." }, 400);
+    const sizeCheck = checkTurnSize({ text: asked,
+      history: Array.isArray(body.history) ? body.history.filter(isHistory).slice(-12) : [],
+      memoryContext: Array.isArray(body.memoryContext) ? body.memoryContext.filter(isNote).slice(0, 12) : [],
+      images: sanitizeAttachments(body.images) });
+    if (!sizeCheck.ok) return json({ ok: false, error: sizeCheck.error }, 400);
     const modules = await modulesConnectedNow(userId);
-    const planned = planModelConsult({ orchestrator, modules, question: asked });
+    const consult = body.consult && typeof body.consult === "object" ? body.consult as { helperIds?: unknown; allowPaidHelpers?: unknown } : {};
+    if (consult.helperIds != null && (!Array.isArray(consult.helperIds) || !consult.helperIds.every((id) => typeof id === "string"))) return json({ ok: false, error: "Choose helper models by their connected identities. Nothing was sent." }, 400);
+    if (consult.allowPaidHelpers != null && typeof consult.allowPaidHelpers !== "boolean") return json({ ok: false, error: "Invalid helper spending authorization. Nothing was sent." }, 400);
+    const helperIds = Array.isArray(consult.helperIds) && consult.helperIds.every((id) => typeof id === "string") ? consult.helperIds as string[] : undefined;
+    const planned = planModelConsult({ orchestrator, modules, question: asked,
+      helperIds: sanitizeAttachments(body.images).length ? [] : helperIds,
+      allowPaidHelpers: consult.allowPaidHelpers === true,
+      freeOnly: body.freeOnly === true });
     if (!planned.ok) return json({ ok: false, error: planned.error, provider: orchestrator }, 400);
+    const mainSelection = selectProvider(planned.plan.orchestrator, process.env);
+    if (mainSelection.ok && mainSelection.id !== "grok" && typeof body.requestedModel === "string" && body.requestedModel !== mainSelection.model) {
+      return json({ ok: false, error: "The configured answering model changed. Choose the current model before requesting helpers. Nothing was sent." }, 409);
+    }
     if (sanitizeAttachments(body.images).length && planned.plan.orchestrator !== "grok") {
       return json({
         ok: false,
@@ -415,14 +454,16 @@ async function dispatchMindTurn(request: Request, userId: string, data: Record<s
         provider: planned.plan.orchestrator,
       }, 400);
     }
-    const blocked = await preflight();
+    const blocked = (await checkStop()) ?? await ratePreflight();
     if (blocked) return blocked;
-    const help = await collectConsultHelp(planned.plan, async (id, requestText) => {
-      if (await preflight()) return { ok: false, text: "" };
+    const report = await collectConsultReport(planned.plan, async (id, requestText, signal) => {
+      const denied = await preflight();
+      if (denied) return { ok: false, text: "", error: "The current stop or provider-call policy prevented this helper from running." };
       markDispatched();
-      return askConnectedModule(userId, id, requestText);
-    });
-    consultHelp = orchestratorInstruction(planned.plan, help);
+      return askConnectedModule(userId, id, requestText, signal);
+    }, { signal: request.signal });
+    consultAttempts = report.attempts;
+    consultHelp = orchestratorInstruction(planned.plan, report.help, report.attempts);
     body = { ...body, provider: planned.plan.orchestrator, logicRoute: undefined };
   }
   const tierField = parseModelTierField(body.modelTier);
@@ -447,7 +488,7 @@ async function dispatchMindTurn(request: Request, userId: string, data: Record<s
     if (!sized.ok) return json(sized, 400);
     const gate = envCheck();
     if (!gate.ok) return json({ ok: false, error: gate.error }, 503);
-    const assembled = assembleTurn({ memory, history, text, memoryContext, images: [], personalityId: body.personalityId, customPersonality: body.customPersonality, botKnowledge: body.botKnowledge, consultHelp });
+    const assembled = assembleTurn({ allowHistoryImages: false, memory, history, text, memoryContext, images: [], personalityId: body.personalityId, customPersonality: body.customPersonality, botKnowledge: body.botKnowledge, consultHelp });
     if (!assembled.ok) return json({ ok: false, error: assembled.error }, 400);
     const formatted = toAdapterMessages(assembled.messages);
     if (!formatted.ok) return json({ ok: false, error: formatted.error }, 400);
@@ -455,9 +496,9 @@ async function dispatchMindTurn(request: Request, userId: string, data: Record<s
     if (blocked) return blocked;
     try {
       markDispatched();
-      const result = await executeCustomChat(userId, chosen, formatted.messages, request.signal);
+      const result = await executeCustomChat(userId, chosen, formatted.messages, request.signal, { freeOnly: body.freeOnly === true });
       if (!result.ok) return json(result, result.httpStatus ?? 502);
-      const done = { text: result.text, model: result.model, provider: result.provider, requestedModel: chosen.model, usedIds: assembled.usedIds, usage: result.usage, requestId: result.requestId };
+      const done = { consult: consultAttempts, text: result.text, model: result.model, provider: result.provider, requestedModel: chosen.model, usedIds: assembled.usedIds, usage: result.usage, requestId: result.requestId };
       const stream = `event: delta\ndata: ${JSON.stringify({ text: result.text })}\n\nevent: done\ndata: ${JSON.stringify(done)}\n\n`;
       return new Response(stream, { headers: { "content-type": "text/event-stream", "cache-control": "no-store" } });
     } catch {
@@ -500,7 +541,7 @@ async function dispatchMindTurn(request: Request, userId: string, data: Record<s
       fetch: globalThis.fetch,
     });
     if (!routed.ok) return json({ ok: false, error: routed.error, provider: requestedProvider }, routed.httpStatus ?? 502, routed.retryAfter);
-    const done = { text: routed.text, model: routed.model, requestedModel: routed.requestedModel, provider: requestedProvider === "nemotron" ? "openrouter" : requestedProvider, usage: null, usedIds: context.usedIds, requestId: null };
+    const done = { consult: consultAttempts, text: routed.text, model: routed.model, requestedModel: routed.requestedModel, provider: requestedProvider === "nemotron" ? "openrouter" : requestedProvider, usage: null, usedIds: context.usedIds, requestId: null };
     const stream = "event: delta\ndata: " + JSON.stringify({ text: routed.text }) + "\n\nevent: done\ndata: " + JSON.stringify(done) + "\n\n";
     return new Response(stream, { headers: { "content-type": "text/event-stream", "cache-control": "no-store" } });
   }
@@ -549,7 +590,7 @@ async function dispatchMindTurn(request: Request, userId: string, data: Record<s
     });
     if (!called.ok) return json({ ok: false, error: called.error, provider: selected.id }, called.httpStatus ?? 502, called.retryAfter);
     // Use the same SSE contract as the Grok and custom-provider chat paths.
-    const done = { text: called.text, model: reportedModel(called.model), requestedModel: selected.model, provider: selected.id, usage: null, usedIds: context.usedIds, requestId: null };
+    const done = { consult: consultAttempts, text: called.text, model: reportedModel(called.model), requestedModel: selected.model, provider: selected.id, usage: null, usedIds: context.usedIds, requestId: null };
     const stream = "event: delta\ndata: " + JSON.stringify({ text: called.text }) +
       "\n\nevent: done\ndata: " + JSON.stringify(done) + "\n\n";
     return new Response(stream, { headers: { "content-type": "text/event-stream", "cache-control": "no-store" } });
@@ -598,6 +639,7 @@ async function dispatchMindTurn(request: Request, userId: string, data: Record<s
       reasoning_effort: prepared.modelTier.params.reasoning_effort,
     },
     meta: {
+      consult: consultAttempts,
       modelTier: prepared.modelTier.selected,
       resolvedTier: prepared.modelTier.resolved,
       tierReason: prepared.modelTier.reason,
@@ -616,6 +658,9 @@ async function modulesConnectedNow(userId: string) {
     grokConfigured: resolveXaiInferenceApiKey(process.env).ok,
     providers: configuredProviders(process.env),
     localRunner: Boolean(process.env.LOCAL_MODEL_URL),
+    localRunnerUrl: process.env.LOCAL_MODEL_URL,
+    openrouterModel: process.env.OPENROUTER_MODEL,
+    ollamaModel: process.env.OLLAMA_MODEL,
   });
   try {
     const { listAiProviders } = await import("./ai-provider-config.server.ts");
@@ -627,56 +672,41 @@ async function modulesConnectedNow(userId: string) {
   return modules;
 }
 
-async function askConnectedModule(userId: string, id: string, requestText: string): Promise<{ ok: boolean; text: string }> {
+async function askConnectedModule(userId: string, id: string, requestText: string, signal?: AbortSignal): Promise<ConsultHelperReply> {
+  if (signal?.aborted) return { ok: false, text: "", error: "Canceled before provider dispatch." };
   if (id.startsWith("custom:")) {
     const chosen = parseCustomProviderChoice(id);
-    if (!chosen.ok) return { ok: false, text: "" };
+    if (!chosen.ok) return { ok: false, text: "", error: chosen.error };
     const result = await executeCustomChat(userId, chosen, [
-      { role: "system", content: ADRIAN_MIND_IDENTITY },
-      { role: "user", content: requestText },
-    ]);
-    return result.ok ? { ok: true, text: result.text } : { ok: false, text: "" };
+      { role: "system", content: ADRIAN_MIND_IDENTITY }, { role: "user", content: requestText },
+    ], signal);
+    return result.ok ? { ...result, requestedModel: chosen.model } : { ok: false, text: "", error: result.error, requestedModel: chosen.model };
   }
   if (id === "grok") {
     const keyed = resolveXaiInferenceApiKey(process.env);
-    if (!keyed.ok) return { ok: false, text: "" };
+    if (!keyed.ok) return { ok: false, text: "", error: keyed.error };
     try {
       const res = await fetch("https://api.x.ai/v1/chat/completions", {
-        method: "POST",
-        signal: AbortSignal.timeout(20_000),
+        method: "POST", signal: signal ? AbortSignal.any([signal, AbortSignal.timeout(20_000)]) : AbortSignal.timeout(20_000),
         headers: { "content-type": "application/json", authorization: `Bearer ${keyed.key}` },
-        body: JSON.stringify({
-          model: "grok-4.5",
-          messages: [
-            { role: "system", content: ADRIAN_MIND_IDENTITY },
-            { role: "user", content: requestText },
-          ],
-          max_tokens: 400,
-          stream: false,
-        }),
+        body: JSON.stringify({ model: "grok-4.5", messages: [
+          { role: "system", content: ADRIAN_MIND_IDENTITY }, { role: "user", content: requestText },
+        ], max_tokens: 400, stream: false }),
       });
-      if (!res.ok) return { ok: false, text: "" };
+      if (!res.ok) return { ok: false, text: "", error: `Grok helper returned HTTP ${res.status}.`, provider: "grok", requestedModel: "grok-4.5" };
       const parsed = readModelPayload(await res.text());
-      return parsed.text ? { ok: true, text: parsed.text } : { ok: false, text: "" };
-    } catch {
-      return { ok: false, text: "" };
-    }
+      return { ok: Boolean(parsed.text), text: parsed.text, error: parsed.text ? undefined : "Grok helper returned no text.", provider: "grok", model: reportedModel(parsed.model), requestedModel: "grok-4.5", usage: parsed.usage, requestId: res.headers.get("x-request-id") };
+    } catch { return { ok: false, text: "", error: "Grok helper could not complete.", provider: "grok", requestedModel: "grok-4.5" }; }
   }
   if (id === "nemotron" || id === "ollama" || id === "openrouter") {
-    const result = await routeSelectedModel({ id, prompt: requestText, env: process.env, fetch: globalThis.fetch });
-    return { ok: result.ok, text: result.text };
+    const result = await routeSelectedModel({ id, prompt: requestText, env: process.env, fetch: globalThis.fetch, signal });
+    return { ...result, provider: id === "nemotron" ? "openrouter" : id };
   }
   const selected = selectProvider(id, process.env);
-  if (!selected.ok || selected.id === "grok") return { ok: false, text: "" };
+  if (!selected.ok || selected.id === "grok") return { ok: false, text: "", error: selected.ok ? "Invalid helper route." : selected.error };
   const keyName = selected.id === "openai" ? "OPENAI_API_KEY" : selected.id === "anthropic" ? "ANTHROPIC_API_KEY" : selected.id === "gemini" ? "GEMINI_API_KEY" : "OPENROUTER_API_KEY";
   const key = process.env[keyName] ?? "";
-  if (!key) return { ok: false, text: "" };
-  const called = await callConfiguredProvider({
-    id: selected.id,
-    key,
-    prompt: requestText,
-    systemPrompt: ADRIAN_MIND_IDENTITY,
-    fetch: globalThis.fetch,
-  });
-  return called.ok ? { ok: true, text: called.text } : { ok: false, text: "" };
+  if (!key) return { ok: false, text: "", error: "The selected helper has no configured credential." };
+  const called = await callConfiguredProvider({ id: selected.id, key, model: selected.model, prompt: requestText, systemPrompt: ADRIAN_MIND_IDENTITY, fetch: globalThis.fetch, signal });
+  return { ...called, provider: selected.id, requestedModel: selected.model };
 }

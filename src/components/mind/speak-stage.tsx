@@ -4,6 +4,7 @@ import { createPortal } from "react-dom";
 import { ArrowUp, AudioLines, Camera, Mic, MicOff, MonitorUp, PhoneOff, Plus, Settings, Volume2, VolumeX, X } from "lucide-react";
 import { openCameraStream, openScreenStream } from "@/components/mind/live-voice-bar/frame-capture";
 import { sharedAudioOutput } from "@/lib/mind/voice/audio-output";
+import type { SpeakSelection, SpeakStageReceipt } from "@/lib/mind/voice/staged-pipeline";
 import {
   readStoredVoiceChoice,
   voiceDisplayName,
@@ -54,7 +55,15 @@ export function SpeakStage(props: {
   micMuted: boolean;
   onMicMute: (muted: boolean) => void;
   recording: boolean;
-  onAsk?: (text: string) => Promise<string | null | { reply?: string; error?: string }>;
+  onAsk?: (text: string) => Promise<string | null | { reply?: string; error?: string; spoken?: boolean }>;
+  onTurn?: () => Promise<{ reply?: string; error?: string; spoken?: boolean }>;
+  selection?: SpeakSelection;
+  onSelection?: (next: SpeakSelection) => void;
+  answerProvider?: string;
+  answerChoices?: { id: string; label: string; enabled: boolean }[];
+  onAnswerProvider?: (id: string) => void;
+  receipt?: SpeakStageReceipt | null;
+  onSpeakerMute?: (muted: boolean) => void;
   onKeepRecording?: (stream: MediaStream) => void;
   onEmergencyStop?: () => void;
   halted?: boolean;
@@ -80,6 +89,7 @@ export function SpeakStage(props: {
   keepRef.current = props.onKeepRecording;
   const [source, setSource] = useState<"none" | "camera" | "screen">("none");
   const [connecting, setConnecting] = useState(false);
+  const [conversationMode, setConversationMode] = useState<"staged" | "realtime">("staged");
   const [notice, setNotice] = useState<string | null>(null);
   const [line, setLine] = useState("");
   const [asking, setAsking] = useState(false);
@@ -174,6 +184,7 @@ export function SpeakStage(props: {
       stopVideo();
       setSettingsOpen(false);
       setConnecting(false);
+      setAsking(false);
       setRecordingPending(false);
       setReply("");
       setNotice(null);
@@ -223,6 +234,21 @@ export function SpeakStage(props: {
   }
 
   async function startLive() {
+    if (conversationMode === "staged") {
+      if (!props.signedIn) { props.onSignIn(); return; }
+      if (props.halted || connecting || asking || !props.onTurn) return;
+      const generation = callGeneration.current;
+      setConnecting(true); setShowTranscript(true); setNotice("Recording one turn, up to six seconds…");
+      try {
+        const result = await props.onTurn();
+        if (generation !== callGeneration.current || !openRef.current) return;
+        setReply(result.reply ?? "");
+        setNotice(result.error ?? (result.spoken ? "Reply spoken." : "Reply saved. Speech output was not used."));
+      } finally {
+        if (generation === callGeneration.current && openRef.current) setConnecting(false);
+      }
+      return;
+    }
     if (props.freeOnly) { setNotice("Free-only mode keeps xAI realtime voice off."); return; }
     if (!props.signedIn) { props.onSignIn(); return; }
     if (props.halted || connecting || props.live) return;
@@ -300,6 +326,7 @@ export function SpeakStage(props: {
   function toggleSpeaker() {
     const next = !speakerMuted;
     setSpeakerMuted(next);
+    props.onSpeakerMute?.(next);
     if (next) window.speechSynthesis?.cancel();
     setNotice(next ? "Speaker muted for this call." : "Speaker on.");
   }
@@ -308,15 +335,17 @@ export function SpeakStage(props: {
     const text = line.trim();
     if (!text || !props.onAsk || asking || props.halted) return;
     if (!props.signedIn) { props.onSignIn(); return; }
+    const generation = callGeneration.current;
     setAsking(true);
     setShowTranscript(true);
     setReply("");
     setNotice("Adrian is answering. The reply will be spoken.");
     try {
       const result = await props.onAsk(text);
+      if (generation !== callGeneration.current || !openRef.current) return;
       if (result && typeof result === "object") {
         setReply(result.reply ?? "");
-        setNotice(result.error ?? (result.reply ? "Spoken." : "The reply did not include text."));
+        setNotice(result.error ?? (result.spoken ? "Spoken." : result.reply ? "Reply saved. Speech output was not used." : "The reply did not include text."));
         if (!result.error) setLine("");
       } else {
         setReply("");
@@ -324,10 +353,11 @@ export function SpeakStage(props: {
         if (!result) setLine("");
       }
     } catch {
+      if (generation !== callGeneration.current || !openRef.current) return;
       setReply("");
       setNotice("The reply did not finish. Nothing was spoken.");
     } finally {
-      setAsking(false);
+      if (generation === callGeneration.current && openRef.current) setAsking(false);
     }
   }
 
@@ -347,7 +377,7 @@ export function SpeakStage(props: {
         }
         if (event.key !== "Tab") return;
         const root = settingsOpen ? dialogRef.current?.querySelector(".speak-sheet") : dialogRef.current;
-        const controls = root?.querySelectorAll<HTMLElement>('button:not([disabled]), input:not([hidden]):not([disabled])');
+        const controls = root?.querySelectorAll<HTMLElement>('button:not([disabled]), input:not([hidden]):not([disabled]), select:not([disabled])');
         if (!controls?.length) return;
         const first = controls[0], last = controls[controls.length - 1];
         if (event.shiftKey && (document.activeElement === first || document.activeElement === root)) { event.preventDefault(); last.focus(); }
@@ -356,7 +386,7 @@ export function SpeakStage(props: {
     >
       <video ref={videoRef} className={source === "none" ? "is-hidden" : source} playsInline muted autoPlay />
       <div className="speak-call__top">
-        <span>Adrian’s Mind <span className="speak-call__provider">/ {props.freeOnly ? "Free-only · cloud voice off" : "xAI realtime"}</span></span>
+        <span>Adrian’s Mind <span className="speak-call__provider">/ {props.live ? "xAI realtime session" : conversationMode === "staged" ? "Separate speech and answer providers" : "xAI realtime selected"}</span></span>
         <div className="speak-call__safety">
           <button type="button" data-testid="speak-emergency-stop" onClick={() => cutSpeechRef.current("owner")}>Emergency stop</button>
           {props.halted && <button type="button" data-testid="speak-clear-stop" onClick={clearStop}>Clear stop</button>}
@@ -366,7 +396,9 @@ export function SpeakStage(props: {
         <div className="speak-call__symbol" aria-hidden="true"><AudioLines /></div>
         <h2>Speak with Adrian</h2>
         <p role="status" data-testid="speak-status">{status}</p>
-        {!props.live && <button type="button" className="speak-call__place" disabled={props.halted || connecting || recordingPending || props.recording} onClick={() => void startLive()}>{!props.signedIn ? "Sign in to speak" : connecting ? "Connecting…" : props.callError ? "Retry live conversation" : "Start live conversation"}</button>}
+        {!props.live && <label className="block text-sm">Conversation mode <select aria-label="Speak conversation mode" value={conversationMode} disabled={connecting || asking} onChange={(event) => setConversationMode(event.target.value === "realtime" ? "realtime" : "staged")}><option value="staged">Turn by turn · selected answer provider</option><option value="realtime">xAI realtime · audio and answer</option></select></label>}
+        {!props.live && <button type="button" className="speak-call__place" disabled={props.halted || connecting || asking || recordingPending || props.recording} onClick={() => void startLive()}>{!props.signedIn ? "Sign in to speak" : connecting ? (conversationMode === "staged" ? "Recording / answering…" : "Connecting…") : conversationMode === "staged" ? "Record one turn" : "Start xAI realtime"}</button>}
+        {props.receipt && <p className="speak-call__transcript" data-testid="speak-stage-receipt">Input: {props.receipt.input} · Answer: {props.receipt.answer}{props.receipt.model ? ` / ${props.receipt.model}` : ""} · Speech: {props.receipt.output}{props.receipt.spoken ? " · played" : ""}</p>}
         {props.callError && <p className="speak-call__transcript" role="alert">{props.callError}</p>}
         {notice && <p className="speak-call__transcript" data-testid="speak-speech-cut" role="status">{notice}</p>}
         {showTranscript && transcript && <p className="speak-call__transcript" data-testid="speak-transcript">{transcript}</p>}
@@ -396,14 +428,22 @@ export function SpeakStage(props: {
       </div>
       {settingsOpen ? (
         <section className="speak-sheet" aria-label="Voice settings">
+          <div className="grid gap-3 p-3 text-sm" data-testid="speak-stage-choices">
+            <p>Turn by turn uses these independent stages. xAI realtime has its own audio and answer model.</p>
+            <label>Audio input <select aria-label="Speech input provider" value={props.selection?.input ?? "handy"} onChange={(event) => props.onSelection?.({ ...props.selection!, input: event.target.value as SpeakSelection["input"] })}><option value="handy">Handy · local engine</option><option value="xai" disabled={props.freeOnly}>xAI transcription · cloud</option><option value="openai" disabled={props.freeOnly}>OpenAI transcription · cloud</option></select></label>
+            <label>Answer provider <select aria-label="Speak answer provider" value={props.answerProvider} onChange={(event) => props.onAnswerProvider?.(event.target.value)}>{props.answerChoices?.map((item) => <option key={item.id} value={item.id} disabled={!item.enabled}>{item.label}{!item.enabled ? " · unavailable" : ""}</option>)}</select></label>
+            <label>Speech output <select aria-label="Speech output provider" value={props.selection?.output ?? "browser"} onChange={(event) => props.onSelection?.({ ...props.selection!, output: event.target.value as SpeakSelection["output"] })}><option value="browser">Browser speech</option><option value="none">Text only</option><option value="xai" disabled={props.freeOnly}>xAI · selected voice · cloud</option><option value="openai" disabled={props.freeOnly}>OpenAI · Alloy · cloud</option></select></label>
+            {props.freeOnly && <p>Free-only mode allows local input and browser speech. Cloud speech stages stay off. Each selected stage reports its actual result.</p>}
+          </div>
           <header>
             <button ref={closeSettingsButton} type="button" aria-label="Close voice settings" onClick={closeSettings}><X /></button>
             <h2>Voice settings</h2>
           </header>
-          <button type="button" className="speak-sheet__voice" onClick={() => chooseVoice(VOICES[(VOICES.findIndex((item) => item.id === voice) + 1) % VOICES.length].id)}>
-            <span>Voice</span>
+          <button type="button" className="speak-sheet__voice" disabled={conversationMode === "staged" && props.selection?.output !== "xai"} onClick={() => chooseVoice(VOICES[(VOICES.findIndex((item) => item.id === voice) + 1) % VOICES.length].id)}>
+            <span>xAI voice</span>
             <strong>{voiceDisplayName(voice)}</strong>
           </button>
+          {conversationMode === "staged" && props.selection?.output !== "xai" && <p className="text-xs text-muted">{props.selection?.output === "browser" ? "Browser speech uses your system's default voice." : props.selection?.output === "openai" ? "OpenAI speech uses Alloy." : "Text-only output does not use a voice."}</p>}
           <p>Personality</p>
           <p className="text-xs text-muted">Personality changes how the reply is written. Voice changes who speaks it.</p>
           <div className="speak-sheet__styles">
@@ -412,10 +452,11 @@ export function SpeakStage(props: {
           <label className="speak-sheet__volume">Volume
             <input aria-label="Speaker volume" type="range" min={0} max={100} value={volume} onChange={(event) => chooseVolume(Number(event.target.value))} />
           </label>
-          <p>Voice activation</p>
+          <p>Realtime voice activation</p>
           <div className="speak-sheet__activation" role="group" aria-label="Voice activation">
-            {ACTIVATION.map((item) => <button key={item.id} type="button" aria-pressed={activation === item.id} onClick={() => chooseActivation(item.id)}>{item.label}</button>)}
+            {ACTIVATION.map((item) => <button key={item.id} type="button" disabled={conversationMode === "staged"} aria-pressed={activation === item.id} onClick={() => chooseActivation(item.id)}>{item.label}</button>)}
           </div>
+          {conversationMode === "staged" && <p className="text-xs text-muted">Turn-by-turn input records one bounded take when you press Record one turn.</p>}
           <div className="speak-sheet__rates" role="group" aria-label="Speaking pace">
             {RATES.map((item) => <button key={item.id} type="button" aria-pressed={rate === item.id} onClick={() => chooseRate(item.id)}>{item.label}</button>)}
           </div>

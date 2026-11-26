@@ -7,6 +7,7 @@ import { MIND_MAX_BODY_BYTES } from "./request-body.ts";
 
 import { isConnectedGrokModel, type ModelTier } from "./model-tiers.ts";
 import { normalizeBotKnowledge, normalizeBotModel } from "./bot-model.ts";
+import { referencedHistoryImages } from "./media/history.ts";
 
 export type { ModelTier };
 
@@ -350,17 +351,20 @@ export type ChatTurnBodyInput = {
   orchestrator?: string | null;
   composerMode?: string;
   identity?: string;
-  consult?: { available: string[]; helpers: { id: string; request: string }[]; purpose: string } | null;
+  freeOnly?: boolean;
+  consult?: { available: string[]; helpers: { id: string; request: string }[]; purpose: string; helperIds?: string[]; allowPaidHelpers?: boolean } | null;
   images: unknown[];
 };
 
 /** Client JSON for POST /api/mind/turn. The server re-resolves model and endpoint. */
-export function chatTurnBody(input: ChatTurnBodyInput): Record<string, unknown> {
-  const body = {
+export type HistoryBodyOmission = { messageIndex: number; name: string; reason: "request_body_budget" };
+export function chatTurnBody(input: ChatTurnBodyInput): Record<string, unknown> & { historyImageOmissions?: HistoryBodyOmission[] } {
+  const body: Record<string, unknown> & { history: unknown[]; historyImageOmissions?: HistoryBodyOmission[] } = {
     text: input.text,
     ...(input.chatId ? { chatId: input.chatId } : {}),
     memory: input.memory,
     halted: input.halted,
+    ...(input.freeOnly !== undefined ? { freeOnly: input.freeOnly } : {}),
     history: input.history.slice(-12),
     memoryContext: input.memoryContext,
     ...(normalizeBotKnowledge(input.botKnowledge).knowledge ? { botKnowledge: normalizeBotKnowledge(input.botKnowledge).knowledge } : {}),
@@ -378,11 +382,33 @@ export function chatTurnBody(input: ChatTurnBodyInput): Record<string, unknown> 
   };
   const size = () => new TextEncoder().encode(JSON.stringify(body)).byteLength;
   if (body.history.length && size() > MIND_MAX_BODY_BYTES) {
-    for (let i = 0; i < body.history.length; i++) {
-      const turn = body.history[i];
-      if (!turn || typeof turn !== "object" || !("images" in turn) || !Array.isArray(turn.images) || !turn.images.length) continue;
-      body.history[i] = { ...turn, images: [] };
-      if (size() <= MIND_MAX_BODY_BYTES) break;
+    const originals = body.history;
+    const history = originals.map((turn) => turn && typeof turn === "object" && "images" in turn && Array.isArray(turn.images) ? turn as Record<string, unknown> & { images: unknown[] } : null);
+    const references = new Set(referencedHistoryImages(history.map((turn) => ({ images: turn?.images.map((image) => ({ name: image && typeof image === "object" && "name" in image && typeof image.name === "string" ? image.name : undefined })) })), input.text).map((image) => `${image.messageIndex}:${image.imageIndex}`));
+    const candidates = history.flatMap((turn, messageIndex) => (turn?.images ?? []).map((image, imageIndex) => ({
+      messageIndex, imageIndex, image, id: `${messageIndex}:${imageIndex}`,
+      name: image && typeof image === "object" && "name" in image && typeof image.name === "string" ? image.name.slice(0, 100) : `image ${imageIndex + 1}`,
+    }))).sort((a, b) => Number(references.has(b.id)) - Number(references.has(a.id)) || b.messageIndex - a.messageIndex || a.imageIndex - b.imageIndex);
+    const selected = new Set<string>();
+    const render = () => {
+      const omitted = candidates.filter((image) => !selected.has(image.id));
+      body.historyImageOmissions = omitted.map((image) => ({ messageIndex: image.messageIndex, name: image.name, reason: "request_body_budget" }));
+      body.history = originals.map((turn, messageIndex) => {
+        const original = history[messageIndex];
+        if (!original) return turn;
+        const images = original.images.filter((_image, imageIndex) => selected.has(`${messageIndex}:${imageIndex}`));
+        const missing = omitted.filter((image) => image.messageIndex === messageIndex);
+        const content = typeof original.content === "string" && missing.length
+          ? `${original.content}\n\n[Image context: ${missing.map((image) => image.name).join(", ")} not included because this request exceeded the byte allowance. Do not infer omitted image contents.]`
+          : original.content;
+        return { ...original, images, ...(typeof content === "string" ? { content } : {}) };
+      });
+    };
+    render();
+    for (const candidate of candidates) {
+      selected.add(candidate.id);
+      render();
+      if (size() > MIND_MAX_BODY_BYTES) { selected.delete(candidate.id); render(); }
     }
   }
   return body;

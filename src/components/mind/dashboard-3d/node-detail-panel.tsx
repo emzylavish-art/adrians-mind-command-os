@@ -23,7 +23,7 @@ function Field({ label, value }: { label: string; value: string | null | undefin
   );
 }
 
-function BotDetailBody({ detail, spend, portraitSrc }: { detail: BotDetailView; spend?: SpendView | null; portraitSrc?: string | null }) {
+function BotDetailBody({ detail, spend, portraitSrc, healthTimeLabel }: { detail: BotDetailView; spend?: SpendView | null; portraitSrc?: string | null; healthTimeLabel?: string }) {
   return (
     <>
       <h2>Star detail</h2>
@@ -42,6 +42,7 @@ function BotDetailBody({ detail, spend, portraitSrc }: { detail: BotDetailView; 
         <span className={`dash3d-dot ${detail.health}`} /> <strong>{detail.health}</strong>
         <span className="dash3d-muted"> — {detail.reason || NO_SOURCE}</span>
       </p>
+      {healthTimeLabel ? <p className="dash3d-muted" data-testid="detail-health-time">{healthTimeLabel}. Health and reason use this time; all fields below show the latest received information.</p> : null}
       <p className="dash3d-mono dash3d-muted" style={{ marginTop: "0.75rem" }}>
         <Field label="lane" value={detail.laneName ? `${detail.laneName}${detail.laneHealth ? ` · ${detail.laneHealth}` : ""}` : null} />
         <Field label="lock" value={detail.lockFile} />
@@ -146,6 +147,7 @@ export function NodeDetailPanel({
   status,
   notionNeighbors,
   portraitSrc,
+  healthTimeLabel,
 }: {
   bot: BotNode | null;
   notionPage: NotionSnapPage | null;
@@ -155,6 +157,7 @@ export function NodeDetailPanel({
   status?: DashboardStatus | null;
   notionNeighbors?: NotionSnapPage[];
   portraitSrc?: string | null;
+  healthTimeLabel?: string;
 }) {
   const detail =
     bot && status
@@ -176,7 +179,7 @@ export function NodeDetailPanel({
         <button type="button" className="dash3d-side-close" onClick={onClose} aria-label="Close details">
           ×
         </button>
-        {detail ? <BotDetailBody detail={detail} spend={spend} portraitSrc={portraitSrc} /> : null}
+        {detail ? <BotDetailBody detail={detail} spend={spend} portraitSrc={portraitSrc} healthTimeLabel={healthTimeLabel} /> : null}
         {!detail && bot ? (
           <p className="dash3d-muted">Detail data {NO_SOURCE}</p>
         ) : null}

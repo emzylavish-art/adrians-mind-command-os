@@ -1,7 +1,7 @@
 import { createMiddleware, createServerFn } from "@tanstack/react-start";
 import { authMiddleware } from "@/lib/auth/middleware";
 import { guardMindEnv } from "./isolation";
-import { allowMindRequest } from "./limits";
+import { allowSharedMindRequest as allowMindRequest } from "./rate-limit.server.ts";
 import { describePersistence } from "./persistence";
 import { modelTierCatalog } from "./model-tiers";
 import { configuredProviders, selectProvider, NEMOTRON_MODEL } from "./provider-call";
@@ -9,6 +9,7 @@ import { performSearch } from "./research";
 import { interpretWorkerHealth } from "./worker-health";
 import { resolveXaiInferenceApiKey } from "./xai-adapter";
 import { resolveDatabaseUrl } from "../env.server.ts";
+import type { NotionTurn } from "./notion.ts";
 
 const MODEL = "grok-4.5";
 
@@ -25,12 +26,14 @@ export const mindStatus = createServerFn({ method: "GET" }).handler(async () => 
   const checkedAt = new Date().toISOString();
   let signedIn = false;
   let executionHalted = false;
+  let executionHaltState: "on" | "off" | "unknown" = "unknown";
   try {
     const { requireUserId } = await import("../auth/verify.server");
     const userId = await requireUserId();
     signedIn = true;
-    const { haltIsOn } = await import("./halt.server");
-    executionHalted = await haltIsOn(userId);
+    const { readHaltState } = await import("./halt.server");
+    executionHaltState = await readHaltState(userId);
+    executionHalted = executionHaltState !== "off";
   } catch {
     signedIn = false;
   }
@@ -56,6 +59,8 @@ export const mindStatus = createServerFn({ method: "GET" }).handler(async () => 
       database: gate.error,
       isolation: "failed" as const,
       executionHalted,
+      executionHaltState,
+      executionHaltDetail: executionHaltState === "unknown" ? "Emergency-stop storage could not be checked. Execution is blocked until its state is known." : executionHaltState === "on" ? "Emergency stop is on." : "Emergency stop is off.",
       signedIn,
       persistence,
       databaseBackend,
@@ -64,6 +69,7 @@ export const mindStatus = createServerFn({ method: "GET" }).handler(async () => 
       providers: configuredProviders(process.env),
       logicRoutes,
       checkedAt,
+      evidenceKind: "configuration" as const,
     };
   }
   const mindUrl = process.env.MIND_SUPABASE_URL;
@@ -77,6 +83,8 @@ export const mindStatus = createServerFn({ method: "GET" }).handler(async () => 
       : "No dedicated project yet. The free organization already holds two active projects.",
     isolation: "clear" as const,
     executionHalted,
+    executionHaltState,
+    executionHaltDetail: executionHaltState === "unknown" ? "Emergency-stop storage could not be checked. Execution is blocked until its state is known." : executionHaltState === "on" ? "Emergency stop is on." : "Emergency stop is off.",
     signedIn,
     persistence,
     databaseBackend,
@@ -85,6 +93,7 @@ export const mindStatus = createServerFn({ method: "GET" }).handler(async () => 
     providers: configuredProviders(process.env),
     logicRoutes,
     checkedAt,
+    evidenceKind: "configuration" as const,
   };
 });
 
@@ -102,7 +111,7 @@ export const paperclipStatus = createServerFn({ method: "GET" })
     if (!paperclipOwnerAllowed(context.userId, process.env)) {
       return empty("not_configured", "No Paperclip instance is authorised for this account.");
     }
-    if (!allowMindRequest("paperclip_read", context.userId, 8)) {
+    if (!await allowMindRequest("paperclip_read", context.userId, 8)) {
       return empty("unavailable", "Too many Paperclip status checks. Wait one minute.");
     }
     return getPaperclipSnapshot();
@@ -112,7 +121,7 @@ export const paperclipStatus = createServerFn({ method: "GET" })
 export const runDurableCorePass = createServerFn({ method: "POST" })
   .middleware([authMiddleware])
   .handler(async ({ context }) => {
-    if (!allowMindRequest("core_pass", context.userId, 6)) {
+    if (!await allowMindRequest("core_pass", context.userId, 6)) {
       return { ok: false as const, error: "Too many runtime steps. Wait a minute. Nothing ran." };
     }
     const { runDurableCorePassForUser } = await import("./core-runtime.server");
@@ -132,7 +141,8 @@ export const workerHealth = createServerFn({ method: "GET" }).handler(async () =
 
 export const searchWeb = createServerFn({ method: "POST" })
   .middleware([authMiddleware])
-  .validator((input: { query: string; freeOnly?: boolean; retryQueries?: string[] }) => ({
+  .validator((input: { query: string; freeOnly?: boolean; retryQueries?: string[]; routeFingerprint?: string }) => ({
+    routeFingerprint: typeof input.routeFingerprint === "string" && /^[0-9a-f]{64}$/.test(input.routeFingerprint) ? input.routeFingerprint : undefined,
     query: typeof input.query === "string" ? input.query.trim() : "", freeOnly: input.freeOnly === true, retryQueries: Array.isArray(input.retryQueries) ? input.retryQueries.filter((q) => typeof q === "string" && q.length <= 330).slice(0, 3) : undefined,
   }))
   .handler(async ({ data, context }) => {
@@ -144,23 +154,31 @@ export const searchWeb = createServerFn({ method: "POST" })
       return { ok: false as const, configured: false, citations: [] as { title: string; url: string }[],
         error: data.freeOnly ? "Free-only mode is active. No verified free web search route is available." : "Shorten the research question to 300 characters before searching." };
     }
-    if (!allowMindRequest("search", context.userId, 6)) {
+    if (!await allowMindRequest("search", context.userId, 6)) {
       return { ok: false as const, configured: false, citations: [] as { title: string; url: string }[], error: "Too many searches. Wait a minute and try again." };
     }
     const endpoint = process.env.MIND_SEARCH_ENDPOINT?.trim();
     const key = process.env.MIND_SEARCH_KEY?.trim();
+    const { researchRouteIdentity } = await import("./research-route.server");
+    const { researchRetryAllowed, withResearchProvenance, shouldRunDeepResearch } = await import("./research");
     if (endpoint && key) {
-      return performSearch({
+      const route = researchRouteIdentity({ provider: "configured-search", endpoint, key, strategy: data.retryQueries || shouldRunDeepResearch(data.query) ? "multi_query" : "single_query" });
+      if (!researchRetryAllowed(data.retryQueries, data.routeFingerprint, route)) return { ok: false as const, configured: true, citations: [], error: "The research route changed or the original route identity is missing. Start a new report after reviewing the provider; no retry was dispatched." };
+      const result = await performSearch({
         query: data.query,
         retryQueries: data.retryQueries,
         deep: data.retryQueries ? true : undefined,
         endpoint,
         key,
       });
+      return withResearchProvenance(result, route, data.query);
     }
     if (data.retryQueries) return { ok: false as const, configured: false, citations: [], error: "The original research service is unavailable." };
     const { searchWithGrok } = await import("./xai-search");
-    return searchWithGrok(data.query);
+    const { resolveXaiInferenceApiKey } = await import("./media/xai-key");
+    const apiKey = resolveXaiInferenceApiKey();
+    const route = researchRouteIdentity({ provider: "xai", endpoint: "https://api.x.ai/v1/responses", key: apiKey ?? "", strategy: "single_query", model: "grok-4.7" });
+    return withResearchProvenance(await searchWithGrok(data.query, { apiKey }), route, data.query);
   });
 
 export const recordAgentExecution = createServerFn({ method: "POST" })
@@ -174,19 +192,12 @@ export const recordAgentExecution = createServerFn({ method: "POST" })
     detail: typeof input.detail === "string" ? input.detail.slice(0, 500) : "",
   }))
   .handler(async ({ data, context }) => {
-    const { recordIssuedExecution } = await import("./execution-ledger");
-    const { writeToolRun } = await import("./notion-record");
+    const { recordDurableExecution } = await import("./execution-ledger.server.ts");
+    const { consumeSharedMindRateLimit } = await import("./rate-limit.server.ts");
+    const limit = await consumeSharedMindRateLimit("record-exec", context.userId, 20);
+    if (!limit.ok) return { ok: false, error: "Execution recording is temporarily unavailable. Retry later.", retryAfterSec: limit.retryAfterSec };
     const { getSql } = await import("../db");
-    const sql = await getSql();
-    const result = await recordIssuedExecution({
-      userId: context.userId,
-      id: data.id,
-      clientOk: data.ok,
-      clientDetail: data.detail,
-      write: async (run) => {
-        await writeToolRun(sql, context.userId, run);
-      },
-    });
+    const result = await recordDurableExecution(await getSql(), context.userId, data.id);
     return result;
   });
 
@@ -208,13 +219,15 @@ export const notionDisconnect = createServerFn({ method: "POST" })
 
 export const notionCommand = createServerFn({ method: "POST" })
   .middleware([authMiddleware])
-  .validator((input: { text?: string; confirmed?: boolean; pageId?: string | null; workspaceId?: string }) => ({
+  .validator((input: { text?: string; confirmed?: boolean; pageId?: string | null; workspaceId?: string; operationId?: string }) => ({
     text: typeof input.text === "string" ? input.text.slice(0, 2000) : "",
-    workspaceId: typeof input.workspaceId === "string" ? input.workspaceId : undefined,
+    workspaceId: typeof input.workspaceId === "string" ? input.workspaceId.slice(0, 100) : undefined,
+    operationId: typeof input.operationId === "string" && /^[a-f0-9-]{36}$/i.test(input.operationId) ? input.operationId : undefined,
     confirmed: input.confirmed === true,
     pageId: typeof input.pageId === "string" ? input.pageId.slice(0, 80) : null,
   }))
-  .handler(async ({ data, context }) => {
+  .handler(async ({ data, context }): Promise<NotionTurn> => {
+    const startedAt = Date.now();
     const { haltIsOn } = await import("./halt.server");
     if (await haltIsOn(context.userId)) {
       return {
@@ -230,7 +243,7 @@ export const notionCommand = createServerFn({ method: "POST" })
         verified: false,
       };
     }
-    if (!allowMindRequest("notion", context.userId, 8)) {
+    if (!await allowMindRequest("notion", context.userId, 8)) {
       return {
         ok: false as const,
         state: "connected" as const,
@@ -245,28 +258,47 @@ export const notionCommand = createServerFn({ method: "POST" })
       };
     }
     const { runNotionTurn } = await import("./notion");
-    const { resolveNotionTokenPersistent, resolveWorkspaceGrant } = await import("./connectors/notion-oauth");
-    const result = await runNotionTurn({
-      token: data.workspaceId ? await resolveWorkspaceGrant(context.userId, data.workspaceId) : await resolveNotionTokenPersistent(context.userId),
-      disabled: false,
-      text: data.text,
-      confirmed: data.confirmed,
-      pageId: data.pageId,
-      fetch: globalThis.fetch,
-    });
+    const { savedNotionWorkspaces } = await import("./connectors/notion-oauth");
+    const { resolveOAuthAccessToken } = await import("./connectors/token-refresh.ts");
+    const { sqlNotionOperationStore } = await import("./notion-operation-store.ts");
+    const { getSql } = await import("../db");
+    let result: NotionTurn;
     try {
-      const { randomUUID } = await import("node:crypto");
-      const { writeToolRun } = await import("./notion-record");
-      const { getSql } = await import("../db");
-      await writeToolRun(await getSql(), context.userId, {
-        id: randomUUID(),
-        tool: "notion",
-        action: result.action,
-        ok: result.ok,
-        detail: result.ok ? `Notion ${result.action} completed.` : `Notion ${result.action} did not complete.`,
+      if (!envCheck().ok || (!resolveDatabaseUrl(process.env) && (process.env.VERCEL || process.env.GROK_PROJECT_ID))) throw new Error("Recovery storage unavailable");
+      const sql = await getSql();
+      const workspaces = await savedNotionWorkspaces(context.userId);
+      const workspaceId = data.workspaceId ?? workspaces.find((row) => row.active)?.id;
+      const authorization = await resolveOAuthAccessToken({ ownerId: context.userId, connector: "notion", workspaceId });
+      if (!authorization.ok) {
+        return { ok: false, state: workspaces.some((row) => row.id === workspaceId) ? "connected" : "disconnected", action: "none", needsConfirmation: false, ambiguous: false, pages: [], content: "", error: authorization.error, wrote: false, verified: false, operationId: data.operationId, outcome: data.operationId ? "uncertain" : "not_dispatched", errorCode: authorization.reconnect ? "reconnect_required" : "storage_unavailable", recovery: authorization.reconnect ? "reconnect" : data.operationId ? "verify_existing" : "retry_read" };
+      }
+      result = await runNotionTurn({
+        token: authorization.token,
+        disabled: false, text: data.text, confirmed: data.confirmed, pageId: data.pageId,
+        operationId: data.operationId, workspaceId, operationStore: sqlNotionOperationStore(sql, context.userId), fetch: globalThis.fetch,
       });
+      if (result.errorCode === "reconnect_required") {
+        const renewed = await resolveOAuthAccessToken({ ownerId: context.userId, connector: "notion", workspaceId, forceRefresh: true });
+        if (renewed.ok) {
+          // Renewal never carries write approval forward. Known accepted writes only reconcile; rejected writes ask again.
+          result = await runNotionTurn({ token: renewed.token, disabled: false, text: data.text, confirmed: false,
+            pageId: result.pages[0]?.id ?? data.pageId, operationId: result.operationId ?? data.operationId,
+            workspaceId, operationStore: sqlNotionOperationStore(sql, context.userId), fetch: globalThis.fetch });
+        } else result = { ...result, error: renewed.error, recovery: renewed.reconnect ? "reconnect" : "retry_read" };
+      }
+      if (!result.needsConfirmation && result.action !== "none") {
+        const { issueDurableExecution, recordDurableExecution } = await import("./execution-ledger.server.ts");
+        try {
+          result.executionId = await issueDurableExecution(sql, context.userId, {
+            tool: "notion", action: "chat", ok: result.ok,
+            metadata: { provider: "notion", workspaceId, operationId: result.operationId, outcome: result.outcome, errorCode: result.errorCode, durationMs: Date.now() - startedAt },
+            detail: `Notion ${result.action}: ${result.outcome ?? (result.ok ? "completed" : "not completed")}.`,
+          });
+          await recordDurableExecution(sql, context.userId, result.executionId);
+        } catch { /* API outcome and durable operation receipt remain authoritative if diagnostic recording fails. */ }
+      }
     } catch {
-      /* the reply still reports the API result when the record cannot be saved */
+      return { ok: false, state: "connected", action: "none", needsConfirmation: false, ambiguous: false, pages: [], content: "", error: data.operationId ? "Notion recovery storage could not be checked. The earlier write may already exist. Retry verification of this same operation; do not append it again." : "Notion recovery storage is unavailable. No new action was sent; retry later.", wrote: false, verified: false, outcome: data.operationId ? "uncertain" : "not_dispatched", errorCode: "storage_unavailable", operationId: data.operationId, recovery: data.operationId ? "verify_existing" : "retry_read" };
     }
     return result;
   });
@@ -337,7 +369,7 @@ export const inspectWebPage = createServerFn({ method: "POST" })
     if (await haltIsOn(context.userId)) {
       return { ok: false as const, title: "", excerpt: "", error: "Emergency stop is on. No page was opened." };
     }
-    if (!allowMindRequest("browser", context.userId, 6)) {
+    if (!await allowMindRequest("browser", context.userId, 6)) {
       return { ok: false as const, title: "", excerpt: "", error: "Too many page opens. Wait a minute." };
     }
     if (!/^https?:\/\/\S+$/i.test(data.url) || data.url.includes("@")) {
@@ -410,7 +442,7 @@ export const saveMindCopy = createServerFn({ method: "POST" })
     if (typeof data.expectedRevision !== "string" || !/^[a-f0-9]{64}$/.test(data.expectedRevision)) {
       return { ok: false as const, error: "Reload the workspace before saving a server copy. Your browser copy was kept." };
     }
-    if (!allowMindRequest("save", context.userId, 20)) return { ok: false as const, error: "Too many saves. The browser copy was kept." };
+    if (!await allowMindRequest("save", context.userId, 20)) return { ok: false as const, error: "Too many saves. The browser copy was kept." };
     const { normalizeWorkspace } = await import("./workspace");
     const { snapshotTooLarge, writeSnapshot } = await import("./store");
     const { getSql } = await import("../db");
@@ -445,25 +477,26 @@ export const loadMindCopy = createServerFn({ method: "POST" })
 
 export const speakText = createServerFn({ method: "POST" })
   .middleware([authMiddleware])
-  .validator((input: { text: string; voiceId?: string; freeOnly?: boolean }) => input)
+  .validator((input: { text: string; voiceId?: string; freeOnly?: boolean; provider?: "xai" | "openai" }) => input)
   .handler(async ({ data, context }) => {
+    if (data.provider !== undefined && data.provider !== "xai" && data.provider !== "openai") return { ok: false as const, error: "Choose a supported speech provider. Nothing was substituted." };
     if (data.freeOnly) return { ok: false as const, error: "Free-only mode keeps cloud speech off." };
     const { validateSpeakTextInput } = await import("./voice/voice-input");
     const parsed = validateSpeakTextInput((data as { text?: unknown } | null)?.text);
     if (!parsed.ok) return { ok: false as const, error: parsed.error };
     const { haltIsOn } = await import("./halt.server");
     if (await haltIsOn(context.userId)) return { ok: false as const, error: "Emergency stop is on. Nothing was read aloud." };
-    if (!allowMindRequest("speak", context.userId, 8)) return { ok: false as const, error: "Too many voice requests. Wait a minute." };
+    if (!await allowMindRequest("speak", context.userId, 8)) return { ok: false as const, error: "Too many voice requests. Wait a minute." };
     const text = parsed.text;
     const { resolveVoiceApiKey } = await import("./voice/keys");
     const { speakWithFallback } = await import("./voice/provider-fallback");
     const spoken = await speakWithFallback({
       text,
       voiceId: data.voiceId,
-      xaiKey: resolveVoiceApiKey(process.env),
+      xaiKey: data.provider === "openai" ? undefined : resolveVoiceApiKey(process.env),
       // Speak honours the chosen xAI voice (Eve by default). A different
       // provider/voice is never substituted without explicit consent.
-      openaiKey: undefined,
+      openaiKey: data.provider === "openai" ? process.env.OPENAI_API_KEY?.trim() : undefined,
     });
     if (!spoken.ok) return { ok: false as const, error: spoken.error, provider: null };
     return { ok: true as const, audio: spoken.audio, mime: spoken.mime, provider: spoken.provider };
@@ -476,7 +509,7 @@ export const createVoiceClientSecret = createServerFn({ method: "POST" })
     if (data.freeOnly) return { ok: false as const, error: "Free-only mode keeps realtime voice off." };
     const { haltIsOn } = await import("./halt.server");
     if (await haltIsOn(context.userId)) return { ok: false as const, error: "Emergency stop is on. Voice was not started." };
-    if (!allowMindRequest("voice_secret", context.userId, 20)) {
+    if (!await allowMindRequest("voice_secret", context.userId, 20)) {
       return { ok: false as const, error: "Too many voice requests. Wait a minute." };
     }
     const { mintRealtimeClientSecret } = await import("./voice/client-secret");
@@ -497,7 +530,7 @@ export const transcribeDictation = createServerFn({ method: "POST" })
     if (await haltIsOn(context.userId)) {
       return { ok: false as const, error: "Emergency stop is on. Nothing was transcribed." };
     }
-    if (!allowMindRequest("stt", context.userId, 20)) {
+    if (!await allowMindRequest("stt", context.userId, 20)) {
       return { ok: false as const, error: "Too many speech-to-text requests. Wait a minute." };
     }
     const { transcribeWhisperFlowAudio } = await import("./whisper-flow/provider");
@@ -520,7 +553,7 @@ export const refineDictationOptional = createServerFn({ method: "POST" })
     }
     const text = typeof data.text === "string" ? data.text.trim().slice(0, 2000) : "";
     if (!text) return { ok: false as const, skipped: true as const, error: "Nothing to refine." };
-    if (!allowMindRequest("stt_refine", context.userId, 10)) {
+    if (!await allowMindRequest("stt_refine", context.userId, 10)) {
       return { ok: false as const, skipped: true as const, error: "Too many refine requests. Local text was kept." };
     }
     const key = resolveXaiInferenceApiKey(process.env);
@@ -673,7 +706,7 @@ export const createMindMemory = createServerFn({ method: "POST" })
     if (await haltIsOn(context.userId)) {
       return { ok: false as const, error: "Emergency stop is on. Nothing was saved.", memorySaved: false as const, savedMemoryId: null };
     }
-    if (!allowMindRequest("memory_write", context.userId, 30)) {
+    if (!await allowMindRequest("memory_write", context.userId, 30)) {
       return { ok: false as const, error: "Too many memory writes. Wait a minute.", memorySaved: false as const, savedMemoryId: null };
     }
     const { getSql } = await import("../db");
@@ -695,7 +728,7 @@ export const editMindMemory = createServerFn({ method: "POST" })
     if (await haltIsOn(context.userId)) {
       return { ok: false as const, error: "Emergency stop is on. Nothing was edited." };
     }
-    if (!allowMindRequest("memory_write", context.userId, 30)) {
+    if (!await allowMindRequest("memory_write", context.userId, 30)) {
       return { ok: false as const, error: "Too many memory writes. Wait a minute." };
     }
     const { getSql } = await import("../db");
@@ -713,7 +746,7 @@ export const deleteMindMemory = createServerFn({ method: "POST" })
     if (await haltIsOn(context.userId)) {
       return { ok: false as const, error: "Emergency stop is on. Nothing was deleted." };
     }
-    if (!allowMindRequest("memory_write", context.userId, 30)) {
+    if (!await allowMindRequest("memory_write", context.userId, 30)) {
       return { ok: false as const, error: "Too many memory writes. Wait a minute." };
     }
     const { getSql } = await import("../db");

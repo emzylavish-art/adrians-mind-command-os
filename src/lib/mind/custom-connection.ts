@@ -28,6 +28,8 @@ export type PublicOperation = {
   description: string;
   inputSchema: OperationSchema | null;
   compatible: boolean;
+  /** Server metadata is descriptive; it never replaces confirmation or authorization. */
+  annotations?: { readOnlyHint?: boolean };
 };
 
 export type ConnectionState = "unchecked" | "ready" | "unauthorized" | "missing_config" | "incompatible" | "failed";
@@ -236,7 +238,7 @@ function initialized(text: string): boolean {
   return !envelope.error && Boolean(envelope.result) && typeof envelope.result === "object" && !Array.isArray(envelope.result);
 }
 
-function operationFromTool(tool: { name?: unknown; description?: unknown; inputSchema?: unknown }): PublicOperation | null {
+function operationFromTool(tool: { name?: unknown; description?: unknown; inputSchema?: unknown; annotations?: { readOnlyHint?: unknown } }): PublicOperation | null {
   if (typeof tool.name !== "string" || !tool.name.trim() || tool.name.toLowerCase() === "model.generate") return null;
   if (tool.name.length > 80) return null;
   const schema = readOperationSchema(tool.inputSchema);
@@ -244,6 +246,7 @@ function operationFromTool(tool: { name?: unknown; description?: unknown; inputS
     name: tool.name,
     description: typeof tool.description === "string" ? tool.description.slice(0, 180) : "",
     inputSchema: schema,
+    ...(typeof tool.annotations?.readOnlyHint === "boolean" ? { annotations: { readOnlyHint: tool.annotations.readOnlyHint } } : {}),
     compatible: Boolean(schema),
   };
 }

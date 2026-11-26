@@ -1,9 +1,12 @@
 import { retainActivity } from "./connection-attention.ts";
+import { normalizeRecovery } from "./recovery-inbox.ts";
+import { normalizeConsultAttempts } from "./model-consult.ts";
+import { workspaceArchiveManifest } from "./workspace-archive-manifest.ts";
 import { isModelTier } from "./model-tiers.ts";
 import { emptyFleet, readFleet } from "./fleet.ts";
 import { normalizeBotModel } from "./bot-model.ts";
 import { normalizeBotKnowledge } from "./bot-model.ts";
-import { DEFAULT_PERSONALITY_ID, normalizeCustomPersonality, resolvePersonalityId } from "./personalities/index.ts";
+import { DEFAULT_PERSONALITY_ID, isPersonalityId, normalizeCustomPersonality, resolvePersonalityId } from "./personalities/index.ts";
 import type {
   AuditEntry,
   Autonomy,
@@ -76,7 +79,7 @@ export function memoriesForChat(ws: Workspace, chat: Chat): MemoryItem[] {
   return ws.memories.filter((item) => {
     if (item.archived) return false;
     if (item.scope === "global") return true;
-    if (item.scope === "project") return !!chat.projectId && item.projectId === chat.projectId;
+    if (item.scope === "project") return !!chat.projectId && ws.projects.some((project) => project.id === chat.projectId) && item.projectId === chat.projectId;
     return item.scope === "chat" && item.chatId === chat.id;
   });
 }
@@ -117,6 +120,7 @@ export function normalizeWorkspace(input: unknown): Workspace {
   const base = emptyWorkspace();
   if (!isRecord(input)) return base;
   base.halted = input.halted === true;
+  if (Array.isArray(input.recovery)) base.recovery = normalizeRecovery(input.recovery);
   if (Array.isArray(input.projects)) {
     for (const row of input.projects) {
       if (!isRecord(row) || !str(row.id) || !str(row.name)) continue;
@@ -144,10 +148,13 @@ export function normalizeWorkspace(input: unknown): Workspace {
       if (item && !deleted.has(item.id)) base.memories.push(item);
     }
   }
+  const deletedFiles = new Set(Array.isArray(input.deletedFileIds)
+    ? input.deletedFileIds.filter((id): id is string => typeof id === "string" && id.length > 0) : []);
+  if (deletedFiles.size) base.deletedFileIds = [...deletedFiles];
   if (Array.isArray(input.files)) {
     for (const row of input.files) {
       const file = normalizeFile(row);
-      if (file) base.files.push(file);
+      if (file && !deletedFiles.has(file.id)) base.files.push(file);
     }
   }
   if (Array.isArray(input.usage)) {
@@ -205,6 +212,8 @@ function normalizeChat(row: unknown): Chat | null {
         at: str(msg.at, new Date(0).toISOString()),
         model: typeof msg.model === "string" ? msg.model : undefined,
         ...(typeof msg.provider === "string" && msg.provider.trim() ? { provider: msg.provider.trim() } : {}),
+        ...(Array.isArray(msg.consult) ? { consult: normalizeConsultAttempts(msg.consult) } : {}),
+        ...(isRecord(msg.contextReceipt) ? { contextReceipt: { availableMessages: Number(msg.contextReceipt.availableMessages) || 0, includedMessages: Number(msg.contextReceipt.includedMessages) || 0, omittedMessages: Number(msg.contextReceipt.omittedMessages) || 0, imageWarnings: Array.isArray(msg.contextReceipt.imageWarnings) ? msg.contextReceipt.imageWarnings.filter((value): value is string => typeof value === "string").slice(0, 12) : [] } } : {}),
         ...(msg.routingMode === "A" || msg.routingMode === "B" || msg.routingMode === "C" || msg.routingMode === "D" ? { routingMode: msg.routingMode } : {}),
         ...(typeof msg.requestedModel === "string" && msg.requestedModel.trim() ? { requestedModel: msg.requestedModel.trim().slice(0, 150) } : {}),
         ...(msg.role === "user" && typeof msg.deliveryOperationId === "string" && /^\d{13}-[a-f0-9-]{36}$/i.test(msg.deliveryOperationId) ? { deliveryOperationId: msg.deliveryOperationId } : {}),
@@ -228,6 +237,9 @@ function normalizeChat(row: unknown): Chat | null {
     : [];
   return {
     id: str(row.id),
+    ...(typeof row.updatedAt === "string" && Number.isFinite(Date.parse(row.updatedAt)) ? { updatedAt: row.updatedAt } : {}),
+    ...(typeof row.botConfigVersion === "number" && Number.isSafeInteger(row.botConfigVersion) ? { botConfigVersion: row.botConfigVersion } : {}),
+    ...(isRecord(row.forkedFrom) && typeof row.forkedFrom.chatId === "string" && typeof row.forkedFrom.messageId === "string" && typeof row.forkedFrom.at === "string" ? { forkedFrom: { chatId: row.forkedFrom.chatId, messageId: row.forkedFrom.messageId, at: row.forkedFrom.at } } : {}),
     title: str(row.title, "New session").slice(0, 80),
     ...(typeof row.notionWorkspaceId === "string" && row.notionWorkspaceId.length <= 200 ? { notionWorkspaceId: row.notionWorkspaceId } : {}),
     ...(typeof row.agentId === "string" && row.agentId ? { agentId: row.agentId } : {}),
@@ -236,6 +248,10 @@ function normalizeChat(row: unknown): Chat | null {
     temporary: row.temporary === true,
     autonomy,
     personalityId: resolvePersonalityId(row.personalityId),
+    ...(typeof row.personalityId === "string" && !isPersonalityId(row.personalityId)
+      ? { personalityFallback: row.personalityId.slice(0, 80) }
+      : typeof row.personalityFallback === "string" ? { personalityFallback: row.personalityFallback.slice(0, 80) } : {}),
+    ...(row.customPersonalityTruncated === true || typeof row.customPersonality === "string" && row.customPersonality.length > 800 ? { customPersonalityTruncated: true } : {}),
     customPersonality: typeof row.customPersonality === "string" ? row.customPersonality.slice(0, 800) : "",
     projectId: typeof row.projectId === "string" ? row.projectId : null,
     messages,
@@ -256,7 +272,18 @@ function normalizeFile(row: unknown): LocalFile | null {
     ...(row.partial === true || row.text.length > text.length ? { partial: true } : {}),
     projectId: typeof row.projectId === "string" ? row.projectId : null,
     createdAt: str(row.createdAt, new Date(0).toISOString()),
+    ...(normalizeDocument(row.document) ? { document: normalizeDocument(row.document)! } : {}),
   };
+}
+
+function normalizeDocument(value: unknown): LocalFile["document"] {
+  if (!isRecord(value) || value.kind !== "pdf" || !Array.isArray(value.chunks)) return undefined;
+  const chunks = value.chunks.slice(0, 200).flatMap((chunk) => {
+    if (!isRecord(chunk) || typeof chunk.text !== "string" || typeof chunk.id !== "string") return [];
+    return [{ id: chunk.id.slice(0, 100), page: typeof chunk.page === "number" && chunk.page > 0 ? chunk.page : null,
+      start: Math.max(0, Number(chunk.start) || 0), end: Math.max(0, Number(chunk.end) || 0), text: chunk.text.slice(0, 2000) }];
+  });
+  return { kind: "pdf", pages: Math.max(0, Number(value.pages) || 0), coverage: str(value.coverage).slice(0, 2000), partial: value.partial === true, chunks };
 }
 
 function publicImages(value: unknown): { images: NonNullable<Msg["images"]> } | Record<string, never> {
@@ -339,6 +366,7 @@ export function createChat(
 ): { ws: Workspace; chat: Chat } {
   const chat: Chat = {
     id: crypto.randomUUID(),
+    updatedAt: new Date().toISOString(),
     title: "New session",
     memory: input.memory,
     temporary: input.temporary,
@@ -366,13 +394,29 @@ export function openBotChat(ws: Workspace, agentId: string, newThread = false): 
     personalityId: "custom",
     customPersonality: agent.instructions,
   });
-  const linked = { ...chat, title: agent.name, agentId };
+  const linked = { ...chat, title: agent.name, agentId, botConfigVersion: agent.version };
   const model = normalizeBotModel(agent);
   if (model.chatProvider) linked.botProvider = model.chatProvider;
   if (model.chatTier) linked.botTier = model.chatTier;
   const knowledge = normalizeBotKnowledge(agent.knowledge).knowledge;
   if (knowledge) linked.botKnowledge = knowledge;
   return { ws: { ...ws, chats: [linked, ...ws.chats] }, chat: linked };
+}
+
+/** A running conversation remains pinned until its owner explicitly refreshes it. */
+export function refreshBotChat(ws: Workspace, chatId: string): Workspace {
+  const chat = ws.chats.find((item) => item.id === chatId);
+  const agent = ws.agents.find((item) => item.id === chat?.agentId && !item.archived);
+  if (!chat || !agent) return ws;
+  const model = normalizeBotModel(agent);
+  return { ...ws, chats: ws.chats.map((item) => item.id !== chatId ? item : {
+    ...item, memory: agent.memory, autonomy: agent.approval,
+    projectId: ws.projects.some((project) => project.id === agent.projectId) ? agent.projectId : null,
+    personalityId: "custom", customPersonality: normalizeCustomPersonality(agent.instructions),
+    botKnowledge: normalizeBotKnowledge(agent.knowledge).knowledge,
+    botProvider: model.chatProvider ?? undefined, botTier: model.chatTier ?? undefined,
+    botConfigVersion: agent.version, updatedAt: new Date().toISOString(),
+  }) };
 }
 
 function chatBotModel(row: Record<string, unknown>) {
@@ -390,7 +434,7 @@ export function updateChatPersonality(ws: Workspace, chatId: string, personality
   if (!chatId || !ws.chats.some((chat) => chat.id === chatId)) return ws;
   return {
     ...ws,
-    chats: ws.chats.map((chat) => chat.id === chatId ? { ...chat, personalityId: next } : chat),
+    chats: ws.chats.map((chat) => chat.id === chatId ? { ...chat, personalityId: next, personalityFallback: undefined } : chat),
   };
 }
 
@@ -399,7 +443,7 @@ export function updateChatCustomPersonality(ws: Workspace, chatId: string, custo
   if (!chatId || !ws.chats.some((chat) => chat.id === chatId)) return ws;
   return {
     ...ws,
-    chats: ws.chats.map((chat) => chat.id === chatId ? { ...chat, customPersonality: next } : chat),
+    chats: ws.chats.map((chat) => chat.id === chatId ? { ...chat, customPersonality: next, customPersonalityTruncated: typeof customPersonality === "string" && customPersonality.length > 800 ? true : undefined } : chat),
   };
 }
 
@@ -468,6 +512,7 @@ export async function packWorkspace(ws: Workspace, includeTemporary: boolean) {
     format: 1 as const,
     sha256: await sha256(canonical(workspace)),
     counts: counts(workspace),
+    manifest: workspaceArchiveManifest(workspace, { omittedTemporaryChats: includeTemporary ? 0 : ws.chats.filter((chat) => chat.temporary).length }),
     workspace,
   };
 }
@@ -500,11 +545,16 @@ export function mergeMemoryState(current: Workspace, incoming: Workspace): Pick<
   for (const note of [...current.memories, ...incoming.memories]) {
     if (deleted.has(note.id)) continue;
     const previous = memories.get(note.id);
-    if (!previous || note.updatedAt > previous.updatedAt ||
+    if (!previous) { memories.set(note.id, note); continue; }
+    const winner = note.updatedAt > previous.updatedAt ||
         (note.updatedAt === previous.updatedAt && (note.versions.length > previous.versions.length ||
-          (note.versions.length === previous.versions.length && note.archived && !previous.archived)))) {
-      memories.set(note.id, note);
-    }
+          (note.versions.length === previous.versions.length && note.archived && !previous.archived))) ? note : previous;
+    const history = [...previous.versions, ...note.versions,
+      ...(previous.text !== winner.text ? [{ at: previous.updatedAt, text: previous.text }] : []),
+      ...(note.text !== winner.text ? [{ at: note.updatedAt, text: note.text }] : [])];
+    const versions = [...new Map(history.map((version) => [canonical(version), version])).values()]
+      .sort((a, b) => a.at.localeCompare(b.at) || a.text.localeCompare(b.text));
+    memories.set(note.id, { ...winner, versions });
   }
   return { memories: [...memories.values()], ...(deleted.size ? { deletedMemoryIds: [...deleted] } : {}) };
 }
@@ -523,7 +573,24 @@ export function replaceFromArchive(current: Workspace, archive: Workspace): Work
     }
     return note;
   });
-  return { ...archive, memories, deletedMemoryIds: [...deleted], halted: current.halted || archive.halted };
+  const deletedFiles = new Set([...(current.deletedFileIds ?? []), ...(archive.deletedFileIds ?? [])]);
+  for (const file of current.files) if (!archive.files.some((item) => item.id === file.id)) deletedFiles.add(file.id);
+  const files = archive.files.map((file) => deletedFiles.has(file.id) ? { ...file, id: crypto.randomUUID(), createdAt: now } : file);
+  // Restoration restores data, never old authority to run unattended work.
+  return { ...archive, memories, files, deletedMemoryIds: [...deleted], deletedFileIds: [...deletedFiles],
+    schedules: archive.schedules.map((job) => ({ ...job, enabled: false, resultDelivery: "runs" as const })),
+    runs: archive.runs.map(restoredRun), halted: current.halted || archive.halted };
+}
+
+function restoredRun<T extends Workspace["runs"][number]>(run: T): T {
+  return ["queued", "running", "waiting_approval", "waiting_external"].includes(run.state)
+    ? { ...run, state: "paused", workerId: null, leaseUntil: null, approvedActions: [], approvals: [] } : run;
+}
+
+function newerRecord<T extends { id: string; updatedAt?: string; version?: number }>(current: T, incoming: T): T {
+  if (incoming.updatedAt && current.updatedAt && incoming.updatedAt > current.updatedAt) return incoming;
+  if (incoming.updatedAt === current.updatedAt && (incoming.version ?? 0) > (current.version ?? 0)) return incoming;
+  return current;
 }
 
 export function archiveMessagePreview(current: Workspace, incoming: Workspace) {
@@ -547,27 +614,43 @@ export function mergeWorkspace(current: Workspace, incoming: Workspace): Workspa
   const byId = <T extends { id: string }>(rows: T[]) => new Map(rows.map((row) => [row.id, row]));
   const merge = <T extends { id: string }>(left: T[], right: T[]) => [...byId([...left, ...right]).values()];
   const archivedChats = byId(incoming.chats);
+  const deletedFiles = new Set([...(current.deletedFileIds ?? []), ...(incoming.deletedFileIds ?? [])]);
+  const mergeRevisions = <T extends { id: string; updatedAt?: string; version?: number }>(left: T[], right: T[]) => {
+    const rows = byId(left);
+    for (const item of right) rows.set(item.id, rows.has(item.id) ? newerRecord(rows.get(item.id)!, item) : item);
+    return [...rows.values()];
+  };
   return {
     version: 1,
     halted: current.halted,
+    ...(current.recovery?.length || incoming.recovery?.length ? { recovery: merge(incoming.recovery ?? [], current.recovery ?? []).slice(0, 200) } : {}),
     chats: [...byId([...incoming.chats, ...current.chats]).values()].map((chat) => {
       const archive = archivedChats.get(chat.id);
       if (!archive || archive === chat) return chat;
       const messages = merge(archive.messages, chat.messages).sort((a, b) => a.at.localeCompare(b.at));
-      return { ...chat, temporary: chat.temporary || archive.temporary, messages };
+      return { ...newerRecord(chat, archive), temporary: chat.temporary || archive.temporary, messages,
+        retrievalLog: [...new Map([...chat.retrievalLog, ...archive.retrievalLog].map((item) => [canonical(item), item])).values()] };
     }),
     ...mergeMemoryState(current, incoming),
     projects: merge(current.projects, incoming.projects),
-    files: merge(current.files, incoming.files),
+    files: merge(incoming.files, current.files).filter((file) => !deletedFiles.has(file.id)),
+    ...(deletedFiles.size ? { deletedFileIds: [...deletedFiles] } : {}),
     usage: merge(current.usage, incoming.usage).sort((a, b) => b.at.localeCompare(a.at)).slice(0, 200),
     audit: retainActivity(merge(current.audit, incoming.audit).sort((a, b) => b.at.localeCompare(a.at))),
-    agents: merge(current.agents, incoming.agents),
+    agents: mergeRevisions(current.agents, incoming.agents),
     deployments: merge(current.deployments, incoming.deployments),
-    runs: merge(current.runs, incoming.runs),
+    runs: merge(incoming.runs.map(restoredRun), current.runs),
     runEvents: merge(current.runEvents, incoming.runEvents),
     connections: merge(current.connections, incoming.connections),
     mailboxes: merge(current.mailboxes, incoming.mailboxes),
-    schedules: merge(current.schedules, incoming.schedules),
+    schedules: mergeRevisions(current.schedules, incoming.schedules).map((job) => {
+      const local = current.schedules.find((item) => item.id === job.id);
+      const other = incoming.schedules.find((item) => item.id === job.id);
+      return { ...job, enabled: !!local?.enabled && other?.enabled !== false,
+        // Imported records never authorize a new conversation delivery or redirect a local choice.
+        resultDelivery: local?.resultDelivery ?? "runs" as const,
+        chatId: local ? local.chatId : job.chatId };
+    }),
     pins: merge(current.pins, incoming.pins),
     browserSessions: merge(current.browserSessions, incoming.browserSessions),
   };
@@ -600,11 +683,14 @@ export function pushUsage(ws: Workspace, entry: Omit<UsageEntry, "kind">): Works
 
 export function addLocalFile(
   ws: Workspace,
-  input: { id?: string; name: string; text: string; partial?: boolean; projectId: string | null },
+  input: { id?: string; name: string; text: string; partial?: boolean; projectId: string | null; document?: LocalFile["document"]; separateCopy?: boolean },
 ): Workspace {
-  if (ws.files.length >= 40) return ws;
   const text = input.text.slice(0, 40000);
   if (!text.trim()) return ws;
+  // Content reuse is scoped to the project; a same-named revision remains distinct.
+  const document = normalizeDocument(input.document);
+  if (!input.separateCopy && ws.files.some((file) => file.projectId === input.projectId && file.name === (input.name || "untitled.txt") && file.text === text && canonical(file.document ?? null) === canonical(document ?? null))) return ws;
+  if (ws.files.length >= 40) return ws;
   const file: LocalFile = {
     id: input.id || crypto.randomUUID(),
     name: input.name || "untitled.txt",
@@ -613,8 +699,38 @@ export function addLocalFile(
     ...(input.partial || input.text.length > text.length ? { partial: true } : {}),
     projectId: input.projectId,
     createdAt: new Date().toISOString(),
+    ...(document ? { document } : {}),
   };
   return { ...ws, files: [file, ...ws.files] };
+}
+
+export function deleteLocalFile(ws: Workspace, id: string): Workspace {
+  if (!ws.files.some((file) => file.id === id)) return ws;
+  return { ...ws, files: ws.files.filter((file) => file.id !== id), deletedFileIds: [...new Set([...(ws.deletedFileIds ?? []), id])] };
+}
+
+/** Keep records but remove the deleted project as an active routing/retrieval scope. */
+export function deleteProject(ws: Workspace, id: string): Workspace {
+  const now = new Date().toISOString();
+  return { ...ws,
+    projects: ws.projects.filter((project) => project.id !== id),
+    chats: ws.chats.map((chat) => chat.projectId === id ? { ...chat, projectId: null, updatedAt: now } : chat),
+    files: ws.files.map((file) => file.projectId === id ? { ...file, projectId: null } : file),
+    agents: ws.agents.map((agent) => agent.projectId === id ? { ...agent, projectId: null, updatedAt: now, version: agent.version + 1 } : agent),
+  };
+}
+
+/** Metadata edits receive their own clock so archive merge need not infer freshness from messages. */
+export function stampWorkspaceEdits(previous: Workspace, next: Workspace, now = new Date().toISOString()): Workspace {
+  if (previous === next) return next;
+  const oldChats = new Map(previous.chats.map((chat) => [chat.id, chat]));
+  return { ...next, chats: next.chats.map((chat) => {
+    const old = oldChats.get(chat.id);
+    if (!old || old === chat || (chat.updatedAt && chat.updatedAt !== old.updatedAt)) return chat;
+    const { messages: _m1, retrievalLog: _r1, updatedAt: _t1, ...before } = old;
+    const { messages: _m2, retrievalLog: _r2, updatedAt: _t2, ...after } = chat;
+    return canonical(before) === canonical(after) ? chat : { ...chat, updatedAt: now };
+  }) };
 }
 
 export function addProject(ws: Workspace, name: string, description: string): { ws: Workspace; project: Project } {

@@ -1,3 +1,4 @@
+import type { ConsultAttempt } from "./model-consult.ts";
 import { pullMindEvents, type ModelUsage } from "./stream.ts";
 
 import { outcomeFromDoneEvent, rememberTierOutcome } from "./model-tier-memory.ts";
@@ -7,7 +8,7 @@ export const STOPPED_REPLY = "Stopped. The unfinished reply was not saved.";
 export { CHAT_TIMEOUT_REPLY, CHAT_DISCONNECT_REPLY };
 
 export type LiveTurnResult =
-  | { ok: true; text: string; model: string; usage: ModelUsage | null; usedIds: string[]; requestId: string | null; modelTier?: string; resolvedTier?: string; tierReason?: string; memorySaved?: boolean; savedMemoryId?: string | null; provider?: string; requestedModel?: string; credentialFallback?: string | null }
+  | { ok: true; text: string; model: string; usage: ModelUsage | null; usedIds: string[]; requestId: string | null; modelTier?: string; resolvedTier?: string; tierReason?: string; memorySaved?: boolean; savedMemoryId?: string | null; provider?: string; requestedModel?: string; credentialFallback?: string | null; consult?: ConsultAttempt[] }
   | { ok: false; error: string; deliveryUncertain?: true };
 
 export function shouldStoreReply(result: LiveTurnResult): result is Extract<LiveTurnResult, { ok: true }> {
@@ -152,6 +153,7 @@ export async function consumeMindTurn(input: {
           savedMemoryId: event.savedMemoryId ?? null,
           provider: event.provider,
           requestedModel: event.requestedModel,
+          consult: event.consult,
           credentialFallback: event.credentialFallback ?? null,
         };
         const outcome = outcomeFromDoneEvent(event);

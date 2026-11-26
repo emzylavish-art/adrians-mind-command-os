@@ -13,6 +13,7 @@ export type PersonaCard = {
   roleCategory: PersonaCategoryId;
   source: PersonaSource;
   templateName?: string;
+  templateId?: string;
   agentId?: string;
   tools: string[];
   live: false;
@@ -43,7 +44,7 @@ function templateCards(): PersonaCard[] {
   return AGENT_TEMPLATES.map((template) => {
     const roleCategory = categoryForRole(template.role);
     return {
-      id: `template:${template.name}`,
+      id: `template:${template.templateId}`,
       name: template.name,
       description: template.description,
       role: template.role,
@@ -51,6 +52,7 @@ function templateCards(): PersonaCard[] {
       roleCategory,
       source: "template" as const,
       templateName: template.name,
+      templateId: template.templateId,
       tools: [...template.tools],
       live: false as const,
       badge: "TEMPLATE" as const,

@@ -1,3 +1,4 @@
+import type { ConsultAttempt } from "./model-consult.ts";
 import type { PersonalityId } from "./personalities/index.ts";
 import type { BotModel } from "./bot-model.ts";
 import type { ModelTier } from "./model-tiers.ts";
@@ -29,6 +30,7 @@ export type MsgImage = {
 };
 
 export type Msg = {
+  contextReceipt?: { availableMessages: number; includedMessages: number; omittedMessages: number; imageWarnings: string[] };
   id: string;
   role: "user" | "assistant";
   content: string;
@@ -36,6 +38,7 @@ export type Msg = {
   model?: string;
   provider?: string;
   requestedModel?: string;
+  consult?: ConsultAttempt[];
   routingMode?: "A" | "B" | "C" | "D";
   deliveryOperationId?: string;
   deliveryRoute?: { provider: string; tier: ModelTier; model: string | null; orchestrated: boolean; fingerprint: string };
@@ -53,6 +56,10 @@ export type Msg = {
 export type Retrieval = { at: string; ids: string[] };
 
 export type Chat = {
+  /** Metadata revision, independent of the most recent message. */
+  updatedAt?: string;
+  botConfigVersion?: number;
+  forkedFrom?: { chatId: string; messageId: string; at: string };
   notionWorkspaceId?: string;
   id: string;
   agentId?: string;
@@ -64,6 +71,9 @@ export type Chat = {
   temporary: boolean;
   autonomy: Autonomy;
   personalityId?: PersonalityId;
+  /** Preserved import warning until the owner explicitly chooses a supported style. */
+  personalityFallback?: string;
+  customPersonalityTruncated?: boolean;
   customPersonality?: string;
   projectId: string | null;
   messages: Msg[];
@@ -119,6 +129,7 @@ export type AuditEntry = {
 };
 
 export type LocalFile = {
+  document?: { kind: "pdf"; pages: number; coverage: string; partial: boolean; chunks: import("./pdf-text.ts").PdfChunk[] };
   id: string;
   name: string;
   text: string;
@@ -134,6 +145,8 @@ export type Workspace = {
   chats: Chat[];
   memories: MemoryItem[];
   deletedMemoryIds?: string[];
+  deletedFileIds?: string[];
+  recovery?: RecoveryRecord[];
   projects: Project[];
   files: LocalFile[];
   usage: UsageEntry[];
@@ -147,6 +160,13 @@ export type Workspace = {
   schedules: ScheduleJob[];
   pins: FleetPin[];
   browserSessions: BrowserSessionRecord[];
+};
+
+export type RecoveryRecord = {
+  id: string; at: string; action: string; target: string; message: string;
+  state: "open" | "dismissed" | "resolved";
+  chatId?: string; workspaceId?: string; operationId?: string;
+  text?: string; pageId?: string | null; outcome?: string;
 };
 
 export type MemoryNote = { id: string; text: string };

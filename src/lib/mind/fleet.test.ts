@@ -178,7 +178,7 @@ describe("local agent worker", () => {
 
   it("builds an ordered plan and refuses a finished run going back to running", () => {
     const plan = buildTaskPlan("pier", ["list_projects", "search_notes", "delegate"]);
-    assert.deepEqual(plan.map((step) => step.tool), ["list_projects", "search_notes"]);
+    assert.deepEqual(plan.map((step) => step.tool), ["list_projects", "search_notes", "delegate"]);
     assert.deepEqual(plan[1]?.dependsOn, ["step-1"]);
     assert.equal(plan.every((step) => step.need === "none"), true);
     assert.equal(canTransition("completed", "running"), false);

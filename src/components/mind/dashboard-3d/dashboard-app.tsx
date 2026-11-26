@@ -3,6 +3,9 @@ import { hudDefaultOpen, sortHudCards } from "@/lib/mind/dashboard/hud-order";
 import { subscribePrefersReducedMotion } from "./motion";
 import { GraphFiltersPanel } from "./graph-filters-panel";
 import { MobileChrome, MobilePanelCard, useMobilePanelFocus } from "./mobile-structure";
+import { DEFAULT_GRAPH_FILTER, filterBotIds, type GraphFilterState } from "@/lib/mind/dashboard/graph-filters";
+import { focusDashboardPanel } from "@/lib/mind/dashboard/view-state";
+import type { MobilePanelId } from "./mobile-structure";
 import type { BotNode } from "@/lib/mind/dashboard/types";
 import type { NotionSnapPage } from "@/lib/mind/dashboard/notion-graph-core";
 import { NodeDetailPanel, resolveNotionNeighbors } from "./node-detail-panel";
@@ -87,6 +90,22 @@ export function DashboardApp({ embedded = false }: { embedded?: boolean }) {
   const [operatorOpen, setOperatorOpen] = useState(false);
   const [operatorPrefs, setOperatorPrefs] = useState<OperatorPrefs>(() => loadInitialOperatorPrefs());
   const [supportOpen, setSupportOpen] = useState(false);
+  const [graphFilter, setGraphFilter] = useState<GraphFilterState>(DEFAULT_GRAPH_FILTER);
+  const navigationOriginRef = useRef<HTMLElement | null>(null);
+  const jumpToPanel = (id: MobilePanelId) => {
+    navigationOriginRef.current = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+    if (id !== "scene") setSupportOpen(true);
+    setPanelFocus(id);
+  };
+  const backFromPanel = () => {
+    clearPanelFocus();
+    navigationOriginRef.current?.focus();
+  };
+  useEffect(() => {
+    if (!panelFocus || !narrow || (panelFocus !== "scene" && !supportOpen)) return;
+    // Runs after React has mounted and expanded the requested panel.
+    focusDashboardPanel(document, panelFocus, reducedMotion);
+  }, [panelFocus, supportOpen, narrow, reducedMotion]);
   useEffect(() => {
     const sound = createHealthSound({ reducedMotion });
     soundRef.current = sound;
@@ -181,9 +200,21 @@ export function DashboardApp({ embedded = false }: { embedded?: boolean }) {
   }, [state, scrubMs, nowMs]);
 
   const sceneData = scrubView.data;
-  const selected = selectedBotId && state.status === "ready"
-    ? state.data.bots.find((bot) => bot.id === selectedBotId) ?? null
+  const selected = selectedBotId && sceneData
+    ? sceneData.bots.find((bot) => bot.id === selectedBotId) ?? null
     : null;
+
+  const visibleBots = useMemo(() => {
+    if (!sceneData) return [];
+    const allow = filterBotIds(sceneData.bots, sceneData.constellationEdges ?? [], graphFilter);
+    return sceneData.bots.filter((bot) => allow.has(bot.id));
+  }, [sceneData, graphFilter]);
+  const graphicsAvailable = !webglError && (!narrow || sceneInteract);
+  const healthTimeLabel = scrubView.mode === "live"
+    ? "Latest received health"
+    : scrubView.mode === "before_history"
+      ? "Historical health unavailable before recorded history"
+      : `Historical health at ${new Date(scrubView.scrubMs!).toLocaleString()}`;
 
   useEffect(() => {
     if (selectedBotId && !selected) setSelectedBotId(null);
@@ -218,8 +249,11 @@ export function DashboardApp({ embedded = false }: { embedded?: boolean }) {
 
   return (
     <main
+      id="panel-scene"
+      tabIndex={-1}
       className={`dash3d-root dash3d-universe${embedded ? " is-embedded" : ""}`}
       data-testid="dash3d-root"
+      data-renderer-unavailable={webglError ? "1" : "0"}
       data-reduced-motion={reducedMotion ? "1" : "0"}
       data-narrow={narrow ? "1" : "0"}
       data-scene-interact={!narrow || sceneInteract ? "1" : "0"}
@@ -239,7 +273,7 @@ export function DashboardApp({ embedded = false }: { embedded?: boolean }) {
               {rendererMode === "graph" ? "Fleet 3D graph" : "Painterly 3D universe"}
             </h1>
             <p className="dash3d-muted" style={{ margin: "0.15rem 0 0", fontSize: "0.72rem" }}>
-              Drag rotate · scroll zoom · click node · Cmd/Ctrl-K search
+              {graphicsAvailable ? "Drag rotate · scroll zoom · click node · Cmd/Ctrl-K search" : "List view · select an operational record or search"}
             </p>
             <p className="dash3d-muted" style={{ margin: "0.2rem 0 0", fontSize: "0.72rem" }}>
               {state.data.notionGraph.pages.length
@@ -266,14 +300,14 @@ export function DashboardApp({ embedded = false }: { embedded?: boolean }) {
             >
               Universe
             </button>
-            <GraphFiltersPanel />
+            <GraphFiltersPanel filter={graphFilter} onFilterChange={setGraphFilter} />
             <button
               type="button"
               className="dash3d-glass dash3d-zoomout"
               data-testid="operator-open"
               onClick={() => setOperatorOpen(true)}
             >
-              Search graph
+              Search records
             </button>
             <button
               type="button"
@@ -288,6 +322,7 @@ export function DashboardApp({ embedded = false }: { embedded?: boolean }) {
               type="button"
               className="dash3d-glass dash3d-zoomout"
               data-testid="zoom-in"
+              disabled={!graphicsAvailable}
               aria-label="Zoom in"
               onClick={() => document.dispatchEvent(new CustomEvent("dash3d-zoom", { detail: { factor: 0.8 } }))}
             >
@@ -297,6 +332,7 @@ export function DashboardApp({ embedded = false }: { embedded?: boolean }) {
               type="button"
               className="dash3d-glass dash3d-zoomout"
               data-testid="zoom-out"
+              disabled={!graphicsAvailable}
               aria-label="Zoom out"
               onClick={() => document.dispatchEvent(new CustomEvent("dash3d-zoom", { detail: { factor: 1.25 } }))}
             >
@@ -306,6 +342,7 @@ export function DashboardApp({ embedded = false }: { embedded?: boolean }) {
               type="button"
               className="dash3d-glass dash3d-zoomout"
               data-testid="zoom-sky"
+              disabled={!graphicsAvailable}
               onClick={() => {
                 unlockSound();
                 setSelectedBotId(null);
@@ -323,6 +360,7 @@ export function DashboardApp({ embedded = false }: { embedded?: boolean }) {
         {rendererMode === "graph" ? (
           <FleetForceGraph
             data={sceneData}
+            filter={graphFilter}
             reducedMotion={reducedMotion}
             onSelectBot={selectGraphBot}
             onSelectNotion={openNotion}
@@ -332,6 +370,7 @@ export function DashboardApp({ embedded = false }: { embedded?: boolean }) {
         ) : (
           <ClientUniverseScene
             data={sceneData}
+            filter={graphFilter}
             reducedMotion={reducedMotion}
             onSelectBot={selectGraphBot}
             onSelectNotion={openNotion}
@@ -344,14 +383,16 @@ export function DashboardApp({ embedded = false }: { embedded?: boolean }) {
       ) : null}
 
       {webglError ? (
-        <div className="dash3d-fallback">
+        <section className="dash3d-fallback dash3d-operations-fallback" aria-label="Operations list">
           <div className="dash3d-glass">
-            <h2>Universe unavailable</h2>
-            <p className="dash3d-title">WebGL fallback</p>
+            <h2>{rendererMode === "graph" ? "Graph" : "Universe"} graphics unavailable</h2>
+            <p className="dash3d-title">Operations overview</p>
+            <p className="dash3d-muted">{healthTimeLabel}. Your records remain available in List view.</p>
+            <button type="button" className="dash3d-pill" data-testid="retry-3d" onClick={() => setWebglError(null)}>Retry 3D</button>
             <p className="dash3d-muted">{webglError}</p>
             {state.status === "ready" ? (
               <ul className="dash3d-list" style={{ marginTop: "0.75rem", textAlign: "left" }}>
-                {state.data.bots.map((b) => (
+                {visibleBots.map((b) => (
                   <li key={b.id}>
                     <button type="button" className="dash3d-pill" onClick={() => setSelectedBotId(b.id)}>
                       <span className={`dash3d-dot ${b.health}`} />
@@ -361,8 +402,9 @@ export function DashboardApp({ embedded = false }: { embedded?: boolean }) {
                 ))}
               </ul>
             ) : null}
+            {!visibleBots.length ? <p className="dash3d-muted">No records match the selected filters.</p> : null}
           </div>
-        </div>
+        </section>
       ) : null}
 
       {state.status === "loading" ? (
@@ -387,11 +429,12 @@ export function DashboardApp({ embedded = false }: { embedded?: boolean }) {
       {state.status === "ready" && narrow ? (
         <MobileChrome
           sceneInteract={sceneInteract}
+          graphicsAvailable={!webglError}
           onSceneInteract={setSceneInteract}
-          filtersSlot={<GraphFiltersPanel triggerOnly />}
+          filtersSlot={<GraphFiltersPanel triggerOnly filter={graphFilter} onFilterChange={setGraphFilter} />}
           focused={panelFocus}
-          onJump={setPanelFocus}
-          onBack={clearPanelFocus}
+          onJump={jumpToPanel}
+          onBack={backFromPanel}
         />
       ) : null}
       {state.status === "ready" && supportOpen ? (
@@ -417,7 +460,7 @@ export function DashboardApp({ embedded = false }: { embedded?: boolean }) {
               summary={card.summary}
               defaultOpen={hudDefaultOpen(index)}
               focused={panelFocus}
-              onFocus={setPanelFocus}
+              onFocus={(id) => id ? jumpToPanel(id) : backFromPanel()}
             >
               {card.id === "weather" ? (
                 <div className="dash3d-glass dash3d-skybar-card">
@@ -443,9 +486,9 @@ export function DashboardApp({ embedded = false }: { embedded?: boolean }) {
               ) : null}
               {card.id === "compass" ? (
                 <section className="dash3d-plain-fallback" data-testid="dash3d-plain-fallback" aria-label="Universe list">
-                  <p className="dash3d-muted">Same status payload as the scene. {state.data.weather.label}: {state.data.weather.summary}</p>
+                  <p className="dash3d-muted">{healthTimeLabel}. Weather, assignments, connections and spend describe the latest received status.</p>
                   <ul className="dash3d-list">
-                    {state.data.bots.map((bot) => (
+                    {visibleBots.map((bot) => (
                       <li key={bot.id}>
                         <button type="button" className="dash3d-pill" onClick={() => setSelectedBotId(bot.id)}>
                           <span className={`dash3d-dot ${bot.health}`} />
@@ -472,15 +515,17 @@ export function DashboardApp({ embedded = false }: { embedded?: boolean }) {
               {card.id === "feed" && sceneData && operatorPrefs.layers.feed ? (
                 <FeedPanel feed={sceneData.skyFeed ?? state.data.skyFeed} />
               ) : null}
-              {card.id === "filters" ? <GraphFiltersPanel /> : null}
+              {card.id === "filters" ? <GraphFiltersPanel filter={graphFilter} onFilterChange={setGraphFilter} /> : null}
               {card.id === "controls" ? (
                 <div className="dash3d-flyhud-row">
                   {state.stale ? <p className="dash3d-muted" data-testid="status-stale">Status stale — showing last good data. {state.stale.error}</p> : null}
                   <button type="button" className="dash3d-glass dash3d-zoomout" data-testid="sound-mute" aria-pressed={soundMuted} onClick={() => { unlockSound(); const next = !soundMuted; soundRef.current?.setMuted(next); setSoundMuted(next); }}>{soundMuted ? "Sound muted" : "Sound on"}</button>
                 </div>
               ) : null}
-              {card.id === "flyhud" && !webglError ? <FlyoverHud fly={fly} layout={layoutForHud} /> : null}
-              {card.id === "charts" && sceneData?.charts && operatorPrefs.layers.charts ? <ChartsPanel charts={sceneData.charts} /> : null}
+              {card.id === "flyhud" ? graphicsAvailable ? <FlyoverHud fly={fly} layout={layoutForHud} /> : <p className="dash3d-muted">Flyover requires the 3D scene. Operational records remain available in the Universe list.</p> : null}
+              {card.id === "charts" ? !operatorPrefs.layers.charts ? <p className="dash3d-muted">Charts are hidden. Enable the Charts layer in Search records.</p> : sceneData?.charts ? <ChartsPanel charts={sceneData.charts} /> : <p className="dash3d-muted">No chart data is available.</p> : null}
+              {card.id === "feed" && !operatorPrefs.layers.feed ? <p className="dash3d-muted">Feed is hidden. Enable the Feed layer in Search records.</p> : null}
+              {card.id === "time" && !operatorPrefs.layers.time ? <p className="dash3d-muted">Time is hidden. Enable the Time layer in Search records.</p> : null}
             </MobilePanelCard>
           </div>
         ))}
@@ -490,21 +535,21 @@ export function DashboardApp({ embedded = false }: { embedded?: boolean }) {
         <BuildingInteriorPanel
           fly={fly}
           projects={state.data.projects}
-          bots={state.data.bots}
+          bots={sceneData?.bots ?? state.data.bots}
           onClose={() => sendFly({ type: "ZOOM_OUT" })}
         />
       ) : null}
       {state.status === "ready" ? (
         <OperatorConsole
-          bots={state.data.bots}
-          buildings={layoutForHud.buildings}
+          bots={sceneData?.bots ?? state.data.bots}
+          buildings={graphicsAvailable ? layoutForHud.buildings : []}
           pages={state.data.notionGraph.pages}
           open={operatorOpen}
           onOpenChange={setOperatorOpen}
           prefs={operatorPrefs}
           onPrefsChange={setOperatorPrefs}
           onFlyBot={(botId) => {
-            document.dispatchEvent(new CustomEvent("dash3d-focus-bot", { detail: { botId } }));
+            if (graphicsAvailable) document.dispatchEvent(new CustomEvent("dash3d-focus-bot", { detail: { botId } }));
           }}
           onOpenNotion={openNotion}
           onSelectBot={(bot) => {
@@ -514,11 +559,12 @@ export function DashboardApp({ embedded = false }: { embedded?: boolean }) {
       ) : null}
 
       <NodeDetailPanel
+        healthTimeLabel={scrubView.mode !== "live" ? healthTimeLabel : undefined}
         bot={selected}
         notionPage={notionPage}
         open={Boolean(selected || notionPage)}
         spend={spendView}
-        status={state.status === "ready" ? state.data : null}
+        status={sceneData}
         notionNeighbors={resolveNotionNeighbors(state.status === "ready" ? state.data : null, notionPage?.id)}
         portraitSrc={selected ? `/dashboard-3d/art/portrait-${selected.id}.webp` : null}
         onClose={() => {

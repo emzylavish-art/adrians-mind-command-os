@@ -1,5 +1,5 @@
 import { resolveXaiInferenceApiKey } from "./media/xai-key.ts";
-import { normalizeCitations, type ResearchCitation, type ResearchResult } from "./research.ts";
+import { normalizeCitations, type ResearchCitation, type ResearchResult, type ResearchAnswer } from "./research.ts";
 
 const RESPONSES_URL = "https://api.x.ai/v1/responses";
 const SEARCH_MODEL = "grok-4.7";
@@ -65,6 +65,38 @@ function collectHits(body: unknown): { title: string; url: string }[] {
   return hits;
 }
 
+
+/** Preserve provider text and annotation offsets as attributed, unverified evidence. */
+export function extractResearchAnswer(body: unknown): ResearchAnswer {
+  if (!body || typeof body !== "object") return { text: "", annotations: [] };
+  const output = (body as { output?: unknown }).output;
+  const chunks: string[] = [];
+  const annotations: ResearchAnswer["annotations"] = [];
+  let offset = 0;
+  for (const item of Array.isArray(output) ? output : []) {
+    const content = item && typeof item === "object" ? (item as { content?: unknown }).content : undefined;
+    for (const block of Array.isArray(content) ? content : []) {
+      if (!block || typeof block !== "object") continue;
+      const row = block as { text?: unknown; annotations?: unknown };
+      if (typeof row.text !== "string" || !row.text) continue;
+      const text = row.text.slice(0, Math.max(0, 16000 - offset));
+      if (!text) break;
+      for (const annotation of Array.isArray(row.annotations) ? row.annotations : []) {
+        if (!annotation || typeof annotation !== "object") continue;
+        const a = annotation as { url?: unknown; start_index?: unknown; end_index?: unknown };
+        const normalized = normalizeCitations([{ title: "Source", url: a.url }])[0];
+        if (!normalized) continue;
+        const start = typeof a.start_index === "number" && Number.isInteger(a.start_index) && a.start_index >= 0 && a.start_index <= text.length ? a.start_index : null;
+        const end = start !== null && typeof a.end_index === "number" && Number.isInteger(a.end_index) && a.end_index >= start && a.end_index <= text.length ? a.end_index : null;
+        annotations.push({ url: normalized.url, start: start === null || end === null ? null : start + offset, end: end === null ? null : end + offset });
+      }
+      chunks.push(text);
+      offset += text.length + 2;
+    }
+  }
+  return { text: chunks.join("\n\n"), annotations: annotations.slice(0, 80) };
+}
+
 export async function searchWithGrok(
   query: string,
   options: { fetchImpl?: typeof fetch; apiKey?: string } = {},
@@ -119,5 +151,5 @@ export async function searchWithGrok(
   if (!citations.length) {
     return { ok: false, configured: true, citations: [], error: "The search returned no usable sources. No citations were created." };
   }
-  return { ok: true, configured: true, citations, error: "" };
+  return { ok: true, configured: true, citations, error: "", providerAnswer: extractResearchAnswer(body) };
 }

@@ -1,4 +1,5 @@
-import { lazy, Suspense, useEffect, useLayoutEffect, useMemo, useRef, useState, type KeyboardEvent as ReactKeyboardEvent, type MouseEvent as ReactMouseEvent, type ReactNode, useSyncExternalStore } from "react";
+import { lazy, Suspense, useEffect, useLayoutEffect, useMemo, useRef, useState, type KeyboardEvent as ReactKeyboardEvent, type MouseEvent as ReactMouseEvent, type ReactNode, useSyncExternalStore, useDeferredValue } from "react";
+import { createPortal } from "react-dom";
 import { Link, useRouter } from "@tanstack/react-router";
 import "./command-drawer-nav.css";
 import "./command-search.css";
@@ -6,6 +7,7 @@ import "./command-voice-mode.css";
 import "./gpt-shell.css";
 import "./visual-system.css";
 import { getBearerToken } from "@/lib/auth/client";
+import { fetchOauthStatusPayload } from "@/lib/mind/service-board-status";
 import { loadMcpWithHttpFallback } from "@/lib/mind/mcp-list-http";
 import { getRecentChats } from "@/lib/mind/recent-chats";
 import { ConversationSections } from "@/components/mind/conversation-sections";
@@ -77,7 +79,10 @@ import { LiveVoiceBar } from "@/components/mind/live-voice-bar";
 import { VoiceCloningStudioPage } from "@/components/mind/voice-cloning-studio/voice-cloning-studio";
 import { DictationPill } from "@/components/mind/dictation-pill";
 import { VoiceModeOverlay, type VoiceOverlayPhase } from "@/components/mind/voice-mode-overlay";
+import { researchSummary, type ResearchResult, type ResearchStep } from "@/lib/mind/research";
 import { SpeakStage } from "@/components/mind/speak-stage";
+import { saveRecovery, closeRecovery } from "@/lib/mind/recovery-inbox";
+import { runStagedSpeak, loadSpeakSelection, STAGED_SPEAK_KEY, type SpeakSelection, type SpeakStageReceipt } from "@/lib/mind/voice/staged-pipeline";
 import { HUMAN_CODE_NOTE, HumanCodePanel, isIntelligenceThread } from "@/components/mind/human-code-panel";
 import { SpeakPanel } from "@/components/mind/surfaces/speak-panel";
 import { SharedFleet } from "@/components/mind/shared-fleet";
@@ -200,7 +205,7 @@ import { tickFleet } from "@/lib/mind/fleet";
 import { createBotFromSpeech, parseCreateBot } from "@/lib/mind/speak-bot";
 import { interpretCommand, type CommandMode } from "@/lib/mind/intent";
 import { notionSearchIssue, retainActivity } from "@/lib/mind/connection-attention";
-import { paletteHits } from "@/lib/mind/palette";
+import { createPaletteIndexBuilder, queryPaletteIndex, paletteShortcut } from "@/lib/mind/palette";
 import { paletteKeyAction } from "@/lib/mind/palette-keys";
 import { runLocalPlan } from "@/lib/mind/local-tools";
 import { greeting } from "@/lib/mind/greeting";
@@ -220,7 +225,8 @@ import {
   type ToolTimelineRow,
 } from "@/lib/mind/tools-timeline";
 import { describeFile } from "@/lib/mind/files-read";
-import { extractPdfText } from "@/lib/mind/pdf-text";
+import { selectHistoryForQuestion, prepareHistoryContext } from "@/lib/mind/media/history";
+import { extractPdfText, selectPdfChunks } from "@/lib/mind/pdf-text";
 import { ModelTierChip } from "@/components/mind/model-tier-chip";
 import { AnchoredCard, MenuCluster, MenuGroup, MenuMotion, MenuShelf, ComposerMore, finishMenu, menuChip, pinShelf } from "@/components/mind/menu-material";
 import { MODEL_TIERS, type ConcreteModelTier, type ModelTier } from "@/lib/mind/model-tiers";
@@ -240,7 +246,7 @@ import {
   type LogicRouteId,
   type LogicRoutePublic,
 } from "@/lib/mind/logic-routes";
-import { runSkill, runRequestedSkill, searchSkills, SKILLS } from "@/lib/mind/skills";
+import { runSkill, runRequestedSkill, runLocalSkill, searchSkills, SKILLS } from "@/lib/mind/skills";
 import LocalSkillsTools from "@/components/mind/local-skills-tools";
 import { HandyDictation } from "@/components/mind/handy-dictation";
 import { detectWithHandy } from "@/lib/mind/handy-dictation";
@@ -298,6 +304,8 @@ import { previewPathPrefix } from "@/lib/preview-path-prefix";
 import {
   PROJECT_NAME_MAX,
   addLocalFile,
+  deleteLocalFile,
+  deleteProject,
   addMemory,
   emptyWorkspace,
   deleteMemory,
@@ -307,7 +315,7 @@ import {
   clearedBrowserCopy,
   createChat,
   openBotChat,
-  loadWorkspace,
+  refreshBotChat,
   memoriesForChat,
   mergeWorkspace,
   replaceFromArchive,
@@ -321,8 +329,8 @@ import {
   updateChatCustomPersonality,
 } from "@/lib/mind/workspace";
 import { WORKSPACE_ROUTE_LINKS } from "@/lib/mind/workspace-nav";
-import { CONVERSATIONAL_PERSONALITIES, resolvePersonalityId, type PersonalityId } from "@/lib/mind/personalities";
-import { clearPersonaSelection, readPersonaSelection } from "@/lib/mind/personas/selection";
+import { CONVERSATIONAL_PERSONALITIES, isPersonalityId, personalityStatus, resolvePersonalityId, type PersonalityId } from "@/lib/mind/personalities";
+import { consumePersonaHandoff } from "@/lib/mind/personas/selection";
 
 type View =
   | "command"
@@ -358,7 +366,7 @@ type Pending = {
 
 const EMPTY_DRAFT_IMAGES: ImageAttachment[] = [];
 
-type Staged = { name: string; text: string };
+type Staged = { name: string; text: string; document?: import("@/lib/mind/types").LocalFile["document"] };
 
 function pinRailScroll(node: HTMLElement | null) {
   node?.style.setProperty("overflow-x", "hidden", "important");
@@ -786,6 +794,9 @@ export function CommandApp() {
   const [hiddenSettings, setHiddenSettings] = useState<string[]>([]);
   const [settingsMenu, setSettingsMenu] = useState<string | null>(null);
   const [query, setQuery] = useState("");
+  const deferredQuery = useDeferredValue(query);
+  const [shortcutLabel, setShortcutLabel] = useState("Ctrl K");
+  useEffect(() => { setShortcutLabel(paletteShortcut(navigator.platform)); }, []);
   const [paletteOpen, setPaletteOpen] = useState(false);
   const [paletteIndex, setPaletteIndex] = useState(0);
   const [navOpen, setNavOpen] = useState(false);
@@ -823,15 +834,14 @@ export function CommandApp() {
     const drawer = navDrawerRef.current;
     const phone = window.matchMedia("(max-width: 767px)").matches;
     if (drawer && phone) {
-      const light = document.documentElement.dataset.theme === "light";
       const reduce = document.documentElement.dataset.adrianMotion === "reduce" || window.matchMedia("(prefers-reduced-motion: reduce)").matches;
       drawer.style.setProperty("inset", "0 auto 0 0", "important");
       drawer.style.setProperty("width", "min(18.5rem, 84vw)", "important");
       drawer.style.setProperty("height", "100dvh", "important");
-      drawer.style.setProperty("background", light ? "#f7f7f8" : "#161618", "important");
-      drawer.style.setProperty("color", light ? "#18181b" : "#fafafa", "important");
-      drawer.style.setProperty("border-radius", "0 22px 22px 0", "important");
-      drawer.style.setProperty("box-shadow", "18px 0 48px rgba(0, 0, 0, 0.38)", "important");
+      drawer.style.setProperty("background", "var(--color-surface)", "important");
+      drawer.style.setProperty("color", "var(--color-fg)", "important");
+      drawer.style.setProperty("border-radius", "0 var(--radius-panel, 22px) var(--radius-panel, 22px) 0", "important");
+      drawer.style.setProperty("box-shadow", "var(--shadow-panel, 18px 0 48px rgb(0 0 0 / 0.38))", "important");
       drawer.style.setProperty("z-index", "200", "important");
       if (!reduce) drawer.style.setProperty("animation", "adrian-drawer-in 240ms cubic-bezier(0.22, 1, 0.36, 1)", "important");
       const stage = document.querySelector(".main-stage");
@@ -924,7 +934,11 @@ export function CommandApp() {
   const [stylePreference, setStylePreference] = useState<{ key: string; id: PersonalityId } | null>(null);
   const defaultPersonalityId = stylePreference?.key === personalityKey ? stylePreference.id : "assistant";
   useEffect(() => {
-    try { setStylePreference({ key: personalityKey, id: resolvePersonalityId(localStorage.getItem(personalityKey)) }); }
+    try {
+      const saved = localStorage.getItem(personalityKey);
+      setStylePreference({ key: personalityKey, id: resolvePersonalityId(saved) });
+      if (saved !== null && !isPersonalityId(saved)) setNotice(`The saved conversation style “${saved.slice(0, 80)}” is unavailable. New chats use Assistant until you choose another style.`);
+    }
     catch { setStylePreference(null); }
   }, [personalityKey]);
   function setDefaultPersonalityId(id: PersonalityId) {
@@ -973,18 +987,31 @@ export function CommandApp() {
   const [dictationLevel, setDictationLevel] = useState(0);
   const [voiceOverlayOpen, setVoiceOverlayOpen] = useState(false);
   const [speakStageOpen, setSpeakStageOpen] = useState(false);
+  const [speakSelection, setSpeakSelection] = useState<SpeakSelection>({ input: "handy", output: "browser" });
+  const [speakReceipt, setSpeakReceipt] = useState<SpeakStageReceipt | null>(null);
+  const stagedSpeakGeneration = useRef(0);
+  const stagedSpeakAbort = useRef<AbortController | null>(null);
+  const stagedSpeakerMuted = useRef(false);
+  useEffect(() => { setSpeakSelection(loadSpeakSelection(localStorage)); }, []);
   const taskRecorder = useRef(createTaskRecorder());
   const taskStream = useRef<MediaStream | null>(null);
   const [taskRecording, setTaskRecording] = useState(false);
   const [taskSeconds, setTaskSeconds] = useState(0);
   const [speakCall, setSpeakCall] = useState({ heard: "", reply: "", error: "" });
   const speakStageOpenRef = useRef(false);
-  useEffect(() => {
+  useLayoutEffect(() => {
+    const wasOpen = speakStageOpenRef.current;
     speakStageOpenRef.current = speakStageOpen;
+    if (wasOpen && !speakStageOpen) {
+      ++stagedSpeakGeneration.current;
+      stagedSpeakAbort.current?.abort();
+      window.speechSynthesis?.cancel();
+      sharedAudioOutput.interrupt();
+    }
   }, [speakStageOpen]);
   useEffect(() => {
     if (!taskRecording) return;
-    const id = window.setInterval(() => setTaskSeconds(Math.round(taskRecorder.current.elapsed() / 1000)), 500);
+    const id = window.setInterval(() => setTaskSeconds(Math.round(taskRecorder.current.elapsed() / 1000)), 1000);
     return () => window.clearInterval(id);
   }, [taskRecording]);
   useEffect(() => {
@@ -1082,6 +1109,14 @@ export function CommandApp() {
   useEffect(() => {
     return () => {
       turnGen.current++;
+      ++stagedSpeakGeneration.current;
+      stagedSpeakAbort.current?.abort();
+      speakStageOpenRef.current = false;
+      setSpeakStageOpen(false);
+      setSpeakCall({ heard: "", reply: "", error: "" });
+      setSpeakReceipt(null);
+      window.speechSynthesis?.cancel();
+      sharedAudioOutput.interrupt();
       turnAbort.current?.abort();
       turnAbort.current = null;
       turnInFlight.current = false;
@@ -1107,7 +1142,6 @@ export function CommandApp() {
   const [failure, setFailure] = useState<{ message: string; auditId: string; retry: (() => void) | null; kind: HonestFailureKind | null; action?: RouteFailureAction; chatId?: string } | null>(null);
   const reportFailureRef = useRef<(message: string, action: string, target: string, retry: (() => void) | null) => void>(() => undefined);
   const [toolTimeline, setToolTimeline] = useState<ToolTimelineRow[]>([]);
-  const [timelineTickMs, setTimelineTickMs] = useState(0);
   const [statusSignedIn, setStatusSignedIn] = useState<boolean | null>(null);
   const [databaseConfigured, setDatabaseConfigured] = useState(false);
   const [focusAuditId, setFocusAuditId] = useState<string | null>(null);
@@ -1116,6 +1150,7 @@ export function CommandApp() {
   const [grok, setGrok] = useState("Checking");
   const [databasePill, setDatabasePill] = useState("Checking");
   const [databaseDetail, setDatabaseDetail] = useState("The status check has not finished.");
+  const [haltStatusDetail, setHaltStatusDetail] = useState<string | null>(null);
   const [grokConfigured, setGrokConfigured] = useState<boolean | null>(null);
   const [liveProviders, setLiveProviders] = useState<Partial<Record<"openai" | "anthropic" | "gemini" | "openrouter", boolean>>>({});
   const [selectionLoaded, setSelectionLoaded] = useState(false);
@@ -1127,6 +1162,8 @@ export function CommandApp() {
   const [logicRoutes, setLogicRoutes] = useState<LogicRoutePublic[]>([]);
   const [composerEffort, setComposerEffort] = useState<ComposerModeId>("auto");
   const [consultModel, setConsultModel] = useState("");
+  const [consultHelperIds, setConsultHelperIds] = useState<string[]>([]);
+  const [allowPaidHelpers, setAllowPaidHelpers] = useState(false);
   const [routingMode, setRoutingMode] = useState<RoutingMode>("A");
   const [routingPanel, setRoutingPanel] = useState<LogicRouteId[]>([]);
   const ratingOwner = account?.id ? "account:" + account.id : "device:guest";
@@ -1136,7 +1173,8 @@ export function CommandApp() {
   const [failoverPolicy, setFailoverPolicy] = useState<"none" | "grok">("none");
  const [researchCitations, setResearchCitations] = useState<{ title: string; url: string }[]>([]);
   const [researchReportQuestion, setResearchReportQuestion] = useState("");
-  type ResearchReport = { id: string; question: string; summary: string; citations: { title: string; url: string }[]; at: string; steps?: { query: string; ok: boolean; count: number }[] };
+  const [researchReportId, setResearchReportId] = useState<string | null>(null);
+  type ResearchReport = Omit<ResearchResult, "ok" | "configured" | "error"> & { id: string; question: string; summary: string; at: string; attempts?: ResearchStep[] };
   const [researchHistory, setResearchHistory] = useState<ResearchReport[]>([]);
   const [researchSteps, setResearchSteps] = useState<ResearchReport["steps"]>([]);
   const [researchOwner, setResearchOwner] = useState<string | null>(null);
@@ -1348,17 +1386,22 @@ export function CommandApp() {
     else router.history.push(next);
   }, [ready, view, activeId, shareProjectId, openFileId, shareBotId, router]);
 
-  const personaHandoffDone = useRef(false);
+  const personaHandoffDone = useRef<string | null>(null);
   useEffect(() => {
-    if (!ready || personaHandoffDone.current || typeof window === "undefined") return;
-    const selection = readPersonaSelection(window.localStorage);
+    if (!ready || !draftOwner || personaHandoffDone.current === draftOwner || typeof window === "undefined") return;
+    const handoff = consumePersonaHandoff(window.localStorage, draftOwner, wsRef.current);
+    if (handoff.status === "invalid" || handoff.status === "blocked") {
+      personaHandoffDone.current = draftOwner;
+      setNotice(handoff.error);
+      return;
+    }
+    const selection = handoff.status === "ready" ? handoff.selection : null;
     const params = new URLSearchParams(window.location.search);
     const agentId = selection?.agentId || params.get("agentId");
     if (!agentId || (params.get("mode") !== "agent" && !selection)) return;
-    personaHandoffDone.current = true;
-    const stored = loadWorkspace(window.localStorage);
-    const agent = stored.agents.find((item) => item.id === agentId && !item.archived) ?? ws.agents.find((item) => item.id === agentId && !item.archived);
-    clearPersonaSelection(window.localStorage);
+    personaHandoffDone.current = draftOwner;
+    const base = handoff.status === "ready" ? handoff.ws : wsRef.current;
+    const agent = base.agents.find((item) => item.id === agentId && !item.archived);
     const url = new URL(window.location.href);
     url.searchParams.delete("mode");
     url.searchParams.delete("agentId");
@@ -1367,14 +1410,13 @@ export function CommandApp() {
       setNotice("That persona was not found on this device. Nothing was opened.");
       return;
     }
-    const base = ws.agents.some((item) => item.id === agent.id) ? ws : stored;
     const opened = openBotChat(base, agent.id);
     if (!opened) return;
     if (opened.ws !== ws) setWs(() => opened.ws);
     setActiveId(opened.chat.id);
     setView("chat");
     setNotice(`${agent.name} is open in Chat.`);
-  }, [ready, ws, setWs]);
+  }, [ready, draftOwner, ws, setWs, router]);
 
   useEffect(() => {
     const storage = typeof localStorage === "undefined" ? null : localStorage;
@@ -1394,7 +1436,7 @@ export function CommandApp() {
     setDictationElapsed(0);
     const id = window.setInterval(() => {
       setDictationElapsed(Math.floor((Date.now() - started) / 1000));
-    }, 250);
+    }, 1000);
     return () => window.clearInterval(id);
   }, [dictation.phase]);
 
@@ -1464,9 +1506,16 @@ export function CommandApp() {
       grokConfigured,
       providers: liveProviders,
       localRunner: typeof localStorage !== "undefined" && Boolean(localStorage.getItem("amcos.ollama.base")?.trim()),
+      localRunnerUrl: typeof localStorage !== "undefined" ? localStorage.getItem("amcos.ollama.base") ?? undefined : undefined,
+      openrouterModel: providerModels.openrouter,
     }),
     ...customModules(customAiProviders),
-  ], [grokConfigured, liveProviders, customAiProviders]);
+  ], [grokConfigured, liveProviders, customAiProviders, providerModels.openrouter]);
+
+  useEffect(() => {
+    setConsultHelperIds([]);
+    setAllowPaidHelpers(false);
+  }, [draftOwner]);
 
   useEffect(() => {
     const storage = typeof localStorage === "undefined" ? null : localStorage;
@@ -1661,6 +1710,8 @@ export function CommandApp() {
   const [skillRefreshNonce, setSkillRefreshNonce] = useState(0);
   const [skillBand, setSkillBand] = useState<"device" | "installed" | "missing">("device");
   const [enabledSkills, setEnabledSkills] = useState<Record<string, boolean>>({});
+  const enabledSkillsRef = useRef(enabledSkills);
+  useLayoutEffect(() => { enabledSkillsRef.current = enabledSkills; }, [enabledSkills]);
   const [skillNoteQuery, setSkillNoteQuery] = useState("");
   const [skillResult, setSkillResult] = useState<{ id: string; text: string } | null>(null);
   const [skillStorageError, setSkillStorageError] = useState("");
@@ -1692,7 +1743,7 @@ export function CommandApp() {
   const controlsModelLabel = effectiveProvider === "grok" ? grokModel ?? effectiveRoute.modelTier
     : providerOptions.find((option) => option.id === effectiveProvider)?.label
       ?? logicRoutes.find((option) => option.id === effectiveProvider)?.label ?? "Selected module unavailable";
-  const storedBytes = useMemo(() => new Blob([JSON.stringify(ws)]).size, [ws]);
+  const storedBytes = useMemo(() => view === "settings" ? new Blob([JSON.stringify(ws)]).size : 0, [view, ws]);
 
   useEffect(() => {
     if (!focusAuditId || view !== "activity") return;
@@ -1755,14 +1806,6 @@ export function CommandApp() {
     };
   }, [view]);
 
-  const timelineRunning = useMemo(() => timelineCounts(toolTimeline).running, [toolTimeline]);
-  useEffect(() => {
-    if (!timelineRunning) return;
-    setTimelineTickMs(Date.now());
-    const id = window.setInterval(() => setTimelineTickMs(Date.now()), 250);
-    return () => window.clearInterval(id);
-  }, [timelineRunning]);
-
   useEffect(() => {
     if (!ready) return;
     let active = true;
@@ -1783,6 +1826,7 @@ export function CommandApp() {
         setDatabaseDetail(mode.detail);
         setSystem(status.database);
         setCheckedAt(status.checkedAt);
+        setHaltStatusDetail(status.executionHaltState === "unknown" ? status.executionHaltDetail : null);
         if (Array.isArray(status.logicRoutes)) setLogicRoutes(status.logicRoutes);
         if (status.executionHalted && !clearedStop.current) {
           setWs((prev) => (prev.halted ? prev : pushAudit({ ...prev, halted: true }, "emergency_stop", "session", "server already stopped")));
@@ -1794,6 +1838,7 @@ export function CommandApp() {
         setDatabasePill("Unknown");
         setDatabaseDetail("The status check did not finish.");
         setSystem("The status check did not finish.");
+        setHaltStatusDetail("Emergency-stop status could not be checked. The server will block execution until its state is known.");
       });
     notionStatus()
       .then((status) => { if (active) setNotion(status); })
@@ -1959,7 +2004,7 @@ export function CommandApp() {
         void fetch("/api/mind/pc/status", { method: "POST", credentials: "include", headers: { "content-type": "application/json" }, body: JSON.stringify({ text: run.goal }) });
       }
       const next = tickFleet(runDueSchedules(current, now), { now, workerId: "browser-worker" });
-      setWs(next);
+      if (next !== current) setWs(next);
     };
     const id = window.setInterval(step, 15000);
     return () => window.clearInterval(id);
@@ -1976,8 +2021,7 @@ export function CommandApp() {
       if (event.key === "Escape") {
         if (speakStageOpenRef.current) {
           event.preventDefault();
-          setSpeakStageOpen(false);
-          if (!overlayOpenRef.current) void listenRef.current({ mode: "stop" });
+          closeSpeakStage();
           return;
         }
         if (overlayOpenRef.current) {
@@ -2041,6 +2085,7 @@ export function CommandApp() {
     setResearchText("");
     setResearchNote(null);
     setResearchReportQuestion("");
+    setResearchReportId(null);
     setResearchSteps([]);
     if (!draftOwner) return;
     try {
@@ -2116,19 +2161,21 @@ export function CommandApp() {
     window.location.assign("/login?next=" + encodeURIComponent(loginReturnPath()));
   };
 
-  const hits = useMemo(
+  const buildPaletteIndex = useMemo(() => createPaletteIndexBuilder(), []);
+  const paletteChats = useMemo(() => ws.chats.map((chat) => ({ ...chat, title: shownChatTitle(chat), humanCode: isIntelligenceThread(chat.customPersonality) })), [ws.chats]);
+  const paletteSearchIndex = useMemo(
     () =>
-      paletteHits({
-        query,
+      buildPaletteIndex({
         projects: ws.projects,
-        chats: ws.chats.map((chat) => ({ ...chat, title: shownChatTitle(chat), humanCode: isIntelligenceThread(chat.customPersonality) })),
+        chats: paletteChats,
         memories: ws.memories,
         files: ws.files,
         agents: ws.agents,
         runs: ws.runs,
       }),
-    [query, ws],
+    [buildPaletteIndex, paletteChats, ws.projects, ws.memories, ws.files, ws.agents, ws.runs],
   );
+  const hits = useMemo(() => queryPaletteIndex(paletteSearchIndex, paletteOpen ? deferredQuery : ""), [paletteSearchIndex, deferredQuery, paletteOpen]);
 
   type ChromeMenu = "palette" | "surface" | "bell" | "account" | "controls" | "nav";
 
@@ -2367,8 +2414,7 @@ export function CommandApp() {
       available: true,
       unavailableReason: "",
       run: (text) => {
-        const result = runLocalPlan(scoped, [{ id, tool: id, query: text }], { autonomy: "automatic", halted: source.halted, tokens: {} });
-        return { ok: result.ok, text: result.lines.join("\n") || "No result." };
+        return runLocalSkill(scoped, id, text, enabledSkillsRef.current);
       },
     });
     return [
@@ -2380,7 +2426,7 @@ export function CommandApp() {
         confirm: false,
         available: true,
         unavailableReason: "",
-        run: (text) => runRequestedSkill(scoped, text, enabledSkills),
+        run: (text) => runRequestedSkill(scoped, text, enabledSkillsRef.current),
       },
       {
         id: "save_chat_skill",
@@ -2447,8 +2493,21 @@ export function CommandApp() {
   }
 
   function settleIntent(chat: Chat, text: string, source: Workspace, action: "chat" | "voice" = "chat"): boolean {
+    // Retries re-evaluate current policy and scope, not a failed render's snapshot.
+    source = wsRef.current;
+    chat = source.chats.find((item) => item.id === chat.id) ?? chat;
     const intent = interpretCommand(text, source.agents, commandMode);
     if (intent.kind === "chat") return false;
+    if (intent.kind === "blocked" && intent.area === "gmail") {
+      const owner = draftOwner;
+      void fetchOauthStatusPayload("/api/mind/oauth/gmail/status", { bearer: getBearerToken() }).then((status) => {
+        if (turnOwner.current !== owner || !wsRef.current.chats.some((item) => item.id === chat.id)) return;
+        const known = status.state === "connected" || status.state === "not_connected" || status.state === "not_configured";
+        const current = interpretCommand(text, wsRef.current.agents, commandMode, known ? { gmail: { authorizationSaved: status.state === "connected" } } : undefined);
+        recordToolTurn(chat, text, current.kind === "blocked" ? current.reply : intent.reply);
+      });
+      return true;
+    }
     if (intent.kind === "local" || intent.kind === "skill" || intent.kind === "save_skill") {
       const toolId = intent.kind === "save_skill" ? "save_chat_skill" : intent.kind === "skill" ? "search_skills" : intent.tool;
       setToolTimeline([]);
@@ -2495,7 +2554,7 @@ export function CommandApp() {
         });
         return true;
       }
-      const notes = relevantMemories(memoriesForChat(source, chat), text);
+      const notes = intent.kind === "local" || turn.status !== "completed" ? [] : relevantMemories(memoriesForChat(source, chat), text);
       const reply = notes.length ? `${turn.text}\n\nSaved note: ${notes.map((item) => item.text).join(" ")}` : turn.text;
       recordToolTurn(chat, text, reply, undefined, { tool: toolId, ok: turn.status === "completed", action });
       if (turn.status === "failed" || turn.status === "timed_out" || turn.status === "cancelled") {
@@ -2551,6 +2610,7 @@ export function CommandApp() {
       if (!wsRef.current.chats.some((item) => item.id === chat.id)) return;
       setResearchCitations(result.citations);
       setResearchReportQuestion(query);
+      setResearchReportId(null);
       if (!result.ok) {
         const message = result.error;
         const retry = () => {
@@ -2582,8 +2642,12 @@ export function CommandApp() {
     }
   }
 
-  async function askNotion(chat: Chat, text: string, confirmed = false, pageId: string | null = null, workspaceId = chat.notionWorkspaceId) {
+  async function askNotion(chat: Chat, text: string, confirmed = false, pageId: string | null = null, workspaceId = chat.notionWorkspaceId, operationId?: string) {
     if (turnOwner.current !== draftOwner || !wsRef.current.chats.some((item) => item.id === chat.id)) return;
+    if ((confirmed || operationId) && wsRef.current.chats.find((item) => item.id === chat.id)?.notionWorkspaceId !== workspaceId) {
+      setError("This conversation's Notion workspace changed after the operation was prepared. Restore the original workspace to check its existing result, or prepare a new request and approval for the new workspace. Nothing was sent.");
+      return;
+    }
     setBusy(true);
     setError(null);
     const epoch = notionEpoch.current;
@@ -2604,7 +2668,8 @@ export function CommandApp() {
         });
         return;
       }
-      const result = await notionCommand({ data: { text, confirmed, pageId, workspaceId } });
+      if (confirmed && operationId) setWs((prev) => saveRecovery(prev, { id: operationId, operationId, at: new Date().toISOString(), action: "notion_operation", target: "notion", chatId: chat.id, workspaceId, pageId, text, outcome: "uncertain", message: "Notion write outcome has not been confirmed. Check this existing operation before starting another write.", state: "open" }));
+      const result = await notionCommand({ data: { text, confirmed, pageId, workspaceId, operationId } });
       if (turnOwner.current !== draftOwner) return;
       setBusy(false);
       if (epoch !== notionEpoch.current || !wsRef.current.chats.some((item) => item.id === chat.id)) return;
@@ -2618,18 +2683,21 @@ export function CommandApp() {
           detail: result.error,
           confirm: "Append",
           run: () => {
-            void askNotion(chat, text, true, target.id, workspaceId);
+            void askNotion(chat, text, true, target.id, workspaceId, result.operationId);
           },
         });
         return;
       }
       if (!result.ok) {
         const message = result.error || "Notion did not complete the requested operation.";
-        const retry = () => { void askNotion(chat, text, false, pageId, workspaceId); };
-        reportFailure(message, "notion_operation_failed", "notion", retry, result.needsConfirmation ? "none" : "retry");
+        const savedId = result.operationId ?? operationId;
+        if (savedId) setWs((prev) => saveRecovery(prev, { id: savedId, operationId: savedId, at: new Date().toISOString(), action: "notion_operation", target: "notion", chatId: chat.id, workspaceId, pageId: pageId ?? result.pages[0]?.id ?? null, text, outcome: result.outcome, message, state: "open" }));
+        const retry = result.recovery === "reconnect" ? null : () => { void askNotion(chat, text, false, pageId, workspaceId, savedId); };
+        reportFailure(message, "notion_operation_failed", "notion", retry, result.recovery === "reconnect" ? "setup" : result.needsConfirmation ? "none" : "retry");
         recordToolTurn(chat, text, message, undefined, { tool: "notion", ok: false, action: "chat" });
         return;
       }
+      if (result.operationId ?? operationId) setWs((prev) => closeRecovery(prev, (result.operationId ?? operationId)!, "resolved"));
       const lines = [result.error, ...result.pages.map((page) => `${page.title} — ${page.url}`), result.content].filter(Boolean);
       if (lines.length && epoch === notionEpoch.current) {
         setNotionPreview({ owner: draftOwner, chatId: chat.id, text: lines.join("\n") });
@@ -2639,9 +2707,9 @@ export function CommandApp() {
       if (turnOwner.current !== draftOwner) return;
       setBusy(false);
       if (!wsRef.current.chats.some((item) => item.id === chat.id)) return;
-      const message = "Notion could not be reached. Nothing was changed.";
+      const message = confirmed && operationId ? "Notion's write response was lost. The outcome is uncertain. Check the existing operation; do not repeat the append." : "Notion could not be reached. No write was confirmed from this request.";
       const retry = () => {
-        void askNotion(chat, text, false, pageId, workspaceId);
+        void askNotion(chat, text, false, pageId, workspaceId, operationId);
       };
       if (emitFailure("notion", mountFailure({ message, action: "notion_unreachable", target: "notion" }, retry))) return;
       setError(message);
@@ -2722,7 +2790,7 @@ export function CommandApp() {
     source: Workspace,
     resume = false,
     images: ImageAttachment[] = [],
-    options?: { logicRoute?: LogicRouteId | null; skipUserMessage?: boolean; isolateOutputs?: boolean; accessNotes?: { id: string; text: string }[]; request?: TurnRequest; operationId?: string; replaceReplyId?: string; recovery?: Msg["deliveryRoute"] },
+    options?: { logicRoute?: LogicRouteId | null; skipUserMessage?: boolean; isolateOutputs?: boolean; accessNotes?: { id: string; text: string }[]; request?: TurnRequest; operationId?: string; replaceReplyId?: string; recovery?: Msg["deliveryRoute"]; onReceipt?: (receipt: { provider: string; model?: string }) => void },
   ): Promise<string | null> {
     if (turnInFlight.current || turnOwner.current !== draftOwner) return null;
     const snapped = snapshotImages(images);
@@ -2794,7 +2862,8 @@ export function CommandApp() {
     }
     const orchestrating = savedRoute ? savedRoute.orchestrated : resolveSendPath(composerEffort).path === "orchestrator";
     const consultPlan = orchestrating
-      ? planModelConsult({ orchestrator: savedRoute?.provider ?? consultModel, modules: consultModules, question: text })
+      ? planModelConsult({ orchestrator: savedRoute?.provider ?? consultModel, modules: consultModules, question: text,
+          helperIds: consultHelperIds.length ? consultHelperIds : undefined, allowPaidHelpers, freeOnly: currentFreeOnly.current })
       : null;
     if (consultPlan && !consultPlan.ok) {
       reportFailure(consultPlan.error, "model_unavailable", "provider", () => {
@@ -2822,14 +2891,17 @@ export function CommandApp() {
     }
     const messages = options?.replaceReplyId ? live.slice(0, -1) : selectRetryMessages(chat.messages, live);
     if (resume && messages.at(-1)?.role === "assistant") return null;
-    const history = historyForDeliver(messages, resume);
+    const priorMessages = resume ? messages.slice(0, -1) : messages;
+    const selectedHistory = selectHistoryForQuestion(priorMessages, text, 12);
+    const preparedHistory = prepareHistoryContext(selectedHistory.messages, text, { maxImageChars: Math.max(0, 2_700_000 - snapped.reduce((total, image) => total + image.dataUrl.length, 0)) });
+    const history = preparedHistory.messages;
+    const contextReceipt = { availableMessages: priorMessages.length, includedMessages: history.length, omittedMessages: priorMessages.length - history.length, imageWarnings: [...preparedHistory.warnings, ...selectedHistory.omittedReferenceNames.map((name) => `Referenced image omitted: ${name}`)] };
     const title = resume || messages.length > 0 ? chat.title : text.replace(/\s+/g, " ").slice(0, 48);
     const userMessageId = options?.skipUserMessage ? null : resume ? messages.at(-1)?.id ?? null : crypto.randomUUID();
     setTurnChat({ ownerId: draftOwner, chatId: chat.id });
     setBusy(true);
     setLiveText("");
     setError(null);
-    setFailure(null);
     setToolTimeline([]);
     turnAbort.current?.abort();
     const generation = ++turnGen.current;
@@ -2896,7 +2968,7 @@ export function CommandApp() {
             content: item.content,
             images: item.images
               ?.filter((image) => typeof image.dataUrl === "string" && image.dataUrl.startsWith("data:image/"))
-              .map((image) => ({ dataUrl: image.dataUrl!, name: image.name })),
+              .map((image) => ({ dataUrl: image.dataUrl!, name: image.name, origin: image.origin })),
           })),
           memoryContext: [
             ...(options?.accessNotes ?? []),
@@ -2907,21 +2979,27 @@ export function CommandApp() {
             ? consultPlan.plan.orchestrator
             : activeLogic ?? (isCustomProvider || otherReady || routedRunner ? selectedProvider : (routed.ok ? routed.id : selectedProvider)),
           modelTier: selectedTier,
-          requestedModel: savedRoute?.model ?? (selectedProvider === "grok" && !activeLogic && !consultPlan ? grokModel : providerModels[selectedProvider] ?? null),
+          requestedModel: savedRoute?.model ?? (consultPlan?.ok
+            ? providerModels[consultPlan.plan.orchestrator] ?? null
+            : selectedProvider === "grok" && !activeLogic ? grokModel : providerModels[selectedProvider] ?? null),
           logicRoute: consultPlan && consultPlan.ok ? null : activeLogic,
           orchestrator: consultPlan && consultPlan.ok ? consultPlan.plan.orchestrator : null,
           composerMode: orchestrating ? "orchestrator" : undefined,
+          freeOnly: currentFreeOnly.current,
           identity: ADRIAN_MIND_IDENTITY,
           consult: consultPlan && consultPlan.ok ? {
             available: consultPlan.plan.available,
             helpers: consultPlan.plan.helpers,
             purpose: consultPlan.plan.purpose,
+            helperIds: consultHelperIds.length ? consultHelperIds : undefined,
+            allowPaidHelpers: allowPaidHelpers && !currentFreeOnly.current,
           } : null,
           images: snapped.map((image) => ({ dataUrl: image.dataUrl, name: image.name, origin: image.origin })),
           personalityId: chat.personalityId ?? "assistant",
           customPersonality: chat.customPersonality ?? "",
         }),
     };
+    for (const omitted of request.body.historyImageOmissions ?? []) contextReceipt.imageWarnings.push(`Historical image omitted from the request allowance: ${omitted.name}`);
     function reportTurnError(message: string, deliveryUncertain: boolean) {
       const useOriginal = deliveryUncertain || options?.request !== undefined || options?.operationId !== undefined;
       markDelivery(useOriginal ? "unconfirmed" : "failed");
@@ -2986,6 +3064,7 @@ export function CommandApp() {
         reportTurnError(message, result.ok || result.deliveryUncertain === true);
         return null;
       }
+      options?.onReceipt?.({ provider: result.provider || "not reported", model: result.model });
       setWs((prev) => {
         const next = {
           ...prev,
@@ -3003,6 +3082,8 @@ export function CommandApp() {
                       model: result.model,
                       routingMode,
                       ...(result.provider ? { provider: result.provider } : {}),
+                      ...(result.consult?.length ? { consult: result.consult } : {}),
+                      contextReceipt,
                       ...(result.requestedModel ? { requestedModel: result.requestedModel } : {}),
                       ...(result.memorySaved === true
                         ? {
@@ -3345,7 +3426,7 @@ ${message.content}`;
     setView("chat");
     setWs((prev) => {
       let next = { ...prev, chats: [made.chat, ...prev.chats] };
-      if (file && !made.chat.temporary) next = addLocalFile(next, { name: file.name, text: file.text, projectId: projectChoice || null });
+      if (file && !made.chat.temporary) next = addLocalFile(next, { name: file.name, text: file.text, document: file.document, projectId: projectChoice || null });
       return pushAudit(next, "create_chat", made.chat.id, `memory ${made.chat.memory}; ${made.chat.autonomy}`);
     });
     if (settleIntent(made.chat, full, source)) return;
@@ -3375,7 +3456,7 @@ ${message.content}`;
     researchFlight.current = true;
     setResearchPending(true);
     try {
-      const result = await searchWeb({ data: { query, freeOnly: researchFreeOnly, retryQueries: retry?.steps?.filter((step) => !step.ok).map((step) => step.query) } });
+      const result = await searchWeb({ data: { query, freeOnly: researchFreeOnly, retryQueries: retry?.steps?.filter((step) => !step.ok).map((step) => step.query), routeFingerprint: retry?.providerIdentity?.routeFingerprint } });
       if (!draftOwner || turnOwner.current !== draftOwner) return;
       setError(null);
       setWs((prev) => pushAudit(prev, result.configured && result.ok ? "research_result" : "research_refused", "search", result.ok ? `${result.citations.length} sources` : "no citation"));
@@ -3386,8 +3467,13 @@ ${message.content}`;
       } else {
         const steps = retry?.steps?.map((step) => result.steps?.find((current) => current.query === step.query) ?? step) ?? result.steps;
         const citations = [...new Map([...(retry?.citations ?? []), ...result.citations].map((item) => [item.url, item])).values()];
-        const summary = retry && steps ? `${steps.filter((step) => step.ok).length} of ${steps.length} searches succeeded.` : result.summary || "";
-        const report: ResearchReport = { id: retry?.id ?? crypto.randomUUID(), question: query, steps, summary, citations, at: new Date().toISOString() };
+        const attempts = [...(retry?.attempts ?? retry?.steps ?? []), ...(result.steps ?? [])];
+        const evidence = [...(retry?.evidence ?? []), ...(result.evidence ?? [])];
+        const providerIdentity = result.providerIdentity ?? retry?.providerIdentity;
+        const providerAnswer = result.providerAnswer ?? retry?.providerAnswer;
+        const summary = researchSummary({ citations, steps, evidence, providerIdentity, attempts });
+        const report: ResearchReport = { id: retry?.id ?? crypto.randomUUID(), question: query, steps, summary, citations, evidence, providerIdentity, providerAnswer, attempts, at: new Date().toISOString() };
+        setResearchReportId(report.id);
         setResearchReportQuestion(query);
         setResearchCitations(citations);
         setResearchNote(summary);
@@ -3607,12 +3693,12 @@ ${message.content}`;
     setPendingImages([]);
     const source = ws;
     if (settleIntent(active, full, source)) {
-      if (file && !active.temporary) setWs((prev) => addLocalFile(prev, { name: file.name, text: file.text, projectId: active.projectId }));
+      if (file && !active.temporary) setWs((prev) => addLocalFile(prev, { name: file.name, text: file.text, document: file.document, projectId: active.projectId }));
       await releaseNextCue();
       return;
     }
     if (file && !active.temporary) {
-      setWs((prev) => addLocalFile(prev, { name: file.name, text: file.text, projectId: active.projectId }));
+      setWs((prev) => addLocalFile(prev, { name: file.name, text: file.text, document: file.document, projectId: active.projectId }));
     }
     const effortPath = resolveSendPath(composerEffort);
     if (effortPath.notice) setNotice(effortPath.notice);
@@ -4178,16 +4264,15 @@ ${message.content}`;
       return;
     }
     const coverage = pdf?.coverage ? `[Partial PDF: ${pdf.coverage}]\n` : "";
-    const stagedFile = { name: file.name, text: coverage + text.slice(0, 40000) };
+    const document = pdf ? { kind: "pdf" as const, pages: pdf.pages, coverage: pdf.coverage || "", partial: pdf.partial === true, chunks: pdf.chunks ?? [] } : undefined;
+    const stagedFile: Staged = { name: file.name, text: coverage + text.slice(0, 40000), document };
     const partial = pdf?.partial || text.length > stagedFile.text.length;
     if (view === "files") {
-      if (wsRef.current.files.length >= 40) {
-        setError("Library holds 40 text copies. Remove an existing copy before uploading another.");
-        return;
-      }
-      const savedId = crypto.randomUUID();
+      const existing = wsRef.current.files.find((saved) => saved.name === stagedFile.name && saved.projectId === (libraryProjectId || projectChoice || null) && saved.text === (coverage + text).slice(0, 40000) && JSON.stringify(saved.document ?? null) === JSON.stringify(document ?? null));
+      if (!existing && wsRef.current.files.length >= 40) { setError("Library holds 40 text copies. Remove an existing copy before uploading another."); return; }
+      const savedId = existing?.id ?? crypto.randomUUID();
       setWs((prev) => {
-        return addLocalFile(prev, { id: savedId, name: stagedFile.name, text: coverage + text, partial, projectId: libraryProjectId || projectChoice || null });
+        return addLocalFile(prev, { id: savedId, name: stagedFile.name, text: coverage + text, document, partial, projectId: libraryProjectId || projectChoice || null });
       });
       setOpenFileId(savedId);
       setLibraryBand("preview");
@@ -4212,6 +4297,7 @@ ${message.content}`;
   async function downloadArchive() {
     const pack = await packWorkspace(ws, includeTemporary);
     const blob = new Blob([JSON.stringify(pack, null, 2)], { type: "application/json" });
+    setNotice(`Export includes a coverage manifest. ${pack.manifest.media.blobReferencesWithoutBytes} image reference(s) lack portable bytes; ${pack.manifest.media.externalVideoLinks} video link(s) depend on external storage. A checksum verifies content integrity, not the archive's author.`);
     const url = URL.createObjectURL(blob);
     const link = document.createElement("a");
     link.href = url;
@@ -4263,6 +4349,7 @@ ${message.content}`;
     try {
       const result = await setExecutionHalt({ data: { on: true } });
       if (!result.ok) setError(result.error);
+      else setHaltStatusDetail(null);
     } catch {
       setError("The server did not confirm the stop. Sends are blocked in this browser.");
     }
@@ -4277,6 +4364,7 @@ ${message.content}`;
         return;
       }
       clearedStop.current = true;
+      setHaltStatusDetail(null);
       setWs((prev) => (prev.halted ? pushAudit({ ...prev, halted: false }, "emergency_stop", "session", "cleared by owner") : prev));
       setSpeakCall((current) => ({ ...current, error: "" }));
       setNotice("Emergency stop cleared. Schedules remain paused.");
@@ -4321,16 +4409,15 @@ ${message.content}`;
   }
 
   function clearFailure() {
-    setFailure(null);
     setError(null);
   }
 
   function presentReportedFailure(outcome: McpReportedOutcome, auditId: string, retry: (() => void) | null) {
     const { message, action, target, kind, failureAction } = outcome;
-    setWs((prev) => ({
+    setWs((prev) => saveRecovery({
       ...prev,
       audit: retainActivity([{ id: auditId, at: new Date().toISOString(), action, target, result: message }, ...prev.audit]),
-    }));
+    }, { id: auditId, at: new Date().toISOString(), action, target, message, state: "open", chatId: activeId ?? undefined }));
    setFailure({ message, auditId, retry: onceRetry(retry), kind, action: failureAction });
     setError(null);
     setNotice(null);
@@ -4601,11 +4688,12 @@ ${message.content}`;
       setWs(made.ws);
       setNotice(made.reply);
       if (speakStageOpenRef.current) setSpeakCall((current) => ({ ...current, heard: transcript, reply: made.reply, error: "" }));
-      return { ok: true as const, text: made.reply };
+      return { ok: true as const, text: made.reply, provider: "Local bot configuration", model: undefined };
     }
-    const reply = await deliver({ ...chat, personalityId: spokenStyle }, transcript, source, false, [], { accessNotes: chat.memory === "on" && !chat.temporary ? eveAccessNotes(workspaceForChat(source, chat)) : [] });
+    let receipt: { provider: string; model?: string } = { provider: "not reported" };
+    const reply = await deliver({ ...chat, personalityId: spokenStyle }, transcript, source, false, [], { accessNotes: chat.memory === "on" && !chat.temporary ? eveAccessNotes(workspaceForChat(source, chat)) : [], onReceipt: (current) => { receipt = current; } });
     if (!reply) return { ok: false as const, error: "The chat turn failed. Nothing was spoken." };
-    return { ok: true as const, text: reply };
+    return { ok: true as const, text: reply, ...receipt };
   }
 
   async function speak(text: string, messageId = "", voiceId = voiceChoiceRef.current, replay?: SpeakRetryParams) {
@@ -5175,6 +5263,10 @@ ${message.content}`;
   }
 
   function openSpeakStage() {
+    ++stagedSpeakGeneration.current;
+    stagedSpeakAbort.current?.abort();
+    stagedSpeakerMuted.current = false;
+    setSpeakReceipt(null);
     closeMenus();
     clearOverlayFlag();
     setSpeakCall({ heard: "", reply: "", error: "" });
@@ -5207,9 +5299,71 @@ ${message.content}`;
   }
 
   function closeSpeakStage() {
+    ++stagedSpeakGeneration.current;
+    stagedSpeakAbort.current?.abort();
+    window.speechSynthesis?.cancel();
+    interruptSpeakPlayback();
     speakStageOpenRef.current = false;
     setSpeakStageOpen(false);
     if (!overlayOpenRef.current) void listen({ mode: "stop" });
+  }
+
+  async function stagedSpeak(text?: string) {
+    const generation = stagedSpeakGeneration.current;
+    stagedSpeakAbort.current?.abort();
+    const abort = new AbortController();
+    stagedSpeakAbort.current = abort;
+    const isCurrent = () => turnOwner.current === draftOwner && generation === stagedSpeakGeneration.current && speakStageOpenRef.current && !abort.signal.aborted && !wsRef.current.halted;
+    const result = await runStagedSpeak({ text, selection: speakSelection, freeOnly: currentFreeOnly.current, isCurrent, isMuted: () => stagedSpeakerMuted.current }, {
+      capture: async () => {
+        const result = await captureSpeakUtterance({ maxMs: 6000, signal: abort.signal });
+        return result.ok ? result : { ok: false, error: "message" in result ? String(result.message) : "Microphone capture was canceled or unavailable." };
+      },
+      transcribe: async (audio, provider) => {
+        if (provider === "handy") return detectWithHandy(audio.audioBase64);
+        const prefix = previewPathPrefix(window.location.hostname, window.location.pathname) ?? "";
+        const token = getBearerToken();
+        const response = await fetch(`${prefix}/api/mind/voice/stt`, { method: "POST", credentials: "include", signal: abort.signal,
+          headers: { "content-type": "application/json", ...(token ? { Authorization: `Bearer ${token}` } : {}) },
+          body: JSON.stringify({ ...audio, provider, freeOnly: currentFreeOnly.current, filename: sanitizeAudioFilename("speak", audio.mime) }) });
+        const body = await response.json();
+        return response.ok && body.ok && typeof body.text === "string" ? { ok: true, text: body.text, provider: body.provider || "not reported" } : { ok: false, error: body.error || "Transcription failed. No provider was substituted." };
+      },
+      answer: async (heard) => {
+        if (!isCurrent()) return { ok: false, error: "Call ended before the answer request." };
+        setSpeakCall((current) => ({ ...current, heard, error: "" }));
+        const turn = await speakChatTurn(heard, { stay: true });
+        return turn;
+      },
+      output: async (reply, provider) => {
+        if (!isCurrent() || stagedSpeakerMuted.current) return { ok: false, error: "Speech canceled or muted." };
+        noteSpokenText(reply);
+        if (provider === "browser") {
+          if (!window.speechSynthesis || typeof SpeechSynthesisUtterance === "undefined") return { ok: false, error: "Browser speech is unavailable. The answer remains in the conversation; select another speech engine explicitly." };
+          const utterance = new SpeechSynthesisUtterance(reply);
+          const volume = Number(localStorage.getItem("adrian-speak-volume") ?? "100");
+          utterance.volume = Number.isFinite(volume) ? Math.min(1, Math.max(0, volume / 100)) : 1;
+          const pace = localStorage.getItem("adrian-speak-rate");
+          utterance.rate = pace === "slow" ? 0.85 : pace === "brisk" ? 1.15 : 1;
+          return new Promise((resolve) => {
+            utterance.onend = () => resolve({ ok: true, provider: "Browser speech" });
+            utterance.onerror = () => resolve({ ok: false, error: "Browser speech was interrupted or failed. The answer remains saved." });
+            window.speechSynthesis.cancel(); window.speechSynthesis.speak(utterance);
+          });
+        }
+        if (provider !== "xai" && provider !== "openai") return { ok: false, error: "No speech engine selected." };
+        const audio = await speakText({ data: { text: reply, voiceId: voiceChoiceRef.current, provider, freeOnly: currentFreeOnly.current } });
+        if (!audio.ok) return { ok: false, error: audio.error };
+        if (!isCurrent() || stagedSpeakerMuted.current) return { ok: false, error: "Speech canceled before playback. The answer remains saved." };
+        await sharedAudioOutput.playMpegBase64(audio.audio);
+        return { ok: true, provider: audio.provider || "not reported" };
+      },
+    }).catch(() => ({ ok: false, error: "The selected speech stage failed. No provider was substituted.", receipt: { input: "not reported", answer: "not reported", output: "not run", spoken: false } as SpeakStageReceipt }));
+    if (isCurrent()) {
+      setSpeakReceipt(result.receipt);
+      setSpeakCall((current) => ({ ...current, reply: "text" in result ? result.text || "" : "", error: result.error || "" }));
+    }
+    return { reply: "text" in result ? result.text : undefined, error: result.error, spoken: result.receipt.spoken };
   }
 
   function interruptVoiceOverlay() {
@@ -6025,13 +6179,13 @@ ${message.content}`;
               aria-haspopup="listbox"
               aria-activedescendant={paletteOpen && hits.length > 0 ? `palette-hit-${hits[Math.min(Math.max(paletteIndex, 0), hits.length - 1)]!.key}` : undefined}
             />
-            <span className="pointer-events-none absolute top-1/2 right-3 -translate-y-1/2 text-xs text-muted">⌘K</span>
+            <span className="pointer-events-none absolute top-1/2 right-3 -translate-y-1/2 text-xs text-muted">{shortcutLabel}</span>
             {paletteOpen && (
-              <div id="command-palette" ref={finishMenu} className="command-palette floating-menu absolute z-30 mt-2 w-full" role="listbox" aria-label="Search results">
+              <div ref={finishMenu} className="command-palette floating-menu absolute z-30 mt-2 w-full">
+                <div id="command-palette" role="listbox" aria-label="Search results">
                 <p className="px-3 pb-1 pt-1 text-[11px] font-semibold uppercase tracking-[0.14em] text-muted">Results</p>
                 {hits.length === 0 && <p className="px-3 py-3 text-sm text-muted">No matches.</p>}
                 {hits.map((hit, index) => {
-                  const kind = hit.meta === "Chat" || hit.meta === "Intelligence" ? "chat" : hit.meta === "Agent" ? "agent" : hit.meta === "Project" ? "project" : hit.meta === "File" ? "file" : null;
                   const active = hits.length > 0 && index === Math.min(Math.max(paletteIndex, 0), hits.length - 1);
                   return (
                     <div key={hit.key}>
@@ -6042,22 +6196,6 @@ ${message.content}`;
                         aria-selected={active}
                         className={`palette-option flex min-h-11 min-w-0 flex-1 items-center justify-between gap-3 rounded-panel px-2 text-left text-sm${active ? " palette-option-active" : ""}`}
                         onMouseEnter={() => setPaletteIndex(index)}
-                        onPointerDown={(event) => {
-                          if (!kind || !hit.ref) return;
-                          const button = event.currentTarget;
-                          button.dataset.held = "0";
-                          const timer = window.setTimeout(() => {
-                            button.dataset.held = "1";
-                            const before = wsRef.current;
-                            const after = togglePin(before, kind, hit.ref);
-                            setWs(after);
-                            setNotice(after === before ? `Pin limit reached. ${hit.label} was not added.` : after.pins.some((pin) => pin.kind === kind && pin.ref === hit.ref) ? `Pinned ${hit.label}.` : `Unpinned ${hit.label}.`);
-                          }, 550);
-                          event.currentTarget.dataset.hold = String(timer);
-                        }}
-                        onPointerUp={(event) => window.clearTimeout(Number(event.currentTarget.dataset.hold))}
-                        onPointerLeave={(event) => window.clearTimeout(Number(event.currentTarget.dataset.hold))}
-                        onPointerCancel={(event) => window.clearTimeout(Number(event.currentTarget.dataset.hold))}
                         onClick={(event) => {
                           if (event.currentTarget.dataset.held === "1") {
                             event.currentTarget.dataset.held = "0";
@@ -6072,6 +6210,19 @@ ${message.content}`;
                     </div>
                   );
                 })}
+                </div>
+                {(() => {
+                  const hit = hits[paletteIndex];
+                  const kind = hit?.view === "chat" || hit?.view === "code" ? "chat" : hit?.view === "agents" ? "agent" : hit?.view === "projects" ? "project" : hit?.view === "files" ? "file" : null;
+                  if (!hit?.ref || !kind) return null;
+                  const pinned = ws.pins.some((pin) => pin.kind === kind && pin.ref === hit.ref);
+                  return <button type="button" className="min-h-11 w-full border-t border-line px-3 text-left text-sm" aria-label={`${pinned ? "Unpin" : "Pin"} ${hit.label}`} onClick={() => {
+                    const before = wsRef.current;
+                    const after = togglePin(before, kind, hit.ref);
+                    setWs(after);
+                    setNotice(after === before ? "Pin limit reached." : `${pinned ? "Unpinned" : "Pinned"} ${hit.label}.`);
+                  }}>{pinned ? "Unpin" : "Pin"} selected result</button>;
+                })()}
               </div>
             )}
           </div>
@@ -6187,6 +6338,7 @@ ${message.content}`;
                     <span className="text-xs text-muted">{composerEffort === "orchestrator" ? "On" : "Off"}</span>
                   </button>
                   {composerEffort === "orchestrator" ? (
+                    <>
                     <div className="flex w-full flex-wrap gap-1" data-testid="orchestrator-models">
                       {consultModules.filter((item) => item.connected).map((item) => (
                         <button
@@ -6200,10 +6352,27 @@ ${message.content}`;
                           onClick={() => chooseConsultModel(item.id)}
                         >
                           <span className="min-w-0 break-words">{item.label}</span>
-                          <span className="text-xs text-muted">Ready</span>
+                          <span className="text-xs text-muted">Configured</span>
                         </button>
                       ))}
                     </div>
+                    <fieldset className="mt-3 w-full space-y-2 rounded-panel border border-line p-3 text-sm">
+                      <legend>Helpers for the next orchestrated turn</legend>
+                      <p className="text-xs text-muted">Choose up to two helpers. With none selected, complex requests may use compatible free or local helpers. Simple requests go directly to the answering model.</p>
+                      {consultModules.filter((item) => item.connected && item.id !== consultModel).map((item) => (
+                        <label key={item.id} className="flex min-h-11 items-center gap-2">
+                          <input type="checkbox" checked={consultHelperIds.includes(item.id)} disabled={!consultHelperIds.includes(item.id) && consultHelperIds.length >= 2}
+                            onChange={(event) => setConsultHelperIds((current) => event.target.checked ? [...current.filter((id) => id !== item.id), item.id].slice(0, 2) : current.filter((id) => id !== item.id))} />
+                          <span>{item.label} · {item.cost === "free" ? "free model" : item.cost === "local" ? "local" : "may be billed"}</span>
+                        </label>
+                      ))}
+                      <label className="flex min-h-11 items-center gap-2">
+                        <input type="checkbox" checked={allowPaidHelpers && !researchFreeOnly} disabled={researchFreeOnly} onChange={(event) => setAllowPaidHelpers(event.target.checked)} />
+                        <span>Allow additional billed calls to my selected helpers</span>
+                      </label>
+                      <p className="text-xs text-muted">Helper replies and failures appear in the answer's evidence receipt. The selected answering model may still charge; free-only mode blocks paid routes.</p>
+                    </fieldset>
+                    </>
                   ) : null}
                 </MenuCluster>
                 <MenuCluster label="Share">
@@ -6298,7 +6467,26 @@ ${message.content}`;
               }}>Notion search needs attention · {searchIssue.result} · Open Notion search</button>}
               {failure && failure.auditId !== searchIssue?.id && <button type="button" className="min-h-11 px-3 text-left text-sm text-danger" onClick={() => { setActivityQuery(""); setFocusAuditId(failure.auditId); setView("activity"); closeMenus(); }}>{failure.message} · View activity</button>}
               {ws.schedules.some((job) => job.lastError) && <button type="button" className="min-h-11 px-3 text-left text-sm text-danger" onClick={() => { setView("scheduled"); closeMenus(); }}>A scheduled job needs attention · Open Scheduled</button>}
-              {!ws.halted && !searchIssue && !failure && !ws.schedules.some((job) => job.lastError) && <p className="px-3 py-2 text-sm text-muted">No current warnings.</p>}
+              {ws.runs.some((run) => run.state === "waiting_approval") && <button type="button" className="min-h-11 px-3 text-left text-sm" onClick={() => { setView("runs"); closeMenus(); }}>{ws.runs.filter((run) => run.state === "waiting_approval").length} run(s) need your approval · Open Runs</button>}
+              {!ws.halted && !searchIssue && !failure && !(ws.recovery ?? []).some((item) => item.state === "open") && !ws.runs.some((run) => run.state === "waiting_approval") && !ws.schedules.some((job) => job.lastError) && <p className="px-3 py-2 text-sm text-muted">No current warnings.</p>}
+            </MenuGroup>
+            <MenuGroup label="Recovery">
+              {(ws.recovery ?? []).filter((item) => item.state === "open").map((item) => <div key={item.id} className="border-b border-line px-3 py-2 text-sm">
+                <p>{item.message}</p>
+                <p className="text-xs text-muted">{item.target}{item.workspaceId ? ` · Workspace ${item.workspaceId}` : ""} · {stamp(item.at)}</p>
+                <div className="flex flex-wrap gap-2">
+                  <button type="button" className="min-h-11 text-accent" onClick={() => {
+                    closeMenus();
+                    if (item.operationId && item.target === "notion" && item.chatId && item.text) {
+                      const chat = wsRef.current.chats.find((chat) => chat.id === item.chatId);
+                      if (!chat || chat.notionWorkspaceId !== item.workspaceId) { setNotice("This operation belongs to its original conversation and Notion workspace. Reopen that workspace explicitly before checking it."); setView("connected"); return; }
+                      setActiveId(chat.id); setView("chat");
+                      void askNotion(chat, item.text, false, item.pageId, item.workspaceId, item.operationId);
+                    } else { setActivityQuery(""); setFocusAuditId(item.id); setView("activity"); setNotice("Review the failed operation and reopen its feature. Reloaded recovery records never automatically repeat external actions."); }
+                  }}>{item.operationId ? "Check existing operation" : "Review"}</button>
+                  <button type="button" className="min-h-11 text-muted" onClick={() => { setWs((prev) => closeRecovery(prev, item.id, "dismissed")); if (failure?.auditId === item.id) setFailure(null); }}>Dismiss</button>
+                </div>
+              </div>)}
             </MenuGroup>
             <MenuGroup label="Recent">
               {ws.audit.length === 0 ? <p className="px-3 py-2 text-sm text-muted">Nothing recorded yet.</p> : null}
@@ -6336,6 +6524,14 @@ ${message.content}`;
             </MenuShelf>
           </AnchoredCard>
         )}
+        {view === "chat" && active?.agentId && (() => {
+          const bot = ws.agents.find((agent) => agent.id === active.agentId && !agent.archived);
+          if (!bot || active.botConfigVersion === bot.version) return null;
+          return <div className="mx-3 mt-2 flex flex-wrap items-center gap-3 rounded-panel border border-line bg-surface px-4 py-2 text-sm" role="status">
+            <span>This conversation uses {active.botConfigVersion ? `bot revision ${active.botConfigVersion}` : "a saved bot snapshot"}. {bot.name} is now revision {bot.version}. Review its settings before updating this conversation.</span>
+            <button type="button" className="min-h-11 text-accent" onClick={() => setWs((prev) => refreshBotChat(prev, active.id))}>Use latest bot settings</button>
+          </div>;
+        })()}
         {ws.halted && (
           <div className="banner-error mx-3 mt-2 flex flex-wrap items-center justify-between gap-2 px-4 py-2 md:mx-5">
             <p className="text-sm text-danger">Emergency stop is on. Sending and approvals are blocked.</p>
@@ -6393,7 +6589,7 @@ ${message.content}`;
                 type="button"
                 data-testid="failure-dismiss"
                 className="chat-button chat-button--ghost"
-                onClick={() => clearFailure()}
+                onClick={() => { setWs((prev) => closeRecovery(prev, failure.auditId, "dismissed")); setFailure(null); clearFailure(); }}
               >
                 Dismiss
               </button>
@@ -6851,6 +7047,7 @@ ${message.content}`;
                   <StatusRow icon={Bot} name="REA" detail="CLI from GitHub runs. Native engines are not installed." pill="Partial" tone="muted" />
                   <StatusRow icon={Square} name="HP" detail="Local device integration" pill="Not paired" tone="danger" />
                   <p className="mt-3 text-xs text-muted">Grok: {grok}. Checked {stamp(checkedAt) || checkedAt}. {system}</p>
+                  {haltStatusDetail && <p className="mt-2 text-sm text-warn" role="status">{haltStatusDetail}</p>}
                 </Panel>
                 <Panel title="Recent Activity" action="View all" onAction={() => setView("activity")}>
                   {!ready && (
@@ -7077,7 +7274,6 @@ ${message.content}`;
               logicRoutes={logicRoutes}
               onChooseLogic={selectProviderInChat}
               toolTimeline={toolTimeline}
-              timelineNowMs={timelineTickMs || Date.now()}
               agentActivity={agentActivityFromTimeline(toolTimeline)}
               recentTasks={recentTasksFromAudit(ws.audit)}
               connectedServices={connectedServicesRail({
@@ -7156,15 +7352,10 @@ ${message.content}`;
                           type="button"
                           className="min-h-11 rounded-panel border border-line px-3 text-sm"
                           onClick={() =>
-                            requestProtected("delete", `delete-project:${project.id}`, `Delete “${project.name}”`, "Chats and files stay in the workspace and are unlinked. Notes stay in Memory and are labeled if this project is gone. Nothing is erased except the project record.", "Approve delete", () => {
+                            requestProtected("delete", `delete-project:${project.id}`, `Delete “${project.name}”`, "Chats, files and bots stay in the workspace and are unlinked. Project notes remain in Memory but are no longer retrieved automatically. Nothing is erased except the project record.", "Approve delete", () => {
                               setWs((prev) =>
                                 pushAudit(
-                                  {
-                                    ...prev,
-                                    projects: prev.projects.filter((item) => item.id !== project.id),
-                                    chats: prev.chats.map((chat) => (chat.projectId === project.id ? { ...chat, projectId: null } : chat)),
-                                    files: prev.files.map((file) => (file.projectId === project.id ? { ...file, projectId: null } : file)),
-                                  },
+                                  deleteProject(prev, project.id),
                                   "delete_project",
                                   project.id,
                                   "approved",
@@ -7614,7 +7805,7 @@ ${message.content}`;
                   <img src="/brand/logo-mark.jpg" alt="" className="size-8 rounded-lg" />
                   <div>
                     <h2 className="font-display text-3xl font-bold">Research</h2>
-                    <p className="text-sm text-muted">Search uses the Grok key saved on this computer. Citations appear only when the search returns real links.</p>
+                    <p className="text-sm text-muted">Search uses the configured research provider shown below. Reports preserve returned sources, query attempts, and provider attribution.</p>
                   </div>
                 </div>
               </div>
@@ -7636,13 +7827,24 @@ ${message.content}`;
                   {researchPending ? "Searching…" : "Start research"}
                 </button>
                 {researchReportQuestion && <h3 className="mt-3 font-semibold">{researchReportQuestion}</h3>}
+                {(() => {
+                  const report = researchHistory.find((item) => item.id === researchReportId);
+                  if (!report) return null;
+                  return <details className="mt-3 rounded-panel border border-line p-3 text-sm"><summary>Research evidence and attempts</summary>
+                    <p>{report.providerIdentity?.label ?? "Provider not recorded"} · {report.providerIdentity?.strategy ?? "Strategy not recorded"}. Sources are provider-returned; page contents have not been independently verified.</p>
+                    <ul>{(report.attempts ?? report.steps ?? []).map((step, index) => <li key={index}>{step.query} · {step.ok ? "returned sources" : "failed"} · {step.count} returned / {step.retainedCount ?? step.count} shown{step.error ? ` · ${step.error}` : ""}</li>)}</ul>
+                    {report.providerAnswer && <div className="mt-3"><p className="font-semibold">Provider answer</p><p className="whitespace-pre-wrap">{report.providerAnswer.text}</p><ul>{report.providerAnswer.annotations.map((entry, index) => <li key={index}><a href={entry.url} target="_blank" rel="noreferrer">{entry.url}</a>{entry.start !== null ? ` · answer characters ${entry.start}–${entry.end}` : " · source position not reported"}</li>)}</ul></div>}
+                    <ul>{report.evidence?.map((entry, index) => <li key={index}><a href={entry.url} target="_blank" rel="noreferrer">{entry.title}</a> · {entry.query} · {entry.verification}</li>)}</ul>
+                  </details>;
+                })()}
+
                 {researchNote ? <p className="mt-3 text-sm text-muted">{researchNote}</p> : null}
                 {researchCitations.length === 0 && !researchNote ? (
                   <p className="mt-3 text-sm text-muted">Reports and their sources appear here after a search.</p>
                 ) : null}
                 {researchSteps?.some((step) => !step.ok) && (
                   <button type="button" disabled={researchPending || ws.halted || researchFreeOnly} className="min-h-11 text-sm text-accent" onClick={() => {
-                    const report = researchHistory.find((item) => item.question === researchReportQuestion && item.steps === researchSteps);
+                    const report = researchHistory.find((item) => item.id === researchReportId);
                     if (report) void startResearch(report.question, report);
                   }}>Retry missing searches</button>
                 )}
@@ -7669,7 +7871,7 @@ ${message.content}`;
                     <ul className="mt-2 space-y-2">
                       {researchHistory.map((report) => (
                         <li key={report.id}>
-                          <button type="button" disabled={researchPending} className="min-h-11 text-left text-sm text-accent" onClick={() => { setResearchText(report.question); setResearchReportQuestion(report.question); setResearchNote(report.summary); setResearchCitations(report.citations); setResearchSteps(report.steps); setResearchBand("search"); }}>
+                          <button type="button" disabled={researchPending} className="min-h-11 text-left text-sm text-accent" onClick={() => { setResearchReportId(report.id); setResearchText(report.question); setResearchReportQuestion(report.question); setResearchNote(report.summary); setResearchCitations(report.citations); setResearchSteps(report.steps); setResearchBand("search"); }}>
                             {report.question} · {report.citations.length} sources
                           </button>
                         </li>
@@ -7841,6 +8043,11 @@ ${message.content}`;
                       <p className="font-semibold [overflow-wrap:anywhere]">{file.name}</p>
                       {file.partial && <p className="text-sm text-muted">Partial text copy. Keep the original for the full contents.</p>}
                       <p className="text-xs text-muted">{formatBytes(file.bytes)} · {stamp(file.createdAt)} · {describeFile(file.name, file.text).summary}</p>
+                      {file.document && <details className="my-3 rounded-panel border border-line p-3"><summary>PDF evidence · {file.document.pages} page(s) · {file.document.chunks.length} saved text chunks</summary><p className="text-xs text-muted">{file.document.coverage} Extracted text is retained up to the documented 400,000 character limit; scans and unsupported fonts require the original document.</p><button type="button" className="min-h-11 text-sm text-accent" onClick={() => {
+                        const selected = selectPdfChunks({ chunks: file.document!.chunks, coverage: file.document!.coverage, partial: file.document!.partial }, { query: draftRef.current, maxChars: 6000 });
+                        setStaged({ name: file.name, text: `${selected.coverage}\n${selected.text}`, document: file.document });
+                        setView("chat"); setNotice(selected.coverage + " Review the staged excerpts before sending.");
+                      }}>Stage relevant PDF excerpts</button><ul className="max-h-64 overflow-auto text-xs">{file.document.chunks.map((chunk) => <li key={chunk.id} className="my-2"><strong>{chunk.page ? `Page ${chunk.page}` : "Page unknown"} · {chunk.id}</strong><p className="whitespace-pre-wrap">{chunk.text}</p></li>)}</ul></details>}
                       <pre tabIndex={0} aria-label="File text" className="mt-3 max-h-[60dvh] overflow-auto break-words whitespace-pre-wrap rounded-panel bg-bg p-3 text-sm">{file.text}</pre>
                       <div className="mt-3 flex flex-wrap gap-2">
                         <button type="button" className="min-h-11 rounded-panel border border-line px-3" onClick={() => void inspectWithRea({ name: file.name, text: file.text }, "research")}>Inspect text with REA</button>
@@ -7848,9 +8055,9 @@ ${message.content}`;
                           type="button"
                           className="min-h-11 rounded-panel border border-line px-3"
                           onClick={() =>
-                            requestProtected("delete", `delete-file:${file.id}`, `Delete “${file.name}”`, "The text copy in this browser is removed.", "Approve delete", () => {
+                            requestProtected("delete", `delete-file:${file.id}`, `Delete “${file.name}”`, "The Library copy is removed and stays deleted during archive merge. Previous conversations and exported archives may retain attached text; deleting this copy does not erase them.", "Approve delete", () => {
                               setOpenFileId(null);
-                              setWs((prev) => pushAudit({ ...prev, files: prev.files.filter((item) => item.id !== file.id) }, "delete_file", file.id, "approved"));
+                              setWs((prev) => pushAudit(deleteLocalFile(prev, file.id), "delete_file", file.id, "approved"));
                             })
                           }
                         >
@@ -8253,6 +8460,7 @@ ${message.content}`;
                 {importPreview && (
                   <div className="mt-3 text-sm">
                     <p className="break-all font-semibold">{importPreview.name}</p>
+                    <p className="mt-2 text-sm text-muted">The checksum confirms that this file's contents match its checksum; it does not verify the author. Import only an archive you trust. Imported schedules stay paused, and unfinished runs require fresh approval.</p>
                     <p className="mt-1 text-muted">Integrity check passed. Review the record counts before applying this archive.</p>
                     <table className="my-3 w-full text-left text-xs">
                       <thead><tr><th scope="col">Record</th><th scope="col">This device</th><th scope="col">Archive</th><th scope="col">Match</th></tr></thead>
@@ -8298,6 +8506,7 @@ ${message.content}`;
                     <Square className="size-4" /> {ws.halted ? "Clear emergency stop" : "Emergency stop"}
                   </button>
                   <p className="mt-2 text-muted">Stops new sends on this page and on the server.</p>
+                  {haltStatusDetail && <p className="mt-2 text-warn" role="status">{haltStatusDetail}</p>}
                 </div>
               <div className="settings-card rounded-panel p-4 text-sm">
                 <p className="font-semibold">Requirement record</p>
@@ -8399,8 +8608,8 @@ ${message.content}`;
       />
 
       {voiceSignInNotice && (
-        <Overlay>
-          <h3 className="font-display text-xl font-bold">Sign in to use Speak</h3>
+        <Overlay labelledBy="speak-signin-title" onDismiss={() => setVoiceSignInNotice(false)}>
+          <h3 id="speak-signin-title" className="font-display text-xl font-bold">Sign in to use Speak</h3>
           <p className="mt-2 text-sm text-muted">Voice starts only after you sign in and press Speak. Your microphone has not been requested.</p>
           <div className="mt-3 flex gap-2">
             <button type="button" className="min-h-11 flex-1 rounded-panel border border-line" onClick={() => setVoiceSignInNotice(false)}>Cancel</button>
@@ -8423,8 +8632,8 @@ ${message.content}`;
         </Overlay>
       )}
       {armMemory && (
-        <Overlay>
-          <h3 className="font-display text-2xl font-bold">Enable saved memory?</h3>
+        <Overlay labelledBy="enable-memory-title" onDismiss={() => setArmMemory(null)}>
+          <h3 id="enable-memory-title" className="font-display text-2xl font-bold">Enable saved memory?</h3>
           <p className="mt-2 text-sm text-muted">Retrieval starts for this command or chat. Earlier messages are not copied into global memory. Other projects stay out. You can turn it off again.</p>
           <div className="mt-3 flex gap-2">
             <button type="button" className="min-h-11 flex-1 rounded-panel border border-line" onClick={() => setArmMemory(null)}>Cancel</button>
@@ -8433,8 +8642,8 @@ ${message.content}`;
         </Overlay>
       )}
       {pending && (
-        <Overlay>
-          <h3 className="font-display text-2xl font-bold">Approval required</h3>
+        <Overlay labelledBy="approval-required-title" onDismiss={() => setPending(null)}>
+          <h3 id="approval-required-title" className="font-display text-2xl font-bold">Approval required</h3>
           <p className="mt-2 text-sm font-semibold">{pending.label}</p>
           <p className="mt-1 text-sm text-muted">{pending.detail} Automatic mode does not approve this.</p>
           <div className="mt-3 flex gap-2">
@@ -8550,16 +8759,22 @@ ${message.content}`;
         halted={ws.halted}
         onEmergencyStop={() => { void pressEmergencyStop(); }}
         onClearStop={() => { void clearEmergencyStop(); }}
-        onAsk={async (text) => {
-          const blocked = decideComputerAction({ text, halted: wsRef.current.halted === true, paired: false, actor: "eve" });
-          if (blocked.kind !== "none") return { error: blocked.message };
-          const turn = await speakChatTurn(text);
-          if (!turn.ok) return { error: turn.error };
-          if (!speakStageOpenRef.current || wsRef.current.halted) return { reply: turn.text, error: "Call ended before playback." };
-          const spoken = await speak(turn.text);
-          if (!spoken?.ok) return { reply: turn.text, error: spoken?.error || "The reply was written, but it was not spoken." };
-          return { reply: turn.text };
+        selection={speakSelection}
+        onSelection={(next) => {
+          setSpeakSelection(next);
+          try { localStorage.setItem(STAGED_SPEAK_KEY, JSON.stringify(next)); }
+          catch { setNotice("Speech choices apply for this session; this browser could not save them."); }
         }}
+        answerProvider={composerEffort === "orchestrator" ? consultModel : effectiveProvider}
+        answerChoices={providerOptions}
+        onAnswerProvider={selectProviderInChat}
+        receipt={speakReceipt}
+        onSpeakerMute={(muted) => {
+          stagedSpeakerMuted.current = muted;
+          if (muted) { window.speechSynthesis?.cancel(); sharedAudioOutput.interrupt(); }
+        }}
+        onTurn={() => stagedSpeak()}
+        onAsk={(text) => stagedSpeak(text)}
       />
       {taskRecording ? (
         <div className="fixed left-1/2 top-20 z-40 flex -translate-x-1/2 items-center gap-3 rounded-panel border border-line bg-surface px-4 py-2 shadow-lg" data-testid="task-recording" role="status">
@@ -8731,22 +8946,23 @@ function StatusRow({
 }
 
 function Overlay({ children, labelledBy, onDismiss }: { children: ReactNode; labelledBy?: string; onDismiss?: () => void }) {
-  return (
-    <div className="overlay-backdrop fixed inset-0 z-40 grid place-items-end p-4 md:place-items-center" role="dialog" aria-modal="false" aria-labelledby={labelledBy} ref={(node) => {
-      node?.style.setProperty("background", "transparent", "important");
-      node?.style.setProperty("backdrop-filter", "none", "important");
-    }} onKeyDown={(event) => {
-      if (event.key === "Escape" && onDismiss) { event.preventDefault(); onDismiss(); return; }
-      if (event.key !== "Tab") return;
-      const targets = [...event.currentTarget.querySelectorAll<HTMLElement>('button:not([disabled]), input:not([disabled]), textarea:not([disabled]), select:not([disabled]), [tabindex]:not([tabindex="-1"])')].filter((element) => element.offsetParent !== null);
-      if (targets.length === 0) return;
-      const first = targets[0]!;
-      const last = targets.at(-1)!;
-      if (event.shiftKey && document.activeElement === first) { event.preventDefault(); last.focus(); }
-      else if (!event.shiftKey && document.activeElement === last) { event.preventDefault(); first.focus(); }
-    }}>
-      <div ref={finishMenu} className="overlay-panel w-full max-w-md">{children}</div>
-    </div>
+  const dialog = useRef<HTMLDialogElement>(null);
+  useLayoutEffect(() => {
+    const node = dialog.current;
+    if (!node) return;
+    const opener = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+    node.showModal();
+    return () => {
+      node.close();
+      if (opener?.isConnected) opener.focus({ preventScroll: true });
+    };
+  }, []);
+  if (typeof document === "undefined") return null;
+  return createPortal(
+    <dialog ref={dialog} className="c2-modal-overlay overlay-backdrop fixed inset-0 z-40 m-0 h-dvh max-h-none w-screen max-w-none border-0 bg-transparent p-4 text-fg" role="dialog" aria-modal="true" aria-labelledby={labelledBy} tabIndex={-1}
+      onCancel={(event) => { event.preventDefault(); onDismiss?.(); }}>
+      <div className="grid min-h-full place-items-end md:place-items-center"><div ref={finishMenu} className="overlay-panel w-full max-w-md">{children}</div></div>
+    </dialog>, document.body,
   );
 }
 
@@ -8899,7 +9115,6 @@ function ChatPane({
   logicRoutes = [],
   onChooseLogic,
   toolTimeline,
-  timelineNowMs,
   agentActivity,
   recentTasks,
   connectedServices,
@@ -9010,7 +9225,6 @@ function ChatPane({
   logicRoutes?: LogicRoutePublic[];
   onChooseLogic?: (route: LogicRouteId) => void;
   toolTimeline: ToolTimelineRow[];
-  timelineNowMs: number;
   agentActivity: ReturnType<typeof agentActivityFromTimeline>;
   recentTasks: ReturnType<typeof recentTasksFromAudit>;
   connectedServices: ReturnType<typeof connectedServicesRail>;
@@ -9137,6 +9351,8 @@ function ChatPane({
              {CONVERSATIONAL_PERSONALITIES.map((profile) => <option key={profile.id} value={profile.id}>{profile.label}</option>)}
            </select>
           </div>
+          {active?.personalityFallback && <p className="mt-2 text-sm text-warn" role="status">The imported style “{active.personalityFallback}” is unavailable. Assistant is in effect; choose a supported style to clear this warning.</p>}
+          {active?.customPersonalityTruncated && <p className="mt-2 text-sm text-warn" role="status">The imported style exceeded 800 characters. Only the first 800 were retained. Review and save the instructions before relying on this style.</p>}
           {active && personalityId === "custom" && (
             <div className="mt-2 max-w-xl space-y-1">
               <label htmlFor="thread-custom-personality" className="text-xs font-semibold text-muted">Persona instructions</label>
@@ -9153,6 +9369,7 @@ function ChatPane({
               />
               <p id="thread-custom-personality-help" className="text-xs text-muted">Up to 800 characters. This changes tone and presentation only; it cannot change tools, access, approvals or safety rules.</p>
               <p className="text-right text-[11px] tabular-nums text-muted">{customPersonality.length}/800</p>
+              <details className="text-xs text-muted"><summary>Effective instructions for the next reply</summary><p className="mt-2 whitespace-pre-wrap">{personalityStatus(personalityId, customPersonality).effective || "No custom instructions saved."}</p></details>
             </div>
           )}
           {active && (
@@ -9192,6 +9409,8 @@ function ChatPane({
             return (
             <article key={msg.id} id={"message-" + msg.id} tabIndex={-1} className={`turn w-full max-w-none px-1 py-2 text-sm ${msg.role === "user" ? "turn-user" : "turn-assistant"}`}>
               <p className="mb-1 text-xs text-muted">{msg.role === "user" ? "You" : [msg.provider, msg.model].filter(Boolean).join(" · ") || "Assistant · model unreported"} · {stamp(msg.at)}</p>
+              {msg.contextReceipt && (msg.contextReceipt.omittedMessages > 0 || msg.contextReceipt.imageWarnings.length > 0) ? <details className="mb-2 text-xs text-muted"><summary>Context used: {msg.contextReceipt.includedMessages} of {msg.contextReceipt.availableMessages} earlier messages</summary><p>Earlier context is selected within the request allowance. Quote an earlier message or reattach a document when its contents are required.</p>{msg.contextReceipt.imageWarnings.map((warning, index) => <p key={index}>{warning}</p>)}</details> : null}
+              {msg.consult?.length ? <details className="mb-2 rounded-panel border border-line p-2 text-xs" data-testid="consult-receipt"><summary>Helper evidence · {msg.consult.length} attempt(s)</summary><ul className="mt-2 space-y-1">{msg.consult.map((attempt, index) => <li key={`${attempt.id}-${index}`}>{attempt.id} · {attempt.status} · {attempt.provider || "provider not reported"}{attempt.model ? ` / ${attempt.model}` : ""} · {attempt.durationMs} ms{attempt.truncated ? " · shortened" : ""}{attempt.error ? ` · ${attempt.error}` : ""}</li>)}</ul></details> : null}
               {msg.requestedModel && msg.model !== msg.requestedModel && (
                 <p className="mb-1 break-words text-xs text-muted">Requested {msg.requestedModel}</p>
               )}
@@ -9311,7 +9530,6 @@ function ChatPane({
               })()}
               <ul className="space-y-2">
                 {toolTimeline.map((row) => {
-                  const ms = elapsedMs(row, timelineNowMs);
                   const failed = row.status === "failed" || row.status === "timed_out" || row.status === "cancelled";
                   const done = row.endedAtMs != null && !failed;
                   return (
@@ -9319,7 +9537,7 @@ function ChatPane({
                       <span className={`size-2 shrink-0 rounded-full ${failed ? "bg-danger" : done ? "bg-ok" : "bg-accent"}`} />
                       <span className="min-w-0 flex-1 font-medium">{row.name}</span>
                       <span className={`text-xs ${failed ? "text-danger" : "text-muted"}`}>{row.status}</span>
-                      <span className="text-xs text-muted tabular-nums">{formatElapsed(ms)}</span>
+                      <ToolElapsed row={row} />
                       {row.auditId ? (
                         <button type="button" className="min-h-11 text-xs text-accent" onClick={() => onViewAudit(row.auditId!)}>
                           View
@@ -9434,7 +9652,7 @@ function ChatPane({
             rows={2}
             className="input-glow min-h-11 w-full resize-none rounded-xl bg-transparent px-1 text-sm outline-none"
           />
-          {active?.botKnowledge ? <p className="mt-1 text-xs text-muted">This chat sends its copied bot note. Saved memory stays off.</p> : null}
+          {active?.botKnowledge ? <p className="mt-1 text-xs text-muted">This chat sends its copied bot note. Saved memory is {memoryChoice}.</p> : null}
           {active?.botProvider || active?.botTier ? <p className="mt-1 text-xs text-muted">This chat uses {active.botProvider ?? "Chat’s provider"} · {active.botTier ?? "Chat’s tier"}. The picker above is not changed.</p> : null}
           <AttachmentChips images={pendingImages} onRemove={onRemoveImage} onEditImagine={(image) => onEditImagine(image.dataUrl)} />
           {stagedName && <p className="text-xs text-muted">Staged: {stagedName}. Send includes it. Analyze runs REA on it.</p>}
@@ -9983,4 +10201,14 @@ function chatStamp(chat: Chat) {
   const iso = chat.messages.at(-1)?.at ?? chat.messages[0]?.at;
   if (!iso) return "New";
   return new Date(iso).toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit" });
+}
+
+function ToolElapsed({ row }: { row: Parameters<typeof elapsedMs>[0] }) {
+  const [now, setNow] = useState(Date.now);
+  useEffect(() => {
+    if (row.endedAtMs != null) return;
+    const id = window.setInterval(() => setNow(Date.now()), 250);
+    return () => window.clearInterval(id);
+  }, [row.endedAtMs]);
+  return <span className="text-xs text-muted tabular-nums">{formatElapsed(elapsedMs(row, now))}</span>;
 }

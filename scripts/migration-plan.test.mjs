@@ -64,6 +64,7 @@ test("owner schemas are globbed and the auth source stays in migrations/auth", (
       "0001_auth.sql", "0002_mind.sql", "0003_fleet.sql", "0004_tool_run.sql", "0005_custom_connection.sql",
       "0006_ai_providers.sql", "0007_oauth_connections.sql", "0008_kimi_runtime.sql", "0009_kimi_files.sql",
       "0010_mind_turn_receipts.sql", "0011_mind_turn_retryable.sql", "0013_imagine_attempts.sql", "0015_notion_workspaces.sql", "0016_mcp_call_approvals.sql",
+      "0018_c2_execution_recovery.sql", "0019_c2_model_profiles.sql",
     ],
   );
   assert.ok(readdirSync(join(migrationsDir, "auth")).includes("0001_auth.sql"));

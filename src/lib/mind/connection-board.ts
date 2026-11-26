@@ -4,7 +4,7 @@
  * "connected" flag must not paint over it.
  */
 
-export type BoardOauth = { state: string; detail: string } | null | undefined;
+export type BoardOauth = { state: string; detail: string; authorization?: string; recovery?: { status: string } } | null | undefined;
 export type BoardLegacy = { state: string; detail: string } | null | undefined;
 
 export function oauthBoardState(oauth: BoardOauth, legacy?: BoardLegacy): { state: string; detail: string } {
@@ -13,7 +13,9 @@ export function oauthBoardState(oauth: BoardOauth, legacy?: BoardLegacy): { stat
   if (oauth.state === "unavailable" || /status could not be read/i.test(oauth.detail)) {
     return { state: "Status unavailable", detail: oauth.detail || "Connection status could not be read." };
   }
- if (oauth.state === "connected") return { state: "Connected", detail: oauth.detail };
+  if (oauth.recovery?.status === "reconnect_required" || oauth.authorization === "expired") return { state: "Needs attention", detail: oauth.detail };
+  if (oauth.recovery?.status === "revocation_unknown") return { state: oauth.state === "connected" ? "Authorization saved · review access" : "Disconnected · review access", detail: oauth.detail };
+  if (oauth.state === "connected") return { state: "Authorization saved", detail: oauth.detail };
   if (oauth.state === "not_configured") {
     if (legacy?.state === "connected") {
       return { state: "API token present", detail: `${legacy.detail} This is not an OAuth session.` };

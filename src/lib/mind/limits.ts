@@ -32,14 +32,16 @@ export function consumeToken(
 }
 
 const windows = new Map<string, number[]>();
+const windowDurations = new Map<string, number>();
 
 /** Soft cap on distinct rate-limit keys (after TTL prune). */
 export const MAX_RATE_LIMIT_KEYS = 2_000;
 
-function pruneRateLimitWindows(now: number, windowMs: number): void {
+function pruneRateLimitWindows(now: number): void {
   for (const [key, stamps] of windows) {
+    const windowMs = windowDurations.get(key) ?? 60_000;
     const recent = stamps.filter((stamp) => now - stamp < windowMs);
-    if (recent.length === 0) windows.delete(key);
+    if (recent.length === 0) { windows.delete(key); windowDurations.delete(key); }
     else windows.set(key, recent);
   }
   if (windows.size <= MAX_RATE_LIMIT_KEYS) return;
@@ -49,7 +51,10 @@ function pruneRateLimitWindows(now: number, windowMs: number): void {
     return aMax - bMax;
   });
   const excess = windows.size - MAX_RATE_LIMIT_KEYS;
-  for (let i = 0; i < excess; i += 1) windows.delete(ordered[i]![0]);
+  for (let i = 0; i < excess; i += 1) {
+    windows.delete(ordered[i]![0]);
+    windowDurations.delete(ordered[i]![0]);
+  }
 }
 
 export function allowMindRequest(bucket: string, userId: string, limit: number, windowMs = 60_000, now = Date.now()): boolean {
@@ -69,22 +74,27 @@ export function consumeMindRateLimit(
   windowMs = 60_000,
   now = Date.now(),
 ): RateLimitResult {
-  pruneRateLimitWindows(now, windowMs);
-  const result = consumeToken(windows, `${bucket}:${userId}`, limit, windowMs, now);
-  pruneRateLimitWindows(now, windowMs);
+  pruneRateLimitWindows(now);
+  const key = JSON.stringify([bucket, userId, windowMs]);
+  windowDurations.set(key, windowMs);
+  const result = consumeToken(windows, key, limit, windowMs, now);
+  pruneRateLimitWindows(now);
   return result;
 }
 
 /** Share a single chat token across the helper and final calls of one HTTP turn. */
-export function createChatTurnPreflight(userId: string, isHalted: () => Promise<boolean>) {
+export function createChatTurnPreflight(userId: string, isHalted: () => Promise<boolean>, consume: typeof consumeMindRateLimit | ((bucket: string, userId: string, limit: number) => Promise<RateLimitResult & { unavailable?: boolean }>) = consumeMindRateLimit) {
   let charged = false;
   return async (): Promise<Response | null> => {
     if (await isHalted()) {
       return Response.json({ ok: false, error: "Emergency stop is on. Nothing was sent." }, { status: 403 });
     }
     if (!charged) {
-      const limit = consumeMindRateLimit("chat", userId, 12);
-      if (!limit.ok) return jsonRateLimited(CHAT_RATE_LIMIT_REPLY, limit.retryAfterSec);
+      const limit = await consume("chat", userId, 12);
+      if (!limit.ok) {
+        if ("unavailable" in limit && limit.unavailable) return Response.json({ ok: false, error: "Usage limits could not be checked. No provider call was sent. Retry shortly." }, { status: 503 });
+        return jsonRateLimited(CHAT_RATE_LIMIT_REPLY, limit.retryAfterSec);
+      }
       charged = true;
     }
     return null;
@@ -94,11 +104,13 @@ export function createChatTurnPreflight(userId: string, isHalted: () => Promise<
 /** Test-only: clear the process-wide rate-limit windows. */
 export function resetMindRateLimitsForTests(): void {
   windows.clear();
+  windowDurations.clear();
 }
 
 /** Test-only: run TTL prune + size cap. */
 export function pruneMindRateLimitsForTests(now: number, windowMs: number): void {
-  pruneRateLimitWindows(now, windowMs);
+  void windowMs;
+  pruneRateLimitWindows(now);
 }
 
 export function rateLimitMapSizeForTests(): number {

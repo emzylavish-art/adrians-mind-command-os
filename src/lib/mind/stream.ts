@@ -1,3 +1,5 @@
+import { normalizeConsultAttempts, type ConsultAttempt } from "./model-consult.ts";
+
 /** Honest label when a done event did not confirm which model answered. */
 export const UNKNOWN_MODEL_LABEL = "model unknown";
 
@@ -71,7 +73,7 @@ export function pushSse(feed: SseFeed, chunk: string): SseFeed & { deltas: strin
 
 export type MindClientEvent =
   | { event: "delta"; text: string }
-  | { event: "done"; text: string; model: string; usage: ModelUsage | null; usedIds: string[]; requestId: string | null; modelTier?: string; resolvedTier?: string; tierReason?: string; memorySaved?: boolean; savedMemoryId?: string | null; provider?: string; requestedModel?: string; credentialFallback?: string | null }
+  | { event: "done"; text: string; model: string; usage: ModelUsage | null; usedIds: string[]; requestId: string | null; modelTier?: string; resolvedTier?: string; tierReason?: string; memorySaved?: boolean; savedMemoryId?: string | null; provider?: string; requestedModel?: string; credentialFallback?: string | null; consult?: ConsultAttempt[] }
   | { event: "error"; error: string }
   | { event: "canceled"; error: string };
 
@@ -117,6 +119,7 @@ export function pullMindEvents(buffer: string): { events: MindClientEvent[]; res
         savedMemoryId: typeof record.savedMemoryId === "string" ? record.savedMemoryId : null,
         provider: typeof record.provider === "string" ? record.provider : undefined,
         requestedModel: typeof record.requestedModel === "string" ? record.requestedModel : undefined,
+        consult: record.consult === undefined ? undefined : normalizeConsultAttempts(record.consult),
         credentialFallback: typeof record.credentialFallback === "string" ? record.credentialFallback : null,
       });
     }

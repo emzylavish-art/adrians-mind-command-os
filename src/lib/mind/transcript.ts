@@ -28,9 +28,12 @@ export function reviseUserTurn(
     ...chat,
     title: index === 0 ? nextText.replace(/\s+/g, " ").slice(0, 48) : chat.title,
     messages: [...chat.messages.slice(0, index), edited],
+    updatedAt: new Date().toISOString(),
   };
+  const original: Chat = { ...chat, id: crypto.randomUUID(), title: `Before edit: ${chat.title}`.slice(0, 80), archived: true,
+    forkedFrom: { chatId, messageId, at: new Date().toISOString() } };
   return {
-    ws: { ...ws, chats: ws.chats.map((item) => (item.id === chatId ? nextChat : item)) },
+    ws: { ...ws, chats: [...ws.chats.map((item) => (item.id === chatId ? nextChat : item)), original] },
     chat: nextChat,
     text: nextText,
     images,
@@ -79,12 +82,16 @@ export function exportChat(ws: Workspace, chatId: string): { filename: string; j
   const payload = {
     kind: "adrians-mind-chat",
     version: 1,
+    exportScope: "conversation-with-configuration",
+    attachments: "Inline image bytes are included when present. Blob references and remote video links require their original storage and are not a complete media backup.",
     exportedAt: new Date().toISOString(),
     chat: {
+      ...chat,
       id: chat.id,
       title: chat.title,
       memory: chat.memory,
       messages: chat.messages.map((msg) => ({
+        id: msg.id,
         role: msg.role,
         content: msg.content,
         at: msg.at,
@@ -98,6 +105,7 @@ export function exportChat(ws: Workspace, chatId: string): { filename: string; j
             blobId: image.blobId,
             name: image.name ?? null,
             mime: image.mime ?? null,
+            origin: image.origin ?? null,
           }))
           .filter((image) => Boolean(image.dataUrl) || Boolean(image.blobId)) ?? undefined,
       })),

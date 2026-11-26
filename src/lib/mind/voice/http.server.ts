@@ -8,7 +8,7 @@
 
 import { decideFetchSite } from "../request-guard.ts";
 import { readJsonObjectBody } from "../request-body.ts";
-import { allowMindRequest } from "../limits.ts";
+import { consumeSharedMindRateLimit } from "../rate-limit.server.ts";
 import { mintRealtimeClientSecret } from "./client-secret.ts";
 import { resolveVoiceApiKey } from "./keys.ts";
 import { speakWithFallback, transcribeWithFallback } from "./provider-fallback.ts";
@@ -71,7 +71,9 @@ async function haltOrLimit(userId: string, bucket: string, limit: number, deps: 
     return haltIsOn(id);
   });
   if (await halted(userId)) return coded("emergency_stop");
-  if (!allowMindRequest(bucket, userId, limit)) return coded("rate_limited");
+  const limited = await consumeSharedMindRateLimit(bucket, userId, limit);
+  if (!limited.ok && "unavailable" in limited) return json({ ok: false, code: "network_failure", error: "Usage limits could not be checked. No voice request was sent." }, 503);
+  if (!limited.ok) return coded("rate_limited");
   return null;
 }
 
@@ -104,6 +106,7 @@ export async function handleVoiceStt(request: Request, deps: VoiceHttpDeps = {})
   const read = await readJsonObjectBody(request, 6_000_000);
   if (!read.ok) return json({ ok: false, code: "network_failure", error: read.error }, read.status);
   if (read.body.freeOnly === true) return json({ ok: false, error: "Free-only mode keeps cloud transcription off." });
+  if (read.body.provider !== undefined && read.body.provider !== "xai" && read.body.provider !== "openai") return json({ ok: false, error: "Unsupported transcription provider. Nothing was sent." }, 400);
   const parsed = validateTranscribeAudioInput(read.body);
   if (!parsed.ok) return json({ ok: false, code: "empty_transcript", error: parsed.error });
   const decoded = decodeAudioBase64(parsed.audioBase64);
@@ -111,8 +114,8 @@ export async function handleVoiceStt(request: Request, deps: VoiceHttpDeps = {})
   const env = deps.env ?? process.env;
   const transcribed = await transcribeWithFallback({
     bytes: decoded.bytes,
-    xaiKey: resolveVoiceApiKey(env, deps.secretsPath),
-    openaiKey: env.OPENAI_API_KEY?.trim() || undefined,
+    xaiKey: read.body.provider === "openai" ? undefined : resolveVoiceApiKey(env, deps.secretsPath),
+    openaiKey: read.body.provider === "xai" ? undefined : env.OPENAI_API_KEY?.trim() || undefined,
     filename: parsed.filename,
     mime: parsed.mime,
     fetchImpl: deps.fetchImpl,
