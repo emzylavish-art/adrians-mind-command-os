@@ -7,7 +7,18 @@
       "expected": "A denied Notion append preserves usable reads while every surface identifies the affected workspace/action and safe recovery.",
       "implementation": "src/lib/mind/notion.ts; src/lib/mind/notion-operation-status.ts; src/lib/mind/connectors/notion-operation-status.server.ts; src/components/mind/notion-workspaces.tsx; src/lib/mind/dashboard/owner-connections.ts",
       "regression": "Connector lane: c1-notion-recovery.test.ts 3/3, including actual adapter fake transport, durable owner/workspace separation and callback script.",
-      "disposition": "Combined verification pending"
+      "disposition": "Combined verification pending",
+      "sourceDisposition": "fixed and tested",
+      "sourceLimits": "Apply migration 0017 before rollout; real OAuth renewal and real Notion write/readback remain an authorized integration check.",
+      "sourceFiles": "src/lib/mind/notion.ts; src/lib/mind/notion-operation-status.ts; src/lib/mind/connectors/notion-operation-status.server.ts; src/components/mind/notion-workspaces.tsx; src/lib/mind/dashboard/owner-connections.ts",
+      "recordUrl": "https://app.notion.com/p/4231aa276323816a9133d798b075b29e?pvs=204",
+      "caseReports": {
+        "files": [
+          "src/lib/mind/connectors/c1-notion-recovery.test.ts"
+        ],
+        "lookup": "Exact-head CI logs and named source fixtures must be checked individually; case-level proof has not yet been recorded."
+      },
+      "nextCheck": "Compare the named fixture cases and remaining source limits against this original acceptance. Live and physical evidence must be recorded separately when required."
     },
     {
       "finding": "C1/AA-002",
@@ -15,7 +26,18 @@
       "expected": "Delayed Google identity lookup must not relabel a replacement grant or retain a different account refresh token.",
       "implementation": "src/lib/mind/connectors/durable-oauth.server.ts; src/lib/mind/connectors/google-account.server.ts; src/lib/mind/connectors/store.ts; migrations/0017_c1_oauth_contract.sql",
       "regression": "Connector lane: c1-identity-contract.test.ts 3/3 covers replacement, equal-email/different-sub and timeout cases.",
-      "disposition": "Combined verification pending"
+      "disposition": "Combined verification pending",
+      "sourceDisposition": "fixed and tested",
+      "sourceLimits": "Real Google accounts were not connected or switched.",
+      "sourceFiles": "src/lib/mind/connectors/durable-oauth.server.ts; src/lib/mind/connectors/google-account.server.ts; src/lib/mind/connectors/store.ts; migrations/0017_c1_oauth_contract.sql",
+      "recordUrl": "https://app.notion.com/p/4231aa27632381babfcfe2dcf88bea6d?pvs=204",
+      "caseReports": {
+        "files": [
+          "src/lib/mind/connectors/c1-identity-contract.test.ts"
+        ],
+        "lookup": "Exact-head CI logs and named source fixtures must be checked individually; case-level proof has not yet been recorded."
+      },
+      "nextCheck": "Compare the named fixture cases and remaining source limits against this original acceptance. Live and physical evidence must be recorded separately when required."
     },
     {
       "finding": "C1/AA-003",
@@ -23,7 +45,19 @@
       "expected": "Only a selected transcription provider and explicitly allowed alternate may receive audio; silence and failures remain distinct.",
       "implementation": "src/lib/mind/voice/transcription-policy.ts; src/lib/mind/voice/provider-fallback.ts; src/lib/mind/voice/http.server.ts; src/components/mind/command-app.tsx",
       "regression": "voice/transcription-policy.test.ts 4/4 and provider-fallback.test.ts 4/4 passed; actual HTTP helpers use fake providers and preserve attempted-provider/error envelopes.",
-      "disposition": "Combined verification pending"
+      "disposition": "Combined verification pending",
+      "sourceDisposition": "fixed and tested",
+      "sourceLimits": "Real microphone and provider calls were not performed. Only explicit stage-specific recipients can receive audio.",
+      "sourceFiles": "src/lib/mind/voice/transcription-policy.ts; src/lib/mind/voice/provider-fallback.ts; src/lib/mind/voice/http.server.ts; src/components/mind/command-app.tsx",
+      "recordUrl": "https://app.notion.com/p/4231aa2763238117a082ecbbc9e784ff?pvs=204",
+      "caseReports": {
+        "files": [
+          "src/lib/mind/voice/provider-fallback.test.ts",
+          "src/lib/mind/voice/transcription-policy.test.ts"
+        ],
+        "lookup": "Exact-head CI logs and named source fixtures must be checked individually; case-level proof has not yet been recorded."
+      },
+      "nextCheck": "Compare the named fixture cases and remaining source limits against this original acceptance. Live and physical evidence must be recorded separately when required."
     },
     {
       "finding": "C1/AA-004",
@@ -31,7 +65,18 @@
       "expected": "A temporary local voice-engine outage must keep the selected route and block or offer an explicit choice.",
       "implementation": "src/lib/mind/voice/selected-route.ts; src/lib/mind/voice/selected-route.test.ts; src/components/mind/command-app.tsx",
       "regression": "voice/selected-route.test.ts passed; saved Orchestrator selection survives an unavailable local-engine probe.",
-      "disposition": "Combined verification pending"
+      "disposition": "Combined verification pending",
+      "sourceDisposition": "fixed and tested",
+      "sourceLimits": "Physical local-engine recovery and microphone tests remain a later authorized check.",
+      "sourceFiles": "src/lib/mind/voice/selected-route.ts; src/lib/mind/voice/selected-route.test.ts; src/components/mind/command-app.tsx",
+      "recordUrl": "https://app.notion.com/p/4231aa2763238117a082ecbbc9e784ff?pvs=204",
+      "caseReports": {
+        "files": [
+          "src/lib/mind/voice/selected-route.test.ts"
+        ],
+        "lookup": "Exact-head CI logs and named source fixtures must be checked individually; case-level proof has not yet been recorded."
+      },
+      "nextCheck": "Compare the named fixture cases and remaining source limits against this original acceptance. Live and physical evidence must be recorded separately when required."
     },
     {
       "finding": "C1/AA-005",
@@ -39,7 +84,18 @@
       "expected": "Approval binds exact account, connection, credential revision, tool definition, arguments and destination through dispatch.",
       "implementation": "src/lib/mind/mcp/approval-snapshot.ts; src/lib/mind/connected-mcp.server.ts; src/lib/mind/custom-connection.ts; src/components/mind/custom-connections.tsx",
       "regression": "Connector lane: connected-mcp.test.ts 16/16, including endpoint, credentials, schema, description and mid-approval changes.",
-      "disposition": "Combined verification pending"
+      "disposition": "Combined verification pending",
+      "sourceDisposition": "fixed and tested",
+      "sourceLimits": "Existing approvals are intentionally invalidated by connection or definition changes; retain these tests across overlapping branches.",
+      "sourceFiles": "src/lib/mind/mcp/approval-snapshot.ts; src/lib/mind/connected-mcp.server.ts; src/lib/mind/custom-connection.ts; src/components/mind/custom-connections.tsx",
+      "recordUrl": "https://app.notion.com/p/4231aa27632381a483d1ddf5621afb07?pvs=204",
+      "caseReports": {
+        "files": [
+          "src/lib/mind/connected-mcp.test.ts"
+        ],
+        "lookup": "Exact-head CI logs and named source fixtures must be checked individually; case-level proof has not yet been recorded."
+      },
+      "nextCheck": "Compare the named fixture cases and remaining source limits against this original acceptance. Live and physical evidence must be recorded separately when required."
     },
     {
       "finding": "C1/AA-006",
@@ -47,7 +103,16 @@
       "expected": "The live initialized MCP session must advertise the reviewed tool definition before tools/call.",
       "implementation": "src/lib/mind/custom-connection.ts; src/lib/mind/connected-mcp.test.ts; src/lib/mind/custom-connection.test.ts",
       "regression": "Connector fixtures show changed definition makes zero tools/call requests; identical definition permits one call.",
-      "disposition": "Combined verification pending"
+      "disposition": "Combined verification pending",
+      "sourceDisposition": "fixed and tested",
+      "sourceLimits": "Real external MCP services were not probed or invoked.",
+      "sourceFiles": "src/lib/mind/custom-connection.ts; src/lib/mind/connected-mcp.test.ts; src/lib/mind/custom-connection.test.ts",
+      "recordUrl": "https://app.notion.com/p/4231aa27632381a483d1ddf5621afb07?pvs=204",
+      "caseReports": {
+        "files": [],
+        "lookup": "Exact-head CI logs and named source fixtures must be checked individually; case-level proof has not yet been recorded."
+      },
+      "nextCheck": "Resolve the exact combined test for this record from its committed source evidence and execute its acceptance path before closure."
     },
     {
       "finding": "C1/AA-007",
@@ -55,7 +120,16 @@
       "expected": "Every new dispatch validates current authenticated-owner privacy policy and exact permitted saved content.",
       "implementation": "src/lib/mind/memory/dispatch-policy.ts; src/lib/mind/memory/dispatch-policy.server.ts; src/lib/mind/turn.server.ts; src/lib/mind/agent-run.server.ts; src/lib/mind/use-mind-workspace.ts",
       "regression": "Privacy lane 48/48 includes current-owner reread, note deletion/edit/archive/scope, legacy payloads and planner identity/revocation fixtures.",
-      "disposition": "Combined verification pending"
+      "disposition": "Combined verification pending",
+      "sourceDisposition": "fixed and tested",
+      "sourceLimits": "Authenticated multi-tab permission changes remain a release journey; fixtures do not prove a live provider call.",
+      "sourceFiles": "src/lib/mind/memory/dispatch-policy.ts; src/lib/mind/memory/dispatch-policy.server.ts; src/lib/mind/turn.server.ts; src/lib/mind/agent-run.server.ts; src/lib/mind/use-mind-workspace.ts",
+      "recordUrl": "https://app.notion.com/p/4231aa27632381a1983ad70b98d0eb77?pvs=204",
+      "caseReports": {
+        "files": [],
+        "lookup": "Exact-head CI logs and named source fixtures must be checked individually; case-level proof has not yet been recorded."
+      },
+      "nextCheck": "Resolve the exact combined test for this record from its committed source evidence and execute its acceptance path before closure."
     },
     {
       "finding": "C1/AA-008",
@@ -63,7 +137,16 @@
       "expected": "Old requests must not newly dispatch revoked context; already completed results should recover under their original operation ID.",
       "implementation": "src/lib/mind/turn.server.ts; src/lib/mind/turn-recovery.ts; src/lib/mind/memory/dispatch-policy.ts; src/components/mind/command-app.tsx",
       "regression": "Policy old-body rejection plus runtime PGlite exact-response recovery/temporary-retention tests.",
-      "disposition": "Combined verification pending"
+      "disposition": "Combined verification pending",
+      "sourceDisposition": "fixed and tested",
+      "sourceLimits": "Keep receipt lookup ordering when reconciling other branches; live/provider proof remains unperformed.",
+      "sourceFiles": "src/lib/mind/turn.server.ts; src/lib/mind/turn-recovery.ts; src/lib/mind/memory/dispatch-policy.ts; src/components/mind/command-app.tsx",
+      "recordUrl": "https://app.notion.com/p/4231aa27632381a1983ad70b98d0eb77?pvs=204",
+      "caseReports": {
+        "files": [],
+        "lookup": "Exact-head CI logs and named source fixtures must be checked individually; case-level proof has not yet been recorded."
+      },
+      "nextCheck": "Resolve the exact combined test for this record from its committed source evidence and execute its acceptance path before closure."
     },
     {
       "finding": "C1/AA-009",
@@ -71,7 +154,18 @@
       "expected": "Saved memory, history, copied bot knowledge, document access and new memory saves are independently controlled and disclosed.",
       "implementation": "src/lib/mind/memory/context-policy.ts; src/lib/mind/types.ts; src/lib/mind/workspace.ts; src/components/mind/command-app.tsx",
       "regression": "memory/dispatch-policy.test.ts fresh-context and memory-off/project-permission cases in the 48/48 privacy lane.",
-      "disposition": "Combined verification pending"
+      "disposition": "Combined verification pending",
+      "sourceDisposition": "fixed and tested",
+      "sourceLimits": "Project-conversation/research policy fields do not by themselves implement additional retrieval engines.",
+      "sourceFiles": "src/lib/mind/memory/context-policy.ts; src/lib/mind/types.ts; src/lib/mind/workspace.ts; src/components/mind/command-app.tsx",
+      "recordUrl": "https://app.notion.com/p/4231aa27632381a1983ad70b98d0eb77?pvs=204",
+      "caseReports": {
+        "files": [
+          "src/lib/mind/memory/dispatch-policy.test.ts"
+        ],
+        "lookup": "Exact-head CI logs and named source fixtures must be checked individually; case-level proof has not yet been recorded."
+      },
+      "nextCheck": "Compare the named fixture cases and remaining source limits against this original acceptance. Live and physical evidence must be recorded separately when required."
     },
     {
       "finding": "C1/AA-010",
@@ -79,7 +173,16 @@
       "expected": "Active UI, local checkpoint and server synchronization should reconcile the same full workspace.",
       "implementation": "src/lib/mind/use-mind-workspace.ts; src/lib/mind/workspace-edits.ts; src/lib/mind/workspace-reconciliation.test.ts",
       "regression": "Independent records/fields and deletion tests use the same reconciliation functions as the hook; privacy lane 48/48.",
-      "disposition": "Combined verification pending"
+      "disposition": "Combined verification pending",
+      "sourceDisposition": "fixed and tested",
+      "sourceLimits": "Real two-tab visibility and account switch during hydration are listed in the privacy lane release checks.",
+      "sourceFiles": "src/lib/mind/use-mind-workspace.ts; src/lib/mind/workspace-edits.ts; src/lib/mind/workspace-reconciliation.test.ts",
+      "recordUrl": "https://app.notion.com/p/4231aa276323814ba23ef6527ad64388?pvs=204",
+      "caseReports": {
+        "files": [],
+        "lookup": "Exact-head CI logs and named source fixtures must be checked individually; case-level proof has not yet been recorded."
+      },
+      "nextCheck": "Resolve the exact combined test for this record from its committed source evidence and execute its acceptance path before closure."
     },
     {
       "finding": "C1/AA-011",
@@ -87,7 +190,18 @@
       "expected": "Independent non-chat edits merge; actual conflicts preserve both variants; sensitive configurations remain coherent.",
       "implementation": "src/lib/mind/workspace-edits.ts; src/lib/mind/sync.ts; src/lib/mind/types.ts",
       "regression": "workspace-reconciliation.test.ts independent/same-field/deletion/agent/conflict-resolution regression cases.",
-      "disposition": "Combined verification pending"
+      "disposition": "Combined verification pending",
+      "sourceDisposition": "fixed and tested",
+      "sourceLimits": "Merge policy for new security-sensitive collections must be defined before adding them.",
+      "sourceFiles": "src/lib/mind/workspace-edits.ts; src/lib/mind/sync.ts; src/lib/mind/types.ts",
+      "recordUrl": "https://app.notion.com/p/4231aa276323814ba23ef6527ad64388?pvs=204",
+      "caseReports": {
+        "files": [
+          "src/lib/mind/workspace-reconciliation.test.ts"
+        ],
+        "lookup": "Exact-head CI logs and named source fixtures must be checked individually; case-level proof has not yet been recorded."
+      },
+      "nextCheck": "Compare the named fixture cases and remaining source limits against this original acceptance. Live and physical evidence must be recorded separately when required."
     },
     {
       "finding": "C1/AA-012",
@@ -95,7 +209,16 @@
       "expected": "Use a common revision to merge independent device/server changes and expose real conflicts for review.",
       "implementation": "src/lib/mind/sync.ts; src/lib/mind/use-mind-workspace.ts; src/components/mind/command-app.tsx",
       "regression": "Common-base and missing-ancestor tests; store stale-revision fixture; scalar settings conflict remains resolvable.",
-      "disposition": "Combined verification pending"
+      "disposition": "Combined verification pending",
+      "sourceDisposition": "fixed and tested",
+      "sourceLimits": "The multi-device browser journey is not represented as executed.",
+      "sourceFiles": "src/lib/mind/sync.ts; src/lib/mind/use-mind-workspace.ts; src/components/mind/command-app.tsx",
+      "recordUrl": "https://app.notion.com/p/4231aa276323814ba23ef6527ad64388?pvs=204",
+      "caseReports": {
+        "files": [],
+        "lookup": "Exact-head CI logs and named source fixtures must be checked individually; case-level proof has not yet been recorded."
+      },
+      "nextCheck": "Resolve the exact combined test for this record from its committed source evidence and execute its acceptance path before closure."
     },
     {
       "finding": "C1/AA-013",
@@ -103,7 +226,16 @@
       "expected": "Workspace growth should not make every small edit exceed a single full-snapshot request limit.",
       "implementation": "src/lib/mind/workspace-delta.ts; src/lib/mind/store.ts; src/lib/mind/server.ts; src/lib/mind/use-mind-workspace.ts",
       "regression": "Large initial workspace + long-chat batch/resume, sub-1KB message delta, >1.5MB workspace update and actual PGlite reopen in privacy lane 48/48.",
-      "disposition": "Combined verification pending"
+      "disposition": "Combined verification pending",
+      "sourceDisposition": "fixed and tested",
+      "sourceLimits": "Further independently versioned/paginated DB/browser reads remain a staged migration proposal; an exceptionally large individual record still fails explicitly.",
+      "sourceFiles": "src/lib/mind/workspace-delta.ts; src/lib/mind/store.ts; src/lib/mind/server.ts; src/lib/mind/use-mind-workspace.ts",
+      "recordUrl": "https://app.notion.com/p/4231aa276323814ba23ef6527ad64388?pvs=204",
+      "caseReports": {
+        "files": [],
+        "lookup": "Exact-head CI logs and named source fixtures must be checked individually; case-level proof has not yet been recorded."
+      },
+      "nextCheck": "Resolve the exact combined test for this record from its committed source evidence and execute its acceptance path before closure."
     },
     {
       "finding": "C1/AA-014",
@@ -111,7 +243,18 @@
       "expected": "Provider receipts preserve reported usage/model/request identity and never invent missing counters.",
       "implementation": "src/lib/mind/provider-call.ts; src/lib/mind/stream.ts; src/lib/mind/turn.server.ts; src/lib/mind/live-turn.ts",
       "regression": "Runtime lane: c1-runtime-regressions.test.ts AA014 plus provider tests in reported 84/84 batch.",
-      "disposition": "Combined verification pending"
+      "disposition": "Combined verification pending",
+      "sourceDisposition": "fixed and tested",
+      "sourceLimits": "Provider-reported model metadata is attribution, not independent proof of backend internals.",
+      "sourceFiles": "src/lib/mind/provider-call.ts; src/lib/mind/stream.ts; src/lib/mind/turn.server.ts; src/lib/mind/live-turn.ts",
+      "recordUrl": "https://app.notion.com/p/4231aa2763238171b61ded08986e6b29?pvs=204",
+      "caseReports": {
+        "files": [
+          "src/lib/mind/c1-runtime-regressions.test.ts"
+        ],
+        "lookup": "Exact-head CI logs and named source fixtures must be checked individually; case-level proof has not yet been recorded."
+      },
+      "nextCheck": "Compare the named fixture cases and remaining source limits against this original acceptance. Live and physical evidence must be recorded separately when required."
     },
     {
       "finding": "C1/AA-015",
@@ -119,7 +262,16 @@
       "expected": "Being connected does not authorize a helper model or additional spend.",
       "implementation": "src/lib/mind/model-consult.ts; src/lib/mind/turn.server.ts; src/components/mind/command-app.tsx",
       "regression": "Runtime AA015 fixture proves available providers are not implicit helpers; governed-call budget tests.",
-      "disposition": "Combined verification pending"
+      "disposition": "Combined verification pending",
+      "sourceDisposition": "fixed and tested",
+      "sourceLimits": "Live multi-model billing remains untested; helper configuration must survive semantic branch merge.",
+      "sourceFiles": "src/lib/mind/model-consult.ts; src/lib/mind/turn.server.ts; src/components/mind/command-app.tsx",
+      "recordUrl": "https://app.notion.com/p/4231aa2763238171b61ded08986e6b29?pvs=204",
+      "caseReports": {
+        "files": [],
+        "lookup": "Exact-head CI logs and named source fixtures must be checked individually; case-level proof has not yet been recorded."
+      },
+      "nextCheck": "Resolve the exact combined test for this record from its committed source evidence and execute its acceptance path before closure."
     },
     {
       "finding": "C1/AA-016",
@@ -127,7 +279,16 @@
       "expected": "Every attempted helper keeps provider/model/request/usage/duration/outcome metadata, including failures.",
       "implementation": "src/lib/mind/model-consult.ts; src/lib/mind/turn.server.ts; src/lib/mind/types.ts; src/lib/mind/workspace.ts; src/components/mind/command-app.tsx",
       "regression": "Runtime AA016/017 fixture; privacy lane message receipt round-trip test.",
-      "disposition": "Combined verification pending"
+      "disposition": "Combined verification pending",
+      "sourceDisposition": "fixed and tested",
+      "sourceLimits": "Unknown usage remains unknown; no fixture claim of actual provider execution.",
+      "sourceFiles": "src/lib/mind/model-consult.ts; src/lib/mind/turn.server.ts; src/lib/mind/types.ts; src/lib/mind/workspace.ts; src/components/mind/command-app.tsx",
+      "recordUrl": "https://app.notion.com/p/4231aa2763238171b61ded08986e6b29?pvs=204",
+      "caseReports": {
+        "files": [],
+        "lookup": "Exact-head CI logs and named source fixtures must be checked individually; case-level proof has not yet been recorded."
+      },
+      "nextCheck": "Resolve the exact combined test for this record from its committed source evidence and execute its acceptance path before closure."
     },
     {
       "finding": "C1/AA-017",
@@ -135,7 +296,16 @@
       "expected": "Independent helpers can run with bounded concurrency while cancellation prevents new dispatch.",
       "implementation": "src/lib/mind/model-consult.ts; src/lib/mind/execution-plan.ts; src/lib/mind/turn.server.ts",
       "regression": "Runtime AA016/017 concurrent/failure/cancel regression in the 84/84 batch.",
-      "disposition": "Combined verification pending"
+      "disposition": "Combined verification pending",
+      "sourceDisposition": "fixed and tested",
+      "sourceLimits": "Production latency improvement is not claimed from fixture timings.",
+      "sourceFiles": "src/lib/mind/model-consult.ts; src/lib/mind/execution-plan.ts; src/lib/mind/turn.server.ts",
+      "recordUrl": "https://app.notion.com/p/4231aa2763238171b61ded08986e6b29?pvs=204",
+      "caseReports": {
+        "files": [],
+        "lookup": "Exact-head CI logs and named source fixtures must be checked individually; case-level proof has not yet been recorded."
+      },
+      "nextCheck": "Resolve the exact combined test for this record from its committed source evidence and execute its acceptance path before closure."
     },
     {
       "finding": "C1/AA-018",
@@ -143,7 +313,16 @@
       "expected": "Adrian may keep its product identity while truthfully attributing models and tool execution.",
       "implementation": "src/lib/mind/model-consult.ts; src/lib/mind/model-consult.test.ts; src/lib/mind/prompt.ts",
       "regression": "Runtime model-consult regression assertions in the 84/84 batch.",
-      "disposition": "Combined verification pending"
+      "disposition": "Combined verification pending",
+      "sourceDisposition": "fixed and tested",
+      "sourceLimits": "A system instruction does not prove a real model obeyed it; live answer proof remains separate.",
+      "sourceFiles": "src/lib/mind/model-consult.ts; src/lib/mind/model-consult.test.ts; src/lib/mind/prompt.ts",
+      "recordUrl": "https://app.notion.com/p/4231aa2763238171b61ded08986e6b29?pvs=204",
+      "caseReports": {
+        "files": [],
+        "lookup": "Exact-head CI logs and named source fixtures must be checked individually; case-level proof has not yet been recorded."
+      },
+      "nextCheck": "Resolve the exact combined test for this record from its committed source evidence and execute its acceptance path before closure."
     },
     {
       "finding": "C1/AA-019",
@@ -151,7 +330,16 @@
       "expected": "An active run uses a pinned definition/plan but current revocation must still stop new steps.",
       "implementation": "src/lib/mind/fleet.ts; src/lib/mind/worker-pass.ts; src/lib/mind/c1-runtime-regressions.test.ts",
       "regression": "Runtime AA019 fixture covers changed definition and revoked permissions.",
-      "disposition": "Combined verification pending"
+      "disposition": "Combined verification pending",
+      "sourceDisposition": "fixed and tested",
+      "sourceLimits": "Remote/native agent behavior is not inferred from local worker fixtures.",
+      "sourceFiles": "src/lib/mind/fleet.ts; src/lib/mind/worker-pass.ts; src/lib/mind/c1-runtime-regressions.test.ts",
+      "recordUrl": "https://app.notion.com/p/4231aa27632381d6a2e8d69d24e7feac?pvs=204",
+      "caseReports": {
+        "files": [],
+        "lookup": "Exact-head CI logs and named source fixtures must be checked individually; case-level proof has not yet been recorded."
+      },
+      "nextCheck": "Resolve the exact combined test for this record from its committed source evidence and execute its acceptance path before closure."
     },
     {
       "finding": "C1/AA-020",
@@ -159,7 +347,16 @@
       "expected": "Completing listed steps must not imply the user objective was verified.",
       "implementation": "src/lib/mind/fleet.ts; src/lib/mind/core-runtime.ts; src/lib/mind/c1-runtime-regressions.test.ts",
       "regression": "Runtime AA020/021 completion/budget fixture.",
-      "disposition": "Combined verification pending"
+      "disposition": "Combined verification pending",
+      "sourceDisposition": "fixed and tested",
+      "sourceLimits": "Objective verification needs task-specific evidence; no universal success evaluator is claimed.",
+      "sourceFiles": "src/lib/mind/fleet.ts; src/lib/mind/core-runtime.ts; src/lib/mind/c1-runtime-regressions.test.ts",
+      "recordUrl": "https://app.notion.com/p/4231aa27632381d6a2e8d69d24e7feac?pvs=204",
+      "caseReports": {
+        "files": [],
+        "lookup": "Exact-head CI logs and named source fixtures must be checked individually; case-level proof has not yet been recorded."
+      },
+      "nextCheck": "Resolve the exact combined test for this record from its committed source evidence and execute its acceptance path before closure."
     },
     {
       "finding": "C1/AA-021",
@@ -167,7 +364,16 @@
       "expected": "Browser-local, scheduled-local and server-local runs must identify their actual runtime/capabilities.",
       "implementation": "src/lib/mind/fleet.ts; src/lib/mind/worker-pass.ts; src/lib/mind/core-runtime.ts",
       "regression": "Runtime AA020/021 fixture distinguishes execution and objective status.",
-      "disposition": "Combined verification pending"
+      "disposition": "Combined verification pending",
+      "sourceDisposition": "fixed and tested",
+      "sourceLimits": "A local step does not prove a hosted model/browser/mailbox ran.",
+      "sourceFiles": "src/lib/mind/fleet.ts; src/lib/mind/worker-pass.ts; src/lib/mind/core-runtime.ts",
+      "recordUrl": "https://app.notion.com/p/4231aa27632381d6a2e8d69d24e7feac?pvs=204",
+      "caseReports": {
+        "files": [],
+        "lookup": "Exact-head CI logs and named source fixtures must be checked individually; case-level proof has not yet been recorded."
+      },
+      "nextCheck": "Resolve the exact combined test for this record from its committed source evidence and execute its acceptance path before closure."
     },
     {
       "finding": "C1/AA-022",
@@ -175,7 +381,16 @@
       "expected": "Scheduled work retains each occurrence and an explicit overlap policy.",
       "implementation": "src/lib/mind/fleet.ts; src/lib/mind/worker-pass.ts; src/lib/mind/c1-runtime-regressions.test.ts",
       "regression": "Runtime AA022 fixture preserves occurrence history and queues overlapping execution.",
-      "disposition": "Combined verification pending"
+      "disposition": "Combined verification pending",
+      "sourceDisposition": "fixed and tested",
+      "sourceLimits": "Actual hosted timer availability is a deployment/runtime check.",
+      "sourceFiles": "src/lib/mind/fleet.ts; src/lib/mind/worker-pass.ts; src/lib/mind/c1-runtime-regressions.test.ts",
+      "recordUrl": "https://app.notion.com/p/4231aa27632381d6a2e8d69d24e7feac?pvs=204",
+      "caseReports": {
+        "files": [],
+        "lookup": "Exact-head CI logs and named source fixtures must be checked individually; case-level proof has not yet been recorded."
+      },
+      "nextCheck": "Resolve the exact combined test for this record from its committed source evidence and execute its acceptance path before closure."
     },
     {
       "finding": "C1/AA-023",
@@ -183,7 +398,16 @@
       "expected": "Cancellation distinguishes request/acknowledgement and preserves already produced results.",
       "implementation": "src/lib/mind/fleet.ts; src/lib/mind/pc-pairing/store.ts; src/lib/mind/c1-runtime-regressions.test.ts",
       "regression": "Runtime AA023 local acknowledgement/result preservation plus durable device fixture.",
-      "disposition": "Combined verification pending"
+      "disposition": "Combined verification pending",
+      "sourceDisposition": "fixed and tested",
+      "sourceLimits": "No claim that an accepted external request can be forcibly undone.",
+      "sourceFiles": "src/lib/mind/fleet.ts; src/lib/mind/pc-pairing/store.ts; src/lib/mind/c1-runtime-regressions.test.ts",
+      "recordUrl": "https://app.notion.com/p/4231aa27632381d6a2e8d69d24e7feac?pvs=204",
+      "caseReports": {
+        "files": [],
+        "lookup": "Exact-head CI logs and named source fixtures must be checked individually; case-level proof has not yet been recorded."
+      },
+      "nextCheck": "Resolve the exact combined test for this record from its committed source evidence and execute its acceptance path before closure."
     },
     {
       "finding": "C1/AA-024",
@@ -191,7 +415,16 @@
       "expected": "Research distinguishes discovered links, observed passages, provider synthesis, conflicts and uncertainty.",
       "implementation": "src/lib/mind/research-evidence.server.ts; src/lib/mind/research-service.server.ts; src/lib/mind/research.ts; src/components/mind/research-library.tsx",
       "regression": "Runtime Research/Skills 32/32 includes fake public pages, private redirect rejection and truthful source-excerpt/provider-synthesis tests.",
-      "disposition": "Combined verification pending"
+      "disposition": "Combined verification pending",
+      "sourceDisposition": "fixed and tested",
+      "sourceLimits": "Automated exhaustive fact checking, semantic contradiction resolution and live page research are not claimed.",
+      "sourceFiles": "src/lib/mind/research-evidence.server.ts; src/lib/mind/research-service.server.ts; src/lib/mind/research.ts; src/components/mind/research-library.tsx",
+      "recordUrl": "https://app.notion.com/p/4231aa2763238142af7ed04c954f6825?pvs=204",
+      "caseReports": {
+        "files": [],
+        "lookup": "Exact-head CI logs and named source fixtures must be checked individually; case-level proof has not yet been recorded."
+      },
+      "nextCheck": "Resolve the exact combined test for this record from its committed source evidence and execute its acceptance path before closure."
     },
     {
       "finding": "C1/AA-025",
@@ -199,7 +432,16 @@
       "expected": "Later research queries retain unique supporting evidence even when the first query fills the limit.",
       "implementation": "src/lib/mind/research.ts; src/lib/mind/c1-research-skills.test.ts",
       "regression": "AA025 fixture fills three eight-result groups and verifies later query evidence survives.",
-      "disposition": "Combined verification pending"
+      "disposition": "Combined verification pending",
+      "sourceDisposition": "fixed and tested",
+      "sourceLimits": "No private or live source was searched by the fixture.",
+      "sourceFiles": "src/lib/mind/research.ts; src/lib/mind/c1-research-skills.test.ts",
+      "recordUrl": "https://app.notion.com/p/4231aa2763238142af7ed04c954f6825?pvs=204",
+      "caseReports": {
+        "files": [],
+        "lookup": "Exact-head CI logs and named source fixtures must be checked individually; case-level proof has not yet been recorded."
+      },
+      "nextCheck": "Resolve the exact combined test for this record from its committed source evidence and execute its acceptance path before closure."
     },
     {
       "finding": "C1/AA-026",
@@ -207,7 +449,16 @@
       "expected": "Research routes expose consistent evidence/report fields while preserving route-specific answers and provenance.",
       "implementation": "src/lib/mind/research.ts; src/lib/mind/xai-search.ts; src/lib/mind/research-service.server.ts; src/lib/mind/research-evidence.server.ts",
       "regression": "AA024/026 configured and fake xAI route fixtures in Research/Skills 32/32.",
-      "disposition": "Combined verification pending"
+      "disposition": "Combined verification pending",
+      "sourceDisposition": "fixed and tested",
+      "sourceLimits": "Provider-supplied synthesis is labeled separately from directly inspected passages.",
+      "sourceFiles": "src/lib/mind/research.ts; src/lib/mind/xai-search.ts; src/lib/mind/research-service.server.ts; src/lib/mind/research-evidence.server.ts",
+      "recordUrl": "https://app.notion.com/p/4231aa2763238142af7ed04c954f6825?pvs=204",
+      "caseReports": {
+        "files": [],
+        "lookup": "Exact-head CI logs and named source fixtures must be checked individually; case-level proof has not yet been recorded."
+      },
+      "nextCheck": "Resolve the exact combined test for this record from its committed source evidence and execute its acceptance path before closure."
     },
     {
       "finding": "C1/AA-027",
@@ -215,7 +466,16 @@
       "expected": "Research retry must retain the originally selected provider configuration or require a new review.",
       "implementation": "src/lib/mind/research-service.server.ts; src/lib/mind/research-followup.ts; src/components/mind/command-app.tsx",
       "regression": "AA027 configuration-change rejection fixture plus AA028 merge regression.",
-      "disposition": "Combined verification pending"
+      "disposition": "Combined verification pending",
+      "sourceDisposition": "fixed and tested",
+      "sourceLimits": "Runtime fixture identity does not establish a current live provider configuration.",
+      "sourceFiles": "src/lib/mind/research-service.server.ts; src/lib/mind/research-followup.ts; src/components/mind/command-app.tsx",
+      "recordUrl": "https://app.notion.com/p/4231aa2763238142af7ed04c954f6825?pvs=204",
+      "caseReports": {
+        "files": [],
+        "lookup": "Exact-head CI logs and named source fixtures must be checked individually; case-level proof has not yet been recorded."
+      },
+      "nextCheck": "Resolve the exact combined test for this record from its committed source evidence and execute its acceptance path before closure."
     },
     {
       "finding": "C1/AA-028",
@@ -223,7 +483,16 @@
       "expected": "Research follow-up transfers supporting passages, route and uncertainty, not only URLs.",
       "implementation": "src/lib/mind/research-followup.ts; src/components/mind/command-app.tsx; src/components/mind/research-library.tsx",
       "regression": "AA028 fixture retains excerpt/status and marks external text untrusted.",
-      "disposition": "Combined verification pending"
+      "disposition": "Combined verification pending",
+      "sourceDisposition": "fixed and tested",
+      "sourceLimits": "A follow-up model response is not proven by preparing its evidence bundle.",
+      "sourceFiles": "src/lib/mind/research-followup.ts; src/components/mind/command-app.tsx; src/components/mind/research-library.tsx",
+      "recordUrl": "https://app.notion.com/p/4231aa2763238142af7ed04c954f6825?pvs=204",
+      "caseReports": {
+        "files": [],
+        "lookup": "Exact-head CI logs and named source fixtures must be checked individually; case-level proof has not yet been recorded."
+      },
+      "nextCheck": "Resolve the exact combined test for this record from its committed source evidence and execute its acceptance path before closure."
     },
     {
       "finding": "C1/AA-029",
@@ -231,7 +500,16 @@
       "expected": "Research reports survive reload and larger histories with explicit owner-scoped retention and archive.",
       "implementation": "src/lib/mind/research-library.server.ts; src/lib/mind/research-http.server.ts; src/routes/api/mind/research-reports.ts; migrations/0021_c1_research_skills.sql",
       "regression": "Runtime PGlite AA029 fixture stores more than eight reports, isolates owners and checks revisions/pagination/archive.",
-      "disposition": "Combined verification pending"
+      "disposition": "Combined verification pending",
+      "sourceDisposition": "fixed and tested",
+      "sourceLimits": "Apply additive migration before deployment; current production reports were not migrated here.",
+      "sourceFiles": "src/lib/mind/research-library.server.ts; src/lib/mind/research-http.server.ts; src/routes/api/mind/research-reports.ts; migrations/0021_c1_research_skills.sql",
+      "recordUrl": "https://app.notion.com/p/4231aa2763238142af7ed04c954f6825?pvs=204",
+      "caseReports": {
+        "files": [],
+        "lookup": "Exact-head CI logs and named source fixtures must be checked individually; case-level proof has not yet been recorded."
+      },
+      "nextCheck": "Resolve the exact combined test for this record from its committed source evidence and execute its acceptance path before closure."
     },
     {
       "finding": "C1/AA-030",
@@ -239,7 +517,16 @@
       "expected": "Instruction procedures, local tools and connector readiness must have distinct labels and authority.",
       "implementation": "src/lib/mind/skills.ts; src/components/mind/instruction-library.tsx; src/components/mind/command-app.tsx",
       "regression": "AA030/031 category/tool-guard tests in Research/Skills 32/32.",
-      "disposition": "Combined verification pending"
+      "disposition": "Combined verification pending",
+      "sourceDisposition": "fixed and tested",
+      "sourceLimits": "New standalone procedures are not represented as installed merely because a connector exists.",
+      "sourceFiles": "src/lib/mind/skills.ts; src/components/mind/instruction-library.tsx; src/components/mind/command-app.tsx",
+      "recordUrl": "https://app.notion.com/p/4231aa276323814dbf40cef97b4305d3?pvs=204",
+      "caseReports": {
+        "files": [],
+        "lookup": "Exact-head CI logs and named source fixtures must be checked individually; case-level proof has not yet been recorded."
+      },
+      "nextCheck": "Resolve the exact combined test for this record from its committed source evidence and execute its acceptance path before closure."
     },
     {
       "finding": "C1/AA-031",
@@ -247,7 +534,16 @@
       "expected": "Explicit tool permission must apply through every local dispatch route, independently of automatic skill selection.",
       "implementation": "src/lib/mind/local-tools.ts; src/lib/mind/types.ts; src/lib/mind/workspace.ts; src/lib/mind/skills.ts",
       "regression": "AA030/031 direct-tool and named-skill rejection fixtures; permission state reconciliation tests.",
-      "disposition": "Combined verification pending"
+      "disposition": "Combined verification pending",
+      "sourceDisposition": "fixed and tested",
+      "sourceLimits": "An unknown new tool needs an explicit policy before being added.",
+      "sourceFiles": "src/lib/mind/local-tools.ts; src/lib/mind/types.ts; src/lib/mind/workspace.ts; src/lib/mind/skills.ts",
+      "recordUrl": "https://app.notion.com/p/4231aa276323814dbf40cef97b4305d3?pvs=204",
+      "caseReports": {
+        "files": [],
+        "lookup": "Exact-head CI logs and named source fixtures must be checked individually; case-level proof has not yet been recorded."
+      },
+      "nextCheck": "Resolve the exact combined test for this record from its committed source evidence and execute its acceptance path before closure."
     },
     {
       "finding": "C1/AA-032",
@@ -255,7 +551,16 @@
       "expected": "Skill preferences belong to one account and stale tabs must not silently replace them.",
       "implementation": "src/lib/mind/skill-preferences.ts; src/components/mind/command-app.tsx",
       "regression": "AA032 fixture checks owner separation, stale write rejection and corrupted preference pause.",
-      "disposition": "Combined verification pending"
+      "disposition": "Combined verification pending",
+      "sourceDisposition": "fixed and tested",
+      "sourceLimits": "These browser preferences are not described as server account backup.",
+      "sourceFiles": "src/lib/mind/skill-preferences.ts; src/components/mind/command-app.tsx",
+      "recordUrl": "https://app.notion.com/p/4231aa276323814dbf40cef97b4305d3?pvs=204",
+      "caseReports": {
+        "files": [],
+        "lookup": "Exact-head CI logs and named source fixtures must be checked individually; case-level proof has not yet been recorded."
+      },
+      "nextCheck": "Resolve the exact combined test for this record from its committed source evidence and execute its acceptance path before closure."
     },
     {
       "finding": "C1/AA-033",
@@ -263,7 +568,16 @@
       "expected": "Instruction sets expose exact source/body/revision/assignments and distinguish attachment from execution proof.",
       "implementation": "src/lib/mind/skill-instructions.server.ts; src/routes/api/mind/skills.ts; src/components/mind/instruction-library.tsx; migrations/0021_c1_research_skills.sql",
       "regression": "AA033 instruction-change/removal/dependency fixture plus PGlite review/dispatch history CAS.",
-      "disposition": "Combined verification pending"
+      "disposition": "Combined verification pending",
+      "sourceDisposition": "fixed and tested",
+      "sourceLimits": "Instructions attached to a model request are not proof the model followed the procedure.",
+      "sourceFiles": "src/lib/mind/skill-instructions.server.ts; src/routes/api/mind/skills.ts; src/components/mind/instruction-library.tsx; migrations/0021_c1_research_skills.sql",
+      "recordUrl": "https://app.notion.com/p/4231aa276323814dbf40cef97b4305d3?pvs=204",
+      "caseReports": {
+        "files": [],
+        "lookup": "Exact-head CI logs and named source fixtures must be checked individually; case-level proof has not yet been recorded."
+      },
+      "nextCheck": "Resolve the exact combined test for this record from its committed source evidence and execute its acceptance path before closure."
     },
     {
       "finding": "C1/AA-034",
@@ -271,7 +585,16 @@
       "expected": "Hosted Build receives the same complete reviewed builder instructions displayed in Skills.",
       "implementation": "src/lib/mind/adrian-os-skill.ts; src/lib/mind/kimi/hosted/builder-instructions.ts; src/lib/mind/kimi/hosted/acp-client.ts; src/components/mind/build-workspace.tsx",
       "regression": "Connector lane: fake ACP child captures full body for both transports; handshake failure produces no attachment receipt.",
-      "disposition": "Combined verification pending"
+      "disposition": "Combined verification pending",
+      "sourceDisposition": "fixed and tested",
+      "sourceLimits": "No real coding model or hosted account was invoked.",
+      "sourceFiles": "src/lib/mind/adrian-os-skill.ts; src/lib/mind/kimi/hosted/builder-instructions.ts; src/lib/mind/kimi/hosted/acp-client.ts; src/components/mind/build-workspace.tsx",
+      "recordUrl": "https://app.notion.com/p/4231aa276323814dbf40cef97b4305d3?pvs=204",
+      "caseReports": {
+        "files": [],
+        "lookup": "Exact-head CI logs and named source fixtures must be checked individually; case-level proof has not yet been recorded."
+      },
+      "nextCheck": "Resolve the exact combined test for this record from its committed source evidence and execute its acceptance path before closure."
     },
     {
       "finding": "C1/AA-035",
@@ -279,7 +602,16 @@
       "expected": "Skill recommendations are bounded, explain why they match, disclose missing dependencies and grant no permission.",
       "implementation": "src/lib/mind/skill-plan.ts; src/components/mind/instruction-library.tsx; src/lib/mind/c1-research-skills.test.ts",
       "regression": "AA035 bounded multi-skill/dependency/disabled-category fixture.",
-      "disposition": "Combined verification pending"
+      "disposition": "Combined verification pending",
+      "sourceDisposition": "fixed and tested",
+      "sourceLimits": "Matching remains deterministic registered categories; a semantic autonomous planner is a broader proposal, not claimed here.",
+      "sourceFiles": "src/lib/mind/skill-plan.ts; src/components/mind/instruction-library.tsx; src/lib/mind/c1-research-skills.test.ts",
+      "recordUrl": "https://app.notion.com/p/4231aa276323814dbf40cef97b4305d3?pvs=204",
+      "caseReports": {
+        "files": [],
+        "lookup": "Exact-head CI logs and named source fixtures must be checked individually; case-level proof has not yet been recorded."
+      },
+      "nextCheck": "Resolve the exact combined test for this record from its committed source evidence and execute its acceptance path before closure."
     },
     {
       "finding": "C1/AA-036",
@@ -287,7 +619,16 @@
       "expected": "Build must expose account-files, hosted execution and paired-PC capabilities and retain explicit runtime selection.",
       "implementation": "src/lib/mind/kimi/runtime-capabilities.ts; src/lib/mind/kimi/phase4.server.ts; src/components/mind/build-workspace.tsx; src/components/mind/code-ide.tsx",
       "regression": "Connector runtime matrix covers account/local/unknown/ready/busy; UI/source wiring reviewed.",
-      "disposition": "Combined verification pending"
+      "disposition": "Combined verification pending",
+      "sourceDisposition": "fixed and tested",
+      "sourceLimits": "Authenticated browser and actual companion capability emissions require later authorized tests.",
+      "sourceFiles": "src/lib/mind/kimi/runtime-capabilities.ts; src/lib/mind/kimi/phase4.server.ts; src/components/mind/build-workspace.tsx; src/components/mind/code-ide.tsx",
+      "recordUrl": "https://app.notion.com/p/4231aa27632381d99628f1d98fbeea1c?pvs=204",
+      "caseReports": {
+        "files": [],
+        "lookup": "Exact-head CI logs and named source fixtures must be checked individually; case-level proof has not yet been recorded."
+      },
+      "nextCheck": "Resolve the exact combined test for this record from its committed source evidence and execute its acceptance path before closure."
     },
     {
       "finding": "C1/AA-037",
@@ -295,7 +636,16 @@
       "expected": "Existing-file writes require a reviewed revision; creates explicitly require the destination to be absent.",
       "implementation": "src/lib/mind/kimi/account-workspace.ts; src/lib/mind/kimi/hosted-files.server.ts; src/components/mind/build-workspace.tsx; src/components/mind/owner-flow.tsx",
       "regression": "Account SQL and hosted filesystem fixtures reject missing/stale revisions and duplicate creates; reviewed saves succeed.",
-      "disposition": "Combined verification pending"
+      "disposition": "Combined verification pending",
+      "sourceDisposition": "fixed and tested",
+      "sourceLimits": "Preserve distinct shared-file regressions during integration; native companion not modified.",
+      "sourceFiles": "src/lib/mind/kimi/account-workspace.ts; src/lib/mind/kimi/hosted-files.server.ts; src/components/mind/build-workspace.tsx; src/components/mind/owner-flow.tsx",
+      "recordUrl": "https://app.notion.com/p/4231aa27632381d99628f1d98fbeea1c?pvs=204",
+      "caseReports": {
+        "files": [],
+        "lookup": "Exact-head CI logs and named source fixtures must be checked individually; case-level proof has not yet been recorded."
+      },
+      "nextCheck": "Resolve the exact combined test for this record from its committed source evidence and execute its acceptance path before closure."
     },
     {
       "finding": "C1/AA-038",
@@ -303,7 +653,16 @@
       "expected": "Delete/rename bind exact reviewed source revision and never overwrite an unexpected destination.",
       "implementation": "src/lib/mind/kimi/account-workspace.ts; src/lib/mind/kimi/hosted-files.server.ts; src/components/mind/build-workspace.tsx",
       "regression": "Account/hosted normal, stale/missing revision and destination-conflict fixtures.",
-      "disposition": "Combined verification pending"
+      "disposition": "Combined verification pending",
+      "sourceDisposition": "fixed and tested",
+      "sourceLimits": "Paired native implementation still needs a physical protocol check.",
+      "sourceFiles": "src/lib/mind/kimi/account-workspace.ts; src/lib/mind/kimi/hosted-files.server.ts; src/components/mind/build-workspace.tsx",
+      "recordUrl": "https://app.notion.com/p/4231aa27632381d99628f1d98fbeea1c?pvs=204",
+      "caseReports": {
+        "files": [],
+        "lookup": "Exact-head CI logs and named source fixtures must be checked individually; case-level proof has not yet been recorded."
+      },
+      "nextCheck": "Resolve the exact combined test for this record from its committed source evidence and execute its acceptance path before closure."
     },
     {
       "finding": "C1/AA-039",
@@ -311,7 +670,16 @@
       "expected": "A disk mutation followed by durable-save failure must report partial persistence and provide reviewed reconciliation.",
       "implementation": "src/lib/mind/kimi/hosted-files.server.ts; src/lib/mind/kimi/file-reconciliation.ts; src/lib/mind/kimi/persist.ts; src/components/mind/build-workspace.tsx",
       "regression": "Forced persistence failure returns 503/partial; stale reconciliation rejected; verified retry idempotent.",
-      "disposition": "Combined verification pending"
+      "disposition": "Combined verification pending",
+      "sourceDisposition": "fixed and tested",
+      "sourceLimits": "No cross-filesystem/database atomic transaction is claimed.",
+      "sourceFiles": "src/lib/mind/kimi/hosted-files.server.ts; src/lib/mind/kimi/file-reconciliation.ts; src/lib/mind/kimi/persist.ts; src/components/mind/build-workspace.tsx",
+      "recordUrl": "https://app.notion.com/p/4231aa27632381d99628f1d98fbeea1c?pvs=204",
+      "caseReports": {
+        "files": [],
+        "lookup": "Exact-head CI logs and named source fixtures must be checked individually; case-level proof has not yet been recorded."
+      },
+      "nextCheck": "Resolve the exact combined test for this record from its committed source evidence and execute its acceptance path before closure."
     },
     {
       "finding": "C1/AA-040",
@@ -319,7 +687,16 @@
       "expected": "Read-only listing cannot restore over newer disk content; recovery needs explicit reviewed intent.",
       "implementation": "src/lib/mind/kimi/persist.ts; src/lib/mind/kimi/hosted-files.server.ts; src/components/mind/build-workspace.tsx",
       "regression": "Hosted fixture: listing leaves newer file unchanged; preview writes nothing; reviewed recovery restores only missing files.",
-      "disposition": "Combined verification pending"
+      "disposition": "Combined verification pending",
+      "sourceDisposition": "fixed and tested",
+      "sourceLimits": "Production filesystem content was not inspected or restored.",
+      "sourceFiles": "src/lib/mind/kimi/persist.ts; src/lib/mind/kimi/hosted-files.server.ts; src/components/mind/build-workspace.tsx",
+      "recordUrl": "https://app.notion.com/p/4231aa27632381d99628f1d98fbeea1c?pvs=204",
+      "caseReports": {
+        "files": [],
+        "lookup": "Exact-head CI logs and named source fixtures must be checked individually; case-level proof has not yet been recorded."
+      },
+      "nextCheck": "Resolve the exact combined test for this record from its committed source evidence and execute its acceptance path before closure."
     },
     {
       "finding": "C1/AA-041",
@@ -327,7 +704,16 @@
       "expected": "Checkpoint errors must identify unsupported/denied/unreadable states instead of masquerading as an empty list.",
       "implementation": "src/lib/mind/kimi/runtime-capabilities.ts; src/components/mind/build-workspace.tsx; src/lib/mind/kimi/runtime-capabilities.test.ts",
       "regression": "Authorization/service/malformed/empty/nonempty response fixtures.",
-      "disposition": "Combined verification pending"
+      "disposition": "Combined verification pending",
+      "sourceDisposition": "fixed and tested",
+      "sourceLimits": "A real hosted checkpoint recovery was not executed.",
+      "sourceFiles": "src/lib/mind/kimi/runtime-capabilities.ts; src/components/mind/build-workspace.tsx; src/lib/mind/kimi/runtime-capabilities.test.ts",
+      "recordUrl": "https://app.notion.com/p/4231aa27632381d99628f1d98fbeea1c?pvs=204",
+      "caseReports": {
+        "files": [],
+        "lookup": "Exact-head CI logs and named source fixtures must be checked individually; case-level proof has not yet been recorded."
+      },
+      "nextCheck": "Resolve the exact combined test for this record from its committed source evidence and execute its acceptance path before closure."
     },
     {
       "finding": "C1/AA-042",
@@ -335,7 +721,16 @@
       "expected": "Large nested file trees and search results remain reachable through bounded navigation.",
       "implementation": "src/components/mind/code-ide.tsx; src/components/mind/build-workspace.tsx; src/lib/mind/kimi/code-navigation.ts; src/lib/mind/kimi/code-navigation.test.ts",
       "regression": "Runtime lane: 3/3 actual parser/decoy/stale-buffer/workspace fixtures; connector file-navigation tests and browser QA evidence in lane docs.",
-      "disposition": "Combined verification pending"
+      "disposition": "Combined verification pending",
+      "sourceDisposition": "fixed and tested",
+      "sourceLimits": "Whole-project semantic graph/index is a broader proposal, not claimed by the bounded per-file navigation implementation.",
+      "sourceFiles": "src/components/mind/code-ide.tsx; src/components/mind/build-workspace.tsx; src/lib/mind/kimi/code-navigation.ts; src/lib/mind/kimi/code-navigation.test.ts",
+      "recordUrl": "https://app.notion.com/p/4231aa27632381d99628f1d98fbeea1c?pvs=204",
+      "caseReports": {
+        "files": [],
+        "lookup": "Exact-head CI logs and named source fixtures must be checked individually; case-level proof has not yet been recorded."
+      },
+      "nextCheck": "Resolve the exact combined test for this record from its committed source evidence and execute its acceptance path before closure."
     },
     {
       "finding": "C1/AA-043",
@@ -343,7 +738,16 @@
       "expected": "Website coordination persists across processes instead of relying on one server filesystem.",
       "implementation": "src/lib/mind/pc-pairing/coordination.server.ts; src/lib/mind/pc-pairing/store.ts; src/routes/api/mind/pc/*; migrations/0020_c1_device_coordination.sql",
       "regression": "Runtime PGlite AA043–049 shared-device queue and owner isolation fixture.",
-      "disposition": "Combined verification pending"
+      "disposition": "Combined verification pending",
+      "sourceDisposition": "fixed and tested",
+      "sourceLimits": "Legacy production filesystem records are not imported automatically; operator must review a migration/retention plan. Native installers remain separate.",
+      "sourceFiles": "src/lib/mind/pc-pairing/coordination.server.ts; src/lib/mind/pc-pairing/store.ts; src/routes/api/mind/pc/*; migrations/0020_c1_device_coordination.sql",
+      "recordUrl": "https://app.notion.com/p/4231aa27632381f287e3e6e03345ff49?pvs=204",
+      "caseReports": {
+        "files": [],
+        "lookup": "Exact-head CI logs and named source fixtures must be checked individually; case-level proof has not yet been recorded."
+      },
+      "nextCheck": "Resolve the exact combined test for this record from its committed source evidence and execute its acceptance path before closure."
     },
     {
       "finding": "C1/AA-044",
@@ -351,7 +755,16 @@
       "expected": "A cancellation request must not discard evidence that already accepted execution succeeded later.",
       "implementation": "src/lib/mind/pc-pairing/store.ts; src/lib/mind/pc-pairing/coordination.server.ts; src/routes/api/mind/pc/result.ts",
       "regression": "Runtime durable device and pairing fixtures retain late success after cancellation.",
-      "disposition": "Combined verification pending"
+      "disposition": "Combined verification pending",
+      "sourceDisposition": "fixed and tested",
+      "sourceLimits": "Physical companion delivery and actual external side effects remain unverified.",
+      "sourceFiles": "src/lib/mind/pc-pairing/store.ts; src/lib/mind/pc-pairing/coordination.server.ts; src/routes/api/mind/pc/result.ts",
+      "recordUrl": "https://app.notion.com/p/4231aa27632381f287e3e6e03345ff49?pvs=204",
+      "caseReports": {
+        "files": [],
+        "lookup": "Exact-head CI logs and named source fixtures must be checked individually; case-level proof has not yet been recorded."
+      },
+      "nextCheck": "Resolve the exact combined test for this record from its committed source evidence and execute its acceptance path before closure."
     },
     {
       "finding": "C1/AA-045",
@@ -359,7 +772,16 @@
       "expected": "Timeout must remain distinct from final execution outcome and accept later authenticated reconciliation.",
       "implementation": "src/lib/mind/pc-pairing/store.ts; src/lib/mind/pc-pairing/run.ts; src/lib/mind/pc-pairing/coordination.server.ts",
       "regression": "Runtime shared queue fixture verifies late result/owner/history behavior.",
-      "disposition": "Combined verification pending"
+      "disposition": "Combined verification pending",
+      "sourceDisposition": "fixed and tested",
+      "sourceLimits": "No live PC command or timeout was triggered.",
+      "sourceFiles": "src/lib/mind/pc-pairing/store.ts; src/lib/mind/pc-pairing/run.ts; src/lib/mind/pc-pairing/coordination.server.ts",
+      "recordUrl": "https://app.notion.com/p/4231aa27632381f287e3e6e03345ff49?pvs=204",
+      "caseReports": {
+        "files": [],
+        "lookup": "Exact-head CI logs and named source fixtures must be checked individually; case-level proof has not yet been recorded."
+      },
+      "nextCheck": "Resolve the exact combined test for this record from its committed source evidence and execute its acceptance path before closure."
     },
     {
       "finding": "C1/AA-046",
@@ -367,7 +789,16 @@
       "expected": "A visible/online PC is not necessarily ready for the requested runtime capability.",
       "implementation": "src/lib/mind/pc-pairing/store.ts; src/lib/mind/pc-pairing/coordination.server.ts; src/lib/mind/kimi/runtime-capabilities.ts",
       "regression": "Runtime/connector manifest and runtime matrix fixtures.",
-      "disposition": "Combined verification pending"
+      "disposition": "Combined verification pending",
+      "sourceDisposition": "fixed and tested",
+      "sourceLimits": "Native agent capability advertisement requires a separate companion release verification.",
+      "sourceFiles": "src/lib/mind/pc-pairing/store.ts; src/lib/mind/pc-pairing/coordination.server.ts; src/lib/mind/kimi/runtime-capabilities.ts",
+      "recordUrl": "https://app.notion.com/p/4231aa27632381f287e3e6e03345ff49?pvs=204",
+      "caseReports": {
+        "files": [],
+        "lookup": "Exact-head CI logs and named source fixtures must be checked individually; case-level proof has not yet been recorded."
+      },
+      "nextCheck": "Resolve the exact combined test for this record from its committed source evidence and execute its acceptance path before closure."
     },
     {
       "finding": "C1/AA-047",
@@ -375,7 +806,16 @@
       "expected": "Default file dispatch must not silently choose an arbitrary paired device.",
       "implementation": "src/lib/mind/pc-pairing/run.ts; src/lib/mind/kimi/phase4.server.ts; src/lib/mind/mcp/tools.ts",
       "regression": "Runtime pairing and connector capability fixtures cover selection ambiguity.",
-      "disposition": "Combined verification pending"
+      "disposition": "Combined verification pending",
+      "sourceDisposition": "fixed and tested",
+      "sourceLimits": "No production device selection was changed.",
+      "sourceFiles": "src/lib/mind/pc-pairing/run.ts; src/lib/mind/kimi/phase4.server.ts; src/lib/mind/mcp/tools.ts",
+      "recordUrl": "https://app.notion.com/p/4231aa27632381f287e3e6e03345ff49?pvs=204",
+      "caseReports": {
+        "files": [],
+        "lookup": "Exact-head CI logs and named source fixtures must be checked individually; case-level proof has not yet been recorded."
+      },
+      "nextCheck": "Resolve the exact combined test for this record from its committed source evidence and execute its acceptance path before closure."
     },
     {
       "finding": "C1/AA-048",
@@ -383,7 +823,16 @@
       "expected": "File protocol support must be advertised/versioned instead of inferred from polling.",
       "implementation": "src/lib/mind/pc-pairing/store.ts; src/lib/mind/pc-pairing/coordination.server.ts; src/routes/api/mind/pc/register.ts",
       "regression": "Runtime manifest/queue fixture and connector runtime matrix.",
-      "disposition": "Combined verification pending"
+      "disposition": "Combined verification pending",
+      "sourceDisposition": "fixed and tested",
+      "sourceLimits": "Verify a real compatible companion advertises the expected manifest before enabling that route.",
+      "sourceFiles": "src/lib/mind/pc-pairing/store.ts; src/lib/mind/pc-pairing/coordination.server.ts; src/routes/api/mind/pc/register.ts",
+      "recordUrl": "https://app.notion.com/p/4231aa27632381f287e3e6e03345ff49?pvs=204",
+      "caseReports": {
+        "files": [],
+        "lookup": "Exact-head CI logs and named source fixtures must be checked individually; case-level proof has not yet been recorded."
+      },
+      "nextCheck": "Resolve the exact combined test for this record from its committed source evidence and execute its acceptance path before closure."
     },
     {
       "finding": "C1/AA-049",
@@ -391,7 +840,16 @@
       "expected": "Paired-device history must be bounded/indexed and owner-scoped as it grows.",
       "implementation": "src/lib/mind/pc-pairing/coordination.server.ts; src/routes/api/mind/pc/events.ts; migrations/0020_c1_device_coordination.sql",
       "regression": "Runtime PGlite indexed history/owner separation fixture.",
-      "disposition": "Combined verification pending"
+      "disposition": "Combined verification pending",
+      "sourceDisposition": "fixed and tested",
+      "sourceLimits": "Production-scale query/load performance and legacy import remain release operations.",
+      "sourceFiles": "src/lib/mind/pc-pairing/coordination.server.ts; src/routes/api/mind/pc/events.ts; migrations/0020_c1_device_coordination.sql",
+      "recordUrl": "https://app.notion.com/p/4231aa27632381f287e3e6e03345ff49?pvs=204",
+      "caseReports": {
+        "files": [],
+        "lookup": "Exact-head CI logs and named source fixtures must be checked individually; case-level proof has not yet been recorded."
+      },
+      "nextCheck": "Resolve the exact combined test for this record from its committed source evidence and execute its acceptance path before closure."
     },
     {
       "finding": "C1/AA-050",
@@ -399,7 +857,18 @@
       "expected": "Switching chats preserves each conversation reading position and follow/detached intent.",
       "implementation": "src/components/mind/command-app.tsx; src/lib/mind/reading-position.ts; src/lib/mind/reading-position.test.ts",
       "regression": "reading-position.test.ts 3/3; actual Chromium long-chat-reading-position fixture passed with real wheel input and exact A→B→A restoration.",
-      "disposition": "Combined verification pending"
+      "disposition": "Combined verification pending",
+      "sourceDisposition": "fixed and tested",
+      "sourceLimits": "Local synthetic Chromium proof; physical mobile scrolling remains unverified.",
+      "sourceFiles": "src/components/mind/command-app.tsx; src/lib/mind/reading-position.ts; src/lib/mind/reading-position.test.ts",
+      "recordUrl": "https://app.notion.com/p/4231aa27632381b19fa1fc1c1031fe5e?pvs=204",
+      "caseReports": {
+        "files": [
+          "src/lib/mind/reading-position.test.ts"
+        ],
+        "lookup": "Exact-head CI logs and named source fixtures must be checked individually; case-level proof has not yet been recorded."
+      },
+      "nextCheck": "Compare the named fixture cases and remaining source limits against this original acceptance. Live and physical evidence must be recorded separately when required."
     },
     {
       "finding": "C1/AA-051",
@@ -407,7 +876,18 @@
       "expected": "Auto-follow must respect upward reading and selected text while still following new output when requested.",
       "implementation": "src/components/mind/command-app.tsx; src/lib/mind/reading-position.ts; src/lib/mind/reading-position.test.ts",
       "regression": "reading-position.test.ts 3/3 plus real-wheel/streaming Chromium transitions passed. User wheel/touch/keyboard/selection intent is distinguished from layout clamping.",
-      "disposition": "Combined verification pending"
+      "disposition": "Combined verification pending",
+      "sourceDisposition": "fixed and tested",
+      "sourceLimits": "No physical input-device claim; selection is limited to this transcript.",
+      "sourceFiles": "src/components/mind/command-app.tsx; src/lib/mind/reading-position.ts; src/lib/mind/reading-position.test.ts",
+      "recordUrl": "https://app.notion.com/p/4231aa27632381b19fa1fc1c1031fe5e?pvs=204",
+      "caseReports": {
+        "files": [
+          "src/lib/mind/reading-position.test.ts"
+        ],
+        "lookup": "Exact-head CI logs and named source fixtures must be checked individually; case-level proof has not yet been recorded."
+      },
+      "nextCheck": "Compare the named fixture cases and remaining source limits against this original acceptance. Live and physical evidence must be recorded separately when required."
     },
     {
       "finding": "C1/AA-052",
@@ -415,7 +895,16 @@
       "expected": "Streaming and completed replies should use the same structured renderer to avoid a completion layout jump.",
       "implementation": "src/components/mind/command-app.tsx; src/components/mind/message-body.tsx",
       "regression": "Actual Chromium stream-to-markdown-tail fixture passed: synthetic ReadableStream rendered the shared Markdown component and remained at the tail after completion.",
-      "disposition": "Combined verification pending"
+      "disposition": "Combined verification pending",
+      "sourceDisposition": "fixed and tested",
+      "sourceLimits": "Synthetic provider receipt only; no live model or network-stream reliability claim.",
+      "sourceFiles": "src/components/mind/command-app.tsx; src/components/mind/message-body.tsx",
+      "recordUrl": "https://app.notion.com/p/4231aa27632381b19fa1fc1c1031fe5e?pvs=204",
+      "caseReports": {
+        "files": [],
+        "lookup": "Exact-head CI logs and named source fixtures must be checked individually; case-level proof has not yet been recorded."
+      },
+      "nextCheck": "Resolve the exact combined test for this record from its committed source evidence and execute its acceptance path before closure."
     },
     {
       "finding": "C1/AA-053",
@@ -423,7 +912,16 @@
       "expected": "Mobile primary navigation exposes its selected destination to assistive technology.",
       "implementation": "src/components/mind/command-app.tsx; scripts/visual/destinations.mjs; scripts/visual/audit.mjs",
       "regression": "Actual hydrated mobile drawer current-page/focus fixture passed; selected Projects button has aria-current=page. Both primary navigation implementations carry the attribute in source.",
-      "disposition": "Combined verification pending"
+      "disposition": "Combined verification pending",
+      "sourceDisposition": "fixed and tested",
+      "sourceLimits": "The existing mobile shell hides its legacy bottom nav; the visible drawer was tested. No claim that hidden controls were clicked.",
+      "sourceFiles": "src/components/mind/command-app.tsx; scripts/visual/destinations.mjs; scripts/visual/audit.mjs",
+      "recordUrl": "https://app.notion.com/p/4231aa27632381b19fa1fc1c1031fe5e?pvs=204",
+      "caseReports": {
+        "files": [],
+        "lookup": "Exact-head CI logs and named source fixtures must be checked individually; case-level proof has not yet been recorded."
+      },
+      "nextCheck": "Resolve the exact combined test for this record from its committed source evidence and execute its acceptance path before closure."
     },
     {
       "finding": "C1/AA-054",
@@ -431,7 +929,16 @@
       "expected": "One scoped drawer stylesheet owns theme, geometry, motion and responsive presentation.",
       "implementation": "src/components/mind/command-app.tsx; src/components/mind/command-drawer-nav.css",
       "regression": "Actual mobile drawer focus/Tab/Escape restoration and light/dark persistence passed; reduced-motion and resize-to-desktop cleanup passed in the extended fixture.",
-      "disposition": "Combined verification pending"
+      "disposition": "Combined verification pending",
+      "sourceDisposition": "fixed and tested",
+      "sourceLimits": "Emulated Chromium viewport; no physical iOS/Safari/PWA claim.",
+      "sourceFiles": "src/components/mind/command-app.tsx; src/components/mind/command-drawer-nav.css",
+      "recordUrl": "https://app.notion.com/p/4231aa27632381b19fa1fc1c1031fe5e?pvs=204",
+      "caseReports": {
+        "files": [],
+        "lookup": "Exact-head CI logs and named source fixtures must be checked individually; case-level proof has not yet been recorded."
+      },
+      "nextCheck": "Resolve the exact combined test for this record from its committed source evidence and execute its acceptance path before closure."
     },
     {
       "finding": "C1/AA-055",
@@ -439,7 +946,18 @@
       "expected": "Returning to a workspace page restores its prior reading context rather than always scrolling to top.",
       "implementation": "src/lib/mind/use-view-scroll-position.ts; src/components/mind/command-app.tsx; src/components/mind/view-scroll-position.test.ts",
       "regression": "view-scroll-position.test.ts 2/2 mounted React cases plus actual Chromium Settings Data→Projects→Data restores exact1600px after async content. Pending restore cancels on real user input; owner/pane boundaries verified.",
-      "disposition": "Combined verification pending"
+      "disposition": "Combined verification pending",
+      "sourceDisposition": "fixed and tested",
+      "sourceLimits": "Physical Safari/PWA not tested. Restoring observes pending content only until the saved position becomes available or genuine user input cancels it.",
+      "sourceFiles": "src/lib/mind/use-view-scroll-position.ts; src/components/mind/command-app.tsx; src/components/mind/view-scroll-position.test.ts",
+      "recordUrl": "https://app.notion.com/p/4231aa27632381b19fa1fc1c1031fe5e?pvs=204",
+      "caseReports": {
+        "files": [
+          "src/components/mind/view-scroll-position.test.ts"
+        ],
+        "lookup": "Exact-head CI logs and named source fixtures must be checked individually; case-level proof has not yet been recorded."
+      },
+      "nextCheck": "Compare the named fixture cases and remaining source limits against this original acceptance. Live and physical evidence must be recorded separately when required."
     },
     {
       "finding": "C1/AA-056",
@@ -447,7 +965,18 @@
       "expected": "Credential fallback cannot change authenticated identity when another credential already established a different subject.",
       "implementation": "src/lib/auth/identity-continuity.ts; src/lib/auth/verify.server.ts; src/lib/auth/identity-continuity.test.ts",
       "regression": "identity-continuity.test.ts passed; local preview auth-invariant gate passed with sign-in disabled matching resolved build configuration.",
-      "disposition": "Combined verification pending"
+      "disposition": "Combined verification pending",
+      "sourceDisposition": "fixed and tested",
+      "sourceLimits": "No real authentication account or session was changed.",
+      "sourceFiles": "src/lib/auth/identity-continuity.ts; src/lib/auth/verify.server.ts; src/lib/auth/identity-continuity.test.ts",
+      "recordUrl": "https://app.notion.com/p/4231aa276323815f9afdfa12c46c4c5a?pvs=204",
+      "caseReports": {
+        "files": [
+          "src/lib/auth/identity-continuity.test.ts"
+        ],
+        "lookup": "Exact-head CI logs and named source fixtures must be checked individually; case-level proof has not yet been recorded."
+      },
+      "nextCheck": "Compare the named fixture cases and remaining source limits against this original acceptance. Live and physical evidence must be recorded separately when required."
     },
     {
       "finding": "C1/AA-057",
@@ -455,7 +984,16 @@
       "expected": "Emergency-stop updates accept only a strict boolean and resume binds the observed stop revision.",
       "implementation": "src/lib/mind/halt.server.ts; src/lib/mind/server.ts; src/lib/mind/c1-runtime-regressions.test.ts; src/lib/mind/c1-durable-runtime.test.ts",
       "regression": "Runtime 84/84 includes malformed input; added eighth PGlite case covers resume CAS and audit.",
-      "disposition": "Combined verification pending"
+      "disposition": "Combined verification pending",
+      "sourceDisposition": "fixed and tested",
+      "sourceLimits": "Root must record the final result of the new eighth PGlite case in full-branch results.",
+      "sourceFiles": "src/lib/mind/halt.server.ts; src/lib/mind/server.ts; src/lib/mind/c1-runtime-regressions.test.ts; src/lib/mind/c1-durable-runtime.test.ts",
+      "recordUrl": "https://app.notion.com/p/4231aa276323815f9afdfa12c46c4c5a?pvs=204",
+      "caseReports": {
+        "files": [],
+        "lookup": "Exact-head CI logs and named source fixtures must be checked individually; case-level proof has not yet been recorded."
+      },
+      "nextCheck": "Resolve the exact combined test for this record from its committed source evidence and execute its acceptance path before closure."
     },
     {
       "finding": "C1/AA-058",
@@ -463,7 +1001,16 @@
       "expected": "Status distinguishes browser-local stop request, confirmed durable stop and unavailable authority.",
       "implementation": "src/lib/mind/halt.server.ts; src/lib/mind/server.ts; src/components/mind/command-app.tsx",
       "regression": "Runtime halt tests plus stop-state PGlite CAS fixture; UI mapping inspected.",
-      "disposition": "Combined verification pending"
+      "disposition": "Combined verification pending",
+      "sourceDisposition": "fixed and tested",
+      "sourceLimits": "A stop cannot undo work already accepted by an external service.",
+      "sourceFiles": "src/lib/mind/halt.server.ts; src/lib/mind/server.ts; src/components/mind/command-app.tsx",
+      "recordUrl": "https://app.notion.com/p/4231aa276323815f9afdfa12c46c4c5a?pvs=204",
+      "caseReports": {
+        "files": [],
+        "lookup": "Exact-head CI logs and named source fixtures must be checked individually; case-level proof has not yet been recorded."
+      },
+      "nextCheck": "Resolve the exact combined test for this record from its committed source evidence and execute its acceptance path before closure."
     },
     {
       "finding": "C1/AA-059",
@@ -471,7 +1018,16 @@
       "expected": "Current authoritative stop/permission state must be checked immediately before every external dispatch, including later agent steps.",
       "implementation": "src/lib/mind/external-resource-call.server.ts; src/lib/mind/turn.server.ts; src/lib/mind/agent-run.server.ts; src/lib/mind/kimi/hosted/resource-dispatch.server.ts; src/lib/mind/voice/http.server.ts",
       "regression": "Runtime dispatch/agent recheck tests and connector mid-discovery halt regression; cross-route exact coverage belongs in final inventory.",
-      "disposition": "Combined verification pending"
+      "disposition": "Combined verification pending",
+      "sourceDisposition": "fixed and tested",
+      "sourceLimits": "Do not infer a distributed external cancellation guarantee from a dispatch gate.",
+      "sourceFiles": "src/lib/mind/external-resource-call.server.ts; src/lib/mind/turn.server.ts; src/lib/mind/agent-run.server.ts; src/lib/mind/kimi/hosted/resource-dispatch.server.ts; src/lib/mind/voice/http.server.ts",
+      "recordUrl": "https://app.notion.com/p/4231aa276323815f9afdfa12c46c4c5a?pvs=204",
+      "caseReports": {
+        "files": [],
+        "lookup": "Exact-head CI logs and named source fixtures must be checked individually; case-level proof has not yet been recorded."
+      },
+      "nextCheck": "Resolve the exact combined test for this record from its committed source evidence and execute its acceptance path before closure."
     },
     {
       "finding": "C1/AA-060",
@@ -479,7 +1035,16 @@
       "expected": "Every direct endpoint and RPC has an explicit transport-specific owner/origin/credential contract.",
       "implementation": "scripts/security/endpoint-inventory.mjs; scripts/security/endpoint-inventory.json; docs/verification/endpoint-security.md; src/lib/auth/middleware.ts; src/lib/supabase/actions.ts; src/lib/mind/owner-keys-fns.ts; src/lib/mind/pairing/pairing.server.ts; src/routes/api/mind/pc/status.ts",
       "regression": "9/9 inventory/request-isolation tests passed; included in 77/77 combined recovery batch. Exact guard-source paths appear in the inventory.",
-      "disposition": "Combined verification pending"
+      "disposition": "Combined verification pending",
+      "sourceDisposition": "fixed and tested",
+      "sourceLimits": "Static guard contracts are not live penetration testing. Preserve explicit public and native/OAuth exceptions when adding endpoints.",
+      "sourceFiles": "scripts/security/endpoint-inventory.mjs; scripts/security/endpoint-inventory.json; docs/verification/endpoint-security.md; src/lib/auth/middleware.ts; src/lib/supabase/actions.ts; src/lib/mind/owner-keys-fns.ts; src/lib/mind/pairing/pairing.server.ts; src/routes/api/mind/pc/status.ts",
+      "recordUrl": "https://app.notion.com/p/4231aa276323815f9afdfa12c46c4c5a?pvs=204",
+      "caseReports": {
+        "files": [],
+        "lookup": "Exact-head CI logs and named source fixtures must be checked individually; case-level proof has not yet been recorded."
+      },
+      "nextCheck": "Resolve the exact combined test for this record from its committed source evidence and execute its acceptance path before closure."
     },
     {
       "finding": "C1/AA-061",
@@ -495,7 +1060,16 @@
         "result": "passed",
         "observed": "ordinary response and temporary retention, owner isolation, cancellation before delayed transport",
         "limits": "Fixture establishes the stored response and its operation state. End-to-end authenticated replay is pending."
-      }
+      },
+      "sourceDisposition": "fixed and tested",
+      "sourceLimits": "Live provider loss/recovery not exercised; ambiguous external receipt remains ambiguous.",
+      "sourceFiles": "src/lib/mind/turn-recovery.ts; src/lib/mind/turn.server.ts; src/lib/mind/c1-durable-runtime.test.ts; migrations/0018_c1_resource_authority.sql",
+      "recordUrl": "https://app.notion.com/p/4231aa276323815f9afdfa12c46c4c5a?pvs=204",
+      "caseReports": {
+        "files": [],
+        "lookup": "Exact-head CI logs and named source fixtures must be checked individually; case-level proof has not yet been recorded."
+      },
+      "nextCheck": "Resolve the exact combined test for this record from its committed source evidence and execute its acceptance path before closure."
     },
     {
       "finding": "C1/AA-062",
@@ -503,7 +1077,16 @@
       "expected": "Latest streaming text should not repeatedly rerender completed message bodies.",
       "implementation": "src/components/mind/stable-message-body.ts; src/components/mind/command-app.tsx; src/components/mind/message-rendering.test.ts",
       "regression": "Runtime lane actual mounted React fixture: 20 live updates do not reparse historical splitBlocks; real content edit reparses; action uses newest callback.",
-      "disposition": "Combined verification pending"
+      "disposition": "Combined verification pending",
+      "sourceDisposition": "fixed and tested",
+      "sourceLimits": "Large-browser performance depends on actual data/device. This fixture verifies the production component boundary, not production timing.",
+      "sourceFiles": "src/components/mind/stable-message-body.ts; src/components/mind/command-app.tsx; src/components/mind/message-rendering.test.ts",
+      "recordUrl": "https://app.notion.com/p/4231aa276323811985e2cac3d3a06889?pvs=204",
+      "caseReports": {
+        "files": [],
+        "lookup": "Exact-head CI logs and named source fixtures must be checked individually; case-level proof has not yet been recorded."
+      },
+      "nextCheck": "Resolve the exact combined test for this record from its committed source evidence and execute its acceptance path before closure."
     },
     {
       "finding": "C1/AA-063",
@@ -511,7 +1094,16 @@
       "expected": "Long conversations progressively mount messages while preserving all data, selection, links and accessibility.",
       "implementation": "src/lib/mind/reading-position.ts; src/components/mind/command-app.tsx; src/lib/mind/reading-position.test.ts",
       "regression": "Actual Chromium initially rendered 80/180 messages, loaded 160, then revealed/focused the oldest hidden message; source messages remained retained.",
-      "disposition": "Combined verification pending"
+      "disposition": "Combined verification pending",
+      "sourceDisposition": "fixed and tested",
+      "sourceLimits": "This is bounded windowing with explicit earlier loading, not variable-height virtualization of every rendered message.",
+      "sourceFiles": "src/lib/mind/reading-position.ts; src/components/mind/command-app.tsx; src/lib/mind/reading-position.test.ts",
+      "recordUrl": "https://app.notion.com/p/4231aa276323811985e2cac3d3a06889?pvs=204",
+      "caseReports": {
+        "files": [],
+        "lookup": "Exact-head CI logs and named source fixtures must be checked individually; case-level proof has not yet been recorded."
+      },
+      "nextCheck": "Resolve the exact combined test for this record from its committed source evidence and execute its acceptance path before closure."
     },
     {
       "finding": "C1/AA-064",
@@ -519,7 +1111,16 @@
       "expected": "Storage-size display should not serialize the whole workspace while unrelated UI is active.",
       "implementation": "src/lib/mind/workspace-metrics.ts; src/components/mind/command-app.tsx; src/components/mind/message-rendering.test.ts",
       "regression": "Runtime lane actual mounted React serialization-count fixture; two combined component performance tests passed.",
-      "disposition": "Combined verification pending"
+      "disposition": "Combined verification pending",
+      "sourceDisposition": "fixed and tested",
+      "sourceLimits": "Figure explicitly excludes draft/separate binary stores and is not total disk usage.",
+      "sourceFiles": "src/lib/mind/workspace-metrics.ts; src/components/mind/command-app.tsx; src/components/mind/message-rendering.test.ts",
+      "recordUrl": "https://app.notion.com/p/4231aa276323811985e2cac3d3a06889?pvs=204",
+      "caseReports": {
+        "files": [],
+        "lookup": "Exact-head CI logs and named source fixtures must be checked individually; case-level proof has not yet been recorded."
+      },
+      "nextCheck": "Resolve the exact combined test for this record from its committed source evidence and execute its acceptance path before closure."
     },
     {
       "finding": "C1/AA-065",
@@ -527,7 +1128,16 @@
       "expected": "Network/database persistence processes changed records instead of rewriting every mirror on every save.",
       "implementation": "src/lib/mind/workspace-delta.ts; src/lib/mind/store.ts; src/lib/mind/use-mind-workspace.ts",
       "regression": "Privacy lane 48/48 includes mutation-scope capture, large workspace small update and batch/resume; shares the AA013 implementation without omitting this finding.",
-      "disposition": "Combined verification pending"
+      "disposition": "Combined verification pending",
+      "sourceDisposition": "fixed and tested",
+      "sourceLimits": "Full compatibility snapshot and browser checkpoint serialization still exist. Fully paginated records are a subsequent migration proposal.",
+      "sourceFiles": "src/lib/mind/workspace-delta.ts; src/lib/mind/store.ts; src/lib/mind/use-mind-workspace.ts",
+      "recordUrl": "https://app.notion.com/p/4231aa276323811985e2cac3d3a06889?pvs=204",
+      "caseReports": {
+        "files": [],
+        "lookup": "Exact-head CI logs and named source fixtures must be checked individually; case-level proof has not yet been recorded."
+      },
+      "nextCheck": "Resolve the exact combined test for this record from its committed source evidence and execute its acceptance path before closure."
     },
     {
       "finding": "C1/AA-066",
@@ -535,7 +1145,18 @@
       "expected": "Presentation timers update only the visible component that displays elapsed time.",
       "implementation": "src/components/mind/elapsed-time.tsx; src/components/mind/command-app.tsx; src/components/mind/dictation-pill.tsx; src/components/mind/owner-flow.tsx",
       "regression": "browser-work-pump.test.ts 3/3 includes visibility-aware clock stop/resume and no retained intervals; production ElapsedTime/ChatPane subscribe to the tested clock.",
-      "disposition": "Combined verification pending"
+      "disposition": "Combined verification pending",
+      "sourceDisposition": "fixed and tested",
+      "sourceLimits": "A 30-second general status refresh remains; no one-second recording timer drives CommandApp.",
+      "sourceFiles": "src/components/mind/elapsed-time.tsx; src/components/mind/command-app.tsx; src/components/mind/dictation-pill.tsx; src/components/mind/owner-flow.tsx",
+      "recordUrl": "https://app.notion.com/p/4231aa276323811985e2cac3d3a06889?pvs=204",
+      "caseReports": {
+        "files": [
+          "src/lib/mind/browser-work-pump.test.ts"
+        ],
+        "lookup": "Exact-head CI logs and named source fixtures must be checked individually; case-level proof has not yet been recorded."
+      },
+      "nextCheck": "Compare the named fixture cases and remaining source limits against this original acceptance. Live and physical evidence must be recorded separately when required."
     },
     {
       "finding": "C1/AA-067",
@@ -543,7 +1164,16 @@
       "expected": "Heavy optional features load behind explicit boundaries while essential navigation/chat remain available.",
       "implementation": "src/components/mind/command-app.tsx; src/components/mind/stable-message-body.ts",
       "regression": "Direct Vite production bundle passed and emitted separate Build/Voice Studio chunks; actual Chromium lazy-build-and-voice entry fixture passed.",
-      "disposition": "Combined verification pending"
+      "disposition": "Combined verification pending",
+      "sourceDisposition": "fixed and tested",
+      "sourceLimits": "No deployment; native/runtime initialization and physical-device performance are not established.",
+      "sourceFiles": "src/components/mind/command-app.tsx; src/components/mind/stable-message-body.ts",
+      "recordUrl": "https://app.notion.com/p/4231aa276323811985e2cac3d3a06889?pvs=204",
+      "caseReports": {
+        "files": [],
+        "lookup": "Exact-head CI logs and named source fixtures must be checked individually; case-level proof has not yet been recorded."
+      },
+      "nextCheck": "Resolve the exact combined test for this record from its committed source evidence and execute its acceptance path before closure."
     },
     {
       "finding": "C1/AA-068",
@@ -551,7 +1181,18 @@
       "expected": "New authorized queued work starts from an event, with periodic reconciliation as fallback.",
       "implementation": "src/components/mind/command-app.tsx; src/lib/mind/worker-pass.ts; src/lib/mind/browser-work-pump.ts; src/lib/mind/browser-work-pump.test.ts",
       "regression": "browser-work-pump.test.ts 3/3: actual Fleet tick dispatches on queued wake without waiting2 seconds, coalesces bursts, and disposes stale owner/visibility subscriptions.",
-      "disposition": "Combined verification pending"
+      "disposition": "Combined verification pending",
+      "sourceDisposition": "fixed and tested",
+      "sourceLimits": "Reconciliation heartbeat remains2 seconds; the helper does not claim browser-closed execution.",
+      "sourceFiles": "src/components/mind/command-app.tsx; src/lib/mind/worker-pass.ts; src/lib/mind/browser-work-pump.ts; src/lib/mind/browser-work-pump.test.ts",
+      "recordUrl": "https://app.notion.com/p/4231aa276323811985e2cac3d3a06889?pvs=204",
+      "caseReports": {
+        "files": [
+          "src/lib/mind/browser-work-pump.test.ts"
+        ],
+        "lookup": "Exact-head CI logs and named source fixtures must be checked individually; case-level proof has not yet been recorded."
+      },
+      "nextCheck": "Compare the named fixture cases and remaining source limits against this original acceptance. Live and physical evidence must be recorded separately when required."
     },
     {
       "finding": "C1/AA-069",
@@ -559,7 +1200,18 @@
       "expected": "Machine failure code/subsystem/operation/provider/stage/retry/outcome control classification independently of display wording.",
       "implementation": "src/lib/mind/failure-envelope.ts; src/lib/mind/failure-states.ts; src/lib/mind/stream.ts; src/lib/mind/live-turn.ts; src/lib/mind/relay.ts; src/lib/mind/turn.server.ts; src/lib/mind/media/imagine-http.ts; src/lib/mind/voice/http.server.ts; src/components/mind/command-app.tsx",
       "regression": "failure-envelope.test.ts changed-wording/status/policy/actual HTTP+SSE fixtures; 77/77 combined targeted recovery tests passed.",
-      "disposition": "Combined verification pending"
+      "disposition": "Combined verification pending",
+      "sourceDisposition": "fixed and tested",
+      "sourceLimits": "Do not infer no remote effect from a generic HTTP failure. Resource/Free-only policies use review, halt uses never, permission repair requires a permission code.",
+      "sourceFiles": "src/lib/mind/failure-envelope.ts; src/lib/mind/failure-states.ts; src/lib/mind/stream.ts; src/lib/mind/live-turn.ts; src/lib/mind/relay.ts; src/lib/mind/turn.server.ts; src/lib/mind/media/imagine-http.ts; src/lib/mind/voice/http.server.ts; src/components/mind/command-app.tsx",
+      "recordUrl": "https://app.notion.com/p/4231aa27632381dda334ed147a51ab26?pvs=204",
+      "caseReports": {
+        "files": [
+          "src/lib/mind/failure-envelope.test.ts"
+        ],
+        "lookup": "Exact-head CI logs and named source fixtures must be checked individually; case-level proof has not yet been recorded."
+      },
+      "nextCheck": "Compare the named fixture cases and remaining source limits against this original acceptance. Live and physical evidence must be recorded separately when required."
     },
     {
       "finding": "C1/AA-070",
@@ -567,7 +1219,16 @@
       "expected": "Open incidents remain discoverable beyond activity retention and are scoped to the current account.",
       "implementation": "src/lib/mind/incidents.ts; src/components/mind/command-app.tsx; src/components/mind/incident-recovery-card.tsx",
       "regression": "250-open-incident retention, reload/account/privacy and actual card markup tests; combined 77/77 targeted pass.",
-      "disposition": "Combined verification pending"
+      "disposition": "Combined verification pending",
+      "sourceDisposition": "fixed and tested",
+      "sourceLimits": "Journal is browser/account-scoped. Account-wide cross-device incident synchronization is not claimed.",
+      "sourceFiles": "src/lib/mind/incidents.ts; src/components/mind/command-app.tsx; src/components/mind/incident-recovery-card.tsx",
+      "recordUrl": "https://app.notion.com/p/4231aa27632381dda334ed147a51ab26?pvs=204",
+      "caseReports": {
+        "files": [],
+        "lookup": "Exact-head CI logs and named source fixtures must be checked individually; case-level proof has not yet been recorded."
+      },
+      "nextCheck": "Resolve the exact combined test for this record from its committed source evidence and execute its acceptance path before closure."
     },
     {
       "finding": "C1/AA-071",
@@ -575,7 +1236,16 @@
       "expected": "Only exact verified recovery resolves an incident; unrelated success and acknowledgement remain distinct.",
       "implementation": "src/lib/mind/incidents.ts; src/components/mind/command-app.tsx",
       "regression": "Wrong operation/binding/missing check and unidentified-operation tests reject resolution; exact verified proof succeeds; 77/77 combined pass.",
-      "disposition": "Combined verification pending"
+      "disposition": "Combined verification pending",
+      "sourceDisposition": "fixed and tested",
+      "sourceLimits": "Uncertain operations remain open for inspection; no generic target-only success is presented as proof.",
+      "sourceFiles": "src/lib/mind/incidents.ts; src/components/mind/command-app.tsx",
+      "recordUrl": "https://app.notion.com/p/4231aa27632381dda334ed147a51ab26?pvs=204",
+      "caseReports": {
+        "files": [],
+        "lookup": "Exact-head CI logs and named source fixtures must be checked individually; case-level proof has not yet been recorded."
+      },
+      "nextCheck": "Resolve the exact combined test for this record from its committed source evidence and execute its acceptance path before closure."
     },
     {
       "finding": "C1/AA-072",
@@ -583,7 +1253,16 @@
       "expected": "Recovering state and attempt history survive retry failure without merging unrelated operations at one target.",
       "implementation": "src/lib/mind/incidents.ts; src/components/mind/command-app.tsx",
       "regression": "Same target/different operation and recovering→failed identity fixtures; 77/77 combined pass.",
-      "disposition": "Combined verification pending"
+      "disposition": "Combined verification pending",
+      "sourceDisposition": "fixed and tested",
+      "sourceLimits": "Actual in-session retry remains limited to safe read or original-send receipt policy; other actions reopen fresh review.",
+      "sourceFiles": "src/lib/mind/incidents.ts; src/components/mind/command-app.tsx",
+      "recordUrl": "https://app.notion.com/p/4231aa27632381dda334ed147a51ab26?pvs=204",
+      "caseReports": {
+        "files": [],
+        "lookup": "Exact-head CI logs and named source fixtures must be checked individually; case-level proof has not yet been recorded."
+      },
+      "nextCheck": "Resolve the exact combined test for this record from its committed source evidence and execute its acceptance path before closure."
     },
     {
       "finding": "C1/AA-073",
@@ -591,7 +1270,16 @@
       "expected": "Notion timeout wording must preserve uncertainty after a potentially accepted write.",
       "implementation": "src/lib/mind/notion-failure-action.ts; src/lib/mind/failure-states.ts; src/lib/mind/notion.ts; src/lib/mind/notion-operation-status.ts",
       "regression": "Connector adapter/operation-state fixtures; root normal suite must retain timeout classification checks.",
-      "disposition": "Combined verification pending"
+      "disposition": "Combined verification pending",
+      "sourceDisposition": "fixed and tested",
+      "sourceLimits": "No assertion that a real provider operation was or was not executed after timeout.",
+      "sourceFiles": "src/lib/mind/notion-failure-action.ts; src/lib/mind/failure-states.ts; src/lib/mind/notion.ts; src/lib/mind/notion-operation-status.ts",
+      "recordUrl": "https://app.notion.com/p/4231aa27632381dda334ed147a51ab26?pvs=204",
+      "caseReports": {
+        "files": [],
+        "lookup": "Exact-head CI logs and named source fixtures must be checked individually; case-level proof has not yet been recorded."
+      },
+      "nextCheck": "Resolve the exact combined test for this record from its committed source evidence and execute its acceptance path before closure."
     },
     {
       "finding": "C1/AA-074",
@@ -599,7 +1287,16 @@
       "expected": "Recovery plans survive reload with original destination and current authority checks but no old approval or sensitive body.",
       "implementation": "src/lib/mind/incidents.ts; src/lib/mind/failure-envelope.ts; src/components/mind/incident-recovery-card.tsx; src/components/mind/command-app.tsx",
       "regression": "Reload/private-payload stripping, owner/grant/destination/halt/wait/reauthentication, exact receipt replay and actual component render fixtures; 77/77 combined pass.",
-      "disposition": "Combined verification pending"
+      "disposition": "Combined verification pending",
+      "sourceDisposition": "fixed and tested",
+      "sourceLimits": "No automatic provider call, restored approval or cross-device journal is claimed. Completed receipt inspection and new dispatch authority remain separate.",
+      "sourceFiles": "src/lib/mind/incidents.ts; src/lib/mind/failure-envelope.ts; src/components/mind/incident-recovery-card.tsx; src/components/mind/command-app.tsx",
+      "recordUrl": "https://app.notion.com/p/4231aa27632381dda334ed147a51ab26?pvs=204",
+      "caseReports": {
+        "files": [],
+        "lookup": "Exact-head CI logs and named source fixtures must be checked individually; case-level proof has not yet been recorded."
+      },
+      "nextCheck": "Resolve the exact combined test for this record from its committed source evidence and execute its acceptance path before closure."
     },
     {
       "finding": "C1/AA-075",
@@ -607,7 +1304,16 @@
       "expected": "Ordinary project Chat can retrieve relevant explicitly permitted document passages with truthful source identity.",
       "implementation": "src/lib/mind/knowledge.ts; src/lib/mind/prompt.ts; src/lib/mind/memory/dispatch-policy.ts; src/components/mind/command-app.tsx",
       "regression": "Privacy lane knowledge tests: multiple relevant files, foreign-project exclusion, bounded context, exact slice/hash/name/coverage and revocation rejection.",
-      "disposition": "Combined verification pending"
+      "disposition": "Combined verification pending",
+      "sourceDisposition": "fixed and tested",
+      "sourceLimits": "Actual model citation use was not tested; other project conversations/research engines are not implicitly enabled.",
+      "sourceFiles": "src/lib/mind/knowledge.ts; src/lib/mind/prompt.ts; src/lib/mind/memory/dispatch-policy.ts; src/components/mind/command-app.tsx",
+      "recordUrl": "https://app.notion.com/p/4231aa27632381a8a514ca3d0e9b3a84?pvs=204",
+      "caseReports": {
+        "files": [],
+        "lookup": "Exact-head CI logs and named source fixtures must be checked individually; case-level proof has not yet been recorded."
+      },
+      "nextCheck": "Resolve the exact combined test for this record from its committed source evidence and execute its acceptance path before closure."
     },
     {
       "finding": "C1/AA-076",
@@ -615,7 +1321,16 @@
       "expected": "Project document permission is separate from personal memory and temporary chats remain protected.",
       "implementation": "src/lib/mind/workspace.ts; src/lib/mind/memory/context-policy.ts; src/lib/mind/knowledge.ts",
       "regression": "Privacy lane independent memory-off/document-on and temporary denial tests.",
-      "disposition": "Combined verification pending"
+      "disposition": "Combined verification pending",
+      "sourceDisposition": "fixed and tested",
+      "sourceLimits": "Retain explicit policy precedence when combining workspace/privacy branches.",
+      "sourceFiles": "src/lib/mind/workspace.ts; src/lib/mind/memory/context-policy.ts; src/lib/mind/knowledge.ts",
+      "recordUrl": "https://app.notion.com/p/4231aa27632381a8a514ca3d0e9b3a84?pvs=204",
+      "caseReports": {
+        "files": [],
+        "lookup": "Exact-head CI logs and named source fixtures must be checked individually; case-level proof has not yet been recorded."
+      },
+      "nextCheck": "Resolve the exact combined test for this record from its committed source evidence and execute its acceptance path before closure."
     },
     {
       "finding": "C1/AA-077",
@@ -623,7 +1338,16 @@
       "expected": "Original documents, searchable extraction and model context have separate storage/size policies.",
       "implementation": "src/lib/mind/document-originals.ts; src/lib/mind/knowledge-limits.ts; src/lib/mind/workspace.ts; src/components/mind/knowledge-settings.tsx; src/components/mind/command-app.tsx",
       "regression": "Privacy lane IDB fixture: owner separation, hash/read/delete, failure and size cap; >40k text and >40 records; original/extraction round trip.",
-      "disposition": "Combined verification pending"
+      "disposition": "Combined verification pending",
+      "sourceDisposition": "fixed and tested",
+      "sourceLimits": "Originals are browser-local; metadata/account JSON export is not binary cloud backup. Final legacy Files delete/excerpt consumer wiring must match shared semantics.",
+      "sourceFiles": "src/lib/mind/document-originals.ts; src/lib/mind/knowledge-limits.ts; src/lib/mind/workspace.ts; src/components/mind/knowledge-settings.tsx; src/components/mind/command-app.tsx",
+      "recordUrl": "https://app.notion.com/p/4231aa27632381a8a514ca3d0e9b3a84?pvs=204",
+      "caseReports": {
+        "files": [],
+        "lookup": "Exact-head CI logs and named source fixtures must be checked individually; case-level proof has not yet been recorded."
+      },
+      "nextCheck": "Resolve the exact combined test for this record from its committed source evidence and execute its acceptance path before closure."
     },
     {
       "finding": "C1/AA-078",
@@ -631,7 +1355,16 @@
       "expected": "Evidence identifies the exact original/extraction/revision and never pretends a partial extraction is a full document.",
       "implementation": "src/lib/mind/pdf-text.ts; src/lib/mind/knowledge.ts; src/lib/mind/types.ts; src/lib/mind/workspace.ts; src/lib/mind/document-originals.ts; src/components/mind/knowledge-settings.tsx; src/components/mind/command-app.tsx",
       "regression": "Runtime completion: 31/31 PDF/knowledge/original/render fixtures; actual PDF page offsets/checksum-bound retrieval and actual provenance markup.",
-      "disposition": "Combined verification pending"
+      "disposition": "Combined verification pending",
+      "sourceDisposition": "fixed and tested",
+      "sourceLimits": "Scanned/unsupported PDFs retain explicit unavailable/unknown evidence. OCR and external-provider citation correctness are not invented; no physical document/provider test is claimed.",
+      "sourceFiles": "src/lib/mind/pdf-text.ts; src/lib/mind/knowledge.ts; src/lib/mind/types.ts; src/lib/mind/workspace.ts; src/lib/mind/document-originals.ts; src/components/mind/knowledge-settings.tsx; src/components/mind/command-app.tsx",
+      "recordUrl": "https://app.notion.com/p/4231aa27632381a8a514ca3d0e9b3a84?pvs=204",
+      "caseReports": {
+        "files": [],
+        "lookup": "Exact-head CI logs and named source fixtures must be checked individually; case-level proof has not yet been recorded."
+      },
+      "nextCheck": "Resolve the exact combined test for this record from its committed source evidence and execute its acceptance path before closure."
     },
     {
       "finding": "C1/AA-079",
@@ -639,7 +1372,16 @@
       "expected": "Project archive/restore preserves associations; reviewed deletion reconciles all associated future execution without broadening notes.",
       "implementation": "src/lib/mind/workspace.ts; src/components/mind/knowledge-settings.tsx; src/lib/mind/fleet.ts",
       "regression": "Privacy lane relationship fixture plus actual KnowledgeSettings render check.",
-      "disposition": "Combined verification pending"
+      "disposition": "Combined verification pending",
+      "sourceDisposition": "fixed and tested",
+      "sourceLimits": "Root must ensure all legacy project deletion buttons call the shared lifecycle helper and active navigation treats archive consistently.",
+      "sourceFiles": "src/lib/mind/workspace.ts; src/components/mind/knowledge-settings.tsx; src/lib/mind/fleet.ts",
+      "recordUrl": "https://app.notion.com/p/4231aa27632381a8a514ca3d0e9b3a84?pvs=204",
+      "caseReports": {
+        "files": [],
+        "lookup": "Exact-head CI logs and named source fixtures must be checked individually; case-level proof has not yet been recorded."
+      },
+      "nextCheck": "Resolve the exact combined test for this record from its committed source evidence and execute its acceptance path before closure."
     },
     {
       "finding": "C1/AA-080",
@@ -647,7 +1389,16 @@
       "expected": "Bot conversation revision is explicit, adoption is reviewed, and current permission/knowledge revocation applies immediately.",
       "implementation": "src/lib/mind/workspace.ts; src/lib/mind/memory/dispatch-policy.ts; src/components/mind/knowledge-settings.tsx",
       "regression": "Privacy lane old/new knowledge, explicit adoption, preserved messages, unavailable bot and actual settings markup tests.",
-      "disposition": "Combined verification pending"
+      "disposition": "Combined verification pending",
+      "sourceDisposition": "fixed and tested",
+      "sourceLimits": "Adoption does not rewrite an active agent run; runtime immutable-plan rules remain separate.",
+      "sourceFiles": "src/lib/mind/workspace.ts; src/lib/mind/memory/dispatch-policy.ts; src/components/mind/knowledge-settings.tsx",
+      "recordUrl": "https://app.notion.com/p/4231aa27632381a8a514ca3d0e9b3a84?pvs=204",
+      "caseReports": {
+        "files": [],
+        "lookup": "Exact-head CI logs and named source fixtures must be checked individually; case-level proof has not yet been recorded."
+      },
+      "nextCheck": "Resolve the exact combined test for this record from its committed source evidence and execute its acceptance path before closure."
     },
     {
       "finding": "C1/AA-081",
@@ -655,7 +1406,16 @@
       "expected": "Library removal, retrieval exclusion and previously copied conversation/provider content are disclosed as separate effects.",
       "implementation": "src/lib/mind/knowledge.ts; src/lib/mind/document-originals.ts; src/components/mind/knowledge-settings.tsx; src/components/mind/command-app.tsx",
       "regression": "Privacy lane retained-copy and failed-original-delete fixtures; source→staged→message linkage reviewed.",
-      "disposition": "Combined verification pending"
+      "disposition": "Combined verification pending",
+      "sourceDisposition": "fixed and tested",
+      "sourceLimits": "External provider erasure is not claimed. Legacy Files controls and excerpt selection must retain source metadata; root is reconciling those consumer paths.",
+      "sourceFiles": "src/lib/mind/knowledge.ts; src/lib/mind/document-originals.ts; src/components/mind/knowledge-settings.tsx; src/components/mind/command-app.tsx",
+      "recordUrl": "https://app.notion.com/p/4231aa27632381a8a514ca3d0e9b3a84?pvs=204",
+      "caseReports": {
+        "files": [],
+        "lookup": "Exact-head CI logs and named source fixtures must be checked individually; case-level proof has not yet been recorded."
+      },
+      "nextCheck": "Resolve the exact combined test for this record from its committed source evidence and execute its acceptance path before closure."
     },
     {
       "finding": "C1/AA-082",
@@ -663,7 +1423,18 @@
       "expected": "Accepted video jobs survive reload with their original owner, chat and provider request identity.",
       "implementation": "src/lib/mind/media/operations.server.ts; src/lib/mind/media/imagine-http.ts; src/components/mind/command-app.tsx; migrations/0019_c1_media_operations.sql",
       "regression": "media/operations.test.ts 4/4: accepted request recovers by stable operation ID, concurrent duplicates do not redispatch, owner isolation and temporary retention hold.",
-      "disposition": "Combined verification pending"
+      "disposition": "Combined verification pending",
+      "sourceDisposition": "fixed and tested",
+      "sourceLimits": "Apply migration 0019 before rollout; actual provider job completion remains unverified.",
+      "sourceFiles": "src/lib/mind/media/operations.server.ts; src/lib/mind/media/imagine-http.ts; src/components/mind/command-app.tsx; migrations/0019_c1_media_operations.sql",
+      "recordUrl": "https://app.notion.com/p/4231aa27632381cc9d3bd3c7803fcb87?pvs=204",
+      "caseReports": {
+        "files": [
+          "src/lib/mind/media/operations.test.ts"
+        ],
+        "lookup": "Exact-head CI logs and named source fixtures must be checked individually; case-level proof has not yet been recorded."
+      },
+      "nextCheck": "Compare the named fixture cases and remaining source limits against this original acceptance. Live and physical evidence must be recorded separately when required."
     },
     {
       "finding": "C1/AA-083",
@@ -671,7 +1442,18 @@
       "expected": "Video UI distinguishes temporary provider URLs, local download attempts and genuinely retained assets.",
       "implementation": "src/components/mind/retained-video.tsx; src/lib/mind/types.ts; src/lib/mind/workspace.ts; src/lib/mind/media/asset-lifecycle.ts; src/components/mind/retained-video.test.ts",
       "regression": "retained-video.test.ts actual React error→unavailable→retry-playback passed; asset-lifecycle export test labels external-temporary assets.",
-      "disposition": "Combined verification pending"
+      "disposition": "Combined verification pending",
+      "sourceDisposition": "fixed and tested",
+      "sourceLimits": "No account/cloud video binary archive is implemented. Opening a download link is not claimed as verified local retention.",
+      "sourceFiles": "src/components/mind/retained-video.tsx; src/lib/mind/types.ts; src/lib/mind/workspace.ts; src/lib/mind/media/asset-lifecycle.ts; src/components/mind/retained-video.test.ts",
+      "recordUrl": "https://app.notion.com/p/4231aa27632381cc9d3bd3c7803fcb87?pvs=204",
+      "caseReports": {
+        "files": [
+          "src/components/mind/retained-video.test.ts"
+        ],
+        "lookup": "Exact-head CI logs and named source fixtures must be checked individually; case-level proof has not yet been recorded."
+      },
+      "nextCheck": "Compare the named fixture cases and remaining source limits against this original acceptance. Live and physical evidence must be recorded separately when required."
     },
     {
       "finding": "C1/AA-084",
@@ -679,7 +1461,18 @@
       "expected": "Transient video-status communication errors retry the same accepted job with bounded backoff.",
       "implementation": "src/components/mind/command-app.tsx; src/lib/mind/media/operations.server.ts; src/lib/mind/media/imagine-http.ts; src/lib/mind/media/video-poll.ts; src/lib/mind/media/video-poll.test.ts",
       "regression": "media/video-poll.test.ts 3/3 covers transient status failure/Retry-After/deadline and cancellation; observer only receives a status callback and cannot start generation.",
-      "disposition": "Combined verification pending"
+      "disposition": "Combined verification pending",
+      "sourceDisposition": "fixed and tested",
+      "sourceLimits": "Provider outage behavior is synthetic; resume uses the saved accepted request ID.",
+      "sourceFiles": "src/components/mind/command-app.tsx; src/lib/mind/media/operations.server.ts; src/lib/mind/media/imagine-http.ts; src/lib/mind/media/video-poll.ts; src/lib/mind/media/video-poll.test.ts",
+      "recordUrl": "https://app.notion.com/p/4231aa27632381cc9d3bd3c7803fcb87?pvs=204",
+      "caseReports": {
+        "files": [
+          "src/lib/mind/media/video-poll.test.ts"
+        ],
+        "lookup": "Exact-head CI logs and named source fixtures must be checked individually; case-level proof has not yet been recorded."
+      },
+      "nextCheck": "Compare the named fixture cases and remaining source limits against this original acceptance. Live and physical evidence must be recorded separately when required."
     },
     {
       "finding": "C1/AA-085",
@@ -687,7 +1480,18 @@
       "expected": "The interface should say submitting until provider acceptance is actually observed.",
       "implementation": "src/components/mind/command-app.tsx; src/lib/mind/media/imagine-http.ts; src/lib/mind/media/video-progress.ts; src/lib/mind/media/video-progress.test.ts",
       "regression": "video-progress.test.ts 2/2 plus real Chromium delayed rejected/accepted Home→Video→Chat flows: no premature acceptance/status poll, rejected start clears progress, accepted same operation/requestId gets one status and zero repeated starts.",
-      "disposition": "Combined verification pending"
+      "disposition": "Combined verification pending",
+      "sourceDisposition": "fixed and tested",
+      "sourceLimits": "Synthetic transport and clock only; no live generation, billing or physical device proof.",
+      "sourceFiles": "src/components/mind/command-app.tsx; src/lib/mind/media/imagine-http.ts; src/lib/mind/media/video-progress.ts; src/lib/mind/media/video-progress.test.ts",
+      "recordUrl": "https://app.notion.com/p/4231aa27632381cc9d3bd3c7803fcb87?pvs=204",
+      "caseReports": {
+        "files": [
+          "src/lib/mind/media/video-progress.test.ts"
+        ],
+        "lookup": "Exact-head CI logs and named source fixtures must be checked individually; case-level proof has not yet been recorded."
+      },
+      "nextCheck": "Compare the named fixture cases and remaining source limits against this original acceptance. Live and physical evidence must be recorded separately when required."
     },
     {
       "finding": "C1/AA-086",
@@ -695,7 +1499,18 @@
       "expected": "Image generation has an owner/operation-bound recoverable receipt and ambiguous results do not automatically generate again.",
       "implementation": "src/lib/mind/media/operations.server.ts; src/lib/mind/media/imagine-http.ts; src/components/mind/command-app.tsx",
       "regression": "media/operations.test.ts 4/4 and route fixtures passed: stable payload identity, one claim, concurrent duplicates, unknown outcome, no automatic repeated generation, temporary-result privacy.",
-      "disposition": "Combined verification pending"
+      "disposition": "Combined verification pending",
+      "sourceDisposition": "fixed and tested",
+      "sourceLimits": "Provider-reported identifiers/usage are retained when supplied; actual billing remains unknown unless independently reported.",
+      "sourceFiles": "src/lib/mind/media/operations.server.ts; src/lib/mind/media/imagine-http.ts; src/components/mind/command-app.tsx",
+      "recordUrl": "https://app.notion.com/p/4231aa27632381cc9d3bd3c7803fcb87?pvs=204",
+      "caseReports": {
+        "files": [
+          "src/lib/mind/media/operations.test.ts"
+        ],
+        "lookup": "Exact-head CI logs and named source fixtures must be checked individually; case-level proof has not yet been recorded."
+      },
+      "nextCheck": "Compare the named fixture cases and remaining source limits against this original acceptance. Live and physical evidence must be recorded separately when required."
     },
     {
       "finding": "C1/AA-087",
@@ -703,7 +1518,18 @@
       "expected": "An edit creates a distinct asset linked to original identity, prompt, operation and creation time.",
       "implementation": "src/lib/mind/media/asset-lifecycle.ts; src/lib/mind/media/blob-store.ts; src/lib/mind/types.ts; src/lib/mind/workspace.ts; src/components/mind/command-app.tsx",
       "regression": "asset-lifecycle.test.ts 3/3; original/edited SHA identity, immutable parent lineage, offload/hydration/export plus workspace preferred-version normalization passed.",
-      "disposition": "Combined verification pending"
+      "disposition": "Combined verification pending",
+      "sourceDisposition": "fixed and tested",
+      "sourceLimits": "Version metadata and preferred selection do not create cloud binary storage.",
+      "sourceFiles": "src/lib/mind/media/asset-lifecycle.ts; src/lib/mind/media/blob-store.ts; src/lib/mind/types.ts; src/lib/mind/workspace.ts; src/components/mind/command-app.tsx",
+      "recordUrl": "https://app.notion.com/p/4231aa27632381cc9d3bd3c7803fcb87?pvs=204",
+      "caseReports": {
+        "files": [
+          "src/lib/mind/media/asset-lifecycle.test.ts"
+        ],
+        "lookup": "Exact-head CI logs and named source fixtures must be checked individually; case-level proof has not yet been recorded."
+      },
+      "nextCheck": "Compare the named fixture cases and remaining source limits against this original acceptance. Live and physical evidence must be recorded separately when required."
     },
     {
       "finding": "C1/AA-088",
@@ -711,7 +1537,18 @@
       "expected": "Account-scoped image reads never silently fall back to unowned legacy shared storage.",
       "implementation": "src/lib/mind/media/blob-store.ts; src/lib/mind/media/asset-lifecycle.test.ts",
       "regression": "account-blob-isolation.test.ts passed using actual fake IndexedDB namespaces: no legacy fallback, no guest/owner adoption and owner-only clear.",
-      "disposition": "Combined verification pending"
+      "disposition": "Combined verification pending",
+      "sourceDisposition": "fixed and tested",
+      "sourceLimits": "Legacy assets require a separately reviewed ownership migration; there is no automatic legacy adoption.",
+      "sourceFiles": "src/lib/mind/media/blob-store.ts; src/lib/mind/media/asset-lifecycle.test.ts",
+      "recordUrl": "https://app.notion.com/p/4231aa27632381cc9d3bd3c7803fcb87?pvs=204",
+      "caseReports": {
+        "files": [
+          "src/lib/mind/media/account-blob-isolation.test.ts"
+        ],
+        "lookup": "Exact-head CI logs and named source fixtures must be checked individually; case-level proof has not yet been recorded."
+      },
+      "nextCheck": "Compare the named fixture cases and remaining source limits against this original acceptance. Live and physical evidence must be recorded separately when required."
     },
     {
       "finding": "C1/AA-089",
@@ -719,7 +1556,18 @@
       "expected": "Conversation availability and each asset binary availability are independently visible in exports.",
       "implementation": "src/lib/mind/media/asset-lifecycle.ts; src/lib/mind/workspace.ts; src/components/mind/command-app.tsx",
       "regression": "asset-lifecycle.test.ts passed: export hydrates available pixels and marks included/missing/external-temporary assets without mutating source; original-document exclusions remain explicit.",
-      "disposition": "Combined verification pending"
+      "disposition": "Combined verification pending",
+      "sourceDisposition": "fixed and tested",
+      "sourceLimits": "A reference without local bytes is not a backup or a promise of cross-device availability.",
+      "sourceFiles": "src/lib/mind/media/asset-lifecycle.ts; src/lib/mind/workspace.ts; src/components/mind/command-app.tsx",
+      "recordUrl": "https://app.notion.com/p/4231aa27632381cc9d3bd3c7803fcb87?pvs=204",
+      "caseReports": {
+        "files": [
+          "src/lib/mind/media/asset-lifecycle.test.ts"
+        ],
+        "lookup": "Exact-head CI logs and named source fixtures must be checked individually; case-level proof has not yet been recorded."
+      },
+      "nextCheck": "Compare the named fixture cases and remaining source limits against this original acceptance. Live and physical evidence must be recorded separately when required."
     },
     {
       "finding": "C1/AA-090",
@@ -727,7 +1575,18 @@
       "expected": "Only implemented provider-supported creative options should be selectable and validated.",
       "implementation": "src/lib/mind/media/asset-lifecycle.ts; src/lib/mind/media/imagine-http.ts; src/components/mind/command-app.tsx",
       "regression": "asset-lifecycle.test.ts validates implemented image count1–4 and video duration1–15, rejects invalid/fractional/out-of-range inputs; server validation matches client options.",
-      "disposition": "Combined verification pending"
+      "disposition": "Combined verification pending",
+      "sourceDisposition": "fixed and tested",
+      "sourceLimits": "Only the implemented xAI media route is exposed. Broader provider adapters, arbitrary resolution/aspect-ratio options and project-wide creative search remain explicit follow-on proposals.",
+      "sourceFiles": "src/lib/mind/media/asset-lifecycle.ts; src/lib/mind/media/imagine-http.ts; src/components/mind/command-app.tsx",
+      "recordUrl": "https://app.notion.com/p/4231aa27632381cc9d3bd3c7803fcb87?pvs=204",
+      "caseReports": {
+        "files": [
+          "src/lib/mind/media/asset-lifecycle.test.ts"
+        ],
+        "lookup": "Exact-head CI logs and named source fixtures must be checked individually; case-level proof has not yet been recorded."
+      },
+      "nextCheck": "Compare the named fixture cases and remaining source limits against this original acceptance. Live and physical evidence must be recorded separately when required."
     },
     {
       "finding": "C1/AA-091",
@@ -735,7 +1594,16 @@
       "expected": "Provider allowance must be shared durably across requests/processes, independent of local abuse-rate counters.",
       "implementation": "src/lib/mind/resource-governor.server.ts; src/lib/mind/resource-policy.ts; src/lib/mind/external-resource-call.server.ts; migrations/0018_c1_resource_authority.sql",
       "regression": "Runtime PGlite AA091/092/094/095 concurrent reservation and exactly-once settlement tests.",
-      "disposition": "Combined verification pending"
+      "disposition": "Combined verification pending",
+      "sourceDisposition": "fixed and tested",
+      "sourceLimits": "Apply migration; no claim of an exact invoice without trusted provider cost data.",
+      "sourceFiles": "src/lib/mind/resource-governor.server.ts; src/lib/mind/resource-policy.ts; src/lib/mind/external-resource-call.server.ts; migrations/0018_c1_resource_authority.sql",
+      "recordUrl": "https://app.notion.com/p/4231aa276323810fb293e13da228b8cd?pvs=204",
+      "caseReports": {
+        "files": [],
+        "lookup": "Exact-head CI logs and named source fixtures must be checked individually; case-level proof has not yet been recorded."
+      },
+      "nextCheck": "Resolve the exact combined test for this record from its committed source evidence and execute its acceptance path before closure."
     },
     {
       "finding": "C1/AA-092",
@@ -743,7 +1611,16 @@
       "expected": "A multi-model request reserves and reports all actual provider participants, not only one UI turn.",
       "implementation": "src/lib/mind/execution-plan.ts; src/lib/mind/model-consult.ts; src/lib/mind/resource-governor.server.ts; src/lib/mind/turn.server.ts",
       "regression": "Runtime plan/helper tests and PGlite reservation fixture.",
-      "disposition": "Combined verification pending"
+      "disposition": "Combined verification pending",
+      "sourceDisposition": "fixed and tested",
+      "sourceLimits": "Keep participant authorization, receipt and resource behavior consistent across orchestration branches.",
+      "sourceFiles": "src/lib/mind/execution-plan.ts; src/lib/mind/model-consult.ts; src/lib/mind/resource-governor.server.ts; src/lib/mind/turn.server.ts",
+      "recordUrl": "https://app.notion.com/p/4231aa276323810fb293e13da228b8cd?pvs=204",
+      "caseReports": {
+        "files": [],
+        "lookup": "Exact-head CI logs and named source fixtures must be checked individually; case-level proof has not yet been recorded."
+      },
+      "nextCheck": "Resolve the exact combined test for this record from its committed source evidence and execute its acceptance path before closure."
     },
     {
       "finding": "C1/AA-093",
@@ -751,7 +1628,16 @@
       "expected": "Persisted owner free-only policy cannot be disabled by an omitted or false request field.",
       "implementation": "src/lib/mind/resource-governor.server.ts; src/lib/mind/resource-http.server.ts; src/lib/mind/external-resource-call.server.ts; src/components/mind/resource-settings.tsx",
       "regression": "Runtime PGlite AA093 request-omission case; voice/media/BYOK/Build route fixtures in lane batches.",
-      "disposition": "Combined verification pending"
+      "disposition": "Combined verification pending",
+      "sourceDisposition": "fixed and tested",
+      "sourceLimits": "A free-only classification is not a promise that provider rate limits or access will remain available.",
+      "sourceFiles": "src/lib/mind/resource-governor.server.ts; src/lib/mind/resource-http.server.ts; src/lib/mind/external-resource-call.server.ts; src/components/mind/resource-settings.tsx",
+      "recordUrl": "https://app.notion.com/p/4231aa276323810fb293e13da228b8cd?pvs=204",
+      "caseReports": {
+        "files": [],
+        "lookup": "Exact-head CI logs and named source fixtures must be checked individually; case-level proof has not yet been recorded."
+      },
+      "nextCheck": "Resolve the exact combined test for this record from its committed source evidence and execute its acceptance path before closure."
     },
     {
       "finding": "C1/AA-094",
@@ -759,7 +1645,16 @@
       "expected": "Request byte/token limits are separate from owner call and monetary allowance.",
       "implementation": "src/lib/mind/resource-policy.ts; src/lib/mind/resource-governor.server.ts; src/components/mind/resource-settings.tsx",
       "regression": "Runtime unknown-price/reservation fixtures and atomic PGlite tests.",
-      "disposition": "Combined verification pending"
+      "disposition": "Combined verification pending",
+      "sourceDisposition": "fixed and tested",
+      "sourceLimits": "Money enforcement requires configured trusted price data; unknown values remain unknown.",
+      "sourceFiles": "src/lib/mind/resource-policy.ts; src/lib/mind/resource-governor.server.ts; src/components/mind/resource-settings.tsx",
+      "recordUrl": "https://app.notion.com/p/4231aa276323810fb293e13da228b8cd?pvs=204",
+      "caseReports": {
+        "files": [],
+        "lookup": "Exact-head CI logs and named source fixtures must be checked individually; case-level proof has not yet been recorded."
+      },
+      "nextCheck": "Resolve the exact combined test for this record from its committed source evidence and execute its acceptance path before closure."
     },
     {
       "finding": "C1/AA-095",
@@ -767,7 +1662,16 @@
       "expected": "Inference spending is explicitly governed independently from tool/write approval.",
       "implementation": "src/lib/mind/external-resource-call.server.ts; src/lib/mind/resource-http.server.ts; src/components/mind/resource-settings.tsx",
       "regression": "Runtime reservation policy and guarded-route tests; approvals remain a separate contract.",
-      "disposition": "Combined verification pending"
+      "disposition": "Combined verification pending",
+      "sourceDisposition": "fixed and tested",
+      "sourceLimits": "No account spending settings were changed during implementation.",
+      "sourceFiles": "src/lib/mind/external-resource-call.server.ts; src/lib/mind/resource-http.server.ts; src/components/mind/resource-settings.tsx",
+      "recordUrl": "https://app.notion.com/p/4231aa276323810fb293e13da228b8cd?pvs=204",
+      "caseReports": {
+        "files": [],
+        "lookup": "Exact-head CI logs and named source fixtures must be checked individually; case-level proof has not yet been recorded."
+      },
+      "nextCheck": "Resolve the exact combined test for this record from its committed source evidence and execute its acceptance path before closure."
     },
     {
       "finding": "C1/AA-096",
@@ -775,7 +1679,16 @@
       "expected": "Usage reporting separates observed usage, estimates, unknown cost and complete financial expenditure.",
       "implementation": "src/lib/mind/provider-call.ts; src/lib/mind/resource-governor.server.ts; src/lib/mind/turn.server.ts",
       "regression": "Runtime provider receipt normalization and PGlite AA096 unknown-cost test.",
-      "disposition": "Combined verification pending"
+      "disposition": "Combined verification pending",
+      "sourceDisposition": "fixed and tested",
+      "sourceLimits": "No billing reconciliation/invoice import was performed or claimed.",
+      "sourceFiles": "src/lib/mind/provider-call.ts; src/lib/mind/resource-governor.server.ts; src/lib/mind/turn.server.ts",
+      "recordUrl": "https://app.notion.com/p/4231aa276323810fb293e13da228b8cd?pvs=204",
+      "caseReports": {
+        "files": [],
+        "lookup": "Exact-head CI logs and named source fixtures must be checked individually; case-level proof has not yet been recorded."
+      },
+      "nextCheck": "Resolve the exact combined test for this record from its committed source evidence and execute its acceptance path before closure."
     },
     {
       "finding": "C1/AA-097",
@@ -783,7 +1696,16 @@
       "expected": "The default runner discovers every intended checked-in regression file and reports the inventory.",
       "implementation": "scripts/test-inventory.mjs; scripts/test-inventory.test.mjs; scripts/run-tests.mjs; scripts/run-tests-shard.mjs; package.json",
       "regression": "Final normal npm test on clean committed source b17e90c5728f7f1a9f303f703fcf073cbdd2175e:416/416 files passed;2,295 tests passed,0 failed,4 optional OG-skill tests skipped. Recursive inventory and shard inventory agree. Earlier400/410-file failures were fixed and superseded.",
-      "disposition": "Combined verification pending"
+      "disposition": "Combined verification pending",
+      "sourceDisposition": "fixed and tested",
+      "sourceLimits": "Four optional tests require gitignored .grok/skills/og, absent from this checkout. CI/integration must rerun the discovered suite on the combined branch.",
+      "sourceFiles": "scripts/test-inventory.mjs; scripts/test-inventory.test.mjs; scripts/run-tests.mjs; scripts/run-tests-shard.mjs; package.json",
+      "recordUrl": "https://app.notion.com/p/4231aa276323815eb1e9c95087daece4?pvs=204",
+      "caseReports": {
+        "files": [],
+        "lookup": "Exact-head CI logs and named source fixtures must be checked individually; case-level proof has not yet been recorded."
+      },
+      "nextCheck": "Resolve the exact combined test for this record from its committed source evidence and execute its acceptance path before closure."
     },
     {
       "finding": "C1/AA-098",
@@ -791,7 +1713,18 @@
       "expected": "Visual report-only output is distinct from a release gate with thresholds, reviewed exceptions and regression comparison.",
       "implementation": "scripts/visual/policy.mjs; scripts/visual/policy.test.mjs; scripts/visual/audit.mjs; docs/verification/visual-policy.json",
       "regression": "visual/policy.test.mjs 3/3: report/release gates, exact exceptions, dirty state and thresholds; local fixture captures and scoped final Build contrast rerun executed.",
-      "disposition": "Combined verification pending"
+      "disposition": "Combined verification pending",
+      "sourceDisposition": "fixed and tested",
+      "sourceLimits": "This is local synthetic evidence, not a production release approval. Report mode deliberately does not equate exit0 with release eligibility.",
+      "sourceFiles": "scripts/visual/policy.mjs; scripts/visual/policy.test.mjs; scripts/visual/audit.mjs; docs/verification/visual-policy.json",
+      "recordUrl": "https://app.notion.com/p/4231aa276323815eb1e9c95087daece4?pvs=204",
+      "caseReports": {
+        "files": [
+          "scripts/visual/policy.test.mjs"
+        ],
+        "lookup": "Exact-head CI logs and named source fixtures must be checked individually; case-level proof has not yet been recorded."
+      },
+      "nextCheck": "Compare the named fixture cases and remaining source limits against this original acceptance. Live and physical evidence must be recorded separately when required."
     },
     {
       "finding": "C1/AA-099",
@@ -799,7 +1732,19 @@
       "expected": "A screenshot must carry independently verified destination, heading/readiness and environment identity.",
       "implementation": "scripts/visual/destinations.mjs; scripts/visual/policy.test.mjs; scripts/visual/audit.mjs",
       "regression": "visual/policy.test.mjs and fixture-states.test.mjs passed;14 actual desktop/mobile captures verified destination and readiness before screenshot.",
-      "disposition": "Combined verification pending"
+      "disposition": "Combined verification pending",
+      "sourceDisposition": "fixed and tested",
+      "sourceLimits": "Screen readiness only proves the named fixture, not every authenticated downstream service.",
+      "sourceFiles": "scripts/visual/destinations.mjs; scripts/visual/policy.test.mjs; scripts/visual/audit.mjs",
+      "recordUrl": "https://app.notion.com/p/4231aa276323815eb1e9c95087daece4?pvs=204",
+      "caseReports": {
+        "files": [
+          "scripts/visual/fixture-states.test.mjs",
+          "scripts/visual/policy.test.mjs"
+        ],
+        "lookup": "Exact-head CI logs and named source fixtures must be checked individually; case-level proof has not yet been recorded."
+      },
+      "nextCheck": "Compare the named fixture cases and remaining source limits against this original acceptance. Live and physical evidence must be recorded separately when required."
     },
     {
       "finding": "C1/AA-100",
@@ -807,7 +1752,18 @@
       "expected": "Safe navigation coverage is supplemented with deterministic failure/loading/permission functional states.",
       "implementation": "scripts/visual/fixture-states.mjs; scripts/visual/fixture-states.test.mjs; scripts/visual/audit.mjs",
       "regression": "fixture-states.test.mjs 2/2 plus14 actual desktop/mobile state captures; requests are intercepted and external traffic/WebSockets blocked.",
-      "disposition": "Combined verification pending"
+      "disposition": "Combined verification pending",
+      "sourceDisposition": "fixed and tested",
+      "sourceLimits": "Additional real-account/provider states remain separate acceptance runs, never inferred from fixtures.",
+      "sourceFiles": "scripts/visual/fixture-states.mjs; scripts/visual/fixture-states.test.mjs; scripts/visual/audit.mjs",
+      "recordUrl": "https://app.notion.com/p/4231aa276323815eb1e9c95087daece4?pvs=204",
+      "caseReports": {
+        "files": [
+          "scripts/visual/fixture-states.test.mjs"
+        ],
+        "lookup": "Exact-head CI logs and named source fixtures must be checked individually; case-level proof has not yet been recorded."
+      },
+      "nextCheck": "Compare the named fixture cases and remaining source limits against this original acceptance. Live and physical evidence must be recorded separately when required."
     },
     {
       "finding": "C1/AA-101",
@@ -815,7 +1771,18 @@
       "expected": "Verification explicitly separates source/unit/emulated/browser/authenticated/physical environments.",
       "implementation": "scripts/verification/evidence.mjs; docs/verification/environment-evidence.json",
       "regression": "verification/evidence.test.mjs 4/4 includes refusing emulation labeled physical; environment matrix records all physical environments as unverified.",
-      "disposition": "Combined verification pending"
+      "disposition": "Combined verification pending",
+      "sourceDisposition": "fixed and tested",
+      "sourceLimits": "Actual iPhone/Safari/PWA, native Windows companion/installer and later Android proof require the corresponding physical devices and separately authorized runs.",
+      "sourceFiles": "scripts/verification/evidence.mjs; docs/verification/environment-evidence.json",
+      "recordUrl": "https://app.notion.com/p/4231aa276323815eb1e9c95087daece4?pvs=204",
+      "caseReports": {
+        "files": [
+          "scripts/verification/evidence.test.mjs"
+        ],
+        "lookup": "Exact-head CI logs and named source fixtures must be checked individually; case-level proof has not yet been recorded."
+      },
+      "nextCheck": "Compare the named fixture cases and remaining source limits against this original acceptance. Live and physical evidence must be recorded separately when required."
     },
     {
       "finding": "C1/AA-102",
@@ -823,7 +1790,18 @@
       "expected": "Feature completion evidence identifies exact revision, environment/date, artifacts and remaining blockers.",
       "implementation": "scripts/verification/evidence.mjs; scripts/verification/validate.mjs; docs/verification/feature-evidence.json; docs/verification/feature-matrix-legacy.md",
       "regression": "verification/evidence.test.mjs passed: current versus historical revision, complete evidence fields and unverified records; master114-ID checklist and final validation evidence retained.",
-      "disposition": "Combined verification pending"
+      "disposition": "Combined verification pending",
+      "sourceDisposition": "fixed and tested",
+      "sourceLimits": "A supplied evidence URL is checked for consistency, not independently authenticated by the validator.",
+      "sourceFiles": "scripts/verification/evidence.mjs; scripts/verification/validate.mjs; docs/verification/feature-evidence.json; docs/verification/feature-matrix-legacy.md",
+      "recordUrl": "https://app.notion.com/p/4231aa276323815eb1e9c95087daece4?pvs=204",
+      "caseReports": {
+        "files": [
+          "scripts/verification/evidence.test.mjs"
+        ],
+        "lookup": "Exact-head CI logs and named source fixtures must be checked individually; case-level proof has not yet been recorded."
+      },
+      "nextCheck": "Compare the named fixture cases and remaining source limits against this original acceptance. Live and physical evidence must be recorded separately when required."
     },
     {
       "finding": "C1/AA-103",
@@ -831,7 +1809,18 @@
       "expected": "Release evidence links tested SHA, build artifact hash, migration state, deployment/alias and journeys.",
       "implementation": "scripts/verification/evidence.mjs; scripts/verification/validate.mjs; docs/verification/release-evidence.template.json",
       "regression": "verification/evidence.test.mjs passed: wrong CI/build/deployment SHA, artifact/alias/database mismatch, skipped/canceled journey and missing rollback cannot pass.",
-      "disposition": "Combined verification pending"
+      "disposition": "Combined verification pending",
+      "sourceDisposition": "fixed and tested",
+      "sourceLimits": "This branch is not merged or deployed. Integration Codex must collect actual CI, target migration, deployment, production-alias, signed-in journey and rollback evidence later.",
+      "sourceFiles": "scripts/verification/evidence.mjs; scripts/verification/validate.mjs; docs/verification/release-evidence.template.json",
+      "recordUrl": "https://app.notion.com/p/4231aa276323815eb1e9c95087daece4?pvs=204",
+      "caseReports": {
+        "files": [
+          "scripts/verification/evidence.test.mjs"
+        ],
+        "lookup": "Exact-head CI logs and named source fixtures must be checked individually; case-level proof has not yet been recorded."
+      },
+      "nextCheck": "Compare the named fixture cases and remaining source limits against this original acceptance. Live and physical evidence must be recorded separately when required."
     },
     {
       "finding": "C1/AA-104",
@@ -839,7 +1828,16 @@
       "expected": "Independent comparisons and synthesis share participant/call/concurrency/authority structure without confusing their behavior.",
       "implementation": "src/lib/mind/execution-plan.ts; src/lib/mind/routing-modes.ts; src/lib/mind/model-consult.ts",
       "regression": "Runtime AA104 plan fixture rejects implicit helpers in independent mode and preserves synthesis dependency edges.",
-      "disposition": "Combined verification pending"
+      "disposition": "Combined verification pending",
+      "sourceDisposition": "fixed and tested",
+      "sourceLimits": "A shared envelope is not a fully distributed durable scheduler; actual operations keep their existing receipt systems.",
+      "sourceFiles": "src/lib/mind/execution-plan.ts; src/lib/mind/routing-modes.ts; src/lib/mind/model-consult.ts",
+      "recordUrl": "https://app.notion.com/p/4231aa2763238116b82eeb6f3e38e85e?pvs=204",
+      "caseReports": {
+        "files": [],
+        "lookup": "Exact-head CI logs and named source fixtures must be checked individually; case-level proof has not yet been recorded."
+      },
+      "nextCheck": "Resolve the exact combined test for this record from its committed source evidence and execute its acceptance path before closure."
     },
     {
       "finding": "C1/AA-105",
@@ -847,7 +1845,16 @@
       "expected": "Durable owner stop authority overrides all workspace/process projections; a stale local state cannot grant permission.",
       "implementation": "src/lib/mind/halt.server.ts; src/lib/mind/turn.server.ts; src/lib/mind/core-runtime.server.ts; src/components/mind/command-app.tsx",
       "regression": "Runtime source reachability check plus AA057–059 regression coverage; original bypass hypothesis was not treated as an independently reproduced defect.",
-      "disposition": "Combined verification pending"
+      "disposition": "Combined verification pending",
+      "sourceDisposition": "fixed and tested",
+      "sourceLimits": "Preserve fail-closed unavailable-authority handling while integrating alternate runtimes.",
+      "sourceFiles": "src/lib/mind/halt.server.ts; src/lib/mind/turn.server.ts; src/lib/mind/core-runtime.server.ts; src/components/mind/command-app.tsx",
+      "recordUrl": "https://app.notion.com/p/4231aa2763238116b82eeb6f3e38e85e?pvs=204",
+      "caseReports": {
+        "files": [],
+        "lookup": "Exact-head CI logs and named source fixtures must be checked individually; case-level proof has not yet been recorded."
+      },
+      "nextCheck": "Resolve the exact combined test for this record from its committed source evidence and execute its acceptance path before closure."
     },
     {
       "finding": "C1/AA-106",
@@ -855,7 +1862,16 @@
       "expected": "Dashboard and operational surfaces distinguish saved authorization from known operation restrictions and verification.",
       "implementation": "src/lib/mind/notion-operation-status.ts; src/lib/mind/dashboard/owner-connections.ts; src/components/mind/service-board.tsx; src/components/mind/notion-workspaces.tsx",
       "regression": "Connector AA001 shared status fixtures; same implementation addresses this consolidation finding without dropping it.",
-      "disposition": "Combined verification pending"
+      "disposition": "Combined verification pending",
+      "sourceDisposition": "fixed and tested",
+      "sourceLimits": "A universal six-dimensional status contract for every future connector is a broader proposal; only inspected implemented connectors are claimed.",
+      "sourceFiles": "src/lib/mind/notion-operation-status.ts; src/lib/mind/dashboard/owner-connections.ts; src/components/mind/service-board.tsx; src/components/mind/notion-workspaces.tsx",
+      "recordUrl": "https://app.notion.com/p/4231aa2763238116b82eeb6f3e38e85e?pvs=204",
+      "caseReports": {
+        "files": [],
+        "lookup": "Exact-head CI logs and named source fixtures must be checked individually; case-level proof has not yet been recorded."
+      },
+      "nextCheck": "Resolve the exact combined test for this record from its committed source evidence and execute its acceptance path before closure."
     },
     {
       "finding": "C1/AA-107",
@@ -863,7 +1879,16 @@
       "expected": "Execution counts use the same named states for running, queued, approval/external waits, cancellation and unresolved work.",
       "implementation": "src/lib/mind/core-runtime.ts; src/lib/mind/c1-runtime-regressions.test.ts",
       "regression": "Runtime AA107 fixture includes waiting and paused states in unresolved totals.",
-      "disposition": "Combined verification pending"
+      "disposition": "Combined verification pending",
+      "sourceDisposition": "fixed and tested",
+      "sourceLimits": "Confirm every dashboard consumer renders the category meanings; do not equate unresolved with CPU-active execution.",
+      "sourceFiles": "src/lib/mind/core-runtime.ts; src/lib/mind/c1-runtime-regressions.test.ts",
+      "recordUrl": "https://app.notion.com/p/4231aa2763238116b82eeb6f3e38e85e?pvs=204",
+      "caseReports": {
+        "files": [],
+        "lookup": "Exact-head CI logs and named source fixtures must be checked individually; case-level proof has not yet been recorded."
+      },
+      "nextCheck": "Resolve the exact combined test for this record from its committed source evidence and execute its acceptance path before closure."
     },
     {
       "finding": "C1/AA-108",
@@ -871,7 +1896,16 @@
       "expected": "Subjective ratings link to actual execution/model/task context without automatically changing provider routing.",
       "implementation": "src/lib/mind/execution-evidence.ts; src/lib/mind/execution-evidence.test.ts; src/lib/mind/routing-modes.ts; src/lib/mind/types.ts; src/lib/mind/workspace.ts; src/components/mind/command-app.tsx",
       "regression": "Runtime completion: 40/40 tests including production synthetic SSE→workspace reload→rating/exact execution join; 15-case routing/durable follow-up also passed.",
-      "disposition": "Combined verification pending"
+      "disposition": "Combined verification pending",
+      "sourceDisposition": "fixed and tested",
+      "sourceLimits": "Ratings never change routing automatically and are not billing/factual proof. Live provider invoice reconciliation remains separate.",
+      "sourceFiles": "src/lib/mind/execution-evidence.ts; src/lib/mind/execution-evidence.test.ts; src/lib/mind/routing-modes.ts; src/lib/mind/types.ts; src/lib/mind/workspace.ts; src/components/mind/command-app.tsx",
+      "recordUrl": "https://app.notion.com/p/4231aa2763238116b82eeb6f3e38e85e?pvs=204",
+      "caseReports": {
+        "files": [],
+        "lookup": "Exact-head CI logs and named source fixtures must be checked individually; case-level proof has not yet been recorded."
+      },
+      "nextCheck": "Resolve the exact combined test for this record from its committed source evidence and execute its acceptance path before closure."
     },
     {
       "finding": "C1/AA-109",
@@ -879,7 +1913,18 @@
       "expected": "Late video completion cannot mutate a different account or a later operation.",
       "implementation": "src/lib/mind/operation-scope.ts; src/components/mind/command-app.tsx; src/lib/mind/media/operations.server.ts",
       "regression": "operation-scope.test.ts 3/3 and media operations4/4: A→B→A and fresh same-owner sessions invalidate stale progress/results/cleanup; accepted jobs stay owned by their original account.",
-      "disposition": "Combined verification pending"
+      "disposition": "Combined verification pending",
+      "sourceDisposition": "fixed and tested",
+      "sourceLimits": "No live delayed video or authenticated account was tested; actual callbacks use the tested operation ticket.",
+      "sourceFiles": "src/lib/mind/operation-scope.ts; src/components/mind/command-app.tsx; src/lib/mind/media/operations.server.ts",
+      "recordUrl": "https://app.notion.com/p/4231aa276323813da4e1cba1752ca724?pvs=204",
+      "caseReports": {
+        "files": [
+          "src/lib/mind/operation-scope.test.ts"
+        ],
+        "lookup": "Exact-head CI logs and named source fixtures must be checked individually; case-level proof has not yet been recorded."
+      },
+      "nextCheck": "Compare the named fixture cases and remaining source limits against this original acceptance. Live and physical evidence must be recorded separately when required."
     },
     {
       "finding": "C1/AA-110",
@@ -887,7 +1932,18 @@
       "expected": "An old image completion/finally callback cannot clear a newer Chat or media operation state.",
       "implementation": "src/lib/mind/operation-scope.ts; src/components/mind/command-app.tsx",
       "regression": "operation-scope.test.ts 3/3: older image cleanup cannot finish a newer ticket; CommandApp also requires its captured chat generation before clearing Chat state.",
-      "disposition": "Combined verification pending"
+      "disposition": "Combined verification pending",
+      "sourceDisposition": "fixed and tested",
+      "sourceLimits": "Actual physical/provider concurrency remains unverified; no synthetic response is labeled a real generation.",
+      "sourceFiles": "src/lib/mind/operation-scope.ts; src/components/mind/command-app.tsx",
+      "recordUrl": "https://app.notion.com/p/4231aa276323813da4e1cba1752ca724?pvs=204",
+      "caseReports": {
+        "files": [
+          "src/lib/mind/operation-scope.test.ts"
+        ],
+        "lookup": "Exact-head CI logs and named source fixtures must be checked individually; case-level proof has not yet been recorded."
+      },
+      "nextCheck": "Compare the named fixture cases and remaining source limits against this original acceptance. Live and physical evidence must be recorded separately when required."
     },
     {
       "finding": "C1/AA-111",
@@ -895,7 +1951,18 @@
       "expected": "Research success and error paths obey the same account/session/request identity.",
       "implementation": "src/lib/mind/operation-scope.ts; src/components/mind/command-app.tsx; src/lib/mind/research-service.server.ts",
       "regression": "operation-scope.test.ts plus research configuration/retry tests passed; success, failure and finally use the same current-ticket condition.",
-      "disposition": "Combined verification pending"
+      "disposition": "Combined verification pending",
+      "sourceDisposition": "fixed and tested",
+      "sourceLimits": "Source-bound client callback wiring plus isolated timing fixtures; no real late research request was issued.",
+      "sourceFiles": "src/lib/mind/operation-scope.ts; src/components/mind/command-app.tsx; src/lib/mind/research-service.server.ts",
+      "recordUrl": "https://app.notion.com/p/4231aa276323813da4e1cba1752ca724?pvs=204",
+      "caseReports": {
+        "files": [
+          "src/lib/mind/operation-scope.test.ts"
+        ],
+        "lookup": "Exact-head CI logs and named source fixtures must be checked individually; case-level proof has not yet been recorded."
+      },
+      "nextCheck": "Compare the named fixture cases and remaining source limits against this original acceptance. Live and physical evidence must be recorded separately when required."
     },
     {
       "finding": "C1/AA-112",
@@ -903,7 +1970,16 @@
       "expected": "A→B→A and successive sessions of one account remain distinguishable for pending callbacks.",
       "implementation": "src/lib/auth/session-identity.ts; src/lib/auth/client.ts; src/lib/mind/operation-scope.ts; src/lib/mind/operation-scope.test.ts; src/components/mind/command-app.tsx; src/lib/auth/use-current-user.ts",
       "regression": "Root reported 3/3 operation-scope fixtures including real cookie-session identity reauthentication and token-refresh continuity; server auth identity tests retained.",
-      "disposition": "Combined verification pending"
+      "disposition": "Combined verification pending",
+      "sourceDisposition": "fixed and tested",
+      "sourceLimits": "No real account switch or physical device claimed; final integration test evidence belongs below.",
+      "sourceFiles": "src/lib/auth/session-identity.ts; src/lib/auth/client.ts; src/lib/mind/operation-scope.ts; src/lib/mind/operation-scope.test.ts; src/components/mind/command-app.tsx; src/lib/auth/use-current-user.ts",
+      "recordUrl": "https://app.notion.com/p/4231aa276323813da4e1cba1752ca724?pvs=204",
+      "caseReports": {
+        "files": [],
+        "lookup": "Exact-head CI logs and named source fixtures must be checked individually; case-level proof has not yet been recorded."
+      },
+      "nextCheck": "Resolve the exact combined test for this record from its committed source evidence and execute its acceptance path before closure."
     },
     {
       "finding": "C1/AA-113",
@@ -911,7 +1987,18 @@
       "expected": "Independent operations have explicit ownership/concurrency rules and cannot interfere through shared cleanup flags.",
       "implementation": "src/lib/mind/operation-scope.ts; src/components/mind/command-app.tsx; src/lib/mind/resource-governor.server.ts",
       "regression": "operation-scope.test.ts 3/3 covers independent Chat/research tickets and invalidation; SQL resource tests enforce shared reservations across operations.",
-      "disposition": "Combined verification pending"
+      "disposition": "Combined verification pending",
+      "sourceDisposition": "fixed and tested",
+      "sourceLimits": "This browser operation registry is not a full background task manager or a claim of browser-closed execution.",
+      "sourceFiles": "src/lib/mind/operation-scope.ts; src/components/mind/command-app.tsx; src/lib/mind/resource-governor.server.ts",
+      "recordUrl": "https://app.notion.com/p/4231aa276323813da4e1cba1752ca724?pvs=204",
+      "caseReports": {
+        "files": [
+          "src/lib/mind/operation-scope.test.ts"
+        ],
+        "lookup": "Exact-head CI logs and named source fixtures must be checked individually; case-level proof has not yet been recorded."
+      },
+      "nextCheck": "Compare the named fixture cases and remaining source limits against this original acceptance. Live and physical evidence must be recorded separately when required."
     },
     {
       "finding": "C1/AA-114",
@@ -919,7 +2006,18 @@
       "expected": "Preserve the existing stronger Notion request+connection-epoch+owner pattern and reuse its invariant elsewhere.",
       "implementation": "src/components/mind/command-app.tsx; src/lib/mind/operation-scope.ts; src/lib/mind/operation-scope.test.ts",
       "regression": "Original Notion search current() guards retained; operation-scope.test.ts 3/3 proves generalization used by media/research, including fresh same-owner session identity.",
-      "disposition": "Combined verification pending"
+      "disposition": "Combined verification pending",
+      "sourceDisposition": "already fixed with proof",
+      "sourceLimits": "Positive control retained; no new Notion defect claimed. Live provider/device proof remains separate.",
+      "sourceFiles": "src/components/mind/command-app.tsx; src/lib/mind/operation-scope.ts; src/lib/mind/operation-scope.test.ts",
+      "recordUrl": "https://app.notion.com/p/4231aa276323813da4e1cba1752ca724?pvs=204",
+      "caseReports": {
+        "files": [
+          "src/lib/mind/operation-scope.test.ts"
+        ],
+        "lookup": "Exact-head CI logs and named source fixtures must be checked individually; case-level proof has not yet been recorded."
+      },
+      "nextCheck": "Compare the named fixture cases and remaining source limits against this original acceptance. Live and physical evidence must be recorded separately when required."
     }
   ]
 }

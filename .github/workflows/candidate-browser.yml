@@ -1,0 +1,37 @@
+name: Candidate isolated browser fixtures
+on:
+  pull_request:
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  browser:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24.11.1'
+          cache: npm
+      - run: npm ci
+      - name: Run isolated Chromium fixtures
+        run: |
+          export BROWSER_EXECUTABLE_PATH="$(command -v google-chrome)"
+          test -x "$BROWSER_EXECUTABLE_PATH"
+          node scripts/visual/run-c3-fixture.mjs
+          FIXTURE_SCRIPT=scripts/visual/paired-chat.mjs node scripts/visual/run-c3-fixture.mjs
+        env:
+          VISUAL_ARTIFACT_DIR: ${{ runner.temp }}/browser-fixtures
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: chromium-fixtures-${{ github.event.pull_request.head.sha || github.sha }}
+          path: |
+            ${{ runner.temp }}/browser-fixtures/*.png
+            ${{ runner.temp }}/browser-fixtures/*.json
+            ${{ runner.temp }}/browser-fixtures/server.log
+          if-no-files-found: error
