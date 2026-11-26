@@ -2929,6 +2929,10 @@ export function CommandApp() {
         if (turnInFlight.current || turnOwner.current !== draftOwner) return;
         const thread = wsRef.current.chats.find((item) => item.id === chat.id);
         if (!thread) return;
+        if (useOriginal && request.body.memory === "on" && thread.memory !== "on") {
+          setError("Memory is now off. The earlier delivery is unconfirmed; review it before starting a new send.");
+          return;
+        }
         if (options?.replaceReplyId && thread.messages.at(-1)?.id === options.replaceReplyId) {
           const prior = prepareRegenerate(wsRef.current, chat.id);
           if (!("error" in prior)) void deliver(prior.chat, text, wsRef.current, true, snapped, { ...options, request: useOriginal ? request : undefined });
@@ -4246,7 +4250,14 @@ ${message.content}`;
   async function pressEmergencyStop() {
     stopVoiceSession();
     clearedStop.current = false;
-    if (wsRef.current.halted) return;
+    if (wsRef.current.halted) {
+      try {
+        const result = await setExecutionHalt({ data: { on: true } });
+        if (!result.ok) setError(result.error);
+        else { setError(null); setNotice("Server emergency stop confirmed."); }
+      } catch { setError("The server did not confirm the stop. Sends are blocked in this browser."); }
+      return;
+    }
     turnAbort.current?.abort();
     agentAbort.current?.abort();
     setError(null);
