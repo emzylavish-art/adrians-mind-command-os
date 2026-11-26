@@ -1,7 +1,10 @@
 export type PdfPageText = { page: number | null; text: string; partial: boolean };
 export type PdfChunk = { id: string; page: number | null; start: number; end: number; text: string };
 import type { PdfEvidenceIndex, PdfPageRange } from "./pdf-evidence.ts";
-export type PdfText = { ok: boolean; text: string; pages: number; error: string; partial?: boolean; coverage?: string; evidenceIndex?: PdfEvidenceIndex; extractedCharacters?: number };
+export type PdfText = { ok: boolean; text: string; pages: number; error: string; partial?: boolean; coverage?: string; evidenceIndex?: PdfEvidenceIndex; extractedCharacters?: number;
+  fullText?: string;
+  pageTexts?: PdfPageText[];
+  chunks?: PdfChunk[]; };
 export const MAX_PDF_EXTRACTED_CHARS = 400_000;
 export const PDF_PREVIEW_CHARS = 40_000;
 export const PDF_CHUNK_CHARS = 2_000;
@@ -226,9 +229,7 @@ export async function extractPdfText(bytes: Uint8Array): Promise<PdfText> {
       if (!inflated) return { text: "", partial: true };
       content = latin1(inflated);
     }
-    const text = stringsFrom(content).join(" ");
-    // Hex glyphs, quotation operators and embedded images/forms require a fuller PDF reader.
-    return { text, partial: !text || /<[\da-f\s]+>\s*(?:Tj|[^\]]*\]\s*TJ)|\)\s*['"]|\sDo\b|\bBI\b/i.test(content) };
+    return textFrom(content);
   }
 
   const parts: string[] = [];

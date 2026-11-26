@@ -1,3 +1,4 @@
+import { performSearch } from "./research";
 import { authorizeExternalResource, externalResourceCall } from "./external-resource-call.server";
 import { createMiddleware, createServerFn } from "@tanstack/react-start";
 import { authMiddleware } from "@/lib/auth/middleware";

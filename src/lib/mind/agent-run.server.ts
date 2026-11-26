@@ -68,31 +68,9 @@ export async function handleAgentRun(request: Request): Promise<Response> {
   const keyed = resolveXaiInferenceApiKey(process.env);
   if (!keyed.ok) return json({ ok: false, error: keyed.error, log: [] });
   const apiKey = keyed.key;
-  const ws = emptyWorkspace();
-  const stamp = "2026-01-01T00:00:00.000Z";
-  ws.projects = names(body.projects, 20).map((name, index) => ({ id: `p${index}`, name, description: "", createdAt: stamp }));
-  ws.chats = names(body.chats, 20).map((title, index) => ({
-    id: `c${index}`,
-    title,
-    memory: "off" as const,
-    temporary: false,
-    autonomy: "ask" as const,
-    projectId: null,
-    retrievalLog: [],
-    messages: [],
-  }));
-  ws.memories = names(body.notes, 12).map((text, index) => ({
-    id: `n${index}`,
-    scope: "global" as const,
-    projectId: null,
-    chatId: null,
-    text,
-    source: "owner",
-    createdAt: stamp,
-    updatedAt: stamp,
-    archived: false,
-    versions: [],
-  }));
+  const currentContext = await readAuthorizedAgentContext(userId, read.body);
+  if (!currentContext.ok) return json({ ...currentContext, log: [] }, 409);
+  const ws = currentContext.workspace;
   const goal = typeof body.goal === "string" ? body.goal : "";
   const tier = resolveModelTier(tierField.tier, goal || (Array.isArray(body.images) && body.images.length ? "image" : ""), process.env);
   const images = sanitizeAttachments(body.images);
@@ -110,6 +88,12 @@ export async function handleAgentRun(request: Request): Promise<Response> {
       signal: bound.signal,
       autonomy: "ask",
       halted: false,
+      beforeStep: async () => {
+        if (await haltIsOn(userId)) throw new Error("Emergency stop is on. No new agent step can run.");
+        const current = await readAuthorizedAgentContext(userId, read.body);
+        if (!current.ok) throw new Error(current.error);
+        Object.assign(ws, current.workspace);
+      },
       approved: true,
       images,
     }));

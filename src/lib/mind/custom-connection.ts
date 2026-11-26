@@ -43,6 +43,9 @@ export type PublicOperation = {
   compatible: boolean;
   /** Full advertised definition, including constraints not represented in the form. */
   definitionFingerprint?: string;
+  annotations?: { readOnlyHint?: boolean };
+  revision?: string;
+  definitionRevision?: string;
 };
 
 export type ConnectionState = "unchecked" | "ready" | "unauthorized" | "missing_config" | "incompatible" | "failed";
@@ -60,6 +63,8 @@ export type PublicConnection = {
   state: ConnectionState;
   operations: PublicOperation[];
   error: string;
+  discoveryStatus?: CallStatus;
+  capabilityRevision?: string;
 };
 
 export type CallStatus = "ok" | "error" | "unauthorized" | "missing_config" | "incompatible" | "definition_changed" | "timeout";

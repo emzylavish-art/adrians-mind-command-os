@@ -1,3 +1,5 @@
+import { dirname, resolve } from "node:path";
+import { mkdirSync, writeFileSync, lstatSync, readFileSync } from "node:fs";
 import { createHash, randomBytes } from "node:crypto";
 import { getSql, type Sql } from "../../db.ts";
 import { restoreMissingWorkspaceFile } from "./file-recovery.ts";

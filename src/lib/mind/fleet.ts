@@ -105,6 +105,15 @@ export type AgentRun = {
   error: string;
   createdAt: string;
   updatedAt: string;
+  approvals?: RunApproval[];
+  agentVersion?: number;
+  planVersion?: number;
+  chatId?: string;
+  scheduleId?: string;
+  scheduledAt?: string;
+  execution?: { provider: string | null; tier: ModelTier | null; instructions: string; knowledge: string; projectId: string | null; memory: "on" | "off" };
+  delegations?: { agentId: string; goal: string; allowedTools: FleetTool[]; maxSteps: number }[];
+  modelOperation?: { id: string; state: "claimed" | "uncertain" | "completed"; provider: string; model?: string };
 };
 
 export type RunConfiguration = Pick<AgentDefinition, "version" | "instructions" | "tools" | "projectId" | "memory" | "approval" | "chatProvider" | "chatTier" | "knowledge" | "knowledgeDocumentIds">;
@@ -119,6 +128,10 @@ export type RunApproval = {
   state: "requested" | "granted" | "consumed" | "expired" | "revoked" | "superseded";
   updatedAt: string;
   batchId?: string;
+  action: FleetTool;
+  fingerprint: string;
+  approvedAt: string;
+  consumedAt?: string;
 };
 
 export type ScheduleOccurrence = {
@@ -199,6 +212,13 @@ export type ScheduleJob = {
   recoveryApprovalFor?: string;
   executionEnvironment?: "device";
   lastVerification?: "unverified" | "verified" | "not_met";
+  resultDelivery?: "runs" | "conversation";
+  approvedCatchUpFor?: string;
+  executionTarget?: "browser" | "local-worker" | "hosted-worker";
+  workerHeartbeatAt?: string;
+  workerId?: string;
+  missedCount?: number;
+  skippedCount?: number;
 };
 
 export type PlanNeed = "none" | "search" | "browser" | "gmail" | "model";
@@ -210,6 +230,8 @@ export type PlanStep = {
   dependsOn: string[];
   need: PlanNeed;
   input?: { url?: string; accountId?: string; connectionVersion?: string; recipients?: string[]; subject?: string; body?: string };
+  selection?: "goal" | "template";
+  inputFrom?: { stepId: string; field: "output" | "recordIds" };
 };
 
 export type FleetPin = { id: string; kind: "project" | "agent" | "chat" | "file"; ref: string };
@@ -1034,6 +1056,7 @@ export type TickEnv = {
   model?: (request: FleetExternalRequest) => { ok: true; text: string; provider: string; model: string } | { ok: false; error: string };
   gmail?: (request: FleetExternalRequest & { action: "gmail_read" | "gmail_send"; accountId: string }) => { ok: true; text: string; accountId: string; operationId: string } | { ok: false; error: string };
   verify?: (run: AgentRun) => { met: boolean; detail: string };
+  environment?: "browser" | "local-worker" | "hosted-worker";
 };
 
 export type FleetExternalRequest = {

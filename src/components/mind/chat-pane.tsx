@@ -445,6 +445,11 @@ export function ChatPane({
           previousScrollTop.current = top;
           setDetached(!following.current);
         }}>
+        {detached && <button type="button" className="jump-to-latest" onClick={() => {
+          following.current = true;
+          setDetached(false);
+          if (transcript.current) transcript.current.scrollTop = transcript.current.scrollHeight;
+        }}>Jump to latest</button>}
           <div ref={turns} className="space-y-3">
           {copyError ? <p role="alert" className="text-sm text-danger">{copyError}</p> : null}
           <ChatMediaGallery messages={active?.messages} onUseInComposer={onSaveImage} onEditImagine={onEditImagine} onDownload={onDownloadImage} />
@@ -634,12 +639,7 @@ export function ChatPane({
           )}
           {voiceListening ? <div className="flex items-center gap-2"><VoiceLevelMeter level={voiceLevel} listening={voiceListening} /></div> : null}
         </div>
-        </div>
-        {detached && <button type="button" className="jump-to-latest" onClick={() => {
-          following.current = true;
-          setDetached(false);
-          if (transcript.current) transcript.current.scrollTop = transcript.current.scrollHeight;
-        }}>Jump to latest</button>}
+
         {cue.length > 0 ? (
           <div className="rounded-panel border border-line p-2" data-testid="message-cue">
             <p className="text-xs uppercase tracking-wide text-muted">Next</p>
@@ -672,6 +672,7 @@ export function ChatPane({
             {lastReply?.kind === "error" || lastReply?.content.startsWith("/imagine") ? null : <button type="button" className="suggestion-chip shrink-0" onClick={() => setDraft("Turn that into an image")}>Make an image</button>}
           </div>
         ) : null}
+        </div>
         <form
           className="floating-composer command-card composer-dock thread-composer p-3" data-composer="floating" data-expanded={composerExpanded ? "true" : "false"}
           onSubmit={(event) => {

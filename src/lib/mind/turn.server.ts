@@ -37,7 +37,7 @@ import { isAvailableGrokSelection, parseModelControls, reconcileTierParams, reso
 import { assertLiveProvider } from "./providers";
 import { callConfiguredProvider, httpStatusForProviderSelection, routeSelectedModel, selectProvider } from "./provider-call";
 import { configuredProviders } from "./provider-call";
-import { ADRIAN_MIND_IDENTITY, builtinModules, customModules, orchestratorInstruction, planModelConsult, type ConsultReply, executeConsultPlan, type HelperReceipt, type HelperReply, collectConsultReport, isLocalConsultRunner, type ConsultAttempt, type ConsultHelperReply } from "./model-consult.ts";
+import { collectConsultHelp, ADRIAN_MIND_IDENTITY, builtinModules, customModules, orchestratorInstruction, planModelConsult, type ConsultReply, executeConsultPlan, type HelperReceipt, type HelperReply, collectConsultReport, isLocalConsultRunner, type ConsultAttempt, type ConsultHelperReply } from "./model-consult.ts";
 import { adrianPcEnabled, runAdrianPc } from "./adrian-pc.server.ts";
 import { ownerScreenshotReader } from "./pc-vision.server.ts";
 import { consequentialSpeechRefusal } from "./frontier-2031.ts";
@@ -53,7 +53,7 @@ import { resolveDatabaseUrl } from "../env.server.ts";
 import { LOGIC_ROUTE_LABEL, resolveRequestedRoute, toAdapterMessages, type LogicRouteId } from "./logic-routes.ts";
 import { inspectLogicRoutes, runLogicRoute } from "./logic-route-adapter.server.ts";
 import { parseCustomProviderChoice, executeCustomChat, validateCustomProviderSelection } from "./ai-provider-config.server.ts";
-import { claimTurn, pruneTurnReceipts, turnOperationExpiry, readTurnReceipt } from "./turn-receipt.ts";
+import { finishTurnReceipt, claimTurn, pruneTurnReceipts, turnOperationExpiry, readTurnReceipt } from "./turn-receipt.ts";
 import { readTurnRecovery, recoverableTurnResponse } from "./turn-recovery.ts";
 import { governedModelCall, reserveResourceOperation, settleResourceOperation, settleResourceStream } from "./resource-governor.server.ts";
 import { assertCurrentMemoryContext } from "./memory/dispatch-policy.server.ts";
@@ -102,6 +102,13 @@ export type TurnBody = {
   consult?: unknown;
   modelControls?: unknown;
   previousTier?: unknown;
+  consultHelpers?: unknown;
+  maxHelpers?: unknown;
+  freeOnly?: unknown;
+  temporary?: unknown;
+  memoryPolicyRevision?: unknown;
+  contextPolicy?: unknown;
+  projectContext?: unknown;
 };
 
 function loadParsedControls(value: unknown) { const parsed = parseModelControls(value); return parsed.ok ? parsed.controls : {}; }

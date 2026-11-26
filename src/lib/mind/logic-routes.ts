@@ -366,6 +366,7 @@ export type ChatTurnBodyInput = {
   freeOnly?: boolean;
   consult?: { available: string[]; helpers: { id: string; request: string }[]; purpose: string; helperIds?: string[]; allowPaidHelpers?: boolean } | null;
   images: unknown[];
+  projectContext?: unknown;
 };
 
 /** Client JSON for POST /api/mind/turn. The server re-resolves model and endpoint. */

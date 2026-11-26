@@ -1,3 +1,4 @@
+import { ADRIAN_OS_BUILDER_ORDER } from "../../adrian-os-skill.ts";
 import { spawn } from "node:child_process";
 import { createHash, randomUUID } from "node:crypto";
 import { codingFileRequest, type CodingToolReceipt, type CodingFileChange } from "./file-receipts.ts";
@@ -21,6 +22,7 @@ export type KimiProbe = {
   error?: string;
   runtimeVerified: false;
   requestDispatched?: boolean;
+  instructionReceipt?: BuilderInstructionReceipt;
 };
 
 type JsonObject = Record<string, unknown>;
@@ -218,6 +220,7 @@ export type CodingTurn = {
   toolReceipts?: CodingToolReceipt[];
   filesChanged?: CodingFileChange[];
   verification?: { implementation: "unverified"; builderInstructionDigest: string; checks: { id: string; status: "not_run" }[] };
+  instructionReceipt?: BuilderInstructionReceipt;
 };
 
 type LiveHandle = {

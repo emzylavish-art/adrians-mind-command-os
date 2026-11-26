@@ -24,6 +24,12 @@ export type ImageRef = {
   blobId?: string;
   name?: string;
   mime?: string;
+  assetId?: string;
+  parentAssetId?: string;
+  operationId?: string;
+  createdAt?: string;
+  editPrompt?: string;
+  preferred?: boolean;
 };
 
 

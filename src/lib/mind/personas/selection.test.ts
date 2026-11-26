@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
-import { addAgentFromTemplate, addCustomAgent, readFleet } from "../fleet.ts";
+import { emptyFleet, addAgentFromTemplate, addCustomAgent, readFleet } from "../fleet.ts";
 import { accountWorkspaceKey, emptyWorkspace, normalizeWorkspace, WORKSPACE_KEY } from "../workspace.ts";
 import { buildPersonaDirectory } from "./directory.ts";
 import { PERSONA_SELECT_KEY, applyPersonaHandoff, clearPersonaSelection, persistPersonaOpen, personaChatHref, readPersonaSelection, selectPersona, writePersonaSelection, PERSONA_SELECTION_TTL_MS, consumePersonaHandoff, personaSelectionKey } from "./selection.ts";

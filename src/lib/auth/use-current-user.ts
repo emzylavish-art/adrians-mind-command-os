@@ -15,6 +15,7 @@ export type AppUser = {
   isDevFallback: boolean;
   /** Ephemeral login identity for stale-callback guards; never a bearer or credential. */
   sessionEpoch?: string | null;
+  sessionSource?: "supabase" | "better-auth" | "both";
 };
 
 /**
@@ -40,6 +41,8 @@ export type CurrentUserState = {
   /** True while the session is still resolving — don't treat `user: null` as signed out yet. */
   isPending: boolean;
   error?: string | null;
+  status?: CanonicalSessionState["status"];
+  retry?: () => void;
 };
 
 const DEV_STATE: CurrentUserState = { user: DEV_USER, isPending: false, status: "authenticated", error: null };

@@ -74,6 +74,9 @@ export type PaletteHit = {
   archived?: boolean;
   temporary?: boolean;
   rank?: number;
+  focusId?: string;
+  rankTime?: string;
+  matchCount?: number;
 };
 
 export type PaletteData = {
@@ -87,10 +90,10 @@ export type PaletteData = {
 
 export type PaletteInput = {
   filter?: PaletteHit["view"] | "all";
-  schedules?: { id: string; goal?: string; task?: string; prompt?: string; name?: string; enabled: boolean }[];
+  schedules?: { id: string; goal?: string; task?: string; prompt?: string; name?: string; enabled?: boolean; instruction?: string; timeZone?: string }[];
   research?: { id: string; question: string; summary: string; at?: string }[];
   activity?: { id: string; action: string; target: string; result: string; at?: string }[];
-  connections?: { id: string; name?: string; label?: string; status?: string; state?: string }[];
+  connections?: { id: string; name?: string; label?: string; status?: string; state?: string; provider?: string }[];
   skills?: { id: string; name: string; description?: string }[];
   query: string;
   projects: { id: string; name: string; description: string }[];
@@ -100,11 +103,8 @@ export type PaletteInput = {
   agents: { id: string; name: string; description: string; archived: boolean; version?: number }[];
   runs: { id: string; goal: string; state: string }[];
   schedules?: { id: string; name: string; instruction?: string; timeZone: string }[];
-  connections?: { id: string; label: string; provider: string; status: string }[];
   browserSessions?: { id: string; title: string; url: string; excerpt: string; lastAction: string }[];
-  research?: { id: string; question: string; summary: string; at: string }[];
   deployments?: { id: string; agentId: string; agentVersion: number; target: string; state: string; error: string }[];
-  activity?: { id: string; action: string; target: string; result: string; at: string }[];
 };
 const COLLECTIONS = ["projects", "chats", "memories", "files", "agents", "runs"] as const;
 const NAVIGATION_INDEX: readonly IndexedPaletteDocument[] = PALETTE_DESTINATIONS.map((item) => ({

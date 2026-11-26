@@ -35,6 +35,12 @@ export type MsgImage = {
   blobId?: string;
   name?: string;
   mime?: string;
+  assetId?: string;
+  parentAssetId?: string;
+  operationId?: string;
+  createdAt?: string;
+  editPrompt?: string;
+  preferred?: boolean;
 };
 
 export type Msg = {
@@ -72,6 +78,16 @@ export type Msg = {
   savedMemoryId?: string | null;
   /** Temporary https link returned by the video service. */
   videoUrl?: string;
+  helperReceipts?: HelperReceipt[];
+  executionId?: string;
+  executionEvidence?: ExecutionEvidence;
+  videoOperationId?: string;
+  videoRetention?: "provider-temporary" | "local-download" | "account-storage";
+  videoExpiresAt?: string | null;
+  consult?: ConsultAttempt[];
+  replyStatus?: "streaming" | "interrupted" | "complete";
+  replyOperationId?: string;
+  contextNotice?: string;
 };
 
 export type ReplyVersion = { id: string; content: string; at: string; provider?: string; model?: string; requestedModel?: string; routingMode?: Msg["routingMode"]; memoryUsedIds?: string[]; images?: MsgImage[]; videoUrl?: string };
@@ -121,6 +137,9 @@ export type Chat = {
   /** Independent quoted copy; deleting its source does not delete this conversation. */
   quotedFrom?: { chatId: string; messageIds: string[]; quotedAt: string };
   branchFrom?: { chatId: string; messageId: string; createdAt: string; sourceRevision: string; reason: "edit" };
+  botRevision?: number;
+  documentSources?: { fileId: string; revision: string; name: string; messageId?: string }[];
+  contextPolicy?: ChatContextPolicy;
 };
 
 export type MemoryScope = "global" | "project" | "chat";
@@ -144,6 +163,7 @@ export type MemoryItem = {
   reviewAt?: string;
   supersedesIds?: string[];
   sourceRef?: { documentId?: string; section?: string; url?: string; quote?: string };
+  reviewReason?: string;
 };
 
 export type ProjectTask = { id: string; title: string; status: "todo" | "doing" | "done"; dependsOn: string[]; updatedAt: string };
@@ -223,9 +243,11 @@ export type LocalFile = {
   retrievalDisabled?: boolean;
   original?: { id: string; sha256: string; bytes: number; mime: string; storage: "browser" };
   extraction?: { method: "plain-text" | "pdf-text" | "legacy"; extractedCharacters: number; retainedCharacters: number; coverage: string; at: string };
+  document?: { kind: "pdf"; pages: number; coverage: string; partial: boolean; chunks: import("./pdf-text.ts").PdfChunk[] };
 };
 
 export type Workspace = {
+  recovery?: RecoveryRecord[];
   version: 1;
   halted: boolean;
   chats: Chat[];
@@ -248,6 +270,7 @@ export type Workspace = {
   browserSessions: BrowserSessionRecord[];
   syncConflicts?: WorkspaceConflict[];
   toolPermissions?: Record<string, boolean>;
+  deletedFileIds?: string[];
 };
 
 export type RecoveryRecord = {

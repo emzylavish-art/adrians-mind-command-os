@@ -151,7 +151,7 @@ import {
 } from "lucide-react";
 import { approvalTokenFor, decide, type Autonomy } from "@/lib/mind/policy";
 import { reaDoctor, reaInspect } from "@/lib/mind/rea";
-import { CAPABILITIES } from "@/lib/mind/registry";
+import { isVerifiedCapability, CAPABILITIES, type CapabilityStatus } from "@/lib/mind/registry";
 import { REQUIREMENTS, requirementCounts } from "@/lib/mind/requirements";
 import { consumeMindTurn, prepareTurn, shouldStoreReply, STOPPED_REPLY, checkTurnReceipt } from "@/lib/mind/live-turn";
 import { boundAbortSignal } from "@/lib/mind/turn-timeouts";
@@ -188,7 +188,7 @@ const DashboardApp = lazy(() => import("@/components/mind/agent-command-center")
 import { isLiveVoiceOccupied, LIVE_VOICE_BUSY_MESSAGE } from "@/lib/mind/voice-live/occupancy";
 import { probeOllamaConductor, runOllamaConductor } from "@/lib/mind/voice/ollama-conductor";
 import { readTranscriptionPolicy, transcriptionPolicyKey, transcriptionRecipients, type TranscriptionPolicy } from "@/lib/mind/voice/transcription-policy";
-import { formatVoiceClientError, resolveVoiceMode } from "@/lib/mind/voice/errors";
+import { formatVoiceClientError, resolveVoiceMode, DIRECT_FALLBACK_NOTICE } from "@/lib/mind/voice/errors";
 import { commitVoiceMode, toggleVoiceMode, type VoiceRoutingMode } from "@/lib/mind/voice/mode";
 import {
   getServerVoiceMode,
@@ -299,7 +299,7 @@ import { tickFleet } from "@/lib/mind/fleet";
 import { createBotFromSpeech, parseCreateBot } from "@/lib/mind/speak-bot";
 import { interpretCommand, type CommandMode } from "@/lib/mind/intent";
 import { notionSearchIssue, retainActivity } from "@/lib/mind/connection-attention";
-import { createPaletteIndexBuilder, queryPaletteIndex, paletteShortcut } from "@/lib/mind/palette";
+import { createPaletteIndexBuilder, queryPaletteIndex, paletteShortcut, paletteHits } from "@/lib/mind/palette";
 import { paletteKeyAction } from "@/lib/mind/palette-keys";
 import { runLocalPlan } from "@/lib/mind/local-tools";
 import { greeting } from "@/lib/mind/greeting";
@@ -423,7 +423,7 @@ import {
 } from "@/lib/mind/workspace";
 import { WORKSPACE_ROUTE_LINKS } from "@/lib/mind/workspace-nav";
 import { CONVERSATIONAL_PERSONALITIES, isPersonalityId, personalityStatus, resolvePersonalityId, type PersonalityId } from "@/lib/mind/personalities";
-import { applyPersonaHandoff, consumePersonaHandoff } from "@/lib/mind/personas/selection";
+import { applyPersonaHandoff, clearPersonaSelection, readPersonaSelection } from "@/lib/mind/personas/selection";
 
 type View =
   | "command"
@@ -809,12 +809,23 @@ function shownChatTitle(chat: { title?: string; messages?: { role: string; conte
   return first ? humanThreadTitle(first) : "Intelligence";
 }
 
+function statusWord(status: CapabilityStatus) {
+  if (status === "live_verified") return "Live verified";
+  if (status === "ready") return "Ready";
+  if (status === "configured") return "Configured";
+  if (status === "blocked") return "Blocked";
+  if (status === "unconfigured") return "Not configured";
+  if (status === "local_required") return "Local only";
+ if (status === "paid_required") return "Paid, not called";
+ return "Not implemented";
+}
+
 export function CommandApp() {
   const { user: account, error } = useCurrentUserState();
   return <AccountPreferencesProvider ownerId={account?.id ?? null}>{error && <div role="alert" className="border-b border-warning p-3 text-sm">{error}<button type="button" className="ml-3 min-h-11 underline" onClick={() => window.location.reload()}>Retry verification</button></div>}<SurfaceErrorBoundary key={account?.id ?? "guest"} name="Workspace"><CommandSession account={account} /></SurfaceErrorBoundary></AccountPreferencesProvider>;
 }
 
-function CommandSession({ account }: { account: ReturnType<typeof useCurrentUser> }) {
+function CommandSession({ account }: { account: ReturnType<typeof useCurrentUserState>["user"] }) {
   const preferenceStorage = useAccountPreferences();
   const loopback = typeof window !== "undefined" && (window.location.hostname === "127.0.0.1" || window.location.hostname === "localhost");
   const { ws, setWs, ready, syncNote, serverHeld, saveError, retrySave, clearStoredCopy, ensureChatMedia, prioritizeChatMedia, mediaProgress } = useMindWorkspace(account?.id ?? null, account?.emailVerified ? account.primaryEmail : null);

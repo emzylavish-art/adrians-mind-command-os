@@ -1,3 +1,4 @@
+import type { NotionWriteOutcome } from "./notion-write-receipt.ts";
 import { classifyNotionFailure, type NotionFailureEvidence, type NotionOperation as NotionOperationKind } from "./notion-operation-status.ts";
 import { createHash, randomUUID } from "node:crypto";
 import type { NotionOperation, NotionOperationStore } from "./notion-operation-store.ts";
@@ -38,6 +39,7 @@ export type NotionTurn = {
   recovery?: "reconnect" | "retry_read" | "verify_existing" | "confirm";
   outcome?: "not_dispatched" | "rejected" | "accepted" | "uncertain" | "verified";
   nextCursor?: string | null;
+  writeOutcome?: NotionWriteOutcome;
 };
 
 type FetchLike = (url: string, init?: RequestInit) => Promise<{ ok: boolean; status: number; json: () => Promise<unknown> }>;

@@ -148,6 +148,7 @@ export async function sha256(text: string): Promise<string> {
 export function normalizeWorkspace(input: unknown): Workspace {
   const base = emptyWorkspace();
   if (!isRecord(input)) return base;
+  if (Array.isArray(input.recovery)) base.recovery = normalizeRecovery(input.recovery);
   base.halted = input.halted === true;
   if (isRecord(input.toolPermissions)) {
     const permissions = input.toolPermissions;
@@ -813,6 +814,8 @@ export function mergeWorkspace(current: Workspace, source: Workspace): Workspace
       const messages = merge(archive.messages, chat.messages).sort((a, b) => a.at.localeCompare(b.at));
       return { ...chat, temporary: chat.temporary || archive.temporary, messages };
     }),
+    // Preserve the current resolution when an older archive contains the same operation.
+    recovery: normalizeRecovery([...(current.recovery ?? []), ...(incoming.recovery ?? [])]),
     ...mergeMemoryState(current, incoming),
     projects: merge(current.projects, incoming.projects),
     files: merge(current.files, incoming.files),

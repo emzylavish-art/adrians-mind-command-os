@@ -21,6 +21,12 @@ export type ImageAttachment = {
   name?: string;
   /** MIME subtype hint, e.g. jpeg / png / webp */
   mime?: string;
+  assetId?: string;
+  parentAssetId?: string;
+  operationId?: string;
+  createdAt?: string;
+  editPrompt?: string;
+  preferred?: boolean;
 };
 
 export const MAX_IMAGE_EDGE = 2048;

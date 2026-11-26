@@ -7,7 +7,7 @@ import { clearAccountDrafts } from "./use-composer-draft";
 import { createWorkspaceCheckpoint } from "./workspace-checkpoint";
 import { loadMindCopy, saveMindChanges, loadAccountAttachment, saveAccountAttachment, runDurableCorePass, runFleetModelStep } from "./server";
 import { planWorkspaceChanges, validateWorkspaceChanges } from "./workspace-changes";
-import { reconcileServerWorkspace, serverCheckpointKey, synchronizeWorkspace } from "./sync";
+import { chooseServerSync, reconcileServerWorkspace, serverCheckpointKey, synchronizeWorkspace } from "./sync";
 import { prepareAccountAttachments } from "./media/attachment-integrity";
 import type { Chat, Workspace } from "./types";
 import { accountWorkspaceKey, emptyWorkspace, mergeChatDeletionState, mergeMemoryState, loadWorkspaceForAccount, readWorkspaceRawForAccount, canonical, normalizeWorkspace, stampWorkspaceEdits, isPrimaryOwner } from "./workspace";

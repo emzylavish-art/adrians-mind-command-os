@@ -1,4 +1,4 @@
-import type { Chat, Workspace, WorkspaceConflict, AgentRun } from "./types.ts";
+import type { Chat, Workspace, WorkspaceConflict as SavedWorkspaceConflict, AgentRun } from "./types.ts";
 import { canonical, mergeChatDeletionState, mergeMemoryState, workspaceJsonValue } from "./workspace.ts";
 
 export function sameWorkspaceValue(left: unknown, right: unknown): boolean {
@@ -11,7 +11,7 @@ const safeFields: Partial<Record<keyof Workspace, Set<string>>> = {
   files: new Set(["name", "projectId"]),
 };
 
-function mergeFields<T extends Row>(stored: T, base: T, edited: T, collection: string, conflicts: WorkspaceConflict[], fields?: Set<string>): T {
+function mergeFields<T extends Row>(stored: T, base: T, edited: T, collection: string, conflicts: SavedWorkspaceConflict[], fields?: Set<string>): T {
   const result: Record<string, unknown> = { ...stored };
   const old = base as T & Record<string, unknown>, local = edited as T & Record<string, unknown>, remote = stored as T & Record<string, unknown>;
   const changed = Object.keys({ ...old, ...local }).filter((key) => key !== "id" && !same(old[key], local[key]));
@@ -29,7 +29,7 @@ function mergeFields<T extends Row>(stored: T, base: T, edited: T, collection: s
   return result as T;
 }
 
-function mergeRows<T extends Row>(stored: T[], base: T[], edited: T[], collection: string, conflicts: WorkspaceConflict[], reconcile?: (current: T, before: T, after: T) => T): T[] {
+function mergeRows<T extends Row>(stored: T[], base: T[], edited: T[], collection: string, conflicts: SavedWorkspaceConflict[], reconcile?: (current: T, before: T, after: T) => T): T[] {
   if (same(base, stored)) return edited;
   if (same(base, edited)) return stored;
   const before = new Map(base.map((row) => [row.id, row]));
@@ -116,7 +116,8 @@ export function reconcileWorkspace(
           ? { ...chat, messages: resolve(chat.messages, chosen.chats.find((item) => item.id === chatId)?.messages ?? [], conflict) as Chat["messages"] }
           : chat) };
       } else {
-        const key = conflict.collection as Exclude<keyof Workspace, "version" | "halted" | "deletedMemoryIds">;
+        const key = workspaceCollections.find((collection) => collection === conflict.collection);
+        if (!key) continue;
         workspace = { ...workspace, [key]: resolve(workspace[key], chosen[key], conflict) };
       }
     }
@@ -124,8 +125,8 @@ export function reconcileWorkspace(
   return { workspace, conflicts: preference ? [] : conflicts };
 }
 
-function mergeRun(current: AgentRun, before: AgentRun, after: AgentRun): AgentRun {
-  const merged = mergeFields(current, before, after);
+function mergeRun(current: AgentRun, before: AgentRun, after: AgentRun, conflicts: SavedWorkspaceConflict[]): AgentRun {
+  const merged = mergeFields(current, before, after, "runs", conflicts);
   if (["completed", "failed", "canceled"].includes(current.state) && current.state !== before.state) {
     // A stale worker checkpoint cannot restart a terminal execution or replace
     // its final receipt. A new attempt has a new run ID.
@@ -137,10 +138,10 @@ function mergeRun(current: AgentRun, before: AgentRun, after: AgentRun): AgentRu
 
 export const workspaceCollections = ["chats", "memories", "projects", "files", "usage", "audit", "agents", "deployments", "runs", "runEvents", "connections", "mailboxes", "schedules", "pins", "browserSessions"] as const;
 
-function pendingConflicts(stored: Workspace, base: Workspace, edited: Workspace): WorkspaceConflict[] {
+function pendingConflicts(stored: Workspace, base: Workspace, edited: Workspace): SavedWorkspaceConflict[] {
   const before = new Map((base.syncConflicts ?? []).map((item) => [item.id, item]));
   const after = new Map((edited.syncConflicts ?? []).map((item) => [item.id, item]));
-  const result: WorkspaceConflict[] = [];
+  const result: SavedWorkspaceConflict[] = [];
   for (const current of stored.syncConflicts ?? []) {
     const previous = before.get(current.id), next = after.get(current.id);
     // An explicit resolution removes precisely the reviewed variant, while a
@@ -156,28 +157,44 @@ function pendingConflicts(stored: Workspace, base: Workspace, edited: Workspace)
 
 /** Apply only the changes this browser made from its last locally persisted checkpoint. */
 export function mergeWorkspaceEdits(stored: Workspace, base: Workspace, edited: Workspace): Workspace {
-  const deletedFiles = [...new Set([...(stored.deletedFileIds ?? []), ...(edited.deletedFileIds ?? [])])];
-  return {
+  const conflicts = pendingConflicts(stored, base, edited);
+  const mergeChat = (current: Chat, before: Chat, after: Chat): Chat => {
+    const { messages: _a, ...a } = current, { messages: _b, ...b } = before, { messages: _c, ...c } = after;
+    return { ...mergeFields(a, b, c, "chats", conflicts), messages: mergeRows(current.messages, before.messages, after.messages, `messages/${current.id}`, conflicts) };
+  };
+  const deletedFileIds = [...new Set([...(stored.deletedFileIds ?? []), ...(edited.deletedFileIds ?? [])])];
+  const next: Workspace = {
     ...stored,
-    ...(stored.recovery?.length || edited.recovery?.length ? { recovery: mergeRows(stored.recovery ?? [], base.recovery ?? [], edited.recovery ?? []).slice(0, 200) } : {}),
+    ...(stored.recovery?.length || edited.recovery?.length ? { recovery: mergeRows(stored.recovery ?? [], base.recovery ?? [], edited.recovery ?? [], "recovery", conflicts).slice(0, 200) } : {}),
     ...mergeMemoryState(stored, edited),
     halted: edited.halted === base.halted ? stored.halted : edited.halted,
-    ...mergeChatDeletionState({ ...edited, chats: mergeRows(stored.chats, base.chats, edited.chats, mergeChat) }, stored),
-    projects: mergeRows(stored.projects, base.projects, edited.projects),
-    files: mergeRows(stored.files, base.files, edited.files).filter((file) => !deletedFiles.includes(file.id)),
-    ...(deletedFiles.length ? { deletedFileIds: deletedFiles } : {}),
-    usage: [...mergeRows(stored.usage, base.usage, edited.usage)].sort((a, b) => b.at.localeCompare(a.at)).slice(0, 200),
-    audit: [...mergeRows(stored.audit, base.audit, edited.audit)].sort((a, b) => b.at.localeCompare(a.at)).slice(0, 200),
-    agents: mergeRows(stored.agents, base.agents, edited.agents),
-    deployments: mergeRows(stored.deployments, base.deployments, edited.deployments),
-    runs: mergeRows(stored.runs, base.runs, edited.runs, mergeRun),
-    runEvents: mergeRows(stored.runEvents, base.runEvents, edited.runEvents),
-    connections: mergeRows(stored.connections, base.connections, edited.connections),
-    mailboxes: mergeRows(stored.mailboxes, base.mailboxes, edited.mailboxes),
-    schedules: mergeRows(stored.schedules, base.schedules, edited.schedules),
-    pins: mergeRows(stored.pins, base.pins, edited.pins),
-    browserSessions: mergeRows(stored.browserSessions, base.browserSessions, edited.browserSessions),
+    chats: mergeRows(stored.chats, base.chats, edited.chats, "chats", conflicts, mergeChat),
+    projects: mergeRows(stored.projects, base.projects, edited.projects, "projects", conflicts),
+    files: mergeRows(stored.files, base.files, edited.files, "files", conflicts).filter((file) => !deletedFileIds.includes(file.id)),
+    ...(deletedFileIds.length ? { deletedFileIds } : {}),
+    usage: mergeRows(stored.usage, base.usage, edited.usage, "usage", conflicts).sort((a, b) => b.at.localeCompare(a.at)).slice(0, 200),
+    audit: mergeRows(stored.audit, base.audit, edited.audit, "audit", conflicts).sort((a, b) => b.at.localeCompare(a.at)).slice(0, 200),
+    agents: mergeRows(stored.agents, base.agents, edited.agents, "agents", conflicts),
+    deployments: mergeRows(stored.deployments, base.deployments, edited.deployments, "deployments", conflicts),
+    runs: mergeRows(stored.runs, base.runs, edited.runs, "runs", conflicts, (current, before, after) => mergeRun(current, before, after, conflicts)),
+    runEvents: mergeRows(stored.runEvents, base.runEvents, edited.runEvents, "runEvents", conflicts),
+    connections: mergeRows(stored.connections, base.connections, edited.connections, "connections", conflicts),
+    mailboxes: mergeRows(stored.mailboxes, base.mailboxes, edited.mailboxes, "mailboxes", conflicts),
+    schedules: mergeRows(stored.schedules, base.schedules, edited.schedules, "schedules", conflicts),
+    pins: mergeRows(stored.pins, base.pins, edited.pins, "pins", conflicts),
+    browserSessions: mergeRows(stored.browserSessions, base.browserSessions, edited.browserSessions, "browserSessions", conflicts),
   };
+  const unique = [...new Map(conflicts.map((conflict) => [conflict.id, conflict])).values()];
+  if (stored.toolPermissions || edited.toolPermissions) {
+    next.toolPermissions = { ...stored.toolPermissions };
+    for (const key of ["list_projects", "list_chats", "search_notes"]) {
+      const local = edited.toolPermissions?.[key], old = base.toolPermissions?.[key], remote = stored.toolPermissions?.[key];
+      if (local !== old && local !== undefined) next.toolPermissions[key] = remote !== old && remote !== local ? false : local;
+    }
+  }
+  if (unique.length) next.syncConflicts = unique;
+  else delete next.syncConflicts;
+  return { ...next, ...mergeChatDeletionState({ ...next, deletedChatIds: edited.deletedChatIds }, stored) };
 }
 
 /** Explicit review is the only operation that selects a conflicting variant. */

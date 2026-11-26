@@ -22,6 +22,8 @@ type ConnRow = {
   workspace_id: string | null; bot_id: string | null; account_label: string | null;
   grant_generation: string | null; external_account_id: string | null;
   connected_at: string | Date; token_type: string | null; scopes: string | null;
+  expires_at?: string | Date | null;
+  scope_source?: "provider" | "requested" | "unknown" | null;
 };
 function restore(row: ConnRow): StoredConnection | null {
   if (!isConnectorId(row.connector)) return null;

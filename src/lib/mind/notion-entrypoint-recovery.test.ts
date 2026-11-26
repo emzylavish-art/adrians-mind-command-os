@@ -5,7 +5,7 @@ import { test } from "node:test";
 import ts from "typescript";
 import { runNotionTurn } from "./notion.ts";
 import { closeRecovery, saveRecovery } from "./recovery-inbox.ts";
-import { emptyWorkspace } from "./workspace.ts";
+import { emptyWorkspace, mergeWorkspace, normalizeWorkspace } from "./workspace.ts";
 import type { NotionOperation, NotionOperationStore } from "./notion-operation-store.ts";
 
 const source = readFileSync(new URL("../../components/mind/command-app.tsx", import.meta.url), "utf8");
@@ -176,3 +176,16 @@ for (const [name, options] of [
     assert.notEqual(app.wsRef.current.recovery?.[0]?.state, "resolved");
   });
 }
+
+test("reload preserves a pending write and archive import keeps its later resolution", () => {
+  const base = emptyWorkspace();
+  const pending = saveRecovery(base, {
+    id: "append-a", operationId: "append-a", state: "open", action: "notion_operation",
+    target: "notion", chatId: "chat-a", workspaceId: "workspace-A", pageId: "p1",
+    at: "2026-01-01T12:00:00.000Z", message: "Verify this existing operation.", outcome: "uncertain",
+  });
+  const reopened = normalizeWorkspace(JSON.parse(JSON.stringify(pending)));
+  assert.deepEqual(reopened.recovery, pending.recovery);
+  const resolved = closeRecovery(reopened, "append-a", "resolved");
+  assert.equal(mergeWorkspace(resolved, pending).recovery?.[0].state, "resolved");
+});

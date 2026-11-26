@@ -1,3 +1,4 @@
+import { allowMindRequest } from "../limits.ts";
 import { authorizeExternalResource, externalResourceCall } from "../external-resource-call.server.ts";
 import { withFailureEnvelope } from "../failure-envelope.ts";
 /**
@@ -35,6 +36,8 @@ export type VoiceHttpDeps = {
   reserve?: ReserveDispatch;
   settle?: SettleDispatch;
   customCredential?: (userId: string, id: string) => Promise<SelectedSpeechCredential>;
+  authorize?: (owner: string, provider: "xAI" | "OpenAI") => Promise<(ok: boolean) => Promise<void>>;
+  recordUsage?: VoiceUsageWriter;
 };
 
 function json(body: unknown, status = 200) {

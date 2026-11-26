@@ -19,7 +19,11 @@ export type ResearchRoute = {
   configurationRevision: string; endpointOrigin: string | null;
   reportedModel: string | null; requestId: string | null;
 };
-export type ResearchStep = { query: string; ok: boolean; count: number; status?: "succeeded" | "failed" | "unattempted"; error?: string };
+export type ResearchStep = { query: string; ok: boolean; count: number; status?: "succeeded" | "failed" | "unattempted"; error?: string;
+  retainedCount?: number;
+  at?: string;
+  providerId?: string;
+  routeFingerprint?: string; };
 export type ResearchEvidence = ResearchCitation & { query: string; at: string; verification: "provider_returned"; providerId?: string; routeFingerprint?: string };
 export type ResearchAnswer = { text: string; annotations: { url: string; start: number | null; end: number | null }[] };
 
@@ -85,6 +89,7 @@ export type ResearchResult = {
   claims?: { text: string; sourceUrls: string[]; kind: "provider-cited" }[];
   /** True when some deep-research queries timed out but real citations were kept. */
   partial?: boolean;
+  providerIdentity?: ResearchProviderIdentity;
 };
 
 /** Per-query search fetch budget (ms). Override with MIND_SEARCH_TIMEOUT_MS (≥1000). */
