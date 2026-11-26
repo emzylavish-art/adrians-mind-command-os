@@ -55,9 +55,10 @@ export function WhisperFlowBar(props: WhisperFlowBarProps) {
       llmRefine:
         propsRef.current.llmRefine ||
         (async (text: string) => {
-          if (propsRef.current.freeOnly) return null;
+          const freeOnly = propsRef.current.freeOnly === true;
+          if (freeOnly) return null;
           try {
-            const result = await refineDictationOptional({ data: { text, enabled: true, freeOnly: propsRef.current.freeOnly === true } });
+            const result = await refineDictationOptional({ data: { text, enabled: true, freeOnly } });
             if (!result || typeof result !== "object") {
               setLlmStatus("Optional LLM refinement failed. Local refinement was kept.");
               return null;
