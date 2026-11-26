@@ -42,6 +42,9 @@ jobs:
         options: --health-cmd pg_isready --health-interval 5s --health-timeout 5s --health-retries 10
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          persist-credentials: false
       - name: Check out the previous production application for upgrade testing
         uses: actions/checkout@v4
         with:
@@ -60,6 +63,9 @@ jobs:
     timeout-minutes: 20
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          persist-credentials: false
       - uses: actions/setup-node@v4
         with:
           node-version: "24.11.1"
@@ -72,12 +78,23 @@ jobs:
     timeout-minutes: 35
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          persist-credentials: false
       - uses: actions/setup-node@v4
         with:
           node-version: "24.11.1"
           cache: npm
       - run: npm ci
       - run: node scripts/run-tests.mjs --scripts
+        env:
+          ADRIAN_CASE_REPORT: ${{ runner.temp }}/cases-scripts.jsonl
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: cases-scripts
+          path: ${{ runner.temp }}/cases-scripts.jsonl
+          if-no-files-found: error
 
   unit-tests:
     runs-on: ubuntu-latest
@@ -88,18 +105,32 @@ jobs:
         shard: [0, 1, 2, 3]
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          persist-credentials: false
       - uses: actions/setup-node@v4
         with:
           node-version: "24.11.1"
           cache: npm
       - run: npm ci
       - run: node scripts/run-tests-shard.mjs ${{ matrix.shard }} 4
+        env:
+          ADRIAN_CASE_REPORT: ${{ runner.temp }}/cases-shard-${{ matrix.shard }}.jsonl
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: cases-shard-${{ matrix.shard }}
+          path: ${{ runner.temp }}/cases-shard-${{ matrix.shard }}.jsonl
+          if-no-files-found: error
 
   build:
     runs-on: ubuntu-latest
     timeout-minutes: 25
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          persist-credentials: false
       - uses: actions/setup-node@v4
         with:
           node-version: "24.11.1"
@@ -113,6 +144,9 @@ jobs:
     timeout-minutes: 15
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          persist-credentials: false
       - uses: actions/setup-node@v4
         with:
           node-version: "24.11.1"
@@ -124,3 +158,51 @@ jobs:
           name: mind-interface-inventory
           path: out/interface-audit.*
           retention-days: 30
+
+  case-inventory:
+    needs: [script-tests, unit-tests]
+    if: always()
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "24.11.1"
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: cases-*
+          path: ${{ runner.temp }}/case-reports
+          merge-multiple: true
+      - run: node scripts/verify-case-reports.mjs "${{ runner.temp }}/case-reports"
+
+  browser-fixtures:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "24.11.1"
+          cache: npm
+      - run: npm ci
+      - name: Capture isolated Chromium fixtures
+        run: |
+          export BROWSER_EXECUTABLE_PATH="$(command -v google-chrome)"
+          node scripts/visual/run-c3-fixture.mjs
+          FIXTURE_SCRIPT=scripts/visual/paired-chat.mjs node scripts/visual/run-c3-fixture.mjs
+        env:
+          VISUAL_ARTIFACT_DIR: ${{ runner.temp }}/browser-fixtures
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: chromium-fixtures-${{ github.event.pull_request.head.sha || github.sha }}
+          path: |
+            ${{ runner.temp }}/browser-fixtures/*.png
+            ${{ runner.temp }}/browser-fixtures/*.json
+          if-no-files-found: error

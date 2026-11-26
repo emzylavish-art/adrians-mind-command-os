@@ -17,7 +17,9 @@ export function discoverTests(root) {
 
 /** CI runs scripts separately; source shards and npm test share this exact inventory. */
 export function testInventory(root = REPOSITORY_ROOT) {
-  const paths = (directory) => discoverTests(join(root, directory)).map((file) => relative(root, file));
+  const paths = (directory) => discoverTests(join(root, directory)).map((file) => relative(root, file))
+    // Historical command alias imports mcp/registry.test.ts, which discovery already executes.
+    .filter((file) => file !== "src/lib/mind/mcp-registry.test.ts");
   return { scripts: paths("scripts"), source: paths("src") };
 }
 
@@ -43,8 +45,11 @@ export function runNodeTests(files, { root = REPOSITORY_ROOT, spawnImpl = spawnS
   // per invocation prevents those workers from reopening another run's test DB.
   const ownedTemp = mkdtempSync(join(tempParent, "adrian-test-run-"));
   try {
-    const result = spawnImpl(process.execPath, ["--experimental-strip-types", "--test", "--test-concurrency=1", "--test-timeout=120000", ...files], {
-      cwd: root, stdio: "inherit", shell: false, env: { ...process.env, NODE_ENV: "test", TMPDIR: ownedTemp },
+    const { ADRIAN_CASE_REPORT: report, ...childEnvironment } = process.env;
+    const reporters = report ? ["--test-reporter=spec", "--test-reporter-destination=stdout",
+      "--test-reporter=./scripts/case-reporter.mjs", "--test-reporter-destination=" + report] : [];
+    const result = spawnImpl(process.execPath, ["--experimental-strip-types", "--test", ...reporters, "--test-concurrency=1", "--test-timeout=120000", ...files], {
+      cwd: root, stdio: "inherit", shell: false, env: { ...childEnvironment, NODE_ENV: "test", TMPDIR: ownedTemp },
     });
     if (result.error) throw result.error;
     return result.status ?? 1;

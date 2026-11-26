@@ -1,0 +1,24 @@
+{
+  "sha": "18d5b9364e6bdcfec028eeccf56fe596946ed8ce",
+  "route": "/?section=chat&chat=layout-50",
+  "fixture": "50 generated turns; browser-only data; external and server operations disabled",
+  "browser": "153.0.8010.0",
+  "viewport": {
+    "width": 390,
+    "height": 844
+  },
+  "lastMessage": {
+    "x": 31.1875,
+    "y": 465.15625,
+    "width": 294.03125,
+    "height": 41.390625
+  },
+  "composer": {
+    "x": 10,
+    "y": 711.21875,
+    "width": 370,
+    "height": 132.78125
+  },
+  "screenshot": "18d5b93-chat-390x844-50.png",
+  "sha256": "3fe829d3dd809664509fc3f786e27d318c101c8a25129167ee20c4da0d30a9c2"
+}

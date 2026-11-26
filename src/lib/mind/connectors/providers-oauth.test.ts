@@ -19,7 +19,7 @@ const connectors = ["gmail", "google_calendar", "google_drive", "slack", "github
 describe("oauth providers beyond notion", () => {
   for (const connector of connectors) {
     describe(connector, () => {
-      it("reports not_configured when env is missing", () => {
+      it(`${connector} reports not_configured when env is missing`, () => {
         const provider = getProvider(connector);
         assert.equal(providerConfigured(provider.readEnv({})), false);
         setConnectorDirectory(mkdtempSync(join(tmpdir(), `mind-oauth-${connector}-`)));
@@ -28,7 +28,7 @@ describe("oauth providers beyond notion", () => {
         assert.match(status.detail, /not configured/i);
       });
 
-      it("builds authorize URL with state (and PKCE when supported)", () => {
+      it(`${connector} builds authorize URL with state (and PKCE when supported)`, () => {
         setConnectorDirectory(mkdtempSync(join(tmpdir(), `mind-oauth-${connector}-`)));
         const provider = getProvider(connector);
         const env = {
@@ -56,7 +56,7 @@ describe("oauth providers beyond notion", () => {
         }
       });
 
-      it("exchanges code via mock token endpoint, stores encrypted, never leaks token", async () => {
+      it(`${connector} exchanges code via mock token endpoint, stores encrypted, never leaks token`, async () => {
         setConnectorDirectory(mkdtempSync(join(tmpdir(), `mind-oauth-${connector}-`)));
         process.env.CONNECTOR_TOKEN_SECRET = "test-secret-for-unit";
         const provider = getProvider(connector);

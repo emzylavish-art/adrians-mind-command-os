@@ -1,3 +1,4 @@
+import type { ResearchResult } from "@/lib/mind/research";
 import { failureEnvelopeFromAction, type FailureDetails } from "@/lib/mind/failure-envelope";
 import { memorySendRevision, checkMemorySendRevision } from "@/lib/mind/memory-send-policy";
 import type { StoredSelection } from "@/lib/mind/logic-routes";
@@ -2720,7 +2721,7 @@ function CommandSession({ account, accountPending }: { account: ReturnType<typeo
     setBusy(true);
     setError(null);
     try {
-      const result: ResearchReport["result"] = await searchWeb({ data: { query, operationId, projectId: chat.projectId, freeOnly: researchFreeOnly } });
+      const result: ResearchResult = await searchWeb({ data: { query, operationId, projectId: chat.projectId, freeOnly: researchFreeOnly } });
       if (turnOwner.current !== draftOwner) return;
       setBusy(false);
       if (!wsRef.current.chats.some((item) => item.id === chat.id)) return;
@@ -3147,7 +3148,7 @@ function CommandSession({ account, accountPending }: { account: ReturnType<typeo
     } else if (resume) {
       markDelivery("submitted");
     }
-    const customRoute = parseCustomProviderChoice(selectedProvider);
+    const customRoute = isCustomProvider ? parseCustomProviderChoice(selectedProvider) : null;
     const request: TurnRequest = options?.request ?? {
       id: operationId, memoryRevision,
       body: chatTurnBody({
@@ -3167,7 +3168,7 @@ function CommandSession({ account, accountPending }: { account: ReturnType<typeo
             ...(options?.accessNotes ?? []),
             ...relevantMemories(memoriesForChat(source, chat), text).map((item) => ({ id: item.id, text: item.text, authority: item.authority, sourceRef: item.sourceRef })),
           ],
-          supportsHistoryImages: customRoute.ok && !activeLogic && !consultPlan
+          supportsHistoryImages: customRoute?.ok && !activeLogic && !consultPlan
             ? customAiProviders.find(row => row.id === customRoute.id)?.modelCapabilities?.[customRoute.model]?.imageInput === "supported"
             : undefined,
           checkpoints: chat.checkpoints ?? [],
@@ -3730,7 +3731,7 @@ ${message.content}`;
     const researchGeneration = researchRunGuard.current.begin();
     setResearchPending(true);
     try {
-      const result: ResearchReport["result"] = await searchWeb({ data: { query, operationId, projectId, freeOnly: researchFreeOnly, retryQueries: retry?.steps?.filter((step) => !step.ok).map((step) => step.query) } });
+      const result: ResearchResult = await searchWeb({ data: { query, operationId, projectId, freeOnly: researchFreeOnly, retryQueries: retry?.steps?.filter((step) => !step.ok).map((step) => step.query) } });
       if (!draftOwner || turnOwner.current !== draftOwner || !researchRunGuard.current.current(researchGeneration)) return;
       setError(null);
       setWs((prev) => pushAudit(prev, result.configured && result.ok ? "research_result" : "research_refused", "search", result.ok ? `${result.citations.length} sources` : "no citation"));

@@ -106,9 +106,3 @@ describe("hacker pass — motion lane breaks", () => {
     assert.ok(spiked > 0);
   });
 });
-
-// Lane suites without their own package.json test entry (lane-only edit rule) ride along here.
-import "./hacker-pass-c3.test.ts";
-import "./motion-lod.test.ts";
-import "../motion/motion-clock.test.ts";
-import "./comet-tail.test.ts";

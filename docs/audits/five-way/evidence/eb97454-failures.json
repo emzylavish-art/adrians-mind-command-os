@@ -1,0 +1,157 @@
+{
+  "commit": "eb974545aa5edbac1a5a6475b3d873ade44603ac",
+  "tree": "3be43e67bf8b1264d34cfd865c1438c6139d7b40",
+  "totals": {
+    "pass": 3077,
+    "fail": 19,
+    "skip": 5
+  },
+  "failures": [
+    {
+      "file": "scripts/adrian-audit-deliver-lifecycle.test.mjs",
+      "line": 121,
+      "name": "AA020/021: actual deliver captures newly revoked memory after preparation, not its stale chat argument",
+      "result": "fail"
+    },
+    {
+      "file": "scripts/adrian-audit-deliver-lifecycle.test.mjs",
+      "line": 137,
+      "name": "AA020/021: memory revocation, project switch or note change during hashing prevents provider dispatch",
+      "result": "fail"
+    },
+    {
+      "file": "scripts/adrian-audit-deliver-lifecycle.test.mjs",
+      "line": 157,
+      "name": "AA020/061: owner change or emergency halt during fingerprint calculation cannot dispatch the prepared body",
+      "result": "fail"
+    },
+    {
+      "file": "scripts/adrian-audit-deliver-lifecycle.test.mjs",
+      "line": 175,
+      "name": "AA039/040: an interrupted long stream preserves every received character and retry performs only receipt GET",
+      "result": "fail"
+    },
+    {
+      "file": "scripts/adrian-audit-deliver-lifecycle.test.mjs",
+      "line": 202,
+      "name": "AA039/040: a stopped partial remains incomplete and account-expired recovery never posts again",
+      "result": "fail"
+    },
+    {
+      "file": "scripts/adrian-audit-deliver-lifecycle.test.mjs",
+      "line": 222,
+      "name": "AA039/044: completed long reply replaces its checkpoint once, preserves text and reports the actual answer provider",
+      "result": "fail"
+    },
+    {
+      "file": "scripts/adrian-audit-deliver-lifecycle.test.mjs",
+      "line": 250,
+      "name": "AA044: an explicit server rejection before dispatch is not recorded as a provider execution",
+      "result": "fail"
+    },
+    {
+      "file": "scripts/adrian-audit-deliver-lifecycle.test.mjs",
+      "line": 260,
+      "name": "AA040/044: fingerprint preparation failure is a failed unsent message, not uncertain provider delivery",
+      "result": "fail"
+    },
+    {
+      "file": "scripts/adrian-audit-deliver-lifecycle.test.mjs",
+      "line": 289,
+      "name": "AA044: a dispatched provider failure preserves known request metadata and partial usage without inventing zero",
+      "result": "fail"
+    },
+    {
+      "file": "src/lib/mind/memory-send-preparation.test.ts",
+      "line": 125,
+      "name": "stops stale memory when off happens during prepare",
+      "result": "fail"
+    },
+    {
+      "file": "src/lib/mind/memory-send-preparation.test.ts",
+      "line": 125,
+      "name": "stops stale memory when delete happens during fingerprint",
+      "result": "fail"
+    },
+    {
+      "file": "src/lib/mind/memory-send-preparation.test.ts",
+      "line": 125,
+      "name": "stops stale memory when correct happens during fingerprint",
+      "result": "fail"
+    },
+    {
+      "file": "src/lib/mind/memory-send-preparation.test.ts",
+      "line": 125,
+      "name": "stops stale memory when archive happens during fingerprint",
+      "result": "fail"
+    },
+    {
+      "file": "src/lib/mind/memory-send-preparation.test.ts",
+      "line": 125,
+      "name": "stops stale memory when off happens during fingerprint",
+      "result": "fail"
+    },
+    {
+      "file": "src/lib/mind/memory-send-preparation.test.ts",
+      "line": 143,
+      "name": "unchanged context reaches the transport normally",
+      "result": "fail"
+    },
+    {
+      "file": "src/lib/mind/memory-send-preparation.test.ts",
+      "line": 148,
+      "name": "blocks original uncertain retry after off and permits a deliberate fresh request",
+      "result": "fail"
+    },
+    {
+      "file": "src/lib/mind/memory-send-preparation.test.ts",
+      "line": 148,
+      "name": "blocks original uncertain retry after delete and permits a deliberate fresh request",
+      "result": "fail"
+    },
+    {
+      "file": "src/lib/mind/memory-send-preparation.test.ts",
+      "line": 148,
+      "name": "blocks original uncertain retry after correct and permits a deliberate fresh request",
+      "result": "fail"
+    },
+    {
+      "file": "src/lib/mind/memory-send-preparation.test.ts",
+      "line": 157,
+      "name": "unchanged uncertain retry checks exactly the original operation without posting its payload",
+      "result": "fail"
+    }
+  ],
+  "skips": [
+    {
+      "file": "scripts/brand-check.test.mjs",
+      "line": 312,
+      "name": "SKILL.md and AGENTS.md name the marker path and bound this script uses",
+      "result": "skip"
+    },
+    {
+      "file": "scripts/brand-check.test.mjs",
+      "line": 354,
+      "name": "the sections that own the brand-task prohibition never affirm a wait",
+      "result": "skip"
+    },
+    {
+      "file": "scripts/brand-check.test.mjs",
+      "line": 377,
+      "name": "SKILL.md tells the pass to self-check with the flag this CLI accepts",
+      "result": "skip"
+    },
+    {
+      "file": "scripts/write-atomic.test.mjs",
+      "line": 167,
+      "name": "every hand-over the og skill prints is one this script accepts",
+      "result": "skip"
+    },
+    {
+      "file": "src/lib/mind/handy-dictation.test.ts",
+      "line": 91,
+      "name": "Speak detection asks the loaded Handy engine and does not invent words",
+      "result": "skip"
+    }
+  ]
+}
