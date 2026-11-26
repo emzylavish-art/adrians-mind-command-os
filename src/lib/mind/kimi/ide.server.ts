@@ -170,6 +170,7 @@ export async function handleIdeTools(request: Request): Promise<Response> {
   } catch {
     return json({ ok: false, error: "Sign in is required." }, 401);
   }
+  if (request.method === "GET") return json({ ok: true, debugAvailable: ownerId === "dev-user", reason: ownerId === "dev-user" ? "Local development runtime" : "No isolated debugger runtime is configured for this account." });
   if (request.method !== "POST") return json({ ok: false, error: "Method not allowed." }, 405);
   const origin = assertSameOrigin(request);
   if (!origin.ok) return json({ ok: false, error: origin.error }, 403);

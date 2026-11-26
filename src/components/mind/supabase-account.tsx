@@ -1,7 +1,7 @@
+import { signOut as signOutAllAccounts } from "@/lib/auth/client";
 import { useEffect, useRef, useState } from "react";
 import {
   getSupabaseAuthUser,
-  signOutSupabase,
 } from "@/lib/supabase/actions";
 import {
   SupabaseAccountFailureBanner,
@@ -111,7 +111,7 @@ export function SupabaseAccountControls({
             const run = () => {
               setBusy(true);
               setActionState({ status: "running", action: "sign_out" });
-              void runSupabaseSignOut(() => signOutSupabase()).then((result) => {
+              void runSupabaseSignOut(() => signOutAllAccounts("/login")).then((result) => {
                 if (result.ok) {
                   setActionState({ status: "ok" });
                   // Redirect navigates away; if it returned without redirect, clear busy.
@@ -167,7 +167,7 @@ export function SupabaseAccountControls({
           onRetry={
             onceRetry(() => {
               setBusy(true);
-              void runSupabaseSignOut(() => signOutSupabase()).then((result) => {
+              void runSupabaseSignOut(() => signOutAllAccounts("/login")).then((result) => {
                 if (result.ok) {
                   setActionState({ status: "ok" });
                   setBusy(false);

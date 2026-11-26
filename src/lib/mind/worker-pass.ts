@@ -88,7 +88,10 @@ export async function runWorkerPass(
 }
 
 /** Advance only scheduled local runs. External tools remain waiting for the owner/runtime. */
-export async function runLocalSchedulePass(sql: Sql, now: string, workerId: string, readStop = readHaltState): Promise<WorkerPass> {
+export async function runLocalSchedulePass(sql: Sql, now: string, workerId: string, readStop = readHaltState, environment: "local-worker" | "hosted-worker" = "local-worker"): Promise<WorkerPass> {
+  // Every worker must claim and advance an occurrence under the same owner lock.
+  // The store's read-only/test fallback cannot provide that cross-worker guarantee.
+  if (!sql.transaction) throw new Error("Shared schedule execution requires transactional storage. No schedules were run.");
   const owners = await sql<{ user_id: string }>`select user_id from mind_snapshot`;
   const summary: WorkerPass = { owners: owners.length, ran: 0, failed: 0, skipped: 0, recovered: 0 };
   for (const owner of owners) {
@@ -104,13 +107,14 @@ export async function runLocalSchedulePass(sql: Sql, now: string, workerId: stri
         const stopped = haltFleet({ ...current, halted: true }, now);
         return { workspace: { ...stopped, schedules: stopped.schedules.map((job) => ({ ...job, enabled: false })) }, result: { ran: 0, failed: 0 } };
       }
-      const due = runDueSchedules(current, now);
+      const withHeartbeat = { ...current, schedules: current.schedules.map((job) => job.executionTarget === environment ? { ...job, workerHeartbeatAt: now, workerId } : job) };
+      const due = runDueSchedules(withHeartbeat, now, environment);
       const owned = (run: AgentRun) => run.id.startsWith("scheduled:") || run.parentId?.startsWith("scheduled:");
       const scheduledRuns = due.runs.filter(owned);
       const active = scheduledRuns.some((run) => run.state === "queued" || run.state === "running");
       const justAttempted = due.schedules.some((job, i) => job !== current.schedules[i]);
-      if (!active && !justAttempted) return { result: { ran: 0, failed: 0 } };
-      const stepped = tickFleet({ ...due, runs: scheduledRuns }, { workerId, now });
+      if (!active && !justAttempted) return { workspace: due.schedules.some((job) => job.executionTarget === environment) ? due : undefined, result: { ran: 0, failed: 0 } };
+      const stepped = tickFleet({ ...due, runs: scheduledRuns }, { workerId, now, environment });
       const changed = stepped.runs.filter((run) => !run.parentId && current.runs.find(old => old.id === run.id)?.state !== run.state);
       const failed = due.schedules.filter((job, i) => job !== current.schedules[i] && job.lastError).length;
       // This local step finished inside the owner snapshot transaction. A later one-shot

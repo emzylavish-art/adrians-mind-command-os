@@ -30,7 +30,7 @@ export async function haltIsOn(userId: string): Promise<boolean> {
   return (await readHaltState(userId)) !== "off";
 }
 
-export async function setDurableHalt(userId: string, on: boolean): Promise<{ ok: true; halted: boolean } | { ok: false; error: string }> {
+export async function setDurableHalt(userId: string, on: boolean): Promise<{ ok: true; halted: boolean; cancellation?: { cancelled: number; pending: number; unknown: number } } | { ok: false; error: string }> {
   if (!userId) return { ok: false, error: "Sign in is required." };
   try {
     if (sharedStorageRequired()) {
@@ -41,7 +41,14 @@ export async function setDurableHalt(userId: string, on: boolean): Promise<{ ok:
       // File names are scoped to the authenticated owner, including when repairing corrupt state.
       writeHaltFile(userId, on);
     }
-    return { ok: true, halted: on };
+    let cancellation;
+    if (on) {
+      try {
+        const { cancelOwnerJobs } = await import("./pc-pairing/store.ts");
+        cancellation = cancelOwnerJobs(userId);
+      } catch { cancellation = { cancelled: 0, pending: 0, unknown: 1 }; }
+    }
+    return { ok: true, halted: on, cancellation };
   } catch {
     return { ok: false, error: "The emergency stop could not be saved. Check storage and retry." };
   }

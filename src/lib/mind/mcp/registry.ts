@@ -522,6 +522,18 @@ export async function listRegistryTools(
       continue;
     }
     if (!server.url) continue;
+    if (server.protocol === "mcp") {
+      // Custom forms, chat approvals and this live list consume one saved
+      // discovery snapshot. Pagination and schema compatibility are shared.
+      const { refreshMcp } = await import("../custom-connection.ts");
+      const fresh = await refreshMcp(deps.registryDb ?? null, userId, server.id, { fetch: fetchImpl, lookup: deps.http?.lookup });
+      if (fresh.state !== "ready") {
+        tools.push({ serverId: server.id, serverLabel: server.label, name: "(unavailable)", description: fresh.error, enabled: true, status: "error" });
+      } else {
+        tools.push(...fresh.operations.map((operation) => ({ serverId: server.id, serverLabel: server.label, name: operation.name, description: operation.description, inputSchema: operation.inputSchema, enabled: true, status: operation.compatible ? "ok" as const : "error" as const })));
+      }
+      continue;
+    }
     const opened = await registryRpc(fetchImpl, server.url, server.token ?? "", null, {
       jsonrpc: "2.0",
       id: 1,

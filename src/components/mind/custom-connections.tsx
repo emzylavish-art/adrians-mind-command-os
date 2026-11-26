@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { focusConnection } from "./focus-connection";
-import { callCustomConnectionFn, listCustomConnectionsFn, saveCustomConnectionFn } from "@/lib/mind/custom-connection-fns";
+import { refreshCustomConnectionFn, callCustomConnectionFn, listCustomConnectionsFn, saveCustomConnectionFn } from "@/lib/mind/custom-connection-fns";
 import type { PublicConnection } from "@/lib/mind/custom-connection";
 import { missingConfigNotice, reasonCode, safeReason } from "@/lib/mind/mcp/call-contract";
 import { acceptResult, dismissResult, type AttemptView } from "@/components/mind/custom-connection-result";
@@ -20,14 +20,20 @@ export function CustomConnections({ halted }: { halted: boolean }) {
   const [approved, setApproved] = useState<string | null>(null);
   const [result, setResult] = useState<AttemptView | null>(null);
   const activeAttempt = useRef("");
+  const listGeneration = useRef(0);
 
   async function reload() {
+    const generation = ++listGeneration.current;
     const listed = await listCustomConnectionsFn();
+    if (generation !== listGeneration.current) return;
     setRows(listed.connections);
   }
 
   useEffect(() => {
-    void reload().catch(() => setNotice("Saved connections could not be loaded."));
+    const refresh = () => { setApproved(null); void reload().catch(() => setNotice("Saved connections could not be loaded.")); };
+    refresh();
+    window.addEventListener("adrian-mcp-catalog-refreshed", refresh);
+    return () => { ++listGeneration.current; window.removeEventListener("adrian-mcp-catalog-refreshed", refresh); };
   }, []);
 
   return (
@@ -91,8 +97,18 @@ export function CustomConnections({ halted }: { halted: boolean }) {
             <p className="font-semibold">{row.label}</p>
             <p className="text-xs text-muted">{row.kind} · {row.method} · {row.auth} · token {row.hasToken ? "stored" : "none"} · {row.host} · {row.state}</p>
             {row.error ? <p className="text-muted">{row.error}</p> : null}
+            {row.kind === "mcp" && <button type="button" className="min-h-11 underline" disabled={halted} onClick={() => {
+              setApproved(null);
+              const generation = ++listGeneration.current;
+              void refreshCustomConnectionFn({ data: { id: row.id } }).then((result) => {
+                if (generation !== listGeneration.current) return;
+                if (!result.ok) { setNotice(result.error); return; }
+                setRows((current) => current.map((item) => item.id === result.connection.id ? result.connection : item));
+                setNotice(result.connection.error || "Tools refreshed. Review the current arguments before confirming a call.");
+              }).catch(() => setNotice("Tool refresh could not complete. No tool was called."));
+            }}>Refresh tools</button>}
             {row.operations.map((operation) => {
-              const approval = JSON.stringify([row.id, operation.name, operation.inputSchema, args]);
+              const approval = JSON.stringify([row.id, row.capabilityRevision, operation.name, operation.inputSchema, args]);
               const confirm = approved === approval;
               return (
               <div key={operation.name} className="mt-2">
@@ -110,7 +126,7 @@ export function CustomConnections({ halted }: { halted: boolean }) {
                 )) : <p className="text-xs text-muted">No compatible argument schema. Nothing will be called.</p>}
                 <label className="mt-2 flex items-center gap-2 text-xs text-muted">
                   <input type="checkbox" checked={confirm} onChange={(event) => setApproved(event.target.checked ? approval : null)} />
-                  Confirm this call
+                  Confirm {operation.name} on {row.label} ({row.host}) with the arguments shown above
                 </label>
                 <button
                   type="button"
@@ -127,7 +143,7 @@ export function CustomConnections({ halted }: { halted: boolean }) {
                     const localAttemptId = crypto.randomUUID();
                     activeAttempt.current = localAttemptId;
                     setResult({ localAttemptId, upstreamRequestId: null, status: "running", text: "", retryable: false });
-                    void callCustomConnectionFn({ data: { id: row.id, operation: operation.name, args: payload, confirmed: confirm || (row.kind === "http" && row.method === "GET") } }).then((called) => {
+                    void callCustomConnectionFn({ data: { id: row.id, operation: operation.name, args: payload, expectedRevision: row.capabilityRevision, confirmed: confirm || (row.kind === "http" && row.method === "GET") } }).then((called) => {
                       const next = acceptResult(activeAttempt.current, { localAttemptId, status: called.status, text: called.text });
                       if (next !== "stale") setResult(next);
                       if (called.connection) setRows((current) => current.map((item) => item.id === called.connection?.id ? called.connection : item));

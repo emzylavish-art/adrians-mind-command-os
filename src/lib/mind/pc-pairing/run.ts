@@ -26,6 +26,8 @@ function sleep(ms: number) {
 export async function runOnPairedAgent(input: {
   ownerId: string;
   command: string;
+  agentId?: string;
+  cwd?: string;
   /** Server-authorized only (allowlist or consumed human approval). */
   confirm: boolean;
   timeoutMs?: number;
@@ -34,12 +36,15 @@ export async function runOnPairedAgent(input: {
 }): Promise<PairingRunResult | null> {
   const online = onlineAgents(input.ownerId, 60_000, input.now ?? Date.now());
   if (online.length === 0) return null;
-  const agent: PairedAgent = online[0];
+  const agent: PairedAgent | undefined = input.agentId ? online.find((item) => item.id === input.agentId) : online[0];
+  if (!agent) return null;
+  if (input.cwd && agent.fileProtocol !== 2) return { ok: false, status: "error", text: "Update the selected Companion before running in an explicitly reviewed workspace. Nothing ran." };
   const job = enqueueJob({
     ownerId: input.ownerId,
     agentId: agent.id,
     command: input.command,
     confirm: input.confirm,
+    ...(input.cwd ? { payload: { cwd: input.cwd } } : {}),
   });
   const timeoutMs = input.timeoutMs ?? 15_000;
   const pollMs = input.pollMs ?? 50;

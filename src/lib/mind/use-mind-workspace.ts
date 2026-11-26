@@ -2,7 +2,7 @@ import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, typ
 import { accountImageStore } from "./media/blob-store";
 import { clearAccountDrafts } from "./use-composer-draft";
 import { createWorkspaceCheckpoint } from "./workspace-checkpoint";
-import { loadMindCopy, saveMindCopy } from "./server";
+import { loadMindCopy, saveMindCopy, runDurableCorePass, runFleetModelStep } from "./server";
 import { chooseServerSync } from "./sync";
 import type { Workspace } from "./types";
 import { accountWorkspaceKey, emptyWorkspace, mergeMemoryState, loadWorkspaceForAccount } from "./workspace";
@@ -47,6 +47,7 @@ export function useMindWorkspace(userId: string | null = "dev-user", email: stri
   }, [scope]);
   const writeQueue = useRef(Promise.resolve());
   const pendingWrites = useRef(0);
+  const serverStepBusy = useRef(false);
   const saveForOwner = useCallback((workspace: Workspace, gen: number) => {
     // Serialize snapshots so a slow older request cannot finish after a new workspace or wipe.
     pendingWrites.current++;
@@ -222,7 +223,7 @@ export function useMindWorkspace(userId: string | null = "dev-user", email: stri
   }, [ready, ws, userId, email, scope]);
 
   useEffect(() => {
-    if (!ready || !userId || !followServer.current) return;
+    if (!ready || !userId || !followServer.current || serverStepBusy.current) return;
     const gen = persistGen.current;
     const packed = JSON.stringify(ws);
     if (!pendingWrites.current && packed === savedJson.current) return;
@@ -279,6 +280,34 @@ export function useMindWorkspace(userId: string | null = "dev-user", email: stri
     return publishServerCopy();
   }
 
+  /** A server step follows the saved owner revision and reconciles edits made while it runs. */
+  async function runServerPass(model?: { runId: string; freeOnly: boolean; allowPaid: boolean }) {
+    if (!ready || !userId || activeScope.current !== scope || serverStepBusy.current) return { ok: false as const, error: "Wait for this account's workspace or active worker step." };
+    if (!followServer.current || !scope.serverRevision) return { ok: false as const, error: "Review and save the server workspace copy in Settings before running scheduled or delegated work." };
+    const gen = persistGen.current;
+    serverStepBusy.current = true;
+    try {
+      await writeQueue.current;
+      const base = latest.current;
+      if (JSON.stringify(base) !== savedJson.current) {
+        const saved = await saveForOwner(base, gen);
+        if (!saved.ok) return saved;
+        savedJson.current = JSON.stringify(base);
+      }
+      if (gen !== persistGen.current || activeScope.current !== scope) return { ok: false as const, error: "The account changed. No worker step was requested." };
+      const data = { ownerId: userId, expectedRevision: scope.serverRevision! };
+      const result = model ? await runFleetModelStep({ data: { ...data, ...model } }) : await runDurableCorePass({ data });
+      if (gen !== persistGen.current || activeScope.current !== scope) return { ok: false as const, error: "The account changed during the worker step. Reopen its workspace to read the result." };
+      if (!result.ok) return result;
+      scope.serverRevision = result.revision;
+      savedJson.current = JSON.stringify(result.workspace);
+      setWs(current => mergeWorkspaceEdits(result.workspace, base, current));
+      setSyncNote(result.message);
+      return result;
+    } catch { return { ok: false as const, error: "The worker result is unconfirmed. Reload its saved run before retrying." }; }
+    finally { serverStepBusy.current = false; }
+  }
+
   function clearSaveError() {
     setSaveError(null);
   }
@@ -308,5 +337,5 @@ export function useMindWorkspace(userId: string | null = "dev-user", email: stri
     }
   }
 
-  return { ws, ready, setWs, syncNote, serverHeld, publishServerCopy, saveError, retrySave, clearSaveError, clearStoredCopy };
+  return { ws, ready, setWs, syncNote, serverHeld, publishServerCopy, saveError, retrySave, clearSaveError, clearStoredCopy, runServerPass };
 }

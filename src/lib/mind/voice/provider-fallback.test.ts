@@ -70,10 +70,11 @@ describe("voice provider fallback", () => {
     if (!spoken.ok) assert.match(spoken.error, /xAI voice is not configured/);
   });
 
-  it("uses OpenAI STT, TTS, and chat when xAI returns 400", async () => {
+  it("uses explicitly permitted OpenAI STT and TTS fallback when xAI returns 400", async () => {
     const stt = scriptedFetch(200);
     const heard = await transcribeWithFallback({
       bytes: new Uint8Array([1, 2, 3, 4]),
+      fallbackProvider: "openai",
       xaiKey: XAI,
       openaiKey: OPENAI,
       fetchImpl: stt.fetchImpl,
@@ -87,7 +88,7 @@ describe("voice provider fallback", () => {
     assert.ok(stt.seen.some((url) => url.includes("/audio/transcriptions")));
 
     const tts = scriptedFetch(200);
-    const spoken = await speakWithFallback({ text: "It is sunny.", xaiKey: XAI, openaiKey: OPENAI, fetchImpl: tts.fetchImpl });
+    const spoken = await speakWithFallback({ fallbackProvider: "openai", text: "It is sunny.", xaiKey: XAI, openaiKey: OPENAI, fetchImpl: tts.fetchImpl });
     assert.equal(spoken.ok, true);
     if (spoken.ok) assert.equal(spoken.provider, "OpenAI");
     assert.ok(tts.seen.some((url) => url.includes("/audio/speech")));
@@ -113,8 +114,8 @@ describe("voice provider fallback", () => {
 
   it("returns an honest error when xAI and OpenAI both fail", async () => {
     for (const run of [
-      () => transcribeWithFallback({ bytes: new Uint8Array([1, 2, 3]), xaiKey: XAI, openaiKey: OPENAI, fetchImpl: scriptedFetch(500).fetchImpl }),
-      () => speakWithFallback({ text: "Hello", xaiKey: XAI, openaiKey: OPENAI, fetchImpl: scriptedFetch(500).fetchImpl }),
+      () => transcribeWithFallback({ fallbackProvider: "openai", bytes: new Uint8Array([1, 2, 3]), xaiKey: XAI, openaiKey: OPENAI, fetchImpl: scriptedFetch(500).fetchImpl }),
+      () => speakWithFallback({ fallbackProvider: "openai", text: "Hello", xaiKey: XAI, openaiKey: OPENAI, fetchImpl: scriptedFetch(500).fetchImpl }),
       () =>
         directChatWithFallback({
           messages: [{ role: "user", content: "Hello" }],

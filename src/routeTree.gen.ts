@@ -27,6 +27,7 @@ import { Route as ApiMindProvidersRouteImport } from './routes/api/mind/provider
 import { Route as ApiMindReceiptsRouteImport } from './routes/api/mind/receipts'
 import { Route as ApiMindSkillsRouteImport } from './routes/api/mind/skills'
 import { Route as ApiMindTurnRouteImport } from './routes/api/mind/turn'
+import { Route as ApiMindUsageRouteImport } from './routes/api/mind/usage'
 import { Route as ApiMindBuildBrowserRouteImport } from './routes/api/mind/build/browser'
 import { Route as ApiMindBuildCancelRouteImport } from './routes/api/mind/build/cancel'
 import { Route as ApiMindBuildCapabilitiesRouteImport } from './routes/api/mind/build/capabilities'
@@ -72,6 +73,7 @@ import { Route as ApiMindPcJobsRouteImport } from './routes/api/mind/pc/jobs'
 import { Route as ApiMindPcRegisterRouteImport } from './routes/api/mind/pc/register'
 import { Route as ApiMindPcResultRouteImport } from './routes/api/mind/pc/result'
 import { Route as ApiMindPcStatusRouteImport } from './routes/api/mind/pc/status'
+import { Route as ApiMindSchedulesTickRouteImport } from './routes/api/mind/schedules/tick'
 import { Route as ApiMindVoiceCallRouteImport } from './routes/api/mind/voice/call'
 import { Route as ApiMindVoiceSessionRouteImport } from './routes/api/mind/voice/session'
 import { Route as ApiMindVoiceSttRouteImport } from './routes/api/mind/voice/stt'
@@ -178,6 +180,11 @@ const ApiMindSkillsRoute = ApiMindSkillsRouteImport.update({
 const ApiMindTurnRoute = ApiMindTurnRouteImport.update({
   id: '/api/mind/turn',
   path: '/api/mind/turn',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ApiMindUsageRoute = ApiMindUsageRouteImport.update({
+  id: '/api/mind/usage',
+  path: '/api/mind/usage',
   getParentRoute: () => rootRouteImport,
 } as any)
 const ApiMindBuildBrowserRoute = ApiMindBuildBrowserRouteImport.update({
@@ -406,6 +413,11 @@ const ApiMindPcStatusRoute = ApiMindPcStatusRouteImport.update({
   path: '/api/mind/pc/status',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ApiMindSchedulesTickRoute = ApiMindSchedulesTickRouteImport.update({
+  id: '/api/mind/schedules/tick',
+  path: '/api/mind/schedules/tick',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const ApiMindVoiceCallRoute = ApiMindVoiceCallRouteImport.update({
   id: '/api/mind/voice/call',
   path: '/api/mind/voice/call',
@@ -520,6 +532,7 @@ export interface FileRoutesByFullPath {
   '/api/mind/receipts': typeof ApiMindReceiptsRoute
   '/api/mind/skills': typeof ApiMindSkillsRoute
   '/api/mind/turn': typeof ApiMindTurnRoute
+  '/api/mind/usage': typeof ApiMindUsageRoute
   '/api/mind/build/browser': typeof ApiMindBuildBrowserRoute
   '/api/mind/build/cancel': typeof ApiMindBuildCancelRoute
   '/api/mind/build/capabilities': typeof ApiMindBuildCapabilitiesRoute
@@ -565,6 +578,7 @@ export interface FileRoutesByFullPath {
   '/api/mind/pc/register': typeof ApiMindPcRegisterRoute
   '/api/mind/pc/result': typeof ApiMindPcResultRoute
   '/api/mind/pc/status': typeof ApiMindPcStatusRoute
+  '/api/mind/schedules/tick': typeof ApiMindSchedulesTickRoute
   '/api/mind/voice/call': typeof ApiMindVoiceCallRoute
   '/api/mind/voice/session': typeof ApiMindVoiceSessionRoute
   '/api/mind/voice/stt': typeof ApiMindVoiceSttRoute
@@ -602,6 +616,7 @@ export interface FileRoutesByTo {
   '/api/mind/receipts': typeof ApiMindReceiptsRoute
   '/api/mind/skills': typeof ApiMindSkillsRoute
   '/api/mind/turn': typeof ApiMindTurnRoute
+  '/api/mind/usage': typeof ApiMindUsageRoute
   '/api/mind/build/browser': typeof ApiMindBuildBrowserRoute
   '/api/mind/build/cancel': typeof ApiMindBuildCancelRoute
   '/api/mind/build/capabilities': typeof ApiMindBuildCapabilitiesRoute
@@ -647,6 +662,7 @@ export interface FileRoutesByTo {
   '/api/mind/pc/register': typeof ApiMindPcRegisterRoute
   '/api/mind/pc/result': typeof ApiMindPcResultRoute
   '/api/mind/pc/status': typeof ApiMindPcStatusRoute
+  '/api/mind/schedules/tick': typeof ApiMindSchedulesTickRoute
   '/api/mind/voice/call': typeof ApiMindVoiceCallRoute
   '/api/mind/voice/session': typeof ApiMindVoiceSessionRoute
   '/api/mind/voice/stt': typeof ApiMindVoiceSttRoute
@@ -685,6 +701,7 @@ export interface FileRoutesById {
   '/api/mind/receipts': typeof ApiMindReceiptsRoute
   '/api/mind/skills': typeof ApiMindSkillsRoute
   '/api/mind/turn': typeof ApiMindTurnRoute
+  '/api/mind/usage': typeof ApiMindUsageRoute
   '/api/mind/build/browser': typeof ApiMindBuildBrowserRoute
   '/api/mind/build/cancel': typeof ApiMindBuildCancelRoute
   '/api/mind/build/capabilities': typeof ApiMindBuildCapabilitiesRoute
@@ -730,6 +747,7 @@ export interface FileRoutesById {
   '/api/mind/pc/register': typeof ApiMindPcRegisterRoute
   '/api/mind/pc/result': typeof ApiMindPcResultRoute
   '/api/mind/pc/status': typeof ApiMindPcStatusRoute
+  '/api/mind/schedules/tick': typeof ApiMindSchedulesTickRoute
   '/api/mind/voice/call': typeof ApiMindVoiceCallRoute
   '/api/mind/voice/session': typeof ApiMindVoiceSessionRoute
   '/api/mind/voice/stt': typeof ApiMindVoiceSttRoute
@@ -769,6 +787,7 @@ export interface FileRouteTypes {
     | '/api/mind/receipts'
     | '/api/mind/skills'
     | '/api/mind/turn'
+    | '/api/mind/usage'
     | '/api/mind/build/browser'
     | '/api/mind/build/cancel'
     | '/api/mind/build/capabilities'
@@ -814,6 +833,7 @@ export interface FileRouteTypes {
     | '/api/mind/pc/register'
     | '/api/mind/pc/result'
     | '/api/mind/pc/status'
+    | '/api/mind/schedules/tick'
     | '/api/mind/voice/call'
     | '/api/mind/voice/session'
     | '/api/mind/voice/stt'
@@ -851,6 +871,7 @@ export interface FileRouteTypes {
     | '/api/mind/receipts'
     | '/api/mind/skills'
     | '/api/mind/turn'
+    | '/api/mind/usage'
     | '/api/mind/build/browser'
     | '/api/mind/build/cancel'
     | '/api/mind/build/capabilities'
@@ -896,6 +917,7 @@ export interface FileRouteTypes {
     | '/api/mind/pc/register'
     | '/api/mind/pc/result'
     | '/api/mind/pc/status'
+    | '/api/mind/schedules/tick'
     | '/api/mind/voice/call'
     | '/api/mind/voice/session'
     | '/api/mind/voice/stt'
@@ -933,6 +955,7 @@ export interface FileRouteTypes {
     | '/api/mind/receipts'
     | '/api/mind/skills'
     | '/api/mind/turn'
+    | '/api/mind/usage'
     | '/api/mind/build/browser'
     | '/api/mind/build/cancel'
     | '/api/mind/build/capabilities'
@@ -978,6 +1001,7 @@ export interface FileRouteTypes {
     | '/api/mind/pc/register'
     | '/api/mind/pc/result'
     | '/api/mind/pc/status'
+    | '/api/mind/schedules/tick'
     | '/api/mind/voice/call'
     | '/api/mind/voice/session'
     | '/api/mind/voice/stt'
@@ -1016,6 +1040,7 @@ export interface RootRouteChildren {
   ApiMindReceiptsRoute: typeof ApiMindReceiptsRoute
   ApiMindSkillsRoute: typeof ApiMindSkillsRoute
   ApiMindTurnRoute: typeof ApiMindTurnRoute
+  ApiMindUsageRoute: typeof ApiMindUsageRoute
   ApiMindBuildBrowserRoute: typeof ApiMindBuildBrowserRoute
   ApiMindBuildCancelRoute: typeof ApiMindBuildCancelRoute
   ApiMindBuildCapabilitiesRoute: typeof ApiMindBuildCapabilitiesRoute
@@ -1061,6 +1086,7 @@ export interface RootRouteChildren {
   ApiMindPcRegisterRoute: typeof ApiMindPcRegisterRoute
   ApiMindPcResultRoute: typeof ApiMindPcResultRoute
   ApiMindPcStatusRoute: typeof ApiMindPcStatusRoute
+  ApiMindSchedulesTickRoute: typeof ApiMindSchedulesTickRoute
   ApiMindVoiceCallRoute: typeof ApiMindVoiceCallRoute
   ApiMindVoiceSessionRoute: typeof ApiMindVoiceSessionRoute
   ApiMindVoiceSttRoute: typeof ApiMindVoiceSttRoute
@@ -1206,6 +1232,13 @@ declare module '@tanstack/react-router' {
       path: '/api/mind/turn'
       fullPath: '/api/mind/turn'
       preLoaderRoute: typeof ApiMindTurnRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/mind/usage': {
+      id: '/api/mind/usage'
+      path: '/api/mind/usage'
+      fullPath: '/api/mind/usage'
+      preLoaderRoute: typeof ApiMindUsageRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/api/mind/build/browser': {
@@ -1523,6 +1556,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApiMindPcStatusRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/api/mind/schedules/tick': {
+      id: '/api/mind/schedules/tick'
+      path: '/api/mind/schedules/tick'
+      fullPath: '/api/mind/schedules/tick'
+      preLoaderRoute: typeof ApiMindSchedulesTickRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/api/mind/voice/call': {
       id: '/api/mind/voice/call'
       path: '/api/mind/voice/call'
@@ -1664,6 +1704,7 @@ const rootRouteChildren: RootRouteChildren = {
   ApiMindReceiptsRoute: ApiMindReceiptsRoute,
   ApiMindSkillsRoute: ApiMindSkillsRoute,
   ApiMindTurnRoute: ApiMindTurnRoute,
+  ApiMindUsageRoute: ApiMindUsageRoute,
   ApiMindBuildBrowserRoute: ApiMindBuildBrowserRoute,
   ApiMindBuildCancelRoute: ApiMindBuildCancelRoute,
   ApiMindBuildCapabilitiesRoute: ApiMindBuildCapabilitiesRoute,
@@ -1709,6 +1750,7 @@ const rootRouteChildren: RootRouteChildren = {
   ApiMindPcRegisterRoute: ApiMindPcRegisterRoute,
   ApiMindPcResultRoute: ApiMindPcResultRoute,
   ApiMindPcStatusRoute: ApiMindPcStatusRoute,
+  ApiMindSchedulesTickRoute: ApiMindSchedulesTickRoute,
   ApiMindVoiceCallRoute: ApiMindVoiceCallRoute,
   ApiMindVoiceSessionRoute: ApiMindVoiceSessionRoute,
   ApiMindVoiceSttRoute: ApiMindVoiceSttRoute,
@@ -1730,12 +1772,3 @@ const rootRouteChildren: RootRouteChildren = {
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
   ._addFileTypes<FileRouteTypes>()
-
-import type { getRouter } from './router.tsx'
-import type { createStart } from '@tanstack/react-start'
-declare module '@tanstack/react-start' {
-  interface Register {
-    ssr: true
-    router: Awaited<ReturnType<typeof getRouter>>
-  }
-}

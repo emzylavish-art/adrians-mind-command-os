@@ -58,6 +58,7 @@ export type Chat = {
   agentId?: string;
   botProvider?: NonNullable<BotModel["chatProvider"]>;
   botTier?: ModelTier;
+  botExactModel?: string;
   botKnowledge?: string;
   title: string;
   memory: "off" | "on";
@@ -88,6 +89,8 @@ export type MemoryItem = {
   archived: boolean;
   versions: MemoryVersion[];
   alwaysApply?: boolean;
+  /** Imported notes with unresolved scope cannot be retrieved until reviewed. */
+  reviewReason?: string;
 };
 
 export type Project = {
@@ -99,6 +102,11 @@ export type Project = {
 
 export type UsageEntry = {
   id: string;
+  operationId?: string;
+  channel?: "chat" | "orchestrator" | "speak" | "build" | "image" | "agent";
+  stage?: string;
+  outcome?: "unconfirmed" | "rejected_before_dispatch" | "completed" | "failed" | "canceled";
+  dispatched?: boolean;
   chatId: string;
   at: string;
   provider?: string;

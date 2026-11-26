@@ -114,7 +114,7 @@ export async function signIn(
   await runPreSignInSignOut({
     livePreview: inLivePreview(),
     hasBearer: Boolean(getBearerToken()),
-    requestSignOut: () => authClient.signOut(),
+    requestSignOut: () => requestAllSessionSignOut(),
     clearToken: () => setBearerToken(null),
   });
 
@@ -204,28 +204,33 @@ function waitForPopupToken(popup: Window): Promise<string | null> {
   });
 }
 
+/** End every accepted app session before reporting sign-out. */
+async function requestAllSessionSignOut(): Promise<void> {
+  const response = await fetch("/api/auth/owner-sign-out", { method: "POST", credentials: "same-origin", headers: { "content-type": "application/json" }, body: "{}" });
+  if (!response.ok) throw new Error("An account session could not be ended. Retry sign out.");
+  const { error } = await authClient.signOut();
+  if (error) throw new Error(error.message ?? "Sign-out failed");
+  if (typeof window !== "undefined") window.dispatchEvent(new Event("adrian-auth-changed"));
+}
+
 /**
  * Sign out of THIS app's local session, clear the preview token, then redirect.
  *
  * Use this, never `authClient.signOut()` — see the note on `authClient`.
  * Sequencing lives in `scripts/sign-out-plan.mjs` so it can be unit-tested.
  *
- * **Rejects when deployed if the server never confirms.** There the session is
- * an HttpOnly cookie only the server can clear, so redirecting anyway would
- * report a sign-out that did not happen. `<UserButton />` handles that for you;
- * a hand-rolled control must catch it and let the visitor retry. In the live
- * preview the local clear is sufficient, so it always resolves.
+ * Rejects unless both accepted session systems confirm sign-out, including
+ * preview: Supabase may still authenticate through an HttpOnly cookie when
+ * no preview bearer exists. A failed response leaves the retry control visible.
  */
 export async function signOut(redirectTo = "/"): Promise<void> {
   await runSignOut({
-    livePreview: inLivePreview(),
+    // Both accepted session systems can use cookies, even inside preview.
+    livePreview: false,
     hasBearer: Boolean(getBearerToken()),
     // Better Auth resolves with `{ error }` instead of rejecting, so surface a
     // failed response as a rejection for the sequence to act on.
-    requestSignOut: async () => {
-      const { error } = await authClient.signOut();
-      if (error) throw new Error(error.message ?? "Sign-out failed");
-    },
+    requestSignOut: () => requestAllSessionSignOut(),
     clearToken: () => setBearerToken(null),
     redirect: () => {
       window.location.href = redirectTo;

@@ -24,6 +24,7 @@ type BuildEvent = {
 };
 
 type BuildJob = {
+  sourceReceipt?: { workspace: string; cwd: string; files: { path: string; sha256: string }[]; policy: string } | null;
   id: string;
   status: "queued" | "running" | "cancel_requested" | "cancelled" | "done" | "error" | "timeout";
   output: string;
@@ -120,7 +121,7 @@ export function BuildWorkspace(props: {
   const [fileNotice, setFileNotice] = useState<string | null>(null);
   const [terminalCommand, setTerminalCommand] = useState("");
   const [terminalOutput, setTerminalOutput] = useState("");
-  const [terminalApproval, setTerminalApproval] = useState<{ id: string; token: string; command: string; hosted?: boolean; expiresAt?: string } | null>(null);
+  const [terminalApproval, setTerminalApproval] = useState<{ id: string; token: string; command: string; hosted?: boolean; expiresAt?: string; agentLabel?: string; workspace?: string; cwd?: string } | null>(null);
   const [terminalHistory, setTerminalHistory] = useState<{ command: string; text: string; ok: boolean }[]>([]);
   const [gitReport, setGitReport] = useState<GitReport | null>(null);
   const [terminalBusy, setTerminalBusy] = useState(false);
@@ -136,6 +137,12 @@ export function BuildWorkspace(props: {
   const [apiKey, setApiKey] = useState("");
   const [mode, setMode] = useState<"default" | "plan" | "auto">("default");
   const [sessionId, setSessionId] = useState("");
+  const [debugAvailable, setDebugAvailable] = useState(false);
+  const [executionChoice, setExecutionChoice] = useState(false);
+  const [executionReceipt, setExecutionReceipt] = useState<{ workspace: string; cwd: string; files: { path: string; sha256: string }[]; policy: string } | null>(null);
+  const haltedRef = useRef(props.halted);
+  haltedRef.current = props.halted;
+  const stopRequested = useRef(new Set<string>());
 
   const assistantText = useMemo(
     () => events.map(updateText).filter(Boolean).join(""),
@@ -178,6 +185,7 @@ export function BuildWorkspace(props: {
         return;
       }
       setJob(data.job);
+      if (data.job.sourceReceipt) setExecutionReceipt(data.job.sourceReceipt);
       setEvents(Array.isArray(data.events) ? data.events : []);
     } catch {
       setNotice("Build session status is temporarily unavailable. No completion was assumed.");
@@ -344,10 +352,13 @@ export function BuildWorkspace(props: {
 
   async function requestTerminalApproval() {
     if (!terminalCommand.trim()) { setFileNotice("Enter a terminal command before requesting approval."); return; }
+    if (props.halted) { setFileNotice("Emergency stop is on."); return; }
+    const target = buffers[selectedFile] || listingTarget;
+    if (!target) { setFileNotice("Browse or select the execution workspace before requesting terminal approval."); return; }
     setTerminalBusy(true);
     try {
-      const response = await fetch("/api/mind/build/terminal", { method: "POST", credentials: "include", headers: { "content-type": "application/json" }, body: JSON.stringify({ command: terminalCommand.trim() }) });
-      const data = (await response.json()) as { ok?: boolean; hosted?: boolean; approval?: { id: string; token: string; command: string }; error?: string };
+      const response = await fetch("/api/mind/build/terminal", { method: "POST", credentials: "include", headers: { "content-type": "application/json" }, body: JSON.stringify({ command: terminalCommand.trim(), workspace: target.workspace, cwd: target.cwd }) });
+      const data = (await response.json()) as { ok?: boolean; hosted?: boolean; approval?: { id: string; token: string; command: string; agentLabel?: string; workspace?: string; cwd?: string; expiresAt?: string }; error?: string };
       if (!response.ok || !data.ok || !data.approval) { setFileNotice(data.error || "Terminal approval request failed."); return; }
       setTerminalApproval({ ...data.approval, hosted: data.hosted === true });
       setFileNotice("Terminal approval created. Review the exact command before approving.");
@@ -355,7 +366,7 @@ export function BuildWorkspace(props: {
   }
 
   async function approveTerminal() {
-    if (!terminalApproval) return;
+    if (!terminalApproval || props.halted) return;
     setTerminalBusy(true);
     try {
       const response = await fetch(terminalApproval.hosted ? "/api/mind/build/terminal" : "/api/mind/pc/approve", { method: "POST", credentials: "include", headers: { "content-type": "application/json" }, body: JSON.stringify({ approvalId: terminalApproval.id, token: terminalApproval.token, command: terminalApproval.command, confirm: terminalApproval.hosted === true }) });
@@ -454,6 +465,7 @@ export function BuildWorkspace(props: {
   }, []);
 
   useEffect(() => {
+    void fetch("/api/mind/build/ide", { credentials: "include" }).then((response) => response.json()).then((data) => setDebugAvailable(data.debugAvailable === true)).catch(() => setDebugAvailable(false));
     void fetch("/api/mind/build/capabilities", { credentials: "include" }).then((response) => response.json()).then((data) => { if (data.capabilities) setCapabilities(data.capabilities); }).catch(() => undefined);
     void fetch("/api/mind/build/projects", { credentials: "include" }).then((response) => response.json()).then((data) => { setProjects(data.projects || []); setSessions(data.sessions || []); }).catch(() => undefined);
     void fetch("/api/mind/build/providers", { credentials: "include" }).then((response) => response.json()).then((data) => setProviders(data.providers || [])).catch(() => undefined);
@@ -468,6 +480,13 @@ export function BuildWorkspace(props: {
   const submittingBuild = useRef(false);
   async function submit(event: FormEvent) {
     event.preventDefault();
+    if (editorDirty) { setExecutionChoice(true); return; }
+    await runBuild("saved");
+  }
+
+  async function runBuild(policy: "saved" | "save") {
+    setExecutionChoice(false);
+    if (haltedRef.current) { setNotice("Emergency stop is on. No Build task was started."); return; }
     if (props.freeOnly) { setNotice("Free-only is selected. Build has no verified free coding model for this action."); return; }
     const text = prompt.trim();
     if (!text) {
@@ -483,6 +502,27 @@ export function BuildWorkspace(props: {
     setNotice(null);
     setEvents([]);
     try {
+      const target = { workspace: agentId || "hosted", cwd: cwd.trim() };
+      const relevant = Object.entries(buffersRef.current).filter(([, buffer]) => buffer.workspace === target.workspace && (buffer.cwd || "") === target.cwd);
+      if (policy === "save") {
+        const unrelated = Object.values(buffersRef.current).some((buffer) => buffer.draft !== buffer.saved && (buffer.workspace !== target.workspace || (buffer.cwd || "") !== target.cwd));
+        if (unrelated) { setNotice("Unsaved files belong to another workspace. Save them there, or choose Run saved version. No task started."); return; }
+        for (const [key, buffer] of relevant) {
+          if (buffer.draft === buffer.saved) continue;
+          const result = await runFileOperation("write", buffer.path, buffer.draft, { workspace: buffer.workspace, cwd: buffer.cwd, expectedContent: buffer.saved });
+          if (!result || result.after !== buffer.draft) { setNotice("A file save was not verified. No Build task started. Your drafts were kept."); return; }
+          setBuffers((previous) => previous[key] ? { ...previous, [key]: { ...previous[key], saved: result.after! } } : previous);
+        }
+      }
+      const files: { path: string; sha256: string }[] = [];
+      for (const [, buffer] of relevant) {
+        const content = policy === "save" ? buffer.draft : buffer.saved;
+        const hash = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(content));
+        files.push({ path: buffer.path, sha256: Array.from(new Uint8Array(hash), (byte) => byte.toString(16).padStart(2, "0")).join("") });
+      }
+      if (haltedRef.current || planOwner.current !== props.ownerId) { setNotice("Build stopped before submission."); return; }
+      const receipt = { ...target, files, policy };
+      setExecutionReceipt(receipt);
       if (jobKey) {
         try { localStorage.setItem(`adrian-build-last-job.${props.ownerId || "signed-out"}`, jobKey); } catch { /* Recovery remains available on this screen. */ }
       }
@@ -490,7 +530,7 @@ export function BuildWorkspace(props: {
         method: "POST",
         credentials: "include",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ prompt: text, agentId, jobKey, cwd: cwd.trim() || undefined, mode, resumeSessionId: sessionId || undefined }),
+        body: JSON.stringify({ prompt: text, agentId, jobKey, cwd: cwd.trim() || undefined, mode, resumeSessionId: sessionId || undefined, sourceReceipt: receipt }),
       });
       const data = (await response.json()) as { ok?: boolean; jobId?: string; executed?: boolean; error?: string; version?: string; agent?: string; loginRequired?: boolean; output?: string; package?: string; sessionId?: string; mode?: string; resumed?: boolean; forkedSessionId?: string; filesChanged?: { path: string; before: string; after: string }[] };
       if (!response.ok || !data.ok || !data.jobId) {
@@ -598,10 +638,26 @@ export function BuildWorkspace(props: {
     try {
       const response = await fetch("/api/mind/build/cancel", { method: "POST", credentials: "include", headers: { "content-type": "application/json" }, body: JSON.stringify({ jobId: job.id }) });
       const data = (await response.json()) as { ok?: boolean; error?: string };
-      if (data.ok) setJob((current) => current?.id === job.id && (current.status === "queued" || current.status === "running") ? { ...current, status: "cancel_requested" } : current);
-      setNotice(data.ok ? "Cancellation requested. Waiting for the Companion to stop the runtime." : data.error || "Cancellation was not accepted.");
+      if (response.ok && data.ok) setJob((current) => current?.id === job.id && (current.status === "queued" || current.status === "running") ? { ...current, status: (data as { status?: string }).status === "cancelled" ? "cancelled" : "cancel_requested" } : current);
+      setNotice(response.ok && data.ok ? ((data as { status?: string }).status === "cancelled" ? "Queued task canceled before execution." : "Cancellation requested. Waiting for the Companion to confirm the runtime stopped.") : data.error || "Cancellation was not accepted.");
     } catch { setNotice("Cancellation request could not reach Adrian OS."); }
   }
+
+  const buildStopHandlers = useRef({ cancel: cancelBuild, end: endCodingSession });
+  buildStopHandlers.current = { cancel: cancelBuild, end: endCodingSession };
+  useEffect(() => {
+    if (!props.halted) return;
+    setExecutionChoice(false);
+    setTerminalApproval(null);
+    if (job?.id && active && !stopRequested.current.has(job.id)) {
+      stopRequested.current.add(job.id);
+      void buildStopHandlers.current.cancel();
+    }
+    if (sessionId && !stopRequested.current.has(`session:${sessionId}`)) {
+      stopRequested.current.add(`session:${sessionId}`);
+      void buildStopHandlers.current.end();
+    }
+  }, [props.halted, job?.id, active, sessionId]);
 
   async function endCodingSession() {
     if (!sessionId) return;
@@ -694,6 +750,13 @@ export function BuildWorkspace(props: {
 
   return (
     <section className="page-shell intelligence-main" data-testid="build-workspace">
+      {executionChoice && <ActionOverlay label="Unsaved Build files" title="Unsaved changes" onClose={() => setExecutionChoice(false)}>
+        <p>The editor contains changes not saved to the execution workspace.</p>
+        <button type="button" disabled={loading || fileBusy || props.halted} onClick={() => void runBuild("save")}>Save and run</button>
+        <button type="button" disabled={loading || fileBusy || props.halted} onClick={() => void runBuild("saved")}>Run saved version</button>
+        <button type="button" onClick={() => setExecutionChoice(false)}>Cancel</button>
+      </ActionOverlay>}
+      {executionReceipt && <details className="text-xs text-muted"><summary>Submitted source receipt</summary><p>Workspace {executionReceipt.workspace} · {executionReceipt.cwd || "runtime default"} · {executionReceipt.policy === "save" ? "Verified save before submission" : "Saved versions; drafts kept"}. These hashes identify the submitted baseline; runtime readback is required to confirm which revision executed.</p><ul>{executionReceipt.files.map((file) => <li key={file.path}>{file.path} · {file.sha256}</li>)}</ul></details>}
       <div className="page-hero">
         <div className="flex flex-wrap items-start justify-between gap-4">
           <div className="flex items-center gap-3">
@@ -853,10 +916,10 @@ export function BuildWorkspace(props: {
             {panel === "changes" ? <GitReview report={gitReport} busy={fileBusy} onRead={() => void readGit(false)} onInit={() => void readGit(true)} onCommit={(message) => void commitGit(message)} onBranch={(name) => void branchGit(name)} onOpen={(path) => { setPanel("editor"); void openFile(path, { workspace: "hosted" }); }} /> : null}
             {panel === "changes" ? <div className="space-y-2">{changedFiles.map((path) => <div key={path} className="rounded-panel border border-line p-3 text-sm"><FileDiff className="mr-2 inline size-4 text-accent" />{path}<span className="ml-2 text-xs text-muted">written by ACP</span></div>)}{lastDiff ? <div className="rounded-panel border border-line p-3 text-xs"><p className="font-semibold">Reviewed save: {lastDiff.path}</p><p className="mt-2 whitespace-pre-wrap text-danger">{lastDiff.before}</p><hr className="my-2 border-line" /><p className="whitespace-pre-wrap text-success">{lastDiff.after}</p></div> : null}{!changedFiles.length && !lastDiff ? <p className="text-sm text-muted">No file-write events have been reported for this session.</p> : null}<p className="text-xs text-muted">Reviewed file saves return before/after content for bounded change review.</p></div> : null}
             {panel === "changes" ? <button type="button" className="min-h-11 rounded-panel border border-line px-3 text-sm" onClick={() => void restoreLatestCheckpoint()}>Restore last checkpoint</button> : null}
-            {panel === "editor" ? <CodeIde files={workspaceFiles} matches={searchMatches} tabs={tabs.map((id) => ({ id, path: buffers[id]?.path || "", workspace: buffers[id]?.workspace || "", cwd: buffers[id]?.cwd }))} dirty={dirtyTabs} selectedId={selectedFile} selected={buffers[selectedFile]?.path || ""} text={editorText} busy={fileBusy} notice={fileNotice} newName={newFileName} onNewName={setNewFileName} onCreate={() => void createFile()} onOpen={(path) => void openFile(path, listingTarget)} onOpenMatch={(path) => void openFile(path, matchTarget)} onSelectTab={setSelectedFile} onCloseTab={closeTab} onChange={(value) => setBuffers((prev) => prev[selectedFile] ? { ...prev, [selectedFile]: { ...prev[selectedFile], draft: value } } : prev)} onCheck={() => void checkFileState()} onSave={() => void saveFile()} /> : null}
+            {panel === "editor" ? <CodeIde debugAvailable={debugAvailable} files={workspaceFiles} matches={searchMatches} tabs={tabs.map((id) => ({ id, path: buffers[id]?.path || "", workspace: buffers[id]?.workspace || "", cwd: buffers[id]?.cwd }))} dirty={dirtyTabs} selectedId={selectedFile} selected={buffers[selectedFile]?.path || ""} text={editorText} busy={fileBusy} notice={fileNotice} newName={newFileName} onNewName={setNewFileName} onCreate={() => void createFile()} onOpen={(path) => void openFile(path, listingTarget)} onOpenMatch={(path) => void openFile(path, matchTarget)} onSelectTab={setSelectedFile} onCloseTab={closeTab} onChange={(value) => setBuffers((prev) => prev[selectedFile] ? { ...prev, [selectedFile]: { ...prev[selectedFile], draft: value } } : prev)} onCheck={() => void checkFileState()} onSave={() => void saveFile()} /> : null}
             {panel === "capabilities" ? <div className="space-y-2">{capabilities.map((item) => <div key={item.id} className="rounded-panel border border-line p-3 text-sm"><div className="flex items-center justify-between gap-2"><span className="font-medium">{item.label}</span><span className="text-xs text-muted">{item.status.replaceAll("_", " ")}</span></div><p className="mt-1 text-xs text-muted">{item.evidence}</p></div>)}{!capabilities.length ? <p className="text-sm text-muted">Capability inventory has not loaded.</p> : null}<div className="rounded-panel border border-line p-3 text-xs text-muted"><p>Projects: {projects.map((project) => project.label).join(", ") || "none"}</p><p>Sessions: {sessions.map((session) => session.name).join(", ") || "none"}</p><p>Providers: {providers.map((provider) => `${provider.model}${provider.hasKey ? " (key stored)" : ""} · ${provider.runtimeUse}`).join(", ") || "none"}</p></div></div> : null}
             {panel === "capabilities" ? <KimiPhase4Panel initializeResponse={null} updates={events} /> : null}
-            {panel === "terminal" ? <div className="space-y-3"><input value={terminalCommand} onChange={(event) => setTerminalCommand(event.target.value)} placeholder="Command requiring explicit approval" className="min-h-11 w-full rounded-panel border border-line bg-transparent px-3 font-mono text-sm outline-none focus:border-accent" aria-label="Terminal command" /><div className="flex flex-wrap gap-2"><button type="button" disabled={terminalBusy || !terminalCommand.trim()} onClick={() => void requestTerminalApproval()} className="min-h-10 rounded-panel border border-line px-3 text-sm disabled:opacity-50">{terminalBusy ? "Requesting…" : "Request approval"}</button>{terminalApproval ? <button type="button" disabled={terminalBusy} onClick={() => void approveTerminal()} className="min-h-10 rounded-panel bg-accent px-3 text-sm font-semibold text-accent-ink disabled:opacity-50">Approve exact command</button> : null}</div>{terminalApproval ? <p className="rounded-panel border border-warning/40 bg-warning/10 p-3 text-xs">Pending approval: <code>{terminalApproval.command}</code>{terminalApproval.expiresAt ? ` · expires ${terminalApproval.expiresAt}` : ""} · hosted workspace</p> : null}<div className="min-h-40 whitespace-pre-wrap rounded-panel border border-line bg-black/20 p-4 font-mono text-xs text-muted">{terminalOutput || (deniedTerminals ? `${deniedTerminals} ACP terminal request${deniedTerminals === 1 ? "" : "s"} denied by the agent safety policy.` : "No approved terminal output yet.")}</div><p className="text-xs text-muted">The exact command runs only after you approve it. It runs in the hosted workspace when no computer is paired. Dangerous commands are refused by the server even after approval. {terminalHistory.map((item) => `${item.ok ? "ok" : "failed"}: ${item.command}`).join(" · ")}</p></div> : null}
+            {panel === "terminal" ? <div className="space-y-3"><input value={terminalCommand} onChange={(event) => setTerminalCommand(event.target.value)} placeholder="Command requiring explicit approval" className="min-h-11 w-full rounded-panel border border-line bg-transparent px-3 font-mono text-sm outline-none focus:border-accent" aria-label="Terminal command" /><div className="flex flex-wrap gap-2"><button type="button" disabled={terminalBusy || !terminalCommand.trim()} onClick={() => void requestTerminalApproval()} className="min-h-10 rounded-panel border border-line px-3 text-sm disabled:opacity-50">{terminalBusy ? "Requesting…" : "Request approval"}</button>{terminalApproval ? <button type="button" disabled={terminalBusy} onClick={() => void approveTerminal()} className="min-h-10 rounded-panel bg-accent px-3 text-sm font-semibold text-accent-ink disabled:opacity-50">Approve exact command</button> : null}</div>{terminalApproval ? <p className="rounded-panel border border-warning/40 bg-warning/10 p-3 text-xs">Pending approval: <code>{terminalApproval.command}</code>{terminalApproval.expiresAt ? ` · expires ${terminalApproval.expiresAt}` : ""} · {terminalApproval.hosted ? "Local development workspace" : terminalApproval.agentLabel || terminalApproval.workspace || "Selected paired computer"} · {terminalApproval.cwd || "runtime default directory"}</p> : null}<div className="min-h-40 whitespace-pre-wrap rounded-panel border border-line bg-black/20 p-4 font-mono text-xs text-muted">{terminalOutput || (deniedTerminals ? `${deniedTerminals} ACP terminal request${deniedTerminals === 1 ? "" : "s"} denied by the agent safety policy.` : "No approved terminal output yet.")}</div><p className="text-xs text-muted">The exact command runs only after you approve it. The reviewed computer and directory remain bound to this approval. Ordinary accounts require a connected Companion. Dangerous commands are refused by the server even after approval. {terminalHistory.map((item) => `${item.ok ? "ok" : "failed"}: ${item.command}`).join(" · ")}</p></div> : null}
           </section>
         </div>
       </section>

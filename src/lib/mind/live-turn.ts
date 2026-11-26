@@ -95,6 +95,7 @@ export async function consumeMindTurn(input: {
     try {
       const payload = (await response.json()) as { error?: string; duplicate?: boolean };
       uncertain ||= payload.duplicate === true;
+      if (response.headers.get("x-mind-dispatch") === "none" && !payload.duplicate) uncertain = false;
       if (typeof payload.error === "string" && payload.error.trim()) message = payload.error;
     } catch {
       /* the status message stands */

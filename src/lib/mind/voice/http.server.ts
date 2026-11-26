@@ -12,6 +12,7 @@ import { allowMindRequest } from "../limits.ts";
 import { mintRealtimeClientSecret } from "./client-secret.ts";
 import { resolveVoiceApiKey } from "./keys.ts";
 import { speakWithFallback, transcribeWithFallback } from "./provider-fallback.ts";
+import { parseCloudSpeechPolicy } from "./route-preferences.ts";
 import { decodeAudioBase64, validateSpeakTextInput, validateTranscribeAudioInput } from "./voice-input.ts";
 import { isSpeakCode, speakFailure, voiceSecretExpired, type SpeakCode } from "./speak-failures.ts";
 
@@ -77,6 +78,8 @@ async function haltOrLimit(userId: string, bucket: string, limit: number, deps: 
 
 function providerOrNetwork(error: string): Response {
   if (/no speech key|not configured|no xai_api_key/i.test(error)) return coded("provider_not_configured");
+  if (/returned 401|returned 403|unauthorized|incorrect api key/i.test(error)) return json({ ok: false, code: "provider_not_configured", error: "The selected speech service rejected authorization. Repair that connection or explicitly choose another service." });
+  if (/returned 429/i.test(error)) return coded("rate_limited");
   if (/did not answer|could not be reached|timed out|network/i.test(error)) return coded("network_failure");
   return json({ ok: false, code: "network_failure" as const, error: speakFailure("network_failure").message });
 }
@@ -104,12 +107,15 @@ export async function handleVoiceStt(request: Request, deps: VoiceHttpDeps = {})
   const read = await readJsonObjectBody(request, 6_000_000);
   if (!read.ok) return json({ ok: false, code: "network_failure", error: read.error }, read.status);
   if (read.body.freeOnly === true) return json({ ok: false, error: "Free-only mode keeps cloud transcription off." });
+  const policy = parseCloudSpeechPolicy(read.body);
+  if (!policy.ok) return json({ ok: false, error: policy.error }, 400);
   const parsed = validateTranscribeAudioInput(read.body);
   if (!parsed.ok) return json({ ok: false, code: "empty_transcript", error: parsed.error });
   const decoded = decodeAudioBase64(parsed.audioBase64);
   if (!decoded.ok) return json({ ok: false, code: "empty_transcript", error: decoded.error });
   const env = deps.env ?? process.env;
   const transcribed = await transcribeWithFallback({
+    ...policy.value,
     bytes: decoded.bytes,
     xaiKey: resolveVoiceApiKey(env, deps.secretsPath),
     openaiKey: env.OPENAI_API_KEY?.trim() || undefined,
@@ -132,18 +138,19 @@ export async function handleVoiceTts(request: Request, deps: VoiceHttpDeps = {})
   const read = await readJsonObjectBody(request, 32_000);
   if (!read.ok) return json({ ok: false, code: "network_failure", error: read.error }, read.status);
   if (read.body.freeOnly === true) return json({ ok: false, error: "Free-only mode keeps cloud speech off." });
+  const policy = parseCloudSpeechPolicy(read.body);
+  if (!policy.ok) return json({ ok: false, error: policy.error }, 400);
   const parsed = validateSpeakTextInput(read.body.text);
   if (!parsed.ok) return json({ ok: false, code: "chat_failed", error: parsed.error });
   const env = deps.env ?? process.env;
   const voiceId = typeof read.body.voiceId === "string" ? read.body.voiceId : undefined;
   const spoken = await speakWithFallback({
+    ...policy.value,
     text: parsed.text,
     voiceId,
     xaiKey: resolveVoiceApiKey(env, deps.secretsPath),
-    // Do not silently replace an explicitly selected xAI voice with an unrelated voice.
-    // Even the implicit default is Eve. Never switch to OpenAI/alloy
-    // merely because the client omitted voiceId or xAI could not respond.
-    openaiKey: undefined,
+    // Selection and explicit fallback, never key presence, control dispatch.
+    openaiKey: env.OPENAI_API_KEY?.trim() || undefined,
     fetchImpl: deps.fetchImpl,
   });
   if (!spoken.ok) return providerOrNetwork(spoken.error);

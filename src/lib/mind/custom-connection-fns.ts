@@ -36,11 +36,12 @@ export const saveCustomConnectionFn = createServerFn({ method: "POST" })
 
 export const callCustomConnectionFn = createServerFn({ method: "POST" })
   .middleware([authMiddleware])
-  .validator((input: { id?: string; operation?: string; args?: Record<string, unknown>; confirmed?: boolean }) => ({
+  .validator((input: { id?: string; operation?: string; args?: Record<string, unknown>; confirmed?: boolean; expectedRevision?: string }) => ({
     id: typeof input.id === "string" ? input.id.slice(0, 80) : "",
     operation: typeof input.operation === "string" ? input.operation.slice(0, 80) : "",
     args: input.args && typeof input.args === "object" && !Array.isArray(input.args) ? input.args : {},
     confirmed: input.confirmed === true,
+    expectedRevision: typeof input.expectedRevision === "string" ? input.expectedRevision.slice(0, 80) : undefined,
   }))
   .handler(async ({ data, context }) => {
     const { haltIsOn } = await import("./halt.server");
@@ -52,4 +53,18 @@ export const callCustomConnectionFn = createServerFn({ method: "POST" })
     const db = databaseConfigured() ? await getSql() : null;
     const { callCustomConnection } = await import("./custom-connection");
     return callCustomConnection({ db, userId: context.userId, ...data });
+  });
+
+/** Refresh discovery without executing a tool. Existing approvals are invalidated by revision. */
+export const refreshCustomConnectionFn = createServerFn({ method: "POST" })
+  .middleware([authMiddleware])
+  .validator((input: { id?: string }) => ({ id: typeof input.id === "string" ? input.id.slice(0, 80) : "" }))
+  .handler(async ({ data, context }) => {
+    const { haltIsOn } = await import("./halt.server");
+    if (await haltIsOn(context.userId)) return { ok: false as const, error: STOPPED };
+    const { databaseConfigured } = await import("./mcp/registry-store");
+    const { getSql } = await import("@/lib/db");
+    const db = databaseConfigured() ? await getSql() : null;
+    const { refreshMcp } = await import("./custom-connection");
+    return { ok: true as const, connection: await refreshMcp(db, context.userId, data.id, {}) };
   });

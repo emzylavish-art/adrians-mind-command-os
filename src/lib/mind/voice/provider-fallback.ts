@@ -124,6 +124,13 @@ export async function openAiDirectChat(input: {
   return { ok: true, text, model: reportedModel(payload.model) };
 }
 
+/** A configured key is availability, never permission to change audio destination. */
+export type CloudSpeechProvider = "xai" | "openai";
+export type SpeechProviderPolicy = {
+  provider?: CloudSpeechProvider;
+  fallbackProvider?: CloudSpeechProvider | null;
+};
+
 export async function transcribeWithFallback(input: {
   bytes: Uint8Array;
   xaiKey?: string;
@@ -131,28 +138,23 @@ export async function transcribeWithFallback(input: {
   filename?: string;
   mime?: string;
   fetchImpl?: typeof fetch;
-}): Promise<FallbackOk<{ text: string }> | FallbackFail> {
+} & SpeechProviderPolicy): Promise<FallbackOk<{ text: string }> | FallbackFail> {
   const fetchImpl = input.fetchImpl ?? fetch;
-  if (input.xaiKey) {
-    const first = await transcribeWavBytes({
-      bytes: input.bytes,
-      apiKey: input.xaiKey,
-      filename: input.filename,
-      mime: input.mime,
-      fetchImpl,
-    });
-    if (first.ok) return { ok: true, text: first.text, provider: "xAI" };
-  }
-  if (!input.openaiKey) return { ok: false, error: honestBoth("transcribed"), provider: null };
-  const second = await openAiTranscribe({
-    bytes: input.bytes,
-    apiKey: input.openaiKey,
-    filename: input.filename,
-    mime: input.mime,
-    fetchImpl,
-  });
-  if (!second.ok) return { ok: false, error: honestBoth("transcribed"), provider: null };
-  return { ok: true, text: second.text, provider: "OpenAI" };
+  const primary = input.provider ?? "xai";
+  const attempt = async (provider: CloudSpeechProvider): Promise<FallbackOk<{ text: string }> | FallbackFail> => {
+    const key = provider === "xai" ? input.xaiKey : input.openaiKey;
+    const label = provider === "xai" ? "xAI" : "OpenAI";
+    if (!key) return { ok: false, error: `${label} transcription is not configured. Choose a configured transcription service.`, provider: null };
+    const result = provider === "xai"
+      ? await transcribeWavBytes({ bytes: input.bytes, apiKey: key, filename: input.filename, mime: input.mime, fetchImpl })
+      : await openAiTranscribe({ bytes: input.bytes, apiKey: key, filename: input.filename, mime: input.mime, fetchImpl });
+    return result.ok ? { ok: true, text: result.text, provider: label } : { ...result, provider: null };
+  };
+  const first = await attempt(primary);
+  if (first.ok || !input.fallbackProvider || input.fallbackProvider === primary) return first;
+  const fallback = await attempt(input.fallbackProvider);
+  if (fallback.ok) return fallback;
+  return { ok: false, error: honestBoth("transcribed"), provider: null };
 }
 
 export async function speakWithFallback(input: {
@@ -161,20 +163,21 @@ export async function speakWithFallback(input: {
   xaiKey?: string;
   openaiKey?: string;
   fetchImpl?: typeof fetch;
-}): Promise<FallbackOk<{ audio: string; mime: "audio/mpeg" }> | FallbackFail> {
+} & SpeechProviderPolicy): Promise<FallbackOk<{ audio: string; mime: "audio/mpeg" }> | FallbackFail> {
   const fetchImpl = input.fetchImpl ?? fetch;
-  let selectedVoiceError = "xAI voice is not configured. Nothing was played or substituted.";
-  if (input.xaiKey) {
-    const first = await callXaiTts({ text: input.text, voiceId: input.voiceId, apiKey: input.xaiKey, fetchImpl });
-    if (first.ok) return { ok: true, audio: first.audio, mime: "audio/mpeg", provider: "xAI" };
-    selectedVoiceError = first.error;
-  }
-  // Explicit opt-in callers may supply an OpenAI key to enable an alternative
-  // voice. Normal Speak routes do not; failures preserve the chosen voice.
-  if (!input.openaiKey) return { ok: false, error: selectedVoiceError, provider: null };
-  const second = await openAiSpeech({ text: input.text, apiKey: input.openaiKey, fetchImpl });
-  if (!second.ok) return { ok: false, error: honestBoth("played"), provider: null };
-  return { ok: true, audio: second.audio, mime: "audio/mpeg", provider: "OpenAI" };
+  const primary = input.provider ?? "xai";
+  const attempt = async (provider: CloudSpeechProvider): Promise<FallbackOk<{ audio: string; mime: "audio/mpeg" }> | FallbackFail> => {
+    const key = provider === "xai" ? input.xaiKey : input.openaiKey;
+    if (!key) return { ok: false, error: `${provider === "xai" ? "xAI voice" : "OpenAI speech"} is not configured. Nothing was played or substituted.`, provider: null };
+    const result = provider === "xai"
+      ? await callXaiTts({ text: input.text, voiceId: input.voiceId, apiKey: key, fetchImpl })
+      : await openAiSpeech({ text: input.text, apiKey: key, fetchImpl });
+    return result.ok ? { ok: true, audio: result.audio, mime: "audio/mpeg", provider: provider === "xai" ? "xAI" : "OpenAI" } : { ...result, provider: null };
+  };
+  const first = await attempt(primary);
+  if (first.ok || !input.fallbackProvider || input.fallbackProvider === primary) return first;
+  const fallback = await attempt(input.fallbackProvider);
+  return fallback.ok ? fallback : { ok: false, error: honestBoth("played"), provider: null };
 }
 
 export async function directChatWithFallback(input: {

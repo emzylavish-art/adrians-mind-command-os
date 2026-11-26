@@ -89,6 +89,7 @@ export class RealtimeVoiceSession {
 
   private voiceId: string;
   private instructions: string;
+  private instructionUpdate: { instructions: string; resolve: () => void; reject: (error: Error) => void; timer: ReturnType<typeof setTimeout> } | null = null;
   private transcriptOnly: boolean;
   private captureMedia: () => Promise<MediaStream>;
 
@@ -121,6 +122,32 @@ export class RealtimeVoiceSession {
     if (this.open) {
       this.send({ type: "session.update", session: { voice: next } });
     }
+  }
+
+  /** Resolve only after the provider acknowledges the exact new instructions. */
+  updateInstructions(instructions: string): Promise<void> {
+    const next = instructions.trim();
+    if (!next) return Promise.reject(new Error("Voice instructions must not be empty."));
+    this.instructions = next;
+    if (!this.open || this.ws?.readyState !== 1) return Promise.reject(new Error("Voice is not connected. The style applies to the next call."));
+    if (this.instructionUpdate) {
+      clearTimeout(this.instructionUpdate.timer);
+      this.instructionUpdate.reject(new Error("A newer voice style replaced this update."));
+      this.instructionUpdate = null;
+    }
+    return new Promise<void>((resolve, reject) => {
+      const timer = setTimeout(() => {
+        if (this.instructionUpdate?.instructions !== next) return;
+        this.instructionUpdate = null;
+        reject(new Error("The live session did not confirm the new style. Reconnect to apply it."));
+      }, 5_000);
+      this.instructionUpdate = { instructions: next, resolve, reject, timer };
+      try { this.send({ type: "session.update", session: { instructions: next } }); }
+      catch {
+        clearTimeout(timer); this.instructionUpdate = null;
+        reject(new Error("The live session could not receive the new style."));
+      }
+    });
   }
 
   get isOpen() {
@@ -205,6 +232,7 @@ export class RealtimeVoiceSession {
       transcript?: string;
       delta?: string;
       error?: { message?: string; code?: string };
+      session?: { instructions?: string };
     };
     try {
       msg = JSON.parse(raw) as typeof msg;
@@ -212,6 +240,12 @@ export class RealtimeVoiceSession {
       return;
     }
     const type = msg.type || "";
+    if (type === "session.updated" && this.instructionUpdate && msg.session?.instructions === this.instructionUpdate.instructions) {
+      clearTimeout(this.instructionUpdate.timer);
+      this.instructionUpdate.resolve();
+      this.instructionUpdate = null;
+      return;
+    }
     if (this.transcriptOnly && type.startsWith("response.")) {
       if (type === "response.created") this.send({ type: "response.cancel" });
       return;
@@ -219,6 +253,11 @@ export class RealtimeVoiceSession {
     if (type === "error") {
       const message = msg.error?.message || "Voice realtime error.";
       if (/no active response/i.test(message)) return;
+      if (this.instructionUpdate) {
+        clearTimeout(this.instructionUpdate.timer);
+        this.instructionUpdate.reject(new Error("The live session rejected the style update."));
+        this.instructionUpdate = null;
+      }
       this.handlers.onError?.(message);
       return;
     }
@@ -408,6 +447,11 @@ export class RealtimeVoiceSession {
   }
 
   close() {
+    if (this.instructionUpdate) {
+      clearTimeout(this.instructionUpdate.timer);
+      this.instructionUpdate.reject(new Error("The live session closed before confirming the style."));
+      this.instructionUpdate = null;
+    }
     this.intentionalClose = true;
     this.stopCapture();
     try {

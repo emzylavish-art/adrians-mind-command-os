@@ -25,6 +25,8 @@ export type NotionTurn = {
   error: string;
   wrote: boolean;
   verified: boolean;
+  recovery?: "reconnect" | "permissions" | "page_unavailable" | "retry" | "workspace_removed";
+  httpStatus?: number;
 };
 
 type FetchLike = (url: string, init?: RequestInit) => Promise<{ ok: boolean; status: number; json: () => Promise<unknown> }>;
@@ -130,7 +132,7 @@ function empty(state: NotionTurn["state"], action: string, error: string): Notio
   return { ok: false, state, action, needsConfirmation: false, ambiguous: false, pages: [], content: "", error, wrote: false, verified: false };
 }
 
-async function callNotion(fetchImpl: FetchLike, token: string, path: string, init: RequestInit): Promise<{ ok: true; body: unknown } | { ok: false; error: string }> {
+async function callNotion(fetchImpl: FetchLike, token: string, path: string, init: RequestInit): Promise<{ ok: true; body: unknown } | { ok: false; error: string; httpStatus?: number; recovery?: NotionTurn["recovery"] }> {
   let response: { ok: boolean; status: number; json: () => Promise<unknown> };
   try {
     response = await fetchImpl(`https://api.notion.com/v1${path}`, {
@@ -142,18 +144,22 @@ async function callNotion(fetchImpl: FetchLike, token: string, path: string, ini
       },
     });
   } catch {
-    return { ok: false, error: "Notion could not be reached. Nothing was changed." };
+    return { ok: false, error: init.method === "PATCH" ? "The Notion write response was lost. Its outcome is unconfirmed; inspect the selected page before sending again." : "Notion could not be reached. Retry when the connection is available.", recovery: "retry" };
   }
   const body = await response.json().catch(() => null);
   if (!response.ok) {
+    if (response.status === 401) return { ok: false, error: "Notion rejected this workspace’s credential. Reconnect the same workspace in Plugins, then return to this request. No replacement workspace was selected.", httpStatus: 401, recovery: "reconnect" };
+    if (response.status === 403) return { ok: false, error: "Notion denied this operation. In Plugins, reconnect the same workspace with the required permissions and share the selected page. A write must be reviewed again before it is sent.", httpStatus: 403, recovery: "permissions" };
+    if (response.status === 404) return { ok: false, error: "The selected Notion page is unavailable to this connection. Restore page access in the same workspace or explicitly choose another destination and review it again.", httpStatus: 404, recovery: "page_unavailable" };
     const message = body && typeof body === "object" && typeof (body as { message?: unknown }).message === "string" ? (body as { message: string }).message : `Notion returned ${response.status}.`;
-    return { ok: false, error: `${message} Nothing was invented.` };
+    return { ok: false, error: `${message} Nothing was invented.`, httpStatus: response.status, recovery: "retry" };
   }
   return { ok: true, body };
 }
 
 export async function runNotionTurn(input: {
   token: string | undefined;
+  workspaceId?: string;
   disabled: boolean;
   text: string;
   confirmed: boolean;
@@ -161,7 +167,9 @@ export async function runNotionTurn(input: {
   fetch: FetchLike;
 }): Promise<NotionTurn> {
   const connection = notionConnection(input.token, input.disabled);
-  if (connection.state !== "connected" || !input.token) return empty(connection.state, "none", connection.detail);
+  if (connection.state !== "connected" || !input.token) return input.workspaceId && !input.token
+    ? { ...empty("disconnected", "none", "The Notion workspace selected for this conversation is no longer connected. Reconnect that workspace in Plugins, or explicitly review a different destination. Nothing was sent to another workspace."), recovery: "workspace_removed" }
+    : empty(connection.state, "none", connection.detail);
   const intent = parseNotionIntent(input.text);
   if (intent.action === "unclear") {
     return empty("connected", "unclear", "Say whether to search, read, or append, and name the page. Nothing was called.");
@@ -171,19 +179,20 @@ export async function runNotionTurn(input: {
     method: "POST",
     body: JSON.stringify({ query: query.slice(0, 200), page_size: 8 }),
   });
-  if (!found.ok) return empty("connected", intent.action, found.error);
+  if (!found.ok) return { ...empty(found.httpStatus === 401 ? "disconnected" : "connected", intent.action, found.error), recovery: found.recovery, httpStatus: found.httpStatus };
   let pages = pagesFromSearch(found.body);
   if (input.pageId) pages = pages.filter((page) => page.id === input.pageId).concat(pages.filter((page) => page.id !== input.pageId));
   const picked = input.pageId ? pages.find((page) => page.id === input.pageId) ?? null : pages.length === 1 ? pages[0] : null;
   if (intent.action === "search") {
     return { ok: true, state: "connected", action: "search", needsConfirmation: false, ambiguous: false, pages, content: "", error: pages.length ? "" : "Notion returned no matching pages.", wrote: false, verified: false };
   }
+  if (!picked && input.pageId) return { ...empty("connected", intent.action, "The selected Notion page was not returned for this workspace. Restore its access or explicitly select another page; no other search result was used."), pages, recovery: "page_unavailable" };
   if (!picked) {
     return { ok: false, state: "connected", action: intent.action, needsConfirmation: false, ambiguous: pages.length > 1, pages, content: "", error: pages.length ? "More than one Notion result matches. Pick one. Nothing was changed." : "Notion returned no matching page. Nothing was changed.", wrote: false, verified: false };
   }
   if (intent.action === "read") {
     const blocks = await callNotion(input.fetch, input.token, `/blocks/${picked.id}/children?page_size=20`, { method: "GET" });
-    if (!blocks.ok) return { ...empty("connected", "read", blocks.error), pages: [picked] };
+    if (!blocks.ok) return { ...empty(blocks.httpStatus === 401 ? "disconnected" : "connected", "read", blocks.error), pages: [picked], recovery: blocks.recovery, httpStatus: blocks.httpStatus };
     return { ok: true, state: "connected", action: "read", needsConfirmation: false, ambiguous: false, pages: [picked], content: textFromBlocks(blocks.body), error: "", wrote: false, verified: false };
   }
   if (!input.confirmed) {
@@ -196,7 +205,7 @@ export async function runNotionTurn(input: {
       children: [{ object: "block", type: "paragraph", paragraph: { rich_text: [{ type: "text", text: { content: note } }] } }],
     }),
   });
-  if (!wrote.ok) return { ...empty("connected", "append", wrote.error), pages: [picked] };
+  if (!wrote.ok) return { ...empty(wrote.httpStatus === 401 ? "disconnected" : "connected", "append", wrote.error), pages: [picked], recovery: wrote.recovery, httpStatus: wrote.httpStatus };
   const check = await callNotion(input.fetch, input.token, `/blocks/${picked.id}/children?page_size=50`, { method: "GET" });
   const content = check.ok ? textFromBlocks(check.body) : "";
   const verified = content.includes(note);

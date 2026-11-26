@@ -5,9 +5,9 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, it } from "node:test";
 import { listConnectedMcp, removeConnectedMcp, runConnectedMcpTurn, saveConnectedMcp } from "./connected-mcp.server.ts";
-import { listCustomConnections } from "./custom-connection.ts";
+import { listCustomConnections, refreshMcp } from "./custom-connection.ts";
 import { decryptSecret } from "./connectors/crypto.ts";
-import { callRegistryTool, listRegistryServers } from "./mcp/registry.ts";
+import { callRegistryTool, listRegistryServers, listRegistryTools } from "./mcp/registry.ts";
 import { loadRegistry, resetRegistryStoreForTests, saveRegistry, setConnectedLegacyDirectory, type RegistryDb } from "./mcp/registry-store.ts";
 
 const SECRET = "test-connector-secret";
@@ -30,6 +30,14 @@ function memoryDb(rows: Row[] = []): RegistryDb & { rows: Row[] } {
       if (text.startsWith("select id")) return rows.filter((row) => row.userId === userId).map((row) => ({ id: row.id })) as T[];
       const id = String(params[1]);
       const index = rows.findIndex((row) => row.userId === userId && row.id === id);
+      if (text.startsWith("UPDATE mind_mcp_registry")) {
+        if (index < 0) return [];
+        const record = JSON.parse(rows[index].record);
+        if (record.url !== params[3] || (record.tokenEnc ?? null) !== params[4] || record.deleted || !record.enabled) return [];
+        if (text.includes("RETURNING id") && ((record.state ?? null) !== params[6] || (record.operations === undefined ? null : JSON.stringify(record.operations)) !== params[5])) return [];
+        rows[index].record = JSON.stringify({ ...record, ...JSON.parse(String(params[2])) });
+        return [{ id }] as T[];
+      }
       if (text.startsWith("delete")) {
         if (index >= 0) rows.splice(index, 1);
       } else if (text.startsWith("insert")) {
@@ -183,8 +191,8 @@ describe("Connected durable backend", { concurrency: false }, () => {
     const saved = await saveConnectedMcp(db, "owner", input, wire);
     resetRegistryStoreForTests();
     setConnectedLegacyDirectory(directory);
-    let approvalId: string | undefined;
-    const turn = (text: string, confirmed = false, userId = "owner") => runConnectedMcpTurn({ db: memoryDb(db.rows), userId, text, confirmed, approvalId, approvalServerId: confirmed && saved.ok ? saved.savedId : undefined, ...wire });
+    const approval = { id: undefined as string | undefined };
+    const turn = (text: string, confirmed = false, userId = "owner") => runConnectedMcpTurn({ db: memoryDb(db.rows), userId, text, confirmed, approvalId: approval.id, approvalServerId: confirmed && saved.ok ? saved.savedId : undefined, ...wire });
     wire.calls.length = 0;
     const listed = await turn("list MCP tools");
     assert.equal(listed.ok, true);
@@ -192,7 +200,7 @@ describe("Connected durable backend", { concurrency: false }, () => {
     assert.equal((await turn("list MCP tools", false, "stranger")).ok, false);
     const unconfirmed = await turn('call MCP tool lookup {"id":"42"}');
     assert.equal(unconfirmed.needsConfirmation, true);
-    approvalId = unconfirmed.approvalId;
+    approval.id = unconfirmed.approvalId;
     assert.equal(wire.calls.length, 0);
     assert.equal((await turn("call MCP tool lookup arbitrary words", true)).ok, false);
     assert.equal((await turn('call MCP tool lookup {"text":"not a schema field"}', true)).ok, false);
@@ -242,4 +250,87 @@ describe("Connected durable backend", { concurrency: false }, () => {
     assert.equal((await runConnectedMcpTurn(turnInput)).ok, false);
     assert.equal(wire.calls.length, 0);
   });
+  it("invalidates reviewed capabilities when the remote schema changes and provides a complete review", async () => {
+    const db = memoryDb();
+    const base = fakeMcp();
+    let revision = 1;
+    const wire = { ...base, fetch: async (url: string, init?: RequestInit) => {
+      const message = JSON.parse(String(init?.body));
+      if (message.method !== "tools/list") return base.fetch(url, init);
+      return { ok: true, status: 200, headers: { get: () => null }, text: async () => JSON.stringify({ jsonrpc: "2.0", id: message.id, result: { tools: [{ ...operation, description: revision === 1 ? "Read an item" : "Update an item" }] } }) };
+    } };
+    const saved = await saveConnectedMcp(db, "owner", input, wire);
+    assert.ok(saved.ok);
+    const text = 'call MCP tool lookup {"id":"42"}';
+    const proposal = await runConnectedMcpTurn({ db, userId: "owner", text, confirmed: false, ...wire });
+    assert.deepEqual(proposal.approval?.args, { id: "42" });
+    assert.equal(proposal.approval?.host, "localhost");
+    assert.equal(proposal.approval?.accountId, "owner");
+    revision = 2;
+    const stale = await runConnectedMcpTurn({ db, userId: "owner", text, confirmed: true, approvalId: proposal.approvalId, approvalServerId: saved.savedId, ...wire });
+    assert.equal(stale.ok, false);
+    assert.match(stale.error, /definition changed/);
+    assert.equal(base.calls.filter((call) => call.method === "tools/call").length, 0);
+    const reviewed = await runConnectedMcpTurn({ db, userId: "owner", text, confirmed: false, ...wire });
+    assert.notEqual(reviewed.approval?.capabilityRevision, proposal.approval?.capabilityRevision);
+    const called = await runConnectedMcpTurn({ db, userId: "owner", text, confirmed: true, approvalId: reviewed.approvalId, approvalServerId: saved.savedId, ...wire });
+    assert.equal(called.ok, true);
+    assert.equal(base.calls.filter((call) => call.method === "tools/call").length, 1);
+  });
+
+  it("fresh registry discovery updates the same definitions used by custom forms and chat", async () => {
+    const db = memoryDb();
+    const base = fakeMcp();
+    let description = "First definition";
+    const wire = { ...base, fetch: async (url: string, init?: RequestInit) => {
+      const message = JSON.parse(String(init?.body));
+      if (message.method !== "tools/list") return base.fetch(url, init);
+      return { ok: true, status: 200, headers: { get: () => null }, text: async () => JSON.stringify({ jsonrpc: "2.0", id: message.id, result: { tools: [{ ...operation, description }] } }) };
+    } };
+    const saved = await saveConnectedMcp(db, "owner", input, wire);
+    assert.ok(saved.ok);
+    const before = (await listCustomConnections(db, "owner"))[0];
+    description = "Current definition";
+    const listed = await listRegistryTools("owner", wire.fetch, { registryDb: db, isHalted: () => false });
+    assert.equal(listed.find((tool) => tool.serverId === saved.savedId)?.description, description);
+    const after = (await listCustomConnections(db, "owner"))[0];
+    assert.equal(after.operations[0].description, description);
+    assert.notEqual(after.capabilityRevision, before.capabilityRevision);
+    assert.equal((await listConnectedMcp(db, "owner"))[0].tools[0].description, description);
+    assert.equal(base.calls.filter((call) => call.method === "tools/call").length, 0);
+  });
+
+  it("late MCP discovery cannot resurrect removal or overwrite changed credentials", async () => {
+    for (const change of ["remove", "replace"] as const) {
+      const db = memoryDb();
+      const base = fakeMcp();
+      const saved = await saveConnectedMcp(db, "owner", input, base);
+      assert.ok(saved.ok);
+      let release!: () => void;
+      let reached!: () => void;
+      const blocked = new Promise<void>(resolve => { release = resolve; });
+      const started = new Promise<void>(resolve => { reached = resolve; });
+      const refreshing = refreshMcp(db, "owner", saved.savedId, { fetch: async (url, init) => {
+        if (JSON.parse(String(init?.body)).method === "tools/list") { reached(); await blocked; }
+        return base.fetch(url, init);
+      } });
+      await started;
+      if (change === "remove") await removeConnectedMcp(db, "owner", saved.savedId);
+      else {
+        const loaded = await loadRegistry("owner", db);
+        const row = loaded.servers.find(item => item.id === saved.savedId)!;
+        row.url = "http://localhost/replaced-mcp";
+        row.enabled = false;
+        await saveRegistry("owner", loaded.servers, db);
+      }
+      const afterChange = db.rows.find(item => item.id === saved.savedId)!.record;
+      release();
+      const result = await refreshing;
+      assert.equal(result.state, "failed");
+      assert.match(result.error ?? "", /changed or was removed/);
+      assert.equal(db.rows.find(item => item.id === saved.savedId)!.record, afterChange);
+      assert.equal(base.calls.filter(call => call.method === "tools/call").length, 0);
+    }
+  });
+
 });

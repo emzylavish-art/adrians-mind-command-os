@@ -4,6 +4,7 @@ import {
   validateArgs,
   listCustomConnections,
   saveCustomConnection,
+  connectionCapabilityRevision,
   type PublicConnection,
 } from "./custom-connection.ts";
 import { connectorTokenSecretStatus } from "./connectors/crypto.ts";
@@ -66,7 +67,7 @@ export async function removeConnectedMcp(db: RegistryDb | null, userId: string, 
   return listConnectedMcp(db, userId);
 }
 
-type TurnResult = { approvalId?: string; approvalServerId?: string; ok: boolean; needsConfirmation: boolean; servers: McpPublic[]; text: string; error: string };
+type TurnResult = { approval?: { accountId: string; connectionId: string; label: string; host: string; tool: string; args: Record<string, string | number | boolean>; capabilityRevision: string }; approvalId?: string; approvalServerId?: string; ok: boolean; needsConfirmation: boolean; servers: McpPublic[]; text: string; error: string };
 
 /** Chat uses the same durable rows and schema/confirmation enforcement as Tools. */
 export async function runConnectedMcpTurn(input: {
@@ -115,19 +116,24 @@ export async function runConnectedMcpTurn(input: {
   if (!operation?.inputSchema) return refused("This tool has no supported argument schema.", servers);
   const checked = validateArgs(operation.inputSchema, args);
   if (!checked.ok) return refused(checked.error, servers);
-  const hash = createHash("sha256").update(JSON.stringify([target.id, intent.tool, checked.args])).digest("hex");
+  const record = loaded.servers.find((row) => row.id === target.id);
+  if (!record) return refused("The reviewed connection is no longer saved.", servers);
+  const capabilityRevision = connectionCapabilityRevision(record);
+  // Credentials remain private; their identity and the complete definition are
+  // part of the server-only approval digest, so neither can be swapped later.
+  const hash = createHash("sha256").update(JSON.stringify([input.userId, target.id, record.url, record.token ?? "", capabilityRevision, intent.tool, checked.args])).digest("hex");
   if (!input.confirmed) {
     const approvalId = randomUUID();
     await input.db.query("DELETE FROM mind_mcp_call_approvals WHERE expires_at <= now()");
     await input.db.query("INSERT INTO mind_mcp_call_approvals (approval_id, owner_id, request_hash, expires_at) VALUES ($1,$2,$3,now()+interval '10 minutes')", [approvalId, input.userId, hash]);
-    return { ...refused(`Call “${intent.tool}” on ${target.label} only after you confirm. Nothing was called.`, servers, true), approvalServerId: target.id, approvalId };
+    return { ...refused(`Call “${intent.tool}” on ${target.label} only after you confirm. Nothing was called.`, servers, true), approvalServerId: target.id, approvalId, approval: { accountId: input.userId, connectionId: target.id, label: target.label, host: target.host, tool: intent.tool, args: checked.args, capabilityRevision } };
   }
   if (!input.approvalId || !/^[0-9a-f-]{36}$/.test(input.approvalId)) return refused("Review the exact call again.", servers);
   const consumed = await input.db.query("DELETE FROM mind_mcp_call_approvals WHERE approval_id=$1 AND owner_id=$2 AND request_hash=$3 AND expires_at>now() RETURNING approval_id", [input.approvalId, input.userId, hash]);
   if (!consumed.length) return refused("The call changed or its approval expired or was already used. Review it again.", servers);
   // Recheck immediately before dispatch; do not weaken the wrapper's halt gate.
   if (await halted(input.userId, input)) return refused(STOPPED, servers);
-  const result = await callCustomConnection({ ...input, id: target.id, operation: intent.tool, args });
+  const result = await callCustomConnection({ ...input, id: target.id, operation: intent.tool, args, expectedRevision: capabilityRevision });
   const latest = result.connection;
   return { ok: result.ok, needsConfirmation: false, servers: latest ? servers.map((server) => server.id === latest.id ? connectedMcpPublic(latest) : server) : servers, text: result.ok ? result.text : "", error: result.ok ? "" : result.text };
 }
