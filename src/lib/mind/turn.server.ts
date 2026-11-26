@@ -368,7 +368,20 @@ export async function handleMindTurn(request: Request): Promise<Response> {
     const message = error instanceof Error ? error.message : "Unauthorized";
     return json({ ok: false, error: message === "Unauthorized" ? "Sign in is required." : message }, message === "Unauthorized" ? 401 : sessionErrorStatus(error));
   }
-  if (request.method === "GET") return json({ operationId: `${Date.now()}-${crypto.randomUUID()}`, timeoutMs: chatTurnTimeoutMs() });
+  if (request.method === "GET") {
+    const operationId = new URL(request.url).searchParams.get("operationId");
+    if (!operationId) return json({ operationId: `${Date.now()}-${crypto.randomUUID()}`, timeoutMs: chatTurnTimeoutMs() });
+    if (!turnOperationExpiry(operationId)) return json({ ok: false, error: "This send receipt expired. Review the conversation; nothing was resent." }, 410);
+    const gate = envCheck();
+    if (!gate.ok) return json({ ok: false, error: gate.error }, 503);
+    try {
+      const { getSql } = await import("../db");
+      const sql = await getSql();
+      const state = await readTurnReceipt(sql, userId, operationId);
+      const executions = await readModelExecutions(sql, userId, operationId);
+      return json({ ownerId: userId, operationId, state, executions });
+    } catch { return json({ ok: false, error: "Send verification is temporarily unavailable. Nothing was resent." }, 503); }
+  }
   const read = await readJsonObjectBody(request, MAX_BODY);
   if (!read.ok) return json({ ok: false, error: read.error }, read.status);
   const operationId = request.headers.get("x-mind-turn-id");
@@ -400,6 +413,7 @@ export async function handleMindTurn(request: Request): Promise<Response> {
     return json({ ok: false, error: "Send verification is temporarily unavailable. The provider was not contacted." }, 503);
   }
   let dispatched = false;
+  let answerDispatched = false;
   const usage: UsageReceipt = {
     id: `${operationId}/answer`, operationId, stage: "answer", chatId: typeof read.body.chatId === "string" ? read.body.chatId : "",
     channel: read.body.usageChannel === "speak" ? "speak" : read.body.composerMode === "orchestrator" ? "orchestrator" : "chat",
@@ -421,28 +435,29 @@ export async function handleMindTurn(request: Request): Promise<Response> {
   }
   let response: Response;
   try {
-    response = await dispatchMindTurn(request, userId, read.body, () => { dispatched = true; }, usage, recordUsage);
+    response = await dispatchMindTurn(request, userId, read.body, (stage) => { dispatched = true; if (stage === "answer") answerDispatched = true; }, usage, recordUsage);
   } catch {
     response = json({ ok: false, error: "The request could not be completed. Check the conversation before sending again." }, 503);
   }
-  const accounted = { ...usage, dispatched, outcome: !dispatched ? "rejected_before_dispatch" as const : response.ok ? "unconfirmed" as const : "failed" as const };
+  const streaming = response.headers.get("content-type")?.includes("text/event-stream") === true;
+  const accounted = { ...usage, dispatched: answerDispatched, outcome: !answerDispatched && !streaming ? "rejected_before_dispatch" as const : response.ok ? "unconfirmed" as const : "failed" as const };
   // Preserve a provider response after dispatch, even if its final accounting
   // write fails. The initial durable record remains explicitly unconfirmed.
   await recordUsage(accounted).catch(() => undefined);
-  response.headers.set("x-mind-dispatch", dispatched ? "sent" : "none");
-  response = trackUsageResponse(response, accounted, recordUsage);
+  response.headers.set("x-mind-dispatch", dispatched ? "sent" : streaming ? "pending" : "none");
+  response = trackUsageResponse(response, accounted, (receipt) => recordUsage({ ...receipt, dispatched: answerDispatched }));
   // The insert is the protection. A failed audit update must not hide a real reply.
   try {
     await pruneTurnReceipts(sql);
   } catch {
     // The existing receipt keeps later deliveries from starting another call.
   }
-  return recoverableTurnResponse({ response, sql, owner: userId, operation: operationId, retain: read.body.temporary !== true && read.body.retainResponse !== false, dispatched });
+  return recoverableTurnResponse({ response, sql, owner: userId, operation: operationId, retain: read.body.temporary !== true && read.body.retainResponse !== false, dispatched: streaming ? () => dispatched : dispatched });
 }
 
-async function dispatchMindTurn(request: Request, userId: string, data: Record<string, unknown>, onDispatched: () => void = () => {}): Promise<Response> {
+async function dispatchMindTurn(request: Request, userId: string, data: Record<string, unknown>, onDispatched: (stage: "answer" | "helper") => void = () => {}, usage?: UsageReceipt, recordUsage?: (receipt: UsageReceipt) => Promise<void>): Promise<Response> {
   let anyDispatched = false;
-  const markDispatched = () => { anyDispatched = true; onDispatched(); };
+  const markDispatched = (stage: "answer" | "helper" = "answer") => { anyDispatched = true; onDispatched(stage); };
   if (request.signal.aborted) return json({ ok: false, error: "This send was canceled before it started.", code: "user_stopped" }, 499);
   let body = data as TurnBody;
   const { readHaltState } = await import("./halt.server.ts");
@@ -491,7 +506,15 @@ async function dispatchMindTurn(request: Request, userId: string, data: Record<s
       return new Response(stream, { headers: { "content-type": "text/event-stream", "cache-control": "no-store" } });
     }
   }
-  const ratePreflight = createChatTurnPreflight(userId, async () => false);
+  if (body.freeOnly !== undefined && typeof body.freeOnly !== "boolean") return json({ ok: false, error: "Invalid free-only setting. Nothing was sent." }, 400);
+  if (body.freeOnly === true && body.composerMode !== "orchestrator") {
+    const selected = typeof body.provider === "string" ? body.provider : "grok";
+    if (body.logicRoute || (!selected.startsWith("custom:") && !["openrouter", "nemotron", "ollama"].includes(selected))) {
+      return json({ ok: false, error: "Free-only mode does not authorize this provider's pricing. Choose an explicit free or local route. Nothing was sent." }, 400);
+    }
+    if (selected === "ollama" && !isLocalConsultRunner(process.env.LOCAL_MODEL_URL)) return json({ ok: false, error: "Free-only mode cannot establish that this runner is local. Configure a loopback runner or explicitly allow the selected route. Nothing was sent." }, 400);
+  }
+  const ratePreflight = createChatTurnPreflight(userId, async () => false, consumeSharedMindRateLimit);
   const taskId = request.headers.get("x-mind-turn-id") || randomUUID();
   let primaryDispatchContext: MonetaryDispatchContext | undefined;
   let primaryReservationId: string | undefined;
@@ -529,7 +552,7 @@ async function dispatchMindTurn(request: Request, userId: string, data: Record<s
   if (typeof body.provider === "string" && body.provider.startsWith("custom:")) {
     const selected = parseCustomProviderChoice(body.provider);
     if (!selected.ok) return json({ ok: false, error: selected.error }, 400);
-    const valid = await validateCustomProviderSelection(userId, selected, { options: { images: sanitizeAttachments(body.images), controls: controls.controls } });
+    const valid = await validateCustomProviderSelection(userId, selected, { freeOnly: body.freeOnly === true, options: { images: sanitizeAttachments(body.images), controls: controls.controls } });
     if (!valid.ok) return json({ ok: false, error: valid.error }, 400);
     selectedCapabilities = valid.capabilities;
     customSelection = { model: selected.model, imageInput: valid.capabilities?.imageInput === "supported" };
@@ -570,9 +593,12 @@ async function dispatchMindTurn(request: Request, userId: string, data: Record<s
       ? body.orchestrator
       : typeof body.provider === "string" ? body.provider : "";
     const modules = await modulesConnectedNow(userId);
-    const consult = body.consult && typeof body.consult === "object" ? body.consult as { helpers?: unknown } : null;
-    const selectedHelpers = Array.isArray(consult?.helpers) ? consult.helpers.flatMap((row: unknown) => row && typeof row === "object" && "id" in row && typeof row.id === "string" ? [row.id] : []) : [];
-    const planned = planModelConsult({ orchestrator, modules, question: asked, selectedHelpers });
+    const consult = body.consult && typeof body.consult === "object" ? body.consult as { helpers?: unknown; helperIds?: unknown; allowPaidHelpers?: unknown } : null;
+    const requested = consult?.helperIds ?? (Array.isArray(consult?.helpers) ? consult.helpers.map((row) => row?.id) : []);
+    if (!Array.isArray(requested) || requested.some((id) => typeof id !== "string")) {
+      return json({ ok: false, error: "The helper selection is invalid. Nothing was sent." }, 400);
+    }
+    const planned = planModelConsult({ orchestrator, modules, question: asked, helperIds: requested, allowPaidHelpers: consult?.allowPaidHelpers === true, freeOnly: body.freeOnly === true });
     if (!planned.ok) return json({ ok: false, error: planned.error, provider: orchestrator }, 400);
     if (sanitizeAttachments(body.images).length && planned.plan.orchestrator !== "grok" && !planned.plan.orchestrator.startsWith("custom:")) {
       return json({
@@ -584,16 +610,27 @@ async function dispatchMindTurn(request: Request, userId: string, data: Record<s
     const help = await collectConsultHelp(planned.plan, async (id, requestText) => {
       const configured = await validateHelperConfiguration(userId, id, requestText);
       if (!configured.ok) return { ok: false, text: "", error: configured.error };
+      const entry = usage ? { ...usage, id: `${usage.operationId}/helper:${id}`, stage: `helper:${id}`,
+        provider: configured.provider, requestedModel: configured.model } : undefined;
+      if (entry && recordUsage) await recordUsage(entry);
       let helperReservationId: string | undefined;
       const context = dispatchContext({ operationId: taskId, taskId, projectId: body.projectId, provider: financialProviderId(configured.provider), model: configured.model,
         stage: `helper-${id}`, args: { text: requestText, model: configured.model, system: ADRIAN_MIND_IDENTITY }, textOnly: true });
       const denied = await preflight(context, id => { helperReservationId = id; });
       if (denied) {
+        if (entry && recordUsage) await recordUsage({ ...entry, outcome: "rejected_before_dispatch" }).catch(() => undefined);
         const detail = await denied.json().catch(() => ({})) as { error?: string; approvalId?: string };
         return { ok: false, text: "", error: detail.error || "Execution stopped before this helper was called.", approvalId: detail.approvalId };
       }
-      markDispatched();
-      return runSettledDispatch(userId, helperReservationId, () => askConnectedModule(userId, id, requestText, request.signal));
+      let sent = false;
+      const result = await runSettledDispatch(userId, helperReservationId, async () => {
+        const answer = await askConnectedModule(userId, id, requestText, () => { sent = true; markDispatched("helper"); }, request.signal, { freeOnly: body.freeOnly === true });
+        return { ...answer, dispatched: sent };
+      });
+      if (entry && recordUsage) await recordUsage({ ...entry, dispatched: sent, outcome: result.ok ? "completed" : sent ? "unconfirmed" : "rejected_before_dispatch",
+        model: result.model || "model unknown", requestId: result.requestId ?? null, promptTokens: result.usage?.prompt_tokens ?? null,
+        completionTokens: result.usage?.completion_tokens ?? null }).catch(() => undefined);
+      return result;
     });
     consultation = help;
     consultHelp = orchestratorInstruction(planned.plan, help);
@@ -630,8 +667,7 @@ async function dispatchMindTurn(request: Request, userId: string, data: Record<s
       setPrimaryContext(assembled.messages, chosen.model);
       const blocked = await preflight();
       if (blocked) return blocked;
-      markPrimaryDispatched();
-      return providerResponse((onDelta, signal) => runSettledDispatch(userId, primaryReservationId, () => executeCustomChat(userId, chosen, formatted.messages, signal, { onDelta, options: { controls: controls.controls } })), (result) => result.ok ? { text: result.text, model: result.model, provider: result.provider, requestedModel: chosen.model, usedIds: assembled.usedIds, contextReceipt: assembled.contextReceipt, skillReceipts: assembled.skillReceipts, consultation, usage: result.usage, requestId: result.requestId, responseId: result.responseId, actualCostMicros: result.actualCostMicros, currency: result.currency, delivery: result.delivery } : {}, request.signal);
+      return providerResponse((onDelta, signal) => runSettledDispatch(userId, primaryReservationId, () => executeCustomChat(userId, chosen, formatted.messages, signal, { onDelta, onDispatch: markPrimaryDispatched, freeOnly: body.freeOnly === true, options: { controls: controls.controls } })), (result) => result.ok ? { text: result.text, model: result.model, provider: result.provider, requestedModel: chosen.model, usedIds: assembled.usedIds, contextReceipt: assembled.contextReceipt, skillReceipts: assembled.skillReceipts, consultation, usage: result.usage, requestId: result.requestId, responseId: result.responseId, actualCostMicros: result.actualCostMicros, currency: result.currency, delivery: result.delivery } : {}, request.signal);
     }
     const pendingImages = sanitizeAttachments(body.images);
     const requestedProvider = body.provider == null || body.provider === "" ? "grok" : body.provider;
@@ -745,8 +781,8 @@ async function dispatchMindTurn(request: Request, userId: string, data: Record<s
       memorySaved = signal.memorySaved;
       savedMemoryId = signal.savedMemoryId;
     }
-    markPrimaryDispatched();
     return relayModelStream({
+      onDispatch: markPrimaryDispatched,
       onSettled: settlePrimary,
       apiKey,
       model: prepared.model,
@@ -815,21 +851,26 @@ async function validateHelperConfiguration(userId: string, id: string, text: str
   return readiness.ok ? selected : readiness;
 }
 
-async function askConnectedModule(userId: string, id: string, requestText: string, signal?: AbortSignal): Promise<ConsultReply> {
+export async function askConnectedModule(userId: string, id: string, requestText: string, onDispatch: () => void, signal: AbortSignal, options: { freeOnly?: boolean; tier?: import("./model-tiers.ts").ModelTier } = {}): Promise<ConsultReply> {
+  const transport: typeof fetch = (...args) => {
+    signal.throwIfAborted();
+    onDispatch();
+    return fetch(...args);
+  };
   if (id.startsWith("custom:")) {
     const chosen = parseCustomProviderChoice(id);
     if (!chosen.ok) return { ok: false, text: "" };
     const result = await executeCustomChat(userId, chosen, [
       { role: "system", content: ADRIAN_MIND_IDENTITY },
       { role: "user", content: requestText },
-    ], signal);
+    ], signal, { onDispatch, freeOnly: options.freeOnly });
     return { ok: result.ok, text: result.ok ? result.text : "", ...(!result.ok ? { error: result.error } : {}), model: result.model, provider: result.provider, usage: result.usage, requestId: result.requestId, responseId: result.responseId, actualCostMicros: result.actualCostMicros, currency: result.currency };
   }
   if (id === "grok") {
     const keyed = resolveXaiInferenceApiKey(process.env);
     if (!keyed.ok) return { ok: false, text: "" };
     try {
-      const res = await fetch("https://api.x.ai/v1/chat/completions", {
+      const res = await transport("https://api.x.ai/v1/chat/completions", {
         method: "POST",
         signal: signal ? AbortSignal.any([signal, AbortSignal.timeout(20_000)]) : AbortSignal.timeout(20_000),
         headers: { "content-type": "application/json", authorization: `Bearer ${keyed.key}` },
@@ -851,7 +892,7 @@ async function askConnectedModule(userId: string, id: string, requestText: strin
     }
   }
   if (id === "nemotron" || id === "ollama" || id === "openrouter") {
-    const result = await routeSelectedModel({ id, prompt: requestText, env: process.env, signal, fetch: globalThis.fetch });
+    const result = await routeSelectedModel({ id, prompt: requestText, env: process.env, signal, fetch: transport });
     return { ok: result.ok, text: result.text, error: result.error, model: result.model, provider: id, usage: result.usage, requestId: result.requestId, responseId: result.responseId, actualCostMicros: result.actualCostMicros, currency: result.currency };
   }
   const selected = selectProvider(id, process.env);
@@ -866,7 +907,7 @@ async function askConnectedModule(userId: string, id: string, requestText: strin
     prompt: requestText,
     systemPrompt: ADRIAN_MIND_IDENTITY,
     signal,
-    fetch: globalThis.fetch,
+    fetch: transport,
   });
   return { ok: called.ok, text: called.text, error: called.error, model: called.model, provider: selected.id, usage: called.usage, requestId: called.requestId, responseId: called.responseId, actualCostMicros: called.actualCostMicros, currency: called.currency };
 }

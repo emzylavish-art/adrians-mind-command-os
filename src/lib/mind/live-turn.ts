@@ -1,10 +1,7 @@
-import { readHelperReceipts } from "./execution-evidence.ts";
-import { readFailureEnvelope, type FailureEnvelope } from "./failure-envelope.ts";
-import type { ModelExecutionPlan } from "./execution-plan.ts";
 import type { SkillApplicationReceipt } from "./skill-activation.ts";
 import type { ContextReceipt } from "./conversation-context.ts";
-import type { ConsultEvidence, HelperReceipt, ConsultAttempt, ConsultExecutionReceipt } from "./model-consult.ts";
-import { readExecutionReceipts, readPrimaryFailureReceipt, type PrimaryFailureReceipt } from "./execution-receipt.ts";
+import type { ConsultEvidence, ConsultExecutionReceipt } from "./model-consult.ts";
+import { readExecutionReceipts } from "./execution-receipt.ts";
 import { normalizeTurnCallEvidence, pullMindEvents, type ModelUsage, type TurnCallEvidence } from "./stream.ts";
 
 import { outcomeFromDoneEvent, rememberTierOutcome } from "./model-tier-memory.ts";
@@ -15,7 +12,7 @@ export const STOPPED_REPLY = "Stopped listening for this reply. Any received par
 export { CHAT_TIMEOUT_REPLY, CHAT_DISCONNECT_REPLY };
 
 export type LiveTurnResult =
-  | { ok: true; text: string; model: string; usage: ModelUsage | null; usedIds: string[]; requestId: string | null; modelTier?: string; resolvedTier?: string; tierReason?: string; memorySaved?: boolean; savedMemoryId?: string | null; provider?: string; requestedModel?: string; credentialFallback?: string | null; contextReceipt?: ContextReceipt; consultation?: ConsultEvidence[]; skillReceipts?: SkillApplicationReceipt[]; delivery?: "streamed" | "buffered"; actualCostMicros?: number; currency?: "USD" }
+  | ({ ok: true; text: string; model: string; usage: ModelUsage | null; usedIds: string[]; requestId: string | null; modelTier?: string; resolvedTier?: string; tierReason?: string; memorySaved?: boolean; savedMemoryId?: string | null; provider?: string; requestedModel?: string; credentialFallback?: string | null; contextReceipt?: ContextReceipt; consultation?: ConsultEvidence[]; skillReceipts?: SkillApplicationReceipt[]; delivery?: "streamed" | "buffered"; actualCostMicros?: number; currency?: "USD" } & TurnCallEvidence)
   | ({ ok: false; error: string; code?: TurnErrorCode; deliveryUncertain?: true } & TurnCallEvidence);
 
 export function shouldStoreReply(result: LiveTurnResult): result is Extract<LiveTurnResult, { ok: true }> {
@@ -55,6 +52,7 @@ function readOrAbort(reader: ReadableStreamDefaultReader<Uint8Array>, signal: Ab
 /** Prepare a send on the server clock before any inference request. */
 export async function prepareTurn(url: string, headers: HeadersInit, signal: AbortSignal, fetchImpl: typeof fetch = fetch): Promise<{ operationId: string; timeoutMs: number }> {
   const response = await fetchImpl(url, { method: "GET", headers, signal, credentials: "same-origin", cache: "no-store" });
+  if (response.status === 401) throw new Error("Sign in to the same account before sending. No model was called.");
   if (!response.ok) throw new Error("Could not prepare this send. No model was called.");
   const value = await response.json() as { operationId?: unknown; timeoutMs?: unknown };
   if (typeof value.operationId !== "string" || !/^\d{13}-[a-f0-9-]{36}$/i.test(value.operationId)) {
@@ -107,9 +105,17 @@ export async function consumeMindTurn(input: {
         ...(input.signal.aborted ? {} : { deliveryUncertain: true }),
     };
   }
+  const bodyOperation = input.body && typeof input.body === "object" ? (input.body as { operationId?: unknown }).operationId : undefined;
+  const operation = new Headers(input.headers).get("x-mind-turn-id") || (typeof bodyOperation === "string" ? bodyOperation : undefined);
+  const primaryHeader = response.headers.get("x-mind-primary-dispatched");
+  const evidence: TurnCallEvidence = {};
+  if (primaryHeader === "0" || primaryHeader === "1") evidence.primaryDispatched = primaryHeader === "1";
+  const addExecutions = (raw: unknown) => {
+    const executions = readExecutionReceipts([...(evidence.executions ?? []), ...readExecutionReceipts(raw, operation)], operation);
+    if (executions.length) evidence.executions = executions;
+  };
   const type = response.headers.get("content-type") ?? "";
   if (!response.ok || !type.includes("text/event-stream")) {
-    let evidence: TurnCallEvidence = {};
     let code = turnErrorCode(undefined, response.status);
     let message =
       response.status === 401
@@ -119,9 +125,10 @@ export async function consumeMindTurn(input: {
           : "The model service could not be reached.";
     let uncertain = response.status >= 500 || response.status === 409 || response.ok;
     try {
-      const payload = (await response.json()) as { error?: string; code?: unknown; duplicate?: boolean };
+      const payload = (await response.json()) as { error?: string; code?: unknown; duplicate?: boolean; executions?: unknown };
       code = turnErrorCode(payload.code, response.status);
-      evidence = normalizeTurnCallEvidence(payload);
+      Object.assign(evidence, normalizeTurnCallEvidence(payload));
+      addExecutions(payload.executions);
       uncertain ||= payload.duplicate === true;
       if (response.headers.get("x-mind-dispatch") === "none" && !payload.duplicate) uncertain = false;
       if (typeof payload.error === "string" && payload.error.trim()) message = payload.error;
@@ -134,14 +141,15 @@ export async function consumeMindTurn(input: {
   const reader = response.body.getReader();
   const decoder = new TextDecoder();
   let carry = "";
-  let evidence: TurnCallEvidence = {};
   const retainEvidence = (next: TurnCallEvidence) => {
     const consultation = new Map((evidence.consultation ?? []).map((row) => [row.id, row]));
     for (const row of next.consultation ?? []) consultation.set(row.id, row);
-    evidence = { ...evidence, ...next, ...(consultation.size ? { consultation: [...consultation.values()] } : {}) };
+    Object.assign(evidence, next);
+    if (consultation.size) evidence.consultation = [...consultation.values()];
   };
   const stop = async (): Promise<LiveTurnResult> => {
-    await reader.cancel().catch(() => undefined);
+    void reader.cancel().catch(() => undefined);
+    if (isTimeoutAbort(input.signal, input.signal.reason)) return { ok: false, error: CHAT_TIMEOUT_REPLY, code: "chat_timeout", deliveryUncertain: true, ...evidence };
     return { ok: false, error: STOPPED_REPLY, code: "user_stopped", ...evidence };
   };
   while (true) {
@@ -150,7 +158,7 @@ export async function consumeMindTurn(input: {
     try {
       step = await readOrAbort(reader, input.signal);
     } catch (caught) {
-      await reader.cancel().catch(() => undefined);
+      void reader.cancel().catch(() => undefined);
       if (isTimeoutAbort(input.signal, caught) || isTimeoutAbort(input.signal, input.signal.reason)) {
         return { ok: false, error: CHAT_TIMEOUT_REPLY, code: "chat_timeout", deliveryUncertain: true, ...evidence };
       }
@@ -169,15 +177,17 @@ export async function consumeMindTurn(input: {
     carry = pulled.rest;
     for (const event of pulled.events) {
       if (input.signal.aborted) return stop();
+      if (event.event === "executions") addExecutions(event.executions);
       if (event.event === "delta") input.onDelta(event.text);
       if (event.event === "consultation") retainEvidence({ consultation: event.consultation });
       if (event.event === "error" || event.event === "canceled") {
         retainEvidence(normalizeTurnCallEvidence(event));
-        await reader.cancel().catch(() => undefined);
-        return { ok: false, error: event.error, code: event.event === "canceled" ? event.code ?? "user_stopped" : turnErrorCode(event.code), ...(evidence.dispatched !== false ? { deliveryUncertain: true as const } : {}), ...evidence };
+        void reader.cancel().catch(() => undefined);
+        return { ok: false, error: event.event === "canceled" ? STOPPED_REPLY : event.error, code: event.event === "canceled" ? event.code ?? "user_stopped" : turnErrorCode(event.code), ...(evidence.dispatched !== false ? { deliveryUncertain: true as const } : {}), ...evidence };
       }
       if (event.event === "done") {
         const finished: LiveTurnResult = {
+          ...evidence,
           ...normalizeTurnCallEvidence(event),
           ok: true,
           contextReceipt: event.contextReceipt,

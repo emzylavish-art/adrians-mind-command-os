@@ -405,6 +405,7 @@ export function chatTurnBody(input: ChatTurnBodyInput): Record<string, unknown> 
     ...(input.composerMode ? { composerMode: input.composerMode } : {}),
     ...(input.identity ? { identity: input.identity } : {}),
     ...(input.consult ? { consult: input.consult } : {}),
+    ...(input.freeOnly !== undefined ? { freeOnly: input.freeOnly } : {}),
     images: input.images,
   };
   const size = () => new TextEncoder().encode(JSON.stringify(body)).byteLength;

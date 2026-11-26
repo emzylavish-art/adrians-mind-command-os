@@ -60,6 +60,8 @@ type StoredProvider = {
 };
 
 export type AiProviderDependencies = {
+  freeOnly?: boolean;
+  onDispatch?: () => void;
   sql?: Sql;
   request?: typeof requestProvider;
   decrypt?: (ciphertext: string) => string | null;
@@ -69,7 +71,7 @@ export type AiProviderDependencies = {
 async function providerSql(deps: AiProviderDependencies): Promise<Sql> {
   return deps.sql || (await import("../db.ts")).getSql();
 }
-const PROVIDER_COLUMNS = "id, label, base_url, key_ciphertext, default_model, models, status, last_error, catalog_checked_at, inference_verified_at, inference_model, inference_failed_at, retry_after, rate_limit_model, model_capabilities";
+const PROVIDER_COLUMNS = "id, label, base_url, key_ciphertext, default_model, models, status, last_error, catalog_checked_at, inference_verified_at, inference_model, inference_failed_at, retry_after, rate_limit_model, model_capabilities, model_profiles";
 function timestamp(value: string | Date | null | undefined): string | null {
   if (!value) return null;
   const date = value instanceof Date ? value : new Date(value);
@@ -291,12 +293,15 @@ async function requestProvider(
   path: string,
   init: RequestInit,
   stream?: { kind: AiWireProtocol; onDelta: (text: string) => void },
+  onDispatch?: () => void,
 ): Promise<{ status: number; text: string; requestId: string | null; retryAfter?: string | null; answer?: ParsedAnswer; receipt?: ProviderReceipt; observedModel?: string }> {
   const checked = baseUrl(row.base_url);
   if (!checked.ok) throw new Error("The saved provider endpoint is not valid.");
   const url = new URL(checked.value + "/" + path);
   const pin = await resolveAndPinMcpHostname(url.hostname);
   if (!pin.ok) throw new Error("The provider hostname is not publicly reachable.");
+  init.signal?.throwIfAborted();
+  onDispatch?.();
   const response = await pinnedHttpFetch(url, pin.pinnedAddress, pin.hostname, {
     ...init,
     streamResponse: Boolean(stream),
@@ -342,6 +347,7 @@ export async function discoverAiModels(userId: string, id: string, deps: AiProvi
   let models = asModels(row.models);
   let retryAt: string | null = null;
   let capabilities = readModelCapabilityRegistry(row.model_capabilities);
+  let profiles = asProfiles(row.model_profiles);
   try {
     const res = await (deps.request || requestProvider)(requestRow, "models", {
       method: "GET",
@@ -353,7 +359,7 @@ export async function discoverAiModels(userId: string, id: string, deps: AiProvi
         status = "configured";
         lastError = "Model listing is unsupported. The saved model can be tried manually; inference is unverified.";
       } else {
-        status = providerRestriction(res.status) ?? "unavailable";
+        status = providerRestriction(res.status) ?? (["credentials_rejected", "billing_required", "quota_or_rate_limited", "rate_limited"].includes(row.status) ? row.status : "unavailable");
         if (res.status === 429) retryAt = providerRetryAt(res.retryAfter);
       }
     } else {
@@ -364,9 +370,10 @@ export async function discoverAiModels(userId: string, id: string, deps: AiProvi
       if (parsed.length) {
         models = parsed;
         capabilities = catalogCapabilities(publicRow(requestRow).host, found, parsed);
+        profiles = normalizeCatalogModels(found).filter((profile) => parsed.includes(profile.id));
         status = "catalogued";
       } else {
-        status = models.length ? "configured" : "awaiting_discovery";
+        status = ["credentials_rejected", "billing_required", "quota_or_rate_limited", "rate_limited"].includes(row.status) ? row.status : models.length ? "configured" : "awaiting_discovery";
         lastError = models.length ? "No models were listed. You can try the saved model manually." : "The API did not expose a compatible model catalogue.";
       }
     }
@@ -377,15 +384,27 @@ export async function discoverAiModels(userId: string, id: string, deps: AiProvi
   const defaultModel = preserveProviderModel(row.default_model, models).model;
   if (defaultModel && !models.includes(defaultModel) && status === "catalogued") lastError = "The selected default model is no longer listed. It was preserved; choose a replacement explicitly before using that selection.";
   await sql.query(
-    "update mind_ai_providers set base_url = $3, default_model = $4, models = $5::jsonb, status = $6, last_error = $7, catalog_checked_at = now(), retry_after = $8, rate_limit_model = '', model_capabilities = $10::jsonb, updated_at = now() where user_id = $1 and id = $2 and key_ciphertext = $9",
-    [userId, id, requestRow.base_url, defaultModel, JSON.stringify(models), status, lastError, retryAt, row.key_ciphertext, JSON.stringify(capabilities)],
+    "update mind_ai_providers set base_url = $3, default_model = $4, models = $5::jsonb, status = $6, last_error = $7, catalog_checked_at = now(), retry_after = $8, rate_limit_model = '', model_capabilities = $10::jsonb, model_profiles = coalesce((select jsonb_object_agg(incoming.key, incoming.value || case when model_profiles -> incoming.key ? 'lastExecution' then jsonb_build_object('lastExecution', model_profiles -> incoming.key -> 'lastExecution') else '{}'::jsonb end) from jsonb_each($11::jsonb) incoming), '{}'::jsonb), updated_at = now() where user_id = $1 and id = $2 and key_ciphertext = $9",
+    [userId, id, requestRow.base_url, defaultModel, JSON.stringify(models), status, lastError, retryAt, row.key_ciphertext, JSON.stringify(capabilities), JSON.stringify(profileRecord(profiles))],
   );
-  const provider = publicRow({ ...requestRow, default_model: defaultModel, models, status, last_error: lastError, catalog_checked_at: new Date().toISOString(), retry_after: retryAt, rate_limit_model: "", model_capabilities: capabilities });
+  const provider = publicRow({ ...requestRow, default_model: defaultModel, models, status, last_error: lastError, catalog_checked_at: new Date().toISOString(), retry_after: retryAt, rate_limit_model: "", model_capabilities: capabilities, model_profiles: profileRecord(profiles) });
   const usable = !customProviderBlockReason(provider);
   return usable ? { ok: true, provider, stage: "catalogue", usable } : { ok: false, error: lastError || "Provider discovery did not establish readiness.", provider, stage: "catalogue" };
 }
 
 export { parseCustomProviderChoice } from "./provider-catalog.ts";
+
+function customPolicyError(row: StoredProvider, model: string, freeOnly?: boolean, messages: TextTurn[] = []): string | null {
+  if (freeOnly && !(publicRow(row).host === "openrouter.ai" && isOpenRouterFreeModel(model))) {
+    return "Free-only mode requires a route that enforces zero-price execution. Nothing was sent.";
+  }
+  const profile = asProfiles(row.model_profiles).find((item) => item.id === model);
+  const compatibility = modelCompatibility(profile, {
+    input: messages.some((message) => message.images?.length) ? ["text", "image"] : ["text"], output: ["text"],
+    estimatedInputTokens: Math.ceil(messages.reduce((total, message) => total + message.content.length, 0) / 3),
+  });
+  return compatibility.compatible ? null : compatibility.reason;
+}
 
 /** Side-effect-free configuration preflight for a plan, before any helper/model request. */
 export async function validateCustomProviderSelection(userId: string, selection: { id: string; model: string }, deps: AiProviderDependencies = {}): Promise<{ ok: true; capabilities?: ModelCapabilities } | { ok: false; error: string }> {
@@ -395,6 +414,8 @@ export async function validateCustomProviderSelection(userId: string, selection:
   if (blocked) return { ok: false, error: blocked };
   if (!asModels(row.models).includes(selection.model)) return { ok: false, error: "The selected model is not in this connection's catalogue. Refresh and choose a model explicitly." };
   if (publicRow(row).host === "openrouter.ai" && !isOpenRouterFreeModel(selection.model)) return { ok: false, error: OPENROUTER_FREE_MODEL_REQUIRED };
+  const policyError = customPolicyError(row, selection.model, deps.freeOnly);
+  if (policyError) return { ok: false, error: policyError };
   const capabilities = readModelCapabilityRegistry(row.model_capabilities)[selection.model];
   const effectiveOutputTokens = deps.options?.controls?.answerTokens ?? (providerWireProtocol(row.base_url) === "anthropic" ? 2048 : undefined);
   if (effectiveOutputTokens !== undefined && capabilities?.maxOutputTokens !== undefined && effectiveOutputTokens > capabilities.maxOutputTokens) return { ok: false, error: `The selected model declares a maximum output of ${capabilities.maxOutputTokens} tokens. Reduce the answer budget explicitly; nothing was sent.` };
@@ -411,47 +432,61 @@ export async function executeCustomChat(
   deps: AiProviderDependencies = {},
 ): Promise<
   ({ ok: true; text: string; model: string; provider: string; delivery: "streamed" | "buffered"; requestId: string | null; usage: { prompt_tokens?: number; completion_tokens?: number } | null } |
-  { ok: false; error: string; httpStatus?: number; model?: string; provider?: string }) & Partial<ProviderReceipt>
+  { ok: false; error: string; httpStatus?: number; model?: string; provider?: string }) & Partial<ProviderReceipt> & { dispatched: boolean; requestedModel: string; executionLocation: "hosted" }
 > {
+  let dispatched = false;
+  const execution = () => ({ dispatched, requestedModel: selection.model, executionLocation: "hosted" as const });
+  const mark = () => { dispatched = true; deps.onDispatch?.(); };
   const sql = await providerSql(deps);
   const row = (await rows(sql, userId)).find((item) => item.id === selection.id);
-  if (!row) return { ok: false, error: "Custom provider is not saved for this account." };
+  if (!row) return { ...execution(), ok: false, error: "Custom provider is not saved for this account." };
   const blockReason = customProviderBlockReason({ ...publicRow(row), model: selection.model });
-  if (blockReason) return { ok: false, error: blockReason };
-  if (!asModels(row.models).includes(selection.model)) return { ok: false, error: "Model is not in the saved provider's catalogue." };
+  if (blockReason) return { ...execution(), ok: false, error: blockReason };
+  if (!asModels(row.models).includes(selection.model)) return { ...execution(), ok: false, error: "Model is not in the saved provider's catalogue." };
+  const policyError = customPolicyError(row, selection.model, deps.freeOnly, messages);
+  if (policyError) return { ...execution(), ok: false, error: policyError, httpStatus: 400 };
   const maxOutputTokens = readModelCapabilityRegistry(row.model_capabilities)[selection.model]?.maxOutputTokens;
   const effectiveOutputTokens = deps.options?.controls?.answerTokens ?? (providerWireProtocol(row.base_url) === "anthropic" ? 2048 : undefined);
-  if (effectiveOutputTokens !== undefined && maxOutputTokens !== undefined && effectiveOutputTokens > maxOutputTokens) return { ok: false, error: `The selected model declares a maximum output of ${maxOutputTokens} tokens. Reduce the answer budget explicitly; nothing was sent.`, httpStatus: 400 };
-  const key = (deps.decrypt || decryptSecret)(row.key_ciphertext);
-  if (!key) return { ok: false, error: "The saved provider credential could not be decrypted." };
-  if (!messages.length || !messages.some((m) => m.role === "user")) return { ok: false, error: "No user message was supplied." };
+  if (effectiveOutputTokens !== undefined && maxOutputTokens !== undefined && effectiveOutputTokens > maxOutputTokens) return { ...execution(), ok: false, error: `The selected model declares a maximum output of ${maxOutputTokens} tokens. Reduce the answer budget explicitly; nothing was sent.`, httpStatus: 400 };
+  const key = row.key_ciphertext && (deps.decrypt || decryptSecret)(row.key_ciphertext);
+  if (!key) return { ...execution(), ok: false, error: "The saved provider credential could not be decrypted." };
+  if (!messages.length || !messages.some((m) => m.role === "user")) return { ...execution(), ok: false, error: "No user message was supplied." };
   try {
     const kind = providerWireProtocol(row.base_url);
     const freeOpenRouter = publicRow(row).host === "openrouter.ai";
-    if (freeOpenRouter && !isOpenRouterFreeModel(selection.model)) return { ok: false, error: OPENROUTER_FREE_MODEL_REQUIRED };
-    if (deps.options?.images?.length || messages.some(message => message.images?.length)) { const imageReason = imageCapabilityBlockReason(publicRow(row).host, selection.model, row.model_capabilities); if (imageReason) return { ok: false, error: imageReason }; }
+    if (freeOpenRouter && !isOpenRouterFreeModel(selection.model)) return { ...execution(), ok: false, error: OPENROUTER_FREE_MODEL_REQUIRED };
+    if (deps.options?.images?.length || messages.some(message => message.images?.length)) { const imageReason = imageCapabilityBlockReason(publicRow(row).host, selection.model, row.model_capabilities); if (imageReason) return { ...execution(), ok: false, error: imageReason }; }
     const request = buildProviderChatRequest(kind, key, selection.model, messages, freeOpenRouter, { ...deps.options, stream: Boolean(deps.onDelta) });
     const res = await (deps.request || requestProvider)(row, request.path, {
       method: "POST",
       headers: request.headers,
       body: request.body,
       signal,
-    }, deps.onDelta ? { kind, onDelta: deps.onDelta } : undefined);
+    }, deps.onDelta ? { kind, onDelta: deps.onDelta } : undefined, mark);
     let payload: Record<string, unknown> | null = null;
     try { const value: unknown = JSON.parse(res.text); if (value && typeof value === "object" && !Array.isArray(value)) payload = value as Record<string, unknown>; } catch { /* Stream receipts and HTTP headers can still carry observed usage. */ }
+    if (!dispatched) mark(); // Injected transports may return an HTTP receipt directly.
     const receipt = res.receipt ?? readProviderReceipt(freeOpenRouter ? "openrouter" : kind, payload);
     const observedModel = res.observedModel ?? payload?.model ?? payload?.modelVersion;
-    const evidence = { ...receipt, requestId: res.requestId ?? receipt.requestId, provider: row.label,
+    const evidence = { ...execution(), ...receipt, requestId: res.requestId ?? receipt.requestId, provider: row.label,
       ...(typeof observedModel === "string" && observedModel.trim() ? { model: observedModel.trim() } : {}) };
+    const record = async (outcome: ModelExecution["outcome"], error?: string) => {
+      await recordModelExecution(sql, userId, row.id, selection.model, {
+        outcome, at: new Date().toISOString(), requestedModel: selection.model,
+        reportedModel: typeof observedModel === "string" ? observedModel : undefined, error,
+      }).catch(() => undefined);
+    };
     if (res.status < 200 || res.status >= 300) {
       const error = providerError(res.status);
+      await record(res.status === 429 ? "rate_limited" : res.status === 403 ? "permission_denied" : "failed", error);
       const restriction = providerRestriction(res.status) || (res.status >= 500 ? "unavailable" : row.status);
       try { await sql.query("update mind_ai_providers set status=$3,last_error=$4,inference_failed_at=now(),retry_after=$5,rate_limit_model=$6,updated_at=now() where user_id=$1 and id=$2 and key_ciphertext=$7", [userId, row.id, restriction, error, res.status === 429 ? providerRetryAt(res.retryAfter) : null, res.status === 429 ? selection.model : "", row.key_ciphertext]); } catch { /* A bookkeeping outage cannot erase an actual provider failure receipt. */ }
       return { ...evidence, ok: false, error, httpStatus: res.status >= 400 && res.status < 500 ? res.status : undefined };
     }
     const parsed = res.answer || parseProviderText(kind, res.text);
     if (parsed.ok && !res.answer && deps.onDelta) deps.onDelta(parsed.text);
-    if (!parsed.ok) return { ...evidence, ...parsed };
+    if (!parsed.ok) { await record("failed", "Provider answer unavailable."); return { ...evidence, ...parsed }; }
+    await record("succeeded");
     // A completed paid answer is retained even if readiness bookkeeping is temporarily unavailable.
     try { await sql.query("update mind_ai_providers set status='catalogued',last_error='',inference_verified_at=now(),inference_model=$3,retry_after=null,rate_limit_model='',updated_at=now() where user_id=$1 and id=$2 and key_ciphertext=$4", [userId, row.id, parsed.model, row.key_ciphertext]); } catch { /* The response itself remains the inference evidence. */ }
     return {
@@ -459,6 +494,6 @@ export async function executeCustomChat(
       delivery: res.answer ? "streamed" : "buffered", requestId: res.requestId ?? receipt.requestId, usage: receipt.usage ?? parsed.usage,
     };
   } catch {
-    return { ok: false, error: "The provider could not be reached or returned an unreadable response." };
+    return { ...execution(), ok: false, error: "The provider could not be reached or returned an unreadable response." };
   }
 }

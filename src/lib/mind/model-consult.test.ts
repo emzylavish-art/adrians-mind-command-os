@@ -25,7 +25,7 @@ describe("model consult", () => {
       modules,
       question: "What file formats last?",
       purpose: ORCHESTRATOR_PURPOSE,
-      selectedHelpers: ["grok", "custom:saved:desk-model"],
+      allowPaidHelpers: true, helperIds: ["grok", "custom:saved:desk-model"],
     });
     assert.equal(planned.ok, true);
     if (!planned.ok) return;
@@ -52,7 +52,7 @@ describe("model consult", () => {
       orchestrator: "grok",
       modules: builtinModules({ grokConfigured: true, providers: { openai: true, openrouter: true } }),
       question: "Name a durable format.",
-      selectedHelpers: ["openai", "openrouter", "nemotron"],
+      allowPaidHelpers: true, helperIds: ["openai", "openrouter", "nemotron"],
     });
     assert.equal(planned.ok, true);
     if (!planned.ok) return;

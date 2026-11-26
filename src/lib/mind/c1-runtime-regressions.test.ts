@@ -18,12 +18,12 @@ test("AA014 preserves provider counters, identity and finish metadata without fa
 test("AA015 connected providers do not become authorized helpers", () => {
   const none = planModelConsult({ orchestrator: "grok", modules, question: "hello" });
   assert(none.ok); assert.deepEqual(none.plan.helpers, []);
-  const selected = planModelConsult({ orchestrator: "grok", modules, question: "hello", authorizedHelpers: ["gemini"] });
+  const selected = planModelConsult({ orchestrator: "grok", modules, question: "hello", allowPaidHelpers: true, helperIds: ["gemini"] });
   assert(selected.ok); assert.deepEqual(selected.plan.helpers.map((v) => v.id), ["gemini"]);
-  assert.equal(planModelConsult({ orchestrator: "grok", modules, question: "hello", authorizedHelpers: ["missing"] }).ok, false);
+  assert.equal(planModelConsult({ orchestrator: "grok", modules, question: "hello", allowPaidHelpers: true, helperIds: ["missing"] }).ok, false);
 });
 test("AA016/017 bounded helpers preserve failed receipts and stop new dispatch after cancel", async () => {
-  const plan = planModelConsult({ orchestrator: "grok", modules, question: "test", authorizedHelpers: ["openai", "gemini", "anthropic"], maxConcurrency: 2 });
+  const plan = planModelConsult({ orchestrator: "grok", modules, question: "test", allowPaidHelpers: true, helperIds: ["openai", "gemini", "anthropic"], maxConcurrency: 2 });
   assert(plan.ok);
   let active = 0, peak = 0;
   const result = await executeConsultPlan(plan.plan, async (id) => {

@@ -6,6 +6,7 @@ import type { Sql } from "../db.ts";
 import { DEFAULT_RESOURCE_POLICY } from "./resource-policy.ts";
 import { reserveResourceOperation, settleResourceOperation, saveResourcePolicy, resourceLedger } from "./resource-governor.server.ts";
 import { recoverableTurnResponse, readTurnRecovery } from "./turn-recovery.ts";
+import { readTurnReceipt } from "./turn-receipt.ts";
 import { setCoordinationSqlForTests, registerAgent, findAgentByToken, onlineAgents, enqueueJob, acceptJob, requestJobCancel, completeJob, markJobTimeout, unregisterAgent, appendJobEvent, listJobEvents, recordCapabilities, deviceReadiness } from "./pc-pairing/coordination.server.ts";
 import { saveResearchReport, listResearchReports, readResearchReport, researchVersions, editResearchMetadata } from "./research-library.server.ts";
 import { saveInstructionPreferences, readInstructionPreferences, recordLoadedInstructions, instructionHistory, type InstructionMetadata } from "./skill-instructions.server.ts";
@@ -165,4 +166,20 @@ test("AA094 token-capped accounts cannot authorize opaque internal model usage a
   await saveResourcePolicy("opaque-owner", DEFAULT_RESOURCE_POLICY, 1, sql);
   const allowed = await reserveResourceOperation(attempt);
   assert.equal(allowed.estimate, null);
+});
+
+test("reader cancellation before a delayed transport leaves the claim uncertain", async () => {
+  const owner = "late-owner";
+  const operation = "delayed";
+  await sql.query("insert into mind_turn_receipt(user_id,operation_id,expires_at) values($1,$2,now()+interval '1 day')", [owner, operation]);
+  let dispatched = false;
+  const upstream = new ReadableStream<Uint8Array>({});
+  const response = recoverableTurnResponse({ sql, owner, operation, retain: true, dispatched: () => dispatched, response: new Response(upstream) });
+  const reader = response.body!.getReader();
+  const pending = reader.read();
+  await reader.cancel();
+  assert.equal((await pending).done, true);
+  dispatched = true;
+  assert.equal(await readTurnReceipt(sql, owner, operation), "processing_or_unknown");
+  assert.equal(await readTurnRecovery(sql, owner, operation), null);
 });

@@ -205,8 +205,8 @@ test("AA043/046 failure accounting distinguishes a dispatched primary from helpe
       assert.equal(result.ok, false);
       assert.deepEqual(result.executions, [helper]);
       if (!result.ok) {
-        assert.equal(result.dispatched, value === "1" ? true : value === "0" ? false : undefined);
-        assert.equal("dispatched" in result, value === "0" || value === "1", "missing metadata remains unknown");
+        assert.equal(result.primaryDispatched, value === "1" ? true : value === "0" ? false : undefined);
+        assert.equal("primaryDispatched" in result, value === "0" || value === "1", "missing metadata remains unknown");
       }
     }
   }
@@ -218,8 +218,8 @@ test("AA043/046 a completed local tool reply can explicitly report no primary mo
     if (value) headers.set("x-mind-primary-dispatched", value);
     const result = await consume(new Response(event("done", { ...done, model: "adrian-local", provider: "Adrian" }), { headers }));
     assert.equal(shouldStoreReply(result), true, "local replies are still valid assistant messages");
-    assert.equal(result.dispatched, value === "0" ? false : value === "1" ? true : undefined);
-    assert.equal("dispatched" in result, value !== undefined);
+    assert.equal(result.primaryDispatched, value === "0" ? false : value === "1" ? true : undefined);
+    assert.equal("primaryDispatched" in result, value !== undefined);
   }
 });
 
@@ -230,13 +230,13 @@ test("AA043/046 failed primary retains only reported identity and valid token co
     const payload = { error: "Primary failed", ...metadata };
     const response = protocol === "json" ? Response.json(payload, { status: 500, headers: { "x-mind-primary-dispatched": "1" } })
       : new Response(event("error", payload), { headers: { "content-type": "text/event-stream", "x-mind-primary-dispatched": "1" } });
-    assert.deepEqual(await consume(response), { ok: false, error: "Primary failed", deliveryUncertain: true, dispatched: true, ...metadata });
+    assert.deepEqual(await consume(response), { ok: false, error: "Primary failed", code: protocol === "json" ? "service_unavailable" : "unknown", deliveryUncertain: true, primaryDispatched: true, ...metadata });
   }
   const invalid = await consume(Response.json({ error: "Unknown receipt", usage: { prompt_tokens: -1, completion_tokens: 1.2 },
     provider: {}, model: "", requestedModel: false, requestId: "unsafe\nvalue", executionLocation: "guess" }, { status: 500 }));
-  assert.deepEqual(invalid, { ok: false, error: "Unknown receipt", deliveryUncertain: true, usage: null });
+  assert.deepEqual(invalid, { ok: false, error: "Unknown receipt", code: "service_unavailable", deliveryUncertain: true, usage: null });
   const missing = await consume(Response.json({ error: "No receipt" }, { status: 401 }));
-  assert.deepEqual(missing, { ok: false, error: "No receipt" });
+  assert.deepEqual(missing, { ok: false, code: "auth_required", error: "No receipt" });
 });
 
 test("AA043/046 receipt validation rejects false identities and usage, strips extra material, and counts repeated IDs once", () => {

@@ -13,11 +13,12 @@ export async function readTurnRecovery(sql: Sql, owner: string, operation: strin
 
 /** Saves only a fully delivered response under the existing owner and 24h expiry. */
 export function recoverableTurnResponse(input: {
-  response: Response; sql: Sql; owner: string; operation: string; retain: boolean; dispatched: boolean;
+  response: Response; sql: Sql; owner: string; operation: string; retain: boolean; dispatched: boolean | (() => boolean);
 }): Response {
   const { response, sql, owner, operation, retain, dispatched } = input;
+  const wasDispatched = () => typeof dispatched === "function" ? dispatched() : dispatched;
   if (!response.body) {
-    void finishTurnReceipt(sql, owner, operation, !dispatched).catch(() => {});
+    void finishTurnReceipt(sql, owner, operation, !wasDispatched()).catch(() => {});
     return response;
   }
   const reader = response.body.getReader();
@@ -28,19 +29,23 @@ export function recoverableTurnResponse(input: {
     if (finished) return;
     finished = true;
     try {
-      if (store && retain && dispatched && size <= MAX_RECOVERY_BYTES) {
+      // A canceled/erroring stream can outlive its reader. Leave its claim uncertain
+      // if work has not reached the transport yet and could still do so later.
+      if (!store && typeof dispatched === "function" && !wasDispatched()) return;
+      if (store && retain && wasDispatched() && size <= MAX_RECOVERY_BYTES) {
         const data = new Uint8Array(size);
         let offset = 0;
         for (const chunk of chunks) { data.set(chunk, offset); offset += chunk.length; }
         const content = new TextDecoder().decode(data);
         await sql`update mind_turn_receipt set response_body = ${content}, response_status = ${response.status}, response_type = ${response.headers.get("content-type") || "application/json"}, responded = true, retryable = false where user_id = ${owner} and operation_id = ${operation}`;
-      } else await finishTurnReceipt(sql, owner, operation, !dispatched);
+      } else await finishTurnReceipt(sql, owner, operation, !wasDispatched());
     } catch { /* Deduplication remains in force when optional recovery storage fails. */ }
   };
   const body = new ReadableStream<Uint8Array>({
     async pull(controller) {
       try {
         const part = await reader.read();
+        if (finished) return;
         if (part.done) { await complete(true); controller.close(); return; }
         size += part.value.length;
         if (retain && size <= MAX_RECOVERY_BYTES) chunks.push(part.value.slice());
@@ -48,7 +53,10 @@ export function recoverableTurnResponse(input: {
         controller.enqueue(part.value);
       } catch (error) { await complete(false); controller.error(error); }
     },
-    async cancel(reason) { await reader.cancel(reason); await complete(false); },
+    async cancel(reason) {
+      const completion = complete(false);
+      try { await reader.cancel(reason); } finally { await completion; }
+    },
   });
   return new Response(body, { status: response.status, headers: response.headers });
 }

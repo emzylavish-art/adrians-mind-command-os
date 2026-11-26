@@ -6,13 +6,13 @@ const modules = ["primary", "helper-a", "helper-b", "new-key"].map((id) => ({ id
 test("connecting another key never authorizes it to receive the prompt", () => {
   const defaultPlan = planModelConsult({ orchestrator: "primary", modules, question: "Private prompt" });
   assert.ok(defaultPlan.ok); assert.deepEqual(defaultPlan.plan.helpers, []);
-  const selected = planModelConsult({ orchestrator: "primary", modules, selectedHelpers: ["helper-a"], question: "Private prompt" });
+  const selected = planModelConsult({ orchestrator: "primary", modules, allowPaidHelpers: true, helperIds: ["helper-a"], question: "Private prompt" });
   assert.ok(selected.ok); assert.deepEqual(selected.plan.helpers.map((helper) => helper.id), ["helper-a"]);
-  assert.equal(planModelConsult({ orchestrator: "primary", modules, selectedHelpers: ["disconnected"], question: "Private prompt" }).ok, false);
+  assert.equal(planModelConsult({ orchestrator: "primary", modules, allowPaidHelpers: true, helperIds: ["disconnected"], question: "Private prompt" }).ok, false);
 });
 
 test("bounded parallel calls retain independent failures and explicit excerpt metadata", async () => {
-  const plan = planModelConsult({ orchestrator: "primary", modules, selectedHelpers: ["helper-a", "helper-b", "new-key"], question: "Review the proposal" });
+  const plan = planModelConsult({ orchestrator: "primary", modules, allowPaidHelpers: true, helperIds: ["helper-a", "helper-b", "new-key"], question: "Review the proposal" });
   assert.ok(plan.ok);
   let active = 0, max = 0;
   const evidence = await collectConsultHelp(plan.plan, async (id) => {

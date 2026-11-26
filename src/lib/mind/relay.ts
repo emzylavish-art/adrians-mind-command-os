@@ -66,6 +66,7 @@ export function relayModelStream(input: {
   usedIds: string[];
   requestSignal: AbortSignal;
   fetchImpl?: typeof fetch;
+  onDispatch?: () => void;
   timeoutMs?: number;
   url?: string;
   params?: RelayModelParams;
@@ -143,6 +144,7 @@ export function relayModelStream(input: {
           return;
         }
         const fetchImpl = input.fetchImpl ?? fetch;
+        input.onDispatch?.();
         dispatched = true;
         const res = await fetchImpl(input.url ?? PROVIDER_URL, {
           method: "POST",
@@ -204,6 +206,10 @@ export function relayModelStream(input: {
             return;
           }
           for (const text of pushed.deltas) send("delta", { text });
+          if (pushed.done) {
+            void reader.cancel().catch(() => undefined);
+            break;
+          }
         }
         if (linked.signal.aborted) {
           await stopped();

@@ -1,3 +1,10 @@
+import * as fixtureProviderHealth from "./provider-health.ts";
+import * as fixtureProviderLifecycle from "./provider-lifecycle.ts";
+import * as fixtureAiProviderStream from "./ai-provider-stream.ts";
+import * as fixtureProviderCallStream from "./provider-call-stream.ts";
+import * as fixtureProviderUsage from "./provider-usage.ts";
+import * as fixtureProviderDependencies from "./provider-dependencies.ts";
+import * as fixtureModelCapabilities from "./model-capabilities.ts";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { randomUUID } from "node:crypto";
@@ -14,6 +21,14 @@ function customFixture(input: { dns?: boolean; credential?: string; row?: boolea
   const record = { id: "custom", label: "Fixture API", base_url: "https://api.openai.com/v1", key_ciphertext: input.credential ?? "encrypted-fixture",
     default_model: "selected", models: ["selected"], status: "catalogued", last_error: "" };
   const imports: Record<string, unknown> = {
+    "./provider-health.ts": fixtureProviderHealth,
+    "./provider-lifecycle.ts": fixtureProviderLifecycle,
+    "./ai-provider-stream.ts": fixtureAiProviderStream,
+    "./provider-call-stream.ts": fixtureProviderCallStream,
+    "./provider-usage.ts": fixtureProviderUsage,
+    "./provider-dependencies.ts": fixtureProviderDependencies,
+    "./model-capabilities.ts": fixtureModelCapabilities,
+
     "node:crypto": { randomUUID }, "./ai-provider-native.ts": native, "./provider-catalog.ts": catalogue,
     "./provider-receipt.ts": receipt, "./stream.ts": { reportedModel },
     "../db.ts": { getSql: async () => ({ query: async (sql: string) => sql.startsWith("select") && input.row !== false ? [record] : [] }) },

@@ -1,3 +1,12 @@
+import * as fixtureProviderHealth from "./provider-health.ts";
+import * as fixtureProviderLifecycle from "./provider-lifecycle.ts";
+import * as fixtureAiProviderStream from "./ai-provider-stream.ts";
+import * as fixtureProviderCallStream from "./provider-call-stream.ts";
+import * as fixtureProviderUsage from "./provider-usage.ts";
+import * as fixtureProviderDependencies from "./provider-dependencies.ts";
+import * as fixtureModelCapabilities from "./model-capabilities.ts";
+import * as fixtureStream from "./stream.ts";
+import * as fixtureProviderReceipt from "./provider-receipt.ts";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { test } from "node:test";
@@ -18,6 +27,16 @@ function registryFixture(profile: catalogue.CatalogModelProfile | undefined, res
   const row = { id: "aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee", label: "Synthetic provider", base_url: "https://api.example.test/v1", key_ciphertext: "fixture-encrypted-key", default_model: "fixture-model", models: ["fixture-model"], model_profiles: profile ? { "fixture-model": profile } : {}, status: "configured", last_error: "" };
   const sql = { async query(query: string, values: any[]) { if (query.startsWith("select")) return [row]; writes.push({ query, values }); return []; } };
   const imports: Record<string, any> = {
+    "./provider-health.ts": fixtureProviderHealth,
+    "./provider-lifecycle.ts": fixtureProviderLifecycle,
+    "./ai-provider-stream.ts": fixtureAiProviderStream,
+    "./provider-call-stream.ts": fixtureProviderCallStream,
+    "./provider-usage.ts": fixtureProviderUsage,
+    "./provider-dependencies.ts": fixtureProviderDependencies,
+    "./model-capabilities.ts": fixtureModelCapabilities,
+    "./stream.ts": fixtureStream,
+    "./provider-receipt.ts": fixtureProviderReceipt,
+
     "node:crypto": { randomUUID: () => row.id },
     "./provider-catalog.ts": catalogue,
     "./ai-provider-native.ts": native,
@@ -63,7 +82,12 @@ test("C2 AA111: actual inference receipts bind model, owner and reported model w
   assert.equal(receipt.outcome, "succeeded");
   const limited = registryFixture(profile(), 429);
   await limited.exports.executeCustomChat("owner-a", { id: "aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee", model: "fixture-model" }, [{ role: "user", content: "Hello" }]);
-  assert.equal(limited.writes.some((item) => /set status=/.test(item.query)), false, "one model rate limit must not mark every model unavailable");
+  const restriction = limited.writes.find((item) => item.query.includes("rate_limit_model="));
+  assert.ok(restriction);
+  const [, , status, , retryAt, rateLimitedModel] = restriction.values;
+  assert.equal(rateLimitedModel, "fixture-model");
+  assert.equal(catalogue.customProviderBlockReason({ hasKey: true, status, retryAt, rateLimitedModel, model: "other-model" }), null);
+  assert.match(catalogue.customProviderBlockReason({ hasKey: true, status, retryAt, rateLimitedModel, model: "fixture-model" }) ?? "", /rate limit/i);
   assert.equal(JSON.parse(limited.writes[0].values[3]).outcome, "rate_limited");
 });
 

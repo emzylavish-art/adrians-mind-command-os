@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
-import { checkTurnSize, takeToken, consumeMindRateLimit, resetMindRateLimitsForTests } from "./limits.ts";
+import { createChatTurnPreflight, checkTurnSize, takeToken, consumeMindRateLimit, resetMindRateLimitsForTests } from "./limits.ts";
 
 describe("mind request limits", () => {
   it("retains a long-window quota when a short-window request prunes stale buckets", () => {
@@ -34,4 +34,15 @@ describe("checkTurnSize images", () => {
     const result = checkTurnSize({ text: "hi", history: [], memoryContext: [], images: [{ dataUrl: big }] });
     assert.equal(result.ok, false);
   });
+});
+
+it("concurrent helper and answer preflights share a turn token and count each dispatch", async () => {
+  const buckets: string[] = [];
+  const preflight = createChatTurnPreflight("owner", async () => false, async (bucket) => {
+    buckets.push(bucket);
+    await Promise.resolve();
+    return { ok: true };
+  });
+  assert.deepEqual(await Promise.all([preflight(), preflight(), preflight()]), [null, null, null]);
+  assert.deepEqual(buckets, ["chat", "provider-dispatch", "provider-dispatch", "provider-dispatch"]);
 });

@@ -1,3 +1,7 @@
+import { failureKindForAction } from "./recovery-inbox.ts";
+import { effectiveContextPolicy } from "./memory/context-policy.ts";
+import { memoryPolicyRevision, validateMemoryDispatch } from "./memory/dispatch-policy.ts";
+import { retrieveProjectPassages } from "./knowledge.ts";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { stripTypeScriptTypes } from "node:module";
@@ -7,7 +11,7 @@ import { addMemory, createChat, deleteMemory, emptyWorkspace, memoriesForChat, p
 import { memorySendRevision, checkMemorySendRevision } from "./memory-send-policy.ts";
 import { chatTurnBody, isLogicRouteId, respondedRouteLabel } from "./logic-routes.ts";
 import { boundAbortSignal } from "./turn-timeouts.ts";
-import { consumeMindTurn, prepareTurnId, shouldStoreReply, STOPPED_REPLY } from "./live-turn.ts";
+import { consumeMindTurn, prepareTurn, shouldStoreReply, STOPPED_REPLY } from "./live-turn.ts";
 import { historyForDeliver, resolveChatMessages, shouldBlockForEmergencyStop, snapshotImages } from "./retry-fidelity.ts";
 import { relevantMemories } from "./memory/relevant.ts";
 import { normalizeBotKnowledge, routeForBotChat } from "./bot-model.ts";
@@ -66,7 +70,7 @@ function harness(options: { pause?: "prepare" | "fingerprint"; uncertainFirst?: 
     providerChoice: "grok", modelTier: "Fast", grokConfigured: true, grokModel: null, providerModels: {},
     logicRoute: null, logicRoutes: [], discovered: [], liveProviders: {}, failoverPolicy: "none",
     composerEffort: "Fast", routingMode: "A", consultModel: "grok", consultModules: [], ADRIAN_MIND_IDENTITY: "fixture identity",
-    normalizeBotKnowledge, routeForBotChat, chosenProvider, failover, isLogicRouteId, exactModelForChat,
+    failureKindForAction, normalizeBotKnowledge, routeForBotChat, chosenProvider, failover, isLogicRouteId, exactModelForChat,
     resolveSendPath: () => ({ path: "direct" }), getBearerToken: () => "", previewPathPrefix: () => "",
     setTurnChat: noop, setLiveText: noop, setToolTimeline: noop, setLastResolvedTier: noop, setLastModelUsed: noop, setBusy: noop, setNotice: noop,
     setError: (error: string | null) => { if (error) errors.push(error); },
@@ -78,7 +82,11 @@ function harness(options: { pause?: "prepare" | "fingerprint"; uncertainFirst?: 
     reportFailure: (message: string, _kind: string, _target: string, retry: (() => void) | null) => { failure = { message, retry }; },
     chatTurnBody, memoriesForChat, relevantMemories, boundAbortSignal, historyForDeliver, resolveChatMessages, shouldBlockForEmergencyStop, snapshotImages, respondedRouteLabel, shouldStoreReply, STOPPED_REPLY,
     sha256: async (text: string) => { if (options.pause === "fingerprint") { reached.resolve(); await release.promise; } return sha256(text); },
-    prepareTurnId: (url: string, headers: HeadersInit, signal: AbortSignal) => prepareTurnId(url, headers, signal, fetchImpl),
+    prepareTurn: (url: string, headers: HeadersInit, signal: AbortSignal) => prepareTurn(url, headers, signal, fetchImpl),
+    ensureChatMedia: async (chat: Chat) => chat, effectiveContextPolicy, memoryPolicyRevision, validateMemoryDispatch, retrieveProjectPassages,
+    currentFreeOnly: { current: false }, researchReferencesInText: () => [], researchHistory: [], preferenceStorage: null, enabledSkills: [],
+    collectAccountSkillApplications: () => [], loadModelControls: () => ({}), projectInstructionsForChat: () => "",
+    requestAnimationFrame: (callback: () => void) => { callback(); return 1; }, cancelAnimationFrame: noop,
     consumeMindTurn: (input: Parameters<typeof consumeMindTurn>[0]) => consumeMindTurn({ ...input, fetchImpl }),
   });
   vm.runInContext(code, context);
@@ -102,7 +110,8 @@ describe("C5 memory privacy at the actual send boundary", () => {
     for (const mutation of ["delete", "correct", "archive", "off"] as const) {
       it(`stops stale memory when ${mutation} happens during ${pause}`, async () => {
         const h = harness({ pause });
-        const pending = h.start(); await h.reached;
+        const pending = h.start();
+        await Promise.race([h.reached, pending.then(() => assert.fail("Send ended before the intended mutation point: " + h.errors.join(" "))) ]);
         const ws = h.ws(), note = ws.memories[0];
         h.setWs(mutation === "delete" ? deleteMemory(ws, note.id) : mutation === "correct" ? reviseMemory(ws, note.id, "new corrected preference") : mutation === "archive" ? { ...ws, memories: ws.memories.map(n => ({ ...n, archived: true })) } : { ...ws, chats: ws.chats.map(chat => ({ ...chat, memory: "off" })) });
         h.release(); await pending;

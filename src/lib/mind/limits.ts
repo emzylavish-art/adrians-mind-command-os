@@ -84,20 +84,24 @@ export function consumeMindRateLimit(
 }
 
 /** Charge one turn token and a separate bounded slot for every provider dispatch. */
-export function createChatTurnPreflight(userId: string, isHalted: () => Promise<boolean>) {
-  let charged = false;
+export function createChatTurnPreflight(
+  userId: string,
+  isHalted: () => Promise<boolean>,
+  consume: (bucket: string, owner: string, limit: number) => RateLimitResult | Promise<RateLimitResult & { unavailable?: boolean }> = consumeMindRateLimit,
+) {
+  let chatWindow: Promise<RateLimitResult & { unavailable?: boolean }> | undefined;
   return async (): Promise<Response | null> => {
-    if (await isHalted()) {
-      return Response.json({ ok: false, error: "Emergency stop is on. Nothing was sent." }, { status: 403 });
-    }
-    if (!charged) {
-      const limit = consumeMindRateLimit("chat", userId, 12);
-      if (!limit.ok) return jsonRateLimited(CHAT_RATE_LIMIT_REPLY, limit.retryAfterSec);
-      charged = true;
-    }
-    const dispatch = consumeMindRateLimit("provider-dispatch", userId, 24);
-    if (!dispatch.ok) return jsonRateLimited("Provider call limit reached. No additional helper or answer call was sent.", dispatch.retryAfterSec);
-    return null;
+    if (await isHalted()) return Response.json({ ok: false, error: "Emergency stop is on. Nothing was sent." }, { status: 403 });
+    // Concurrent helpers share one chat-window decision and each consume their own dispatch allowance.
+    chatWindow ??= Promise.resolve(consume("chat", userId, 12));
+    const chat = await chatWindow;
+    if (!chat.ok) return chat.unavailable
+      ? Response.json({ ok: false, error: "Usage limits could not be checked. Nothing was sent." }, { status: 503 })
+      : jsonRateLimited(CHAT_RATE_LIMIT_REPLY, chat.retryAfterSec);
+    const dispatch = await consume("provider-dispatch", userId, 24);
+    if (dispatch.ok) return null;
+    if ("unavailable" in dispatch && dispatch.unavailable) return Response.json({ ok: false, error: "Provider limits could not be checked. Nothing was sent." }, { status: 503 });
+    return jsonRateLimited("Provider call limit reached. No additional helper or answer call was sent.", dispatch.retryAfterSec);
   };
 }
 

@@ -1210,6 +1210,9 @@ function CommandSession({ account }: { account: ReturnType<typeof useCurrentUser
   const [composerEffort, setComposerEffort] = useState<ComposerModeId>("auto");
   const [consultModel, setConsultModel] = useState("");
   const [consultHelpers, setConsultHelpers] = useState<string[]>([]);
+  const [approvedHelperDraft, setApprovedHelperDraft] = useState<string | null>(null);
+  const helperDraftKey = JSON.stringify([draftOwner, draftScope, consultModel, consultHelpers, draft.trim()]);
+  useEffect(() => { setApprovedHelperDraft(null); }, [helperDraftKey]);
   const [routingMode, setRoutingMode] = useState<RoutingMode>("A");
   const [routingPanel, setRoutingPanel] = useState<LogicRouteId[]>([]);
   const ratingOwner = account?.id ? "account:" + account.id : "device:guest";
@@ -1573,10 +1576,12 @@ function CommandSession({ account }: { account: ReturnType<typeof useCurrentUser
     ...builtinModules({
       grokConfigured,
       providers: liveProviders,
+      openrouterModel: providerModels.openrouter,
+      localRunnerUrl: typeof localStorage === "undefined" ? undefined : preferenceStorage.getItem("amcos.ollama.base") ?? undefined,
       localRunner: typeof localStorage !== "undefined" && Boolean(preferenceStorage.getItem("amcos.ollama.base")?.trim()),
     }),
     ...customModules(customAiProviders),
-  ], [grokConfigured, liveProviders, customAiProviders]);
+  ], [grokConfigured, liveProviders, customAiProviders, providerModels.openrouter, preferenceStorage]);
 
   useEffect(() => {
     const storage = preferenceStorage;
@@ -2902,7 +2907,7 @@ function CommandSession({ account }: { account: ReturnType<typeof useCurrentUser
     }
   }
 
-  type TurnRequest = { id: string; body: ReturnType<typeof chatTurnBody> };
+  type TurnRequest = { id: string; body: ReturnType<typeof chatTurnBody>; memoryRevision?: string };
   type TurnReplyReceipt = { chatId: string; messageId: string; provider?: string; model?: string; requestId?: string | null };
 
   async function deliver(
@@ -2982,8 +2987,10 @@ function CommandSession({ account }: { account: ReturnType<typeof useCurrentUser
       }
     }
     const orchestrating = savedRoute ? savedRoute.orchestrated : resolveSendPath(composerEffort).path === "orchestrator";
+    const helperConsent = orchestrating && !currentFreeOnly.current && approvedHelperDraft === helperDraftKey
+      && text.trim() === draft.trim() && (!savedRoute || savedRoute.provider === consultModel);
     const consultPlan = orchestrating
-      ? planModelConsult({ orchestrator: savedRoute?.provider ?? consultModel, modules: consultModules, question: text, selectedHelpers: consultHelpers })
+      ? planModelConsult({ orchestrator: savedRoute?.provider ?? consultModel, modules: consultModules, question: text, helperIds: consultHelpers, allowPaidHelpers: helperConsent, freeOnly: currentFreeOnly.current })
       : null;
     if (consultPlan && !consultPlan.ok) {
       reportFailure(consultPlan.error, "model_unavailable", "provider", () => {
@@ -3029,6 +3036,7 @@ function CommandSession({ account }: { account: ReturnType<typeof useCurrentUser
     const token = getBearerToken();
     const prefix = previewPathPrefix(window.location.hostname, window.location.pathname) ?? "";
     turnInFlight.current = true;
+    const memoryRevision = options?.request?.memoryRevision ?? memorySendRevision(source, chat);
     let operationId: string;
     let knowledgePassages: KnowledgePassage[] = [];
     let projectContext: Awaited<ReturnType<typeof retrieveProjectPassages>> = [];
@@ -3099,9 +3107,9 @@ function CommandSession({ account }: { account: ReturnType<typeof useCurrentUser
       markDelivery("submitted");
     }
     const request: TurnRequest = options?.request ?? {
-      id: operationId,
+      id: operationId, memoryRevision,
       body: chatTurnBody({
-          chatId: chat.id, projectId: chat.projectId, taskId: options?.taskId ?? operationId,
+          chatId: chat.id, projectId: chat.projectId, taskId: options?.taskId ?? operationId, freeOnly: currentFreeOnly.current,
           text,
           memory: chat.memory,
           halted: wsRef.current.halted,
@@ -3136,6 +3144,8 @@ function CommandSession({ account }: { account: ReturnType<typeof useCurrentUser
           consult: consultPlan && consultPlan.ok ? {
             available: consultPlan.plan.available,
             helpers: consultPlan.plan.helpers,
+            helperIds: consultPlan.plan.helpers.map((helper) => helper.id),
+            allowPaidHelpers: helperConsent,
             purpose: consultPlan.plan.purpose,
           } : null,
           images: snapped.map((image) => ({ dataUrl: image.dataUrl, name: image.name, origin: image.origin, lineage: image.lineage, preparation: image.preparation })),
@@ -3143,6 +3153,7 @@ function CommandSession({ account }: { account: ReturnType<typeof useCurrentUser
           customPersonality: chat.customPersonality ?? "",
         }),
     };
+    if (helperConsent && orchestrating) setApprovedHelperDraft(null);
     function reportTurnError(message: string, deliveryUncertain: boolean, code: TurnErrorCode, knownNotSent = false) {
       const useOriginal = deliveryUncertain || knownNotSent || options?.request !== undefined || options?.operationId !== undefined;
       markDelivery(knownNotSent ? "failed" : useOriginal ? "unconfirmed" : "failed");
@@ -3150,6 +3161,10 @@ function CommandSession({ account }: { account: ReturnType<typeof useCurrentUser
         if (turnInFlight.current || turnOwner.current !== draftOwner) return;
         const thread = wsRef.current.chats.find((item) => item.id === chat.id);
         if (!thread) return;
+        if (useOriginal && !checkMemorySendRevision(wsRef.current, chat.id, memoryRevision)) {
+          setError("Memory permissions or notes changed. Review the message and start a fresh request.");
+          return;
+        }
         if (options?.replaceReplyId && thread.messages.at(-1)?.id === options.replaceReplyId) {
           const prior = prepareRegenerate(wsRef.current, chat.id);
           if (!("error" in prior)) void deliver(prior.chat, text, wsRef.current, true, snapped, { ...options, request: useOriginal ? request : undefined });
@@ -3179,6 +3194,16 @@ function CommandSession({ account }: { account: ReturnType<typeof useCurrentUser
         setWs((prev) => ({ ...prev, chats: prev.chats.map((item) => item.id === chat.id
           ? { ...item, messages: item.messages.map((message) => message.id === userMessageId ? { ...message, deliveryRoute } : message) }
           : item) }));
+      }
+      // Recheck after every asynchronous preparation, including the request hash.
+      // A changed workspace during validation cannot lend its approval to this payload.
+      const reviewed = wsRef.current;
+      const privacy = await validateMemoryDispatch(reviewed, request.body);
+      if (generation !== turnGen.current || turnOwner.current !== draftOwner || signal.aborted) return null;
+      if (wsRef.current.halted || reviewed !== wsRef.current || !privacy.ok || !checkMemorySendRevision(wsRef.current, chat.id, memoryRevision)) {
+        markDelivery(options?.request ? "unconfirmed" : "failed");
+        setError("Memory permissions or notes changed, or execution stopped. Review the current conversation before a new send.");
+        return null;
       }
       const result = await consumeMindTurn({
         url: `${prefix}/api/mind/turn`,
@@ -6959,6 +6984,14 @@ ${message.content}`;
                         </MenuCluster>
                         <MenuCluster label="Chat" wide>
                           <ComposerEffortControl mode={composerEffort} onChoose={chooseComposerEffort} consultModules={consultModules} consultModel={consultModel} onConsultModel={chooseConsultModel} consultHelpers={consultHelpers} onConsultHelper={toggleConsultHelper} />
+                          {resolveSendPath(composerEffort).path === "orchestrator" && consultHelpers.some((id) => {
+                            const cost = consultModules.find((item) => item.id === id)?.cost;
+                            return cost !== "free" && cost !== "local";
+                          }) && <label className="inline-flex min-h-11 items-center gap-2 text-sm">
+                            <input type="checkbox" disabled={researchFreeOnly || !draft.trim()} checked={!researchFreeOnly && approvedHelperDraft === helperDraftKey}
+                              onChange={(event) => setApprovedHelperDraft(event.target.checked ? helperDraftKey : null)} />
+                            Allow selected helpers with paid or unknown pricing for this message
+                          </label>}
                           <label className="inline-flex min-h-11 items-center gap-2 text-xs text-muted" style={{ flex: "1 1 12rem", maxWidth: "100%" }}>
                             Style
                             <select aria-label="Conversation style" value={defaultPersonalityId} onChange={(event) => setDefaultPersonalityId(event.target.value as PersonalityId)} className="min-h-11 rounded-panel border border-line bg-transparent px-2 text-sm text-fg">
