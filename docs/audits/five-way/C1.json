@@ -273,7 +273,11 @@
         "candidateExplicitIdMatches": [
           "src/lib/mind/c1-runtime-regressions.test.ts"
         ],
-        "candidateWarning": "Candidate paths match an explicit ID in a C1 test file; verify the actual case against the acceptance before assigning coverage."
+        "candidateWarning": "Candidate paths match an explicit ID in a C1 test file; verify the actual case against the acceptance before assigning coverage.",
+        "reviewedFixtureFiles": [
+          "src/lib/mind/c1-runtime-regressions.test.ts"
+        ],
+        "reviewedAssertionScope": "AA015: connected providers alone add no helpers; an explicitly selected helper is retained and an unknown helper is rejected. Does not prove live billing."
       },
       "nextCheck": "Resolve the exact combined test for this record from its committed source evidence and execute its acceptance path before closure."
     },
@@ -294,7 +298,11 @@
         "candidateExplicitIdMatches": [
           "src/lib/mind/c1-runtime-regressions.test.ts"
         ],
-        "candidateWarning": "Candidate paths match an explicit ID in a C1 test file; verify the actual case against the acceptance before assigning coverage."
+        "candidateWarning": "Candidate paths match an explicit ID in a C1 test file; verify the actual case against the acceptance before assigning coverage.",
+        "reviewedFixtureFiles": [
+          "src/lib/mind/c1-runtime-regressions.test.ts"
+        ],
+        "reviewedAssertionScope": "AA016/017: concurrent helper fixture preserves a failed receipt and a reported model; it does not independently assert every metadata field."
       },
       "nextCheck": "Resolve the exact combined test for this record from its committed source evidence and execute its acceptance path before closure."
     },
@@ -349,7 +357,11 @@
         "candidateExplicitIdMatches": [
           "src/lib/mind/c1-runtime-regressions.test.ts"
         ],
-        "candidateWarning": "Candidate paths match an explicit ID in a C1 test file; verify the actual case against the acceptance before assigning coverage."
+        "candidateWarning": "Candidate paths match an explicit ID in a C1 test file; verify the actual case against the acceptance before assigning coverage.",
+        "reviewedFixtureFiles": [
+          "src/lib/mind/c1-runtime-regressions.test.ts"
+        ],
+        "reviewedAssertionScope": "AA019: synthetic fleet run retains definition version and pauses when a tool is revoked."
       },
       "nextCheck": "Resolve the exact combined test for this record from its committed source evidence and execute its acceptance path before closure."
     },
@@ -370,7 +382,11 @@
         "candidateExplicitIdMatches": [
           "src/lib/mind/c1-runtime-regressions.test.ts"
         ],
-        "candidateWarning": "Candidate paths match an explicit ID in a C1 test file; verify the actual case against the acceptance before assigning coverage."
+        "candidateWarning": "Candidate paths match an explicit ID in a C1 test file; verify the actual case against the acceptance before assigning coverage.",
+        "reviewedFixtureFiles": [
+          "src/lib/mind/c1-runtime-regressions.test.ts"
+        ],
+        "reviewedAssertionScope": "AA020/021: budget-exhausted local run records objective as unverified."
       },
       "nextCheck": "Resolve the exact combined test for this record from its committed source evidence and execute its acceptance path before closure."
     },
@@ -408,7 +424,11 @@
         "candidateExplicitIdMatches": [
           "src/lib/mind/c1-runtime-regressions.test.ts"
         ],
-        "candidateWarning": "Candidate paths match an explicit ID in a C1 test file; verify the actual case against the acceptance before assigning coverage."
+        "candidateWarning": "Candidate paths match an explicit ID in a C1 test file; verify the actual case against the acceptance before assigning coverage.",
+        "reviewedFixtureFiles": [
+          "src/lib/mind/c1-runtime-regressions.test.ts"
+        ],
+        "reviewedAssertionScope": "AA022: synthetic overlapping schedules record individual occurrences and exercise queued and parallel policies; hosted execution remains unverified."
       },
       "nextCheck": "Resolve the exact combined test for this record from its committed source evidence and execute its acceptance path before closure."
     },
@@ -429,7 +449,11 @@
         "candidateExplicitIdMatches": [
           "src/lib/mind/c1-runtime-regressions.test.ts"
         ],
-        "candidateWarning": "Candidate paths match an explicit ID in a C1 test file; verify the actual case against the acceptance before assigning coverage."
+        "candidateWarning": "Candidate paths match an explicit ID in a C1 test file; verify the actual case against the acceptance before assigning coverage.",
+        "reviewedFixtureFiles": [
+          "src/lib/mind/c1-runtime-regressions.test.ts"
+        ],
+        "reviewedAssertionScope": "AA023: local cancellation retains a completed result and records local worker acknowledgement; external cancellation remains unverified."
       },
       "nextCheck": "Resolve the exact combined test for this record from its committed source evidence and execute its acceptance path before closure."
     },
@@ -471,7 +495,11 @@
         "candidateExplicitIdMatches": [
           "src/lib/mind/c1-research-skills.test.ts"
         ],
-        "candidateWarning": "Candidate paths match an explicit ID in a C1 test file; verify the actual case against the acceptance before assigning coverage."
+        "candidateWarning": "Candidate paths match an explicit ID in a C1 test file; verify the actual case against the acceptance before assigning coverage.",
+        "reviewedFixtureFiles": [
+          "src/lib/mind/c1-research-skills.test.ts"
+        ],
+        "reviewedAssertionScope": "AA025: fair selection preserves later-query citations when an earlier query fills the limit using mock search responses."
       },
       "nextCheck": "Resolve the exact combined test for this record from its committed source evidence and execute its acceptance path before closure."
     },
@@ -509,7 +537,11 @@
         "candidateExplicitIdMatches": [
           "src/lib/mind/c1-research-skills.test.ts"
         ],
-        "candidateWarning": "Candidate paths match an explicit ID in a C1 test file; verify the actual case against the acceptance before assigning coverage."
+        "candidateWarning": "Candidate paths match an explicit ID in a C1 test file; verify the actual case against the acceptance before assigning coverage.",
+        "reviewedFixtureFiles": [
+          "src/lib/mind/c1-research-skills.test.ts"
+        ],
+        "reviewedAssertionScope": "AA027: changed or absent provider configuration fingerprints cause retry rejection in a fixture."
       },
       "nextCheck": "Resolve the exact combined test for this record from its committed source evidence and execute its acceptance path before closure."
     },
@@ -551,7 +583,11 @@
         "candidateExplicitIdMatches": [
           "src/lib/mind/c1-durable-runtime.test.ts"
         ],
-        "candidateWarning": "Candidate paths match an explicit ID in a C1 test file; verify the actual case against the acceptance before assigning coverage."
+        "candidateWarning": "Candidate paths match an explicit ID in a C1 test file; verify the actual case against the acceptance before assigning coverage.",
+        "reviewedFixtureFiles": [
+          "src/lib/mind/c1-durable-runtime.test.ts"
+        ],
+        "reviewedAssertionScope": "AA029: PGlite fixture covers 12 reports, owner isolation, pagination, revisions, archival and deletion; no hosted database claim."
       },
       "nextCheck": "Resolve the exact combined test for this record from its committed source evidence and execute its acceptance path before closure."
     },
@@ -610,7 +646,11 @@
         "candidateExplicitIdMatches": [
           "src/lib/mind/c1-research-skills.test.ts"
         ],
-        "candidateWarning": "Candidate paths match an explicit ID in a C1 test file; verify the actual case against the acceptance before assigning coverage."
+        "candidateWarning": "Candidate paths match an explicit ID in a C1 test file; verify the actual case against the acceptance before assigning coverage.",
+        "reviewedFixtureFiles": [
+          "src/lib/mind/c1-research-skills.test.ts"
+        ],
+        "reviewedAssertionScope": "AA032: local owner-scoped storage fixture covers account isolation, stale write rejection and malformed preferences."
       },
       "nextCheck": "Resolve the exact combined test for this record from its committed source evidence and execute its acceptance path before closure."
     },
@@ -670,7 +710,11 @@
         "candidateExplicitIdMatches": [
           "src/lib/mind/c1-research-skills.test.ts"
         ],
-        "candidateWarning": "Candidate paths match an explicit ID in a C1 test file; verify the actual case against the acceptance before assigning coverage."
+        "candidateWarning": "Candidate paths match an explicit ID in a C1 test file; verify the actual case against the acceptance before assigning coverage.",
+        "reviewedFixtureFiles": [
+          "src/lib/mind/c1-research-skills.test.ts"
+        ],
+        "reviewedAssertionScope": "AA035: local planning fixture bounds steps, reports blocked dependencies, and grants no permissions or tool execution."
       },
       "nextCheck": "Resolve the exact combined test for this record from its committed source evidence and execute its acceptance path before closure."
     },
@@ -1145,7 +1189,11 @@
         "candidateExplicitIdMatches": [
           "src/lib/mind/c1-durable-runtime.test.ts"
         ],
-        "candidateWarning": "Candidate paths match an explicit ID in a C1 test file; verify the actual case against the acceptance before assigning coverage."
+        "candidateWarning": "Candidate paths match an explicit ID in a C1 test file; verify the actual case against the acceptance before assigning coverage.",
+        "reviewedFixtureFiles": [
+          "src/lib/mind/c1-durable-runtime.test.ts"
+        ],
+        "reviewedAssertionScope": "AA061: synthetic response recovery is owner-bound and temporary response retention is disabled; no live provider claim."
       },
       "nextCheck": "Resolve the exact combined test for this record from its committed source evidence and execute its acceptance path before closure."
     },
@@ -1723,7 +1771,11 @@
           "src/lib/mind/c1-durable-runtime.test.ts",
           "src/lib/mind/c1-runtime-regressions.test.ts"
         ],
-        "candidateWarning": "Candidate paths match an explicit ID in a C1 test file; verify the actual case against the acceptance before assigning coverage."
+        "candidateWarning": "Candidate paths match an explicit ID in a C1 test file; verify the actual case against the acceptance before assigning coverage.",
+        "reviewedFixtureFiles": [
+          "src/lib/mind/c1-durable-runtime.test.ts"
+        ],
+        "reviewedAssertionScope": "AA093: PGlite resource reservation rejects a paid route when persisted free-only policy is on; no live provider routing claim."
       },
       "nextCheck": "Resolve the exact combined test for this record from its committed source evidence and execute its acceptance path before closure."
     },
@@ -1782,7 +1834,11 @@
         "candidateExplicitIdMatches": [
           "src/lib/mind/c1-durable-runtime.test.ts"
         ],
-        "candidateWarning": "Candidate paths match an explicit ID in a C1 test file; verify the actual case against the acceptance before assigning coverage."
+        "candidateWarning": "Candidate paths match an explicit ID in a C1 test file; verify the actual case against the acceptance before assigning coverage.",
+        "reviewedFixtureFiles": [
+          "src/lib/mind/c1-durable-runtime.test.ts"
+        ],
+        "reviewedAssertionScope": "AA096: fixture keeps unknown cost null after an uncertain attempted call; it does not validate complete real-world billing."
       },
       "nextCheck": "Resolve the exact combined test for this record from its committed source evidence and execute its acceptance path before closure."
     },
@@ -1935,7 +1991,11 @@
         "candidateExplicitIdMatches": [
           "src/lib/mind/c1-runtime-regressions.test.ts"
         ],
-        "candidateWarning": "Candidate paths match an explicit ID in a C1 test file; verify the actual case against the acceptance before assigning coverage."
+        "candidateWarning": "Candidate paths match an explicit ID in a C1 test file; verify the actual case against the acceptance before assigning coverage.",
+        "reviewedFixtureFiles": [
+          "src/lib/mind/c1-runtime-regressions.test.ts"
+        ],
+        "reviewedAssertionScope": "AA104: plan fixture checks independent and synthesis participant dependencies and call bounds."
       },
       "nextCheck": "Resolve the exact combined test for this record from its committed source evidence and execute its acceptance path before closure."
     },
@@ -1990,7 +2050,11 @@
         "candidateExplicitIdMatches": [
           "src/lib/mind/c1-runtime-regressions.test.ts"
         ],
-        "candidateWarning": "Candidate paths match an explicit ID in a C1 test file; verify the actual case against the acceptance before assigning coverage."
+        "candidateWarning": "Candidate paths match an explicit ID in a C1 test file; verify the actual case against the acceptance before assigning coverage.",
+        "reviewedFixtureFiles": [
+          "src/lib/mind/c1-runtime-regressions.test.ts"
+        ],
+        "reviewedAssertionScope": "AA107: synthetic run states produce separate counts for queued, executing, waiting, paused and cancellation-pending work."
       },
       "nextCheck": "Resolve the exact combined test for this record from its committed source evidence and execute its acceptance path before closure."
     },
