@@ -62,7 +62,7 @@ for (const [width, height, rootPercent] of viewports) {
       });
       await context.addInitScript(({ appOrigin, counts, rootPercent, skillReceipts }) => {
         if (location.origin !== appOrigin) return;
-        const metrics = { supported: PerformanceObserver.supportedEntryTypes ?? [], lcpMs: null, cls: 0, interactions: [], longTasks: [], observedAt: 0 };
+        const metrics = { supported: PerformanceObserver.supportedEntryTypes ?? [], lcpMs: null, cls: 0, layoutShifts: [], interactions: [], longTasks: [], observedAt: 0 };
         window.__mindFixturePerformance = metrics;
         let clsWindowStart = 0, clsLast = 0, clsWindowValue = 0;
         const observe = (type, receive, extra = {}) => {
@@ -72,6 +72,16 @@ for (const [width, height, rootPercent] of viewports) {
         observe("largest-contentful-paint", (entry) => { metrics.lcpMs = entry.startTime; });
         observe("layout-shift", (entry) => {
           if (entry.hadRecentInput) return;
+          if (metrics.layoutShifts.length < 100) metrics.layoutShifts.push({
+            value: entry.value, startTime: entry.startTime,
+            sources: (entry.sources ?? []).map(({ node, previousRect, currentRect }) => ({
+              tag: node?.nodeName ?? null,
+              id: node?.id || null,
+              classes: typeof node?.className === "string" ? node.className.slice(0, 160) : null,
+              previous: { x: previousRect.x, y: previousRect.y, width: previousRect.width, height: previousRect.height },
+              current: { x: currentRect.x, y: currentRect.y, width: currentRect.width, height: currentRect.height },
+            })),
+          });
           if (clsLast === 0 || entry.startTime - clsLast > 1000 || entry.startTime - clsWindowStart > 5000) { clsWindowStart = entry.startTime; clsWindowValue = entry.value; } else clsWindowValue += entry.value;
           clsLast = entry.startTime; metrics.cls = Math.max(metrics.cls, clsWindowValue);
         });
@@ -167,7 +177,7 @@ for (const [width, height, rootPercent] of viewports) {
           const observed = window.__mindFixturePerformance;
           const heap = performance.memory;
           const interactionMs = observed?.interactions.length ? Math.max(...observed.interactions.map((entry) => entry.duration)) : null;
-          return { lcpMs: observed?.lcpMs ?? null, cls: observed?.supported.includes("layout-shift") ? observed.cls : null, maxObservedInteractionMs: interactionMs, interactionEntries: observed?.interactions.length ?? 0, eventTiming: observed?.supported.includes("event") ? "supported; events below16ms may not be reported" : "unsupported", longTaskCount: observed?.longTasks.length ?? null, maxLongTaskMs: observed?.longTasks.length ? Math.max(...observed.longTasks) : null, heap: heap ? { usedJsBytes: heap.usedJSHeapSize, totalJsBytes: heap.totalJSHeapSize, limitJsBytes: heap.jsHeapSizeLimit } : null, supported: observed?.supported ?? [] };
+          return { lcpMs: observed?.lcpMs ?? null, cls: observed?.supported.includes("layout-shift") ? observed.cls : null, layoutShifts: observed?.layoutShifts ?? [], maxObservedInteractionMs: interactionMs, interactionEntries: observed?.interactions.length ?? 0, eventTiming: observed?.supported.includes("event") ? "supported; events below16ms may not be reported" : "unsupported", longTaskCount: observed?.longTasks.length ?? null, maxLongTaskMs: observed?.longTasks.length ? Math.max(...observed.longTasks) : null, heap: heap ? { usedJsBytes: heap.usedJSHeapSize, totalJsBytes: heap.totalJSHeapSize, limitJsBytes: heap.jsHeapSizeLimit } : null, supported: observed?.supported ?? [] };
         });
         const proposedTargetReview = { lcpWithin2500ms: metrics.lcpMs === null ? null : metrics.lcpMs <= 2500, observedInteractionWithin200ms: metrics.maxObservedInteractionMs === null ? null : metrics.maxObservedInteractionMs <= 200, clsWithinPointOne: metrics.cls === null ? null : metrics.cls <= 0.1 };
         report.states.push({ label, count, navigationMs, editMs, renderedMessages: await page.locator("article.turn").count(), skillReceiptReview, metrics, proposedTargetReview, consoleErrors: [...consoleErrors] });
