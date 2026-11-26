@@ -135,6 +135,7 @@ export type RunApproval = {
 };
 
 export type ScheduleOccurrence = {
+  destinationChatId?: string;
   id: string;
   dueAt: string;
   runId?: string;
@@ -194,9 +195,9 @@ export type ScheduleJob = {
   instruction?: string;
   lastAttemptAt?: string;
   lastQueuedRunId?: string;
-  overlapPolicy?: "queue" | "skip" | "parallel";
+  overlapPolicy?: "wait" | "queue" | "skip" | "parallel";
   maxParallel?: number;
-  occurrences?: { runId: string; scheduledAt: string; state: RunState; updatedAt: string }[];
+  occurrences?: ScheduleOccurrence[];
   enabled: boolean;
   lastError: string;
   timeZone: string;
@@ -591,6 +592,7 @@ export function readFleet(input: unknown): FleetShape {
         overlapPolicy: row.overlapPolicy === "parallel" || row.overlapPolicy === "skip" ? row.overlapPolicy : "queue",
         maxParallel: typeof row.maxParallel === "number" ? Math.min(4, Math.max(1, Math.floor(row.maxParallel))) : 2,
         occurrences: readOccurrences(row.occurrences),
+        resultDelivery: row.resultDelivery === "conversation" ? "conversation" : "runs",
         lastAttemptAt: typeof row.lastAttemptAt === "string" ? row.lastAttemptAt : undefined,
         lastRunAt: typeof row.lastRunAt === "string" ? row.lastRunAt : null,
         enabled: row.enabled !== false,
@@ -602,7 +604,7 @@ export function readFleet(input: unknown): FleetShape {
         leaseUntil: typeof row.leaseUntil === "string" ? row.leaseUntil : null,
         lastStatus: row.lastStatus === "ran" || row.lastStatus === "failed" ? row.lastStatus : "",
         timing: row.timing === "fixed_delay" ? "fixed_delay" : "fixed_rate",
-        missedPolicy: row.missedPolicy === "skip" || row.missedPolicy === "ask" || row.missedPolicy === "all" ? row.missedPolicy : "latest",
+        missedPolicy: row.missedPolicy === "skip" || row.missedPolicy === "ask" || row.missedPolicy === "all" || row.missedPolicy === "review" || row.missedPolicy === "once" ? row.missedPolicy : "latest",
         missedOccurrences: typeof row.missedOccurrences === "number" ? Math.max(0, row.missedOccurrences) : 0,
         recoveryPending: row.recoveryPending === true,
         recoveryApprovalFor: typeof row.recoveryApprovalFor === "string" ? row.recoveryApprovalFor : undefined,
@@ -656,11 +658,24 @@ function readCompletion(value: unknown): RunCompletion | undefined {
   if (!isRecord(value) || !["finished", "budget_exhausted", "no_results"].includes(String(value.execution))) return undefined;
   return { execution: value.execution as RunCompletion["execution"], objective: "unverified", evidence: Array.isArray(value.evidence) ? value.evidence.filter((v): v is string => typeof v === "string").slice(0, 20) : [] };
 }
-function readOccurrences(value: unknown): NonNullable<ScheduleJob["occurrences"]> {
+function readOccurrences(value: unknown): ScheduleOccurrence[] {
   if (!Array.isArray(value)) return [];
-  return value.flatMap((row) => isRecord(row) && typeof row.runId === "string" && typeof row.scheduledAt === "string" && typeof row.updatedAt === "string" && typeof row.state === "string" && row.state in NEXT_STATE
-    ? [{ runId: row.runId, scheduledAt: row.scheduledAt, updatedAt: row.updatedAt, state: row.state as RunState }] : []).slice(-100);
+  return value.flatMap((row): ScheduleOccurrence[] => {
+    if (!isRecord(row) || typeof row.updatedAt !== "string" || typeof row.state !== "string" ||
+        (row.state !== "skipped" && !Object.hasOwn(NEXT_STATE, row.state))) return [];
+    const id = row.id ?? row.runId;
+    const dueAt = row.dueAt ?? row.scheduledAt;
+    if (typeof id !== "string" || typeof dueAt !== "string") return [];
+    return [{ id, dueAt, runId: typeof row.runId === "string" ? row.runId : undefined,
+      updatedAt: row.updatedAt, state: row.state as ScheduleOccurrence["state"],
+      detail: typeof row.detail === "string" ? row.detail.slice(0, 500) : "",
+      missedCount: typeof row.missedCount === "number" ? Math.max(0, Math.floor(row.missedCount)) : 0,
+      destinationChatId: typeof row.destinationChatId === "string" ? row.destinationChatId : undefined,
+      deliveredAt: typeof row.deliveredAt === "string" ? row.deliveredAt : undefined,
+      deliveryError: typeof row.deliveryError === "string" ? row.deliveryError.slice(0, 500) : undefined }];
+  }).slice(-100);
 }
+
 function snapshotDefinition(agent: AgentDefinition): RunDefinition {
   return { version: agent.version, tools: [...agent.tools], projectId: agent.projectId, memory: agent.memory, approval: agent.approval, maxSteps: agent.maxSteps };
 }
@@ -836,8 +851,8 @@ export function addSchedule(ws: Workspace, name: string, agentId: string | null,
     intervalMinutes: minutes,
     nextRunAt: clock?.at ?? at,
     lastRunAt: null,
-    missedPolicy: "once",
-    overlapPolicy: "wait",
+    resultDelivery: "runs",
+    overlapPolicy: "queue",
     occurrences: [],
     enabled: true,
     lastError: clock ? "" : "",
@@ -863,7 +878,7 @@ export function setScheduleEnabled(ws: Workspace, id: string, enabled: boolean, 
       nextRunAt = job.clockHour == null ? new Date(Date.parse(now) + job.intervalMinutes * 60_000).toISOString()
         : nextClock(now, job.timeZone, job.clockHour, job.clockMinute ?? 0).at;
     }
-    return { ...job, enabled, nextRunAt, recoveryPending: false };
+    return { ...job, enabled, nextRunAt, recoveryPending: false, recoveryApprovalFor: enabled && runMissed ? nextRunAt : undefined };
   }) };
 }
 
@@ -1135,6 +1150,7 @@ export function tickFleet(ws: Workspace, env: TickEnv): Workspace {
   const runs = fleet.runs.map((run) => {
     if (processed >= 4 || TERMINAL.has(run.state) || run.state === "paused" || run.state === "waiting_external") return run;
     if (run.externalOperation?.state === "dispatching" || run.externalOperation?.state === "unknown") return run;
+    if (run.state === "waiting_approval" && !run.pendingApproval) return run;
     if (run.state === "waiting_approval" && run.pendingApproval?.state === "requested" && run.pendingApproval.expiresAt > at) return run;
     if (run.leaseUntil && run.leaseUntil > at && run.workerId && run.workerId !== env.workerId) return run;
     processed += 1;
@@ -1278,15 +1294,43 @@ export function tickFleet(ws: Workspace, env: TickEnv): Workspace {
       return recordStep(claimed, step, at, outcome.text, [], false, { provider: outcome.provider, model: outcome.model });
     } catch { return fail("The model adapter threw after dispatch. A billable outcome may be unknown; inspect the provider receipt before retrying."); }
   });
+  let chats = ws.chats;
+  let scheduleChanged = false;
   const schedules = fleet.schedules.map(job => {
+    const occurrences = (job.occurrences ?? []).map((occurrence) => {
+      const outcome = runs.find((run) => run.id === occurrence.runId);
+      if (!outcome) return occurrence;
+      let next = occurrence;
+      if (outcome.state !== occurrence.state || outcome.updatedAt !== occurrence.updatedAt) {
+        next = { ...occurrence, state: outcome.state, updatedAt: outcome.updatedAt, detail: (outcome.error || outcome.result).slice(0, 500) };
+        scheduleChanged = true;
+      }
+      if (job.resultDelivery !== "conversation" || outcome.state !== "completed" || next.deliveredAt || next.deliveryError) return next;
+      scheduleChanged = true;
+      const chat = chats.find((item) => item.id === next.destinationChatId && item.id === job.chatId && !item.archived && !item.temporary);
+      if (!chat) return { ...next, deliveryError: "The original conversation is unavailable or changed. The result remains in Runs." };
+      const messageId = "scheduled-result:" + next.id;
+      if (!chat.messages.some((message) => message.id === messageId)) {
+        chats = chats.map((item) => item.id === chat.id ? { ...item, messages: [...item.messages, {
+          id: messageId, at, role: "assistant" as const, content: outcome.result || "The scheduled task completed without text output.",
+          provider: "Local workflow", model: "scheduled result",
+        }] } : item);
+      }
+      return { ...next, deliveredAt: at };
+    });
+    job = { ...job, occurrences };
     if (!job.lastQueuedRunId) return job;
     const run = runs.find(item => item.id === job.lastQueuedRunId);
     if (!run || !TERMINAL.has(run.state)) return job;
+    scheduleChanged ||= run.state === "completed"
+      ? job.lastRunAt !== run.updatedAt || job.lastStatus !== "ran"
+      : job.lastStatus !== "failed" || job.lastError !== (run.error || run.state);
     return run.state === "completed"
       ? { ...job, lastRunAt: run.updatedAt, lastStatus: "ran" as const, lastError: "", lastVerification: run.verification?.state ?? "unverified" as const }
       : { ...job, lastStatus: "failed" as const, lastError: run.error || run.state, lastVerification: run.verification?.state ?? "not_met" as const };
   });
-  return withFleet(ws, { ...fleet, schedules, runs: [...extra, ...runs] });
+  if (!processed && !extra.length && !scheduleChanged) return ws;
+  return withFleet({ ...ws, chats }, { ...fleet, schedules, runs: [...extra, ...runs] });
 }
 
 export function scheduleExecutionStatus(job: ScheduleJob, now = new Date().toISOString()): string {
@@ -1329,7 +1373,7 @@ export function reviewMissedSchedule(ws: Workspace, id: string, runLatest: boole
 }
 
 export function runDueSchedules(ws: Workspace, now: string): Workspace {
-  if (ws.halted) return ws;
+  if (ws.halted || !ws.schedules.some((job) => job.enabled && job.nextRunAt <= now)) return ws;
   let next = ws;
   const jobs = ws.schedules.map(job => {
     if (!job.enabled || job.nextRunAt > now) return job;
@@ -1340,6 +1384,17 @@ export function runDueSchedules(ws: Workspace, now: string): Workspace {
     if (!agent) return { ...job, enabled: false, lastAttemptAt: now, lastError: "That agent is not on this device. Nothing was queued." };
     const recovery = scheduleOccurrences(job.recoveryApprovalFor === job.nextRunAt ? { ...job, missedPolicy: "latest" } : job, now);
     if (recovery.needsReview) return { ...job, enabled: false, recoveryPending: true, missedOccurrences: recovery.missed, lastAttemptAt: now, lastError: "This schedule missed its time. Review the missed occurrence before resuming." };
+    const occurrences = [...(job.occurrences ?? [])];
+    const activeIds = new Set([job.lastQueuedRunId, ...occurrences.map((entry) => entry.runId)]);
+    const active = next.runs.filter((run) => activeIds.has(run.id) && !TERMINAL.has(run.state));
+    const skipOverlap = active.length > 0 && job.overlapPolicy === "skip";
+    if (active.length && !skipOverlap && (job.overlapPolicy !== "parallel" || active.length >= (job.maxParallel ?? 2))) {
+      return { ...job, lastError: "Waiting for the previous scheduled run.", lastAttemptAt: now };
+    }
+    if (skipOverlap || !recovery.occurrences.length) {
+      occurrences.push({ id: job.id + ":" + job.nextRunAt, dueAt: job.nextRunAt, updatedAt: now, state: "skipped", detail: "Skipped by schedule policy.", missedCount: recovery.missed });
+      return { ...job, nextRunAt: recovery.nextRunAt, lastAttemptAt: now, missedOccurrences: recovery.missed, occurrences: occurrences.slice(-100) };
+    }
     let lastQueuedRunId = job.lastQueuedRunId;
     for (const occurrence of recovery.occurrences) {
       const occurrenceId = "scheduled:" + job.id + ":" + occurrence;
@@ -1348,8 +1403,12 @@ export function runDueSchedules(ws: Workspace, now: string): Workspace {
       if (!queued.ok) return { ...job, enabled: false, nextRunAt: occurrence, lastQueuedRunId, lastAttemptAt: now, lastError: queued.error };
       next = queued.ws;
       lastQueuedRunId = queued.run.id;
+      if (!occurrences.some((entry) => entry.runId === queued.run.id)) occurrences.push({
+        id: occurrenceId, runId: queued.run.id, dueAt: occurrence, state: queued.run.state, updatedAt: queued.run.updatedAt,
+        detail: "", missedCount: recovery.missed, destinationChatId: job.chatId,
+      });
     }
-    return { ...job, recoveryPending: false, recoveryApprovalFor: undefined, missedOccurrences: recovery.missed, lastAttemptAt: now, lastQueuedRunId, lastError: "", nextRunAt: recovery.nextRunAt };
+    return { ...job, occurrences: occurrences.slice(-100), recoveryPending: false, recoveryApprovalFor: undefined, missedOccurrences: recovery.missed, lastAttemptAt: now, lastQueuedRunId, lastError: "", nextRunAt: recovery.nextRunAt };
   });
   return { ...next, schedules: jobs };
 }

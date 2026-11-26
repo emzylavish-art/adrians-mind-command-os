@@ -3024,11 +3024,21 @@ function CommandSession({ account }: { account: ReturnType<typeof useCurrentUser
     turnInFlight.current = true;
     let operationId: string;
     let knowledgePassages: KnowledgePassage[] = [];
+    let projectContext: Awaited<ReturnType<typeof retrieveProjectPassages>> = [];
+    let preparedRevision: string | undefined;
     try {
       const hydrated = await ensureChatMedia({ ...chat, messages }, signal);
       if (!hydrated || generation !== turnGen.current || turnOwner.current !== draftOwner || signal.aborted) throw new Error("The conversation changed while loading its images.");
       messages = hydrated.messages;
       history = historyForDeliver(messages, resume);
+      if (!options?.request) {
+        const policy = effectiveContextPolicy(chat);
+        if (!policy.history) history = [];
+        [projectContext, preparedRevision] = await Promise.all([
+          retrieveProjectPassages(source, chat, text),
+          memoryPolicyRevision(source, chat),
+        ]);
+      }
       if (draftOwner && chat.knowledgeDocumentIds?.length) {
         const selectedKnowledge = await retrieveAccountKnowledge(draftOwner, chat.projectId, chat.knowledgeDocumentIds, text);
         if ("error" in selectedKnowledge && selectedKnowledge.error) throw new Error(String(selectedKnowledge.error));
@@ -3102,7 +3112,7 @@ function CommandSession({ account }: { account: ReturnType<typeof useCurrentUser
           ],
           checkpoints: chat.checkpoints ?? [],
           botKnowledge: chat.botKnowledge ?? "",
-          knowledgePassages,
+          knowledgePassages, projectContext, memoryPolicyRevision: preparedRevision,
           skillApplications: collectAccountSkillApplications(preferenceStorage, text, enabledSkills, "chat"),
           projectInstructions: projectInstructionsForChat(source, chat.id),
           provider: consultPlan && consultPlan.ok

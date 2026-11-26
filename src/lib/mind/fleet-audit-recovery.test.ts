@@ -244,6 +244,21 @@ describe("C2 scheduled occurrences", () => {
     }
   });
 
+  it("keeps a queued result bound to the conversation selected when scheduled", () => {
+    let ws = scheduled();
+    ws.chats = ["original", "replacement"].map((id) => ({ id, title: id, memory: "off", temporary: false, autonomy: "ask", projectId: null, messages: [], retrievalLog: [] }));
+    ws.schedules[0]!.chatId = "original";
+    ws = setSchedulePolicy(ws, ws.schedules[0]!.id, { resultDelivery: "conversation" });
+    ws = runDueSchedules(ws, NOW);
+    ws = { ...ws, ...readFleet(ws) };
+    ws.schedules[0]!.chatId = "replacement";
+    ws.runs[0] = { ...ws.runs[0]!, state: "completed", result: "Original conversation only", updatedAt: NEXT };
+    ws = tickFleet(ws, env(NEXT));
+    assert.equal(ws.chats.flatMap((chat) => chat.messages).length, 0);
+    assert.equal(ws.runs[0]!.result, "Original conversation only");
+    assert.match(ws.schedules[0]!.occurrences?.[0]?.deliveryError ?? "", /original conversation/);
+  });
+
   it("AA-026 preserves cadence and records one bounded catch-up with missed count", () => {
     const ws = scheduled();
     const later = "2026-11-25T15:30:00.000Z";

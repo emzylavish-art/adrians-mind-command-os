@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import type { LocalFile, Project } from "@/lib/mind/types";
-import { accountOriginalFileStore, parseCsvPreview, prepareLibraryDocument, readVerifiedOriginal, replaceLibraryDocument, restoreLibraryVersion } from "@/lib/mind/library-documents";
+import { accountOriginalFileStore, parseCsvPreview, prepareLibraryDocument, readAccountOriginal, originalKey, replaceLibraryDocument, restoreLibraryVersion } from "@/lib/mind/library-documents";
 import { extractPdfText } from "@/lib/mind/pdf-text";
 import { MarkdownProse } from "./markdown-prose";
 import { ResourceState } from "./resource-state";
@@ -26,12 +26,12 @@ export function LibraryDocumentPreview({ file, ownerId, projects, onChange, onOp
     setOriginalUrl(null); setError(null); setLoadingOriginal(false);
     if (!file.original || !ownerId) return;
     setLoadingOriginal(true);
-    void readVerifiedOriginal(file, accountOriginalFileStore(ownerId)).then((blob) => {
+    void readAccountOriginal(file, ownerId).then((blob) => {
       if (!active) return;
       url = URL.createObjectURL(blob); setOriginalUrl(url);
     }).catch((caught) => { if (active) setError(caught instanceof Error ? caught.message : "Original unavailable on this device."); }).finally(() => { if (active) setLoadingOriginal(false); });
     return () => { active = false; if (url) URL.revokeObjectURL(url); };
-  }, [ownerId, file.id, file.original?.blobId, originalAttempt]);
+  }, [ownerId, file.id, file.original && originalKey(file.original), file.original?.sha256, originalAttempt]);
   const expectedVersion = file.versionId || file.id;
   const isImage = /^image\/(?:png|jpeg|gif|webp)$/.test(file.original?.mime || "");
   const isPdf = file.original?.mime === "application/pdf" || /\.pdf$/i.test(file.name);
@@ -55,12 +55,12 @@ export function LibraryDocumentPreview({ file, ownerId, projects, onChange, onOp
   };
   return <section className="min-w-0 space-y-3" aria-label={`Document ${file.name}`}>
     <div className="flex flex-wrap gap-2">
-      {originalUrl ? <a className="inline-flex min-h-11 items-center rounded-panel border border-line px-3 text-sm" href={originalUrl} download={file.original?.name || file.name}>Download original · {file.original?.bytes.toLocaleString()} bytes</a> : null}
+      {originalUrl ? <a className="inline-flex min-h-11 items-center rounded-panel border border-line px-3 text-sm" href={originalUrl} download={(file.original && "name" in file.original && file.original.name) || file.name}>Download original · {file.original?.bytes.toLocaleString()} bytes</a> : null}
       <button type="button" className="min-h-11 rounded-panel border border-line px-3 text-sm" onClick={downloadText} disabled={!file.text}>Download extracted text</button>
       <label className="inline-flex min-h-11 cursor-pointer items-center rounded-panel border border-line px-3 text-sm">{working ? "Saving replacement…" : "Upload new version"}<input type="file" className="sr-only" disabled={working} onChange={(event) => { void replace(event.currentTarget.files?.[0]); event.currentTarget.value = ""; }} /></label>
       {file.sourceChatId && onOpenSource ? <button type="button" className="min-h-11 rounded-panel border border-line px-3 text-sm" onClick={() => onOpenSource(file.sourceChatId!)}>Open source conversation</button> : null}
     </div>
-    <p className="text-sm text-muted">{file.original ? "Original bytes are saved on this device for this account. Workspace archives include a reference, not the original file." : "This legacy entry contains a text copy. Its original file was not preserved."} {file.extraction} {file.partial ? "The text preview is partial; inspect the original for complete coverage." : ""}</p>
+    <p className="text-sm text-muted">{file.original ? "Original bytes are saved on this device for this account. Workspace archives include a reference, not the original file." : "This legacy entry contains a text copy. Its original file was not preserved."} {typeof file.extraction === "string" ? file.extraction : file.extraction?.coverage} {file.partial ? "The text preview is partial; inspect the original for complete coverage." : ""}</p>
     {(loadingOriginal || working) && <ResourceState phase="loading" title={working ? "Saving the new document version" : "Loading the original document"}>{working ? "The previous version remains available until the replacement is saved." : "Reading this account's local copy. The extracted preview remains available below."}</ResourceState>}
     {error ? <ResourceState phase="error" title="Document action incomplete" action={file.original && !working ? { label: "Retry reading original", run: () => setOriginalAttempt((value) => value + 1) } : undefined}>{error}</ResourceState> : null}
     {!loadingOriginal && !working && !error && !file.text && !originalUrl && <ResourceState phase="empty" title="No document preview available">This entry has no extracted text or original available on this device. Upload an original as a new version to recover it.</ResourceState>}

@@ -7,8 +7,8 @@ import { validateMemoryDispatch, type MemoryDispatchBody, type MemoryPolicyResul
 /** Re-read the owner snapshot at every new provider dispatch, never trust cached request notes. */
 export async function assertCurrentMemoryContext(ownerId: string, body: MemoryDispatchBody, sql?: Sql): Promise<MemoryPolicyResult> {
   // Requests carrying no account context remain available during a storage outage.
-  if (!body.chatId && !Array.isArray(body.memoryContext) && !body.saveMemory && !body.projectContext) return { ok: true };
-  if (!body.chatId && Array.isArray(body.memoryContext) && body.memoryContext.length === 0 && !body.saveMemory && !body.projectContext) return { ok: true };
+  if (!body.chatId && !Array.isArray(body.memoryContext) && !body.saveMemory && !body.projectContext && !body.botKnowledge) return { ok: true };
+  if (!body.chatId && Array.isArray(body.memoryContext) && body.memoryContext.length === 0 && !body.saveMemory && !body.projectContext && !body.botKnowledge) return { ok: true };
   try {
     const database = sql ?? await (await import("../../db.ts")).getSql();
     return await validateMemoryDispatch(normalizeWorkspace(await readSnapshot(database, ownerId)), body);

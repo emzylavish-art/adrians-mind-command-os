@@ -18,6 +18,7 @@ export function assembleTurn(input: {
   personalityId?: unknown;
   customPersonality?: unknown;
   botKnowledge?: unknown;
+  projectContext?: unknown;
   projectInstructions?: unknown;
   skillApplications?: unknown;
   knowledgePassages?: unknown;
@@ -67,7 +68,8 @@ export function assembleTurn(input: {
   }
   const skills = skillApplicationContext(input.skillApplications, "chat");
   const selectedKnowledge = knowledgePassageContext(input.knowledgePassages);
-  const system = `${skills.text ? `${skills.text}\n` : ""}${selectedKnowledge.text ? `${selectedKnowledge.text}\n` : ""}${ADRIAN_MIND_IDENTITY} ${memoryLine}${knowledgeLine ? ` ${knowledgeLine}` : ""}${projectLine ? ` ${projectLine}` : ""} ${personalityInstruction(input.personalityId, input.customPersonality)} ${input.consultHelp?.trim() ? input.consultHelp.trim() : "Do not claim tools, agents, or other models ran."}`;
+  const projectEvidence = projectEvidenceInstruction(input.projectContext);
+  const system = `${skills.text ? `${skills.text}\n` : ""}${selectedKnowledge.text ? `${selectedKnowledge.text}\n` : ""}${projectEvidence ? projectEvidence + "\n" : ""}${ADRIAN_MIND_IDENTITY} ${memoryLine}${knowledgeLine ? ` ${knowledgeLine}` : ""}${projectLine ? ` ${projectLine}` : ""} ${personalityInstruction(input.personalityId, input.customPersonality)} ${input.consultHelp?.trim() ? input.consultHelp.trim() : "Do not claim tools, agents, or other models ran."}`;
   const reservedTokens = estimateTextTokens(system) + estimateTextTokens(input.text) + 128;
   if (reservedTokens > contextBudget(input.contextOptions).inputTokenBudget) return { ok: false, error: "The current message, instructions, and saved context exceed this model's text budget. Reduce attached context or choose a larger declared context budget. Nothing was truncated in storage." };
   const allocation = allocateConversationContext(input.history, input.text, { ...input.contextOptions, reservedTokens, checkpoints: input.checkpoints });

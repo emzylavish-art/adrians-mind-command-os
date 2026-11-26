@@ -68,7 +68,7 @@ export type Msg = {
   memoryUsedIds?: string[];
   consultation?: ConsultEvidence[];
   deliveryMode?: "streamed" | "buffered";
-  contextReceipt?: ContextReceipt;
+  contextReceipt?: ContextReceipt | { availableMessages: number; includedMessages: number; omittedMessages: number; imageWarnings: string[] };
   resolvedTier?: Exclude<ModelTier, "Auto">;
   kind?: "error";
   /** Inline image attachments shown in the bubble and sent on the originating turn. */
@@ -218,7 +218,10 @@ export type AuditEntry = {
 };
 
 export type LocalFileOriginal = { blobId: string; sha256: string; bytes: number; mime: string; name: string };
-export type LocalFileVersion = { versionId: string; name: string; text: string; bytes: number; at: string; original?: LocalFileOriginal; partial?: boolean; extraction?: string };
+export type BrowserDocumentOriginal = { id: string; sha256: string; bytes: number; mime: string; storage: "browser" };
+export type DocumentOriginal = LocalFileOriginal | BrowserDocumentOriginal;
+export type DocumentExtraction = string | { method: "plain-text" | "pdf-text" | "legacy"; extractedCharacters: number; retainedCharacters: number; coverage: string; at: string };
+export type LocalFileVersion = { versionId: string; name: string; text: string; bytes: number; at: string; original?: DocumentOriginal; partial?: boolean; extraction?: DocumentExtraction };
 
 export type LocalFile = {
   evidenceIndex?: PdfEvidenceIndex;
@@ -227,11 +230,11 @@ export type LocalFile = {
   text: string;
   bytes: number;
   partial?: boolean;
-  original?: LocalFileOriginal;
+  original?: DocumentOriginal;
   versionId?: string;
   versions?: LocalFileVersion[];
   updatedAt?: string;
-  extraction?: string;
+  extraction?: DocumentExtraction;
   sourceChatId?: string;
   sourceMessageId?: string;
   projectId: string | null;
@@ -241,8 +244,6 @@ export type LocalFile = {
   previousVersionId?: string;
   archived?: boolean;
   retrievalDisabled?: boolean;
-  original?: { id: string; sha256: string; bytes: number; mime: string; storage: "browser" };
-  extraction?: { method: "plain-text" | "pdf-text" | "legacy"; extractedCharacters: number; retainedCharacters: number; coverage: string; at: string };
   document?: { kind: "pdf"; pages: number; coverage: string; partial: boolean; chunks: import("./pdf-text.ts").PdfChunk[] };
 };
 

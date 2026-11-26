@@ -1,9 +1,9 @@
 import { useEffect, useRef, useState, type Dispatch, type SetStateAction } from "react";
 import * as AlertDialog from "@radix-ui/react-alert-dialog";
 import type { LocalFile, Workspace } from "@/lib/mind/types";
-import { adoptBotConfiguration, botConversationRevision, canonical, deleteProject, pushAudit, setProjectArchived } from "@/lib/mind/workspace";
+import { adoptBotConfiguration, botConversationRevision, canonical, deleteLocalFile, deleteProject, pushAudit, setProjectArchived } from "@/lib/mind/workspace";
 import { documentCopyDisclosure } from "@/lib/mind/knowledge";
-import { readDocumentOriginal, removeDocumentOriginal } from "@/lib/mind/document-originals";
+import { originalKey, readAccountOriginal, removeAccountOriginal } from "@/lib/mind/library-documents";
 
 type Confirmation = { title: string; detail: string; confirm: string; run: () => void | Promise<void> };
 const button = "min-h-11 rounded-panel border border-line px-3 py-2 text-sm";
@@ -35,7 +35,7 @@ export function KnowledgeSettings({ ws, setWs, activeChatId, owner }: {
     if (!owner || !item.original) return;
     const capturedOwner = owner;
     try {
-      const data = await readDocumentOriginal(capturedOwner, item.original.id, item.original.sha256);
+      const data = await readAccountOriginal(item, capturedOwner);
       if (identity.current !== capturedOwner) return;
       if (!data) { setNotice("The original bytes are not on this browser. The extracted text and provenance remain available."); return; }
       const url = URL.createObjectURL(data);
@@ -55,8 +55,18 @@ export function KnowledgeSettings({ ws, setWs, activeChatId, owner }: {
     const reviewed = canonical(item);
     setPending({ title: `Delete “${item.name}”`, confirm: "Delete Library copy", detail: `${documentCopyDisclosure(ws, item).message} Its retained original on this device will also be removed.`, run: async () => {
       if (identity.current !== capturedOwner || canonical(current.current.files.find((row) => row.id === item.id)) !== reviewed) { setNotice("The account or document changed. Review it again before deleting."); return; }
-      if (capturedOwner && item.original && !current.current.files.some((row) => row.id !== item.id && row.original?.id === item.original!.id)) {
-        try { await removeDocumentOriginal(capturedOwner, item.original.id); }
+      if (capturedOwner) {
+        const originals = (row: LocalFile) => [row.original, ...(row.versions ?? []).map((version) => version.original)].filter((ref) => ref !== undefined);
+        const retained = new Set(current.current.files.filter((row) => row.id !== item.id).flatMap(originals).map(originalKey));
+        try {
+          for (const ref of originals(item)) {
+            const key = originalKey(ref);
+            if (!retained.has(key)) {
+              await removeAccountOriginal(capturedOwner, ref);
+              retained.add(key);
+            }
+          }
+        }
         catch {
           if (identity.current === capturedOwner) {
             setWs((value) => ({ ...value, files: value.files.map((row) => row.id === item.id ? { ...row, retrievalDisabled: true } : row) }));
@@ -67,7 +77,7 @@ export function KnowledgeSettings({ ws, setWs, activeChatId, owner }: {
       }
       if (identity.current !== capturedOwner) return;
       if (canonical(current.current.files.find((row) => row.id === item.id)) !== reviewed) { setNotice("The document changed during removal. Its Library record was kept; review it again."); return; }
-      setWs((value) => pushAudit({ ...value, files: value.files.filter((row) => row.id !== item.id) }, "delete_file", item.id, "Library copy removed; conversation copies retained"));
+      setWs((value) => pushAudit(deleteLocalFile(value, item.id), "delete_file", item.id, "Library copy removed; conversation copies retained"));
       setSelected("");
       setNotice("Library copy removed. Existing conversation copies remain separate.");
     } });
@@ -112,8 +122,8 @@ export function KnowledgeSettings({ ws, setWs, activeChatId, owner }: {
     <label className="block text-sm">Inspect a document<select className="mt-1 min-h-11 w-full rounded-panel border border-line bg-bg px-3" value={selected} onChange={(event) => { setSelected(event.target.value); setNotice(null); }}><option value="">Choose a Library document</option>{ws.files.map((item) => <option key={item.id} value={item.id}>{item.name}{item.archived ? " (prior revision)" : ""}</option>)}</select></label>
     {file && <div className="space-y-2 rounded-panel border border-line p-3 text-sm">
       <h4 className="font-semibold">{file.name} · Revision {file.revision ?? "legacy"}</h4>
-      <p>Extracted text: {file.text.length.toLocaleString()} characters{file.partial ? " · Partial extraction" : ""}. {file.extraction?.method ?? "Legacy extraction method unknown"}.</p>
-      {file.extraction?.coverage && <p>{file.extraction.coverage}</p>}
+      <p>Extracted text: {file.text.length.toLocaleString()} characters{file.partial ? " · Partial extraction" : ""}. {(typeof file.extraction === "string" ? file.extraction : file.extraction?.method) ?? "Legacy extraction method unknown"}.</p>
+      {typeof file.extraction === "object" && file.extraction.coverage && <p>{file.extraction.coverage}</p>}
       {file.evidenceIndex && <PdfSourceLocations index={file.evidenceIndex} />}
       <p className="break-all">Text checksum: {file.textSha256 ?? "Not recorded for this legacy copy"}</p>
       <p>{file.original ? `Original: ${file.original.bytes.toLocaleString()} bytes, stored on the originating browser. Account sync and JSON archives contain its reference, not its original bytes.` : "No retained original is recorded; this is an extracted text copy."}</p>

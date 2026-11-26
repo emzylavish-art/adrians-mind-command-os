@@ -927,6 +927,11 @@ export function FleetPanel({
               {job.clockHour == null && <label className="mt-2 block">Interval timing <select aria-label={`Interval timing for ${job.name}`} value={job.timing ?? "fixed_rate"} className="min-h-11 rounded-panel border border-line bg-surface px-2" onChange={event => setWs(prev => configureSchedulePolicy(prev, job.id, { timing: event.target.value === "fixed_delay" ? "fixed_delay" : "fixed_rate" }))}>
                 <option value="fixed_rate">Keep original time</option><option value="fixed_delay">Delay from each execution</option>
               </select></label>}
+              {job.chatId && <label className="mt-2 block">Completed result destination
+                <select disabled={ws.halted} value={job.resultDelivery ?? "runs"} className="ml-2 min-h-11 rounded-panel border border-line bg-surface px-2" onChange={(event) => setWs((prev) => setSchedulePolicy(prev, job.id, { resultDelivery: event.target.value === "conversation" ? "conversation" : "runs" }))}>
+                  <option value="runs">Runs only</option><option value="conversation">Runs and linked conversation</option>
+                </select>
+              </label>}
               <label className="mt-2 block">Missed work <select aria-label={`Missed work for ${job.name}`} value={job.missedPolicy ?? "latest"} className="min-h-11 rounded-panel border border-line bg-surface px-2" onChange={event => setWs(prev => configureSchedulePolicy(prev, job.id, { missedPolicy: event.target.value as "latest" | "skip" | "ask" | "all" }))}>
                 <option value="latest">Run the latest occurrence once</option><option value="skip">Skip late work</option><option value="ask">Ask before recovering late work</option><option value="all">Recover all occurrences, up to 10 per check</option>
               </select></label>

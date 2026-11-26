@@ -367,6 +367,7 @@ export type ChatTurnBodyInput = {
   consult?: { available: string[]; helpers: { id: string; request: string }[]; purpose: string; helperIds?: string[]; allowPaidHelpers?: boolean } | null;
   images: unknown[];
   projectContext?: unknown;
+  memoryPolicyRevision?: string;
 };
 
 /** Client JSON for POST /api/mind/turn. The server re-resolves model and endpoint. */
@@ -384,6 +385,8 @@ export function chatTurnBody(input: ChatTurnBodyInput): Record<string, unknown> 
     halted: input.halted,
     history: [...input.history],
     memoryContext: input.memoryContext,
+    ...(input.projectContext ? { projectContext: input.projectContext } : {}),
+    ...(input.memoryPolicyRevision ? { memoryPolicyRevision: input.memoryPolicyRevision } : {}),
     ...(input.projectInstructions ? { projectInstructions: input.projectInstructions } : {}),
     ...(input.knowledgePassages ? { knowledgePassages: input.knowledgePassages } : {}),
     ...(input.skillApplications ? { skillApplications: input.skillApplications } : {}),

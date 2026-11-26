@@ -9,7 +9,11 @@ import { validateEnvironmentModel } from "./environment-model-catalog.server.ts"
 import { resolveXaiInferenceApiKey } from "./xai-adapter.ts";
 import { rpcDispatchContext, rpcOperationId, runOwnerProviderRequest } from "./rpc-provider-request.server.ts";
 
+import { assertCurrentMemoryContext } from "./memory/dispatch-policy.server.ts";
+import type { MemoryDispatchBody } from "./memory/dispatch-policy.ts";
+
 export type LegacyPreparedTurn = {
+  dispatchBody?: MemoryDispatchBody;
   assembled: { messages: { role: "system" | "user" | "assistant"; content: ChatContent }[]; usedIds: string[] };
   memory: "off" | "on";
   model: string;
@@ -35,6 +39,10 @@ export async function completeLegacyModelReply(prepared: LegacyPreparedTurn, dep
   const refused = (error: string) => ({ ok: false as const, error, operationId, dispatched: false as const });
   const stop = await (deps.halt ?? readHaltState)(prepared.userId);
   if (stop !== "off") return refused(stop === "on" ? "Emergency stop is on. This chat request was not sent." : "Emergency stop status is unavailable. This chat request was not sent.");
+  if (prepared.dispatchBody) {
+    const permission = await assertCurrentMemoryContext(prepared.userId, prepared.dispatchBody);
+    if (!permission.ok) return refused(permission.error);
+  }
   const privacy = await (deps.memory ?? assertOwnerMemoryDispatch)(prepared.userId, prepared.usedSavedMemory === true || prepared.assembled.usedIds.length > 0);
   if (!privacy.ok) return refused(privacy.error);
   const images = prepared.assembled.messages.reduce((count, message) => count + (Array.isArray(message.content) ? message.content.filter(part => part.type === "image_url").length : 0), 0);

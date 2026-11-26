@@ -24,7 +24,7 @@ import type {
   Autonomy,
   Chat,
   LocalFile,
-  LocalFileOriginal,
+  DocumentOriginal,
   MemoryItem,
   MemoryScope,
   Msg,
@@ -189,10 +189,12 @@ export function normalizeWorkspace(input: unknown): Workspace {
       if (item && !deleted.has(item.id)) base.memories.push(item);
     }
   }
+  const deletedFiles = new Set(validIds(input.deletedFileIds));
+  if (deletedFiles.size) base.deletedFileIds = [...deletedFiles];
   if (Array.isArray(input.files)) {
     for (const row of input.files) {
       const file = normalizeFile(row);
-      if (file) base.files.push(file);
+      if (file && !deletedFiles.has(file.id)) base.files.push(file);
     }
   }
   if (Array.isArray(input.usage)) {
@@ -258,6 +260,16 @@ function normalizeChat(row: unknown): Chat | null {
         ? { provider: route.provider, tier: route.tier, model: typeof route.model === "string" ? route.model.slice(0, 150) : null,
             orchestrated: route.orchestrated === true, fingerprint: route.fingerprint } : null;
       messages.push({
+        ...(readExecutionEvidence(msg.executionEvidence, typeof msg.executionId === "string" ? msg.executionId : undefined) ? { executionEvidence: readExecutionEvidence(msg.executionEvidence, typeof msg.executionId === "string" ? msg.executionId : undefined) } : {}),
+        ...(typeof msg.executionId === "string" && msg.executionId.length > 0 && msg.executionId.length <= 200 ? { executionId: msg.executionId } : {}),
+        ...(Array.isArray(msg.helperReceipts) ? { helperReceipts: msg.helperReceipts.filter((receipt) => isRecord(receipt) && typeof receipt.id === "string" && ["succeeded", "failed", "canceled", "skipped"].includes(String(receipt.status))).slice(0, 8).map((receipt) => ({
+          id: String(receipt.id).slice(0, 600), status: receipt.status as "succeeded" | "failed" | "canceled" | "skipped", contributed: receipt.contributed === true,
+          model: typeof receipt.model === "string" ? receipt.model.slice(0, 200) : null, requestedModel: typeof receipt.requestedModel === "string" ? receipt.requestedModel.slice(0, 200) : null,
+          requestId: typeof receipt.requestId === "string" ? receipt.requestId.slice(0, 200) : null, durationMs: typeof receipt.durationMs === "number" && Number.isFinite(receipt.durationMs) ? Math.max(0, receipt.durationMs) : 0,
+          error: typeof receipt.error === "string" ? receipt.error.slice(0, 500) : null,
+          usage: isRecord(receipt.usage) ? { ...(typeof receipt.usage.prompt_tokens === "number" ? { prompt_tokens: receipt.usage.prompt_tokens } : {}), ...(typeof receipt.usage.completion_tokens === "number" ? { completion_tokens: receipt.usage.completion_tokens } : {}) } : null,
+        })) } : {}),
+        ...(recovery ? { deliveryRoute: recovery } : {}),
         ...(recovery ? { deliveryRoute: recovery } : {}),
         id: str(msg.id, crypto.randomUUID()),
         role: msg.role,
@@ -272,7 +284,7 @@ function normalizeChat(row: unknown): Chat | null {
         ...(msg.deliveryMode === "streamed" || msg.deliveryMode === "buffered" ? { deliveryMode: msg.deliveryMode } : {}),
         ...(typeof msg.provider === "string" && msg.provider.trim() ? { provider: msg.provider.trim() } : {}),
         ...(Array.isArray(msg.consult) ? { consult: normalizeConsultAttempts(msg.consult) } : {}),
-        ...(isRecord(msg.contextReceipt) ? { contextReceipt: { availableMessages: Number(msg.contextReceipt.availableMessages) || 0, includedMessages: Number(msg.contextReceipt.includedMessages) || 0, omittedMessages: Number(msg.contextReceipt.omittedMessages) || 0, imageWarnings: Array.isArray(msg.contextReceipt.imageWarnings) ? msg.contextReceipt.imageWarnings.filter((value): value is string => typeof value === "string").slice(0, 12) : [] } } : {}),
+        ...(isRecord(msg.contextReceipt) && typeof msg.contextReceipt.availableMessages === "number" && !("version" in msg.contextReceipt) ? { contextReceipt: { availableMessages: Number(msg.contextReceipt.availableMessages) || 0, includedMessages: Number(msg.contextReceipt.includedMessages) || 0, omittedMessages: Number(msg.contextReceipt.omittedMessages) || 0, imageWarnings: Array.isArray(msg.contextReceipt.imageWarnings) ? msg.contextReceipt.imageWarnings.filter((value): value is string => typeof value === "string").slice(0, 12) : [] } } : {}),
         ...(msg.routingMode === "A" || msg.routingMode === "B" || msg.routingMode === "C" || msg.routingMode === "D" ? { routingMode: msg.routingMode } : {}),
         ...(typeof msg.requestedModel === "string" && msg.requestedModel.trim() ? { requestedModel: msg.requestedModel.trim().slice(0, 150) } : {}),
         ...(Array.isArray(msg.researchRefs) ? { researchRefs: msg.researchRefs.flatMap((reference) => {
@@ -301,6 +313,9 @@ function normalizeChat(row: unknown): Chat | null {
         ...(typeof msg.contextNotice === "string" ? { contextNotice: msg.contextNotice.slice(0, 2000) } : {}),
         ...publicImages(msg.images),
         ...publicVideo(msg.videoUrl),
+        ...(typeof msg.videoOperationId === "string" && msg.videoOperationId.length <= 200 ? { videoOperationId: msg.videoOperationId } : {}),
+        ...(["provider-temporary", "local-download", "account-storage"].includes(String(msg.videoRetention)) ? { videoRetention: msg.videoRetention as "provider-temporary" | "local-download" | "account-storage" } : {}),
+        ...(msg.videoExpiresAt === null || (typeof msg.videoExpiresAt === "string" && msg.videoExpiresAt.length <= 100) ? { videoExpiresAt: msg.videoExpiresAt } : {}),
         ...(msg.memorySaved === true
           ? {
               memorySaved: true as const,
@@ -330,7 +345,10 @@ function normalizeChat(row: unknown): Chat | null {
     } : {}),
     ...(typeof row.notionWorkspaceId === "string" && row.notionWorkspaceId.length <= 200 ? { notionWorkspaceId: row.notionWorkspaceId } : {}),
     ...(typeof row.agentId === "string" && row.agentId ? { agentId: row.agentId } : {}),
+    ...(typeof row.botRevision === "number" && Number.isSafeInteger(row.botRevision) ? { botRevision: row.botRevision } : {}),
+    ...(Array.isArray(row.documentSources) ? { documentSources: row.documentSources.filter((item) => isRecord(item) && typeof item.fileId === "string" && typeof item.revision === "string" && typeof item.name === "string").map((item) => ({ fileId: String(item.fileId), revision: String(item.revision), name: String(item.name), ...(typeof item.messageId === "string" ? { messageId: item.messageId } : {}) })) } : {}),
     ...chatBotModel(row),
+    ...(normalizeContextPolicy(row.contextPolicy) ? { contextPolicy: normalizeContextPolicy(row.contextPolicy) } : {}),
     ...(isConnectedGrokModel(row.botExactModel) ? { botExactModel: row.botExactModel } : {}),
     memory,
     ...(row.temporary === true ? { requestedMemory: row.requestedMemory === "on" || (row.requestedMemory === undefined && row.memory === "on") ? "on" as const : "off" as const } : {}),
@@ -354,20 +372,27 @@ function normalizeChat(row: unknown): Chat | null {
 
 function normalizeFile(row: unknown): LocalFile | null {
   if (!isRecord(row) || !str(row.id) || typeof row.text !== "string" || (!row.text.trim() && !normalizeOriginal(row.original))) return null;
-  const text = row.text.slice(0, 40000);
+  const text = row.text.slice(0, MAX_DOCUMENT_TEXT_CHARS);
+  const evidenceIndex = readPdfEvidenceIndex(row.evidenceIndex, text.length);
   return {
     id: str(row.id),
     name: str(row.name, "untitled.txt"),
+    ...(evidenceIndex ? { evidenceIndex } : {}),
+    ...(row.text.length === text.length && typeof row.textSha256 === "string" && /^[a-f0-9]{64}$/.test(row.textSha256) ? { textSha256: row.textSha256 } : {}),
+    ...(Number.isSafeInteger(row.revision) && Number(row.revision) > 0 ? { revision: Number(row.revision) } : {}),
+    ...(typeof row.previousVersionId === "string" ? { previousVersionId: row.previousVersionId } : {}),
+    ...(row.archived === true ? { archived: true } : {}),
+    ...(row.retrievalDisabled === true ? { retrievalDisabled: true } : {}),
     ...(normalizeOriginal(row.original) ? { original: normalizeOriginal(row.original)! } : {}),
     ...(str(row.versionId) ? { versionId: str(row.versionId).slice(0, 200) } : {}),
     ...(str(row.updatedAt) ? { updatedAt: str(row.updatedAt) } : {}),
-    ...(str(row.extraction) ? { extraction: str(row.extraction).slice(0, 1000) } : {}),
+    ...extractionMetadata(row.extraction),
     ...(str(row.sourceChatId) ? { sourceChatId: str(row.sourceChatId).slice(0, 200) } : {}),
     ...(str(row.sourceMessageId) ? { sourceMessageId: str(row.sourceMessageId).slice(0, 200) } : {}),
     ...(Array.isArray(row.versions) ? { versions: row.versions.flatMap((version) => {
       if (!isRecord(version) || !str(version.versionId) || typeof version.text !== "string") return [];
-      return [{ versionId: str(version.versionId).slice(0, 200), name: str(version.name), text: version.text.slice(0, 40000), bytes: typeof version.bytes === "number" ? version.bytes : version.text.length, at: str(version.at),
-        ...(normalizeOriginal(version.original) ? { original: normalizeOriginal(version.original)! } : {}), ...(version.partial === true ? { partial: true } : {}), ...(str(version.extraction) ? { extraction: str(version.extraction).slice(0, 1000) } : {}) }];
+      return [{ versionId: str(version.versionId).slice(0, 200), name: str(version.name), text: version.text.slice(0, MAX_DOCUMENT_TEXT_CHARS), bytes: typeof version.bytes === "number" ? version.bytes : version.text.length, at: str(version.at),
+        ...(normalizeOriginal(version.original) ? { original: normalizeOriginal(version.original)! } : {}), ...(version.partial === true || version.text.length > MAX_DOCUMENT_TEXT_CHARS ? { partial: true } : {}), ...extractionMetadata(version.extraction) }];
     }) } : {}),
     text,
     bytes: typeof row.bytes === "number" ? row.bytes : text.length,
@@ -388,7 +413,21 @@ function normalizeDocument(value: unknown): LocalFile["document"] {
   return { kind: "pdf", pages: Math.max(0, Number(value.pages) || 0), coverage: str(value.coverage).slice(0, 2000), partial: value.partial === true, chunks };
 }
 
-function normalizeOriginal(value: unknown): LocalFileOriginal | null {
+function extractionMetadata(value: unknown): Pick<LocalFile, "extraction"> {
+  if (typeof value === "string" && value) return { extraction: value.slice(0, 1000) };
+  if (!isRecord(value)) return {};
+  const { method, extractedCharacters, retainedCharacters } = value;
+  if (method !== "plain-text" && method !== "pdf-text" && method !== "legacy") return {};
+  if (typeof extractedCharacters !== "number" || !Number.isSafeInteger(extractedCharacters) || extractedCharacters < 0 ||
+      typeof retainedCharacters !== "number" || !Number.isSafeInteger(retainedCharacters) || retainedCharacters < 0 || retainedCharacters > extractedCharacters) return {};
+  return { extraction: { method, extractedCharacters, retainedCharacters, coverage: str(value.coverage).slice(0, 2000), at: str(value.at) } };
+}
+
+function normalizeOriginal(value: unknown): DocumentOriginal | null {
+  if (isRecord(value) && value.storage === "browser" && typeof value.id === "string" && value.id && value.id.length <= 200 &&
+      /^[a-f0-9]{64}$/.test(str(value.sha256)) && Number.isSafeInteger(value.bytes) && Number(value.bytes) >= 0) {
+    return { id: value.id, storage: "browser", sha256: str(value.sha256), bytes: Number(value.bytes), mime: str(value.mime, "application/octet-stream") };
+  }
   if (!isRecord(value) || !/^document_[a-f0-9]{64}$/.test(str(value.blobId)) || !/^[a-f0-9]{64}$/.test(str(value.sha256)) || !Number.isSafeInteger(value.bytes) || Number(value.bytes) < 0) return null;
   return { blobId: str(value.blobId), sha256: str(value.sha256), bytes: Number(value.bytes), mime: str(value.mime, "application/octet-stream").slice(0, 100), name: str(value.name).slice(0, 1000) };
 }
@@ -509,7 +548,7 @@ export function openBotChat(ws: Workspace, agentId: string, newThread = false): 
     personalityId: "custom",
     customPersonality: agent.instructions,
   });
-  const linked = { ...chat, title: agent.name, agentId };
+  const linked = { ...chat, title: agent.name, agentId, botRevision: agent.version, botConfigVersion: agent.version };
   if (agent.knowledgeDocumentIds?.length) linked.knowledgeDocumentIds = [...agent.knowledgeDocumentIds];
   const model = normalizeBotModel(agent);
   if (model.chatProvider) linked.botProvider = model.chatProvider;
@@ -531,7 +570,7 @@ export function refreshBotChat(ws: Workspace, chatId: string): Workspace {
     personalityId: "custom", customPersonality: normalizeCustomPersonality(agent.instructions),
     botKnowledge: normalizeBotKnowledge(agent.knowledge).knowledge,
     botProvider: model.chatProvider ?? undefined, botTier: model.chatTier ?? undefined,
-    botConfigVersion: agent.version, updatedAt: new Date().toISOString(),
+    botRevision: agent.version, botConfigVersion: agent.version, updatedAt: new Date().toISOString(),
   }) };
 }
 
@@ -641,6 +680,12 @@ export async function packWorkspace(ws: Workspace, includeTemporary: boolean) {
     format: 1 as const,
     sha256: await sha256(canonical(workspace)),
     counts: counts(workspace),
+    manifest: workspaceArchiveManifest(workspace, { omittedTemporaryChats: includeTemporary ? 0 : ws.chats.filter((chat) => chat.temporary).length }),
+    attachments: attachmentManifest(workspace),
+    resources: {
+      extractedDocuments: workspace.files.map((file) => ({ id: file.id, name: file.name, partial: file.partial === true, revision: file.textSha256 ?? null })),
+      excludedOriginals: workspace.files.filter((file) => file.original || file.versions?.some((version) => version.original)).map((file) => ({ fileId: file.id, name: file.name, reason: "Original bytes are stored on the originating browser and are not embedded in this JSON archive." })),
+    },
     originals: { included: false, references: workspace.files.filter((file) => file.original).length, note: "Original documents are saved separately in the originating account on this device. This archive contains references and extracted previews; download originals separately." },
     workspace,
   };
@@ -713,7 +758,7 @@ export function selectArchiveCategories(archive: Workspace, categories: readonly
   if (selected.has("chats")) { result.chats = archive.chats; result.deletedChatIds = archive.deletedChatIds; result.pins = archive.pins.filter((pin) => pin.kind === "chat"); }
   if (selected.has("memories")) { result.memories = archive.memories; result.deletedMemoryIds = archive.deletedMemoryIds; }
   if (selected.has("projects")) result.projects = archive.projects;
-  if (selected.has("files")) result.files = archive.files;
+  if (selected.has("files")) { result.files = archive.files; result.deletedFileIds = archive.deletedFileIds; }
   if (selected.has("agents")) {
     result.agents = archive.agents; result.runs = archive.runs; result.runEvents = archive.runEvents;
     result.schedules = archive.schedules; result.deployments = archive.deployments;
@@ -728,7 +773,7 @@ function inactiveArchive(archive: Workspace): Workspace {
   return {
     ...archive,
     runs: archive.runs.map((run) => ({ ...run, state: ["completed", "failed", "canceled"].includes(run.state) ? run.state : "paused", workerId: null, leaseUntil: null, approvedActions: [], pendingApproval: undefined })),
-    schedules: archive.schedules.map((job) => ({ ...job, enabled: false, leaseWorker: null, leaseUntil: null })),
+    schedules: archive.schedules.map((job) => ({ ...job, enabled: false, resultDelivery: "runs", leaseWorker: null, leaseUntil: null })),
     deployments: archive.deployments.map((row) => ({ ...row, state: "external-required", workerId: null, heartbeatAt: null, error: "Imported configuration. Verify a worker before deployment." })),
     connections: archive.connections.map((row) => ({ ...row, status: "unconfigured", secretStored: false })),
     browserSessions: archive.browserSessions.map((row) => ({ ...row, status: row.status === "failed" ? "failed" : "closed" })),
@@ -739,6 +784,9 @@ function inactiveArchive(archive: Workspace): Workspace {
 export function replaceFromArchive(current: Workspace, source: Workspace): Workspace {
   const archive = inactiveArchive(source);
   const deleted = new Set([...(current.deletedMemoryIds ?? []), ...(archive.deletedMemoryIds ?? [])]);
+  const deletedFiles = new Set([...(current.deletedFileIds ?? []), ...(archive.deletedFileIds ?? [])]);
+  const restoredFiles = new Set(archive.files.map((file) => file.id));
+  for (const file of current.files) if (!restoredFiles.has(file.id)) deletedFiles.add(file.id);
   const incoming = new Set(archive.memories.map((note) => note.id));
   for (const note of current.memories) if (!incoming.has(note.id)) deleted.add(note.id);
   const now = new Date().toISOString();
@@ -761,7 +809,8 @@ export function replaceFromArchive(current: Workspace, source: Workspace): Works
     return { ...chat, id };
   });
   return {
-    ...archive, chats,
+    ...archive, chats, files: archive.files.filter((file) => !deletedFiles.has(file.id)),
+    ...(deletedFiles.size ? { deletedFileIds: [...deletedFiles] } : {}),
     memories: memories.map((note) => note.chatId && restoredIds.has(note.chatId) ? { ...note, chatId: restoredIds.get(note.chatId)! } : note),
     deletedMemoryIds: [...deleted], ...(deletedChats.size ? { deletedChatIds: [...deletedChats] } : {}),
     pins: archive.pins.map((pin) => pin.kind === "chat" && restoredIds.has(pin.ref) ? { ...pin, ref: restoredIds.get(pin.ref)! } : pin),
@@ -802,6 +851,7 @@ export function mergeWorkspace(current: Workspace, source: Workspace): Workspace
   const incoming = inactiveArchive(source);
   const byId = <T extends { id: string }>(rows: T[]) => new Map(rows.map((row) => [row.id, row]));
   const merge = <T extends { id: string }>(left: T[], right: T[]) => [...byId([...left, ...right]).values()];
+  const deletedFiles = new Set([...(current.deletedFileIds ?? []), ...(incoming.deletedFileIds ?? [])]);
   const archivedChats = byId(incoming.chats);
   const deletionState = mergeChatDeletionState({ ...current, chats: [...byId([...incoming.chats, ...current.chats]).values()] }, incoming);
   return {
@@ -818,7 +868,8 @@ export function mergeWorkspace(current: Workspace, source: Workspace): Workspace
     recovery: normalizeRecovery([...(current.recovery ?? []), ...(incoming.recovery ?? [])]),
     ...mergeMemoryState(current, incoming),
     projects: merge(current.projects, incoming.projects),
-    files: merge(current.files, incoming.files),
+    files: merge(incoming.files, current.files).filter((file) => !deletedFiles.has(file.id)),
+    ...(deletedFiles.size ? { deletedFileIds: [...deletedFiles] } : {}),
     usage: merge(current.usage, incoming.usage).sort((a, b) => b.at.localeCompare(a.at)).slice(0, 200),
     audit: retainActivity(merge(current.audit, incoming.audit).sort((a, b) => b.at.localeCompare(a.at))),
     agents: merge(incoming.agents, current.agents),
@@ -933,7 +984,7 @@ export function adoptBotConfiguration(ws: Workspace, chatId: string): Workspace 
   if (!chat || !agent) return ws;
   const model = normalizeBotModel(agent);
   const knowledge = normalizeBotKnowledge(agent.knowledge).knowledge;
-  return { ...ws, chats: ws.chats.map((row) => row.id === chatId ? { ...row, botRevision: agent.version,
+  return { ...ws, chats: ws.chats.map((row) => row.id === chatId ? { ...row, botRevision: agent.version, botConfigVersion: agent.version,
     botKnowledge: knowledge || undefined, botProvider: model.chatProvider ?? undefined, botTier: model.chatTier ?? undefined,
     customPersonality: normalizeCustomPersonality(agent.instructions), personalityId: "custom", memory: agent.memory, autonomy: agent.approval, projectId: agent.projectId } : row) };
 }

@@ -88,7 +88,7 @@ test("C1/AA077-078: Library stores larger versioned text, keeps provenance, and 
   if (reopened.ok) {
     const first = reopened.workspace.files.find((file) => file.id === "first")!;
     assert.deepEqual(first.original, original);
-    assert.equal(first.extraction?.method, "plain-text");
+    assert.equal(typeof first.extraction === "object" && first.extraction.method, "plain-text");
     assert.equal(first.textSha256, await sha256(text));
   }
 });

@@ -1,4 +1,4 @@
-import type { LocalFile } from "./types.ts";
+import type { BrowserDocumentOriginal } from "./types.ts";
 import { MAX_DOCUMENT_INPUT_BYTES } from "./knowledge.ts";
 
 type Record = { ownerId: string; id: string; name: string; mime: string; data: Blob; sha256: string };
@@ -15,7 +15,7 @@ async function database(ownerId: string): Promise<IDBDatabase> {
   });
 }
 
-export async function saveDocumentOriginal(ownerId: string, file: File, id: string = crypto.randomUUID()): Promise<NonNullable<LocalFile["original"]>> {
+export async function saveDocumentOriginal(ownerId: string, file: File, id: string = crypto.randomUUID()): Promise<BrowserDocumentOriginal> {
   if (file.size > MAX_DOCUMENT_INPUT_BYTES) throw new Error("Original documents are limited to 5 MB per file.");
   const bytes = await file.arrayBuffer();
   const digest = await crypto.subtle.digest("SHA-256", bytes);

@@ -1,7 +1,7 @@
 import { nextClock } from "./schedule-clock.ts";
 
 export type ScheduleTiming = "fixed_rate" | "fixed_delay";
-export type MissedSchedulePolicy = "latest" | "skip" | "ask" | "all";
+export type MissedSchedulePolicy = "latest" | "skip" | "ask" | "all" | "once" | "review";
 export type SchedulePolicyInput = {
   nextRunAt: string;
   intervalMinutes: number;
@@ -27,7 +27,7 @@ export function scheduleOccurrences(job: SchedulePolicyInput, now: string): {
     return { occurrences: [], nextRunAt: job.nextRunAt, missed: 0, needsReview: false };
   }
   const interval = Math.max(5, Math.min(10_080, job.intervalMinutes || 1440)) * 60_000;
-  const policy = job.missedPolicy ?? "latest";
+  const policy = job.missedPolicy === "review" ? "ask" : job.missedPolicy === "once" ? "latest" : job.missedPolicy ?? "latest";
   let due: string[] = [];
   let nextRunAt: string;
   let missed: number;

@@ -1,4 +1,5 @@
-import type { LocalFile, LocalFileVersion, Workspace } from "./types.ts";
+import { readDocumentOriginal, removeDocumentOriginal } from "./document-originals.ts";
+import type { DocumentOriginal, LocalFileOriginal, LocalFile, LocalFileVersion, Workspace } from "./types.ts";
 
 export const MAX_ORIGINAL_FILE_BYTES = 20 * 1024 * 1024;
 export const MAX_LIBRARY_DOCUMENTS = 1000;
@@ -60,7 +61,7 @@ export async function prepareLibraryDocument(file: File, input: {
   isCurrent?: () => boolean;
   sourceChatId?: string;
   sourceMessageId?: string;
-}): Promise<LocalFile> {
+}): Promise<LocalFile & { original: LocalFileOriginal }> {
   if (file.size > MAX_ORIGINAL_FILE_BYTES) throw new Error("Original files are limited to 20 MB on this device. Nothing was saved.");
   const bytes = await file.arrayBuffer();
   if (input.isCurrent && !input.isCurrent()) throw new Error("The account or destination changed. This upload was not added.");
@@ -91,8 +92,27 @@ export async function prepareLibraryDocument(file: File, input: {
     ...(input.sourceChatId ? { sourceChatId: input.sourceChatId } : {}), ...(input.sourceMessageId ? { sourceMessageId: input.sourceMessageId } : {}) };
 }
 
+export async function readAccountOriginal(file: Pick<LocalFile, "original">, owner: string): Promise<Blob> {
+  const original = file.original;
+  if (original && "id" in original) {
+    const blob = await readDocumentOriginal(owner, original.id, original.sha256);
+    if (!blob || blob.size !== original.bytes) throw new Error("The verified original is unavailable on this device.");
+    return blob;
+  }
+  return readVerifiedOriginal(file, accountOriginalFileStore(owner));
+}
+
+export function originalKey(original: DocumentOriginal): string {
+  return "id" in original ? "browser:" + original.id : "library:" + original.blobId;
+}
+
+export function removeAccountOriginal(owner: string, original: DocumentOriginal): Promise<void> {
+  return "id" in original ? removeDocumentOriginal(owner, original.id) : accountOriginalFileStore(owner).remove(original.blobId);
+}
+
 export async function readVerifiedOriginal(file: Pick<LocalFile, "original">, store: OriginalFileStore): Promise<Blob> {
   if (!file.original) throw new Error("This legacy entry contains extracted text only; its original was not saved.");
+  if (!("blobId" in file.original)) throw new Error("This original requires the originating account document store.");
   const blob = await store.get(file.original.blobId);
   if (!blob) throw new Error("The original is not available on this device. The saved text preview is still available.");
   if (blob.size !== file.original.bytes || await fileChecksum(await blob.arrayBuffer()) !== file.original.sha256) throw new Error("The original-file integrity check failed. Download was stopped.");
