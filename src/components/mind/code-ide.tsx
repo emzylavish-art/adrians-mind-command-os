@@ -225,7 +225,7 @@ export function CodeIde(props: {
       }
       setToolNotice("");
     } catch {
-      if (isCurrent()) setToolNotice("The editor tool could not be reached. No result was assumed.");
+      if (isCurrent()) setToolNotice(action === "debug" ? "The debugger could not be reached. No pause was confirmed." : "The editor tool could not be reached. No completion was confirmed.");
     } finally {
       if (toolAttempt.current === controller) {
         toolAttempt.current = null;

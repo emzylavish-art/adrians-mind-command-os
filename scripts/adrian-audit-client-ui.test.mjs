@@ -5,6 +5,7 @@ import * as React from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import ts from "typescript";
 import { resolveShare, shareWriteForView, shareWriteDropsMissing, writeShareSearch, sameShareLocation, settingsPaneFromSearch, shareMissLabel } from "../src/lib/mind/app-location.ts";
+import { prepareLibraryDocument, saveLibraryDocument } from "../src/lib/mind/library-documents.ts";
 import { addLocalFile } from "../src/lib/mind/workspace.ts";
 import { togglePin } from "../src/lib/mind/fleet.ts";
 import { dropCued } from "../src/lib/mind/message-cue.ts";
@@ -13,6 +14,7 @@ import * as Dialog from "@radix-ui/react-dialog";
 import { ModalOverlay } from "../src/components/mind/modal-overlay.ts";
 
 const source = ts.createSourceFile("command-app.tsx", readFileSync(new URL("../src/components/mind/command-app.tsx", import.meta.url), "utf8"), ts.ScriptTarget.Latest, true, ts.ScriptKind.TSX);
+const chatSource = ts.createSourceFile("chat-pane.tsx", readFileSync(new URL("../src/components/mind/chat-pane.tsx", import.meta.url), "utf8"), ts.ScriptTarget.Latest, true, ts.ScriptKind.TSX);
 const cloudSource = ts.createSourceFile("cloud-picker.tsx", readFileSync(new URL("../src/components/mind/media/cloud-picker.tsx", import.meta.url), "utf8"), ts.ScriptTarget.Latest, true, ts.ScriptKind.TSX);
 function find(file, predicate) {
   let result;
@@ -109,9 +111,15 @@ function libraryFixture(overrides = {}) {
     cloudDestination: { current: null }, setCloudPickerOpen: () => {},
     ...overrides,
   };
+  const target = context.view === "files" ? context.libraryProjectId : context.projectChoice;
+  context.uploadDestination = { current: { owner: context.draftOwner, view: context.view, projectId: target, scope: context.draftScope } };
+  context.prepareLibraryDocument = prepareLibraryDocument;
+  context.saveLibraryDocument = saveLibraryDocument;
+  context.accountOriginalFileStore = () => ({ put: async () => {}, remove: async () => {} });
+  context.extractPdfText = undefined;
   return { context, state };
 }
-const textFile = (value = "fixture text") => ({ name: "fixture.txt", type: "text/plain", size: value.length, text: async () => value });
+const textFile = (value = "fixture text") => new File([value], "fixture.txt", { type: "text/plain" });
 
 test("AA011/014: actual Library upload uses its visible destination, rejects signed-out writes and ignores an old owner's pending read", async () => {
   const host = libraryFixture();
@@ -121,15 +129,15 @@ test("AA011/014: actual Library upload uses its visible destination, rejects sig
   assert.equal(host.state.staged, null);
   const blocked = libraryFixture({ account: null });
   let reads = 0;
-  await fn("onPicked", blocked.context)({ ...textFile(), text: async () => { reads++; return "private"; } }, null);
+  await fn("onPicked", blocked.context)({ ...textFile(), arrayBuffer: async () => { reads++; return new ArrayBuffer(0); } }, null);
   assert.equal(reads, 0);
   assert.equal(blocked.state.workspace.files.length, 0);
   assert.match(blocked.state.error, /Sign in/);
   const deferred = defer();
   const pending = libraryFixture({ libraryProjectId: "project-a" });
-  const upload = fn("onPicked", pending.context)({ ...textFile(), text: () => deferred.promise }, null);
+  const upload = fn("onPicked", pending.context)({ name: "fixture.txt", type: "text/plain", size: 14, arrayBuffer: () => deferred.promise }, null);
   pending.context.turnOwner.current = "owner-b";
-  deferred.resolve("old-owner text");
+  deferred.resolve(new TextEncoder().encode("old-owner text").buffer);
   await upload;
   assert.equal(pending.state.workspace.files.length, 0);
 });
@@ -205,9 +213,9 @@ test("AA015: actual scheduler waits for identity and re-registers with the new o
 
 test("AA052: the actual queue removal button is keyboard-focusable, identifies its row and preserves other messages", () => {
   let queue = [{ id: "a", text: "first" }, { id: "b", text: "second" }, { id: "c", text: "third" }];
-  const button = find(source, (n) => ts.isJsxElement(n) && n.openingElement.tagName.getText(source) === "button" && n.openingElement.attributes.getText(source).includes("Remove queued message"));
+  const button = find(chatSource, (n) => ts.isJsxElement(n) && n.openingElement.tagName.getText(chatSource) === "button" && n.openingElement.attributes.getText(chatSource).includes("Remove queued message"));
   let stopped = false;
-  const rendered = expression(button, { React, item: queue[1], index: 1, onDropCue: (id) => { queue = dropCued(queue, id); } });
+  const rendered = expression(button, { React, item: queue[1], index: 1, onDropCue: (id) => { queue = dropCued(queue, id); } }, chatSource);
   assert.equal(rendered.props.type, "button");
   assert.equal(rendered.props["aria-label"], "Remove queued message 2");
   rendered.props.onPointerDown({ stopPropagation: () => { stopped = true; } });
@@ -254,8 +262,8 @@ test("AA056: lifecycle announcements are atomic and streamed tokens are outside 
   assert.equal(region.props.role, "status");
   assert.equal(region.props["aria-live"], "polite"); assert.equal(region.props["aria-atomic"], "true");
   assert.equal(region.props.children, "Reply completed.");
-  const article = find(source, (n) => ts.isJsxElement(n) && n.openingElement.tagName.getText(source) === "article" && n.getText(source).includes("{liveText}"));
-  const stream = expression(article, { React, modelTier: "fixture", liveText: "streamed tokens" });
+  const article = find(chatSource, (n) => ts.isJsxElement(n) && n.openingElement.tagName.getText(chatSource) === "article" && n.getText(chatSource).includes("{liveText}"));
+  const stream = expression(article, { React, modelTier: "fixture", liveText: "streamed tokens" }, chatSource);
   assert.equal(stream.props["aria-live"], undefined);
   const lifecycle = find(source, (n) => ts.isCallExpression(n) && n.expression.getText(source) === "setGenerationStatus" && n.arguments[0]?.getText(source).includes("result.ok"));
   for (const [result, expected] of [[{ ok: true }, "Reply completed."], [{ ok: false, error: "fixture-stop" }, "Reply stopped. Received text is kept as incomplete."], [{ ok: false, error: "failure" }, "Reply interrupted. Check the original send."]]) {

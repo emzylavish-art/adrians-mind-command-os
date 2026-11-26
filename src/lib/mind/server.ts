@@ -479,8 +479,9 @@ export const readExecutionControl = createServerFn({ method: "GET" }).middleware
 
 export const setExecutionHalt = createServerFn({ method: "POST" })
   .middleware([authMiddleware])
-  .validator((input: { on: boolean; expectedRevision?: string }) => parseHaltControlRequest(input))
+  .validator((input: { on: boolean; ownerId?: string; expectedRevision?: string }) => parseHaltControlRequest(input))
   .handler(async ({ data, context }) => {
+    if (data.ownerId !== undefined && data.ownerId !== context.userId) return { ok: false as const, error: "The signed-in account changed. Emergency control was not modified." };
     const { setDurableHalt } = await import("./halt.server");
     return setDurableHalt(context.userId, data.on, data.expectedRevision);
   });

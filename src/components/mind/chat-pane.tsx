@@ -659,7 +659,7 @@ export function ChatPane({
                   onPointerLeave={(event) => window.clearTimeout(Number(event.currentTarget.dataset.hold))}
                   onPointerCancel={(event) => window.clearTimeout(Number(event.currentTarget.dataset.hold))}
                 >
-                  <span className="block break-words text-sm">{index + 1}. {item.text}</span>
+                  <div className="flex items-center gap-2"><span className="min-w-0 flex-1 break-words text-sm">{index + 1}. {item.text}</span><button type="button" className="min-h-11 min-w-11" aria-label={`Remove queued message ${index + 1}`} onPointerDown={(event) => event.stopPropagation()} onClick={() => onDropCue(item.id)}>Remove</button></div>
                 </li>
               ))}
             </ol>

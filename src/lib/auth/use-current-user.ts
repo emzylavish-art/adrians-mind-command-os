@@ -1,4 +1,4 @@
-import { useMemo, useRef, useEffect, useSyncExternalStore, useState } from "react";
+import { useMemo, useEffect, useSyncExternalStore } from "react";
 import { authClient, authEnabled, getBearerToken } from "./client";
 import { createSessionIdentityStore, PENDING_SESSION, readSessionIdentity, type CanonicalSessionState } from "./session-state";
 import { previewPathPrefix } from "../preview-path-prefix";
@@ -81,22 +81,36 @@ export function useCurrentUserState(): CurrentUserState {
 }
 
 function useSessionUserState(): CurrentUserState {
-  const { data, isPending, error } = authClient.useSession();
-  const lastVerified = useRef<AppUser | null>(null);
-  const id = data?.user.id;
-  const displayName = data?.user.name ?? null;
-  const primaryEmail = data?.user.email ?? null;
-  const emailVerified = data?.user.emailVerified === true;
-  const profileImageUrl = data?.user.image ?? null;
+  const { data, isPending: brokerPending } = authClient.useSession();
+  const brokerId = data?.user.id ?? "signed-out";
   const sessionEpoch = sessionInstanceId(data?.session);
-  const user = useMemo<AppUser | null>(
-    () => (id ? { id, displayName, primaryEmail, emailVerified, profileImageUrl, isDevFallback: false, sessionEpoch } : null),
-    [id, displayName, primaryEmail, emailVerified, profileImageUrl, sessionEpoch],
-  );
-  if (user) lastVerified.current = user;
-  else if (!isPending && !error) lastVerified.current = null;
-  const preserved = user ?? (error ? lastVerified.current : null);
-  return useMemo(() => ({ user: preserved, isPending, error: error ? "Session verification is temporarily unavailable. Saved work is kept. Retry verification before sending again." : null }), [preserved, isPending, error]);
+  const requestKey = `${brokerPending ? "pending" : "resolved"}:${brokerId}:${sessionEpoch ?? ""}`;
+  const session = useSyncExternalStore(identityStore.subscribe, identityStore.getSnapshot, serverSnapshot);
+  useEffect(() => {
+    void identityStore.refresh(requestKey);
+    const refresh = () => { void identityStore.refresh(requestKey, true); };
+    window.addEventListener("focus", refresh);
+    window.addEventListener("adrian-auth-changed", refresh);
+    return () => {
+      window.removeEventListener("focus", refresh);
+      window.removeEventListener("adrian-auth-changed", refresh);
+    };
+  }, [requestKey]);
+  const retry = () => { void identityStore.refresh(requestKey, true); };
+  const keyIsCurrent = identityStore.matchesKey(requestKey);
+  const verifiedId = keyIsCurrent ? session.user?.id : undefined;
+  const brokerMatches = verifiedId === data?.user.id;
+  const user = useMemo<AppUser | null>(() => verifiedId ? {
+    id: verifiedId,
+    displayName: session.user?.displayName ?? (brokerMatches ? data?.user.name ?? null : null),
+    primaryEmail: session.user?.email ?? null,
+    emailVerified: session.user?.emailVerified ?? (brokerMatches && data?.user.emailVerified === true),
+    profileImageUrl: session.user?.profileImageUrl ?? (brokerMatches ? data?.user.image ?? null : null),
+    isDevFallback: false,
+    sessionSource: session.user?.sessionSource,
+    sessionEpoch: brokerMatches ? sessionEpoch : null,
+  } : null, [verifiedId, brokerMatches, sessionEpoch, data?.user.name, data?.user.emailVerified, data?.user.image, session.user]);
+  return { user, isPending: !keyIsCurrent || session.status === "pending", status: keyIsCurrent ? session.status : "pending", error: keyIsCurrent ? session.error : null, retry };
 }
 
 /**

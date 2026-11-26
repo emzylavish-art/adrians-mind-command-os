@@ -151,7 +151,11 @@
       "expected": "Terminal review pins workspace/computer and cwd; routes and approval use exact reviewed destination; missing selected computer cannot fall back to another.",
       "implementation": "[B](#files-b); B52",
       "regression": "[B](#files-b); B52",
-      "disposition": "Combined verification pending"
+      "disposition": "Combined verification pending",
+      "combinedTests": [
+        "src/lib/mind/kimi/c5-build.test.ts"
+      ],
+      "combinedFixture": "The relevant callback or search fixture passed on the subsequent integration tree. Use its combined CI for exact-head verification. Physical devices, native execution and third-party delivery require separate evidence."
     },
     {
       "finding": "C5/AA-020",
@@ -159,7 +163,11 @@
       "expected": "Submitted-source receipt retains workspace/cwd/file SHA-256/save policy; local development checks disk baseline. UI explicitly distinguishes baseline from executed revision.",
       "implementation": "[B](#files-b); B52",
       "regression": "[B](#files-b); B52",
-      "disposition": "Combined verification pending"
+      "disposition": "Combined verification pending",
+      "combinedTests": [
+        "src/lib/mind/kimi/c5-build.test.ts"
+      ],
+      "combinedFixture": "The relevant callback or search fixture passed on the subsequent integration tree. Use its combined CI for exact-head verification. Physical devices, native execution and third-party delivery require separate evidence."
     },
     {
       "finding": "C5/AA-021",

@@ -26,7 +26,7 @@ test("AA010: actual editor renders no empty result strip, and disabled Debug has
   const sourceUrl = new URL("../src/components/mind/code-ide.tsx", import.meta.url);
   const require = createRequire(sourceUrl);
   const compiled = ts.transpileModule(readFileSync(sourceUrl, "utf8"), { compilerOptions: { jsx: ts.JsxEmit.ReactJSX, module: ts.ModuleKind.ESNext, target: ts.ScriptTarget.ES2022 } }).outputText;
-  const moduleCode = compiled.replace(/from\s+(["'])([^"']+)\1/g, (_, quote, specifier) => {
+  const moduleCode = compiled.replace(/^import ["'][^"']+\.css["'];?$/gm, "").replace(/from\s+(["'])([^"']+)\1/g, (_, quote, specifier) => {
     let path;
     if (specifier.startsWith("@/")) {
       path = fileURLToPath(new URL(`../src/${specifier.slice(2)}`, import.meta.url));
@@ -158,12 +158,12 @@ test("AA023: account halt cancels queued Build jobs and requests running cancell
   const other = make("b");
   const shell = make("a", "shell");
   const result = await setDurableHalt("a", true);
-  assert.deepEqual(result, { ok: true, halted: true, buildCancellation: { queuedCancelled: 1, cancellationRequested: 1, unconfirmed: 0 } });
+  assert.deepEqual(result, { ok: true, halted: true, cancellation: { cancelled: 2, pending: 1, unknown: 0 }, buildCancellation: { queuedCancelled: 1, cancellationRequested: 1, unconfirmed: 0 } });
   assert.equal(readJob(queued.id).status, "cancelled");
   assert.equal(readJob(running.id).status, "cancel_requested");
   assert.equal(readJob(finished.id).status, "done");
   assert.equal(readJob(other.id).status, "queued");
-  assert.equal(readJob(shell.id).status, "queued");
+  assert.equal(readJob(shell.id).status, "cancelled");
   await setDurableHalt("a", false);
   assert.equal(readJob(queued.id).status, "cancelled", "clearing stop never restarts canceled work");
   const concurrentOn = setDurableHalt("a", true);

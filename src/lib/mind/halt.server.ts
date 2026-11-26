@@ -1,7 +1,7 @@
 import { resolveDatabaseUrl } from "../env.server.ts";
 import { createHash, randomUUID } from "node:crypto";
 import { readHaltFile, writeHaltFile, haltFileRevision } from "./halt-file.ts";
-import { cancelOwnerBuildJobs, type BuildCancellationSummary } from "./pc-pairing/store.ts";
+import { cancelOwnerJobsWithBuildSummary } from "./pc-pairing/store.ts";
 import type { Sql } from "../db.ts";
 
 export type HaltSnapshot = { state: "on" | "off" | "unknown"; revision: string | null };
@@ -65,10 +65,18 @@ export async function haltIsOn(userId: string): Promise<boolean> {
   return (await readHaltState(userId)) !== "off";
 }
 
-type HaltSaveResult = { ok: true; halted: boolean; buildCancellation?: BuildCancellationSummary } | { ok: false; error: string };
+type HaltSaveResult = { ok: true; halted: boolean; buildCancellation?: ReturnType<typeof cancelOwnerJobsWithBuildSummary>["buildCancellation"]; cancellation?: ReturnType<typeof cancelOwnerJobsWithBuildSummary>["cancellation"] } | { ok: false; error: string };
 const haltWrites = new Map<string, Promise<HaltSaveResult>>();
 
-export async function setDurableHalt(userId: string, on: boolean, expectedRevision?: string): Promise<{ ok: true; halted: boolean } | { ok: false; error: string }> {
+export async function setDurableHalt(userId: string, on: boolean, expectedRevision?: string): Promise<HaltSaveResult> {
+  const previous = haltWrites.get(userId) ?? Promise.resolve();
+  const pending = previous.then(() => applyDurableHalt(userId, on, expectedRevision));
+  haltWrites.set(userId, pending);
+  try { return await pending; }
+  finally { if (haltWrites.get(userId) === pending) haltWrites.delete(userId); }
+}
+
+async function applyDurableHalt(userId: string, on: boolean, expectedRevision?: string): Promise<HaltSaveResult> {
   if (!userId) return { ok: false, error: "Sign in is required." };
   if (typeof on !== "boolean") return { ok: false, error: "Emergency stop requires an explicit boolean. Existing state was preserved." };
   try {
@@ -80,31 +88,12 @@ export async function setDurableHalt(userId: string, on: boolean, expectedRevisi
       if (!on && expectedRevision !== undefined && expectedRevision !== haltFileRevision(userId)) return { ok: false, error: "Emergency stop changed elsewhere. Reload its state before resuming." };
       writeHaltFile(userId, on);
     }
+    if (on) {
+      try { return { ok: true, halted: true, ...cancelOwnerJobsWithBuildSummary(userId) }; }
+      catch { return { ok: true, halted: true, cancellation: { cancelled: 0, pending: 0, unknown: 1 }, buildCancellation: { queuedCancelled: 0, cancellationRequested: 0, unconfirmed: 1 } }; }
+    }
     return { ok: true, halted: on };
   } catch (error) {
     return { ok: false, error: error instanceof Error && error.message.includes("changed elsewhere") ? error.message : "The emergency stop could not be saved. Check storage and retry." };
-  }
-}
-
-async function applyDurableHalt(userId: string, on: boolean): Promise<HaltSaveResult> {
-  if (!userId) return { ok: false, error: "Sign in is required." };
-  try {
-    if (sharedStorageRequired()) {
-      const sql = await sharedSql();
-      const { writeControl } = await import("./store.ts");
-      await writeControl(sql, userId, on);
-    } else {
-      // File names are scoped to the authenticated owner, including when repairing corrupt state.
-      writeHaltFile(userId, on);
-    }
-    if (on) {
-      let buildCancellation: BuildCancellationSummary;
-      try { buildCancellation = cancelOwnerBuildJobs(userId); }
-      catch { buildCancellation = { queuedCancelled: 0, cancellationRequested: 0, unconfirmed: 1 }; }
-      return { ok: true, halted: on, buildCancellation };
-    }
-    return { ok: true, halted: on };
-  } catch {
-    return { ok: false, error: "The emergency stop could not be saved. Check storage and retry." };
   }
 }

@@ -124,6 +124,10 @@ function BuildWorkspaceSession(props: BuildWorkspaceProps) {
   const [selectedFile, setSelectedFile] = useState("");
   const [tabs, setTabs] = useState<string[]>([]);
   const [buffers, setBuffers] = useState<Record<string, EditorBuffer>>({});
+  const [executionChoice, setExecutionChoice] = useState(false);
+  const [executionReceipt, setExecutionReceipt] = useState<{ workspace: string; cwd: string; files: { path: string; sha256: string }[]; policy: string } | null>(null);
+  const haltedRef = useRef(props.halted);
+  haltedRef.current = props.halted;
   const buffersRef = useRef(buffers);
   const [fileRequests, setFileRequests] = useState(0);
   const fileBusy = fileRequests > 0;
@@ -522,6 +526,13 @@ function BuildWorkspaceSession(props: BuildWorkspaceProps) {
   const submittingBuild = useRef(false);
   async function submit(event: FormEvent) {
     event.preventDefault();
+    if (editorDirty) { setExecutionChoice(true); return; }
+    await runBuild("saved");
+  }
+
+  async function runBuild(policy: "saved" | "save") {
+    setExecutionChoice(false);
+    if (haltedRef.current) { setNotice("Emergency stop is on. No Build task was started."); return; }
     if (props.freeOnly) { setNotice("Free-only is selected. Build has no verified free coding model for this action."); return; }
     const text = prompt.trim();
     if (!text) {
@@ -530,13 +541,48 @@ function BuildWorkspaceSession(props: BuildWorkspaceProps) {
     }
     if (submittingBuild.current || active) return;
     submittingBuild.current = true;
-    const agentId = companion.onlineAgentIds?.[0];
+    const selectedBuffer = buffersRef.current[selectedFile];
+    if (!selectedBuffer && (companion.onlineAgentIds?.length ?? 0) > 1) {
+      submittingBuild.current = false;
+      setNotice("Open a file on the intended computer before running this task.");
+      return;
+    }
+    const workspace = selectedBuffer?.workspace ?? companion.onlineAgentIds?.[0] ?? "hosted";
+    const agentId = workspace === "hosted" ? undefined : workspace;
+    const targetCwd = selectedBuffer?.cwd ?? cwd.trim();
+    if (agentId && !companion.onlineAgentIds?.includes(agentId)) {
+      submittingBuild.current = false;
+      setNotice("The original computer is offline. Reconnect it before running this task.");
+      return;
+    }
     const jobKey = agentId ? crypto.randomUUID().replaceAll("-", "") : undefined;
     ++pollSequence.current;
     setLoading(true);
     setNotice(null);
     setEvents([]);
     try {
+      const target = { workspace, cwd: targetCwd };
+      const relevant = Object.entries(buffersRef.current).filter(([, buffer]) => buffer.workspace === target.workspace && (buffer.cwd || "") === target.cwd);
+      if (policy === "save") {
+        const unrelated = Object.values(buffersRef.current).some((buffer) => buffer.draft !== buffer.saved && (buffer.workspace !== target.workspace || (buffer.cwd || "") !== target.cwd));
+        if (unrelated) { setNotice("Unsaved files belong to another workspace. Save them there, or choose Run saved version. No task started."); return; }
+        for (const [key, buffer] of relevant) {
+          if (buffer.draft === buffer.saved) continue;
+          if (!mounted.current || haltedRef.current || planOwner.current !== props.ownerId || buffersRef.current[key]?.draft !== buffer.draft) { setNotice("The reviewed buffer or owner changed. No task started."); return; }
+          const result = await runFileOperation("write", buffer.path, buffer.draft, { workspace: buffer.workspace, cwd: buffer.cwd, expectedContent: buffer.saved });
+          if (!result || result.after !== buffer.draft) { setNotice("A file save was not verified. No Build task started. Your drafts were kept."); return; }
+          setBuffers((previous) => previous[key] ? { ...previous, [key]: { ...previous[key], saved: result.after! } } : previous);
+        }
+      }
+      const files: { path: string; sha256: string }[] = [];
+      for (const [, buffer] of relevant) {
+        const content = policy === "save" ? buffer.draft : buffer.saved;
+        const hash = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(content));
+        files.push({ path: buffer.path, sha256: Array.from(new Uint8Array(hash), (byte) => byte.toString(16).padStart(2, "0")).join("") });
+      }
+      if (!mounted.current || haltedRef.current || planOwner.current !== props.ownerId || relevant.some(([key, buffer]) => !buffersRef.current[key] || (policy === "save" && buffersRef.current[key].draft !== buffer.draft))) { setNotice("Build stopped before submission."); return; }
+      const receipt = { ...target, files, policy };
+      setExecutionReceipt(receipt);
       if (jobKey) {
         try { localStorage.setItem(`adrian-build-last-job.${props.ownerId || "signed-out"}`, jobKey); } catch { /* Recovery remains available on this screen. */ }
       }
@@ -544,7 +590,7 @@ function BuildWorkspaceSession(props: BuildWorkspaceProps) {
         method: "POST",
         credentials: "include",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ prompt: text, skillApplications: collectAccountSkillApplications(preferenceStorage, text, props.enabledSkills, "build"), agentId, jobKey, cwd: cwd.trim() || undefined, mode, resumeSessionId: sessionId || undefined }),
+        body: JSON.stringify({ prompt: text, skillApplications: collectAccountSkillApplications(preferenceStorage, text, props.enabledSkills, "build"), sourceReceipt: receipt, agentId: workspace, jobKey, cwd: targetCwd || undefined, mode, resumeSessionId: sessionId || undefined }),
       });
       const data = (await response.json()) as { ok?: boolean; jobId?: string; receipt?: BuildStoredReceipt | null; executed?: boolean; error?: string; version?: string; agent?: string; loginRequired?: boolean; output?: string; package?: string; sessionId?: string; mode?: string; resumed?: boolean; forkedSessionId?: string; filesChanged?: { path: string; before: string; after: string }[]; skillReceipts?: SkillApplicationReceipt[]; operationId?: string; outputComplete?: boolean; requestDispatched?: boolean; fileReviewScope?: string; fileReviewWarnings?: string[]; verification?: { implementation: string; builderInstructionDigest?: string; checks: { id: string; status: string }[] }; toolReceipts?: { method: string; path?: string; status: string; detail?: string; durable?: boolean }[] };
       if (!mounted.current) return;
@@ -838,6 +884,13 @@ function BuildWorkspaceSession(props: BuildWorkspaceProps) {
       ) : null}
       <section className="intelligence-group" aria-label="Task" hidden={band !== "message"}>
         <h3>Task</h3>
+      {executionChoice && <ActionOverlay label="Unsaved Build files" title="Unsaved changes" onClose={() => setExecutionChoice(false)}>
+        <p>The editor contains changes not saved to the execution workspace.</p>
+        <button type="button" disabled={loading || fileBusy || props.halted} onClick={() => void runBuild("save")}>Save and run</button>
+        <button type="button" disabled={loading || fileBusy || props.halted} onClick={() => void runBuild("saved")}>Run saved version</button>
+        <button type="button" onClick={() => setExecutionChoice(false)}>Cancel</button>
+      </ActionOverlay>}
+      {executionReceipt && <details className="text-xs text-muted"><summary>Submitted source receipt</summary><p>Workspace {executionReceipt.workspace} · {executionReceipt.cwd || "runtime default"} · {executionReceipt.policy === "save" ? "Verified save before submission" : "Saved versions; drafts kept"}. These hashes identify the submitted baseline; runtime readback is required to confirm which revision executed.</p><ul>{executionReceipt.files.map((file) => <li key={file.path}>{file.path} · {file.sha256}</li>)}</ul></details>}
       <form className="space-y-3" onSubmit={submit}>
         <div className="flex items-center gap-2">
           <FolderOpen className="size-4 text-accent" aria-hidden="true" />

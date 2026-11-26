@@ -5,6 +5,7 @@ import { join } from "node:path";
 import { afterEach, beforeEach, describe, it } from "node:test";
 import { runInNewContext } from "node:vm";
 import ts from "typescript";
+import { parseHaltControlRequest } from "./halt-request.ts";
 import { readHaltFile, setHaltDirectory, writeHaltFile } from "./halt-file.ts";
 
 describe("C5 emergency stop server action validation", () => {
@@ -15,7 +16,7 @@ describe("C5 emergency stop server action validation", () => {
     const module = { exports: {} as { setExecutionHalt: (input: unknown) => Promise<{ ok: boolean }> } };
     const createServerFn = () => ({ middleware: () => ({ validator: (validate: (input: unknown) => unknown) => ({ handler: (handle: (input: unknown) => unknown) => async (input: unknown) => handle({ data: validate(input), context: { userId: "owner-a" } }) }) }) });
     const code = ts.transpileModule(action, { compilerOptions: { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.CommonJS } }).outputText;
-    runInNewContext(code, { module, exports: module.exports, createServerFn, authMiddleware: {}, require: (name: string) => {
+    runInNewContext(code, { module, exports: module.exports, parseHaltControlRequest, createServerFn, authMiddleware: {}, require: (name: string) => {
       assert.equal(name, "./halt.server");
       return { setDurableHalt: async (ownerId: string, on: boolean) => { calls.push({ ownerId, on }); return { ok: true, halted: on }; } };
     } });
@@ -24,10 +25,10 @@ describe("C5 emergency stop server action validation", () => {
       await assert.rejects(invoke(input), /explicit stop or release/);
     }
     assert.equal(calls.length, 0);
-    assert.equal((await invoke({ on: false, ownerId: "owner-b" })).ok, false);
+    assert.equal((await invoke({ on: false, expectedRevision: "reviewed", ownerId: "owner-b" })).ok, false);
     assert.equal(calls.length, 0);
     assert.equal((await invoke({ on: true, ownerId: "owner-a" })).ok, true);
-    assert.equal((await invoke({ on: false, ownerId: "owner-a" })).ok, true);
+    assert.equal((await invoke({ on: false, expectedRevision: "reviewed", ownerId: "owner-a" })).ok, true);
     assert.deepEqual(calls, [{ ownerId: "owner-a", on: true }, { ownerId: "owner-a", on: false }]);
   });
 });

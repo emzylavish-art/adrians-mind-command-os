@@ -69,11 +69,17 @@ function buildHandlerFixture() {
   let runtimeCalls = 0;
   const job = { id: "fixture-job", ownerId: "owner-a", kind: "kimi-acp", status: "queued", createdAt: "2026-11-01T00:00:00Z", updatedAt: "2026-11-01T00:00:00Z", payload: {} };
   const imports: Record<string, unknown> = {
+    "./runtime-capabilities.ts": { buildRuntimeCapabilities: () => [{}, { coding: true }] },
+    "./hosted/file-receipts.ts": { readCodingFileSnapshot: () => ({ ok: true, exists: true, content: "fixture source" }) },
+    "./build-guidance.ts": { prepareBuildTask: (prompt: string) => ({ ok: true, prompt, skillReceipts: [] }) },
+    "./paired-build-receipt.ts": { pairedBuildPayload: () => ({}), pairedBuildReceipt: () => null },
+    "../media/xai-key.ts": { resolveXaiInferenceApiKey: () => "fixture" },
+    "../dispatch-attempt.ts": { dispatchContext: () => ({ operationId: "build:fixture-" + runtimeCalls }), reserveDispatchAttempt: async () => ({ok:true}), runSettledDispatch: async (_owner: string, _id: string, work: () => Promise<unknown>) => work() },
     "./account-workspace.ts": { machineRequired: "fixture machine required" },
     "../../auth/verify.server": { requireUserId: async () => owner },
     "../connectors/oauth-csrf": { assertSameOrigin: () => ({ ok: true }) },
     "../halt.server": { haltIsOn: async () => false },
-    "../pc-pairing/store": { enqueueJob: () => job, listJobEvents: () => [], onlineAgents: () => paired ? [{ id: "pc-a", label: "Fixture" }] : [], readJob: () => job },
+    "../pc-pairing/coordination.server.ts": { enqueueJob: () => job, listJobEvents: () => [], onlineAgents: () => paired ? [{ id: "pc-a", label: "Fixture" }] : [], readJob: () => job },
     "node:fs": { readFileSync: () => "fixture source" }, "node:path": { join },
     "./hosted/acp-client.ts": { adrianBuildCommand: () => "fixture.mjs", adrianHostedWorkspace: () => "/fixture", closeHostedCodingSession: () => true, packageLabel: () => "fixture", resolveBuildWorkspace: () => "/fixture",
       runCodingTurn: async () => { runtimeCalls++; return { ok: true, output: "private output", command: "fixture" }; },

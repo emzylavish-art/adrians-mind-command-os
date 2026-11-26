@@ -73,7 +73,7 @@ test("AA125 the actual CommandApp memo boundary reuses its index when only the q
   let cursor = 0, builds = 0;
   const ws = empty();
   ws.chats = [{ id: "chat", title: "Review", messages: [{ id: "one", content: "Copper needle" }] }];
-  const context: any = { ws, paletteOpen: true, deferredQuery: "copper", shownChatTitle: (chat: { title: string }) => chat.title, isIntelligenceThread: () => false,
+  const context: any = { ws, draftOwner: "fixture", paletteSkills: [], researchHistory: [], paletteFilter: "all", paletteOpen: true, deferredQuery: "copper", shownChatTitle: (chat: { title: string }) => chat.title, isIntelligenceThread: () => false,
     queryPaletteIndex,
     createPaletteIndexBuilder: () => { const build = createPaletteIndexBuilder(); return (input: PaletteData) => { builds++; return build(input); }; },
     useMemo(factory: () => unknown, deps: unknown[]) {

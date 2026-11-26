@@ -52,7 +52,11 @@
       "expected": "Settings pane must survive deep link, back and reload.",
       "implementation": "docs/adrian-analysis-implementation-checklist.md#L24",
       "regression": "[G04](#g04-navigation)",
-      "disposition": "Combined verification pending"
+      "disposition": "Combined verification pending",
+      "combinedTests": [
+        "scripts/adrian-audit-client-ui.test.mjs"
+      ],
+      "combinedFixture": "The relevant callback or search fixture passed on the subsequent integration tree. Use its combined CI for exact-head verification. Physical devices, native execution and third-party delivery require separate evidence."
     },
     {
       "finding": "C4/AA-007",
@@ -60,7 +64,11 @@
       "expected": "The first user navigation must be a Back-reachable history entry.",
       "implementation": "docs/adrian-analysis-implementation-checklist.md#L25",
       "regression": "[G04](#g04-navigation)",
-      "disposition": "Combined verification pending"
+      "disposition": "Combined verification pending",
+      "combinedTests": [
+        "scripts/adrian-audit-client-ui.test.mjs"
+      ],
+      "combinedFixture": "The relevant callback or search fixture passed on the subsequent integration tree. Use its combined CI for exact-head verification. Physical devices, native execution and third-party delivery require separate evidence."
     },
     {
       "finding": "C4/AA-008",
@@ -68,7 +76,11 @@
       "expected": "Intelligence reload must restore the selected thread.",
       "implementation": "docs/adrian-analysis-implementation-checklist.md#L26",
       "regression": "[G04](#g04-navigation)",
-      "disposition": "Combined verification pending"
+      "disposition": "Combined verification pending",
+      "combinedTests": [
+        "scripts/adrian-audit-client-ui.test.mjs"
+      ],
+      "combinedFixture": "The relevant callback or search fixture passed on the subsequent integration tree. Use its combined CI for exact-head verification. Physical devices, native execution and third-party delivery require separate evidence."
     },
     {
       "finding": "C4/AA-009",
@@ -92,7 +104,11 @@
       "expected": "Library upload must use the visible destination.",
       "implementation": "docs/adrian-analysis-implementation-checklist.md#L29",
       "regression": "[G06](#g06-library-destinations)",
-      "disposition": "Combined verification pending"
+      "disposition": "Combined verification pending",
+      "combinedTests": [
+        "scripts/adrian-audit-client-ui.test.mjs"
+      ],
+      "combinedFixture": "The relevant callback or search fixture passed on the subsequent integration tree. Use its combined CI for exact-head verification. Physical devices, native execution and third-party delivery require separate evidence."
     },
     {
       "finding": "C4/AA-012",
@@ -100,7 +116,11 @@
       "expected": "Preview must belong to the selected Library scope.",
       "implementation": "docs/adrian-analysis-implementation-checklist.md#L30",
       "regression": "[G06](#g06-library-destinations)",
-      "disposition": "Combined verification pending"
+      "disposition": "Combined verification pending",
+      "combinedTests": [
+        "scripts/adrian-audit-client-ui.test.mjs"
+      ],
+      "combinedFixture": "The relevant callback or search fixture passed on the subsequent integration tree. Use its combined CI for exact-head verification. Physical devices, native execution and third-party delivery require separate evidence."
     },
     {
       "finding": "C4/AA-013",
@@ -108,7 +128,11 @@
       "expected": "Drive Library import must save to that destination, without sending/staging chat.",
       "implementation": "docs/adrian-analysis-implementation-checklist.md#L31",
       "regression": "[G06](#g06-library-destinations)",
-      "disposition": "Combined verification pending"
+      "disposition": "Combined verification pending",
+      "combinedTests": [
+        "scripts/adrian-audit-client-ui.test.mjs"
+      ],
+      "combinedFixture": "The relevant callback or search fixture passed on the subsequent integration tree. Use its combined CI for exact-head verification. Physical devices, native execution and third-party delivery require separate evidence."
     },
     {
       "finding": "C4/AA-014",
@@ -116,7 +140,11 @@
       "expected": "Signed-out Library must not claim account persistence.",
       "implementation": "docs/adrian-analysis-implementation-checklist.md#L32",
       "regression": "[G06](#g06-library-destinations)",
-      "disposition": "Combined verification pending"
+      "disposition": "Combined verification pending",
+      "combinedTests": [
+        "scripts/adrian-audit-client-ui.test.mjs"
+      ],
+      "combinedFixture": "The relevant callback or search fixture passed on the subsequent integration tree. Use its combined CI for exact-head verification. Physical devices, native execution and third-party delivery require separate evidence."
     },
     {
       "finding": "C4/AA-015",
@@ -124,7 +152,11 @@
       "expected": "Scheduler must use the current owner after delayed auth or switching.",
       "implementation": "docs/adrian-analysis-implementation-checklist.md#L33",
       "regression": "[G07](#g07-schedules)",
-      "disposition": "Combined verification pending"
+      "disposition": "Combined verification pending",
+      "combinedTests": [
+        "scripts/adrian-audit-client-ui.test.mjs"
+      ],
+      "combinedFixture": "The relevant callback or search fixture passed on the subsequent integration tree. Use its combined CI for exact-head verification. Physical devices, native execution and third-party delivery require separate evidence."
     },
     {
       "finding": "C4/AA-016",
@@ -414,7 +446,11 @@
       "expected": "Every matching message in a chat must be reachable.",
       "implementation": "docs/adrian-analysis-implementation-checklist.md#L65",
       "regression": "[G16](#g16-local-search)",
-      "disposition": "Combined verification pending"
+      "disposition": "Combined verification pending",
+      "combinedTests": [
+        "src/lib/mind/adrian-analysis-regressions.test.ts"
+      ],
+      "combinedFixture": "The relevant callback or search fixture passed on the subsequent integration tree. Use its combined CI for exact-head verification. Physical devices, native execution and third-party delivery require separate evidence."
     },
     {
       "finding": "C4/AA-048",
@@ -422,7 +458,11 @@
       "expected": "Ranking must favor deterministic meaningful matches.",
       "implementation": "docs/adrian-analysis-implementation-checklist.md#L66",
       "regression": "[G16](#g16-local-search)",
-      "disposition": "Combined verification pending"
+      "disposition": "Combined verification pending",
+      "combinedTests": [
+        "src/lib/mind/adrian-analysis-regressions.test.ts"
+      ],
+      "combinedFixture": "The relevant callback or search fixture passed on the subsequent integration tree. Use its combined CI for exact-head verification. Physical devices, native execution and third-party delivery require separate evidence."
     },
     {
       "finding": "C4/AA-049",
@@ -430,7 +470,11 @@
       "expected": "Reordered keywords and exact phrases must be supported locally.",
       "implementation": "docs/adrian-analysis-implementation-checklist.md#L67",
       "regression": "[G16](#g16-local-search)",
-      "disposition": "Combined verification pending"
+      "disposition": "Combined verification pending",
+      "combinedTests": [
+        "src/lib/mind/adrian-analysis-regressions.test.ts"
+      ],
+      "combinedFixture": "The relevant callback or search fixture passed on the subsequent integration tree. Use its combined CI for exact-head verification. Physical devices, native execution and third-party delivery require separate evidence."
     },
     {
       "finding": "C4/AA-050",
@@ -438,7 +482,11 @@
       "expected": "Supported saved record types need exact destinations.",
       "implementation": "docs/adrian-analysis-implementation-checklist.md#L68",
       "regression": "[G16](#g16-local-search)",
-      "disposition": "Combined verification pending"
+      "disposition": "Combined verification pending",
+      "combinedTests": [
+        "src/lib/mind/adrian-analysis-regressions.test.ts"
+      ],
+      "combinedFixture": "The relevant callback or search fixture passed on the subsequent integration tree. Use its combined CI for exact-head verification. Physical devices, native execution and third-party delivery require separate evidence."
     },
     {
       "finding": "C4/AA-051",
@@ -446,7 +494,11 @@
       "expected": "Excerpts must show the matched content.",
       "implementation": "docs/adrian-analysis-implementation-checklist.md#L69",
       "regression": "[G16](#g16-local-search)",
-      "disposition": "Combined verification pending"
+      "disposition": "Combined verification pending",
+      "combinedTests": [
+        "src/lib/mind/adrian-analysis-regressions.test.ts"
+      ],
+      "combinedFixture": "The relevant callback or search fixture passed on the subsequent integration tree. Use its combined CI for exact-head verification. Physical devices, native execution and third-party delivery require separate evidence."
     },
     {
       "finding": "C4/AA-052",
@@ -454,7 +506,11 @@
       "expected": "Queue removal must be a keyboard-accessible named action.",
       "implementation": "docs/adrian-analysis-implementation-checklist.md#L70",
       "regression": "[G17](#g17-accessible-actions)",
-      "disposition": "Combined verification pending"
+      "disposition": "Combined verification pending",
+      "combinedTests": [
+        "scripts/adrian-audit-client-ui.test.mjs"
+      ],
+      "combinedFixture": "The relevant callback or search fixture passed on the subsequent integration tree. Use its combined CI for exact-head verification. Physical devices, native execution and third-party delivery require separate evidence."
     },
     {
       "finding": "C4/AA-053",
@@ -462,7 +518,11 @@
       "expected": "Pinning must be visible and operable without a context menu.",
       "implementation": "docs/adrian-analysis-implementation-checklist.md#L71",
       "regression": "[G16](#g16-local-search)",
-      "disposition": "Combined verification pending"
+      "disposition": "Combined verification pending",
+      "combinedTests": [
+        "scripts/adrian-audit-client-ui.test.mjs"
+      ],
+      "combinedFixture": "The relevant callback or search fixture passed on the subsequent integration tree. Use its combined CI for exact-head verification. Physical devices, native execution and third-party delivery require separate evidence."
     },
     {
       "finding": "C4/AA-054",
@@ -478,7 +538,11 @@
       "expected": "Shortcut hints must match the input platform.",
       "implementation": "docs/adrian-analysis-implementation-checklist.md#L73",
       "regression": "[G17](#g17-accessible-actions)",
-      "disposition": "Combined verification pending"
+      "disposition": "Combined verification pending",
+      "combinedTests": [
+        "scripts/adrian-audit-client-ui.test.mjs"
+      ],
+      "combinedFixture": "The relevant callback or search fixture passed on the subsequent integration tree. Use its combined CI for exact-head verification. Physical devices, native execution and third-party delivery require separate evidence."
     },
     {
       "finding": "C4/AA-056",
@@ -486,7 +550,11 @@
       "expected": "Response lifecycle must be announced without token spam.",
       "implementation": "docs/adrian-analysis-implementation-checklist.md#L74",
       "regression": "[G17](#g17-accessible-actions)",
-      "disposition": "Combined verification pending"
+      "disposition": "Combined verification pending",
+      "combinedTests": [
+        "scripts/adrian-audit-client-ui.test.mjs"
+      ],
+      "combinedFixture": "The relevant callback or search fixture passed on the subsequent integration tree. Use its combined CI for exact-head verification. Physical devices, native execution and third-party delivery require separate evidence."
     },
     {
       "finding": "C4/AA-057",
@@ -494,7 +562,11 @@
       "expected": "All auth sources must resolve to one verified owner or an explicit conflict.",
       "implementation": "docs/adrian-analysis-implementation-checklist.md#L75",
       "regression": "[G18](#g18-canonical-identity)",
-      "disposition": "Combined verification pending"
+      "disposition": "Combined verification pending",
+      "combinedTests": [
+        "scripts/adrian-audit-client-ui.test.mjs"
+      ],
+      "combinedFixture": "The relevant callback or search fixture passed on the subsequent integration tree. Use its combined CI for exact-head verification. Physical devices, native execution and third-party delivery require separate evidence."
     },
     {
       "finding": "C4/AA-058",

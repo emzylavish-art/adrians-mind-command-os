@@ -2,27 +2,28 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { test } from "node:test";
 import ts from "typescript";
-import { editorRequestKey, canApplyEditorResult } from "./editor-request.ts";
 import { readBuildSourceReceipt } from "./source-receipt.ts";
 
 const source = readFileSync(new URL("../../../components/mind/code-ide.tsx", import.meta.url), "utf8");
-const complete = source.slice(source.indexOf("  async function complete()"), source.indexOf("  async function debug()"));
-const debug = source.slice(source.indexOf("  async function debug()"), source.indexOf("  return (\n    <div className=\"code-ide\""));
+const toolBody = source.slice(source.indexOf("  async function runTool("), source.indexOf('  return (\n    <div className="code-ide"'));
+const resetBody = source.slice(source.indexOf("    toolAttempt.current?.abort();"), source.indexOf("    return () => { toolAttempt.current?.abort();", source.indexOf("    toolAttempt.current?.abort();")));
 function mountedHandlers(fetcher: typeof fetch) {
   const body = ts.transpileModule(`
-    let props = { selectedId: "A", selected: "a.ts", text: "alpha", debugAvailable: true };
-    let key = editorRequestKey(props.selectedId, props.text);
-    const generation = { current: 0 }; const current = { current: { key, generation: 0 } };
-    let dirty = false, toolBusy = false, breakLine = 1;
+    let props = { selectedId: "A", selected: "A.ts", text: "alpha", busy: false };
+    const toolAttempt = { current: null }, selection = { current: { id: "A", text: "alpha" } };
+    let debugAllowed = true; const breakLine = 1;
     const state = { completions: [], notice: "", debug: "", busy: false };
-    const setToolBusy = (value) => { state.busy = value; toolBusy = value; };
-    const setToolNotice = (value) => { state.notice = value; };
-    const setCompletions = (value) => { state.completions = value; };
-    const setDebugText = (value) => { state.debug = value; };
-    ${complete}\n${debug}
-    return { complete, debug, state, select: (id, text) => { props = { ...props, selectedId: id, selected: id + ".ts", text }; key = editorRequestKey(id, text); current.current = { key, generation: ++generation.current }; }, disableDebug: () => { props.debugAvailable = false; } };
+    const setToolBusy = value => { state.busy = value; };
+    const setToolNotice = value => { state.notice = value; };
+    const setCompletions = value => { state.completions = value; };
+    const setDebugText = value => { state.debug = value; };
+    ${toolBody}
+    return { complete: () => runTool("complete"), debug: () => runTool("debug"), state,
+      select(id, text) { ${resetBody} props = { ...props, selectedId: id, selected: id + ".ts", text }; selection.current = { id, text }; },
+      disableDebug() { debugAllowed = false; }
+    };
   `, { compilerOptions: { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.None } }).outputText;
-  return new Function("fetch", "editorRequestKey", "canApplyEditorResult", body)(fetcher, editorRequestKey, canApplyEditorResult);
+  return new Function("fetch", body)(fetcher);
 }
 
 test("C5 actual Complete handler rejects an old file response after a new selection", async () => {
@@ -58,6 +59,7 @@ test("C5 actual emergency-stop handler retries activation without releasing loca
     const wsRef = { current: { halted: false, schedules: [{ enabled: true }] } };
     const turnOwner = { current: "owner-A" }; const stopSyncFlight = { current: null }; const clearedStop = { current: false };
     const turnAbort = { current: null }, agentAbort = { current: null };
+    const readExecutionControl = async () => ({ state: "on", revision: "fixture" });
     const stopVoiceSession = () => {}; const pushAudit = (ws) => ws; const haltFleet = (ws) => ws;
     const state = { sync: null, notice: "", error: null }; let stopConfirmed = false;
     const setWs = (fn) => { wsRef.current = fn(wsRef.current); }; const setError = (value) => { state.error = value; };
@@ -92,6 +94,7 @@ test("C5 a new emergency stop survives an older pending release and reasserts th
     const wsRef = { current: { halted: false, schedules: [{ enabled: true }] } };
     const turnOwner = { current: "owner-A" }; const stopSyncFlight = { current: null }; const clearedStop = { current: false };
     const turnAbort = { current: null }, agentAbort = { current: null };
+    const readExecutionControl = async () => ({ state: "on", revision: "fixture" });
     const stopVoiceSession = () => {}; const pushAudit = (ws) => ws; const haltFleet = (ws) => ws;
     const state = { sync: null, notice: "", error: null, published: [] }; let stopConfirmed = false;
     const setWs = (fn) => { wsRef.current = fn(wsRef.current); state.published.push(wsRef.current.halted); };
@@ -111,6 +114,7 @@ test("C5 a new emergency stop survives an older pending release and reasserts th
     });
     await h.pressEmergencyStop();
     const releasing = h.clearEmergencyStop();
+    await Promise.resolve();
     await h.pressEmergencyStop();
     assert.equal(h.wsRef.current.halted, true);
     assert.deepEqual(calls, [true, false], "New activation waits for the older release to settle");
@@ -129,6 +133,7 @@ test("C5 actual Build handler distinguishes saved execution, verified save and f
   const body = ts.transpileModule(`
     const props = { ownerId: "owner-A", freeOnly: false }; const haltedRef = { current: false }; const planOwner = { current: "owner-A" };
     const prompt = "Inspect fixture file"; const cwd = "/fixture"; const mode = "plan"; const sessionId = "";
+    const mounted = {current:true}; const selectedFile = "f"; const preferenceStorage = {}; const collectAccountSkillApplications = () => [];
     const companion = { onlineAgentIds: ["fixture-pc"] }; const active = false;
     const submittingBuild = { current: false }, pollSequence = { current: 0 };
     const buffersRef = { current: { f: { workspace: "fixture-pc", cwd: "/fixture", path: "a.ts", saved: "revision A", draft: "revision B" } } };

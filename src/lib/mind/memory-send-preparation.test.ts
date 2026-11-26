@@ -86,7 +86,7 @@ function harness(options: { pause?: "prepare" | "fingerprint"; uncertainFirst?: 
     composerEffort: "Fast", routingMode: "A", consultModel: "grok", consultModules: [], ADRIAN_MIND_IDENTITY: "fixture identity",
     failureKindForAction, normalizeBotKnowledge, routeForBotChat, chosenProvider, failover, isLogicRouteId, exactModelForChat,
     resolveSendPath: () => ({ path: "direct" }), getBearerToken: () => "", previewPathPrefix: () => "",
-    setTurnChat: noop, setLiveText: noop, setToolTimeline: noop, setLastResolvedTier: noop, setLastModelUsed: noop, setBusy: noop, setNotice: noop,
+    setGenerationStatus: noop, setTurnChat: noop, setLiveText: noop, setToolTimeline: noop, setLastResolvedTier: noop, setLastModelUsed: noop, setBusy: noop, setNotice: noop,
     setError: (error: string | null) => { if (error) errors.push(error); },
     setFailure: (value: typeof failure | ((current: typeof failure) => typeof failure)) => { failure = typeof value === "function" ? value(failure) : value; },
     setWs: (value: Workspace | ((current: Workspace) => Workspace)) => { wsRef.current = typeof value === "function" ? value(wsRef.current) : value; },

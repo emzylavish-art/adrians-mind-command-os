@@ -822,8 +822,13 @@ function statusWord(status: CapabilityStatus) {
 }
 
 export function CommandApp() {
-  const { user: account, error, isPending } = useCurrentUserState();
-  if (error) return <main role="alert" className="p-4">{error}<button type="button" className="ml-3 min-h-11 underline" onClick={() => window.location.reload()}>Retry verification</button></main>;
+  const { user: account, error, isPending, status, retry } = useCurrentUserState();
+  const [sessionError, setError] = useState("");
+  if (error) return <main role="alert" className="p-4">
+    <p>{sessionError || error}</p>
+    {status === "conflict" && <button type="button" className="min-h-11 underline" onClick={() => { void signOut("/login", "both").catch(caught => setError(caught instanceof Error ? caught.message : "Sessions could not be ended. Try again.")); }}>End conflicting sessions</button>}
+    <button type="button" className="ml-3 min-h-11 underline" onClick={() => { setError(""); retry?.(); }}>Retry verification</button>
+  </main>;
   if (isPending) return <main role="status" className="p-4">Verifying your account…</main>;
   return <AccountPreferencesProvider ownerId={account?.id ?? null}><SurfaceErrorBoundary key={account?.id ?? "guest"} name="Workspace"><CommandSession account={account} accountPending={isPending} /></SurfaceErrorBoundary></AccountPreferencesProvider>;
 }
@@ -880,6 +885,7 @@ function CommandSession({ account, accountPending }: { account: ReturnType<typeo
   const [hiddenSettings, setHiddenSettings] = useState<string[]>([]);
   const [settingsMenu, setSettingsMenu] = useState<string | null>(null);
   const [query, setQuery] = useState("");
+  const deferredQuery = useDeferredValue(query);
   const [paletteFilter, setPaletteFilter] = useState<"all" | Parameters<typeof paletteHits>[0]["filter"]>("all");
   const [paletteLimit, setPaletteLimit] = useState(50);
   const [paletteOpen, setPaletteOpen] = chromeMenus.bind("palette");
@@ -891,6 +897,12 @@ function CommandSession({ account, accountPending }: { account: ReturnType<typeo
   const navWasOpenRef = useRef(false);
   const [voiceSignInNotice, setVoiceSignInNotice] = useState(false);
   const pageScrollRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (view !== "settings") return;
+    if (pageScrollRef.current) pageScrollRef.current.scrollTop = 0;
+    const frame = requestAnimationFrame(() => document.getElementById("settings-heading")?.focus({ preventScroll: true }));
+    return () => cancelAnimationFrame(frame);
+  }, [view, settingsPane]);
   const pagePositions = useRef(new Map<View, number>());
   useLayoutEffect(() => {
     const scroller = pageScrollRef.current;
@@ -1010,6 +1022,7 @@ function CommandSession({ account, accountPending }: { account: ReturnType<typeo
   const [draft, setDraft, setDraftInScope] = useComposerDraft(draftScope, "text", "", persistDraft);
   const [busy, setBusy] = useState(false);
   const [liveText, setLiveText] = useState("");
+  const [generationStatus, setGenerationStatus] = useState("");
   const turnAbort = useRef<AbortController | null>(null);
   const voiceScope = JSON.stringify([draftOwner, view, activeId]);
   const currentVoiceScope = useRef(voiceScope);
@@ -1136,7 +1149,6 @@ function CommandSession({ account, accountPending }: { account: ReturnType<typeo
   const stageTimerRef = useRef(0);
   const stageGenRef = useRef(0);
   const voiceActiveRef = useRef(false);
-  const desktopActedRef = useRef(new Set<string>());
   const closeVoiceOverlayRef = useRef<() => void>(() => undefined);
   const cancelDictationRef = useRef<(announce?: boolean) => void>(() => undefined);
   const turnGen = useRef(0);
@@ -1312,6 +1324,11 @@ function CommandSession({ account, accountPending }: { account: ReturnType<typeo
   const excerptRef = useRef<HTMLTextAreaElement>(null);
   const [cameraOpen, setCameraOpen] = useState(false);
   const [cloudPickerOpen, setCloudPickerOpen] = useState(false);
+  const cloudDestination = useRef<{ owner: string | null; kind: "chat" | "library"; projectId: string | null; scope: string } | null>(null);
+  function openCloudPicker(kind: "chat" | "library" = "chat") {
+    cloudDestination.current = { owner: draftOwner, kind, projectId: kind === "library" ? libraryProjectId : null, scope: draftScope };
+    setCloudPickerOpen(true);
+  }
   const [driveConnected, setDriveConnected] = useState(false);
   const imageInputRef = useRef<HTMLInputElement>(null);
   const [contextOpen, setContextOpen] = chromeMenus.bind("context");
@@ -1409,13 +1426,10 @@ function CommandSession({ account, accountPending }: { account: ReturnType<typeo
       const params = new URLSearchParams(window.location.search);
       if (params.get("mode") === "agent" && params.get("agentId")) return;
       applyingLocation.current = true;
-      locationHistory.current = "replace";
+      locationHistory.current = "push";
       const resolved = resolveShare(window.location.search, wsRef.current, known);
       setViewState(resolved.view as View);
-      if (resolved.view === "settings") {
-        const pane = params.get("pane");
-        if (pane === "connections" || pane === "general" || pane === "keys" || pane === "voice" || pane === "data" || pane === "safety" || pane === "browser" || pane === "pages" || pane === "personalization") setSettingsPane(pane);
-      }
+      setSettingsPane(settingsPaneFromSearch(window.location.search));
       if (params.get("resume") === "speak") {
         setSpeakStageOpen(true);
         const url = new URL(window.location.href);
@@ -1457,7 +1471,7 @@ function CommandSession({ account, accountPending }: { account: ReturnType<typeo
       locationHistory.current = "push";
       return;
     }
-    const search = writeShareSearch(window.location.search, nextWrite, Object.keys(TITLES));
+    const search = writeShareSearch(window.location.search, { ...nextWrite, pane: settingsPane }, Object.keys(TITLES));
     if (sameShareLocation(window.location.pathname, window.location.hash, window.location.search, search)) {
       locationHistory.current = "push";
       return;
@@ -1467,7 +1481,7 @@ function CommandSession({ account, accountPending }: { account: ReturnType<typeo
     locationHistory.current = "push";
     if (mode === "replace") router.history.replace(next);
     else router.history.push(next);
-  }, [ready, view, activeId, shareProjectId, openFileId, shareBotId, router]);
+  }, [ready, view, settingsPane, activeId, shareProjectId, openFileId, shareBotId, router]);
 
   const personaHandoffDone = useRef(false);
   useEffect(() => {
@@ -1823,6 +1837,9 @@ function CommandSession({ account, accountPending }: { account: ReturnType<typeo
   const searchRef = useRef<HTMLInputElement>(null);
   const fileRef = useRef<HTMLInputElement>(null);
   const inspectFileRef = useRef<HTMLInputElement>(null);
+  const [stopSync, setStopSync] = useState<{ owner: string | null; state: "idle" | "pending" | "confirmed" | "unconfirmed"; detail: string }>({ owner: null, state: "idle", detail: "" });
+  const stopSyncFlight = useRef<{ owner: string | null; on: boolean; restop?: boolean } | null>(null);
+  const stopConfirmed = stopSync.owner === turnOwner.current && stopSync.state === "confirmed";
   const clearedStop = useRef(false);
   const counts = requirementCounts();
   const active = ws.chats.find((chat) => chat.id === activeId) ?? null;
@@ -2138,6 +2155,7 @@ function CommandSession({ account, accountPending }: { account: ReturnType<typeo
   }, []);
 
   useEffect(() => {
+    if (!ready || accountPending || !account) return;
     const step = () => {
       const current = wsRef.current;
       if (current.halted) return;
@@ -2145,19 +2163,12 @@ function CommandSession({ account, accountPending }: { account: ReturnType<typeo
       const due = current.schedules.some((job) => job.enabled && job.nextRunAt <= now);
       const queued = current.runs.some((run) => run.state === "queued" || run.state === "running");
       if (!due && !queued) return;
-      for (const run of current.runs) {
-        // Scheduled occurrences execute their declared agent tools. Their titles must never become PC commands.
-        if (run.id.startsWith("scheduled:") || run.parentId?.startsWith("scheduled:")) continue;
-        if (run.state !== "queued" || desktopActedRef.current.has(run.id) || !spokenPcCommand(run.goal)) continue;
-        desktopActedRef.current.add(run.id);
-        void fetch("/api/mind/pc/status", { method: "POST", credentials: "include", headers: { "content-type": "application/json" }, body: JSON.stringify({ text: run.goal }) });
-      }
       const next = tickFleet(runDueSchedules(current, now), { now, workerId: "browser-worker" });
-      setWs(next);
+      if (next !== current) setWs(next);
     };
     const id = window.setInterval(step, 15000);
     return () => window.clearInterval(id);
-  }, []);
+  }, [ready, accountPending, account?.id, setWs]);
 
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => {
@@ -2309,19 +2320,19 @@ function CommandSession({ account, accountPending }: { account: ReturnType<typeo
     window.location.assign("/login?next=" + encodeURIComponent(loginReturnPath()));
   };
 
-  const hits = useMemo(
-    () => !paletteOpen ? [] :
-      paletteHits({
-        query, filter: paletteFilter, skills: accountSkillCatalog(preferenceStorage, enabledSkills), schedules: ws.schedules, activity: ws.audit, research: researchHistory, connections: ws.connections,
-        projects: ws.projects,
-        chats: ws.chats.map((chat) => ({ ...chat, title: shownChatTitle(chat), humanCode: isIntelligenceThread(chat.customPersonality) })),
-        memories: ws.memories,
-        files: ws.files,
-        agents: ws.agents,
-        runs: ws.runs,
-      }),
-    [query, paletteOpen, paletteFilter, ws.projects, ws.chats, ws.memories, ws.files, ws.agents, ws.runs, ws.schedules, ws.audit, ws.connections, researchHistory, enabledSkills, preferenceStorage],
-  );
+  const paletteSkills = useMemo(() => accountSkillCatalog(preferenceStorage, enabledSkills), [preferenceStorage, enabledSkills]);
+  const buildPaletteIndex = useMemo(() => createPaletteIndexBuilder(), [draftOwner]);
+  const paletteChats = useMemo(() => ws.chats.map(chat => ({ ...chat, title: shownChatTitle(chat), humanCode: isIntelligenceThread(chat.customPersonality) })), [ws.chats]);
+  const paletteSearchIndex = useMemo(() => buildPaletteIndex({
+    projects: ws.projects, chats: paletteChats, memories: ws.memories, files: ws.files, agents: ws.agents, runs: ws.runs,
+    skills: paletteSkills, schedules: ws.schedules, activity: ws.audit, research: researchHistory, connections: ws.connections,
+    browserSessions: ws.browserSessions, deployments: ws.deployments,
+  }), [buildPaletteIndex, paletteChats, ws.projects, ws.memories, ws.files, ws.agents, ws.runs, paletteSkills, ws.schedules, ws.audit, researchHistory, ws.connections, ws.browserSessions, ws.deployments]);
+  const hits = useMemo(() => {
+    if (!paletteOpen) return [];
+    const result = queryPaletteIndex(paletteSearchIndex, deferredQuery);
+    return paletteFilter && paletteFilter !== "all" ? result.filter(hit => hit.view === paletteFilter) : result;
+  }, [paletteOpen, paletteSearchIndex, deferredQuery, paletteFilter]);
 
   type ChromeMenu = "palette" | "surface" | "bell" | "account" | "controls" | "nav";
 
@@ -2371,13 +2382,29 @@ function CommandSession({ account, accountPending }: { account: ReturnType<typeo
     if (hit.view === "speak") openSpeakStage();
     else if (hit.view === "social" || hit.view === "gpt-wrapper") window.location.assign("/" + hit.view);
     else setView(hit.view);
+    if (hit.focusId) setCardFocus({ id: hit.focusId });
     setQuery("");
     setPaletteIndex(0);
     setPaletteOpen(false);
     setNavOpen(false);
   }
 
+  function palettePinKind(hit: (typeof hits)[number] | undefined) {
+    return !hit?.ref ? null : hit.meta.startsWith("Chat") || hit.meta.startsWith("Intelligence") ? "chat" as const : hit.meta === "Agent" ? "agent" as const : hit.meta === "Project" ? "project" as const : hit.meta.startsWith("File") ? "file" as const : null;
+  }
+  const selectedHitPinned = Boolean(hits[paletteIndex]?.ref && ws.pins.some((pin) => pin.ref === hits[paletteIndex].ref && pin.kind === palettePinKind(hits[paletteIndex])));
+  function pinPaletteHit(hit: (typeof hits)[number] | undefined) {
+    if (!hit?.ref) return;
+    const kind = palettePinKind(hit);
+    if (!kind) return;
+    setWs((before) => {
+      const after = togglePin(before, kind, hit.ref);
+      setNotice(after === before ? `Pin limit reached. ${hit.label} was not added.` : after.pins.some((pin) => pin.kind === kind && pin.ref === hit.ref) ? `Pinned ${hit.label}.` : `Unpinned ${hit.label}.`);
+      return after;
+    });
+  }
   function onPaletteKeyDown(event: ReactKeyboardEvent<HTMLInputElement>) {
+    if (paletteOpen && event.altKey && event.key.toLowerCase() === "p") { event.preventDefault(); pinPaletteHit(hits[paletteIndex]); return; }
     const action = paletteKeyAction({
       key: event.key,
       open: paletteOpen,
@@ -3004,7 +3031,7 @@ function CommandSession({ account, accountPending }: { account: ReturnType<typeo
       const name = selectedProvider.slice("service:".length);
       if (name === "social") window.location.assign("/social");
       else if (name === "gpt-wrapper") window.location.assign("/gpt-wrapper");
-      else if (name === "drive") setCloudPickerOpen(true);
+      else if (name === "drive") openCloudPicker();
       else if (name === "notion") setView("connected");
       return null;
     }
@@ -3283,6 +3310,7 @@ function CommandSession({ account, accountPending }: { account: ReturnType<typeo
         return null;
       }
       dispatchStarted = true;
+      setGenerationStatus("Adrian is answering.");
       const result = await consumeMindTurn({
         url: `${prefix}/api/mind/turn`,
         signal,
@@ -3307,6 +3335,7 @@ function CommandSession({ account, accountPending }: { account: ReturnType<typeo
       if (streamFrame !== null) { cancelAnimationFrame(streamFrame); streamFrame = null; }
       setLiveText("");
       if (turnAbort.current === controller) turnAbort.current = null;
+      setGenerationStatus(result.ok ? "Reply completed." : result.error === STOPPED_REPLY ? "Reply stopped. Received text is kept as incomplete." : "Reply interrupted. Check the original send.");
       if (result.ok && result.provider) setNotice(`${result.provider} answered.`);
       // Helpers may have completed even when the primary answer failed or was stopped.
       if (result.consultation?.length) setWs((current) => (result.consultation ?? []).filter(helper => helper.dispatched !== false).reduce((next, helper, index) => pushUsage(next, {
@@ -3419,6 +3448,7 @@ function CommandSession({ account, accountPending }: { account: ReturnType<typeo
     } catch (caught) {
       if (generation !== turnGen.current || turnOwner.current !== draftOwner) return null;
       keepPartial("interrupted");
+      setGenerationStatus(controller.signal.aborted ? "Reply stopped." : "Reply interrupted. Check the original send.");
       setBusy(false);
       if (streamFrame !== null) { cancelAnimationFrame(streamFrame); streamFrame = null; }
       setLiveText("");
@@ -4406,6 +4436,21 @@ ${message.content}`;
   }
 
   function applyCloudAttach(item: CloudPickerAttach) {
+    const destination = cloudDestination.current;
+    if (!destination || destination.owner !== turnOwner.current || destination.owner !== draftOwner) return;
+    if (destination.kind === "library") {
+      if (!account || item.kind !== "text") { setError("Library accepts text copies. Attach images from Chat instead."); return; }
+      if (wsRef.current.files.length >= 40) { setError("Library holds 40 text copies. Remove a copy before adding another."); return; }
+      if (!item.text.trim()) { setError("The cloud file has no readable text."); return; }
+      const savedId = crypto.randomUUID();
+      setWs((prev) => addLocalFile(prev, { id: savedId, name: item.name, text: item.text, partial: item.text.length > 40000, projectId: destination.projectId }));
+      setLibraryProjectId(destination.projectId);
+      setOpenFileId(savedId);
+      setLibraryBand("preview");
+      setNotice(`Added a text copy of “${item.name}” to Library. Account sync status is shown above.`);
+      return;
+    }
+    if (destination.scope !== draftScope) { setError("The conversation changed. Choose the cloud file again in the intended conversation."); return; }
     if (item.kind === "image") {
       setPendingImages((prev) => {
         if (prev.length >= 4) {
@@ -4453,13 +4498,13 @@ ${message.content}`;
     }
   }
 
-  const uploadDestination = useRef({ owner: draftOwner, view, projectId: libraryProjectId || projectChoice || null, scope: draftScope });
-  uploadDestination.current = { owner: draftOwner, view, projectId: libraryProjectId || projectChoice || null, scope: draftScope };
+  const uploadDestination = useRef({ owner: draftOwner, view, projectId: view === "files" ? libraryProjectId || null : projectChoice || null, scope: draftScope });
+  uploadDestination.current = { owner: draftOwner, view, projectId: view === "files" ? libraryProjectId || null : projectChoice || null, scope: draftScope };
   async function onPicked(file: File, inspection: View | null) {
     const destination = { ...uploadDestination.current };
     const isCurrent = () => turnOwner.current === destination.owner && uploadDestination.current.view === destination.view && uploadDestination.current.projectId === destination.projectId && uploadDestination.current.scope === destination.scope;
     if (view === "files" && !inspection) {
-      if (!draftOwner) { setError("Sign in to save a document for this account."); return; }
+      if (accountPending || !account || !draftOwner) { setError("Sign in to save a document for this account."); return; }
       try {
         const document = await prepareLibraryDocument(file, { projectId: destination.projectId, store: accountOriginalFileStore(draftOwner), extractPdf: extractPdfText, isCurrent });
         if (!isCurrent()) return;
@@ -4554,49 +4599,96 @@ ${message.content}`;
   }
 
   function toggleStop() {
-    return wsRef.current.halted ? clearEmergencyStop() : pressEmergencyStop();
+    return wsRef.current.halted && stopConfirmed ? clearEmergencyStop() : pressEmergencyStop();
   }
   async function pressEmergencyStop() {
     stopVoiceSession();
     clearedStop.current = false;
-    if (wsRef.current.halted) return;
+    // Block same-frame sends before React publishes the halted state.
+    wsRef.current = { ...wsRef.current, halted: true };
     turnAbort.current?.abort();
     agentAbort.current?.abort();
+    const owner = turnOwner.current;
+    if (stopSyncFlight.current?.owner === owner) {
+      if (!stopSyncFlight.current.on) {
+        // Preserve the newer stop intent, then reassert it after the older
+        // release settles so request ordering cannot leave the server released.
+        stopSyncFlight.current.restop = true;
+        setStopSync({ owner, state: "pending", detail: "Local protection is active. A stop will be synchronized after the pending release settles." });
+        setNotice("Local stop is active. Waiting for the earlier release to settle before synchronizing the new stop.");
+      }
+      return;
+    }
+    const attempt = { owner, on: true };
+    stopSyncFlight.current = attempt;
     setError(null);
     setWs((prev) => {
-      if (prev.halted) return prev;
-      const updated = pushAudit({ ...prev, halted: true }, "emergency_stop", "session", "on");
+      const updated = prev.halted ? prev : pushAudit({ ...prev, halted: true }, "emergency_stop", "session", "local block activated; awaiting server confirmation");
       const stopped = haltFleet(updated);
-      return {
-        ...stopped,
-        schedules: stopped.schedules.map((job) => (job.enabled ? { ...job, enabled: false } : job)),
-      };
+      return { ...stopped, schedules: stopped.schedules.map((job) => job.enabled ? { ...job, enabled: false } : job) };
     });
-    setNotice("Emergency stop is on. Open runs were canceled and schedules were paused. Logs and memory were kept.");
+    setStopSync({ owner, state: "pending", detail: "This browser blocks new work. Server stop and remote cancellation are awaiting confirmation." });
+    setNotice("Local stop is active. Schedules are paused in this browser. Server stop and remote cancellation are awaiting confirmation.");
+    if (!owner) {
+      setStopSync({ owner, state: "unconfirmed", detail: "Local protection is active. Sign in to synchronize the server stop for your account." });
+      stopSyncFlight.current = null;
+      return;
+    }
     try {
-      const result = await setExecutionHalt({ data: { on: true } });
-      if (!result.ok) setError(result.error);
+      const result = await setExecutionHalt({ data: { on: true, ownerId: owner || undefined } });
+      if (turnOwner.current !== owner || stopSyncFlight.current !== attempt) return;
+      if (!result.ok) {
+        setStopSync({ owner, state: "unconfirmed", detail: "Local protection remains active. The server stop is unconfirmed." });
+        setError(result.error);
+        return;
+      }
+      const cancellation = result.cancellation;
+      const detail = cancellation ? `Server stop confirmed. ${cancellation.cancelled} queued job(s) canceled; ${cancellation.pending} running job cancellation(s) awaiting runtime confirmation; ${cancellation.unknown} cancellation outcome(s) unconfirmed.` : "Server stop confirmed. Remote runtime termination has not been independently confirmed.";
+      setStopSync({ owner, state: "confirmed", detail });
+      setError(null);
+      setNotice(detail);
     } catch {
-      setError("The server did not confirm the stop. Sends are blocked in this browser.");
+      if (turnOwner.current !== owner || stopSyncFlight.current !== attempt) return;
+      setStopSync({ owner, state: "unconfirmed", detail: "The server did not confirm the stop. This browser continues blocking new work." });
+      setError("The server did not confirm the stop. Retry stop synchronization to keep local protection active.");
+    } finally {
+      if (stopSyncFlight.current === attempt) stopSyncFlight.current = null;
     }
   }
   async function clearEmergencyStop() {
+    const owner = turnOwner.current;
+    if (!owner) { setError("Sign in to confirm release of the server stop. Local protection remains active."); return; }
+    if (stopSyncFlight.current?.owner === owner) return;
+    const attempt = { owner, on: false, restop: false };
+    stopSyncFlight.current = attempt;
     setError(null);
     try {
-      const result = await setExecutionHalt({ data: { on: false } });
+      const control = await readExecutionControl();
+      if (turnOwner.current !== owner || stopSyncFlight.current !== attempt || attempt.restop) return;
+      if (!control.revision || control.state === "unknown") { setError("The server stop state could not be verified. Local protection remains active."); return; }
+      const result = await setExecutionHalt({ data: { on: false, ownerId: owner, expectedRevision: control.revision } });
+      if (turnOwner.current !== owner || stopSyncFlight.current !== attempt) return;
+      if (attempt.restop) return;
       if (!result.ok) {
         setError(result.error);
         setSpeakCall((current) => ({ ...current, error: result.error }));
         return;
       }
       clearedStop.current = true;
-      setWs((prev) => (prev.halted ? pushAudit({ ...prev, halted: false }, "emergency_stop", "session", "cleared by owner") : prev));
+      setStopSync({ owner, state: "idle", detail: "" });
+      setWs((prev) => prev.halted ? pushAudit({ ...prev, halted: false }, "emergency_stop", "session", "cleared by owner") : prev);
       setSpeakCall((current) => ({ ...current, error: "" }));
-      setNotice("Emergency stop cleared. Schedules remain paused.");
+      setNotice("Emergency stop cleared. Schedules remain paused and canceled tasks do not restart.");
     } catch {
+      if (turnOwner.current !== owner || stopSyncFlight.current !== attempt) return;
       const message = "The server could not confirm the release. Emergency stop remains on.";
       setError(message);
       setSpeakCall((current) => ({ ...current, error: message }));
+    } finally {
+      if (stopSyncFlight.current === attempt) {
+        stopSyncFlight.current = null;
+        if (attempt.restop && turnOwner.current === owner) await pressEmergencyStop();
+      }
     }
   }
   function explain(text: string) {
@@ -6465,14 +6557,15 @@ ${message.content}`;
               aria-haspopup="listbox"
               aria-activedescendant={paletteOpen && hits.length > 0 ? `palette-hit-${hits[Math.min(Math.max(paletteIndex, 0), hits.length - 1)]!.key}` : undefined}
             />
-            <span className="pointer-events-none absolute top-1/2 right-3 -translate-y-1/2 text-xs text-muted">⌘K</span>
+            <span className="pointer-events-none absolute top-1/2 right-3 -translate-y-1/2 text-xs text-muted">{typeof navigator !== "undefined" && /Mac|iPhone|iPad/.test(navigator.platform) ? "⌘K" : "Ctrl K"}</span>
             {paletteOpen && (
               <div id="command-palette" ref={finishMenu} className="command-palette floating-menu absolute z-30 mt-2 w-full" role="listbox" aria-label="Search results">
                 <label className="flex items-center gap-2 px-3 text-xs">Filter<select className="min-h-11 max-w-full bg-bg px-2" value={paletteFilter} onChange={(event) => { setPaletteFilter(event.target.value as typeof paletteFilter); setPaletteIndex(0); setPaletteLimit(50); }}><option value="all">All resources</option>{[["chat", "Chats"], ["projects", "Projects"], ["files", "Files"], ["memory", "Notes"], ["agents", "Agents"], ["runs", "Runs"], ["research", "Research"], ["scheduled", "Schedules"], ["connected", "Connections"], ["skills", "Skills"], ["activity", "Activity"]].map(([id, label]) => <option key={id} value={id}>{label}</option>)}</select></label>
                 <p className="px-3 pb-1 pt-1 text-[11px] font-semibold uppercase tracking-[0.14em] text-muted">{hits.length} results</p>
+                {palettePinKind(hits[paletteIndex]) && <button type="button" className="min-h-11 px-3 text-xs" aria-keyshortcuts="Alt+P" aria-pressed={selectedHitPinned} onClick={() => pinPaletteHit(hits[paletteIndex])}>{selectedHitPinned ? "Unpin" : "Pin"} selected result · Alt P</button>}
                 {hits.length === 0 && <p className="px-3 py-3 text-sm text-muted">No matches.</p>}
                 {hits.slice(0, paletteLimit).map((hit, index) => {
-                  const kind = hit.meta === "Chat" || hit.meta === "Intelligence" ? "chat" : hit.meta === "Agent" ? "agent" : hit.meta === "Project" ? "project" : hit.meta === "File" ? "file" : null;
+                  const kind = palettePinKind(hit);
                   const active = hits.length > 0 && index === Math.min(Math.max(paletteIndex, 0), hits.length - 1);
                   return (
                     <div key={hit.key} className="flex items-center gap-1">
@@ -6489,10 +6582,7 @@ ${message.content}`;
                           button.dataset.held = "0";
                           const timer = window.setTimeout(() => {
                             button.dataset.held = "1";
-                            const before = wsRef.current;
-                            const after = togglePin(before, kind, hit.ref);
-                            setWs(after);
-                            setNotice(after === before ? `Pin limit reached. ${hit.label} was not added.` : after.pins.some((pin) => pin.kind === kind && pin.ref === hit.ref) ? `Pinned ${hit.label}.` : `Unpinned ${hit.label}.`);
+                            pinPaletteHit(hit);
                           }, 550);
                           event.currentTarget.dataset.hold = String(timer);
                         }}
@@ -6510,7 +6600,7 @@ ${message.content}`;
                         <span className="min-w-0 truncate">{hit.label}{hit.excerpt && <small className="block truncate text-muted">{hit.excerpt}</small>}</span>
                         <span className="text-xs text-muted">{hit.meta}</span>
                       </button>
-                      {kind && hit.ref ? <button type="button" className="min-h-11 shrink-0 rounded-panel border border-line px-2 text-xs" aria-label={`${ws.pins.some((pin) => pin.kind === kind && pin.ref === hit.ref) ? "Unpin" : "Pin"} ${hit.label}`} onClick={() => { const before = wsRef.current; const after = togglePin(before, kind, hit.ref); setWs(after); setNotice(after === before ? "Pin limit reached." : after.pins.some((pin) => pin.kind === kind && pin.ref === hit.ref) ? `Pinned ${hit.label}.` : `Unpinned ${hit.label}.`); }}>{ws.pins.some((pin) => pin.kind === kind && pin.ref === hit.ref) ? "Unpin" : "Pin"}</button> : null}
+                      {kind && hit.ref ? <button type="button" className="min-h-11 shrink-0 rounded-panel border border-line px-2 text-xs" aria-label={`${ws.pins.some((pin) => pin.kind === kind && pin.ref === hit.ref) ? "Unpin" : "Pin"} ${hit.label}`} onClick={() => pinPaletteHit(hit)}>{ws.pins.some((pin) => pin.kind === kind && pin.ref === hit.ref) ? "Unpin" : "Pin"}</button> : null}
                     </div>
                   );
                 })}
@@ -6872,6 +6962,7 @@ ${message.content}`;
             </button>
           </div>
         ) : null}
+        <p className="sr-only" role="status" aria-live="polite" aria-atomic="true" data-testid="generation-status">{generationStatus}</p>
         {mediaProgress && (mediaProgress.completed < mediaProgress.total || mediaProgress.missing > 0) ? <p role="status" className="mx-3 mb-2 text-xs text-muted">Historical image copies: {mediaProgress.completed} of {mediaProgress.total} checked{mediaProgress.missing ? ` · ${mediaProgress.missing} unavailable in this browser; reattach an image before asking to inspect it` : ". Workspace text is ready."}.</p> : null}
         {notice && (notice.startsWith("This link points at") || notice.startsWith("That bot is archived") || notice.startsWith("Link copied") || notice.startsWith("Clipboard copy")) ? (
           <p role="status" data-testid="share-notice" className="mx-3 mb-2 rounded-panel border border-line px-3 py-2 text-sm text-muted">{notice}</p>
@@ -7077,7 +7168,7 @@ ${message.content}`;
                             <Camera className="size-4" /> Camera
                           </button>
                           {driveConnected ? (
-                            <button type="button" className="inline-flex items-center gap-2 rounded-panel border border-line px-3 text-sm" style={menuChip} onClick={() => setCloudPickerOpen(true)}>
+                            <button type="button" className="inline-flex items-center gap-2 rounded-panel border border-line px-3 text-sm" style={menuChip} onClick={() => openCloudPicker()}>
                               Drive
                             </button>
                           ) : null}
@@ -7513,7 +7604,7 @@ ${message.content}`;
               onAttach={() => fileRef.current?.click()}
               onAttachImage={() => imageInputRef.current?.click()}
               onOpenCamera={() => setCameraOpen(true)}
-              onOpenCloud={() => setCloudPickerOpen(true)}
+              onOpenCloud={() => openCloudPicker()}
               driveConnected={driveConnected}
               onImagine={() => {
                 const viaCmd = parseImagineCommand(draft);
@@ -8280,7 +8371,7 @@ ${message.content}`;
                 </div>
                 <div className="flex flex-wrap gap-2">
                   <button type="button" className="min-h-11 rounded-panel bg-accent px-4 text-sm font-semibold text-accent-ink" onClick={() => fileRef.current?.click()}>Upload file</button>
-                  {driveConnected ? <button type="button" className="min-h-11 rounded-panel border border-line px-4 text-sm" onClick={() => setCloudPickerOpen(true)}>Browse Drive</button> : null}
+                  {driveConnected ? <button type="button" className="min-h-11 rounded-panel border border-line px-4 text-sm" onClick={() => openCloudPicker("library")}>Browse Drive</button> : null}
                 </div>
               </div>
               <div id="owner-library">
@@ -8318,14 +8409,14 @@ ${message.content}`;
                   </ul>
                 </aside>
                 <div className="dense-card p-4 text-sm" hidden={libraryBand !== "preview"}>
-                  {!ws.files.find((file) => file.id === openFileId) && (
+                  {!ws.files.find((file) => file.id === openFileId && (!libraryProjectId || file.projectId === libraryProjectId)) && (
                     <div className="empty-state">
                       <img src="/empty/empty-folder.svg" alt="" />
                       <p className="font-semibold">Select a file</p>
                       <p className="text-muted">Upload a file, or choose a saved text copy in Files.</p>
                     </div>
                   )}
-                  {ws.files.filter((file) => file.id === openFileId).map((file) => (
+                  {ws.files.filter((file) => file.id === openFileId && (!libraryProjectId || file.projectId === libraryProjectId)).map((file) => (
                     <div key={file.id}>
                       <p className="font-semibold [overflow-wrap:anywhere]">{file.name}</p>
                       {file.partial && <p className="text-sm text-muted">Partial text copy. Keep the original for the full contents.</p>}
@@ -8506,7 +8597,7 @@ ${message.content}`;
                 <div className="flex items-center gap-3">
                   <img src="/brand/logo-mark.jpg" alt="" className="size-8 rounded-lg" />
                   <div>
-                    <h2 className="font-display text-3xl font-bold">Settings</h2>
+                    <h2 id="settings-heading" tabIndex={-1} className="font-display text-3xl font-bold">Settings</h2>
                     <p className="text-sm text-muted">Preferences stay in this browser. Open a group to reach its pages.</p>
                   </div>
                 </div>
@@ -8785,9 +8876,9 @@ ${message.content}`;
               <div id="settings-safety" hidden={settingsPane !== "safety"} className="space-y-4">
                 <div className="settings-card rounded-panel p-4 text-sm">
                   <button type="button" className="inline-flex min-h-11 items-center gap-2 rounded-panel border border-line px-3 text-sm font-semibold" onClick={() => void toggleStop()}>
-                    <Square className="size-4" /> {ws.halted ? "Clear emergency stop" : "Emergency stop"}
+                    <Square className="size-4" /> {ws.halted ? stopConfirmed ? "Clear emergency stop" : "Synchronize emergency stop" : "Emergency stop"}
                   </button>
-                  <p className="mt-2 text-muted">Stops new sends on this page and on the server.</p>
+                  <p className="mt-2 text-muted">{ws.halted && stopSync.owner === turnOwner.current ? stopSync.detail : "Stop new sends and request cancellation of account jobs."}</p>
                 </div>
               <div className="settings-card rounded-panel p-4 text-sm">
                 <p className="font-semibold">Requirement record</p>
@@ -8882,6 +8973,8 @@ ${message.content}`;
         }}
       />
       <CloudPicker
+        key={JSON.stringify([draftOwner, cloudDestination.current])}
+        purpose={cloudDestination.current?.kind ?? "chat"}
         open={cloudPickerOpen}
         onClose={() => setCloudPickerOpen(false)}
         onAttach={applyCloudAttach}

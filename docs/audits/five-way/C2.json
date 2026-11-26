@@ -1995,7 +1995,12 @@
       "regression": [
         "src/lib/mind/c2-interface-recovery.test.ts"
       ],
-      "disposition": "Combined verification pending"
+      "disposition": "Combined verification pending",
+      "combinedTests": [
+        "src/lib/mind/palette-index.test.ts",
+        "src/lib/mind/c2-interface-recovery.test.ts"
+      ],
+      "combinedFixture": "The relevant callback or search fixture passed on the subsequent integration tree. Use its combined CI for exact-head verification. Physical devices, native execution and third-party delivery require separate evidence."
     },
     {
       "finding": "C2/AA-121",
@@ -2008,7 +2013,12 @@
       "regression": [
         "src/lib/mind/c2-interface-recovery.test.ts"
       ],
-      "disposition": "Combined verification pending"
+      "disposition": "Combined verification pending",
+      "combinedTests": [
+        "src/lib/mind/palette-index.test.ts",
+        "src/lib/mind/c2-interface-recovery.test.ts"
+      ],
+      "combinedFixture": "The relevant callback or search fixture passed on the subsequent integration tree. Use its combined CI for exact-head verification. Physical devices, native execution and third-party delivery require separate evidence."
     },
     {
       "finding": "C2/AA-122",
@@ -2022,7 +2032,12 @@
       "regression": [
         "src/lib/mind/c2-interface-recovery.test.ts"
       ],
-      "disposition": "Combined verification pending"
+      "disposition": "Combined verification pending",
+      "combinedTests": [
+        "src/lib/mind/palette-index.test.ts",
+        "src/lib/mind/c2-interface-recovery.test.ts"
+      ],
+      "combinedFixture": "The relevant callback or search fixture passed on the subsequent integration tree. Use its combined CI for exact-head verification. Physical devices, native execution and third-party delivery require separate evidence."
     },
     {
       "finding": "C2/AA-123",
@@ -2035,7 +2050,12 @@
       "regression": [
         "src/lib/mind/c2-interface-recovery.test.ts"
       ],
-      "disposition": "Combined verification pending"
+      "disposition": "Combined verification pending",
+      "combinedTests": [
+        "src/lib/mind/palette-index.test.ts",
+        "src/lib/mind/c2-interface-recovery.test.ts"
+      ],
+      "combinedFixture": "The relevant callback or search fixture passed on the subsequent integration tree. Use its combined CI for exact-head verification. Physical devices, native execution and third-party delivery require separate evidence."
     },
     {
       "finding": "C2/AA-124",
@@ -2048,7 +2068,12 @@
       "regression": [
         "src/lib/mind/c2-interface-recovery.test.ts"
       ],
-      "disposition": "Combined verification pending"
+      "disposition": "Combined verification pending",
+      "combinedTests": [
+        "src/lib/mind/palette-index.test.ts",
+        "src/lib/mind/c2-interface-recovery.test.ts"
+      ],
+      "combinedFixture": "The relevant callback or search fixture passed on the subsequent integration tree. Use its combined CI for exact-head verification. Physical devices, native execution and third-party delivery require separate evidence."
     },
     {
       "finding": "C2/AA-125",
@@ -2064,7 +2089,12 @@
         "src/lib/mind/palette-label.test.ts",
         "src/lib/mind/c2-workspace-recovery.test.ts"
       ],
-      "disposition": "Combined verification pending"
+      "disposition": "Combined verification pending",
+      "combinedTests": [
+        "src/lib/mind/palette-index.test.ts",
+        "src/lib/mind/c2-interface-recovery.test.ts"
+      ],
+      "combinedFixture": "The relevant callback or search fixture passed on the subsequent integration tree. Use its combined CI for exact-head verification. Physical devices, native execution and third-party delivery require separate evidence."
     },
     {
       "finding": "C2/AA-126",

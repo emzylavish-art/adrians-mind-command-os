@@ -346,36 +346,45 @@ export function requestJobCancel(ownerId: string, jobId: string): PcJob | null {
 export type BuildCancellationSummary = { queuedCancelled: number; cancellationRequested: number; unconfirmed: number };
 
 /** Owner-scoped sweep, including jobs whose Build screen is no longer mounted. */
-export function cancelOwnerBuildJobs(ownerId: string): BuildCancellationSummary {
-  const summary = { queuedCancelled: 0, cancellationRequested: 0, unconfirmed: 0 };
-  if (!ownerId || !existsSync(jobsDir())) return summary;
-  for (const name of readdirSync(jobsDir()).filter((name) => name.endsWith(".json"))) {
-    try {
-      const existing = readJob(name.slice(0, -5));
-      if (!existing || existing.ownerId !== ownerId || existing.kind !== "kimi-acp") continue;
-      if (!["queued", "running", "cancel_requested"].includes(existing.status)) continue;
-      const result = requestJobCancel(ownerId, existing.id);
-      if (result?.status === "cancelled") summary.queuedCancelled++;
-      else if (result?.status === "cancel_requested") summary.cancellationRequested++;
-      // A completion won the atomic transition. Its recorded outcome stays intact.
-    } catch { summary.unconfirmed++; }
+function cancelOwnedJobs(ownerId: string, buildOnly: boolean) {
+  const cancellation = { cancelled: 0, pending: 0, unknown: 0 };
+  const buildCancellation: BuildCancellationSummary = { queuedCancelled: 0, cancellationRequested: 0, unconfirmed: 0 };
+  if (ownerId && existsSync(jobsDir())) {
+    for (const name of readdirSync(jobsDir()).filter(name => name.endsWith(".json"))) {
+      let isBuild = false;
+      try {
+        const job = readJob(name.slice(0, -5));
+        if (!job || job.ownerId !== ownerId || !["queued", "running", "cancel_requested"].includes(job.status)) continue;
+        isBuild = job.kind === "kimi-acp";
+        if (buildOnly && !isBuild) continue;
+        const updated = requestJobCancel(ownerId, job.id);
+        if (!updated) throw new Error("Cancellation receipt missing");
+        if (updated.status === "cancelled") {
+          cancellation.cancelled++;
+          if (isBuild) buildCancellation.queuedCancelled++;
+        } else if (updated.status === "cancel_requested") {
+          cancellation.pending++;
+          if (isBuild) buildCancellation.cancellationRequested++;
+        }
+      } catch {
+        cancellation.unknown++;
+        if (isBuild) buildCancellation.unconfirmed++;
+      }
+    }
   }
-  return summary;
+  return { cancellation, buildCancellation };
 }
 
-/** Requests cancellation for this owner's known jobs; running jobs remain unconfirmed. */
-export function cancelOwnerJobs(ownerId: string): { cancelled: number; pending: number; unknown: number } {
-  ensure();
-  const result = { cancelled: 0, pending: 0, unknown: 0 };
-  for (const name of readdirSync(jobsDir()).filter((item) => item.endsWith(".json"))) {
-    const job = readJob(name.slice(0, -5));
-    if (!job || job.ownerId !== ownerId || !["queued", "running", "cancel_requested"].includes(job.status)) continue;
-    const next = requestJobCancel(ownerId, job.id);
-    if (!next) result.unknown += 1;
-    else if (next.status === "cancelled") result.cancelled += 1;
-    else result.pending += 1;
-  }
-  return result;
+export function cancelOwnerBuildJobs(ownerId: string): BuildCancellationSummary {
+  return cancelOwnedJobs(ownerId, true).buildCancellation;
+}
+
+export function cancelOwnerJobs(ownerId: string) {
+  return cancelOwnedJobs(ownerId, false).cancellation;
+}
+
+export function cancelOwnerJobsWithBuildSummary(ownerId: string) {
+  return cancelOwnedJobs(ownerId, false);
 }
 
 export function appendJobEvent(input: {

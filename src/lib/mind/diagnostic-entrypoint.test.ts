@@ -23,6 +23,7 @@ async function status(state: "on" | "off" | "unknown", configured: boolean) {
     process: { env: {} },
     require: (name: keyof typeof modules) => { assert.ok(name in modules, `unexpected dependency ${name}`); return modules[name]; },
     createServerFn: () => ({ handler: (callback: () => unknown) => callback }),
+    listEnvironmentModelCatalogs: async () => [], unavailableEnvironmentCatalogs: () => [],
     envCheck: () => ({ ok: true }),
     describePersistence: () => ({ note: "Fixture configuration", backend: "fixture" }),
     resolveDatabaseUrl: () => undefined,

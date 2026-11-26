@@ -31,21 +31,22 @@ test("C2 AA056: the actual approval entry point accepts registered adapters and 
 });
 
 test("C2 search pin control invokes the real workspace pin mutation and reports a full capacity accurately", () => {
-  const start = source.indexOf("                    const before = wsRef.current;", source.indexOf('aria-label={`${pinned ? "Unpin" : "Pin"} ${hit.label}`}'));
-  const end = source.indexOf("                  }}>", start);
-  assert.ok(start >= 0 && end > start);
-  const code = stripTypeScriptTypes(source.slice(start, end));
+  assert.match(source, /aria-label=\{[^\n]+hit.label[^\n]+onClick=\{\(\) => pinPaletteHit\(hit\)/);
   let ws = emptyWorkspace();
   let notice = "";
-  const hit = { ref: "chat-1", label: "Harbor" };
-  const run = (pinned: boolean) => runInNewContext(code, { wsRef: { current: ws }, togglePin, kind: "chat", hit, pinned, setWs(value: typeof ws) { ws = value; }, setNotice(value: string) { notice = value; } });
-  run(false);
+  const hit = { ref: "chat-1", label: "Harbor", meta: "Chat" };
+  const run = () => actualHandler("  function pinPaletteHit(", "  function onPaletteKeyDown", {
+    palettePinKind: () => "chat", togglePin,
+    setWs(update: (current: typeof ws) => typeof ws) { ws = update(ws); },
+    setNotice(value: string) { notice = value; },
+  })(hit);
+  run();
   assert.equal(ws.pins[0]?.ref, "chat-1");
   assert.equal(notice, "Pinned Harbor.");
-  run(true);
+  run();
   assert.equal(ws.pins.length, 0);
   ws.pins = Array.from({ length: 24 }, (_, index) => ({ id: String(index), kind: "chat", ref: `existing-${index}` }));
-  run(false);
+  run();
   assert.equal(ws.pins.length, 24);
-  assert.equal(notice, "Pin limit reached.");
+  assert.match(notice, /Pin limit reached/);
 });
