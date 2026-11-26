@@ -181,6 +181,15 @@ for (const [width, height, rootPercent] of viewports) {
         });
         const proposedTargetReview = { lcpWithin2500ms: metrics.lcpMs === null ? null : metrics.lcpMs <= 2500, observedInteractionWithin200ms: metrics.maxObservedInteractionMs === null ? null : metrics.maxObservedInteractionMs <= 200, clsWithinPointOne: metrics.cls === null ? null : metrics.cls <= 0.1 };
         report.states.push({ label, count, navigationMs, editMs, renderedMessages: await page.locator("article.turn").count(), skillReceiptReview, metrics, proposedTargetReview, consoleErrors: [...consoleErrors] });
+        if (count === counts[0] && serviceState === "unavailable") {
+          await page.getByTestId("alerts-toggle").click();
+          const alerts = page.getByTestId("alerts-panel");
+          await alerts.getByRole("button", { name: /(?:MCP.*could not be loaded|Notion status could not be read).*View activity/i }).first().waitFor();
+          assert.equal(await page.getByTestId("failure-banner").count(), 0, "Background connection checks must leave the chat viewport intact.");
+          await page.keyboard.press("Escape");
+          await alerts.waitFor({ state: "hidden" });
+        }
+
         assert.equal(consoleErrors.length, 0, "Unexpected application error in fixture.");
         if (count === 1) continue;
         const chip = await composer.getByRole("listitem").first().boundingBox();

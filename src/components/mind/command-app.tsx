@@ -767,6 +767,10 @@ function statusWord(status: CapabilityStatus) {
  return "Not implemented";
 }
 
+function isBackgroundConnectionCheck(target: string) {
+  return target === "notion:status" || target === "mcp:registry" || target === "mcp:list";
+}
+
 export function CommandApp() {
   const { user: account, error, isPending, status, retry } = useCurrentUserState();
   const [sessionError, setError] = useState("");
@@ -1141,12 +1145,24 @@ function CommandSession({ account, accountPending }: { account: ReturnType<typeo
   }, []);
   const [pendingFailures, setPendingFailures] = useState<RecoveryEntry[]>([]);
   const [selectedFailureId, setSelectedFailureId] = useState<string | null>(null);
-  const failure = pendingFailures.find((row) => row.auditId === selectedFailureId) ?? pendingFailures[0] ?? null;
+  const inConversation = view === "command" || view === "chat";
+  function visibleRecoveries(rows: RecoveryEntry[]) {
+    return inConversation ? rows.filter((row) => !isBackgroundConnectionCheck(row.target)) : rows;
+  }
+  const bannerRecoveries = visibleRecoveries(pendingFailures);
+  const failure = bannerRecoveries.find((row) => row.auditId === selectedFailureId) ?? bannerRecoveries[0] ?? null;
+  const alertFailure = failure ?? pendingFailures[0] ?? null;
   const recoveryLoaded = useRef(false);
   useEffect(() => { try { setPendingFailures(readRecoveries(preferenceStorage.getItem("amcos.recovery.inbox.v1"))); } catch { /* Session-only recovery still works. */ } recoveryLoaded.current = true; }, [preferenceStorage]);
   useEffect(() => { if (!recoveryLoaded.current) return; try { preferenceStorage.setItem("amcos.recovery.inbox.v1", serializeRecoveries(pendingFailures)); } catch { /* The audit and request receipt remain separate recovery sources. */ } }, [pendingFailures, preferenceStorage]);
   function setFailure(change: RecoveryEntry | null | ((current: RecoveryEntry | null) => RecoveryEntry | null)) {
-    setPendingFailures((rows) => { const active = rows.find((row) => row.auditId === selectedFailureId) ?? rows[0] ?? null; const next = typeof change === "function" ? change(active) : change; return next ? upsertRecovery(rows, next) : active ? dismissRecovery(rows, active.auditId) : rows; });
+    setPendingFailures((rows) => {
+      if (change && typeof change !== "function") return upsertRecovery(rows, change);
+      const visible = visibleRecoveries(rows);
+      const active = visible.find((row) => row.auditId === selectedFailureId) ?? visible[0] ?? null;
+      const next = change?.(active) ?? null;
+      return next ? upsertRecovery(rows, next) : active ? dismissRecovery(rows, active.auditId) : rows;
+    });
   }
   const reportFailureRef = useRef<(message: string, action: string, target: string, retry: (() => void) | null) => void>(() => undefined);
   const [toolTimeline, setToolTimeline] = useState<ToolTimelineRow[]>([]);
@@ -4687,10 +4703,12 @@ ${message.content}`;
     }));
    const chat = wsRef.current.chats.find((row) => row.id === (outcome.bindings?.chatId ?? target));
    const operationId = outcome.envelope?.operationId ?? (chat ? [...chat.messages].reverse().find((message) => message.deliveryOperationId)?.deliveryOperationId : undefined);
-   setSelectedFailureId(auditId);
+   if (!isBackgroundConnectionCheck(target)) setSelectedFailureId(auditId);
    setFailure({ message, auditId, target, createdAt: new Date().toISOString(), retry: onceRetry(retry), kind, action: failureAction, ...(chat ? { chatId: chat.id } : {}), ...(operationId ? { operationId } : {}) });
-    setError(null);
-    setNotice(null);
+    if (!isBackgroundConnectionCheck(target)) {
+      setError(null);
+      setNotice(null);
+    }
   }
 
   useMcpFailureMount(({ outcome, retry, localCorrelationId }) => {
@@ -6744,7 +6762,7 @@ ${message.content}`;
           </button>
           <button
             type="button"
-            className="grid size-11 min-h-11 min-w-11 shrink-0 place-items-center rounded-full border border-line bg-white/5"
+            className="relative grid size-11 min-h-11 min-w-11 shrink-0 place-items-center rounded-full border border-line bg-white/5"
             aria-label={`Alerts${unreadNoticeCount ? `, ${unreadNoticeCount} unread` : ""}`}
             aria-expanded={bellOpen}
             aria-controls="alerts-panel"
@@ -6757,7 +6775,7 @@ ${message.content}`;
             }}
           >
             <Bell className="size-4" aria-hidden="true" />
-            {unreadNoticeCount ? <span className="text-[10px] font-semibold" aria-hidden="true">{unreadNoticeCount > 99 ? "99+" : unreadNoticeCount}</span> : null}
+            {unreadNoticeCount ? <span className="pointer-events-none absolute right-1 top-0.5 text-[10px] font-semibold" aria-hidden="true">{unreadNoticeCount > 99 ? "99+" : unreadNoticeCount}</span> : null}
           </button>
           <button
             type="button"
@@ -6783,9 +6801,9 @@ ${message.content}`;
               {searchIssue && <button type="button" className="min-h-11 px-3 text-left text-sm text-danger" onClick={() => {
                 setView("connected"); setCardFocus({ id: "owner-notion-search" }); closeMenus();
               }}>Notion search needs attention · {searchIssue.result} · Open Notion search</button>}
-              {failure && failure.auditId !== searchIssue?.id && <button type="button" className="min-h-11 px-3 text-left text-sm text-danger" onClick={() => { setActivityQuery(""); setFocusAuditId(failure.auditId); setView("activity"); closeMenus(); }}>{failure.message} · View activity</button>}
+              {alertFailure && alertFailure.auditId !== searchIssue?.id && <button type="button" className="min-h-11 px-3 text-left text-sm text-danger" onClick={() => { setActivityQuery(""); setFocusAuditId(alertFailure.auditId); setView("activity"); closeMenus(); }}>{alertFailure.message} · View activity</button>}
               {ws.schedules.some((job) => job.lastError) && <button type="button" className="min-h-11 px-3 text-left text-sm text-danger" onClick={() => { setView("scheduled"); closeMenus(); }}>Schedules need attention · Review individual jobs below</button>}
-              {!ws.halted && !searchIssue && !failure && !ws.schedules.some((job) => job.lastError) && <p className="px-3 py-2 text-sm text-muted">No current warnings.</p>}
+              {!ws.halted && !searchIssue && !alertFailure && !ws.schedules.some((job) => job.lastError) && <p className="px-3 py-2 text-sm text-muted">No current warnings.</p>}
             </MenuGroup>
             <NotificationInbox notices={notifications} read={readNotices} dismissed={dismissedNotices} onDismiss={(id) => { const next = [...new Set([...dismissedNotices, id])]; setDismissedNotices(next); try { preferenceStorage.setItem("notifications.dismissed.v1", JSON.stringify(next)); } catch { setNotice("Dismissal applies to this session; device storage is unavailable."); } }} onRead={markNoticesRead} onOpen={(entry) => {
               if (entry.view === "runs") setFocusRunId(entry.target);
@@ -6848,7 +6866,7 @@ ${message.content}`;
           >
             <div className="min-w-0"><p className="error-focus text-danger">{failure.message}</p>
               {failure.operationId && <p className="break-all text-xs text-muted">Original operation: {failure.operationId}</p>}
-              {pendingFailures.length > 1 && <label className="text-xs">Pending recoveries <select className="ml-2 min-h-11 max-w-full bg-bg" value={failure.auditId} onChange={(event) => setSelectedFailureId(event.target.value)}>{pendingFailures.map((row) => <option key={row.auditId} value={row.auditId}>{row.target} · {row.message.slice(0, 90)}</option>)}</select></label>}
+              {bannerRecoveries.length > 1 && <label className="text-xs">Pending recoveries <select className="ml-2 min-h-11 max-w-full bg-bg" value={failure.auditId} onChange={(event) => setSelectedFailureId(event.target.value)}>{bannerRecoveries.map((row) => <option key={row.auditId} value={row.auditId}>{row.target} · {row.message.slice(0, 90)}</option>)}</select></label>}
             </div>
             <div className="flex flex-wrap gap-2">
               {!failure.retry && failure.chatId && <button type="button" className="min-h-11 rounded-panel border border-line px-3 text-sm" onClick={() => { setActiveId(failure.chatId!); setView("chat"); }}>Open original conversation</button>}
