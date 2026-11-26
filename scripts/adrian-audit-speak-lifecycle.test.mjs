@@ -1,3 +1,6 @@
+import { loadVoiceStages, VOICE_STAGES_KEY } from "../src/lib/mind/voice/provider-selection.ts";
+import { snapshotSpeakRetryParams } from "../src/lib/mind/voice/speak-action.ts";
+import { createVoiceStagesReceipt, recordVoiceStage, recordVoicePlayback, storeVoiceReceipt } from "../src/lib/mind/voice/stage-receipts.ts";
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { readFileSync } from "node:fs";
@@ -35,6 +38,9 @@ function fixture(overrides = {}) {
   const calls = { answer: 0, cloudSpeech: 0, captures: 0, transcriptions: [], utterances: [], notices: [], failures: [], cancel: 0 };
   const state = { speaking: false, call: { heard: "", reply: "", error: "" }, activeId: null };
   const context = {
+    createVoiceStagesReceipt, recordVoiceStage, recordVoicePlayback, storeVoiceReceipt, loadVoiceStages, snapshotSpeakRetryParams,
+    activeId: null, effectiveProvider: "gemini", setSpeakingMessageId: () => {}, serverDictationRef: { current: null },
+    preferenceStorage: { setItem: () => {}, getItem: key => key === VOICE_STAGES_KEY ? JSON.stringify({ inputProvider: "openai", outputProvider: "browser" }) : (overrides.localStorage ?? storage).getItem(key) },
     currentFreeOnly: { current: false }, voicePipeline: { answerMode: "selected", transcription: "openai", speechOutput: "browser" },
     voiceModeRef: { current: "direct" }, speakStageOpenRef: { current: true }, voiceChoiceRef: { current: "eve" }, localStorage: storage,
     probeOllamaConductor: async () => ({ ok: false }), resolveVoiceMode,
@@ -79,7 +85,7 @@ test("AA003: actual recorded Speak keeps its first new chat, uses selected answe
     memoryChoice: "off", autonomy: "ask", temporary: false, chatProjectId: null, projectChoice: null, defaultPersonalityId: null,
     setActiveId: (id) => { host.state.activeId = id; cleanup(); }, setView: () => {},
     setWs: (next) => { context.wsRef.current = next(context.wsRef.current); }, pushAudit: (value) => value,
-    localStorage: { getItem: () => null }, speakStylePersonality: () => "fixture-style", parseCreateBot: () => null,
+    preferenceStorage: context.preferenceStorage, localStorage: { getItem: () => null }, speakStylePersonality: () => "fixture-style", parseCreateBot: () => null,
     deliver: async (_chat, _text, _source, _resume, _images, options) => {
       host.calls.answer++;
       assert.equal(options.selectedProviderOnly, true, "voice cannot consult another model instead of the selected provider");
@@ -154,6 +160,7 @@ test("AA003: actual SpeakStage ask callback ignores delayed close/reopen results
   const state = { reply: "", notice: "", asking: false, line: "" };
   const context = {
     props: { signedIn: true, halted: false, onAsk: () => (++requested === 1 ? old.promise : current.promise) },
+    speakerMutedRef: { current: false }, speechCutRef: { current: false }, outputGeneration: { current: 0 },
     line: "first question", asking: false, callGeneration: { current: 0 }, openRef: { current: true },
     setAsking: (value) => { state.asking = value; }, setShowTranscript: () => {},
     setReply: (value) => { state.reply = value; }, setNotice: (value) => { state.notice = value; }, setLine: (value) => { state.line = value; },

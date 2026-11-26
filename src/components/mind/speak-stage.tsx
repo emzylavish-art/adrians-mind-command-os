@@ -59,11 +59,12 @@ export function SpeakStage(props: {
   selectedBusy?: boolean;
   selectedRoute?: string;
   onStopSelected?: () => void;
+  onOutputSettings?: (muted: boolean, volume: number) => void;
   onVoice: (voice: XaiBuiltinVoice) => void;
   micMuted: boolean;
   onMicMute: (muted: boolean) => void;
   recording: boolean;
-  onAsk?: (text: string, playback: { canSpeak: () => boolean }) => Promise<string | null | { reply?: string; error?: string }>;
+  onAsk?: (text: string, playback: { canSpeak: () => boolean }) => Promise<string | null | { reply?: string; error?: string; speech?: "played" | "muted" }>;
   onKeepRecording?: (stream: MediaStream) => void;
   onEmergencyStop?: () => void;
   halted?: boolean;
@@ -72,6 +73,7 @@ export function SpeakStage(props: {
   onStyle?: (style: string) => void;
   heard?: string;
   spoken?: string;
+  answerReceipt?: string;
   callError?: string;
 }) {
   const preferenceStorage = useAccountPreferences();
@@ -161,6 +163,7 @@ export function SpeakStage(props: {
 
   useEffect(() => {
     if (!props.open) return;
+    props.onOutputSettings?.(speakerMuted, volume / 100);
     sharedAudioOutput.setOutputVolume(speakerMuted ? 0 : volume / 100);
     sharedAudioOutput.setPcmRate(rate === "slow" ? 0.85 : rate === "brisk" ? 1.15 : 1);
     return () => {
@@ -304,6 +307,7 @@ export function SpeakStage(props: {
   function chooseVolume(next: number) {
     const level = Math.min(100, Math.max(0, next));
     setVolume(level);
+    props.onOutputSettings?.(speakerMutedRef.current, level / 100);
     try { preferenceStorage.setItem("adrian-speak-volume", String(level)); } catch { /* private mode */ }
     setNotice(level === 0 ? "Speaker volume is off." : `Speaker volume is ${level}.`);
   }
@@ -320,7 +324,8 @@ export function SpeakStage(props: {
     speakerMutedRef.current = next;
     if (next) outputGeneration.current++;
     setSpeakerMuted(next);
-    if (next) props.onStopSelected?.();
+    props.onOutputSettings?.(next, volume / 100);
+    if (next && !props.onOutputSettings) props.onStopSelected?.();
     if (next) window.speechSynthesis?.cancel();
     setNotice(next ? "Speaker muted for this call." : "Speaker on.");
   }
@@ -341,7 +346,7 @@ export function SpeakStage(props: {
       if (!isCurrent()) return;
       if (result && typeof result === "object") {
         setReply(result.reply ?? "");
-        setNotice(result.error ?? (result.reply ? "Spoken." : "The reply did not include text."));
+        setNotice(result.error ?? (result.speech === "muted" ? "Reply saved. Speaker muted." : result.reply ? "Spoken." : "The reply did not include text."));
         if (!result.error) setLine("");
       } else {
         setReply("");
@@ -395,6 +400,7 @@ export function SpeakStage(props: {
         {!props.live && props.onSelectedSpeak && <button type="button" className="speak-call__place" disabled={props.freeOnly || props.halted || connecting || recordingPending || props.recording || speakerMuted} onClick={() => { if (!props.signedIn) props.onSignIn(); else if (props.selectedBusy) props.onStopSelected?.(); else void props.onSelectedSpeak?.(); }}>{props.selectedBusy ? "Stop selected voice turn" : "Speak with chat model"}</button>}
         {!props.live && props.selectedRoute && <p className="speak-call__transcript">{props.selectedRoute}. One recorded turn uses these selected stages. Playback and transcription are reported separately.</p>}
         {!props.live && <button type="button" className="min-h-11 rounded-panel border border-line px-3 text-sm" disabled={props.halted || props.selectedBusy || connecting || recordingPending || props.recording} onClick={() => void startLive()}>{!props.signedIn ? "Sign in for xAI realtime" : connecting ? "Connecting to xAI…" : "Start xAI realtime"}</button>}
+        {props.answerReceipt && <p className="speak-call__transcript">Answer from {props.answerReceipt}</p>}
         {props.callError && <p className="speak-call__transcript" role="alert">{props.callError}</p>}
         {notice && <p className="speak-call__transcript" data-testid="speak-speech-cut" role="status">{notice}</p>}
         {showTranscript && transcript && <p className="speak-call__transcript" data-testid="speak-transcript">{transcript}</p>}

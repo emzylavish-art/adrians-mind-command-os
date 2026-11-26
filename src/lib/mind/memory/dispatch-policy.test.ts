@@ -7,7 +7,8 @@ import { assertCurrentMemoryContext, readAuthorizedAgentContext } from "./dispat
 import type { Sql } from "../../db.ts";
 
 async function setup() {
-  const created = createChat(emptyWorkspace(), { memory: "on", autonomy: "ask", temporary: false, projectId: "p" });
+  const owner = { ...emptyWorkspace(), projects: [{ id: "p", name: "Fixture project", description: "", createdAt: "2026-01-01T00:00:00.000Z" }] };
+  const created = createChat(owner, { memory: "on", autonomy: "ask", temporary: false, projectId: "p" });
   const workspace = addMemory(created.ws, { scope: "project", projectId: "p", chatId: null, text: "Private current note", source: "fixture" });
   const body = { chatId: created.chat.id, memory: "on", memoryContext: workspace.memories.map(({ id, text }) => ({ id, text })), memoryPolicyRevision: await memoryPolicyRevision(workspace, created.chat) };
   return { workspace, chat: created.chat, body };
@@ -17,6 +18,7 @@ test("C1/AA007-008: saved context is rejected after memory-off, deletion, archiv
   const { workspace, chat, body } = await setup();
   assert.equal((await validateMemoryDispatch(workspace, body)).ok, true);
   const changed = [
+    { ...workspace, projects: [] },
     { ...workspace, chats: [{ ...chat, memory: "off" as const }] },
     deleteMemory(workspace, workspace.memories[0].id),
     { ...workspace, memories: workspace.memories.map((note) => ({ ...note, archived: true })) },

@@ -825,10 +825,10 @@ export function CommandApp() {
   const { user: account, error, isPending } = useCurrentUserState();
   if (error) return <main role="alert" className="p-4">{error}<button type="button" className="ml-3 min-h-11 underline" onClick={() => window.location.reload()}>Retry verification</button></main>;
   if (isPending) return <main role="status" className="p-4">Verifying your account…</main>;
-  return <AccountPreferencesProvider ownerId={account?.id ?? null}><SurfaceErrorBoundary key={account?.id ?? "guest"} name="Workspace"><CommandSession account={account} /></SurfaceErrorBoundary></AccountPreferencesProvider>;
+  return <AccountPreferencesProvider ownerId={account?.id ?? null}><SurfaceErrorBoundary key={account?.id ?? "guest"} name="Workspace"><CommandSession account={account} accountPending={isPending} /></SurfaceErrorBoundary></AccountPreferencesProvider>;
 }
 
-function CommandSession({ account }: { account: ReturnType<typeof useCurrentUserState>["user"] }) {
+function CommandSession({ account, accountPending }: { account: ReturnType<typeof useCurrentUserState>["user"]; accountPending: boolean }) {
   const preferenceStorage = useAccountPreferences();
   const loopback = typeof window !== "undefined" && (window.location.hostname === "127.0.0.1" || window.location.hostname === "localhost");
   const { ws, setWs, ready, syncNote, serverHeld, saveError, retrySave, clearStoredCopy, ensureChatMedia, prioritizeChatMedia, mediaProgress } = useMindWorkspace(account?.id ?? null, account?.emailVerified ? account.primaryEmail : null);
@@ -1049,7 +1049,9 @@ function CommandSession({ account }: { account: ReturnType<typeof useCurrentUser
   const taskStream = useRef<MediaStream | null>(null);
   const [taskRecording, setTaskRecording] = useState(false);
   const [taskSeconds, setTaskSeconds] = useState(0);
-  const [speakCall, setSpeakCall] = useState({ heard: "", reply: "", error: "" });
+  const voiceOutput = useRef({ muted: false, volume: 1 });
+  const browserPlaybackAbort = useRef<AbortController | null>(null);
+  const [speakCall, setSpeakCall] = useState<{ heard: string; reply: string; error: string; answerReceipt?: string }>({ heard: "", reply: "", error: "" });
   const speakStageOpenRef = useRef(false);
   useEffect(() => {
     speakStageOpenRef.current = speakStageOpen;
@@ -1679,6 +1681,8 @@ function CommandSession({ account }: { account: ReturnType<typeof useCurrentUser
   }
 
   function interruptSpeakPlayback() {
+    browserPlaybackAbort.current?.abort();
+    browserPlaybackAbort.current = null;
     interruptMessageSpeak({
       sharedAudio: sharedAudioOutput,
       abortSpeak: speakAbortRef.current,
@@ -2926,15 +2930,46 @@ function CommandSession({ account }: { account: ReturnType<typeof useCurrentUser
   type TurnRequest = { id: string; body: ReturnType<typeof chatTurnBody>; memoryRevision?: string };
   type TurnReplyReceipt = { chatId: string; messageId: string; provider?: string; model?: string; requestId?: string | null };
 
+  async function reconcileSend(chatId: string, operationId: string) {
+    const owner = draftOwner;
+    if (!owner || turnOwner.current !== owner) return;
+    try {
+      const token = getBearerToken();
+      const prefix = previewPathPrefix(window.location.hostname, window.location.pathname) ?? "";
+      const receipt = await checkTurnReceipt(`${prefix}/api/mind/turn`, operationId, token ? { Authorization: `Bearer ${token}` } : {});
+      if (turnOwner.current !== owner) return;
+      if (!receipt.ownerId || receipt.ownerId !== owner || receipt.ownerId !== account?.id) {
+        reportFailure("Verify the original account before checking this send.", "auth_required", chatId, null, "setup");
+        return;
+      }
+      if (receipt.executions?.length) setWs((prev) => applyExecutionUsage(prev, chatId, receipt.executions!, new Date().toISOString()));
+      const message = receipt.state === "responded"
+        ? "The app dispatched the original request. Review the saved reply or incomplete text; provider completion may still be unconfirmed. Nothing was resent."
+        : receipt.state === "not_dispatched"
+          ? "The original request was rejected before provider dispatch. You can review the current context and explicitly send a new message."
+          : receipt.state === "not_received"
+            ? "No receipt is available yet. The earlier delivery may still arrive; nothing was resent."
+            : "The original request is still processing or its outcome is unknown. Nothing was resent.";
+      reportFailure(message, "chat_recovery_checked", chatId, () => { void reconcileSend(chatId, operationId); });
+    } catch (error) {
+      if (turnOwner.current !== owner) return;
+      reportFailure(error instanceof Error ? error.message : "The send could not be checked. Nothing was resent.", "chat_recovery_failed", chatId, () => { void reconcileSend(chatId, operationId); });
+    }
+  }
+
   async function deliver(
     chat: Chat,
     text: string,
     source: Workspace,
     resume = false,
     images: ImageAttachment[] = [],
-    options?: { onFailure?: (failure: { error: string; dispatched: false; approvalId?: string; answerRequest: NonNullable<SpeakRetryParams["answerRequest"]> }) => void; onReply?: (reply: TurnReplyReceipt) => void; provider?: string; taskId?: string; logicRoute?: LogicRouteId | null; skipUserMessage?: boolean; isolateOutputs?: boolean; accessNotes?: { id: string; text: string }[]; request?: TurnRequest; operationId?: string; replaceReplyId?: string; recovery?: Msg["deliveryRoute"] },
+    options?: { onFailure?: (failure: { error: string; dispatched: false; approvalId?: string; answerRequest: NonNullable<SpeakRetryParams["answerRequest"]> }) => void; onReply?: (reply: TurnReplyReceipt) => void; provider?: string; taskId?: string; logicRoute?: LogicRouteId | null; skipUserMessage?: boolean; isolateOutputs?: boolean; accessNotes?: { id: string; text: string }[]; request?: TurnRequest; selectedProviderOnly?: boolean; knownUnsent?: boolean; operationId?: string; replaceReplyId?: string; recovery?: Msg["deliveryRoute"] },
   ): Promise<string | null> {
-    if (turnInFlight.current || turnOwner.current !== draftOwner) return null;
+    if (accountPending || turnInFlight.current || turnOwner.current !== draftOwner) return null;
+    if (options?.request && !options.knownUnsent) {
+      await reconcileSend(chat.id, options.request.id);
+      return null;
+    }
     const snapped = snapshotImages(images);
     if (shouldBlockForEmergencyStop(wsRef.current.halted, source.halted)) {
       reportEmergencyStop(chat.id, () => {
@@ -2996,13 +3031,13 @@ function CommandSession({ account }: { account: ReturnType<typeof useCurrentUser
     const otherReady = !activeLogic && !isCustomProvider && selectedProvider !== "grok" && liveProviders[selectedProvider as "openai" | "anthropic" | "gemini" | "openrouter"] === true;
     let routed = chosenProvider(activeLogic || isCustomProvider ? "grok" : selectedProvider, isCustomProvider ? true : grokConfigured);
     if (!savedRoute && !routedRunner && !otherReady && !activeLogic && !isCustomProvider && !routed.ok) {
-      const switched = failover(selectedProvider, grokConfigured === true, selectedProvider === "gemini" ? "none" : failoverPolicy);
+      const switched = failover(selectedProvider, grokConfigured === true, options?.selectedProviderOnly || selectedProvider === "gemini" || selectedProvider === "openrouter" ? "none" : failoverPolicy);
       if (switched.provider === "grok") {
         routed = chosenProvider("grok", grokConfigured);
         if (routed.ok) setNotice(switched.note);
       }
     }
-    const orchestrating = savedRoute ? savedRoute.orchestrated : resolveSendPath(composerEffort).path === "orchestrator";
+    const orchestrating = options?.selectedProviderOnly ? false : savedRoute ? savedRoute.orchestrated : resolveSendPath(composerEffort).path === "orchestrator";
     const helperConsent = orchestrating && !currentFreeOnly.current && approvedHelperDraft === helperDraftKey
       && text.trim() === draft.trim() && (!savedRoute || savedRoute.provider === consultModel);
     const consultPlan = orchestrating
@@ -3020,7 +3055,7 @@ function CommandSession({ account }: { account: ReturnType<typeof useCurrentUser
       });
       return null;
     }
-    let live = resolveChatMessages(wsRef.current.chats, chat.id, chat) as Msg[];
+    let live = completedHistory(resolveChatMessages(wsRef.current.chats, chat.id, chat) as Msg[]);
     if (options?.isolateOutputs) {
       let lastUser = -1;
       live.forEach((item, index) => {
@@ -3032,7 +3067,7 @@ function CommandSession({ account }: { account: ReturnType<typeof useCurrentUser
       setError("The reply changed before regeneration. Choose the current reply to regenerate.");
       return null;
     }
-    let messages = options?.replaceReplyId ? live.slice(0, -1) : selectRetryMessages(chat.messages, live);
+    let messages = options?.replaceReplyId ? live.slice(0, -1) : selectRetryMessages(completedHistory(chat.messages), live);
     if (resume && messages.at(-1)?.role === "assistant") return null;
     let history = historyForDeliver(messages, resume);
     const title = resume || messages.length > 0 ? chat.title : text.replace(/\s+/g, " ").slice(0, 48);
@@ -3052,7 +3087,7 @@ function CommandSession({ account }: { account: ReturnType<typeof useCurrentUser
     const token = getBearerToken();
     const prefix = previewPathPrefix(window.location.hostname, window.location.pathname) ?? "";
     turnInFlight.current = true;
-    const memoryRevision = options?.request?.memoryRevision ?? memorySendRevision(source, chat);
+    let memoryRevision = options?.request?.memoryRevision ?? memorySendRevision(source, chat);
     let operationId: string;
     let knowledgePassages: KnowledgePassage[] = [];
     let projectContext: Awaited<ReturnType<typeof retrieveProjectPassages>> = [];
@@ -3081,6 +3116,20 @@ function CommandSession({ account }: { account: ReturnType<typeof useCurrentUser
       ({ signal, cleanup: clearTurnTimeout } = boundAbortSignal(controller.signal, prepared.timeoutMs + 5_000));
       if (generation !== turnGen.current || turnOwner.current !== draftOwner || signal.aborted || wsRef.current.halted ||
           !wsRef.current.chats.some((item) => item.id === chat.id)) throw new Error();
+      const updated = currentMemoryContext(wsRef.current, chat.id);
+      if (!updated || updated.chat.projectId !== chat.projectId) throw new Error("The conversation destination changed.");
+      if (!checkMemorySendRevision(wsRef.current, chat.id, memoryRevision)) {
+        if (options?.request || updated.chat.memory !== "off") throw new Error("The saved context changed.");
+        source = wsRef.current;
+        chat = updated.chat;
+        options = { ...options, accessNotes: [] };
+        projectContext = [];
+        knowledgePassages = [];
+        if (!effectiveContextPolicy(chat).history) history = [];
+        memoryRevision = memorySendRevision(source, chat);
+        preparedRevision = await memoryPolicyRevision(source, chat);
+        if (generation !== turnGen.current || turnOwner.current !== draftOwner || signal.aborted || wsRef.current.halted) throw new Error("The conversation changed.");
+      }
     } catch {
       clearTurnTimeout();
       if (generation === turnGen.current) {
@@ -3088,7 +3137,7 @@ function CommandSession({ account }: { account: ReturnType<typeof useCurrentUser
         turnAbort.current = null;
         setBusy(false);
         setTurnChat(null);
-        setError("This send could not be prepared. No model was called.");
+        setError("This send could not be prepared. Verify the same account and current conversation before retrying. No model was called.");
       }
       return null;
     }
@@ -3171,10 +3220,11 @@ function CommandSession({ account }: { account: ReturnType<typeof useCurrentUser
     };
     if (helperConsent && orchestrating) setApprovedHelperDraft(null);
     function reportTurnError(message: string, deliveryUncertain: boolean, code: TurnErrorCode, knownNotSent = false) {
-      const useOriginal = deliveryUncertain || knownNotSent || options?.request !== undefined || options?.operationId !== undefined;
+      const useOriginal = dispatchStarted || deliveryUncertain || knownNotSent || options?.request !== undefined || options?.operationId !== undefined;
       markDelivery(knownNotSent ? "failed" : useOriginal ? "unconfirmed" : "failed");
       const retry = () => {
         if (turnInFlight.current || turnOwner.current !== draftOwner) return;
+        if (!knownNotSent && (dispatchStarted || deliveryUncertain)) { void reconcileSend(chat.id, operationId); return; }
         const thread = wsRef.current.chats.find((item) => item.id === chat.id);
         if (!thread) return;
         if (useOriginal && !checkMemorySendRevision(wsRef.current, chat.id, memoryRevision)) {
@@ -3183,22 +3233,33 @@ function CommandSession({ account }: { account: ReturnType<typeof useCurrentUser
         }
         if (options?.replaceReplyId && thread.messages.at(-1)?.id === options.replaceReplyId) {
           const prior = prepareRegenerate(wsRef.current, chat.id);
-          if (!("error" in prior)) void deliver(prior.chat, text, wsRef.current, true, snapped, { ...options, request: useOriginal ? request : undefined });
+          if (!("error" in prior)) void deliver(prior.chat, text, wsRef.current, true, snapped, { ...options, knownUnsent: knownNotSent, request: useOriginal ? request : undefined });
           return;
         }
         if (thread.messages.at(-1)?.role === "assistant") return;
         void deliver(thread, text, wsRef.current, true, snapped, {
-          ...options, request: useOriginal ? request : undefined,
+          ...options, knownUnsent: knownNotSent, request: useOriginal ? request : undefined,
         });
       };
       const kind = failureKindForAction(code);
-      const description = useOriginal ? `${message} Retry uses the original send ID so the server can recognize an already received request.` : message;
+      const description = (dispatchStarted || deliveryUncertain) && !knownNotSent ? `${message} Retry checks the original send receipt.` : message;
       const action: RouteFailureAction = ["auth_required", "provider_credentials_rejected", "billing_required", "model_unavailable", "provider_unavailable"].includes(code) ? "setup" : ["request_invalid", "user_stopped", "emergency_stop_active"].includes(code) ? "none" : "retry";
       reportFailure(description, code, chat.id, action === "retry" ? retry : null, action, kind);
       setFailure((current) => current ? { ...current, chatId: chat.id } : current);
     }
+    let dispatchStarted = false;
+    let lastCheckpoint = 0;
+    const partialAt = new Date().toISOString();
+    function keepPartial(status: "streaming" | "interrupted") {
+      if (partialText && generation === turnGen.current && turnOwner.current === draftOwner) {
+        setWs((prev) => checkpointReply(prev, chat.id, operationId, partialText, status, partialAt));
+      }
+    }
+    const onVisibilityChange = () => { if (document.hidden) keepPartial("interrupted"); };
+    document.addEventListener("visibilitychange", onVisibilityChange);
     try {
       const fingerprint = await sha256(JSON.stringify(request.body));
+      if (generation !== turnGen.current || turnOwner.current !== draftOwner || signal.aborted) return null;
       if (savedRoute && fingerprint !== savedRoute.fingerprint) {
         markDelivery("unconfirmed");
         setError("The original message context changed. Its previous delivery is unconfirmed. Review the thread before starting a new send.");
@@ -3218,9 +3279,10 @@ function CommandSession({ account }: { account: ReturnType<typeof useCurrentUser
       if (generation !== turnGen.current || turnOwner.current !== draftOwner || signal.aborted) return null;
       if (wsRef.current.halted || reviewed !== wsRef.current || !privacy.ok || !checkMemorySendRevision(wsRef.current, chat.id, memoryRevision)) {
         markDelivery(options?.request ? "unconfirmed" : "failed");
-        setError("Memory permissions or notes changed, or execution stopped. Review the current conversation before a new send.");
+        setError("Memory or project access changed, or execution stopped. Review the current conversation before a new send.");
         return null;
       }
+      dispatchStarted = true;
       const result = await consumeMindTurn({
         url: `${prefix}/api/mind/turn`,
         signal,
@@ -3233,6 +3295,7 @@ function CommandSession({ account }: { account: ReturnType<typeof useCurrentUser
         onDelta: (chunk) => {
           if (generation !== turnGen.current || turnOwner.current !== draftOwner) return;
           partialText += chunk;
+          if (Date.now() - lastCheckpoint >= 1000) { keepPartial("streaming"); lastCheckpoint = Date.now(); }
           if (streamFrame === null) streamFrame = requestAnimationFrame(() => {
             streamFrame = null;
             if (generation === turnGen.current && turnOwner.current === draftOwner) setLiveText(partialText);
@@ -3250,17 +3313,20 @@ function CommandSession({ account }: { account: ReturnType<typeof useCurrentUser
         id: `${request.id}:helper:${index}`, operationId: request.id, stage: `helper:${helper.id}`, role: "helper", chatId: chat.id, at: new Date().toISOString(), provider: helper.provider ?? helper.id,
         model: helper.model || "model unknown", requestId: helper.requestId ?? null, promptTokens: helper.usage?.prompt_tokens ?? null, completionTokens: helper.usage?.completion_tokens ?? null,
       }), current));
-      if (!result.ok && result.usage) setWs((current) => pushUsage(current, {
+      if (!result.ok && result.dispatched !== false && (result.primaryDispatched || result.usage || result.deliveryUncertain || partialText)) setWs((current) => pushUsage(current, {
         id: `${request.id}:primary`, operationId: request.id, stage: "answer", role: "primary", chatId: chat.id, at: new Date().toISOString(), provider: result.provider,
-        model: result.model || "model unknown", requestId: result.requestId ?? null, promptTokens: result.usage?.prompt_tokens ?? null, completionTokens: result.usage?.completion_tokens ?? null,
+        model: result.model || "model unknown", outcome: "unknown", providerDispatch: result.primaryDispatched ? "sent" : "unknown",
+        requestedModel: result.requestedModel, executionLocation: result.executionLocation, requestId: result.requestId ?? null, promptTokens: result.usage?.prompt_tokens ?? null, completionTokens: result.usage?.completion_tokens ?? null,
       }));
       if (!shouldStoreReply(result)) {
+        keepPartial("interrupted");
         const message = result.ok ? "The provider returned an empty reply." : result.error;
         if (!result.ok && result.code === "user_stopped") {
           markDelivery("stopped");
           return null;
         }
-        const knownNotSent = !result.ok && result.dispatched === false;
+        const knownNotSent = !result.ok && (result.dispatched === false ||
+          (!orchestrating && result.primaryDispatched === false && !result.executions?.length && !result.consultation?.length && !result.usage));
         if (knownNotSent) options?.onFailure?.({ error: message, dispatched: false, approvalId: result.approvalId,
           answerRequest: { chatId: chat.id, operationId: request.id, body: request.body } });
         reportTurnError(message, result.ok || result.deliveryUncertain === true, result.ok ? "invalid_response" : result.code ?? "unknown", knownNotSent);
@@ -3271,12 +3337,13 @@ function CommandSession({ account }: { account: ReturnType<typeof useCurrentUser
         const next = {
           ...prev,
           chats: prev.chats.map((item) =>
-            item.id === chat.id && (!options?.replaceReplyId || item.messages.at(-1)?.id === options.replaceReplyId)
+            item.id === chat.id && (!options?.replaceReplyId || completedHistory(item.messages).at(-1)?.id === options.replaceReplyId)
               ? {
                   ...item,
                   messages: [
-                    ...item.messages.filter((message) => message.id !== options?.replaceReplyId).map((message) => message.id === userMessageId ? { ...message, delivery: undefined, deliveryOperationId: undefined, deliveryRoute: undefined, partialReply: undefined } : message),
+                    ...item.messages.filter((message) => message.id !== options?.replaceReplyId && message.id !== `partial:${operationId}`).map((message) => message.id === userMessageId ? { ...message, delivery: undefined, deliveryOperationId: undefined, deliveryRoute: undefined, partialReply: undefined } : message),
                     withReplyVersion(item.messages.find((message) => message.id === options?.replaceReplyId), {
+                      replyStatus: "complete", replyOperationId: operationId,
                       id: replyMessageId,
                       role: "assistant" as const,
                       content: result.text,
@@ -3343,10 +3410,15 @@ function CommandSession({ account }: { account: ReturnType<typeof useCurrentUser
           tierLabel,
         );
       });
+      if (speakStageOpenRef.current) {
+        const answerReceipt = [result.provider ?? "Provider unconfirmed", result.model || "Model unconfirmed", result.requestId].filter(Boolean).join(" · ");
+        setSpeakCall((current) => ({ ...current, answerReceipt }));
+      }
       options?.onReply?.({ chatId: chat.id, messageId: replyMessageId, provider: result.provider, model: result.model, requestId: result.requestId });
       return result.text;
     } catch (caught) {
       if (generation !== turnGen.current || turnOwner.current !== draftOwner) return null;
+      keepPartial("interrupted");
       setBusy(false);
       if (streamFrame !== null) { cancelAnimationFrame(streamFrame); streamFrame = null; }
       setLiveText("");
@@ -3356,9 +3428,10 @@ function CommandSession({ account }: { account: ReturnType<typeof useCurrentUser
         return null;
       }
       const message = normalizeClientFailureMessage(caught);
-      reportTurnError(message, true, caught instanceof DOMException && caught.name === "TimeoutError" ? "chat_timeout" : "unknown");
+      reportTurnError(message, dispatchStarted, caught instanceof DOMException && caught.name === "TimeoutError" ? "chat_timeout" : "unknown", !dispatchStarted);
       return null;
     } finally {
+      document.removeEventListener("visibilitychange", onVisibilityChange);
       if (streamFrame !== null) cancelAnimationFrame(streamFrame);
       clearTurnTimeout();
       if (generation === turnGen.current) {
@@ -3470,6 +3543,10 @@ function CommandSession({ account }: { account: ReturnType<typeof useCurrentUser
     const last = prepared.chat.messages.at(-1);
     if (last?.role !== "user") return;
     const unresolved = last.delivery === "submitted" || last.delivery === "unconfirmed" || last.delivery === "stopped" || last.delivery === "failed";
+    if (last.deliveryOperationId && ["submitted", "unconfirmed", "stopped"].includes(last.delivery ?? "")) {
+      void reconcileSend(active.id, last.deliveryOperationId);
+      return;
+    }
     if (unresolved && (!last.deliveryOperationId || !last.deliveryRoute)) {
       setError("The outcome of this earlier send is unknown. Its original send details are unavailable. Review the conversation before starting a new send.");
       return;
@@ -4853,14 +4930,18 @@ ${message.content}`;
     const returned: { receipt?: TurnReplyReceipt; failure?: { error: string; dispatched: false; approvalId?: string; answerRequest: NonNullable<SpeakRetryParams["answerRequest"]> } } = {};
     const replay = options?.answerRequest;
     const reply = await deliver({ ...chat, personalityId: spokenStyle }, transcript, source, Boolean(replay), [], {
-      ...(replay ? { request: { id: replay.operationId, body: replay.body } } : {}),
+      selectedProviderOnly: true,
+      ...(replay ? { knownUnsent: true, request: { id: replay.operationId, body: replay.body } } : {}),
       onFailure: (failure) => { returned.failure = failure; }, onReply: (receipt) => { returned.receipt = receipt; }, provider: options?.provider, taskId: options?.taskId, accessNotes: chat.memory === "on" && !chat.temporary ? eveAccessNotes(workspaceForChat(source, chat)) : [] });
     if (!reply) return returned.failure ? { ok: false as const, ...returned.failure } : { ok: false as const, error: "The chat turn failed. Its delivery was not confirmed; no automatic replay will run." };
     return { ok: true as const, text: reply, replyReceipt: returned.receipt };
   }
 
   async function speak(text: string, messageId = "", voiceId = voiceChoiceRef.current, replay?: SpeakRetryParams) {
-    if (currentFreeOnly.current) { setError("Free-only mode is on. Cloud voice requires a billable provider. Browser dictation is still available when supported."); return { ok: false as const, error: "Free-only mode is on. Cloud voice requires a billable provider. Browser dictation is still available when supported." }; }
+    const stages = loadVoiceStages(preferenceStorage);
+    const inputProvider = replay?.inputProvider ?? stages.inputProvider;
+    const outputProvider = replay?.outputProvider ?? stages.outputProvider;
+    if (currentFreeOnly.current && (!(text || replay?.reply) || outputProvider !== "browser")) { setError("Free-only mode is on. Cloud voice requires a billable provider. Browser dictation is still available when supported."); return { ok: false as const, error: "Free-only mode is on. Cloud voice requires a billable provider. Browser dictation is still available when supported." }; }
     interruptSpeakPlayback();
     const generation = ++speakGenRef.current;
     const abort = new AbortController();
@@ -4871,9 +4952,13 @@ ${message.content}`;
     let speechFailed = false;
     let speechError = "";
     let spokeProvider = "";
-    const stages = loadVoiceStages(preferenceStorage);
-    const inputProvider = replay?.inputProvider ?? stages.inputProvider;
-    const outputProvider = replay?.outputProvider ?? stages.outputProvider;
+    let browserReply = "";
+    let muted = false;
+    const current = () => generation === speakGenRef.current && !abort.signal.aborted && turnOwner.current === draftOwner;
+    if (!speakStageOpenRef.current) {
+      const volume = Number(preferenceStorage.getItem("adrian-speak-volume") ?? "100");
+      voiceOutput.current = { muted: false, volume: Number.isFinite(volume) ? Math.max(0, Math.min(1, volume / 100)) : 1 };
+    }
     const answerProvider = replay?.answerProvider ?? effectiveProvider;
     const originalTarget = replay?.replyTarget ?? (() => {
       const chat = wsRef.current.chats.find((item) => item.messages.some((message) => message.id === messageId));
@@ -4903,7 +4988,7 @@ ${message.content}`;
       messageId,
       voiceId,
       replay: attempt,
-      isCurrent: () => generation === speakGenRef.current && !abort.signal.aborted,
+      isCurrent: current,
       deps: {
         capture: async () => {
           try { return await captureSpeakUtterance({ maxMs: 6000, signal: abort.signal }); }
@@ -4916,7 +5001,7 @@ ${message.content}`;
           if (inputProvider === "handy") {
             const detected = await detectWithHandy(audioBase64);
             if (!detected.ok) return { ok: false, error: detected.error || "Handy could not transcribe this recording. Choose a different input provider in Settings to try another service." };
-            setNotice("Handy Whisper Flow detected this. Speak is the call.");
+            if (current()) setNotice("Handy Whisper Flow detected this. Speak is the call.");
             return { ok: true, text: detected.text, provider: "handy" };
           }
           const prefix = previewPathPrefix(window.location.hostname, window.location.pathname) ?? "";
@@ -4934,21 +5019,27 @@ ${message.content}`;
           });
           try {
             const body = (await response.json()) as { ok?: boolean; text?: string; error?: string; provider?: string };
-            if (body.ok && body.provider) setNotice(`${body.provider} transcribed this.`);
+            if (current() && body.ok && body.provider) setNotice(`${body.provider} transcribed this.`);
             return body;
           } catch {
             return { ok: false, error: "The transcript request failed. Nothing was substituted." };
           }
         }),
         chatTurn: (transcript) => observedStage("answer", async () => {
-          const result = await speakChatTurn(transcript, { provider: answerProvider, taskId: voiceReceipt.operationId, answerRequest: attempt.answerRequest });
+          if (!current()) return { ok: false, error: "The voice request was interrupted." };
+          setSpeakCall((call) => ({ ...call, heard: transcript, error: "", answerReceipt: undefined }));
+          const result = await speakChatTurn(transcript, { stay: true, provider: answerProvider, taskId: voiceReceipt.operationId, answerRequest: attempt.answerRequest });
+          if (result.ok && current()) setSpeakCall((call) => ({ ...call, reply: result.text }));
           if (result.ok && "replyReceipt" in result && result.replyReceipt) {
             replyTarget = { chatId: result.replyReceipt.chatId, messageId: result.replyReceipt.messageId };
             return { ...result, provider: result.replyReceipt.provider, model: result.replyReceipt.model, requestId: result.replyReceipt.requestId };
           }
           return result;
         }),
-        synthesize: (reply, voice) => observedStage("output", async () => {
+        synthesize: (reply, voice) => {
+          if (voiceOutput.current.muted || !voiceOutput.current.volume) { muted = true; return Promise.resolve({ ok: true, audio: "muted" }); }
+          if (outputProvider === "browser") { browserReply = reply; return Promise.resolve({ ok: true, audio: "browser-speech" }); }
+          return observedStage("output", async () => {
           noteSpokenText(reply);
           const spoken = await speakText({ data: { text: reply, voiceId: voice, provider: outputProvider, operationId: `${voiceReceipt.operationId}:output`, taskId: voiceReceipt.operationId, projectId: voiceProjectId, freeOnly: currentFreeOnly.current } });
           if (spoken && typeof spoken === "object" && "ok" in spoken && spoken.ok) {
@@ -4957,8 +5048,37 @@ ${message.content}`;
             if ("provider" in spoken && typeof spoken.provider === "string" && spoken.provider) spokeProvider = spoken.provider;
           }
           return spoken;
-        }),
+          });
+        },
         play: async (audio) => {
+          if (muted || voiceOutput.current.muted || !voiceOutput.current.volume) {
+            muted = true;
+            setNotice("Reply saved. Speech output is muted.");
+            return;
+          }
+          if (outputProvider === "browser") {
+            const playback = new AbortController();
+            browserPlaybackAbort.current = playback;
+            const stop = () => playback.abort();
+            abort.signal.addEventListener("abort", stop, { once: true });
+            try {
+              await speakWithBrowser({ text: browserReply, signal: playback.signal, volume: voiceOutput.current.volume });
+              if (current()) {
+                voiceReceipt = recordVoiceStage(voiceReceipt, "output", { ok: true, provider: "browser" });
+                voiceReceipt = recordVoicePlayback(voiceReceipt, "played");
+                setNotice("Browser speech finished playing the reply.");
+              }
+            } catch (cause) {
+              voiceReceipt = recordVoicePlayback(voiceReceipt, playback.signal.aborted ? "interrupted" : "failed");
+              if (playback.signal.aborted && current() && (voiceOutput.current.muted || !voiceOutput.current.volume)) { muted = true; setNotice("Reply saved. Speech output is muted."); }
+              else throw cause;
+            } finally {
+              abort.signal.removeEventListener("abort", stop);
+              if (browserPlaybackAbort.current === playback) browserPlaybackAbort.current = null;
+              if (current()) persistVoiceEvidence();
+            }
+            return;
+          }
           window.speechSynthesis?.cancel();
           voiceSession.current?.interruptPlayback();
           const pace = preferenceStorage.getItem("adrian-speak-rate");
@@ -4971,7 +5091,7 @@ ${message.content}`;
             voiceReceipt = recordVoicePlayback(voiceReceipt, generation === speakGenRef.current && !abort.signal.aborted ? "played" : "interrupted");
           } catch (cause) { voiceReceipt = recordVoicePlayback(voiceReceipt, abort.signal.aborted ? "interrupted" : "failed"); throw cause; }
           finally { persistVoiceEvidence(); }
-          setNotice(spokeProvider ? `${spokeProvider} spoke this reply.` : "The reply was spoken.");
+          if (current()) setNotice(spokeProvider ? `${spokeProvider} spoke this reply.` : "The reply was spoken.");
         },
       },
       reportFailure: (message, action, target, retry) => {
@@ -4986,6 +5106,9 @@ ${message.content}`;
         void speak(params.text, replyTarget?.messageId ?? params.messageId, resolveXaiVoiceId(params.voiceId), { ...params, voiceStages: voiceReceipt, replyTarget });
       },
     });
+    if (!current()) return { ok: false as const, error: "The voice request was interrupted." };
+    if (muted && voiceReceipt.playback === "pending") voiceReceipt = recordVoicePlayback(voiceReceipt, "not_requested");
+    if (muted && voiceReceipt.output.state === "pending") voiceReceipt = { ...voiceReceipt, playback: "not_requested", output: { ...voiceReceipt.output, state: "not_requested" } };
     for (const stage of ["input", "answer", "output"] as const) if (voiceReceipt[stage].state === "pending") voiceReceipt = { ...voiceReceipt, [stage]: { ...voiceReceipt[stage], state: "not_requested" } };
     if (generation !== speakGenRef.current || abort.signal.aborted) { voiceReceipt = recordVoicePlayback(voiceReceipt, "interrupted"); persistVoiceEvidence(); return; }
     if (speechFailed && voiceReceipt.playback === "pending") voiceReceipt = recordVoicePlayback(voiceReceipt, "not_requested");
@@ -4993,7 +5116,7 @@ ${message.content}`;
     setSpeakingMessageId(null);
     setSpeaking(false);
     if (!speechFailed && !wsRef.current.halted) setAvatarPresence("idle");
-    return speechFailed ? { ok: false as const, error: speechError || "The reply was not spoken." } : { ok: true as const };
+    return speechFailed ? { ok: false as const, error: speechError || "The reply was not spoken." } : { ok: true as const, speech: muted ? "muted" as const : "played" as const };
   }
 
   useEffect(() => () => {
@@ -8911,12 +9034,17 @@ ${message.content}`;
         selectedBusy={speaking}
         selectedRoute={`Input: ${loadVoiceStages(preferenceStorage).inputProvider} · Answer: ${controlsModelLabel} · Output: ${loadVoiceStages(preferenceStorage).outputProvider}`}
         onStopSelected={interruptSpeakPlayback}
+        onOutputSettings={(muted, volume) => {
+          voiceOutput.current = { muted, volume };
+          if (muted || volume === 0) browserPlaybackAbort.current?.abort();
+        }}
         onLive={() => {
           setSpeakCall((current) => ({ ...current, error: "" }));
           return listen({ mode: "start" });
         }}
         heard={speakCall.heard}
         spoken={speakCall.reply}
+        answerReceipt={speakCall.answerReceipt}
         callError={speakCall.error}
         halted={ws.halted}
         onEmergencyStop={() => { void pressEmergencyStop(); }}
@@ -8929,7 +9057,7 @@ ${message.content}`;
           if (!speakStageOpenRef.current || wsRef.current.halted || !context.canSpeak()) return { reply: turn.text, error: "The answer was saved. Playback was canceled before speech synthesis." };
           const spoken = await speak(turn.text, "replyReceipt" in turn ? turn.replyReceipt?.messageId : undefined);
           if (!spoken?.ok) return { reply: turn.text, error: spoken?.error || "The reply was written, but it was not spoken." };
-          return { reply: turn.text };
+          return { reply: turn.text, speech: spoken.speech };
         }}
       />
       {taskRecording ? (

@@ -23,7 +23,12 @@
       "expected": "Typed and recorded microphone answers must use the selected capable text route.",
       "implementation": "docs/adrian-analysis-implementation-checklist.md#L21",
       "regression": "[G03](#g03-voice-stages)",
-      "disposition": "Combined verification pending"
+      "disposition": "Combined verification pending",
+      "combinedTests": [
+        "scripts/adrian-audit-speak-lifecycle.test.mjs",
+        "scripts/adrian-audit-deliver-lifecycle.test.mjs"
+      ],
+      "combinedFixture": "Production callback and HTTP fixture exercised on the chat/recorded Speak integration tree. See the chat and Speak checkpoint in integration-receipt.md. Authenticated staging remains unverified."
     },
     {
       "finding": "C4/AA-004",
@@ -159,7 +164,11 @@
       "expected": "Dispatch must use current saved-memory permission.",
       "implementation": "docs/adrian-analysis-implementation-checklist.md#L38",
       "regression": "[G09](#g09-current-context-permission)",
-      "disposition": "Combined verification pending"
+      "disposition": "Combined verification pending",
+      "combinedTests": [
+        "scripts/adrian-audit-deliver-lifecycle.test.mjs"
+      ],
+      "combinedFixture": "Production callback and HTTP fixture exercised on the chat/recorded Speak integration tree. See the chat and Speak checkpoint in integration-receipt.md. Authenticated staging remains unverified."
     },
     {
       "finding": "C4/AA-021",
@@ -167,7 +176,11 @@
       "expected": "Recovery must not replay a previously authorized context payload.",
       "implementation": "docs/adrian-analysis-implementation-checklist.md#L39",
       "regression": "[G09](#g09-current-context-permission)",
-      "disposition": "Combined verification pending"
+      "disposition": "Combined verification pending",
+      "combinedTests": [
+        "scripts/adrian-audit-deliver-lifecycle.test.mjs"
+      ],
+      "combinedFixture": "Production callback and HTTP fixture exercised on the chat/recorded Speak integration tree. See the chat and Speak checkpoint in integration-receipt.md. Authenticated staging remains unverified."
     },
     {
       "finding": "C4/AA-022",
@@ -311,7 +324,11 @@
       "expected": "Received partial text must survive interruption.",
       "implementation": "docs/adrian-analysis-implementation-checklist.md#L57",
       "regression": "[G14](#g14-streaming-and-send-recovery)",
-      "disposition": "Combined verification pending"
+      "disposition": "Combined verification pending",
+      "combinedTests": [
+        "scripts/adrian-audit-deliver-lifecycle.test.mjs"
+      ],
+      "combinedFixture": "Production callback and HTTP fixture exercised on the chat/recorded Speak integration tree. See the chat and Speak checkpoint in integration-receipt.md. Authenticated staging remains unverified."
     },
     {
       "finding": "C4/AA-040",
@@ -319,7 +336,11 @@
       "expected": "Stopped/uncertain retry must not silently create a new paid execution.",
       "implementation": "docs/adrian-analysis-implementation-checklist.md#L58",
       "regression": "[G14](#g14-streaming-and-send-recovery)",
-      "disposition": "Combined verification pending"
+      "disposition": "Combined verification pending",
+      "combinedTests": [
+        "scripts/adrian-audit-deliver-lifecycle.test.mjs"
+      ],
+      "combinedFixture": "Production callback and HTTP fixture exercised on the chat/recorded Speak integration tree. See the chat and Speak checkpoint in integration-receipt.md. Authenticated staging remains unverified."
     },
     {
       "finding": "C4/AA-041",
@@ -359,7 +380,11 @@
       "expected": "Failed/uncertain calls need honest usage; known preflight rejection is not execution.",
       "implementation": "docs/adrian-analysis-implementation-checklist.md#L62",
       "regression": "[G15](#g15-execution-receipts)",
-      "disposition": "Combined verification pending"
+      "disposition": "Combined verification pending",
+      "combinedTests": [
+        "scripts/adrian-audit-deliver-lifecycle.test.mjs"
+      ],
+      "combinedFixture": "Production callback and HTTP fixture exercised on the chat/recorded Speak integration tree. See the chat and Speak checkpoint in integration-receipt.md. Authenticated staging remains unverified."
     },
     {
       "finding": "C4/AA-045",
@@ -505,7 +530,11 @@
       "expected": "Expired sessions must offer original-owner receipt recovery without resending.",
       "implementation": "docs/adrian-analysis-implementation-checklist.md#L79",
       "regression": "[G14](#g14-streaming-and-send-recovery)",
-      "disposition": "Combined verification pending"
+      "disposition": "Combined verification pending",
+      "combinedTests": [
+        "scripts/adrian-audit-deliver-lifecycle.test.mjs"
+      ],
+      "combinedFixture": "Production callback and HTTP fixture exercised on the chat/recorded Speak integration tree. See the chat and Speak checkpoint in integration-receipt.md. Authenticated staging remains unverified."
     },
     {
       "finding": "C4/AA-062",

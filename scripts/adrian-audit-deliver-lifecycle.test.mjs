@@ -1,8 +1,17 @@
+import { memorySendRevision, checkMemorySendRevision } from "../src/lib/mind/memory-send-policy.ts";
+import { memoryPolicyRevision, validateMemoryDispatch } from "../src/lib/mind/memory/dispatch-policy.ts";
+import { effectiveContextPolicy } from "../src/lib/mind/memory/context-policy.ts";
+import { retrieveProjectPassages } from "../src/lib/mind/knowledge.ts";
+import { projectInstructionsForChat } from "../src/lib/mind/project-workspace.ts";
+import { collectAccountSkillApplications } from "../src/lib/mind/skill-activation.ts";
+import { loadModelControls } from "../src/lib/mind/model-tiers.ts";
+import { researchReferencesInText } from "../src/lib/mind/research-reports.ts";
+import { failureKindForAction } from "../src/lib/mind/recovery-inbox.ts";
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { readFileSync } from "node:fs";
 import ts from "typescript";
-import { emptyWorkspace, workspaceForChat, pushAudit, pushUsage, sha256 } from "../src/lib/mind/workspace.ts";
+import { memoriesForChat, emptyWorkspace, workspaceForChat, pushAudit, pushUsage, sha256 } from "../src/lib/mind/workspace.ts";
 import { currentMemoryContext } from "../src/lib/mind/context-permission.ts";
 import { completedHistory, checkpointReply } from "../src/lib/mind/partial-reply.ts";
 import { chatTurnBody, isLogicRouteId, respondedRouteLabel } from "../src/lib/mind/logic-routes.ts";
@@ -11,7 +20,7 @@ import { eveAccessNotes } from "../src/lib/mind/eve-access.ts";
 import { routeForBotChat } from "../src/lib/mind/bot-model.ts";
 import { chosenProvider, failover } from "../src/lib/mind/providers.ts";
 import { historyForDeliver, resolveChatMessages, shouldBlockForEmergencyStop, snapshotImages } from "../src/lib/mind/retry-fidelity.ts";
-import { prepareRetry } from "../src/lib/mind/transcript.ts";
+import { prepareRetry, withReplyVersion } from "../src/lib/mind/transcript.ts";
 import { contextReceiptNotice } from "../src/lib/mind/context-budget.ts";
 import { consumeMindTurn, checkTurnReceipt, prepareTurnId, shouldStoreReply, STOPPED_REPLY } from "../src/lib/mind/live-turn.ts";
 import { boundAbortSignal } from "../src/lib/mind/turn-timeouts.ts";
@@ -58,6 +67,10 @@ function fixture(overrides = {}) {
     wsRef: { current: ws }, providerChoice: "gemini", modelTier: "Fast", grokConfigured: false, grokModel: null,
     liveProviders: { gemini: true }, providerModels: { gemini: "selected-gemini-model" }, discovered: [], logicRoute: null, logicRoutes: [],
     composerEffort: "normal", consultModel: "grok", consultModules: [], failoverPolicy: "none", routingMode: "single", ADRIAN_MIND_IDENTITY: "fixture identity",
+    memorySendRevision, checkMemorySendRevision, memoryPolicyRevision, validateMemoryDispatch, effectiveContextPolicy, retrieveProjectPassages,
+    projectInstructionsForChat, collectAccountSkillApplications, preferenceStorage: { getItem: () => null }, enabledSkills: {}, loadModelControls,
+    currentFreeOnly: { current: false }, researchHistory: [], researchReferencesInText, memoriesForChat, withReplyVersion, failureKindForAction,
+    ensureChatMedia: async (chat) => chat,
     snapshotImages, shouldBlockForEmergencyStop, routeForBotChat, isLogicRouteId, chosenProvider, failover,
     resolveSendPath: () => ({ path: "direct" }), completedHistory, resolveChatMessages, historyForDeliver,
     currentMemoryContext, workspaceForChat, relevantMemories, eveAccessNotes, chatTurnBody, contextReceiptNotice,
@@ -88,6 +101,7 @@ function fixture(overrides = {}) {
   };
   context.network = overrides.network ?? network;
   context.prepareTurnId = overrides.prepareTurnId ?? ((url, headers, signal) => prepareTurnId(url, headers, signal, context.network));
+  context.prepareTurn = async (url, headers, signal) => ({ operationId: await context.prepareTurnId(url, headers, signal), timeoutMs: 10000 });
   context.consumeMindTurn = overrides.consumeMindTurn ?? ((input) => consumeMindTurn({ ...input, fetchImpl: context.network }));
   context.checkTurnReceipt = (url, id, headers, signal) => checkTurnReceipt(url, id, headers, signal, context.network);
   context.selectRetryMessages = callback("selectRetryMessages", {});
