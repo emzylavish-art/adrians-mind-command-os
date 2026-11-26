@@ -7,14 +7,16 @@ import { writeUsageReceipt } from "./usage-ledger.server.ts";
 import type { UsageReceipt } from "./usage-ledger.ts";
 import type { ModelUsage } from "./stream.ts";
 import type { Workspace } from "./types.ts";
+import { isOpenRouterFreeModel } from "./provider-catalog.ts";
+import { isLocalConsultRunner } from "./model-consult.ts";
 import type { ModelTier } from "./model-tiers.ts";
 import { NEMOTRON_MODEL } from "./provider-call.ts";
 
 export type FleetModelInput = { runId: string; expectedRevision?: string; freeOnly?: boolean; allowPaid?: boolean };
-type ModelResult = { ok: boolean; text: string; model?: string; usage?: ModelUsage | null; requestId?: string | null };
+type ModelResult = { ok: boolean; error?: string; text: string; model?: string; usage?: ModelUsage | null; requestId?: string | null };
 export type FleetModelDependencies = {
   stop: (owner: string) => Promise<"on" | "off" | "unknown">;
-  call: (owner: string, provider: string, text: string, dispatched: () => void, signal: AbortSignal, options: { tier?: ModelTier }) => Promise<ModelResult>;
+  call: (owner: string, provider: string, text: string, dispatched: () => void, signal: AbortSignal, options: { tier?: ModelTier; operationId: string; freeOnly: boolean }) => Promise<ModelResult>;
   record: (sql: Sql, owner: string, receipt: UsageReceipt) => Promise<void>;
 };
 type Result = { ok: false; error: string; conflict?: boolean } | { ok: true; ws: Workspace; workspace: Workspace; revision: string; message: string };
@@ -29,7 +31,9 @@ export async function executeFleetModelStep(sql: Sql, owner: string, input: Flee
     if (!input.expectedRevision || input.expectedRevision !== snapshotRevision(raw)) return { result: { ok: false, conflict: true, error: "Synchronize the reviewed run before making a model call." } };
     const run = ws.runs.find((item) => item.id === input.runId);
     const provider = run?.execution?.provider;
-    const verifiedFree = provider === "ollama" || provider === "openrouter" || provider === "nemotron";
+    const verifiedFree = provider === "nemotron"
+      || (provider === "openrouter" && isOpenRouterFreeModel(process.env.OPENROUTER_MODEL || ""))
+      || (provider === "ollama" && isLocalConsultRunner(process.env.LOCAL_MODEL_URL));
     if (!verifiedFree && (input.freeOnly !== false || input.allowPaid !== true)) return { result: { ok: false, error: "This model requires an explicit one-call budget and free-only mode off. Nothing was sent." } };
     const claim = claimFleetModelStep(ws, input.runId, operationId, now);
     if (!claim.ok) return { result: claim };
@@ -61,7 +65,8 @@ export async function executeFleetModelStep(sql: Sql, owner: string, input: Flee
       }).catch(() => stopController.abort(new Error("Emergency stop could not be checked."))).finally(() => { checkingStop = false; });
     }, 1_000);
     try {
-      answer = await deps.call(owner, request.provider, prompt, () => { dispatched = true; }, AbortSignal.any([AbortSignal.timeout(60_000), stopController.signal]), { tier: request.tier || undefined });
+      answer = await deps.call(owner, request.provider, prompt, () => { dispatched = true; }, AbortSignal.any([AbortSignal.timeout(60_000), stopController.signal]), { tier: request.tier || undefined, operationId, freeOnly: input.freeOnly !== false || input.allowPaid !== true });
+      if (!answer.ok && answer.error) error = answer.error;
     } finally {
       clearInterval(stopWatch);
     }
@@ -80,9 +85,9 @@ export async function executeFleetModelStep(sql: Sql, owner: string, input: Flee
 
 export async function runFleetModelStepForUser(owner: string, input: FleetModelInput): Promise<Result> {
   try {
-    const { askConnectedModule } = await import("./turn.server.ts");
+    const { callFleetProvider } = await import("./turn.server.ts");
     const { getSql } = await import("../db.ts");
-    return await executeFleetModelStep(await getSql(), owner, input, { stop: readHaltState, call: askConnectedModule, record: writeUsageReceipt });
+    return await executeFleetModelStep(await getSql(), owner, input, { stop: readHaltState, call: callFleetProvider, record: writeUsageReceipt });
   } catch {
     return { ok: false, error: "The model step could not be completed. Check its run receipt before trying again." };
   }

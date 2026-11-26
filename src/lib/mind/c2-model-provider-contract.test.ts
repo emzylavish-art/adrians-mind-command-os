@@ -19,6 +19,9 @@ import { createChatTurnPreflight } from "./limits.ts";
 import { stripTypeScriptTypes } from "node:module";
 import { chatTurnBody } from "./logic-routes.ts";
 import { builtinModules, collectConsultReport, isLocalConsultRunner, orchestratorInstruction, planModelConsult } from "./model-consult.ts";
+import { validatePrimaryConfiguration } from "./turn-primary-selection.ts";
+import { resolveModelTier } from "./model-tiers.ts";
+import { collectConsultHelp } from "./model-consult.ts";
 import { selectProvider } from "./provider-call.ts";
 
 function registryFixture(profile: catalogue.CatalogModelProfile | undefined, responseStatus = 200) {
@@ -106,10 +109,11 @@ test("C2 AA047: helper receipt survives actual SSE parsing and client turn consu
 test("C2 AA090: actual HTTP preflight charges every helper/final provider attempt, with one chat token", async () => {
   const source = readFileSync(new URL("./turn.server.ts", import.meta.url), "utf8");
   const start = source.indexOf("  const ratePreflight = createChatTurnPreflight");
-  const end = source.indexOf("  let consultHelp", start);
+  const end = source.indexOf('  if (body.composerMode === "orchestrator") body =', start);
   assert.ok(start >= 0 && end > start);
   let chatTokens = 0; let calls = 0;
-  const context: any = { userId: "owner-fixture", request: { signal: new AbortController().signal },
+  const context: any = { userId: "owner-fixture", body: {}, initialNotes: [], request: { headers: new Headers(), signal: new AbortController().signal },
+    randomUUID: () => "fixture", assertCurrentMemoryContext: async () => ({ ok: true }), assertOwnerMemoryDispatch: async () => ({ ok: true }), reserveOwnerDispatch: async () => ({ ok: true }),
     createChatTurnPreflight, checkStop: async () => null,
     consumeSharedMindRateLimit: async (bucket: string) => { if (bucket === "chat") { chatTokens++; return { ok: true }; } calls++; return calls <= 3 ? { ok: true } : { ok: false, retryAfterSec: 60 }; },
     json: (value: unknown, status: number) => Response.json(value, { status }), Response,
@@ -124,8 +128,8 @@ test("C2 AA090: actual HTTP preflight charges every helper/final provider attemp
 
 test("C2 AA044/090: the actual server consultation block consumes request consent before a helper can dispatch", async () => {
   const source = readFileSync(new URL("./turn.server.ts", import.meta.url), "utf8");
-  const start = source.indexOf('  let consultHelp = "";');
-  const end = source.indexOf("  const tierField = parseModelTierField(body.modelTier)", start);
+  const start = source.indexOf("  const primary = validatePrimaryConfiguration(");
+  const end = source.indexOf("  // Return known helper receipts", start);
   assert.ok(start >= 0 && end > start);
   for (const [consent, freeOnly, expectedCalls, staleFinal] of [[false, false, 0, false], [true, false, 1, false], [true, true, 0, false], [true, false, 0, true]] as Array<[boolean, boolean, number, boolean]>) {
     let calls = 0;
@@ -135,16 +139,23 @@ test("C2 AA044/090: the actual server consultation block consumes request consen
     const context: any = { body, userId: "owner-fixture", request: { signal: new AbortController().signal },
       parseModelTierField: () => ({ ok: true }), checkTurnSize: () => ({ ok: true }), sanitizeAttachments: () => [], isHistory: () => true, isNote: () => true,
       modulesConnectedNow: async () => builtinModules({ grokConfigured: true, providers: { openai: true } }),
-      planModelConsult, collectConsultReport, orchestratorInstruction, selectProvider, process: { env: { OPENAI_API_KEY: "synthetic-key" } },
+      primaryDispatchContext: undefined, initialHistory: [], anyDispatched: false, usage: null, taskId: "fixture",
+      controls: { controls: {} }, customSelection: null, inspectedLogic: undefined, environmentCatalogs: [],
+      catalogForProvider: () => undefined, resolveXaiInferenceApiKey: () => ({ ok: true }), resolveModelTier, validatePrimaryConfiguration,
+      validateEnvironmentModel: async () => ({ ok: true }), directTurnContext: () => ({ ok: true, messages: [] }), selectedCapabilities: undefined,
+      dispatchContext: () => ({}), financialProviderId: (id: string) => id, ADRIAN_MIND_IDENTITY: "fixture",
+      validateHelperConfiguration: async () => ({ ok: true, provider: "openai", model: "fixture" }),
+      runSettledDispatch: async (_owner: string, _hold: unknown, work: () => unknown) => work(),
+      planModelConsult, collectConsultHelp, orchestratorInstruction, selectProvider, process: { env: { OPENAI_API_KEY: "synthetic-key" } },
       checkStop: async () => null, ratePreflight: async () => null, preflight: async () => null, markDispatched() {},
       askConnectedModule: async () => { calls++; return { ok: true, text: "Synthetic helper evidence", provider: "openai", model: "fixture-model" }; },
       json: (value: unknown, status: number) => Response.json(value, { status }),
     };
-    runInNewContext(stripTypeScriptTypes(`globalThis.invoke = async () => {${source.slice(start, end)} return {consultAttempts}; };`), context);
+    runInNewContext(stripTypeScriptTypes(`globalThis.invoke = async () => {${source.slice(start, end)} return {consultation}; };`), context);
     const result = await context.invoke();
     assert.equal(calls, expectedCalls);
     if (expectedCalls === 0) assert.equal(result.status, staleFinal ? 409 : 400);
-    else assert.equal(result.consultAttempts[0].status, "completed");
+    else assert.equal(result.consultation[0].ok, true);
   }
 });
 

@@ -4,7 +4,7 @@ import type { Sql } from "../db.ts";
 import { addAgentFromTemplate, enqueueRun } from "./fleet.ts";
 import { executeFleetModelStep } from "./fleet-model.server.ts";
 import { emptyWorkspace } from "./workspace.ts";
-import { snapshotRevision, updateOwnerWorkspace } from "./store.ts";
+import { preserveServerRunAuthority, snapshotRevision, updateOwnerWorkspace } from "./store.ts";
 import type { UsageReceipt } from "./usage-ledger.ts";
 
 function fixture(provider = "gemini") {
@@ -110,4 +110,27 @@ test("C5 fleet receipts preserve the selected Nemotron route while recording its
   assert.equal(records[0].model, "model unknown");
   assert.equal(records.at(-1)?.provider, "openrouter");
   assert.equal(records.at(-1)?.model, "model unknown");
+});
+
+test("account stop retains a completed provider answer without queuing another step", async () => {
+  const f = fixture();
+  let stopped = false;
+  const result = await executeFleetModelStep(f.sql, "owner", { runId: f.queued.run.id, expectedRevision: snapshotRevision(f.queued.ws), freeOnly: false, allowPaid: true }, {
+    stop: async () => stopped ? "on" : "off",
+    record: async () => {},
+    call: async (_owner, _provider, _text, mark) => { mark(); stopped = true; return { ok: true, text: "Completed before stop", model: "fixture-model" }; },
+  });
+  assert(result.ok);
+  const run = result.workspace.runs.find(row => row.id === f.queued.run.id)!;
+  assert.equal(run.state, "canceled");
+  assert.equal(run.modelOperation?.state, "completed");
+  assert.match(run.result, /Completed before stop/);
+});
+
+test("a stale browser snapshot cannot rewind, omit or manufacture a model operation", () => {
+  const { queued } = fixture();
+  const claim = { ...queued.run, state: "waiting_external" as const, modelOperation: { id: "claimed-operation", state: "claimed" as const, provider: "gemini" } };
+  assert.deepEqual(preserveServerRunAuthority([claim], [queued.run])[0]?.modelOperation, claim.modelOperation);
+  assert.deepEqual(preserveServerRunAuthority([claim], []), [claim]);
+  assert.equal(preserveServerRunAuthority([], [claim])[0]?.modelOperation, undefined);
 });

@@ -41,7 +41,13 @@ export function preserveServerRunAuthority(current: AgentRun[], incoming: AgentR
   const terminalGrant = new Set(["consumed", "revoked", "expired", "superseded"]);
   const next: AgentRun[] = incoming.map(run => {
     const authority = stored.get(run.id);
-    if (!authority) return { ...run, externalOperation: undefined };
+    if (!authority) return { ...run, externalOperation: undefined, modelOperation: undefined };
+    // Model claims are issued by the owner transaction. Client snapshots cannot
+    // clear an in-flight claim, advance its step or forge a completion.
+    if (authority.modelOperation && (authority.modelOperation.state !== "completed" || run.step < authority.step)) {
+      return { ...authority, state: run.state === "canceled" || run.state === "paused" ? run.state : authority.state };
+    }
+    run = { ...run, modelOperation: authority.modelOperation };
     const retired = [...(authority.approvalHistory ?? []), ...(authority.pendingApproval && terminalGrant.has(authority.pendingApproval.state) ? [authority.pendingApproval] : [])];
     const retiredIds = new Set(retired.filter(grant => terminalGrant.has(grant.state)).map(grant => grant.id));
     const history = new Map([...(run.approvalHistory ?? []), ...retired].map(grant => [`${grant.id}:${grant.state}`, grant]));
@@ -78,7 +84,7 @@ export function preserveServerRunAuthority(current: AgentRun[], incoming: AgentR
   const seen = new Set(next.map(run => run.id));
   // Explicit history removal uses its own owner transaction. A snapshot omission
   // cannot erase an operation, including an unresolved dispatch after a crash.
-  for (const run of current) if (!seen.has(run.id) && run.externalOperation) next.push(run);
+  for (const run of current) if (!seen.has(run.id) && (run.externalOperation || run.modelOperation)) next.push(run);
   return next;
 }
 

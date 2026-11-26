@@ -518,6 +518,20 @@ export function readFleet(input: unknown): FleetShape {
         approvedActions: Array.isArray(row.approvedActions) ? row.approvedActions.filter((item): item is string => typeof item === "string").slice(0, 12) : [],
         pendingApproval: readApproval(row.pendingApproval),
         approvalHistory: Array.isArray(row.approvalHistory) ? row.approvalHistory.map(readApproval).filter((approval): approval is RunApproval => !!approval).slice(-40) : [],
+        agentVersion: typeof row.agentVersion === "number" ? row.agentVersion : undefined,
+        chatId: typeof row.chatId === "string" ? row.chatId : undefined,
+        scheduleId: typeof row.scheduleId === "string" ? row.scheduleId : undefined,
+        scheduledAt: typeof row.scheduledAt === "string" ? row.scheduledAt : undefined,
+        execution: isRecord(row.execution) ? {
+          provider: typeof row.execution.provider === "string" ? row.execution.provider : null,
+          tier: normalizeBotModel({ chatTier: row.execution.tier }).chatTier ?? null,
+          instructions: typeof row.execution.instructions === "string" ? row.execution.instructions.slice(0, 2000) : "",
+          knowledge: typeof row.execution.knowledge === "string" ? row.execution.knowledge.slice(0, 12000) : "",
+          projectId: typeof row.execution.projectId === "string" ? row.execution.projectId : null,
+          memory: row.execution.memory === "on" ? "on" : "off",
+        } : undefined,
+        delegations: Array.isArray(row.delegations) ? row.delegations.filter(isRecord).filter((item) => typeof item.agentId === "string" && typeof item.goal === "string").slice(0, PLAN_MAX_CHILDREN).map((item) => ({ agentId: item.agentId as string, goal: (item.goal as string).slice(0, 2000), allowedTools: toolList(item.allowedTools), maxSteps: Math.min(20, Math.max(1, Number(item.maxSteps) || 1)) })) : undefined,
+        modelOperation: isRecord(row.modelOperation) && typeof row.modelOperation.id === "string" && typeof row.modelOperation.provider === "string" && ["claimed", "uncertain", "completed"].includes(String(row.modelOperation.state)) ? { id: row.modelOperation.id, provider: row.modelOperation.provider, state: row.modelOperation.state as "claimed" | "uncertain" | "completed", model: typeof row.modelOperation.model === "string" ? row.modelOperation.model : undefined } : undefined,
         configuration: readConfiguration(row.configuration),
         stepResults: readStepResults(row.stepResults),
         verification: isRecord(row.verification) ? { state: row.verification.state === "verified" ? "verified" : row.verification.state === "not_met" ? "not_met" : "unverified", detail: typeof row.verification.detail === "string" ? row.verification.detail.slice(0, 500) : "" } : undefined,
@@ -913,6 +927,8 @@ export function enqueueRun(ws: Workspace, agentId: string, goal: string, now?: s
     workerId: null,
     leaseUntil: null,
     approvedActions: [],
+    agentVersion: agent.version,
+    execution: { provider: agent.chatProvider || null, tier: agent.chatTier || null, instructions: agent.instructions, knowledge: agent.knowledge || "", projectId: agent.projectId, memory: agent.memory },
     configuration: configurationOf(agent),
     stepResults: [],
     approvalHistory: [],
@@ -1433,6 +1449,7 @@ export function claimFleetModelStep(ws: Workspace, runId: string, operationId: s
   const agent = run && ws.agents.find((item) => item.id === run.agentId && !item.archived);
   if (ws.halted || !run || !agent) return { ok: false, error: "The run is unavailable or stopped." };
   if (run.step >= run.maxSteps || !["queued", "waiting_external"].includes(run.state) || run.plan[run.step]?.tool !== "model" || !agent.tools.includes("model")) return { ok: false, error: "This run has no permitted model step." };
+  if (run.configuration && JSON.stringify(run.configuration) !== JSON.stringify(configurationOf(agent))) return { ok: false, error: "The reviewed agent configuration changed before execution." };
   if (run.modelOperation) return { ok: false, error: "This model operation already started. Reconcile its outcome before creating new work." };
   if (!run.execution?.provider || !run.agentVersion || run.agentVersion !== agent.version) return { ok: false, error: "Review the agent provider and revision before starting its model step." };
   const request: FleetModelRequest = { operationId, runId, agentId: run.agentId, agentVersion: run.agentVersion, provider: run.execution.provider, tier: run.execution.tier, goal: run.goal, instructions: run.execution.instructions, knowledge: run.execution.knowledge, notes: agent.memory === "on" && run.execution.memory === "on" ? ws.memories.filter((note) => !note.archived && (note.scope === "global" || note.scope === "project" && !!run.execution?.projectId && note.projectId === run.execution.projectId)).slice(0, 12).map(({ id, text }) => ({ id, text })) : [], maxCalls: 1 };
@@ -1442,7 +1459,15 @@ export function claimFleetModelStep(ws: Workspace, runId: string, operationId: s
 export function completeFleetModelStep(ws: Workspace, request: FleetModelRequest, outcome: { ok: boolean; text?: string; error?: string; provider: string; model?: string; dispatched?: boolean }, now: string): Workspace {
   return { ...ws, runs: ws.runs.map((run) => {
     if (run.id !== request.runId || run.modelOperation?.id !== request.operationId || run.modelOperation.state !== "claimed") return run;
-    if (ws.halted || run.state === "canceled") return { ...run, modelOperation: { ...run.modelOperation, state: "uncertain" as const }, error: "Stopped while a provider outcome was pending; no new work started." };
+    if (ws.halted || run.state === "canceled") {
+      if (outcome.ok && outcome.provider === request.provider && outcome.text?.trim()) {
+        const updated = advanceWithResult(run, outcome.text);
+        return { ...updated, state: "canceled" as const, modelOperation: { ...run.modelOperation, state: "completed" as const, model: outcome.model },
+          error: "Stopped. The provider had already returned this result. No further steps ran." };
+      }
+      return { ...run, modelOperation: outcome.dispatched === false ? undefined : { ...run.modelOperation, state: "uncertain" as const },
+        error: outcome.dispatched === false ? "Stopped before dispatch." : "Stopped while a provider outcome was pending; no new work started." };
+    }
     if (!outcome.ok || outcome.provider !== request.provider || !outcome.text?.trim()) return { ...run, modelOperation: outcome.dispatched === false ? undefined : { ...run.modelOperation, state: "uncertain" as const }, state: "waiting_external" as const, error: outcome.error || "The requested provider result could not be verified. It was not retried." };
     const updated = advanceWithResult(run, outcome.text);
     return { ...updated, state: "queued" as const, error: "", updatedAt: now, modelOperation: { ...run.modelOperation, state: "completed" as const, model: outcome.model } };

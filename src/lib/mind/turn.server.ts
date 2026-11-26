@@ -1,3 +1,4 @@
+import { readHaltState } from "./halt.server.ts";
 import { writeUsageReceipt, trackUsageResponse } from "./usage-ledger.server.ts";
 import type { UsageReceipt } from "./usage-ledger.ts";
 import { providerRequestId } from "./provider-usage.ts";
@@ -12,6 +13,7 @@ import { toNativeProviderTurns } from "./ai-provider-native.ts";
 import type { ModelCapabilities } from "./model-capabilities.ts";
 import type { SkillApplicationReceipt } from "./skill-activation.ts";
 import { consultationResponse, providerResponse } from "./provider-response.ts";
+import { isOpenRouterFreeModel } from "./provider-catalog.ts";
 import { validatePrimaryConfiguration } from "./turn-primary-selection.ts";
 import { listEnvironmentModelCatalogs, validateEnvironmentModel } from "./environment-model-catalog.server.ts";
 import { catalogForProvider } from "./environment-model-catalog.ts";
@@ -838,20 +840,40 @@ async function modulesConnectedNow(userId: string) {
   return modules;
 }
 
-async function validateHelperConfiguration(userId: string, id: string, text: string): Promise<{ ok: true; provider: string; model: string } | { ok: false; error: string }> {
+async function validateHelperConfiguration(userId: string, id: string, text: string, requestedGrokModel = "grok-4.5"): Promise<{ ok: true; provider: string; model: string } | { ok: false; error: string }> {
   if (id.startsWith("custom:")) {
     const selected = parseCustomProviderChoice(id);
     if (!selected.ok) return selected;
     const valid = await validateCustomProviderSelection(userId, selected);
     return valid.ok ? { ok: true, provider: id, model: selected.model } : valid;
   }
-  const selected = validatePrimaryConfiguration({ provider: id, requestedModel: id === "grok" ? "grok-4.5" : undefined, text, imageCount: 0, controls: {}, memory: "off", xai: id === "grok" ? resolveXaiInferenceApiKey(process.env) : { ok: false } }, process.env);
+  const selected = validatePrimaryConfiguration({ provider: id, requestedModel: id === "grok" ? requestedGrokModel : undefined, text, imageCount: 0, controls: {}, memory: "off", xai: id === "grok" ? resolveXaiInferenceApiKey(process.env) : { ok: false } }, process.env);
   if (!selected.ok) return selected;
   const readiness = await validateEnvironmentModel(userId, selected.provider, selected.model, { outputTokens: id === "grok" || id === "anthropic" ? 400 : undefined });
   return readiness.ok ? selected : readiness;
 }
 
-export async function askConnectedModule(userId: string, id: string, requestText: string, onDispatch: () => void, signal: AbortSignal, options: { freeOnly?: boolean; tier?: import("./model-tiers.ts").ModelTier } = {}): Promise<ConsultReply> {
+export async function callFleetProvider(userId: string, id: string, requestText: string, onDispatch: () => void, signal: AbortSignal, options: { operationId: string; tier?: import("./model-tiers.ts").ModelTier; freeOnly: boolean }): Promise<ConsultReply> {
+  const model = id === "grok" ? resolveModelTier(options.tier ?? "Expert", requestText, process.env).model : undefined;
+  const configured = await validateHelperConfiguration(userId, id, requestText, model);
+  if (!configured.ok) return { ok: false, text: "", error: configured.error };
+  const free = id === "nemotron" || (id === "openrouter" && isOpenRouterFreeModel(configured.model))
+    || (id === "ollama" && isLocalConsultRunner(process.env.LOCAL_MODEL_URL));
+  if (options.freeOnly && !free) return { ok: false, text: "", error: "This route has no verified free price for the selected model." };
+  const context = dispatchContext({ operationId: options.operationId, provider: financialProviderId(configured.provider), model: configured.model,
+    stage: "agent", args: { text: requestText, model: configured.model, system: ADRIAN_MIND_IDENTITY }, textOnly: true });
+  signal.throwIfAborted();
+  const reservation = await reserveOwnerDispatch(userId, undefined, undefined, context);
+  if (!reservation.ok) return { ok: false, text: "", error: reservation.error };
+  return runSettledDispatch(userId, reservation.reservationId, async () => {
+    let dispatched = false;
+    if (signal.aborted || await readHaltState(userId) !== "off") return { ok: false, text: "", error: "Execution stopped before the provider call.", dispatched };
+    const answer = await askConnectedModule(userId, id, requestText, () => { dispatched = true; onDispatch(); }, signal, { freeOnly: options.freeOnly, model });
+    return { ...answer, dispatched };
+  });
+}
+
+async function askConnectedModule(userId: string, id: string, requestText: string, onDispatch: () => void, signal: AbortSignal, options: { freeOnly?: boolean; model?: string } = {}): Promise<ConsultReply> {
   const transport: typeof fetch = (...args) => {
     signal.throwIfAborted();
     onDispatch();
@@ -875,7 +897,7 @@ export async function askConnectedModule(userId: string, id: string, requestText
         signal: signal ? AbortSignal.any([signal, AbortSignal.timeout(20_000)]) : AbortSignal.timeout(20_000),
         headers: { "content-type": "application/json", authorization: `Bearer ${keyed.key}` },
         body: JSON.stringify({
-          model: "grok-4.5",
+          model: options.model ?? "grok-4.5",
           messages: [
             { role: "system", content: ADRIAN_MIND_IDENTITY },
             { role: "user", content: requestText },
