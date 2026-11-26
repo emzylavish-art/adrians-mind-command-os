@@ -1,9 +1,11 @@
 name: Adrian's Mind production verification
+# Candidate CI also runs when audit evidence changes.
 
 on:
   push:
     branches: ["main"]
     paths:
+      - "docs/audits/five-way/**"
       - "src/**"
       - "scripts/**"
       - "migrations/**"
@@ -12,6 +14,7 @@ on:
       - ".github/workflows/dashboard-verify.yml"
   pull_request:
     paths:
+      - "docs/audits/five-way/**"
       - "src/**"
       - "scripts/**"
       - "migrations/**"

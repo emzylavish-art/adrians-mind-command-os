@@ -269,7 +269,11 @@
       "recordUrl": "https://app.notion.com/p/4231aa2763238171b61ded08986e6b29?pvs=204",
       "caseReports": {
         "files": [],
-        "lookup": "Exact-head CI logs and named source fixtures must be checked individually; case-level proof has not yet been recorded."
+        "lookup": "Exact-head CI logs and named source fixtures must be checked individually; case-level proof has not yet been recorded.",
+        "candidateExplicitIdMatches": [
+          "src/lib/mind/c1-runtime-regressions.test.ts"
+        ],
+        "candidateWarning": "Candidate paths match an explicit ID in a C1 test file; verify the actual case against the acceptance before assigning coverage."
       },
       "nextCheck": "Resolve the exact combined test for this record from its committed source evidence and execute its acceptance path before closure."
     },
@@ -286,7 +290,11 @@
       "recordUrl": "https://app.notion.com/p/4231aa2763238171b61ded08986e6b29?pvs=204",
       "caseReports": {
         "files": [],
-        "lookup": "Exact-head CI logs and named source fixtures must be checked individually; case-level proof has not yet been recorded."
+        "lookup": "Exact-head CI logs and named source fixtures must be checked individually; case-level proof has not yet been recorded.",
+        "candidateExplicitIdMatches": [
+          "src/lib/mind/c1-runtime-regressions.test.ts"
+        ],
+        "candidateWarning": "Candidate paths match an explicit ID in a C1 test file; verify the actual case against the acceptance before assigning coverage."
       },
       "nextCheck": "Resolve the exact combined test for this record from its committed source evidence and execute its acceptance path before closure."
     },
@@ -337,7 +345,11 @@
       "recordUrl": "https://app.notion.com/p/4231aa27632381d6a2e8d69d24e7feac?pvs=204",
       "caseReports": {
         "files": [],
-        "lookup": "Exact-head CI logs and named source fixtures must be checked individually; case-level proof has not yet been recorded."
+        "lookup": "Exact-head CI logs and named source fixtures must be checked individually; case-level proof has not yet been recorded.",
+        "candidateExplicitIdMatches": [
+          "src/lib/mind/c1-runtime-regressions.test.ts"
+        ],
+        "candidateWarning": "Candidate paths match an explicit ID in a C1 test file; verify the actual case against the acceptance before assigning coverage."
       },
       "nextCheck": "Resolve the exact combined test for this record from its committed source evidence and execute its acceptance path before closure."
     },
@@ -354,7 +366,11 @@
       "recordUrl": "https://app.notion.com/p/4231aa27632381d6a2e8d69d24e7feac?pvs=204",
       "caseReports": {
         "files": [],
-        "lookup": "Exact-head CI logs and named source fixtures must be checked individually; case-level proof has not yet been recorded."
+        "lookup": "Exact-head CI logs and named source fixtures must be checked individually; case-level proof has not yet been recorded.",
+        "candidateExplicitIdMatches": [
+          "src/lib/mind/c1-runtime-regressions.test.ts"
+        ],
+        "candidateWarning": "Candidate paths match an explicit ID in a C1 test file; verify the actual case against the acceptance before assigning coverage."
       },
       "nextCheck": "Resolve the exact combined test for this record from its committed source evidence and execute its acceptance path before closure."
     },
@@ -388,7 +404,11 @@
       "recordUrl": "https://app.notion.com/p/4231aa27632381d6a2e8d69d24e7feac?pvs=204",
       "caseReports": {
         "files": [],
-        "lookup": "Exact-head CI logs and named source fixtures must be checked individually; case-level proof has not yet been recorded."
+        "lookup": "Exact-head CI logs and named source fixtures must be checked individually; case-level proof has not yet been recorded.",
+        "candidateExplicitIdMatches": [
+          "src/lib/mind/c1-runtime-regressions.test.ts"
+        ],
+        "candidateWarning": "Candidate paths match an explicit ID in a C1 test file; verify the actual case against the acceptance before assigning coverage."
       },
       "nextCheck": "Resolve the exact combined test for this record from its committed source evidence and execute its acceptance path before closure."
     },
@@ -405,7 +425,11 @@
       "recordUrl": "https://app.notion.com/p/4231aa27632381d6a2e8d69d24e7feac?pvs=204",
       "caseReports": {
         "files": [],
-        "lookup": "Exact-head CI logs and named source fixtures must be checked individually; case-level proof has not yet been recorded."
+        "lookup": "Exact-head CI logs and named source fixtures must be checked individually; case-level proof has not yet been recorded.",
+        "candidateExplicitIdMatches": [
+          "src/lib/mind/c1-runtime-regressions.test.ts"
+        ],
+        "candidateWarning": "Candidate paths match an explicit ID in a C1 test file; verify the actual case against the acceptance before assigning coverage."
       },
       "nextCheck": "Resolve the exact combined test for this record from its committed source evidence and execute its acceptance path before closure."
     },
@@ -422,7 +446,11 @@
       "recordUrl": "https://app.notion.com/p/4231aa2763238142af7ed04c954f6825?pvs=204",
       "caseReports": {
         "files": [],
-        "lookup": "Exact-head CI logs and named source fixtures must be checked individually; case-level proof has not yet been recorded."
+        "lookup": "Exact-head CI logs and named source fixtures must be checked individually; case-level proof has not yet been recorded.",
+        "candidateExplicitIdMatches": [
+          "src/lib/mind/c1-research-skills.test.ts"
+        ],
+        "candidateWarning": "Candidate paths match an explicit ID in a C1 test file; verify the actual case against the acceptance before assigning coverage."
       },
       "nextCheck": "Resolve the exact combined test for this record from its committed source evidence and execute its acceptance path before closure."
     },
@@ -439,7 +467,11 @@
       "recordUrl": "https://app.notion.com/p/4231aa2763238142af7ed04c954f6825?pvs=204",
       "caseReports": {
         "files": [],
-        "lookup": "Exact-head CI logs and named source fixtures must be checked individually; case-level proof has not yet been recorded."
+        "lookup": "Exact-head CI logs and named source fixtures must be checked individually; case-level proof has not yet been recorded.",
+        "candidateExplicitIdMatches": [
+          "src/lib/mind/c1-research-skills.test.ts"
+        ],
+        "candidateWarning": "Candidate paths match an explicit ID in a C1 test file; verify the actual case against the acceptance before assigning coverage."
       },
       "nextCheck": "Resolve the exact combined test for this record from its committed source evidence and execute its acceptance path before closure."
     },
@@ -473,7 +505,11 @@
       "recordUrl": "https://app.notion.com/p/4231aa2763238142af7ed04c954f6825?pvs=204",
       "caseReports": {
         "files": [],
-        "lookup": "Exact-head CI logs and named source fixtures must be checked individually; case-level proof has not yet been recorded."
+        "lookup": "Exact-head CI logs and named source fixtures must be checked individually; case-level proof has not yet been recorded.",
+        "candidateExplicitIdMatches": [
+          "src/lib/mind/c1-research-skills.test.ts"
+        ],
+        "candidateWarning": "Candidate paths match an explicit ID in a C1 test file; verify the actual case against the acceptance before assigning coverage."
       },
       "nextCheck": "Resolve the exact combined test for this record from its committed source evidence and execute its acceptance path before closure."
     },
@@ -490,7 +526,11 @@
       "recordUrl": "https://app.notion.com/p/4231aa2763238142af7ed04c954f6825?pvs=204",
       "caseReports": {
         "files": [],
-        "lookup": "Exact-head CI logs and named source fixtures must be checked individually; case-level proof has not yet been recorded."
+        "lookup": "Exact-head CI logs and named source fixtures must be checked individually; case-level proof has not yet been recorded.",
+        "candidateExplicitIdMatches": [
+          "src/lib/mind/c1-research-skills.test.ts"
+        ],
+        "candidateWarning": "Candidate paths match an explicit ID in a C1 test file; verify the actual case against the acceptance before assigning coverage."
       },
       "nextCheck": "Resolve the exact combined test for this record from its committed source evidence and execute its acceptance path before closure."
     },
@@ -507,7 +547,11 @@
       "recordUrl": "https://app.notion.com/p/4231aa2763238142af7ed04c954f6825?pvs=204",
       "caseReports": {
         "files": [],
-        "lookup": "Exact-head CI logs and named source fixtures must be checked individually; case-level proof has not yet been recorded."
+        "lookup": "Exact-head CI logs and named source fixtures must be checked individually; case-level proof has not yet been recorded.",
+        "candidateExplicitIdMatches": [
+          "src/lib/mind/c1-durable-runtime.test.ts"
+        ],
+        "candidateWarning": "Candidate paths match an explicit ID in a C1 test file; verify the actual case against the acceptance before assigning coverage."
       },
       "nextCheck": "Resolve the exact combined test for this record from its committed source evidence and execute its acceptance path before closure."
     },
@@ -524,7 +568,11 @@
       "recordUrl": "https://app.notion.com/p/4231aa276323814dbf40cef97b4305d3?pvs=204",
       "caseReports": {
         "files": [],
-        "lookup": "Exact-head CI logs and named source fixtures must be checked individually; case-level proof has not yet been recorded."
+        "lookup": "Exact-head CI logs and named source fixtures must be checked individually; case-level proof has not yet been recorded.",
+        "candidateExplicitIdMatches": [
+          "src/lib/mind/c1-research-skills.test.ts"
+        ],
+        "candidateWarning": "Candidate paths match an explicit ID in a C1 test file; verify the actual case against the acceptance before assigning coverage."
       },
       "nextCheck": "Resolve the exact combined test for this record from its committed source evidence and execute its acceptance path before closure."
     },
@@ -558,7 +606,11 @@
       "recordUrl": "https://app.notion.com/p/4231aa276323814dbf40cef97b4305d3?pvs=204",
       "caseReports": {
         "files": [],
-        "lookup": "Exact-head CI logs and named source fixtures must be checked individually; case-level proof has not yet been recorded."
+        "lookup": "Exact-head CI logs and named source fixtures must be checked individually; case-level proof has not yet been recorded.",
+        "candidateExplicitIdMatches": [
+          "src/lib/mind/c1-research-skills.test.ts"
+        ],
+        "candidateWarning": "Candidate paths match an explicit ID in a C1 test file; verify the actual case against the acceptance before assigning coverage."
       },
       "nextCheck": "Resolve the exact combined test for this record from its committed source evidence and execute its acceptance path before closure."
     },
@@ -575,7 +627,12 @@
       "recordUrl": "https://app.notion.com/p/4231aa276323814dbf40cef97b4305d3?pvs=204",
       "caseReports": {
         "files": [],
-        "lookup": "Exact-head CI logs and named source fixtures must be checked individually; case-level proof has not yet been recorded."
+        "lookup": "Exact-head CI logs and named source fixtures must be checked individually; case-level proof has not yet been recorded.",
+        "candidateExplicitIdMatches": [
+          "src/lib/mind/c1-durable-runtime.test.ts",
+          "src/lib/mind/c1-research-skills.test.ts"
+        ],
+        "candidateWarning": "Candidate paths match an explicit ID in a C1 test file; verify the actual case against the acceptance before assigning coverage."
       },
       "nextCheck": "Resolve the exact combined test for this record from its committed source evidence and execute its acceptance path before closure."
     },
@@ -609,7 +666,11 @@
       "recordUrl": "https://app.notion.com/p/4231aa276323814dbf40cef97b4305d3?pvs=204",
       "caseReports": {
         "files": [],
-        "lookup": "Exact-head CI logs and named source fixtures must be checked individually; case-level proof has not yet been recorded."
+        "lookup": "Exact-head CI logs and named source fixtures must be checked individually; case-level proof has not yet been recorded.",
+        "candidateExplicitIdMatches": [
+          "src/lib/mind/c1-research-skills.test.ts"
+        ],
+        "candidateWarning": "Candidate paths match an explicit ID in a C1 test file; verify the actual case against the acceptance before assigning coverage."
       },
       "nextCheck": "Resolve the exact combined test for this record from its committed source evidence and execute its acceptance path before closure."
     },
@@ -745,7 +806,11 @@
       "recordUrl": "https://app.notion.com/p/4231aa27632381f287e3e6e03345ff49?pvs=204",
       "caseReports": {
         "files": [],
-        "lookup": "Exact-head CI logs and named source fixtures must be checked individually; case-level proof has not yet been recorded."
+        "lookup": "Exact-head CI logs and named source fixtures must be checked individually; case-level proof has not yet been recorded.",
+        "candidateExplicitIdMatches": [
+          "src/lib/mind/c1-durable-runtime.test.ts"
+        ],
+        "candidateWarning": "Candidate paths match an explicit ID in a C1 test file; verify the actual case against the acceptance before assigning coverage."
       },
       "nextCheck": "Resolve the exact combined test for this record from its committed source evidence and execute its acceptance path before closure."
     },
@@ -991,7 +1056,12 @@
       "recordUrl": "https://app.notion.com/p/4231aa276323815f9afdfa12c46c4c5a?pvs=204",
       "caseReports": {
         "files": [],
-        "lookup": "Exact-head CI logs and named source fixtures must be checked individually; case-level proof has not yet been recorded."
+        "lookup": "Exact-head CI logs and named source fixtures must be checked individually; case-level proof has not yet been recorded.",
+        "candidateExplicitIdMatches": [
+          "src/lib/mind/c1-durable-runtime.test.ts",
+          "src/lib/mind/c1-runtime-regressions.test.ts"
+        ],
+        "candidateWarning": "Candidate paths match an explicit ID in a C1 test file; verify the actual case against the acceptance before assigning coverage."
       },
       "nextCheck": "Resolve the exact combined test for this record from its committed source evidence and execute its acceptance path before closure."
     },
@@ -1025,7 +1095,11 @@
       "recordUrl": "https://app.notion.com/p/4231aa276323815f9afdfa12c46c4c5a?pvs=204",
       "caseReports": {
         "files": [],
-        "lookup": "Exact-head CI logs and named source fixtures must be checked individually; case-level proof has not yet been recorded."
+        "lookup": "Exact-head CI logs and named source fixtures must be checked individually; case-level proof has not yet been recorded.",
+        "candidateExplicitIdMatches": [
+          "src/lib/mind/c1-runtime-regressions.test.ts"
+        ],
+        "candidateWarning": "Candidate paths match an explicit ID in a C1 test file; verify the actual case against the acceptance before assigning coverage."
       },
       "nextCheck": "Resolve the exact combined test for this record from its committed source evidence and execute its acceptance path before closure."
     },
@@ -1067,7 +1141,11 @@
       "recordUrl": "https://app.notion.com/p/4231aa276323815f9afdfa12c46c4c5a?pvs=204",
       "caseReports": {
         "files": [],
-        "lookup": "Exact-head CI logs and named source fixtures must be checked individually; case-level proof has not yet been recorded."
+        "lookup": "Exact-head CI logs and named source fixtures must be checked individually; case-level proof has not yet been recorded.",
+        "candidateExplicitIdMatches": [
+          "src/lib/mind/c1-durable-runtime.test.ts"
+        ],
+        "candidateWarning": "Candidate paths match an explicit ID in a C1 test file; verify the actual case against the acceptance before assigning coverage."
       },
       "nextCheck": "Resolve the exact combined test for this record from its committed source evidence and execute its acceptance path before closure."
     },
@@ -1601,7 +1679,12 @@
       "recordUrl": "https://app.notion.com/p/4231aa276323810fb293e13da228b8cd?pvs=204",
       "caseReports": {
         "files": [],
-        "lookup": "Exact-head CI logs and named source fixtures must be checked individually; case-level proof has not yet been recorded."
+        "lookup": "Exact-head CI logs and named source fixtures must be checked individually; case-level proof has not yet been recorded.",
+        "candidateExplicitIdMatches": [
+          "src/lib/mind/c1-durable-runtime.test.ts",
+          "src/lib/mind/c1-runtime-regressions.test.ts"
+        ],
+        "candidateWarning": "Candidate paths match an explicit ID in a C1 test file; verify the actual case against the acceptance before assigning coverage."
       },
       "nextCheck": "Resolve the exact combined test for this record from its committed source evidence and execute its acceptance path before closure."
     },
@@ -1635,7 +1718,12 @@
       "recordUrl": "https://app.notion.com/p/4231aa276323810fb293e13da228b8cd?pvs=204",
       "caseReports": {
         "files": [],
-        "lookup": "Exact-head CI logs and named source fixtures must be checked individually; case-level proof has not yet been recorded."
+        "lookup": "Exact-head CI logs and named source fixtures must be checked individually; case-level proof has not yet been recorded.",
+        "candidateExplicitIdMatches": [
+          "src/lib/mind/c1-durable-runtime.test.ts",
+          "src/lib/mind/c1-runtime-regressions.test.ts"
+        ],
+        "candidateWarning": "Candidate paths match an explicit ID in a C1 test file; verify the actual case against the acceptance before assigning coverage."
       },
       "nextCheck": "Resolve the exact combined test for this record from its committed source evidence and execute its acceptance path before closure."
     },
@@ -1652,7 +1740,11 @@
       "recordUrl": "https://app.notion.com/p/4231aa276323810fb293e13da228b8cd?pvs=204",
       "caseReports": {
         "files": [],
-        "lookup": "Exact-head CI logs and named source fixtures must be checked individually; case-level proof has not yet been recorded."
+        "lookup": "Exact-head CI logs and named source fixtures must be checked individually; case-level proof has not yet been recorded.",
+        "candidateExplicitIdMatches": [
+          "src/lib/mind/c1-durable-runtime.test.ts"
+        ],
+        "candidateWarning": "Candidate paths match an explicit ID in a C1 test file; verify the actual case against the acceptance before assigning coverage."
       },
       "nextCheck": "Resolve the exact combined test for this record from its committed source evidence and execute its acceptance path before closure."
     },
@@ -1686,7 +1778,11 @@
       "recordUrl": "https://app.notion.com/p/4231aa276323810fb293e13da228b8cd?pvs=204",
       "caseReports": {
         "files": [],
-        "lookup": "Exact-head CI logs and named source fixtures must be checked individually; case-level proof has not yet been recorded."
+        "lookup": "Exact-head CI logs and named source fixtures must be checked individually; case-level proof has not yet been recorded.",
+        "candidateExplicitIdMatches": [
+          "src/lib/mind/c1-durable-runtime.test.ts"
+        ],
+        "candidateWarning": "Candidate paths match an explicit ID in a C1 test file; verify the actual case against the acceptance before assigning coverage."
       },
       "nextCheck": "Resolve the exact combined test for this record from its committed source evidence and execute its acceptance path before closure."
     },
@@ -1835,7 +1931,11 @@
       "recordUrl": "https://app.notion.com/p/4231aa2763238116b82eeb6f3e38e85e?pvs=204",
       "caseReports": {
         "files": [],
-        "lookup": "Exact-head CI logs and named source fixtures must be checked individually; case-level proof has not yet been recorded."
+        "lookup": "Exact-head CI logs and named source fixtures must be checked individually; case-level proof has not yet been recorded.",
+        "candidateExplicitIdMatches": [
+          "src/lib/mind/c1-runtime-regressions.test.ts"
+        ],
+        "candidateWarning": "Candidate paths match an explicit ID in a C1 test file; verify the actual case against the acceptance before assigning coverage."
       },
       "nextCheck": "Resolve the exact combined test for this record from its committed source evidence and execute its acceptance path before closure."
     },
@@ -1886,7 +1986,11 @@
       "recordUrl": "https://app.notion.com/p/4231aa2763238116b82eeb6f3e38e85e?pvs=204",
       "caseReports": {
         "files": [],
-        "lookup": "Exact-head CI logs and named source fixtures must be checked individually; case-level proof has not yet been recorded."
+        "lookup": "Exact-head CI logs and named source fixtures must be checked individually; case-level proof has not yet been recorded.",
+        "candidateExplicitIdMatches": [
+          "src/lib/mind/c1-runtime-regressions.test.ts"
+        ],
+        "candidateWarning": "Candidate paths match an explicit ID in a C1 test file; verify the actual case against the acceptance before assigning coverage."
       },
       "nextCheck": "Resolve the exact combined test for this record from its committed source evidence and execute its acceptance path before closure."
     },
