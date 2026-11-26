@@ -23,6 +23,19 @@ export const PALETTE_DESTINATIONS = [
   { id: "settings", label: "Settings" },
 ] as const;
 
+function matches(text: string, search: string) {
+  const normalized = text.toLowerCase();
+  return search.split(/\s+/).every((word) => normalized.includes(word));
+}
+
+function excerpt(text: string, search: string) {
+  const lower = text.toLowerCase();
+  const exact = lower.indexOf(search);
+  const index = exact >= 0 ? exact : Math.max(0, lower.indexOf(search.split(/\s+/)[0]!));
+  const start = Math.max(0, index - 28);
+  return text.slice(start, start + Math.max(search.length + 28, 96));
+}
+
 function destinationMatches(item: { label: string; aliases?: readonly string[] }, search: string) {
   if (!search) return true;
   return [item.label, ...(item.aliases ?? [])].join(" ").toLowerCase().includes(search);
@@ -85,13 +98,13 @@ export function paletteHits(input: PaletteInput): PaletteHit[] {
     }
   }
   for (const note of input.memories) {
-    if (!note.archived && note.text.toLowerCase().includes(search)) {
-      rows.push({ key: note.id, label: note.text.slice(0, 80), meta: "Note", view: "memory", ref: note.id });
+    if (!note.archived && matches(note.text, search)) {
+      rows.push({ key: note.id, label: note.text.slice(0, 80), meta: "Note", view: "memory", ref: note.id, excerpt: excerpt(note.text, search) });
     }
   }
   for (const file of input.files) {
-    if (`${file.name} ${file.text}`.toLowerCase().includes(search)) {
-      rows.push({ key: file.id, label: file.name, meta: "File", view: "files", ref: file.id });
+    if (matches(`${file.name} ${file.text}`, search)) {
+      rows.push({ key: file.id, label: file.name, meta: "File", view: "files", ref: file.id, excerpt: matches(file.text, search) ? excerpt(file.text, search) : undefined });
     }
   }
   const rank = (row: PaletteHit) => {
