@@ -14,8 +14,8 @@ describe("GitHub tools", () => {
     assert.match(listed, /LibreTranslate is not installed/);
   });
 
-  it("leaves incomplete translation to the caller and refuses an unsupported language", () => {
-    assert.equal(runGitHubTool("translate hello"), null);
+  it("asks for the missing translation target and refuses an unsupported language", () => {
+    assert.match(runGitHubTool("translate hello") ?? "", /Choose a target language.*No text was translated/);
     const result = runGitHubTool("translate hello to klingon");
     assert.match(result ?? "", /No installed language package was selected/);
     assert.match(result ?? "", /Nothing was translated/);

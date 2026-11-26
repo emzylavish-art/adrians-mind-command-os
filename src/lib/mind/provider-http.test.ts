@@ -53,9 +53,9 @@ describe("non-Grok provider path rate limit", () => {
     const preflight = helper.indexOf("const denied = await preflight(context,");
     const denial = helper.indexOf("if (denied)");
     const failure = helper.indexOf("return { ok: false", denial);
-    const dispatch = helper.indexOf("markDispatched();", failure);
-    const invoke = helper.indexOf("askConnectedModule(", dispatch);
-    assert.ok(preflight >= 0 && denial > preflight && failure > denial && dispatch > failure && invoke > dispatch, "each helper checks its exact dispatch context and returns a denial before invoking its adapter");
+    const invoke = helper.indexOf("await askConnectedModule(", failure);
+    const dispatch = helper.indexOf('markDispatched("helper");', invoke);
+    assert.ok(preflight >= 0 && denial > preflight && failure > denial && invoke > failure && dispatch > invoke, "each helper checks its exact dispatch context and returns a denial before invoking its adapter");
     assert.ok(source.indexOf("contextValidation") < source.indexOf("const help = await collectConsultHelp"));
     for (const [branch, call] of [
       ['if (requestedProvider === "nemotron"', "() => routeSelectedModel("],

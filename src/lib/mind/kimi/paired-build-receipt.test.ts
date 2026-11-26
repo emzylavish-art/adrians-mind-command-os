@@ -93,7 +93,7 @@ test("queued selection accepts only bounded non-use reports and cannot escalate 
 test("the mounted paired Build queue, polling and browser recovery paths carry the same receipt", () => {
   const route = readFileSync(new URL("./acp.server.ts", import.meta.url), "utf8");
   const component = readFileSync(new URL("../../../components/mind/build-workspace.tsx", import.meta.url), "utf8");
-  assert.match(route, /payload: pairedBuildPayload\(prompt, prepared\.skillReceipts, requestedCwd\)/);
+  assert.match(route, /payload: \{ \.\.\.pairedBuildPayload\(prompt, prepared\.skillReceipts, requestedCwd\), sourceReceipt \}/);
   assert.equal(route.match(/receipt: pairedBuildReceipt\(job, ownerId\)/g)?.length, 2);
   assert.doesNotMatch(route, /queued_for_coding/);
   assert.match(component, /setJob\(data\.job\);\s*setBuildReceipt\(data\.receipt \?\? null\)/);

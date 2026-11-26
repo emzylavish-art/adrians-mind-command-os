@@ -47,7 +47,7 @@ test("C5 actual Effort handler clears the scoped override and retains the chosen
     let ws: Workspace = { ...created.ws, chats: created.ws.chats.map(chat => ({ ...chat, botProvider: provider, botTier: "Heavy", botExactModel: provider === "grok" ? "grok-4.6" : undefined })) };
     let override: string | null = "grok-4.6", tier = "Heavy";
     const noop = () => undefined;
-    const context = vm.createContext({ active: ws.chats[0], effortModelTier, resolveSendPath, saveComposerEffort, setComposerEffort: noop, setNotice: noop, setLogicRoute: noop, setGrokModel: (value: string | null) => { override = value; }, setModelTier: (value: string) => { tier = value; }, setWs: (update: (value: Workspace) => Workspace) => { ws = update(ws); }, applyVoiceMode: noop, setView: noop });
+    const context = vm.createContext({ preferenceStorage: null, active: ws.chats[0], effortModelTier, resolveSendPath, saveComposerEffort, setComposerEffort: noop, setNotice: noop, setLogicRoute: noop, setGrokModel: (value: string | null) => { override = value; }, setModelTier: (value: string) => { tier = value; }, setWs: (update: (value: Workspace) => Workspace) => { ws = update(ws); }, applyVoiceMode: noop, setView: noop });
     vm.runInContext(stripTypeScriptTypes(app.slice(start, end)) + '\nchooseComposerEffort("fast");', context);
     assert.equal(tier, "Fast"); assert.equal(override, null);
     assert.equal(ws.chats[0].botProvider, provider);

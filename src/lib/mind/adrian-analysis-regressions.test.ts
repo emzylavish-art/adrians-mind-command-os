@@ -20,6 +20,7 @@ const at = "2026-11-25T12:00:00.000Z";
 const operation = `${Date.now()}-${randomUUID()}`;
 function fixture() {
   const ws = emptyWorkspace();
+  ws.projects = [{ id: "project-a", name: "Fixture project", description: "", createdAt: at }];
   ws.chats = [{ id: "chat-a", title: "Review", memory: "on", temporary: false, autonomy: "ask", projectId: "project-a", retrievalLog: [],
     messages: [{ id: "user-a", role: "user", content: "Review the plan", at, deliveryOperationId: operation, delivery: "unconfirmed" }] }];
   return ws;

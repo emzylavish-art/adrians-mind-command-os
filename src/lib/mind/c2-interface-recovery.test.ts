@@ -19,20 +19,20 @@ function actualNode(predicate: (node: ts.Node) => boolean): string {
 
 test("AA064/065: actual overlay opens as a named native modal, cancels, closes and restores its opener", () => {
   const ast = ts.createSourceFile("command-app.tsx", source, ts.ScriptTarget.Latest, true, ts.ScriptKind.TSX);
-  const declaration = ast.statements.find((node) => ts.isFunctionDeclaration(node) && node.name?.text === "Overlay");
-  assert.ok(declaration);
-  const compiled = ts.transpileModule(`${declaration.getText(ast)}\nglobalThis.fixture = Overlay;`, { compilerOptions: { jsx: ts.JsxEmit.ReactJSX, module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 } }).outputText;
+  assert.match(source, /WorkspaceDialog as Overlay/);
+  const modal = readFileSync(new URL("../../components/mind/workspace-dialog.tsx", import.meta.url), "utf8");
+  const compiled = ts.transpileModule(modal, { compilerOptions: { jsx: ts.JsxEmit.ReactJSX, module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 } }).outputText;
   const events: string[] = [];
-  class Element { isConnected = true; focus() { events.push("restore-focus"); } }
+  class Element { isConnected = true; getClientRects() { return [{}]; } focus() { events.push("restore-focus"); } }
   const opener = new Element();
   let effect: (() => (() => void)) | undefined;
   const dialog = { showModal() { events.push("native-modal"); }, close() { events.push("close"); } };
   const context: any = { exports: {}, HTMLElement: Element, document: { activeElement: opener, body: {} },
-    useRef: () => ({ current: dialog }), useLayoutEffect: (fn: () => (() => void)) => { effect = fn; },
-    createPortal: (tree: unknown) => tree, finishMenu() {},
-    require: () => ({ jsx: (type: unknown, props: unknown) => ({ type, props }), jsxs: (type: unknown, props: unknown) => ({ type, props }) }) };
+    require: (name: string) => name === "react" ? {
+      useRef: (value: unknown) => ({ current: value ?? dialog }), useEffect: (fn: () => (() => void)) => { effect = fn; }
+    } : { jsx: (type: unknown, props: unknown) => ({ type, props }), jsxs: (type: unknown, props: unknown) => ({ type, props }) } };
   runInNewContext(compiled, context);
-  const tree = context.fixture({ children: "Fixture", labelledBy: "fixture-title", onDismiss: () => events.push("dismiss") });
+  const tree = context.exports.WorkspaceDialog({ children: "Fixture", labelledBy: "fixture-title", onDismiss: () => events.push("dismiss") });
   assert.equal(tree.type, "dialog");
   assert.equal(tree.props["aria-modal"], "true");
   assert.equal(tree.props["aria-labelledby"], "fixture-title");
@@ -93,7 +93,7 @@ test("AA029–032: multiple pending recoveries survive normalization and unrelat
 test("AA060/062/063: actual hidden-storage and polling callbacks avoid unnecessary work", () => {
   const initializer = actualNode((node) => ts.isVariableDeclaration(node) && node.name.getText() === "storedBytes");
   let serialized = 0;
-  const state: any = { view: "chat", ws: {}, Blob, useMemo: (fn: () => unknown) => fn(), JSON: { stringify: () => { serialized++; return "{}"; } } };
+  const state: any = { view: "chat", settingsPane: "data", ws: {}, Blob, useMemo: (fn: () => unknown) => fn(), JSON: { stringify: () => { serialized++; return "{}"; } } };
   runInNewContext(`globalThis.bytes = (${initializer.slice(initializer.indexOf("=") + 1)});`, state);
   assert.equal(serialized, 0); assert.equal(state.bytes, 0);
   state.view = "settings";
@@ -103,7 +103,7 @@ test("AA060/062/063: actual hidden-storage and polling callbacks avoid unnecessa
   const polling = actualNode((node) => ts.isCallExpression(node) && node.expression.getText() === "useEffect" && node.getText().includes('workerId: "browser-worker"'));
   let tick: (() => void) | undefined, writes = 0, calls = 0;
   const workspace = { ...emptyWorkspace(), runs: [{ id: "scheduled:fixture", state: "running" }] };
-  const context = { useEffect: (fn: () => unknown) => fn(), wsRef: { current: workspace }, desktopActedRef: { current: new Set() }, Date,
+  const context = { ready: true, accountPending: false, account: { id: "fixture" }, useEffect: (fn: () => unknown) => fn(), wsRef: { current: workspace }, desktopActedRef: { current: new Set() }, Date,
     runDueSchedules: (ws: unknown) => ws, tickFleet: (ws: unknown) => ws, setWs: () => { writes++; },
     spokenPcCommand: () => false, fetch: () => { calls++; }, window: { setInterval: (fn: () => void) => { tick = fn; return 1; }, clearInterval() {} } };
   runInNewContext(ts.transpileModule(polling, { compilerOptions: { target: ts.ScriptTarget.ES2022 } }).outputText, context);
@@ -119,8 +119,8 @@ test("AA017: actual Speak answer attribution is returned by that turn and cannot
   const handler = actualNode((node) => ts.isFunctionDeclaration(node) && node.name?.text === "speakChatTurn");
   const made = createChat(emptyWorkspace(), { memory: "off", temporary: false, autonomy: "ask", projectId: null });
   let provideReceipt = true;
-  const context: any = { exports: {}, activeId: made.chat.id, wsRef: { current: made.ws }, speakStylePersonality: () => "assistant", localStorage: { getItem: () => null }, parseCreateBot: () => false,
-    deliver: async (_chat: unknown, _text: string, _source: unknown, _resume: boolean, _images: unknown, options: { onReceipt: (receipt: unknown) => void }) => { if (provideReceipt) options.onReceipt({ provider: "Gemini", model: "fixture-reported" }); return "fixture answer"; } };
+  const context: any = { exports: {}, activeId: made.chat.id, preferenceStorage: { getItem: () => null }, wsRef: { current: made.ws }, speakStylePersonality: () => "assistant", localStorage: { getItem: () => null }, parseCreateBot: () => false,
+    deliver: async (_chat: unknown, _text: string, _source: unknown, _resume: boolean, _images: unknown, options: { onReply: (receipt: unknown) => void }) => { if (provideReceipt) options.onReply({ provider: "Gemini", model: "fixture-reported" }); return "fixture answer"; } };
   runInNewContext(ts.transpileModule(`${handler}\nexports.speakChatTurn = speakChatTurn;`, { compilerOptions: { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.CommonJS } }).outputText, context);
   const first = await context.exports.speakChatTurn("one", { stay: true });
   assert.equal(first.provider, "Gemini"); assert.equal(first.model, "fixture-reported");
@@ -131,25 +131,25 @@ test("AA017: actual Speak answer attribution is returned by that turn and cannot
 
 test("AA068: mobile drawer uses colors declared by both the dark and light themes", () => {
   const css = readFileSync(new URL("../../styles.css", import.meta.url), "utf8");
-  const effect = actualNode((node) => ts.isCallExpression(node) && node.expression.getText() === "useEffect" && node.getText().includes('drawer.style.setProperty("background"'));
+  const rule = css.match(/\.shell \.rail\.nav-drawer-open \{([^}]+)/)?.[1] ?? "";
   for (const property of ["background", "color"]) {
-    const value = effect.match(new RegExp(`drawer\\.style\\.setProperty\\("${property}", "var\\((--[a-z-]+)\\)"`))?.[1];
+    const value = rule.match(new RegExp(`${property}: var\\((--[a-z-]+)\\)`))?.[1];
     assert.ok(value, `${property} must reference a theme token`);
     assert.ok((css.match(new RegExp(`${value}:`, "g"))?.length ?? 0) >= 2, `${value} must be defined for both themes`);
   }
 });
 
 test("AA016: actual staged-call guard rejects account changes and every stage close aborts pending capture", () => {
-  const handler = actualNode((node) => ts.isFunctionDeclaration(node) && node.name?.text === "stagedSpeak");
-  const guard = handler.match(/const isCurrent = ([^;]+);/)?.[1];
+  const handler = actualNode((node) => ts.isFunctionDeclaration(node) && node.name?.text === "speak");
+  const guard = handler.match(/const current = ([^;]+);/)?.[1];
   assert.ok(guard);
-  const state: any = { turnOwner: { current: 'owner-a' }, draftOwner: 'owner-a', generation: 1, stagedSpeakGeneration: { current: 1 }, speakStageOpenRef: { current: true }, abort: { signal: { aborted: false } }, wsRef: { current: { halted: false } } };
+  const state = { turnOwner: { current: 'owner-a' }, draftOwner: 'owner-a', generation: 1, speakGenRef: { current: 1 }, abort: new AbortController(), wsRef: { current: { halted: false } } };
   assert.equal(runInNewContext(`(${guard})()`, state), true);
   state.turnOwner.current = 'owner-b'; assert.equal(runInNewContext(`(${guard})()`, state), false);
-  const closeEffect = actualNode((node) => ts.isCallExpression(node) && node.expression.getText() === 'useLayoutEffect' && node.getText().includes('const wasOpen = speakStageOpenRef.current'));
-  const effects: string[] = [];
-  const closed: any = { speakStageOpen: false, speakStageOpenRef: { current: true }, stagedSpeakGeneration: { current: 1 }, stagedSpeakAbort: { current: { abort: () => effects.push('abort') } }, sharedAudioOutput: { interrupt: () => effects.push('audio') }, window: { speechSynthesis: { cancel: () => effects.push('browser') } }, useLayoutEffect: (fn: () => void) => fn() };
-  runInNewContext(closeEffect, closed);
-  assert.equal(closed.speakStageOpenRef.current, false); assert.equal(closed.stagedSpeakGeneration.current, 2);
-  assert.deepEqual(effects, ['abort', 'browser', 'audio']);
+  state.turnOwner.current = 'owner-a';
+  const transition = actualNode(node => ts.isCallExpression(node) && node.getText().includes("if (speakStageOpenRef.current && !speakStageOpen) interruptSpeakPlayback()") && node.expression.getText().startsWith("use"));
+  const open = { current: true };
+  runInNewContext(transition, { speakStageOpenRef: open, speakStageOpen: false, useEffect: (fn: () => void) => fn(), useLayoutEffect: (fn: () => void) => fn(), interruptSpeakPlayback: () => state.abort.abort() });
+  assert.equal(open.current, false);
+  assert.equal(runInNewContext(`(${guard})()`, state), false);
 });

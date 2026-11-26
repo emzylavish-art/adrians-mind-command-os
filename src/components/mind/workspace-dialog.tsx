@@ -17,7 +17,7 @@ export function WorkspaceDialog({ children, labelledBy, onDismiss }: { children:
       if (previous?.isConnected && previous.getClientRects().length) previous.focus({ preventScroll: true });
     };
   }, []);
-  return <dialog ref={dialog} tabIndex={-1} aria-labelledby={labelledBy} aria-label={labelledBy ? undefined : "Workspace dialog"}
+  return <dialog ref={dialog} tabIndex={-1} aria-modal="true" aria-labelledby={labelledBy} aria-label={labelledBy ? undefined : "Workspace dialog"}
     className="workspace-dialog fixed inset-0 m-0 h-full max-h-none w-full max-w-none border-0 bg-transparent p-4 text-fg backdrop:bg-black/25 open:grid open:place-items-end md:open:place-items-center"
     onKeyDown={(event) => {
       if (event.defaultPrevented || event.key !== "Tab" || event.altKey || event.ctrlKey || event.metaKey) return;

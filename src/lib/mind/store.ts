@@ -152,47 +152,47 @@ async function persistSnapshot(sql: Sql, userId: string, ws: Workspace, previous
     const before = new Map(previous[key].map((row) => [row.id, canonical(row)]));
     const after = new Map(ws[key].map((row) => [row.id, canonical(row)]));
     changed[key] = new Set([...after].filter(([id, value]) => before.get(id) !== value).map(([id]) => id));
-    const removed = [...before.keys()].filter((id) => !after.has(id) || changed[key].has(id));
+    const removed = [...before.keys()].filter((id) => !after.has(id));
     if (removed.length) await sql.query(`delete from ${tables[key]} where user_id = $1 and id = any($2::text[])`, [userId, removed]);
   }
   for (const project of ws.projects.filter((row) => changed.projects.has(row.id))) {
-    await sql`insert into mind_project (user_id, id, name, description, created_at) values (${userId}, ${project.id}, ${project.name}, ${project.description}, ${project.createdAt})`;
+    await sql`insert into mind_project (user_id, id, name, description, created_at) values (${userId}, ${project.id}, ${project.name}, ${project.description}, ${project.createdAt}) on conflict (user_id, id) do update set name = excluded.name, description = excluded.description, created_at = excluded.created_at`;
   }
   for (const chat of ws.chats.filter((row) => changed.chats.has(row.id))) {
-    await sql`insert into mind_chat (user_id, id, project_id, title, memory, autonomy, temporary, messages, retrieval_log) values (${userId}, ${chat.id}, ${chat.projectId}, ${chat.title}, ${chat.memory}, ${chat.autonomy}, ${chat.temporary}, ${JSON.stringify(chat.messages)}::jsonb, ${JSON.stringify(chat.retrievalLog)}::jsonb)`;
+    await sql`insert into mind_chat (user_id, id, project_id, title, memory, autonomy, temporary, messages, retrieval_log) values (${userId}, ${chat.id}, ${chat.projectId}, ${chat.title}, ${chat.memory}, ${chat.autonomy}, ${chat.temporary}, ${JSON.stringify(chat.messages)}::jsonb, ${JSON.stringify(chat.retrievalLog)}::jsonb) on conflict (user_id, id) do update set project_id = excluded.project_id, title = excluded.title, memory = excluded.memory, autonomy = excluded.autonomy, temporary = excluded.temporary, messages = excluded.messages, retrieval_log = excluded.retrieval_log`;
   }
   for (const note of ws.memories.filter((row) => changed.memories.has(row.id))) {
-    await sql`insert into mind_memory (user_id, id, scope, project_id, chat_id, body, source, archived, versions, created_at, updated_at) values (${userId}, ${note.id}, ${note.scope}, ${note.projectId}, ${note.chatId}, ${note.text}, ${note.source}, ${note.archived}, ${JSON.stringify(note.versions)}::jsonb, ${note.createdAt}, ${note.updatedAt})`;
+    await sql`insert into mind_memory (user_id, id, scope, project_id, chat_id, body, source, archived, versions, created_at, updated_at) values (${userId}, ${note.id}, ${note.scope}, ${note.projectId}, ${note.chatId}, ${note.text}, ${note.source}, ${note.archived}, ${JSON.stringify(note.versions)}::jsonb, ${note.createdAt}, ${note.updatedAt}) on conflict (user_id, id) do update set scope = excluded.scope, project_id = excluded.project_id, chat_id = excluded.chat_id, body = excluded.body, source = excluded.source, archived = excluded.archived, versions = excluded.versions, created_at = excluded.created_at, updated_at = excluded.updated_at`;
   }
   for (const file of ws.files.filter((row) => changed.files.has(row.id))) {
-    await sql`insert into mind_file (user_id, id, project_id, name, bytes, text_copy, created_at) values (${userId}, ${file.id}, ${file.projectId}, ${file.name}, ${file.bytes}, ${file.text}, ${file.createdAt})`;
+    await sql`insert into mind_file (user_id, id, project_id, name, bytes, text_copy, created_at) values (${userId}, ${file.id}, ${file.projectId}, ${file.name}, ${file.bytes}, ${file.text}, ${file.createdAt}) on conflict (user_id, id) do update set project_id = excluded.project_id, name = excluded.name, bytes = excluded.bytes, text_copy = excluded.text_copy, created_at = excluded.created_at`;
   }
   for (const entry of ws.audit.filter((row) => changed.audit.has(row.id))) {
-    await sql`insert into mind_audit (user_id, id, at, action, target, result) values (${userId}, ${entry.id}, ${entry.at}, ${entry.action}, ${entry.target}, ${entry.result})`;
+    await sql`insert into mind_audit (user_id, id, at, action, target, result) values (${userId}, ${entry.id}, ${entry.at}, ${entry.action}, ${entry.target}, ${entry.result}) on conflict (user_id, id) do update set at = excluded.at, action = excluded.action, target = excluded.target, result = excluded.result`;
   }
   for (const entry of ws.usage.filter((row) => changed.usage.has(row.id))) {
-    await sql`insert into mind_usage (user_id, id, chat_id, at, model, request_id, prompt_tokens, completion_tokens) values (${userId}, ${entry.id}, ${entry.chatId}, ${entry.at}, ${entry.model}, ${entry.requestId}, ${entry.promptTokens}, ${entry.completionTokens})`;
+    await sql`insert into mind_usage (user_id, id, chat_id, at, model, request_id, prompt_tokens, completion_tokens) values (${userId}, ${entry.id}, ${entry.chatId}, ${entry.at}, ${entry.model}, ${entry.requestId}, ${entry.promptTokens}, ${entry.completionTokens}) on conflict (user_id, id) do update set chat_id = excluded.chat_id, at = excluded.at, model = excluded.model, request_id = excluded.request_id, prompt_tokens = excluded.prompt_tokens, completion_tokens = excluded.completion_tokens`;
   }
   for (const agent of ws.agents.filter((row) => changed.agents.has(row.id))) {
-    await sql`insert into mind_agent (user_id, id, name, version, body) values (${userId}, ${agent.id}, ${agent.name}, ${agent.version}, ${JSON.stringify(agent)}::jsonb)`;
+    await sql`insert into mind_agent (user_id, id, name, version, body) values (${userId}, ${agent.id}, ${agent.name}, ${agent.version}, ${JSON.stringify(agent)}::jsonb) on conflict (user_id, id) do update set name = excluded.name, version = excluded.version, body = excluded.body`;
   }
   for (const run of ws.runs.filter((row) => changed.runs.has(row.id))) {
-    await sql`insert into mind_agent_run (user_id, id, agent_id, parent_id, state, body) values (${userId}, ${run.id}, ${run.agentId}, ${run.parentId}, ${run.state}, ${JSON.stringify(run)}::jsonb)`;
+    await sql`insert into mind_agent_run (user_id, id, agent_id, parent_id, state, body) values (${userId}, ${run.id}, ${run.agentId}, ${run.parentId}, ${run.state}, ${JSON.stringify(run)}::jsonb) on conflict (user_id, id) do update set agent_id = excluded.agent_id, parent_id = excluded.parent_id, state = excluded.state, body = excluded.body`;
   }
   for (const event of ws.runEvents.filter((row) => changed.runEvents.has(row.id))) {
-    await sql`insert into mind_agent_event (user_id, id, run_id, at, kind, detail) values (${userId}, ${event.id}, ${event.runId}, ${event.at}, ${event.kind}, ${event.detail})`;
+    await sql`insert into mind_agent_event (user_id, id, run_id, at, kind, detail) values (${userId}, ${event.id}, ${event.runId}, ${event.at}, ${event.kind}, ${event.detail}) on conflict (user_id, id) do update set run_id = excluded.run_id, at = excluded.at, kind = excluded.kind, detail = excluded.detail`;
   }
   for (const connection of ws.connections.filter((row) => changed.connections.has(row.id))) {
-    await sql`insert into mind_connection (user_id, id, provider, label, status) values (${userId}, ${connection.id}, ${connection.provider}, ${connection.label}, ${connection.status})`;
+    await sql`insert into mind_connection (user_id, id, provider, label, status) values (${userId}, ${connection.id}, ${connection.provider}, ${connection.label}, ${connection.status}) on conflict (user_id, id) do update set provider = excluded.provider, label = excluded.label, status = excluded.status`;
   }
   for (const mailbox of ws.mailboxes.filter((row) => changed.mailboxes.has(row.id))) {
-    await sql`insert into mind_mailbox (user_id, id, label, address, status) values (${userId}, ${mailbox.id}, ${mailbox.label}, ${mailbox.address}, ${mailbox.status})`;
+    await sql`insert into mind_mailbox (user_id, id, label, address, status) values (${userId}, ${mailbox.id}, ${mailbox.label}, ${mailbox.address}, ${mailbox.status}) on conflict (user_id, id) do update set label = excluded.label, address = excluded.address, status = excluded.status`;
   }
   for (const job of ws.schedules.filter((row) => changed.schedules.has(row.id))) {
-    await sql`insert into mind_schedule (user_id, id, name, agent_id, next_run_at, enabled) values (${userId}, ${job.id}, ${job.name}, ${job.agentId}, ${job.nextRunAt}, ${job.enabled})`;
+    await sql`insert into mind_schedule (user_id, id, name, agent_id, next_run_at, enabled) values (${userId}, ${job.id}, ${job.name}, ${job.agentId}, ${job.nextRunAt}, ${job.enabled}) on conflict (user_id, id) do update set name = excluded.name, agent_id = excluded.agent_id, next_run_at = excluded.next_run_at, enabled = excluded.enabled`;
   }
   for (const deployment of ws.deployments.filter((row) => changed.deployments.has(row.id))) {
-    await sql`insert into mind_deployment (user_id, id, agent_id, target, state) values (${userId}, ${deployment.id}, ${deployment.agentId}, ${deployment.target}, ${deployment.state})`;
+    await sql`insert into mind_deployment (user_id, id, agent_id, target, state) values (${userId}, ${deployment.id}, ${deployment.agentId}, ${deployment.target}, ${deployment.state}) on conflict (user_id, id) do update set agent_id = excluded.agent_id, target = excluded.target, state = excluded.state`;
   }
   await sql`insert into mind_snapshot (user_id, payload, updated_at) values (${userId}, ${payload}::jsonb, now()) on conflict (user_id) do update set payload = excluded.payload, updated_at = now()`;
 }

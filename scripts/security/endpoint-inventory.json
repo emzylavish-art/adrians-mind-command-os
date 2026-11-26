@@ -122,6 +122,7 @@
       "file": "src/routes/api/mind/build/ide.ts",
       "path": "/api/mind/build/ide",
       "methods": [
+        "GET",
         "POST"
       ],
       "policy": "owner_origin",
@@ -256,6 +257,25 @@
       ]
     },
     {
+      "file": "src/routes/api/mind/dashboard/health.ts",
+      "path": "/api/mind/dashboard/health",
+      "methods": [
+        "GET"
+      ],
+      "policy": "owner_read",
+      "notes": "Reads owner-scoped Dashboard and worker health; rate-limited before returning diagnostics.",
+      "evidence": [
+        {
+          "file": "src/routes/api/mind/dashboard/health.ts",
+          "requires": [
+            "requireUserId",
+            "allowMindRequest",
+            "buildOperationalHealth"
+          ]
+        }
+      ]
+    },
+    {
       "file": "src/routes/api/mind/dashboard/status.ts",
       "path": "/api/mind/dashboard/status",
       "methods": [
@@ -285,6 +305,67 @@
           "file": "src/routes/api/mind/desktop-update.ts",
           "requires": [
             "GET:"
+          ]
+        }
+      ]
+    },
+    {
+      "file": "src/routes/api/mind/dispatch-policy.ts",
+      "path": "/api/mind/dispatch-policy",
+      "methods": [
+        "GET",
+        "POST"
+      ],
+      "policy": "owner_origin",
+      "notes": "Authenticated owner reads settings and approves changes. Browser mutations require the current origin. Financial policy actions scope the request to that owner.",
+      "evidence": [
+        {
+          "file": "src/routes/api/mind/dispatch-policy.ts",
+          "requires": [
+            "requireUserId",
+            "assertSameOrigin",
+            "readFinancialSnapshot",
+            "approveFinancialRequest"
+          ]
+        }
+      ]
+    },
+    {
+      "file": "src/routes/api/mind/fleet/execute.ts",
+      "path": "/api/mind/fleet/execute",
+      "methods": [
+        "POST"
+      ],
+      "policy": "owner_origin",
+      "notes": "Rechecks the current account, emergency control and saved run for external steps.",
+      "evidence": [
+        {
+          "file": "src/routes/api/mind/fleet/execute.ts",
+          "requires": [
+            "requireUserId",
+            "assertSameOrigin",
+            "readHaltState",
+            "runExternalFleetStep"
+          ]
+        }
+      ]
+    },
+    {
+      "file": "src/routes/api/mind/fleet/history.ts",
+      "path": "/api/mind/fleet/history",
+      "methods": [
+        "POST"
+      ],
+      "policy": "owner_origin",
+      "notes": "Clears selected terminal records from the verified owner’s workspace.",
+      "evidence": [
+        {
+          "file": "src/routes/api/mind/fleet/history.ts",
+          "requires": [
+            "requireUserId",
+            "assertSameOrigin",
+            "clearFinishedRuns",
+            "updateOwnerWorkspace"
           ]
         }
       ]
@@ -679,6 +760,27 @@
           "requires": [
             "requireUserId",
             "decideFetchSite"
+          ]
+        }
+      ]
+    },
+    {
+      "file": "src/routes/api/mind/memory-policy.ts",
+      "path": "/api/mind/memory-policy",
+      "methods": [
+        "GET",
+        "POST"
+      ],
+      "policy": "owner_origin",
+      "notes": "Reads and updates the verified owner’s dispatch-time memory permissions.",
+      "evidence": [
+        {
+          "file": "src/routes/api/mind/memory-policy.ts",
+          "requires": [
+            "requireUserId",
+            "assertSameOrigin",
+            "readOwnerMemoryPolicy",
+            "writeOwnerMemoryPolicy"
           ]
         }
       ]
@@ -1264,6 +1366,66 @@
       ]
     },
     {
+      "file": "src/routes/api/mind/schedules/tick.ts",
+      "path": "/api/mind/schedules/tick",
+      "methods": [
+        "POST"
+      ],
+      "policy": "schedule_worker",
+      "notes": "Rejects missing or mismatched worker authorization and checks stop state before a bounded pass.",
+      "evidence": [
+        {
+          "file": "src/lib/mind/schedule-tick.server.ts",
+          "requires": [
+            "MIND_SCHEDULE_WORKER_TOKEN",
+            "expected.length < 32",
+            "timingSafeEqual",
+            "runLocalSchedulePass",
+            "readHaltState"
+          ]
+        }
+      ]
+    },
+    {
+      "file": "src/routes/api/mind/session.ts",
+      "path": "/api/mind/session",
+      "methods": [
+        "GET"
+      ],
+      "policy": "session_probe",
+      "notes": "Returns the canonical signed-in owner, a signed-out response, an identity conflict or an unavailable status.",
+      "evidence": [
+        {
+          "file": "src/routes/api/mind/session.ts",
+          "requires": [
+            "getSessionUser",
+            "handleSessionIdentity"
+          ]
+        }
+      ]
+    },
+    {
+      "file": "src/routes/api/mind/sessions.ts",
+      "path": "/api/mind/sessions",
+      "methods": [
+        "GET",
+        "POST"
+      ],
+      "policy": "owner_origin",
+      "notes": "Lists the verified owner’s Better Auth devices and revokes only a reviewed session after the same-origin check.",
+      "evidence": [
+        {
+          "file": "src/routes/api/mind/sessions.ts",
+          "requires": [
+            "requireUserId",
+            "assertSameOrigin",
+            "session.user.id !== owner",
+            "sessionToRevoke"
+          ]
+        }
+      ]
+    },
+    {
       "file": "src/routes/api/mind/skills.ts",
       "path": "/api/mind/skills",
       "methods": [
@@ -1298,6 +1460,27 @@
           "requires": [
             "requireUserId",
             "decideFetchSite"
+          ]
+        }
+      ]
+    },
+    {
+      "file": "src/routes/api/mind/usage.ts",
+      "path": "/api/mind/usage",
+      "methods": [
+        "DELETE",
+        "GET"
+      ],
+      "policy": "owner_fetch_metadata",
+      "notes": "Isolation and owner checks cover usage history and confirmed retention deletion.",
+      "evidence": [
+        {
+          "file": "src/routes/api/mind/usage.ts",
+          "requires": [
+            "decideRequestIsolation",
+            "requireUserId",
+            "body.body.ownerId !== owner",
+            "deleteUsageBefore"
           ]
         }
       ]
@@ -1453,6 +1636,28 @@
       ],
       "requiredInExport": [
         ".middleware([authMiddleware])"
+      ]
+    },
+    {
+      "file": "src/lib/mind/custom-connection-fns.ts",
+      "name": "refreshCustomConnectionFn",
+      "method": "POST",
+      "policy": "owner_rpc",
+      "notes": "Refreshes the signed-in owner’s connection while honoring the stop state.",
+      "evidence": [
+        {
+          "file": "src/lib/mind/custom-connection-fns.ts",
+          "requires": [
+            "authMiddleware",
+            "haltIsOn(context.userId)",
+            "refreshMcp(db, context.userId"
+          ]
+        }
+      ],
+      "requiredInExport": [
+        "authMiddleware",
+        "haltIsOn(context.userId)",
+        "refreshMcp(db, context.userId"
       ]
     },
     {
@@ -1757,6 +1962,28 @@
       ],
       "requiredInExport": [
         ".middleware([authMiddleware])"
+      ]
+    },
+    {
+      "file": "src/lib/mind/server.ts",
+      "name": "loadAccountAttachment",
+      "method": "POST",
+      "policy": "owner_rpc",
+      "notes": "Verifies the current owner before accessing the associated account operation.",
+      "evidence": [
+        {
+          "file": "src/lib/mind/server.ts",
+          "requires": [
+            "authMiddleware",
+            "context.userId",
+            "data.ownerId !== context.userId"
+          ]
+        }
+      ],
+      "requiredInExport": [
+        "authMiddleware",
+        "context.userId",
+        "data.ownerId !== context.userId"
       ]
     },
     {
@@ -2105,6 +2332,70 @@
     },
     {
       "file": "src/lib/mind/server.ts",
+      "name": "runFleetModelStep",
+      "method": "POST",
+      "policy": "owner_rpc",
+      "notes": "Verifies the current owner before accessing the associated account operation.",
+      "evidence": [
+        {
+          "file": "src/lib/mind/server.ts",
+          "requires": [
+            "authMiddleware",
+            "context.userId"
+          ]
+        }
+      ],
+      "requiredInExport": [
+        "authMiddleware",
+        "context.userId"
+      ]
+    },
+    {
+      "file": "src/lib/mind/server.ts",
+      "name": "saveAccountAttachment",
+      "method": "POST",
+      "policy": "owner_rpc",
+      "notes": "Verifies the current owner before accessing the associated account operation.",
+      "evidence": [
+        {
+          "file": "src/lib/mind/server.ts",
+          "requires": [
+            "authMiddleware",
+            "context.userId",
+            "data.ownerId !== context.userId"
+          ]
+        }
+      ],
+      "requiredInExport": [
+        "authMiddleware",
+        "context.userId",
+        "data.ownerId !== context.userId"
+      ]
+    },
+    {
+      "file": "src/lib/mind/server.ts",
+      "name": "saveMindChanges",
+      "method": "POST",
+      "policy": "owner_rpc",
+      "notes": "Verifies the current owner before accessing the associated account operation.",
+      "evidence": [
+        {
+          "file": "src/lib/mind/server.ts",
+          "requires": [
+            "authMiddleware",
+            "context.userId",
+            "validateWorkspaceChanges"
+          ]
+        }
+      ],
+      "requiredInExport": [
+        "authMiddleware",
+        "context.userId",
+        "validateWorkspaceChanges"
+      ]
+    },
+    {
+      "file": "src/lib/mind/server.ts",
       "name": "saveMindCopy",
       "method": "POST",
       "policy": "owner_rpc",
@@ -2384,6 +2675,28 @@
       ],
       "requiredInExport": [
         "getStatus()"
+      ]
+    },
+    {
+      "file": "src/lib/supabase/actions.ts",
+      "name": "endSupabaseSession",
+      "method": "POST",
+      "policy": "credential_establishment",
+      "notes": "Ends the current browser’s Supabase session after verifying origin and reports cleanup failures.",
+      "evidence": [
+        {
+          "file": "src/lib/supabase/actions.ts",
+          "requires": [
+            "isolationMiddleware",
+            "assertSameSiteRequest()",
+            "auth.signOut()"
+          ]
+        }
+      ],
+      "requiredInExport": [
+        "isolationMiddleware",
+        "assertSameSiteRequest()",
+        "auth.signOut()"
       ]
     },
     {

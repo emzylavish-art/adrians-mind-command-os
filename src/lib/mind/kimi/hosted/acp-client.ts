@@ -1,6 +1,5 @@
-import { ADRIAN_OS_BUILDER_ORDER } from "../../adrian-os-skill.ts";
 import { spawn } from "node:child_process";
-import { createHash, randomUUID } from "node:crypto";
+import { randomUUID } from "node:crypto";
 import { codingFileRequest, type CodingToolReceipt, type CodingFileChange } from "./file-receipts.ts";
 import { cpSync, existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
@@ -173,7 +172,7 @@ async function exchange(command: string, cwd: string, prompts: string[], instruc
           } else if (prompts.length && isObject(message.result)) {
             const sessionId = typeof message.result.sessionId === "string" ? message.result.sessionId : "";
             if (!sessionId) finish({ ...seen, status: "failed", error: "Kimi created a session without an id." });
-            else { seen.instructionReceipt = instructionReceipt; seen.requestDispatched = true; child.stdin.write(`${JSON.stringify({ jsonrpc: "2.0", id: 3, method: "session/prompt", params: { sessionId, prompt: [{ type: "text", text: `${ADRIAN_OS_BUILDER_ORDER}\n\n${prompts[0]}` }] } })}\n`); }
+            else { seen.instructionReceipt = instructionReceipt; seen.requestDispatched = true; child.stdin.write(`${JSON.stringify({ jsonrpc: "2.0", id: 3, method: "session/prompt", params: { sessionId, prompt: [{ type: "text", text: prompts[0] }] } })}\n`); }
           } else {
             finish({ ...seen, status: "session_created", error: undefined });
           }
@@ -426,9 +425,10 @@ export async function runCodingTurn(input: { prompt: string; cwd: string; mode?:
   const command = adrianBuildCommand();
   const mode = input.mode;
   const mcpServers = mcpServersFor(input.cwd);
+  const instructions = builderInstructions(input.prompt);
   const empty: CodingTurn = {
     ok: false, command, mode, mcpServers: mcpServers.length, operationId: randomUUID(),
-    verification: { implementation: "unverified", builderInstructionDigest: createHash("sha256").update(ADRIAN_OS_BUILDER_ORDER).digest("hex"), checks: [{ id: "build", status: "not_run" }, { id: "regression_tests", status: "not_run" }, { id: "acceptance", status: "not_run" }] },
+    verification: { implementation: "unverified", builderInstructionDigest: instructions.receipt.sha256, checks: [{ id: "build", status: "not_run" }, { id: "regression_tests", status: "not_run" }, { id: "acceptance", status: "not_run" }] },
   };
   if (!command.endsWith(".mjs") && !command.endsWith(".js")) return { ...empty, error: "The in-repo coding package was not found." };
   const opened = await openLiveSession(input.cwd, input.resumeSessionId, input.ownerId);
@@ -449,6 +449,7 @@ export async function runCodingTurn(input: { prompt: string; cwd: string; mode?:
       return {
         ...empty, sessionId, resumed: Boolean(input.resumeSessionId), reused, mode: handle.mode,
         processAlive: !handle.closed && handle.child.exitCode == null, pid: handle.pid, requestDispatched,
+        ...(requestDispatched ? { instructionReceipt: instructions.receipt } : {}),
         clientCalls: [...handle.calls], toolReceipts: [...handle.receipts],
         filesChanged: [...handle.changes.values()].filter(change => !change.beforeExists || change.before !== change.after),
         outputCharacters: handle.outputCharacters, outputComplete: handle.outputComplete,
@@ -464,7 +465,7 @@ export async function runCodingTurn(input: { prompt: string; cwd: string; mode?:
     }
     if (handle.closed || !handle.child.stdin || handle.child.stdin.destroyed) return receiptForTurn({ error: "The coding process is not accepting requests. No task was dispatched." });
     requestDispatched = true;
-    const prompted = await sendLive(handle, "session/prompt", { sessionId, prompt: [{ type: "text", text: `${ADRIAN_OS_BUILDER_ORDER}\n\n${input.prompt}` }] });
+    const prompted = await sendLive(handle, "session/prompt", { sessionId, prompt: [{ type: "text", text: instructions.text }] });
     await Promise.allSettled([...handle.clientPending]);
     if (handle.closed) return receiptForTurn({ error: "The coding process closed before the reply. Recorded changes were retained; completion was not assumed." });
     if (isObject(prompted.error)) {

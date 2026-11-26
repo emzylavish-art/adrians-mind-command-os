@@ -463,7 +463,7 @@ export function DashboardApp({ embedded = false, status }: { embedded?: boolean;
               id={card.id}
               title={card.title}
               summary={card.summary}
-              defaultOpen={hudDefaultOpen(index)}
+              defaultOpen={hudDefaultOpen(index, card.band)}
               focused={panelFocus}
               onFocus={setPanelFocus}
             >

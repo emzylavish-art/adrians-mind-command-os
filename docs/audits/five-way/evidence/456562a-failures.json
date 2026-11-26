@@ -1,0 +1,235 @@
+{
+  "commit": "456562aa3debac4fdf05822e41148d9955a35174",
+  "tree": "49305c2af409b06c5d5cc2c2e2f8b82341a0d0a4",
+  "totals": {
+    "pass": 3064,
+    "skip": 5,
+    "fail": 32
+  },
+  "failures": [
+    {
+      "file": "scripts/frontend-architecture.test.mjs",
+      "line": 64,
+      "name": "the current application and extracted conversation boundaries satisfy the checked-in architecture baseline",
+      "result": "fail"
+    },
+    {
+      "file": "scripts/security/endpoint-inventory.test.mjs",
+      "line": 10,
+      "name": "AA060 every HTTP method and RPC export has an explicit guard contract",
+      "result": "fail"
+    },
+    {
+      "file": "src/components/mind/surface-failure-host.test.ts",
+      "line": 67,
+      "name": "command-app routes failures through the shared emitter, with separate persona and Speak handling",
+      "result": "fail"
+    },
+    {
+      "file": "src/lib/mind/adrian-analysis-regressions.test.ts",
+      "line": 41,
+      "name": "AA020/022 memory context changes immediately with revocation, archive, project or temporary mode",
+      "result": "fail"
+    },
+    {
+      "file": "src/lib/mind/adrian-analysis-regressions.test.ts",
+      "line": 73,
+      "name": "AA033/038 context receipt counts omitted images and gives missing-byte recovery",
+      "result": "fail"
+    },
+    {
+      "file": "src/lib/mind/c2-interface-recovery.test.ts",
+      "line": 20,
+      "name": "AA064/065: actual overlay opens as a named native modal, cancels, closes and restores its opener",
+      "result": "fail"
+    },
+    {
+      "file": "src/lib/mind/c2-interface-recovery.test.ts",
+      "line": 93,
+      "name": "AA060/062/063: actual hidden-storage and polling callbacks avoid unnecessary work",
+      "result": "fail"
+    },
+    {
+      "file": "src/lib/mind/c2-interface-recovery.test.ts",
+      "line": 118,
+      "name": "AA017: actual Speak answer attribution is returned by that turn and cannot reuse a previous turn receipt",
+      "result": "fail"
+    },
+    {
+      "file": "src/lib/mind/c2-interface-recovery.test.ts",
+      "line": 132,
+      "name": "AA068: mobile drawer uses colors declared by both the dark and light themes",
+      "result": "fail"
+    },
+    {
+      "file": "src/lib/mind/c2-interface-recovery.test.ts",
+      "line": 142,
+      "name": "AA016: actual staged-call guard rejects account changes and every stage close aborts pending capture",
+      "result": "fail"
+    },
+    {
+      "file": "src/lib/mind/c2-workspace-recovery.test.ts",
+      "line": 12,
+      "name": "AA012/013: repeated attachments reuse scoped content and old archives cannot resurrect deleted files",
+      "result": "fail"
+    },
+    {
+      "file": "src/lib/mind/c2-workspace-recovery.test.ts",
+      "line": 66,
+      "name": "AA053/073\u2013075: metadata clocks merge independently; edits preserve a recoverable original and exports include configuration",
+      "result": "fail"
+    },
+    {
+      "file": "src/lib/mind/c2-workspace-recovery.test.ts",
+      "line": 98,
+      "name": "AA070/071: task evidence survives a full preference allowance and equivalent cost vocabulary",
+      "result": "fail"
+    },
+    {
+      "file": "src/lib/mind/c5-provider-recovery.test.ts",
+      "line": 56,
+      "name": "C5 AA010 marks custom dispatch only after the real preflight and DNS boundary",
+      "result": "fail"
+    },
+    {
+      "file": "src/lib/mind/c5-provider-recovery.test.ts",
+      "line": 72,
+      "name": "C5 AA011 repeated unsupported listings cannot heal a rejected credential",
+      "result": "fail"
+    },
+    {
+      "file": "src/lib/mind/c5-provider-recovery.test.ts",
+      "line": 99,
+      "name": "C5 AA013 actual provider route rejects a stale form owner before any mutation",
+      "result": "fail"
+    },
+    {
+      "file": "src/lib/mind/c5-provider-recovery.test.ts",
+      "line": 124,
+      "name": "C5 AA001/003 integration views use account observations and never map inaccessible status to disconnected",
+      "result": "fail"
+    },
+    {
+      "file": "src/lib/mind/c5-provider-recovery.test.ts",
+      "line": 134,
+      "name": "C5 AA012/013/014 owner-scoped UI and canonical session are wired to guarded route",
+      "result": "fail"
+    },
+    {
+      "file": "src/lib/mind/c5-provider-recovery.test.ts",
+      "line": 146,
+      "name": "C5 AA016 exact review and cancellation stay attached to the originating draft",
+      "result": "fail"
+    },
+    {
+      "file": "src/lib/mind/c5-provider-recovery.test.ts",
+      "line": 157,
+      "name": "C5 AA003 rendered Plugins badges distinguish sign-in, unavailable and a confirmed absent grant",
+      "result": "fail"
+    },
+    {
+      "file": "src/lib/mind/c5-provider-recovery.test.ts",
+      "line": 180,
+      "name": "C5 AA014 preview sign-out requires confirmed removal of all cookie sessions even without a bearer",
+      "result": "fail"
+    },
+    {
+      "file": "src/lib/mind/dashboard/hud-order.test.ts",
+      "line": 16,
+      "name": "keeps supporting cards collapsed until opened so the graph stays primary",
+      "result": "fail"
+    },
+    {
+      "file": "src/lib/mind/github-tools.test.ts",
+      "line": 17,
+      "name": "leaves incomplete translation to the caller and refuses an unsupported language",
+      "result": "fail"
+    },
+    {
+      "file": "src/lib/mind/integration-persona-explore.test.ts",
+      "line": 59,
+      "name": "persists the account-owned persona selection without a delayed workspace writer",
+      "result": "fail"
+    },
+    {
+      "file": "src/lib/mind/kimi/hosted/acp-client.test.ts",
+      "line": 66,
+      "name": "answers each ACP permission request once, regardless of option order",
+      "result": "fail"
+    },
+    {
+      "file": "src/lib/mind/kimi/hosted/acp-client.test.ts",
+      "line": 131,
+      "name": "C1 AA034 attaches the same full skill to the one-shot hosted ACP path",
+      "result": "fail"
+    },
+    {
+      "file": "src/lib/mind/kimi/paired-build-receipt.test.ts",
+      "line": 93,
+      "name": "the mounted paired Build queue, polling and browser recovery paths carry the same receipt",
+      "result": "fail"
+    },
+    {
+      "file": "src/lib/mind/media/asset-lifecycle.test.ts",
+      "line": 6,
+      "name": "editing retains immutable parent identity through offload, hydration, and export",
+      "result": "fail"
+    },
+    {
+      "file": "src/lib/mind/pc-pairing/pairing.test.ts",
+      "line": 151,
+      "name": "C5 binds reviewed terminal execution to its selected computer and directory",
+      "result": "fail"
+    },
+    {
+      "file": "src/lib/mind/persistence-incremental.test.ts",
+      "line": 12,
+      "name": "C4 incremental snapshots retain owner isolation, CAS and atomic rollback",
+      "result": "fail"
+    },
+    {
+      "file": "src/lib/mind/provider-http.test.ts",
+      "line": 50,
+      "name": "checks the request preflight before consulting helpers and dispatching direct providers",
+      "result": "fail"
+    },
+    {
+      "file": "src/lib/mind/selection-sync.test.ts",
+      "line": 40,
+      "name": "C5 actual Effort handler clears the scoped override and retains the chosen provider",
+      "result": "fail"
+    }
+  ],
+  "skips": [
+    {
+      "file": "scripts/brand-check.test.mjs",
+      "line": 312,
+      "name": "SKILL.md and AGENTS.md name the marker path and bound this script uses",
+      "result": "skip"
+    },
+    {
+      "file": "scripts/brand-check.test.mjs",
+      "line": 354,
+      "name": "the sections that own the brand-task prohibition never affirm a wait",
+      "result": "skip"
+    },
+    {
+      "file": "scripts/brand-check.test.mjs",
+      "line": 377,
+      "name": "SKILL.md tells the pass to self-check with the flag this CLI accepts",
+      "result": "skip"
+    },
+    {
+      "file": "scripts/write-atomic.test.mjs",
+      "line": 167,
+      "name": "every hand-over the og skill prints is one this script accepts",
+      "result": "skip"
+    },
+    {
+      "file": "src/lib/mind/handy-dictation.test.ts",
+      "line": 91,
+      "name": "Speak detection asks the loaded Handy engine and does not invent words",
+      "result": "skip"
+    }
+  ]
+}

@@ -1,31 +1,12 @@
+import { failureEnvelopeFromAction, type FailureDetails } from "@/lib/mind/failure-envelope";
 import { memorySendRevision, checkMemorySendRevision } from "@/lib/mind/memory-send-policy";
-import { commitSelectionChanges, ownerSelectionStorage, exactModelForChat } from "@/lib/mind/selection-sync";
 import type { StoredSelection } from "@/lib/mind/logic-routes";
-import { UsageHistory } from "@/components/mind/usage-history";
 import { archiveReview, packMemoryOnly, unpackMemoryOnly, quarantineImportedMemory, resolveImportedMemory, unreviewedMemoryScopeIds } from "@/lib/mind/archive-review";
 import { applyExecutionUsage } from "@/lib/mind/execution-usage";
 import { readVoicePipeline, writeVoicePipeline, speakWithBrowser, type VoicePipelinePreferences } from "@/lib/mind/voice/stage-routing";
-import { NotionIntegrationCard } from "@/components/mind/notion-integration-card";
-import { ModalOverlay } from "@/components/mind/modal-overlay";
-import { loadNotionRecovery, saveNotionRecovery, type NotionRecovery } from "@/lib/mind/notion-recovery";
 import { currentMemoryContext } from "@/lib/mind/context-permission";
 import { checkpointReply, completedHistory } from "@/lib/mind/partial-reply";
-import { contextReceiptNotice, type ContextReceipt } from "@/lib/mind/context-budget";
-import { ElapsedTime } from "@/components/mind/elapsed-time";
-import { createExecutionEvidence } from "@/lib/mind/execution-evidence";
-import { startBrowserWorkPump } from "@/lib/mind/browser-work-pump";
-import { subscribeVisibleClock } from "@/lib/mind/visible-clock";
-import { pollSavedVideo } from "@/lib/mind/media/video-poll";
-import { selectedVoiceRoute } from "@/lib/mind/voice/selected-route";
-import { InstructionLibrary, SkillPlanPreview } from "@/components/mind/instruction-library";
-import { defaultSkillPreferences, loadSkillPreferences, saveSkillPreferences, skillPreferenceKey, type SkillPreferences } from "@/lib/mind/skill-preferences";
-import type { TurnBody } from "@/lib/mind/turn.server";
-import { KnowledgeSettings } from "@/components/mind/knowledge-settings";
 import { ResearchEvidence } from "@/components/mind/research-evidence";
-import { ResearchLibrary } from "@/components/mind/research-library";
-import { RetainedVideo } from "@/components/mind/retained-video";
-import { researchFollowupContext, mergeResearchEvidence } from "@/lib/mind/research-followup";
-import { identifyImages, prepareMediaExport } from "@/lib/mind/media/asset-lifecycle";
 import { stageCodeHandoff } from "@/lib/mind/code-handoff";
 import type { TurnErrorCode } from "@/lib/mind/turn-error";
 import { ChatPane } from "./chat-pane";
@@ -36,16 +17,9 @@ import { ResourceState } from "./resource-state";
 import { GeneratedArtifactWorkspace } from "@/components/mind/generated-artifact-workspace";
 import { saveGeneratedArtifact } from "@/lib/mind/generated-artifacts";
 import { accountImageStore } from "@/lib/mind/media/blob-store";
-import { saveDocumentOriginal } from "@/lib/mind/document-originals";
 import { retrieveProjectPassages, MAX_DOCUMENT_INPUT_BYTES, MAX_DOCUMENT_TEXT_CHARS, MAX_LIBRARY_FILES } from "@/lib/mind/knowledge";
 import { effectiveContextPolicy, freshContextPolicy, contextDisclosure } from "@/lib/mind/memory/context-policy";
 import { memoryPolicyRevision, validateMemoryDispatch } from "@/lib/mind/memory/dispatch-policy";
-import { nextReadingPosition } from "@/lib/mind/reading-position";
-import { beginIncidentRecovery, createIncident, incidentForOperation, incidentStorageKey, planIncidentRecovery, readIncidents, recordIncident, resolveIncident, verifyIncidentRecovery, type Incident, type RecoveryBindings, type RecoveryProof } from "@/lib/mind/incidents";
-import { failureEnvelopeFromAction, notionFailureEnvelope, readFailureEnvelope, type FailureDetails, type FailureEnvelope } from "@/lib/mind/failure-envelope";
-import { IncidentRecoveryCard } from "./incident-recovery-card";
-import { ResourceSettings } from "@/components/mind/resource-settings";
-import { createOperationScope } from "@/lib/mind/operation-scope";
 import { DataRetentionCenter } from "@/components/mind/data-retention-center";
 import { loadMindCopy, readExecutionControl } from "@/lib/mind/server";
 import { MediaRecoveryPanel } from "@/components/mind/media/media-recovery-panel";
@@ -67,7 +41,6 @@ import { updateMemoryMetadata } from "@/lib/mind/memory/maintenance";
 import { selectMemoryContext } from "@/lib/mind/memory/relevant";
 import { SpendingControls } from "@/components/mind/spending-controls";
 import { dismissRecovery, failureKindForAction, recoveryKind, readRecoveries, serializeRecoveries, upsertRecovery, type RecoveryEntry, saveRecovery, closeRecovery } from "@/lib/mind/recovery-inbox";
-import { runStagedSpeak, loadSpeakSelection, STAGED_SPEAK_KEY, type SpeakSelection, type SpeakStageReceipt } from "@/lib/mind/voice/staged-pipeline";
 import { SurfaceErrorBoundary } from "@/components/mind/surface-error-boundary";
 import { SessionCenter } from "@/components/mind/session-center";
 import { ProjectWorkspace } from "@/components/mind/project-workspace";
@@ -82,14 +55,12 @@ import { accountOriginalFileStore, prepareLibraryDocument, saveLibraryDocument, 
 import { createResearchRunGuard, loadResearchReports, makeResearchReport, researchAttachment, researchReferencesInText, saveResearchReport, type ResearchReport } from "@/lib/mind/research-reports";
 import { NotificationInbox } from "./notification-inbox";
 import { workspaceNotices, isQuietHour, DEFAULT_NOTIFICATION_PREFERENCES, type NotificationPreferences } from "@/lib/mind/notifications";
-import { INITIAL_MESSAGE_WINDOW, messageWindow } from "@/lib/mind/render-window";
 import { ARCHIVE_CATEGORIES, selectArchiveCategories, type ArchiveCategory, deleteLocalFile, deleteProject, refreshBotChat } from "@/lib/mind/workspace";
 import { WorkspaceDialog as Overlay } from "./workspace-dialog";
 import type { NotionPage } from "@/lib/mind/notion";
 import { AccountPreferencesProvider, useAccountPreferences } from "./account-preferences-context";
 import { accountPreferenceKey } from "@/lib/mind/account-preferences";
 import { lazy, Suspense, useEffect, useLayoutEffect, useMemo, useRef, useState, type KeyboardEvent as ReactKeyboardEvent, type MouseEvent as ReactMouseEvent, type ReactNode, useSyncExternalStore, useDeferredValue } from "react";
-import { createPortal } from "react-dom";
 import { Link, useRouter } from "@tanstack/react-router";
 import "./command-drawer-nav.css";
 import "./command-search.css";
@@ -98,7 +69,6 @@ import "./gpt-shell.css";
 import "./visual-system.css";
 import "./workspace-layout.css";
 import { getBearerToken, signOut } from "@/lib/auth/client";
-import { fetchOauthStatusPayload } from "@/lib/mind/service-board-status";
 import { loadMcpWithHttpFallback } from "@/lib/mind/mcp-list-http";
 import { getRecentChats } from "@/lib/mind/recent-chats";
 import { ConversationSections } from "@/components/mind/conversation-sections";
@@ -164,31 +134,17 @@ import { AiProviderConnections } from "@/components/mind/ai-provider-connections
 import type { PublicAiProvider } from "@/lib/mind/ai-provider-config.server";
 import { VoiceWaveform } from "@/components/mind/voice-waveform";
 import { VoiceLevelMeter } from "@/components/mind/voice-level-meter";
-import { VoiceLiveTranscript } from "@/components/mind/voice-live-transcript";
-import { VoicePicker } from "@/components/mind/voice-picker";
 import { LiveVoiceBar } from "@/components/mind/live-voice-bar";
 const VoiceCloningStudioPage = lazy(() => import("@/components/mind/voice-cloning-studio/voice-cloning-studio").then((module) => ({ default: module.VoiceCloningStudioPage })));
-import { DictationPill } from "@/components/mind/dictation-pill";
 import { VoiceModeOverlay, type VoiceOverlayPhase } from "@/components/mind/voice-mode-overlay";
-import { researchSummary, type ResearchResult, type ResearchStep } from "@/lib/mind/research";
 import { SpeakStage } from "@/components/mind/speak-stage";
 import { HUMAN_CODE_NOTE, HumanCodePanel, isIntelligenceThread } from "@/components/mind/human-code-panel";
 import { SpeakPanel } from "@/components/mind/surfaces/speak-panel";
 import { SharedFleet } from "@/components/mind/shared-fleet";
-import { ChatEmptyHero } from "@/components/mind/chat-empty-hero";
-import {
-  ComposerBar,
-  type ComposerModelId,
-  DictationPill as PreviewDictationPill,
-  LiveSpeakControl,
-  LiveVoiceBar as PresentationalLiveVoiceBar,
-  VoiceModeStage,
-} from "@/components/mind/voice-ui";
 
 const DashboardApp = lazy(() => import("@/components/mind/agent-command-center").then((mod) => ({ default: mod.AgentCommandCenter })));
 import { isLiveVoiceOccupied, LIVE_VOICE_BUSY_MESSAGE } from "@/lib/mind/voice-live/occupancy";
 import { probeOllamaConductor, runOllamaConductor } from "@/lib/mind/voice/ollama-conductor";
-import { readTranscriptionPolicy, transcriptionPolicyKey, transcriptionRecipients, type TranscriptionPolicy } from "@/lib/mind/voice/transcription-policy";
 import { formatVoiceClientError, resolveVoiceMode, DIRECT_FALLBACK_NOTICE } from "@/lib/mind/voice/errors";
 import { commitVoiceMode, toggleVoiceMode, type VoiceRoutingMode } from "@/lib/mind/voice/mode";
 import {
@@ -227,7 +183,6 @@ import {
   writeStoredVoiceChoice,
 } from "@/lib/mind/voice/voices";
 import { RealtimeVoiceSession } from "@/lib/mind/voice/realtime-session";
-import { readVoiceRoutePreferences, speechEngineLabel, voiceRouteKey } from "@/lib/mind/voice/route-preferences";
 import { voiceSessionInstructions } from "@/lib/mind/voice-live/session-instructions";
 import { readStoredCharacterId } from "@/lib/mind/characters";
 import { noteSpokenText, readAvatarSession, setAvatarPresence } from "@/lib/mind/avatar/session";
@@ -280,17 +235,10 @@ import { EveWorkbench } from "@/components/mind/eve-workbench";
 import { FleetPanel } from "@/components/mind/fleet-panels";
 const BuildWorkspace = lazy(() => import("@/components/mind/build-workspace").then((module) => ({ default: module.BuildWorkspace })));
 import { ResearchPanel } from "@/components/mind/surfaces/research-panel";
-import { MemoAnswerTabs, MemoMessageBody, useMessageMediaActions } from "@/components/mind/stable-message-body";
-import { useWorkspaceRecordSize } from "@/lib/mind/workspace-metrics";
-import { useViewScrollPosition } from "@/lib/mind/use-view-scroll-position";
-import { advanceVideoProgress, createVideoProgress, videoProgressMessage, type VideoProgress } from "@/lib/mind/media/video-progress";
-import { MemorySavedIndicator } from "@/components/mind/memory-saved-indicator";
-import { MemoryChatToggle } from "@/components/mind/memory-chat-toggle";
 import { AttachmentChips } from "@/components/mind/media/attachment-chips";
 import { CameraCapture } from "@/components/mind/media/camera-capture";
 import { CloudPicker, type CloudPickerAttach } from "@/components/mind/media/cloud-picker";
 import { InlineImage } from "@/components/mind/media/inline-image";
-import { ChatMediaGallery } from "@/components/mind/media/chat-media-gallery";
 import { explainRejectedImageFile } from "@/components/mind/media/accept-image-files";
 import { imageDownloadName, listChatGalleryImages } from "@/lib/mind/media/chat-gallery";
 import { fileToDownscaledDataUrl } from "@/components/mind/media/downscale";
@@ -320,14 +268,13 @@ import {
   type ToolTimelineRow,
 } from "@/lib/mind/tools-timeline";
 import { describeFile } from "@/lib/mind/files-read";
-import { selectHistoryForQuestion, prepareHistoryContext } from "@/lib/mind/media/history";
 import { extractPdfText, selectPdfChunks } from "@/lib/mind/pdf-text";
 import { ModelTierChip } from "@/components/mind/model-tier-chip";
 import { AnchoredCard, MenuCluster, MenuGroup, MenuMotion, MenuShelf, ComposerMore, finishMenu, menuChip, pinShelf } from "@/components/mind/menu-material";
 import { MODEL_TIERS, type ConcreteModelTier, type ModelTier, type modelTierCatalog } from "@/lib/mind/model-tiers";
 import { catalogForProvider, environmentModelReadiness, type EnvironmentModelCatalog } from "@/lib/mind/environment-model-catalog";
 import { chosenProvider, failover, providerChoicesWithKeys } from "@/lib/mind/providers";
-import { discoveredCapabilities, mcpToolCallText } from "@/lib/mind/provider-catalog";
+import { discoveredCapabilities, mcpToolCallText, parseCustomProviderChoice } from "@/lib/mind/provider-catalog";
 import { emitFailure, mountFailure, surfaceForReport } from "@/lib/mind/failure-mount";
 import { useMcpFailureMount, type McpReportedOutcome } from "./use-mcp-failure-mount";
 import { routeFailureAction, type RouteFailureAction } from "@/lib/mind/route-failure";
@@ -350,7 +297,6 @@ import { ModuleSuggestions } from "@/components/mind/module-suggestions";
 import { type ModuleSuggestion } from "@/lib/intent/module-suggestions";
 
 import { exportChat, prepareRegenerate, prepareRetry, renameChat, createEditedBranch, withReplyVersion, selectReplyVersion } from "@/lib/mind/transcript";
-import { replyActions, replyHasSources } from "@/lib/mind/reply-actions";
 import { useComposerDraft } from "@/lib/mind/use-composer-draft";
 import { useMindWorkspace } from "@/lib/mind/use-mind-workspace";
 import { useCurrentUserState } from "@/lib/auth/use-current-user";
@@ -422,7 +368,6 @@ import {
   updateChatPersonality,
   updateChatCustomPersonality,
 } from "@/lib/mind/workspace";
-import { WORKSPACE_ROUTE_LINKS } from "@/lib/mind/workspace-nav";
 import { CONVERSATIONAL_PERSONALITIES, isPersonalityId, personalityStatus, resolvePersonalityId, type PersonalityId } from "@/lib/mind/personalities";
 import { applyPersonaHandoff, clearPersonaSelection, readHandoff } from "@/lib/mind/personas/selection";
 
@@ -1067,11 +1012,12 @@ function CommandSession({ account, accountPending }: { account: ReturnType<typeo
   const [speakCall, setSpeakCall] = useState<{ heard: string; reply: string; error: string; answerReceipt?: string }>({ heard: "", reply: "", error: "" });
   const speakStageOpenRef = useRef(false);
   useEffect(() => {
+    if (speakStageOpenRef.current && !speakStageOpen) interruptSpeakPlayback();
     speakStageOpenRef.current = speakStageOpen;
   }, [speakStageOpen]);
   useEffect(() => {
     if (!taskRecording) return;
-    const id = window.setInterval(() => setTaskSeconds(Math.round(taskRecorder.current.elapsed() / 1000)), 500);
+    const id = window.setInterval(() => setTaskSeconds(Math.round(taskRecorder.current.elapsed() / 1000)), 1000);
     return () => window.clearInterval(id);
   }, [taskRecording]);
   useEffect(() => {
@@ -1598,7 +1544,9 @@ function CommandSession({ account, accountPending }: { account: ReturnType<typeo
     const tier = effortModelTier(mode);
     if (tier) {
       setLogicRoute(null);
+      setGrokModel(null);
       setModelTier(tier);
+      if (active?.botProvider || active?.botTier) setWs(prev => ({ ...prev, chats: prev.chats.map(chat => chat.id === active.id ? { ...chat, botTier: tier, botExactModel: undefined } : chat) }));
     }
     applyVoiceMode(mode === "orchestrator" ? "orchestrator" : "direct");
     if (mode === "build") setView("build");
@@ -2772,7 +2720,7 @@ function CommandSession({ account, accountPending }: { account: ReturnType<typeo
     setBusy(true);
     setError(null);
     try {
-      const result = await searchWeb({ data: { query, operationId, projectId: chat.projectId, freeOnly: researchFreeOnly } });
+      const result: ResearchReport["result"] = await searchWeb({ data: { query, operationId, projectId: chat.projectId, freeOnly: researchFreeOnly } });
       if (turnOwner.current !== draftOwner) return;
       setBusy(false);
       if (!wsRef.current.chats.some((item) => item.id === chat.id)) return;
@@ -2780,10 +2728,7 @@ function CommandSession({ account, accountPending }: { account: ReturnType<typeo
       setResearchReportQuestion(query);
       if (!result.ok) {
         const message = result.error;
-        const retry = () => {
-          void runWebResearch(chat, query, action, operationId);
-        };
-        emitFailure("research", mountFailure({ message, action: "research_failed", target: "search", outcome: result }, retry));
+        reportFailure(message, "research_failed", "search", null, "none", null, { operationId, subsystem: "research", stage: "response", operationKind: "generation", retryPolicy: "review", outcome: result.partial ? "partial" : "unknown", provider: result.route?.provider, bindings: { chatId: chat.id, reportId: result.persistence?.reportId, revision: result.route?.configurationRevision }, temporary: chat.temporary });
         recordToolTurn(chat, query, result.error, undefined, { tool: "web_search", ok: false, action });
         setResearchNote(result.error);
         return;
@@ -2800,10 +2745,7 @@ function CommandSession({ account, accountPending }: { account: ReturnType<typeo
       setBusy(false);
       if (!wsRef.current.chats.some((item) => item.id === chat.id)) return;
       const message = "The search provider could not be reached. No citations were created.";
-      const retry = () => {
-        void runWebResearch(chat, query, action, operationId);
-      };
-      emitFailure("research", mountFailure({ message, action: "research_failed", target: "search" }, retry));
+      reportFailure(message, "research_failed", "search", null, "none", null, { operationId, subsystem: "research", stage: "response", operationKind: "generation", retryPolicy: "review", outcome: "unknown", bindings: { chatId: chat.id }, temporary: chat.temporary });
       recordToolTurn(chat, query, message, undefined, { tool: "web_search", ok: false, action });
       setResearchNote(message);
     }
@@ -2918,6 +2860,13 @@ function CommandSession({ account, accountPending }: { account: ReturnType<typeo
           label: "Call MCP tool",
           detail: result.error,
           confirm: "Call",
+          review: "approval" in result && result.approval ? result.approval : { connectionId: reviewedServerId },
+          cancel: () => {
+            if (turnOwner.current !== draftOwner || !wsRef.current.chats.some((item) => item.id === chat.id)) return;
+            const scope = JSON.stringify([draftOwner, chat.id, chat.temporary]);
+            setDraftInScope(scope, Boolean(draftOwner) && !chat.temporary, (current) => current || text);
+            setNotice("MCP call canceled. The command is kept in its original conversation draft.");
+          },
           run: () => {
             void askMcp(chat, text, true, reviewedServerId, review);
           },
@@ -3198,6 +3147,7 @@ function CommandSession({ account, accountPending }: { account: ReturnType<typeo
     } else if (resume) {
       markDelivery("submitted");
     }
+    const customRoute = parseCustomProviderChoice(selectedProvider);
     const request: TurnRequest = options?.request ?? {
       id: operationId, memoryRevision,
       body: chatTurnBody({
@@ -3217,6 +3167,9 @@ function CommandSession({ account, accountPending }: { account: ReturnType<typeo
             ...(options?.accessNotes ?? []),
             ...relevantMemories(memoriesForChat(source, chat), text).map((item) => ({ id: item.id, text: item.text, authority: item.authority, sourceRef: item.sourceRef })),
           ],
+          supportsHistoryImages: customRoute.ok && !activeLogic && !consultPlan
+            ? customAiProviders.find(row => row.id === customRoute.id)?.modelCapabilities?.[customRoute.model]?.imageInput === "supported"
+            : undefined,
           checkpoints: chat.checkpoints ?? [],
           botKnowledge: chat.botKnowledge ?? "",
           knowledgePassages, projectContext, memoryPolicyRevision: preparedRevision,
@@ -3777,14 +3730,12 @@ ${message.content}`;
     const researchGeneration = researchRunGuard.current.begin();
     setResearchPending(true);
     try {
-      const result = await searchWeb({ data: { query, operationId, projectId, freeOnly: researchFreeOnly, retryQueries: retry?.steps?.filter((step) => !step.ok).map((step) => step.query) } });
+      const result: ResearchReport["result"] = await searchWeb({ data: { query, operationId, projectId, freeOnly: researchFreeOnly, retryQueries: retry?.steps?.filter((step) => !step.ok).map((step) => step.query) } });
       if (!draftOwner || turnOwner.current !== draftOwner || !researchRunGuard.current.current(researchGeneration)) return;
       setError(null);
       setWs((prev) => pushAudit(prev, result.configured && result.ok ? "research_result" : "research_refused", "search", result.ok ? `${result.citations.length} sources` : "no citation"));
       if (!result.ok) {
-        reportFailure(result.error || "Research refused. No citations were created.", "research_failed", "search", () => {
-          void startResearch(query, retry, operationId, projectId);
-        });
+        reportFailure(result.error || "Research refused. No citations were created.", "research_failed", "search", null, "none", null, { operationId, subsystem: "research", stage: "response", operationKind: "generation", retryPolicy: "review", outcome: result.partial ? "partial" : "unknown", provider: result.route?.provider, bindings: { reportId: result.persistence?.reportId, revision: result.route?.configurationRevision } });
       } else {
         const report = makeResearchReport(query, result, retry);
         setActiveResearchId(report.id);
@@ -3794,15 +3745,12 @@ ${message.content}`;
         setResearchSteps(report.steps);
         const saved = saveResearchReport(localStorage, draftOwner, researchHistory, report);
         setResearchHistory(saved.history);
-        if (!saved.saved) setError(saved.error);
-        setError(null);
+        setError(saved.saved ? null : saved.error);
       }
     } catch (caught) {
       if (!researchRunGuard.current.current(researchGeneration) || turnOwner.current !== draftOwner) return;
       const message = caught instanceof Error ? caught.message : "The search did not run. No citations were created.";
-      reportFailure(message, "research_failed", "search", () => {
-        void startResearch(query, retry, operationId, projectId);
-      });
+      reportFailure(message, "research_failed", "search", null, "none", null, { operationId, subsystem: "research", stage: "response", operationKind: "generation", retryPolicy: "review", outcome: "unknown", bindings: { reportId: retry?.id } });
     } finally {
       if (researchRunGuard.current.current(researchGeneration)) { researchFlight.current = false; setResearchPending(false); }
     }
@@ -4736,8 +4684,8 @@ ${message.content}`;
       ...prev,
       audit: retainActivity([{ id: auditId, at: new Date().toISOString(), action, target, result: message }, ...prev.audit]),
     }));
-   const chat = wsRef.current.chats.find((row) => row.id === target);
-   const operationId = chat ? [...chat.messages].reverse().find((message) => message.deliveryOperationId)?.deliveryOperationId : undefined;
+   const chat = wsRef.current.chats.find((row) => row.id === (outcome.bindings?.chatId ?? target));
+   const operationId = outcome.envelope?.operationId ?? (chat ? [...chat.messages].reverse().find((message) => message.deliveryOperationId)?.deliveryOperationId : undefined);
    setSelectedFailureId(auditId);
    setFailure({ message, auditId, target, createdAt: new Date().toISOString(), retry: onceRetry(retry), kind, action: failureAction, ...(chat ? { chatId: chat.id } : {}), ...(operationId ? { operationId } : {}) });
     setError(null);
@@ -4748,12 +4696,13 @@ ${message.content}`;
     presentReportedFailure(outcome, localCorrelationId, outcome.retryable ? retry : null);
   });
 
-  function reportFailure(message: string, action: string, target: string, retry: (() => void) | null, failureAction: RouteFailureAction = "retry", structuredKind?: HonestFailureKind | null) {
-    const kind = recoveryKind(action, message, structuredKind);
+  function reportFailure(message: string, action: string, target: string, retry: (() => void) | null, failureAction: RouteFailureAction = "retry", structuredKind?: HonestFailureKind | null, details?: FailureDetails & Pick<McpReportedOutcome, "bindings" | "temporary">) {
+    const envelope = details ? failureEnvelopeFromAction({ action, target, message, ...details }) : undefined;
+    const kind = envelope ? classifyHonestFailure(envelope) : recoveryKind(action, message, structuredKind);
     const auditAction = kind ? honestFailureAuditAction(kind) : action;
     const auditId = crypto.randomUUID();
     const surface = surfaceForReport(auditAction, target);
-    const outcome: McpReportedOutcome = { message, action: auditAction, target, kind, retryable: retry !== null && failureAction === "retry", failureAction };
+    const outcome: McpReportedOutcome = { message, action: auditAction, target, kind, retryable: retry !== null && failureAction === "retry", failureAction, ...(envelope ? { envelope, bindings: details?.bindings, temporary: details?.temporary } : {}) };
     if (
       surface &&
       emitFailure(
@@ -5026,7 +4975,7 @@ ${message.content}`;
       ...(replay ? { knownUnsent: true, request: { id: replay.operationId, body: replay.body } } : {}),
       onFailure: (failure) => { returned.failure = failure; }, onReply: (receipt) => { returned.receipt = receipt; }, provider: options?.provider, taskId: options?.taskId, accessNotes: chat.memory === "on" && !chat.temporary ? eveAccessNotes(workspaceForChat(source, chat)) : [] });
     if (!reply) return returned.failure ? { ok: false as const, ...returned.failure } : { ok: false as const, error: "The chat turn failed. Its delivery was not confirmed; no automatic replay will run." };
-    return { ok: true as const, text: reply, replyReceipt: returned.receipt };
+    return { ok: true as const, text: reply, replyReceipt: returned.receipt, provider: returned.receipt?.provider ?? "not reported", model: returned.receipt?.model };
   }
 
   async function speak(text: string, messageId = "", voiceId = voiceChoiceRef.current, replay?: SpeakRetryParams) {
@@ -5046,7 +4995,7 @@ ${message.content}`;
     let spokeProvider = "";
     let browserReply = "";
     let muted = false;
-    const current = () => generation === speakGenRef.current && !abort.signal.aborted && turnOwner.current === draftOwner;
+    const current = () => generation === speakGenRef.current && !abort.signal.aborted && turnOwner.current === draftOwner && !wsRef.current.halted;
     if (!speakStageOpenRef.current) {
       const volume = Number(preferenceStorage.getItem("adrian-speak-volume") ?? "100");
       voiceOutput.current = { muted: false, volume: Number.isFinite(volume) ? Math.max(0, Math.min(1, volume / 100)) : 1 };
@@ -5731,6 +5680,7 @@ ${message.content}`;
   }
 
   function closeSpeakStage() {
+    interruptSpeakPlayback();
     speakStageOpenRef.current = false;
     setSpeakStageOpen(false);
     if (!overlayOpenRef.current) void listen({ mode: "stop" });
@@ -8455,34 +8405,32 @@ ${message.content}`;
                   <img src="/brand/logo-mark.jpg" alt="" className="size-8 rounded-lg" />
                   <div>
                     <h2 className="font-display text-3xl font-bold">Integrations</h2>
-                    <p className="text-xs text-muted">Last check {stamp(checkedAt) || checkedAt}. Green means that behavior was verified here. Configured means a key or setting exists and a live call was not verified.</p>
+                    <p className="text-xs text-muted">Connections for the current account. Saved credentials and authorization are shown separately from a successful feature call. Provider status checked {stamp(checkedAt) || "when available"}.</p>
                   </div>
                 </div>
               </div>
-              <div id="owner-integrations" className="mt-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
-                {CAPABILITIES.map((item) => {
-                  const live = isVerifiedCapability(item.status);
-                  const page = CAPABILITY_PAGE[item.id];
-                  return (
-                    <article key={item.id} className="integration-card">
-                      <div className="flex items-start justify-between gap-3">
-                        <div className="flex min-w-0 items-center gap-3">
-                          <img src={productMark(CAPABILITY_MARK[item.id] ?? "integrations")} alt="" className="size-8 shrink-0 rounded-lg object-contain" style={markTile(productMark(CAPABILITY_MARK[item.id] ?? "integrations"))} />
-                          <h3 className="text-sm font-semibold">{item.name}</h3>
-                        </div>
-                        <span className={`rounded-full border px-2 py-0.5 text-xs ${live ? "border-ok/40 text-ok" : item.status === "blocked" || item.status === "paid_required" ? "border-danger/40 text-danger" : "border-line text-muted"}`}>
-                          {statusWord(item.status)}
-                        </span>
-                      </div>
-                      <p className="mt-2 text-sm text-muted">{item.why}</p>
-                      {page && (
-                        <button type="button" className="mt-3 min-h-11 rounded-panel border border-line px-3 text-sm" onClick={() => openCapability(item.id, setView, setSettingsPane)}>
-                          {CAPABILITY_CONNECT[item.id] ? "Set up" : "Open"}
-                        </button>
-                      )}
-                    </article>
-                  );
-                })}
+              <div id="owner-integrations" className="mt-4">
+                <ServiceBoard key={`integrations:${draftOwner ?? "guest"}`}
+                  grokConfigured={grokConfigured}
+                  providers={customAiProviders}
+                  savedMcp={mcpSavedListState.status === "ready" ? mcpServers : []}
+                  notion={notion}
+                  mcp={mcpBoard}
+                  onSetup={setNotice}
+                  onOpenConnect={(name) => {
+                    setView("connected");
+                    setCardFocus({ id: name === "Notion" ? "connection-notion" : name === "MCP" ? "owner-mcp-connect" : "owner-api-connect" });
+                  }}
+                />
+                <p className="mt-4 rounded-panel border border-line p-3 text-sm">Workspace storage: {databasePill}. {databaseDetail}</p>
+                <details className="mt-4 rounded-panel border border-line p-3">
+                  <summary className="cursor-pointer text-sm font-semibold">Feature shortcuts</summary>
+                  <div className="mt-3 grid gap-2 sm:grid-cols-2 xl:grid-cols-3">{CAPABILITIES.filter((item) => CAPABILITY_PAGE[item.id]).map((item) => (
+                    <button key={item.id} type="button" className="flex min-h-11 items-center gap-2 rounded-panel border border-line px-3 text-left text-sm" onClick={() => openCapability(item.id, setView, setSettingsPane)}>
+                      <img src={productMark(CAPABILITY_MARK[item.id] ?? "integrations")} alt="" className="size-6 object-contain" style={markTile(productMark(CAPABILITY_MARK[item.id] ?? "integrations"))} />{item.name}
+                    </button>
+                  ))}</div>
+                </details>
               </div>
             </section>
           )}
@@ -9016,12 +8964,13 @@ ${message.content}`;
         </Overlay>
       )}
       {pending && (
-        <Overlay labelledBy="approval-required-title" onDismiss={() => setPending(null)}>
+        <Overlay labelledBy="approval-required-title" onDismiss={() => { pending.cancel?.(); setPending(null); }}>
           <h3 id="approval-required-title" className="font-display text-2xl font-bold">Approval required</h3>
           <p className="mt-2 text-sm font-semibold">{pending.label}</p>
           <p className="mt-1 text-sm text-muted">{pending.detail} Automatic mode does not approve this.</p>
+          {pending.review && <pre tabIndex={0} aria-label="Exact action to approve" className="mt-3 max-h-64 overflow-auto whitespace-pre-wrap break-words rounded-panel border border-line p-3 text-xs">{JSON.stringify(pending.review, null, 2)}</pre>}
           <div className="mt-3 flex gap-2">
-            <button type="button" className="min-h-11 flex-1 rounded-panel border border-line" onClick={() => setPending(null)}>Deny</button>
+            <button type="button" className="min-h-11 flex-1 rounded-panel border border-line" onClick={() => { pending.cancel?.(); setPending(null); }}>Deny</button>
             <button type="button" className="min-h-11 flex-1 rounded-panel bg-accent font-semibold text-accent-ink" onClick={confirmPending}>{pending.confirm}</button>
           </div>
         </Overlay>

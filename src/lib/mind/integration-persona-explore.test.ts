@@ -57,7 +57,7 @@ describe("integration persona directory survives merge", () => {
   });
 
   it("persists the account-owned persona selection without a delayed workspace writer", () => {
-    assert.match(directoryUi, /persistPersonaOpen\(preferences, result\.ws, result\.selection\)/);
+    assert.match(directoryUi, /persistPersonaOpen\(preferences, result\.ws, result\.selection, ownerId\)/);
     assert.match(directoryUi, /if \(!persisted\.ok\)/);
     assert.match(directoryUi, /Nothing was opened/);
     assert.match(directoryUi, /opens Chat with that agent's saved instructions/);

@@ -93,6 +93,9 @@ export function exportChat(ws: Workspace, chatId: string): { filename: string; j
     chat: {
       id: chat.id,
       title: chat.title,
+      autonomy: chat.autonomy,
+      personalityId: chat.personalityId,
+      customPersonality: chat.customPersonality,
       memory: chat.memory,
       temporary: chat.temporary,
       projectId: chat.projectId,

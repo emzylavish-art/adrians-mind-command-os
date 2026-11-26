@@ -1,3 +1,12 @@
+import * as provider_lifecycle from "./provider-lifecycle.ts";
+import * as ai_provider_stream from "./ai-provider-stream.ts";
+import * as provider_call_stream from "./provider-call-stream.ts";
+import * as provider_usage from "./provider-usage.ts";
+import * as provider_dependencies from "./provider-dependencies.ts";
+import * as model_capabilities from "./model-capabilities.ts";
+import * as provider_catalog from "./provider-catalog.ts";
+import * as provider_receipt from "./provider-receipt.ts";
+import * as stream from "./stream.ts";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { runInNewContext } from "node:vm";
@@ -11,7 +20,6 @@ import { isStatusUnavailable, unavailableStatus } from "./service-board-status.t
 import { OwnerRequestGate } from "./owner-request-gate.ts";
 import { discoveryFailureState } from "./provider-health.ts";
 import { buildProviderChatRequest, parseProviderText, providerWireProtocol, modelDiscoveryHeaders } from "./ai-provider-native.ts";
-import { customProviderBlockReason, isOpenRouterFreeModel, rankCatalogModels, validCatalogModelId } from "./provider-catalog.ts";
 
 function compile(path: URL, imports: Record<string, unknown>) {
   const module = { exports: {} as Record<string, any> };
@@ -40,7 +48,15 @@ function providerFixture() {
     "./ai-provider-native.ts": { buildProviderChatRequest, parseProviderText, providerWireProtocol, modelDiscoveryHeaders },
     "../db.ts": { getSql: async () => sql },
     "./connectors/crypto.ts": { decryptSecret: () => "fake-key", encryptSecret: () => ({ ciphertext: "sealed" }), connectorTokenSecretStatus: () => ({ ok: true }) },
-    "./provider-catalog.ts": { customProviderBlockReason, isOpenRouterFreeModel, rankCatalogModels, validCatalogModelId },
+    "./provider-lifecycle.ts": provider_lifecycle,
+    "./ai-provider-stream.ts": ai_provider_stream,
+    "./provider-call-stream.ts": provider_call_stream,
+    "./provider-usage.ts": provider_usage,
+    "./provider-dependencies.ts": provider_dependencies,
+    "./model-capabilities.ts": model_capabilities,
+    "./provider-catalog.ts": provider_catalog,
+    "./provider-receipt.ts": provider_receipt,
+    "./stream.ts": stream,
     "./mcp/http-dns-pin.ts": {
       isLocalHostname: () => false, isPrivateAddressLiteral: () => false,
       resolveAndPinMcpHostname: async () => { events.push("dns"); return reachable ? { ok: true, pinnedAddress: "203.0.113.10", hostname: "api.example.test" } : { ok: false }; },
@@ -55,7 +71,7 @@ function providerFixture() {
 
 test("C5 AA010 marks custom dispatch only after the real preflight and DNS boundary", async () => {
   const f = providerFixture();
-  const call = () => f.api.executeCustomChat("owner", { id: "provider-a", model: "model-a" }, [{ role: "user", content: "hello" }], undefined, () => f.events.push("dispatched"));
+  const call = () => f.api.executeCustomChat("owner", { id: "provider-a", model: "model-a" }, [{ role: "user", content: "hello" }], undefined, { onDispatch: () => f.events.push("dispatched") });
   f.row.status = "credentials_rejected";
   assert.equal((await call()).ok, false);
   assert.deepEqual(f.events, []);
@@ -102,7 +118,8 @@ test("C5 AA013 actual provider route rejects a stale form owner before any mutat
     "@tanstack/react-router": { createFileRoute: () => (definition: unknown) => definition },
     "@/lib/auth/verify.server": { requireUserId: async () => "owner-b", UnauthorizedError: class extends Error {} },
     "@/lib/mind/connectors/oauth-csrf": { assertSameOrigin: () => ({ ok: true }) },
-    "@/lib/mind/limits": { allowMindRequest: () => true },
+    "@/lib/mind/rate-limit.server": { allowSharedMindRequest: () => true },
+    "@/lib/mind/environment-model-catalog.server": { listEnvironmentModelCatalogs: async () => [] },
     "@/lib/mind/halt.server": { readHaltState: () => "off" },
     "@/lib/mind/ai-provider-config.server": {
       listAiProviders: async () => [],
@@ -138,9 +155,9 @@ test("C5 AA012/013/014 owner-scoped UI and canonical session are wired to guarde
   assert.match(providers, /if \(!gate\.accept\(ticket, ownerId\)\) return/);
   assert.match(providers, /return \(\) => \{ gate\.close\(\); \}/);
   const currentUser = readFileSync(new URL("../auth/use-current-user.ts", import.meta.url), "utf8");
-  assert.match(currentUser, /fetch\("\/api\/auth\/owner"/);
-  assert.match(currentUser, /const id = canonical\.user\?\.id/);
-  assert.match(currentUser, /session\.data\?\.user\.id === id/);
+  assert.match(currentUser, /readSessionIdentity\(fetch, \x60\$\{prefix\}\/api\/mind\/session\x60, getBearerToken\(\)\)/);
+  assert.match(currentUser, /const verifiedId = keyIsCurrent \? session\.user\?\.id : undefined/);
+  assert.match(currentUser, /verifiedId === data\?\.user\.id/);
 });
 
 test("C5 AA016 exact review and cancellation stay attached to the originating draft", () => {
@@ -161,6 +178,7 @@ test("C5 AA003 rendered Plugins badges distinguish sign-in, unavailable and a co
       "react": { ...React, useState: (initial: unknown) => React.useState(stateIndex++ === 0 ? { Notion: status } : stateIndex === 7 ? true : initial) },
       "react/jsx-runtime": jsxRuntime,
       "@/lib/auth/client": { getBearerToken: () => null },
+      "@/lib/mind/connectors/oauth-return": { rememberOAuthReturn: () => undefined },
       "./focus-connection": { focusConnection: () => undefined },
       "./notion-workspaces": { NotionWorkspaces: () => null },
       "@/components/mind/kimi-device-connect": { KimiDeviceConnect: () => null },

@@ -93,7 +93,7 @@ describe("C2 historical image continuity", () => {
     const small = { name: "small.png", dataUrl: TINY };
     const current = { name: "current.png", dataUrl: "data:image/png;base64," + "b".repeat(980_000) };
     const history = [{ role: "user", content: "A saved pair", images: [small, huge] }];
-    const body = chatTurnBody({ text: "Read small.png", memory: "off", halted: false, history, memoryContext: [], provider: "gemini", modelTier: "Auto", logicRoute: null, images: [current] });
+    const body = chatTurnBody({ text: "Read small.png", memory: "off", halted: false, history, memoryContext: [], provider: "custom:33ffdde0-0000-4000-8000-000000000000:gemini-vision", supportsHistoryImages: true, modelTier: "Auto", logicRoute: null, images: [current] });
     const sent = body.history as typeof history;
     assert.deepEqual(sent[0]!.images, [small]);
     assert.match(sent[0]!.content, /large.png not included/);

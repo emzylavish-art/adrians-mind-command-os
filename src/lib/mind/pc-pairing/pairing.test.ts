@@ -156,7 +156,11 @@ it("C5 binds reviewed terminal execution to its selected computer and directory"
   recordFileProtocol(second.agentId, true);
   const pending = runOnPairedAgent({ ownerId: "owner", agentId: second.agentId, cwd: "/fixture/reviewed", command: "pwd", confirm: true, pollMs: 5, timeoutMs: 500 });
   assert.equal(offerNextJob(first.agentId), null);
-  const offered = offerNextJob(second.agentId);
+  let offered = offerNextJob(second.agentId);
+  for (let attempt = 0; !offered && attempt < 25; attempt++) {
+    await new Promise(resolve => setTimeout(resolve, 5));
+    offered = offerNextJob(second.agentId);
+  }
   assert.ok(offered);
   assert.equal(offered.payload?.cwd, "/fixture/reviewed");
   acceptJob(second.agentId, offered.id, "receipt");
@@ -164,7 +168,10 @@ it("C5 binds reviewed terminal execution to its selected computer and directory"
   const result = await pending;
   assert.equal(result?.ok, true);
   assert.equal(result?.data?.agentId, second.agentId);
-  assert.equal(await runOnPairedAgent({ ownerId: "owner", agentId: "missing", command: "pwd", confirm: true }), null);
+  const missing = await runOnPairedAgent({ ownerId: "owner", agentId: "missing", command: "pwd", confirm: true });
+  assert.equal(missing?.ok, false);
+  assert.match(missing?.text ?? "", /No other computer was substituted/);
+  assert.equal(offerNextJob(first.agentId), null);
 });
 
 it("C5 stop cancels queued jobs and reports running cancellation as pending for the correct owner", () => {

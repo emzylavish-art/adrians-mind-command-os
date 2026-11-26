@@ -87,7 +87,7 @@ export function selectMemoryContext<T extends RetrievalNote>(items: T[], query: 
 }
 
 export function relevantMemories<T extends RetrievalNote>(items: T[], query: string) {
-  return selectMemoryContext(items, query).notes;
+  return selectMemoryContext(items, query, { maxNotes: 12 }).notes;
 }
 
 export function voiceProviderStatus(voiceKey: string | undefined) {

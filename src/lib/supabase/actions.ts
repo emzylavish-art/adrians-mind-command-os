@@ -229,7 +229,9 @@ export const startOAuth = createServerFn({ method: "POST" })
   });
 
 /** End only this app's Supabase session; failures are reported before navigation. */
-export const endSupabaseSession = createServerFn({ method: "POST" }).handler(async () => {
+export const endSupabaseSession = createServerFn({ method: "POST" }).middleware([isolationMiddleware]).handler(async () => {
+  const { assertSameSiteRequest } = await import("../auth/isolation.server");
+  assertSameSiteRequest();
   const { readSupabaseEnv, createSupabaseServerClient } = await loadServer();
   if (!readSupabaseEnv()) return { ok: true as const };
   try {

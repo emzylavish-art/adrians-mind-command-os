@@ -72,7 +72,7 @@ describe("mounted failure surfaces", () => {
     const researchPage = app.slice(app.indexOf("async function startResearch("), app.indexOf("async function runPlanner("));
     for (const entry of [inChatResearch, researchPage]) {
       assert.match(entry, /reportFailure\([^;]*"research_failed"/);
-      assert.match(entry, /operationId: researchOperationId/);
+      assert.match(entry, /data: \{ query, operationId,/);
       assert.match(entry, /subsystem: "research"/);
       assert.match(entry, /retryPolicy: "review"/);
       assert.match(entry, /revision: (?:result|retry)/);

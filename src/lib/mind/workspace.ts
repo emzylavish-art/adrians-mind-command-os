@@ -810,7 +810,12 @@ export function replaceFromArchive(current: Workspace, source: Workspace, restor
     return { ...chat, id };
   });
   return {
-    ...archive, chats, files: archive.files.filter((file) => !deletedFiles.has(file.id)),
+    ...archive, chats, files: archive.files.map((file) => {
+      if (!deletedFiles.has(file.id)) return file;
+      // Explicit replacement may reimport the exported text. Prior account blob handles stay revoked.
+      return { id: crypto.randomUUID(), name: file.name, text: file.text, bytes: file.bytes, partial: file.partial,
+        projectId: file.projectId, createdAt: now, revision: 1 };
+    }),
     ...(deletedFiles.size ? { deletedFileIds: [...deletedFiles] } : {}),
     memories: memories.map((note) => note.chatId && restoredIds.has(note.chatId) ? { ...note, chatId: restoredIds.get(note.chatId)! } : note),
     deletedMemoryIds: [...deleted], ...(deletedChats.size ? { deletedChatIds: [...deletedChats] } : {}),
@@ -864,7 +869,7 @@ export function mergeWorkspace(current: Workspace, source: Workspace, restoreMem
       if (!archive) return chat;
       if (archive === chat) return { ...chat, memory: restoreMemoryPreferences ? archive.memory : "off" as const };
       const messages = merge(archive.messages, chat.messages).sort((a, b) => a.at.localeCompare(b.at));
-      return { ...chat, memory: restoreMemoryPreferences ? archive.memory : chat.memory, temporary: chat.temporary || archive.temporary, messages };
+      return { ...chat, title: newerRecord(chat, archive).title, memory: restoreMemoryPreferences ? archive.memory : chat.memory, temporary: chat.temporary || archive.temporary, messages };
     }),
     // Preserve the current resolution when an older archive contains the same operation.
     recovery: normalizeRecovery([...(current.recovery ?? []), ...(incoming.recovery ?? [])]),
@@ -919,6 +924,11 @@ export function addLocalFile(
   if (ws.files.length >= MAX_LIBRARY_FILES) return ws;
   const text = input.text.slice(0, MAX_DOCUMENT_TEXT_CHARS);
   if (!text.trim()) return ws;
+  const name = input.name || "untitled.txt";
+  if (!input.previousVersionId && ws.files.some((row) => !row.archived && row.name === name &&
+    row.projectId === input.projectId && row.text === text && Boolean(row.partial) === Boolean(input.partial || input.text.length > text.length) &&
+    row.original?.sha256 === input.original?.sha256 && (input.original || (!input.partial && input.text === text)) &&
+    (!input.id || row.id === input.id))) return ws;
   const file: LocalFile = {
     id: input.id || crypto.randomUUID(),
     name: input.name || "untitled.txt",

@@ -214,14 +214,13 @@ async function requestAllSessionSignOut(): Promise<void> {
  * **Rejects when deployed if the server never confirms.** There the session is
  * an HttpOnly cookie only the server can clear, so redirecting anyway would
  * report a sign-out that did not happen. `<UserButton />` handles that for you;
- * a hand-rolled control must catch it and let the visitor retry. In the live
- * preview the local clear is sufficient, so it always resolves.
+ * a hand-rolled control must catch it and let the visitor retry. Preview sessions also require confirmed invalidation before redirect.
  */
-export async function signOut(redirectTo = "/", sessionSource: "supabase" | "better-auth" | "both" = "better-auth"): Promise<void> {
+export async function signOut(redirectTo = "/", sessionSource: "supabase" | "better-auth" | "both" = "both"): Promise<void> {
   await runSignOut({
-    livePreview: inLivePreview() && sessionSource === "better-auth",
+    livePreview: false,
     hasBearer: Boolean(getBearerToken()),
-    requestSignOut: () => endVerifiedSessions(sessionSource),
+    requestSignOut: () => sessionSource === "both" || inLivePreview() ? requestAllSessionSignOut() : endVerifiedSessions(sessionSource),
     clearToken: () => setBearerToken(null),
     redirect: () => {
       window.location.href = redirectTo;

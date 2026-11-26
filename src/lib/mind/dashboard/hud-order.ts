@@ -13,8 +13,8 @@ export function sortHudCards<T extends HudOrderItem>(items: readonly T[]): T[] {
   return [...items].sort((a, b) => BAND_RANK[a.band] - BAND_RANK[b.band] || a.seq - b.seq);
 }
 
-export function hudDefaultOpen(index: number): boolean {
+export function hudDefaultOpen(index: number, band?: HudBand): boolean {
   // Show the first two priority cards so warnings are visible without discovery.
   // Remaining supporting charts stay collapsed beside the graph.
-  return Number.isInteger(index) && index >= 0 && index < 2;
+  return band === "needs" && Number.isInteger(index) && index >= 0 && index < 2;
 }

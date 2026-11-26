@@ -188,7 +188,8 @@ describe("mind store", () => {
     assert.equal(saved?.workspace.projects[0].name, "After");
     assert.equal(saved?.workspace.files.length, 45);
     assert.ok(!mutations.some((call) => /mind_file/.test(call.query)));
-    assert.equal(mutations.filter((call) => /delete from mind_project/.test(call.query)).length, 1);
+    assert.equal(mutations.filter((call) => /delete from mind_project/.test(call.query)).length, 0);
+    assert.equal(mutations.filter((call) => /insert into mind_project.*on conflict/s.test(call.query)).length, 1);
     assert.equal(await writeSnapshotDelta(sql, "owner", createWorkspaceDelta(before, edited), revision!), null);
     assert.equal(await readSnapshot(sql, "other-owner"), null);
   });
@@ -263,7 +264,7 @@ it("renaming one chat does not reconstruct unrelated resource collections", asyn
   const next = { ...ws, chats: [{ ...ws.chats[0], title: "After" }] };
   assert.ok(await writeSnapshot(record, "owner", next, revision!));
   assert.equal(calls.filter((call) => /(?:delete from|insert into) mind_project/.test(call)).length, 0);
-  assert.equal(calls.filter((call) => /delete from mind_chat/.test(call)).length, 1);
+  assert.equal(calls.filter((call) => /delete from mind_chat/.test(call)).length, 0);
   assert.equal(calls.filter((call) => /insert into mind_chat/.test(call)).length, 1);
 });
 

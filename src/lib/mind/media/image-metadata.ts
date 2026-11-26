@@ -25,7 +25,14 @@ export function safeImageLineage(value: unknown): ImageEditLineage | undefined {
   return { imageId: String(row.imageId), parentImageId: String(row.parentImageId), rootImageId: String(row.rootImageId), editId: String(row.editId), version: row.version, prompt: row.prompt, model: row.model, createdAt: row.createdAt };
 }
 
-export function imageMetadata(value: { preparation?: unknown; lineage?: unknown }) {
+export function imageMetadata(value: { preparation?: unknown; lineage?: unknown; assetId?: string; parentAssetId?: string; operationId?: string; createdAt?: string; editPrompt?: string }) {
   const preparation = safeImagePreparation(value.preparation), lineage = safeImageLineage(value.lineage);
-  return { ...(preparation ? { preparation } : {}), ...(lineage ? { lineage } : {}) };
+  return {
+    ...(preparation ? { preparation } : {}), ...(lineage ? { lineage } : {}),
+    ...(value.assetId ? { assetId: value.assetId.slice(0, 160) } : {}),
+    ...(value.parentAssetId ? { parentAssetId: value.parentAssetId.slice(0, 160) } : {}),
+    ...(value.operationId ? { operationId: value.operationId.slice(0, 160) } : {}),
+    ...(value.createdAt ? { createdAt: value.createdAt } : {}),
+    ...(value.editPrompt ? { editPrompt: value.editPrompt.slice(0, 6000) } : {}),
+  };
 }
