@@ -81,7 +81,11 @@
           "src/lib/mind/notion-entrypoint-recovery.test.ts",
           "src/lib/mind/notion-recovery.test.ts"
         ],
-        "lookup": "Exact-head CI logs and named source fixtures must be checked individually; case-level proof has not yet been recorded."
+        "lookup": "Exact-head CI logs and named source fixtures must be checked individually; case-level proof has not yet been recorded.",
+        "reviewedFixtureFiles": [
+          "src/lib/mind/audit-connection-integrity.test.ts"
+        ],
+        "reviewedAssertionScope": "PGlite with synthetic transport checks acknowledged block-ID readback after restart, exact original page, account separation, duplicate old text, simultaneous confirmation, lost acknowledgement and no second PATCH. Real Notion grant repair and live readback remain unverified."
       },
       "nextCheck": "Compare the named fixture cases and remaining source limits against this original acceptance. Live and physical evidence must be recorded separately when required."
     },

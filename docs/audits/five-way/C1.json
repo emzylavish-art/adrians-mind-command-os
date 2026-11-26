@@ -110,7 +110,12 @@
       "recordUrl": "https://app.notion.com/p/4231aa27632381a483d1ddf5621afb07?pvs=204",
       "caseReports": {
         "files": [],
-        "lookup": "Exact-head CI logs and named source fixtures must be checked individually; case-level proof has not yet been recorded."
+        "lookup": "Exact-head CI logs and named source fixtures must be checked individually; case-level proof has not yet been recorded.",
+        "reviewedFixtureFiles": [
+          "src/lib/mind/connected-mcp.test.ts",
+          "src/lib/mind/audit-connection-integrity.test.ts"
+        ],
+        "reviewedAssertionScope": "Fake MCP transport checks fresh changed definitions cause zero tools/call requests, unchanged reviewed calls execute once, and approval cannot be reused. Live server behavior remains unverified."
       },
       "nextCheck": "Resolve the exact combined test for this record from its committed source evidence and execute its acceptance path before closure."
     },
@@ -127,7 +132,11 @@
       "recordUrl": "https://app.notion.com/p/4231aa27632381a1983ad70b98d0eb77?pvs=204",
       "caseReports": {
         "files": [],
-        "lookup": "Exact-head CI logs and named source fixtures must be checked individually; case-level proof has not yet been recorded."
+        "lookup": "Exact-head CI logs and named source fixtures must be checked individually; case-level proof has not yet been recorded.",
+        "reviewedFixtureFiles": [
+          "src/lib/mind/memory/dispatch-policy.test.ts"
+        ],
+        "reviewedAssertionScope": "Fixture rereads authenticated owner state and rejects missing owner, deleted, archived, edited, revoked or scope-changed memory; it does not itself prove all production dispatch paths."
       },
       "nextCheck": "Resolve the exact combined test for this record from its committed source evidence and execute its acceptance path before closure."
     },
@@ -144,7 +153,12 @@
       "recordUrl": "https://app.notion.com/p/4231aa27632381a1983ad70b98d0eb77?pvs=204",
       "caseReports": {
         "files": [],
-        "lookup": "Exact-head CI logs and named source fixtures must be checked individually; case-level proof has not yet been recorded."
+        "lookup": "Exact-head CI logs and named source fixtures must be checked individually; case-level proof has not yet been recorded.",
+        "reviewedFixtureFiles": [
+          "src/lib/mind/memory/dispatch-policy.test.ts",
+          "src/lib/mind/c1-durable-runtime.test.ts"
+        ],
+        "reviewedAssertionScope": "Policy fixture rejects revoked current and legacy payloads; PGlite fixture separately recovers an owner-bound completed response and excludes temporary retention. Hosted behavior remains unverified."
       },
       "nextCheck": "Resolve the exact combined test for this record from its committed source evidence and execute its acceptance path before closure."
     },
