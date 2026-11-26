@@ -36,11 +36,12 @@ export const saveCustomConnectionFn = createServerFn({ method: "POST" })
 
 export const callCustomConnectionFn = createServerFn({ method: "POST" })
   .middleware([authMiddleware])
-  .validator((input: { id?: string; operation?: string; args?: Record<string, unknown>; confirmed?: boolean }) => ({
+  .validator((input: { id?: string; operation?: string; args?: Record<string, unknown>; confirmed?: boolean; reviewedRevision?: string }) => ({
     id: typeof input.id === "string" ? input.id.slice(0, 80) : "",
     operation: typeof input.operation === "string" ? input.operation.slice(0, 80) : "",
     args: input.args && typeof input.args === "object" && !Array.isArray(input.args) ? input.args : {},
     confirmed: input.confirmed === true,
+    reviewedRevision: typeof input.reviewedRevision === "string" ? input.reviewedRevision.slice(0, 64) : undefined,
   }))
   .handler(async ({ data, context }) => {
     const { haltIsOn } = await import("./halt.server");
@@ -51,5 +52,6 @@ export const callCustomConnectionFn = createServerFn({ method: "POST" })
     const { getSql } = await import("@/lib/db");
     const db = databaseConfigured() ? await getSql() : null;
     const { callCustomConnection } = await import("./custom-connection");
-    return callCustomConnection({ db, userId: context.userId, ...data });
+    if (!data.reviewedRevision) return { ok: false as const, status: "incompatible" as const, text: "Review the current tool definition before calling it. Nothing was called.", connection: null, transport: null, rpc: null };
+    return callCustomConnection({ db, userId: context.userId, ...data, isHalted: haltIsOn });
   });

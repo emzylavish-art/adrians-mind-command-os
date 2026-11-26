@@ -70,12 +70,13 @@ describe("voice provider fallback", () => {
     if (!spoken.ok) assert.match(spoken.error, /xAI voice is not configured/);
   });
 
-  it("uses OpenAI STT, TTS, and chat when xAI returns 400", async () => {
+  it("uses an explicitly selected OpenAI transcriber independently of xAI fallback opt-ins", async () => {
     const stt = scriptedFetch(200);
     const heard = await transcribeWithFallback({
       bytes: new Uint8Array([1, 2, 3, 4]),
       xaiKey: XAI,
       openaiKey: OPENAI,
+      provider: "openai",
       fetchImpl: stt.fetchImpl,
     });
     assert.equal(heard.ok, true);
@@ -83,7 +84,7 @@ describe("voice provider fallback", () => {
       assert.equal(heard.provider, "OpenAI");
       assert.equal(heard.text, "what is the weather");
     }
-    assert.ok(stt.seen.some((url) => url.includes("api.x.ai/v1/stt")));
+    assert.equal(stt.seen.some((url) => url.includes("api.x.ai/v1/stt")), false);
     assert.ok(stt.seen.some((url) => url.includes("/audio/transcriptions")));
 
     const tts = scriptedFetch(200);
@@ -126,7 +127,7 @@ describe("voice provider fallback", () => {
       const result = await run();
       assert.equal(result.ok, false);
       if (!result.ok) {
-        assert.match(result.error, /xAI and OpenAI did not produce a successful/);
+        assert.match(result.error, /xAI and OpenAI did not produce a successful|Speech-to-text returned 400/);
         assert.equal(result.error.includes(XAI), false);
         assert.equal(result.error.includes(OPENAI), false);
         assert.equal(result.provider, null);

@@ -25,6 +25,7 @@ import { Route as ApiMindAgentRouteImport } from './routes/api/mind/agent'
 import { Route as ApiMindDesktopUpdateRouteImport } from './routes/api/mind/desktop-update'
 import { Route as ApiMindProvidersRouteImport } from './routes/api/mind/providers'
 import { Route as ApiMindReceiptsRouteImport } from './routes/api/mind/receipts'
+import { Route as ApiMindSessionRouteImport } from './routes/api/mind/session'
 import { Route as ApiMindSkillsRouteImport } from './routes/api/mind/skills'
 import { Route as ApiMindTurnRouteImport } from './routes/api/mind/turn'
 import { Route as ApiMindBuildBrowserRouteImport } from './routes/api/mind/build/browser'
@@ -168,6 +169,11 @@ const ApiMindProvidersRoute = ApiMindProvidersRouteImport.update({
 const ApiMindReceiptsRoute = ApiMindReceiptsRouteImport.update({
   id: '/api/mind/receipts',
   path: '/api/mind/receipts',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ApiMindSessionRoute = ApiMindSessionRouteImport.update({
+  id: '/api/mind/session',
+  path: '/api/mind/session',
   getParentRoute: () => rootRouteImport,
 } as any)
 const ApiMindSkillsRoute = ApiMindSkillsRouteImport.update({
@@ -518,6 +524,7 @@ export interface FileRoutesByFullPath {
   '/api/mind/desktop-update': typeof ApiMindDesktopUpdateRoute
   '/api/mind/providers': typeof ApiMindProvidersRoute
   '/api/mind/receipts': typeof ApiMindReceiptsRoute
+  '/api/mind/session': typeof ApiMindSessionRoute
   '/api/mind/skills': typeof ApiMindSkillsRoute
   '/api/mind/turn': typeof ApiMindTurnRoute
   '/api/mind/build/browser': typeof ApiMindBuildBrowserRoute
@@ -600,6 +607,7 @@ export interface FileRoutesByTo {
   '/api/mind/desktop-update': typeof ApiMindDesktopUpdateRoute
   '/api/mind/providers': typeof ApiMindProvidersRoute
   '/api/mind/receipts': typeof ApiMindReceiptsRoute
+  '/api/mind/session': typeof ApiMindSessionRoute
   '/api/mind/skills': typeof ApiMindSkillsRoute
   '/api/mind/turn': typeof ApiMindTurnRoute
   '/api/mind/build/browser': typeof ApiMindBuildBrowserRoute
@@ -683,6 +691,7 @@ export interface FileRoutesById {
   '/api/mind/desktop-update': typeof ApiMindDesktopUpdateRoute
   '/api/mind/providers': typeof ApiMindProvidersRoute
   '/api/mind/receipts': typeof ApiMindReceiptsRoute
+  '/api/mind/session': typeof ApiMindSessionRoute
   '/api/mind/skills': typeof ApiMindSkillsRoute
   '/api/mind/turn': typeof ApiMindTurnRoute
   '/api/mind/build/browser': typeof ApiMindBuildBrowserRoute
@@ -767,6 +776,7 @@ export interface FileRouteTypes {
     | '/api/mind/desktop-update'
     | '/api/mind/providers'
     | '/api/mind/receipts'
+    | '/api/mind/session'
     | '/api/mind/skills'
     | '/api/mind/turn'
     | '/api/mind/build/browser'
@@ -849,6 +859,7 @@ export interface FileRouteTypes {
     | '/api/mind/desktop-update'
     | '/api/mind/providers'
     | '/api/mind/receipts'
+    | '/api/mind/session'
     | '/api/mind/skills'
     | '/api/mind/turn'
     | '/api/mind/build/browser'
@@ -931,6 +942,7 @@ export interface FileRouteTypes {
     | '/api/mind/desktop-update'
     | '/api/mind/providers'
     | '/api/mind/receipts'
+    | '/api/mind/session'
     | '/api/mind/skills'
     | '/api/mind/turn'
     | '/api/mind/build/browser'
@@ -1014,6 +1026,7 @@ export interface RootRouteChildren {
   ApiMindDesktopUpdateRoute: typeof ApiMindDesktopUpdateRoute
   ApiMindProvidersRoute: typeof ApiMindProvidersRoute
   ApiMindReceiptsRoute: typeof ApiMindReceiptsRoute
+  ApiMindSessionRoute: typeof ApiMindSessionRoute
   ApiMindSkillsRoute: typeof ApiMindSkillsRoute
   ApiMindTurnRoute: typeof ApiMindTurnRoute
   ApiMindBuildBrowserRoute: typeof ApiMindBuildBrowserRoute
@@ -1192,6 +1205,13 @@ declare module '@tanstack/react-router' {
       path: '/api/mind/receipts'
       fullPath: '/api/mind/receipts'
       preLoaderRoute: typeof ApiMindReceiptsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/mind/session': {
+      id: '/api/mind/session'
+      path: '/api/mind/session'
+      fullPath: '/api/mind/session'
+      preLoaderRoute: typeof ApiMindSessionRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/api/mind/skills': {
@@ -1662,6 +1682,7 @@ const rootRouteChildren: RootRouteChildren = {
   ApiMindDesktopUpdateRoute: ApiMindDesktopUpdateRoute,
   ApiMindProvidersRoute: ApiMindProvidersRoute,
   ApiMindReceiptsRoute: ApiMindReceiptsRoute,
+  ApiMindSessionRoute: ApiMindSessionRoute,
   ApiMindSkillsRoute: ApiMindSkillsRoute,
   ApiMindTurnRoute: ApiMindTurnRoute,
   ApiMindBuildBrowserRoute: ApiMindBuildBrowserRoute,

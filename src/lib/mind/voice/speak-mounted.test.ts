@@ -103,7 +103,7 @@ describe("mounted Speak click", () => {
     assert.match(composer, /await deliverPlanned\(made\.chat, full,/);
     assert.match(planned, /await deliver\(chat, full,/);
     assert.match(commandApp, /onCompactSpeak=\{openSpeakStage\}/);
-    assert.match(commandApp, /chatTurn: \(transcript\) => speakChatTurn\(transcript\)/);
+    assert.match(commandApp, /const turn = await speakChatTurn\(transcript, \{ stay: true \}\)/);
 
     const order: string[] = [];
     const delivered: string[] = [];

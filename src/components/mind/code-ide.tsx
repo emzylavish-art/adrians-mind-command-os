@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { EditorState } from "@codemirror/state";
+import { Compartment, EditorState } from "@codemirror/state";
 import { EditorView, lineNumbers } from "@codemirror/view";
 import { javascript } from "@codemirror/lang-javascript";
 import { json } from "@codemirror/lang-json";
@@ -7,7 +7,8 @@ import { markdown } from "@codemirror/lang-markdown";
 import { css } from "@codemirror/lang-css";
 import { html } from "@codemirror/lang-html";
 import { python } from "@codemirror/lang-python";
-import { oneDark } from "@codemirror/theme-one-dark";
+import { canDebugFile } from "@/lib/mind/kimi/ide-capabilities";
+import { codeEditorTheme, observeCodeEditorTheme } from "@/lib/mind/kimi/editor-theme";
 
 type IdeFile = { path: string; bytes: number };
 
@@ -86,13 +87,14 @@ function HighlightedEditor(props: { path: string; text: string; disabled: boolea
   useEffect(() => {
     if (!host.current) return;
     const language = languageFor(props.path);
+    const appearance = new Compartment();
     const view = new EditorView({
       parent: host.current,
       state: EditorState.create({
         doc: props.text,
         extensions: [
           lineNumbers(),
-          oneDark,
+          appearance.of(codeEditorTheme(document.documentElement.dataset.theme === "light")),
           EditorView.editable.of(!props.disabled),
           EditorView.contentAttributes.of({ "aria-label": "Workspace file editor", "data-language": props.path.split(".").pop() || "text" }),
           ...(language ? [language] : []),
@@ -103,7 +105,11 @@ function HighlightedEditor(props: { path: string; text: string; disabled: boolea
       }),
     });
     viewRef.current = view;
+    const stopObservingTheme = observeCodeEditorTheme(document.documentElement, (light) => {
+      view.dispatch({ effects: appearance.reconfigure(codeEditorTheme(light)) });
+    });
     return () => {
+      stopObservingTheme();
       view.destroy();
       viewRef.current = null;
     };
@@ -123,6 +129,7 @@ function HighlightedEditor(props: { path: string; text: string; disabled: boolea
 }
 
 export function CodeIde(props: {
+  ownerId?: string;
   files: IdeFile[];
   matches: string[];
   tabs: { id: string; path: string; workspace: string; cwd?: string }[];
@@ -149,35 +156,75 @@ export function CodeIde(props: {
   const [debugText, setDebugText] = useState("");
   const [toolNotice, setToolNotice] = useState("");
   const [breakLine, setBreakLine] = useState(3);
-  async function complete() {
-    setToolNotice("");
-    const lines = props.text.split("\n");
-    const response = await fetch("/api/mind/build/ide", {
-      method: "POST",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify({ action: "complete", path: props.selected, text: props.text, line: lines.length, column: lines.at(-1)?.length ?? 0 }),
-    });
-    const body = await response.json().catch(() => ({})) as { ok?: boolean; completions?: string[]; error?: string };
-    setCompletions(Array.isArray(body.completions) ? body.completions : []);
-    setToolNotice(body.ok ? "" : body.error || "Completions did not load.");
-  }
-  async function debug() {
-    setToolNotice("Debugging.");
+  const [debugCapability, setDebugCapability] = useState<{ debug: boolean; reason: string }>({ debug: false, reason: "Checking debugger availability…" });
+  const [toolBusy, setToolBusy] = useState(false);
+  const toolAttempt = useRef<AbortController | null>(null);
+  const selection = useRef({ id: props.selectedId, text: props.text });
+  selection.current = { id: props.selectedId, text: props.text };
+  useEffect(() => {
+    const controller = new AbortController();
+    setDebugCapability({ debug: false, reason: "Checking debugger availability…" });
+    void fetch("/api/mind/build/ide", {
+      method: "POST", credentials: "include", headers: { "content-type": "application/json" },
+      signal: controller.signal, body: JSON.stringify({ action: "capabilities" }),
+    }).then(async (response) => {
+      const body = await response.json() as { ok?: boolean; debug?: boolean; reason?: string; error?: string };
+      if (!controller.signal.aborted) setDebugCapability({ debug: response.ok && body.ok === true && body.debug === true, reason: body.reason || body.error || "Debugger availability could not be verified." });
+    }).catch(() => { if (!controller.signal.aborted) setDebugCapability({ debug: false, reason: "Debugger availability could not be verified. Reload to check again." }); });
+    return () => controller.abort();
+  }, [props.ownerId]);
+  useEffect(() => {
+    toolAttempt.current?.abort();
+    toolAttempt.current = null;
+    setToolBusy(false);
+    setCompletions([]);
     setDebugText("");
-    const response = await fetch("/api/mind/build/ide", {
-      method: "POST",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify({ action: "debug", path: props.selected, line: breakLine }),
-    });
-    const body = await response.json().catch(() => ({})) as { ok?: boolean; pausedLine?: number; locals?: Array<{ name: string; value: string }>; error?: string };
-    if (!body.ok) {
-      setToolNotice(body.error || "The breakpoint was not reached.");
-      return;
-    }
-    const locals = (body.locals ?? []).map((item) => `${item.name} = ${item.value}`).join(", ");
-    setDebugText(`Paused at line ${body.pausedLine}${locals ? `. ${locals}` : ""}`);
     setToolNotice("");
+    return () => { toolAttempt.current?.abort(); toolAttempt.current = null; };
+  }, [props.selectedId, props.ownerId]);
+  const debugAllowed = canDebugFile({
+    capability: debugCapability.debug, selected: Boolean(props.selected),
+    hosted: props.tabs.find((tab) => tab.id === props.selectedId)?.workspace === "hosted",
+    dirty, busy: props.busy || toolBusy,
+  });
+  async function runTool(action: "complete" | "debug") {
+    if (toolAttempt.current || !props.selected || props.busy || (action === "debug" && !debugAllowed)) return;
+    const controller = new AbortController();
+    toolAttempt.current = controller;
+    const selected = { id: props.selectedId, text: props.text };
+    const isCurrent = () => toolAttempt.current === controller && !controller.signal.aborted && selection.current.id === selected.id && selection.current.text === selected.text;
+    setToolBusy(true);
+    setToolNotice(action === "debug" ? "Debugging the saved file…" : "Loading completions…");
+    setDebugText("");
+    const lines = props.text.split("\n");
+    try {
+      const response = await fetch("/api/mind/build/ide", {
+        method: "POST", credentials: "include", signal: controller.signal,
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify(action === "complete"
+          ? { action, path: props.selected, text: props.text, line: lines.length, column: lines.at(-1)?.length ?? 0 }
+          : { action, path: props.selected, line: breakLine }),
+      });
+      const body = await response.json().catch(() => ({})) as { ok?: boolean; completions?: string[]; pausedLine?: number; locals?: Array<{ name: string; value: string }>; error?: string };
+      if (!isCurrent()) return;
+      if (!response.ok || !body.ok) { setToolNotice(body.error || "The editor tool did not complete."); return; }
+      if (action === "complete") setCompletions(Array.isArray(body.completions) ? body.completions : []);
+      else {
+        const locals = (body.locals ?? []).map((item) => `${item.name} = ${item.value}`).join(", ");
+        setDebugText(`Paused at line ${body.pausedLine}${locals ? `. ${locals}` : ""}`);
+      }
+      setToolNotice("");
+    } catch {
+      if (isCurrent()) setToolNotice("The editor tool could not be reached. No result was assumed.");
+    } finally {
+      if (toolAttempt.current === controller) {
+        toolAttempt.current = null;
+        setToolBusy(false);
+        if (selection.current.id === selected.id && selection.current.text !== selected.text) setToolNotice("The buffer changed. Run the tool again for the current text.");
+      }
+    }
   }
+
   return (
     <div className="code-ide" data-testid="code-ide">
       <aside aria-label="File tree">
@@ -211,18 +258,19 @@ export function CodeIde(props: {
           <span>{props.selected ? `${props.selected} · ${props.text.split("\n").length} lines · ${dirty ? "Unsaved" : "Matches last read or verified save"}` : "No file selected"}</span>
         </div>
         <div className="code-ide-tools">
-          <button type="button" disabled={!props.selected || props.busy} onClick={() => void complete()}>Complete</button>
+          <button type="button" disabled={!props.selected || props.busy || toolBusy} onClick={() => void runTool("complete")}>Complete</button>
           <label>
             Breakpoint line
             <input aria-label="Breakpoint line" type="number" min={1} value={breakLine} onChange={(event) => setBreakLine(Number(event.target.value) || 1)} />
           </label>
-          <button type="button" disabled={!props.selected || props.busy || dirty || props.tabs.find((tab) => tab.id === props.selectedId)?.workspace !== "hosted"} title="Debug runs the saved hosted file" onClick={() => void debug()}>Debug</button>
+          <button type="button" disabled={!debugAllowed} title={debugCapability.reason} onClick={() => void runTool("debug")}>Debug</button>
         </div>
-        <div className="code-ide-results">
+        {!debugCapability.debug ? <p className="code-ide-empty" role="status">{debugCapability.reason}</p> : null}
+        {completions.length || debugText || toolNotice ? <div className="code-ide-results">
           {completions.length ? <ul data-testid="completions">{completions.map((name) => <li key={name}>{name}</li>)}</ul> : null}
           {debugText ? <p data-testid="debug-pause">{debugText}</p> : null}
           {toolNotice ? <p role="status">{toolNotice}</p> : null}
-        </div>
+        </div> : null}
         {props.notice ? <p className="code-ide-empty" role="status">{props.notice}</p> : null}
       </section>
     </div>

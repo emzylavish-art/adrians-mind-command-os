@@ -326,6 +326,26 @@ export function requestJobCancel(ownerId: string, jobId: string): PcJob | null {
   });
 }
 
+export type BuildCancellationSummary = { queuedCancelled: number; cancellationRequested: number; unconfirmed: number };
+
+/** Owner-scoped sweep, including jobs whose Build screen is no longer mounted. */
+export function cancelOwnerBuildJobs(ownerId: string): BuildCancellationSummary {
+  const summary = { queuedCancelled: 0, cancellationRequested: 0, unconfirmed: 0 };
+  if (!ownerId || !existsSync(jobsDir())) return summary;
+  for (const name of readdirSync(jobsDir()).filter((name) => name.endsWith(".json"))) {
+    try {
+      const existing = readJob(name.slice(0, -5));
+      if (!existing || existing.ownerId !== ownerId || existing.kind !== "kimi-acp") continue;
+      if (!["queued", "running", "cancel_requested"].includes(existing.status)) continue;
+      const result = requestJobCancel(ownerId, existing.id);
+      if (result?.status === "cancelled") summary.queuedCancelled++;
+      else if (result?.status === "cancel_requested") summary.cancellationRequested++;
+      // A completion won the atomic transition. Its recorded outcome stays intact.
+    } catch { summary.unconfirmed++; }
+  }
+  return summary;
+}
+
 export function appendJobEvent(input: {
   jobId: string;
   agentId: string;
@@ -373,12 +393,17 @@ export function completeJob(input: {
   jobId: string;
   agentId: string;
   ok: boolean;
+  cancelled?: boolean;
   output?: string;
   error?: string;
 }): PcJob | null {
   const job = changeJob(input.jobId, (current) => {
     if (current.agentId !== input.agentId || current.status === "queued") return null;
-    if (current.status === "cancel_requested") return { status: "cancelled", error: "Cancelled by the owner." };
+    if (current.status === "cancel_requested") {
+      if (input.cancelled === true) return { status: "cancelled", output: (input.output ?? "").slice(0, 8000), error: "Cancellation acknowledged by the runtime." };
+      if (input.ok) return { status: "done", output: (input.output ?? "").slice(0, 8000), error: "The runtime reported completion before cancellation was confirmed." };
+      return { status: "error", output: (input.output ?? "").slice(0, 8000), error: (input.error || "The runtime stopped reporting work, but cancellation was not confirmed.").slice(0, 2000) };
+    }
     if (current.status !== "running") return "unchanged";
     const output = input.output ?? "";
     if (current.kind === "file-op" && input.ok) {

@@ -115,7 +115,7 @@ export async function runConnectedMcpTurn(input: {
   if (!operation?.inputSchema) return refused("This tool has no supported argument schema.", servers);
   const checked = validateArgs(operation.inputSchema, args);
   if (!checked.ok) return refused(checked.error, servers);
-  const hash = createHash("sha256").update(JSON.stringify([target.id, intent.tool, checked.args])).digest("hex");
+  const hash = createHash("sha256").update(JSON.stringify([target.id, intent.tool, operation.revision, checked.args])).digest("hex");
   if (!input.confirmed) {
     const approvalId = randomUUID();
     await input.db.query("DELETE FROM mind_mcp_call_approvals WHERE expires_at <= now()");
@@ -127,7 +127,7 @@ export async function runConnectedMcpTurn(input: {
   if (!consumed.length) return refused("The call changed or its approval expired or was already used. Review it again.", servers);
   // Recheck immediately before dispatch; do not weaken the wrapper's halt gate.
   if (await halted(input.userId, input)) return refused(STOPPED, servers);
-  const result = await callCustomConnection({ ...input, id: target.id, operation: intent.tool, args });
+  const result = await callCustomConnection({ ...input, id: target.id, operation: intent.tool, args, reviewedRevision: operation.revision });
   const latest = result.connection;
   return { ok: result.ok, needsConfirmation: false, servers: latest ? servers.map((server) => server.id === latest.id ? connectedMcpPublic(latest) : server) : servers, text: result.ok ? result.text : "", error: result.ok ? "" : result.text };
 }

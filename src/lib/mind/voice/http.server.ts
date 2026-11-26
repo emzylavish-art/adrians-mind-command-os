@@ -108,8 +108,11 @@ export async function handleVoiceStt(request: Request, deps: VoiceHttpDeps = {})
   if (!parsed.ok) return json({ ok: false, code: "empty_transcript", error: parsed.error });
   const decoded = decodeAudioBase64(parsed.audioBase64);
   if (!decoded.ok) return json({ ok: false, code: "empty_transcript", error: decoded.error });
+  const provider = read.body.provider ?? "xai";
+  if (provider !== "xai" && provider !== "openai") return json({ ok: false, error: "Choose xAI or OpenAI for transcription. No audio was sent." }, 400);
   const env = deps.env ?? process.env;
   const transcribed = await transcribeWithFallback({
+    provider,
     bytes: decoded.bytes,
     xaiKey: resolveVoiceApiKey(env, deps.secretsPath),
     openaiKey: env.OPENAI_API_KEY?.trim() || undefined,

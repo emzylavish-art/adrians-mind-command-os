@@ -1,4 +1,5 @@
-import { createHash } from "node:crypto";
+import { createHash, randomUUID } from "node:crypto";
+import { notionWriteFingerprint, validNotionOperationId, type NotionReceiptStore, type NotionWriteOutcome, type NotionWriteReceipt } from "./notion-write-receipt.ts";
 import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { localDataPath } from "../local-data.ts";
@@ -25,6 +26,9 @@ export type NotionTurn = {
   error: string;
   wrote: boolean;
   verified: boolean;
+  operationId?: string;
+  writeOutcome?: NotionWriteOutcome;
+  recovery?: "verify_only" | "inspect_page";
 };
 
 type FetchLike = (url: string, init?: RequestInit) => Promise<{ ok: boolean; status: number; json: () => Promise<unknown> }>;
@@ -130,7 +134,7 @@ function empty(state: NotionTurn["state"], action: string, error: string): Notio
   return { ok: false, state, action, needsConfirmation: false, ambiguous: false, pages: [], content: "", error, wrote: false, verified: false };
 }
 
-async function callNotion(fetchImpl: FetchLike, token: string, path: string, init: RequestInit): Promise<{ ok: true; body: unknown } | { ok: false; error: string }> {
+async function callNotion(fetchImpl: FetchLike, token: string, path: string, init: RequestInit): Promise<{ ok: true; body: unknown } | { ok: false; error: string; uncertain: boolean }> {
   let response: { ok: boolean; status: number; json: () => Promise<unknown> };
   try {
     response = await fetchImpl(`https://api.notion.com/v1${path}`, {
@@ -142,12 +146,12 @@ async function callNotion(fetchImpl: FetchLike, token: string, path: string, ini
       },
     });
   } catch {
-    return { ok: false, error: "Notion could not be reached. Nothing was changed." };
+    return { ok: false, error: init.method === "PATCH" ? "Notion did not acknowledge the write. Its outcome is unknown; do not append it again." : "Notion could not be reached. No write was sent.", uncertain: init.method === "PATCH" };
   }
   const body = await response.json().catch(() => null);
   if (!response.ok) {
     const message = body && typeof body === "object" && typeof (body as { message?: unknown }).message === "string" ? (body as { message: string }).message : `Notion returned ${response.status}.`;
-    return { ok: false, error: `${message} Nothing was invented.` };
+    return { ok: false, error: `${message} Nothing was invented.`, uncertain: init.method === "PATCH" && response.status >= 500 };
   }
   return { ok: true, body };
 }
@@ -159,6 +163,11 @@ export async function runNotionTurn(input: {
   confirmed: boolean;
   pageId: string | null;
   fetch: FetchLike;
+  operationId?: string;
+  workspaceId?: string;
+  recoveryOnly?: boolean;
+  receipts?: NotionReceiptStore;
+  isHalted?: () => boolean | Promise<boolean>;
 }): Promise<NotionTurn> {
   const connection = notionConnection(input.token, input.disabled);
   if (connection.state !== "connected" || !input.token) return empty(connection.state, "none", connection.detail);
@@ -167,12 +176,19 @@ export async function runNotionTurn(input: {
     return empty("connected", "unclear", "Say whether to search, read, or append, and name the page. Nothing was called.");
   }
   const query = intent.action === "search" ? intent.query : intent.query;
-  const found = await callNotion(input.fetch, input.token, "/search", {
+  const savedReceipt = intent.action === "append" && input.receipts && validNotionOperationId(input.operationId)
+    ? await input.receipts.read(input.operationId) : null;
+  if (savedReceipt && input.pageId && input.pageId !== savedReceipt.pageId) return {
+    ...empty("connected", "append", "The approved page changed. This write approval cannot be reused."), operationId: input.operationId,
+  };
+  const found = savedReceipt ? null : await callNotion(input.fetch, input.token, "/search", {
     method: "POST",
     body: JSON.stringify({ query: query.slice(0, 200), page_size: 8 }),
   });
-  if (!found.ok) return empty("connected", intent.action, found.error);
-  let pages = pagesFromSearch(found.body);
+  if (found && !found.ok) return empty("connected", intent.action, found.error);
+  let pages: NotionPage[] = savedReceipt
+    ? [{ id: savedReceipt.pageId, title: "Approved Notion destination", url: `https://www.notion.so/${encodeURIComponent(savedReceipt.pageId)}`, kind: "page" }]
+    : pagesFromSearch(found && found.ok ? found.body : null);
   if (input.pageId) pages = pages.filter((page) => page.id === input.pageId).concat(pages.filter((page) => page.id !== input.pageId));
   const picked = input.pageId ? pages.find((page) => page.id === input.pageId) ?? null : pages.length === 1 ? pages[0] : null;
   if (intent.action === "search") {
@@ -186,22 +202,67 @@ export async function runNotionTurn(input: {
     if (!blocks.ok) return { ...empty("connected", "read", blocks.error), pages: [picked] };
     return { ok: true, state: "connected", action: "read", needsConfirmation: false, ambiguous: false, pages: [picked], content: textFromBlocks(blocks.body), error: "", wrote: false, verified: false };
   }
-  if (!input.confirmed) {
-    return { ok: false, state: "connected", action: "append", needsConfirmation: true, ambiguous: false, pages: [picked], content: "", error: `Append to “${picked.title}” only after you confirm. Nothing was written.`, wrote: false, verified: false };
-  }
+  const operationId = validNotionOperationId(input.operationId) ? input.operationId : randomUUID();
   const note = intent.note.slice(0, 1500);
+  const fingerprint = notionWriteFingerprint(input.workspaceId ?? "", picked.id, note);
+  const base = { ...empty("connected", "append", ""), pages: [picked], operationId };
+  const recover = async (receipt: NotionWriteReceipt): Promise<NotionTurn> => {
+    if (receipt.fingerprint !== fingerprint || receipt.pageId !== picked.id) {
+      return { ...base, error: "The account, workspace, page or text changed. This write approval cannot be reused." };
+    }
+    if (receipt.outcome === "verified") return { ...base, ok: true, wrote: true, verified: true, writeOutcome: "verified" };
+    if (receipt.blockIds.length) {
+      const checks = await Promise.all(receipt.blockIds.map((id) => callNotion(input.fetch, input.token!, `/blocks/${encodeURIComponent(id)}`, { method: "GET" })));
+      const verified = checks.every((check, index) => check.ok && check.body && typeof check.body === "object" &&
+        (check.body as { id?: string }).id === receipt.blockIds[index] && textFromBlocks({ results: [check.body] }) === note);
+      if (verified) {
+        await input.receipts!.save(operationId, { ...receipt, outcome: "verified" });
+        return { ...base, ok: true, wrote: true, verified: true, writeOutcome: "verified", content: note };
+      }
+      return { ...base, wrote: true, writeOutcome: "accepted", recovery: "verify_only", error: "Notion accepted this append. Its new block could not be verified yet. Check the same write again; do not append it again." };
+    }
+    if (receipt.outcome === "rejected") return { ...base, writeOutcome: "rejected", error: "Notion rejected this operation. Nothing was accepted. Start a new append and review it again if you want to try again." };
+    return { ...base, wrote: receipt.outcome === "accepted", writeOutcome: receipt.outcome, recovery: "inspect_page", error: receipt.outcome === "accepted"
+      ? "Notion accepted this append without returning a block identity. Inspect the exact destination before starting another append. This operation will not be repeated."
+      : "This append may already have reached Notion. Its outcome is unknown. Inspect the exact destination before starting another append. This operation will not be repeated." };
+  };
+  if (input.receipts && validNotionOperationId(input.operationId)) {
+    if (savedReceipt) return recover(savedReceipt);
+  }
+  if (input.recoveryOnly) return { ...base, error: "No saved receipt exists for this operation. No write was sent." };
+  if (!input.confirmed) {
+    return { ...base, needsConfirmation: true, error: `Append to “${picked.title}” only after you confirm. Nothing was written.` };
+  }
+  if (!input.receipts || !validNotionOperationId(input.operationId)) {
+    return { ...base, error: "A durable operation receipt is required before this append. Review the request again. Nothing was sent." };
+  }
+  const receipt: NotionWriteReceipt = { fingerprint, pageId: picked.id, outcome: "sending", blockIds: [] };
+  const claimed = await input.receipts.claim(operationId, receipt);
+  if (!claimed) {
+    const previous = await input.receipts.read(operationId);
+    return previous ? recover(previous) : { ...base, recovery: "inspect_page", writeOutcome: "unknown", error: "The write receipt could not be reconciled. No repeat append was sent." };
+  }
+  // A claim is durable before dispatch. A process/network loss can never authorize a second PATCH.
+  if (input.isHalted && await input.isHalted()) {
+    await input.receipts.save(operationId, { ...receipt, outcome: "rejected" });
+    return { ...base, writeOutcome: "rejected", error: "Emergency stop is on. No write was sent." };
+  }
   const wrote = await callNotion(input.fetch, input.token, `/blocks/${picked.id}/children`, {
     method: "PATCH",
     body: JSON.stringify({
       children: [{ object: "block", type: "paragraph", paragraph: { rich_text: [{ type: "text", text: { content: note } }] } }],
     }),
   });
-  if (!wrote.ok) return { ...empty("connected", "append", wrote.error), pages: [picked] };
-  const check = await callNotion(input.fetch, input.token, `/blocks/${picked.id}/children?page_size=50`, { method: "GET" });
-  const content = check.ok ? textFromBlocks(check.body) : "";
-  const verified = content.includes(note);
-  if (!check.ok || !verified) {
-    return { ok: false, state: "connected", action: "append", needsConfirmation: false, ambiguous: false, pages: [picked], content, error: "Notion accepted a write, but the text was not found when the page was read back.", wrote: true, verified: false };
+  if (!wrote.ok) {
+    const outcome = wrote.uncertain ? "unknown" : "rejected";
+    await input.receipts.save(operationId, { ...receipt, outcome });
+    return { ...base, writeOutcome: outcome, ...(wrote.uncertain ? { recovery: "inspect_page" as const } : {}), error: wrote.error };
   }
-  return { ok: true, state: "connected", action: "append", needsConfirmation: false, ambiguous: false, pages: [picked], content, error: "", wrote: true, verified: true };
+  const results = wrote.body && typeof wrote.body === "object" && Array.isArray((wrote.body as { results?: unknown }).results)
+    ? (wrote.body as { results: unknown[] }).results : [];
+  const blockIds = results.flatMap((block) => block && typeof block === "object" && typeof (block as { id?: unknown }).id === "string" ? [(block as { id: string }).id] : []);
+  const accepted: NotionWriteReceipt = { ...receipt, outcome: "accepted", blockIds };
+  // Preserve the acknowledgement before the independent readback, including permission loss.
+  await input.receipts.save(operationId, accepted);
+  return recover(accepted);
 }

@@ -304,19 +304,19 @@ describe("H33 Notion connector failure banners", () => {
     assert.equal(ambiguous.tone, "message");
   });
 
-  it("a verify miss and an emergency stop are failures; emergency stop is not user_stopped", () => {
+  it("an accepted write is recovery information, while emergency stop remains a failure", () => {
     const verify = notionFailureFromTurn(
       turn({
         ok: false,
         state: "connected",
         action: "append",
         error: "Notion accepted a write, but the text was not found when the page was read back.",
+        wrote: true,
+        writeOutcome: "accepted",
       }),
       { text: "Append today's priorities to the Notion page about roadmap", confirmed: true, pageId: "p1", surface: "chat" },
     );
-    assert.equal(verify.tone, "failure");
-    if (verify.tone !== "failure") return;
-    assert.equal(verify.failure.kind, "notion_failed");
+    assert.equal(verify.tone, "message");
     const halted = notionFailureFromTurn(
       turn({ ok: false, state: "connected", error: "Emergency stop is on. Notion was not called." }),
       searchParams(),

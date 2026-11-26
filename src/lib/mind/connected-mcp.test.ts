@@ -26,6 +26,14 @@ function memoryDb(rows: Row[] = []): RegistryDb & { rows: Row[] } {
         return [];
       }
       const userId = String(params[0]);
+      if (text.startsWith("UPDATE mind_mcp_registry")) {
+        const row = rows.find((row) => row.userId === String(params[0]) && row.id === String(params[1]));
+        if (!row) return [];
+        const current = JSON.parse(row.record);
+        if (current.url !== params[3] || (current.tokenEnc ?? null) !== params[4] || current.enabled === false || current.deleted) return [];
+        row.record = JSON.stringify({ ...current, ...JSON.parse(String(params[2])) });
+        return text.includes("RETURNING") ? [{ record: row.record }] as T[] : [];
+      }
       if (text.startsWith("select record")) return rows.filter((row) => row.userId === userId).map((row) => ({ record: row.record })) as T[];
       if (text.startsWith("select id")) return rows.filter((row) => row.userId === userId).map((row) => ({ id: row.id })) as T[];
       const id = String(params[1]);

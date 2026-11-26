@@ -209,7 +209,7 @@ export function BotBuilder({ ws, setWs, onChat, onRun, onSchedule, onSelect, foc
                 {onDeploy && <button type="button" className={secondary} onClick={() => onDeploy(bot.id, "hosted-worker")}>Record hosted target</button>}
                 <button type="button" className={secondary} onClick={() => setArchiveId(bot.id)}>Archive</button>
               </div>
-              <p className="mt-2 text-xs text-muted">{deployment ? `${deployment.target} · ${deployment.state}${deployment.error ? ` · ${deployment.error}` : ""}` : "No worker target recorded for this version."}</p>
+              <p id={deployment ? `deployment-${deployment.id}` : undefined} tabIndex={-1} className="mt-2 text-xs text-muted">{deployment ? `${deployment.target} · ${deployment.state}${deployment.error ? ` · ${deployment.error}` : ""}` : "No worker target recorded for this version."}</p>
               <p className="mt-1 text-xs text-muted">Instruction changes apply to new conversations. Existing conversations keep their own settings.</p>
               {archiveId === bot.id && <div className="mt-2 space-y-2 text-sm">
                 <p>{scheduled ? `${scheduled} enabled schedule(s) will be blocked while this bot is archived.` : "This bot will be hidden from active bots."} Existing conversations and run history are kept.</p>

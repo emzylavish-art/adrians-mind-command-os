@@ -1,3 +1,8 @@
+import { withExecutionReceipts } from "./execution-response.ts";
+import { readModelExecutions, saveModelExecution } from "./model-execution.server.ts";
+import type { ConsultExecutionReceipt } from "./model-consult.ts";
+import type { ProviderReceipt } from "./provider-receipt.ts";
+import { selectContextHistory } from "./context-budget.ts";
 import { DEV_USER_ID, isLoopbackPreview, requireUserId } from "../auth/verify.server";
 import { guardMindEnv } from "./isolation";
 import { checkTurnSize, createChatTurnPreflight } from "./limits";
@@ -25,7 +30,7 @@ import { resolveDatabaseUrl } from "../env.server.ts";
 import { LOGIC_ROUTE_LABEL, resolveRequestedRoute, toAdapterMessages, type LogicRouteId } from "./logic-routes.ts";
 import { inspectLogicRoutes, runLogicRoute } from "./logic-route-adapter.server.ts";
 import { parseCustomProviderChoice, executeCustomChat } from "./ai-provider-config.server.ts";
-import { claimTurn, finishTurnReceipt, pruneTurnReceipts, turnOperationExpiry } from "./turn-receipt.ts";
+import { claimTurn, readTurnReceipt, finishTurnReceipt, pruneTurnReceipts, turnOperationExpiry } from "./turn-receipt.ts";
 import type { Sql } from "../db";
 
 /** Default Expert model id — kept for status/docs; live turns use resolveModelTier. */
@@ -114,7 +119,7 @@ export async function prepareMindTurnWithHelp(userId: string, data: TurnBody, co
   const images = sanitizeAttachments(data.images);
   const text = typeof data.text === "string" ? data.text.trim() : "";
   if (!text && images.length === 0) return { ok: false as const, error: "Write a message first." };
-  const history = Array.isArray(data.history) ? data.history.filter(isHistory).slice(-12) : [];
+  const history = selectContextHistory(Array.isArray(data.history) ? data.history.filter(isHistory) : [], { provider: String(data.provider ?? "grok"), model: typeof data.requestedModel === "string" ? data.requestedModel : null, reservedText: text + JSON.stringify(data.memoryContext ?? []) + String(data.botKnowledge ?? "") + String(data.customPersonality ?? "") }).history;
   const memoryContext = Array.isArray(data.memoryContext) ? data.memoryContext.filter(isNote).slice(0, 12) : [];
   const sized = checkTurnSize({
     text: text || "Describe the attached image.",
@@ -212,8 +217,13 @@ export async function completeModelReply(prepared: {
 function json(body: unknown, status = 200, retryAfter?: string) {
   return new Response(JSON.stringify(body), {
     status,
-    headers: { "content-type": "application/json", "cache-control": "no-store", ...(retryAfter ? { "retry-after": retryAfter } : {}) },
+    headers: { "content-type": "application/json", "cache-control": "no-store", "x-mind-primary-dispatched": "0", ...(retryAfter ? { "retry-after": retryAfter } : {}) },
   });
+}
+
+function failureReceipt(result: Partial<ProviderReceipt> & { model?: string; requestedModel?: string | null; dispatched?: boolean }) {
+  return { usage: result.usage ?? null, requestId: result.requestId ?? null, model: result.model,
+    requestedModel: result.requestedModel, executionLocation: result.executionLocation, dispatched: result.dispatched };
 }
 
 function logicSse(input: {
@@ -223,6 +233,7 @@ function logicSse(input: {
   route: LogicRouteId;
   usedIds: string[];
   credentialFallback: "OPENAI_API_KEY" | null;
+  usage?: ProviderReceipt["usage"]; requestId?: string | null; executionLocation?: "local" | "hosted";
 }): Response {
   const label = LOGIC_ROUTE_LABEL[input.route];
   const done = {
@@ -230,9 +241,10 @@ function logicSse(input: {
     model: input.model,
     requestedModel: input.requestedModel,
     provider: input.route,
-    usage: null,
+    usage: input.usage ?? null,
     usedIds: input.usedIds,
-    requestId: null,
+    requestId: input.requestId ?? null,
+    executionLocation: input.executionLocation,
     logicRoute: input.route,
     credentialFallback: input.credentialFallback,
     tierReason: `Owner selected ${label}.`,
@@ -243,7 +255,7 @@ function logicSse(input: {
   });
 }
 
-async function handleLogicTurn(userId: string, data: TurnBody, route: LogicRouteId, preflight: () => Promise<Response | null>, markDispatched: () => void): Promise<Response> {
+async function handleLogicTurn(userId: string, data: TurnBody, route: LogicRouteId, preflight: () => Promise<Response | null>, markDispatched: (dispatched?: boolean) => void): Promise<Response> {
   const label = LOGIC_ROUTE_LABEL[route];
   const images = sanitizeAttachments(data.images);
   if (images.length > 0) {
@@ -259,7 +271,7 @@ async function handleLogicTurn(userId: string, data: TurnBody, route: LogicRoute
   }
   const text = typeof data.text === "string" ? data.text.trim() : "";
   if (!text) return json({ ok: false, error: "Write a message first. Nothing was sent." }, 400);
-  const history = Array.isArray(data.history) ? data.history.filter(isHistory).slice(-12) : [];
+  const history = selectContextHistory(Array.isArray(data.history) ? data.history.filter(isHistory) : [], { provider: String(data.provider ?? "grok"), model: typeof data.requestedModel === "string" ? data.requestedModel : null, reservedText: text + JSON.stringify(data.memoryContext ?? []) + String(data.botKnowledge ?? "") + String(data.customPersonality ?? "") }).history;
   const memoryContext = Array.isArray(data.memoryContext) ? data.memoryContext.filter(isNote).slice(0, 12) : [];
   const sized = checkTurnSize({ text, history, memoryContext, images: [] });
   if (!sized.ok) return json(sized, 400);
@@ -290,7 +302,7 @@ async function handleLogicTurn(userId: string, data: TurnBody, route: LogicRoute
     env: process.env,
     inspect: async () => inspected,
   });
-  if (!ran.ok) return json({ ok: false, error: ran.error, logicRoute: route, provider: route }, ran.called ? 502 : 503);
+  if (!ran.ok) { if (!ran.called) markDispatched(false); return json({ ok: false, error: ran.error, logicRoute: route, provider: route, ...failureReceipt(ran) }, ran.called ? 502 : 503); }
   return logicSse({
     text: ran.content,
     model: ran.model,
@@ -298,6 +310,7 @@ async function handleLogicTurn(userId: string, data: TurnBody, route: LogicRoute
     route: ran.provider,
     usedIds: assembled.usedIds,
     credentialFallback: ran.credentialFallback,
+    usage: ran.usage, requestId: ran.requestId, executionLocation: ran.executionLocation,
   });
 }
 
@@ -322,11 +335,32 @@ export async function handleMindTurn(request: Request): Promise<Response> {
     const message = error instanceof Error ? error.message : "Unauthorized";
     return json({ ok: false, error: message === "Unauthorized" ? "Sign in is required." : message }, message === "Unauthorized" ? 401 : 403);
   }
-  if (request.method === "GET") return json({ operationId: `${Date.now()}-${crypto.randomUUID()}` });
+  if (request.method === "GET") {
+    const operationId = new URL(request.url).searchParams.get("operationId");
+    if (!operationId) return json({ operationId: `${Date.now()}-${crypto.randomUUID()}` });
+    if (!turnOperationExpiry(operationId)) return json({ ok: false, error: "This send receipt expired. Review the conversation; nothing was resent." }, 410);
+    const gate = envCheck();
+    if (!gate.ok) return json({ ok: false, error: gate.error }, 503);
+    try {
+      const { getSql } = await import("../db");
+      const sql = await getSql();
+      const state = await readTurnReceipt(sql, userId, operationId);
+      const executions = await readModelExecutions(sql, userId, operationId);
+      return json({ ownerId: userId, operationId, state, executions });
+    } catch { return json({ ok: false, error: "Send verification is temporarily unavailable. Nothing was resent." }, 503); }
+  }
   const read = await readJsonObjectBody(request, MAX_BODY);
   if (!read.ok) return json({ ok: false, error: read.error }, read.status);
   const operationId = request.headers.get("x-mind-turn-id");
-  if (operationId === null) return dispatchMindTurn(request, userId, read.body);
+  const executions: ConsultExecutionReceipt[] = [];
+  let primaryDispatched = false;
+  const finalResponse = async (response: Response) => {
+    const recorded = await withExecutionReceipts(response, executions);
+    const headers = new Headers(recorded.headers);
+    headers.set("x-mind-primary-dispatched", primaryDispatched ? "1" : "0");
+    return new Response(recorded.body, { status: recorded.status, headers });
+  };
+  if (operationId === null) return finalResponse(await dispatchMindTurn(request, userId, read.body, (value = true) => { primaryDispatched = value; }, executions, () => {}));
   const expiresAt = turnOperationExpiry(operationId);
   if (!expiresAt) {
     return json({ ok: false, error: "This send ID is invalid or expired. Check your conversation before starting a new send." }, 400);
@@ -349,19 +383,20 @@ export async function handleMindTurn(request: Request): Promise<Response> {
   } catch {
     return json({ ok: false, error: "Send verification is temporarily unavailable. The provider was not contacted." }, 503);
   }
-  let dispatched = false;
-  const response = await dispatchMindTurn(request, userId, read.body, () => { dispatched = true; });
+  let helperDispatched = false;
+  let sideEffectDispatched = false;
+  const response = await dispatchMindTurn(request, userId, read.body, (value = true) => { primaryDispatched = value; }, executions, () => { helperDispatched = true; }, () => { sideEffectDispatched = true; });
   // The insert is the protection. A failed audit update must not hide a real reply.
   try {
-    await finishTurnReceipt(sql, userId, operationId, !dispatched);
+    await finishTurnReceipt(sql, userId, operationId, !primaryDispatched && !helperDispatched && !sideEffectDispatched);
     await pruneTurnReceipts(sql);
   } catch {
     // The existing receipt keeps later deliveries from starting another call.
   }
-  return response;
+  return finalResponse(response);
 }
 
-async function dispatchMindTurn(request: Request, userId: string, data: Record<string, unknown>, markDispatched: () => void = () => {}): Promise<Response> {
+async function dispatchMindTurn(request: Request, userId: string, data: Record<string, unknown>, markDispatched: (dispatched?: boolean) => void = () => {}, executions: ConsultExecutionReceipt[] = [], markHelperDispatched: () => void = markDispatched, markSideEffect: () => void = () => {}): Promise<Response> {
   if (request.signal.aborted) return json({ ok: false, error: "This send was canceled before it started." }, 499);
   let body = data as TurnBody;
   const { readHaltState } = await import("./halt.server.ts");
@@ -379,7 +414,7 @@ async function dispatchMindTurn(request: Request, userId: string, data: Record<s
   if (localOwner && adrianPcEnabled() && typeof body.text === "string" && body.text.trim()) {
     const pc = await runAdrianPc({ text: body.text, halted: false });
     if (pc.ran) {
-      markDispatched();
+      markSideEffect();
       body = { ...body, text: `${body.text}\n\nAdrian PC result: ${pc.output}` };
     }
   }
@@ -391,7 +426,7 @@ async function dispatchMindTurn(request: Request, userId: string, data: Record<s
     }
     const local = runLocalCommand(body.text);
     if (local) {
-      markDispatched();
+      markSideEffect();
       const done = { text: local, model: "adrian-local", provider: "Adrian", usage: null, usedIds: [], requestId: null };
       const stream = `event: delta\ndata: ${JSON.stringify({ text: local })}\n\nevent: done\ndata: ${JSON.stringify(done)}\n\n`;
       return new Response(stream, { headers: { "content-type": "text/event-stream", "cache-control": "no-store" } });
@@ -418,10 +453,17 @@ async function dispatchMindTurn(request: Request, userId: string, data: Record<s
     const blocked = await preflight();
     if (blocked) return blocked;
     const help = await collectConsultHelp(planned.plan, async (id, requestText) => {
-      if (await preflight()) return { ok: false, text: "" };
-      markDispatched();
-      return askConnectedModule(userId, id, requestText);
-    });
+      if (request.signal.aborted || await preflight()) return { ok: false, text: "", dispatched: false };
+      try {
+        const result = await askConnectedModule(userId, id, requestText);
+        if (result.dispatched !== false) markHelperDispatched();
+        return result;
+      } catch (error) { markHelperDispatched(); throw error; }
+    }, { parentOperationId: request.headers.get("x-mind-turn-id") ?? crypto.randomUUID(), onReceipt: async (receipt) => {
+      executions.push(receipt);
+      try { const { getSql } = await import("../db"); await saveModelExecution(await getSql(), userId, receipt); }
+      catch { /* Deliver the receipt even if its durable copy is temporarily unavailable. */ }
+    } });
     consultHelp = orchestratorInstruction(planned.plan, help);
     body = { ...body, provider: planned.plan.orchestrator, logicRoute: undefined };
   }
@@ -441,7 +483,7 @@ async function dispatchMindTurn(request: Request, userId: string, data: Record<s
     if (!text) return json({ ok: false, error: "Write a message first." }, 400);
     const memory = body.memory === "on" ? "on" : body.memory === "off" ? "off" : null;
     if (!memory) return json({ ok: false, error: "Invalid memory setting." }, 400);
-    const history = Array.isArray(body.history) ? body.history.filter(isHistory).slice(-12) : [];
+    const history = selectContextHistory(Array.isArray(body.history) ? body.history.filter(isHistory) : [], { provider: String(body.provider ?? "grok"), model: typeof body.requestedModel === "string" ? body.requestedModel : null, reservedText: text + JSON.stringify(body.memoryContext ?? []) + String(body.botKnowledge ?? "") + String(body.customPersonality ?? "") }).history;
     const memoryContext = Array.isArray(body.memoryContext) ? body.memoryContext.filter(isNote).slice(0, 12) : [];
     const sized = checkTurnSize({ text, history, memoryContext, images: [] });
     if (!sized.ok) return json(sized, 400);
@@ -456,7 +498,7 @@ async function dispatchMindTurn(request: Request, userId: string, data: Record<s
     try {
       markDispatched();
       const result = await executeCustomChat(userId, chosen, formatted.messages, request.signal);
-      if (!result.ok) return json(result, result.httpStatus ?? 502);
+      if (!result.ok) { if (result.dispatched === false) markDispatched(false); return json(result, result.httpStatus ?? 502); }
       const done = { text: result.text, model: result.model, provider: result.provider, requestedModel: chosen.model, usedIds: assembled.usedIds, usage: result.usage, requestId: result.requestId };
       const stream = `event: delta\ndata: ${JSON.stringify({ text: result.text })}\n\nevent: done\ndata: ${JSON.stringify(done)}\n\n`;
       return new Response(stream, { headers: { "content-type": "text/event-stream", "cache-control": "no-store" } });
@@ -481,7 +523,7 @@ async function dispatchMindTurn(request: Request, userId: string, data: Record<s
   if (requestedProvider === "nemotron" || requestedProvider === "ollama" || requestedProvider === "openrouter") {
     const text = typeof body.text === "string" ? body.text.trim() : "";
     if (!text) return json({ ok: false, error: "Write a message first." }, 400);
-    const history = Array.isArray(body.history) ? body.history.filter(isHistory) : [];
+    const history = selectContextHistory(Array.isArray(body.history) ? body.history.filter(isHistory) : [], { provider: String(requestedProvider), model: typeof body.requestedModel === "string" ? body.requestedModel : null, reservedText: text + JSON.stringify(body.memoryContext ?? []) + String(body.botKnowledge ?? "") + String(body.customPersonality ?? "") + consultHelp }).history;
     const context = directTurnContext(body, text, history, consultHelp);
     if (!context.ok) return json(context, 400);
     const blocked = await preflight();
@@ -499,8 +541,8 @@ async function dispatchMindTurn(request: Request, userId: string, data: Record<s
       signal: request.signal,
       fetch: globalThis.fetch,
     });
-    if (!routed.ok) return json({ ok: false, error: routed.error, provider: requestedProvider }, routed.httpStatus ?? 502, routed.retryAfter);
-    const done = { text: routed.text, model: routed.model, requestedModel: routed.requestedModel, provider: requestedProvider === "nemotron" ? "openrouter" : requestedProvider, usage: null, usedIds: context.usedIds, requestId: null };
+    if (!routed.ok) { if (routed.dispatched === false) markDispatched(false); return json({ ok: false, error: routed.error, provider: requestedProvider === "nemotron" ? "openrouter" : requestedProvider, ...failureReceipt(routed) }, routed.httpStatus ?? 502, routed.retryAfter); }
+    const done = { text: routed.text, model: routed.model, requestedModel: routed.requestedModel, provider: requestedProvider === "nemotron" ? "openrouter" : requestedProvider, usage: routed.usage, usedIds: context.usedIds, requestId: routed.requestId, executionLocation: routed.executionLocation };
     const stream = "event: delta\ndata: " + JSON.stringify({ text: routed.text }) + "\n\nevent: done\ndata: " + JSON.stringify(done) + "\n\n";
     return new Response(stream, { headers: { "content-type": "text/event-stream", "cache-control": "no-store" } });
   }
@@ -529,10 +571,8 @@ async function dispatchMindTurn(request: Request, userId: string, data: Record<s
     const blocked = await preflight();
     if (blocked) return blocked;
     const key = process.env[selected.id === "openai" ? "OPENAI_API_KEY" : selected.id === "anthropic" ? "ANTHROPIC_API_KEY" : selected.id === "gemini" ? "GEMINI_API_KEY" : "OPENROUTER_API_KEY"] ?? "";
-    const history = Array.isArray(body.history)
-      ? body.history.filter(isHistory).map((item) => ({ role: item.role, content: item.content }))
-      : [];
     const text = typeof body.text === "string" ? body.text.trim() : "";
+    const history = selectContextHistory(Array.isArray(body.history) ? body.history.filter(isHistory) : [], { provider: selected.id, model: selected.model, reservedText: text + JSON.stringify(body.memoryContext ?? []) + String(body.botKnowledge ?? "") + String(body.customPersonality ?? "") + consultHelp }).history.map(({ role, content }) => ({ role, content }));
     if (!text) return json({ ok: false, error: "Write a message first." }, 400);
     const context = directTurnContext(body, text, history, consultHelp);
     if (!context.ok) return json(context, 400);
@@ -547,9 +587,9 @@ async function dispatchMindTurn(request: Request, userId: string, data: Record<s
       signal: request.signal,
       fetch: globalThis.fetch,
     });
-    if (!called.ok) return json({ ok: false, error: called.error, provider: selected.id }, called.httpStatus ?? 502, called.retryAfter);
+    if (!called.ok) { if (called.dispatched === false) markDispatched(false); return json({ ok: false, error: called.error, provider: selected.id, ...failureReceipt(called) }, called.httpStatus ?? 502, called.retryAfter); }
     // Use the same SSE contract as the Grok and custom-provider chat paths.
-    const done = { text: called.text, model: reportedModel(called.model), requestedModel: selected.model, provider: selected.id, usage: null, usedIds: context.usedIds, requestId: null };
+    const done = { text: called.text, model: reportedModel(called.model), requestedModel: selected.model, provider: selected.id, usage: called.usage, usedIds: context.usedIds, requestId: called.requestId, executionLocation: called.executionLocation };
     const stream = "event: delta\ndata: " + JSON.stringify({ text: called.text }) +
       "\n\nevent: done\ndata: " + JSON.stringify(done) + "\n\n";
     return new Response(stream, { headers: { "content-type": "text/event-stream", "cache-control": "no-store" } });
@@ -572,7 +612,7 @@ async function dispatchMindTurn(request: Request, userId: string, data: Record<s
   if (shouldPersistTurnMemory({ memory: prepared.memory, saveText: prepared.saveMemoryText })) {
     const { getSql } = await import("../db");
     const { createOwnerMemory } = await import("./memory/owner-ops");
-    markDispatched();
+    markSideEffect();
     const saved = await createOwnerMemory(await getSql(), userId, {
       scope: "chat",
       text: prepared.saveMemoryText,
@@ -584,8 +624,8 @@ async function dispatchMindTurn(request: Request, userId: string, data: Record<s
     memorySaved = signal.memorySaved;
     savedMemoryId = signal.savedMemoryId;
   }
-  markDispatched();
   return relayModelStream({
+    onDispatch: markDispatched,
     apiKey,
     model: prepared.model,
     messages: prepared.assembled.messages,
@@ -627,19 +667,19 @@ async function modulesConnectedNow(userId: string) {
   return modules;
 }
 
-async function askConnectedModule(userId: string, id: string, requestText: string): Promise<{ ok: boolean; text: string }> {
+async function askConnectedModule(userId: string, id: string, requestText: string): Promise<import("./model-consult.ts").ConsultResult> {
   if (id.startsWith("custom:")) {
     const chosen = parseCustomProviderChoice(id);
-    if (!chosen.ok) return { ok: false, text: "" };
+    if (!chosen.ok) return { ok: false, text: "", dispatched: false };
     const result = await executeCustomChat(userId, chosen, [
       { role: "system", content: ADRIAN_MIND_IDENTITY },
       { role: "user", content: requestText },
     ]);
-    return result.ok ? { ok: true, text: result.text } : { ok: false, text: "" };
+    return result.ok ? { ...result, dispatched: true, requestedModel: chosen.model } : { ...result, text: "", requestedModel: chosen.model, dispatched: result.dispatched === true, outcome: result.outcome ?? "unknown" };
   }
   if (id === "grok") {
     const keyed = resolveXaiInferenceApiKey(process.env);
-    if (!keyed.ok) return { ok: false, text: "" };
+    if (!keyed.ok) return { ok: false, text: "", dispatched: false };
     try {
       const res = await fetch("https://api.x.ai/v1/chat/completions", {
         method: "POST",
@@ -655,22 +695,21 @@ async function askConnectedModule(userId: string, id: string, requestText: strin
           stream: false,
         }),
       });
-      if (!res.ok) return { ok: false, text: "" };
       const parsed = readModelPayload(await res.text());
-      return parsed.text ? { ok: true, text: parsed.text } : { ok: false, text: "" };
+      return { ok: res.ok && Boolean(parsed.text), text: res.ok ? parsed.text : "", model: parsed.model, requestedModel: "grok-4.5", provider: "grok", usage: parsed.usage, requestId: res.headers.get("x-request-id"), dispatched: true, ...(!res.ok ? { outcome: "failed" as const } : {}) };
     } catch {
-      return { ok: false, text: "" };
+      return { ok: false, text: "", dispatched: true, provider: "grok", outcome: "unknown" };
     }
   }
   if (id === "nemotron" || id === "ollama" || id === "openrouter") {
     const result = await routeSelectedModel({ id, prompt: requestText, env: process.env, fetch: globalThis.fetch });
-    return { ok: result.ok, text: result.text };
+    return { ...result, provider: id === "nemotron" ? "openrouter" : id, dispatched: result.dispatched === true };
   }
   const selected = selectProvider(id, process.env);
-  if (!selected.ok || selected.id === "grok") return { ok: false, text: "" };
+  if (!selected.ok || selected.id === "grok") return { ok: false, text: "", dispatched: false };
   const keyName = selected.id === "openai" ? "OPENAI_API_KEY" : selected.id === "anthropic" ? "ANTHROPIC_API_KEY" : selected.id === "gemini" ? "GEMINI_API_KEY" : "OPENROUTER_API_KEY";
   const key = process.env[keyName] ?? "";
-  if (!key) return { ok: false, text: "" };
+  if (!key) return { ok: false, text: "", dispatched: false };
   const called = await callConfiguredProvider({
     id: selected.id,
     key,
@@ -678,5 +717,5 @@ async function askConnectedModule(userId: string, id: string, requestText: strin
     systemPrompt: ADRIAN_MIND_IDENTITY,
     fetch: globalThis.fetch,
   });
-  return called.ok ? { ok: true, text: called.text } : { ok: false, text: "" };
+  return { ...called, provider: selected.id, requestedModel: selected.model, dispatched: called.dispatched === true };
 }

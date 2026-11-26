@@ -224,17 +224,21 @@ export const startOAuth = createServerFn({ method: "POST" })
     return { ok: true as const, url: oauth.url };
   });
 
-export const signOutSupabase = createServerFn({ method: "POST" }).handler(
-  async () => {
-    const { readSupabaseEnv, createSupabaseServerClient } = await loadServer();
-    if (readSupabaseEnv()) {
-      try {
-        const supabase = createSupabaseServerClient();
-        await supabase.auth.signOut();
-      } catch {
-        // Still send the visitor to login even if sign-out errors.
-      }
-    }
-    throw redirect({ to: "/login" });
-  },
-);
+/** End only this app's Supabase session; failures are reported before navigation. */
+export const endSupabaseSession = createServerFn({ method: "POST" }).handler(async () => {
+  const { readSupabaseEnv, createSupabaseServerClient } = await loadServer();
+  if (!readSupabaseEnv()) return { ok: true as const };
+  try {
+    const { error } = await createSupabaseServerClient().auth.signOut();
+    if (error) return { ok: false as const, error: "The account session could not be ended. Please try again." };
+    return { ok: true as const };
+  } catch {
+    return { ok: false as const, error: "The account session could not be ended. Please try again." };
+  }
+});
+
+export const signOutSupabase = createServerFn({ method: "POST" }).handler(async () => {
+  const result = await endSupabaseSession();
+  if (!result.ok) throw new Error(result.error);
+  throw redirect({ to: "/login" });
+});

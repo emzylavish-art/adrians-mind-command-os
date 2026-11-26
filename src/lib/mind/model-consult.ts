@@ -1,6 +1,7 @@
 /** Multi-model help for the selected orchestrator. Presence is checked at send time. */
 
 import { customProviderBlockReason, type ProviderAvailability } from "./provider-catalog.ts";
+import type { ProviderReceipt } from "./provider-receipt.ts";
 
 export const ADRIAN_MIND_IDENTITY =
   "You were born inside Adrian's Mind. You are Adrian. Do not name yourself Grok, OpenAI, Claude, Gemini, Kimi, or any other vendor. Do not say which model or API produced the answer. Do not think of yourself as a model outside this platform.";
@@ -139,23 +140,50 @@ export function orchestratorInstruction(plan: ConsultPlan, help: { id: string; t
 
 export async function collectConsultHelp(
   plan: ConsultPlan,
-  callHelper: (id: string, request: string) => Promise<{ ok: boolean; text: string }>,
+  callHelper: (id: string, request: string) => Promise<ConsultResult>,
+  options: { parentOperationId?: string; onReceipt?: (receipt: ConsultExecutionReceipt) => void | Promise<void> } = {},
 ): Promise<{ id: string; text: string }[]> {
   const replies: { id: string; ok: boolean; text: string }[] = [];
-  for (const helper of plan.helpers) {
+  const parentOperationId = options.parentOperationId ?? crypto.randomUUID();
+  for (const [index, helper] of plan.helpers.entries()) {
     if (helper.request.includes(plan.purpose)) {
       replies.push({ id: helper.id, ok: false, text: "" });
       continue;
     }
-    try {
-      const result = await callHelper(helper.id, helper.request);
-      replies.push({ id: helper.id, ok: result.ok, text: result.text });
-    } catch {
-      replies.push({ id: helper.id, ok: false, text: "" });
+    let result: ConsultResult;
+    try { result = await callHelper(helper.id, helper.request); }
+    catch { result = { ok: false, text: "", dispatched: true, outcome: "unknown" }; }
+    replies.push({ id: helper.id, ok: result.ok, text: result.text });
+    if (result.dispatched !== false) {
+      await options.onReceipt?.({
+        executionId: `${parentOperationId}:helper:${index}`,
+        parentOperationId,
+        role: "helper",
+        provider: result.provider ?? helper.id,
+        requestedModel: result.requestedModel ?? null,
+        model: result.model ?? "model unknown",
+        usage: result.usage ?? null,
+        requestId: result.requestId ?? null,
+        executionLocation: result.executionLocation ?? (helper.id === "ollama" ? "local" : "hosted"),
+        outcome: result.ok ? "completed" : result.outcome ?? "failed",
+      });
     }
   }
   return returnedHelp(replies);
 }
+
+export type ConsultResult = { ok: boolean; text: string; dispatched?: boolean; provider?: string; model?: string; requestedModel?: string;
+  outcome?: "failed" | "unknown" | "stopped" } & Partial<ProviderReceipt>;
+
+export type ConsultExecutionReceipt = ProviderReceipt & {
+  executionId: string;
+  parentOperationId: string;
+  role: "helper" | "primary";
+  provider: string;
+  requestedModel: string | null;
+  model: string;
+  outcome: "completed" | "failed" | "unknown" | "stopped";
+};
 
 export function loadConsultModel(storage: Pick<Storage, "getItem"> | null | undefined, modules: ConsultModule[]): string {
   const connected = connectedModules(modules);

@@ -25,6 +25,7 @@ export function acceptResult(
   };
 }
 
-export function dismissResult(): null {
+export function dismissResult(activeAttempt?: { current: string }): null {
+  if (activeAttempt) activeAttempt.current = "";
   return null;
 }

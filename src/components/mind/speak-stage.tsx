@@ -44,6 +44,10 @@ type ActivationId = (typeof ACTIVATION)[number]["id"];
  */
 export function SpeakStage(props: {
   open: boolean;
+  answerMode?: "selected" | "realtime";
+  providerDescription?: string;
+  answerReceipt?: string;
+  onOutputSettings?: (muted: boolean, volume: number) => void;
   signedIn: boolean;
   freeOnly?: boolean;
   live?: boolean;
@@ -54,7 +58,7 @@ export function SpeakStage(props: {
   micMuted: boolean;
   onMicMute: (muted: boolean) => void;
   recording: boolean;
-  onAsk?: (text: string) => Promise<string | null | { reply?: string; error?: string }>;
+  onAsk?: (text: string) => Promise<string | null | { reply?: string; error?: string; speech?: "played" | "muted" }>;
   onKeepRecording?: (stream: MediaStream) => void;
   onEmergencyStop?: () => void;
   halted?: boolean;
@@ -148,9 +152,11 @@ export function SpeakStage(props: {
   useEffect(() => {
     if (!props.open) return;
     sharedAudioOutput.setOutputVolume(speakerMuted ? 0 : volume / 100);
+    props.onOutputSettings?.(speakerMuted, volume / 100);
     sharedAudioOutput.setPcmRate(rate === "slow" ? 0.85 : rate === "brisk" ? 1.15 : 1);
     return () => {
       sharedAudioOutput.setOutputVolume(1);
+      props.onOutputSettings?.(false, 1);
       sharedAudioOutput.setPcmRate(1);
     };
   }, [props.open, speakerMuted, volume, rate]);
@@ -174,6 +180,7 @@ export function SpeakStage(props: {
       stopVideo();
       setSettingsOpen(false);
       setConnecting(false);
+      setAsking(false);
       setRecordingPending(false);
       setReply("");
       setNotice(null);
@@ -308,15 +315,18 @@ export function SpeakStage(props: {
     const text = line.trim();
     if (!text || !props.onAsk || asking || props.halted) return;
     if (!props.signedIn) { props.onSignIn(); return; }
+    const generation = callGeneration.current;
+    const current = () => openRef.current && generation === callGeneration.current;
     setAsking(true);
     setShowTranscript(true);
     setReply("");
     setNotice("Adrian is answering. The reply will be spoken.");
     try {
       const result = await props.onAsk(text);
+      if (!current()) return;
       if (result && typeof result === "object") {
         setReply(result.reply ?? "");
-        setNotice(result.error ?? (result.reply ? "Spoken." : "The reply did not include text."));
+        setNotice(result.error ?? (result.speech === "muted" ? "Reply saved. Speaker muted." : result.reply ? "Spoken." : "The reply did not include text."));
         if (!result.error) setLine("");
       } else {
         setReply("");
@@ -324,10 +334,9 @@ export function SpeakStage(props: {
         if (!result) setLine("");
       }
     } catch {
-      setReply("");
-      setNotice("The reply did not finish. Nothing was spoken.");
+      if (current()) { setReply(""); setNotice("The reply did not finish. Nothing was spoken."); }
     } finally {
-      setAsking(false);
+      if (current()) setAsking(false);
     }
   }
 
@@ -347,7 +356,7 @@ export function SpeakStage(props: {
         }
         if (event.key !== "Tab") return;
         const root = settingsOpen ? dialogRef.current?.querySelector(".speak-sheet") : dialogRef.current;
-        const controls = root?.querySelectorAll<HTMLElement>('button:not([disabled]), input:not([hidden]):not([disabled])');
+        const controls = root?.querySelectorAll<HTMLElement>('button:not([disabled]), input:not([hidden]):not([disabled]), textarea:not([disabled]), select:not([disabled]), a[href], [tabindex="0"]');
         if (!controls?.length) return;
         const first = controls[0], last = controls[controls.length - 1];
         if (event.shiftKey && (document.activeElement === first || document.activeElement === root)) { event.preventDefault(); last.focus(); }
@@ -356,7 +365,7 @@ export function SpeakStage(props: {
     >
       <video ref={videoRef} className={source === "none" ? "is-hidden" : source} playsInline muted autoPlay />
       <div className="speak-call__top">
-        <span>Adrian’s Mind <span className="speak-call__provider">/ {props.freeOnly ? "Free-only · cloud voice off" : "xAI realtime"}</span></span>
+        <span>Adrian’s Mind <span className="speak-call__provider">/ {props.freeOnly ? "Free-only · cloud voice off" : props.providerDescription ?? "xAI realtime"}</span>{props.answerReceipt ? <span className="block text-xs" data-testid="speak-answer-receipt">{props.answerReceipt}</span> : null}</span>
         <div className="speak-call__safety">
           <button type="button" data-testid="speak-emergency-stop" onClick={() => cutSpeechRef.current("owner")}>Emergency stop</button>
           {props.halted && <button type="button" data-testid="speak-clear-stop" onClick={clearStop}>Clear stop</button>}
@@ -366,7 +375,7 @@ export function SpeakStage(props: {
         <div className="speak-call__symbol" aria-hidden="true"><AudioLines /></div>
         <h2>Speak with Adrian</h2>
         <p role="status" data-testid="speak-status">{status}</p>
-        {!props.live && <button type="button" className="speak-call__place" disabled={props.halted || connecting || recordingPending || props.recording} onClick={() => void startLive()}>{!props.signedIn ? "Sign in to speak" : connecting ? "Connecting…" : props.callError ? "Retry live conversation" : "Start live conversation"}</button>}
+        {!props.live && <button type="button" className="speak-call__place" disabled={props.halted || connecting || recordingPending || props.recording} onClick={() => void startLive()}>{!props.signedIn ? "Sign in to speak" : connecting ? "Connecting…" : props.callError ? "Try voice again" : props.answerMode === "selected" ? "Record a turn · up to 6 seconds" : "Start live conversation"}</button>}
         {props.callError && <p className="speak-call__transcript" role="alert">{props.callError}</p>}
         {notice && <p className="speak-call__transcript" data-testid="speak-speech-cut" role="status">{notice}</p>}
         {showTranscript && transcript && <p className="speak-call__transcript" data-testid="speak-transcript">{transcript}</p>}

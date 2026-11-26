@@ -1,0 +1,60 @@
+{
+  "baseline": "18d5b9364e6bdcfec028eeccf56fe596946ed8ce",
+  "evidence": "Actual before/after TSX and parser calls in a deterministic hooks/reconciliation fixture. React DOM, wall time, frame rate, input latency and physical devices are not measured.",
+  "results": [
+    {
+      "count": 20,
+      "variant": "before",
+      "updates": 20,
+      "initialBlockParses": 41,
+      "initialMarkdownParses": 41,
+      "updateBlockParses": 820,
+      "updateMarkdownParses": 820
+    },
+    {
+      "count": 20,
+      "variant": "after",
+      "updates": 20,
+      "initialBlockParses": 41,
+      "initialMarkdownParses": 41,
+      "updateBlockParses": 20,
+      "updateMarkdownParses": 20
+    },
+    {
+      "count": 200,
+      "variant": "before",
+      "updates": 20,
+      "initialBlockParses": 401,
+      "initialMarkdownParses": 401,
+      "updateBlockParses": 8020,
+      "updateMarkdownParses": 8020
+    },
+    {
+      "count": 200,
+      "variant": "after",
+      "updates": 20,
+      "initialBlockParses": 401,
+      "initialMarkdownParses": 401,
+      "updateBlockParses": 20,
+      "updateMarkdownParses": 20
+    },
+    {
+      "count": 1000,
+      "variant": "before",
+      "updates": 20,
+      "initialBlockParses": 2001,
+      "initialMarkdownParses": 2001,
+      "updateBlockParses": 40020,
+      "updateMarkdownParses": 40020
+    },
+    {
+      "count": 1000,
+      "variant": "after",
+      "updates": 20,
+      "initialBlockParses": 2001,
+      "initialMarkdownParses": 2001,
+      "updateBlockParses": 20,
+      "updateMarkdownParses": 20
+    }
+  ]
+}

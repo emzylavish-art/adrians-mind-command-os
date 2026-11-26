@@ -208,9 +208,11 @@ export const notionDisconnect = createServerFn({ method: "POST" })
 
 export const notionCommand = createServerFn({ method: "POST" })
   .middleware([authMiddleware])
-  .validator((input: { text?: string; confirmed?: boolean; pageId?: string | null; workspaceId?: string }) => ({
+  .validator((input: { text?: string; confirmed?: boolean; pageId?: string | null; workspaceId?: string; operationId?: string; recoveryOnly?: boolean }) => ({
     text: typeof input.text === "string" ? input.text.slice(0, 2000) : "",
     workspaceId: typeof input.workspaceId === "string" ? input.workspaceId : undefined,
+    operationId: typeof input.operationId === "string" ? input.operationId.slice(0, 80) : undefined,
+    recoveryOnly: input.recoveryOnly === true,
     confirmed: input.confirmed === true,
     pageId: typeof input.pageId === "string" ? input.pageId.slice(0, 80) : null,
   }))
@@ -245,6 +247,9 @@ export const notionCommand = createServerFn({ method: "POST" })
       };
     }
     const { runNotionTurn } = await import("./notion");
+    const { notionReceiptStore } = await import("./notion-write-receipt");
+    const { getSql } = await import("../db");
+    const receipts = notionReceiptStore(await getSql(), context.userId);
     const { resolveNotionTokenPersistent, resolveWorkspaceGrant } = await import("./connectors/notion-oauth");
     const result = await runNotionTurn({
       token: data.workspaceId ? await resolveWorkspaceGrant(context.userId, data.workspaceId) : await resolveNotionTokenPersistent(context.userId),
@@ -252,6 +257,11 @@ export const notionCommand = createServerFn({ method: "POST" })
       text: data.text,
       confirmed: data.confirmed,
       pageId: data.pageId,
+      workspaceId: data.workspaceId,
+      operationId: data.operationId,
+      recoveryOnly: data.recoveryOnly,
+      receipts,
+      isHalted: () => haltIsOn(context.userId),
       fetch: globalThis.fetch,
     });
     try {
@@ -412,18 +422,59 @@ export const saveMindCopy = createServerFn({ method: "POST" })
     }
     if (!allowMindRequest("save", context.userId, 20)) return { ok: false as const, error: "Too many saves. The browser copy was kept." };
     const { normalizeWorkspace } = await import("./workspace");
+    const { attachmentIssues, ACCOUNT_ATTACHMENT_ID } = await import("./media/attachment-integrity");
     const { snapshotTooLarge, writeSnapshot } = await import("./store");
     const { getSql } = await import("../db");
+    const attachmentErrors = attachmentIssues(data.workspace);
+    if (attachmentErrors.length) return { ok: false as const, error: `${attachmentErrors[0].name}: ${attachmentErrors[0].reason}`, attachmentErrors };
     const workspace = normalizeWorkspace(data.workspace);
     if (snapshotTooLarge(workspace)) return { ok: false as const, error: "This workspace is too large to copy to the server. The browser copy was kept." };
     try {
-      const revision = await writeSnapshot(await getSql(), context.userId, workspace, data.expectedRevision);
+      const sql = await getSql();
+      const { getAccountAttachment } = await import("./media/account-attachments.server");
+      const attachmentIds = new Set(workspace.chats.flatMap((chat) => chat.messages.flatMap((message) =>
+        (message.images ?? []).map((image) => image.blobId).filter((id): id is string => Boolean(id && ACCOUNT_ATTACHMENT_ID.test(id))))));
+      for (const id of attachmentIds) {
+        if (!await getAccountAttachment(sql, context.userId, id)) return { ok: false as const, error: "An account attachment is unavailable for this account. Reattach the image; the browser copy was kept." };
+      }
+      const revision = await writeSnapshot(sql, context.userId, workspace, data.expectedRevision);
       if (!revision) {
-        return { ok: false as const, conflict: true as const, error: "The server copy changed in another session. Both copies were kept. Reload and review before replacing the server copy." };
+        return { ok: false as const, conflict: true as const, error: "The server copy changed in another session. Both copies were kept. Retry save to compare the latest copies." };
       }
       return { ok: true as const, storage: "local-server" as const, revision };
     } catch {
       return { ok: false as const, error: "The server copy could not be saved. The browser copy was kept." };
+    }
+  });
+
+export const saveAccountAttachment = createServerFn({ method: "POST" })
+  .middleware([authMiddleware])
+  .validator((input: { ownerId: string; dataUrl: string }) => input)
+  .handler(async ({ data, context }) => {
+    if (data.ownerId !== context.userId) return { ok: false as const, error: "The account changed before saving the image." };
+    if (typeof data.dataUrl !== "string") return { ok: false as const, error: "No image bytes were supplied." };
+    if (!allowMindRequest("attachment-save", context.userId, 80)) return { ok: false as const, error: "Too many image saves. Try again shortly; the device copy was kept." };
+    try {
+      const { getSql } = await import("../db");
+      const { putAccountAttachment } = await import("./media/account-attachments.server");
+      return await putAccountAttachment(await getSql(), context.userId, data.dataUrl);
+    } catch {
+      return { ok: false as const, error: "Account image storage is unavailable. The image remains on this device." };
+    }
+  });
+
+export const loadAccountAttachment = createServerFn({ method: "POST" })
+  .middleware([authMiddleware])
+  .validator((input: { ownerId: string; id: string }) => input)
+  .handler(async ({ data, context }) => {
+    if (data.ownerId !== context.userId) return { ok: false as const, error: "The account changed before loading the image." };
+    try {
+      const { getSql } = await import("../db");
+      const { getAccountAttachment } = await import("./media/account-attachments.server");
+      const dataUrl = await getAccountAttachment(await getSql(), context.userId, data.id);
+      return dataUrl ? { ok: true as const, dataUrl } : { ok: false as const, error: "This image is unavailable. Reattach it to inspect its contents." };
+    } catch {
+      return { ok: false as const, error: "Account image storage could not be read." };
     }
   });
 

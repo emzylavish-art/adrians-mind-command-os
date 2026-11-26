@@ -9,6 +9,8 @@ import { getSql, type Sql } from "../db.ts";
 import { connectorTokenSecretStatus, encryptSecret, decryptSecret } from "./connectors/crypto.ts";
 import { isLocalHostname, isPrivateAddressLiteral, pinnedHttpFetch, resolveAndPinMcpHostname } from "./mcp/http-dns-pin.ts";
 import { customProviderBlockReason, isOpenRouterFreeModel, OPENROUTER_FREE_MODEL_REQUIRED, rankCatalogModels, validCatalogModelId } from "./provider-catalog.ts";
+import { normalizeProviderReceipt, type ProviderReceipt } from "./provider-receipt.ts";
+import { reportedModel } from "./stream.ts";
 
 export type PublicAiProvider = {
   id: string;
@@ -177,12 +179,15 @@ async function requestProvider(
   row: StoredProvider,
   path: string,
   init: RequestInit,
+  onDispatch?: () => void,
 ): Promise<{ status: number; text: string; requestId: string | null }> {
   const checked = baseUrl(row.base_url);
   if (!checked.ok) throw new Error("The saved provider endpoint is not valid.");
   const url = new URL(checked.value + "/" + path);
   const pin = await resolveAndPinMcpHostname(url.hostname);
   if (!pin.ok) throw new Error("The provider hostname is not publicly reachable.");
+  if (init.signal?.aborted) throw new Error("The request was stopped before dispatch.");
+  onDispatch?.();
   const response = await pinnedHttpFetch(url, pin.pinnedAddress, pin.hostname, {
     ...init,
     redirect: "manual",
@@ -265,44 +270,53 @@ export async function executeCustomChat(
   messages: Array<{ role: "system" | "user" | "assistant"; content: string }>,
   signal?: AbortSignal,
 ): Promise<
-  { ok: true; text: string; model: string; provider: string; requestId: string | null; usage: { prompt_tokens?: number; completion_tokens?: number } | null } |
-  { ok: false; error: string; httpStatus?: number }
+  ({ ok: true; text: string; model: string; requestedModel?: string; provider: string; dispatched?: boolean } & ProviderReceipt) |
+  ({ ok: false; error: string; httpStatus?: number; dispatched?: boolean; provider?: string; model?: string; requestedModel?: string; outcome?: "failed" | "unknown" } & Partial<ProviderReceipt>)
 > {
+  let dispatched = false;
+  let received: Partial<ProviderReceipt> & { provider?: string; model?: string; requestedModel?: string } = {};
+  try {
   const sql = await getSql();
   const row = (await rows(sql, userId)).find((item) => item.id === selection.id);
-  if (!row) return { ok: false, error: "Custom provider is not saved for this account." };
+  if (!row) return { ok: false, error: "Custom provider is not saved for this account.", dispatched: false };
   const blockReason = customProviderBlockReason({ status: row.status, hasKey: Boolean(row.key_ciphertext) });
-  if (blockReason) return { ok: false, error: blockReason };
-  if (!asModels(row.models).includes(selection.model)) return { ok: false, error: "Model is not in the saved provider's catalogue." };
+  if (blockReason) return { ok: false, error: blockReason, dispatched: false };
+  if (!asModels(row.models).includes(selection.model)) return { ok: false, error: "Model is not in the saved provider's catalogue.", dispatched: false };
   const key = decryptSecret(row.key_ciphertext);
-  if (!key) return { ok: false, error: "The saved provider credential could not be decrypted." };
-  if (!messages.length || !messages.some((m) => m.role === "user")) return { ok: false, error: "No user message was supplied." };
-  try {
+  if (!key) return { ok: false, error: "The saved provider credential could not be decrypted.", dispatched: false };
+  if (!messages.length || !messages.some((m) => m.role === "user")) return { ok: false, error: "No user message was supplied.", dispatched: false };
     const kind = providerWireProtocol(row.base_url);
     const freeOpenRouter = publicRow(row).host === "openrouter.ai";
-    if (freeOpenRouter && !isOpenRouterFreeModel(selection.model)) return { ok: false, error: OPENROUTER_FREE_MODEL_REQUIRED };
+    if (freeOpenRouter && !isOpenRouterFreeModel(selection.model)) return { ok: false, error: OPENROUTER_FREE_MODEL_REQUIRED, dispatched: false };
     const request = buildProviderChatRequest(kind, key, selection.model, messages, freeOpenRouter);
+    if (signal?.aborted) return { ok: false, error: "The request was stopped before dispatch.", dispatched: false };
     const res = await requestProvider(row, request.path, {
       method: "POST",
       headers: request.headers,
       body: request.body,
       signal,
-    });
+    }, () => { dispatched = true; });
+    let payload: Record<string, unknown> = {};
+    try { const parsed: unknown = JSON.parse(res.text); if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) payload = parsed as Record<string, unknown>; } catch { /* Preserve header metadata when the body cannot be read. */ }
+    const receipt = { ...normalizeProviderReceipt(kind, payload, { get: (name) => name === "x-request-id" ? res.requestId : null }),
+      model: reportedModel(kind === "gemini" ? payload.modelVersion : payload.model), provider: row.label, requestedModel: selection.model };
+    received = receipt;
     if (res.status < 200 || res.status >= 300) {
       const error = providerError(res.status);
       const restriction = providerRestriction(res.status);
       if (restriction) {
         await sql.query("update mind_ai_providers set status=$3,last_error=$4,updated_at=now() where user_id=$1 and id=$2", [userId, row.id, restriction, error]);
       }
-      return { ok: false, error, httpStatus: res.status >= 400 && res.status < 500 ? res.status : undefined };
+      return { ...receipt, ok: false, error, dispatched, outcome: "failed", httpStatus: res.status >= 400 && res.status < 500 ? res.status : undefined };
     }
     const parsed = parseProviderText(kind, res.text);
-    if (!parsed.ok) return parsed;
+    if (!parsed.ok) return { ...receipt, ...parsed, dispatched, outcome: "failed" };
     return {
+      ...receipt, dispatched,
       ok: true, text: parsed.text, model: parsed.model, provider: row.label,
-      requestId: res.requestId, usage: parsed.usage,
+      usage: parsed.usage,
     };
   } catch {
-    return { ok: false, error: "The provider could not be reached or returned an unreadable response." };
+    return { ...received, ok: false, error: "The provider could not be reached or returned an unreadable response.", dispatched, ...(dispatched ? { outcome: "unknown" as const } : {}) };
   }
 }

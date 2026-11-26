@@ -7,6 +7,8 @@ import { OwnerFlow } from "@/components/mind/owner-flow";
 import { ActionOverlay } from "@/components/mind/conversation-menu";
 import { chatTurnBody } from "@/lib/mind/logic-routes";
 import { consumeMindTurn, prepareTurnId } from "@/lib/mind/live-turn";
+import { boundAbortSignal } from "@/lib/mind/turn-timeouts";
+import { createBuildPlanningGate } from "@/lib/mind/kimi/build-lifecycle";
 
 type CompanionState = {
   ok?: boolean;
@@ -100,6 +102,9 @@ export function BuildWorkspace(props: {
   const [plan, setPlan] = useState("");
   const [planModel, setPlanModel] = useState("");
   const planFlight = useRef(false);
+  const planGate = useRef(createBuildPlanningGate());
+  const haltedRef = useRef(props.halted === true);
+  haltedRef.current = props.halted === true;
   const planAttempts = useRef(new Map<string, string>());
   const planOwner = useRef(props.ownerId);
   planOwner.current = props.ownerId;
@@ -168,11 +173,12 @@ export function BuildWorkspace(props: {
 
   const pollSequence = useRef(0);
   async function refreshJob(jobId: string) {
+    const owner = props.ownerId;
     const sequence = ++pollSequence.current;
     try {
       const response = await fetch(`/api/mind/build/session?jobId=${encodeURIComponent(jobId)}`, { credentials: "include", cache: "no-store" });
       const data = (await response.json()) as { ok?: boolean; job?: BuildJob; events?: BuildEvent[]; error?: string };
-      if (sequence !== pollSequence.current) return;
+      if (sequence !== pollSequence.current || planOwner.current !== owner) return;
       if (!response.ok || !data.ok || !data.job) {
         setNotice(data.error || "Build session status could not be read.");
         return;
@@ -180,6 +186,7 @@ export function BuildWorkspace(props: {
       setJob(data.job);
       setEvents(Array.isArray(data.events) ? data.events : []);
     } catch {
+      if (sequence !== pollSequence.current || planOwner.current !== owner) return;
       setNotice("Build session status is temporarily unavailable. No completion was assumed.");
     }
   }
@@ -465,9 +472,25 @@ export function BuildWorkspace(props: {
     return () => window.clearInterval(timer);
   }, [active, job?.id]);
 
+  useEffect(() => {
+    if (!props.halted) return;
+    planGate.current.stop();
+    planFlight.current = false;
+    setPlanning(false);
+    setNotice("Emergency stop blocks new Build work. Planning was interrupted; runtime cancellation remains pending until confirmed.");
+    if (job?.status === "queued" || job?.status === "running") void cancelBuild();
+  }, [props.halted, job?.id, job?.status]);
+
+  useEffect(() => () => {
+    planGate.current.stop();
+    planFlight.current = false;
+    ++pollSequence.current;
+  }, [props.ownerId]);
+
   const submittingBuild = useRef(false);
   async function submit(event: FormEvent) {
     event.preventDefault();
+    if (haltedRef.current) { setNotice("Emergency stop is on. No Build task was submitted."); return; }
     if (props.freeOnly) { setNotice("Free-only is selected. Build has no verified free coding model for this action."); return; }
     const text = prompt.trim();
     if (!text) {
@@ -535,14 +558,15 @@ export function BuildWorkspace(props: {
       setNotice("Describe the task before asking Grok for a plan.");
       return;
     }
+    const attempt = planGate.current.begin(owner, haltedRef.current);
+    if (!attempt) return;
+    const isCurrent = () => planGate.current.isCurrent(attempt, planOwner.current, haltedRef.current);
     planFlight.current = true;
     setPlanning(true);
     setPlan("");
     setPlanModel("");
     setNotice("Asking Grok for a plan. This does not edit files.");
-    const controller = new AbortController();
-    const timeout = AbortSignal.timeout(30_000);
-    const signal = typeof AbortSignal.any === "function" ? AbortSignal.any([controller.signal, timeout]) : timeout;
+    const { signal, cleanup } = boundAbortSignal(attempt.controller.signal, 30_000);
     try {
       const body = chatTurnBody({
           text: `Plan this Adrian Build task. Do not claim any file was written.\n\n${text}`,
@@ -563,7 +587,7 @@ export function BuildWorkspace(props: {
         try { id = sessionStorage.getItem(key) || undefined; } catch { /* the open tab can still recover */ }
       }
       id ??= await prepareTurnId("/api/mind/turn", {}, signal);
-      if (planOwner.current !== owner || signal.aborted) return;
+      if (!isCurrent() || signal.aborted) return;
       planAttempts.current.set(key, id);
       try { sessionStorage.setItem(key, id); } catch { /* retained in this tab */ }
       const result = await consumeMindTurn({
@@ -571,9 +595,9 @@ export function BuildWorkspace(props: {
         signal,
         headers: { "content-type": "application/json", "x-mind-turn-id": id },
         body,
-        onDelta: (chunk) => { if (planOwner.current === owner) setPlan((current) => current + chunk); },
+        onDelta: (chunk) => { if (isCurrent() && !signal.aborted) setPlan((current) => current + chunk); },
       });
-      if (planOwner.current !== owner) return;
+      if (!isCurrent() || signal.aborted) return;
       if (result.ok || !result.deliveryUncertain) {
         planAttempts.current.delete(key);
         try { sessionStorage.removeItem(key); } catch { /* browser storage unavailable */ }
@@ -586,21 +610,35 @@ export function BuildWorkspace(props: {
       setPlanModel(result.model);
       setNotice("Grok returned a plan. No file was written.");
     } catch {
-      setNotice("The Grok plan could not be completed. No file was written.");
+      if (isCurrent()) setNotice("The Grok plan could not be completed. No file was written; provider completion is unconfirmed.");
     } finally {
-      planFlight.current = false;
-      setPlanning(false);
+      cleanup();
+      if (planGate.current.finish(attempt)) {
+        planFlight.current = false;
+        setPlanning(false);
+      }
     }
   }
 
   async function cancelBuild() {
     if (!job?.id || !active || job.status === "cancel_requested") return;
+    const targetId = job.id;
+    const owner = props.ownerId;
     try {
-      const response = await fetch("/api/mind/build/cancel", { method: "POST", credentials: "include", headers: { "content-type": "application/json" }, body: JSON.stringify({ jobId: job.id }) });
-      const data = (await response.json()) as { ok?: boolean; error?: string };
-      if (data.ok) setJob((current) => current?.id === job.id && (current.status === "queued" || current.status === "running") ? { ...current, status: "cancel_requested" } : current);
-      setNotice(data.ok ? "Cancellation requested. Waiting for the Companion to stop the runtime." : data.error || "Cancellation was not accepted.");
-    } catch { setNotice("Cancellation request could not reach Adrian OS."); }
+      const response = await fetch("/api/mind/build/cancel", { method: "POST", credentials: "include", headers: { "content-type": "application/json" }, body: JSON.stringify({ jobId: targetId }) });
+      const data = (await response.json()) as { ok?: boolean; status?: BuildJob["status"]; error?: string };
+      if (planOwner.current !== owner) return;
+      if (response.ok && data.ok) {
+        const state = data.status === "cancelled" ? "cancelled" : "cancel_requested";
+        setJob((current) => current?.id === targetId && (current.status === "queued" || current.status === "running") ? { ...current, status: state } : current);
+        setNotice(state === "cancelled" ? "Queued task canceled before it started." : "Cancellation requested. Waiting for the Companion to confirm its outcome.");
+      } else {
+        setNotice(data.error || "Cancellation was not accepted. Its outcome remains unconfirmed.");
+        await refreshJob(targetId);
+      }
+    } catch {
+      if (planOwner.current === owner) setNotice("Cancellation request could not reach Adrian OS. Its outcome is unconfirmed.");
+    }
   }
 
   async function endCodingSession() {
@@ -795,7 +833,7 @@ export function BuildWorkspace(props: {
           <input value={transcript} onChange={(event) => setTranscript(event.target.value)} placeholder="Dictate or paste an Adrian Speak transcript" className="min-h-11 min-w-40 flex-1 rounded-panel border border-line bg-transparent px-3 text-sm outline-none focus:border-accent" aria-label="Voice transcript" />
           <button type="button" disabled={!transcript.trim()} onClick={() => void submitVoice()} className="min-h-11 rounded-panel border border-line px-3 text-sm disabled:opacity-50">Send transcript</button>
           <button type="button" onClick={speakResult} className="min-h-11 rounded-panel border border-line px-3 text-sm">Read result</button>
-          <button type="button" disabled={planning || !prompt.trim()} onClick={() => void planWithGrok()} className="min-h-11 rounded-panel border border-line px-3 text-sm disabled:opacity-50">{planning ? "Planning…" : "Plan with Grok"}</button>
+          <button type="button" disabled={planning || props.halted || !prompt.trim()} onClick={() => void planWithGrok()} className="min-h-11 rounded-panel border border-line px-3 text-sm disabled:opacity-50">{planning ? "Planning…" : "Plan with Grok"}</button>
           <button type="button" disabled={!prompt.trim()} onClick={() => props.onDiscuss?.(prompt)} className="min-h-11 rounded-panel border border-line px-3 text-sm disabled:opacity-50">Discuss in Intelligence</button>
           <button type="button" onClick={() => props.onResult?.(job?.output || notice || prompt || "Build has no result yet.")} className="min-h-11 rounded-panel border border-line px-3 text-sm">Save result in Intelligence</button>
           </div>
@@ -813,7 +851,7 @@ export function BuildWorkspace(props: {
           ] as const).map(([item, label, sentence]) => (
             <button key={item} type="button" title={sentence} onClick={() => setMode(item)} className={`min-h-11 rounded-panel border px-3 text-sm ${mode === item ? "border-accent" : "border-line"}`} aria-pressed={mode === item}>{label}</button>
           ))}
-          <button type="submit" disabled={loading || Boolean(active) || !prompt.trim()} className="inline-flex min-h-11 items-center gap-2 rounded-panel bg-accent px-4 text-sm font-semibold text-accent-ink disabled:cursor-not-allowed disabled:opacity-50">
+          <button type="submit" disabled={loading || props.halted || Boolean(active) || !prompt.trim()} className="inline-flex min-h-11 items-center gap-2 rounded-panel bg-accent px-4 text-sm font-semibold text-accent-ink disabled:cursor-not-allowed disabled:opacity-50">
             <Send className="size-4" aria-hidden="true" /> {loading ? "Queueing…" : active ? "Task running…" : mode === "plan" ? "Ask Build" : mode === "default" ? "Start edit" : "Run build"}
           </button>
           <span className="text-xs text-muted">{mode === "plan" ? "Ask explains only. No file is changed." : mode === "default" ? "Edit can change files in this workspace." : "Run can change files and use tools in this workspace."}</span>
@@ -853,7 +891,7 @@ export function BuildWorkspace(props: {
             {panel === "changes" ? <GitReview report={gitReport} busy={fileBusy} onRead={() => void readGit(false)} onInit={() => void readGit(true)} onCommit={(message) => void commitGit(message)} onBranch={(name) => void branchGit(name)} onOpen={(path) => { setPanel("editor"); void openFile(path, { workspace: "hosted" }); }} /> : null}
             {panel === "changes" ? <div className="space-y-2">{changedFiles.map((path) => <div key={path} className="rounded-panel border border-line p-3 text-sm"><FileDiff className="mr-2 inline size-4 text-accent" />{path}<span className="ml-2 text-xs text-muted">written by ACP</span></div>)}{lastDiff ? <div className="rounded-panel border border-line p-3 text-xs"><p className="font-semibold">Reviewed save: {lastDiff.path}</p><p className="mt-2 whitespace-pre-wrap text-danger">{lastDiff.before}</p><hr className="my-2 border-line" /><p className="whitespace-pre-wrap text-success">{lastDiff.after}</p></div> : null}{!changedFiles.length && !lastDiff ? <p className="text-sm text-muted">No file-write events have been reported for this session.</p> : null}<p className="text-xs text-muted">Reviewed file saves return before/after content for bounded change review.</p></div> : null}
             {panel === "changes" ? <button type="button" className="min-h-11 rounded-panel border border-line px-3 text-sm" onClick={() => void restoreLatestCheckpoint()}>Restore last checkpoint</button> : null}
-            {panel === "editor" ? <CodeIde files={workspaceFiles} matches={searchMatches} tabs={tabs.map((id) => ({ id, path: buffers[id]?.path || "", workspace: buffers[id]?.workspace || "", cwd: buffers[id]?.cwd }))} dirty={dirtyTabs} selectedId={selectedFile} selected={buffers[selectedFile]?.path || ""} text={editorText} busy={fileBusy} notice={fileNotice} newName={newFileName} onNewName={setNewFileName} onCreate={() => void createFile()} onOpen={(path) => void openFile(path, listingTarget)} onOpenMatch={(path) => void openFile(path, matchTarget)} onSelectTab={setSelectedFile} onCloseTab={closeTab} onChange={(value) => setBuffers((prev) => prev[selectedFile] ? { ...prev, [selectedFile]: { ...prev[selectedFile], draft: value } } : prev)} onCheck={() => void checkFileState()} onSave={() => void saveFile()} /> : null}
+            {panel === "editor" ? <CodeIde ownerId={props.ownerId} files={workspaceFiles} matches={searchMatches} tabs={tabs.map((id) => ({ id, path: buffers[id]?.path || "", workspace: buffers[id]?.workspace || "", cwd: buffers[id]?.cwd }))} dirty={dirtyTabs} selectedId={selectedFile} selected={buffers[selectedFile]?.path || ""} text={editorText} busy={fileBusy} notice={fileNotice} newName={newFileName} onNewName={setNewFileName} onCreate={() => void createFile()} onOpen={(path) => void openFile(path, listingTarget)} onOpenMatch={(path) => void openFile(path, matchTarget)} onSelectTab={setSelectedFile} onCloseTab={closeTab} onChange={(value) => setBuffers((prev) => prev[selectedFile] ? { ...prev, [selectedFile]: { ...prev[selectedFile], draft: value } } : prev)} onCheck={() => void checkFileState()} onSave={() => void saveFile()} /> : null}
             {panel === "capabilities" ? <div className="space-y-2">{capabilities.map((item) => <div key={item.id} className="rounded-panel border border-line p-3 text-sm"><div className="flex items-center justify-between gap-2"><span className="font-medium">{item.label}</span><span className="text-xs text-muted">{item.status.replaceAll("_", " ")}</span></div><p className="mt-1 text-xs text-muted">{item.evidence}</p></div>)}{!capabilities.length ? <p className="text-sm text-muted">Capability inventory has not loaded.</p> : null}<div className="rounded-panel border border-line p-3 text-xs text-muted"><p>Projects: {projects.map((project) => project.label).join(", ") || "none"}</p><p>Sessions: {sessions.map((session) => session.name).join(", ") || "none"}</p><p>Providers: {providers.map((provider) => `${provider.model}${provider.hasKey ? " (key stored)" : ""} · ${provider.runtimeUse}`).join(", ") || "none"}</p></div></div> : null}
             {panel === "capabilities" ? <KimiPhase4Panel initializeResponse={null} updates={events} /> : null}
             {panel === "terminal" ? <div className="space-y-3"><input value={terminalCommand} onChange={(event) => setTerminalCommand(event.target.value)} placeholder="Command requiring explicit approval" className="min-h-11 w-full rounded-panel border border-line bg-transparent px-3 font-mono text-sm outline-none focus:border-accent" aria-label="Terminal command" /><div className="flex flex-wrap gap-2"><button type="button" disabled={terminalBusy || !terminalCommand.trim()} onClick={() => void requestTerminalApproval()} className="min-h-10 rounded-panel border border-line px-3 text-sm disabled:opacity-50">{terminalBusy ? "Requesting…" : "Request approval"}</button>{terminalApproval ? <button type="button" disabled={terminalBusy} onClick={() => void approveTerminal()} className="min-h-10 rounded-panel bg-accent px-3 text-sm font-semibold text-accent-ink disabled:opacity-50">Approve exact command</button> : null}</div>{terminalApproval ? <p className="rounded-panel border border-warning/40 bg-warning/10 p-3 text-xs">Pending approval: <code>{terminalApproval.command}</code>{terminalApproval.expiresAt ? ` · expires ${terminalApproval.expiresAt}` : ""} · hosted workspace</p> : null}<div className="min-h-40 whitespace-pre-wrap rounded-panel border border-line bg-black/20 p-4 font-mono text-xs text-muted">{terminalOutput || (deniedTerminals ? `${deniedTerminals} ACP terminal request${deniedTerminals === 1 ? "" : "s"} denied by the agent safety policy.` : "No approved terminal output yet.")}</div><p className="text-xs text-muted">The exact command runs only after you approve it. It runs in the hosted workspace when no computer is paired. Dangerous commands are refused by the server even after approval. {terminalHistory.map((item) => `${item.ok ? "ok" : "failed"}: ${item.command}`).join(" · ")}</p></div> : null}

@@ -7,6 +7,8 @@
 import { spawn } from "node:child_process";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
+import { normalizeProviderReceipt, type ProviderReceipt } from "./provider-receipt.ts";
+import { reportedModel } from "./stream.ts";
 import {
   adapterCliArgs,
   LOGIC_ROUTE_ENV,
@@ -125,8 +127,21 @@ export async function inspectLogicRoutes(env: NodeJS.ProcessEnv = process.env): 
 }
 
 export type AdapterInvokeResult =
-  | { ok: true; provider: LogicRouteId; model: string; content: string }
-  | { ok: false; error: string };
+  | ({ ok: true; provider: LogicRouteId; model: string; content: string; dispatched?: boolean } & Partial<ProviderReceipt>)
+  | ({ ok: false; error: string; dispatched?: boolean; provider?: string; model?: string; requestedModel?: string } & Partial<ProviderReceipt>);
+
+function adapterReceipt(spec: ModelGenerateArgs, stdout: string, stderr = "") {
+  for (const raw of [stdout, stderr]) {
+    try {
+      const data = JSON.parse(raw) as Record<string, unknown>;
+      if (!data || typeof data !== "object" || Array.isArray(data)) continue;
+      return { ...normalizeProviderReceipt(spec.provider, data), dispatched: data.dispatched !== false,
+        provider: typeof data.provider === "string" ? data.provider.slice(0, 150) : spec.provider,
+        model: reportedModel(data.model), requestedModel: typeof data.requested_model === "string" ? data.requested_model.slice(0, 200) : spec.model };
+    } catch { /* The adapter's safe receipt may be on stderr for a failed call. */ }
+  }
+  return { ...normalizeProviderReceipt(spec.provider, null), dispatched: true, provider: spec.provider, model: "model unknown", requestedModel: spec.model };
+}
 
 function adapterError(stdout: string, stderr: string): string {
   for (const raw of [stderr.trim(), stdout.trim()]) {
@@ -155,28 +170,30 @@ export async function invokeProviderRouter(input: {
   try {
     result = await (input.spawnImpl ?? spawnProcess)("python3", args, safeEnv, (input.spec.timeout_seconds + 5) * 1000);
   } catch {
-    return { ok: false, error: "The model route could not be started. Nothing was sent." };
+    return { ok: false, error: "The model route could not be started. Nothing was sent.", dispatched: false };
   }
   if (leakedSecret(result.stdout, safeEnv) || leakedSecret(result.stderr, safeEnv)) {
-    return { ok: false, error: "The model route returned an unsafe response. Nothing was saved as a success." };
+    return { ok: false, error: "The model route returned an unsafe response. Nothing was saved as a success.", dispatched: true };
   }
-  if (result.timedOut) return { ok: false, error: "The model route timed out. Nothing was saved as a success." };
-  if (result.code !== 0) return { ok: false, error: adapterError(result.stdout, result.stderr) };
+  const receipt = adapterReceipt(input.spec, result.stdout, result.stderr);
+  if (result.timedOut) return { ...receipt, ok: false, error: "The model route timed out. Nothing was saved as a success." };
+  if (result.code !== 0) return { ...receipt, ok: false, error: adapterError(result.stdout, result.stderr) };
   try {
     const parsed = JSON.parse(result.stdout) as { provider?: unknown; model?: unknown; content?: unknown; route?: { selected?: unknown } };
     if (parsed.provider !== input.spec.provider) {
       const ran = typeof parsed.provider === "string" ? parsed.provider : "a different route";
       return {
+        ...receipt,
         ok: false,
         error: `Requested ${LOGIC_ROUTE_LABEL[input.spec.provider]} but the adapter ran ${ran}. Nothing was saved as a success.`,
       };
     }
     if (typeof parsed.model !== "string" || !parsed.model.trim() || typeof parsed.content !== "string" || !parsed.content.trim()) {
-      return { ok: false, error: "The model route returned an empty or unnamed reply. Nothing was saved as a success." };
+      return { ...receipt, ok: false, error: "The model route returned an empty or unnamed reply. Nothing was saved as a success." };
     }
-    return { ok: true, provider: input.spec.provider, model: parsed.model.trim(), content: parsed.content.trim() };
+    return { ok: true, provider: input.spec.provider, model: parsed.model.trim(), content: parsed.content.trim(), dispatched: true, ...normalizeProviderReceipt(input.spec.provider, parsed) };
   } catch {
-    return { ok: false, error: "The model route returned an unreadable reply. Nothing was saved as a success." };
+    return { ...receipt, ok: false, error: "The model route returned an unreadable reply. Nothing was saved as a success." };
   }
 }
 
@@ -196,8 +213,11 @@ export async function runLogicRoute(input: {
       content: string;
       called: true;
       credentialFallback: "OPENAI_API_KEY" | null;
+      usage: ProviderReceipt["usage"];
+      requestId: string | null;
+      executionLocation: "local" | "hosted";
     }
-  | { ok: false; error: string; called: boolean; missing: string[] }
+  | ({ ok: false; error: string; called: boolean; missing: string[]; dispatched?: boolean; provider?: string; model?: string; requestedModel?: string } & Partial<ProviderReceipt>)
 > {
   const env = input.env ?? process.env;
   const inspected = await (input.inspect ?? inspectLogicRoutes)(env);
@@ -206,13 +226,14 @@ export async function runLogicRoute(input: {
     return {
       ok: false,
       called: false,
+      dispatched: false,
       missing: view?.missing ?? [],
       error: view?.reason ?? `${LOGIC_ROUTE_LABEL[input.route]} is not ready. Nothing was sent.`,
     };
   }
   const spec = modelGenerateArgs(input.route, input.messages, view.model);
   const invoked = await (input.invoke ?? invokeProviderRouter)({ spec, endpoint: view.endpoint, env });
-  if (!invoked.ok) return { ok: false, called: true, missing: [], error: invoked.error };
+  if (!invoked.ok) return { ...invoked, ok: false, called: invoked.dispatched !== false, missing: [], requestedModel: invoked.requestedModel ?? view.model };
   return {
     ok: true,
     called: true,
@@ -222,5 +243,8 @@ export async function runLogicRoute(input: {
     endpoint: view.endpoint,
     content: invoked.content,
     credentialFallback: view.credentialFallback,
+    usage: invoked.usage ?? null,
+    requestId: invoked.requestId ?? null,
+    executionLocation: invoked.executionLocation ?? "hosted",
   };
 }

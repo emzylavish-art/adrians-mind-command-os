@@ -1,3 +1,5 @@
+import { selectContextHistory, type ContextMessage } from "./context-budget.ts";
+import { MAX_HISTORY_IMAGES, MAX_HISTORY_IMAGE_CHARS } from "./media/history.ts";
 import { MIND_MAX_BODY_BYTES } from "./request-body.ts";
 /**
  * Chat model-picker selections for Astra, Sol, and Luna.
@@ -356,12 +358,17 @@ export type ChatTurnBodyInput = {
 
 /** Client JSON for POST /api/mind/turn. The server re-resolves model and endpoint. */
 export function chatTurnBody(input: ChatTurnBodyInput): Record<string, unknown> {
+  const context = selectContextHistory(input.history.filter((item): item is ContextMessage => Boolean(item && typeof item === "object" && "role" in item && "content" in item && typeof item.content === "string")), {
+    provider: input.logicRoute ?? input.provider, model: input.requestedModel,
+    reservedText: input.text + JSON.stringify(input.memoryContext) + String(input.botKnowledge ?? "") + String(input.customPersonality ?? ""),
+  });
   const body = {
     text: input.text,
     ...(input.chatId ? { chatId: input.chatId } : {}),
     memory: input.memory,
     halted: input.halted,
-    history: input.history.slice(-12),
+    history: context.history.map((message) => ({ ...message })),
+    contextReceipt: { includedMessages: context.history.length, omittedMessages: context.omittedMessages, excludedImages: input.history.reduce<number>((count, item) => count + (item && typeof item === "object" && "images" in item && Array.isArray(item.images) ? item.images.length : 0), 0) - context.history.reduce((count, item) => count + (item.images?.length ?? 0), 0), budget: context.budget, savedMemory: input.memory, memoryNotes: input.memory === "on" ? input.memoryContext.length : 0, botKnowledge: Boolean(normalizeBotKnowledge(input.botKnowledge).knowledge), personality: Boolean(input.customPersonality || input.personalityId) },
     memoryContext: input.memoryContext,
     ...(normalizeBotKnowledge(input.botKnowledge).knowledge ? { botKnowledge: normalizeBotKnowledge(input.botKnowledge).knowledge } : {}),
     personalityId: input.personalityId ?? "assistant",
@@ -376,11 +383,24 @@ export function chatTurnBody(input: ChatTurnBodyInput): Record<string, unknown> 
     ...(input.consult ? { consult: input.consult } : {}),
     images: input.images,
   };
+  // Apply the same historical-image allowance before transport so the UI can describe exclusions.
+  let imageCount = 0;
+  let imageChars = 0;
+  for (let i = body.history.length - 1; i >= 0; i--) {
+    const turn = body.history[i];
+    if (!Array.isArray(turn.images) || !turn.images.length) continue;
+    const chars = turn.images.reduce<number>((total, image) => total + (image && typeof image === "object" && "dataUrl" in image && typeof image.dataUrl === "string" ? image.dataUrl.length : 0), 0);
+    if (turn.role !== "user" || (input.logicRoute ?? input.provider) !== "grok" || imageCount + turn.images.length > MAX_HISTORY_IMAGES || imageChars + chars > MAX_HISTORY_IMAGE_CHARS) {
+      body.contextReceipt.excludedImages += turn.images.length;
+      body.history[i] = { ...turn, images: [] };
+    } else { imageCount += turn.images.length; imageChars += chars; }
+  }
   const size = () => new TextEncoder().encode(JSON.stringify(body)).byteLength;
   if (body.history.length && size() > MIND_MAX_BODY_BYTES) {
     for (let i = 0; i < body.history.length; i++) {
       const turn = body.history[i];
       if (!turn || typeof turn !== "object" || !("images" in turn) || !Array.isArray(turn.images) || !turn.images.length) continue;
+      body.contextReceipt.excludedImages += turn.images.length;
       body.history[i] = { ...turn, images: [] };
       if (size() <= MIND_MAX_BODY_BYTES) break;
     }

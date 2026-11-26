@@ -7,11 +7,20 @@ export type ShareItemKey = (typeof SHARE_ITEM_KEYS)[number];
 
 export type ShareWrite = {
   section: string;
+  pane?: string | null;
   chat: string | null;
   project: string | null;
   file: string | null;
   bot: string | null;
 };
+
+export const SETTINGS_PANES = ["general", "connections", "voice", "pages", "data", "safety", "keys", "browser", "personalization"] as const;
+export type SettingsPane = (typeof SETTINGS_PANES)[number];
+export function settingsPaneFromSearch(search: string): SettingsPane | null {
+  const params = paramsFrom(search);
+  const pane = params.get("pane");
+  return params.get("section") === "settings" && SETTINGS_PANES.includes(pane as SettingsPane) ? pane as SettingsPane : null;
+}
 
 export type ShareCatalog = {
   chats: readonly { id: string }[];
@@ -48,7 +57,7 @@ export function shareWriteForView(
 ): ShareWrite {
   return {
     section: view,
-    chat: view === "chat" || view === "command" ? selected.chat : null,
+    chat: view === "chat" || view === "command" || view === "code" ? selected.chat : null,
     project: view === "projects" ? selected.project : null,
     file: view === "files" ? selected.file : null,
     bot: view === "agents" ? selected.bot : null,
@@ -57,10 +66,11 @@ export function shareWriteForView(
 
 export function writeShareSearch(current: string, next: ShareWrite, knownSections: readonly string[]): string {
   const params = paramsFrom(current);
-  for (const key of ["section", ...SHARE_ITEM_KEYS]) params.delete(key);
+  for (const key of ["section", "pane", ...SHARE_ITEM_KEYS]) params.delete(key);
   if (next.section && next.section !== "command" && knownSections.includes(next.section)) {
     params.set("section", next.section);
   }
+  if (next.section === "settings" && SETTINGS_PANES.includes(next.pane as SettingsPane)) params.set("pane", next.pane!);
   for (const key of SHARE_ITEM_KEYS) {
     const value = next[key];
     if (isShareId(value)) params.set(key, value);
@@ -107,7 +117,7 @@ export function resolveShare(search: string, catalog: ShareCatalog, knownSection
     else if (bot) view = "agents";
   }
   const missing: ShareItemKey[] = [];
-  const wantChat = view === "chat" || view === "command";
+  const wantChat = view === "chat" || view === "command" || view === "code";
   const chatId = wantChat && chat && catalog.chats.some((item) => item.id === chat) ? chat : null;
   if (wantChat && chat && !chatId) missing.push("chat");
   const projectId = view === "projects" && project && catalog.projects.some((item) => item.id === project) ? project : null;

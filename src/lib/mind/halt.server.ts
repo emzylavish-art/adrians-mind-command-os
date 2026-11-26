@@ -1,5 +1,6 @@
 import { resolveDatabaseUrl } from "../env.server.ts";
 import { readHaltFile, writeHaltFile } from "./halt-file.ts";
+import { cancelOwnerBuildJobs, type BuildCancellationSummary } from "./pc-pairing/store.ts";
 
 function sharedStorageRequired() {
   return Boolean(resolveDatabaseUrl() || process.env.VERCEL || process.env.GROK_PROJECT_ID);
@@ -30,7 +31,19 @@ export async function haltIsOn(userId: string): Promise<boolean> {
   return (await readHaltState(userId)) !== "off";
 }
 
-export async function setDurableHalt(userId: string, on: boolean): Promise<{ ok: true; halted: boolean } | { ok: false; error: string }> {
+type HaltSaveResult = { ok: true; halted: boolean; buildCancellation?: BuildCancellationSummary } | { ok: false; error: string };
+const haltWrites = new Map<string, Promise<HaltSaveResult>>();
+
+/** Preserve command order per owner; a delayed enable cannot cancel work after a later clear. */
+export function setDurableHalt(userId: string, on: boolean): Promise<HaltSaveResult> {
+  const previous = haltWrites.get(userId) ?? Promise.resolve();
+  const pending = previous.catch(() => undefined).then(() => applyDurableHalt(userId, on));
+  haltWrites.set(userId, pending);
+  void pending.finally(() => { if (haltWrites.get(userId) === pending) haltWrites.delete(userId); });
+  return pending;
+}
+
+async function applyDurableHalt(userId: string, on: boolean): Promise<HaltSaveResult> {
   if (!userId) return { ok: false, error: "Sign in is required." };
   try {
     if (sharedStorageRequired()) {
@@ -40,6 +53,12 @@ export async function setDurableHalt(userId: string, on: boolean): Promise<{ ok:
     } else {
       // File names are scoped to the authenticated owner, including when repairing corrupt state.
       writeHaltFile(userId, on);
+    }
+    if (on) {
+      let buildCancellation: BuildCancellationSummary;
+      try { buildCancellation = cancelOwnerBuildJobs(userId); }
+      catch { buildCancellation = { queuedCancelled: 0, cancellationRequested: 0, unconfirmed: 1 }; }
+      return { ok: true, halted: on, buildCancellation };
     }
     return { ok: true, halted: on };
   } catch {

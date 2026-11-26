@@ -17,6 +17,7 @@ export const Route = createFileRoute("/api/mind/pc/result")({
         const body = (await request.json().catch(() => ({}))) as {
           jobId?: string;
           ok?: boolean;
+          cancelled?: boolean;
           output?: string;
           error?: string;
         };
@@ -25,6 +26,7 @@ export const Route = createFileRoute("/api/mind/pc/result")({
           jobId: body.jobId,
           agentId: agent.id,
           ok: body.ok === true,
+          cancelled: body.cancelled === true,
           output: typeof body.output === "string" ? body.output : "",
           error: typeof body.error === "string" ? body.error : "",
         });

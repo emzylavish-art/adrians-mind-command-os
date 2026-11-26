@@ -34,7 +34,7 @@ describe("authoritative emergency stop", () => {
     const dir = mkdtempSync(join(tmpdir(), "mind-halt-authority-"));
     setHaltDirectory(dir);
     assert.equal(await readHaltState("owner"), "off");
-    assert.deepEqual(await setDurableHalt("owner", true), {ok: true, halted: true});
+    assert.equal((await setDurableHalt("owner", true)).ok, true);
     assert.equal(await readHaltState("owner"), "on");
     writeFileSync(join(dir, readdirSync(dir)[0]), "{}");
     assert.equal(await readHaltState("owner"), "unknown");

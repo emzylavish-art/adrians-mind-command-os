@@ -66,6 +66,8 @@ export function relayModelStream(input: {
   timeoutMs?: number;
   url?: string;
   params?: RelayModelParams;
+  /** Called only when an upstream inference request is about to be dispatched. */
+  onDispatch?: () => void;
   /** Optional metadata echoed on the done event (e.g. selected/resolved tier). */
   meta?: Record<string, unknown>;
   /** Called only after an xAI 401 or 400 auth failure. Must not receive the key. */
@@ -124,6 +126,7 @@ export function relayModelStream(input: {
           return;
         }
         const fetchImpl = input.fetchImpl ?? fetch;
+        input.onDispatch?.();
         const res = await fetchImpl(input.url ?? PROVIDER_URL, {
           method: "POST",
           signal: linked.signal,
@@ -183,6 +186,12 @@ export function relayModelStream(input: {
             return;
           }
           for (const text of pushed.deltas) send("delta", { text });
+          if (pushed.done) {
+            // The provider's terminal marker confirms the protocol finished;
+            // keeping a socket open must not turn that answer into a timeout.
+            void reader.cancel().catch(() => undefined);
+            break;
+          }
         }
         if (linked.signal.aborted) {
           await stopped();
