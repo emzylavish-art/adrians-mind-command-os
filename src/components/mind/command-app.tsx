@@ -1,3 +1,8 @@
+import { memorySendRevision, checkMemorySendRevision } from "@/lib/mind/memory-send-policy";
+import { commitSelectionChanges, ownerSelectionStorage, exactModelForChat } from "@/lib/mind/selection-sync";
+import type { StoredSelection } from "@/lib/mind/logic-routes";
+import { UsageHistory } from "@/components/mind/usage-history";
+import { archiveReview, packMemoryOnly, unpackMemoryOnly, quarantineImportedMemory, resolveImportedMemory, unreviewedMemoryScopeIds } from "@/lib/mind/archive-review";
 import { lazy, Suspense, useEffect, useLayoutEffect, useMemo, useRef, useState, type KeyboardEvent as ReactKeyboardEvent, type MouseEvent as ReactMouseEvent, type ReactNode, useSyncExternalStore } from "react";
 import { Link, useRouter } from "@tanstack/react-router";
 import "./command-drawer-nav.css";
@@ -5,7 +10,7 @@ import "./command-search.css";
 import "./command-voice-mode.css";
 import "./gpt-shell.css";
 import "./visual-system.css";
-import { getBearerToken } from "@/lib/auth/client";
+import { getBearerToken, signOut } from "@/lib/auth/client";
 import { loadMcpWithHttpFallback } from "@/lib/mind/mcp-list-http";
 import { getRecentChats } from "@/lib/mind/recent-chats";
 import { ConversationSections } from "@/components/mind/conversation-sections";
@@ -59,7 +64,7 @@ import {
 } from "lucide-react";
 import { approvalTokenFor, decide, type Autonomy } from "@/lib/mind/policy";
 import { reaDoctor, reaInspect } from "@/lib/mind/rea";
-import { CAPABILITIES, isVerifiedCapability, type CapabilityStatus } from "@/lib/mind/registry";
+import { CAPABILITIES } from "@/lib/mind/registry";
 import { REQUIREMENTS, requirementCounts } from "@/lib/mind/requirements";
 import { consumeMindTurn, prepareTurnId, shouldStoreReply, STOPPED_REPLY } from "@/lib/mind/live-turn";
 import { boundAbortSignal } from "@/lib/mind/turn-timeouts";
@@ -131,6 +136,7 @@ import {
   writeStoredVoiceChoice,
 } from "@/lib/mind/voice/voices";
 import { RealtimeVoiceSession } from "@/lib/mind/voice/realtime-session";
+import { readVoiceRoutePreferences, speechEngineLabel, voiceRouteKey } from "@/lib/mind/voice/route-preferences";
 import { voiceSessionInstructions } from "@/lib/mind/voice-live/session-instructions";
 import { readStoredCharacterId } from "@/lib/mind/characters";
 import { noteSpokenText, readAvatarSession, setAvatarPresence } from "@/lib/mind/avatar/session";
@@ -177,7 +183,7 @@ import {
   toggleMute,
 } from "@/lib/mind/voice/spam-guard";
 import { createCallHistory, type CallHistory } from "@/lib/mind/voice/voice-chat-turn";
-import type { Chat, Msg, Workspace } from "@/lib/mind/types";
+import type { Chat, Msg, Workspace, MemoryScope } from "@/lib/mind/types";
 import { ServiceBoard } from "@/components/mind/service-board";
 import { EveWorkbench } from "@/components/mind/eve-workbench";
 import { FleetPanel } from "@/components/mind/fleet-panels";
@@ -251,7 +257,7 @@ import { exportChat, prepareRegenerate, prepareRetry, renameChat, reviseUserTurn
 import { replyActions, replyHasSources } from "@/lib/mind/reply-actions";
 import { useComposerDraft } from "@/lib/mind/use-composer-draft";
 import { useMindWorkspace } from "@/lib/mind/use-mind-workspace";
-import { useCurrentUser } from "@/lib/auth/use-current-user";
+import { useCurrentUserState } from "@/lib/auth/use-current-user";
 import { COMPOSER_MODES, effortForModelTier, effortModelTier, loadComposerEffort, resolveSendPath, saveComposerEffort, type ComposerModeId } from "@/lib/mind/composer-modes";
 import { ADRIAN_MIND_IDENTITY, builtinModules, customModules, loadConsultModel, planModelConsult, saveConsultModel, type ConsultModule } from "@/lib/mind/model-consult";
 import { planRouting, readRatings, readRoutingMode, readRoutingPanel, ROUTING_MODE_LABEL, saveRating, writeRoutingMode, writeRoutingPanel, type ResponseRating, type RoutingMode } from "@/lib/mind/routing-modes";
@@ -354,6 +360,8 @@ type Pending = {
   detail: string;
   confirm: string;
   run: () => void;
+  cancel?: () => void;
+  review?: Record<string, unknown>;
 };
 
 const EMPTY_DRAFT_IMAGES: ImageAttachment[] = [];
@@ -472,17 +480,6 @@ const TITLES: Record<View, string> = {
   settings: "Settings",
   dashboard: "Dashboard",
 };
-
-function statusWord(status: CapabilityStatus) {
-  if (status === "live_verified") return "Live verified";
-  if (status === "ready") return "Ready";
-  if (status === "configured") return "Configured";
-  if (status === "blocked") return "Blocked";
-  if (status === "unconfigured") return "Not configured";
-  if (status === "local_required") return "Local only";
- if (status === "paid_required") return "Paid, not called";
- return "Not implemented";
-}
 
 const CAPABILITY_MARK: Record<string, string> = {
   "chat.grok": "grok",
@@ -740,9 +737,9 @@ function shownChatTitle(chat: { title?: string; messages?: { role: string; conte
 }
 
 export function CommandApp() {
-  const account = useCurrentUser();
+  const { user: account, error: accountError } = useCurrentUserState();
   const loopback = typeof window !== "undefined" && (window.location.hostname === "127.0.0.1" || window.location.hostname === "localhost");
-  const { ws, setWs, ready, syncNote, serverHeld, saveError, retrySave, clearStoredCopy } = useMindWorkspace(account?.id ?? null, account?.emailVerified ? account.primaryEmail : null);
+  const { ws, setWs, ready, syncNote, serverHeld, saveError, retrySave, clearStoredCopy, runServerPass } = useMindWorkspace(account?.id ?? null, account?.emailVerified ? account.primaryEmail : null);
   const router = useRouter();
   const [view, setViewState] = useState<View>("command");
   const applyingLocation = useRef(false);
@@ -966,6 +963,7 @@ export function CommandApp() {
   dictationRef.current = dictation;
   const dictationRecRef = useRef<BrowserSpeechRec | null>(null);
   const serverDictationRef = useRef<DictationRecorder | null>(null);
+  const serverDictationRouteRef = useRef<{ owner: string | null; route: ReturnType<typeof readVoiceRoutePreferences> } | null>(null);
   const dictationBufferRef = useRef("");
   const dictationBaseRef = useRef<string | null>(null);
   const userStoppedDictationRef = useRef(false);
@@ -1099,6 +1097,7 @@ export function CommandApp() {
   const mcpInFlight = useRef(false);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
+  const [notionRecovery, setNotionRecovery] = useState<{ owner: string | null; chatId: string; text: string; workspaceId: string; pageId: string | null; message: string } | null>(null);
   useEffect(() => {
     const warn = () => setNotice("This draft is available in this tab only. Browser storage could not save the latest change for reload.");
     window.addEventListener("adrian-draft-storage-full", warn);
@@ -1199,7 +1198,9 @@ export function CommandApp() {
   const [projectAbout, setProjectAbout] = useState("");
   const [projectOpen, setProjectOpen] = useState(false);
   const [includeTemporary, setIncludeTemporary] = useState(false);
-  const [importPreview, setImportPreview] = useState<{ workspace: Workspace; name: string } | null>(null);
+  const [importPreview, setImportPreview] = useState<{ workspace: Workspace; name: string; memoryOnly?: boolean } | null>(null);
+  const [restoreMemoryPreferences, setRestoreMemoryPreferences] = useState(false);
+  const importReview = importPreview ? archiveReview(ws, importPreview.workspace) : null;
   const messagePreview = importPreview ? archiveMessagePreview(ws, importPreview.workspace) : null;
   const importCounts = importPreview ? ([
     ["chats", "Chats"], ["memories", "Notes"], ["projects", "Projects"], ["files", "Files"], ["agents", "Bots"], ["runs", "Runs"], ["schedules", "Schedules"],
@@ -1255,6 +1256,7 @@ export function CommandApp() {
     }
   }, [ws.halted, ws.runs, voiceListening, speaking]);
 
+  const providerCatalogGeneration = useRef(0);
   useEffect(() => {
     if (statusSignedIn !== true) return;
     let canceled = false;
@@ -1453,7 +1455,9 @@ export function CommandApp() {
     const tier = effortModelTier(mode);
     if (tier) {
       setLogicRoute(null);
+      setGrokModel(null);
       setModelTier(tier);
+      if (active?.botProvider || active?.botTier) setWs(prev => ({ ...prev, chats: prev.chats.map(chat => chat.id === active.id ? { ...chat, botTier: tier, botExactModel: undefined } : chat) }));
     }
     applyVoiceMode(mode === "orchestrator" ? "orchestrator" : "direct");
     if (mode === "build") setView("build");
@@ -1499,7 +1503,7 @@ export function CommandApp() {
       // This conversation follows the explicit selection. Other bot threads keep their defaults.
       setWs((prev) => ({
         ...prev,
-        chats: prev.chats.map((chat) => chat.id === active.id ? { ...chat, botProvider: id, botTier: tier ?? chat.botTier ?? modelTier } : chat),
+        chats: prev.chats.map((chat) => chat.id === active.id ? { ...chat, botProvider: id, botTier: tier ?? chat.botTier ?? modelTier, botExactModel: tier || id !== "grok" ? undefined : chat.botExactModel } : chat),
       }));
     } else {
       setLogicRoute(isLogicRouteId(id) ? id : null);
@@ -1668,6 +1672,11 @@ export function CommandApp() {
   const fileRef = useRef<HTMLInputElement>(null);
   const inspectFileRef = useRef<HTMLInputElement>(null);
   const clearedStop = useRef(false);
+  const [stopSync, setStopSync] = useState<{ owner: string | null; state: "idle" | "pending" | "confirmed" | "unconfirmed"; detail: string }>({ owner: null, state: "idle", detail: "" });
+  const stopSyncFlight = useRef<{ owner: string | null; on: boolean; restop?: boolean } | null>(null);
+  const stopConfirmed = stopSync.owner === turnOwner.current && stopSync.state === "confirmed";
+  const stopPending = stopSync.owner === turnOwner.current && stopSync.state === "pending";
+  const stopControlLabel = ws.halted ? stopPending ? "Confirming stop…" : stopConfirmed ? "Clear stop" : "Retry stop synchronization" : "Emergency stop";
   const counts = requirementCounts();
   const active = ws.chats.find((chat) => chat.id === activeId) ?? null;
   const followupPrivate = active?.temporary ?? temporary;
@@ -1689,7 +1698,8 @@ export function CommandApp() {
     if (listenMintAbortRef.current || voiceSession.current) stopVoiceSession();
     if (speakAbortRef.current) interruptSpeakPlayback();
   }, [researchFreeOnly]);
-  const controlsModelLabel = effectiveProvider === "grok" ? grokModel ?? effectiveRoute.modelTier
+  const effectiveGrokModel = effectiveRoute.fromBot ? active?.botExactModel ?? null : grokModel;
+  const controlsModelLabel = effectiveProvider === "grok" ? effectiveGrokModel ?? effectiveRoute.modelTier
     : providerOptions.find((option) => option.id === effectiveProvider)?.label
       ?? logicRoutes.find((option) => option.id === effectiveProvider)?.label ?? "Selected module unavailable";
   const storedBytes = useMemo(() => new Blob([JSON.stringify(ws)]).size, [ws]);
@@ -1893,7 +1903,9 @@ export function CommandApp() {
   }, [ready, setWs]);
 
   useEffect(() => {
-    if (statusSignedIn !== true) return;
+    const generation = ++providerCatalogGeneration.current;
+    setCustomAiProviders([]);
+    if (statusSignedIn !== true || !draftOwner) return;
     let active = true;
     const bearer = getBearerToken();
     void fetch("/api/mind/providers", {
@@ -1901,40 +1913,70 @@ export function CommandApp() {
       headers: bearer ? { authorization: `Bearer ${bearer}` } : {},
     }).then(async (response) => {
       if (!response.ok) return;
-      const body = await response.json() as { ok?: boolean; providers?: PublicAiProvider[] };
-      if (active && body.ok && Array.isArray(body.providers)) setCustomAiProviders(body.providers);
+      const body = await response.json() as { ok?: boolean; providers?: PublicAiProvider[]; ownerId?: string };
+      if (active && generation === providerCatalogGeneration.current && turnOwner.current === draftOwner && body.ownerId === draftOwner && body.ok && Array.isArray(body.providers)) setCustomAiProviders(body.providers);
     }).catch(() => undefined);
     return () => { active = false; };
-  }, [statusSignedIn]);
+  }, [statusSignedIn, draftOwner]);
 
+  function applyProviderCatalog(providers: PublicAiProvider[]) {
+    if (turnOwner.current !== draftOwner) return;
+    providerCatalogGeneration.current++;
+    setCustomAiProviders(providers);
+  }
+
+  const selectionSnapshot = useRef<{ owner: string; selection: StoredSelection; failover: "none" | "grok" } | null>(null);
   useEffect(() => {
-    try {
-      const stored = readSelection(localStorage);
+    const onRetention = (event: Event) => {
+      const detail = (event as CustomEvent<{ ownerId?: string; before?: string }>).detail;
+      if (!draftOwner || detail?.ownerId !== draftOwner || turnOwner.current !== draftOwner || !detail.before || !Number.isFinite(Date.parse(detail.before))) return;
+      const cutoff = Date.parse(detail.before);
+      setWs(current => ({ ...current, usage: current.usage.filter(row => Date.parse(row.at) >= cutoff) }));
+    };
+    window.addEventListener("adrian-usage-retention", onRetention);
+    return () => window.removeEventListener("adrian-usage-retention", onRetention);
+  }, [draftOwner, setWs]);
+  const [selectionOwner, setSelectionOwner] = useState<string | null>(null);
+  useEffect(() => {
+    const owner = draftOwner ?? "guest";
+    const hydrate = () => { try {
+      const storage = ownerSelectionStorage(localStorage, owner);
+      const stored = readSelection(storage);
       setProviderChoice(stored.provider);
       setModelTier(stored.modelTier);
       setGrokModel(stored.grokModel ?? null);
       setLogicRoute(stored.logicRoute);
-      const fail = localStorage.getItem("amcos.failover.v1");
-      if (fail === "grok" || fail === "none") setFailoverPolicy(fail);
+      const fail = storage.getItem("amcos.failover.v1") === "grok" ? "grok" : "none";
+      setFailoverPolicy(fail);
+      selectionSnapshot.current = { owner, selection: stored, failover: fail };
       setRoutingMode(readRoutingMode(localStorage));
       setRoutingPanel(readRoutingPanel(localStorage));
-
     } catch {
       /* a private browser can refuse storage */
     } finally {
       setSelectionLoaded(true);
-    }
-  }, []);
+      setSelectionOwner(owner);
+    } };
+    hydrate();
+    const onStorage = (event: StorageEvent) => { if (event.storageArea === localStorage && event.key?.startsWith(`amcos.owner.${encodeURIComponent(owner)}.`)) hydrate(); };
+    window.addEventListener("storage", onStorage);
+    return () => window.removeEventListener("storage", onStorage);
+  }, [draftOwner]);
 
   useEffect(() => {
-    if (!selectionLoaded) return;
+    const owner = draftOwner ?? "guest";
+    const before = selectionSnapshot.current;
+    if (!selectionLoaded || selectionOwner !== owner || before?.owner !== owner) return;
     try {
-      writeSelection(localStorage, { provider: providerChoice, modelTier, logicRoute, grokModel: grokModel ?? undefined });
-      localStorage.setItem("amcos.failover.v1", failoverPolicy);
+      const storage = ownerSelectionStorage(localStorage, owner);
+      const next = { provider: providerChoice, modelTier, logicRoute, grokModel: grokModel ?? undefined };
+      commitSelectionChanges(storage, before.selection, next);
+      if (before.failover !== failoverPolicy) storage.setItem("amcos.failover.v1", failoverPolicy);
+      selectionSnapshot.current = { owner, selection: next, failover: failoverPolicy };
     } catch {
       /* a private browser can refuse storage */
     }
-  }, [selectionLoaded, providerChoice, modelTier, logicRoute, grokModel, failoverPolicy]);
+  }, [selectionLoaded, selectionOwner, draftOwner, providerChoice, modelTier, logicRoute, grokModel, failoverPolicy]);
 
   useEffect(() => {
     const tick = () => setNow(new Date());
@@ -1943,26 +1985,37 @@ export function CommandApp() {
     return () => window.clearInterval(id);
   }, []);
 
+  const serverPassRef = useRef(runServerPass);
+  serverPassRef.current = runServerPass;
   useEffect(() => {
-    const step = () => {
+    let inFlight = false;
+    const step = async (manual = false) => {
       const current = wsRef.current;
-      if (current.halted) return;
+      if (current.halted || inFlight || !turnOwner.current) return;
       const now = new Date().toISOString();
       const due = current.schedules.some((job) => job.enabled && job.nextRunAt <= now);
       const queued = current.runs.some((run) => run.state === "queued" || run.state === "running");
-      if (!due && !queued) return;
-      for (const run of current.runs) {
-        // Scheduled occurrences execute their declared agent tools. Their titles must never become PC commands.
-        if (run.id.startsWith("scheduled:") || run.parentId?.startsWith("scheduled:")) continue;
-        if (run.state !== "queued" || desktopActedRef.current.has(run.id) || !spokenPcCommand(run.goal)) continue;
-        desktopActedRef.current.add(run.id);
-        void fetch("/api/mind/pc/status", { method: "POST", credentials: "include", headers: { "content-type": "application/json" }, body: JSON.stringify({ text: run.goal }) });
-      }
-      const next = tickFleet(runDueSchedules(current, now), { now, workerId: "browser-worker" });
-      setWs(next);
+      if (!manual && !due && !queued) return;
+      inFlight = true;
+      const owner = turnOwner.current;
+      try { const result = await serverPassRef.current(); if (owner === turnOwner.current && manual) { if (!result.ok) setError(result.error); else setNotice(result.message); } }
+      finally { inFlight = false; }
     };
-    const id = window.setInterval(step, 15000);
-    return () => window.clearInterval(id);
+    const manual = () => { void step(true); };
+    const modelStep = async (event: Event) => {
+      const detail = (event as CustomEvent<{ runId?: string; allowPaid?: boolean }>).detail;
+      if (!detail?.runId || inFlight || wsRef.current.halted || !turnOwner.current) return;
+      const owner = turnOwner.current;
+      inFlight = true;
+      try {
+        const result = await serverPassRef.current({ runId: detail.runId, allowPaid: detail.allowPaid === true, freeOnly: currentFreeOnly.current });
+        if (owner === turnOwner.current) { if (!result.ok) setError(result.error); else setNotice(result.message); }
+      } finally { inFlight = false; }
+    };
+    window.addEventListener("adrian-fleet-step", manual);
+    window.addEventListener("adrian-fleet-model-step", modelStep);
+    const id = window.setInterval(() => { void step(); }, 15000);
+    return () => { window.clearInterval(id); window.removeEventListener("adrian-fleet-step", manual); window.removeEventListener("adrian-fleet-model-step", modelStep); };
   }, []);
 
   useEffect(() => {
@@ -2608,7 +2661,7 @@ export function CommandApp() {
       if (turnOwner.current !== draftOwner) return;
       setBusy(false);
       if (epoch !== notionEpoch.current || !wsRef.current.chats.some((item) => item.id === chat.id)) return;
-      setNotion((current) => current ?? { state: result.state, detail: result.error || "Notion answered from the server." });
+      setNotion({ state: result.state, detail: result.error || "Notion answered for the selected workspace. Each action still checks page access." });
       if (result.needsConfirmation && result.pages[0]) {
         const target = result.pages[0];
         setPending({
@@ -2625,12 +2678,16 @@ export function CommandApp() {
       }
       if (!result.ok) {
         const message = result.error || "Notion did not complete the requested operation.";
+        if ("recovery" in result && result.recovery && result.recovery !== "retry") {
+          setNotionRecovery({ owner: draftOwner, chatId: chat.id, text, workspaceId, pageId, message });
+        }
         const retry = () => { void askNotion(chat, text, false, pageId, workspaceId); };
         reportFailure(message, "notion_operation_failed", "notion", retry, result.needsConfirmation ? "none" : "retry");
         recordToolTurn(chat, text, message, undefined, { tool: "notion", ok: false, action: "chat" });
         return;
       }
       const lines = [result.error, ...result.pages.map((page) => `${page.title} — ${page.url}`), result.content].filter(Boolean);
+      setNotionRecovery(null);
       if (lines.length && epoch === notionEpoch.current) {
         setNotionPreview({ owner: draftOwner, chatId: chat.id, text: lines.join("\n") });
       }
@@ -2678,6 +2735,13 @@ export function CommandApp() {
           label: "Call MCP tool",
           detail: result.error,
           confirm: "Call",
+          review: "approval" in result && result.approval ? result.approval : { connectionId: reviewedServerId },
+          cancel: () => {
+            if (turnOwner.current !== draftOwner || !wsRef.current.chats.some((item) => item.id === chat.id)) return;
+            const scope = JSON.stringify([draftOwner, chat.id, chat.temporary]);
+            setDraftInScope(scope, Boolean(draftOwner) && !chat.temporary, (current) => current || text);
+            setNotice("MCP call canceled. The command is kept in its original conversation draft.");
+          },
           run: () => {
             void askMcp(chat, text, true, reviewedServerId, review);
           },
@@ -2714,7 +2778,7 @@ export function CommandApp() {
     }
   }
 
-  type TurnRequest = { id: string; body: ReturnType<typeof chatTurnBody> };
+  type TurnRequest = { id: string; memoryRevision?: string; body: ReturnType<typeof chatTurnBody> };
 
   async function deliver(
     chat: Chat,
@@ -2722,7 +2786,7 @@ export function CommandApp() {
     source: Workspace,
     resume = false,
     images: ImageAttachment[] = [],
-    options?: { logicRoute?: LogicRouteId | null; skipUserMessage?: boolean; isolateOutputs?: boolean; accessNotes?: { id: string; text: string }[]; request?: TurnRequest; operationId?: string; replaceReplyId?: string; recovery?: Msg["deliveryRoute"] },
+    options?: { logicRoute?: LogicRouteId | null; skipUserMessage?: boolean; isolateOutputs?: boolean; accessNotes?: { id: string; text: string }[]; request?: TurnRequest; operationId?: string; replaceReplyId?: string; recovery?: Msg["deliveryRoute"]; usageChannel?: "chat" | "speak"; onReceipt?: (receipt: { provider?: string; model: string }) => void },
   ): Promise<string | null> {
     if (turnInFlight.current || turnOwner.current !== draftOwner) return null;
     const snapped = snapshotImages(images);
@@ -2839,6 +2903,10 @@ export function CommandApp() {
     const token = getBearerToken();
     const prefix = previewPathPrefix(window.location.hostname, window.location.pathname) ?? "";
     turnInFlight.current = true;
+    // The revision must describe the same snapshot used to construct the body.
+    // Comparing a current-state revision with an older supplied source would let
+    // already-deleted notes pass the final privacy check.
+    const memoryRevision = options?.request?.memoryRevision ?? memorySendRevision(source, chat);
     let operationId: string;
     try {
       operationId = options?.request?.id ?? options?.operationId ?? await prepareTurnId(`${prefix}/api/mind/turn`, token ? { Authorization: `Bearer ${token}` } : {}, signal);
@@ -2886,8 +2954,10 @@ export function CommandApp() {
     }
     const request: TurnRequest = options?.request ?? {
       id: operationId,
+      memoryRevision,
       body: chatTurnBody({
           chatId: chat.id,
+          usageChannel: options?.usageChannel,
           text,
           memory: chat.memory,
           halted: wsRef.current.halted,
@@ -2907,7 +2977,7 @@ export function CommandApp() {
             ? consultPlan.plan.orchestrator
             : activeLogic ?? (isCustomProvider || otherReady || routedRunner ? selectedProvider : (routed.ok ? routed.id : selectedProvider)),
           modelTier: selectedTier,
-          requestedModel: savedRoute?.model ?? (selectedProvider === "grok" && !activeLogic && !consultPlan ? grokModel : providerModels[selectedProvider] ?? null),
+          requestedModel: exactModelForChat({ botProvider: chat.botProvider, botTier: chat.botTier, botExactModel: chat.botExactModel, selectedProvider, savedModel: savedRoute?.model, grokModel: !activeLogic && !consultPlan ? grokModel : null, providerModel: providerModels[selectedProvider] }),
           logicRoute: consultPlan && consultPlan.ok ? null : activeLogic,
           orchestrator: consultPlan && consultPlan.ok ? consultPlan.plan.orchestrator : null,
           composerMode: orchestrating ? "orchestrator" : undefined,
@@ -2929,6 +2999,10 @@ export function CommandApp() {
         if (turnInFlight.current || turnOwner.current !== draftOwner) return;
         const thread = wsRef.current.chats.find((item) => item.id === chat.id);
         if (!thread) return;
+        if (useOriginal && !checkMemorySendRevision(wsRef.current, chat.id, memoryRevision)) {
+          setError("Memory permissions or notes changed. The earlier delivery is unconfirmed; review the thread before starting a new send.");
+          return;
+        }
         if (options?.replaceReplyId && thread.messages.at(-1)?.id === options.replaceReplyId) {
           const prior = prepareRegenerate(wsRef.current, chat.id);
           if (!("error" in prior)) void deliver(prior.chat, text, wsRef.current, true, snapped, { ...options, request: useOriginal ? request : undefined });
@@ -2946,6 +3020,12 @@ export function CommandApp() {
     }
     try {
       const fingerprint = await sha256(JSON.stringify(request.body));
+      if (!checkMemorySendRevision(wsRef.current, chat.id, memoryRevision)) {
+        markDelivery(options?.request ? "unconfirmed" : "failed");
+        setError("Memory permissions or notes changed while preparing this send. No new request was sent. Review the context and send again.");
+        return null;
+      }
+      if (generation !== turnGen.current || turnOwner.current !== draftOwner || signal.aborted || wsRef.current.halted) return null;
       if (savedRoute && fingerprint !== savedRoute.fingerprint) {
         markDelivery("unconfirmed");
         setError("The original message context changed. Its previous delivery is unconfirmed. Review the thread before starting a new send.");
@@ -2973,6 +3053,13 @@ export function CommandApp() {
         },
       });
       if (generation !== turnGen.current || turnOwner.current !== draftOwner) return null;
+      if (!result.ok) setWs(prev => pushUsage(prev, {
+        id: `${operationId}/answer`, operationId, stage: "answer", chatId: chat.id,
+        at: new Date().toISOString(), provider: String(request.body.provider), model: "model unknown",
+        requestedModel: typeof request.body.requestedModel === "string" ? request.body.requestedModel : undefined,
+        requestId: null, promptTokens: null, completionTokens: null,
+        outcome: result.error === STOPPED_REPLY ? "canceled" : result.deliveryUncertain ? "unconfirmed" : "failed",
+      }));
       setBusy(false);
       setLiveText("");
       if (turnAbort.current === controller) turnAbort.current = null;
@@ -3041,7 +3128,7 @@ export function CommandApp() {
         setNotice(`Ran ${tierLabel}.`);
         return pushAudit(
           pushUsage(next, {
-            id: crypto.randomUUID(),
+            id: `${operationId}/answer`, operationId, stage: "answer", outcome: "completed", dispatched: true,
             chatId: chat.id,
             at: new Date().toISOString(),
             provider: result.provider || undefined,
@@ -3056,6 +3143,7 @@ export function CommandApp() {
           tierLabel,
         );
       });
+      options?.onReceipt?.({ provider: result.provider, model: result.model });
       return result.text;
     } catch (caught) {
       if (generation !== turnGen.current || turnOwner.current !== draftOwner) return null;
@@ -4209,16 +4297,16 @@ ${message.content}`;
     setNotice(`“${file.name}” is staged${partial ? " as a partial text copy" : pdf ? " as extracted text" : ""}. ${pdf?.coverage ?? ""} Press Send to include it, or Analyze File to run REA.`);
   }
 
-  async function downloadArchive() {
-    const pack = await packWorkspace(ws, includeTemporary);
+  async function downloadArchive(memoryOnly = false) {
+    const pack = memoryOnly ? await packMemoryOnly(ws) : await packWorkspace(ws, includeTemporary);
     const blob = new Blob([JSON.stringify(pack, null, 2)], { type: "application/json" });
     const url = URL.createObjectURL(blob);
     const link = document.createElement("a");
     link.href = url;
-    link.download = "adrians-mind-archive.json";
+    link.download = memoryOnly ? "adrians-mind-memory.json" : "adrians-mind-archive.json";
     link.click();
     URL.revokeObjectURL(url);
-    setWs((prev) => pushAudit(prev, "export", "workspace", pack.sha256.slice(0, 12)));
+    setWs((prev) => pushAudit(prev, "export", memoryOnly ? "memory only" : "workspace", pack.sha256.slice(0, 12)));
   }
 
   async function onImportFile(file: File) {
@@ -4227,12 +4315,17 @@ ${message.content}`;
     setImportError(null);
     setImportPreview(null);
     try {
-      const opened = await unpackWorkspace(await file.text());
+      const raw = await file.text();
+      const parsed = JSON.parse(raw);
+      const memoryOnly = parsed.product === "adrians-mind-memory";
+      const opened = memoryOnly ? await unpackMemoryOnly(raw, wsRef.current) : await unpackWorkspace(raw);
       if (!opened.ok) {
         setImportError(opened.error);
         return;
       }
-      setImportPreview({ workspace: opened.workspace, name: file.name });
+      const missingScope = unreviewedMemoryScopeIds(parsed.workspace?.memories);
+      setRestoreMemoryPreferences(false);
+      setImportPreview({ workspace: quarantineImportedMemory(opened.workspace, wsRef.current, missingScope), name: file.name, memoryOnly });
     } catch {
       setImportError("This archive could not be read. Choose another file to try again.");
     } finally {
@@ -4241,49 +4334,93 @@ ${message.content}`;
   }
 
   function toggleStop() {
-    return wsRef.current.halted ? clearEmergencyStop() : pressEmergencyStop();
+    return wsRef.current.halted && stopConfirmed ? clearEmergencyStop() : pressEmergencyStop();
   }
   async function pressEmergencyStop() {
     stopVoiceSession();
     clearedStop.current = false;
-    if (wsRef.current.halted) return;
+    // Block same-frame sends before React publishes the halted state.
+    wsRef.current = { ...wsRef.current, halted: true };
     turnAbort.current?.abort();
     agentAbort.current?.abort();
+    const owner = turnOwner.current;
+    if (stopSyncFlight.current?.owner === owner) {
+      if (!stopSyncFlight.current.on) {
+        // Preserve the newer stop intent, then reassert it after the older
+        // release settles so request ordering cannot leave the server released.
+        stopSyncFlight.current.restop = true;
+        setStopSync({ owner, state: "pending", detail: "Local protection is active. A stop will be synchronized after the pending release settles." });
+        setNotice("Local stop is active. Waiting for the earlier release to settle before synchronizing the new stop.");
+      }
+      return;
+    }
+    const attempt = { owner, on: true };
+    stopSyncFlight.current = attempt;
     setError(null);
     setWs((prev) => {
-      if (prev.halted) return prev;
-      const updated = pushAudit({ ...prev, halted: true }, "emergency_stop", "session", "on");
+      const updated = prev.halted ? prev : pushAudit({ ...prev, halted: true }, "emergency_stop", "session", "local block activated; awaiting server confirmation");
       const stopped = haltFleet(updated);
-      return {
-        ...stopped,
-        schedules: stopped.schedules.map((job) => (job.enabled ? { ...job, enabled: false } : job)),
-      };
+      return { ...stopped, schedules: stopped.schedules.map((job) => job.enabled ? { ...job, enabled: false } : job) };
     });
-    setNotice("Emergency stop is on. Open runs were canceled and schedules were paused. Logs and memory were kept.");
+    setStopSync({ owner, state: "pending", detail: "This browser blocks new work. Server stop and remote cancellation are awaiting confirmation." });
+    setNotice("Local stop is active. Schedules are paused in this browser. Server stop and remote cancellation are awaiting confirmation.");
+    if (!owner) {
+      setStopSync({ owner, state: "unconfirmed", detail: "Local protection is active. Sign in to synchronize the server stop for your account." });
+      stopSyncFlight.current = null;
+      return;
+    }
     try {
-      const result = await setExecutionHalt({ data: { on: true } });
-      if (!result.ok) setError(result.error);
+      const result = await setExecutionHalt({ data: { on: true, ownerId: owner || undefined } });
+      if (turnOwner.current !== owner || stopSyncFlight.current !== attempt) return;
+      if (!result.ok) {
+        setStopSync({ owner, state: "unconfirmed", detail: "Local protection remains active. The server stop is unconfirmed." });
+        setError(result.error);
+        return;
+      }
+      const cancellation = result.cancellation;
+      const detail = cancellation ? `Server stop confirmed. ${cancellation.cancelled} queued job(s) canceled; ${cancellation.pending} running job cancellation(s) awaiting runtime confirmation; ${cancellation.unknown} cancellation outcome(s) unconfirmed.` : "Server stop confirmed. Remote runtime termination has not been independently confirmed.";
+      setStopSync({ owner, state: "confirmed", detail });
+      setError(null);
+      setNotice(detail);
     } catch {
-      setError("The server did not confirm the stop. Sends are blocked in this browser.");
+      if (turnOwner.current !== owner || stopSyncFlight.current !== attempt) return;
+      setStopSync({ owner, state: "unconfirmed", detail: "The server did not confirm the stop. This browser continues blocking new work." });
+      setError("The server did not confirm the stop. Retry stop synchronization to keep local protection active.");
+    } finally {
+      if (stopSyncFlight.current === attempt) stopSyncFlight.current = null;
     }
   }
   async function clearEmergencyStop() {
+    const owner = turnOwner.current;
+    if (!owner) { setError("Sign in to confirm release of the server stop. Local protection remains active."); return; }
+    if (stopSyncFlight.current?.owner === owner) return;
+    const attempt = { owner, on: false, restop: false };
+    stopSyncFlight.current = attempt;
     setError(null);
     try {
-      const result = await setExecutionHalt({ data: { on: false } });
+      const result = await setExecutionHalt({ data: { on: false, ownerId: owner || undefined } });
+      if (turnOwner.current !== owner || stopSyncFlight.current !== attempt) return;
+      if (attempt.restop) return;
       if (!result.ok) {
         setError(result.error);
         setSpeakCall((current) => ({ ...current, error: result.error }));
         return;
       }
       clearedStop.current = true;
-      setWs((prev) => (prev.halted ? pushAudit({ ...prev, halted: false }, "emergency_stop", "session", "cleared by owner") : prev));
+      setStopSync({ owner, state: "idle", detail: "" });
+      setWs((prev) => prev.halted ? pushAudit({ ...prev, halted: false }, "emergency_stop", "session", "cleared by owner") : prev);
       setSpeakCall((current) => ({ ...current, error: "" }));
-      setNotice("Emergency stop cleared. Schedules remain paused.");
+      setNotice("Emergency stop cleared. Schedules remain paused and canceled tasks do not restart.");
     } catch {
+      if (turnOwner.current !== owner || stopSyncFlight.current !== attempt) return;
       const message = "The server could not confirm the release. Emergency stop remains on.";
       setError(message);
       setSpeakCall((current) => ({ ...current, error: message }));
+    } finally {
+      if (stopSyncFlight.current === attempt) {
+        stopSyncFlight.current = null;
+        if (attempt.restop && turnOwner.current === owner) await pressEmergencyStop();
+      }
     }
   }
   function explain(text: string) {
@@ -4601,11 +4738,16 @@ ${message.content}`;
       setWs(made.ws);
       setNotice(made.reply);
       if (speakStageOpenRef.current) setSpeakCall((current) => ({ ...current, heard: transcript, reply: made.reply, error: "" }));
-      return { ok: true as const, text: made.reply };
+      return { ok: true as const, text: made.reply, provider: "Local bot creation", model: "No model called" };
     }
-    const reply = await deliver({ ...chat, personalityId: spokenStyle }, transcript, source, false, [], { accessNotes: chat.memory === "on" && !chat.temporary ? eveAccessNotes(workspaceForChat(source, chat)) : [] });
+    const receipt: { provider?: string; model?: string } = {};
+    const reply = await deliver({ ...chat, personalityId: spokenStyle }, transcript, source, false, [], {
+      usageChannel: "speak",
+      accessNotes: chat.memory === "on" && !chat.temporary ? eveAccessNotes(workspaceForChat(source, chat)) : [],
+      onReceipt: (actual) => { receipt.provider = actual.provider; receipt.model = actual.model; },
+    });
     if (!reply) return { ok: false as const, error: "The chat turn failed. Nothing was spoken." };
-    return { ok: true as const, text: reply };
+    return { ok: true as const, text: reply, ...receipt };
   }
 
   async function speak(text: string, messageId = "", voiceId = voiceChoiceRef.current, replay?: SpeakRetryParams) {
@@ -4646,6 +4788,8 @@ ${message.content}`;
           }
           const prefix = previewPathPrefix(window.location.hostname, window.location.pathname) ?? "";
           const token = getBearerToken();
+          const route = readVoiceRoutePreferences(localStorage, draftOwner);
+          if (route.sttProvider === "browser") return { ok: false, error: "Browser transcription is selected. Use Speak's composed voice route or choose a cloud transcription service." };
           const response = await fetch(`${prefix}/api/mind/voice/stt`, {
             method: "POST",
             credentials: "include",
@@ -4655,7 +4799,7 @@ ${message.content}`;
               ...(token ? { Authorization: `Bearer ${token}` } : {}),
             },
             signal: abort.signal,
-            body: JSON.stringify({ audioBase64, mime, freeOnly: currentFreeOnly.current, filename: sanitizeAudioFilename("speak", mime) }),
+            body: JSON.stringify({ audioBase64, mime, provider: route.sttProvider, fallbackProvider: route.sttFallbackProvider, freeOnly: currentFreeOnly.current, filename: sanitizeAudioFilename("speak", mime) }),
           });
           try {
             const body = (await response.json()) as { ok?: boolean; text?: string; error?: string; provider?: string };
@@ -5006,6 +5150,11 @@ ${message.content}`;
       setNotice("Test clip inserted into the composer. Browser speech path, not a realtime voice provider. Nothing was sent.");
       return;
     }
+    const chosenRoute = readVoiceRoutePreferences(localStorage, draftOwner);
+    if (localStorage.getItem(voiceRouteKey(draftOwner)) && chosenRoute.sttProvider !== "browser") {
+      void startServerDictation();
+      return;
+    }
     const Ctor = browserSpeechCtor();
     if (!Ctor) {
       void startServerDictation();
@@ -5100,13 +5249,17 @@ ${message.content}`;
       setNotice("End Speak before the mic. The mic only inserts words. It does not talk back.");
       return;
     }
+    const route = readVoiceRoutePreferences(localStorage, draftOwner);
+    if (route.sttProvider === "browser") { setError("Browser speech recognition is unavailable here. Choose a configured cloud transcription provider in Voice settings."); return; }
     try {
       const recorder = await createDictationRecorder();
+      if (turnOwner.current !== draftOwner || wsRef.current.halted) { recorder.cancel(); return; }
       serverDictationRef.current = recorder;
+      serverDictationRouteRef.current = { owner: draftOwner, route };
       await recorder.start();
       commitDictation({ type: "start" });
       dictationBaseRef.current = draftRef.current;
-      setNotice("This browser has no live speech recognition. Speak, then press Mic again. Words are inserted only after transcription. Nothing is sent.");
+      setNotice(`Record, then press Mic again. ${speechEngineLabel(route.sttProvider)} will receive the recording for transcription${route.sttFallbackProvider ? `, with ${speechEngineLabel(route.sttFallbackProvider)} permitted as fallback` : ""}. The resulting chat message is not sent until you press Send.`);
     } catch {
       serverDictationRef.current = null;
       commitDictation({
@@ -5119,11 +5272,13 @@ ${message.content}`;
 
   async function finishServerDictation() {
     const recorder = serverDictationRef.current;
+    const preparedRoute = serverDictationRouteRef.current;
     if (!recorder) {
       stopBrowserDictation();
       return;
     }
     serverDictationRef.current = null;
+    serverDictationRouteRef.current = null;
     commitDictation({ type: "stop_begin" }, false);
     try {
       const captured = await recorder.stop();
@@ -5134,17 +5289,19 @@ ${message.content}`;
       }
       const audioBase64 = await blobToBase64(captured.blob);
       const mime = captured.mime.split(";")[0] || "audio/webm";
+      const route = readVoiceRoutePreferences(localStorage, draftOwner);
+      if (!preparedRoute || preparedRoute.owner !== turnOwner.current || JSON.stringify(preparedRoute.route) !== JSON.stringify(route) || route.sttProvider === "browser") { commitDictation({ type: "stop_error", message: "The account or transcription settings changed. The recording was not uploaded. Start again with the intended service." }); return; }
       const response = await fetch("/api/mind/voice/stt", {
         method: "POST",
         credentials: "same-origin",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ audioBase64, mime, freeOnly: currentFreeOnly.current, filename: sanitizeAudioFilename("dictation", mime) }),
+        body: JSON.stringify({ audioBase64, mime, provider: route.sttProvider, fallbackProvider: route.sttFallbackProvider, freeOnly: currentFreeOnly.current, filename: sanitizeAudioFilename("dictation", mime) }),
       });
-      const body = await response.json() as { ok?: boolean; text?: string; error?: string };
+      const body = await response.json() as { ok?: boolean; text?: string; error?: string; provider?: string };
       const text = body.text?.trim() ?? "";
       if (response.ok && body.ok && text) {
         commitDictation({ type: "stop_inserted", text });
-        setNotice("Words inserted into the field. Press Send when you want a reply.");
+        setNotice(`${body.provider || "The selected service"} transcribed the recording. Words inserted into the field. Press Send when you want a reply.`);
         return;
       }
       commitDictation({ type: "stop_error", message: body.error || "Nothing was transcribed." });
@@ -6128,12 +6285,13 @@ ${message.content}`;
                   ) : modelRowsOpen ? (
                     <ModelTierChip
                       presentation="rows"
-                      tier={modelTier}
+                      tier={effectiveRoute.modelTier}
                       onChoose={chooseModelTier}
-                      grokModel={grokModel}
+                      grokModel={effectiveGrokModel}
                       onChooseGrokModel={(model) => {
                         selectProviderInChat("grok");
-                        setGrokModel(model);
+                        if (active?.agentId || active?.botProvider || active?.botTier) setWs(prev => ({ ...prev, chats: prev.chats.map(chat => chat.id === active.id ? { ...chat, botProvider: "grok", botExactModel: model } : chat) }));
+                        else setGrokModel(model);
                       }}
                       lastResolved={lastResolvedTier}
                       lastModel={lastModelUsed}
@@ -6289,6 +6447,25 @@ ${message.content}`;
             <span className="hidden text-sm md:inline">Adrian</span>
           </button>
         </header>
+        {accountError && <div role="alert" className="mx-3 mt-2 rounded-panel border border-danger/40 p-3 text-sm">
+          <p>{accountError}</p>
+          <button type="button" className="min-h-11 underline" onClick={() => void signOut("/login").catch(() => setError("Sign out was not confirmed. Please retry."))}>Sign out and resolve account</button>
+        </div>}
+        {notionRecovery?.owner === draftOwner && notionRecovery && <div role="status" className="mx-3 mt-2 rounded-panel border border-line p-3 text-sm" data-testid="notion-connection-recovery">
+          <p>{notionRecovery.message}</p>
+          <p className="mt-1 text-xs text-muted">Workspace: {notionRecovery.workspaceId}. The original request remains bound to this workspace.</p>
+          <div className="flex flex-wrap gap-2">
+            <button type="button" className="min-h-11 underline" onClick={() => { setView("connected"); setCardFocus({ id: "connection-notion" }); }}>Review Notion connection</button>
+            <button type="button" className="min-h-11 underline" onClick={() => {
+              const recovery = notionRecovery;
+              const chat = wsRef.current.chats.find((item) => item.id === recovery.chatId);
+              if (!chat || turnOwner.current !== recovery.owner) return;
+              setActiveId(chat.id); setView("chat");
+              void askNotion(chat, recovery.text, false, recovery.pageId, recovery.workspaceId);
+            }}>Return to the same request</button>
+            <button type="button" className="min-h-11 underline" onClick={() => setNotionRecovery(null)}>Dismiss</button>
+          </div>
+        </div>}
         {bellOpen && (
           <AnchoredCard anchor={alertAnchor} label="Alerts" onClose={() => setBellOpen(false)} testId="alerts-panel" width={300} align="end">
             <MenuGroup label="Status" first>
@@ -6315,8 +6492,8 @@ ${message.content}`;
           <AnchoredCard anchor={accountAnchor} label="Account" onClose={() => setAccountOpen(false)} testId="account-panel" width={440} align="end">
             <MenuShelf width="100%" testId="account-shelf">
             <MenuCluster label="Account" wide>
-              <p className="px-3 py-1 text-sm font-semibold">Adrian (Personal)</p>
-              <p className="px-3 pb-2 text-xs text-muted">This menu is not an account switcher. No second workspace exists.</p>
+              <p className="px-3 py-1 text-sm font-semibold">{account?.displayName || account?.primaryEmail || "Account"}</p>
+              <p className="px-3 pb-2 text-xs text-muted">Connections and saved workspace data belong to this verified account.</p>
               <UserButton />
               <SupabaseAccountControls />
               <SignedOut>
@@ -6330,7 +6507,7 @@ ${message.content}`;
                 Settings
               </button>
               <button type="button" className="flex min-h-11 items-center rounded-2xl px-3 text-left text-sm" style={menuChip} onClick={() => void toggleStop()}>
-                {ws.halted ? "Clear stop" : "Emergency stop"}
+                {stopControlLabel}
               </button>
             </MenuCluster>
             </MenuShelf>
@@ -6338,9 +6515,9 @@ ${message.content}`;
         )}
         {ws.halted && (
           <div className="banner-error mx-3 mt-2 flex flex-wrap items-center justify-between gap-2 px-4 py-2 md:mx-5">
-            <p className="text-sm text-danger">Emergency stop is on. Sending and approvals are blocked.</p>
+            <p className="text-sm text-danger">{stopSync.owner === turnOwner.current && stopSync.detail ? stopSync.detail : "Local stop is on. Sending and approvals are blocked; server confirmation is pending."}</p>
             <button type="button" className="inline-flex min-h-11 items-center justify-center rounded-panel bg-accent px-4 text-sm font-semibold text-accent-ink" onClick={() => void toggleStop()}>
-              Clear stop
+              {stopControlLabel}
             </button>
           </div>
         )}
@@ -6886,7 +7063,7 @@ ${message.content}`;
                   className="inline-flex min-h-11 w-full items-center justify-center rounded-panel bg-accent px-4 text-sm font-semibold text-accent-ink md:w-auto"
                   onClick={() => void toggleStop()}
                 >
-                  {ws.halted ? "Clear stop" : "Emergency stop"}
+                  {stopControlLabel}
                 </button>
                 <div className="grid grid-cols-3 gap-2 text-center text-xs text-muted">
                   <span className="rounded-panel border border-line px-2 py-2"><Lock className="mx-auto mb-1 size-4 text-accent" />Owner control</span>
@@ -7223,7 +7400,9 @@ ${message.content}`;
               <p className="mt-4 text-sm text-muted">{memoryTab === "chat" ? "Manage notes saved for individual conversations, including closed chats." : memoryTab === "project" ? "Project notes stay inside the project you pick." : memoryTab === "transfer" ? "Export is a JSON file with a hash. Import refuses a file whose hash does not match." : "Personal notes are global on this device. You can save and manage them here while chat use is off."}</p>
               {memoryTab === "transfer" && (
                 <div className="mt-3 flex flex-wrap gap-2">
-                  <button type="button" className="min-h-11 rounded-panel bg-accent px-4 text-sm font-semibold text-white" onClick={() => void downloadArchive()}>Export archive</button>
+                  <button type="button" className="min-h-11 rounded-panel bg-accent px-4 text-sm font-semibold text-white" onClick={() => void downloadArchive(true)}>Export memory only</button>
+                  <button type="button" className="min-h-11 rounded-panel border border-line px-4 text-sm" onClick={() => void downloadArchive()}>Export full workspace</button>
+                  <p className="w-full text-sm text-muted">Memory only includes notes, previous wording, and scope names. Full workspace also includes chats, files, projects, usage, activity, bots, schedules, and connection records. Server credentials are not in this archive.</p>
                   <button type="button" className="min-h-11 rounded-panel border border-line px-4 text-sm" onClick={() => { setSettingsPane("data"); setView("settings"); }}>Open import settings</button>
                 </div>
               )}
@@ -7317,6 +7496,14 @@ ${message.content}`;
                         setWs((prev) => ({ ...prev, memories: prev.memories.map((note) => note.id === item.id ? { ...note, versions: [], updatedAt: new Date().toISOString() } : note) }));
                       })}>Remove previous wording</button>
                     </details>}
+                    {item.reviewReason && <div role="status" className="mt-2 rounded-panel border border-line p-2 text-xs">
+                      <p>{item.reviewReason}</p>
+                      <select aria-label="Reviewed note scope" defaultValue="" onChange={event => { const [scope, ...parts] = event.target.value.split(":"); if (!scope) return; const target = parts.join(":") || null; requestProtected("overwrite", `review-memory:${item.id}`, "Confirm note scope", "This note will become available only to memory-enabled conversations in the selected scope.", "Confirm scope", () => setWs(prev => resolveImportedMemory(prev, item.id, scope as MemoryScope, target))); }}>
+                        <option value="" disabled>Choose scope after review</option><option value="global:">Personal (global)</option>
+                        {ws.projects.map(project => <option key={project.id} value={`project:${project.id}`}>Project: {project.name}</option>)}
+                        {ws.chats.map(thread => <option key={thread.id} value={`chat:${thread.id}`}>Conversation: {thread.title}</option>)}
+                      </select>
+                    </div>}
                     <p className="memory-note-meta mt-1 text-xs text-muted">{item.scope}{item.scope === "project" ? (ws.projects.some((project) => project.id === item.projectId) ? "" : " · project removed, note kept") : ""} · {stamp(item.updatedAt)}{item.archived ? " · archived" : ""}</p>
                     <div className="memory-note-actions"><ActionsButton label={`note: ${item.text.slice(0, 56)}`} onOpen={() => setNoteMenu(item.id)} /></div>
                     {editId === item.id ? <button type="button" disabled={!editText.trim()} className="mt-2 min-h-11 rounded-panel border border-line px-3" onClick={() => { setWs((prev) => pushAudit(reviseMemory(prev, item.id, editText), "save_memory", item.id, "revised")); setEditId(null); }}>Save edit</button> : null}
@@ -7435,7 +7622,7 @@ ${message.content}`;
               <ServiceBoard key={account?.id ?? "guest"}
                 providers={customAiProviders}
                 savedMcp={mcpSavedListState.status === "ready" ? mcpServers : []}
-                grokConfigured={grokConfigured === true}
+                grokConfigured={grokConfigured}
                 notion={notion}
                 mcp={mcpBoard}
                 onSetup={(message) => {
@@ -7551,7 +7738,7 @@ ${message.content}`;
               {notice && <p className="voice-copy rounded-panel border border-line bg-surface px-3 py-2 text-sm text-muted">{presentVoiceCopy(notice)}</p>}
               <details className="intelligence-group">
                 <summary className="cursor-pointer text-sm font-semibold">API keys</summary>
-              <AiProviderConnections onChange={setCustomAiProviders} onUseModel={selectProviderInChat} />
+              <AiProviderConnections key={draftOwner ?? "guest"} onChange={applyProviderCatalog} onUseModel={selectProviderInChat} />
               </details>
               <details className="intelligence-group">
                 <summary className="cursor-pointer text-sm font-semibold">Provider routes</summary>
@@ -7888,34 +8075,32 @@ ${message.content}`;
                   <img src="/brand/logo-mark.jpg" alt="" className="size-8 rounded-lg" />
                   <div>
                     <h2 className="font-display text-3xl font-bold">Integrations</h2>
-                    <p className="text-xs text-muted">Last check {stamp(checkedAt) || checkedAt}. Green means that behavior was verified here. Configured means a key or setting exists and a live call was not verified.</p>
+                    <p className="text-xs text-muted">Connections for the current account. Saved credentials and authorization are shown separately from a successful feature call. Provider status checked {stamp(checkedAt) || "when available"}.</p>
                   </div>
                 </div>
               </div>
-              <div id="owner-integrations" className="mt-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
-                {CAPABILITIES.map((item) => {
-                  const live = isVerifiedCapability(item.status);
-                  const page = CAPABILITY_PAGE[item.id];
-                  return (
-                    <article key={item.id} className="integration-card">
-                      <div className="flex items-start justify-between gap-3">
-                        <div className="flex min-w-0 items-center gap-3">
-                          <img src={productMark(CAPABILITY_MARK[item.id] ?? "integrations")} alt="" className="size-8 shrink-0 rounded-lg object-contain" style={markTile(productMark(CAPABILITY_MARK[item.id] ?? "integrations"))} />
-                          <h3 className="text-sm font-semibold">{item.name}</h3>
-                        </div>
-                        <span className={`rounded-full border px-2 py-0.5 text-xs ${live ? "border-ok/40 text-ok" : item.status === "blocked" || item.status === "paid_required" ? "border-danger/40 text-danger" : "border-line text-muted"}`}>
-                          {statusWord(item.status)}
-                        </span>
-                      </div>
-                      <p className="mt-2 text-sm text-muted">{item.why}</p>
-                      {page && (
-                        <button type="button" className="mt-3 min-h-11 rounded-panel border border-line px-3 text-sm" onClick={() => openCapability(item.id, setView, setSettingsPane)}>
-                          {CAPABILITY_CONNECT[item.id] ? "Set up" : "Open"}
-                        </button>
-                      )}
-                    </article>
-                  );
-                })}
+              <div id="owner-integrations" className="mt-4">
+                <ServiceBoard key={`integrations:${draftOwner ?? "guest"}`}
+                  grokConfigured={grokConfigured}
+                  providers={customAiProviders}
+                  savedMcp={mcpSavedListState.status === "ready" ? mcpServers : []}
+                  notion={notion}
+                  mcp={mcpBoard}
+                  onSetup={setNotice}
+                  onOpenConnect={(name) => {
+                    setView("connected");
+                    setCardFocus({ id: name === "Notion" ? "connection-notion" : name === "MCP" ? "owner-mcp-connect" : "owner-api-connect" });
+                  }}
+                />
+                <p className="mt-4 rounded-panel border border-line p-3 text-sm">Workspace storage: {databasePill}. {databaseDetail}</p>
+                <details className="mt-4 rounded-panel border border-line p-3">
+                  <summary className="cursor-pointer text-sm font-semibold">Feature shortcuts</summary>
+                  <div className="mt-3 grid gap-2 sm:grid-cols-2 xl:grid-cols-3">{CAPABILITIES.filter((item) => CAPABILITY_PAGE[item.id]).map((item) => (
+                    <button key={item.id} type="button" className="flex min-h-11 items-center gap-2 rounded-panel border border-line px-3 text-left text-sm" onClick={() => openCapability(item.id, setView, setSettingsPane)}>
+                      <img src={productMark(CAPABILITY_MARK[item.id] ?? "integrations")} alt="" className="size-6 object-contain" style={markTile(productMark(CAPABILITY_MARK[item.id] ?? "integrations"))} />{item.name}
+                    </button>
+                  ))}</div>
+                </details>
               </div>
             </section>
           )}
@@ -7932,11 +8117,13 @@ ${message.content}`;
               </div>
               {imageAllowance && <p className="mt-3 text-sm">Imagine allowance: {imageAllowance.remaining} of {imageAllowance.dailyCap} images remaining. Resets at {new Date(imageAllowance.resetAt).toLocaleString(undefined, { dateStyle: "medium", timeStyle: "short" })} local time (midnight UTC). {imageAllowance.unconfirmed > 0 && `${imageAllowance.unconfirmed} reserved with provider outcome unconfirmed.`}</p>}
               {allowanceError && <p role="status" className="mt-3 text-sm">Image allowance unavailable. {allowanceError}</p>}
+              <UsageHistory key={draftOwner ?? "guest"} ownerId={draftOwner} />
               {ws.usage.length > 0 && <details className="mt-3 rounded-panel border border-line p-3">
-                <summary>Recent model usage · up to 200 replies</summary>
+                <summary>Recent model usage · up to 200 execution records</summary>
                 <ul>{ws.usage.map((entry) => <li key={entry.id} className="mt-2 break-words text-sm">
                   {stamp(entry.at)} · {entry.provider || "Provider unreported"} · {entry.model}
                   {entry.requestedModel && entry.requestedModel !== entry.model && <> · Requested {entry.requestedModel}</>}
+                  {entry.outcome && <span> · {entry.outcome}</span>}
                   <div>Input tokens: {entry.promptTokens ?? "unknown"} · Output tokens: {entry.completionTokens ?? "unknown"}</div>
                   {entry.requestId && <div>Request: {entry.requestId}</div>}
                 </li>)}</ul>
@@ -8172,7 +8359,7 @@ ${message.content}`;
                   <span className={`h-6 w-11 rounded-full ${failoverPolicy === "grok" ? "bg-accent-ink/30" : "bg-line"}`} />
                 </button>
               </div>
-                <AiProviderConnections onChange={setCustomAiProviders} onUseModel={selectProviderInChat} />
+                <AiProviderConnections key={draftOwner ?? "guest"} onChange={applyProviderCatalog} onUseModel={selectProviderInChat} />
                 <button type="button" className="min-h-11 rounded-panel border border-line px-3 text-sm" onClick={() => setSettingsPane("keys")}>Open Safe keys</button>
                 <button type="button" className="min-h-11 rounded-panel border border-line px-3 text-sm" onClick={() => setView("connected")}>Open connections</button>
               </div>}
@@ -8261,16 +8448,20 @@ ${message.content}`;
                       </tbody>
                     </table>
                     <p className="mt-1 text-muted">Merge keeps {messagePreview?.kept} device-only messages in matching chats. For conflicting messages it keeps the device version. Conflicts in this archive: {messagePreview?.conflicts.join(", ") || "none"}.</p>
+                    <p className="mt-2 text-muted">Merge preserves existing project, file, bot, schedule, and connection records. Conflicting records kept on this device: {importReview?.conflicts.map(row => `${row.category}: ${row.id}`).join(", ") || "none"}.</p>
+                    <p className="mt-2 text-muted">{importReview?.unresolved.length ?? 0} notes need scope review and will stay archived. Review them under Memory → Show archived before use.</p>
+                    {!importPreview.memoryOnly && <label className="mt-2 flex gap-2"><input type="checkbox" checked={restoreMemoryPreferences} onChange={event => setRestoreMemoryPreferences(event.target.checked)} /> Restore archived Memory preferences. {importReview?.privacy.length ?? 0} conversations could enable memory; otherwise current preferences stay and new chats start with Memory off.</label>}
                     <div className="mt-2 flex flex-wrap gap-2">
-                      <button type="button" className="min-h-11 rounded-panel border border-line px-3" onClick={() => requestProtected("overwrite", "import-merge", "Merge this archive", "Merge records from the archive. For saved memory, corrections and deletions are preserved.", "Merge archive", () => { setWs((prev) => pushAudit(mergeWorkspace(prev, importPreview.workspace), "import_merge", "archive", "merged")); setImportPreview(null); setImportStatus("Archive merged with this workspace."); })}>
+                      <button type="button" className="min-h-11 rounded-panel border border-line px-3" onClick={() => requestProtected("overwrite", "import-merge", "Merge this archive", "Merge records from the archive. For saved memory, corrections and deletions are preserved.", "Merge archive", () => { setWs((prev) => pushAudit(mergeWorkspace(prev, importPreview.workspace, restoreMemoryPreferences), "import_merge", "archive", "merged")); setImportPreview(null); setImportStatus("Archive merged with this workspace."); })}>
                         Merge
                       </button>
                       <button
                         type="button"
                         className="min-h-11 rounded-panel border border-line px-3"
+                        disabled={importPreview.memoryOnly}
                         onClick={() =>
                           requestProtected("overwrite", `import-replace:${importPreview.workspace.version}`, "Replace this workspace", "Current chats, notes, projects, and files are replaced by the archive.", "Approve replace", () => {
-                            setWs((prev) => pushAudit(replaceFromArchive(prev, importPreview.workspace), "import_replace", "archive", "replaced"));
+                            setWs((prev) => pushAudit(replaceFromArchive(prev, quarantineImportedMemory(importPreview.workspace, emptyWorkspace()), restoreMemoryPreferences), "import_replace", "archive", "replaced"));
                             setImportPreview(null);
                             setImportStatus("Workspace replaced with the archive.");
                           })
@@ -8295,8 +8486,10 @@ ${message.content}`;
               <div id="settings-safety" hidden={settingsPane !== "safety"} className="space-y-4">
                 <div className="settings-card rounded-panel p-4 text-sm">
                   <button type="button" className="inline-flex min-h-11 items-center gap-2 rounded-panel border border-line px-3 text-sm font-semibold" onClick={() => void toggleStop()}>
-                    <Square className="size-4" /> {ws.halted ? "Clear emergency stop" : "Emergency stop"}
+                    <Square className="size-4" /> {stopControlLabel}
                   </button>
+                  {ws.halted && <button type="button" disabled={stopPending} className="min-h-11 rounded-panel border border-line px-3 text-sm" onClick={() => void pressEmergencyStop()}>Retry stop synchronization</button>}
+                  {ws.halted && <p className="mt-2 text-xs text-muted">{stopSync.owner === turnOwner.current ? stopSync.detail : "Server stop has not been confirmed for this account."}</p>}
                   <p className="mt-2 text-muted">Stops new sends on this page and on the server.</p>
                 </div>
               <div className="settings-card rounded-panel p-4 text-sm">
@@ -8312,7 +8505,7 @@ ${message.content}`;
             </section>
           )}
         </div>
-        <HandyDictation freeOnly={researchFreeOnly} />
+        <HandyDictation freeOnly={researchFreeOnly} ownerId={draftOwner} />
       </main>
       {excerpt && excerpt.scope === draftScope && (
         <Overlay labelledBy="excerpt-title" onDismiss={() => setExcerpt(null)}>
@@ -8433,12 +8626,13 @@ ${message.content}`;
         </Overlay>
       )}
       {pending && (
-        <Overlay>
+        <Overlay onDismiss={() => { pending.cancel?.(); setPending(null); }}>
           <h3 className="font-display text-2xl font-bold">Approval required</h3>
           <p className="mt-2 text-sm font-semibold">{pending.label}</p>
           <p className="mt-1 text-sm text-muted">{pending.detail} Automatic mode does not approve this.</p>
+          {pending.review && <pre tabIndex={0} aria-label="Exact action to approve" className="mt-3 max-h-64 overflow-auto whitespace-pre-wrap break-words rounded-panel border border-line p-3 text-xs">{JSON.stringify(pending.review, null, 2)}</pre>}
           <div className="mt-3 flex gap-2">
-            <button type="button" className="min-h-11 flex-1 rounded-panel border border-line" onClick={() => setPending(null)}>Deny</button>
+            <button type="button" className="min-h-11 flex-1 rounded-panel border border-line" onClick={() => { pending.cancel?.(); setPending(null); }}>Deny</button>
             <button type="button" className="min-h-11 flex-1 rounded-panel bg-accent font-semibold text-accent-ink" onClick={confirmPending}>{pending.confirm}</button>
           </div>
         </Overlay>
@@ -8524,16 +8718,24 @@ ${message.content}`;
       />
       <SpeakStage
         open={speakStageOpen}
+        ownerId={draftOwner}
+        answerModelLabel={controlsModelLabel}
         freeOnly={researchFreeOnly}
         signedIn={statusSignedIn === true || (typeof window !== "undefined" && (window.location.hostname === "127.0.0.1" || window.location.hostname === "localhost"))}
         live={voiceListening}
         onClose={closeSpeakStage}
         onKeepRecording={keepTaskRecording}
         onHandCode={(text) => handToHumanCode(text, "From Speak")}
-        onStyle={(style) => {
+        onStyle={async (style) => {
           const personalityId = speakStylePersonality(style);
           if (activeId) setWs((prev) => updateChatPersonality(prev, activeId, personalityId));
           setNotice(`${style} is saved as the personality. The voice name is separate.`);
+          const session = voiceSession.current;
+          if (!session?.isOpen) return { active: false };
+          const voiceChat = wsRef.current.chats.find((item) => item.id === activeId);
+          const profile = voiceSessionInstructions({ mode: getVoiceMode(), personalityId, customPersonality: voiceChat?.customPersonality ?? "", characterId: readStoredCharacterId(localStorage) });
+          await session.updateInstructions(profile.instructions);
+          return { active: true };
         }}
         onSignIn={() => { setSpeakStageOpen(false); window.location.assign("/login?next=" + encodeURIComponent(loginReturnPath(true))); }}
         recording={taskRecording}
@@ -8541,6 +8743,7 @@ ${message.content}`;
         micMuted={voiceMuted}
         onMicMute={setVoiceMicMuted}
         onLive={() => {
+          applyVoiceMode("direct");
           setSpeakCall((current) => ({ ...current, error: "" }));
           return listen({ mode: "start" });
         }}
@@ -8550,6 +8753,12 @@ ${message.content}`;
         halted={ws.halted}
         onEmergencyStop={() => { void pressEmergencyStop(); }}
         onClearStop={() => { void clearEmergencyStop(); }}
+        onAnswer={async (text) => {
+          const blocked = decideComputerAction({ text, halted: wsRef.current.halted === true, paired: false, actor: "eve" });
+          if (blocked.kind !== "none") return { error: blocked.message };
+          const turn = await speakChatTurn(text, { stay: true });
+          return turn.ok ? { reply: turn.text, provider: turn.provider, model: turn.model } : { error: turn.error };
+        }}
         onAsk={async (text) => {
           const blocked = decideComputerAction({ text, halted: wsRef.current.halted === true, paired: false, actor: "eve" });
           if (blocked.kind !== "none") return { error: blocked.message };

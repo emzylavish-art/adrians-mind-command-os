@@ -1,4 +1,7 @@
 import { useEffect, useRef, useState } from "react";
+import { captureComposedSpeech, playComposedSpeech } from "@/lib/mind/voice/composed-browser";
+import { runComposedVoiceTurn, type VoiceAnswer, type VoiceStageReceipt } from "@/lib/mind/voice/composed-turn";
+import { DEFAULT_VOICE_ROUTE, readVoiceRoutePreferences, writeVoiceRoutePreferences, speechEngineLabel, type VoiceRoutePreferences, type SpeechEngine } from "@/lib/mind/voice/route-preferences";
 import { loadVoiceSettings, saveVoiceSettings } from "@/lib/mind/voice/settings";
 import { createPortal } from "react-dom";
 import { ArrowUp, AudioLines, Camera, Mic, MicOff, MonitorUp, PhoneOff, Plus, Settings, Volume2, VolumeX, X } from "lucide-react";
@@ -54,13 +57,17 @@ export function SpeakStage(props: {
   micMuted: boolean;
   onMicMute: (muted: boolean) => void;
   recording: boolean;
+  ownerId?: string | null;
+  answerModelLabel?: string;
+  /** Answer only; the composed pipeline owns speech output. */
+  onAnswer?: (text: string) => Promise<VoiceAnswer>;
   onAsk?: (text: string) => Promise<string | null | { reply?: string; error?: string }>;
   onKeepRecording?: (stream: MediaStream) => void;
   onEmergencyStop?: () => void;
   halted?: boolean;
   onClearStop?: () => void;
   onHandCode?: (text: string) => void;
-  onStyle?: (style: string) => void;
+  onStyle?: (style: string) => void | Promise<{ active: boolean }>;
   heard?: string;
   spoken?: string;
   callError?: string;
@@ -80,6 +87,11 @@ export function SpeakStage(props: {
   keepRef.current = props.onKeepRecording;
   const [source, setSource] = useState<"none" | "camera" | "screen">("none");
   const [connecting, setConnecting] = useState(false);
+  const [route, setRoute] = useState<VoiceRoutePreferences>({ ...DEFAULT_VOICE_ROUTE });
+  const [composedPhase, setComposedPhase] = useState<"idle" | "listening" | "answering" | "speaking">("idle");
+  const [stageReceipts, setStageReceipts] = useState<VoiceStageReceipt[]>([]);
+  const [composedHeard, setComposedHeard] = useState("");
+  const composedAbort = useRef<AbortController | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const [line, setLine] = useState("");
   const [asking, setAsking] = useState(false);
@@ -95,10 +107,15 @@ export function SpeakStage(props: {
   const [volume, setVolume] = useState(100);
   const [recordingPending, setRecordingPending] = useState(false);
   const speechCutRef = useRef(false);
+  const currentOutput = useRef({ muted: speakerMuted, volume: volume / 100, rate: rate === "slow" ? 0.85 : rate === "brisk" ? 1.15 : 1 });
+  currentOutput.current = { muted: speakerMuted, volume: volume / 100, rate: rate === "slow" ? 0.85 : rate === "brisk" ? 1.15 : 1 };
   const cutSpeechRef = useRef<(reason: "owner" | "tab") => void>(() => undefined);
 
   function cutSpeech(reason: "owner" | "tab") {
     speechCutRef.current = true;
+    composedAbort.current?.abort();
+    composedAbort.current = null;
+    setComposedPhase("idle");
     callGeneration.current++;
     mediaGeneration.current++;
     stopVideo();
@@ -187,6 +204,53 @@ export function SpeakStage(props: {
     if (settingsOpen) closeSettingsButton.current?.focus();
   }, [settingsOpen]);
 
+  useEffect(() => {
+    composedAbort.current?.abort();
+    composedAbort.current = null;
+    setComposedPhase("idle");
+    setStageReceipts([]);
+    setComposedHeard("");
+    setRoute(readVoiceRoutePreferences(window.localStorage, props.ownerId));
+    return () => { composedAbort.current?.abort(); };
+  }, [props.ownerId, props.open]);
+
+  useEffect(() => {
+    if (props.halted || (props.freeOnly && (route.sttProvider !== "browser" || route.ttsProvider !== "browser"))) { composedAbort.current?.abort(); setComposedPhase("idle"); }
+  }, [props.halted, props.freeOnly, route.sttProvider, route.ttsProvider]);
+
+  function chooseRoute(next: VoiceRoutePreferences) {
+    if (props.live || composedAbort.current) return;
+    setRoute(writeVoiceRoutePreferences(window.localStorage, props.ownerId, next));
+    setNotice("Voice route saved. It applies to the next turn.");
+  }
+
+  async function composedTurn(text?: string) {
+    if (!props.onAnswer || composedAbort.current || props.halted) return;
+    if (!props.signedIn) { props.onSignIn(); return; }
+    const controller = new AbortController();
+    composedAbort.current = controller;
+    setReply("");
+    setStageReceipts([]);
+    setShowTranscript(true);
+    setNotice(text ? "The selected answer model is answering." : route.sttProvider === "browser" ? "Listening through browser speech. Your browser manages its speech service." : `Recording up to 12 seconds for ${speechEngineLabel(route.sttProvider)} transcription.`);
+    const result = await runComposedVoiceTurn({ route: { ...route }, signal: controller.signal, text, freeOnly: props.freeOnly }, {
+      capture: (signal) => captureComposedSpeech(route, props.freeOnly === true, signal),
+      answer: props.onAnswer,
+      speak: (replyText, provider, signal) => playComposedSpeech(replyText, provider, { signal, freeOnly: props.freeOnly === true, voiceId: voice, output: () => currentOutput.current }),
+      canSpeak: () => !currentOutput.current.muted,
+      onPhase: setComposedPhase,
+    });
+    if (composedAbort.current !== controller) return;
+    composedAbort.current = null;
+    setComposedPhase("idle");
+    if (!openRef.current || result.canceled) return;
+    setReply(result.reply || "");
+    setComposedHeard(result.transcript || "");
+    setStageReceipts(result.receipts);
+    setNotice(result.error || (currentOutput.current.muted ? "Answer ready. Speaker is muted." : "Voice turn complete. Press Speak again for another turn."));
+    if (result.ok && text) setLine("");
+  }
+
   function closeSettings() {
     setSettingsOpen(false);
     settingsButton.current?.focus();
@@ -223,6 +287,7 @@ export function SpeakStage(props: {
   }
 
   async function startLive() {
+    if (route.mode === "composed" && props.onAnswer) { await composedTurn(); return; }
     if (props.freeOnly) { setNotice("Free-only mode keeps xAI realtime voice off."); return; }
     if (!props.signedIn) { props.onSignIn(); return; }
     if (props.halted || connecting || props.live) return;
@@ -276,11 +341,15 @@ export function SpeakStage(props: {
     setNotice(`${next} pace is saved.`);
   }
 
-  function chooseStyle(next: StyleId) {
+  async function chooseStyle(next: StyleId) {
     setStyle(next);
     try { window.localStorage.setItem("adrian-speak-style", next); } catch { /* private mode */ }
-    props.onStyle?.(next);
-    setNotice(`${next} is saved for this call.`);
+    const change = props.onStyle?.(next);
+    if (change && typeof change.then === "function") {
+      setNotice(`${next} is saved. Updating the live session…`);
+      try { const applied = await change; setNotice(applied.active ? `${next} is active for the next turn.` : `${next} is saved for the next live call. Typed answers use it immediately.`); }
+      catch { setNotice(`${next} is saved, but the live session did not confirm it. Reconnect to apply it.`); }
+    } else setNotice(props.live ? `${next} applies to your next live call. Typed answers use it immediately.` : `${next} is saved for the next turn.`);
   }
 
   function chooseVolume(next: number) {
@@ -306,6 +375,7 @@ export function SpeakStage(props: {
 
   async function ask() {
     const text = line.trim();
+    if (text && props.onAnswer) { await composedTurn(text); return; }
     if (!text || !props.onAsk || asking || props.halted) return;
     if (!props.signedIn) { props.onSignIn(); return; }
     setAsking(true);
@@ -332,8 +402,9 @@ export function SpeakStage(props: {
   }
 
   if (!props.open) return null;
-  const status = props.halted ? "Emergency stop is on" : props.callError ? "Voice unavailable" : props.live ? (props.micMuted ? "Microphone muted" : "Live conversation") : connecting ? "Connecting…" : "Ready to start";
-  const transcript = [props.heard && `You: ${props.heard}`, (reply || props.spoken) && `Adrian: ${reply || props.spoken}`, uploadName].filter(Boolean).join("\n");
+  const status = props.halted ? "Emergency stop is on" : composedPhase !== "idle" ? `Voice: ${composedPhase}` : route.mode === "native-xai" && props.callError ? "Voice unavailable" : props.live ? (props.micMuted ? "Microphone muted" : "Live conversation") : connecting ? "Connecting…" : "Ready to start";
+  const heard = route.mode === "composed" ? composedHeard : props.heard;
+  const transcript = [heard && `You: ${heard}`, (reply || props.spoken) && `Adrian: ${reply || props.spoken}`, uploadName].filter(Boolean).join("\n");
 
   const stage = (
     <div ref={dialogRef} tabIndex={-1} className="speak-stage speak-call" role="dialog" aria-modal="true" aria-label="Speak" data-testid="speak-stage"
@@ -347,7 +418,7 @@ export function SpeakStage(props: {
         }
         if (event.key !== "Tab") return;
         const root = settingsOpen ? dialogRef.current?.querySelector(".speak-sheet") : dialogRef.current;
-        const controls = root?.querySelectorAll<HTMLElement>('button:not([disabled]), input:not([hidden]):not([disabled])');
+        const controls = root?.querySelectorAll<HTMLElement>('button:not([disabled]), input:not([hidden]):not([disabled]), select:not([disabled])');
         if (!controls?.length) return;
         const first = controls[0], last = controls[controls.length - 1];
         if (event.shiftKey && (document.activeElement === first || document.activeElement === root)) { event.preventDefault(); last.focus(); }
@@ -356,7 +427,7 @@ export function SpeakStage(props: {
     >
       <video ref={videoRef} className={source === "none" ? "is-hidden" : source} playsInline muted autoPlay />
       <div className="speak-call__top">
-        <span>Adrian’s Mind <span className="speak-call__provider">/ {props.freeOnly ? "Free-only · cloud voice off" : "xAI realtime"}</span></span>
+        <span>Adrian’s Mind <span className="speak-call__provider">/ {route.mode === "native-xai" ? (props.freeOnly ? "Free-only · cloud voice off" : `Native call: xAI · Typed answer: ${props.answerModelLabel || "selected chat model"}`) : `Answer: ${props.answerModelLabel || "selected chat model"}`}</span></span>
         <div className="speak-call__safety">
           <button type="button" data-testid="speak-emergency-stop" onClick={() => cutSpeechRef.current("owner")}>Emergency stop</button>
           {props.halted && <button type="button" data-testid="speak-clear-stop" onClick={clearStop}>Clear stop</button>}
@@ -366,8 +437,11 @@ export function SpeakStage(props: {
         <div className="speak-call__symbol" aria-hidden="true"><AudioLines /></div>
         <h2>Speak with Adrian</h2>
         <p role="status" data-testid="speak-status">{status}</p>
-        {!props.live && <button type="button" className="speak-call__place" disabled={props.halted || connecting || recordingPending || props.recording} onClick={() => void startLive()}>{!props.signedIn ? "Sign in to speak" : connecting ? "Connecting…" : props.callError ? "Retry live conversation" : "Start live conversation"}</button>}
-        {props.callError && <p className="speak-call__transcript" role="alert">{props.callError}</p>}
+        {route.mode === "composed" && <p className="speak-call__transcript" data-testid="voice-route-summary">Listening: {speechEngineLabel(route.sttProvider)} · Answer: {props.answerModelLabel || "selected chat model"} · Speech: {speechEngineLabel(route.ttsProvider)}{route.sttFallbackProvider ? ` · Audio fallback: ${speechEngineLabel(route.sttFallbackProvider)}` : " · Audio fallback off"}</p>}
+        {stageReceipts.length > 0 && <p className="speak-call__transcript" data-testid="voice-stage-receipts">{stageReceipts.map((receipt) => `${receipt.stage}: ${receipt.provider}${receipt.model ? ` / ${receipt.model}` : ""}`).join(" · ")}</p>}
+        {!props.live && <button type="button" className="speak-call__place" disabled={props.halted || connecting || recordingPending || props.recording || composedPhase !== "idle"} onClick={() => void startLive()}>{!props.signedIn ? "Sign in to speak" : connecting ? "Connecting…" : props.callError ? "Retry live conversation" : route.mode === "composed" ? "Speak a turn" : "Start live conversation"}</button>}
+        {composedPhase !== "idle" && <button type="button" onClick={() => { composedAbort.current?.abort(); composedAbort.current = null; setComposedPhase("idle"); setNotice("Voice turn canceled. A model request already sent may still finish in the chat."); }}>Cancel voice turn</button>}
+        {route.mode === "native-xai" && props.callError && <p className="speak-call__transcript" role="alert">{props.callError}</p>}
         {notice && <p className="speak-call__transcript" data-testid="speak-speech-cut" role="status">{notice}</p>}
         {showTranscript && transcript && <p className="speak-call__transcript" data-testid="speak-transcript">{transcript}</p>}
       </section>
@@ -390,7 +464,7 @@ export function SpeakStage(props: {
       <form className="speak-call__bar" onSubmit={(event) => { event.preventDefault(); void ask(); }}>
         <button type="button" aria-label="Add a file" onClick={() => fileRef.current?.click()}><Plus /></button>
         <input aria-label="Ask Anything" placeholder="Ask Anything" value={line} onChange={(event) => setLine(event.target.value)} />
-        {line.trim() && <button type="submit" aria-label="Send to Adrian" disabled={asking || props.halted}><ArrowUp /></button>}
+        {line.trim() && <button type="submit" aria-label="Send to Adrian" disabled={asking || props.halted || composedPhase !== "idle"}><ArrowUp /></button>}
         <button type="button" className="speak-call__end" aria-label="End call" onClick={() => { stopVideo(); props.onClose(); }}><PhoneOff /></button>
       </form>
       </div>
@@ -400,6 +474,23 @@ export function SpeakStage(props: {
             <button ref={closeSettingsButton} type="button" aria-label="Close voice settings" onClick={closeSettings}><X /></button>
             <h2>Voice settings</h2>
           </header>
+          {props.onAnswer && <fieldset disabled={props.live || composedPhase !== "idle"}>
+            <legend>Voice route</legend>
+            <label>Answer mode <select aria-label="Voice answer mode" value={route.mode} onChange={(event) => chooseRoute({ ...route, mode: event.target.value === "native-xai" ? "native-xai" : "composed" })}>
+              <option value="composed">Selected chat model</option><option value="native-xai">xAI native realtime</option>
+            </select></label>
+            {route.mode === "composed" && <>
+              <p>Answer model: {props.answerModelLabel || "selected chat model"}. Choose the model in the chat model picker.</p>
+              <label>Transcription <select aria-label="Transcription provider" value={route.sttProvider} onChange={(event) => chooseRoute({ ...route, sttProvider: event.target.value as SpeechEngine, sttFallbackProvider: null })}>
+                <option value="browser">Browser speech</option><option value="xai">xAI</option><option value="openai">OpenAI</option>
+              </select></label>
+              <label>Speech output <select aria-label="Speech output provider" value={route.ttsProvider} onChange={(event) => chooseRoute({ ...route, ttsProvider: event.target.value as SpeechEngine })}>
+                <option value="browser">Browser speech</option><option value="xai">xAI voice</option><option value="openai">OpenAI / alloy</option>
+              </select></label>
+              {route.sttProvider !== "browser" && <label><input type="checkbox" checked={route.sttFallbackProvider !== null} onChange={(event) => chooseRoute({ ...route, sttFallbackProvider: event.target.checked ? (route.sttProvider === "xai" ? "openai" : "xai") : null })} />Allow {route.sttProvider === "xai" ? "OpenAI" : "xAI"} to receive this recording if transcription fails</label>}
+              <p>Cloud speech requires its configured server credential and can incur provider charges. Browser speech is managed by your browser. Free-only blocks cloud speech.</p>
+            </>}
+          </fieldset>}
           <button type="button" className="speak-sheet__voice" onClick={() => chooseVoice(VOICES[(VOICES.findIndex((item) => item.id === voice) + 1) % VOICES.length].id)}>
             <span>Voice</span>
             <strong>{voiceDisplayName(voice)}</strong>

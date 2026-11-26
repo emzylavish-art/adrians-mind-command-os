@@ -8,6 +8,9 @@ import { join } from "node:path";
 import { adrianBuildCommand, adrianHostedWorkspace, closeHostedCodingSession, packageLabel, resolveBuildWorkspace, runCodingTurn, runHostedPrompt, type CodingMode } from "./hosted/acp-client.ts";
 import { snapshotHostedWorkspace } from "./hosted/shell.server.ts";
 import { recordKimiAttempt } from "./persist.ts";
+import { readBuildSourceReceipt } from "./source-receipt.ts";
+import { createHash, randomUUID } from "node:crypto";
+import { buildRuntimeUsage, observeBuildRuntime, recordUsageObservation, type UsageRecorder } from "../usage-observation.server.ts";
 
 const MAX_PROMPT = 8_000;
 const MAX_CWD = 500;
@@ -39,13 +42,14 @@ async function ownerIdFromRequest(request: Request): Promise<string> {
   return requireUserId(bearer);
 }
 
-export async function handleKimiSession(request: Request): Promise<Response> {
+export async function handleKimiSession(request: Request, deps: { recordUsage?: UsageRecorder } = {}): Promise<Response> {
+  const record = deps.recordUsage ?? recordUsageObservation;
   if (request.method === "POST") {
     const origin = assertSameOrigin(request);
     if (!origin.ok) return json({ ok: false, error: origin.error }, 403);
     try {
       const ownerId = await ownerIdFromRequest(request);
-      const body = (await request.json().catch(() => ({}))) as { prompt?: unknown; cwd?: unknown; mode?: unknown; resumeSessionId?: unknown; fork?: unknown; action?: unknown; agentId?: unknown; jobKey?: unknown };
+      const body = (await request.json().catch(() => ({}))) as { prompt?: unknown; cwd?: unknown; mode?: unknown; resumeSessionId?: unknown; fork?: unknown; action?: unknown; agentId?: unknown; jobKey?: unknown; sourceReceipt?: unknown };
       if ((body as { action?: unknown }).action === "close") {
         if (ownerId !== "dev-user") return json({ ok: false, error: machineRequired }, 409);
         const sessionId = typeof body.resumeSessionId === "string" ? body.resumeSessionId.trim().slice(0, 80) : "";
@@ -60,16 +64,31 @@ export async function handleKimiSession(request: Request): Promise<Response> {
       const resumeSessionId = typeof body.resumeSessionId === "string" ? body.resumeSessionId.trim().slice(0, 80) : "";
       const agents = onlineAgents(ownerId);
       const agent = body.agentId === undefined ? agents[0] : agents.find((item) => item.id === body.agentId);
+      const sourceReceipt = readBuildSourceReceipt(body.sourceReceipt);
+      if (body.sourceReceipt !== undefined && !sourceReceipt) return json({ ok: false, error: "The source revision receipt is invalid. Nothing was started." }, 400);
+      if (sourceReceipt && (sourceReceipt.workspace !== (agent?.id || "hosted") || sourceReceipt.cwd !== (requestedCwd || ""))) return json({ ok: false, error: "The reviewed source belongs to a different execution workspace. Review it again." }, 409);
       if (body.agentId !== undefined && !agent) return json({ ok: false, error: "The selected Build PC is offline. Reconnect it before submitting." }, 409);
       if (body.jobKey !== undefined && (typeof body.jobKey !== "string" || !/^[a-f0-9]{32}$/.test(body.jobKey))) return json({ ok: false, error: "Invalid job ID." }, 400);
       if (!agent) {
         if (ownerId !== "dev-user") return json({ ok: false, executed: false, error: machineRequired }, 409);
         const cwd = resolveBuildWorkspace(requestedCwd);
+        if (sourceReceipt) {
+          for (const file of sourceReceipt.files) {
+            let content: string;
+            try { content = readFileSync(join(cwd || adrianHostedWorkspace(), file.path), "utf8"); }
+            catch { return json({ ok: false, error: `The reviewed file ${file.path} is unavailable. Nothing started.` }, 409); }
+            if (createHash("sha256").update(content).digest("hex") !== file.sha256) return json({ ok: false, error: `The reviewed file ${file.path} changed. Review the disk copy before running.` }, 409);
+          }
+        }
         if (mode || resumeSessionId || body.fork === true) {
           const workspace = cwd || adrianHostedWorkspace();
           const checkpoint = snapshotHostedWorkspace();
           const watched = fileChange(workspace, prompt);
-          const turn = await runCodingTurn({ prompt, cwd: workspace, mode, resumeSessionId: resumeSessionId || undefined, fork: body.fork === true });
+          const turn = await observeBuildRuntime({
+            ownerId, operationId: `build:${randomUUID()}`, record,
+            run: () => runCodingTurn({ prompt, cwd: workspace, mode, resumeSessionId: resumeSessionId || undefined, fork: body.fork === true }),
+            state: result => result.ok ? "completed" : "failed",
+          });
           const filesChanged = watched.flatMap((item) => {
             const after = safeRead(join(workspace, item.path));
             return item.before === after ? [] : [{ ...item, after }];
@@ -96,7 +115,13 @@ export async function handleKimiSession(request: Request): Promise<Response> {
             checkpoint,
           }, turn.ok ? 200 : 409);
         }
-        const hosted = await runHostedPrompt(prompt, adrianBuildCommand(), cwd || adrianHostedWorkspace());
+        const hosted = await observeBuildRuntime({
+          ownerId, operationId: `build:${randomUUID()}`, record,
+          run: () => runHostedPrompt(prompt, adrianBuildCommand(), cwd || adrianHostedWorkspace()),
+          // Legacy ACP can report session_created after partial output at its
+          // timeout. It does not prove completion of the coding request.
+          state: result => result.status === "session_created" ? undefined : "failed",
+        });
         await recordKimiAttempt({ ownerId, status: hosted.status, error: hosted.error });
         const accepted = hosted.status === "session_created";
         return json({
@@ -118,14 +143,21 @@ export async function handleKimiSession(request: Request): Promise<Response> {
         kind: "kimi-acp",
         command: "kimi acp",
         confirm: false,
-        payload: { prompt, cwd: requestedCwd },
+        payload: { prompt, cwd: requestedCwd, ...(sourceReceipt ? { sourceReceipt } : {}) },
       });
+      await record(ownerId, buildRuntimeUsage({
+        operationId: `build:${job.id}`, at: job.createdAt,
+        state: job.status === "queued" ? "queued" : job.status === "done" ? "completed" : job.status === "cancelled" ? "canceled" : job.status === "error" || job.status === "timeout" ? "failed" : "running",
+        started: job.status !== "queued",
+      })).catch(() => undefined);
       return json({
         ok: true,
         jobId: job.id,
         agentId: agent.id,
         agentLabel: agent.label,
         status: job.status,
+        sourceReceipt,
+        revisionVerified: false,
         eventsUrl: `/api/mind/build/session?jobId=${encodeURIComponent(job.id)}`,
       }, 202);
     } catch (error) {
@@ -140,6 +172,11 @@ export async function handleKimiSession(request: Request): Promise<Response> {
       const jobId = new URL(request.url).searchParams.get("jobId") || "";
       const job = readJob(jobId);
       if (!job || job.ownerId !== ownerId || job.kind !== "kimi-acp") return json({ ok: false, error: "Kimi job not found." }, 404);
+      await record(ownerId, buildRuntimeUsage({
+        operationId: `build:${job.id}`, at: job.createdAt,
+        state: job.status === "queued" ? "queued" : job.status === "done" ? "completed" : job.status === "cancelled" ? "canceled" : job.status === "error" || job.status === "timeout" ? "failed" : "running",
+        started: job.status !== "queued",
+      })).catch(() => undefined);
       return json({
         ok: true,
         job: {
@@ -149,6 +186,8 @@ export async function handleKimiSession(request: Request): Promise<Response> {
           updatedAt: job.updatedAt,
           output: job.output || "",
           error: job.error || "",
+          sourceReceipt: readBuildSourceReceipt(job.payload?.sourceReceipt),
+          revisionVerified: false,
         },
         events: listJobEvents(ownerId, job.id),
       });

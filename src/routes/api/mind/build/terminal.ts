@@ -22,11 +22,17 @@ export const Route = createFileRoute("/api/mind/build/terminal")({
           const bearer = authorization?.toLowerCase().startsWith("bearer ") ? authorization.slice(7).trim() : undefined;
           const ownerId = await requireUserId(bearer);
           if (await haltIsOn(ownerId)) return json({ ok: false, error: "Emergency stop is on. Terminal approval was not created." }, 403);
-          const agent = onlineAgents(ownerId)[0];
-          const body = (await request.json().catch(() => ({}))) as { command?: unknown; confirm?: unknown; approvalId?: unknown; token?: unknown };
+          const body = (await request.json().catch(() => ({}))) as { command?: unknown; confirm?: unknown; approvalId?: unknown; token?: unknown; workspace?: unknown; cwd?: unknown };
+          const requestedWorkspace = typeof body.workspace === "string" ? body.workspace : undefined;
+          const requestedCwd = typeof body.cwd === "string" ? body.cwd.trim().slice(0, 500) : undefined;
+          const agents = onlineAgents(ownerId);
+          const agent = requestedWorkspace === "hosted" ? undefined : requestedWorkspace ? agents.find((item) => item.id === requestedWorkspace) : agents[0];
+          if (requestedWorkspace && requestedWorkspace !== "hosted" && !agent) return json({ ok: false, error: "The reviewed terminal workspace is unavailable. Nothing ran." }, 409);
+          if (agent && requestedCwd && agent.fileProtocol !== 2) return json({ ok: false, error: "Update the selected Companion before running in a reviewed workspace." }, 409);
           const command = typeof body.command === "string" ? body.command.trim().slice(0, 500) : "";
           if (!command) return json({ ok: false, error: "command is required." }, 400);
           if (!agent) {
+            if (requestedCwd) return json({ ok: false, error: "Hosted terminal uses its fixed workspace. Review that destination before approving." }, 409);
             if (ownerId !== "dev-user") return json({ ok: false, error: machineRequired }, 409);
             if (body.confirm === true) {
               const result = await runHostedTerminal({
@@ -38,8 +44,8 @@ export const Route = createFileRoute("/api/mind/build/terminal")({
             }
             return json({ ok: true, hosted: true, approval: createHostedTerminalApproval(command) }, 202);
           }
-          const approval = createPcApproval({ ownerId, command, agentId: agent.id, agentLabel: agent.label });
-          return json({ ok: true, approval: { id: approval.id, token: approval.token, command: approval.command, agentId: approval.agentId, agentLabel: approval.agentLabel, expiresAt: approval.expiresAt, status: approval.status } }, 202);
+          const approval = createPcApproval({ ownerId, command, agentId: agent.id, agentLabel: agent.label, cwd: requestedCwd });
+          return json({ ok: true, approval: { id: approval.id, token: approval.token, command: approval.command, agentId: approval.agentId, agentLabel: approval.agentLabel, workspace: approval.agentId, cwd: approval.cwd, expiresAt: approval.expiresAt, status: approval.status } }, 202);
         } catch (error) {
           const message = error instanceof Error ? error.message : "Unauthorized";
           return json({ ok: false, error: message === "Unauthorized" ? "Sign in is required." : message }, message === "Unauthorized" ? 401 : 403);

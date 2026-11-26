@@ -8,6 +8,7 @@ import { css } from "@codemirror/lang-css";
 import { html } from "@codemirror/lang-html";
 import { python } from "@codemirror/lang-python";
 import { oneDark } from "@codemirror/theme-one-dark";
+import { canApplyEditorResult, editorRequestKey } from "@/lib/mind/kimi/editor-request";
 
 type IdeFile = { path: string; bytes: number };
 
@@ -133,6 +134,7 @@ export function CodeIde(props: {
   selected: string;
   text: string;
   busy: boolean;
+  debugAvailable?: boolean;
   notice: string | null;
   newName: string;
   onNewName: (value: string) => void;
@@ -149,8 +151,25 @@ export function CodeIde(props: {
   const [debugText, setDebugText] = useState("");
   const [toolNotice, setToolNotice] = useState("");
   const [breakLine, setBreakLine] = useState(3);
-  async function complete() {
+  const [toolBusy, setToolBusy] = useState(false);
+  const generation = useRef(0);
+  const current = useRef({ key: "", generation: 0 });
+  const key = editorRequestKey(props.selectedId, props.text);
+  if (current.current.key !== key) generation.current += 1;
+  current.current = { key, generation: generation.current };
+  useEffect(() => {
+    setCompletions([]);
+    setDebugText("");
     setToolNotice("");
+    setToolBusy(false);
+  }, [props.selectedId, props.text]);
+  useEffect(() => () => { current.current = { ...current.current, generation: ++generation.current }; }, []);
+  async function complete() {
+    const request = { key, generation: ++generation.current };
+    current.current = request;
+    setToolBusy(true);
+    setToolNotice("");
+    try {
     const lines = props.text.split("\n");
     const response = await fetch("/api/mind/build/ide", {
       method: "POST",
@@ -158,25 +177,42 @@ export function CodeIde(props: {
       body: JSON.stringify({ action: "complete", path: props.selected, text: props.text, line: lines.length, column: lines.at(-1)?.length ?? 0 }),
     });
     const body = await response.json().catch(() => ({})) as { ok?: boolean; completions?: string[]; error?: string };
-    setCompletions(Array.isArray(body.completions) ? body.completions : []);
-    setToolNotice(body.ok ? "" : body.error || "Completions did not load.");
+    if (!canApplyEditorResult(request, current.current)) return;
+    setCompletions(response.ok && body.ok && Array.isArray(body.completions) ? body.completions : []);
+    setToolNotice(response.ok && body.ok ? "" : body.error || "Completions did not load.");
+    } catch {
+      if (canApplyEditorResult(request, current.current)) setToolNotice("Completions could not be loaded. Your file was kept.");
+    } finally {
+      if (canApplyEditorResult(request, current.current)) setToolBusy(false);
+    }
   }
   async function debug() {
+    if (!props.debugAvailable || dirty || toolBusy) return;
+    const request = { key, generation: ++generation.current };
+    current.current = request;
+    setToolBusy(true);
     setToolNotice("Debugging.");
     setDebugText("");
+    try {
     const response = await fetch("/api/mind/build/ide", {
       method: "POST",
       headers: { "content-type": "application/json" },
       body: JSON.stringify({ action: "debug", path: props.selected, line: breakLine }),
     });
     const body = await response.json().catch(() => ({})) as { ok?: boolean; pausedLine?: number; locals?: Array<{ name: string; value: string }>; error?: string };
-    if (!body.ok) {
-      setToolNotice(body.error || "The breakpoint was not reached.");
+    if (!canApplyEditorResult(request, current.current)) return;
+    if (!response.ok || !body.ok || typeof body.pausedLine !== "number") {
+      setToolNotice(body.error || "The debugger outcome could not be verified. No pause was confirmed.");
       return;
     }
     const locals = (body.locals ?? []).map((item) => `${item.name} = ${item.value}`).join(", ");
     setDebugText(`Paused at line ${body.pausedLine}${locals ? `. ${locals}` : ""}`);
     setToolNotice("");
+    } catch {
+      if (canApplyEditorResult(request, current.current)) setToolNotice("The debugger connection failed. No pause was confirmed.");
+    } finally {
+      if (canApplyEditorResult(request, current.current)) setToolBusy(false);
+    }
   }
   return (
     <div className="code-ide" data-testid="code-ide">
@@ -211,12 +247,13 @@ export function CodeIde(props: {
           <span>{props.selected ? `${props.selected} · ${props.text.split("\n").length} lines · ${dirty ? "Unsaved" : "Matches last read or verified save"}` : "No file selected"}</span>
         </div>
         <div className="code-ide-tools">
-          <button type="button" disabled={!props.selected || props.busy} onClick={() => void complete()}>Complete</button>
+          <button type="button" disabled={!props.selected || props.busy || toolBusy} onClick={() => void complete()}>Complete</button>
           <label>
             Breakpoint line
             <input aria-label="Breakpoint line" type="number" min={1} value={breakLine} onChange={(event) => setBreakLine(Number(event.target.value) || 1)} />
           </label>
-          <button type="button" disabled={!props.selected || props.busy || dirty || props.tabs.find((tab) => tab.id === props.selectedId)?.workspace !== "hosted"} title="Debug runs the saved hosted file" onClick={() => void debug()}>Debug</button>
+          <button type="button" disabled={!props.debugAvailable || !props.selected || props.busy || toolBusy || dirty || props.tabs.find((tab) => tab.id === props.selectedId)?.workspace !== "hosted"} title={props.debugAvailable ? "Debug runs the saved local file" : "Debug is unavailable: this account has no isolated debugger runtime"} onClick={() => void debug()}>Debug</button>
+          {!props.debugAvailable && <span className="text-xs text-muted">Debug requires an isolated debugger runtime.</span>}
         </div>
         <div className="code-ide-results">
           {completions.length ? <ul data-testid="completions">{completions.map((name) => <li key={name}>{name}</li>)}</ul> : null}

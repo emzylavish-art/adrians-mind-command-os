@@ -1,16 +1,12 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
-import { pickSessionUser, localPreviewIdentityAllowed } from "./session-user.ts";
+import { pickSessionUser, localPreviewIdentityAllowed, SessionConflictError } from "./session-user.ts";
 
 describe("pickSessionUser", () => {
-  it("prefers Supabase when both sessions exist", () => {
-    assert.deepEqual(
-      pickSessionUser({
-        supabaseUser: { id: "sb-1", email: "a@b.co" },
-        betterAuthUser: { id: "ba-1", email: "c@d.co" },
-      }),
-      { id: "sb-1", email: "a@b.co" },
-    );
+  it("blocks different unlinked sessions and accepts the same verified owner", () => {
+    assert.throws(() => pickSessionUser({ supabaseUser: { id: "sb-1", email: "a@b.co" }, betterAuthUser: { id: "ba-1", email: "a@b.co" } }), SessionConflictError);
+    assert.deepEqual(pickSessionUser({ supabaseUser: { id: "same", email: "a@b.co" }, betterAuthUser: { id: "same", email: "a@b.co" } }), { id: "same", email: "a@b.co" });
+    assert.deepEqual(pickSessionUser({ supabaseUser: { id: "sb-only", email: "a@b.co" }, betterAuthUser: null }), { id: "sb-only", email: "a@b.co" });
   });
 
   it("falls back to Better Auth when Supabase is absent", () => {

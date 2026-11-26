@@ -9,6 +9,7 @@ import { createWhisperFlowState } from "@/lib/mind/whisper-flow/machine";
 import { mapSttClientError, STT_SIGN_IN_REQUIRED } from "@/lib/mind/whisper-flow/stt-client-errors";
 import { refineDictationOptional, transcribeDictation } from "@/lib/mind/server";
 import { VoiceWaveform } from "@/components/mind/voice-waveform";
+import type { SttProviderId } from "@/lib/mind/whisper-flow/provider";
 
 export type WhisperFlowBarProps = {
   disabled?: boolean;
@@ -22,6 +23,7 @@ export type WhisperFlowBarProps = {
   /** Undo last segment in composer (scratch that). */
   onUndoLastSegment?: () => void;
   compact?: boolean;
+  freeOnly?: boolean;
 };
 
 /**
@@ -33,6 +35,9 @@ export function WhisperFlowBar(props: WhisperFlowBarProps) {
   const [interim, setInterim] = useState("");
   const [llmEnabled, setLlmEnabled] = useState(props.llmRefineEnabled === true);
   const [llmStatus, setLlmStatus] = useState<string | null>(null);
+  const [provider, setProvider] = useState<SttProviderId>("handy");
+  const [fallbackProvider, setFallbackProvider] = useState<SttProviderId | null>(null);
+  const [actualProvider, setActualProvider] = useState<string | null>(null);
   const sessionRef = useRef<WhisperSession | null>(null);
   const propsRef = useRef(props);
   propsRef.current = props;
@@ -42,7 +47,7 @@ export function WhisperFlowBar(props: WhisperFlowBarProps) {
   }, [props.llmRefineEnabled]);
 
   useEffect(() => {
-    const session = createWhisperSession({
+    const session: WhisperSession = createWhisperSession({
       onState: setState,
       onInterim: setInterim,
       onUndoLastSegment: () => propsRef.current.onUndoLastSegment?.(),
@@ -50,8 +55,10 @@ export function WhisperFlowBar(props: WhisperFlowBarProps) {
       llmRefine:
         propsRef.current.llmRefine ||
         (async (text: string) => {
+          const freeOnly = propsRef.current.freeOnly === true;
+          if (freeOnly) return null;
           try {
-            const result = await refineDictationOptional({ data: { text, enabled: true } });
+            const result = await refineDictationOptional({ data: { text, enabled: true, freeOnly } });
             if (!result || typeof result !== "object") {
               setLlmStatus("Optional LLM refinement failed. Local refinement was kept.");
               return null;
@@ -94,14 +101,19 @@ export function WhisperFlowBar(props: WhisperFlowBarProps) {
           return { ok: false, error: STT_SIGN_IN_REQUIRED };
         }
         if (e2e?.transcribe) return e2e.transcribe(input);
+        if (sessionRef.current !== session) return { ok: false, error: "Transcription selection changed. Start dictation again." };
         try {
           const result = await transcribeDictation({
             data: {
               audioBase64: input.audioBase64,
               mime: input.mime,
               filename: input.filename,
+              provider,
+              fallbackProvider,
+              freeOnly: propsRef.current.freeOnly === true,
             },
           });
+          if (sessionRef.current !== session) return { ok: false, error: "Transcription selection changed. The earlier result was not inserted." };
           if (!result || typeof result !== "object") {
             return { ok: false, error: "Speech-to-text returned an unreadable response. Nothing was transcribed." };
           }
@@ -110,6 +122,7 @@ export function WhisperFlowBar(props: WhisperFlowBarProps) {
           }
           const text = String((result as { text?: string }).text || "").trim();
           if (!text) return { ok: false, error: "No words were recognized. Nothing was inserted." };
+          setActualProvider((result as { provider?: string }).provider ?? "not reported");
           return { ok: true, text, provider: (result as { provider?: string }).provider };
         } catch (err) {
           return { ok: false, error: mapSttClientError(err) };
@@ -132,7 +145,7 @@ export function WhisperFlowBar(props: WhisperFlowBarProps) {
       session.cancel();
       sessionRef.current = null;
     };
-  }, [llmEnabled]);
+  }, [llmEnabled, provider, fallbackProvider]);
 
   // Keyboard: Alt+Shift+D toggles start/stop when focused in app
   useEffect(() => {
@@ -160,8 +173,28 @@ export function WhisperFlowBar(props: WhisperFlowBarProps) {
       className={`inline-flex max-w-full flex-wrap items-center gap-2 ${props.className ?? ""}`}
       data-testid="whisper-flow-bar"
       data-whisper-phase={phase}
-      title="Whisper Flow: Handy capture. Speak is separate. Never auto-sends."
+      title={`Whisper Flow sends recordings to ${provider === "handy" ? "Handy local" : provider}. ${fallbackProvider ? `One fallback to ${fallbackProvider} is permitted.` : "Alternate-provider fallback is off."}`}
     >
+      <label className="text-xs text-muted">Transcription
+        <select aria-label="Whisper Flow transcription provider" value={provider} disabled={props.disabled || (phase !== "idle" && phase !== "error")} onChange={(event) => {
+          const next = event.target.value as SttProviderId;
+          setProvider(next); setActualProvider(null);
+          if (fallbackProvider === next) setFallbackProvider(null);
+        }}>
+          <option value="handy">Handy local</option>
+          <option value="xai" disabled={props.freeOnly}>xAI cloud</option>
+          <option value="openai" disabled={props.freeOnly}>OpenAI cloud</option>
+        </select>
+      </label>
+      <label className="text-xs text-muted">Allowed fallback
+        <select aria-label="Whisper Flow allowed fallback" value={fallbackProvider ?? "none"} disabled={props.disabled || (phase !== "idle" && phase !== "error")} onChange={(event) => setFallbackProvider(event.target.value === "none" ? null : event.target.value as SttProviderId)}>
+          <option value="none">None</option>
+          {provider !== "handy" && <option value="handy">Handy local</option>}
+          {provider !== "xai" && <option value="xai" disabled={props.freeOnly}>xAI cloud</option>}
+          {provider !== "openai" && <option value="openai" disabled={props.freeOnly}>OpenAI cloud</option>}
+        </select>
+      </label>
+      <span className="text-xs text-muted">{provider === "handy" ? "Recording goes to Handy local." : `Recording goes to ${provider === "xai" ? "xAI" : "OpenAI"} cloud; provider charges may apply.`}{fallbackProvider ? ` If it fails, one attempt may go to ${fallbackProvider}.` : " No alternate upload is allowed."}{actualProvider ? ` Last transcript: ${actualProvider}.` : ""}</span>
       <button
         type="button"
         className={`grid size-11 place-items-center rounded-panel border border-line ${
@@ -251,7 +284,7 @@ export function WhisperFlowBar(props: WhisperFlowBarProps) {
           className="size-3"
           data-testid="whisper-flow-llm-toggle"
           checked={llmEnabled}
-          disabled={props.disabled}
+          disabled={props.disabled || props.freeOnly}
           onChange={(event) => {
             setLlmEnabled(event.target.checked);
             setLlmStatus(

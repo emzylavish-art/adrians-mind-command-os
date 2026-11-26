@@ -111,12 +111,25 @@ export const paperclipStatus = createServerFn({ method: "GET" })
 /** One authenticated pass over the owner's saved server workspace. Does not replace the browser copy. */
 export const runDurableCorePass = createServerFn({ method: "POST" })
   .middleware([authMiddleware])
-  .handler(async ({ context }) => {
+  .validator((input: { ownerId?: string; expectedRevision?: string } = {}) => input)
+  .handler(async ({ data, context }) => {
+    if (data.ownerId !== undefined && data.ownerId !== context.userId) return { ok: false as const, error: "The signed-in account changed. Nothing ran." };
     if (!allowMindRequest("core_pass", context.userId, 6)) {
       return { ok: false as const, error: "Too many runtime steps. Wait a minute. Nothing ran." };
     }
     const { runDurableCorePassForUser } = await import("./core-runtime.server");
-    return runDurableCorePassForUser(context.userId);
+    return runDurableCorePassForUser(context.userId, data.expectedRevision);
+  });
+
+/** Explicit one-call model stage; background polling never grants a paid budget. */
+export const runFleetModelStep = createServerFn({ method: "POST" })
+  .middleware([authMiddleware])
+  .validator((input: { ownerId?: string; expectedRevision?: string; runId: string; freeOnly?: boolean; allowPaid?: boolean }) => input)
+  .handler(async ({ data, context }) => {
+    if (data.ownerId !== context.userId) return { ok: false as const, error: "The signed-in account changed. Nothing ran." };
+    if (!allowMindRequest("fleet_model", context.userId, 6)) return { ok: false as const, error: "Too many model steps. Wait a minute." };
+    const { runFleetModelStepForUser } = await import("./fleet-model.server");
+    return runFleetModelStepForUser(context.userId, data);
   });
 
 export const workerHealth = createServerFn({ method: "GET" }).handler(async () => {
@@ -248,6 +261,7 @@ export const notionCommand = createServerFn({ method: "POST" })
     const { resolveNotionTokenPersistent, resolveWorkspaceGrant } = await import("./connectors/notion-oauth");
     const result = await runNotionTurn({
       token: data.workspaceId ? await resolveWorkspaceGrant(context.userId, data.workspaceId) : await resolveNotionTokenPersistent(context.userId),
+      workspaceId: data.workspaceId,
       disabled: false,
       text: data.text,
       confirmed: data.confirmed,
@@ -396,8 +410,14 @@ export const sendTurn = createServerFn({ method: "POST" })
 
 export const setExecutionHalt = createServerFn({ method: "POST" })
   .middleware([authMiddleware])
-  .validator((input: { on: boolean }) => ({ on: input.on === true }))
+  .validator((input: { on: boolean; ownerId?: string }) => {
+    if (!input || typeof input.on !== "boolean" || (input.ownerId !== undefined && (typeof input.ownerId !== "string" || !input.ownerId.trim()))) {
+      throw new Error("Choose an explicit stop or release action for the signed-in account.");
+    }
+    return { on: input.on, ownerId: input.ownerId };
+  })
   .handler(async ({ data, context }) => {
+    if (data.ownerId !== undefined && data.ownerId !== context.userId) return { ok: false as const, error: "The signed-in account changed. Stop state was not changed for another account." };
     const { setDurableHalt } = await import("./halt.server");
     return setDurableHalt(context.userId, data.on);
   });
@@ -457,6 +477,8 @@ export const speakText = createServerFn({ method: "POST" })
     const text = parsed.text;
     const { resolveVoiceApiKey } = await import("./voice/keys");
     const { speakWithFallback } = await import("./voice/provider-fallback");
+    const { createVoiceUsageTracker } = await import("./voice/usage.server");
+    const usage = createVoiceUsageTracker(context.userId);
     const spoken = await speakWithFallback({
       text,
       voiceId: data.voiceId,
@@ -464,7 +486,9 @@ export const speakText = createServerFn({ method: "POST" })
       // Speak honours the chosen xAI voice (Eve by default). A different
       // provider/voice is never substituted without explicit consent.
       openaiKey: undefined,
+      fetchImpl: usage.fetch("speech"),
     });
+    if (usage.error) return { ok: false as const, error: usage.error, provider: null };
     if (!spoken.ok) return { ok: false as const, error: spoken.error, provider: null };
     return { ok: true as const, audio: spoken.audio, mime: spoken.mime, provider: spoken.provider };
   });
@@ -480,13 +504,16 @@ export const createVoiceClientSecret = createServerFn({ method: "POST" })
       return { ok: false as const, error: "Too many voice requests. Wait a minute." };
     }
     const { mintRealtimeClientSecret } = await import("./voice/client-secret");
-    return mintRealtimeClientSecret({});
+    const { createVoiceUsageTracker } = await import("./voice/usage.server");
+    const usage = createVoiceUsageTracker(context.userId);
+    const result = await mintRealtimeClientSecret({ fetchImpl: usage.fetch("realtime-session") });
+    return usage.error ? { ok: false as const, error: usage.error } : result;
   });
 
 /** Whisper Flow STT. The key stays on the server. Browser speech is not this path. */
 export const transcribeDictation = createServerFn({ method: "POST" })
   .middleware([authMiddleware])
-  .validator((input: { audioBase64: string; mime?: string; filename?: string }) => input)
+  .validator((input: { audioBase64: string; mime?: string; filename?: string; provider: "handy" | "xai" | "openai"; fallbackProvider?: "handy" | "xai" | "openai" | null; freeOnly?: boolean }) => input)
   .handler(async ({ data, context }) => {
     const { validateTranscribeAudioInput, decodeAudioBase64 } = await import("./voice/voice-input");
     const parsed = validateTranscribeAudioInput(data);
@@ -500,21 +527,31 @@ export const transcribeDictation = createServerFn({ method: "POST" })
     if (!allowMindRequest("stt", context.userId, 20)) {
       return { ok: false as const, error: "Too many speech-to-text requests. Wait a minute." };
     }
-    const { transcribeWhisperFlowAudio } = await import("./whisper-flow/provider");
+    const { transcribeWhisperFlowAudio, parseWhisperFlowRoute } = await import("./whisper-flow/provider");
+    const route = parseWhisperFlowRoute(data);
+    if (!route.ok) return { ok: false as const, error: route.error };
+    const { createVoiceUsageTracker } = await import("./voice/usage.server");
+    const usage = createVoiceUsageTracker(context.userId);
     const result = await transcribeWhisperFlowAudio({
       bytes: new Uint8Array(decoded.bytes),
       mime: parsed.mime,
       filename: parsed.filename,
+      prefer: route.provider,
+      fallbackProvider: route.fallbackProvider,
+      freeOnly: route.freeOnly,
+      cloudFetchImpl: usage.fetch("transcription"),
     });
+    if (usage.error) return { ok: false as const, error: usage.error };
     if (!result.ok) return { ok: false as const, error: result.error };
-    return { ok: true as const, text: result.text, provider: result.provider ?? "xai" };
+    return { ok: true as const, text: result.text, provider: result.provider };
   });
 
 /** Optional polish after the local text is already inserted. It does not replace that text by itself. */
 export const refineDictationOptional = createServerFn({ method: "POST" })
   .middleware([authMiddleware])
-  .validator((input: { text: string; enabled?: boolean }) => input)
+  .validator((input: { text: string; enabled?: boolean; freeOnly?: boolean }) => input)
   .handler(async ({ data, context }) => {
+    if (data.freeOnly === true) return { ok: false as const, skipped: true as const, error: "Free-only mode keeps cloud dictation refinement off. Local text was kept." };
     if (data.enabled === false) {
       return { ok: false as const, skipped: true as const, error: "Optional LLM refinement is turned off. Local refinement was kept." };
     }
@@ -532,7 +569,10 @@ export const refineDictationOptional = createServerFn({ method: "POST" })
       };
     }
     const { polishDictationWithXai } = await import("./whisper-flow/llm-refine");
-    const polished = await polishDictationWithXai({ text, apiKey: key.key });
+    const { createVoiceUsageTracker } = await import("./voice/usage.server");
+    const usage = createVoiceUsageTracker(context.userId);
+    const polished = await polishDictationWithXai({ text, apiKey: key.key, fetchImpl: usage.fetch("dictation-refinement") });
+    if (usage.error) return { ok: false as const, skipped: true as const, error: usage.error };
     if (!polished.ok) {
       return { ok: false as const, skipped: true as const, error: polished.error };
     }

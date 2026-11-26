@@ -17,6 +17,7 @@ export function applyCorePass(input: {
   workspace: Workspace;
   now: string;
   workerId: string;
+  environment?: "browser" | "local-worker" | "hosted-worker";
 }): { workspace: Workspace; summary: CorePassSummary } {
   if (input.workspace.halted) {
     const stopped = haltFleet(input.workspace, input.now);
@@ -34,8 +35,8 @@ export function applyCorePass(input: {
     };
   }
   const before = new Set(input.workspace.runs.map((run) => run.id));
-  const due = runDueSchedules(input.workspace, input.now);
-  const next = tickFleet(due, { now: input.now, workerId: input.workerId });
+  const due = runDueSchedules(input.workspace, input.now, input.environment);
+  const next = tickFleet(due, { now: input.now, workerId: input.workerId, environment: input.environment });
   const queuedNew = next.runs.filter((run) => !before.has(run.id)).length;
   const active = next.runs.filter((run) => run.state === "queued" || run.state === "running" || run.state === "waiting_approval" || run.state === "waiting_external").length;
   return {

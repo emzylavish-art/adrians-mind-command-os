@@ -12,8 +12,10 @@ import { allowMindRequest } from "../limits.ts";
 import { mintRealtimeClientSecret } from "./client-secret.ts";
 import { resolveVoiceApiKey } from "./keys.ts";
 import { speakWithFallback, transcribeWithFallback } from "./provider-fallback.ts";
+import { parseCloudSpeechPolicy } from "./route-preferences.ts";
 import { decodeAudioBase64, validateSpeakTextInput, validateTranscribeAudioInput } from "./voice-input.ts";
 import { isSpeakCode, speakFailure, voiceSecretExpired, type SpeakCode } from "./speak-failures.ts";
+import { createVoiceUsageTracker, type VoiceUsageWriter } from "./usage.server.ts";
 
 export type VoiceHttpDeps = {
   requireUser?: (request: Request) => Promise<string>;
@@ -22,6 +24,7 @@ export type VoiceHttpDeps = {
   secretsPath?: string;
   now?: () => number;
   halted?: (userId: string) => Promise<boolean>;
+  recordUsage?: VoiceUsageWriter;
 };
 
 function json(body: unknown, status = 200) {
@@ -77,6 +80,8 @@ async function haltOrLimit(userId: string, bucket: string, limit: number, deps: 
 
 function providerOrNetwork(error: string): Response {
   if (/no speech key|not configured|no xai_api_key/i.test(error)) return coded("provider_not_configured");
+  if (/returned 401|returned 403|unauthorized|incorrect api key/i.test(error)) return json({ ok: false, code: "provider_not_configured", error: "The selected speech service rejected authorization. Repair that connection or explicitly choose another service." });
+  if (/returned 429/i.test(error)) return coded("rate_limited");
   if (/did not answer|could not be reached|timed out|network/i.test(error)) return coded("network_failure");
   return json({ ok: false, code: "network_failure" as const, error: speakFailure("network_failure").message });
 }
@@ -86,11 +91,13 @@ export async function handleVoiceSession(request: Request, deps: VoiceHttpDeps =
   if (!opened.ok) return opened.response;
   const blocked = await haltOrLimit(opened.userId, "voice_secret", 20, deps);
   if (blocked) return blocked;
+  const usage = createVoiceUsageTracker(opened.userId, { record: deps.recordUsage, fetchImpl: deps.fetchImpl, now: deps.now });
   const minted = await mintRealtimeClientSecret({
     env: deps.env,
-    fetchImpl: deps.fetchImpl,
+    fetchImpl: usage.fetch("realtime-session"),
     secretsPath: deps.secretsPath,
   });
+  if (usage.error) return json({ ok: false, error: usage.error }, 503);
   if (!minted.ok) return providerOrNetwork(minted.error);
   if (voiceSecretExpired(minted.expiresAt, deps.now?.() ?? Date.now())) return coded("session_expired");
   return json({ ok: true, expiresAt: minted.expiresAt });
@@ -104,19 +111,24 @@ export async function handleVoiceStt(request: Request, deps: VoiceHttpDeps = {})
   const read = await readJsonObjectBody(request, 6_000_000);
   if (!read.ok) return json({ ok: false, code: "network_failure", error: read.error }, read.status);
   if (read.body.freeOnly === true) return json({ ok: false, error: "Free-only mode keeps cloud transcription off." });
+  const policy = parseCloudSpeechPolicy(read.body);
+  if (!policy.ok) return json({ ok: false, error: policy.error }, 400);
   const parsed = validateTranscribeAudioInput(read.body);
   if (!parsed.ok) return json({ ok: false, code: "empty_transcript", error: parsed.error });
   const decoded = decodeAudioBase64(parsed.audioBase64);
   if (!decoded.ok) return json({ ok: false, code: "empty_transcript", error: decoded.error });
   const env = deps.env ?? process.env;
+  const usage = createVoiceUsageTracker(opened.userId, { record: deps.recordUsage, fetchImpl: deps.fetchImpl, now: deps.now });
   const transcribed = await transcribeWithFallback({
+    ...policy.value,
     bytes: decoded.bytes,
     xaiKey: resolveVoiceApiKey(env, deps.secretsPath),
     openaiKey: env.OPENAI_API_KEY?.trim() || undefined,
     filename: parsed.filename,
     mime: parsed.mime,
-    fetchImpl: deps.fetchImpl,
+    fetchImpl: usage.fetch("transcription"),
   });
+  if (usage.error) return json({ ok: false, error: usage.error }, 503);
   if (!transcribed.ok) {
     if (/no words were recognized/i.test(transcribed.error)) return coded("empty_transcript");
     return providerOrNetwork(transcribed.error);
@@ -132,20 +144,23 @@ export async function handleVoiceTts(request: Request, deps: VoiceHttpDeps = {})
   const read = await readJsonObjectBody(request, 32_000);
   if (!read.ok) return json({ ok: false, code: "network_failure", error: read.error }, read.status);
   if (read.body.freeOnly === true) return json({ ok: false, error: "Free-only mode keeps cloud speech off." });
+  const policy = parseCloudSpeechPolicy(read.body);
+  if (!policy.ok) return json({ ok: false, error: policy.error }, 400);
   const parsed = validateSpeakTextInput(read.body.text);
   if (!parsed.ok) return json({ ok: false, code: "chat_failed", error: parsed.error });
   const env = deps.env ?? process.env;
   const voiceId = typeof read.body.voiceId === "string" ? read.body.voiceId : undefined;
+  const usage = createVoiceUsageTracker(opened.userId, { record: deps.recordUsage, fetchImpl: deps.fetchImpl, now: deps.now });
   const spoken = await speakWithFallback({
+    ...policy.value,
     text: parsed.text,
     voiceId,
     xaiKey: resolveVoiceApiKey(env, deps.secretsPath),
-    // Do not silently replace an explicitly selected xAI voice with an unrelated voice.
-    // Even the implicit default is Eve. Never switch to OpenAI/alloy
-    // merely because the client omitted voiceId or xAI could not respond.
-    openaiKey: undefined,
-    fetchImpl: deps.fetchImpl,
+    // Selection and explicit fallback, never key presence, control dispatch.
+    openaiKey: env.OPENAI_API_KEY?.trim() || undefined,
+    fetchImpl: usage.fetch("speech"),
   });
+  if (usage.error) return json({ ok: false, error: usage.error }, 503);
   if (!spoken.ok) return providerOrNetwork(spoken.error);
   return json({ ok: true, audio: spoken.audio, mime: spoken.mime, provider: spoken.provider });
 }

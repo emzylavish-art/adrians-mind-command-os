@@ -116,7 +116,7 @@ export function ServiceBoard({
   onFailure,
   onOpenConnect,
 }: {
-  grokConfigured: boolean;
+  grokConfigured: boolean | null;
   providers?: { id: string; label: string; defaultModel: string; host: string; hasKey: boolean; status: string }[];
   savedMcp?: { id: string; label: string; state: string; tools: { name: string }[] }[];
   onSetup: (message: string) => void;
@@ -186,7 +186,9 @@ export function ServiceBoard({
     };
   }, [refreshAll, refreshOne]);
 
-  const grok: Service = grokConfigured
+  const grok: Service = grokConfigured === null
+    ? { name: "Grok", state: "Status unavailable", detail: "The account’s provider status has not been verified." }
+    : grokConfigured
     ? { name: "Grok", state: "Key present", detail: "Fast, Expert, and Heavy use the server key when you press Send. This page has not verified a reply." }
     : { name: "Grok", state: "Not configured", detail: "No server key is visible to this page." };
 
@@ -383,7 +385,7 @@ export function ServiceBoard({
                 <p className="text-sm text-muted">{slackOff ? "Slack stays off. No Slack login is started." : needsSignIn ? "Sign in before this app can check this connection." : service.detail}</p>
               </div>
             </div>
-            <span className="plugin-link__state">{slackOff ? "Off" : needsSignIn ? "Not connected" : service.state}</span>
+            <span className="plugin-link__state">{slackOff ? "Off" : needsSignIn ? "Sign in required" : service.state}</span>
             <div className="plugin-link__action">
             {service.name === "Google Docs" ? <span className="text-xs text-muted">Setup unavailable</span> : slackOff ? null : needsSignIn ? (
               <button type="button" className="min-h-11 rounded-panel bg-accent px-3 text-sm font-semibold text-accent-ink" onClick={() => window.location.assign("/login")}>

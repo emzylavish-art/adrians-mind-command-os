@@ -1,5 +1,5 @@
-import { useMemo } from "react";
-import { authClient, authEnabled } from "./client";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { authClient, authEnabled, getBearerToken } from "./client";
 
 /** Normalized user shape used across the app, auth on or off. */
 export type AppUser = {
@@ -33,6 +33,7 @@ export type CurrentUserState = {
   user: AppUser | null;
   /** True while the session is still resolving — don't treat `user: null` as signed out yet. */
   isPending: boolean;
+  error?: string | null;
 };
 
 const DEV_STATE: CurrentUserState = { user: DEV_USER, isPending: false };
@@ -65,17 +66,58 @@ export function useCurrentUserState(): CurrentUserState {
 }
 
 function useSessionUserState(): CurrentUserState {
-  const { data, isPending } = authClient.useSession();
-  const id = data?.user.id;
-  const displayName = data?.user.name ?? null;
-  const primaryEmail = data?.user.email ?? null;
-  const emailVerified = data?.user.emailVerified === true;
-  const profileImageUrl = data?.user.image ?? null;
+  const session = authClient.useSession();
+  const [canonical, setCanonical] = useState<{ user: { id: string; email: string | null; emailVerified?: boolean; displayName?: string | null; profileImageUrl?: string | null } | null; pending: boolean; error?: string | null }>({ user: null, pending: true });
+  const request = useRef(0);
+  // The same verified owner endpoint used by writes checks both session
+  // systems. A display-only session must never choose a different owner.
+  useEffect(() => {
+    let live = true;
+    let controller: AbortController | undefined;
+    const refresh = () => {
+      const generation = ++request.current;
+      controller?.abort();
+      controller = new AbortController();
+      setCanonical((current) => current.user ? current : { user: null, pending: true });
+      const token = getBearerToken();
+      void fetch("/api/auth/owner", { credentials: "same-origin", cache: "no-store", signal: controller.signal,
+        headers: token ? { authorization: `Bearer ${token}` } : undefined,
+      }).then(async (response) => {
+        const body = await response.json() as { user?: { id?: unknown; email?: unknown; emailVerified?: unknown; displayName?: unknown; profileImageUrl?: unknown } | null; error?: string };
+        if (!response.ok) throw new Error(response.status === 409 && body.error ? body.error : "The account could not be verified. Try refreshing or sign out.");
+        const user = body.user && typeof body.user.id === "string"
+          ? { id: body.user.id, email: typeof body.user.email === "string" ? body.user.email : null, emailVerified: body.user.emailVerified === true, displayName: typeof body.user.displayName === "string" ? body.user.displayName : null, profileImageUrl: typeof body.user.profileImageUrl === "string" ? body.user.profileImageUrl : null } : null;
+        if (live && request.current === generation) setCanonical({ user, pending: false });
+      }).catch((error) => {
+        if (live && request.current === generation) setCanonical({ user: null, pending: false, error: error instanceof Error ? error.message : "The account could not be verified." });
+      });
+    };
+    setCanonical({ user: null, pending: true });
+    refresh();
+    const visible = () => { if (document.visibilityState === "visible") refresh(); };
+    window.addEventListener("focus", refresh);
+    window.addEventListener("adrian-auth-changed", refresh);
+    document.addEventListener("visibilitychange", visible);
+    return () => {
+      live = false;
+      ++request.current;
+      controller?.abort();
+      window.removeEventListener("focus", refresh);
+      window.removeEventListener("adrian-auth-changed", refresh);
+      document.removeEventListener("visibilitychange", visible);
+    };
+  }, [session.data?.user.id]);
+  const id = canonical.user?.id;
+  const sameDisplaySession = id && session.data?.user.id === id ? session.data.user : null;
+  const displayName = canonical.user?.displayName ?? sameDisplaySession?.name ?? null;
+  const primaryEmail = canonical.user?.email ?? null;
+  const emailVerified = canonical.user?.emailVerified === true;
+  const profileImageUrl = canonical.user?.profileImageUrl ?? sameDisplaySession?.image ?? null;
   const user = useMemo<AppUser | null>(
-    () => (id ? { id, displayName, primaryEmail, emailVerified, profileImageUrl, isDevFallback: false } : null),
+    () => (id ? { id, displayName, primaryEmail, emailVerified, profileImageUrl, isDevFallback: id === "dev-user" } : null),
     [id, displayName, primaryEmail, emailVerified, profileImageUrl],
   );
-  return useMemo(() => ({ user, isPending }), [user, isPending]);
+  return useMemo(() => ({ user, isPending: canonical.pending, error: canonical.error }), [user, canonical.pending, canonical.error]);
 }
 
 /**

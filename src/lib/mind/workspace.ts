@@ -1,5 +1,6 @@
+import { mergeUsageEntries } from "./usage-ledger.ts";
 import { retainActivity } from "./connection-attention.ts";
-import { isModelTier } from "./model-tiers.ts";
+import { isModelTier, isConnectedGrokModel } from "./model-tiers.ts";
 import { emptyFleet, readFleet } from "./fleet.ts";
 import { normalizeBotModel } from "./bot-model.ts";
 import { normalizeBotKnowledge } from "./bot-model.ts";
@@ -74,7 +75,7 @@ function str(value: unknown, fallback = ""): string {
 export function memoriesForChat(ws: Workspace, chat: Chat): MemoryItem[] {
   if (chat.memory !== "on" || chat.temporary) return [];
   return ws.memories.filter((item) => {
-    if (item.archived) return false;
+    if (item.archived || item.reviewReason) return false;
     if (item.scope === "global") return true;
     if (item.scope === "project") return !!chat.projectId && item.projectId === chat.projectId;
     return item.scope === "chat" && item.chatId === chat.id;
@@ -157,6 +158,13 @@ export function normalizeWorkspace(input: unknown): Workspace {
         id: str(row.id),
         chatId: str(row.chatId),
         at: str(row.at),
+        ...(typeof row.operationId === "string" ? { operationId: row.operationId } : {}),
+        ...(["chat", "orchestrator", "speak", "build", "image", "agent"].includes(String(row.channel)) ? { channel: row.channel as UsageEntry["channel"] } : {}),
+        ...(typeof row.stage === "string" ? { stage: row.stage } : {}),
+        ...(["unconfirmed", "rejected_before_dispatch", "completed", "failed", "canceled"].includes(String(row.outcome)) ? { outcome: row.outcome as UsageEntry["outcome"] } : {}),
+        ...(typeof row.dispatched === "boolean" ? { dispatched: row.dispatched } : {}),
+        ...(["queued", "running", "completed", "failed", "canceled"].includes(String(row.executionState)) ? { executionState: row.executionState as UsageEntry["executionState"] } : {}),
+        ...(["not_sent", "sent", "unknown"].includes(String(row.providerDispatch)) ? { providerDispatch: row.providerDispatch as UsageEntry["providerDispatch"] } : {}),
         provider: typeof row.provider === "string" ? row.provider : undefined,
         requestedModel: typeof row.requestedModel === "string" ? row.requestedModel : undefined,
         model: str(row.model, "unknown"),
@@ -232,6 +240,7 @@ function normalizeChat(row: unknown): Chat | null {
     ...(typeof row.notionWorkspaceId === "string" && row.notionWorkspaceId.length <= 200 ? { notionWorkspaceId: row.notionWorkspaceId } : {}),
     ...(typeof row.agentId === "string" && row.agentId ? { agentId: row.agentId } : {}),
     ...chatBotModel(row),
+    ...(isConnectedGrokModel(row.botExactModel) ? { botExactModel: row.botExactModel } : {}),
     memory,
     temporary: row.temporary === true,
     autonomy,
@@ -311,6 +320,7 @@ function normalizeMemory(row: unknown): MemoryItem | null {
     archived: row.archived === true,
     versions,
     ...(row.alwaysApply === true ? { alwaysApply: true } : {}),
+    ...(typeof row.reviewReason === "string" ? { reviewReason: row.reviewReason.slice(0, 500) } : {}),
   };
 }
 
@@ -510,7 +520,7 @@ export function mergeMemoryState(current: Workspace, incoming: Workspace): Pick<
 }
 
 /** Explicit replacement can restore forgotten content only as newly saved notes. */
-export function replaceFromArchive(current: Workspace, archive: Workspace): Workspace {
+export function replaceFromArchive(current: Workspace, archive: Workspace, restoreMemoryPreferences = false): Workspace {
   const deleted = new Set([...(current.deletedMemoryIds ?? []), ...(archive.deletedMemoryIds ?? [])]);
   const incoming = new Set(archive.memories.map((note) => note.id));
   for (const note of current.memories) if (!incoming.has(note.id)) deleted.add(note.id);
@@ -523,7 +533,7 @@ export function replaceFromArchive(current: Workspace, archive: Workspace): Work
     }
     return note;
   });
-  return { ...archive, memories, deletedMemoryIds: [...deleted], halted: current.halted || archive.halted };
+  return { ...archive, chats: archive.chats.map(chat => ({ ...chat, memory: restoreMemoryPreferences ? chat.memory : current.chats.find(row => row.id === chat.id)?.memory ?? "off" })), memories, deletedMemoryIds: [...deleted], halted: current.halted || archive.halted };
 }
 
 export function archiveMessagePreview(current: Workspace, incoming: Workspace) {
@@ -543,7 +553,7 @@ export function archiveMessagePreview(current: Workspace, incoming: Workspace) {
   return { kept, conflicts };
 }
 
-export function mergeWorkspace(current: Workspace, incoming: Workspace): Workspace {
+export function mergeWorkspace(current: Workspace, incoming: Workspace, restoreMemoryPreferences = false): Workspace {
   const byId = <T extends { id: string }>(rows: T[]) => new Map(rows.map((row) => [row.id, row]));
   const merge = <T extends { id: string }>(left: T[], right: T[]) => [...byId([...left, ...right]).values()];
   const archivedChats = byId(incoming.chats);
@@ -552,24 +562,25 @@ export function mergeWorkspace(current: Workspace, incoming: Workspace): Workspa
     halted: current.halted,
     chats: [...byId([...incoming.chats, ...current.chats]).values()].map((chat) => {
       const archive = archivedChats.get(chat.id);
-      if (!archive || archive === chat) return chat;
+      if (!archive) return chat;
+      if (archive === chat) return { ...chat, memory: restoreMemoryPreferences ? chat.memory : "off" as const };
       const messages = merge(archive.messages, chat.messages).sort((a, b) => a.at.localeCompare(b.at));
-      return { ...chat, temporary: chat.temporary || archive.temporary, messages };
+      return { ...chat, memory: restoreMemoryPreferences ? archive.memory : chat.memory, temporary: chat.temporary || archive.temporary, messages };
     }),
     ...mergeMemoryState(current, incoming),
-    projects: merge(current.projects, incoming.projects),
-    files: merge(current.files, incoming.files),
-    usage: merge(current.usage, incoming.usage).sort((a, b) => b.at.localeCompare(a.at)).slice(0, 200),
+    projects: merge(incoming.projects, current.projects),
+    files: merge(incoming.files, current.files),
+    usage: mergeUsageEntries([...current.usage, ...incoming.usage]).slice(0, 200),
     audit: retainActivity(merge(current.audit, incoming.audit).sort((a, b) => b.at.localeCompare(a.at))),
-    agents: merge(current.agents, incoming.agents),
-    deployments: merge(current.deployments, incoming.deployments),
-    runs: merge(current.runs, incoming.runs),
-    runEvents: merge(current.runEvents, incoming.runEvents),
-    connections: merge(current.connections, incoming.connections),
-    mailboxes: merge(current.mailboxes, incoming.mailboxes),
-    schedules: merge(current.schedules, incoming.schedules),
-    pins: merge(current.pins, incoming.pins),
-    browserSessions: merge(current.browserSessions, incoming.browserSessions),
+    agents: merge(incoming.agents, current.agents),
+    deployments: merge(incoming.deployments, current.deployments),
+    runs: merge(incoming.runs, current.runs),
+    runEvents: merge(incoming.runEvents, current.runEvents),
+    connections: merge(incoming.connections, current.connections),
+    mailboxes: merge(incoming.mailboxes, current.mailboxes),
+    schedules: merge(incoming.schedules, current.schedules),
+    pins: merge(incoming.pins, current.pins),
+    browserSessions: merge(incoming.browserSessions, current.browserSessions),
   };
 }
 
@@ -595,7 +606,7 @@ function usageKind(prompt: unknown, completion: unknown): UsageEntry["kind"] {
 }
 
 export function pushUsage(ws: Workspace, entry: Omit<UsageEntry, "kind">): Workspace {
-  return { ...ws, usage: [{ ...entry, kind: usageKind(entry.promptTokens, entry.completionTokens) }, ...ws.usage].slice(0, 200) };
+  return { ...ws, usage: mergeUsageEntries([{ ...entry, kind: usageKind(entry.promptTokens, entry.completionTokens) }, ...ws.usage]).slice(0, 200) };
 }
 
 export function addLocalFile(

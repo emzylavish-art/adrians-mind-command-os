@@ -1,7 +1,9 @@
 import { useEffect, useRef, useState } from "react";
 import { ActionOverlay, rememberMenuAnchor } from "@/components/mind/conversation-menu";
 import { customProviderBlockReason } from "@/lib/mind/provider-catalog";
-import { getBearerToken } from "@/lib/auth/client";
+import { getBearerToken, signOut } from "@/lib/auth/client";
+import { useCurrentUserState } from "@/lib/auth/use-current-user";
+import { OwnerRequestGate } from "@/lib/mind/owner-request-gate";
 import type { PublicAiProvider } from "@/lib/mind/ai-provider-config.server";
 
 type PublicRow = PublicAiProvider;
@@ -34,21 +36,30 @@ function providerLogo(label: string) {
   return null;
 }
 
-async function api(action: Record<string, unknown> | null): Promise<Record<string, unknown>> {
+async function api(action: Record<string, unknown> | null, ownerId: string): Promise<Record<string, unknown>> {
   const token = getBearerToken();
   const response = await fetch("/api/mind/providers", {
     method: action ? "POST" : "GET",
     credentials: "same-origin",
     headers: { ...(action ? { "content-type": "application/json" } : {}), ...(token ? { authorization: "Bearer " + token } : {}) },
-    ...(action ? { body: JSON.stringify(action) } : {}),
+    ...(action ? { body: JSON.stringify({ ...action, expectedOwnerId: ownerId }) } : {}),
   });
   const result = await response.json() as Record<string, unknown>;
   if (!response.ok || result.ok !== true) throw new Error(typeof result.error === "string" ? result.error : "Provider request failed.");
+  if (!action && result.ownerId !== ownerId) throw new Error("The signed-in account changed. Reload provider settings.");
   return result;
 }
 
 /** Account-owned, server-encrypted API configurations. Never echoes or stores secret input. */
-export function AiProviderConnections({ onChange, onUseModel }: { onChange?: (rows: PublicRow[]) => void; onUseModel?: (choice: string) => void }) {
+type ProviderConnectionsProps = { onChange?: (rows: PublicRow[]) => void; onUseModel?: (choice: string) => void };
+export function AiProviderConnections(props: ProviderConnectionsProps) {
+  const { user, isPending, error } = useCurrentUserState();
+  const [signOutError, setSignOutError] = useState("");
+  if (isPending || !user) return <div role="status"><p>{isPending ? "Verifying your account…" : error || "Sign in to manage API connections."}</p>{error && <button type="button" className="min-h-11 underline" onClick={() => void signOut("/login").catch(() => setSignOutError("Sign out was not confirmed. Please retry."))}>Sign out and resolve account</button>}{signOutError && <p>{signOutError}</p>}</div>;
+  return <OwnedAiProviderConnections key={user.id} ownerId={user.id} {...props} />;
+}
+
+function OwnedAiProviderConnections({ ownerId, onChange, onUseModel }: ProviderConnectionsProps & { ownerId: string }) {
   const [rows, setRows] = useState<PublicRow[]>([]);
   const [loadedOnce, setLoadedOnce] = useState(false);
   const [kind, setKind] = useState<ProviderKind>("openai");
@@ -70,18 +81,27 @@ export function AiProviderConnections({ onChange, onUseModel }: { onChange?: (ro
     requestAnimationFrame(() => rowTrigger.current?.focus({ preventScroll: true }));
   }
   const [notice, setNotice] = useState("API keys are encrypted on the server. Adding a provider never makes a paid inference request.");
+  const requests = useRef(new OwnerRequestGate(ownerId));
+  const busy = useRef(false);
   const load = async () => {
-    const data = await api(null);
+    const gate = requests.current;
+    const ticket = gate.begin(ownerId);
+    const data = await api(null, ownerId);
+    if (!gate.accept(ticket, ownerId)) return false;
     const next = Array.isArray(data.providers) ? data.providers as PublicRow[] : [];
     setRows(next);
     setLoadedOnce(true);
     onChange?.(next);
+    return true;
   };
   useEffect(() => {
+    requests.current = new OwnerRequestGate(ownerId);
+    const gate = requests.current;
     void load().catch((error) => {
-      setNotice(error instanceof Error ? error.message : "Saved AI providers could not be loaded.");
+      if (gate.active) setNotice(error instanceof Error ? error.message : "Saved AI providers could not be loaded.");
     });
-  }, []);
+    return () => { gate.close(); };
+  }, [ownerId]);
   useEffect(() => {
     const open = (event: Event) => {
       const name = (event as CustomEvent<{ name?: string }>).detail?.name;
@@ -99,15 +119,22 @@ export function AiProviderConnections({ onChange, onUseModel }: { onChange?: (ro
     return () => window.removeEventListener("adrian-open-connect", open);
   }, []);
   async function run(action: Record<string, unknown>, success: string) {
-    if (loading) return;
+    if (busy.current || !requests.current.active) return;
+    busy.current = true;
+    // Invalidate an initial GET before the mutation. It cannot roll back the
+    // newly saved catalog or notify the parent after this owner unmounts.
+    const gate = requests.current;
+    const ticket = gate.begin(ownerId);
     setLoading(true);
     setNotice("Saving or checking provider…");
     try {
-      const data = await api(action);
+      const data = await api(action, ownerId);
+      if (!gate.accept(ticket, ownerId)) return;
       if (action.action === "save") setApiKey("");
       try {
-        await load();
+        if (!await load()) return;
       } catch {
+        if (!gate.active) return;
         setLoadedOnce(false);
         setNotice(`${success} Couldn’t refresh your connections.`);
         return;
@@ -115,8 +142,11 @@ export function AiProviderConnections({ onChange, onUseModel }: { onChange?: (ro
       const provider = data.provider as PublicRow | undefined;
       setNotice(provider?.lastError ? success + " " + provider.lastError : success);
     } catch (error) {
-      setNotice(error instanceof Error ? error.message : "The provider operation did not complete.");
-    } finally { setLoading(false); }
+      if (gate.active) setNotice(error instanceof Error ? error.message : "The provider operation did not complete.");
+    } finally {
+      busy.current = false;
+      if (gate.active) setLoading(false);
+    }
   }
   return (
     <section id="owner-api-connect" className="settings-card adrian-layer rounded-panel p-4 text-sm" aria-label="Custom AI API providers" data-testid="custom-ai-providers">
@@ -169,7 +199,7 @@ export function AiProviderConnections({ onChange, onUseModel }: { onChange?: (ro
         </button>
       </form>
       <p className="mt-3 text-xs text-muted" role="status">{notice}</p>
-      {!loadedOnce && <button type="button" disabled={loading} className="mt-2 min-h-11 rounded-panel border border-line px-3" onClick={() => void load().then(() => setNotice("Connections refreshed.")).catch((error) => setNotice(error.message))}>Retry refresh</button>}
+      {!loadedOnce && <button type="button" disabled={loading} className="mt-2 min-h-11 rounded-panel border border-line px-3" onClick={() => void load().then((accepted) => { if (accepted) setNotice("Connections refreshed."); }).catch((error) => { if (requests.current.active) setNotice(error.message); })}>Retry refresh</button>}
       <div className="mt-4 space-y-3">
         {rows.map((row) => (
           <article

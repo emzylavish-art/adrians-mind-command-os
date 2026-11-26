@@ -326,6 +326,21 @@ export function requestJobCancel(ownerId: string, jobId: string): PcJob | null {
   });
 }
 
+/** Requests cancellation for this owner's known jobs; running jobs remain unconfirmed. */
+export function cancelOwnerJobs(ownerId: string): { cancelled: number; pending: number; unknown: number } {
+  ensure();
+  const result = { cancelled: 0, pending: 0, unknown: 0 };
+  for (const name of readdirSync(jobsDir()).filter((item) => item.endsWith(".json"))) {
+    const job = readJob(name.slice(0, -5));
+    if (!job || job.ownerId !== ownerId || !["queued", "running", "cancel_requested"].includes(job.status)) continue;
+    const next = requestJobCancel(ownerId, job.id);
+    if (!next) result.unknown += 1;
+    else if (next.status === "cancelled") result.cancelled += 1;
+    else result.pending += 1;
+  }
+  return result;
+}
+
 export function appendJobEvent(input: {
   jobId: string;
   agentId: string;

@@ -31,7 +31,7 @@ export class UnauthorizedError extends Error {
   }
 }
 
-export type VerifiedUser = { id: string; email: string | null };
+export type VerifiedUser = import("./session-user").SessionCandidate;
 
 /**
  * Resolve the signed-in user from the current request, or `null` when auth isn't
@@ -52,7 +52,7 @@ async function readSupabaseSessionUser(): Promise<VerifiedUser | null> {
     const supabase = createSupabaseServerClient();
     const { data, error } = await supabase.auth.getUser();
     if (error || !data.user?.id) return null;
-    return { id: data.user.id, email: data.user.email ?? null };
+    return { id: data.user.id, email: data.user.email ?? null, emailVerified: Boolean(data.user.email_confirmed_at), displayName: typeof data.user.user_metadata?.full_name === "string" ? data.user.user_metadata.full_name : null, profileImageUrl: typeof data.user.user_metadata?.avatar_url === "string" ? data.user.user_metadata.avatar_url : null };
   } catch {
     return null;
   }
@@ -73,22 +73,19 @@ async function readBetterAuthSessionUser(
   // must come from the current session record, including after revocation.
   const session = await auth.api.getSession({ headers, query: { disableCookieCache: true } });
   if (!session?.user?.id) return null;
-  return { id: session.user.id, email: session.user.email ?? null };
+  return { id: session.user.id, email: session.user.email ?? null, emailVerified: session.user.emailVerified === true, displayName: session.user.name ?? null, profileImageUrl: session.user.image ?? null };
 }
 
 export async function getSessionUser(
   bearerToken?: string,
 ): Promise<VerifiedUser | null> {
   const { pickSessionUser } = await import("./session-user");
-  const supabaseUser = await readSupabaseSessionUser();
-  // When Supabase Auth is configured and has a user, that is the owner session
-  // MCP list / turn / halt endpoints accept. Better Auth remains a fallback for
-  // existing broker sessions.
-  if (supabaseUser) {
-    return pickSessionUser({ supabaseUser, betterAuthUser: null });
-  }
-  const betterAuthUser = await readBetterAuthSessionUser(bearerToken);
-  return pickSessionUser({ supabaseUser: null, betterAuthUser });
+  const [supabaseUser, betterAuthUser] = await Promise.all([
+    readSupabaseSessionUser(), readBetterAuthSessionUser(bearerToken),
+  ]);
+  // Different unlinked identities cannot silently choose an owner. Both UI and
+  // account-owned operations use this same decision and fail closed on conflict.
+  return pickSessionUser({ supabaseUser, betterAuthUser });
 }
 
 /**

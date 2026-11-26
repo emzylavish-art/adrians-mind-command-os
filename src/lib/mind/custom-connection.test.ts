@@ -27,6 +27,16 @@ function memoryDb(rows: Row[] = []): RegistryDb & { rows: Row[] } {
       if (text.startsWith("select id")) {
         return rows.filter((row) => row.user_id === userId).map((row) => ({ id: row.id })) as T[];
       }
+      if (text.startsWith("UPDATE mind_mcp_registry")) {
+        const id = String(params[1]);
+        const index = rows.findIndex((row) => row.user_id === userId && row.id === id);
+        if (index < 0) return [];
+        const record = JSON.parse(rows[index].record);
+        if (record.url !== params[3] || (record.tokenEnc ?? null) !== params[4] || record.deleted || !record.enabled) return [];
+        if (text.includes("RETURNING id") && ((record.state ?? null) !== params[6] || (record.operations === undefined ? null : JSON.stringify(record.operations)) !== params[5])) return [];
+        rows[index].record = JSON.stringify({ ...record, ...JSON.parse(String(params[2])) });
+        return [{ id }] as T[];
+      }
       if (text.startsWith("delete")) {
         const id = String(params[1] ?? "");
         const index = rows.findIndex((row) => row.user_id === userId && row.id === id);
@@ -129,6 +139,7 @@ describe("shared durable registry", { concurrency: false }, () => {
         args: { id: "7" },
         registryDb: reloadedDb,
         getSql: async () => ({ query: async () => [] }),
+        isHalted: () => false,
       });
       assert.equal(called.ok, true);
       assert.equal(called.text, "status:7");
@@ -219,6 +230,7 @@ describe("shared durable registry", { concurrency: false }, () => {
         args: {},
         registryDb: db,
         getSql: async () => ({ query: async () => [] }),
+        isHalted: () => false,
       });
       assert.equal(called.ok, false);
       assert.equal(called.code, "error");
@@ -273,6 +285,7 @@ describe("shared durable registry", { concurrency: false }, () => {
       tool: "status",
       registryDb: blocked,
       getSql: async () => ({ query: async () => [] }),
+        isHalted: () => false,
       fetch: async () => {
         fetched += 1;
         throw new Error("should not fetch");
@@ -384,9 +397,11 @@ describe("custom connection blueprint regressions", { concurrency: false }, () =
       for (const envelope of ["rpc-error", "tool-error"]) {
         const db = memoryDb();
         let calls = 0;
+        let toolCalls = 0;
         const fetch = async (_url: string, init?: RequestInit) => {
           calls += 1;
           const request = JSON.parse(String(init?.body ?? "{}")) as { method?: string };
+          if (request.method === "tools/call") toolCalls += 1;
           const body = request.method === "tools/list"
             ? { jsonrpc: "2.0", id: 2, result: { tools: [{ name: "status", inputSchema: { type: "object", properties: {}, required: [] } }] } }
             : request.method === "tools/call"
@@ -401,7 +416,8 @@ describe("custom connection blueprint regressions", { concurrency: false }, () =
         if (!saved.ok) continue;
         const before = calls;
         const result = await callCustomConnection({ db, userId: "owner", id: saved.connection.id, operation: "status", confirmed: true, fetch });
-        assert.equal(calls - before, 2, "one initialize and one call, not a retry");
+        assert.equal(calls - before, 4, "fresh definition check then one initialized call");
+        assert.equal(toolCalls, 1, "the tool itself must never be retried");
         assert.equal(result.ok, false);
         assert.equal(result.status, "error");
         assert.equal(result.text, "The call failed.");

@@ -349,6 +349,7 @@ export type ChatTurnBodyInput = {
   logicRoute: LogicRouteId | null;
   orchestrator?: string | null;
   composerMode?: string;
+  usageChannel?: "chat" | "speak";
   identity?: string;
   consult?: { available: string[]; helpers: { id: string; request: string }[]; purpose: string } | null;
   images: unknown[];
@@ -358,6 +359,7 @@ export type ChatTurnBodyInput = {
 export function chatTurnBody(input: ChatTurnBodyInput): Record<string, unknown> {
   const body = {
     text: input.text,
+    ...(input.usageChannel ? { usageChannel: input.usageChannel } : {}),
     ...(input.chatId ? { chatId: input.chatId } : {}),
     memory: input.memory,
     halted: input.halted,

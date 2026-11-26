@@ -4,6 +4,7 @@
  * Network requests are DNS-validated and pinned, with no redirect following.
  */
 import { randomUUID } from "node:crypto";
+import { discoveryFailureState } from "./provider-health.ts";
 import { providerWireProtocol, modelDiscoveryHeaders, buildProviderChatRequest, parseProviderText } from "./ai-provider-native.ts";
 import { getSql, type Sql } from "../db.ts";
 import { connectorTokenSecretStatus, encryptSecret, decryptSecret } from "./connectors/crypto.ts";
@@ -122,7 +123,7 @@ export async function saveAiProvider(
   const model = typeof input.model === "string" ? input.model.trim() : "";
   if (!label) return { ok: false, error: "A provider name is required." };
   if (!url.ok) return url;
-  if (!apiKey || apiKey.length > 1500 || /[\r\n\x00-\x1f]/.test(apiKey)) {
+  if (!apiKey || apiKey.length > 1500 || Array.from(apiKey).some(char => char.charCodeAt(0) < 32)) {
     return { ok: false, error: "Enter a valid API key of at most 1500 characters." };
   }
   if (model && !validModelId(model)) return { ok: false, error: "The model ID contains unsupported characters." };
@@ -177,12 +178,15 @@ async function requestProvider(
   row: StoredProvider,
   path: string,
   init: RequestInit,
+  onDispatch?: () => void,
 ): Promise<{ status: number; text: string; requestId: string | null }> {
   const checked = baseUrl(row.base_url);
   if (!checked.ok) throw new Error("The saved provider endpoint is not valid.");
   const url = new URL(checked.value + "/" + path);
   const pin = await resolveAndPinMcpHostname(url.hostname);
   if (!pin.ok) throw new Error("The provider hostname is not publicly reachable.");
+  init.signal?.throwIfAborted();
+  onDispatch?.();
   const response = await pinnedHttpFetch(url, pin.pinnedAddress, pin.hostname, {
     ...init,
     redirect: "manual",
@@ -230,7 +234,10 @@ export async function discoverAiModels(userId: string, id: string):
         status = "configured";
         lastError = "Model listing is unsupported. The saved model can be tried manually; inference is unverified.";
       } else {
-        status = providerRestriction(res.status) ?? "unavailable";
+        status = discoveryFailureState(row.status, res.status);
+        if (status === "credentials_rejected" && res.status !== 401 && res.status !== 403) {
+          lastError = "The saved credential was previously rejected. Model discovery did not verify it. Reconnect this provider with a valid key or restore its permission, then refresh.";
+        }
       }
     } else {
       const body = JSON.parse(res.text) as { data?: Array<{ id?: unknown }>; models?: Array<{ id?: unknown; name?: unknown } | string> };
@@ -264,6 +271,7 @@ export async function executeCustomChat(
   selection: { id: string; model: string },
   messages: Array<{ role: "system" | "user" | "assistant"; content: string }>,
   signal?: AbortSignal,
+  onDispatch?: () => void,
 ): Promise<
   { ok: true; text: string; model: string; provider: string; requestId: string | null; usage: { prompt_tokens?: number; completion_tokens?: number } | null } |
   { ok: false; error: string; httpStatus?: number }
@@ -287,7 +295,7 @@ export async function executeCustomChat(
       headers: request.headers,
       body: request.body,
       signal,
-    });
+    }, onDispatch);
     if (res.status < 200 || res.status >= 300) {
       const error = providerError(res.status);
       const restriction = providerRestriction(res.status);

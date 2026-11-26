@@ -3,7 +3,7 @@
  * Bearer tokens are sealed with CONNECTOR_TOKEN_SECRET before a database write.
  * model.generate is refused. Gmail OAuth is not started here.
  */
-import { randomUUID } from "node:crypto";
+import { createHash, randomUUID } from "node:crypto";
 import {
   isLocalHostname,
   isPrivateAddressLiteral,
@@ -14,6 +14,7 @@ import {
 import { loadRegistry, saveRegistry, type RegistryDb, type RegistryRecord } from "./mcp/registry-store.ts";
 import type { McpCallRpc, McpCallTransport } from "./mcp/call-contract.ts";
 import { safeReason, mcpRpcFromResult } from "./mcp/call-contract.ts";
+import { readCappedBody } from "./mcp/http-body.ts";
 
 export type ArgType = "string" | "boolean" | "integer";
 
@@ -28,12 +29,15 @@ export type PublicOperation = {
   description: string;
   inputSchema: OperationSchema | null;
   compatible: boolean;
+  definitionRevision?: string;
 };
 
 export type ConnectionState = "unchecked" | "ready" | "unauthorized" | "missing_config" | "incompatible" | "failed";
 
 export type PublicConnection = {
+  discoveryStatus?: CallStatus;
   enabled?: boolean;
+  capabilityRevision?: string;
   id: string;
   label: string;
   kind: "mcp" | "http";
@@ -65,12 +69,23 @@ function hostOf(url: string): string {
   }
 }
 
+function canonical(value: unknown): unknown {
+  if (Array.isArray(value)) return value.map(canonical);
+  if (value && typeof value === "object") return Object.fromEntries(Object.entries(value).sort(([a], [b]) => a.localeCompare(b)).map(([key, entry]) => [key, canonical(entry)]));
+  return value;
+}
+
+export function connectionCapabilityRevision(row: Pick<RegistryRecord, "id" | "url" | "enabled" | "operations">): string {
+  return createHash("sha256").update(JSON.stringify(canonical([row.id, row.url, row.enabled, row.operations ?? []]))).digest("hex");
+}
+
 function toPublic(server: RegistryRecord): PublicConnection | null {
   if (!server.url || server.kind === "builtin" || server.kind === "command") return null;
   const kind = server.protocol === "http" ? "http" : "mcp";
   const operations = Array.isArray(server.operations) ? server.operations as PublicOperation[] : [];
   return {
     enabled: server.enabled,
+    capabilityRevision: connectionCapabilityRevision(server),
     id: server.id,
     label: server.label,
     kind,
@@ -196,9 +211,13 @@ async function send(url: string, init: RequestInit, deps: { fetch?: FetchLike; l
     if (response.status === 401 || response.status === 403) return fail("unauthorized", `The server returned ${response.status}. Nothing was accepted.`, response.status);
     if (response.status >= 300 && response.status < 400) return fail("error", "Redirects are not followed. Nothing was called.", response.status);
     if (!response.ok) return fail("error", `The server returned ${response.status}. Nothing was called.`, response.status);
-    const text = redact(await response.text(), token);
+    const body = await readCappedBody(response, maxBytes);
     controller.signal.throwIfAborted();
-    if (Buffer.byteLength(text) > maxBytes) return fail("error", "The response was larger than the limit and was dropped. Nothing was retried.", response.status);
+    if (!body.ok) {
+      controller.abort();
+      return fail("error", `The response was larger than ${maxBytes} bytes and was dropped. Nothing was retried.`, response.status);
+    }
+    const text = redact(body.text, token);
     return { ok: true as const, status: response.status, text, sessionId: response.headers.get("mcp-session-id") };
   };
   try {
@@ -236,7 +255,7 @@ function initialized(text: string): boolean {
   return !envelope.error && Boolean(envelope.result) && typeof envelope.result === "object" && !Array.isArray(envelope.result);
 }
 
-function operationFromTool(tool: { name?: unknown; description?: unknown; inputSchema?: unknown }): PublicOperation | null {
+function operationFromTool(tool: { name?: unknown; description?: unknown; inputSchema?: unknown; annotations?: unknown }): PublicOperation | null {
   if (typeof tool.name !== "string" || !tool.name.trim() || tool.name.toLowerCase() === "model.generate") return null;
   if (tool.name.length > 80) return null;
   const schema = readOperationSchema(tool.inputSchema);
@@ -245,6 +264,7 @@ function operationFromTool(tool: { name?: unknown; description?: unknown; inputS
     description: typeof tool.description === "string" ? tool.description.slice(0, 180) : "",
     inputSchema: schema,
     compatible: Boolean(schema),
+    definitionRevision: createHash("sha256").update(JSON.stringify(canonical({ name: tool.name, description: tool.description, inputSchema: tool.inputSchema, annotations: tool.annotations }))).digest("hex"),
   };
 }
 
@@ -300,23 +320,36 @@ export async function saveCustomConnection(db: ConnectionDb | null, userId: stri
   return { ok: true, connection: listed.find((item) => item.id === row.id) ?? toPublic({ ...row, token: undefined, tokenEnc: token ? "sealed" : undefined })! };
 }
 
-async function refreshMcp(db: ConnectionDb | null, userId: string, id: string, deps: { fetch?: FetchLike; lookup?: DnsLookupFn }): Promise<PublicConnection> {
+export async function refreshMcp(db: ConnectionDb | null, userId: string, id: string, deps: { fetch?: FetchLike; lookup?: DnsLookupFn; timeoutMs?: number; maxBytes?: number }): Promise<PublicConnection> {
   const loaded = await loadRegistry(userId, db);
   const row = loaded.servers.find((item) => item.id === id);
   if (!row?.url) return { id, label: "", kind: "mcp", host: "", method: "MCP", auth: "none", hasToken: false, state: "failed", operations: [], error: "That connection is not saved." };
-  const fail = async (state: ConnectionState, error: string) => {
-    row.state = state;
-    row.operations = [];
-    row.error = error;
-    await writeRow(db, userId, row);
-    return toPublic(row)!;
+  const expected = { url: row.url, tokenEnc: row.tokenEnc ?? null, operations: row.operations === undefined ? null : JSON.stringify(row.operations), state: row.state ?? null };
+  const publish = async (next: RegistryRecord): Promise<PublicConnection> => {
+    if (db) {
+      // Discovery is a metadata update, never a replacement registration. The
+      // exact saved credential, endpoint and prior definition must still exist.
+      const updated = await db.query("UPDATE mind_mcp_registry SET record = record || $3::jsonb WHERE user_id=$1 AND id=$2 AND record->>'url'=$4 AND record->>'tokenEnc' IS NOT DISTINCT FROM $5 AND record->'operations' IS NOT DISTINCT FROM $6::jsonb AND record->>'state' IS NOT DISTINCT FROM $7 AND record->>'enabled'='true' AND record->>'deleted' IS DISTINCT FROM 'true' RETURNING id", [userId, id, JSON.stringify({ operations: next.operations, state: next.state, error: next.error }), expected.url, expected.tokenEnc, expected.operations, expected.state]);
+      if (updated.length) return toPublic(next)!;
+    } else {
+      const current = (await loadRegistry(userId, db)).servers.find((item) => item.id === id);
+      if (current?.enabled && current.url === expected.url && current.tokenEnc === row.tokenEnc && connectionCapabilityRevision(current) === connectionCapabilityRevision(row)) {
+        await writeRow(db, userId, next);
+        return toPublic(next)!;
+      }
+    }
+    return { ...toPublic(row)!, state: "failed", error: "The connection changed or was removed during discovery. Refresh its current state. No saved change was overwritten.", operations: [] };
+  };
+  const fail = async (state: ConnectionState, error: string, discoveryStatus: CallStatus = "error") => {
+    // Retain the last reviewed definition for recovery, but state is not ready.
+    return { ...await publish({ ...row, state, error }), discoveryStatus };
   };
   const opened = await send(row.url, {
     method: "POST",
     headers: { "content-type": "application/json", accept: "application/json, text/event-stream", ...(row.token ? { authorization: `Bearer ${row.token}` } : {}) },
     body: JSON.stringify({ jsonrpc: "2.0", id: 1, method: "initialize", params: { protocolVersion: "2024-11-05", capabilities: {}, clientInfo: { name: "adrians-mind", version: "1" } } }),
   }, deps, row.token ?? "");
-  if (!opened.ok) return fail(opened.status === "unauthorized" ? "unauthorized" : "failed", opened.error);
+  if (!opened.ok) return fail(opened.status === "unauthorized" ? "unauthorized" : "failed", opened.error, opened.status);
   if (!initialized(opened.text) && !opened.sessionId) return fail("failed", "The MCP initialize handshake failed. The connection is not connected.");
   const meta = rpcEnvelope(opened.text).result;
   const version = meta && typeof meta === "object" && typeof (meta as { protocolVersion?: unknown }).protocolVersion === "string"
@@ -332,7 +365,7 @@ async function refreshMcp(db: ConnectionDb | null, userId: string, id: string, d
       headers: { "content-type": "application/json", ...protocolHeaders, ...(row.token ? { authorization: `Bearer ${row.token}` } : {}) },
       body: JSON.stringify({ jsonrpc: "2.0", method: "notifications/initialized" }),
     }, deps, row.token ?? "");
-    if (!notified.ok) return fail("failed", "The MCP initialized notification was not accepted.");
+    if (!notified.ok) return fail("failed", "The MCP initialized notification was not accepted.", notified.status);
   }
   const operations: PublicOperation[] = [];
   const cursors = new Set<string>();
@@ -343,7 +376,7 @@ async function refreshMcp(db: ConnectionDb | null, userId: string, id: string, d
       headers: { "content-type": "application/json", accept: "application/json, text/event-stream", ...protocolHeaders, ...(row.token ? { authorization: `Bearer ${row.token}` } : {}) },
       body: JSON.stringify({ jsonrpc: "2.0", id: 2 + cursors.size, method: "tools/list", params: cursor ? { cursor } : {} }),
     }, deps, row.token ?? "");
-    if (!listed.ok) return fail(listed.status === "unauthorized" ? "unauthorized" : "failed", listed.error);
+    if (!listed.ok) return fail(listed.status === "unauthorized" ? "unauthorized" : "failed", listed.error, listed.status);
     const data = rpcEnvelope(listed.text).result as { tools?: Parameters<typeof operationFromTool>[0][]; nextCursor?: unknown } | undefined;
     if (!Array.isArray(data?.tools)) return fail("failed", "Tool discovery returned an unreadable page.");
     operations.push(...data.tools.map(operationFromTool).filter((item): item is PublicOperation => Boolean(item)));
@@ -351,11 +384,8 @@ async function refreshMcp(db: ConnectionDb | null, userId: string, id: string, d
     if (operations.length > 256 || (cursor && (cursors.has(cursor) || cursors.size >= 15))) return fail("failed", "Tool discovery was incomplete. Check the server and test again.");
     if (cursor) cursors.add(cursor);
   } while (cursor);
-  row.operations = operations;
-  row.state = operations.some((item) => item.compatible) ? "ready" : "incompatible";
-  row.error = row.state === "incompatible" ? "No tool advertised an object argument schema. A generic text argument was not assumed." : "";
-  await writeRow(db, userId, row);
-  return toPublic(row)!;
+  const state = operations.some((item) => item.compatible) ? "ready" : "incompatible";
+  return publish({ ...row, operations, state, error: state === "incompatible" ? "No tool advertised an object argument schema. A generic text argument was not assumed." : "" });
 }
 
 export async function callCustomConnection(input: {
@@ -365,6 +395,7 @@ export async function callCustomConnection(input: {
   operation: string;
   args?: Record<string, unknown>;
   confirmed?: boolean;
+  expectedRevision?: string;
   fetch?: FetchLike;
   lookup?: DnsLookupFn;
   timeoutMs?: number;
@@ -392,6 +423,20 @@ export async function callCustomConnection(input: {
   }
   const checked = validateArgs(operation.inputSchema, input.args ?? {});
   if (!checked.ok) return { ok: false, status: "incompatible", text: checked.error, connection, transport: null, rpc: null };
+  if (input.expectedRevision && input.expectedRevision !== connection.capabilityRevision) {
+    return { ok: false, status: "incompatible", text: "This connection or its tool definitions changed. Refresh and review the call again. Nothing was called.", connection, transport: null, rpc: null };
+  }
+  if (connection.kind === "mcp") {
+    const fresh = await refreshMcp(input.db, input.userId, row.id, input);
+    if (fresh.state !== "ready" || fresh.capabilityRevision !== connection.capabilityRevision) {
+      return { ok: false, status: fresh.discoveryStatus === "timeout" ? "timeout" : fresh.state === "unauthorized" ? "unauthorized" : "incompatible", text: fresh.error || "The available tool definition changed. Review the refreshed arguments and confirm again. Nothing was called.", connection: fresh, transport: null, rpc: null };
+    }
+    const latest = (await loadRegistry(input.userId, input.db)).servers.find((item) => item.id === row.id);
+    if (!latest?.enabled || latest.url !== row.url || latest.token !== row.token || connectionCapabilityRevision(latest) !== fresh.capabilityRevision) {
+      return { ok: false, status: "error", text: "The connection changed while checking its tools. Review it again. Nothing was called.", connection: latest ? toPublic(latest) : null, transport: null, rpc: null };
+    }
+    row.tokenEnc = latest.tokenEnc;
+  }
   const headers: Record<string, string> = { accept: "application/json", ...(row.token ? { authorization: `Bearer ${row.token}` } : {}) };
   const token = row.token ?? "";
   async function recordAccess(state: "ready" | "unauthorized", error: string) {

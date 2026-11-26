@@ -23,8 +23,9 @@ import {
   enqueueRun,
   pauseRun,
   resumeRun,
-  runDueSchedules,
-  tickFleet,
+  assignDelegation,
+  delegationGoals,
+  scheduleExecutionStatus,
   togglePin,
   toolCatalog,
   type FleetTool,
@@ -248,6 +249,7 @@ export function FleetPanel({
         setMcpToolsState(next);
         if (next.status === "ready") {
           setMcpTools(next.items);
+          window.dispatchEvent(new Event("adrian-mcp-catalog-refreshed"));
           return;
         }
         setMcpTools([]);
@@ -573,7 +575,7 @@ export function FleetPanel({
           <button
             type="button"
             className="min-h-11 rounded-panel border border-line px-3 text-sm"
-            onClick={() => setWs((prev) => tickFleet(prev, { now: new Date().toISOString(), workerId: "browser-worker" }))}
+            onClick={() => window.dispatchEvent(new Event("adrian-fleet-step"))}
           >
             Run worker once
           </button>
@@ -600,6 +602,8 @@ export function FleetPanel({
               <p className="break-words font-semibold">{run.goal}</p>
               <p className="text-muted">{ws.agents.find((agent) => agent.id === run.agentId)?.name ?? "Agent"} · {run.state.replaceAll("_", " ")}</p>
               {run.plan.length > 0 && <p className="mt-1 text-xs text-muted">Plan: {run.plan.map((step) => step.tool).join(" → ")}. Missing tools wait. They are not marked done.</p>}
+              {run.chatId && <p className="text-xs text-muted">Destination: {ws.chats.find((chat) => chat.id === run.chatId)?.title || "Conversation unavailable; result retained in Runs"} · {run.scheduledAt || ""}</p>}
+              {run.step === 0 && run.state === "queued" && run.depth === 0 && run.plan.some((step) => step.tool === "delegate") && <fieldset className="mt-2"><legend>Delegate assignments · at most two children</legend>{delegationGoals(run.goal).map((goal, index) => <label key={index} className="block text-xs">{goal}<select aria-label={`Child agent ${index + 1}`} value={run.delegations?.[index]?.agentId || run.agentId} onChange={(event) => setWs((prev) => assignDelegation(prev, run.id, index, event.target.value))}>{ws.agents.filter((agent) => !agent.archived).map((agent) => <option key={agent.id} value={agent.id}>{agent.name} · {agent.tools.filter((tool) => tool !== "delegate").join(", ")}</option>)}</select></label>)}</fieldset>}
               {run.result ? <p className="mt-1 whitespace-pre-wrap">{run.result}</p> : null}
               {run.error ? <p className="mt-1 text-danger">{run.error}</p> : null}
               {events.length > 0 && <details className="mt-2">
@@ -609,12 +613,19 @@ export function FleetPanel({
                 </ul>
               </details>}
               <div className="mt-2 flex flex-wrap gap-2">
+                {run.plan[run.step]?.tool === "model" && ["queued", "waiting_external"].includes(run.state) && !run.modelOperation && <button type="button" disabled={ws.halted || !run.execution?.provider} className="min-h-11 rounded-panel border border-line px-3" onClick={() => {
+                  const provider = run.execution?.provider || "";
+                  const free = ["ollama", "openrouter", "nemotron"].includes(provider);
+                  if (!free && !window.confirm(`Run one model call using ${provider} for this task? This provider may charge your account. No fallback or automatic retry is allowed.`)) return;
+                  window.dispatchEvent(new CustomEvent("adrian-fleet-model-step", { detail: { runId: run.id, allowPaid: !free } }));
+                }}>Run selected model once · {run.execution?.provider || "Select a provider in the bot and queue a new run"}</button>}
                 {(run.state === "queued" || run.state === "running") ? <button type="button" className="min-h-11 rounded-panel border border-line px-3" onClick={() => setWs((prev) => pauseRun(prev, run.id))}>Pause</button> : null}
                 {(run.state === "paused" || run.state === "waiting_external") ? <button type="button" className="min-h-11 rounded-panel border border-line px-3" onClick={() => setWs((prev) => resumeRun(prev, run.id))}>{run.state === "waiting_external" ? "Retry this step" : "Resume"}</button> : null}
                 {!["completed", "failed", "canceled"].includes(run.state) ? <button type="button" className="min-h-11 rounded-panel border border-line px-3" onClick={() => setWs((prev) => cancelRun(prev, run.id))}>Stop run</button> : null}
                 {run.state === "waiting_approval" ? <>
-                  {run.plan.some((step) => step.tool === "browser") ? <button type="button" className="min-h-11 rounded-panel border border-line px-3" onClick={() => setWs((prev) => approveRunAction(prev, run.id, "browser"))}>Approve browser</button> : null}
-                  {run.plan.some((step) => step.tool === "gmail_send") ? <button type="button" className="min-h-11 rounded-panel border border-line px-3" onClick={() => setWs((prev) => approveRunAction(prev, run.id, "gmail_send"))}>Approve send</button> : null}
+                  <p className="w-full text-xs">Review operation {run.id} · step {run.step + 1} · {run.plan[run.step]?.tool} · {run.goal} · agent revision {ws.agents.find((agent) => agent.id === run.agentId)?.version}. Approval covers this exact operation once.</p>
+                  {run.plan[run.step]?.tool === "browser" ? <button type="button" className="min-h-11 rounded-panel border border-line px-3" onClick={() => setWs((prev) => approveRunAction(prev, run.id, "browser"))}>Approve browser</button> : null}
+                  {run.plan[run.step]?.tool === "gmail_send" ? <button type="button" className="min-h-11 rounded-panel border border-line px-3" onClick={() => setWs((prev) => approveRunAction(prev, run.id, "gmail_send"))}>Approve send</button> : null}
                 </> : null}
               </div>
             </li>
@@ -790,7 +801,7 @@ export function FleetPanel({
         </div>
         </div>
         <div hidden={scheduleBand !== "jobs"}>
-        <button type="button" className="mt-3 min-h-11 rounded-panel border border-line px-3 text-sm" onClick={() => setWs((prev) => runDueSchedules(prev, new Date().toISOString()))}>Run due schedules</button>
+        <button type="button" className="mt-3 min-h-11 rounded-panel border border-line px-3 text-sm" onClick={() => window.dispatchEvent(new Event("adrian-fleet-step"))}>Run due schedules</button>
         <ul className="mt-4 space-y-2">
           {ws.schedules.length === 0 && (
             <li className="empty-state">
@@ -806,7 +817,11 @@ export function FleetPanel({
             <li key={job.id} className="dense-card p-3 text-sm">
               <p className="font-semibold">{job.name}</p>
               <p className="text-sm">Task: {job.instruction || job.name}</p>
-              <p className="text-sm text-muted">Runs in an open browser or a running local schedule worker.</p>
+              <p className="text-sm text-muted">{scheduleExecutionStatus(job)}</p>
+              <label className="block text-xs">Execution environment<select value={job.executionTarget || "browser"} onChange={(event) => setWs((prev) => ({ ...prev, schedules: prev.schedules.map((item) => item.id === job.id ? { ...item, executionTarget: event.target.value as "browser" | "local-worker" | "hosted-worker", workerHeartbeatAt: undefined, workerId: undefined } : item) }))}><option value="browser">Open browser, synchronized server pass</option><option value="local-worker">Local persistent worker on this saved database</option><option value="hosted-worker">Hosted worker — requires configured scheduler and recent heartbeat</option></select></label>
+              <label className="block text-xs">Missed occurrences<select value={job.missedPolicy || "run-once"} onChange={(event) => setWs((prev) => ({ ...prev, schedules: prev.schedules.map((item) => item.id === job.id ? { ...item, missedPolicy: event.target.value as "run-once" | "skip" | "review" | "catch-up" } : item) }))}><option value="run-once">Run once; account for the remaining missed times</option><option value="skip">Skip missed</option><option value="review">Pause for review</option><option value="catch-up">Catch up — at most 3 per pass</option></select></label>
+              <label className="block text-xs">Unresolved occurrences<select value={job.overlapPolicy || "one-active"} onChange={(event) => setWs((prev) => ({ ...prev, schedules: prev.schedules.map((item) => item.id === job.id ? { ...item, overlapPolicy: event.target.value as "one-active" | "skip" | "queue" } : item) }))}><option value="one-active">One active occurrence</option><option value="skip">Skip while busy</option><option value="queue">Queue separately — at most 10 unresolved</option></select></label>
+              {Boolean(job.missedCount || job.skippedCount) && <p className="text-xs text-muted">Last recovery: {job.missedCount || 0} missed · {job.skippedCount || 0} skipped in recorded history.</p>}
               <p className="mt-1 text-sm text-muted">{job.enabled ? (blocked ? "Blocked" : "On") : "Off"} · {bot?.name ?? "No bot assigned"}</p>
               <p className="text-sm text-muted">{job.clockHour == null ? `Every ${job.intervalMinutes} minutes` : `Daily at ${String(job.clockHour).padStart(2, "0")}:${String(job.clockMinute ?? 0).padStart(2, "0")} ${job.timeZone || "UTC"}`}</p>
               {blocked ? <p className="text-sm text-danger">{bot?.archived ? "Agent archived" : "Agent unavailable"}</p> : <p className="text-sm text-muted">Next due in your local time <time dateTime={job.nextRunAt}>{new Date(job.nextRunAt).toLocaleString()}</time></p>}

@@ -1,3 +1,5 @@
+import { normalizeProviderUsage, providerRequestId } from "./provider-usage.ts";
+import type { ModelUsage } from "./stream.ts";
 /** Bounded provider-specific chat calls with normalised assistant text. */
 import { reportedModel } from "./stream.ts";
 import { isOpenRouterFreeModel, OPENROUTER_FREE_MODEL_REQUIRED, OPENROUTER_FREE_ROUTING } from "./provider-catalog.ts";
@@ -71,7 +73,8 @@ export async function callConfiguredProvider(input: {
   history?: History[];
   signal?: AbortSignal;
   fetch: FetchLike;
-}): Promise<{ ok: boolean; text: string; error: string; model?: string; httpStatus?: number; retryAfter?: string }> {
+  onDispatch?: () => void;
+}): Promise<{ ok: boolean; text: string; error: string; model?: string; httpStatus?: number; retryAfter?: string; usage?: ModelUsage | null; requestId?: string | null }> {
   if (!input.key) return { ok: false, text: "", error: "No " + input.id + " key is configured. Nothing was sent." };
   const prompt = input.prompt.trim();
   if (!prompt) return { ok: false, text: "", error: "Write a message first." };
@@ -114,6 +117,7 @@ export async function callConfiguredProvider(input: {
   const target = endpoints[input.id];
   let response: Awaited<ReturnType<FetchLike>>;
   try {
+    input.onDispatch?.();
     response = await input.fetch(target.url, { method: "POST", ...target.init, signal: input.signal ? AbortSignal.any([input.signal, AbortSignal.timeout(25_000)]) : AbortSignal.timeout(25_000) });
   } catch {
     return { ok: false, text: "", error: input.id + " could not be reached. Nothing was substituted." };
@@ -130,7 +134,7 @@ export async function callConfiguredProvider(input: {
     if (raw.length > 500_000) return { ok: false, text: "", error: input.id + " returned a response larger than the supported limit." };
     const payload = JSON.parse(raw);
     const parsed = payload && typeof payload === "object" ? extractAssistantText(input.id, payload) : "";
-    return parsed ? { ok: true, text: parsed, model: reportedModel(input.id === "gemini" ? payload.modelVersion : payload.model), error: "" } :
+    return parsed ? { ok: true, text: parsed, model: reportedModel(input.id === "gemini" ? payload.modelVersion : payload.model), usage: normalizeProviderUsage(input.id, payload), requestId: providerRequestId(response.headers, payload), error: "" } :
       { ok: false, text: "", error: input.id + " returned no assistant text or an unsupported response format." };
   } catch {
     return { ok: false, text: "", error: input.id + " returned an unreadable response." };
@@ -153,7 +157,8 @@ export async function routeSelectedModel(input: {
   history?: History[];
   signal?: AbortSignal;
   fetch: FetchLike;
-}): Promise<{ ok: boolean; text: string; error: string; model: string; requestedModel?: string; httpStatus?: number; retryAfter?: string }> {
+  onDispatch?: () => void;
+}): Promise<{ ok: boolean; text: string; error: string; model: string; requestedModel?: string; httpStatus?: number; retryAfter?: string; usage?: ModelUsage | null; requestId?: string | null }> {
   const prompt = input.prompt.trim();
   if (!prompt) return { ok: false, text: "", error: "Write a message first. Nothing was sent.", model: input.id };
   if (input.id === "nemotron" || input.id === "openrouter") {
@@ -169,6 +174,7 @@ export async function routeSelectedModel(input: {
       signal: input.signal,
       model,
       fetch: input.fetch,
+      onDispatch: input.onDispatch,
     });
     return { ...called, model: reportedModel(called.model), requestedModel: model };
   }
@@ -177,6 +183,7 @@ export async function routeSelectedModel(input: {
     if (!url) return { ok: false, text: "", error: "Local model is selected, but no local runner is reachable. Nothing was sent and Grok was not substituted.", model: "ollama" };
     let response: Awaited<ReturnType<FetchLike>>;
     try {
+      input.onDispatch?.();
       response = await input.fetch(url, { method: "POST", signal: input.signal, headers: { "content-type": "application/json" }, body: JSON.stringify({ model: input.env.OLLAMA_MODEL || "local", prompt, ...(input.systemPrompt ? { system: input.systemPrompt } : {}) }) });
     } catch {
       return { ok: false, text: "", error: "Local model runner could not be reached. Nothing was substituted.", model: "ollama" };
@@ -185,7 +192,7 @@ export async function routeSelectedModel(input: {
     try {
       const json = JSON.parse(await response.text()) as { text?: unknown; model?: unknown };
       const text = typeof json.text === "string" ? json.text.trim() : "";
-      return text ? { ok: true, text, error: "", model: reportedModel(json.model) } : { ok: false, text: "", error: "Local model runner returned no text. Nothing was substituted.", model: "ollama" };
+      return text ? { ok: true, text, error: "", model: reportedModel(json.model), usage: normalizeProviderUsage("ollama", json), requestId: providerRequestId(response.headers, json) } : { ok: false, text: "", error: "Local model runner returned no text. Nothing was substituted.", model: "ollama" };
     } catch {
       return { ok: false, text: "", error: "Local model runner returned an unreadable response.", model: "ollama" };
     }

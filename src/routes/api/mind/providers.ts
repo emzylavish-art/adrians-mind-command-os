@@ -25,7 +25,7 @@ export const Route = createFileRoute("/api/mind/providers")({
       GET: async ({ request }) => {
         try {
           const userId = await owner(request);
-          return reply({ ok: true, providers: await listAiProviders(userId) });
+          return reply({ ok: true, ownerId: userId, providers: await listAiProviders(userId) });
         } catch (error) {
           if (error instanceof UnauthorizedError) {
             return reply({ ok: false, error: "Sign in is required." }, 401);
@@ -50,6 +50,7 @@ export const Route = createFileRoute("/api/mind/providers")({
           if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) return reply({ ok: false, error: "Invalid input." }, 400);
           data = parsed as Record<string, unknown>;
         } catch { return reply({ ok: false, error: "Invalid JSON input." }, 400); }
+        if (data.expectedOwnerId !== userId) return reply({ ok: false, error: "The signed-in account changed. Reload provider settings before making changes." }, 409);
         try {
           if (data.action === "save" || data.action === "discover") {
             const halt = await readHaltState(userId);
