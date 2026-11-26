@@ -73,6 +73,7 @@ export function TimeScrubber({ timeline, scrubMs, nowMs, message, mode, onScrubM
       <p className="dash3d-muted" style={{ fontSize: "0.68rem" }}>
         {message ? message : eventHint}
       </p>
+      <p className="dash3d-muted" style={{ fontSize: "0.68rem" }}>Historical views reconstruct bot health and reason only. Assignments, connections, weather and spend remain current.</p>
       {earliest != null ? (
         <p className="dash3d-muted" style={{ fontSize: "0.62rem" }}>
           from {formatWat(earliest)}

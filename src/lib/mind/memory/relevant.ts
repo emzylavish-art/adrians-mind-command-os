@@ -1,12 +1,17 @@
 type Note = { id: string; text: string; archived?: boolean; alwaysApply?: boolean };
 
+const EQUIVALENTS: Record<string, string> = { costs: "cost", price: "cost", pricing: "cost", expense: "cost", expenses: "cost", budget: "cost", deadlines: "deadline", due: "deadline", tasks: "task", projects: "project", preferences: "preference", preferred: "preference" };
+function terms(text: string) {
+  return new Set((text.toLowerCase().match(/[\p{L}\p{N}]{3,}/gu) ?? []).map((word) => EQUIVALENTS[word] ?? word));
+}
+
 /** Preserve ordinary preferences as fallback; move lexical evidence ahead of unrelated notes. */
 export function rankMemories<T extends Note>(items: T[], query: string) {
-  const words = new Set(query.toLowerCase().match(/[\p{L}\p{N}]{3,}/gu) ?? []);
+  const words = terms(query);
   return items.filter((item) => !item.archived).map((item) => {
-    const terms = new Set(item.text.toLowerCase().match(/[\p{L}\p{N}]{3,}/gu) ?? []);
+    const tokens = terms(item.text);
     let score = 0;
-    for (const word of words) if (terms.has(word)) score += word.length;
+    for (const word of words) if (tokens.has(word)) score += word.length;
     return { item, score };
   }).sort((a, b) => b.score - a.score);
 }
@@ -15,7 +20,9 @@ export function relevantMemories<T extends Note>(items: T[], query: string) {
   const eligible = rankMemories(items, query);
   const preferences = eligible.filter(({ item }) => item.alwaysApply);
   const relevant = eligible.filter(({ item, score }) => !item.alwaysApply && score > 0);
-  return [...preferences, ...relevant].slice(0, 12).map(({ item }) => item);
+  const reserved = Math.min(4, relevant.length);
+  const selectedPreferences = preferences.slice(0, 12 - reserved);
+  return [...selectedPreferences, ...relevant.slice(0, 12 - selectedPreferences.length)].map(({ item }) => item);
 }
 
 export function voiceProviderStatus(voiceKey: string | undefined) {

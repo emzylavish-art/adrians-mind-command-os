@@ -1,0 +1,1287 @@
+{
+  "audit": "C2 \u2014 Notion Recovery Audit",
+  "chapterId": "4231aa276323810e913fdd2b090f4e8b",
+  "baseSha": "18d5b9364e6bdcfec028eeccf56fe596946ed8ce",
+  "findings": [
+    {
+      "id": "AA-005",
+      "status": "fixed and tested",
+      "expected": "An ordinary chat skill invocation obeys its current Skills switch.",
+      "files": [
+        "src/lib/mind/skills.ts",
+        "src/components/mind/command-app.tsx"
+      ],
+      "changed": "Ordinary local tool dispatch uses runLocalSkill and the same enabled-state gate as named skills.",
+      "tests": [
+        "src/lib/mind/c2-workspace-recovery.test.ts",
+        "src/lib/mind/skills.test.ts"
+      ],
+      "remaining": [],
+      "evidenceLevels": [
+        "synthetic fixture",
+        "source integration review"
+      ],
+      "acceptance": "With Notes Off, ordinary note search returns no note content; enable Notes and the same search can return the synthetic note."
+    },
+    {
+      "id": "AA-006",
+      "status": "fixed and tested",
+      "expected": "Ordinary note-search grammar passes the requested query rather than the command prefix.",
+      "files": [
+        "src/lib/mind/skills.ts",
+        "src/components/mind/command-app.tsx"
+      ],
+      "changed": "Extracts the search phrase after search [my] notes [for/about] before calling the note adapter.",
+      "tests": [
+        "src/lib/mind/c2-workspace-recovery.test.ts",
+        "src/lib/mind/skills.test.ts"
+      ],
+      "remaining": [],
+      "evidenceLevels": [
+        "synthetic fixture",
+        "source integration review"
+      ],
+      "acceptance": "The ordinary command search my notes SYNTHETIC_COBALT returns the note containing that marker without requiring the command prefix in its content."
+    },
+    {
+      "id": "AA-007",
+      "status": "fixed and tested",
+      "expected": "A retry reads the current skill switch rather than a captured older value.",
+      "files": [
+        "src/lib/mind/skills.ts",
+        "src/components/mind/command-app.tsx"
+      ],
+      "changed": "Skill dispatch reads enabledSkillsRef.current; the ref updates in a layout effect when preferences change.",
+      "tests": [
+        "src/lib/mind/c2-workspace-recovery.test.ts",
+        "src/lib/mind/retry-fidelity.test.ts"
+      ],
+      "remaining": [
+        "The helper off/on branch is executed in fixtures; the actual ref-backed callback is source-reviewed."
+      ],
+      "evidenceLevels": [
+        "synthetic fixture",
+        "source integration review"
+      ],
+      "acceptance": "Capture a failed Notes-Off request, turn Notes On, and retry through the same dispatcher; latest state is used and only one execution occurs."
+    },
+    {
+      "id": "AA-011",
+      "status": "fixed and tested",
+      "expected": "Library deletion clearly distinguishes the retained historical attachment copy from the removed Library record.",
+      "files": [
+        "src/components/mind/command-app.tsx",
+        "src/lib/mind/workspace.ts"
+      ],
+      "changed": "Deletion confirmation discloses retained conversation/export copies and uses the tombstoned Library-delete helper; no historical messages are silently rewritten.",
+      "tests": [
+        "src/lib/mind/c2-workspace-recovery.test.ts"
+      ],
+      "remaining": [
+        "The full attach/send/delete/inspect-next-provider-context browser sequence remains unrun. The synthetic fixture verifies retained conversation text and Library deletion/tombstones. Stable cross-conversation attachment lineage remains a future extension."
+      ],
+      "evidenceLevels": [
+        "actual workspace mutation fixture",
+        "source integration review"
+      ],
+      "acceptance": "Deleting a Library entry removes that record, leaves historical conversations intact, and explicitly tells the owner that previous attachments/exports may retain text."
+    },
+    {
+      "id": "AA-012",
+      "status": "fixed and tested",
+      "expected": "Ordinary archive merge cannot resurrect a deliberately deleted Library ID.",
+      "files": [
+        "src/lib/mind/workspace.ts",
+        "src/lib/mind/workspace-edits.ts",
+        "src/lib/mind/types.ts",
+        "src/components/mind/command-app.tsx"
+      ],
+      "changed": "Persists deletedFileIds tombstones through normalization, export and merge. Explicit replacement can restore a new identity while preserving tombstones.",
+      "tests": [
+        "src/lib/mind/c2-workspace-recovery.test.ts",
+        "src/lib/mind/workspace.test.ts"
+      ],
+      "remaining": [],
+      "evidenceLevels": [
+        "synthetic fixture",
+        "source integration review"
+      ],
+      "acceptance": "Delete a synthetic file, export/reload, then merge an older archive: the old ID stays deleted. Explicit replacement creates a new restored ID."
+    },
+    {
+      "id": "AA-013",
+      "status": "fixed and tested",
+      "expected": "Repeated identical attachments reuse capacity within their original project scope.",
+      "files": [
+        "src/lib/mind/workspace.ts",
+        "src/components/mind/command-app.tsx"
+      ],
+      "changed": "Deduplicates matching project/name/text/document metadata before enforcing the Library cap; changed revisions or other projects remain distinct.",
+      "tests": [
+        "src/lib/mind/c2-workspace-recovery.test.ts"
+      ],
+      "remaining": [],
+      "evidenceLevels": [
+        "synthetic fixture",
+        "source integration review"
+      ],
+      "acceptance": "Ten identical scoped attachments create one file; a different revision and another project each create a separate file."
+    },
+    {
+      "id": "AA-014",
+      "status": "fixed and tested",
+      "expected": "Speak can use an independently selected text-answer provider with compatible separate input/output engines.",
+      "files": [
+        "src/lib/mind/voice/staged-pipeline.ts",
+        "src/components/mind/speak-stage.tsx",
+        "src/components/mind/command-app.tsx",
+        "src/lib/mind/voice/http.server.ts",
+        "src/lib/mind/server.ts"
+      ],
+      "changed": "Added a turn-by-turn pipeline and selectors for local/cloud transcription, current selected answer route, browser/cloud/no speech output; xAI realtime remains an explicitly selected alternative.",
+      "tests": [
+        "src/lib/mind/voice/staged-pipeline.test.ts",
+        "src/lib/mind/c2-interface-recovery.test.ts"
+      ],
+      "remaining": [
+        "Only synthetic provider receipts were exercised. No claim that Gemini or another live API actually answered. Local Handy/device availability and physical microphone behavior require later authorized verification."
+      ],
+      "evidenceLevels": [
+        "synthetic fixture",
+        "source integration review"
+      ],
+      "acceptance": "Local input + Gemini-labelled synthetic answer + browser output completes with three distinct receipts and zero xAI calls; unavailable selected engines return clear errors without substitution."
+    },
+    {
+      "id": "AA-015",
+      "status": "fixed and tested",
+      "expected": "Free-only mode allows local input and browser output while blocking chargeable speech stages before dispatch.",
+      "files": [
+        "src/lib/mind/voice/staged-pipeline.ts",
+        "src/components/mind/speak-stage.tsx",
+        "src/components/mind/command-app.tsx",
+        "src/lib/mind/voice/http.server.ts",
+        "src/lib/mind/server.ts"
+      ],
+      "changed": "Stage-specific spending gates replace a blanket block; cloud transcription/speech remain unavailable in free-only mode and a completed answer is preserved if output is blocked.",
+      "tests": [
+        "src/lib/mind/voice/staged-pipeline.test.ts"
+      ],
+      "remaining": [],
+      "evidenceLevels": [
+        "synthetic fixture",
+        "source integration review"
+      ],
+      "acceptance": "Handy input/browser speech works in fixture free-only mode; selecting cloud input causes zero capture/provider calls, and blocked cloud output preserves the text answer."
+    },
+    {
+      "id": "AA-016",
+      "status": "fixed and tested",
+      "expected": "An ended/replaced Speak call cannot play an older delayed response in the next call.",
+      "files": [
+        "src/lib/mind/voice/staged-pipeline.ts",
+        "src/components/mind/speak-stage.tsx",
+        "src/components/mind/command-app.tsx",
+        "src/lib/mind/voice/http.server.ts",
+        "src/lib/mind/server.ts"
+      ],
+      "changed": "Call-generation and abort state bind capture, answer and playback to the current session. A late answer/mute change blocks speech generation or playback.",
+      "tests": [
+        "src/lib/mind/voice/staged-pipeline.test.ts"
+      ],
+      "remaining": [],
+      "evidenceLevels": [
+        "synthetic fixture",
+        "source integration review"
+      ],
+      "acceptance": "Finish call A/open B while A answers: A never speaks in B. Mute during answer latency preserves text and suppresses speech."
+    },
+    {
+      "id": "AA-017",
+      "status": "fixed and tested",
+      "expected": "Speak attributes audio input, the actual answer turn and speech output separately.",
+      "files": [
+        "src/lib/mind/voice/staged-pipeline.ts",
+        "src/components/mind/speak-stage.tsx",
+        "src/components/mind/command-app.tsx",
+        "src/lib/mind/voice/http.server.ts",
+        "src/lib/mind/server.ts"
+      ],
+      "changed": "Three-stage receipts and mode-specific labels replace one ambiguous provider label. Each answer uses its own delivery receipt; absent identity is shown as not reported.",
+      "tests": [
+        "src/lib/mind/voice/staged-pipeline.test.ts",
+        "src/lib/mind/c2-interface-recovery.test.ts"
+      ],
+      "remaining": [],
+      "evidenceLevels": [
+        "synthetic fixture",
+        "source integration review"
+      ],
+      "acceptance": "A previous Gemini receipt cannot label the next response when its adapter supplies no identity; output/browser and realtime xAI labels remain distinct."
+    },
+    {
+      "id": "AA-021",
+      "status": "fixed and tested",
+      "expected": "Existing bot chats show their saved configuration revision and apply newer settings only through an explicit action.",
+      "files": [
+        "src/lib/mind/workspace.ts",
+        "src/lib/mind/types.ts",
+        "src/components/mind/command-app.tsx"
+      ],
+      "changed": "Added botConfigVersion plus Use latest bot settings. Refresh copies current allowed configuration, normalizes project/model/knowledge, and preserves message history.",
+      "tests": [
+        "src/lib/mind/c2-workspace-recovery.test.ts",
+        "src/lib/mind/bot-model.test.ts"
+      ],
+      "remaining": [],
+      "evidenceLevels": [
+        "synthetic fixture",
+        "source integration review"
+      ],
+      "acceptance": "A revision-2 conversation remains revision 2 after the bot becomes revision 3; explicit refresh updates future configuration without changing saved message IDs."
+    },
+    {
+      "id": "AA-022",
+      "status": "fixed and tested",
+      "expected": "Deleting a project removes stale active project assignments from chats, files and bots.",
+      "files": [
+        "src/lib/mind/workspace.ts",
+        "src/components/mind/command-app.tsx"
+      ],
+      "changed": "A shared deleteProject operation unlinks related records and stamps bot/chat revisions; associated notes remain historical records but orphan scope cannot retrieve them.",
+      "tests": [
+        "src/lib/mind/c2-workspace-recovery.test.ts"
+      ],
+      "remaining": [],
+      "evidenceLevels": [
+        "synthetic fixture",
+        "source integration review"
+      ],
+      "acceptance": "Delete a project used by a bot and chat: both project IDs become null; a stale chat object cannot retrieve that project\u2019s note."
+    },
+    {
+      "id": "AA-024",
+      "status": "fixed and tested",
+      "expected": "Copied bot knowledge and saved-memory state have separate truthful explanations.",
+      "files": [
+        "src/components/mind/command-app.tsx",
+        "src/lib/mind/workspace.ts"
+      ],
+      "changed": "Composer copy reflects the actual memoryChoice instead of saying Saved memory stays off unconditionally. Bot knowledge remains explicitly disclosed.",
+      "tests": [
+        "src/lib/mind/c2-workspace-recovery.test.ts"
+      ],
+      "remaining": [
+        "Memory Off context behavior and explicit bot refresh are tested; exact composer wording is source-reviewed."
+      ],
+      "evidenceLevels": [
+        "synthetic fixture",
+        "source integration review"
+      ],
+      "acceptance": "A bot chat with Memory On and copied knowledge reports memory on; with Memory Off it may send the copied note but retrieves no saved memory."
+    },
+    {
+      "id": "AA-029",
+      "status": "fixed and tested",
+      "expected": "Multiple unresolved operations remain independently discoverable and actionable.",
+      "files": [
+        "src/lib/mind/recovery-inbox.ts",
+        "src/lib/mind/workspace.ts",
+        "src/lib/mind/types.ts",
+        "src/components/mind/command-app.tsx"
+      ],
+      "changed": "Added a bounded normalized Recovery inbox with stable IDs, open/resolved/dismissed state, context and operation metadata; resolving one does not erase another.",
+      "tests": [
+        "src/lib/mind/c2-interface-recovery.test.ts",
+        "src/lib/mind/notion-entrypoint-recovery.test.ts"
+      ],
+      "remaining": [],
+      "evidenceLevels": [
+        "synthetic fixture",
+        "source integration review"
+      ],
+      "acceptance": "Persist two failures, reload/normalize, resolve one: the second stays open and visible."
+    },
+    {
+      "id": "AA-030",
+      "status": "fixed and tested",
+      "expected": "An unrelated send may clear a transient banner without erasing unresolved recovery state.",
+      "files": [
+        "src/lib/mind/recovery-inbox.ts",
+        "src/lib/mind/workspace.ts",
+        "src/lib/mind/types.ts",
+        "src/components/mind/command-app.tsx"
+      ],
+      "changed": "Persistent recovery records outlive the transient failure banner and unrelated chat creation; alerts derive attention from both.",
+      "tests": [
+        "src/lib/mind/c2-interface-recovery.test.ts"
+      ],
+      "remaining": [],
+      "evidenceLevels": [
+        "synthetic fixture",
+        "source integration review"
+      ],
+      "acceptance": "Create an unresolved recovery, begin unrelated work, then reload: the recovery remains open until explicitly resolved or dismissed."
+    },
+    {
+      "id": "AA-031",
+      "status": "fixed and tested",
+      "expected": "Reload recovery uses structured operation descriptors and revalidates current context before any dispatch.",
+      "files": [
+        "src/lib/mind/recovery-inbox.ts",
+        "src/lib/mind/workspace.ts",
+        "src/lib/mind/types.ts",
+        "src/components/mind/command-app.tsx",
+        "src/lib/mind/notion-operation-store.ts"
+      ],
+      "changed": "Persisted Notion descriptors reconstruct verification of the same operation. Other records reopen their feature/activity for review; executable callbacks are never serialized or silently replayed.",
+      "tests": [
+        "src/lib/mind/c2-interface-recovery.test.ts",
+        "src/lib/mind/notion-entrypoint-recovery.test.ts",
+        "src/lib/mind/durable-recovery.test.ts"
+      ],
+      "remaining": [
+        "Feature-specific executable recovery beyond implemented Notion is deliberately not inferred from arbitrary recorded action strings."
+      ],
+      "evidenceLevels": [
+        "synthetic fixture",
+        "source integration review"
+      ],
+      "acceptance": "Reload accepted/uncertain Notion recovery and check the same operation with confirmed:false; a workspace mismatch blocks the call and generic records never repeat external actions automatically."
+    },
+    {
+      "id": "AA-032",
+      "status": "fixed and tested",
+      "expected": "Pending approvals remain visible independently of avatar activity or another warning.",
+      "files": [
+        "src/components/mind/command-app.tsx",
+        "src/lib/mind/recovery-inbox.ts"
+      ],
+      "changed": "Alerts contain independent pending-run approval count and Recovery entries; No current warnings excludes pending approvals/recoveries.",
+      "tests": [
+        "src/lib/mind/c2-interface-recovery.test.ts",
+        "src/components/mind/c2-command-entrypoints.test.ts"
+      ],
+      "remaining": [
+        "Alert rendering is source-reviewed; approval policy and multiple-recovery state are fixture-tested."
+      ],
+      "evidenceLevels": [
+        "synthetic fixture",
+        "source integration review"
+      ],
+      "acceptance": "With two waiting approvals and an unrelated failure, Alerts still shows both approval awareness and independent recoveries."
+    },
+    {
+      "id": "AA-050",
+      "status": "fixed and tested",
+      "expected": "Older archives do not overwrite a newer bot configuration.",
+      "files": [
+        "src/lib/mind/workspace.ts",
+        "src/lib/mind/use-mind-workspace.ts"
+      ],
+      "changed": "Archive merges compare explicit update/version metadata and preserve the current record when incoming freshness is unproven.",
+      "tests": [
+        "src/lib/mind/c2-workspace-recovery.test.ts",
+        "src/lib/mind/workspace.test.ts"
+      ],
+      "remaining": [],
+      "evidenceLevels": [
+        "synthetic fixture",
+        "source integration review"
+      ],
+      "acceptance": "Merge revision 1 into revision 3: current instructions, model and identity remain revision 3."
+    },
+    {
+      "id": "AA-051",
+      "status": "fixed and tested",
+      "expected": "Restoring data cannot silently restore an old enabled schedule or grant automatic execution authority.",
+      "files": [
+        "src/lib/mind/workspace.ts",
+        "src/lib/mind/fleet.ts"
+      ],
+      "changed": "Merge is conservative about enabled state; explicit replacement disables imported schedules, and stale scheduling result state cannot redirect execution.",
+      "tests": [
+        "src/lib/mind/c2-workspace-recovery.test.ts",
+        "src/lib/mind/workspace-archive-manifest.test.ts",
+        "src/lib/mind/fleet-audit-recovery.test.ts"
+      ],
+      "remaining": [],
+      "evidenceLevels": [
+        "synthetic fixture",
+        "source integration review"
+      ],
+      "acceptance": "Merge or replace an older enabled schedule over a disabled current schedule: it does not execute until explicitly enabled again."
+    },
+    {
+      "id": "AA-052",
+      "status": "fixed and tested",
+      "expected": "Stale imported runs cannot replace newer terminal execution state or revive old approvals.",
+      "files": [
+        "src/lib/mind/workspace.ts"
+      ],
+      "changed": "Current run IDs take precedence; imported unfinished runs are paused and stripped of leases and execution approvals during restoration.",
+      "tests": [
+        "src/lib/mind/c2-workspace-recovery.test.ts",
+        "src/lib/mind/workspace-archive-manifest.test.ts"
+      ],
+      "remaining": [],
+      "evidenceLevels": [
+        "synthetic fixture",
+        "source integration review"
+      ],
+      "acceptance": "A completed local run stays completed when merged with an older queued copy; a new imported running record becomes paused without approval tokens."
+    },
+    {
+      "id": "AA-053",
+      "status": "fixed and tested",
+      "expected": "Conversation metadata has independent revision evidence while messages and retrieval history merge safely.",
+      "files": [
+        "src/lib/mind/workspace.ts",
+        "src/lib/mind/use-mind-workspace.ts",
+        "src/lib/mind/types.ts"
+      ],
+      "changed": "Metadata edits receive updatedAt; merge selects the fresher metadata independently from message content and unions retrieval evidence.",
+      "tests": [
+        "src/lib/mind/c2-workspace-recovery.test.ts"
+      ],
+      "remaining": [],
+      "evidenceLevels": [
+        "synthetic fixture",
+        "source integration review"
+      ],
+      "acceptance": "A newer title/settings edit survives merging an older conversation whose message content overlaps; message IDs and conservative temporary privacy remain intact."
+    },
+    {
+      "id": "AA-054",
+      "status": "fixed and tested",
+      "expected": "Divergent saved-memory revisions preserve the losing branch as history.",
+      "files": [
+        "src/lib/mind/workspace.ts"
+      ],
+      "changed": "Merged memory history unions version entries and both differing current texts, deduplicates them and sorts deterministically while selecting the newest effective text.",
+      "tests": [
+        "src/lib/mind/c2-workspace-recovery.test.ts",
+        "src/lib/mind/workspace.test.ts"
+      ],
+      "remaining": [],
+      "evidenceLevels": [
+        "synthetic fixture",
+        "source integration review"
+      ],
+      "acceptance": "Merge divergent left/right notes: newest text becomes effective and the losing text plus common base remain in version history."
+    },
+    {
+      "id": "AA-055",
+      "status": "fixed and tested",
+      "expected": "Archive checksum validation is described as content integrity, not author/account authenticity.",
+      "files": [
+        "src/lib/mind/workspace-archive-manifest.ts",
+        "src/lib/mind/workspace.ts",
+        "src/components/mind/command-app.tsx"
+      ],
+      "changed": "Export manifest explicitly records authenticity=not-established and UI explains the checksum boundary; restoration revalidates execution authority.",
+      "tests": [
+        "src/lib/mind/workspace-archive-manifest.test.ts",
+        "src/lib/mind/c2-workspace-recovery.test.ts"
+      ],
+      "remaining": [
+        "Authenticated cross-account backup provenance/signing was not added; choosing and operating that trust model remains separate."
+      ],
+      "evidenceLevels": [
+        "synthetic fixture",
+        "source integration review"
+      ],
+      "acceptance": "Export/import a synthetic archive: manifest cannot claim trusted authorship, and old schedules/approvals cannot authorize new execution."
+    },
+    {
+      "id": "AA-060",
+      "status": "fixed and tested",
+      "expected": "Storage statistics do not serialize the full workspace while Settings is hidden.",
+      "files": [
+        "src/components/mind/command-app.tsx"
+      ],
+      "changed": "The memoized Blob/JSON calculation is gated by view===settings.",
+      "tests": [
+        "src/lib/mind/c2-interface-recovery.test.ts"
+      ],
+      "remaining": [
+        "No wall-clock performance gain or device benchmark is claimed."
+      ],
+      "evidenceLevels": [
+        "synthetic fixture",
+        "source integration review"
+      ],
+      "acceptance": "Execute the actual storedBytes initializer in Chat: zero serialization calls. Switch to Settings: one current serialization occurs."
+    },
+    {
+      "id": "AA-061",
+      "status": "fixed and tested",
+      "expected": "Elapsed tool timers update their own display instead of the complete CommandApp timer state.",
+      "files": [
+        "src/components/mind/command-app.tsx"
+      ],
+      "changed": "Moved the 250 ms elapsed state/interval into ToolElapsed and removed timelineTickMs from CommandApp.",
+      "tests": [
+        "src/lib/mind/tools-timeline.test.ts"
+      ],
+      "remaining": [
+        "Component isolation is source-confirmed and elapsed calculations have existing unit coverage. React Profiler measurements of render-count/latency improvement remain unrun."
+      ],
+      "evidenceLevels": [
+        "source integration review",
+        "existing elapsed-time unit fixtures"
+      ],
+      "acceptance": "An active tool timer updates its own elapsed display, stops its interval when ended, and does not require a CommandApp-wide timer state update."
+    },
+    {
+      "id": "AA-063",
+      "status": "fixed and tested",
+      "expected": "A seconds display checks elapsed time at second precision and derives it from the recorder clock.",
+      "files": [
+        "src/components/mind/command-app.tsx"
+      ],
+      "changed": "Recording display interval is 1000 ms and derives elapsed seconds from taskRecorder.elapsed().",
+      "tests": [
+        "src/lib/mind/c2-interface-recovery.test.ts"
+      ],
+      "remaining": [
+        "No device-level recording/timer accuracy claim is made."
+      ],
+      "evidenceLevels": [
+        "synthetic fixture",
+        "source integration review"
+      ],
+      "acceptance": "The actual recording effect installs a 1000 ms timer; an elapsed timestamp of 2300 ms displays 2 seconds."
+    },
+    {
+      "id": "AA-064",
+      "status": "fixed and tested",
+      "expected": "Shared dialogs have one named modal semantic, native focus containment, cancellation and opener restoration.",
+      "files": [
+        "src/components/mind/command-app.tsx",
+        "src/components/mind/command-search.css"
+      ],
+      "changed": "Replaced contradictory wrapper semantics with a portal-mounted native dialog, labelledBy/onDismiss at every overlay call site, showModal/close lifecycle and connected-opener restoration.",
+      "tests": [
+        "src/lib/mind/c2-interface-recovery.test.ts"
+      ],
+      "remaining": [
+        "Physical keyboard, screen-reader and browser top-layer verification remain release-preview checks."
+      ],
+      "evidenceLevels": [
+        "synthetic fixture",
+        "source integration review"
+      ],
+      "acceptance": "The actual Overlay fixture opens a named native dialog, handles cancel once, closes, and restores focus; all call sites supply a name and dismissal handler."
+    },
+    {
+      "id": "AA-065",
+      "status": "fixed and tested",
+      "expected": "Shared dialogs have one named modal semantic, native focus containment, cancellation and opener restoration.",
+      "files": [
+        "src/components/mind/command-app.tsx",
+        "src/components/mind/command-search.css"
+      ],
+      "changed": "Replaced contradictory wrapper semantics with a portal-mounted native dialog, labelledBy/onDismiss at every overlay call site, showModal/close lifecycle and connected-opener restoration.",
+      "tests": [
+        "src/lib/mind/c2-interface-recovery.test.ts"
+      ],
+      "remaining": [
+        "Physical keyboard, screen-reader and browser top-layer verification remain release-preview checks."
+      ],
+      "evidenceLevels": [
+        "synthetic fixture",
+        "source integration review"
+      ],
+      "acceptance": "The actual Overlay fixture opens a named native dialog, handles cancel once, closes, and restores focus; all call sites supply a name and dismissal handler."
+    },
+    {
+      "id": "AA-066",
+      "status": "fixed and tested",
+      "expected": "Pinning is visible and keyboard accessible without a long-press gesture.",
+      "files": [
+        "src/components/mind/command-app.tsx"
+      ],
+      "changed": "Added explicit labelled Pin/Unpin controls that use the existing real pin mutation and report capacity accurately.",
+      "tests": [
+        "src/components/mind/c2-command-entrypoints.test.ts"
+      ],
+      "remaining": [],
+      "evidenceLevels": [
+        "synthetic fixture",
+        "source integration review"
+      ],
+      "acceptance": "Activate the real Pin button: one saved pin; activate Unpin: removal; with 24 existing pins, no extra pin and a truthful limit notice."
+    },
+    {
+      "id": "AA-067",
+      "status": "fixed and tested",
+      "expected": "Shortcut guidance matches the current platform.",
+      "files": [
+        "src/lib/mind/palette.ts",
+        "src/components/mind/command-app.tsx"
+      ],
+      "changed": "Platform-aware shortcut helper supplies Command-K on Apple platforms and Ctrl K elsewhere after mount.",
+      "tests": [
+        "src/lib/mind/c2-interface-recovery.test.ts"
+      ],
+      "remaining": [],
+      "evidenceLevels": [
+        "synthetic fixture",
+        "source integration review"
+      ],
+      "acceptance": "MacIntel returns Command-K and Win32 returns Ctrl K; existing shortcut handler still accepts the matching modifier."
+    },
+    {
+      "id": "AA-068",
+      "status": "fixed and tested",
+      "expected": "Mobile navigation shares the application theme tokens while preserving reduced-motion and focus behavior.",
+      "files": [
+        "src/components/mind/command-app.tsx"
+      ],
+      "changed": "Drawer background/text/radius/shadow derive from shared CSS tokens instead of separate hardcoded light/dark colors.",
+      "tests": [
+        "src/lib/mind/c2-interface-recovery.test.ts"
+      ],
+      "remaining": [
+        "Token wiring is source-reviewed; a real mobile light/dark/high-contrast screenshot and focus check remain unrun. No visual-release proof is claimed."
+      ],
+      "evidenceLevels": [
+        "actual JSX/CSS token integration fixture",
+        "source integration review"
+      ],
+      "acceptance": "In a controlled browser, change theme while opening the mobile drawer: shared panel/foreground tokens apply, reduced motion stays honored, and drawer focus still works."
+    },
+    {
+      "id": "AA-070",
+      "status": "fixed and tested",
+      "expected": "Always-apply preferences cannot consume every slot needed by relevant task evidence.",
+      "files": [
+        "src/lib/mind/memory/relevant.ts"
+      ],
+      "changed": "Reserves up to four of the twelve selected slots for task-relevant non-preference notes while retaining remaining preferences.",
+      "tests": [
+        "src/lib/mind/c2-workspace-recovery.test.ts"
+      ],
+      "remaining": [],
+      "evidenceLevels": [
+        "synthetic fixture",
+        "source integration review"
+      ],
+      "acceptance": "With twelve preferences and one relevant budget note, the result stays within twelve and includes the budget evidence."
+    },
+    {
+      "id": "AA-071",
+      "status": "fixed and tested",
+      "expected": "A free local path recognizes bounded common equivalent terms without claiming full semantic understanding.",
+      "files": [
+        "src/lib/mind/memory/relevant.ts"
+      ],
+      "changed": "Canonicalized a small explicit cost/deadline/task/project/preference vocabulary before lexical scoring; no embedding or paid retrieval call introduced.",
+      "tests": [
+        "src/lib/mind/c2-workspace-recovery.test.ts"
+      ],
+      "remaining": [
+        "Full semantic/entity/recency hybrid retrieval from the original architectural proposal remains unimplemented and needs a separate storage/privacy/cost design."
+      ],
+      "evidenceLevels": [
+        "synthetic fixture",
+        "source integration review"
+      ],
+      "acceptance": "A question using pricing retrieves a note using budget; unrelated notes do not acquire fabricated semantic evidence."
+    },
+    {
+      "id": "AA-072",
+      "status": "fixed and tested",
+      "expected": "Quoting a conversation carries an identified useful excerpt instead of only its first user message.",
+      "files": [
+        "src/lib/mind/conversation-actions.ts",
+        "src/components/mind/command-app.tsx"
+      ],
+      "changed": "Quotes a bounded recent exchange with role labels and an explicit shortening notice; helper also supports a selected message identity.",
+      "tests": [
+        "src/lib/mind/c2-workspace-recovery.test.ts",
+        "src/lib/mind/conversation-actions.test.ts"
+      ],
+      "remaining": [],
+      "evidenceLevels": [
+        "synthetic fixture",
+        "source integration review"
+      ],
+      "acceptance": "Quote a completed exchange: its recent assistant reply is included and shortened excerpts are disclosed, preserving a link to the source identity."
+    },
+    {
+      "id": "AA-073",
+      "status": "fixed and tested",
+      "expected": "A quoted task preserves applicable custom conversation instructions and explicit copied bot context.",
+      "files": [
+        "src/lib/mind/conversation-actions.ts"
+      ],
+      "changed": "Carries customPersonality, bot knowledge/provider/tier and source lineage into the new task while retaining its own chat identity.",
+      "tests": [
+        "src/lib/mind/c2-workspace-recovery.test.ts",
+        "src/lib/mind/conversation-actions.test.ts"
+      ],
+      "remaining": [],
+      "evidenceLevels": [
+        "synthetic fixture",
+        "source integration review"
+      ],
+      "acceptance": "Quote a custom two-paragraph style conversation: the new task keeps that style and source lineage without altering the original."
+    },
+    {
+      "id": "AA-074",
+      "status": "already fixed with proof",
+      "expected": "Editing produces a revised branch while preserving the original conversation.",
+      "files": [
+        "src/lib/mind/transcript.ts",
+        "src/components/mind/command-app.tsx"
+      ],
+      "changed": "At the inspected base, CommandApp already created a new edited branch and retained wsRef.current.chats. Added helper-level archived-original preservation so direct reviseUserTurn callers are also non-destructive.",
+      "tests": [
+        "src/lib/mind/c2-workspace-recovery.test.ts",
+        "src/lib/mind/transcript.test.ts"
+      ],
+      "remaining": [
+        "Historical claim is narrowed: the production UI caller was already branching at the base revision. The new change is defensive helper behavior, not proof of a previously destructive UI path."
+      ],
+      "evidenceLevels": [
+        "synthetic fixture",
+        "source integration review"
+      ],
+      "acceptance": "Edit an earlier user turn: revised branch excludes obsolete answers while the original message sequence remains recoverable; direct helper calls also preserve an archived original."
+    },
+    {
+      "id": "AA-075",
+      "status": "fixed and tested",
+      "expected": "Standalone conversation exports carry configuration and explicitly state attachment portability limits.",
+      "files": [
+        "src/lib/mind/transcript.ts"
+      ],
+      "changed": "Export includes chat configuration, IDs, source image metadata and clear inline/blob/remote-media coverage wording.",
+      "tests": [
+        "src/lib/mind/c2-workspace-recovery.test.ts",
+        "src/lib/mind/transcript.test.ts"
+      ],
+      "remaining": [],
+      "evidenceLevels": [
+        "synthetic fixture",
+        "source integration review"
+      ],
+      "acceptance": "Export a custom-style bot conversation with images: configuration and inline bytes remain available; blob-only/external-media references are disclosed as incomplete portable media."
+    },
+    {
+      "id": "AA-076",
+      "status": "blocked with the exact missing step",
+      "expected": "Website and installed applications have independent release identity and verification records.",
+      "files": [
+        "docs/audits/c2/README.md"
+      ],
+      "changed": "Added separate website/native release gates. This branch changes website code only and does not claim a Windows/iPhone/Android update.",
+      "tests": [],
+      "remaining": [
+        "Missing step: a separately authorized native build/version/update inspection and physical-device smoke verification. No installer or native release artifact was changed, installed or verified."
+      ],
+      "evidenceLevels": [
+        "documentation gate"
+      ],
+      "acceptance": "A later native handoff records installer/app version, exact native build, backend compatibility and physical device results independently of the website commit/deployment."
+    },
+    {
+      "id": "AA-082",
+      "status": "fixed and tested",
+      "expected": "The ordinary runner discovers all checked-in source/script tests and shards share an exact disjoint inventory.",
+      "files": [
+        "package.json",
+        "scripts/run-tests.mjs",
+        "scripts/run-tests-shard.mjs",
+        "scripts/test-inventory.mjs",
+        "scripts/test-inventory.test.mjs"
+      ],
+      "changed": "Replaced explicit TypeScript test enumeration with deterministic discovery and shared sharding. Runners are import-safe, reject invalid/empty shards, and set test environment before child execution. Each run uses and cleans an isolated owned temporary directory; a 120-second test deadline rejects hangs.",
+      "tests": [
+        "scripts/test-inventory.test.mjs"
+      ],
+      "remaining": [
+        "Final full-suite result is recorded separately; adding discovery does not imply every newly included legacy test passed before its actual run."
+      ],
+      "evidenceLevels": [
+        "synthetic fixture",
+        "source integration review"
+      ],
+      "acceptance": "Every source test appears in normal inventory; four shard inventories union exactly to it with no overlap, imports launch no nested runner, and invalid shard arguments fail."
+    },
+    {
+      "id": "AA-085",
+      "status": "fixed and tested",
+      "expected": "Implementation and release reports distinguish source/unit/handler/SQL/browser/live-provider/device evidence.",
+      "files": [
+        "docs/audits/c2/README.md",
+        "docs/audits/c2/findings.json",
+        "docs/audits/c2/validate-checklist.mjs",
+        "docs/audits/c2/verification.md",
+        "docs/audits/c2/check-types.mjs"
+      ],
+      "changed": "Created the complete evidence matrix and executable checklist validator, recorded the final 2,277-test suite and scoped type/build passes, retained the failed whole-project typecheck and baseline lint findings, and separated preview/provider/native release gates.",
+      "tests": [
+        "docs/audits/c2/validate-checklist.mjs"
+      ],
+      "remaining": [
+        "Full repository tsc exhausted the local 832 MiB heap (exit 134); the actual application dependency graph and all 40 changed test roots typecheck independently. Lint remains failed with six independently reproduced base errors and 80 warnings. No deployment, real provider, browser/GPU or native-device verification is implied."
+      ],
+      "evidenceLevels": [
+        "documentation and checklist validation"
+      ],
+      "acceptance": "Exactly AA-001 through AA-136 appear once with valid status, source, change, affected files, evidence and remaining steps; pending/skipped/blocked checks are never converted to passes."
+    },
+    {
+      "id": "AA-095",
+      "status": "proposal needing a decision",
+      "expected": "Pre-dispatch context sizing should include selected-model capacity, output reservation and modality/tool overhead.",
+      "files": [
+        "src/lib/mind/provider-catalog.ts",
+        "src/lib/mind/ai-provider-config.server.ts",
+        "src/lib/mind/media/history.ts",
+        "src/components/mind/command-app.tsx"
+      ],
+      "changed": "Implemented known BYOK context-limit compatibility using a conservative text-size estimate, bounded historical text/image selection and visible omitted-context receipts.",
+      "tests": [
+        "src/lib/mind/provider-catalog.test.ts",
+        "src/lib/mind/c2-model-provider-contract.test.ts",
+        "src/lib/mind/media/history-audit.test.ts"
+      ],
+      "remaining": [
+        "Complete selected-model token budgeting across every adapter, output reservation, tokenizer-specific counting and image/tool/consultation overhead remain unimplemented. Decide supported accounting contracts before claiming an exact model token budget."
+      ],
+      "evidenceLevels": [
+        "synthetic fixture",
+        "source integration review"
+      ],
+      "acceptance": "Known advertised BYOK overflow is refused before calling the provider. A later complete budget implementation must include reserved output and every modality/tool contribution under each supported model\u2019s contract."
+    },
+    {
+      "id": "AA-096",
+      "status": "fixed and tested",
+      "expected": "Local knowledge search preserves record identity, source, revision and scope.",
+      "files": [
+        "src/lib/mind/local-tools.ts",
+        "src/components/mind/command-app.tsx"
+      ],
+      "changed": "LocalResult contains structured records; search text includes stable note ID, scope, source and updated time rather than only concatenated content.",
+      "tests": [
+        "src/lib/mind/c2-workspace-recovery.test.ts",
+        "src/lib/mind/fleet-audit-recovery.test.ts"
+      ],
+      "remaining": [],
+      "evidenceLevels": [
+        "synthetic fixture",
+        "source integration review"
+      ],
+      "acceptance": "Search a synthetic note: structured result returns its exact ID/source/time/scope and does not infer unprovided provenance."
+    },
+    {
+      "id": "AA-097",
+      "status": "proposal needing a decision",
+      "expected": "Conflicting saved records remain distinguishable without presenting an unverified merged truth.",
+      "files": [
+        "src/lib/mind/local-tools.ts"
+      ],
+      "changed": "Returns separate sourced records and explicitly says multiple records\u2019 disagreement has not been resolved.",
+      "tests": [
+        "src/lib/mind/c2-workspace-recovery.test.ts",
+        "src/lib/mind/fleet-audit-recovery.test.ts"
+      ],
+      "remaining": [
+        "Automatic conflict detection/adjudication, authority ranking and entity reconciliation remain a larger knowledge-policy proposal. The patch does not claim that an unresolved conflict has been resolved."
+      ],
+      "evidenceLevels": [
+        "synthetic fixture",
+        "source integration review"
+      ],
+      "acceptance": "Return two disagreeing notes as separate identified records with an unresolved-evidence notice. Future adjudication must preserve both sources and expose the chosen authority/uncertainty policy."
+    },
+    {
+      "id": "AA-098",
+      "status": "fixed and tested",
+      "expected": "Projects with the same display name remain distinguishable in local discovery.",
+      "files": [
+        "src/lib/mind/local-tools.ts"
+      ],
+      "changed": "Project records and human-readable discovery output include stable project IDs and descriptions.",
+      "tests": [
+        "src/lib/mind/c2-workspace-recovery.test.ts",
+        "src/lib/mind/fleet-audit-recovery.test.ts"
+      ],
+      "remaining": [],
+      "evidenceLevels": [
+        "synthetic fixture",
+        "source integration review"
+      ],
+      "acceptance": "List same-name projects and receive distinct project IDs without choosing a destination solely by name."
+    },
+    {
+      "id": "AA-120",
+      "status": "fixed and tested",
+      "expected": "Global search supports independent query terms and deliberate quoted phrases.",
+      "files": [
+        "src/lib/mind/palette.ts",
+        "src/components/mind/command-app.tsx"
+      ],
+      "changed": "Tokenized ordinary terms match independently; quoted groups remain contiguous phrase constraints.",
+      "tests": [
+        "src/lib/mind/c2-interface-recovery.test.ts",
+        "src/lib/mind/palette.test.ts"
+      ],
+      "remaining": [],
+      "evidenceLevels": [
+        "synthetic fixture",
+        "source integration review"
+      ],
+      "acceptance": "launch budget matches Budget is ready for the launch; the quoted phrase \"launch budget\" does not match that reversed separated wording."
+    },
+    {
+      "id": "AA-121",
+      "status": "fixed and tested",
+      "expected": "Global search ranks exact/prefix titles above incidental body matches deterministically.",
+      "files": [
+        "src/lib/mind/palette.ts",
+        "src/components/mind/command-app.tsx"
+      ],
+      "changed": "Adds title exact/prefix/term scores with stable tie-breaks and a small archived penalty.",
+      "tests": [
+        "src/lib/mind/c2-interface-recovery.test.ts",
+        "src/lib/mind/palette.test.ts"
+      ],
+      "remaining": [],
+      "evidenceLevels": [
+        "synthetic fixture",
+        "source integration review"
+      ],
+      "acceptance": "An exact Launch Budget title ranks above matching older body messages; ties produce a stable order."
+    },
+    {
+      "id": "AA-122",
+      "status": "fixed and tested",
+      "expected": "A conversation can expose each matching message and navigate to its exact location.",
+      "files": [
+        "src/lib/mind/palette.ts",
+        "src/components/mind/command-app.tsx",
+        "src/components/mind/command-search.css"
+      ],
+      "changed": "Search results include messageId and excerpt per matching message; navigation focuses the identified message with an accessible focus outline.",
+      "tests": [
+        "src/lib/mind/c2-interface-recovery.test.ts"
+      ],
+      "remaining": [
+        "Actual browser scrolling/focus visibility remains a preview check."
+      ],
+      "evidenceLevels": [
+        "synthetic fixture",
+        "source integration review"
+      ],
+      "acceptance": "Two matching messages in one chat produce two distinct message IDs; choosing one targets that message rather than always the first match."
+    },
+    {
+      "id": "AA-123",
+      "status": "fixed and tested",
+      "expected": "Search results clearly distinguish archived and temporary conversations.",
+      "files": [
+        "src/lib/mind/palette.ts",
+        "src/components/mind/command-app.tsx"
+      ],
+      "changed": "Result metadata carries archived/temporary indicators rather than implying they are ordinary active chats; private local data is not exported to a search service.",
+      "tests": [
+        "src/lib/mind/c2-interface-recovery.test.ts"
+      ],
+      "remaining": [],
+      "evidenceLevels": [
+        "synthetic fixture",
+        "source integration review"
+      ],
+      "acceptance": "A matching archived temporary chat visibly identifies both states; choosing it does not silently unarchive it or alter its privacy mode."
+    },
+    {
+      "id": "AA-124",
+      "status": "fixed and tested",
+      "expected": "Search results include project context and support project-name discovery.",
+      "files": [
+        "src/lib/mind/palette.ts",
+        "src/components/mind/command-app.tsx"
+      ],
+      "changed": "Resolves project names for chat/file result metadata and query matching while retaining stable project IDs.",
+      "tests": [
+        "src/lib/mind/c2-interface-recovery.test.ts"
+      ],
+      "remaining": [],
+      "evidenceLevels": [
+        "synthetic fixture",
+        "source integration review"
+      ],
+      "acceptance": "Search North: matching project-scoped chats appear with North context and distinct identities even when titles are identical."
+    },
+    {
+      "id": "AA-126",
+      "status": "fixed and tested",
+      "expected": "Custom personality limits are disclosed and imported truncation remains visible.",
+      "files": [
+        "src/lib/mind/personalities/index.ts",
+        "src/lib/mind/workspace.ts",
+        "src/lib/mind/types.ts",
+        "src/components/mind/command-app.tsx"
+      ],
+      "changed": "Added effective-length/limit status, persistent imported truncation flag and Settings notice; explicit edits can clear the warning after correction.",
+      "tests": [
+        "src/lib/mind/c2-interface-recovery.test.ts"
+      ],
+      "remaining": [],
+      "evidenceLevels": [
+        "synthetic fixture",
+        "source integration review"
+      ],
+      "acceptance": "Normalize an oversized imported style: the 800-character limit is disclosed and its warning survives reopen until corrected."
+    },
+    {
+      "id": "AA-127",
+      "status": "fixed and tested",
+      "expected": "Custom instruction paragraphs and line structure survive safe normalization.",
+      "files": [
+        "src/lib/mind/personalities/index.ts",
+        "src/lib/mind/workspace.ts",
+        "src/lib/mind/types.ts",
+        "src/components/mind/command-app.tsx"
+      ],
+      "changed": "Normalizes control characters/horizontal spacing without flattening newlines; two-paragraph spacing survives prompt construction.",
+      "tests": [
+        "src/lib/mind/c2-interface-recovery.test.ts",
+        "src/lib/mind/personalities/index.test.ts"
+      ],
+      "remaining": [],
+      "evidenceLevels": [
+        "synthetic fixture",
+        "source integration review"
+      ],
+      "acceptance": "Two paragraphs remain two paragraphs in normalized custom style and the generated personality instruction."
+    },
+    {
+      "id": "AA-128",
+      "status": "fixed and tested",
+      "expected": "Unavailable personality IDs use an explicit safe fallback with a persistent explanation.",
+      "files": [
+        "src/lib/mind/personalities/index.ts",
+        "src/lib/mind/workspace.ts",
+        "src/lib/mind/types.ts",
+        "src/components/mind/command-app.tsx"
+      ],
+      "changed": "Unknown IDs record personalityFallback and use Assistant; default-style load warns, imported warnings survive normalization, and a valid explicit choice clears fallback.",
+      "tests": [
+        "src/lib/mind/c2-interface-recovery.test.ts"
+      ],
+      "remaining": [],
+      "evidenceLevels": [
+        "synthetic fixture",
+        "source integration review"
+      ],
+      "acceptance": "Import retired-style: Assistant is effective, retired-style remains visible as the fallback reason, reopen preserves it, and choosing Custom clears it."
+    }
+  ],
+  "checks": [
+    {
+      "name": "Root workspace/interface/staged voice",
+      "command": "node --experimental-strip-types --test --test-concurrency=1 src/lib/mind/c2-workspace-recovery.test.ts src/lib/mind/c2-interface-recovery.test.ts src/lib/mind/voice/staged-pipeline.test.ts",
+      "result": "PASS 21/21 (7 workspace, 6 interface, 8 staged voice)",
+      "evidenceLevel": "Synthetic state/transport fixtures and extracted actual UI handlers; no browser device or real provider."
+    },
+    {
+      "name": "Discovered runner/shards",
+      "command": "node --test scripts/test-inventory.test.mjs",
+      "result": "PASS 6/6, reported by Dashboard implementation owner; includes owned temporary-directory cleanup and parent-directory preservation.",
+      "evidenceLevel": "Actual inventory/shard/import-safety and isolated temporary-directory regressions."
+    },
+    {
+      "name": "Final targeted workspace/interface/staged voice/PDF/skills regressions",
+      "command": "TMPDIR=/workspace/scratch/5f8234e6a978/audit-recovery/test-tmp NODE_ENV=test node --max-old-space-size=256 --experimental-strip-types --test --test-concurrency=1 src/lib/mind/c2-interface-recovery.test.ts src/lib/mind/c2-workspace-recovery.test.ts src/lib/mind/voice/staged-pipeline.test.ts src/lib/mind/pdf-text.test.ts src/lib/mind/pdf-text-audit.test.ts src/lib/mind/skills.test.ts",
+      "result": "PASS 35/35, zero failed/skipped",
+      "log": "c2-last-regressions.log",
+      "evidenceLevel": "Actual handler/source and controlled runtime fixtures; no real browser/provider/device."
+    }
+  ],
+  "finalVerification": {
+    "normalRunner": {
+      "status": "passed on the frozen exact application/test source",
+      "command": "TMPDIR=/workspace/scratch/5f8234e6a978/audit-recovery/test-tmp NODE_OPTIONS=--max-old-space-size=256 npm test",
+      "runner": "node scripts/run-tests.mjs",
+      "log": "c2-exact-source-tests.log",
+      "result": {
+        "tests": 2277,
+        "suites": 497,
+        "passed": 2272,
+        "failed": 0,
+        "cancelled": 0,
+        "skipped": 5,
+        "todo": 0,
+        "durationMs": 161164.491581,
+        "exitCode": 0
+      },
+      "skips": [
+        "Four absent local .grok/skills/og fixture-file checks",
+        "One real Handy engine check explicitly gated by MIND_LIVE_HANDY_TEST"
+      ],
+      "previousCompletedRun": {
+        "log": "c2-npm-test-isolated-final.log",
+        "tests": 2275,
+        "passed": 2270,
+        "failed": 0,
+        "skipped": 5,
+        "exitCode": 0
+      },
+      "earlierFailedRun": {
+        "tests": 2270,
+        "passed": 2261,
+        "failed": 4,
+        "skipped": 5,
+        "note": "Migration inventory, two palette ranking/reachability expectations and legacy personality newline expectation corrected before the completed passing run; retained as earlier history, not a current pass."
+      }
+    },
+    "applicationTypecheck": {
+      "status": "passed",
+      "command": "node --max-old-space-size=704 docs/audits/c2/check-types.mjs src/components/mind/command-app.tsx src/components/mind/speak-stage.tsx src/lib/mind/workspace.ts src/lib/mind/use-mind-workspace.ts",
+      "log": "c2-portable-client-typecheck.log",
+      "diagnostics": 0,
+      "exitCode": 0,
+      "roots": [
+        "src/components/mind/command-app.tsx",
+        "src/components/mind/speak-stage.tsx",
+        "src/lib/mind/workspace.ts",
+        "src/lib/mind/use-mind-workspace.ts"
+      ],
+      "scope": "Real application dependency graph, actual tsconfig and ambient declarations; no filtered diagnostics. Not the whole-repository tsc gate.",
+      "portableReproduction": {
+        "command": "node --max-old-space-size=704 docs/audits/c2/check-types.mjs src/components/mind/command-app.tsx src/components/mind/speak-stage.tsx src/lib/mind/workspace.ts src/lib/mind/use-mind-workspace.ts",
+        "status": "passed",
+        "log": "c2-portable-client-typecheck.log",
+        "diagnostics": 0,
+        "exitCode": 0
+      },
+      "priorEquivalentCheck": {
+        "command": "node --max-old-space-size=704 /workspace/scratch/5f8234e6a978/check-c2-owned.mjs src/components/mind/command-app.tsx src/components/mind/speak-stage.tsx src/lib/mind/workspace.ts src/lib/mind/use-mind-workspace.ts",
+        "log": "c2-final-client-typecheck.log",
+        "diagnostics": 0,
+        "exitCode": 0
+      }
+    },
+    "changedTestTypecheck": {
+      "status": "passed after three fixture-only type fixes",
+      "roots": [
+        "src/components/mind/c2-command-entrypoints.test.ts",
+        "src/components/mind/dashboard-3d/c2-dashboard-recovery.test.ts",
+        "src/lib/mind/c2-interface-recovery.test.ts",
+        "src/lib/mind/c2-model-profile-store.test.ts",
+        "src/lib/mind/c2-model-provider-contract.test.ts",
+        "src/lib/mind/c2-workspace-recovery.test.ts",
+        "src/lib/mind/connected-mcp.test.ts",
+        "src/lib/mind/connection-board.test.ts",
+        "src/lib/mind/connectors/token-recovery.test.ts",
+        "src/lib/mind/dashboard/hud-order.test.ts",
+        "src/lib/mind/dashboard/spend.test.ts",
+        "src/lib/mind/diagnostic-entrypoint.test.ts",
+        "src/lib/mind/durable-recovery.test.ts",
+        "src/lib/mind/execution-ledger.test.ts",
+        "src/lib/mind/file-persist.test.ts",
+        "src/lib/mind/fleet-audit-recovery.test.ts",
+        "src/lib/mind/fleet.test.ts",
+        "src/lib/mind/github-tools.test.ts",
+        "src/lib/mind/handy-dictation.test.ts",
+        "src/lib/mind/integration-persona-explore.test.ts",
+        "src/lib/mind/intent.test.ts",
+        "src/lib/mind/limits.test.ts",
+        "src/lib/mind/logic-routes.test.ts",
+        "src/lib/mind/mcp-selected.test.ts",
+        "src/lib/mind/media/history-audit.test.ts",
+        "src/lib/mind/memory/scoped-durability.test.ts",
+        "src/lib/mind/model-consult.test.ts",
+        "src/lib/mind/notion-entrypoint-recovery.test.ts",
+        "src/lib/mind/notion-recovery.test.ts",
+        "src/lib/mind/palette-index.test.ts",
+        "src/lib/mind/pdf-text-audit.test.ts",
+        "src/lib/mind/personalities/index.test.ts",
+        "src/lib/mind/personas/selection.test.ts",
+        "src/lib/mind/provider-catalog.test.ts",
+        "src/lib/mind/provider-http.test.ts",
+        "src/lib/mind/research-audit-recovery.test.ts",
+        "src/lib/mind/service-board-status.test.ts",
+        "src/lib/mind/voice/staged-pipeline.test.ts",
+        "src/lib/mind/workspace-archive-manifest.test.ts",
+        "src/lib/mind/workspace.test.ts"
+      ],
+      "batchCount": 8,
+      "rootCount": 40,
+      "heapMiB": 512,
+      "logs": [
+        "c2-changed-test-types.log",
+        "c2-changed-test-types-recheck.log"
+      ],
+      "diagnosticsAfterFixes": 0,
+      "note": "Initial batches exposed three fixture-only type errors; focused dependency-graph recheck of all three corrected roots returned zero diagnostics. This is scoped proof, not a whole-project tsc pass."
+    },
+    "fullTypecheck": {
+      "status": "failed due to local heap limit; not a pass",
+      "commandDescription": "Whole-repository tsc --noEmit with an 832 MiB Node heap",
+      "log": "c2-full-typecheck-final.log",
+      "exitCode": 134,
+      "reason": "JavaScript heap out of memory",
+      "nextAction": "Run the complete repository TypeScript gate in the integration environment with adequate memory."
+    },
+    "bundleBuild": {
+      "status": "passed",
+      "command": "TMPDIR=/workspace/scratch/5f8234e6a978/audit-recovery/test-tmp NODE_OPTIONS=--max-old-space-size=512 RAYON_NUM_THREADS=2 node scripts/with-app-env.mjs node node_modules/vite/bin/vite.js build",
+      "log": "c2-final-build.log",
+      "exitCode": 0,
+      "artifact": "Production client/server Vite/Nitro artifact in .vercel/output",
+      "boundaries": [
+        "The build invoked Vite directly through with-app-env; no migration was run.",
+        "No deployment or production setting was changed.",
+        "Successful artifact build is not runtime/live-provider/native-device verification."
+      ]
+    },
+    "changedSourceLint": {
+      "status": "failed with baseline errors; not a pass",
+      "files": 130,
+      "exitCode": 1,
+      "errors": 6,
+      "warnings": 80,
+      "introducedErrorsRemaining": 0,
+      "baselineProof": "All six remaining errors independently reproduced on base 18d5b9364e6bdcfec028eeccf56fe596946ed8ce",
+      "logs": [
+        "c2-changed-eslint-final.log",
+        "c2-eslint-baseline-errors.log"
+      ],
+      "remainingErrors": [
+        "Three prefer-const errors in universe-scene.tsx",
+        "One no-control-regex error in ai-provider-config.server.ts",
+        "One prefer-const error in connected-mcp.test.ts",
+        "One no-control-regex error in personalities/index.ts"
+      ],
+      "nextAction": "Integration must apply the repository lint policy; do not describe this result as a passing lint gate."
+    },
+    "targetedFinalRegressions": {
+      "status": "passed",
+      "command": "TMPDIR=/workspace/scratch/5f8234e6a978/audit-recovery/test-tmp NODE_ENV=test node --max-old-space-size=256 --experimental-strip-types --test --test-concurrency=1 src/lib/mind/c2-interface-recovery.test.ts src/lib/mind/c2-workspace-recovery.test.ts src/lib/mind/voice/staged-pipeline.test.ts src/lib/mind/pdf-text.test.ts src/lib/mind/pdf-text-audit.test.ts src/lib/mind/skills.test.ts",
+      "log": "c2-last-regressions.log",
+      "tests": 35,
+      "passed": 35,
+      "failed": 0,
+      "skipped": 0
+    },
+    "finalFixtureRegressions": {
+      "status": "passed",
+      "command": "TMPDIR=/workspace/scratch/5f8234e6a978/audit-recovery/test-tmp node --max-old-space-size=256 --experimental-strip-types --test --test-concurrency=1 src/lib/mind/fleet-audit-recovery.test.ts src/lib/mind/personas/selection.test.ts src/lib/mind/notion-entrypoint-recovery.test.ts src/lib/mind/pdf-text-audit.test.ts src/lib/mind/pdf-text.test.ts src/lib/mind/skills.test.ts",
+      "result": "48 passed, 0 failed",
+      "log": "c2-final-fixture-regressions.log"
+    },
+    "diffCheck": {
+      "status": "passed",
+      "command": "git diff --check",
+      "exitCode": 0
+    }
+  }
+}

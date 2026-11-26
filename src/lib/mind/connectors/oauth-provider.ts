@@ -16,6 +16,9 @@ import {
 import { hasDurableOAuthStore, saveDurablePendingOAuth, takeDurablePendingOAuth, saveDurableConnection, readDurableConnection, getDurableAccessToken, clearDurableConnection } from "./durable-oauth.server.ts";
 import { updateDurableAccountLabel } from "./durable-oauth.server.ts";
 import { googleAccountEmail } from "./google-account.server.ts";
+import { tokenExpiresAt } from "./token-expiry.ts";
+import { readOAuthRecovery, saveOAuthRecovery, withOAuthRecovery } from "./recovery.ts";
+import { readLocalOAuthRecovery } from "./store.ts";
 
 function ownerIdsMatch(a: string, b: string): boolean {
   try {
@@ -257,6 +260,8 @@ export async function exchangeAuthorizationCode(
       accountLabel: hints.accountLabel,
       tokenType: typeof json.token_type === "string" ? json.token_type : "bearer",
       scopes: typeof json.scope === "string" ? json.scope : pending.scopes,
+      expiresAt: tokenExpiresAt(json.expires_in),
+      scopeEvidence: typeof json.scope === "string" ? "provider" : "requested",
     });
     return { ok: true, public: toPublic(provider.id, conn, true) };
   } catch (error) {
@@ -271,7 +276,7 @@ export function connectionStatus(
   env?: OAuthProviderEnv,
 ): ConnectionPublic {
   const cfg = env ?? provider.readEnv();
-  return toPublic(provider.id, readConnection(ownerId, provider.id), providerConfigured(cfg));
+  return withOAuthRecovery(toPublic(provider.id, readConnection(ownerId, provider.id), providerConfigured(cfg)), readLocalOAuthRecovery(ownerId, provider.id));
 }
 
 /** Production status reads persisted connection rows across serverless instances. */
@@ -288,7 +293,7 @@ export async function connectionStatusPersistent(
     && (provider.id === "gmail" || provider.id === "google_calendar" || provider.id === "google_drive" || provider.id === "youtube")
     ? await labelFromGoogle(ownerId, provider.id, conn)
     : conn;
-  return toPublic(provider.id, labeled, providerConfigured(cfg));
+  return withOAuthRecovery(toPublic(provider.id, labeled, providerConfigured(cfg)), await readOAuthRecovery(ownerId, provider.id));
 }
 async function labelFromGoogle(ownerId: string, connector: ConnectorId, conn: NonNullable<Awaited<ReturnType<typeof readDurableConnection>>>) {
   const token = await getDurableAccessToken(ownerId, connector);
@@ -352,11 +357,7 @@ export async function disconnectProvider(
           body: JSON.stringify({ access_token: token }),
         });
       }
-      revokeOk = Boolean(response?.ok);
-      if (revokeOk && provider.revokeStyle === "slack_auth_revoke") {
-        const result = await response?.json().catch(() => null) as { ok?: boolean; revoked?: boolean } | null;
-        revokeOk = result?.ok === true && result.revoked === true;
-      }
+      revokeOk = await revocationSucceeded(provider.revokeStyle, response);
       revokeDetail = revokeOk
         ? "Provider revoke succeeded; local token cleared."
         : "Provider revoke failed or was unreachable; local token was still cleared.";
@@ -366,9 +367,18 @@ export async function disconnectProvider(
     }
   }
   if (removed && revokeOk === undefined) revokeDetail = "Local access was removed. Provider-side revocation was not confirmed.";
-  const pub = toPublic(provider.id, null, providerConfigured(env));
+  if (removed) {
+    try {
+      await saveOAuthRecovery(input.ownerId, provider.id, {
+        connectionAt: removed.connectedAt, status: revokeOk === true ? "revoked" : "revocation_unknown",
+        detail: revokeOk ? "Provider revocation was confirmed and local access is removed." : `${revokeDetail ?? "Provider-side revocation was not confirmed."} Review this application's access in ${provider.displayName} account settings.`,
+        at: new Date().toISOString(),
+      });
+    } catch { revokeDetail = `${revokeDetail ?? "Local access was removed."} The final revocation record could not be saved; the pending recovery record remains.`; }
+  }
+  const pub = withOAuthRecovery(toPublic(provider.id, null, providerConfigured(env)), await readOAuthRecovery(input.ownerId, provider.id).catch(() => null));
   const detail =
-    revokeDetail
+    revokeDetail && !pub.recovery
       ? `${pub.detail} ${revokeDetail}`
       : pub.detail;
   return { ...pub, detail, revokeOk, revokeDetail };
@@ -376,4 +386,16 @@ export async function disconnectProvider(
 
 export function displayNameFor(id: ConnectorId): string {
   return CONNECTOR_DISPLAY_NAMES[id];
+}
+
+/** Provider contracts: Notion/Google return 200; GitHub token deletion returns 204; Slack requires revoked:true. */
+export async function revocationSucceeded(style: RevokeStyle, response: Awaited<ReturnType<FetchLike>> | null): Promise<boolean> {
+  if (!response?.ok) return false;
+  if (style === "github_basic") return response.status === 204;
+  if (style === "form_token" || style === "notion_basic") return response.status === 200;
+  if (style === "slack_auth_revoke") {
+    const result = await response.json().catch(() => null) as { ok?: unknown; revoked?: unknown } | null;
+    return response.status === 200 && result?.ok === true && result.revoked === true;
+  }
+  return false;
 }

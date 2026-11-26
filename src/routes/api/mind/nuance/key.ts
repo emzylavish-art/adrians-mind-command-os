@@ -1,7 +1,7 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { requireUserId } from "@/lib/auth/verify.server";
 import { assertSameOrigin } from "@/lib/mind/connectors/oauth-csrf";
-import { allowMindRequest } from "@/lib/mind/limits";
+import { allowSharedMindRequest as allowMindRequest } from "@/lib/mind/rate-limit.server";
 import { saveNuanceKey } from "@/lib/mind/nuance-live.server";
 
 function reply(data: unknown, status = 200): Response {
@@ -23,7 +23,7 @@ export const Route = createFileRoute("/api/mind/nuance/key")({
         } catch {
           return reply({ ok: false, error: "Sign in is required." }, 401);
         }
-        if (!allowMindRequest("nuance_key", user, 5)) {
+        if (!await allowMindRequest("nuance_key", user, 5)) {
           return reply({ ok: false, error: "Too many key changes. Please wait." }, 429);
         }
         let key = "";

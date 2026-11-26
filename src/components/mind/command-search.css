@@ -65,3 +65,6 @@ html[data-theme="light"] #command-palette .palette-option-active {
   outline: 2px solid var(--color-accent, currentColor);
   outline-offset: -2px;
 }
+.c2-modal-overlay::backdrop {
+  background: rgb(0 0 0 / 0.48);
+}

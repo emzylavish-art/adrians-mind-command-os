@@ -4,8 +4,9 @@ import { existsSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSy
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, it } from "node:test";
-import { listConnectedMcp, removeConnectedMcp, runConnectedMcpTurn, saveConnectedMcp } from "./connected-mcp.server.ts";
-import { listCustomConnections } from "./custom-connection.ts";
+import { connectedMcpPublic, listConnectedMcp, removeConnectedMcp, runConnectedMcpTurn, saveConnectedMcp } from "./connected-mcp.server.ts";
+import { listCustomConnections, type PublicConnection } from "./custom-connection.ts";
+import { discoveredCapabilities } from "./provider-catalog.ts";
 import { decryptSecret } from "./connectors/crypto.ts";
 import { callRegistryTool, listRegistryServers } from "./mcp/registry.ts";
 import { loadRegistry, resetRegistryStoreForTests, saveRegistry, setConnectedLegacyDirectory, type RegistryDb } from "./mcp/registry-store.ts";
@@ -42,7 +43,7 @@ function memoryDb(rows: Row[] = []): RegistryDb & { rows: Row[] } {
   };
 }
 
-const operation = { name: "lookup", description: "Lookup an item", inputSchema: { type: "object", properties: { id: { type: "string" } }, required: ["id"] } };
+const operation = { name: "lookup", description: "Lookup an item", inputSchema: { type: "object", properties: { id: { type: "string" } }, required: ["id"] }, annotations: { readOnlyHint: true } };
 function fakeMcp(options: { failInitialize?: boolean; noSchema?: boolean; rpcInitializeError?: boolean } = {}) {
   const calls: { method: string; params?: { arguments?: unknown }; authorization?: string }[] = [];
   return {
@@ -85,6 +86,16 @@ afterEach(() => {
 });
 
 describe("Connected durable backend", { concurrency: false }, () => {
+  it("revalidates persisted tool schemas before exposing usable serializable capability metadata", () => {
+    const connection = { id: "fixture", label: "Fixture", kind: "mcp", host: "fixture.invalid", method: "MCP", auth: "none", hasToken: false, state: "ready", error: "", operations: [
+      { name: "invalid", description: "Unsupported saved schema", compatible: true, inputSchema: { type: "object", properties: { field: { type: "function" } }, required: [] } },
+    ] } as unknown as PublicConnection;
+    const publicRow = connectedMcpPublic(connection);
+    assert.equal(publicRow.state, "failed");
+    assert.deepEqual(publicRow.tools, []);
+    assert.match(publicRow.error, /No compatible tool schema/);
+  });
+
   it("saves, reloads, and removes only the authenticated owner with sealed credentials and the UI DTO", async () => {
     const db = memoryDb();
     const wire = fakeMcp();
@@ -95,6 +106,9 @@ describe("Connected durable backend", { concurrency: false }, () => {
     assert.deepEqual(Object.keys(saved.servers[0]).sort(), ["error", "host", "id", "label", "state", "tools"]);
     assert.equal(saved.servers[0].state, "connected");
     assert.equal(saved.servers[0].host, "localhost");
+    const capabilities = discoveredCapabilities({ models: [], mcp: saved.servers });
+    assert.deepEqual(capabilities[0].tool?.inputSchema, operation.inputSchema);
+    assert.equal(capabilities[0].tool?.readOnly, true);
     const raw = JSON.parse(db.rows.find((row) => row.id === saved.savedId)!.record);
     assert.equal(raw.token, undefined);
     assert.equal(decryptSecret(raw.tokenEnc), TOKEN);

@@ -17,7 +17,7 @@ export function MoneyPanel({ money }: Props) {
       data-available={money.available ? "1" : "0"}
       data-stale={money.stale ? "1" : "0"}
     >
-      <h2>Money</h2>
+      <h2>Spend telemetry</h2>
       {empty ? (
         <>
           <p className="dash3d-title" data-testid="money-empty">
@@ -57,6 +57,9 @@ export function MoneyPanel({ money }: Props) {
           ) : null}
         </>
       )}
+      <p className="dash3d-muted" style={{ fontSize: "0.68rem" }} data-testid="money-coverage">
+        {money.coverage || "Observed spend logs only. This is not a complete provider billing statement."}
+      </p>
     </div>
   );
 }

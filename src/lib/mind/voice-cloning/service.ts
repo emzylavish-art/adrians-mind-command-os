@@ -3,7 +3,7 @@
  * Reuses resolveVoiceApiKey + transcribeWavBytes from existing voice layer (import only).
  */
 import { randomBytes } from "node:crypto";
-import { allowMindRequest } from "../limits.ts";
+import { allowSharedMindRequest as allowMindRequest } from "../rate-limit.server.ts";
 import { resolveVoiceApiKey } from "../voice/keys.ts";
 import { transcribeWavBytes } from "../voice/stt.ts";
 import {
@@ -86,7 +86,7 @@ export function createVoiceCloningService(deps: VoiceCloningServiceDeps = {}) {
     },
 
     async createChallenge(userId: string): Promise<ConsentChallenge> {
-      if (!allowMindRequest("vcs_challenge", userId, 30)) {
+      if (!await allowMindRequest("vcs_challenge", userId, 30)) {
         throw Object.assign(new Error("Too many consent challenges. Wait a minute."), { code: "rate_limited" });
       }
       const challenge = createConsentChallenge(now());
@@ -107,7 +107,7 @@ export function createVoiceCloningService(deps: VoiceCloningServiceDeps = {}) {
       sampleAudioBase64: unknown;
       sampleMime: unknown;
     }): Promise<{ ok: true; profile: VoiceProfile } | { ok: false; error: string; code?: string }> {
-      if (!allowMindRequest("vcs_create", userId, VCS_CREATE_RATE_PER_MIN)) {
+      if (!await allowMindRequest("vcs_create", userId, VCS_CREATE_RATE_PER_MIN)) {
         return { ok: false, error: "Too many profile creates. Wait a minute.", code: "rate_limited" };
       }
       const nameV = validateProfileName(input.name);
@@ -253,7 +253,7 @@ export function createVoiceCloningService(deps: VoiceCloningServiceDeps = {}) {
     },
 
     async generate(userId: string, input: { profileId: unknown; text: unknown }): Promise<GenerateResult> {
-      if (!allowMindRequest("vcs_generate", userId, VCS_GENERATE_RATE_PER_MIN)) {
+      if (!await allowMindRequest("vcs_generate", userId, VCS_GENERATE_RATE_PER_MIN)) {
         return { ok: false, error: "Too many generate requests. Wait a minute.", code: "rate_limited" };
       }
       if (typeof input.profileId !== "string" || !input.profileId.trim()) {
@@ -295,7 +295,7 @@ export function createVoiceCloningService(deps: VoiceCloningServiceDeps = {}) {
     },
 
     async deleteProfile(userId: string, profileId: unknown): Promise<DeleteResult> {
-      if (!allowMindRequest("vcs_delete", userId, VCS_DELETE_RATE_PER_MIN)) {
+      if (!await allowMindRequest("vcs_delete", userId, VCS_DELETE_RATE_PER_MIN)) {
         return { ok: false, error: "Too many deletes. Wait a minute.", code: "rate_limited" };
       }
       if (typeof profileId !== "string" || !profileId.trim()) {

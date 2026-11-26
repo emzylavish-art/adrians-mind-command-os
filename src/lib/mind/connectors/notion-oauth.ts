@@ -1,5 +1,6 @@
 import { getAccessToken } from "./store.ts";
-import { getDurableAccessToken, hasDurableOAuthStore } from "./durable-oauth.server.ts";
+import { resolveOAuthAccessToken } from "./token-refresh.ts";
+import { hasDurableOAuthStore } from "./durable-oauth.server.ts";
 import type { ConnectionPublic } from "./store.ts";
 import {
   buildAuthorizeUrl,
@@ -74,10 +75,8 @@ export async function resolveNotionTokenPersistent(
   env: NodeJS.ProcessEnv = process.env,
 ): Promise<string | undefined> {
   if (ownerId) {
-    const oauth = hasDurableOAuthStore()
-      ? await getDurableAccessToken(ownerId, "notion")
-      : getAccessToken(ownerId, "notion");
-    if (oauth) return oauth;
+    const resolved = await resolveOAuthAccessToken({ ownerId, connector: "notion" });
+    if (resolved.ok) return resolved.token;
   }
   return undefined;
 }
@@ -104,10 +103,6 @@ export async function savedNotionWorkspaces(owner: string) {
 }
 
 export async function resolveWorkspaceGrant(owner: string, id: string) {
-  const { listDurableNotionWorkspaces } = await import("./durable-oauth.server.ts");
-  const { localNotionWorkspaces } = await import("./store.ts");
-  const { decryptSecret } = await import("./crypto.ts");
-  const rows = hasDurableOAuthStore() ? await listDurableNotionWorkspaces(owner) : localNotionWorkspaces(owner);
-  const match = rows.find((row) => (row.workspaceId || "legacy") === id);
-  return match ? decryptSecret(match.accessTokenEnc) ?? undefined : undefined;
+  const result = await resolveOAuthAccessToken({ ownerId: owner, connector: "notion", workspaceId: id });
+  return result.ok ? result.token : undefined;
 }

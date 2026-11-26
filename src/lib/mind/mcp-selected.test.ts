@@ -46,7 +46,7 @@ test("confirmation names the selected MCP server and the call does not use the o
   assert.equal(called.some((url) => url.includes("other.example")), false);
 });
 
-test("orchestrator fan-out asks every connected helper", async () => {
+test("orchestrator fan-out asks only explicitly selected helpers within its two-helper budget", async () => {
   const planned = planModelConsult({
     orchestrator: "grok",
     modules: [
@@ -55,6 +55,8 @@ test("orchestrator fan-out asks every connected helper", async () => {
       { id: "openrouter", label: "OpenRouter", connected: true },
     ],
     question: "What is left?",
+    helperIds: ["ollama", "openrouter"],
+    allowPaidHelpers: true,
   });
   assert.equal(planned.ok, true);
   if (!planned.ok) return;

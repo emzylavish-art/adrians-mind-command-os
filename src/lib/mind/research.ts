@@ -1,6 +1,52 @@
 import { boundAbortSignal, isTimeoutAbort } from "./turn-timeouts.ts";
 
 export type ResearchCitation = { title: string; url: string };
+export type ResearchProviderIdentity = {
+  id: string;
+  label: string;
+  strategy: "multi_query" | "single_query";
+  routeFingerprint: string;
+  model?: string;
+};
+export type ResearchStep = { query: string; ok: boolean; count: number; retainedCount?: number; at?: string; providerId?: string; routeFingerprint?: string; error?: string };
+export type ResearchEvidence = ResearchCitation & { query: string; at: string; verification: "provider_returned"; providerId?: string; routeFingerprint?: string };
+export type ResearchAnswer = { text: string; annotations: { url: string; start: number | null; end: number | null }[] };
+
+export function researchRetryAllowed(retryQueries: string[] | undefined, expected: string | undefined, current: ResearchProviderIdentity): boolean {
+  return !retryQueries || Boolean(expected && expected === current.routeFingerprint);
+}
+
+/** Rebuild from merged records after recovery; do not replace evidence with a success counter. */
+export function researchSummary(input: {
+  citations: ResearchCitation[];
+  steps?: ResearchStep[];
+  evidence?: ResearchEvidence[];
+  providerIdentity?: ResearchProviderIdentity;
+  attempts?: ResearchStep[];
+}): string {
+  const steps = input.steps ?? [];
+  const failed = steps.filter((step) => !step.ok);
+  const evidenceCount = new Set((input.evidence ?? input.citations).map((item) => item.url)).size;
+  const lines = [input.providerIdentity?.strategy === "single_query"
+    ? `${input.providerIdentity.label} returned ${input.citations.length} sources from one provider-assisted search. A multi-query research plan was not executed.`
+    : `Deep research used ${steps.length} searches and kept ${input.citations.length} http(s) sources the provider returned:`];
+  if (steps.length) lines.push(`${steps.length - failed.length} of ${steps.length} searches succeeded.`);
+  if (failed.length) lines.push(`Missing: ${failed.map((step) => step.query).join("; ")}.`);
+  if (evidenceCount > input.citations.length) lines.push(`${evidenceCount} distinct sources were returned; ${input.citations.length} are shown with coverage across queries. The remaining source records are retained as evidence.`);
+  if ((input.attempts?.length ?? 0) > steps.length) lines.push(`${input.attempts!.length} query attempts are recorded, including retries.`);
+  if ((input.attempts ?? steps).some((step) => /timed out/i.test(step.error ?? ""))) lines.push("Some attempts timed out; their failures remain in the attempt history.");
+  lines.push(...input.citations.map((item, index) => `${index + 1}. ${item.title} — ${item.url}`));
+  lines.push("Evidence level: provider-returned sources. Adrian has not independently opened or verified these pages.");
+  return lines.join("\n");
+}
+
+export function withResearchProvenance(result: ResearchResult, providerIdentity: ResearchProviderIdentity, query: string): ResearchResult {
+  const at = new Date().toISOString();
+  const steps = (result.steps ?? [{ query, ok: result.ok, count: result.citations.length, ...(result.error ? { error: result.error } : {}) }]).map((step) => ({ ...step, at: step.at ?? at, providerId: providerIdentity.id, routeFingerprint: providerIdentity.routeFingerprint }));
+  const evidence = (result.evidence ?? result.citations.map((citation) => ({ ...citation, query, at, verification: "provider_returned" as const }))).map((item) => ({ ...item, providerId: providerIdentity.id, routeFingerprint: providerIdentity.routeFingerprint }));
+  const next = { ...result, providerIdentity, steps, evidence };
+  return { ...next, summary: result.ok ? researchSummary(next) : result.summary };
+}
 
 export type ResearchResult = {
   ok: boolean;
@@ -8,7 +54,10 @@ export type ResearchResult = {
   citations: ResearchCitation[];
   error: string;
   /** Present when deep research ran multiple searches. */
-  steps?: { query: string; ok: boolean; count: number }[];
+  steps?: ResearchStep[];
+  providerIdentity?: ResearchProviderIdentity;
+  evidence?: ResearchEvidence[];
+  providerAnswer?: ResearchAnswer;
   summary?: string;
   /** True when some deep-research queries timed out but real citations were kept. */
   partial?: boolean;
@@ -255,8 +304,10 @@ export async function performDeepResearch(input: {
   const overall = combineSignals(input.signal, input.deepTimeoutMs ?? deepSearchTimeoutMs());
   const perQuery = input.timeoutMs ?? searchTimeoutMs();
   const queries = planDeepQueries(text).filter((q) => !input.retryQueries || input.retryQueries.includes(q));
-  const steps: { query: string; ok: boolean; count: number }[] = [];
+  const steps: ResearchStep[] = [];
   const collected: ResearchCitation[] = [];
+  const evidence: ResearchEvidence[] = [];
+  const queryResults: ResearchCitation[][] = [];
   let sawTimeout = false;
   try {
     for (const q of queries) {
@@ -272,7 +323,10 @@ export async function performDeepResearch(input: {
         signal: overall.signal,
         timeoutMs: perQuery,
       });
-      steps.push({ query: q, ok: one.ok, count: one.citations.length });
+      const at = new Date().toISOString();
+      steps.push({ query: q, ok: one.ok, count: one.citations.length, at, ...(one.error ? { error: one.error } : {}) });
+      queryResults.push(one.citations);
+      evidence.push(...one.citations.map((citation) => ({ ...citation, query: q, at, verification: "provider_returned" as const })));
       if (one.error === SEARCH_TIMEOUT_REPLY) {
         sawTimeout = true;
         if (isTimeoutAbort(overall.signal, overall.signal.reason)) {
@@ -286,7 +340,10 @@ export async function performDeepResearch(input: {
     overall.cleanup();
   }
 
-  const citations = dedupeCitations(collected, 8);
+  // Round-robin prevents the first query from consuming the whole visible allowance.
+  const balanced: ResearchCitation[] = [];
+  for (let index = 0; index < 8; index += 1) for (const result of queryResults) if (result[index]) balanced.push(result[index]!);
+  const citations = dedupeCitations(balanced, 8);
   if (!citations.length) {
     return {
       ok: false,
@@ -300,21 +357,15 @@ export async function performDeepResearch(input: {
   }
   for (const query of queries.slice(steps.length)) steps.push({ query, ok: false, count: 0 });
   const failed = steps.filter((step) => !step.ok);
-  const summaryLines = [
-    `Deep research used ${steps.length} searches and kept ${citations.length} http(s) sources the provider returned:`,
-    ...citations.map((item, index) => `${index + 1}. ${item.title} — ${item.url}`),
-  ];
-  if (failed.length) summaryLines.push(`${steps.length - failed.length} of ${steps.length} searches succeeded. Missing: ${failed.map((step) => step.query).join("; ")}.`);
-  if (sawTimeout) {
-    summaryLines.push("Note: some searches timed out; only confirmed sources are listed.");
-  }
-  const summary = summaryLines.join("\n");
+  for (const step of steps) step.retainedCount = evidence.filter((item) => item.query === step.query && citations.some((citation) => citation.url === item.url)).length;
+  const summary = researchSummary({ citations, steps, evidence });
   return {
     ok: true,
     configured: true,
     citations,
     error: "",
     steps,
+    evidence,
     summary,
     ...(failed.length ? { partial: true as const } : {}),
   };

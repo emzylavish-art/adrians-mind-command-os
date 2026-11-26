@@ -30,9 +30,11 @@ function botAvatarSrc(name: string) {
 export function PersonaDirectoryView({
   ws,
   setWs,
+  ownerId,
   onOpened,
 }: {
   ws: Workspace;
+  ownerId: string;
   setWs: (updater: (prev: Workspace) => Workspace) => void;
   /** Optional hook after a successful select (e.g. router navigate). */
   onOpened?: (href: string, card: PersonaCard) => void;
@@ -43,6 +45,8 @@ export function PersonaDirectoryView({
   const navigate = useNavigate();
   const latestWorkspace = useRef(ws);
   latestWorkspace.current = ws;
+  const latestOwner = useRef(ownerId);
+  latestOwner.current = ownerId;
 
   const directory = useMemo(
     () => buildPersonaDirectory({ agents: ws.agents, deployments: ws.deployments }),
@@ -55,6 +59,7 @@ export function PersonaDirectoryView({
   const empty = emptyStateForCategory(category, visible.length);
 
   function openCard(card: PersonaCard) {
+    if (!ownerId || latestOwner.current !== ownerId) { setNote("Your account changed. Reopen Explore before selecting a persona."); return; }
     const result = selectPersona(latestWorkspace.current, card);
     if (!result.ok) {
       const message = result.error;
@@ -66,7 +71,7 @@ export function PersonaDirectoryView({
     }
     let persisted: ReturnType<typeof persistPersonaOpen>;
     try {
-      persisted = persistPersonaOpen(window.localStorage, result.ws, result.selection);
+      persisted = persistPersonaOpen(window.localStorage, result.ws, result.selection, ownerId);
     } catch {
       const message = "Could not access local storage. Nothing was opened.";
       if (!emitFailure("persona", mountFailure({ message, action: "persona_open", target: "persona" }, () => openCard(card)))) {
@@ -75,13 +80,7 @@ export function PersonaDirectoryView({
       return;
     }
     if (!persisted.ok) {
-      if (persisted.workspacePersisted) {
-        latestWorkspace.current = result.ws;
-        setWs(() => result.ws);
-      }
-      const message = persisted.workspacePersisted
-        ? "The persona was saved, but its selection could not be saved. Nothing was opened."
-        : "Could not save this persona. Nothing was opened.";
+      const message = "Could not save this persona. Nothing was opened.";
       if (!emitFailure("persona", mountFailure({ message, action: "persona_open", target: "persona", outcome: persisted }, () => openCard(card)))) {
         setNote(message);
       }

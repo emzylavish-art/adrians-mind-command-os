@@ -49,8 +49,15 @@ describe("provider selection HTTP status", () => {
 describe("non-Grok provider path rate limit", () => {
   it("checks the request preflight before consulting helpers and dispatching direct providers", () => {
     const source = readFileSync(new URL("./turn.server.ts", import.meta.url), "utf8");
+    const consultStart = source.indexOf('if (body.composerMode === "orchestrator")');
+    const consultDispatch = source.indexOf("await collectConsultReport(", consultStart);
+    assert.ok(consultStart >= 0 && consultDispatch > consultStart);
+    assert.match(source.slice(consultStart, consultDispatch), /const blocked = \(await checkStop\(\)\) \?\? await ratePreflight\(\);\s*if \(blocked\) return blocked;/);
+    // Admission consumes one chat token; every actual helper call also runs the shared provider budget.
+    const helperCall = source.indexOf("return askConnectedModule(", consultDispatch);
+    assert.ok(helperCall > consultDispatch);
+    assert.match(source.slice(consultDispatch, helperCall), /const denied = await preflight\(\);/);
     for (const [branch, call] of [
-      ['if (body.composerMode === "orchestrator")', "await collectConsultHelp("],
       ['if (requestedProvider === "nemotron"', "await routeSelectedModel("],
       ['if (selected.id !== "grok")', "await callConfiguredProvider("],
     ]) {

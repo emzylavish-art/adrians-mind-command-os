@@ -1,8 +1,15 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
-import { checkTurnSize, takeToken } from "./limits.ts";
+import { checkTurnSize, takeToken, consumeMindRateLimit, resetMindRateLimitsForTests } from "./limits.ts";
 
 describe("mind request limits", () => {
+  it("retains a long-window quota when a short-window request prunes stale buckets", () => {
+    resetMindRateLimitsForTests();
+    assert.equal(consumeMindRateLimit("daily", "owner", 1, 86_400_000, 0).ok, true);
+    assert.equal(consumeMindRateLimit("chat", "other", 12, 60_000, 120_000).ok, true);
+    assert.equal(consumeMindRateLimit("daily", "owner", 1, 86_400_000, 120_001).ok, false);
+    assert.equal(consumeMindRateLimit("daily", "owner", 1, 86_400_000, 86_400_000).ok, true);
+  });
   it("stops a caller after the limit inside the window", () => {
     const state = new Map<string, number[]>();
     assert.equal(takeToken(state, "chat:a", 2, 1000, 0), true);

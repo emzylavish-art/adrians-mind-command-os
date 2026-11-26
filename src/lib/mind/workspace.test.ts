@@ -43,6 +43,7 @@ describe("workspace memory", () => {
     let ws = emptyWorkspace();
     const projectA = "project-a";
     const projectB = "project-b";
+    ws.projects = [projectA, projectB].map((id) => ({ id, name: id, description: "", createdAt: "2026-01-01T00:00:00.000Z" }));
     const on = createChat(ws, { memory: "on", autonomy: "ask", temporary: false, projectId: projectA });
     ws = on.ws;
     const other = createChat(ws, { memory: "on", autonomy: "ask", temporary: false, projectId: projectB });
@@ -211,6 +212,6 @@ it("merging an older archive twice retains newer turns and preserves local confl
 
 it("chat attachment copies cannot evict any of the forty saved files", () => {
   let workspace = emptyWorkspace();
-  for (let i = 0; i < 40; i++) workspace = addLocalFile(workspace, { name: i + ".txt", text: "saved", projectId: null });
+  for (let i = 0; i < 40; i++) workspace = addLocalFile(workspace, { name: i + ".txt", text: `saved unique fixture ${i}`, projectId: null });
   assert.equal(addLocalFile(workspace, { name: "extra.txt", text: "turn only", projectId: null }), workspace);
 });

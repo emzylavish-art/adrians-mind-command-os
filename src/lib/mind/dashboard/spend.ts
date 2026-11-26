@@ -28,6 +28,7 @@ const DEFAULT_ROOTS = [
 ];
 
 const MAX_FILE_BYTES = 2_000_000;
+export const MAX_SPEND_FILES = 8;
 
 export function createFilesystemSpendAdapter(opts?: { roots?: string[] }): SpendAdapter {
   const roots = opts?.roots ?? DEFAULT_ROOTS;
@@ -48,6 +49,9 @@ export function createFilesystemSpendAdapter(opts?: { roots?: string[] }): Spend
           }
         });
       const searchRoots = ctx.roots ?? roots;
+      const statModifiedMs = ctx.statModifiedMs ?? ((path: string) => {
+        try { return statSync(path).mtimeMs; } catch { return 0; }
+      });
 
       const hits: string[] = [];
       for (const root of searchRoots) {
@@ -86,7 +90,14 @@ export function createFilesystemSpendAdapter(opts?: { roots?: string[] }): Spend
       const all = [];
       let droppedInvalid = 0;
       const used: string[] = [];
-      for (const path of hits.slice(0, 8)) {
+      // Roots can overlap. Select unique files deterministically by freshness,
+      // rather than letting filesystem enumeration hide the newest ledger.
+      const candidates = [...new Set(hits)].map((path) => {
+        let modifiedMs = 0;
+        try { modifiedMs = statModifiedMs(path); } catch { /* unreadable */ }
+        return { path, modifiedMs: Number.isFinite(modifiedMs) ? modifiedMs : 0 };
+      }).sort((a, b) => b.modifiedMs - a.modifiedMs || a.path.localeCompare(b.path));
+      for (const { path } of candidates.slice(0, MAX_SPEND_FILES)) {
         try {
           if (statSize(path) > MAX_FILE_BYTES) {
             droppedInvalid += 1;
@@ -110,7 +121,9 @@ export function createFilesystemSpendAdapter(opts?: { roots?: string[] }): Spend
 
       all.sort((a, b) => b.atMs - a.atMs);
       const events = all.slice(0, MAX_EVENTS);
-      return { ok: true, events, source: used.join(" · "), droppedInvalid };
+      const omitted = Math.max(0, candidates.length - MAX_SPEND_FILES);
+      const coverage = `${used.length} readable source(s); ${omitted} older source(s) outside the ${MAX_SPEND_FILES}-file limit${all.length > MAX_EVENTS ? `; newest ${MAX_EVENTS} events retained` : ""}. Observed logs may not include all provider charges.`;
+      return { ok: true, events, source: used.join(" · "), droppedInvalid, coverage };
     },
   };
 }

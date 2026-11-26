@@ -17,6 +17,7 @@ import {
   addMailbox,
   addSchedule,
   setScheduleEnabled,
+  setSchedulePolicy,
   approveRunAction,
   cancelRun,
   deployAgent,
@@ -599,7 +600,7 @@ export function FleetPanel({
             <li key={run.id} id={`run-${run.id}`} tabIndex={-1} className={`rounded-panel border bg-surface p-3 text-sm ${run.id === focusRunId ? "border-accent" : "border-line"}`}>
               <p className="break-words font-semibold">{run.goal}</p>
               <p className="text-muted">{ws.agents.find((agent) => agent.id === run.agentId)?.name ?? "Agent"} · {run.state.replaceAll("_", " ")}</p>
-              {run.plan.length > 0 && <p className="mt-1 text-xs text-muted">Plan: {run.plan.map((step) => step.tool).join(" → ")}. Missing tools wait. They are not marked done.</p>}
+              {run.plan.length > 0 && <p className="mt-1 text-xs text-muted">Saved workflow{run.planVersion ? ` v${run.planVersion}` : ""}: {run.plan.map((step) => step.tool).join(" → ")}. {run.plan.every((step) => step.selection === "goal") ? "Tools were selected from the explicit goal using local matching." : "Template sequence: the goal did not select a narrower supported workflow."} Each step rechecks current permissions. No model-generated plan is claimed.</p>}
               {run.result ? <p className="mt-1 whitespace-pre-wrap">{run.result}</p> : null}
               {run.error ? <p className="mt-1 text-danger">{run.error}</p> : null}
               {events.length > 0 && <details className="mt-2">
@@ -613,8 +614,9 @@ export function FleetPanel({
                 {(run.state === "paused" || run.state === "waiting_external") ? <button type="button" className="min-h-11 rounded-panel border border-line px-3" onClick={() => setWs((prev) => resumeRun(prev, run.id))}>{run.state === "waiting_external" ? "Retry this step" : "Resume"}</button> : null}
                 {!["completed", "failed", "canceled"].includes(run.state) ? <button type="button" className="min-h-11 rounded-panel border border-line px-3" onClick={() => setWs((prev) => cancelRun(prev, run.id))}>Stop run</button> : null}
                 {run.state === "waiting_approval" ? <>
-                  {run.plan.some((step) => step.tool === "browser") ? <button type="button" className="min-h-11 rounded-panel border border-line px-3" onClick={() => setWs((prev) => approveRunAction(prev, run.id, "browser"))}>Approve browser</button> : null}
-                  {run.plan.some((step) => step.tool === "gmail_send") ? <button type="button" className="min-h-11 rounded-panel border border-line px-3" onClick={() => setWs((prev) => approveRunAction(prev, run.id, "gmail_send"))}>Approve send</button> : null}
+                  <p className="w-full text-xs text-muted">Approve only step {run.step + 1}: {run.plan[run.step]?.title || run.goal}. Changing the goal, destination, plan or bot configuration requires a new approval. Approval expires after ten minutes.</p>
+                  {run.plan[run.step]?.tool === "browser" ? <button type="button" className="min-h-11 rounded-panel border border-line px-3" onClick={() => setWs((prev) => approveRunAction(prev, run.id, "browser"))}>Approve browser</button> : null}
+                  {run.plan[run.step]?.tool === "gmail_send" ? <button type="button" className="min-h-11 rounded-panel border border-line px-3" onClick={() => setWs((prev) => approveRunAction(prev, run.id, "gmail_send"))}>Approve send</button> : null}
                 </> : null}
               </div>
             </li>
@@ -705,7 +707,7 @@ export function FleetPanel({
           <img src="/brand/logo-mark.jpg" alt="" className="size-8 rounded-lg" />
           <div>
             <h2 className="font-display text-3xl font-bold">Scheduled</h2>
-            <p className="text-sm text-muted">Jobs wait on this device. Nothing runs until you start it.</p>
+            <p className="text-sm text-muted">Enabled jobs run while Adrian is open or an authorized schedule worker is running. Saving a job does not provision a hosted worker.</p>
           </div>
         </div>
         <ul className="mb-2 space-y-2">
@@ -810,8 +812,36 @@ export function FleetPanel({
               <p className="mt-1 text-sm text-muted">{job.enabled ? (blocked ? "Blocked" : "On") : "Off"} · {bot?.name ?? "No bot assigned"}</p>
               <p className="text-sm text-muted">{job.clockHour == null ? `Every ${job.intervalMinutes} minutes` : `Daily at ${String(job.clockHour).padStart(2, "0")}:${String(job.clockMinute ?? 0).padStart(2, "0")} ${job.timeZone || "UTC"}`}</p>
               {blocked ? <p className="text-sm text-danger">{bot?.archived ? "Agent archived" : "Agent unavailable"}</p> : <p className="text-sm text-muted">Next due in your local time <time dateTime={job.nextRunAt}>{new Date(job.nextRunAt).toLocaleString()}</time></p>}
+              {job.chatId && <p className="text-xs text-muted">Bot workflow linked to a conversation. Previous messages are not included automatically; put the intended context in the task instruction. Results stay in Runs. You can also deliver completed, undelivered results to this conversation without a model call.</p>}
               {job.chatId && ws.chats.some((chat) => chat.id === job.chatId) && <a className="underline" href={conversationSharePath(job.chatId, ["chat"])}>Open conversation</a>}
               {job.lastQueuedRunId && <p>Last occurrence: {ws.runs.find((run) => run.id === job.lastQueuedRunId)?.state ?? "Run record unavailable"}</p>}
+              <div className="mt-2 flex flex-wrap gap-3">
+                <label>Missed occurrences
+                  <select disabled={ws.halted} value={job.missedPolicy ?? "once"} className="ml-2 min-h-11 rounded-panel border border-line bg-surface px-2" onChange={(event) => setWs((prev) => setSchedulePolicy(prev, job.id, { missedPolicy: event.target.value as "once" | "skip" | "review" }))}>
+                    <option value="once">Run once on recovery</option><option value="skip">Skip missed occurrences</option><option value="review">Pause for review</option>
+                  </select>
+                </label>
+                <label>When a previous run is unfinished
+                  <select disabled={ws.halted} value={job.overlapPolicy ?? "wait"} className="ml-2 min-h-11 rounded-panel border border-line bg-surface px-2" onChange={(event) => setWs((prev) => setSchedulePolicy(prev, job.id, { overlapPolicy: event.target.value as "wait" | "skip" | "parallel" }))}>
+                    <option value="wait">Wait</option><option value="skip">Skip new occurrence</option><option value="parallel">Allow up to four overlapping runs</option>
+                  </select>
+                </label>
+                {job.chatId && <label>Completed result destination
+                  <select disabled={ws.halted} value={job.resultDelivery ?? "runs"} className="ml-2 min-h-11 rounded-panel border border-line bg-surface px-2" onChange={(event) => setWs((prev) => setSchedulePolicy(prev, job.id, { resultDelivery: event.target.value as "runs" | "conversation" }))}>
+                    <option value="runs">Runs only</option><option value="conversation">Runs and linked conversation</option>
+                  </select>
+                </label>}
+              </div>
+              {!!job.occurrences?.length && <details className="mt-2">
+                <summary className="min-h-11 cursor-pointer py-2">Occurrence history · latest {job.occurrences.length}</summary>
+                <ul className="space-y-1 text-xs text-muted">{job.occurrences.map((occurrence) => <li key={occurrence.id}>
+                  <time dateTime={occurrence.dueAt}>{new Date(occurrence.dueAt).toLocaleString()}</time> · {occurrence.state.replaceAll("_", " ")} · {occurrence.detail}
+                  {occurrence.runId && <a className="ml-2 underline" href={`?section=runs#run-${encodeURIComponent(occurrence.runId)}`}>Run record</a>}
+                  {occurrence.deliveredAt && <span> · Delivered to the linked conversation</span>}
+                  {occurrence.deliveryError && <p className="text-danger">{occurrence.deliveryError}</p>}
+                </li>)}</ul>
+                <p className="text-xs text-muted">The latest 100 occurrences are retained in this workspace. Older run records remain subject to the run storage limit.</p>
+              </details>}
               {job.lastRunAt && <p>Last completed: {new Date(job.lastRunAt).toLocaleString()}</p>}
               {job.lastAttemptAt && <p>Last attempt: {new Date(job.lastAttemptAt).toLocaleString()}</p>}
               {job.lastError && <p className="text-sm text-danger">{job.lastError}</p>}

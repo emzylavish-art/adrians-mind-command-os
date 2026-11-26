@@ -42,6 +42,8 @@ export type StoredConnection = {
   connectedAt: string;
   tokenType?: string;
   scopes?: string;
+  expiresAt?: string;
+  scopeEvidence?: "provider" | "requested" | "unknown";
 };
 
 export type ConnectionPublic = {
@@ -51,6 +53,12 @@ export type ConnectionPublic = {
   workspaceName?: string;
   accountLabel?: string;
   connectedAt?: string;
+  workspaceId?: string;
+  scopes?: string[];
+  authorization?: "saved" | "expired";
+  expiresAt?: string;
+  scopeEvidence?: "provider" | "requested" | "unknown";
+  recovery?: { status: string; detail: string; at: string };
 };
 
 export type PendingOAuth = {
@@ -100,6 +108,7 @@ export function readConnection(ownerId: string, connector: ConnectorId): StoredC
 export function clearConnection(ownerId: string, connector: ConnectorId, expectedConnectedAt?: string) {
   const active = readConnection(ownerId, connector);
   if (expectedConnectedAt && active?.connectedAt !== expectedConnectedAt) throw new Error("The selected connection changed. Refresh before disconnecting.");
+  if (active) saveLocalOAuthRecovery(ownerId, connector, { connectionAt: active.connectedAt, status: "revocation_unknown", detail: "Local access removed. Provider-side revocation is not yet confirmed.", at: new Date().toISOString() });
   const workspace = connector === "notion" ? active?.workspaceId : null;
   if (workspace) {
     const archived = workspaceFile(ownerId, workspace);
@@ -120,6 +129,36 @@ export function clearConnection(ownerId: string, connector: ConnectorId, expecte
     }
   }
   return active;
+}
+
+export type OAuthRecovery = { connectionAt: string; status: string; detail: string; at: string };
+
+function localOAuthRecoveryRows(ownerId: string, connector: ConnectorId): OAuthRecovery[] {
+  try {
+    const value = JSON.parse(readFileSync(ownerFile(ownerId, `${connector}-recovery.json`), "utf8")) as unknown;
+    // Read compatibility with the first single-record format.
+    const rows = Array.isArray(value) ? value : [value];
+    return rows.filter((row): row is OAuthRecovery => !!row && typeof row === "object" && typeof row.connectionAt === "string" && typeof row.status === "string" && typeof row.detail === "string" && typeof row.at === "string");
+  } catch { return []; }
+}
+
+/** Sanitized security metadata deliberately outlives credential removal and later reconnects. */
+export function saveLocalOAuthRecovery(ownerId: string, connector: ConnectorId, recovery: OAuthRecovery): void {
+  ensureOwnerDir(ownerId);
+  const file = ownerFile(ownerId, `${connector}-recovery.json`);
+  const temp = file + "." + randomBytes(8).toString("hex");
+  const rows = [recovery, ...localOAuthRecoveryRows(ownerId, connector).filter((row) => row.connectionAt !== recovery.connectionAt)];
+  // Retain every unresolved revocation; bound only historical resolved records.
+  let resolved = 0;
+  const kept = rows.filter((row) => row.status === "revocation_unknown" || ++resolved <= 20);
+  writeFileSync(temp, JSON.stringify(kept), { mode: 0o600 });
+  renameSync(temp, file);
+}
+
+export function readLocalOAuthRecovery(ownerId: string, connector: ConnectorId, connectionAt?: string): OAuthRecovery | null {
+  const rows = localOAuthRecoveryRows(ownerId, connector).sort((a, b) => b.at.localeCompare(a.at));
+  if (connectionAt) return rows.find((row) => row.connectionAt === connectionAt) ?? null;
+  return rows.find((row) => row.status === "revocation_unknown") ?? rows[0] ?? null;
 }
 
 export function getAccessToken(ownerId: string, connector: ConnectorId): string | null {
@@ -184,6 +223,8 @@ export function storeAccessToken(input: {
   accountLabel?: string;
   tokenType?: string;
   scopes?: string;
+  expiresAt?: string;
+  scopeEvidence?: "provider" | "requested" | "unknown";
 }): StoredConnection {
   const access = encryptSecret(input.accessToken);
   const active = readConnection(input.ownerId, input.connector);
@@ -207,6 +248,8 @@ export function storeAccessToken(input: {
     connectedAt: new Date().toISOString(),
     tokenType: input.tokenType,
     scopes: input.scopes,
+    expiresAt: input.expiresAt,
+    scopeEvidence: input.scopeEvidence,
   };
   if (input.connector === "notion" && input.workspaceId) {
     archiveWorkspace(conn);
@@ -347,9 +390,26 @@ export function toPublic(
   return {
     connector,
     state: "connected",
-    detail: `Connected to ${label}${conn.connectedAt ? ` · since ${conn.connectedAt}` : ""}. Tokens stay on the server.`,
+    detail: `Authorization saved for ${label}${conn.connectedAt ? ` · since ${conn.connectedAt}` : ""}. Access is checked when used.${conn.expiresAt && Date.parse(conn.expiresAt) <= Date.now() ? " The access token has expired; renewal or reconnection is required." : ""} Tokens stay on the server.`,
     workspaceName: conn.workspaceName,
     accountLabel: conn.accountLabel,
     connectedAt: conn.connectedAt,
+    workspaceId: conn.workspaceId,
+    scopes: conn.scopes?.split(/[ ,]+/).filter(Boolean),
+    scopeEvidence: conn.scopeEvidence ?? "unknown",
+    expiresAt: conn.expiresAt,
+    authorization: conn.expiresAt && Date.parse(conn.expiresAt) <= Date.now() ? "expired" : "saved",
   };
+}
+
+/** Compare the exact grant before rotating credentials. Never re-creates a disconnected grant. */
+export function replaceLocalGrant(expected: StoredConnection, next: StoredConnection): boolean {
+  const active = readConnection(expected.ownerId, expected.connector);
+  const current = expected.connector === "notion" && expected.workspaceId
+    ? localNotionWorkspaces(expected.ownerId).find((row) => row.workspaceId === expected.workspaceId)
+    : active;
+  if (!current || current.connectedAt !== expected.connectedAt || current.accessTokenEnc !== expected.accessTokenEnc) return false;
+  if (next.connector === "notion" && next.workspaceId) archiveWorkspace(next);
+  if (active?.connectedAt === expected.connectedAt && active.accessTokenEnc === expected.accessTokenEnc) saveConnection(next);
+  return true;
 }

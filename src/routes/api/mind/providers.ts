@@ -1,7 +1,7 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { requireUserId, UnauthorizedError } from "@/lib/auth/verify.server";
 import { assertSameOrigin } from "@/lib/mind/connectors/oauth-csrf";
-import { allowMindRequest } from "@/lib/mind/limits";
+import { allowSharedMindRequest as allowMindRequest } from "@/lib/mind/rate-limit.server";
 import { readHaltState } from "@/lib/mind/halt.server";
 import {
   listAiProviders, saveAiProvider, deleteAiProvider, discoverAiModels, setAiProviderModel,
@@ -39,7 +39,7 @@ export const Route = createFileRoute("/api/mind/providers")({
         let userId: string;
         try { userId = await owner(request); }
         catch { return reply({ ok: false, error: "Sign in is required." }, 401); }
-        if (!allowMindRequest("provider_config", userId, 15)) {
+        if (!await allowMindRequest("provider_config", userId, 15)) {
           return reply({ ok: false, error: "Too many provider changes. Please wait." }, 429);
         }
         let data: Record<string, unknown>;

@@ -288,14 +288,14 @@ export function ServiceBoard({
     {(() => {
       const readyState = (state: string) => state === "Key present" || state === "Connected" || state === "API token present";
       const rows = services.filter((service) => catalogBand(service.name) !== "Models");
-      const unresolved = (state: string) => state === "Checking" || state === "Status unavailable";
-      const connected = rows.filter((service) => readyState(service.state) && catalogBand(service.name) !== "Models");
+      const unresolved = (state: string) => state === "Checking" || state === "Status unavailable" || state.includes("review access");
+      const connected = rows.filter((service) => (readyState(service.state) || oauthByName[service.name]?.state === "connected") && catalogBand(service.name) !== "Models");
       const waiting = rows.filter((service) => !connected.includes(service) && !unresolved(service.state));
       const needle = catalogQuery.trim().toLowerCase();
       const matchesSearch = (service: Service) => !needle || `${service.name} ${service.detail}`.toLowerCase().includes(needle);
       const foundProviders = providers.filter((row) => [row.label, row.host, row.defaultModel].join(" ").toLowerCase().includes(needle));
       const foundMcp = savedMcp.filter((row) => [row.label, ...row.tools.map((tool) => tool.name)].join(" ").toLowerCase().includes(needle));
-      const checking = rows.filter((service) => unresolved(service.state) && matchesSearch(service));
+      const checking = rows.filter((service) => !connected.includes(service) && unresolved(service.state) && matchesSearch(service));
       const catalog = waiting.filter((service) => !needle || `${service.name} ${service.detail}`.toLowerCase().includes(needle));
       const bands = ["Communication", "Productivity", "Developer", "Models", "Research and media", "Custom MCP", "Other"]
         .map((label) => ({ label, items: catalog.filter((service) => catalogBand(service.name) === label) }))
@@ -326,7 +326,7 @@ export function ServiceBoard({
             </article>)}
             <button className="min-h-11 text-accent" onClick={() => openSavedRow("owner-api-connect")}>Add model provider</button>
           </section>
-          {checking.length > 0 && <section className="intelligence-group" aria-label="Connection status"><h3>Checking and unavailable</h3><div className="service-board plugin-links">{checking.map(renderService)}</div></section>}
+          {checking.length > 0 && <section className="intelligence-group" aria-label="Connection status"><h3>Connection checks and recovery</h3><div className="service-board plugin-links">{checking.map(renderService)}</div></section>}
           <section className="intelligence-group" aria-label="Build links" data-testid="kimi-connection">
             <h3>Build links</h3>
             <KimiDeviceConnect />
@@ -400,9 +400,12 @@ export function ServiceBoard({
                   Retry
                 </button>
             ) : meta && oauthConnected ? (
+              <>
+              {(oauth?.authorization === "expired" || oauth?.recovery?.status === "reconnect_required") && <button type="button" className="min-h-11 rounded-panel border border-line px-3 text-sm" disabled={isBusy} onClick={() => void connectOauth(service.name)}>Reconnect</button>}
               <button type="button" className="min-h-11 rounded-panel border border-line px-3 text-sm" disabled={isBusy} onClick={() => void disconnectOauth(service.name)}>
                 Disconnect
               </button>
+              </>
             ) : meta && showOauthConnect ? (
               <button type="button" className="min-h-11 rounded-panel border border-line px-3 text-sm" disabled={isBusy} onClick={() => void connectOauth(service.name)}>
                 Connect
@@ -418,6 +421,13 @@ export function ServiceBoard({
               </button>
             )}
             </div>
+            {oauthConnected && oauth && !slackOff && <details className="plugin-link__extra text-xs text-muted">
+              <summary className="min-h-8 cursor-pointer py-2">Authorization details</summary>
+              <p>{oauth.scopeEvidence === "provider" ? "Permissions reported by the provider" : oauth.scopeEvidence === "requested" ? "Permissions requested during connection; the provider did not report the granted list" : "Recorded permissions; grant evidence was not recorded for this older connection"}. Each action still checks resource access and owner approval.</p>
+              {oauth.scopes?.length ? <ul className="mt-2 space-y-1">{oauth.scopes.map((scope) => <li key={scope} className="break-all">{scope}</li>)}</ul> : <p className="mt-2">No permission list was supplied. Saved authorization does not prove read or write access.</p>}
+              {oauth.workspaceId && <p className="mt-2 break-all">Workspace: {oauth.workspaceName || oauth.workspaceId}</p>}
+              {oauth.expiresAt && <p className="mt-2">Access token expiry: {new Date(oauth.expiresAt).toLocaleString()}</p>}
+            </details>}
             {service.name === "Notion" && oauth && (oauthConnected || showOauthConnect) &&
               <NotionWorkspaces key={oauth.connectedAt || oauth.state} onAdd={() => connectOauth("Notion")} onSelect={() => refreshOne("Notion")} />}
             {service.name === "MCP" ? (

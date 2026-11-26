@@ -5,17 +5,21 @@ import { createWorkspaceCheckpoint } from "./workspace-checkpoint";
 import { loadMindCopy, saveMindCopy } from "./server";
 import { chooseServerSync } from "./sync";
 import type { Workspace } from "./types";
-import { accountWorkspaceKey, emptyWorkspace, mergeMemoryState, loadWorkspaceForAccount } from "./workspace";
+import { accountWorkspaceKey, emptyWorkspace, mergeMemoryState, loadWorkspaceForAccount, stampWorkspaceEdits } from "./workspace";
 import { mergeWorkspaceEdits } from "./workspace-edits";
 import { SAVE_FAIL, saveFailureMessage } from "./save-error";
+import { normalizeRecovery } from "./recovery-inbox";
 
 function hasContent(ws: Workspace) {
-  return ws.chats.length + ws.memories.length + ws.projects.length + ws.files.length + (ws.deletedMemoryIds?.length ?? 0) + ws.audit.length + ws.agents.length > 0;
+  return ws.chats.length + ws.memories.length + ws.projects.length + ws.files.length + (ws.deletedMemoryIds?.length ?? 0) + (ws.deletedFileIds?.length ?? 0) + (ws.recovery?.length ?? 0) + ws.audit.length + ws.agents.length > 0;
 }
 
 function reconcileStoredRecords(ws: Workspace, stored: Workspace): Workspace {
   const missing = stored.agents.filter((agent) => !ws.agents.some((item) => item.id === agent.id));
-  return { ...ws, ...mergeMemoryState(ws, stored), agents: [...ws.agents, ...missing] };
+  const deletedFileIds = [...new Set([...(ws.deletedFileIds ?? []), ...(stored.deletedFileIds ?? [])])];
+  return { ...ws, ...mergeMemoryState(ws, stored), agents: [...ws.agents, ...missing], deletedFileIds,
+    files: ws.files.filter((file) => !deletedFileIds.includes(file.id)),
+    recovery: normalizeRecovery([...(ws.recovery ?? []), ...(stored.recovery ?? [])]) };
 }
 
 
@@ -29,7 +33,7 @@ export function useMindWorkspace(userId: string | null = "dev-user", email: stri
   const ws = ready ? loaded.workspace : scope.empty;
   const setWs = useCallback((action: SetStateAction<Workspace>) => {
     setLoaded((current) => current?.scope === scope
-      ? { scope, workspace: typeof action === "function" ? action(current.workspace) : action }
+      ? { scope, workspace: stampWorkspaceEdits(current.workspace, typeof action === "function" ? action(current.workspace) : action) }
       : current);
   }, [scope]);
   const [syncNote, setSyncNote] = useState("Browser copy. Server copy has not been checked.");

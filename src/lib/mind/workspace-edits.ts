@@ -39,13 +39,16 @@ function mergeChat(stored: Chat, base: Chat, edited: Chat): Chat {
 
 /** Apply only the changes this browser made from its last locally persisted checkpoint. */
 export function mergeWorkspaceEdits(stored: Workspace, base: Workspace, edited: Workspace): Workspace {
+  const deletedFiles = [...new Set([...(stored.deletedFileIds ?? []), ...(edited.deletedFileIds ?? [])])];
   return {
     ...stored,
+    ...(stored.recovery?.length || edited.recovery?.length ? { recovery: mergeRows(stored.recovery ?? [], base.recovery ?? [], edited.recovery ?? []).slice(0, 200) } : {}),
     ...mergeMemoryState(stored, edited),
     halted: edited.halted === base.halted ? stored.halted : edited.halted,
     chats: mergeRows(stored.chats, base.chats, edited.chats, mergeChat),
     projects: mergeRows(stored.projects, base.projects, edited.projects),
-    files: mergeRows(stored.files, base.files, edited.files),
+    files: mergeRows(stored.files, base.files, edited.files).filter((file) => !deletedFiles.includes(file.id)),
+    ...(deletedFiles.length ? { deletedFileIds: deletedFiles } : {}),
     usage: [...mergeRows(stored.usage, base.usage, edited.usage)].sort((a, b) => b.at.localeCompare(a.at)).slice(0, 200),
     audit: [...mergeRows(stored.audit, base.audit, edited.audit)].sort((a, b) => b.at.localeCompare(a.at)).slice(0, 200),
     agents: mergeRows(stored.agents, base.agents, edited.agents),

@@ -8,7 +8,7 @@ import { providerWireProtocol, modelDiscoveryHeaders, buildProviderChatRequest, 
 import { getSql, type Sql } from "../db.ts";
 import { connectorTokenSecretStatus, encryptSecret, decryptSecret } from "./connectors/crypto.ts";
 import { isLocalHostname, isPrivateAddressLiteral, pinnedHttpFetch, resolveAndPinMcpHostname } from "./mcp/http-dns-pin.ts";
-import { customProviderBlockReason, isOpenRouterFreeModel, OPENROUTER_FREE_MODEL_REQUIRED, rankCatalogModels, validCatalogModelId } from "./provider-catalog.ts";
+import { customProviderBlockReason, isOpenRouterFreeModel, OPENROUTER_FREE_MODEL_REQUIRED, rankCatalogModels, normalizeCatalogModels, modelCompatibility, type CatalogModelProfile, type ModelExecution, validCatalogModelId } from "./provider-catalog.ts";
 
 export type PublicAiProvider = {
   id: string;
@@ -16,6 +16,7 @@ export type PublicAiProvider = {
   host: string;
   defaultModel: string;
   models: string[];
+  modelProfiles?: CatalogModelProfile[];
   status: string;
   lastError: string;
   hasKey: boolean;
@@ -28,6 +29,7 @@ type StoredProvider = {
   key_ciphertext: string;
   default_model: string;
   models: unknown;
+  model_profiles?: unknown;
   status: string;
   last_error: string;
 };
@@ -64,6 +66,33 @@ function asModels(value: unknown): string[] {
     : [];
 }
 
+function asProfiles(value: unknown): CatalogModelProfile[] {
+  let raw = value;
+  if (typeof raw === "string") { try { raw = JSON.parse(raw); } catch { return []; } }
+  return normalizeCatalogModels(Array.isArray(raw) ? raw : raw && typeof raw === "object" ? Object.values(raw) : []);
+}
+function profileRecord(profiles: CatalogModelProfile[]): Record<string, CatalogModelProfile> {
+  return Object.fromEntries(profiles.map((profile) => [profile.id, profile]));
+}
+/** Atomic per-model receipt update: concurrent different-model calls do not overwrite one another. */
+export async function recordModelExecution(sql: Sql, ownerId: string, providerId: string, model: string, receipt: ModelExecution): Promise<void> {
+  await sql.query("update mind_ai_providers set model_profiles = jsonb_set(model_profiles, ARRAY[$3::text], coalesce(model_profiles -> $3, '{}'::jsonb) || jsonb_build_object('id', $3::text, 'lastExecution', $4::jsonb), true) where user_id=$1 and id=$2", [ownerId, providerId, model, JSON.stringify(receipt)]);
+}
+
+/** A catalog response may race inference. Retain each latest stored execution receipt atomically. */
+export async function recordModelCatalogue(sql: Sql, ownerId: string, providerId: string, input: {
+  baseUrl: string; defaultModel: string; models: string[]; status: string; lastError: string; profiles: CatalogModelProfile[];
+}): Promise<void> {
+  await sql.query(
+    `update mind_ai_providers set base_url=$3, default_model=$4, models=$5::jsonb, status=$6, last_error=$7,
+     model_profiles=coalesce((select jsonb_object_agg(incoming.key, incoming.value ||
+       case when model_profiles -> incoming.key ? 'lastExecution'
+       then jsonb_build_object('lastExecution', model_profiles -> incoming.key -> 'lastExecution') else '{}'::jsonb end)
+       from jsonb_each($8::jsonb) incoming), '{}'::jsonb), updated_at=now() where user_id=$1 and id=$2`,
+    [ownerId, providerId, input.baseUrl, input.defaultModel, JSON.stringify(input.models), input.status, input.lastError, JSON.stringify(profileRecord(input.profiles))],
+  );
+}
+
 const OFFICIAL_API_BASES: Record<string, string> = {
   "aistudio.google.com": "https://generativelanguage.googleapis.com/v1beta",
   "ai.google.dev": "https://generativelanguage.googleapis.com/v1beta",
@@ -94,6 +123,7 @@ function publicRow(row: StoredProvider): PublicAiProvider {
     host,
     defaultModel: models.includes(row.default_model) ? row.default_model : models[0] ?? "",
     models,
+    modelProfiles: asProfiles(row.model_profiles).filter((profile) => models.includes(profile.id)),
     status: row.status,
     lastError: row.last_error,
     hasKey: Boolean(row.key_ciphertext),
@@ -102,7 +132,7 @@ function publicRow(row: StoredProvider): PublicAiProvider {
 
 async function rows(sql: Sql, userId: string): Promise<StoredProvider[]> {
   return sql.query<StoredProvider>(
-    "select id, label, base_url, key_ciphertext, default_model, models, status, last_error from mind_ai_providers where user_id = $1 order by created_at desc",
+    "select id, label, base_url, key_ciphertext, default_model, models, model_profiles, status, last_error from mind_ai_providers where user_id = $1 order by created_at desc",
     [userId],
   );
 }
@@ -167,7 +197,7 @@ export async function setAiProviderModel(userId: string, id: string, model: stri
   const current = asModels(row.models);
   const models = current.includes(next) ? current : [next, ...current];
   const [updated] = await sql.query<StoredProvider>(
-    "update mind_ai_providers set default_model = $3, models = $4::jsonb, status = case when status = 'awaiting_discovery' then 'configured' else status end, updated_at = now() where user_id = $1 and id = $2 returning id, label, base_url, key_ciphertext, default_model, models, status, last_error",
+    "update mind_ai_providers set default_model = $3, models = $4::jsonb, status = case when status = 'awaiting_discovery' then 'configured' else status end, updated_at = now() where user_id = $1 and id = $2 returning id, label, base_url, key_ciphertext, default_model, models, model_profiles, status, last_error",
     [userId, id, next, JSON.stringify(models)],
   );
   return updated ? { ok: true, provider: publicRow(updated) } : { ok: false, error: "Provider not found for this account." };
@@ -219,6 +249,7 @@ export async function discoverAiModels(userId: string, id: string):
   let status = row.status;
   let lastError = "";
   let models = asModels(row.models);
+  let profiles = asProfiles(row.model_profiles);
   try {
     const res = await requestProvider(requestRow, "models", {
       method: "GET",
@@ -239,6 +270,8 @@ export async function discoverAiModels(userId: string, id: string):
       const parsed = publicRow(requestRow).host === "openrouter.ai" ? ranked.filter(isOpenRouterFreeModel) : ranked;
       if (parsed.length) {
         models = parsed;
+        const previousProfiles = new Map(profiles.map((profile) => [profile.id, profile]));
+        profiles = normalizeCatalogModels(found).filter((profile) => parsed.includes(profile.id)).map((profile) => ({ ...profile, lastExecution: previousProfiles.get(profile.id)?.lastExecution }));
         status = "catalogued";
       } else {
         status = models.length ? "configured" : "awaiting_discovery";
@@ -250,11 +283,9 @@ export async function discoverAiModels(userId: string, id: string):
     lastError = "Model discovery could not complete. Check the connection and refresh.";
   }
   const defaultModel = row.default_model && models.includes(row.default_model) ? row.default_model : models[0] || "";
-  await sql.query(
-    "update mind_ai_providers set base_url = $3, default_model = $4, models = $5::jsonb, status = $6, last_error = $7, updated_at = now() where user_id = $1 and id = $2",
-    [userId, id, requestRow.base_url, defaultModel, JSON.stringify(models), status, lastError],
-  );
-  return { ok: true, provider: publicRow({ ...requestRow, default_model: defaultModel, models, status, last_error: lastError }) };
+  await recordModelCatalogue(sql, userId, id, { baseUrl: requestRow.base_url, defaultModel, models, status, lastError, profiles });
+  const refreshed = (await rows(sql, userId)).find((item) => item.id === id);
+  return refreshed ? { ok: true, provider: publicRow(refreshed) } : { ok: false, error: "Provider was removed before discovery completed." };
 }
 
 export { parseCustomProviderChoice } from "./provider-catalog.ts";
@@ -264,6 +295,7 @@ export async function executeCustomChat(
   selection: { id: string; model: string },
   messages: Array<{ role: "system" | "user" | "assistant"; content: string }>,
   signal?: AbortSignal,
+  policy: { freeOnly?: boolean } = {},
 ): Promise<
   { ok: true; text: string; model: string; provider: string; requestId: string | null; usage: { prompt_tokens?: number; completion_tokens?: number } | null } |
   { ok: false; error: string; httpStatus?: number }
@@ -274,9 +306,17 @@ export async function executeCustomChat(
   const blockReason = customProviderBlockReason({ status: row.status, hasKey: Boolean(row.key_ciphertext) });
   if (blockReason) return { ok: false, error: blockReason };
   if (!asModels(row.models).includes(selection.model)) return { ok: false, error: "Model is not in the saved provider's catalogue." };
+  const profile = asProfiles(row.model_profiles).find((item) => item.id === selection.model);
+  const guardedFreeRoute = publicRow(row).host === "openrouter.ai" && isOpenRouterFreeModel(selection.model);
+  if (policy.freeOnly === true && !guardedFreeRoute) return { ok: false, error: "Free-only mode requires a route that enforces zero-price execution. Catalogue pricing alone does not authorize this API call.", httpStatus: 400 };
+  const compatibility = modelCompatibility(profile, { freeOnly: policy.freeOnly === true && !guardedFreeRoute, input: ["text"], output: ["text"], estimatedInputTokens: Math.ceil(messages.reduce((total, message) => total + message.content.length, 0) / 3) });
+  if (!compatibility.compatible) return { ok: false, error: compatibility.reason, httpStatus: 400 };
   const key = decryptSecret(row.key_ciphertext);
   if (!key) return { ok: false, error: "The saved provider credential could not be decrypted." };
   if (!messages.length || !messages.some((m) => m.role === "user")) return { ok: false, error: "No user message was supplied." };
+  const record = async (outcome: ModelExecution["outcome"], error?: string, reportedModel?: string) => {
+    try { await recordModelExecution(sql, userId, row.id, selection.model, { outcome, at: new Date().toISOString(), requestedModel: selection.model, reportedModel, error }); } catch { /* A receipt write failure must not hide a returned provider answer. */ }
+  };
   try {
     const kind = providerWireProtocol(row.base_url);
     const freeOpenRouter = publicRow(row).host === "openrouter.ai";
@@ -291,18 +331,21 @@ export async function executeCustomChat(
     if (res.status < 200 || res.status >= 300) {
       const error = providerError(res.status);
       const restriction = providerRestriction(res.status);
-      if (restriction) {
+      await record(res.status === 429 ? "rate_limited" : res.status === 403 ? "permission_denied" : "failed", error);
+      if (restriction && res.status !== 429 && res.status !== 403) {
         await sql.query("update mind_ai_providers set status=$3,last_error=$4,updated_at=now() where user_id=$1 and id=$2", [userId, row.id, restriction, error]);
       }
       return { ok: false, error, httpStatus: res.status >= 400 && res.status < 500 ? res.status : undefined };
     }
     const parsed = parseProviderText(kind, res.text);
-    if (!parsed.ok) return parsed;
+    if (!parsed.ok) { await record("failed", parsed.error); return parsed; }
+    await record("succeeded", undefined, parsed.model);
     return {
       ok: true, text: parsed.text, model: parsed.model, provider: row.label,
       requestId: res.requestId, usage: parsed.usage,
     };
   } catch {
+    await record("failed", "The provider could not be reached or returned an unreadable response.");
     return { ok: false, error: "The provider could not be reached or returned an unreadable response." };
   }
 }

@@ -1,0 +1,569 @@
+{
+  "audit": "C2 — Notion Recovery Audit",
+  "chapterId": "4231aa276323810e913fdd2b090f4e8b",
+  "baseSha": "18d5b9364e6bdcfec028eeccf56fe596946ed8ce",
+  "componentOwner": "notion_receipts_connectors",
+  "statusScope": "Code and synthetic/local database fixtures only; parent owns complete branch checks, commit and push.",
+  "findings": [
+    {
+      "id": "AA-001",
+      "title": "Notion permission failures need structured recovery",
+      "source": "https://app.notion.com/p/4231aa2763238131b9fecd6819d766f3",
+      "status": "fixed and tested",
+      "expectedBehavior": "Permission denial keeps a typed error, exact workspace/page identity and reconnect guidance; permission repair never reuses a write approval for another workspace.",
+      "files": [
+        "src/lib/mind/notion.ts",
+        "src/lib/mind/notion-operation-store.ts",
+        "src/lib/mind/server.ts",
+        "src/components/mind/command-app.tsx",
+        "migrations/0018_c2_execution_recovery.sql"
+      ],
+      "changes": "Retained safe HTTP/error codes; 401/403 route to reconnect; server token resolution retains expiry/recovery errors. Actual UI handler offers Setup instead of a generic write Retry. Fresh authorization cannot automatically approve a write.",
+      "evidence": [
+        "notion-recovery.test.ts: typed 403, no credential reflection, changed-workspace rejection",
+        "notion-entrypoint-recovery.test.ts: actual askNotion handler maps permission rejection to Setup and no retry callback",
+        "notion-entrypoint-recovery.test.ts: captured approval and operation-recovery callbacks after chat workspace switch make zero extra server requests or PATCH calls"
+      ],
+      "remainingVerification": [
+        "No live account, paid provider, physical device or deployed migration was exercised."
+      ],
+      "relatedFixes": []
+    },
+    {
+      "id": "AA-002",
+      "title": "Accepted Notion append can be duplicated through recovery",
+      "source": "https://app.notion.com/p/4231aa2763238131b9fecd6819d766f3",
+      "status": "fixed and tested",
+      "expectedBehavior": "Accepted or uncertain writes reconcile the same operation without another PATCH, including long pages and lost responses.",
+      "files": [
+        "src/lib/mind/notion.ts",
+        "src/lib/mind/notion-operation-store.ts",
+        "src/lib/mind/server.ts",
+        "src/components/mind/command-app.tsx",
+        "migrations/0018_c2_execution_recovery.sql"
+      ],
+      "changes": "Persisted prepared/dispatched/accepted/uncertain/verified operations; atomic dispatch claim; returned block IDs verified directly; bounded pagination for legacy responses. UI confirmation and reload recovery preserve operationId and use confirmed:false.",
+      "evidence": [
+        "notion-recovery.test.ts: long-page verification, lost ACK and paginated legacy read",
+        "notion-entrypoint-recovery.test.ts: actual UI confirmation + Retry and lost success response each issue exactly one PATCH and preserve a single operation ID",
+        "durable-recovery.test.ts: independent SQL clients claim a Notion operation once",
+        "notion-entrypoint-recovery.test.ts: captured approval and operation-recovery callbacks after chat workspace switch make zero extra server requests or PATCH calls"
+      ],
+      "remainingVerification": [
+        "No live account, paid provider, physical device or deployed migration was exercised."
+      ],
+      "relatedFixes": []
+    },
+    {
+      "id": "AA-018",
+      "title": "Plugins discards saved permission evidence",
+      "source": "https://app.notion.com/p/4231aa27632381ed8e50f1f436509cb4",
+      "status": "fixed and tested",
+      "expectedBehavior": "Public status and Plugins expose recorded scopes while distinguishing provider-reported grants from requested or unknown evidence.",
+      "files": [
+        "src/lib/mind/connectors/token-refresh.ts",
+        "src/lib/mind/connectors/token-expiry.ts",
+        "src/lib/mind/connectors/oauth-provider.ts",
+        "src/lib/mind/connectors/store.ts",
+        "src/lib/mind/connectors/durable-oauth.server.ts",
+        "src/lib/mind/connectors/recovery.ts",
+        "migrations/0018_c2_execution_recovery.sql",
+        "src/lib/mind/service-board-status.ts",
+        "src/lib/mind/connection-board.ts",
+        "src/lib/mind/oauth-board-action.ts",
+        "src/components/mind/service-board.tsx"
+      ],
+      "changes": "Captured scope evidence/expiry at exchange and refresh, whitelisted public scope/workspace fields, rendered compact Authorization details. No tokens included.",
+      "evidence": [
+        "service-board-status.test.ts: permission metadata retained and token fields omitted",
+        "token-recovery.test.ts: sanitized authorization metadata",
+        "connection-board.test.ts: authorization states"
+      ],
+      "remainingVerification": [
+        "No live account, paid provider, physical device or deployed migration was exercised."
+      ],
+      "relatedFixes": []
+    },
+    {
+      "id": "AA-019",
+      "title": "Saved Gmail authorization contradicts ordinary chat",
+      "source": "https://app.notion.com/p/4231aa27632381ed8e50f1f436509cb4",
+      "status": "fixed and tested",
+      "expectedBehavior": "Ordinary mailbox requests truthfully explain unavailable chat execution without claiming an authorized account is disconnected.",
+      "files": [
+        "src/lib/mind/intent.ts",
+        "src/lib/mind/intent.test.ts",
+        "src/components/mind/command-app.tsx"
+      ],
+      "changes": "Optional known Gmail authorization context; mailbox actions produce a truthful capability-unavailable response. Questions about Gmail and drafting email remain ordinary chat. Parent wires read-only status context before interpreting mailbox actions.",
+      "evidence": [
+        "intent.test.ts: connected/unknown mailbox requests and draft/information cases"
+      ],
+      "remainingVerification": [
+        "A real Gmail read/send adapter was not added or represented as available. No mailbox action was executed."
+      ],
+      "relatedFixes": []
+    },
+    {
+      "id": "AA-020",
+      "title": "Saved authorization is not proof of operational access",
+      "source": "https://app.notion.com/p/4231aa27632381ed8e50f1f436509cb4",
+      "status": "fixed and tested",
+      "expectedBehavior": "Connection labels distinguish saved authorization, expired credentials, required reconnect and unconfirmed revocation from capability proof.",
+      "files": [
+        "src/lib/mind/connectors/token-refresh.ts",
+        "src/lib/mind/connectors/token-expiry.ts",
+        "src/lib/mind/connectors/oauth-provider.ts",
+        "src/lib/mind/connectors/store.ts",
+        "src/lib/mind/connectors/durable-oauth.server.ts",
+        "src/lib/mind/connectors/recovery.ts",
+        "migrations/0018_c2_execution_recovery.sql",
+        "src/lib/mind/service-board-status.ts",
+        "src/lib/mind/connection-board.ts",
+        "src/lib/mind/oauth-board-action.ts",
+        "src/components/mind/service-board.tsx"
+      ],
+      "changes": "Replaced generic Connected with Authorization saved; added expiry/reconnect/review-access states. Status disclosure explains each action still verifies access and approval.",
+      "evidence": [
+        "connection-board.test.ts: saved/expired/reconnect/revocation distinctions",
+        "service-board-status.test.ts: truthful public DTO",
+        "token-recovery.test.ts: expired refresh, rejected renewal and revocation uncertainty"
+      ],
+      "remainingVerification": [
+        "No live account, paid provider, physical device or deployed migration was exercised."
+      ],
+      "relatedFixes": [
+        "AA-001",
+        "AA-018",
+        "AA-105",
+        "AA-106"
+      ]
+    },
+    {
+      "id": "AA-077",
+      "title": "Server-process memory cannot carry durable execution receipts",
+      "source": "https://app.notion.com/p/4231aa27632381b185a9d583f742cb20",
+      "status": "fixed and tested",
+      "expectedBehavior": "Authoritative receipts remain owner-scoped and recordable across independent server instances.",
+      "files": [
+        "src/lib/mind/execution-ledger.ts",
+        "src/lib/mind/execution-ledger.server.ts",
+        "src/lib/mind/notion-record.ts",
+        "src/lib/mind/server.ts",
+        "migrations/0018_c2_execution_recovery.sql"
+      ],
+      "changes": "Added shared SQL receipt issuance and transactional recording; actual Notion server execution issues trusted receipts; public record endpoint reads only durable server evidence. Process-local helpers remain test/development compatibility APIs with no production callers.",
+      "evidence": [
+        "durable-recovery.test.ts: issue using one client, record using another, wrong owner rejected",
+        "execution-ledger.test.ts: forged IDs, owner isolation and expiry/bounds"
+      ],
+      "remainingVerification": [
+        "Apply migration 0018 before deploying code. Durable receipt redemption has a ten-minute TTL; physical database row-retention cleanup is an operational-policy follow-up. Provider receipts are currently issued from the Notion adapter; uninstrumented features are not claimed as verified."
+      ],
+      "relatedFixes": []
+    },
+    {
+      "id": "AA-078",
+      "title": "Receipt consumption precedes durable recording",
+      "source": "https://app.notion.com/p/4231aa27632381b185a9d583f742cb20",
+      "status": "fixed and tested",
+      "expectedBehavior": "Transient recording failure allows an idempotent recording retry with zero repeat executions.",
+      "files": [
+        "src/lib/mind/execution-ledger.ts",
+        "src/lib/mind/execution-ledger.server.ts",
+        "src/lib/mind/notion-record.ts",
+        "src/lib/mind/server.ts",
+        "migrations/0018_c2_execution_recovery.sql"
+      ],
+      "changes": "SQL row lock, tool-run insert and receipt consumption commit in one transaction. Tool-run insert has owner/id conflict protection. Legacy helper marks consumed only after successful write and blocks concurrent recording.",
+      "evidence": [
+        "durable-recovery.test.ts: fault after insert rolls back to zero records, successful retry creates one, replay remains one",
+        "execution-ledger.test.ts: failing write retry and concurrent in-flight recorder"
+      ],
+      "remainingVerification": [
+        "No live account, paid provider, physical device or deployed migration was exercised."
+      ],
+      "relatedFixes": []
+    },
+    {
+      "id": "AA-079",
+      "title": "Configured service is not verified service health",
+      "source": "https://app.notion.com/p/4231aa27632381b185a9d583f742cb20",
+      "status": "fixed and tested",
+      "expectedBehavior": "Status identifies configuration evidence and avoids paid probe calls or fabricated service health.",
+      "files": [
+        "src/lib/mind/server.ts",
+        "src/components/mind/service-board.tsx"
+      ],
+      "changes": "mindStatus returns evidenceKind=configuration; Plugins authorization wording and current configured/unconfigured model wording remain explicit.",
+      "evidence": [
+        "diagnostic-entrypoint.test.ts: executes actual mindStatus handler with configured/missing keys; reports configuration and makes no provider fetch"
+      ],
+      "remainingVerification": [
+        "A historical/live health-monitoring service was not added; this change preserves the scope of what status can truthfully prove."
+      ],
+      "relatedFixes": []
+    },
+    {
+      "id": "AA-080",
+      "title": "Unknown emergency-stop storage loses diagnostic meaning",
+      "source": "https://app.notion.com/p/4231aa27632381b185a9d583f742cb20",
+      "status": "fixed and tested",
+      "expectedBehavior": "On/off/unknown remain separate; unknown still blocks execution.",
+      "files": [
+        "src/lib/mind/server.ts",
+        "src/components/mind/command-app.tsx"
+      ],
+      "changes": "Exposed authoritative executionHaltState and explanatory detail alongside effective executionHalted; root Controls UI displays the storage-verification issue.",
+      "evidence": [
+        "diagnostic-entrypoint.test.ts: actual mindStatus handler returns distinct on/off/unknown with fail-closed unknown",
+        "halt-file.test.ts: existing state and fail-closed storage cases"
+      ],
+      "remainingVerification": [
+        "No live account, paid provider, physical device or deployed migration was exercised."
+      ],
+      "relatedFixes": []
+    },
+    {
+      "id": "AA-081",
+      "title": "Execution records lack correlation context",
+      "source": "https://app.notion.com/p/4231aa27632381b185a9d583f742cb20",
+      "status": "fixed and tested",
+      "expectedBehavior": "Receipts can preserve known provider/model, workspace/chat/project, operation/parent/attempt, duration, certainty and failure code.",
+      "files": [
+        "src/lib/mind/execution-ledger.ts",
+        "src/lib/mind/execution-ledger.server.ts",
+        "src/lib/mind/notion-record.ts",
+        "src/lib/mind/server.ts",
+        "migrations/0018_c2_execution_recovery.sql"
+      ],
+      "changes": "Added sanitized metadata allowlist, SQL JSONB column and durable receipt propagation. Notion production issuer records provider, workspace, operation, certainty, failure code and duration; unavailable dimensions stay absent.",
+      "evidence": [
+        "execution-ledger.test.ts: correlation context survives recording while unsupported credential field is dropped",
+        "durable-recovery.test.ts: latest metadata migration and receipt insertion execute"
+      ],
+      "remainingVerification": [
+        "Other adapters must populate only observed metadata when instrumented. This schema does not manufacture live-provider evidence."
+      ],
+      "relatedFixes": []
+    },
+    {
+      "id": "AA-083",
+      "title": "Missing regression for failed durable receipt recording",
+      "source": "https://app.notion.com/p/4231aa27632381d0b0bcee3b73483f38",
+      "status": "fixed and tested",
+      "expectedBehavior": "Normal test discovery includes storage-failure, restart/client and idempotency regressions.",
+      "files": [
+        "src/lib/mind/execution-ledger.test.ts",
+        "src/lib/mind/durable-recovery.test.ts"
+      ],
+      "changes": "Added fault injection after SQL insert but before receipt consumption, rollback assertion, independent-client retry and duplicate-record exclusion; root auto-discovers TypeScript tests.",
+      "evidence": [
+        "durable-recovery.test.ts: PASS 1/1 with latest migrations",
+        "execution-ledger.test.ts: PASS 10/10"
+      ],
+      "remainingVerification": [
+        "No live account, paid provider, physical device or deployed migration was exercised."
+      ],
+      "relatedFixes": [
+        "AA-078",
+        "AA-082"
+      ]
+    },
+    {
+      "id": "AA-091",
+      "title": "Process-local rate limits diverge across servers",
+      "source": "https://app.notion.com/p/4231aa2763238151b68bff99553e91eb",
+      "status": "fixed and tested",
+      "expectedBehavior": "All production rate-limit entrypoints use a shared owner/bucket/window counter; shared-storage failure blocks provider dispatch.",
+      "files": [
+        "src/lib/mind/rate-limit.server.ts",
+        "src/lib/mind/limits.ts",
+        "src/lib/mind/turn.server.ts",
+        "src/lib/mind/agent-run.server.ts",
+        "src/lib/mind/voice/http.server.ts",
+        "src/lib/mind/server.ts",
+        "src/lib/mind/voice-cloning/service.ts",
+        "src/routes/api/mind/providers.ts",
+        "src/routes/api/mind/nuance/key.ts",
+        "src/routes/api/mind/nuance/session.ts",
+        "src/lib/mind/rea.ts",
+        "migrations/0018_c2_execution_recovery.sql"
+      ],
+      "changes": "Atomic SQL fixed-window counter and async entrypoint gates. Unconfigured local development retains bounded local counters; deployed/shared-store failures fail closed. All remaining production allowMindRequest imports now use shared async gate.",
+      "evidence": [
+        "durable-recovery.test.ts: eight concurrent clients admit exactly three, owners isolated, window reset",
+        "limits.test.ts and voice-cloning/service.test.ts: existing behavior preserved",
+        "c2-shared-gates-tests.log: 23/23"
+      ],
+      "remainingVerification": [
+        "Database migration must precede deployment. This enforces request quotas, not monetary spending budgets or an exact rolling-window algorithm."
+      ],
+      "relatedFixes": []
+    },
+    {
+      "id": "AA-092",
+      "title": "Cleanup applies the wrong bucket duration",
+      "source": "https://app.notion.com/p/4231aa2763238151b68bff99553e91eb",
+      "status": "fixed and tested",
+      "expectedBehavior": "Pruning a short window cannot reset an unrelated longer quota.",
+      "files": [
+        "src/lib/mind/limits.ts",
+        "src/lib/mind/limits.test.ts"
+      ],
+      "changes": "Keys include window duration and cleanup uses each bucket’s stored duration, with bounded map cleanup.",
+      "evidence": [
+        "limits.test.ts: mixed long/short windows preserve the long quota",
+        "execution-ledger.test.ts: bounded map pruning remains green"
+      ],
+      "remainingVerification": [
+        "No live account, paid provider, physical device or deployed migration was exercised."
+      ],
+      "relatedFixes": []
+    },
+    {
+      "id": "AA-105",
+      "title": "Saved refresh tokens have no execution lifecycle",
+      "source": "https://app.notion.com/p/4231aa27632381f9bb1eece695bf3ad8",
+      "status": "fixed and tested",
+      "expectedBehavior": "Expired credentials refresh only the exact same grant, rotate safely, stop looping after rejection and cannot resurrect a disconnected/replaced account.",
+      "files": [
+        "src/lib/mind/connectors/token-refresh.ts",
+        "src/lib/mind/connectors/token-expiry.ts",
+        "src/lib/mind/connectors/oauth-provider.ts",
+        "src/lib/mind/connectors/store.ts",
+        "src/lib/mind/connectors/durable-oauth.server.ts",
+        "src/lib/mind/connectors/recovery.ts",
+        "migrations/0018_c2_execution_recovery.sql",
+        "src/lib/mind/connectors/notion-oauth.ts",
+        "src/lib/mind/media/cloud/connection.ts",
+        "src/lib/mind/server.ts"
+      ],
+      "changes": "Added expiry metadata, bounded token refresh, shared claim lease, per-generation failure memory and compare-and-swap persistence. Notion and Drive token consumers use the resolver; renewal never automatically repeats an external write.",
+      "evidence": [
+        "token-recovery.test.ts: successful expiry refresh, rejected-no-loop, disconnect and delayed reconnect races, pre-dispatch account switch, malformed expiry",
+        "OAuth final suite: 29/29"
+      ],
+      "remainingVerification": [
+        "Provider contracts reviewed against official Google/Notion docs. No actual refresh grant or real account was used."
+      ],
+      "relatedFixes": []
+    },
+    {
+      "id": "AA-106",
+      "title": "Local disconnect and provider revocation are different outcomes",
+      "source": "https://app.notion.com/p/4231aa27632381f9bb1eece695bf3ad8",
+      "status": "fixed and tested",
+      "expectedBehavior": "Credentials are removed locally, while unconfirmed remote revocation remains visible after reload/reconnect.",
+      "files": [
+        "src/lib/mind/connectors/token-refresh.ts",
+        "src/lib/mind/connectors/token-expiry.ts",
+        "src/lib/mind/connectors/oauth-provider.ts",
+        "src/lib/mind/connectors/store.ts",
+        "src/lib/mind/connectors/durable-oauth.server.ts",
+        "src/lib/mind/connectors/recovery.ts",
+        "migrations/0018_c2_execution_recovery.sql",
+        "src/lib/mind/service-board-status.ts",
+        "src/lib/mind/connection-board.ts",
+        "src/lib/mind/oauth-board-action.ts",
+        "src/components/mind/service-board.tsx"
+      ],
+      "changes": "Persists sanitized revocation_unknown before removing local access and records provider result afterward. Durable rows and backwards-compatible local record arrays preserve older unresolved revocations when a new grant refresh succeeds.",
+      "evidence": [
+        "token-recovery.test.ts: failed revoke clears credentials, unresolved metadata survives reload, later successful refresh cannot hide older uncertainty"
+      ],
+      "remainingVerification": [
+        "Manual provider account-settings review remains required when remote revocation is unconfirmed; the app does not claim that access was revoked."
+      ],
+      "relatedFixes": []
+    },
+    {
+      "id": "AA-107",
+      "title": "Revocation needs provider-specific response contracts",
+      "source": "https://app.notion.com/p/4231aa27632381f9bb1eece695bf3ad8",
+      "status": "fixed and tested",
+      "expectedBehavior": "Each provider response is interpreted by its documented success contract, with unknown results disclosed.",
+      "files": [
+        "src/lib/mind/connectors/oauth-provider.ts",
+        "src/lib/mind/connectors/token-recovery.test.ts"
+      ],
+      "changes": "Google/form and Notion require HTTP 200; GitHub requires 204; Slack requires HTTP success plus ok=true and revoked=true. Arbitrary 2xx outcomes do not become confirmed revocation.",
+      "evidence": [
+        "token-recovery.test.ts: provider contract table covers success and unsupported response codes/body fields"
+      ],
+      "remainingVerification": [
+        "Official contracts reviewed: developers.google.com OAuth web-server; developers.notion.com/reference/revoke-token; docs.github.com OAuth app token deletion; docs.slack.dev/reference/methods/auth.revoke. No real revocation performed."
+      ],
+      "relatedFixes": []
+    },
+    {
+      "id": "AA-108",
+      "title": "Operation-specific durable integration recovery architecture",
+      "source": "https://app.notion.com/p/4231aa27632381f9bb1eece695bf3ad8",
+      "status": "duplicate with a link to its fix",
+      "expectedBehavior": "Recovery preserves original owner/workspace/operation and distinguishes retry, reconnect and verification without duplicate writes.",
+      "files": [
+        "src/lib/mind/notion.ts",
+        "src/lib/mind/notion-operation-store.ts",
+        "src/lib/mind/server.ts",
+        "src/components/mind/command-app.tsx",
+        "migrations/0018_c2_execution_recovery.sql",
+        "src/lib/mind/connectors/token-refresh.ts",
+        "src/lib/mind/connectors/token-expiry.ts",
+        "src/lib/mind/connectors/oauth-provider.ts",
+        "src/lib/mind/connectors/store.ts",
+        "src/lib/mind/connectors/durable-oauth.server.ts",
+        "src/lib/mind/connectors/recovery.ts",
+        "migrations/0018_c2_execution_recovery.sql",
+        "src/lib/mind/execution-ledger.ts",
+        "src/lib/mind/execution-ledger.server.ts",
+        "src/lib/mind/notion-record.ts",
+        "src/lib/mind/server.ts",
+        "migrations/0018_c2_execution_recovery.sql"
+      ],
+      "changes": "Implemented through durable Notion operation records, durable receipts, credential-recovery metadata and root Recovery inbox/entrypoint wiring.",
+      "evidence": [
+        "notion-entrypoint-recovery.test.ts",
+        "notion-recovery.test.ts",
+        "durable-recovery.test.ts",
+        "token-recovery.test.ts"
+      ],
+      "remainingVerification": [
+        "No live account, paid provider, physical device or deployed migration was exercised."
+      ],
+      "relatedFixes": [
+        "AA-001",
+        "AA-002",
+        "AA-031",
+        "AA-078",
+        "AA-105",
+        "AA-106"
+      ]
+    },
+    {
+      "id": "AA-129",
+      "title": "Persona template lookup depends on editable display name",
+      "source": "https://app.notion.com/p/4231aa2763238145b0c2d166ca446d68",
+      "status": "fixed and tested",
+      "expectedBehavior": "Renaming a template instance preserves identity; a same-name custom agent is never substituted.",
+      "files": [
+        "src/lib/mind/personas/selection.ts",
+        "src/lib/mind/personas/directory.ts",
+        "src/lib/mind/persona-select-action.ts",
+        "src/lib/mind/fleet.ts",
+        "src/components/mind/persona-directory.tsx",
+        "src/components/mind/surfaces/explore-panel.tsx",
+        "src/routes/explore.tsx",
+        "src/components/mind/command-app.tsx"
+      ],
+      "changes": "Explicit immutable builtin templateId values, readFleet preservation, selection by origin, retry snapshots carrying template identity. Legacy untagged agents are not retroactively guessed from names.",
+      "evidence": [
+        "personas/selection.test.ts: renamed normalized template reuses original ID; custom same-name agent remains unchanged and separate",
+        "persona-select-action.test.ts: retry fidelity"
+      ],
+      "remainingVerification": [
+        "No live account, paid provider, physical device or deployed migration was exercised."
+      ],
+      "relatedFixes": []
+    },
+    {
+      "id": "AA-130",
+      "title": "Persona handoff persistence can partially succeed",
+      "source": "https://app.notion.com/p/4231aa2763238145b0c2d166ca446d68",
+      "status": "fixed and tested",
+      "expectedBehavior": "Selection and template identity persist atomically in the correct account, preserving newer workspace state and recoverability.",
+      "files": [
+        "src/lib/mind/personas/selection.ts",
+        "src/lib/mind/personas/directory.ts",
+        "src/lib/mind/persona-select-action.ts",
+        "src/lib/mind/fleet.ts",
+        "src/components/mind/persona-directory.tsx",
+        "src/components/mind/surfaces/explore-panel.tsx",
+        "src/routes/explore.tsx",
+        "src/components/mind/command-app.tsx"
+      ],
+      "changes": "One owner-scoped v2 envelope holds selection plus exact selected agent. Destination merges only a newly materialized template into the current owner workspace, persists it, then consumes envelope. Save failure retains pending identity. Explore now loads account-scoped workspace after authentication.",
+      "evidence": [
+        "personas/selection.test.ts: one storage write, owner isolation, destination quota recovery, exact ID retention, newer edits preserved and deleted saved agent not resurrected",
+        "integration-persona-explore.test.ts: current route and synchronous persistence wiring"
+      ],
+      "remainingVerification": [
+        "No browser-storage quota was induced in a real browser. Root destination integration is source-reviewed; helper and actual selection workflows run in fixtures."
+      ],
+      "relatedFixes": []
+    },
+    {
+      "id": "AA-131",
+      "title": "Persona handoff lacks freshness and lifecycle rules",
+      "source": "https://app.notion.com/p/4231aa2763238145b0c2d166ca446d68",
+      "status": "fixed and tested",
+      "expectedBehavior": "Only a valid recent owner-bound selection can be consumed once; malformed/missing timestamps cannot become current.",
+      "files": [
+        "src/lib/mind/personas/selection.ts",
+        "src/lib/mind/personas/directory.ts",
+        "src/lib/mind/persona-select-action.ts",
+        "src/lib/mind/fleet.ts",
+        "src/components/mind/persona-directory.tsx",
+        "src/components/mind/surfaces/explore-panel.tsx",
+        "src/routes/explore.tsx",
+        "src/components/mind/command-app.tsx"
+      ],
+      "changes": "Strict five-minute TTL, rejects missing/invalid/future timestamps, owner-bound storage and payload, consume/clear after successful workspace save. Read compatibility for unowned v1 only in explicit dev-user context.",
+      "evidence": [
+        "personas/selection.test.ts: invalid/future/expired timestamps, cross-owner copied payload, dev-only legacy compatibility and one-time consumption",
+        "integration-persona-explore.test.ts: source integration"
+      ],
+      "remainingVerification": [
+        "If persistence is blocked, root UI retains pending selection until reload/retry or five-minute expiry. Direct user-requested deep links are validated against current owner workspace."
+      ],
+      "relatedFixes": []
+    }
+  ],
+  "verificationRuns": [
+    {
+      "command": "node --experimental-strip-types --test --test-concurrency=1 src/lib/mind/durable-recovery.test.ts",
+      "result": "PASS 1/1; 0004/0007/0018 migrations applied to disposable PGlite",
+      "log": "c2-durable-final-tests.log"
+    },
+    {
+      "command": "node --experimental-strip-types --test --test-concurrency=1 src/lib/mind/notion-entrypoint-recovery.test.ts",
+      "result": "PASS 5/5 actual CommandApp handler + real adapter with fake provider/store, including stale-workspace approval and recovery fences",
+      "log": "c2-notion-entrypoint-tests.log"
+    },
+    {
+      "command": "node --experimental-strip-types --test --test-concurrency=1 src/lib/mind/diagnostic-entrypoint.test.ts src/lib/mind/execution-ledger.test.ts",
+      "result": "PASS 12/12",
+      "log": "c2-diagnostic-tests.log"
+    },
+    {
+      "command": "node --experimental-strip-types --test --test-concurrency=1 src/lib/mind/connectors/token-recovery.test.ts src/lib/mind/connectors/providers-oauth.test.ts src/lib/mind/connectors/notion-oauth.test.ts",
+      "result": "PASS 29/29",
+      "log": "c2-oauth-final-tests.log"
+    },
+    {
+      "command": "node --experimental-strip-types --test --test-concurrency=1 src/lib/mind/personas/selection.test.ts src/lib/mind/personas/directory.test.ts src/lib/mind/persona-select-action.test.ts src/lib/mind/integration-persona-explore.test.ts",
+      "result": "PASS 24/24",
+      "log": "c2-persona-tests.log"
+    },
+    {
+      "command": "node --experimental-strip-types --test --test-concurrency=1 src/lib/mind/voice-cloning/service.test.ts src/lib/mind/nuance-live.test.ts src/lib/mind/rea.test.ts src/lib/mind/limits.test.ts",
+      "result": "PASS 23/23",
+      "log": "c2-shared-gates-tests.log"
+    }
+  ],
+  "environmentNotes": [
+    "Use TMPDIR under task workspace. Shared /tmp tmpfs filled to 100% and caused ENOSPC on an intermediate run; latest OAuth rerun passed with own scratch TMPDIR.",
+    "Earlier concurrent heavy PGlite/tsc attempts were SIGKILL; latest serialized durable fixture passed. Do not count killed attempts as passes.",
+    "git diff --check for owned files passed. Parent performs final full typecheck/build and complete suite."
+  ],
+  "migration": [
+    "0018_c2_execution_recovery.sql adds owner-scoped receipts, rate windows, Notion operations, sanitized OAuth recovery, refresh claims, expiry/scope metadata and tool-run metadata.",
+    "Do not renumber or deploy automatically; integration chat must reconcile migration order with other branches and apply before code rollout."
+  ],
+  "sharedFiles": [
+    "src/components/mind/command-app.tsx (parent owns UI integration)",
+    "src/lib/mind/server.ts (parent owns voice/research, child owned Notion/status/receipt/gate sections)",
+    "src/lib/mind/fleet.ts (other child owns scheduler/approval changes; this child added only template IDs/catalog/read normalization)",
+    "src/lib/mind/turn.server.ts and agent-run.server.ts (shared budget/provider changes plus async rate gate)"
+  ]
+}

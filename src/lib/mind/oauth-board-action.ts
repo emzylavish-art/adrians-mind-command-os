@@ -10,6 +10,7 @@ import {
   type HonestFailureKind,
 } from "./failure-states.ts";
 import { onceRetry } from "./retry-fidelity.ts";
+import type { OauthStatusPayload } from "./service-board-status.ts";
 
 export type OauthBoardAction = "connect" | "disconnect";
 
@@ -96,7 +97,7 @@ export async function runOauthBoardAction(
   params: OauthBoardActionParams,
   fetchImpl: (input: string, init: RequestInit) => Promise<Response>,
 ): Promise<
-  | { ok: true; note: string; name: string; redirectUrl?: string; oauth?: { state: string; detail: string } }
+  | { ok: true; note: string; name: string; redirectUrl?: string; oauth?: OauthStatusPayload }
   | { ok: false; kind: HonestFailureKind; message: string; params: OauthBoardActionParams }
 > {
   const snap = snapshotOauthBoardActionParams(params);
@@ -133,6 +134,7 @@ export async function runOauthBoardAction(
       state?: string;
       detail?: string;
       error?: string;
+      recovery?: { status: string; detail: string; at: string };
     } | null;
     if (!res.ok) {
       const classified = classifyOauthBoardActionFailure(
@@ -154,7 +156,7 @@ export async function runOauthBoardAction(
       ok: true,
       note: body.detail ?? `Disconnected ${snap.name}.`,
       name: snap.name,
-      oauth: { state: body.state, detail: body.detail ?? "" },
+      oauth: { state: body.state, detail: body.detail ?? "", ...(body.recovery ? { recovery: body.recovery } : {}) },
     };
   } catch (caught) {
     const classified = classifyOauthBoardActionFailure(snap.action, snap.name, caught);

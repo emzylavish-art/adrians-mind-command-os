@@ -3,7 +3,8 @@
  * The local filesystem store remains available for isolated tests.
  */
 import { createHash } from "node:crypto";
-import { getSql, type Sql } from "../../db.ts";
+import type { Sql } from "../../db.ts";
+async function getSql() { return (await import("../../db.ts")).getSql(); }
 import { resolveDatabaseUrl } from "../../env.server.ts";
 import { encryptSecret, decryptSecret } from "./crypto.ts";
 import { sameExternalAccount, isConnectorId, isValidOAuthState, PENDING_OAUTH_TTL_MS,
@@ -19,7 +20,7 @@ type ConnRow = {
   owner_id: string; connector: string; access_token_enc: string;
   refresh_token_enc: string | null; workspace_name: string | null;
   workspace_id: string | null; bot_id: string | null; account_label: string | null;
-  connected_at: string | Date; token_type: string | null; scopes: string | null;
+  connected_at: string | Date; token_type: string | null; scopes: string | null; expires_at?: string | Date | null; scope_source?: "provider" | "requested" | "unknown" | null;
 };
 function restore(row: ConnRow): StoredConnection | null {
   if (!isConnectorId(row.connector)) return null;
@@ -34,12 +35,14 @@ function restore(row: ConnRow): StoredConnection | null {
     connectedAt: new Date(row.connected_at).toISOString(),
     ...(row.token_type ? { tokenType: row.token_type } : {}),
     ...(row.scopes ? { scopes: row.scopes } : {}),
+    ...(row.expires_at ? { expiresAt: new Date(row.expires_at).toISOString() } : {}),
+    ...(row.scope_source ? { scopeEvidence: row.scope_source } : {}),
   };
 }
 export async function readDurableConnection(ownerId: string, connector: ConnectorId, tx?: Sql): Promise<StoredConnection | null> {
   const sql = tx ?? await getSql();
   const rows = await sql.query<ConnRow>(
-    "SELECT owner_id, connector, access_token_enc, refresh_token_enc, workspace_name, workspace_id, bot_id, account_label, connected_at, token_type, scopes FROM mind_oauth_connections WHERE owner_id = $1 AND connector = $2",
+    "SELECT owner_id, connector, access_token_enc, refresh_token_enc, workspace_name, workspace_id, bot_id, account_label, connected_at, token_type, scopes, expires_at, scope_source FROM mind_oauth_connections WHERE owner_id = $1 AND connector = $2",
     [ownerId, connector],
   );
   return rows.length ? restore(rows[0]) : null;
@@ -47,7 +50,7 @@ export async function readDurableConnection(ownerId: string, connector: Connecto
 export async function saveDurableConnection(input: {
   ownerId: string; connector: ConnectorId; accessToken: string; refreshToken?: string;
   workspaceName?: string; workspaceId?: string; botId?: string;
-  accountLabel?: string; tokenType?: string; scopes?: string;
+  accountLabel?: string; tokenType?: string; scopes?: string; expiresAt?: string; scopeEvidence?: "provider" | "requested" | "unknown";
 }, claim: string): Promise<StoredConnection> {
   if (!input.ownerId || !isConnectorId(input.connector) || !input.accessToken) throw new Error("Invalid OAuth connection.");
   const accessTokenEnc = encryptSecret(input.accessToken).ciphertext;
@@ -66,7 +69,7 @@ export async function saveDurableConnection(input: {
     const conn: StoredConnection = {
       ownerId: input.ownerId, connector: input.connector, accessTokenEnc, connectedAt: new Date().toISOString(),
       ...(refreshTokenEnc ? { refreshTokenEnc } : {}), workspaceName: input.workspaceName, workspaceId: input.workspaceId,
-      botId: input.botId, accountLabel: input.accountLabel, tokenType: input.tokenType, scopes: input.scopes,
+      botId: input.botId, accountLabel: input.accountLabel, tokenType: input.tokenType, scopes: input.scopes, expiresAt: input.expiresAt, scopeEvidence: input.scopeEvidence,
     };
     if (input.connector === "notion" && input.workspaceId) {
       await archiveWorkspace(sql, conn);
@@ -103,13 +106,13 @@ export async function selectDurableNotionWorkspace(owner: string, id: string) {
 }
 async function writeActive(sql: Sql, conn: StoredConnection) {
     await sql.query(
-      "INSERT INTO mind_oauth_connections (owner_id, connector, access_token_enc, refresh_token_enc, workspace_name, workspace_id, bot_id, account_label, connected_at, token_type, scopes)" +
-      " VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)" +
+      "INSERT INTO mind_oauth_connections (owner_id, connector, access_token_enc, refresh_token_enc, workspace_name, workspace_id, bot_id, account_label, connected_at, token_type, scopes, expires_at, scope_source)" +
+      " VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13)" +
       " ON CONFLICT (owner_id,connector) DO UPDATE SET access_token_enc=excluded.access_token_enc, refresh_token_enc=excluded.refresh_token_enc," +
       " workspace_name=excluded.workspace_name, workspace_id=excluded.workspace_id, bot_id=excluded.bot_id," +
-      " account_label=excluded.account_label, connected_at=excluded.connected_at, token_type=excluded.token_type, scopes=excluded.scopes",
+      " account_label=excluded.account_label, connected_at=excluded.connected_at, token_type=excluded.token_type, scopes=excluded.scopes, expires_at=excluded.expires_at, scope_source=excluded.scope_source",
       [conn.ownerId,conn.connector,conn.accessTokenEnc,conn.refreshTokenEnc ?? null,conn.workspaceName ?? null,conn.workspaceId ?? null,
-        conn.botId ?? null,conn.accountLabel ?? null,conn.connectedAt,conn.tokenType ?? null,conn.scopes ?? null],
+        conn.botId ?? null,conn.accountLabel ?? null,conn.connectedAt,conn.tokenType ?? null,conn.scopes ?? null,conn.expiresAt ?? null,conn.scopeEvidence ?? null],
     );
 }
 async function lockConnection(sql: Sql, owner: string, connector: ConnectorId) {
@@ -122,6 +125,8 @@ export async function clearDurableConnection(ownerId: string, connector: Connect
     await lockConnection(tx, ownerId, connector);
     const active = await readDurableConnection(ownerId, connector, tx);
     if (expectedConnectedAt && active?.connectedAt !== expectedConnectedAt) throw new Error("The selected connection changed. Refresh before disconnecting.");
+    if (active) await tx.query("INSERT INTO mind_oauth_recovery(owner_id,connector,connection_at,status,detail) VALUES($1,$2,$3,'revocation_unknown',$4) ON CONFLICT(owner_id,connector,connection_at) DO UPDATE SET status=excluded.status,detail=excluded.detail,at=now()",
+      [ownerId, connector, active.connectedAt, "Local access removed. Provider-side revocation is not yet confirmed."]);
     if (connector === "notion") {
       await tx.query("DELETE FROM mind_notion_workspaces WHERE owner_id=$1 AND workspace_id=(SELECT workspace_id FROM mind_oauth_connections WHERE owner_id=$1 AND connector=$2)", [ownerId, connector]);
     }
@@ -181,4 +186,21 @@ export async function takeDurablePendingOAuth(state: string, claim: string): Pro
   return { state, ownerId: row.owner_id, connector: row.connector, codeVerifier,
     redirectUri: row.redirect_uri, createdAt: new Date(created).toISOString(),
     ...(row.scopes ? { scopes: row.scopes } : {}) };
+}
+
+/** Rotate only the exact grant that was refreshed; a disconnect/reconnect wins any race. */
+export async function replaceDurableGrant(expected: StoredConnection, next: StoredConnection): Promise<boolean> {
+  const database = await getSql();
+  if (!database.transaction) throw new Error("OAuth transaction unavailable.");
+  return database.transaction(async (sql) => {
+    await lockConnection(sql, expected.ownerId, expected.connector);
+    const active = await readDurableConnection(expected.ownerId, expected.connector, sql);
+    const current = expected.connector === "notion" && expected.workspaceId
+      ? (await listDurableNotionWorkspaces(expected.ownerId, sql)).find((row) => row.workspaceId === expected.workspaceId)
+      : active;
+    if (!current || current.connectedAt !== expected.connectedAt || current.accessTokenEnc !== expected.accessTokenEnc) return false;
+    if (next.connector === "notion" && next.workspaceId) await archiveWorkspace(sql, next);
+    if (active?.connectedAt === expected.connectedAt && active.accessTokenEnc === expected.accessTokenEnc) await writeActive(sql, next);
+    return true;
+  });
 }

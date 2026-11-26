@@ -2,6 +2,7 @@ import { createHash, randomUUID } from "node:crypto";
 import {
   callCustomConnection,
   validateArgs,
+  readOperationSchema,
   listCustomConnections,
   saveCustomConnection,
   type PublicConnection,
@@ -23,14 +24,21 @@ async function halted(userId: string, deps: Dependencies): Promise<boolean> {
 
 /** Deliberate legacy UI DTO: no URL, bearer, ciphertext or registry internals. */
 export function connectedMcpPublic(connection: PublicConnection): McpPublic {
-  const schemaReady = connection.operations.some((operation) => operation.compatible && operation.inputSchema);
+  const tools = connection.operations.flatMap((operation) => {
+    const inputSchema = readOperationSchema(operation.inputSchema);
+    if (!operation.compatible || !inputSchema) return [];
+    return [{ name: operation.name, description: operation.description, inputSchema,
+      ...(typeof operation.annotations?.readOnlyHint === "boolean" ? { annotations: { readOnlyHint: operation.annotations.readOnlyHint } } : {}),
+    }];
+  });
+  const schemaReady = tools.length > 0;
   const ready = connection.enabled !== false && connection.state === "ready" && schemaReady && !connection.error;
   return {
     id: connection.id,
     label: connection.label,
     host: connection.host,
     state: ready ? "connected" : connection.state === "unchecked" ? "unchecked" : "failed",
-    tools: connection.operations.filter((op) => op.compatible && op.inputSchema).map(({ name, description }) => ({ name, description })),
+    tools,
     error: connection.enabled === false ? "This connection is disabled." : connection.error || (connection.state === "ready" && !schemaReady ? "No compatible tool schema is saved. Reconnect before calling tools." : ""),
   };
 }

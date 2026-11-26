@@ -26,6 +26,20 @@ function textResponse(status: number, body: string, contentType = "text/plain"):
 }
 
 describe("service-board oauth status resolution", () => {
+  it("retains permission evidence and recovery metadata without turning them into verified access", async () => {
+    const status = await fetchOauthStatusPayload("/api/mind/oauth/gmail/status", {
+      fetchFn: async () => jsonResponse(200, {
+        state: "connected", detail: "Authorization saved", authorization: "expired", scopeEvidence: "requested",
+        scopes: ["gmail.readonly", "gmail.send"], expiresAt: "2026-01-01T00:00:00Z", workspaceId: "workspace-A",
+        recovery: { status: "reconnect_required", detail: "Reconnect the same account.", at: "2026-01-01T00:00:00Z" }, access_token: "must-not-copy",
+      }),
+    });
+    assert.deepEqual(status.scopes, ["gmail.readonly", "gmail.send"]);
+    assert.equal(status.scopeEvidence, "requested");
+    assert.equal(status.authorization, "expired");
+    assert.equal(status.recovery?.status, "reconnect_required");
+    assert.doesNotMatch(JSON.stringify(status), /must-not-copy|access_token/);
+  });
   it("reuses the connector readiness probe timeout (10s)", () => {
     assert.equal(OAUTH_STATUS_FETCH_TIMEOUT_MS, 10_000);
   });

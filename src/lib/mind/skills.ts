@@ -41,6 +41,13 @@ export function runSkill(ws: Workspace, skill: Skill, enabled: boolean, query?: 
   return { ok: result.ok, text: result.lines.join("\n") || "No result." };
 }
 
+/** The ordinary-chat route uses the same switch and adapter as a named skill. */
+export function runLocalSkill(ws: Workspace, tool: NonNullable<Skill["tool"]>, request: string, enabled: Record<string, boolean>) {
+  const skill = SKILLS.find((item) => item.tool === tool)!;
+  const query = tool === "search_notes" ? request.replace(/^\s*search\s+(?:my\s+)?notes\b\s*(?:(?:for|about)\s+)?[:-]?\s*/i, "").trim() : request;
+  return runSkill(ws, skill, enabled[skill.id] !== false, query);
+}
+
 /** Only a named runnable skill can execute. Pass the remainder of the request as its input. */
 export function runRequestedSkill(ws: Workspace, request: string, enabled: Record<string, boolean>): { ok: boolean; text: string } {
   const lower = request.toLowerCase();

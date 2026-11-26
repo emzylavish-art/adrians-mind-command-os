@@ -3,7 +3,7 @@ import { botKnowledgeLine } from "./bot-model.ts";
 import { ADRIAN_MIND_IDENTITY } from "./model-consult.ts";
 import { personalityInstruction } from "./personalities/index.ts";
 import { packageChatContent, sanitizeAttachments, type ChatContent, type ImageAttachment } from "./media/index.ts";
-import { buildHistoryMessages, type HistoryInputMessage } from "./media/history.ts";
+import { buildHistoryMessages, imagePayloadChars, MAX_HISTORY_IMAGE_CHARS, type HistoryInputMessage } from "./media/history.ts";
 
 export function assembleTurn(input: {
   memory: "off" | "on";
@@ -11,6 +11,7 @@ export function assembleTurn(input: {
   text: string;
   memoryContext: MemoryNote[];
   images?: ImageAttachment[];
+  allowHistoryImages?: boolean;
   personalityId?: unknown;
   customPersonality?: unknown;
   botKnowledge?: unknown;
@@ -43,7 +44,7 @@ export function assembleTurn(input: {
   if (images.length > 0 && typeof userContent === "string") {
     return { ok: false, error: "Those image attachments could not be packaged." };
   }
-  const historyMessages = buildHistoryMessages(input.history);
+  const historyMessages = buildHistoryMessages(input.history, { question: input.text, allowImages: input.allowHistoryImages, maxImageChars: Math.max(0, MAX_HISTORY_IMAGE_CHARS - imagePayloadChars(images)) });
   return {
     ok: true,
     usedIds: notes.map((note) => note.id),

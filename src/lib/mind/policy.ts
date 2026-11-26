@@ -2,7 +2,7 @@ import type { Autonomy } from "./types";
 
 export type { Autonomy };
 
-export type ActionClass = "ordinary" | "protected";
+export type ActionClass = "ordinary" | "protected" | "unknown";
 
 export type Decision = "allow" | "ask_owner" | "deny";
 
@@ -16,12 +16,21 @@ const PROTECTED = [
   "publish",
   "rotate_secret",
   "change_governance",
+  // Existing confirmation entry points: the adapter still validates its own operation grant.
+  "tool",
+  "notion-workspace",
+  "notion-append",
+  "mcp-call",
 ] as const;
 
 export type ProtectedKind = (typeof PROTECTED)[number];
 
+/** New adapters must register a policy kind before they can execute. */
+export const ORDINARY_ACTIONS = ["chat", "lookup", "search"] as const;
+
 export function classifyAction(kind: string): ActionClass {
-  return (PROTECTED as readonly string[]).includes(kind) ? "protected" : "ordinary";
+  if ((PROTECTED as readonly string[]).includes(kind)) return "protected";
+  return (ORDINARY_ACTIONS as readonly string[]).includes(kind) ? "ordinary" : "unknown";
 }
 
 export function decide(input: {
@@ -34,7 +43,11 @@ export function decide(input: {
   if (input.halted) {
     return { decision: "deny", reason: "Emergency stop is on. No new action can run." };
   }
-  if (classifyAction(input.kind) === "protected") {
+  const actionClass = classifyAction(input.kind);
+  if (actionClass === "unknown") {
+    return { decision: "deny", reason: "This operation has no registered authorization policy. Nothing was dispatched." };
+  }
+  if (actionClass === "protected") {
     if (!input.approvalToken || input.approvalToken !== input.expectedToken) {
       return {
         decision: "ask_owner",

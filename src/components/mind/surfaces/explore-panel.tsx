@@ -8,8 +8,9 @@ import {
   type PersonaCard,
   type PersonaCategoryId,
 } from "@/lib/mind/personas";
-import { emptyWorkspace, loadWorkspace } from "@/lib/mind/workspace";
+import { emptyWorkspace, loadWorkspaceForAccount } from "@/lib/mind/workspace";
 import type { Workspace } from "@/lib/mind/types";
+import { useCurrentUserState } from "@/lib/auth/use-current-user";
 import { persistPersonaOpen, selectPersona } from "@/lib/mind/personas/selection";
 
 const SHELF_KEY = "adrian-explore-shelf";
@@ -103,6 +104,10 @@ function compareCards(sort: SortId) {
  * The directory below this panel still owns Save and open Chat.
  */
 export function ExplorePanel() {
+  const { user, isPending } = useCurrentUserState();
+  const ownerId = user?.id ?? null;
+  const verifiedEmail = user?.emailVerified ? user.primaryEmail : null;
+  const [loadedOwner, setLoadedOwner] = useState<string | null>(null);
   const [workspace, setWorkspace] = useState<Workspace>(() => emptyWorkspace());
   const [shelf, setShelf] = useState<ShelfId>("official");
   const [source, setSource] = useState<SourceId>("both");
@@ -121,11 +126,12 @@ export function ExplorePanel() {
   useEffect(() => {
     let loaded = emptyWorkspace();
     try {
-      loaded = loadWorkspace(window.localStorage);
+      loaded = loadWorkspaceForAccount(window.localStorage, ownerId, verifiedEmail);
     } catch {
       loaded = emptyWorkspace();
     }
     setWorkspace(loaded);
+    setLoadedOwner(ownerId);
     const built = buildPersonaDirectory({ agents: loaded.agents, deployments: loaded.deployments });
     const known = new Set(built.cards.map((card) => card.id));
     const storedShelf = readKey(SHELF_KEY);
@@ -136,7 +142,7 @@ export function ExplorePanel() {
     if (isSort(storedSort)) setSort(storedSort);
     setPins(readPins(known));
     setSavedNote("Loaded the shelf, source, sort, and saved personas already stored in this browser.");
-  }, []);
+  }, [ownerId, verifiedEmail]);
 
   const visible = useMemo(() => {
     const category = savedOnly ? "all" : shelf;
@@ -190,13 +196,14 @@ export function ExplorePanel() {
   }
 
   function openInChat(card: PersonaCard) {
+    if (isPending || !ownerId || loadedOwner !== ownerId) { setNext("Sign in and wait for your account’s personas to load."); return; }
     const result = selectPersona(workspace, card);
     if (!result.ok) {
       setNext(result.error);
       return;
     }
     try {
-      const persisted = persistPersonaOpen(window.localStorage, result.ws, result.selection);
+      const persisted = persistPersonaOpen(window.localStorage, result.ws, result.selection, ownerId);
       if (!persisted.ok) {
         setNext("Could not save this persona. Nothing was opened.");
         return;
@@ -210,8 +217,9 @@ export function ExplorePanel() {
   }
 
   function reloadLocal() {
+    if (!ownerId || isPending) { setWorkspace(emptyWorkspace()); setLoadedOwner(null); return; }
     try {
-      const loaded = loadWorkspace(window.localStorage);
+      const loaded = loadWorkspaceForAccount(window.localStorage, ownerId, verifiedEmail);
       setWorkspace(loaded);
       const savedCount = loaded.agents.filter((agent) => !agent.archived).length;
       setSavedNote("Reloaded the local workspace from this browser.");

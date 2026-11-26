@@ -44,8 +44,25 @@ test("Opus-MT reports loaded weights for a sentence that is not a test phrase", 
   assert.equal(OPUS_MT_URL, "http://127.0.0.1:4197/opus-mt");
 });
 
-test("Speak detection asks the loaded Handy engine and does not invent words", async () => {
-  const audio = readFileSync("/tmp/handy-engine/harbor.wav").toString("base64");
+test("Speak detection preserves the Handy receipt and reports unavailable or missing audio", async () => {
+  const requests: RequestInit[] = [];
+  const heard = await detectWithHandy(Buffer.from("synthetic fixture audio").toString("base64"), (async (url, init) => {
+    assert.equal(url, HANDY_WHISPER_URL);
+    requests.push(init!);
+    return Response.json({ ok: true, text: "Fixture transcript" });
+  }) as typeof fetch);
+  assert.deepEqual(heard, { ok: true, text: "Fixture transcript", provider: "handy" });
+  assert.equal(requests.length, 1);
+  const missing = await detectWithHandy("", async () => { throw new Error("Empty audio must not dispatch"); });
+  assert.equal(missing.ok, false);
+  if (!missing.ok) assert.match(missing.error, /No audio was recorded/);
+  const down = await detectWithHandy("Zml4dHVyZQ==", async () => { throw new Error("Synthetic unavailable engine"); });
+  assert.equal(down.ok, false);
+  if (!down.ok) assert.match(down.error, /not running/);
+});
+
+test("Speak detection asks the loaded Handy engine and does not invent words", { skip: process.env.MIND_LIVE_HANDY_TEST !== "1" ? "Requires explicit MIND_LIVE_HANDY_TEST=1 and a local Handy engine/audio fixture" : false }, async () => {
+  const audio = readFileSync(process.env.MIND_LIVE_HANDY_AUDIO || "/tmp/handy-engine/harbor.wav").toString("base64");
   const heard = await detectWithHandy(audio);
   assert.equal(heard.ok, true);
   if (heard.ok) {
