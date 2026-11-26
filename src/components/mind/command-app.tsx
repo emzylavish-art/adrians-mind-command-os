@@ -822,8 +822,10 @@ function statusWord(status: CapabilityStatus) {
 }
 
 export function CommandApp() {
-  const { user: account, error } = useCurrentUserState();
-  return <AccountPreferencesProvider ownerId={account?.id ?? null}>{error && <div role="alert" className="border-b border-warning p-3 text-sm">{error}<button type="button" className="ml-3 min-h-11 underline" onClick={() => window.location.reload()}>Retry verification</button></div>}<SurfaceErrorBoundary key={account?.id ?? "guest"} name="Workspace"><CommandSession account={account} /></SurfaceErrorBoundary></AccountPreferencesProvider>;
+  const { user: account, error, isPending } = useCurrentUserState();
+  if (error) return <main role="alert" className="p-4">{error}<button type="button" className="ml-3 min-h-11 underline" onClick={() => window.location.reload()}>Retry verification</button></main>;
+  if (isPending) return <main role="status" className="p-4">Verifying your account…</main>;
+  return <AccountPreferencesProvider ownerId={account?.id ?? null}><SurfaceErrorBoundary key={account?.id ?? "guest"} name="Workspace"><CommandSession account={account} /></SurfaceErrorBoundary></AccountPreferencesProvider>;
 }
 
 function CommandSession({ account }: { account: ReturnType<typeof useCurrentUserState>["user"] }) {
@@ -4417,7 +4419,11 @@ ${message.content}`;
       return;
     }
     const coverage = pdf?.coverage ? `[Partial PDF: ${pdf.coverage}]\n` : "";
-    const stagedFile = { name: file.name, text: coverage + text.slice(0, 40000) };
+    const request = draft.trim();
+    const selected = pdf?.chunks?.length && request
+      ? selectPdfChunks(pdf, { query: request, maxChars: Math.max(0, 8000 - request.length - file.name.length - 160) })
+      : null;
+    const stagedFile = { name: file.name, text: selected?.text ? selected.coverage + "\n" + selected.text : coverage + text.slice(0, 40000) };
     const partial = pdf?.partial || text.length > stagedFile.text.length;
     if (!isCurrent()) { setNotice("The destination changed. The file was not attached to another conversation."); return; }
     const remaining = 8000 - (draft.trim() || "Read the attached file.").length - `\n\nAttached file ${file.name}:\n`.length;

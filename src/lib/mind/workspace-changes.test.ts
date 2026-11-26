@@ -24,3 +24,15 @@ test("delta validation rejects oversized, unknown, duplicate, and contradictory 
   assert.equal(validateWorkspaceChanges({ version: 1, upserts: { chats: [{ id: "x" }] }, deletes: { chats: ["x"] } }).ok, false);
   assert.equal(validateWorkspaceChanges({ version: 1, upserts: { chats: [{ id: "x", content: "x".repeat(1_500_000) }] }, deletes: {} }).ok, false);
 });
+
+test("incremental account saves retain recovery, file deletion and reviewed tool scope across reload", () => {
+  const initial = emptyWorkspace();
+  const recovery = { id: "op", at: "2026-11-26T10:00:00Z", action: "notion", target: "original page", message: "Read back before retry", state: "open" as const };
+  const updated = { ...initial, recovery: [recovery], deletedFileIds: ["removed"], toolPermissions: { search_notes: false } };
+  const delta = planWorkspaceChanges(initial, updated);
+  assert.equal(validateWorkspaceChanges(JSON.parse(JSON.stringify(delta))).ok, true);
+  assert.deepEqual(normalizeWorkspace(applyWorkspaceChanges(initial, delta)), normalizeWorkspace(updated));
+  const resolved = { ...updated, recovery: [{ ...recovery, state: "resolved" as const }] };
+  assert.deepEqual(normalizeWorkspace(applyWorkspaceChanges(updated, planWorkspaceChanges(updated, resolved))), normalizeWorkspace(resolved));
+  assert.equal(validateWorkspaceChanges({ ...delta, toolPermissions: { unknown_permission: true } }).ok, false);
+});

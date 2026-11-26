@@ -66,3 +66,13 @@ node --experimental-strip-types --test src/lib/mind/{archive-review,audit-connec
 ```
 
 Deployment remains held. Scheduled run permissions, stale workspace handling, browser performance, authenticated staging and backup/restore verification still require evidence.
+
+### Full-suite checkpoint at 4f539b105c306195ae7350ee6aea2f92da31a52e
+
+The exact remote tree was c6a8d155d6164096dd345e66ea094cbf3ca486ec. GitHub CI 45842423358 passed typecheck, production build, interface inventory and PostgreSQL migration rehearsal. Scripts and unit shards failed. The separate policy run 45842423321 passed. Local full discovery ran 3,097 tests, with 2,969 passes, 123 failures and five skips. Full lint reported 172 errors and 528 warnings, against 177 errors and 215 warnings on main. The file-level diagnostic differences, complete failure inventory, exact-head browser report and redacted portrait capture are under evidence/4f539b1*. Chromium layout passed 16/16. LCP, CLS and interaction targets passed 9/16, 4/16 and 4/16. The physical-device and authenticated production-equivalent gates remain open.
+
+### Workspace and document reconciliation
+
+The workspace hook now suspends account loads until authentication resolves, merges edits typed during an initial server read and applies cross-tab creates, renames and deletes against the last browser checkpoint. Incremental saves preserve recovery records, file tombstones, conflicts and tool permissions. Image uploads use the original account, including device-only bytes after local compaction. An unavailable device reference stops the account save. PDF preview evidence continues to use its historical exact offsets and digest. The separate bounded full extraction preserves page/line breaks and searchable passages after the preview. The Library saves these with the owner-scoped original.
+
+Local command: `node --test src/lib/mind/{workspace-changes,workspace-hook-lifecycle,pdf-text,pdf-text-audit,library-documents,media/attachment-integrity}.test.ts`. All 32 cases passed with zero skips. These results use synthetic workspaces, PDFs, storage, and server calls. The previous authenticated staging and production release gates still apply.

@@ -1,0 +1,2550 @@
+{
+  "commit": "4f539b105c306195ae7350ee6aea2f92da31a52e",
+  "base": "18d5b9364e6bdcfec028eeccf56fe596946ed8ce",
+  "method": "Multiset difference by repository path, severity, rule and message, ignoring line movements.",
+  "introduced": [
+    {
+      "path": "src/components/mind/account-preferences-context.tsx",
+      "level": "warning",
+      "message": "Fast refresh only works when a file only exports components. Use a new file to share constants or functions between components",
+      "rule": "react-refresh/only-export-components",
+      "count": 1
+    },
+    {
+      "path": "src/components/mind/agent-command-center.tsx",
+      "level": "warning",
+      "message": "The 'bots' logical expression could make the dependencies of useMemo Hook (at line 97) change on every render. To fix this, wrap the initialization of 'bots' in its own useMemo() Hook",
+      "rule": "react-hooks/exhaustive-deps",
+      "count": 1
+    },
+    {
+      "path": "src/components/mind/agent-command-center.tsx",
+      "level": "warning",
+      "message": "The 'bots' logical expression could make the dependencies of useMemo Hook (at line 98) change on every render. To fix this, wrap the initialization of 'bots' in its own useMemo() Hook",
+      "rule": "react-hooks/exhaustive-deps",
+      "count": 1
+    },
+    {
+      "path": "src/components/mind/avatar/digital-human.tsx",
+      "level": "warning",
+      "message": "React Hook useEffect has a missing dependency: 'preferenceStorage'. Either include it or remove the dependency array",
+      "rule": "react-hooks/exhaustive-deps",
+      "count": 1
+    },
+    {
+      "path": "src/components/mind/build-workspace.tsx",
+      "level": "warning",
+      "message": "'BuildRuntime' is defined but never used. Allowed unused vars must match /^_/u",
+      "rule": "@typescript-eslint/no-unused-vars",
+      "count": 1
+    },
+    {
+      "path": "src/components/mind/build-workspace.tsx",
+      "level": "warning",
+      "message": "'BuilderInstructionReceipt' is defined but never used. Allowed unused vars must match /^_/u",
+      "rule": "@typescript-eslint/no-unused-vars",
+      "count": 1
+    },
+    {
+      "path": "src/components/mind/build-workspace.tsx",
+      "level": "warning",
+      "message": "'CodeBufferSource' is defined but never used. Allowed unused vars must match /^_/u",
+      "rule": "@typescript-eslint/no-unused-vars",
+      "count": 1
+    },
+    {
+      "path": "src/components/mind/build-workspace.tsx",
+      "level": "warning",
+      "message": "'FileReconciliation' is defined but never used. Allowed unused vars must match /^_/u",
+      "rule": "@typescript-eslint/no-unused-vars",
+      "count": 1
+    },
+    {
+      "path": "src/components/mind/build-workspace.tsx",
+      "level": "warning",
+      "message": "'boundAbortSignal' is defined but never used. Allowed unused vars must match /^_/u",
+      "rule": "@typescript-eslint/no-unused-vars",
+      "count": 1
+    },
+    {
+      "path": "src/components/mind/build-workspace.tsx",
+      "level": "warning",
+      "message": "'checkpointListOutcome' is defined but never used. Allowed unused vars must match /^_/u",
+      "rule": "@typescript-eslint/no-unused-vars",
+      "count": 1
+    },
+    {
+      "path": "src/components/mind/build-workspace.tsx",
+      "level": "warning",
+      "message": "'createBuildPlanningGate' is defined but never used. Allowed unused vars must match /^_/u",
+      "rule": "@typescript-eslint/no-unused-vars",
+      "count": 1
+    },
+    {
+      "path": "src/components/mind/build-workspace.tsx",
+      "level": "warning",
+      "message": "'knownCodeFilesFor' is defined but never used. Allowed unused vars must match /^_/u",
+      "rule": "@typescript-eslint/no-unused-vars",
+      "count": 1
+    },
+    {
+      "path": "src/components/mind/build-workspace.tsx",
+      "level": "warning",
+      "message": "'reviewedRelatedNavigation' is defined but never used. Allowed unused vars must match /^_/u",
+      "rule": "@typescript-eslint/no-unused-vars",
+      "count": 1
+    },
+    {
+      "path": "src/components/mind/build-workspace.tsx",
+      "level": "warning",
+      "message": "React Hook useEffect has missing dependencies: 'apiPrefix', 'browseWorkspace', and 'props.ownerId'. Either include them or remove the dependency array",
+      "rule": "react-hooks/exhaustive-deps",
+      "count": 1
+    },
+    {
+      "path": "src/components/mind/chat-controls.tsx",
+      "level": "warning",
+      "message": "'logicRoutes' is assigned a value but never used. Allowed unused args must match /^_/u",
+      "rule": "@typescript-eslint/no-unused-vars",
+      "count": 1
+    },
+    {
+      "path": "src/components/mind/chat-controls.tsx",
+      "level": "warning",
+      "message": "'onChooseLogic' is defined but never used. Allowed unused args must match /^_/u",
+      "rule": "@typescript-eslint/no-unused-vars",
+      "count": 1
+    },
+    {
+      "path": "src/components/mind/chat-pane.tsx",
+      "level": "warning",
+      "message": "'onDeleteChat' is defined but never used. Allowed unused args must match /^_/u",
+      "rule": "@typescript-eslint/no-unused-vars",
+      "count": 1
+    },
+    {
+      "path": "src/components/mind/chat-pane.tsx",
+      "level": "warning",
+      "message": "'onDeleteSection' is defined but never used. Allowed unused args must match /^_/u",
+      "rule": "@typescript-eslint/no-unused-vars",
+      "count": 1
+    },
+    {
+      "path": "src/components/mind/chat-pane.tsx",
+      "level": "warning",
+      "message": "'onLiveAssistantTranscript' is defined but never used. Allowed unused args must match /^_/u",
+      "rule": "@typescript-eslint/no-unused-vars",
+      "count": 1
+    },
+    {
+      "path": "src/components/mind/chat-pane.tsx",
+      "level": "warning",
+      "message": "'onLiveUserTranscript' is defined but never used. Allowed unused args must match /^_/u",
+      "rule": "@typescript-eslint/no-unused-vars",
+      "count": 1
+    },
+    {
+      "path": "src/components/mind/chat-pane.tsx",
+      "level": "warning",
+      "message": "'onLiveVoiceError' is defined but never used. Allowed unused args must match /^_/u",
+      "rule": "@typescript-eslint/no-unused-vars",
+      "count": 1
+    },
+    {
+      "path": "src/components/mind/chat-pane.tsx",
+      "level": "warning",
+      "message": "'onLiveVoiceNotice' is defined but never used. Allowed unused args must match /^_/u",
+      "rule": "@typescript-eslint/no-unused-vars",
+      "count": 1
+    },
+    {
+      "path": "src/components/mind/chat-pane.tsx",
+      "level": "warning",
+      "message": "'onRename' is defined but never used. Allowed unused args must match /^_/u",
+      "rule": "@typescript-eslint/no-unused-vars",
+      "count": 1
+    },
+    {
+      "path": "src/components/mind/chat-pane.tsx",
+      "level": "warning",
+      "message": "'onRoutingMode' is defined but never used. Allowed unused args must match /^_/u",
+      "rule": "@typescript-eslint/no-unused-vars",
+      "count": 1
+    },
+    {
+      "path": "src/components/mind/chat-pane.tsx",
+      "level": "warning",
+      "message": "'onToggleRoute' is defined but never used. Allowed unused args must match /^_/u",
+      "rule": "@typescript-eslint/no-unused-vars",
+      "count": 1
+    },
+    {
+      "path": "src/components/mind/chat-pane.tsx",
+      "level": "warning",
+      "message": "'routingMode' is defined but never used. Allowed unused args must match /^_/u",
+      "rule": "@typescript-eslint/no-unused-vars",
+      "count": 1
+    },
+    {
+      "path": "src/components/mind/chat-pane.tsx",
+      "level": "warning",
+      "message": "'routingPanel' is defined but never used. Allowed unused args must match /^_/u",
+      "rule": "@typescript-eslint/no-unused-vars",
+      "count": 1
+    },
+    {
+      "path": "src/components/mind/code-ide.tsx",
+      "level": "warning",
+      "message": "'CodeBufferSource' is defined but never used. Allowed unused vars must match /^_/u",
+      "rule": "@typescript-eslint/no-unused-vars",
+      "count": 1
+    },
+    {
+      "path": "src/components/mind/code-ide.tsx",
+      "level": "warning",
+      "message": "'canApplyEditorResult' is defined but never used. Allowed unused vars must match /^_/u",
+      "rule": "@typescript-eslint/no-unused-vars",
+      "count": 1
+    },
+    {
+      "path": "src/components/mind/code-ide.tsx",
+      "level": "warning",
+      "message": "'editorRequestKey' is defined but never used. Allowed unused vars must match /^_/u",
+      "rule": "@typescript-eslint/no-unused-vars",
+      "count": 1
+    },
+    {
+      "path": "src/components/mind/code-ide.tsx",
+      "level": "warning",
+      "message": "'inspectCodeBuffer' is defined but never used. Allowed unused vars must match /^_/u",
+      "rule": "@typescript-eslint/no-unused-vars",
+      "count": 1
+    },
+    {
+      "path": "src/components/mind/code-ide.tsx",
+      "level": "warning",
+      "message": "'resolveKnownDependency' is defined but never used. Allowed unused vars must match /^_/u",
+      "rule": "@typescript-eslint/no-unused-vars",
+      "count": 1
+    },
+    {
+      "path": "src/components/mind/code-ide.tsx",
+      "level": "warning",
+      "message": "'useMemo' is defined but never used. Allowed unused vars must match /^_/u",
+      "rule": "@typescript-eslint/no-unused-vars",
+      "count": 1
+    },
+    {
+      "path": "src/components/mind/command-app.tsx",
+      "level": "warning",
+      "message": "'COMPOSER_MODES' is defined but never used. Allowed unused vars must match /^_/u",
+      "rule": "@typescript-eslint/no-unused-vars",
+      "count": 1
+    },
+    {
+      "path": "src/components/mind/command-app.tsx",
+      "level": "warning",
+      "message": "'ChatEmptyHero' is defined but never used. Allowed unused vars must match /^_/u",
+      "rule": "@typescript-eslint/no-unused-vars",
+      "count": 1
+    },
+    {
+      "path": "src/components/mind/command-app.tsx",
+      "level": "warning",
+      "message": "'ChatMediaGallery' is defined but never used. Allowed unused vars must match /^_/u",
+      "rule": "@typescript-eslint/no-unused-vars",
+      "count": 1
+    },
+    {
+      "path": "src/components/mind/command-app.tsx",
+      "level": "warning",
+      "message": "'ComposerBar' is defined but never used. Allowed unused vars must match /^_/u",
+      "rule": "@typescript-eslint/no-unused-vars",
+      "count": 1
+    },
+    {
+      "path": "src/components/mind/command-app.tsx",
+      "level": "warning",
+      "message": "'ComposerModelId' is defined but never used. Allowed unused vars must match /^_/u",
+      "rule": "@typescript-eslint/no-unused-vars",
+      "count": 1
+    },
+    {
+      "path": "src/components/mind/command-app.tsx",
+      "level": "warning",
+      "message": "'ContextReceipt' is defined but never used. Allowed unused vars must match /^_/u",
+      "rule": "@typescript-eslint/no-unused-vars",
+      "count": 1
+    },
+    {
+      "path": "src/components/mind/command-app.tsx",
+      "level": "warning",
+      "message": "'ContextReceiptDetails' is defined but never used. Allowed unused vars must match /^_/u",
+      "rule": "@typescript-eslint/no-unused-vars",
+      "count": 1
+    },
+    {
+      "path": "src/components/mind/command-app.tsx",
+      "level": "warning",
+      "message": "'DictationPill' is defined but never used. Allowed unused vars must match /^_/u",
+      "rule": "@typescript-eslint/no-unused-vars",
+      "count": 1
+    },
+    {
+      "path": "src/components/mind/command-app.tsx",
+      "level": "warning",
+      "message": "'ElapsedTime' is defined but never used. Allowed unused vars must match /^_/u",
+      "rule": "@typescript-eslint/no-unused-vars",
+      "count": 1
+    },
+    {
+      "path": "src/components/mind/command-app.tsx",
+      "level": "warning",
+      "message": "'FailureDetails' is defined but never used. Allowed unused vars must match /^_/u",
+      "rule": "@typescript-eslint/no-unused-vars",
+      "count": 1
+    },
+    {
+      "path": "src/components/mind/command-app.tsx",
+      "level": "warning",
+      "message": "'FailureEnvelope' is defined but never used. Allowed unused vars must match /^_/u",
+      "rule": "@typescript-eslint/no-unused-vars",
+      "count": 1
+    },
+    {
+      "path": "src/components/mind/command-app.tsx",
+      "level": "warning",
+      "message": "'INITIAL_MESSAGE_WINDOW' is defined but never used. Allowed unused vars must match /^_/u",
+      "rule": "@typescript-eslint/no-unused-vars",
+      "count": 1
+    },
+    {
+      "path": "src/components/mind/command-app.tsx",
+      "level": "warning",
+      "message": "'Incident' is defined but never used. Allowed unused vars must match /^_/u",
+      "rule": "@typescript-eslint/no-unused-vars",
+      "count": 1
+    },
+    {
+      "path": "src/components/mind/command-app.tsx",
+      "level": "warning",
+      "message": "'IncidentRecoveryCard' is defined but never used. Allowed unused vars must match /^_/u",
+      "rule": "@typescript-eslint/no-unused-vars",
+      "count": 1
+    },
+    {
+      "path": "src/components/mind/command-app.tsx",
+      "level": "warning",
+      "message": "'InstructionLibrary' is defined but never used. Allowed unused vars must match /^_/u",
+      "rule": "@typescript-eslint/no-unused-vars",
+      "count": 1
+    },
+    {
+      "path": "src/components/mind/command-app.tsx",
+      "level": "warning",
+      "message": "'KnowledgeSettings' is defined but never used. Allowed unused vars must match /^_/u",
+      "rule": "@typescript-eslint/no-unused-vars",
+      "count": 1
+    },
+    {
+      "path": "src/components/mind/command-app.tsx",
+      "level": "warning",
+      "message": "'LiveSpeakControl' is defined but never used. Allowed unused vars must match /^_/u",
+      "rule": "@typescript-eslint/no-unused-vars",
+      "count": 1
+    },
+    {
+      "path": "src/components/mind/command-app.tsx",
+      "level": "warning",
+      "message": "'MAX_DOCUMENT_INPUT_BYTES' is defined but never used. Allowed unused vars must match /^_/u",
+      "rule": "@typescript-eslint/no-unused-vars",
+      "count": 1
+    },
+    {
+      "path": "src/components/mind/command-app.tsx",
+      "level": "warning",
+      "message": "'MAX_DOCUMENT_TEXT_CHARS' is defined but never used. Allowed unused vars must match /^_/u",
+      "rule": "@typescript-eslint/no-unused-vars",
+      "count": 1
+    },
+    {
+      "path": "src/components/mind/command-app.tsx",
+      "level": "warning",
+      "message": "'MAX_LIBRARY_FILES' is defined but never used. Allowed unused vars must match /^_/u",
+      "rule": "@typescript-eslint/no-unused-vars",
+      "count": 1
+    },
+    {
+      "path": "src/components/mind/command-app.tsx",
+      "level": "warning",
+      "message": "'MemoAnswerTabs' is defined but never used. Allowed unused vars must match /^_/u",
+      "rule": "@typescript-eslint/no-unused-vars",
+      "count": 1
+    },
+    {
+      "path": "src/components/mind/command-app.tsx",
+      "level": "warning",
+      "message": "'MemoMessageBody' is defined but never used. Allowed unused vars must match /^_/u",
+      "rule": "@typescript-eslint/no-unused-vars",
+      "count": 1
+    },
+    {
+      "path": "src/components/mind/command-app.tsx",
+      "level": "warning",
+      "message": "'MemoryChatToggle' is defined but never used. Allowed unused vars must match /^_/u",
+      "rule": "@typescript-eslint/no-unused-vars",
+      "count": 1
+    },
+    {
+      "path": "src/components/mind/command-app.tsx",
+      "level": "warning",
+      "message": "'MemorySavedIndicator' is defined but never used. Allowed unused vars must match /^_/u",
+      "rule": "@typescript-eslint/no-unused-vars",
+      "count": 1
+    },
+    {
+      "path": "src/components/mind/command-app.tsx",
+      "level": "warning",
+      "message": "'MemoryScope' is defined but never used. Allowed unused vars must match /^_/u",
+      "rule": "@typescript-eslint/no-unused-vars",
+      "count": 1
+    },
+    {
+      "path": "src/components/mind/command-app.tsx",
+      "level": "warning",
+      "message": "'MicOff' is defined but never used. Allowed unused vars must match /^_/u",
+      "rule": "@typescript-eslint/no-unused-vars",
+      "count": 1
+    },
+    {
+      "path": "src/components/mind/command-app.tsx",
+      "level": "warning",
+      "message": "'ModalOverlay' is defined but never used. Allowed unused vars must match /^_/u",
+      "rule": "@typescript-eslint/no-unused-vars",
+      "count": 1
+    },
+    {
+      "path": "src/components/mind/command-app.tsx",
+      "level": "warning",
+      "message": "'NotionIntegrationCard' is defined but never used. Allowed unused vars must match /^_/u",
+      "rule": "@typescript-eslint/no-unused-vars",
+      "count": 1
+    },
+    {
+      "path": "src/components/mind/command-app.tsx",
+      "level": "warning",
+      "message": "'NotionRecovery' is defined but never used. Allowed unused vars must match /^_/u",
+      "rule": "@typescript-eslint/no-unused-vars",
+      "count": 1
+    },
+    {
+      "path": "src/components/mind/command-app.tsx",
+      "level": "warning",
+      "message": "'PresentationalLiveVoiceBar' is defined but never used. Allowed unused vars must match /^_/u",
+      "rule": "@typescript-eslint/no-unused-vars",
+      "count": 1
+    },
+    {
+      "path": "src/components/mind/command-app.tsx",
+      "level": "warning",
+      "message": "'PreviewDictationPill' is defined but never used. Allowed unused vars must match /^_/u",
+      "rule": "@typescript-eslint/no-unused-vars",
+      "count": 1
+    },
+    {
+      "path": "src/components/mind/command-app.tsx",
+      "level": "warning",
+      "message": "'RecoveryBindings' is defined but never used. Allowed unused vars must match /^_/u",
+      "rule": "@typescript-eslint/no-unused-vars",
+      "count": 1
+    },
+    {
+      "path": "src/components/mind/command-app.tsx",
+      "level": "warning",
+      "message": "'RecoveryProof' is defined but never used. Allowed unused vars must match /^_/u",
+      "rule": "@typescript-eslint/no-unused-vars",
+      "count": 1
+    },
+    {
+      "path": "src/components/mind/command-app.tsx",
+      "level": "warning",
+      "message": "'ResearchLibrary' is defined but never used. Allowed unused vars must match /^_/u",
+      "rule": "@typescript-eslint/no-unused-vars",
+      "count": 1
+    },
+    {
+      "path": "src/components/mind/command-app.tsx",
+      "level": "warning",
+      "message": "'ResearchResult' is defined but never used. Allowed unused vars must match /^_/u",
+      "rule": "@typescript-eslint/no-unused-vars",
+      "count": 1
+    },
+    {
+      "path": "src/components/mind/command-app.tsx",
+      "level": "warning",
+      "message": "'ResearchStep' is defined but never used. Allowed unused vars must match /^_/u",
+      "rule": "@typescript-eslint/no-unused-vars",
+      "count": 1
+    },
+    {
+      "path": "src/components/mind/command-app.tsx",
+      "level": "warning",
+      "message": "'ResourceSettings' is defined but never used. Allowed unused vars must match /^_/u",
+      "rule": "@typescript-eslint/no-unused-vars",
+      "count": 1
+    },
+    {
+      "path": "src/components/mind/command-app.tsx",
+      "level": "warning",
+      "message": "'RetainedVideo' is defined but never used. Allowed unused vars must match /^_/u",
+      "rule": "@typescript-eslint/no-unused-vars",
+      "count": 1
+    },
+    {
+      "path": "src/components/mind/command-app.tsx",
+      "level": "warning",
+      "message": "'SKILLS' is defined but never used. Allowed unused vars must match /^_/u",
+      "rule": "@typescript-eslint/no-unused-vars",
+      "count": 1
+    },
+    {
+      "path": "src/components/mind/command-app.tsx",
+      "level": "warning",
+      "message": "'STAGED_SPEAK_KEY' is defined but never used. Allowed unused vars must match /^_/u",
+      "rule": "@typescript-eslint/no-unused-vars",
+      "count": 1
+    },
+    {
+      "path": "src/components/mind/command-app.tsx",
+      "level": "warning",
+      "message": "'STOPPED_REPLY' is defined but never used. Allowed unused vars must match /^_/u",
+      "rule": "@typescript-eslint/no-unused-vars",
+      "count": 1
+    },
+    {
+      "path": "src/components/mind/command-app.tsx",
+      "level": "warning",
+      "message": "'SkillPlanPreview' is defined but never used. Allowed unused vars must match /^_/u",
+      "rule": "@typescript-eslint/no-unused-vars",
+      "count": 1
+    },
+    {
+      "path": "src/components/mind/command-app.tsx",
+      "level": "warning",
+      "message": "'SkillPreferences' is defined but never used. Allowed unused vars must match /^_/u",
+      "rule": "@typescript-eslint/no-unused-vars",
+      "count": 1
+    },
+    {
+      "path": "src/components/mind/command-app.tsx",
+      "level": "warning",
+      "message": "'SpeakSelection' is defined but never used. Allowed unused vars must match /^_/u",
+      "rule": "@typescript-eslint/no-unused-vars",
+      "count": 1
+    },
+    {
+      "path": "src/components/mind/command-app.tsx",
+      "level": "warning",
+      "message": "'SpeakStageReceipt' is defined but never used. Allowed unused vars must match /^_/u",
+      "rule": "@typescript-eslint/no-unused-vars",
+      "count": 1
+    },
+    {
+      "path": "src/components/mind/command-app.tsx",
+      "level": "warning",
+      "message": "'StoredSelection' is defined but never used. Allowed unused vars must match /^_/u",
+      "rule": "@typescript-eslint/no-unused-vars",
+      "count": 1
+    },
+    {
+      "path": "src/components/mind/command-app.tsx",
+      "level": "warning",
+      "message": "'ToolElapsed' is defined but never used. Allowed unused vars must match /^_/u",
+      "rule": "@typescript-eslint/no-unused-vars",
+      "count": 1
+    },
+    {
+      "path": "src/components/mind/command-app.tsx",
+      "level": "warning",
+      "message": "'TranscriptionPolicy' is defined but never used. Allowed unused vars must match /^_/u",
+      "rule": "@typescript-eslint/no-unused-vars",
+      "count": 1
+    },
+    {
+      "path": "src/components/mind/command-app.tsx",
+      "level": "warning",
+      "message": "'TurnBody' is defined but never used. Allowed unused vars must match /^_/u",
+      "rule": "@typescript-eslint/no-unused-vars",
+      "count": 1
+    },
+    {
+      "path": "src/components/mind/command-app.tsx",
+      "level": "warning",
+      "message": "'UsageHistory' is defined but never used. Allowed unused vars must match /^_/u",
+      "rule": "@typescript-eslint/no-unused-vars",
+      "count": 1
+    },
+    {
+      "path": "src/components/mind/command-app.tsx",
+      "level": "warning",
+      "message": "'VideoProgress' is defined but never used. Allowed unused vars must match /^_/u",
+      "rule": "@typescript-eslint/no-unused-vars",
+      "count": 1
+    },
+    {
+      "path": "src/components/mind/command-app.tsx",
+      "level": "warning",
+      "message": "'VoiceModeStage' is defined but never used. Allowed unused vars must match /^_/u",
+      "rule": "@typescript-eslint/no-unused-vars",
+      "count": 1
+    },
+    {
+      "path": "src/components/mind/command-app.tsx",
+      "level": "warning",
+      "message": "'VoicePipelinePreferences' is defined but never used. Allowed unused vars must match /^_/u",
+      "rule": "@typescript-eslint/no-unused-vars",
+      "count": 1
+    },
+    {
+      "path": "src/components/mind/command-app.tsx",
+      "level": "warning",
+      "message": "'advanceVideoProgress' is defined but never used. Allowed unused vars must match /^_/u",
+      "rule": "@typescript-eslint/no-unused-vars",
+      "count": 1
+    },
+    {
+      "path": "src/components/mind/command-app.tsx",
+      "level": "warning",
+      "message": "'applyExecutionUsage' is defined but never used. Allowed unused vars must match /^_/u",
+      "rule": "@typescript-eslint/no-unused-vars",
+      "count": 1
+    },
+    {
+      "path": "src/components/mind/command-app.tsx",
+      "level": "warning",
+      "message": "'beginIncidentRecovery' is defined but never used. Allowed unused vars must match /^_/u",
+      "rule": "@typescript-eslint/no-unused-vars",
+      "count": 1
+    },
+    {
+      "path": "src/components/mind/command-app.tsx",
+      "level": "warning",
+      "message": "'checkTurnReceipt' is defined but never used. Allowed unused vars must match /^_/u",
+      "rule": "@typescript-eslint/no-unused-vars",
+      "count": 1
+    },
+    {
+      "path": "src/components/mind/command-app.tsx",
+      "level": "warning",
+      "message": "'checkpointReply' is defined but never used. Allowed unused vars must match /^_/u",
+      "rule": "@typescript-eslint/no-unused-vars",
+      "count": 1
+    },
+    {
+      "path": "src/components/mind/command-app.tsx",
+      "level": "warning",
+      "message": "'commitSelectionChanges' is defined but never used. Allowed unused vars must match /^_/u",
+      "rule": "@typescript-eslint/no-unused-vars",
+      "count": 1
+    },
+    {
+      "path": "src/components/mind/command-app.tsx",
+      "level": "warning",
+      "message": "'completedHistory' is defined but never used. Allowed unused vars must match /^_/u",
+      "rule": "@typescript-eslint/no-unused-vars",
+      "count": 1
+    },
+    {
+      "path": "src/components/mind/command-app.tsx",
+      "level": "warning",
+      "message": "'contextDisclosure' is defined but never used. Allowed unused vars must match /^_/u",
+      "rule": "@typescript-eslint/no-unused-vars",
+      "count": 1
+    },
+    {
+      "path": "src/components/mind/command-app.tsx",
+      "level": "warning",
+      "message": "'contextReceiptNotice' is defined but never used. Allowed unused vars must match /^_/u",
+      "rule": "@typescript-eslint/no-unused-vars",
+      "count": 1
+    },
+    {
+      "path": "src/components/mind/command-app.tsx",
+      "level": "warning",
+      "message": "'conversationSection' is defined but never used. Allowed unused vars must match /^_/u",
+      "rule": "@typescript-eslint/no-unused-vars",
+      "count": 1
+    },
+    {
+      "path": "src/components/mind/command-app.tsx",
+      "level": "warning",
+      "message": "'createExecutionEvidence' is defined but never used. Allowed unused vars must match /^_/u",
+      "rule": "@typescript-eslint/no-unused-vars",
+      "count": 1
+    },
+    {
+      "path": "src/components/mind/command-app.tsx",
+      "level": "warning",
+      "message": "'createIncident' is defined but never used. Allowed unused vars must match /^_/u",
+      "rule": "@typescript-eslint/no-unused-vars",
+      "count": 1
+    },
+    {
+      "path": "src/components/mind/command-app.tsx",
+      "level": "warning",
+      "message": "'createOperationScope' is defined but never used. Allowed unused vars must match /^_/u",
+      "rule": "@typescript-eslint/no-unused-vars",
+      "count": 1
+    },
+    {
+      "path": "src/components/mind/command-app.tsx",
+      "level": "warning",
+      "message": "'createPaletteIndexBuilder' is defined but never used. Allowed unused vars must match /^_/u",
+      "rule": "@typescript-eslint/no-unused-vars",
+      "count": 1
+    },
+    {
+      "path": "src/components/mind/command-app.tsx",
+      "level": "warning",
+      "message": "'createPortal' is defined but never used. Allowed unused vars must match /^_/u",
+      "rule": "@typescript-eslint/no-unused-vars",
+      "count": 1
+    },
+    {
+      "path": "src/components/mind/command-app.tsx",
+      "level": "warning",
+      "message": "'createVideoProgress' is defined but never used. Allowed unused vars must match /^_/u",
+      "rule": "@typescript-eslint/no-unused-vars",
+      "count": 1
+    },
+    {
+      "path": "src/components/mind/command-app.tsx",
+      "level": "warning",
+      "message": "'currentMemoryContext' is defined but never used. Allowed unused vars must match /^_/u",
+      "rule": "@typescript-eslint/no-unused-vars",
+      "count": 1
+    },
+    {
+      "path": "src/components/mind/command-app.tsx",
+      "level": "warning",
+      "message": "'defaultSkillPreferences' is defined but never used. Allowed unused vars must match /^_/u",
+      "rule": "@typescript-eslint/no-unused-vars",
+      "count": 1
+    },
+    {
+      "path": "src/components/mind/command-app.tsx",
+      "level": "warning",
+      "message": "'deleteLocalFile' is defined but never used. Allowed unused vars must match /^_/u",
+      "rule": "@typescript-eslint/no-unused-vars",
+      "count": 1
+    },
+    {
+      "path": "src/components/mind/command-app.tsx",
+      "level": "warning",
+      "message": "'deleteProject' is defined but never used. Allowed unused vars must match /^_/u",
+      "rule": "@typescript-eslint/no-unused-vars",
+      "count": 1
+    },
+    {
+      "path": "src/components/mind/command-app.tsx",
+      "level": "warning",
+      "message": "'drawer' is assigned a value but never used. Allowed unused vars must match /^_/u",
+      "rule": "@typescript-eslint/no-unused-vars",
+      "count": 1
+    },
+    {
+      "path": "src/components/mind/command-app.tsx",
+      "level": "warning",
+      "message": "'exactModelForChat' is defined but never used. Allowed unused vars must match /^_/u",
+      "rule": "@typescript-eslint/no-unused-vars",
+      "count": 1
+    },
+    {
+      "path": "src/components/mind/command-app.tsx",
+      "level": "warning",
+      "message": "'failureEnvelopeFromAction' is defined but never used. Allowed unused vars must match /^_/u",
+      "rule": "@typescript-eslint/no-unused-vars",
+      "count": 1
+    },
+    {
+      "path": "src/components/mind/command-app.tsx",
+      "level": "warning",
+      "message": "'fetchOauthStatusPayload' is defined but never used. Allowed unused vars must match /^_/u",
+      "rule": "@typescript-eslint/no-unused-vars",
+      "count": 1
+    },
+    {
+      "path": "src/components/mind/command-app.tsx",
+      "level": "warning",
+      "message": "'freshContextPolicy' is defined but never used. Allowed unused vars must match /^_/u",
+      "rule": "@typescript-eslint/no-unused-vars",
+      "count": 1
+    },
+    {
+      "path": "src/components/mind/command-app.tsx",
+      "level": "warning",
+      "message": "'identifyImages' is defined but never used. Allowed unused vars must match /^_/u",
+      "rule": "@typescript-eslint/no-unused-vars",
+      "count": 1
+    },
+    {
+      "path": "src/components/mind/command-app.tsx",
+      "level": "warning",
+      "message": "'incidentForOperation' is defined but never used. Allowed unused vars must match /^_/u",
+      "rule": "@typescript-eslint/no-unused-vars",
+      "count": 1
+    },
+    {
+      "path": "src/components/mind/command-app.tsx",
+      "level": "warning",
+      "message": "'incidentStorageKey' is defined but never used. Allowed unused vars must match /^_/u",
+      "rule": "@typescript-eslint/no-unused-vars",
+      "count": 1
+    },
+    {
+      "path": "src/components/mind/command-app.tsx",
+      "level": "warning",
+      "message": "'isPersonalityId' is defined but never used. Allowed unused vars must match /^_/u",
+      "rule": "@typescript-eslint/no-unused-vars",
+      "count": 1
+    },
+    {
+      "path": "src/components/mind/command-app.tsx",
+      "level": "warning",
+      "message": "'listChatGalleryImages' is defined but never used. Allowed unused vars must match /^_/u",
+      "rule": "@typescript-eslint/no-unused-vars",
+      "count": 1
+    },
+    {
+      "path": "src/components/mind/command-app.tsx",
+      "level": "warning",
+      "message": "'loadNotionRecovery' is defined but never used. Allowed unused vars must match /^_/u",
+      "rule": "@typescript-eslint/no-unused-vars",
+      "count": 1
+    },
+    {
+      "path": "src/components/mind/command-app.tsx",
+      "level": "warning",
+      "message": "'loadSkillPreferences' is defined but never used. Allowed unused vars must match /^_/u",
+      "rule": "@typescript-eslint/no-unused-vars",
+      "count": 1
+    },
+    {
+      "path": "src/components/mind/command-app.tsx",
+      "level": "warning",
+      "message": "'loadSpeakSelection' is defined but never used. Allowed unused vars must match /^_/u",
+      "rule": "@typescript-eslint/no-unused-vars",
+      "count": 1
+    },
+    {
+      "path": "src/components/mind/command-app.tsx",
+      "level": "warning",
+      "message": "'loadWorkspace' is defined but never used. Allowed unused vars must match /^_/u",
+      "rule": "@typescript-eslint/no-unused-vars",
+      "count": 1
+    },
+    {
+      "path": "src/components/mind/command-app.tsx",
+      "level": "warning",
+      "message": "'mergeResearchEvidence' is defined but never used. Allowed unused vars must match /^_/u",
+      "rule": "@typescript-eslint/no-unused-vars",
+      "count": 1
+    },
+    {
+      "path": "src/components/mind/command-app.tsx",
+      "level": "warning",
+      "message": "'messageWindow' is defined but never used. Allowed unused vars must match /^_/u",
+      "rule": "@typescript-eslint/no-unused-vars",
+      "count": 1
+    },
+    {
+      "path": "src/components/mind/command-app.tsx",
+      "level": "warning",
+      "message": "'nextReadingPosition' is defined but never used. Allowed unused vars must match /^_/u",
+      "rule": "@typescript-eslint/no-unused-vars",
+      "count": 1
+    },
+    {
+      "path": "src/components/mind/command-app.tsx",
+      "level": "warning",
+      "message": "'notionFailureEnvelope' is defined but never used. Allowed unused vars must match /^_/u",
+      "rule": "@typescript-eslint/no-unused-vars",
+      "count": 1
+    },
+    {
+      "path": "src/components/mind/command-app.tsx",
+      "level": "warning",
+      "message": "'ownerSelectionStorage' is defined but never used. Allowed unused vars must match /^_/u",
+      "rule": "@typescript-eslint/no-unused-vars",
+      "count": 1
+    },
+    {
+      "path": "src/components/mind/command-app.tsx",
+      "level": "warning",
+      "message": "'paletteShortcut' is defined but never used. Allowed unused vars must match /^_/u",
+      "rule": "@typescript-eslint/no-unused-vars",
+      "count": 1
+    },
+    {
+      "path": "src/components/mind/command-app.tsx",
+      "level": "warning",
+      "message": "'personalityStatus' is defined but never used. Allowed unused vars must match /^_/u",
+      "rule": "@typescript-eslint/no-unused-vars",
+      "count": 1
+    },
+    {
+      "path": "src/components/mind/command-app.tsx",
+      "level": "warning",
+      "message": "'planIncidentRecovery' is defined but never used. Allowed unused vars must match /^_/u",
+      "rule": "@typescript-eslint/no-unused-vars",
+      "count": 1
+    },
+    {
+      "path": "src/components/mind/command-app.tsx",
+      "level": "warning",
+      "message": "'pollSavedVideo' is defined but never used. Allowed unused vars must match /^_/u",
+      "rule": "@typescript-eslint/no-unused-vars",
+      "count": 1
+    },
+    {
+      "path": "src/components/mind/command-app.tsx",
+      "level": "warning",
+      "message": "'prepareHistoryContext' is defined but never used. Allowed unused vars must match /^_/u",
+      "rule": "@typescript-eslint/no-unused-vars",
+      "count": 1
+    },
+    {
+      "path": "src/components/mind/command-app.tsx",
+      "level": "warning",
+      "message": "'prepareMediaExport' is defined but never used. Allowed unused vars must match /^_/u",
+      "rule": "@typescript-eslint/no-unused-vars",
+      "count": 1
+    },
+    {
+      "path": "src/components/mind/command-app.tsx",
+      "level": "warning",
+      "message": "'queryPaletteIndex' is defined but never used. Allowed unused vars must match /^_/u",
+      "rule": "@typescript-eslint/no-unused-vars",
+      "count": 1
+    },
+    {
+      "path": "src/components/mind/command-app.tsx",
+      "level": "warning",
+      "message": "'readExecutionControl' is defined but never used. Allowed unused vars must match /^_/u",
+      "rule": "@typescript-eslint/no-unused-vars",
+      "count": 1
+    },
+    {
+      "path": "src/components/mind/command-app.tsx",
+      "level": "warning",
+      "message": "'readFailureEnvelope' is defined but never used. Allowed unused vars must match /^_/u",
+      "rule": "@typescript-eslint/no-unused-vars",
+      "count": 1
+    },
+    {
+      "path": "src/components/mind/command-app.tsx",
+      "level": "warning",
+      "message": "'readIncidents' is defined but never used. Allowed unused vars must match /^_/u",
+      "rule": "@typescript-eslint/no-unused-vars",
+      "count": 1
+    },
+    {
+      "path": "src/components/mind/command-app.tsx",
+      "level": "warning",
+      "message": "'readTranscriptionPolicy' is defined but never used. Allowed unused vars must match /^_/u",
+      "rule": "@typescript-eslint/no-unused-vars",
+      "count": 1
+    },
+    {
+      "path": "src/components/mind/command-app.tsx",
+      "level": "warning",
+      "message": "'readVoicePipeline' is defined but never used. Allowed unused vars must match /^_/u",
+      "rule": "@typescript-eslint/no-unused-vars",
+      "count": 1
+    },
+    {
+      "path": "src/components/mind/command-app.tsx",
+      "level": "warning",
+      "message": "'readVoiceRoutePreferences' is defined but never used. Allowed unused vars must match /^_/u",
+      "rule": "@typescript-eslint/no-unused-vars",
+      "count": 1
+    },
+    {
+      "path": "src/components/mind/command-app.tsx",
+      "level": "warning",
+      "message": "'recordIncident' is defined but never used. Allowed unused vars must match /^_/u",
+      "rule": "@typescript-eslint/no-unused-vars",
+      "count": 1
+    },
+    {
+      "path": "src/components/mind/command-app.tsx",
+      "level": "warning",
+      "message": "'refreshBotChat' is defined but never used. Allowed unused vars must match /^_/u",
+      "rule": "@typescript-eslint/no-unused-vars",
+      "count": 1
+    },
+    {
+      "path": "src/components/mind/command-app.tsx",
+      "level": "warning",
+      "message": "'replyActions' is defined but never used. Allowed unused vars must match /^_/u",
+      "rule": "@typescript-eslint/no-unused-vars",
+      "count": 1
+    },
+    {
+      "path": "src/components/mind/command-app.tsx",
+      "level": "warning",
+      "message": "'replyHasSources' is defined but never used. Allowed unused vars must match /^_/u",
+      "rule": "@typescript-eslint/no-unused-vars",
+      "count": 1
+    },
+    {
+      "path": "src/components/mind/command-app.tsx",
+      "level": "warning",
+      "message": "'researchFollowupContext' is defined but never used. Allowed unused vars must match /^_/u",
+      "rule": "@typescript-eslint/no-unused-vars",
+      "count": 1
+    },
+    {
+      "path": "src/components/mind/command-app.tsx",
+      "level": "warning",
+      "message": "'researchSummary' is defined but never used. Allowed unused vars must match /^_/u",
+      "rule": "@typescript-eslint/no-unused-vars",
+      "count": 1
+    },
+    {
+      "path": "src/components/mind/command-app.tsx",
+      "level": "warning",
+      "message": "'resolveImportedMemory' is defined but never used. Allowed unused vars must match /^_/u",
+      "rule": "@typescript-eslint/no-unused-vars",
+      "count": 1
+    },
+    {
+      "path": "src/components/mind/command-app.tsx",
+      "level": "warning",
+      "message": "'resolveIncident' is defined but never used. Allowed unused vars must match /^_/u",
+      "rule": "@typescript-eslint/no-unused-vars",
+      "count": 1
+    },
+    {
+      "path": "src/components/mind/command-app.tsx",
+      "level": "warning",
+      "message": "'runLocalSkill' is defined but never used. Allowed unused vars must match /^_/u",
+      "rule": "@typescript-eslint/no-unused-vars",
+      "count": 1
+    },
+    {
+      "path": "src/components/mind/command-app.tsx",
+      "level": "warning",
+      "message": "'runStagedSpeak' is defined but never used. Allowed unused vars must match /^_/u",
+      "rule": "@typescript-eslint/no-unused-vars",
+      "count": 1
+    },
+    {
+      "path": "src/components/mind/command-app.tsx",
+      "level": "warning",
+      "message": "'saveDocumentOriginal' is defined but never used. Allowed unused vars must match /^_/u",
+      "rule": "@typescript-eslint/no-unused-vars",
+      "count": 1
+    },
+    {
+      "path": "src/components/mind/command-app.tsx",
+      "level": "warning",
+      "message": "'saveNotionRecovery' is defined but never used. Allowed unused vars must match /^_/u",
+      "rule": "@typescript-eslint/no-unused-vars",
+      "count": 1
+    },
+    {
+      "path": "src/components/mind/command-app.tsx",
+      "level": "warning",
+      "message": "'saveSkillPreferences' is defined but never used. Allowed unused vars must match /^_/u",
+      "rule": "@typescript-eslint/no-unused-vars",
+      "count": 1
+    },
+    {
+      "path": "src/components/mind/command-app.tsx",
+      "level": "warning",
+      "message": "'selectHistoryForQuestion' is defined but never used. Allowed unused vars must match /^_/u",
+      "rule": "@typescript-eslint/no-unused-vars",
+      "count": 1
+    },
+    {
+      "path": "src/components/mind/command-app.tsx",
+      "level": "warning",
+      "message": "'selectPdfChunks' is defined but never used. Allowed unused vars must match /^_/u",
+      "rule": "@typescript-eslint/no-unused-vars",
+      "count": 1
+    },
+    {
+      "path": "src/components/mind/command-app.tsx",
+      "level": "warning",
+      "message": "'selectedVoiceRoute' is defined but never used. Allowed unused vars must match /^_/u",
+      "rule": "@typescript-eslint/no-unused-vars",
+      "count": 1
+    },
+    {
+      "path": "src/components/mind/command-app.tsx",
+      "level": "warning",
+      "message": "'settingsPaneFromSearch' is defined but never used. Allowed unused vars must match /^_/u",
+      "rule": "@typescript-eslint/no-unused-vars",
+      "count": 1
+    },
+    {
+      "path": "src/components/mind/command-app.tsx",
+      "level": "warning",
+      "message": "'signOut' is defined but never used. Allowed unused vars must match /^_/u",
+      "rule": "@typescript-eslint/no-unused-vars",
+      "count": 1
+    },
+    {
+      "path": "src/components/mind/command-app.tsx",
+      "level": "warning",
+      "message": "'skillPreferenceKey' is defined but never used. Allowed unused vars must match /^_/u",
+      "rule": "@typescript-eslint/no-unused-vars",
+      "count": 1
+    },
+    {
+      "path": "src/components/mind/command-app.tsx",
+      "level": "warning",
+      "message": "'speakWithBrowser' is defined but never used. Allowed unused vars must match /^_/u",
+      "rule": "@typescript-eslint/no-unused-vars",
+      "count": 1
+    },
+    {
+      "path": "src/components/mind/command-app.tsx",
+      "level": "warning",
+      "message": "'speechEngineLabel' is defined but never used. Allowed unused vars must match /^_/u",
+      "rule": "@typescript-eslint/no-unused-vars",
+      "count": 1
+    },
+    {
+      "path": "src/components/mind/command-app.tsx",
+      "level": "warning",
+      "message": "'startBrowserWorkPump' is defined but never used. Allowed unused vars must match /^_/u",
+      "rule": "@typescript-eslint/no-unused-vars",
+      "count": 1
+    },
+    {
+      "path": "src/components/mind/command-app.tsx",
+      "level": "warning",
+      "message": "'subscribeVisibleClock' is defined but never used. Allowed unused vars must match /^_/u",
+      "rule": "@typescript-eslint/no-unused-vars",
+      "count": 1
+    },
+    {
+      "path": "src/components/mind/command-app.tsx",
+      "level": "warning",
+      "message": "'transcriptionPolicyKey' is defined but never used. Allowed unused vars must match /^_/u",
+      "rule": "@typescript-eslint/no-unused-vars",
+      "count": 1
+    },
+    {
+      "path": "src/components/mind/command-app.tsx",
+      "level": "warning",
+      "message": "'transcriptionRecipients' is defined but never used. Allowed unused vars must match /^_/u",
+      "rule": "@typescript-eslint/no-unused-vars",
+      "count": 1
+    },
+    {
+      "path": "src/components/mind/command-app.tsx",
+      "level": "warning",
+      "message": "'useDeferredValue' is defined but never used. Allowed unused vars must match /^_/u",
+      "rule": "@typescript-eslint/no-unused-vars",
+      "count": 1
+    },
+    {
+      "path": "src/components/mind/command-app.tsx",
+      "level": "warning",
+      "message": "'useMessageMediaActions' is defined but never used. Allowed unused vars must match /^_/u",
+      "rule": "@typescript-eslint/no-unused-vars",
+      "count": 1
+    },
+    {
+      "path": "src/components/mind/command-app.tsx",
+      "level": "warning",
+      "message": "'useViewScrollPosition' is defined but never used. Allowed unused vars must match /^_/u",
+      "rule": "@typescript-eslint/no-unused-vars",
+      "count": 1
+    },
+    {
+      "path": "src/components/mind/command-app.tsx",
+      "level": "warning",
+      "message": "'useWorkspaceRecordSize' is defined but never used. Allowed unused vars must match /^_/u",
+      "rule": "@typescript-eslint/no-unused-vars",
+      "count": 1
+    },
+    {
+      "path": "src/components/mind/command-app.tsx",
+      "level": "warning",
+      "message": "'verifyIncidentRecovery' is defined but never used. Allowed unused vars must match /^_/u",
+      "rule": "@typescript-eslint/no-unused-vars",
+      "count": 1
+    },
+    {
+      "path": "src/components/mind/command-app.tsx",
+      "level": "warning",
+      "message": "'videoProgressMessage' is defined but never used. Allowed unused vars must match /^_/u",
+      "rule": "@typescript-eslint/no-unused-vars",
+      "count": 1
+    },
+    {
+      "path": "src/components/mind/command-app.tsx",
+      "level": "warning",
+      "message": "'voiceRouteKey' is defined but never used. Allowed unused vars must match /^_/u",
+      "rule": "@typescript-eslint/no-unused-vars",
+      "count": 1
+    },
+    {
+      "path": "src/components/mind/command-app.tsx",
+      "level": "warning",
+      "message": "'writeVoicePipeline' is defined but never used. Allowed unused vars must match /^_/u",
+      "rule": "@typescript-eslint/no-unused-vars",
+      "count": 1
+    },
+    {
+      "path": "src/components/mind/command-app.tsx",
+      "level": "warning",
+      "message": "React Hook useEffect has a missing dependency: 'preferenceStorage'. Either include it or remove the dependency array",
+      "rule": "react-hooks/exhaustive-deps",
+      "count": 7
+    },
+    {
+      "path": "src/components/mind/command-app.tsx",
+      "level": "warning",
+      "message": "React Hook useEffect has a missing dependency: 'setFailure'. Either include it or remove the dependency array",
+      "rule": "react-hooks/exhaustive-deps",
+      "count": 1
+    },
+    {
+      "path": "src/components/mind/command-app.tsx",
+      "level": "warning",
+      "message": "React Hook useEffect has a missing dependency: 'setNavOpen'. Either include it or remove the dependency array",
+      "rule": "react-hooks/exhaustive-deps",
+      "count": 1
+    },
+    {
+      "path": "src/components/mind/command-app.tsx",
+      "level": "warning",
+      "message": "React Hook useEffect has missing dependencies: 'account?.id' and 'preferenceStorage'. Either include them or remove the dependency array",
+      "rule": "react-hooks/exhaustive-deps",
+      "count": 1
+    },
+    {
+      "path": "src/components/mind/command-app.tsx",
+      "level": "warning",
+      "message": "React Hook useEffect has missing dependencies: 'account?.id', 'preferenceStorage', and 'router.history'. Either include them or remove the dependency array",
+      "rule": "react-hooks/exhaustive-deps",
+      "count": 1
+    },
+    {
+      "path": "src/components/mind/command-app.tsx",
+      "level": "warning",
+      "message": "React Hook useEffect has missing dependencies: 'closeMenus', 'setNavOpen', and 'setPaletteOpen'. Either include them or remove the dependency array",
+      "rule": "react-hooks/exhaustive-deps",
+      "count": 1
+    },
+    {
+      "path": "src/components/mind/command-app.tsx",
+      "level": "warning",
+      "message": "React Hook useMemo has a missing dependency: 'ws'. Either include it or remove the dependency array",
+      "rule": "react-hooks/exhaustive-deps",
+      "count": 1
+    },
+    {
+      "path": "src/components/mind/command-app.tsx",
+      "level": "warning",
+      "message": "React Hook useMemo has an unnecessary dependency: 'skillRefreshNonce'. Either exclude it or remove the dependency array",
+      "rule": "react-hooks/exhaustive-deps",
+      "count": 1
+    },
+    {
+      "path": "src/components/mind/command-app.tsx",
+      "level": "warning",
+      "message": "The ref value 'pagePositions.current' will likely have changed by the time this effect cleanup function runs. If this ref points to a node rendered by React, copy 'pagePositions.current' to a variable inside the effect, and use that variable in the cleanup function",
+      "rule": "react-hooks/exhaustive-deps",
+      "count": 1
+    },
+    {
+      "path": "src/components/mind/command-app.tsx",
+      "level": "warning",
+      "message": "The ref value 'researchRunGuard.current' will likely have changed by the time this effect cleanup function runs. If this ref points to a node rendered by React, copy 'researchRunGuard.current' to a variable inside the effect, and use that variable in the cleanup function",
+      "rule": "react-hooks/exhaustive-deps",
+      "count": 1
+    },
+    {
+      "path": "src/components/mind/custom-connections.tsx",
+      "level": "warning",
+      "message": "'refreshCustomConnectionFn' is defined but never used. Allowed unused vars must match /^_/u",
+      "rule": "@typescript-eslint/no-unused-vars",
+      "count": 1
+    },
+    {
+      "path": "src/components/mind/custom-connections.tsx",
+      "level": "warning",
+      "message": "'useCallback' is defined but never used. Allowed unused vars must match /^_/u",
+      "rule": "@typescript-eslint/no-unused-vars",
+      "count": 1
+    },
+    {
+      "path": "src/components/mind/custom-connections.tsx",
+      "level": "warning",
+      "message": "'useCurrentUserState' is defined but never used. Allowed unused vars must match /^_/u",
+      "rule": "@typescript-eslint/no-unused-vars",
+      "count": 1
+    },
+    {
+      "path": "src/components/mind/fleet-panels.tsx",
+      "level": "warning",
+      "message": "'RunCountsView' is defined but never used. Allowed unused vars must match /^_/u",
+      "rule": "@typescript-eslint/no-unused-vars",
+      "count": 1
+    },
+    {
+      "path": "src/components/mind/fleet-panels.tsx",
+      "level": "warning",
+      "message": "'RunEvidence' is defined but never used. Allowed unused vars must match /^_/u",
+      "rule": "@typescript-eslint/no-unused-vars",
+      "count": 1
+    },
+    {
+      "path": "src/components/mind/fleet-panels.tsx",
+      "level": "warning",
+      "message": "'assignDelegation' is defined but never used. Allowed unused vars must match /^_/u",
+      "rule": "@typescript-eslint/no-unused-vars",
+      "count": 1
+    },
+    {
+      "path": "src/components/mind/fleet-panels.tsx",
+      "level": "warning",
+      "message": "'delegationGoals' is defined but never used. Allowed unused vars must match /^_/u",
+      "rule": "@typescript-eslint/no-unused-vars",
+      "count": 1
+    },
+    {
+      "path": "src/components/mind/fleet-panels.tsx",
+      "level": "warning",
+      "message": "'enqueueRun' is defined but never used. Allowed unused vars must match /^_/u",
+      "rule": "@typescript-eslint/no-unused-vars",
+      "count": 1
+    },
+    {
+      "path": "src/components/mind/fleet-panels.tsx",
+      "level": "warning",
+      "message": "'scheduleExecutionStatus' is defined but never used. Allowed unused vars must match /^_/u",
+      "rule": "@typescript-eslint/no-unused-vars",
+      "count": 1
+    },
+    {
+      "path": "src/components/mind/instruction-library.tsx",
+      "level": "warning",
+      "message": "React Hook useEffect has a missing dependency: 'load'. Either include it or remove the dependency array",
+      "rule": "react-hooks/exhaustive-deps",
+      "count": 1
+    },
+    {
+      "path": "src/components/mind/instruction-library.tsx",
+      "level": "warning",
+      "message": "The ref value 'epoch.current' will likely have changed by the time this effect cleanup function runs. If this ref points to a node rendered by React, copy 'epoch.current' to a variable inside the effect, and use that variable in the cleanup function",
+      "rule": "react-hooks/exhaustive-deps",
+      "count": 1
+    },
+    {
+      "path": "src/components/mind/knowledge-collection-panel.tsx",
+      "level": "warning",
+      "message": "The ref value 'generation.current' will likely have changed by the time this effect cleanup function runs. If this ref points to a node rendered by React, copy 'generation.current' to a variable inside the effect, and use that variable in the cleanup function",
+      "rule": "react-hooks/exhaustive-deps",
+      "count": 1
+    },
+    {
+      "path": "src/components/mind/library-document-preview.tsx",
+      "level": "warning",
+      "message": "React Hook useEffect has a complex expression in the dependency array. Extract it to a separate variable so it can be statically checked",
+      "rule": "react-hooks/exhaustive-deps",
+      "count": 1
+    },
+    {
+      "path": "src/components/mind/library-document-preview.tsx",
+      "level": "warning",
+      "message": "React Hook useEffect has a missing dependency: 'file'. Either include it or remove the dependency array",
+      "rule": "react-hooks/exhaustive-deps",
+      "count": 1
+    },
+    {
+      "path": "src/components/mind/media/cloud-picker.tsx",
+      "level": "warning",
+      "message": "The ref value 'requestEpoch.current' will likely have changed by the time this effect cleanup function runs. If this ref points to a node rendered by React, copy 'requestEpoch.current' to a variable inside the effect, and use that variable in the cleanup function",
+      "rule": "react-hooks/exhaustive-deps",
+      "count": 1
+    },
+    {
+      "path": "src/components/mind/media/media-recovery-panel.tsx",
+      "level": "warning",
+      "message": "React Hook useEffect has a missing dependency: 'context'. Either include it or remove the dependency array",
+      "rule": "react-hooks/exhaustive-deps",
+      "count": 1
+    },
+    {
+      "path": "src/components/mind/memory-privacy-control.tsx",
+      "level": "warning",
+      "message": "The ref value 'generation.current' will likely have changed by the time this effect cleanup function runs. If this ref points to a node rendered by React, copy 'generation.current' to a variable inside the effect, and use that variable in the cleanup function",
+      "rule": "react-hooks/exhaustive-deps",
+      "count": 1
+    },
+    {
+      "path": "src/components/mind/research-library.tsx",
+      "level": "warning",
+      "message": "React Hook useEffect has a missing dependency: 'load'. Either include it or remove the dependency array",
+      "rule": "react-hooks/exhaustive-deps",
+      "count": 1
+    },
+    {
+      "path": "src/components/mind/research-library.tsx",
+      "level": "warning",
+      "message": "The ref value 'epoch.current' will likely have changed by the time this effect cleanup function runs. If this ref points to a node rendered by React, copy 'epoch.current' to a variable inside the effect, and use that variable in the cleanup function",
+      "rule": "react-hooks/exhaustive-deps",
+      "count": 1
+    },
+    {
+      "path": "src/components/mind/speak-stage.tsx",
+      "level": "warning",
+      "message": "'DEFAULT_VOICE_ROUTE' is defined but never used. Allowed unused vars must match /^_/u",
+      "rule": "@typescript-eslint/no-unused-vars",
+      "count": 1
+    },
+    {
+      "path": "src/components/mind/speak-stage.tsx",
+      "level": "warning",
+      "message": "'SpeakSelection' is defined but never used. Allowed unused vars must match /^_/u",
+      "rule": "@typescript-eslint/no-unused-vars",
+      "count": 1
+    },
+    {
+      "path": "src/components/mind/speak-stage.tsx",
+      "level": "warning",
+      "message": "'SpeakStageReceipt' is defined but never used. Allowed unused vars must match /^_/u",
+      "rule": "@typescript-eslint/no-unused-vars",
+      "count": 1
+    },
+    {
+      "path": "src/components/mind/speak-stage.tsx",
+      "level": "warning",
+      "message": "'SpeechEngine' is defined but never used. Allowed unused vars must match /^_/u",
+      "rule": "@typescript-eslint/no-unused-vars",
+      "count": 1
+    },
+    {
+      "path": "src/components/mind/speak-stage.tsx",
+      "level": "warning",
+      "message": "'VoiceAnswer' is defined but never used. Allowed unused vars must match /^_/u",
+      "rule": "@typescript-eslint/no-unused-vars",
+      "count": 1
+    },
+    {
+      "path": "src/components/mind/speak-stage.tsx",
+      "level": "warning",
+      "message": "'VoiceRoutePreferences' is defined but never used. Allowed unused vars must match /^_/u",
+      "rule": "@typescript-eslint/no-unused-vars",
+      "count": 1
+    },
+    {
+      "path": "src/components/mind/speak-stage.tsx",
+      "level": "warning",
+      "message": "'VoiceStageReceipt' is defined but never used. Allowed unused vars must match /^_/u",
+      "rule": "@typescript-eslint/no-unused-vars",
+      "count": 1
+    },
+    {
+      "path": "src/components/mind/speak-stage.tsx",
+      "level": "warning",
+      "message": "'captureComposedSpeech' is defined but never used. Allowed unused vars must match /^_/u",
+      "rule": "@typescript-eslint/no-unused-vars",
+      "count": 1
+    },
+    {
+      "path": "src/components/mind/speak-stage.tsx",
+      "level": "warning",
+      "message": "'playComposedSpeech' is defined but never used. Allowed unused vars must match /^_/u",
+      "rule": "@typescript-eslint/no-unused-vars",
+      "count": 1
+    },
+    {
+      "path": "src/components/mind/speak-stage.tsx",
+      "level": "warning",
+      "message": "'readVoiceRoutePreferences' is defined but never used. Allowed unused vars must match /^_/u",
+      "rule": "@typescript-eslint/no-unused-vars",
+      "count": 1
+    },
+    {
+      "path": "src/components/mind/speak-stage.tsx",
+      "level": "warning",
+      "message": "'runComposedVoiceTurn' is defined but never used. Allowed unused vars must match /^_/u",
+      "rule": "@typescript-eslint/no-unused-vars",
+      "count": 1
+    },
+    {
+      "path": "src/components/mind/speak-stage.tsx",
+      "level": "warning",
+      "message": "'speechEngineLabel' is defined but never used. Allowed unused vars must match /^_/u",
+      "rule": "@typescript-eslint/no-unused-vars",
+      "count": 1
+    },
+    {
+      "path": "src/components/mind/speak-stage.tsx",
+      "level": "warning",
+      "message": "'writeVoiceRoutePreferences' is defined but never used. Allowed unused vars must match /^_/u",
+      "rule": "@typescript-eslint/no-unused-vars",
+      "count": 1
+    },
+    {
+      "path": "src/components/mind/speak-stage.tsx",
+      "level": "warning",
+      "message": "React Hook useEffect has a missing dependency: 'preferenceStorage'. Either include it or remove the dependency array",
+      "rule": "react-hooks/exhaustive-deps",
+      "count": 1
+    },
+    {
+      "path": "src/components/mind/speak-stage.tsx",
+      "level": "warning",
+      "message": "React Hook useEffect has a missing dependency: 'props'. Either include it or remove the dependency array. However, 'props' will change when *any* prop changes, so the preferred fix is to destructure the 'props' object outside of the useEffect call and refer to those specific props inside useEffect",
+      "rule": "react-hooks/exhaustive-deps",
+      "count": 1
+    },
+    {
+      "path": "src/components/mind/speak-stage.tsx",
+      "level": "warning",
+      "message": "The ref value 'outputGeneration.current' will likely have changed by the time this effect cleanup function runs. If this ref points to a node rendered by React, copy 'outputGeneration.current' to a variable inside the effect, and use that variable in the cleanup function",
+      "rule": "react-hooks/exhaustive-deps",
+      "count": 1
+    },
+    {
+      "path": "src/components/mind/surfaces/agents-panel.tsx",
+      "level": "warning",
+      "message": "React Hook useEffect has a missing dependency: 'rows'. Either include it or remove the dependency array",
+      "rule": "react-hooks/exhaustive-deps",
+      "count": 1
+    },
+    {
+      "path": "src/components/mind/surfaces/explore-panel.tsx",
+      "level": "warning",
+      "message": "'useCurrentUserState' is defined but never used. Allowed unused vars must match /^_/u",
+      "rule": "@typescript-eslint/no-unused-vars",
+      "count": 1
+    },
+    {
+      "path": "src/components/mind/surfaces/explore-panel.tsx",
+      "level": "warning",
+      "message": "React Hook useEffect has missing dependencies: 'readKey', 'readPins', 'workspace.agents', and 'workspace.deployments'. Either include them or remove the dependency array",
+      "rule": "react-hooks/exhaustive-deps",
+      "count": 1
+    },
+    {
+      "path": "src/components/mind/surfaces/speak-panel.tsx",
+      "level": "warning",
+      "message": "React Hook useEffect has missing dependencies: 'preferenceStorage', 'readKey', and 'readPins'. Either include them or remove the dependency array",
+      "rule": "react-hooks/exhaustive-deps",
+      "count": 1
+    },
+    {
+      "path": "src/lib/auth/client.ts",
+      "level": "warning",
+      "message": "'requestAllSessionSignOut' is defined but never used. Allowed unused vars must match /^_/u",
+      "rule": "@typescript-eslint/no-unused-vars",
+      "count": 1
+    },
+    {
+      "path": "src/lib/auth/session-user.test.ts",
+      "level": "warning",
+      "message": "'SessionConflictError' is defined but never used. Allowed unused vars must match /^_/u",
+      "rule": "@typescript-eslint/no-unused-vars",
+      "count": 1
+    },
+    {
+      "path": "src/lib/auth/use-current-user.ts",
+      "level": "warning",
+      "message": "'identityStore' is assigned a value but never used. Allowed unused vars must match /^_/u",
+      "rule": "@typescript-eslint/no-unused-vars",
+      "count": 1
+    },
+    {
+      "path": "src/lib/auth/use-current-user.ts",
+      "level": "warning",
+      "message": "'serverSnapshot' is assigned a value but never used. Allowed unused vars must match /^_/u",
+      "rule": "@typescript-eslint/no-unused-vars",
+      "count": 1
+    },
+    {
+      "path": "src/lib/auth/use-current-user.ts",
+      "level": "warning",
+      "message": "'useEffect' is defined but never used. Allowed unused vars must match /^_/u",
+      "rule": "@typescript-eslint/no-unused-vars",
+      "count": 1
+    },
+    {
+      "path": "src/lib/auth/use-current-user.ts",
+      "level": "warning",
+      "message": "'useState' is defined but never used. Allowed unused vars must match /^_/u",
+      "rule": "@typescript-eslint/no-unused-vars",
+      "count": 1
+    },
+    {
+      "path": "src/lib/auth/use-current-user.ts",
+      "level": "warning",
+      "message": "'useSyncExternalStore' is defined but never used. Allowed unused vars must match /^_/u",
+      "rule": "@typescript-eslint/no-unused-vars",
+      "count": 1
+    },
+    {
+      "path": "src/lib/auth/verify.server.ts",
+      "level": "warning",
+      "message": "'hasSupabaseCredential' is defined but never used. Allowed unused vars must match /^_/u",
+      "rule": "@typescript-eslint/no-unused-vars",
+      "count": 1
+    },
+    {
+      "path": "src/lib/auth/verify.server.ts",
+      "level": "warning",
+      "message": "'identitiesAgree' is defined but never used. Allowed unused vars must match /^_/u",
+      "rule": "@typescript-eslint/no-unused-vars",
+      "count": 1
+    },
+    {
+      "path": "src/lib/auth/verify.server.ts",
+      "level": "warning",
+      "message": "'verifiedSessionIdentity' is defined but never used. Allowed unused vars must match /^_/u",
+      "rule": "@typescript-eslint/no-unused-vars",
+      "count": 1
+    },
+    {
+      "path": "src/lib/auth/verify.server.ts",
+      "level": "warning",
+      "message": "'verifiedSupabaseCandidate' is defined but never used. Allowed unused vars must match /^_/u",
+      "rule": "@typescript-eslint/no-unused-vars",
+      "count": 1
+    },
+    {
+      "path": "src/lib/mind/agent-run.server.ts",
+      "level": "warning",
+      "message": "'governedModelCall' is defined but never used. Allowed unused vars must match /^_/u",
+      "rule": "@typescript-eslint/no-unused-vars",
+      "count": 1
+    },
+    {
+      "path": "src/lib/mind/agent-run.server.ts",
+      "level": "warning",
+      "message": "'normalizeProviderReceipt' is defined but never used. Allowed unused vars must match /^_/u",
+      "rule": "@typescript-eslint/no-unused-vars",
+      "count": 1
+    },
+    {
+      "path": "src/lib/mind/ai-provider-config.server.ts",
+      "level": "warning",
+      "message": "'discoveryFailureState' is defined but never used. Allowed unused vars must match /^_/u",
+      "rule": "@typescript-eslint/no-unused-vars",
+      "count": 1
+    },
+    {
+      "path": "src/lib/mind/ai-provider-config.server.ts",
+      "level": "warning",
+      "message": "'normalizeProviderReceipt' is defined but never used. Allowed unused vars must match /^_/u",
+      "rule": "@typescript-eslint/no-unused-vars",
+      "count": 1
+    },
+    {
+      "path": "src/lib/mind/ai-provider-config.server.ts",
+      "level": "warning",
+      "message": "'reportedModel' is defined but never used. Allowed unused vars must match /^_/u",
+      "rule": "@typescript-eslint/no-unused-vars",
+      "count": 1
+    },
+    {
+      "path": "src/lib/mind/c2-model-provider-contract.test.ts",
+      "level": "warning",
+      "message": "'collectConsultReport' is defined but never used. Allowed unused vars must match /^_/u",
+      "rule": "@typescript-eslint/no-unused-vars",
+      "count": 1
+    },
+    {
+      "path": "src/lib/mind/connected-mcp.server.ts",
+      "level": "warning",
+      "message": "'connectionCapabilityRevision' is defined but never used. Allowed unused vars must match /^_/u",
+      "rule": "@typescript-eslint/no-unused-vars",
+      "count": 1
+    },
+    {
+      "path": "src/lib/mind/connected-mcp.test.ts",
+      "level": "warning",
+      "message": "'listRegistryTools' is defined but never used. Allowed unused vars must match /^_/u",
+      "rule": "@typescript-eslint/no-unused-vars",
+      "count": 1
+    },
+    {
+      "path": "src/lib/mind/connected-mcp.test.ts",
+      "level": "warning",
+      "message": "'refreshMcp' is defined but never used. Allowed unused vars must match /^_/u",
+      "rule": "@typescript-eslint/no-unused-vars",
+      "count": 1
+    },
+    {
+      "path": "src/lib/mind/fleet-contract.test.ts",
+      "level": "warning",
+      "message": "'LATER' is assigned a value but never used. Allowed unused vars must match /^_/u",
+      "rule": "@typescript-eslint/no-unused-vars",
+      "count": 1
+    },
+    {
+      "path": "src/lib/mind/fleet.ts",
+      "level": "warning",
+      "message": "'nextOccurrence' is defined but never used. Allowed unused vars must match /^_/u",
+      "rule": "@typescript-eslint/no-unused-vars",
+      "count": 1
+    },
+    {
+      "path": "src/lib/mind/fleet.ts",
+      "level": "warning",
+      "message": "'scheduleRecovery' is defined but never used. Allowed unused vars must match /^_/u",
+      "rule": "@typescript-eslint/no-unused-vars",
+      "count": 1
+    },
+    {
+      "path": "src/lib/mind/halt.server.ts",
+      "level": "warning",
+      "message": "'applyDurableHalt' is defined but never used. Allowed unused vars must match /^_/u",
+      "rule": "@typescript-eslint/no-unused-vars",
+      "count": 1
+    },
+    {
+      "path": "src/lib/mind/halt.server.ts",
+      "level": "warning",
+      "message": "'haltWrites' is assigned a value but never used. Allowed unused vars must match /^_/u",
+      "rule": "@typescript-eslint/no-unused-vars",
+      "count": 1
+    },
+    {
+      "path": "src/lib/mind/kimi/acp.server.ts",
+      "level": "warning",
+      "message": "'UsageRecorder' is defined but never used. Allowed unused vars must match /^_/u",
+      "rule": "@typescript-eslint/no-unused-vars",
+      "count": 1
+    },
+    {
+      "path": "src/lib/mind/kimi/acp.server.ts",
+      "level": "warning",
+      "message": "'buildRuntimeUsage' is defined but never used. Allowed unused vars must match /^_/u",
+      "rule": "@typescript-eslint/no-unused-vars",
+      "count": 1
+    },
+    {
+      "path": "src/lib/mind/kimi/acp.server.ts",
+      "level": "warning",
+      "message": "'createHash' is defined but never used. Allowed unused vars must match /^_/u",
+      "rule": "@typescript-eslint/no-unused-vars",
+      "count": 1
+    },
+    {
+      "path": "src/lib/mind/kimi/acp.server.ts",
+      "level": "warning",
+      "message": "'observeBuildRuntime' is defined but never used. Allowed unused vars must match /^_/u",
+      "rule": "@typescript-eslint/no-unused-vars",
+      "count": 1
+    },
+    {
+      "path": "src/lib/mind/kimi/acp.server.ts",
+      "level": "warning",
+      "message": "'randomUUID' is defined but never used. Allowed unused vars must match /^_/u",
+      "rule": "@typescript-eslint/no-unused-vars",
+      "count": 1
+    },
+    {
+      "path": "src/lib/mind/kimi/acp.server.ts",
+      "level": "warning",
+      "message": "'readBuildSourceReceipt' is defined but never used. Allowed unused vars must match /^_/u",
+      "rule": "@typescript-eslint/no-unused-vars",
+      "count": 1
+    },
+    {
+      "path": "src/lib/mind/kimi/acp.server.ts",
+      "level": "warning",
+      "message": "'recordUsageObservation' is defined but never used. Allowed unused vars must match /^_/u",
+      "rule": "@typescript-eslint/no-unused-vars",
+      "count": 1
+    },
+    {
+      "path": "src/lib/mind/kimi/acp.server.ts",
+      "level": "warning",
+      "message": "'runGovernedHostedCoding' is defined but never used. Allowed unused vars must match /^_/u",
+      "rule": "@typescript-eslint/no-unused-vars",
+      "count": 1
+    },
+    {
+      "path": "src/lib/mind/kimi/hosted/acp-client.ts",
+      "level": "warning",
+      "message": "'dirname' is defined but never used. Allowed unused vars must match /^_/u",
+      "rule": "@typescript-eslint/no-unused-vars",
+      "count": 1
+    },
+    {
+      "path": "src/lib/mind/kimi/hosted/acp-client.ts",
+      "level": "warning",
+      "message": "'relative' is defined but never used. Allowed unused vars must match /^_/u",
+      "rule": "@typescript-eslint/no-unused-vars",
+      "count": 1
+    },
+    {
+      "path": "src/lib/mind/kimi/hosted/acp-client.ts",
+      "level": "warning",
+      "message": "'writeFileSync' is defined but never used. Allowed unused vars must match /^_/u",
+      "rule": "@typescript-eslint/no-unused-vars",
+      "count": 1
+    },
+    {
+      "path": "src/lib/mind/kimi/phase4.server.ts",
+      "level": "warning",
+      "message": "'runGovernedHostedCoding' is defined but never used. Allowed unused vars must match /^_/u",
+      "rule": "@typescript-eslint/no-unused-vars",
+      "count": 1
+    },
+    {
+      "path": "src/lib/mind/limits.ts",
+      "level": "warning",
+      "message": "'MAX_HISTORY_MESSAGES' is defined but never used. Allowed unused vars must match /^_/u",
+      "rule": "@typescript-eslint/no-unused-vars",
+      "count": 1
+    },
+    {
+      "path": "src/lib/mind/logic-routes.ts",
+      "level": "warning",
+      "message": "'ContextMessage' is defined but never used. Allowed unused vars must match /^_/u",
+      "rule": "@typescript-eslint/no-unused-vars",
+      "count": 1
+    },
+    {
+      "path": "src/lib/mind/logic-routes.ts",
+      "level": "warning",
+      "message": "'MAX_HISTORY_IMAGES' is defined but never used. Allowed unused vars must match /^_/u",
+      "rule": "@typescript-eslint/no-unused-vars",
+      "count": 1
+    },
+    {
+      "path": "src/lib/mind/logic-routes.ts",
+      "level": "warning",
+      "message": "'MAX_HISTORY_IMAGE_CHARS' is defined but never used. Allowed unused vars must match /^_/u",
+      "rule": "@typescript-eslint/no-unused-vars",
+      "count": 1
+    },
+    {
+      "path": "src/lib/mind/logic-routes.ts",
+      "level": "warning",
+      "message": "'selectContextHistory' is defined but never used. Allowed unused vars must match /^_/u",
+      "rule": "@typescript-eslint/no-unused-vars",
+      "count": 1
+    },
+    {
+      "path": "src/lib/mind/media/imagine-http.ts",
+      "level": "warning",
+      "message": "'MediaOperationStore' is defined but never used. Allowed unused vars must match /^_/u",
+      "rule": "@typescript-eslint/no-unused-vars",
+      "count": 1
+    },
+    {
+      "path": "src/lib/mind/media/imagine-http.ts",
+      "level": "warning",
+      "message": "'durableMediaOperations' is defined but never used. Allowed unused vars must match /^_/u",
+      "rule": "@typescript-eslint/no-unused-vars",
+      "count": 1
+    },
+    {
+      "path": "src/lib/mind/media/imagine-http.ts",
+      "level": "warning",
+      "message": "'externalResourceCall' is defined but never used. Allowed unused vars must match /^_/u",
+      "rule": "@typescript-eslint/no-unused-vars",
+      "count": 1
+    },
+    {
+      "path": "src/lib/mind/media/imagine-http.ts",
+      "level": "warning",
+      "message": "'mediaPayloadHash' is defined but never used. Allowed unused vars must match /^_/u",
+      "rule": "@typescript-eslint/no-unused-vars",
+      "count": 1
+    },
+    {
+      "path": "src/lib/mind/media/imagine-http.ts",
+      "level": "warning",
+      "message": "'runMediaOnce' is defined but never used. Allowed unused vars must match /^_/u",
+      "rule": "@typescript-eslint/no-unused-vars",
+      "count": 1
+    },
+    {
+      "path": "src/lib/mind/media/imagine-http.ts",
+      "level": "warning",
+      "message": "'validMediaOperationId' is defined but never used. Allowed unused vars must match /^_/u",
+      "rule": "@typescript-eslint/no-unused-vars",
+      "count": 1
+    },
+    {
+      "path": "src/lib/mind/media/imagine-http.ts",
+      "level": "warning",
+      "message": "'validateCreativeParameters' is defined but never used. Allowed unused vars must match /^_/u",
+      "rule": "@typescript-eslint/no-unused-vars",
+      "count": 1
+    },
+    {
+      "path": "src/lib/mind/memory/relevant.ts",
+      "level": "warning",
+      "message": "'terms' is defined but never used. Allowed unused vars must match /^_/u",
+      "rule": "@typescript-eslint/no-unused-vars",
+      "count": 1
+    },
+    {
+      "path": "src/lib/mind/palette.ts",
+      "level": "warning",
+      "message": "'excerpt' is defined but never used. Allowed unused vars must match /^_/u",
+      "rule": "@typescript-eslint/no-unused-vars",
+      "count": 1
+    },
+    {
+      "path": "src/lib/mind/palette.ts",
+      "level": "warning",
+      "message": "'matches' is defined but never used. Allowed unused vars must match /^_/u",
+      "rule": "@typescript-eslint/no-unused-vars",
+      "count": 1
+    },
+    {
+      "path": "src/lib/mind/provider-call.ts",
+      "level": "warning",
+      "message": "'normalizeProviderUsage' is defined but never used. Allowed unused vars must match /^_/u",
+      "rule": "@typescript-eslint/no-unused-vars",
+      "count": 1
+    },
+    {
+      "path": "src/lib/mind/provider-call.ts",
+      "level": "warning",
+      "message": "'providerRequestId' is defined but never used. Allowed unused vars must match /^_/u",
+      "rule": "@typescript-eslint/no-unused-vars",
+      "count": 1
+    },
+    {
+      "path": "src/lib/mind/research.ts",
+      "level": "warning",
+      "message": "'dedupeCitations' is defined but never used. Allowed unused vars must match /^_/u",
+      "rule": "@typescript-eslint/no-unused-vars",
+      "count": 1
+    },
+    {
+      "path": "src/lib/mind/server.ts",
+      "level": "warning",
+      "message": "'authorizeExternalResource' is defined but never used. Allowed unused vars must match /^_/u",
+      "rule": "@typescript-eslint/no-unused-vars",
+      "count": 1
+    },
+    {
+      "path": "src/lib/mind/server.ts",
+      "level": "warning",
+      "message": "'externalResourceCall' is defined but never used. Allowed unused vars must match /^_/u",
+      "rule": "@typescript-eslint/no-unused-vars",
+      "count": 1
+    },
+    {
+      "path": "src/lib/mind/skill-activation.ts",
+      "level": "warning",
+      "message": "'enabled' is assigned a value but never used. Allowed unused args must match /^_/u",
+      "rule": "@typescript-eslint/no-unused-vars",
+      "count": 1
+    },
+    {
+      "path": "src/lib/mind/store.ts",
+      "level": "warning",
+      "message": "'RECORD_TABLES' is assigned a value but never used. Allowed unused vars must match /^_/u",
+      "rule": "@typescript-eslint/no-unused-vars",
+      "count": 1
+    },
+    {
+      "path": "src/lib/mind/store.ts",
+      "level": "warning",
+      "message": "'changedRows' is defined but never used. Allowed unused vars must match /^_/u",
+      "rule": "@typescript-eslint/no-unused-vars",
+      "count": 1
+    },
+    {
+      "path": "src/lib/mind/store.ts",
+      "level": "warning",
+      "message": "'mirroredCollections' is assigned a value but only used as a type. Allowed unused vars must match /^_/u",
+      "rule": "@typescript-eslint/no-unused-vars",
+      "count": 1
+    },
+    {
+      "path": "src/lib/mind/turn.server.ts",
+      "level": "warning",
+      "message": "'ChatContent' is defined but never used. Allowed unused vars must match /^_/u",
+      "rule": "@typescript-eslint/no-unused-vars",
+      "count": 1
+    },
+    {
+      "path": "src/lib/mind/turn.server.ts",
+      "level": "warning",
+      "message": "'ConsultAttempt' is defined but never used. Allowed unused vars must match /^_/u",
+      "rule": "@typescript-eslint/no-unused-vars",
+      "count": 1
+    },
+    {
+      "path": "src/lib/mind/turn.server.ts",
+      "level": "warning",
+      "message": "'ConsultHelperReply' is defined but never used. Allowed unused vars must match /^_/u",
+      "rule": "@typescript-eslint/no-unused-vars",
+      "count": 1
+    },
+    {
+      "path": "src/lib/mind/turn.server.ts",
+      "level": "warning",
+      "message": "'HelperReceipt' is defined but never used. Allowed unused vars must match /^_/u",
+      "rule": "@typescript-eslint/no-unused-vars",
+      "count": 1
+    },
+    {
+      "path": "src/lib/mind/turn.server.ts",
+      "level": "warning",
+      "message": "'HelperReply' is defined but never used. Allowed unused vars must match /^_/u",
+      "rule": "@typescript-eslint/no-unused-vars",
+      "count": 1
+    },
+    {
+      "path": "src/lib/mind/turn.server.ts",
+      "level": "warning",
+      "message": "'LoadedInstruction' is defined but never used. Allowed unused vars must match /^_/u",
+      "rule": "@typescript-eslint/no-unused-vars",
+      "count": 1
+    },
+    {
+      "path": "src/lib/mind/turn.server.ts",
+      "level": "warning",
+      "message": "'ModelExecutionPlan' is defined but never used. Allowed unused vars must match /^_/u",
+      "rule": "@typescript-eslint/no-unused-vars",
+      "count": 1
+    },
+    {
+      "path": "src/lib/mind/turn.server.ts",
+      "level": "warning",
+      "message": "'collectConsultReport' is defined but never used. Allowed unused vars must match /^_/u",
+      "rule": "@typescript-eslint/no-unused-vars",
+      "count": 1
+    },
+    {
+      "path": "src/lib/mind/turn.server.ts",
+      "level": "warning",
+      "message": "'executeConsultPlan' is defined but never used. Allowed unused vars must match /^_/u",
+      "rule": "@typescript-eslint/no-unused-vars",
+      "count": 1
+    },
+    {
+      "path": "src/lib/mind/turn.server.ts",
+      "level": "warning",
+      "message": "'failureReceipt' is defined but never used. Allowed unused vars must match /^_/u",
+      "rule": "@typescript-eslint/no-unused-vars",
+      "count": 1
+    },
+    {
+      "path": "src/lib/mind/turn.server.ts",
+      "level": "warning",
+      "message": "'governedModelCall' is defined but never used. Allowed unused vars must match /^_/u",
+      "rule": "@typescript-eslint/no-unused-vars",
+      "count": 1
+    },
+    {
+      "path": "src/lib/mind/turn.server.ts",
+      "level": "warning",
+      "message": "'instructionContext' is defined but never used. Allowed unused vars must match /^_/u",
+      "rule": "@typescript-eslint/no-unused-vars",
+      "count": 1
+    },
+    {
+      "path": "src/lib/mind/turn.server.ts",
+      "level": "warning",
+      "message": "'modelExecutionPlan' is defined but never used. Allowed unused vars must match /^_/u",
+      "rule": "@typescript-eslint/no-unused-vars",
+      "count": 1
+    },
+    {
+      "path": "src/lib/mind/turn.server.ts",
+      "level": "warning",
+      "message": "'normalizeContextReceipt' is defined but never used. Allowed unused vars must match /^_/u",
+      "rule": "@typescript-eslint/no-unused-vars",
+      "count": 1
+    },
+    {
+      "path": "src/lib/mind/turn.server.ts",
+      "level": "warning",
+      "message": "'ownerScreenshotReader' is defined but never used. Allowed unused vars must match /^_/u",
+      "rule": "@typescript-eslint/no-unused-vars",
+      "count": 1
+    },
+    {
+      "path": "src/lib/mind/turn.server.ts",
+      "level": "warning",
+      "message": "'providerRequestId' is defined but never used. Allowed unused vars must match /^_/u",
+      "rule": "@typescript-eslint/no-unused-vars",
+      "count": 1
+    },
+    {
+      "path": "src/lib/mind/turn.server.ts",
+      "level": "warning",
+      "message": "'recordLoadedInstructions' is defined but never used. Allowed unused vars must match /^_/u",
+      "rule": "@typescript-eslint/no-unused-vars",
+      "count": 1
+    },
+    {
+      "path": "src/lib/mind/turn.server.ts",
+      "level": "warning",
+      "message": "'reserveResourceOperation' is defined but never used. Allowed unused vars must match /^_/u",
+      "rule": "@typescript-eslint/no-unused-vars",
+      "count": 1
+    },
+    {
+      "path": "src/lib/mind/turn.server.ts",
+      "level": "warning",
+      "message": "'resolveTurnInstructions' is defined but never used. Allowed unused vars must match /^_/u",
+      "rule": "@typescript-eslint/no-unused-vars",
+      "count": 1
+    },
+    {
+      "path": "src/lib/mind/turn.server.ts",
+      "level": "warning",
+      "message": "'selectContextHistory' is defined but never used. Allowed unused vars must match /^_/u",
+      "rule": "@typescript-eslint/no-unused-vars",
+      "count": 1
+    },
+    {
+      "path": "src/lib/mind/turn.server.ts",
+      "level": "warning",
+      "message": "'settleResourceOperation' is defined but never used. Allowed unused vars must match /^_/u",
+      "rule": "@typescript-eslint/no-unused-vars",
+      "count": 1
+    },
+    {
+      "path": "src/lib/mind/turn.server.ts",
+      "level": "warning",
+      "message": "'settleResourceStream' is defined but never used. Allowed unused vars must match /^_/u",
+      "rule": "@typescript-eslint/no-unused-vars",
+      "count": 1
+    },
+    {
+      "path": "src/lib/mind/turn.server.ts",
+      "level": "warning",
+      "message": "'withFailureEnvelope' is defined but never used. Allowed unused vars must match /^_/u",
+      "rule": "@typescript-eslint/no-unused-vars",
+      "count": 1
+    },
+    {
+      "path": "src/lib/mind/use-mind-workspace.ts",
+      "level": "warning",
+      "message": "'WorkspaceConflict' is defined but never used. Allowed unused vars must match /^_/u",
+      "rule": "@typescript-eslint/no-unused-vars",
+      "count": 1
+    },
+    {
+      "path": "src/lib/mind/use-mind-workspace.ts",
+      "level": "warning",
+      "message": "'applyWorkspaceDelta' is defined but never used. Allowed unused vars must match /^_/u",
+      "rule": "@typescript-eslint/no-unused-vars",
+      "count": 1
+    },
+    {
+      "path": "src/lib/mind/use-mind-workspace.ts",
+      "level": "warning",
+      "message": "'canonical' is defined but never used. Allowed unused vars must match /^_/u",
+      "rule": "@typescript-eslint/no-unused-vars",
+      "count": 1
+    },
+    {
+      "path": "src/lib/mind/use-mind-workspace.ts",
+      "level": "warning",
+      "message": "'createWorkspaceDelta' is defined but never used. Allowed unused vars must match /^_/u",
+      "rule": "@typescript-eslint/no-unused-vars",
+      "count": 1
+    },
+    {
+      "path": "src/lib/mind/use-mind-workspace.ts",
+      "level": "warning",
+      "message": "'deltaIsEmpty' is defined but never used. Allowed unused vars must match /^_/u",
+      "rule": "@typescript-eslint/no-unused-vars",
+      "count": 1
+    },
+    {
+      "path": "src/lib/mind/use-mind-workspace.ts",
+      "level": "warning",
+      "message": "'isPrimaryOwner' is defined but never used. Allowed unused vars must match /^_/u",
+      "rule": "@typescript-eslint/no-unused-vars",
+      "count": 1
+    },
+    {
+      "path": "src/lib/mind/use-mind-workspace.ts",
+      "level": "warning",
+      "message": "'loadAccountAttachment' is defined but never used. Allowed unused vars must match /^_/u",
+      "rule": "@typescript-eslint/no-unused-vars",
+      "count": 1
+    },
+    {
+      "path": "src/lib/mind/use-mind-workspace.ts",
+      "level": "warning",
+      "message": "'normalizeRecovery' is defined but never used. Allowed unused vars must match /^_/u",
+      "rule": "@typescript-eslint/no-unused-vars",
+      "count": 1
+    },
+    {
+      "path": "src/lib/mind/use-mind-workspace.ts",
+      "level": "warning",
+      "message": "'normalizeWorkspace' is defined but never used. Allowed unused vars must match /^_/u",
+      "rule": "@typescript-eslint/no-unused-vars",
+      "count": 1
+    },
+    {
+      "path": "src/lib/mind/use-mind-workspace.ts",
+      "level": "warning",
+      "message": "'prepareAccountAttachments' is defined but never used. Allowed unused vars must match /^_/u",
+      "rule": "@typescript-eslint/no-unused-vars",
+      "count": 1
+    },
+    {
+      "path": "src/lib/mind/use-mind-workspace.ts",
+      "level": "warning",
+      "message": "'reconcileServerWorkspace' is defined but never used. Allowed unused vars must match /^_/u",
+      "rule": "@typescript-eslint/no-unused-vars",
+      "count": 1
+    },
+    {
+      "path": "src/lib/mind/use-mind-workspace.ts",
+      "level": "warning",
+      "message": "'reconcileWorkspace' is defined but never used. Allowed unused vars must match /^_/u",
+      "rule": "@typescript-eslint/no-unused-vars",
+      "count": 1
+    },
+    {
+      "path": "src/lib/mind/use-mind-workspace.ts",
+      "level": "warning",
+      "message": "'resolveWorkspaceConflict' is defined but never used. Allowed unused vars must match /^_/u",
+      "rule": "@typescript-eslint/no-unused-vars",
+      "count": 1
+    },
+    {
+      "path": "src/lib/mind/use-mind-workspace.ts",
+      "level": "warning",
+      "message": "'runDurableCorePass' is defined but never used. Allowed unused vars must match /^_/u",
+      "rule": "@typescript-eslint/no-unused-vars",
+      "count": 1
+    },
+    {
+      "path": "src/lib/mind/use-mind-workspace.ts",
+      "level": "warning",
+      "message": "'runFleetModelStep' is defined but never used. Allowed unused vars must match /^_/u",
+      "rule": "@typescript-eslint/no-unused-vars",
+      "count": 1
+    },
+    {
+      "path": "src/lib/mind/use-mind-workspace.ts",
+      "level": "warning",
+      "message": "'saveAccountAttachment' is defined but never used. Allowed unused vars must match /^_/u",
+      "rule": "@typescript-eslint/no-unused-vars",
+      "count": 1
+    },
+    {
+      "path": "src/lib/mind/use-mind-workspace.ts",
+      "level": "warning",
+      "message": "'serverCheckpointKey' is defined but never used. Allowed unused vars must match /^_/u",
+      "rule": "@typescript-eslint/no-unused-vars",
+      "count": 1
+    },
+    {
+      "path": "src/lib/mind/use-mind-workspace.ts",
+      "level": "warning",
+      "message": "'splitWorkspaceDelta' is defined but never used. Allowed unused vars must match /^_/u",
+      "rule": "@typescript-eslint/no-unused-vars",
+      "count": 1
+    },
+    {
+      "path": "src/lib/mind/use-mind-workspace.ts",
+      "level": "warning",
+      "message": "'synchronizeWorkspace' is defined but never used. Allowed unused vars must match /^_/u",
+      "rule": "@typescript-eslint/no-unused-vars",
+      "count": 1
+    },
+    {
+      "path": "src/lib/mind/use-view-scroll-position.ts",
+      "level": "warning",
+      "message": "The ref value 'positions.current' will likely have changed by the time this effect cleanup function runs. If this ref points to a node rendered by React, copy 'positions.current' to a variable inside the effect, and use that variable in the cleanup function",
+      "rule": "react-hooks/exhaustive-deps",
+      "count": 1
+    },
+    {
+      "path": "src/lib/mind/voice/http.server.ts",
+      "level": "warning",
+      "message": "'authorizeExternalResource' is defined but never used. Allowed unused vars must match /^_/u",
+      "rule": "@typescript-eslint/no-unused-vars",
+      "count": 1
+    },
+    {
+      "path": "src/lib/mind/voice/http.server.ts",
+      "level": "warning",
+      "message": "'consumeSharedMindRateLimit' is defined but never used. Allowed unused vars must match /^_/u",
+      "rule": "@typescript-eslint/no-unused-vars",
+      "count": 1
+    },
+    {
+      "path": "src/lib/mind/voice/http.server.ts",
+      "level": "warning",
+      "message": "'externalResourceCall' is defined but never used. Allowed unused vars must match /^_/u",
+      "rule": "@typescript-eslint/no-unused-vars",
+      "count": 1
+    },
+    {
+      "path": "src/lib/mind/voice/http.server.ts",
+      "level": "warning",
+      "message": "'parseCloudSpeechPolicy' is defined but never used. Allowed unused vars must match /^_/u",
+      "rule": "@typescript-eslint/no-unused-vars",
+      "count": 1
+    },
+    {
+      "path": "src/lib/mind/voice/http.server.ts",
+      "level": "warning",
+      "message": "'transcribeSelected' is defined but never used. Allowed unused vars must match /^_/u",
+      "rule": "@typescript-eslint/no-unused-vars",
+      "count": 1
+    },
+    {
+      "path": "src/lib/mind/workspace-hook-lifecycle.test.ts",
+      "level": "warning",
+      "message": "React Hook useMemo has a missing dependency: 'fn'. Either include it or remove the dependency array",
+      "rule": "react-hooks/exhaustive-deps",
+      "count": 1
+    },
+    {
+      "path": "src/lib/mind/workspace-hook-lifecycle.test.ts",
+      "level": "warning",
+      "message": "React Hook useMemo was passed a dependency list that is not an array literal. This means we can't statically verify whether you've passed the correct dependencies",
+      "rule": "react-hooks/exhaustive-deps",
+      "count": 1
+    },
+    {
+      "path": "src/lib/mind/workspace.ts",
+      "level": "warning",
+      "message": "'newerRecord' is defined but never used. Allowed unused vars must match /^_/u",
+      "rule": "@typescript-eslint/no-unused-vars",
+      "count": 1
+    },
+    {
+      "path": "src/lib/mind/workspace.ts",
+      "level": "warning",
+      "message": "'restoredRun' is defined but never used. Allowed unused vars must match /^_/u",
+      "rule": "@typescript-eslint/no-unused-vars",
+      "count": 1
+    }
+  ],
+  "removed": [
+    {
+      "path": "src/components/mind/agent-command-center.tsx",
+      "level": "warning",
+      "message": "The 'bots' logical expression could make the dependencies of useMemo Hook (at line 93) change on every render. To fix this, wrap the initialization of 'bots' in its own useMemo() Hook",
+      "rule": "react-hooks/exhaustive-deps",
+      "count": 1
+    },
+    {
+      "path": "src/components/mind/agent-command-center.tsx",
+      "level": "warning",
+      "message": "The 'bots' logical expression could make the dependencies of useMemo Hook (at line 94) change on every render. To fix this, wrap the initialization of 'bots' in its own useMemo() Hook",
+      "rule": "react-hooks/exhaustive-deps",
+      "count": 1
+    },
+    {
+      "path": "src/components/mind/build-workspace.tsx",
+      "level": "warning",
+      "message": "React Hook useEffect has missing dependencies: 'browseWorkspace' and 'props.ownerId'. Either include them or remove the dependency array",
+      "rule": "react-hooks/exhaustive-deps",
+      "count": 1
+    },
+    {
+      "path": "src/components/mind/command-app.tsx",
+      "level": "warning",
+      "message": "'logicRoutes' is assigned a value but never used. Allowed unused args must match /^_/u",
+      "rule": "@typescript-eslint/no-unused-vars",
+      "count": 1
+    },
+    {
+      "path": "src/components/mind/command-app.tsx",
+      "level": "warning",
+      "message": "'onChooseLogic' is defined but never used. Allowed unused args must match /^_/u",
+      "rule": "@typescript-eslint/no-unused-vars",
+      "count": 1
+    },
+    {
+      "path": "src/components/mind/command-app.tsx",
+      "level": "warning",
+      "message": "'onDeleteChat' is defined but never used. Allowed unused args must match /^_/u",
+      "rule": "@typescript-eslint/no-unused-vars",
+      "count": 1
+    },
+    {
+      "path": "src/components/mind/command-app.tsx",
+      "level": "warning",
+      "message": "'onDeleteSection' is defined but never used. Allowed unused args must match /^_/u",
+      "rule": "@typescript-eslint/no-unused-vars",
+      "count": 1
+    },
+    {
+      "path": "src/components/mind/command-app.tsx",
+      "level": "warning",
+      "message": "'onLiveAssistantTranscript' is defined but never used. Allowed unused args must match /^_/u",
+      "rule": "@typescript-eslint/no-unused-vars",
+      "count": 1
+    },
+    {
+      "path": "src/components/mind/command-app.tsx",
+      "level": "warning",
+      "message": "'onLiveUserTranscript' is defined but never used. Allowed unused args must match /^_/u",
+      "rule": "@typescript-eslint/no-unused-vars",
+      "count": 1
+    },
+    {
+      "path": "src/components/mind/command-app.tsx",
+      "level": "warning",
+      "message": "'onLiveVoiceError' is defined but never used. Allowed unused args must match /^_/u",
+      "rule": "@typescript-eslint/no-unused-vars",
+      "count": 1
+    },
+    {
+      "path": "src/components/mind/command-app.tsx",
+      "level": "warning",
+      "message": "'onLiveVoiceNotice' is defined but never used. Allowed unused args must match /^_/u",
+      "rule": "@typescript-eslint/no-unused-vars",
+      "count": 1
+    },
+    {
+      "path": "src/components/mind/command-app.tsx",
+      "level": "warning",
+      "message": "'onRename' is defined but never used. Allowed unused args must match /^_/u",
+      "rule": "@typescript-eslint/no-unused-vars",
+      "count": 1
+    },
+    {
+      "path": "src/components/mind/command-app.tsx",
+      "level": "warning",
+      "message": "'onRoutingMode' is defined but never used. Allowed unused args must match /^_/u",
+      "rule": "@typescript-eslint/no-unused-vars",
+      "count": 1
+    },
+    {
+      "path": "src/components/mind/command-app.tsx",
+      "level": "warning",
+      "message": "'onToggleRoute' is defined but never used. Allowed unused args must match /^_/u",
+      "rule": "@typescript-eslint/no-unused-vars",
+      "count": 1
+    },
+    {
+      "path": "src/components/mind/command-app.tsx",
+      "level": "warning",
+      "message": "'routingMode' is defined but never used. Allowed unused args must match /^_/u",
+      "rule": "@typescript-eslint/no-unused-vars",
+      "count": 1
+    },
+    {
+      "path": "src/components/mind/command-app.tsx",
+      "level": "warning",
+      "message": "'routingPanel' is defined but never used. Allowed unused args must match /^_/u",
+      "rule": "@typescript-eslint/no-unused-vars",
+      "count": 1
+    },
+    {
+      "path": "src/components/mind/command-app.tsx",
+      "level": "warning",
+      "message": "React Hook useEffect has a missing dependency: 'closeMenus'. Either include it or remove the dependency array",
+      "rule": "react-hooks/exhaustive-deps",
+      "count": 1
+    },
+    {
+      "path": "src/components/mind/command-app.tsx",
+      "level": "warning",
+      "message": "React Hook useEffect has a missing dependency: 'router.history'. Either include it or remove the dependency array",
+      "rule": "react-hooks/exhaustive-deps",
+      "count": 1
+    },
+    {
+      "path": "src/components/mind/kimi-device-connect.tsx",
+      "level": "warning",
+      "message": "'apiKey' is assigned a value but never used. Allowed unused vars must match /^_/u",
+      "rule": "@typescript-eslint/no-unused-vars",
+      "count": 1
+    },
+    {
+      "path": "src/components/mind/kimi-device-connect.tsx",
+      "level": "warning",
+      "message": "'setApiKey' is assigned a value but never used. Allowed unused vars must match /^_/u",
+      "rule": "@typescript-eslint/no-unused-vars",
+      "count": 1
+    },
+    {
+      "path": "src/components/mind/kimi-device-connect.tsx",
+      "level": "warning",
+      "message": "'setPlugins' is assigned a value but never used. Allowed unused vars must match /^_/u",
+      "rule": "@typescript-eslint/no-unused-vars",
+      "count": 1
+    },
+    {
+      "path": "src/components/mind/kimi-device-connect.tsx",
+      "level": "warning",
+      "message": "'setUrl' is assigned a value but never used. Allowed unused vars must match /^_/u",
+      "rule": "@typescript-eslint/no-unused-vars",
+      "count": 1
+    },
+    {
+      "path": "src/components/mind/kimi-device-connect.tsx",
+      "level": "warning",
+      "message": "'setUserCode' is assigned a value but never used. Allowed unused vars must match /^_/u",
+      "rule": "@typescript-eslint/no-unused-vars",
+      "count": 1
+    },
+    {
+      "path": "src/components/mind/kimi-device-connect.tsx",
+      "level": "warning",
+      "message": "'url' is assigned a value but never used. Allowed unused vars must match /^_/u",
+      "rule": "@typescript-eslint/no-unused-vars",
+      "count": 1
+    },
+    {
+      "path": "src/components/mind/kimi-device-connect.tsx",
+      "level": "warning",
+      "message": "'userCode' is assigned a value but never used. Allowed unused vars must match /^_/u",
+      "rule": "@typescript-eslint/no-unused-vars",
+      "count": 1
+    },
+    {
+      "path": "src/lib/mind/ai-provider-config.server.ts",
+      "level": "error",
+      "message": "Unexpected control character(s) in regular expression: \\x00, \\x1f",
+      "rule": "no-control-regex",
+      "count": 1
+    },
+    {
+      "path": "src/lib/mind/connected-mcp.test.ts",
+      "level": "error",
+      "message": "'approvalId' is never reassigned. Use 'const' instead",
+      "rule": "prefer-const",
+      "count": 1
+    },
+    {
+      "path": "src/lib/mind/fleet.ts",
+      "level": "warning",
+      "message": "'BotProvider' is defined but never used. Allowed unused vars must match /^_/u",
+      "rule": "@typescript-eslint/no-unused-vars",
+      "count": 1
+    },
+    {
+      "path": "src/lib/mind/mcp/tools.ts",
+      "level": "error",
+      "message": "'j' is never reassigned. Use 'const' instead",
+      "rule": "prefer-const",
+      "count": 1
+    },
+    {
+      "path": "src/lib/mind/mcp/tools.ts",
+      "level": "error",
+      "message": "Unnecessary escape character: \\/",
+      "rule": "no-useless-escape",
+      "count": 2
+    }
+  ]
+}

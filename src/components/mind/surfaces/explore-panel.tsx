@@ -75,7 +75,9 @@ function compareCards(sort: SortId) {
  * The directory below this panel still owns Save and open Chat.
  */
 export function ExplorePanel() {
-  const account = useCurrentUser();
+  const { user: account, error, isPending } = useCurrentUserState();
+  if (error) return <p role="alert">{error} <button onClick={() => window.location.reload()}>Retry verification</button></p>;
+  if (isPending) return <p role="status">Verifying your account…</p>;
   return <AccountPreferencesProvider ownerId={account?.id ?? null}><ExploreAccount key={account?.id ?? "guest"} account={account} /></AccountPreferencesProvider>;
 }
 function ExploreAccount({ account }: { account: ReturnType<typeof useCurrentUser> }) {

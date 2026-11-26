@@ -5,6 +5,9 @@ import { it } from "node:test";
 import ts from "typescript";
 import * as workspaceModule from "./workspace.ts";
 import * as edits from "./workspace-edits.ts";
+import * as changes from "./workspace-changes.ts";
+import * as mediaLoader from "./workspace-media-loader.ts";
+import * as loader from "./workspace-loader.ts";
 import * as sync from "./sync.ts";
 import * as attachments from "./media/attachment-integrity.ts";
 import * as checkpoints from "./workspace-checkpoint.ts";
@@ -46,18 +49,35 @@ function mount(input: { workspace?: Workspace; load: () => Promise<{ ok: true; w
       }];
     },
   };
+  let remote = workspaceModule.emptyWorkspace();
+  const clear = async () => {};
   const imports: Record<string, unknown> = {
     react, "./workspace": workspaceModule, "./workspace-edits": edits, "./sync": sync,
     "./media/attachment-integrity": attachments, "./workspace-checkpoint": checkpoints, "./save-error": saveErrors,
     "./media/blob-store": { accountImageStore: () => ({ ...createMemoryBlobStore(), clear: async () => {}, allowOwnedLegacyReferences: () => {} }) },
     "./use-composer-draft": { clearAccountDrafts: () => {} },
-    "./server": { loadMindCopy: input.load, saveMindCopy: ({ data }: { data: { workspace: Workspace } }) => input.save(data.workspace),
+    "./media/video-device-store": { clearDeviceVideos: clear },
+    "./library-documents": { accountOriginalFileStore: () => ({ clear }) },
+    "./knowledge-index": { accountKnowledgeStore: () => ({ clear }) },
+    "./workspace-changes": changes, "./workspace-media-loader": mediaLoader,
+    "./workspace-loader": { parseWorkspaceDeferred: (raw: string | null, options: { signal: AbortSignal }) => loader.parseWorkspaceDeferred(raw, { ...options, yieldControl: async () => {} }) },
+    "./server": { loadMindCopy: async () => {
+        const result = await input.load();
+        remote = result.workspace ?? workspaceModule.emptyWorkspace();
+        return result;
+      },
+      saveMindChanges: async ({ data }: { data: { changes: ReturnType<typeof changes.planWorkspaceChanges> } }) => {
+        const updated = changes.applyWorkspaceChanges(remote, data.changes);
+        const result = await input.save(updated);
+        remote = updated;
+        return result;
+      },
       saveAccountAttachment: async () => { throw Error("no image expected"); }, loadAccountAttachment: async () => ({ ok: false }) },
   };
   const source = ts.transpileModule(readFileSync(new URL("./use-mind-workspace.ts", import.meta.url), "utf8"), { compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 } }).outputText;
   const exports: { useMindWorkspace?: (...values: [string | null, string | null, boolean]) => Record<string, unknown> } = {};
   vm.runInNewContext(source, { exports, require: (name: string) => { if (!(name in imports)) throw Error(name); return imports[name]; },
-    localStorage: storage, navigator: {}, window: {
+    AbortController, localStorage: storage, navigator: {}, window: {
       setTimeout: () => 1, clearTimeout: () => {},
       addEventListener: (name: string, fn: (event: unknown) => void) => { if (!listeners.has(name)) listeners.set(name, new Set()); listeners.get(name)!.add(fn); },
       removeEventListener: (name: string, fn: (event: unknown) => void) => listeners.get(name)?.delete(fn),

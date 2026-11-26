@@ -85,3 +85,14 @@ describe("C4 attachment completeness", () => {
     assert.equal(await legacy.get("unrelated"), bytes);
   });
 });
+
+it("account saves resolve device-only bytes and preserve the server copy when the device reference is unavailable", async () => {
+  let uploads = 0;
+  const upload = async (content: string) => { uploads++; assert.equal(content, bytes); return { ok: true as const, id }; };
+  const source = ws({ blobId: "device-only" });
+  const missing = await prepareAccountAttachments(source, upload, new Map(), async () => undefined);
+  assert.equal(missing.ok, false); assert.equal(uploads, 0);
+  const result = await prepareAccountAttachments(source, upload, new Map(), async (key) => key === "device-only" ? bytes : undefined);
+  assert.equal(result.ok, true); assert.equal(uploads, 1);
+  if (result.ok) assert.equal(result.workspace.chats[0].messages[0].images?.[0].blobId, id);
+});

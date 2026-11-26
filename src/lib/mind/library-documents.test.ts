@@ -1,3 +1,4 @@
+import { extractPdfText, selectPdfChunks } from "./pdf-text.ts";
 import assert from "node:assert/strict";
 import { it } from "node:test";
 import { originalFileDatabase, prepareLibraryDocument, readVerifiedOriginal, replaceLibraryDocument, restoreLibraryVersion, saveLibraryDocument, updateLibraryDocument, parseCsvPreview, type OriginalFileStore } from "./library-documents.ts";
@@ -69,4 +70,20 @@ it("does not evict forty existing text files when an original document is added"
 it("parses quoted CSV delimiters and discloses bounded previews", () => {
   assert.deepEqual(parseCsvPreview('name,description\nA,"two, words"\nB,"line\ncontinued"').rows, [["name", "description"], ["A", "two, words"], ["B", "line\ncontinued"]]);
   assert.equal(parseCsvPreview("one\ntwo\nthree", 2).truncated, true);
+});
+
+it("a Library PDF retains late, page-attributed text and its original evidence on save and reload", async () => {
+  const pdf = ["%PDF-1.4", "1 0 obj << /Type /Catalog /Pages 2 0 R >> endobj",
+    "2 0 obj << /Type /Pages /Kids [3 0 R 5 0 R] >> endobj", "3 0 obj << /Type /Page /Contents 4 0 R >> endobj",
+    "4 0 obj << >> stream\n(" + "alpha ".repeat(7000) + ") Tj\nendstream endobj", "5 0 obj << /Type /Page /Contents 6 0 R >> endobj",
+    "6 0 obj << >> stream\n(LATE_RENEWAL) Tj\nendstream endobj"].join("\n");
+  const saved = await prepareLibraryDocument(new File([pdf], "contract.pdf"), { store: store(), projectId: null, extractPdf: extractPdfText });
+  const result = saveLibraryDocument(emptyWorkspace(), saved);
+  assert.equal(result.ok, true);
+  if (!result.ok) return;
+  const [file] = normalizeWorkspace(JSON.parse(JSON.stringify(result.workspace))).files;
+  assert.equal(file.text.length, 40_000);
+  assert.equal(file.evidenceIndex?.sourceSha256, saved.original.sha256);
+  assert.ok(file.document);
+  assert.match(selectPdfChunks(file.document, { query: "LATE_RENEWAL", maxChars: 80 }).text, /PDF page 2,[^\]]+\]\nLATE_RENEWAL/);
 });

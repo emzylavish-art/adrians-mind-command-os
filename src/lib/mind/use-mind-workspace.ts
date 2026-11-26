@@ -5,35 +5,31 @@ import { accountOriginalFileStore } from "./library-documents";
 import { accountKnowledgeStore } from "./knowledge-index";
 import { clearAccountDrafts } from "./use-composer-draft";
 import { createWorkspaceCheckpoint } from "./workspace-checkpoint";
-import { loadMindCopy, saveMindChanges, loadAccountAttachment, saveAccountAttachment, runDurableCorePass, runFleetModelStep } from "./server";
+import { loadMindCopy, saveMindChanges, loadAccountAttachment, saveAccountAttachment } from "./server";
 import { planWorkspaceChanges, validateWorkspaceChanges } from "./workspace-changes";
-import { chooseServerSync, reconcileServerWorkspace, serverCheckpointKey, synchronizeWorkspace } from "./sync";
-import { prepareAccountAttachments } from "./media/attachment-integrity";
+import { chooseServerSync } from "./sync";
+import { ACCOUNT_ATTACHMENT_ID, prepareAccountAttachments } from "./media/attachment-integrity";
 import type { Chat, Workspace } from "./types";
-import { accountWorkspaceKey, emptyWorkspace, mergeChatDeletionState, mergeMemoryState, loadWorkspaceForAccount, readWorkspaceRawForAccount, canonical, normalizeWorkspace, stampWorkspaceEdits, isPrimaryOwner } from "./workspace";
+import { accountWorkspaceKey, emptyWorkspace, mergeChatDeletionState, mergeMemoryState, loadWorkspaceForAccount, readWorkspaceRawForAccount, stampWorkspaceEdits } from "./workspace";
 import { parseWorkspaceDeferred } from "./workspace-loader";
 import { applyWorkspaceImagePatches, createWorkspaceMediaLoader, type WorkspaceMediaProgress } from "./workspace-media-loader";
-import { mergeWorkspaceEdits, resolveWorkspaceConflict, reconcileWorkspace, type WorkspaceConflict } from "./workspace-edits";
-import { applyWorkspaceDelta, createWorkspaceDelta, deltaIsEmpty, splitWorkspaceDelta } from "./workspace-delta";
+import { mergeWorkspaceEdits } from "./workspace-edits";
 import { SAVE_FAIL, saveFailureMessage } from "./save-error";
-import { normalizeRecovery } from "./recovery-inbox";
 
 function hasContent(ws: Workspace) {
   return ws.chats.length + ws.memories.length + ws.projects.length + ws.files.length + (ws.deletedMemoryIds?.length ?? 0) + (ws.deletedChatIds?.length ?? 0) + ws.audit.length + ws.agents.length > 0;
 }
 
-function reconcileStoredRecords(ws: Workspace, stored: Workspace): Workspace {
-  const missing = stored.agents.filter((agent) => !ws.agents.some((item) => item.id === agent.id));
-  return { ...ws, ...mergeMemoryState(ws, stored), ...mergeChatDeletionState(ws, stored), agents: [...ws.agents, ...missing] };
-}
-
-
-export function useMindWorkspace(userId: string | null = "dev-user", email: string | null = null) {
+export function useMindWorkspace(userId: string | null = "dev-user", email: string | null = null, authLoading = false) {
   const scope = useMemo(() => {
     const empty = emptyWorkspace();
-    const images = accountImageStore(userId);
-    return { userId, checkpoint: createWorkspaceCheckpoint(), images, mediaLoader: createWorkspaceMediaLoader(images), priorityChatId: null as string | null, mediaGeneration: 0, empty, browserBase: empty, acknowledgedClient: empty, serverRevision: null as string | null };
-  }, [userId, email]);
+    const images = accountImageStore(userId, async (id) => {
+      if (!userId || !ACCOUNT_ATTACHMENT_ID.test(id)) return undefined;
+      const result = await loadAccountAttachment({ data: { ownerId: userId, id } });
+      return result.ok ? result.dataUrl : undefined;
+    });
+    return { userId, checkpoint: createWorkspaceCheckpoint(), images, mediaLoader: createWorkspaceMediaLoader(images), priorityChatId: null as string | null, mediaGeneration: 0, empty, browserBase: empty, acknowledgedClient: empty, serverRevision: null as string | null, attachmentReceipts: new Map<string, string>() };
+  }, [userId, email, authLoading]);
   const [loaded, setLoaded] = useState<{ scope: typeof scope; workspace: Workspace } | null>(null);
   const [mediaState, setMediaState] = useState<{ scope: typeof scope; progress: WorkspaceMediaProgress } | null>(null);
   const ready = loaded?.scope === scope;
@@ -66,7 +62,13 @@ export function useMindWorkspace(userId: string | null = "dev-user", email: stri
         return { ok: false as const, error: "The account workspace changed before saving." };
       }
       if (!scope.serverRevision) return { ok: false as const, error: "Load the server copy before saving it. The browser copy was kept." };
-      const storedWorkspace = scope.checkpoint.snapshot(workspace);
+      const prepared = await prepareAccountAttachments(workspace, async (dataUrl) => {
+        if (activeScope.current !== scope || gen !== persistGen.current) return { ok: false, error: "The account changed before saving an attachment." };
+        return saveAccountAttachment({ data: { ownerId: userId, dataUrl } });
+      }, scope.attachmentReceipts, (id) => scope.images.getOwned(id));
+      if (!prepared.ok) return prepared;
+      if (activeScope.current !== scope || gen !== persistGen.current) return { ok: false as const, error: "The account changed before saving." };
+      const storedWorkspace = prepared.workspace;
       const changes = planWorkspaceChanges(scope.acknowledgedClient, storedWorkspace);
       const checked = validateWorkspaceChanges(changes);
       if (!checked.ok) return checked;
@@ -113,6 +115,7 @@ export function useMindWorkspace(userId: string | null = "dev-user", email: stri
   }, [scope, ensureChatMedia]);
 
   useEffect(() => {
+    if (authLoading) return;
     let cancel = false;
     const loading = new AbortController();
     const loadGen = ++persistGen.current;
@@ -148,22 +151,27 @@ export function useMindWorkspace(userId: string | null = "dev-user", email: stri
         scope.serverRevision = result.revision;
         scope.acknowledgedClient = result.workspace ?? emptyWorkspace();
         const browser = latest.current === scope.empty ? local : latest.current;
-        const choice = chooseServerSync(hasContent(browser), Boolean(result.workspace && hasContent(result.workspace)));
+        const choice = chooseServerSync(hasContent(localRaw), Boolean(result.workspace && hasContent(result.workspace)));
         if (choice === "use-server" && result.workspace) {
           const serverWs = result.workspace as Workspace;
           if (cancel || loadGen !== persistGen.current || activeScope.current !== scope) return;
-          if (latest.current !== scope.empty && hasContent(latest.current)) {
-            setWs((current) => ({ ...current, ...mergeMemoryState(current, serverWs), ...mergeChatDeletionState(current, serverWs) }));
-            followServer.current = false;
+          const merged = mergeWorkspaceEdits(serverWs, localRaw, browser);
+          setWs((current) => mergeWorkspaceEdits(serverWs, localRaw, current));
+          beginMediaHydration(merged, loadGen);
+          if (merged.syncConflicts?.length) {
             setServerHeld(true);
-            setSyncNote("This browser kept its own copy. The server copy was not overwritten.");
+            setSyncNote("Device and server changes need review. Both copies were kept.");
             return;
           }
           followServer.current = true;
-          savedJson.current = JSON.stringify(result.workspace);
-          setWs((current) => hasContent(current) ? current : reconcileStoredRecords(serverWs, localRaw));
-          beginMediaHydration(serverWs, loadGen);
-          setSyncNote("Loaded the server copy because this browser was empty. It is still not cloud backup.");
+          savedJson.current = JSON.stringify(serverWs);
+          if (hasContent(browser)) {
+            const saved = await saveForOwner(merged, loadGen);
+            if (cancel || activeScope.current !== scope || loadGen !== persistGen.current) return;
+            if (!saved.ok) { setSaveError(saved.error); setSyncNote(saved.error); return; }
+            savedJson.current = JSON.stringify(scope.checkpoint.snapshot(merged));
+          }
+          setSyncNote("Loaded the server copy and retained changes made on this device.");
           return;
         }
         if (loadGen !== persistGen.current) return;
@@ -205,25 +213,20 @@ export function useMindWorkspace(userId: string | null = "dev-user", email: stri
       loading.abort();
       ++persistGen.current;
     };
-  }, [userId, email, scope, setWs, saveForOwner, beginMediaHydration]);
+  }, [userId, email, authLoading, scope, setWs, saveForOwner, beginMediaHydration]);
 
   useEffect(() => {
     if (!ready || !userId) return;
     const reconcile = (event: StorageEvent) => {
       if (event.key !== accountWorkspaceKey(userId) || event.storageArea !== localStorage) return;
       const stored = loadWorkspaceForAccount(localStorage, userId, email);
-      setWs((current) => {
-        const next = { ...mergeMemoryState(current, stored), ...mergeChatDeletionState(current, stored) };
-        if (JSON.stringify(next.memories) === JSON.stringify(current.memories) &&
-            JSON.stringify(next.deletedMemoryIds ?? []) === JSON.stringify(current.deletedMemoryIds ?? []) &&
-            JSON.stringify(next.deletedChatIds ?? []) === JSON.stringify(current.deletedChatIds ?? []) &&
-            next.chats.length === current.chats.length) return current;
-        return { ...current, ...next };
-      });
+      const base = scope.browserBase;
+      scope.browserBase = stored;
+      setWs((current) => mergeWorkspaceEdits(stored, base, current));
     };
     window.addEventListener("storage", reconcile);
     return () => window.removeEventListener("storage", reconcile);
-  }, [ready, userId, email, setWs]);
+  }, [ready, userId, email, scope, setWs]);
 
   const flushPending = useRef<(() => void) | null>(null);
   useLayoutEffect(() => () => { flushPending.current?.(); }, [scope]);

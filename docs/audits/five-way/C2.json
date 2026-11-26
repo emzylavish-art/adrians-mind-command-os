@@ -1932,7 +1932,13 @@
         "src/lib/mind/pdf-text-audit.test.ts",
         "src/lib/mind/pdf-text.test.ts"
       ],
-      "disposition": "Combined verification pending"
+      "disposition": "Combined verification pending",
+      "combinedFixture": "The actual PDF extractor, PDF preview evidence ranges, and Library save/normalize/reload path passed a local transport-free fixture. A requested second-page term beyond the preview was returned with its page and offsets.",
+      "combinedTests": [
+        "src/lib/mind/pdf-text-audit.test.ts",
+        "src/lib/mind/pdf-text.test.ts",
+        "src/lib/mind/library-documents.test.ts"
+      ]
     },
     {
       "finding": "C2/AA-118",
@@ -1948,7 +1954,13 @@
         "src/lib/mind/pdf-text-audit.test.ts",
         "src/lib/mind/pdf-text.test.ts"
       ],
-      "disposition": "Combined verification pending"
+      "disposition": "Combined verification pending",
+      "combinedFixture": "The actual PDF extractor, PDF preview evidence ranges, and Library save/normalize/reload path passed a local transport-free fixture. A requested second-page term beyond the preview was returned with its page and offsets.",
+      "combinedTests": [
+        "src/lib/mind/pdf-text-audit.test.ts",
+        "src/lib/mind/pdf-text.test.ts",
+        "src/lib/mind/library-documents.test.ts"
+      ]
     },
     {
       "finding": "C2/AA-119",
@@ -1964,7 +1976,13 @@
         "src/lib/mind/pdf-text-audit.test.ts",
         "src/lib/mind/pdf-text.test.ts"
       ],
-      "disposition": "Combined verification pending"
+      "disposition": "Combined verification pending",
+      "combinedFixture": "The actual PDF extractor, PDF preview evidence ranges, and Library save/normalize/reload path passed a local transport-free fixture. A requested second-page term beyond the preview was returned with its page and offsets.",
+      "combinedTests": [
+        "src/lib/mind/pdf-text-audit.test.ts",
+        "src/lib/mind/pdf-text.test.ts",
+        "src/lib/mind/library-documents.test.ts"
+      ]
     },
     {
       "finding": "C2/AA-120",

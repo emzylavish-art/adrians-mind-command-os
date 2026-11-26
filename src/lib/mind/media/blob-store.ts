@@ -155,14 +155,14 @@ export function scopedImageStore(
 }
 
 /** Account blobs never fall back to the unowned legacy database. Legacy inline pixels still migrate normally. */
-export function accountImageStore(owner: string | null) {
+export function accountImageStore(owner: string | null, remoteGet?: (id: string) => Promise<string | undefined>) {
   const name = MEDIA_BLOB_DB + ".owner." + encodeURIComponent(owner ?? "");
   const scoped = createIndexedDbBlobStore(name);
   return {
     put: scoped.put,
     getOwned: scoped.get,
     async get(id: string) {
-      return scoped.get(id);
+      return await scoped.get(id) ?? (owner && /^acct_[a-f0-9]{64}$/.test(id) ? remoteGet?.(id) : undefined);
     },
     async clear() {
       if (typeof indexedDB === "undefined") return;

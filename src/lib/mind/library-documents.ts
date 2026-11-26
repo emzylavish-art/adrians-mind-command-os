@@ -1,3 +1,4 @@
+import type { PdfText } from "./pdf-text.ts";
 import { readDocumentOriginal, removeDocumentOriginal } from "./document-originals.ts";
 import type { DocumentOriginal, LocalFileOriginal, LocalFile, LocalFileVersion, Workspace } from "./types.ts";
 
@@ -57,7 +58,7 @@ export async function fileChecksum(bytes: ArrayBuffer): Promise<string> {
 export async function prepareLibraryDocument(file: File, input: {
   projectId: string | null;
   store: OriginalFileStore;
-  extractPdf?: (bytes: Uint8Array) => Promise<{ ok: boolean; text?: string; partial?: boolean; coverage?: string; error?: string }>;
+  extractPdf?: (bytes: Uint8Array) => Promise<Partial<PdfText> & { ok: boolean }>;
   isCurrent?: () => boolean;
   sourceChatId?: string;
   sourceMessageId?: string;
@@ -70,10 +71,18 @@ export async function prepareLibraryDocument(file: File, input: {
   const isText = /\.(?:txt|md|markdown|csv|json|[cm]?[jt]sx?|py|css|html?|xml|ya?ml|toml|log|sql|sh|rs|go|java|c|cpp|h)$/i.test(file.name) || file.type.startsWith("text/");
   let text = "";
   let partial = false;
+  let document: LocalFile["document"];
+  let evidenceIndex: LocalFile["evidenceIndex"];
   let extraction = "No text extraction is available for this format. The original is preserved.";
   if (isPdf && input.extractPdf) {
     const result = await input.extractPdf(new Uint8Array(bytes));
-    if (result.ok) { text = result.text ?? ""; partial = !!result.partial; extraction = result.coverage || "PDF text extracted; visuals remain in the original."; }
+    if (result.ok) {
+      text = result.text ?? "";
+      partial = !!result.partial;
+      extraction = result.coverage || "PDF text extracted. Visuals remain in the original.";
+      evidenceIndex = result.evidenceIndex;
+      if (result.chunks?.length) document = { kind: "pdf", pages: result.pages ?? 0, coverage: extraction, partial, chunks: result.chunks };
+    }
     else extraction = result.error || "PDF text extraction was unavailable. The original is preserved.";
   } else if (isText) {
     text = new TextDecoder().decode(bytes);
@@ -87,7 +96,7 @@ export async function prepareLibraryDocument(file: File, input: {
   await input.store.put(blobId, new Blob([bytes], { type: file.type || "application/octet-stream" }));
   if (input.isCurrent && !input.isCurrent()) throw new Error("The destination changed after saving the original on its originating account. No workspace entry was added.");
   const now = new Date().toISOString();
-  return { id: crypto.randomUUID(), versionId: crypto.randomUUID(), name: file.name, text, bytes: file.size, projectId: input.projectId, createdAt: now, updatedAt: now, partial,
+  return { id: crypto.randomUUID(), versionId: crypto.randomUUID(), name: file.name, text, bytes: file.size, ...(document ? { document } : {}), ...(evidenceIndex && evidenceIndex.retainedCharacters === text.length ? { evidenceIndex, textSha256: evidenceIndex.textSha256 } : {}), projectId: input.projectId, createdAt: now, updatedAt: now, partial,
     original: { blobId, sha256: hash, bytes: file.size, mime: file.type || "application/octet-stream", name: file.name }, extraction,
     ...(input.sourceChatId ? { sourceChatId: input.sourceChatId } : {}), ...(input.sourceMessageId ? { sourceMessageId: input.sourceMessageId } : {}) };
 }
@@ -120,7 +129,7 @@ export async function readVerifiedOriginal(file: Pick<LocalFile, "original">, st
 }
 
 export function libraryPreviewCharacters(files: LocalFile[]): number {
-  return files.reduce((sum, file) => sum + file.text.length + (file.versions ?? []).reduce((total, version) => total + version.text.length, 0), 0);
+  return files.reduce((sum, file) => sum + Math.max(file.text.length, file.document?.chunks.reduce((count, chunk) => count + chunk.text.length, 0) ?? 0) + (file.versions ?? []).reduce((total, version) => total + version.text.length, 0), 0);
 }
 
 export function saveLibraryDocument(ws: Workspace, document: LocalFile): { ok: true; workspace: Workspace } | { ok: false; error: string } {
@@ -142,7 +151,11 @@ export function restoreLibraryVersion(file: LocalFile, versionId: string): Local
   const version = file.versions?.find((row) => row.versionId === versionId);
   if (!version) return null;
   const now = new Date().toISOString();
-  return replaceLibraryDocument(file, { ...file, ...version, versionId: crypto.randomUUID(), updatedAt: now });
+  const restored = { ...file, ...version, versionId: crypto.randomUUID(), updatedAt: now };
+  delete restored.document;
+  delete restored.evidenceIndex;
+  delete restored.textSha256;
+  return replaceLibraryDocument(file, restored);
 }
 
 /** Compare-and-set prevents a late upload from replacing a version selected meanwhile. */

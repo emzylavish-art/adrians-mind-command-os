@@ -44,6 +44,7 @@ export async function prepareAccountAttachments(
   workspace: Workspace,
   upload: (dataUrl: string) => Promise<{ ok: true; id: string } | { ok: false; error: string }>,
   uploaded = new Map<string, string>(),
+  readOwned?: (id: string) => Promise<string | undefined>,
 ): Promise<{ ok: true; workspace: Workspace } | { ok: false; error: string }> {
   const issues = attachmentIssues(workspace);
   if (issues.length) return { ok: false, error: `${issues[0].name}: ${issues[0].reason}` };
@@ -54,14 +55,20 @@ export async function prepareAccountAttachments(
       if (!message.images?.length) { messages.push(message); continue; }
       const images = [];
       for (const image of message.images) {
-        if (!image.dataUrl?.startsWith("data:image/")) { images.push(image); continue; }
-        let id = uploaded.get(image.dataUrl);
+        let pixels = image.dataUrl;
+        if (!pixels && image.blobId && !ACCOUNT_ATTACHMENT_ID.test(image.blobId) && readOwned) {
+          pixels = await readOwned(image.blobId);
+          if (!pixels?.startsWith("data:image/")) return { ok: false, error: "An image is unavailable on this device. The account copy was kept. Restore or remove the attachment before saving." };
+        }
+        if (!pixels?.startsWith("data:image/")) { images.push(image); continue; }
+        if (pixels.length >= MAX_ATTACHMENT_DATA_CHARS) return { ok: false, error: "An image exceeds the account attachment limit. The device copy was kept." };
+        let id = uploaded.get(pixels);
         if (!id) {
-          const saved = await upload(image.dataUrl);
+          const saved = await upload(pixels);
           if (!saved.ok) return saved;
           if (!ACCOUNT_ATTACHMENT_ID.test(saved.id)) return { ok: false, error: "The attachment store returned an invalid receipt. Image bytes remain on this device." };
           id = saved.id;
-          uploaded.set(image.dataUrl, id);
+          uploaded.set(pixels, id);
         }
         const { dataUrl: _dataUrl, ...metadata } = image;
         images.push({ ...metadata, blobId: id });

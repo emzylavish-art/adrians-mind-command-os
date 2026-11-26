@@ -189,6 +189,7 @@ async function inflate(data: Uint8Array): Promise<Uint8Array | null> {
 export async function extractPdfText(bytes: Uint8Array): Promise<PdfText> {
   const source = latin1(bytes);
   if (!source.includes("%PDF")) return { ok: false, text: "", pages: 0, error: "That file is not a PDF. Nothing was extracted." };
+  if (/\/Encrypt\s+\d+\s+\d+\s+R\b/.test(source)) return { ok: false, text: "", pages: 0, error: "Encrypted PDFs must be unlocked before extracting text." };
   const objects = new Map<string, string>();
   let duplicateObject = false;
   for (const match of source.matchAll(/(\d+)\s+(\d+)\s+obj\b([\s\S]*?)endobj/g)) {
@@ -234,6 +235,17 @@ export async function extractPdfText(bytes: Uint8Array): Promise<PdfText> {
 
   const parts: string[] = [];
   const pageParts: { text: string; partial: boolean }[] = [];
+  const pageTexts: PdfPageText[] = [];
+  let retained = 0;
+  let clipped = false;
+  function retainPage(page: number | null, content: string, partial: boolean) {
+    const separator = pageTexts.length ? 2 : 0;
+    const available = Math.max(0, MAX_PDF_EXTRACTED_CHARS - retained - separator);
+    const text = content.slice(0, available);
+    clipped ||= text.length < content.length;
+    pageTexts.push({ page, text, partial: partial || text.length < content.length });
+    retained += text.length + separator;
+  }
   const uncertain: number[] = [];
   let coverage: string | undefined;
   const reliable = treeReliable && ordered.length > 0 && ordered.length === pages;
@@ -247,6 +259,7 @@ export async function extractPdfText(bytes: Uint8Array): Promise<PdfText> {
         if (decoded.text) pageText.push(decoded.text);
         if (decoded.partial) incomplete = true;
       }
+      retainPage(index + 1, pageText.join("\n").trim(), incomplete);
       const text = pageText.join(" ").replace(/\s+/g, " ").trim();
       pageParts.push({ text, partial: incomplete });
       if (text) parts.push(text);
@@ -258,7 +271,7 @@ export async function extractPdfText(bytes: Uint8Array): Promise<PdfText> {
     for (const entry of objects.values()) {
       if (!/\bstream\r?\n/.test(entry)) continue;
       const decoded = await decodeObject(entry);
-      if (decoded.text) parts.push(decoded.text);
+      if (decoded.text) { parts.push(decoded.text); retainPage(null, decoded.text, true); }
     }
     coverage = "PDF page coverage could not be verified.";
   }
@@ -279,5 +292,7 @@ export async function extractPdfText(bytes: Uint8Array): Promise<PdfText> {
   const evidenceIndex: PdfEvidenceIndex = { version: 1, kind: reliable ? "pdf-page-tree" : "unresolved", sourceSha256: await digest(bytes), textSha256: await digest(new TextEncoder().encode(text)), pageCount: pages, extractedCharacters: extracted.length, retainedCharacters: text.length, pages: pageRanges };
   if (!text) return { ok: false, text: "", pages, extractedCharacters: extracted.length, evidenceIndex, error: pages ? "No usable text was extracted. Scanned pages require OCR. Nothing was invented." : "No text was found in this PDF. Nothing was invented." };
   if (text.length < extracted.length) coverage = [coverage, "The text copy ends at 40,000 characters."].filter(Boolean).join(" ");
-  return { ok: true, text, pages, extractedCharacters: extracted.length, evidenceIndex, error: "", ...(coverage ? { partial: true, coverage } : {}) };
+  if (clipped) coverage = [coverage, "Searchable text is limited to 400,000 characters."].filter(Boolean).join(" ");
+  const fullText = pageTexts.map((page) => page.text).join("\n\n").slice(0, MAX_PDF_EXTRACTED_CHARS);
+  return { ok: true, text, fullText, pageTexts, chunks: chunkPdfPages(pageTexts), pages, extractedCharacters: extracted.length, evidenceIndex, error: "", ...(coverage ? { partial: true, coverage } : {}) };
 }

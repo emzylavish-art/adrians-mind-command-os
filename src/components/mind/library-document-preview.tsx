@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import type { LocalFile, Project } from "@/lib/mind/types";
 import { accountOriginalFileStore, parseCsvPreview, prepareLibraryDocument, readAccountOriginal, originalKey, replaceLibraryDocument, restoreLibraryVersion } from "@/lib/mind/library-documents";
-import { extractPdfText } from "@/lib/mind/pdf-text";
+import { extractPdfText, selectPdfChunks } from "@/lib/mind/pdf-text";
 import { MarkdownProse } from "./markdown-prose";
 import { ResourceState } from "./resource-state";
 
@@ -17,6 +17,10 @@ export function LibraryDocumentPreview({ file, ownerId, projects, onChange, onOp
   const [originalAttempt, setOriginalAttempt] = useState(0);
   const [rename, setRename] = useState(file.name);
   const [format, setFormat] = useState<"preview" | "text">("preview");
+  const [passageQuery, setPassageQuery] = useState("");
+  const passages = file.document && passageQuery.trim()
+    ? selectPdfChunks(file.document, { query: passageQuery, maxChars: 3500 })
+    : null;
   const current = useRef({ ownerId, fileId: file.id, versionId: file.versionId || file.id });
   current.current = { ownerId, fileId: file.id, versionId: file.versionId || file.id };
   useEffect(() => { setRename(file.name); setFormat("preview"); }, [file.id, file.name]);
@@ -54,6 +58,13 @@ export function LibraryDocumentPreview({ file, ownerId, projects, onChange, onOp
     finally { if (isCurrent()) setWorking(false); }
   };
   return <section className="min-w-0 space-y-3" aria-label={`Document ${file.name}`}>
+    {file.document && <details>
+      <summary>Search extracted PDF passages</summary>
+      <label className="block py-2">Page or search terms
+        <input type="search" value={passageQuery} className="block w-full rounded-panel border border-line p-2" onChange={(event) => setPassageQuery(event.target.value)} />
+      </label>
+      {passages && <><p className="text-xs text-muted">{passages.coverage}</p><pre className="whitespace-pre-wrap break-words text-sm">{passages.text}</pre></>}
+    </details>}
     <div className="flex flex-wrap gap-2">
       {originalUrl ? <a className="inline-flex min-h-11 items-center rounded-panel border border-line px-3 text-sm" href={originalUrl} download={(file.original && "name" in file.original && file.original.name) || file.name}>Download original · {file.original?.bytes.toLocaleString()} bytes</a> : null}
       <button type="button" className="min-h-11 rounded-panel border border-line px-3 text-sm" onClick={downloadText} disabled={!file.text}>Download extracted text</button>

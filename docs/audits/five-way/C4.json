@@ -477,7 +477,11 @@
       "expected": "Pending auth must not display or hydrate another scope.",
       "implementation": "docs/adrian-analysis-implementation-checklist.md#L76",
       "regression": "[G18](#g18-canonical-identity)",
-      "disposition": "Combined verification pending"
+      "disposition": "Combined verification pending",
+      "combinedFixture": "Pending-auth workspace hook remained unready with zero storage reads, server loads and saves. On verified owner transition it became ready. Interactive staging verification remains pending.",
+      "combinedTests": [
+        "src/lib/mind/workspace-hook-lifecycle.test.ts"
+      ]
     },
     {
       "finding": "C4/AA-059",
