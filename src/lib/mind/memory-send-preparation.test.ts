@@ -1,3 +1,7 @@
+import { currentMemoryContext } from "./context-permission.ts";
+import { completedHistory, checkpointReply } from "./partial-reply.ts";
+import { withReplyVersion } from "./transcript.ts";
+import { checkTurnReceipt } from "./live-turn.ts";
 import { failureKindForAction } from "./recovery-inbox.ts";
 import { effectiveContextPolicy } from "./memory/context-policy.ts";
 import { memoryPolicyRevision, validateMemoryDispatch } from "./memory/dispatch-policy.ts";
@@ -28,7 +32,7 @@ function actualFunction(start: string, end: string) {
   return app.slice(a, b);
 }
 const code = stripTypeScriptTypes(
-  actualFunction("  async function deliver(", "  function stopReply()") + "\n" +
+  actualFunction("  async function reconcileSend(", "  function stopReply()") + "\n" +
   actualFunction("function selectRetryMessages(", "type BrowserSpeechRec ="),
 );
 
@@ -48,10 +52,17 @@ function harness(options: { pause?: "prepare" | "fingerprint"; uncertainFirst?: 
   const reached = deferred(), release = deferred();
   const errors: string[] = [];
   const posts: { id: string | null; body: Record<string, unknown> }[] = [];
+  const receiptIds: string[] = [];
   let prepared = 0, failed = false;
   let failure: { retry: (() => void) | null; message: string } | null = null;
   const fetchImpl = (async (_url, init) => {
     if (init?.method === "GET") {
+      const id = new URL(String(_url), "https://fixture.test").searchParams.get("operationId");
+      if (id) {
+        assert.equal(init.body, undefined);
+        receiptIds.push(id);
+        return Response.json({ state: "processing_or_unknown", ownerId: "fixture-owner" });
+      }
       if (options.pause === "prepare") { reached.resolve(); await release.promise; }
       prepared++;
       return Response.json({ operationId: `${1795637700000 + prepared}-00000000-0000-4000-8000-000000000001` });
@@ -63,6 +74,9 @@ function harness(options: { pause?: "prepare" | "fingerprint"; uncertainFirst?: 
   }) as typeof fetch;
   const noop = () => undefined;
   const context = vm.createContext({
+    document: { hidden: false, addEventListener: noop, removeEventListener: noop },
+    completedHistory, checkpointReply, withReplyVersion, currentMemoryContext, accountPending: false, account: { id: "fixture-owner" },
+    speakStageOpenRef: { current: false }, checkTurnReceipt: (url: string, id: string, headers: HeadersInit) => checkTurnReceipt(url, id, headers, undefined, fetchImpl),
     crypto, TextEncoder, TextDecoder, AbortController, DOMException, setTimeout, clearTimeout, Date,
     window: { location: { hostname: "fixture.test", pathname: "/" } },
     turnInFlight: inFlight, turnOwner: { current: "fixture-owner" }, draftOwner: "fixture-owner", wsRef,
@@ -95,7 +109,7 @@ function harness(options: { pause?: "prepare" | "fingerprint"; uncertainFirst?: 
     ws: () => wsRef.current,
     setWs: (next: Workspace) => { wsRef.current = next; },
     start: (source = wsRef.current) => deliver(source.chats[0], "What is my blue preference?", source),
-    posts, errors, reached: reached.promise, release: release.resolve,
+    posts, receiptIds, errors, reached: reached.promise, release: release.resolve,
     async retry() {
       assert.ok(failure?.retry, "actual failure banner offers retry");
       failure.retry();
@@ -115,7 +129,14 @@ describe("C5 memory privacy at the actual send boundary", () => {
         const ws = h.ws(), note = ws.memories[0];
         h.setWs(mutation === "delete" ? deleteMemory(ws, note.id) : mutation === "correct" ? reviseMemory(ws, note.id, "new corrected preference") : mutation === "archive" ? { ...ws, memories: ws.memories.map(n => ({ ...n, archived: true })) } : { ...ws, chats: ws.chats.map(chat => ({ ...chat, memory: "off" })) });
         h.release(); await pending;
-        assert.equal(h.posts.length, 0); assert.ok(h.errors.some(error => /Memory permissions or notes changed/.test(error)));
+        if (pause === "prepare" && mutation === "off") {
+          assert.equal(h.posts.length, 1);
+          assert.deepEqual(h.posts[0].body.memoryContext, []);
+          assert.equal(JSON.stringify(h.posts[0].body).includes("SYNTHETIC_PRIVATE_MARKER"), false);
+        } else {
+          assert.equal(h.posts.length, 0);
+          assert.ok(h.errors.some(error => /Memory or project access changed|saved context changed/i.test(error)));
+        }
       });
     }
   }
@@ -133,10 +154,9 @@ describe("C5 memory privacy at the actual send boundary", () => {
       assert.notEqual(h.posts[0].id, h.posts[1].id); assert.ok(!JSON.stringify(h.posts[1].body).includes("SYNTHETIC_PRIVATE_MARKER"));
     });
   }
-  it("unchanged uncertain retry keeps exactly the original operation identity and payload", async () => {
+  it("unchanged uncertain retry checks exactly the original operation without posting its payload", async () => {
     const h = harness({ uncertainFirst: true }); await h.start(); await h.retry();
-    assert.equal(h.posts.length, 2); assert.equal(h.posts[0].id, h.posts[1].id);
-    assert.deepEqual(h.posts[0].body, h.posts[1].body);
+    assert.equal(h.posts.length, 1); assert.deepEqual(h.receiptIds, [h.posts[0].id]);
   });
   it("refuses a stale supplied workspace that predates memory deletion", async () => {
     const h = harness(); const old = structuredClone(h.ws());

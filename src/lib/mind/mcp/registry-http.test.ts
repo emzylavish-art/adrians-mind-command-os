@@ -1,3 +1,4 @@
+import * as approvalSnapshot from "./approval-snapshot.ts";
 import assert from "node:assert/strict";
 import { createHash, randomUUID } from "node:crypto";
 import { mkdtempSync, readFileSync, writeFileSync } from "node:fs";
@@ -62,7 +63,7 @@ function compileRegistryFixture(storage: Record<string, unknown>, dns: Record<st
     return module.exports;
   };
   const custom = compile(new URL("../custom-connection.ts", import.meta.url), {
-    "node:crypto": { createHash, randomUUID }, "./mcp/http-dns-pin.ts": dns,
+    "node:crypto": { createHash, randomUUID }, "./halt.server.ts": { haltIsOn: async () => false }, "./mcp/http-dns-pin.ts": dns, "./mcp/approval-snapshot.ts": approvalSnapshot,
     "./mcp/registry-store.ts": storage, "./mcp/call-contract.ts": callContract, "./mcp/http-body.ts": { readCappedBody },
   });
   return compile(new URL("./registry.ts", import.meta.url), {
@@ -230,7 +231,7 @@ describe("http MCP registry hardening (REGRESSION)", () => {
     const server = await freshOwner(url);
     const tools = await listRegistryTools("owner", undefined, { http: { timeoutMs: 300 } });
     const row = tools.find((t) => t.serverId === server.id);
-    assert.equal(row?.status, "timeout");
+    assert.equal(row?.status, "timeout", row?.description);
     assert.equal(row?.name, "(timeout)");
     assert.equal(tools.some((t) => t.name === "pglite_query"), true);
     const called = await callRegistryTool({ userId: "owner", serverId: server.id, tool: "x", getSql: noSql, http: { timeoutMs: 300 } });

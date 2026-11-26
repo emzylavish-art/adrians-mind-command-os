@@ -41,7 +41,7 @@ export function applyWorkbenchCommand(
     if (!run) return { ok: false, message: "That run is not in this workspace.", workspace };
     const next = pauseRun(workspace, command.runId);
     const updated = next.runs.find((item) => item.id === command.runId);
-    if (!updated || updated.state !== "paused") {
+    if (run.state === "paused" || !updated || updated.state !== "paused") {
       return { ok: false, message: `This run is ${run.state.replaceAll("_", " ")} and was not paused.`, workspace };
     }
     return { ok: true, message: "Run paused. It will not be stepped until you resume it.", workspace: next };
@@ -49,7 +49,7 @@ export function applyWorkbenchCommand(
   if (command.type === "resume") {
     const next = resumeRun(workspace, command.runId);
     const updated = next.runs.find((item) => item.id === command.runId);
-    if (!updated || updated.state !== "queued") {
+    if (!updated || updated === workspace.runs.find(item => item.id === command.runId) || updated.state !== "queued") {
       return { ok: false, message: "Only a paused run can be resumed. Nothing was queued.", workspace };
     }
     return { ok: true, message: "Run resumed and queued. It has not been executed until the worker steps.", workspace: next };
@@ -59,7 +59,7 @@ export function applyWorkbenchCommand(
     if (!before) return { ok: false, message: "That run is not in this workspace.", workspace };
     const next = cancelRun(workspace, command.runId, now);
     const updated = next.runs.find((item) => item.id === command.runId);
-    if (!updated || updated.state !== "canceled") {
+    if (before.state === "canceled" || !updated || updated.state !== "canceled") {
       return { ok: false, message: `This run is already ${before.state.replaceAll("_", " ")}. It was not changed.`, workspace };
     }
     return { ok: true, message: "Run canceled. Unfinished work was not marked complete.", workspace: next };
@@ -80,6 +80,7 @@ export function applyWorkbenchCommand(
   }
   if (command.type === "step") {
     const next = tickFleet(workspace, { now, workerId: "browser-worker" });
+    if (next === workspace) return { ok: false, message: "No run advanced.", workspace };
     return {
       ok: true,
       message: "Local worker stepped once. Only stored local tools can finish here. Search, browser and mail stay waiting until those services are actually connected.",

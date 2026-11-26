@@ -278,7 +278,9 @@ describe("C5 pinned fleet contracts", () => {
     assert.equal(next.runs[0].step, 2);
     assert.match(next.runEvents[0].detail, /chat|conversation/i);
     ws.agents[0].tools = ["list_projects"];
-    assert.equal(tick(ws).runs[0].state, "failed");
+    const blocked = tick(ws).runs[0];
+    assert.equal(blocked.state, "paused");
+    assert.equal(blocked.step, ws.runs[0].step);
   });
   it("approval cannot authorize a changed goal, destination or agent revision", () => {
     const waiting = tick(started("Browser operator", "Open https://one.example"));
@@ -294,7 +296,12 @@ describe("C5 pinned fleet contracts", () => {
     }
   });
   it("delegation preserves its parent plan and selects explicitly assigned specialists", () => {
-    let ws = started("Project manager", "Read projects and Search notes");
+    const manager = addAgentFromTemplate(emptyWorkspace(), "Project manager", NOW);
+    assert.ok(manager.ok);
+    manager.agent.tools = ["delegate", "search_notes", "list_projects"];
+    const queued = enqueueRun(manager.ws, manager.agent.id, "Delegate a project review and a note lookup", NOW);
+    assert.ok(queued.ok);
+    let ws = queued.ws;
     const documents = addAgentFromTemplate(ws, "Documents", NOW);
     assert.equal(documents.ok, true);
     if (!documents.ok) return;

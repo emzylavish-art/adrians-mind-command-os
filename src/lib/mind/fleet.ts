@@ -100,6 +100,7 @@ export type AgentRun = {
   definition?: RunDefinition;
   completion?: RunCompletion;
   executionRuntime?: "browser-local" | "scheduled-local" | "server-local";
+  stopDispatchOutcome?: "not_dispatched" | "outcome_unknown" | "confirmed_result";
   cancellation?: { requestedAt: string; acknowledgedAt: string | null; scope: "local-worker" };
   result: string;
   error: string;
@@ -560,6 +561,8 @@ export function readFleet(input: unknown): FleetShape {
         definition: readRunDefinition(row.definition),
         completion: readCompletion(row.completion),
         executionRuntime: row.executionRuntime === "scheduled-local" || row.executionRuntime === "server-local" ? row.executionRuntime : "browser-local",
+        stopDispatchOutcome: row.stopDispatchOutcome === "confirmed_result" || row.stopDispatchOutcome === "outcome_unknown" || row.stopDispatchOutcome === "not_dispatched"
+          ? row.stopDispatchOutcome : row.cancellation === "outcome_unknown" || row.cancellation === "not_dispatched" ? row.cancellation : undefined,
         cancellation: isRecord(row.cancellation) && typeof row.cancellation.requestedAt === "string" ? { requestedAt: row.cancellation.requestedAt, acknowledgedAt: typeof row.cancellation.acknowledgedAt === "string" ? row.cancellation.acknowledgedAt : null, scope: "local-worker" } : undefined,
         result: typeof row.result === "string" ? row.result.slice(0, 4000) : "",
         error: typeof row.error === "string" ? row.error.slice(0, 500) : "",
@@ -723,6 +726,7 @@ function readPlan(value: unknown): PlanStep[] {
       id: row.id.slice(0, 40),
       title: typeof row.title === "string" ? row.title.slice(0, 160) : "",
       tool: row.tool as FleetTool,
+      ...(row.selection === "goal" || row.selection === "template" ? { selection: row.selection } : {}),
       dependsOn,
       ...(isRecord(row.inputFrom) && typeof row.inputFrom.stepId === "string" && (row.inputFrom.field === "output" || row.inputFrom.field === "recordIds")
         ? { inputFrom: { stepId: row.inputFrom.stepId, field: row.inputFrom.field } } : {}),
@@ -934,6 +938,8 @@ export function enqueueRun(ws: Workspace, agentId: string, goal: string, now?: s
   const text = goal.trim();
   if (!text) return { ok: false, error: "Write what the agent should do." };
   if (ws.runs.length >= 200) return { ok: false, error: "Too many runs are stored on this device." };
+  const unavailable = explicitGoalTools(text).filter(tool => !agent.tools.includes(tool));
+  if (unavailable.length) return { ok: false, error: `This goal requires ${unavailable.join(", ")}. Choose a bot with the required permission. The bot has no substitute workflow for this request.` };
   const at = stamp(now);
   const run: AgentRun = {
     id: runId,
@@ -991,7 +997,7 @@ export function enqueueConfiguredRun(ws: Workspace, agentId: string, goal: strin
 
 export function approveRunAction(ws: Workspace, runId: string, actionId: string, now = stamp()): Workspace {
   if (ws.halted) return ws;
-  return { ...ws, runs: ws.runs.map((run) => {
+  const runs = ws.runs.map((run) => {
     const pending = run.pendingApproval;
     const agent = ws.agents.find((item) => item.id === run.agentId && !item.archived);
     const step = run.plan[run.step];
@@ -1000,7 +1006,8 @@ export function approveRunAction(ws: Workspace, runId: string, actionId: string,
       return { ...run, pendingApproval: { ...pending, state: pending.expiresAt <= now ? "expired" as const : "superseded" as const, updatedAt: now }, state: "queued" as const, error: "The reviewed action expired or changed. Review the new request before it runs.", updatedAt: now };
     }
     return { ...run, approvedActions: [], pendingApproval: { ...pending, state: "granted" as const, updatedAt: now }, state: "queued" as const, error: "", updatedAt: now };
-  }) };
+  });
+  return runs.some((run, index) => run !== ws.runs[index]) ? { ...ws, runs } : ws;
 }
 
 export function assignDelegation(ws: Workspace, runId: string, index: number, agentId: string): Workspace {
@@ -1011,7 +1018,7 @@ export function assignDelegation(ws: Workspace, runId: string, index: number, ag
     if (!chosen) return run;
     const goals = delegationGoals(run.goal);
     if (!goals[index]) return run;
-    const assignments = goals.map((goal, i) => run.delegations?.[i] || { agentId: run.agentId, goal, allowedTools: run.plan.map((step) => step.tool).filter((tool) => tool !== "delegate"), maxSteps: run.maxSteps });
+    const assignments = goals.map((goal, i) => run.delegations?.[i] || { agentId: run.agentId, goal, allowedTools: (run.configuration?.tools ?? []).filter(tool => tool !== "delegate"), maxSteps: run.maxSteps });
     assignments[index] = { agentId, goal: goals[index], allowedTools: chosen.tools.filter((tool) => tool !== "delegate"), maxSteps: Math.min(run.maxSteps, chosen.maxSteps) };
     return { ...run, delegations: assignments, approvedActions: [] };
   }) };
@@ -1073,13 +1080,19 @@ export function resumeRun(ws: Workspace, runId: string): Workspace {
   return { ...ws, runs: ws.runs.map((run) => (run.id === runId && (run.state === "paused" || run.state === "waiting_external") && canTransition(run.state, "queued") ? { ...run, state: "queued", updatedAt: stamp() } : run)) };
 }
 
+function stopDispatchOutcome(run: AgentRun): NonNullable<AgentRun["stopDispatchOutcome"]> {
+  if (run.stopDispatchOutcome === "outcome_unknown" || run.externalOperation?.state === "dispatching" || run.externalOperation?.state === "unknown" || run.modelOperation?.state === "claimed") return "outcome_unknown";
+  if (run.stepResults?.length || run.externalOperation?.state === "succeeded") return "confirmed_result";
+  return run.state === "running" ? "outcome_unknown" : "not_dispatched";
+}
+
 export function cancelRun(ws: Workspace, runId: string, now?: string): Workspace {
   const at = stamp(now);
   const fleet = readFleet(ws);
   const runs = fleet.runs.map((run) => {
     if ((run.id !== runId && run.parentId !== runId) || !canTransition(run.state, "canceled")) return run;
     event(fleet, run.id, at, "canceled", "Stopped. Unfinished work was not marked complete.");
-    return { ...run, state: "canceled" as const, error: "Stopped.", updatedAt: at, leaseUntil: null, approvedActions: [], pendingApproval: run.pendingApproval ? { ...run.pendingApproval, state: "revoked" as const, updatedAt: at } : undefined };
+    return { ...run, state: "canceled" as const, error: "Local execution stopped. Completed actions were retained.", stopDispatchOutcome: stopDispatchOutcome(run), cancellation: { requestedAt: run.cancellation?.requestedAt ?? at, acknowledgedAt: at, scope: "local-worker" as const }, updatedAt: at, leaseUntil: null, approvedActions: [], pendingApproval: run.pendingApproval ? { ...run.pendingApproval, state: "revoked" as const, updatedAt: at } : undefined };
   });
   return withFleet(ws, { ...fleet, runs });
 }
@@ -1090,7 +1103,7 @@ export function haltFleet(ws: Workspace, now?: string): Workspace {
   const runs = fleet.runs.map((run) => {
     if (TERMINAL.has(run.state)) return run;
     event(fleet, run.id, at, "emergency_stop", "Emergency stop canceled this run.");
-    return { ...run, state: "canceled" as const, error: "Emergency stop is on.", updatedAt: at, leaseUntil: null, approvedActions: [], pendingApproval: run.pendingApproval ? { ...run.pendingApproval, state: "revoked" as const, updatedAt: at } : undefined };
+    return { ...run, state: "canceled" as const, error: stopDispatchOutcome(run) === "outcome_unknown" ? "Emergency stop is on. A previously dispatched operation may still complete." : "Emergency stop is on.", stopDispatchOutcome: stopDispatchOutcome(run), cancellation: { requestedAt: run.cancellation?.requestedAt ?? at, acknowledgedAt: at, scope: "local-worker" as const }, updatedAt: at, leaseUntil: null, approvedActions: [], pendingApproval: run.pendingApproval ? { ...run.pendingApproval, state: "revoked" as const, updatedAt: at } : undefined };
   });
   return withFleet(ws, { ...fleet, runs });
 }
@@ -1202,11 +1215,16 @@ export function tickFleet(ws: Workspace, env: TickEnv): Workspace {
       event(fleet, claimed.id, at, state, error);
       return finish(claimed, state, at, error);
     };
+    const removedTool = claimed.plan.slice(claimed.step).find(step => !agent.tools.includes(step.tool));
+    if (agent.projectId && !ws.projects.some(project => project.id === agent.projectId)) return fail("The scoped project is unavailable. No operation was dispatched.", "paused");
+    if (removedTool && claimed.configuration?.tools.includes(removedTool.tool)) return fail(`The bot no longer permits ${removedTool.tool}. The removed capability was not used.`, "paused");
     if (!validRunPlan(claimed, agent)) return fail("The saved plan is invalid or requests a capability this agent no longer has. Queue a reviewed replacement.");
     const currentConfiguration = configurationOf(agent);
     // A queued plan pins step order. Permission checks compare the capability set.
     const pinned = claimed.configuration!;
-    if (JSON.stringify({ ...pinned, tools: [...pinned.tools].sort() }) !== JSON.stringify({ ...currentConfiguration, tools: [...currentConfiguration.tools].sort() })) return fail("The agent configuration changed after this run was queued. Queue a new run with the reviewed configuration.");
+    const reorderedActivePlan = claimed.step > 0 && JSON.stringify(pinned.tools) !== JSON.stringify(currentConfiguration.tools);
+    const reviewedConfiguration = { ...currentConfiguration, version: reorderedActivePlan ? pinned.version : currentConfiguration.version, tools: [...currentConfiguration.tools].sort() };
+    if (JSON.stringify({ ...pinned, tools: [...pinned.tools].sort() }) !== JSON.stringify(reviewedConfiguration)) return fail("The agent configuration changed after this run was queued. Queue a new run with the reviewed configuration.");
     if (claimed.delegationScope && (agent.projectId !== claimed.delegationScope.projectId || (agent.memory === "on" && claimed.delegationScope.memory !== "on"))) return fail("The child agent's resource scope exceeds its delegation grant. Nothing was dispatched.");
     if (claimed.step >= claimed.plan.length) {
       if (!(claimed.stepResults?.length)) return fail("Execution ended without a confirmed tool result. The objective was not verified.");
@@ -1220,14 +1238,17 @@ export function tickFleet(ws: Workspace, env: TickEnv): Workspace {
       event(fleet, claimed.id, at, verification.state === "not_met" ? "failed" : "completed", verification.detail);
       return finish({ ...claimed, verification }, verification.state === "not_met" ? "failed" : "completed", at, verification.state === "not_met" ? verification.detail : "");
     }
-    if (claimed.step >= claimed.maxSteps) return fail("The step limit was reached with unfinished plan steps. Partial results were retained.");
+    if (claimed.step >= claimed.maxSteps) {
+      claimed.completion = { execution: "budget_exhausted", objective: "unverified", evidence: (claimed.stepResults ?? []).map(result => result.id) };
+      return fail(`The step limit was reached after ${claimed.step} of ${claimed.plan.length} planned steps. The run has unfinished work. Partial results were retained.`);
+    }
     const step = claimed.plan[claimed.step]!;
     const tool = step.tool;
-    if (step.dependsOn.some(id => !claimed.stepResults?.some(result => result.stepId === id))) return fail("A required prior step has no confirmed result. This step was not dispatched.");
+    if (step.dependsOn.some(id => !claimed.stepResults?.some(result => result.stepId === id))) return fail("A required step result is missing. This step was not dispatched.");
     const dependent = step.inputFrom && claimed.stepResults?.find(result => result.stepId === step.inputFrom!.stepId);
     const stepQuery = step.inputFrom ? (step.inputFrom.field === "recordIds" ? dependent?.recordIds?.join(" ") : dependent?.text) : claimed.goal;
     if (!stepQuery || (step.inputFrom && !step.dependsOn.includes(step.inputFrom.stepId))) return fail("A required step result is missing. The dependent operation was not dispatched.");
-    if (tool === "browser" && !destinationFor(claimed, step)) return fail("Choose one exact http(s) URL before requesting browser approval. No page was opened.");
+    if (tool === "browser" && !destinationFor(claimed, step)) return fail("Choose one explicit http(s) destination before requesting browser approval. No page was opened.", (step.input?.url ?? claimed.goal).split(/\s+/).some(part => HTTP.test(part)) ? "failed" : "waiting_external");
     const requiresReview = tool === "browser" || tool === "gmail_read" || tool === "gmail_send" || tool === "model" || (agent.approval === "ask" && tool !== "delegate");
     if (requiresReview) {
       const grant = claimed.pendingApproval;
@@ -1242,21 +1263,31 @@ export function tickFleet(ws: Workspace, env: TickEnv): Workspace {
       const kids = [...fleet.runs, ...extra].filter((item) => item.parentId === claimed.id);
       if (kids.length === 0) {
         const goals = delegationGoals(claimed.goal);
-        const childPlan = buildTaskPlan(claimed.goal, agent.tools.filter(item => item !== "delegate"));
-        if (!childPlan.length) return fail("Delegation has no permitted child capability. Choose a read or analysis tool before queueing.");
+        const childTools = agent.tools.filter(item => item !== "delegate");
+        if (!childTools.length) return fail("Delegation has no permitted child capability. Choose a read or analysis tool before queueing.");
         if (fleet.runs.length + extra.length + goals.length > 200) return fail("Delegation would exceed the saved run limit. Export and clear finished history before queueing a replacement.");
-        for (const part of goals) {
-          const specialist = selectDelegatedAgent(fleet.agents, agent, part);
+        const children: AgentRun[] = [];
+        for (const [index, part] of goals.entries()) {
+          const assignment = claimed.delegations?.[index];
+          const specialist = assignment ? fleet.agents.find(item => item.id === assignment.agentId) : selectDelegatedAgent(fleet.agents, agent, part);
+          if (!specialist || specialist.archived || specialist.projectId !== agent.projectId || (agent.memory === "off" && specialist.memory === "on") || (assignment && assignment.goal !== part)) return fail("The assigned specialist or its scope changed before dispatch.");
+          const allowedTools = specialist.tools.filter(tool => tool !== "delegate" && agent.tools.includes(tool) && (!assignment || assignment.allowedTools.includes(tool)));
+          const plan = buildTaskPlan(part.replace(/\bdelegate\b/gi, "").trim(), allowedTools);
+          if (!plan.length || explicitGoalTools(part).some(tool => tool !== "delegate" && !allowedTools.includes(tool))) return fail("The specialist lacks the required capability within the parent's authorization.");
+          if (plan.some(step => step.tool === "model") && (specialist.chatProvider !== agent.chatProvider || specialist.chatTier !== agent.chatTier)) return fail("The specialist does not use the reviewed model route.");
           const child: AgentRun = {
             ...claimed, id: nid("run"), parentId: claimed.id, depth: 1, goal: part, state: "queued", step: 0,
-            agentId: specialist.id, configuration: configurationOf(specialist), maxSteps: specialist.maxSteps,
-            delegationScope: { tools: agent.tools.filter(item => item !== "delegate"), projectId: agent.projectId, memory: agent.memory },
+            agentId: specialist.id, configuration: configurationOf(specialist), maxSteps: Math.min(specialist.maxSteps, claimed.maxSteps, assignment?.maxSteps ?? claimed.maxSteps),
+            delegationScope: { tools: allowedTools, projectId: agent.projectId, memory: agent.memory },
             workerId: null, leaseUntil: null, result: "", error: "", createdAt: at, updatedAt: at,
             approvedActions: [], pendingApproval: undefined, approvalHistory: [], stepResults: [],
             verification: { state: "unverified", detail: "The delegated objective has not been verified." },
-            plan: buildTaskPlan(part, specialist.tools.filter(item => item !== "delegate")),
+            plan,
           };
-          extra.push(child);
+          children.push(child);
+        }
+        extra.push(...children);
+        for (const child of children) {
           event(fleet, child.id, at, "task_created", "Delegated within the parent capability and project scope. No parent approval was inherited.");
         }
         event(fleet, claimed.id, at, "plan_generated", JSON.stringify(goals));
@@ -1274,7 +1305,7 @@ export function tickFleet(ws: Workspace, env: TickEnv): Workspace {
       const scope = {
         ...ws,
         projects: agent.projectId ? ws.projects.filter(project => project.id === agent.projectId) : ws.projects,
-        chats: (agent.projectId ? ws.chats.filter(chat => chat.projectId === agent.projectId) : ws.chats).filter(chat => !chat.temporary),
+        chats: (agent.projectId ? ws.chats.filter(chat => chat.projectId === agent.projectId) : ws.chats).filter(chat => !chat.temporary && !chat.archived),
         memories: agent.memory === "on" ? ws.memories.filter(note => note.scope === "global" || (note.scope === "project" && !!agent.projectId && note.projectId === agent.projectId)) : [],
       };
       claimed = consumeApproval(claimed, at);
@@ -1309,7 +1340,7 @@ export function tickFleet(ws: Workspace, env: TickEnv): Workspace {
         const detail = `${opened.title} ${url}\n${opened.excerpt}`;
         event(fleet, claimed.id, at, "tool_result", detail);
         return recordStep(claimed, step, at, detail, [{ id: evidenceId, title: opened.title, url }]);
-      } catch { return fail("The browser adapter threw after dispatch. Its outcome is unknown; inspect the browser before starting a replacement run."); }
+      } catch { claimed = { ...claimed, stopDispatchOutcome: "outcome_unknown", externalOperation: { id: claimed.id + ":" + step.id, stepId: step.id, state: "unknown", startedAt: at } }; return fail("The browser adapter threw after dispatch. Its outcome is unknown; inspect the browser before starting a replacement run."); }
     }
     const request: FleetExternalRequest = { runId: claimed.id, stepId: step.id, goal: claimed.goal, instructions: agent.instructions, projectId: agent.projectId, taskId: claimed.parentId ?? claimed.id, provider: agent.chatProvider ?? null, modelTier: agent.chatTier ?? null, results: claimed.stepResults ?? [], input: step.input };
     if (tool === "gmail_read" || tool === "gmail_send") {

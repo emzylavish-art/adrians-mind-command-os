@@ -3130,14 +3130,14 @@ function CommandSession({ account, accountPending }: { account: ReturnType<typeo
         preparedRevision = await memoryPolicyRevision(source, chat);
         if (generation !== turnGen.current || turnOwner.current !== draftOwner || signal.aborted || wsRef.current.halted) throw new Error("The conversation changed.");
       }
-    } catch {
+    } catch (cause) {
       clearTurnTimeout();
       if (generation === turnGen.current) {
         turnInFlight.current = false;
         turnAbort.current = null;
         setBusy(false);
         setTurnChat(null);
-        setError("This send could not be prepared. Verify the same account and current conversation before retrying. No model was called.");
+        setError(cause instanceof Error && cause.message === "The saved context changed." ? "The saved context changed. Review the current conversation before sending." : "This send could not be prepared. Verify the same account and current conversation before retrying. No model was called.");
       }
       return null;
     }

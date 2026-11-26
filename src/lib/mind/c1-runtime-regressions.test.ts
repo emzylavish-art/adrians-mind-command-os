@@ -10,7 +10,7 @@ import { modelExecutionPlan } from "./execution-plan.ts";
 
 const modules = ["grok", "openai", "gemini", "anthropic"].map((id) => ({ id, label: id, connected: true }));
 test("AA014 preserves provider counters, identity and finish metadata without fabricating missing counters", () => {
-  assert.deepEqual(normalizeProviderReceipt("anthropic", { id: "req", stop_reason: "end_turn", usage: { input_tokens: 12, output_tokens: 0 } }), { usage: { prompt_tokens: 12, completion_tokens: 0 }, requestId: "req", finishReason: "end_turn" });
+  assert.deepEqual(normalizeProviderReceipt("anthropic", { id: "req", stop_reason: "end_turn", usage: { input_tokens: 12, output_tokens: 0 } }), { usage: { prompt_tokens: 12, completion_tokens: 0 }, requestId: "req", finishReason: "end_turn", executionLocation: "hosted" });
   assert.deepEqual(normalizeProviderReceipt("gemini", { usageMetadata: { promptTokenCount: 4, candidatesTokenCount: -1 }, responseId: "g", candidates: [{ finishReason: "STOP" }] }).usage, { prompt_tokens: 4 });
   assert.equal(normalizeProviderReceipt("openai", { usage: { prompt_tokens: "20" } }).usage, null);
   assert.deepEqual(normalizeProviderReceipt("ollama", { prompt_eval_count: 7, eval_count: 9 }).usage, { prompt_tokens: 7, completion_tokens: 9 });
@@ -72,7 +72,7 @@ test("AA022 schedule retains individual occurrences and queues overlap", () => {
   added.ws.schedules[0]!.nextRunAt = "2026-01-01T00:00:00Z";
   const first = runDueSchedules(added.ws, "2026-01-01T00:00:00Z");
   const second = runDueSchedules(first, "2026-01-01T00:10:00Z");
-  assert.equal(second.runs.length, 1); assert.equal(second.schedules[0]?.occurrences?.length, 1); assert.match(second.schedules[0]!.lastError, /waiting/);
+  assert.equal(second.runs.length, 1); assert.equal(second.schedules[0]?.occurrences?.length, 1); assert.match(second.schedules[0]!.lastError, /waiting/i);
   second.schedules[0]!.overlapPolicy = "parallel";
   const parallel = runDueSchedules(second, "2026-01-01T00:10:00Z"); assert.equal(parallel.runs.length, 2); assert.equal(parallel.schedules[0]?.occurrences?.length, 2);
 });

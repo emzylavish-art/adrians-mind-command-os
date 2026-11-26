@@ -392,15 +392,15 @@ export async function refreshMcp(db: ConnectionDb | null, userId: string, id: st
   const row = loaded.servers.find((item) => item.id === id);
   if (!row?.url) return { id, label: "", kind: "mcp", host: "", method: "MCP", auth: "none", hasToken: false, state: "failed", operations: [], error: "That connection is not saved." };
   if (!row.enabled) return { ...toPublic(row)!, error: "This connection is disabled. No tools were refreshed." };
-  const publish = async (next: RegistryRecord) => await publishDiscovery(db, userId, row, next) ? toPublic(next)!
+  const publish = async (next: RegistryRecord, discoveryStatus?: CallStatus) => await publishDiscovery(db, userId, row, next) ? { ...toPublic(next)!, ...(discoveryStatus ? { discoveryStatus } : {}) }
     : { ...toPublic(row)!, state: "failed" as const, operations: [], error: "The connection changed during discovery. Refresh its current state." };
-  const fail = (state: ConnectionState, error: string) => publish({ ...row, state, error });
+  const fail = (state: ConnectionState, error: string, status?: CallStatus) => publish({ ...row, state, error }, status);
   const opened = await send(row.url, {
     method: "POST",
     headers: { "content-type": "application/json", accept: "application/json, text/event-stream", ...(row.token ? { authorization: `Bearer ${row.token}` } : {}) },
     body: JSON.stringify({ jsonrpc: "2.0", id: 1, method: "initialize", params: { protocolVersion: "2024-11-05", capabilities: {}, clientInfo: { name: "adrians-mind", version: "1" } } }),
   }, deps, row.token ?? "");
-  if (!opened.ok) return fail(opened.status === "unauthorized" ? "unauthorized" : "failed", opened.error);
+  if (!opened.ok) return fail(opened.status === "unauthorized" ? "unauthorized" : "failed", opened.error, opened.status);
   if (!initialized(opened.text) && !opened.sessionId) return fail("failed", "The MCP initialize handshake failed. The connection is not connected.");
   const meta = rpcEnvelope(opened.text).result;
   const version = meta && typeof meta === "object" && typeof (meta as { protocolVersion?: unknown }).protocolVersion === "string"
@@ -416,7 +416,7 @@ export async function refreshMcp(db: ConnectionDb | null, userId: string, id: st
       headers: { "content-type": "application/json", ...protocolHeaders, ...(row.token ? { authorization: `Bearer ${row.token}` } : {}) },
       body: JSON.stringify({ jsonrpc: "2.0", method: "notifications/initialized" }),
     }, deps, row.token ?? "");
-    if (!notified.ok) return fail("failed", "The MCP initialized notification was not accepted.");
+    if (!notified.ok) return fail("failed", notified.error, notified.status);
   }
   const operations: PublicOperation[] = [];
   const cursors = new Set<string>();
@@ -427,7 +427,7 @@ export async function refreshMcp(db: ConnectionDb | null, userId: string, id: st
       headers: { "content-type": "application/json", accept: "application/json, text/event-stream", ...protocolHeaders, ...(row.token ? { authorization: `Bearer ${row.token}` } : {}) },
       body: JSON.stringify({ jsonrpc: "2.0", id: 2 + cursors.size, method: "tools/list", params: cursor ? { cursor } : {} }),
     }, deps, row.token ?? "");
-    if (!listed.ok) return fail(listed.status === "unauthorized" ? "unauthorized" : "failed", listed.error);
+    if (!listed.ok) return fail(listed.status === "unauthorized" ? "unauthorized" : "failed", listed.error, listed.status);
     const data = rpcEnvelope(listed.text).result as { tools?: Parameters<typeof operationFromTool>[0][]; nextCursor?: unknown } | undefined;
     if (!Array.isArray(data?.tools)) return fail("failed", "Tool discovery returned an unreadable page.");
     operations.push(...data.tools.map(operationFromTool).filter((item): item is PublicOperation => Boolean(item)));

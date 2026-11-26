@@ -9,10 +9,11 @@ import { scheduleRecovery } from "./schedule-recovery.ts";
 const NOW = "2026-11-25T12:00:00.000Z";
 const NEXT = "2026-11-25T12:01:00.000Z";
 const env = (now = NOW) => ({ now, workerId: "audit-worker" });
-function queued(template = "Personal assistant", goal = "alpha") {
+function queued(template = "Personal assistant", goal = "alpha", memory?: "on") {
   const made = addAgentFromTemplate(emptyWorkspace(), template, NOW);
   if (!made.ok) throw new Error(made.error);
   assert.equal(made.ok, true);
+  if (memory) made.agent.memory = memory;
   const result = enqueueRun(made.ws, made.agent.id, goal, NOW);
   if (!result.ok) throw new Error(result.error);
   return result.ws;
@@ -44,7 +45,7 @@ describe("C2 fleet execution and approval regressions", () => {
 
   it("AA-101/104 passes the approved objective to a read-page driver and retains its evidence", () => {
     let ws = tickFleet(queued("Browser operator", "Inspect https://example.com/harbor for opening hours"), env());
-    ws = approveRunAction(ws, ws.runs[0]!.id, "browser", NOW);
+    ws = approveRunAction(ws, ws.runs[0]!.id, ws.runs[0]!.pendingApproval!.id, NOW);
     ws = tickFleet(ws, { ...env(NEXT), browser: (url, objective) => {
       assert.equal(url, "https://example.com/harbor");
       assert.equal(objective.capability, "read_page");
@@ -56,7 +57,7 @@ describe("C2 fleet execution and approval regressions", () => {
     const missing = tickFleet(queued("Browser operator", "Read the page for opening hours"), env());
     assert.equal(missing.runs[0]!.state, "waiting_external");
     assert.match(missing.runs[0]!.error, /explicit http\(s\) destination/);
-    assert.deepEqual(missing.runs[0]!.approvals, []);
+    assert.deepEqual(missing.runs[0]!.approvalHistory, []);
   });
 
   it("AA-033 executes the saved tool order even if the live list is reordered", () => {
@@ -79,10 +80,9 @@ describe("C2 fleet execution and approval regressions", () => {
   });
 
   it("AA-035 passes a declared prior record identity and blocks missing dependencies", () => {
-    let ws = queued();
+    let ws = queued("Personal assistant", "alpha", "on");
     ws.projects = [{ id: "PROJECT_ALPHA", name: "Alpha", description: "", createdAt: NOW }];
     ws.runs[0]!.plan[1] = { id: "step-2", tool: "search_notes", need: "none", title: "Use selected identity", dependsOn: ["step-1"], inputFrom: { stepId: "step-1", field: "recordIds" } };
-    ws.agents[0]!.memory = "on";
     ws.memories = [{ id: "n", text: "PROJECT_ALPHA evidence", source: "fixture", scope: "global", projectId: null, chatId: null, createdAt: NOW, updatedAt: NOW, archived: false, versions: [] }];
     ws = tickFleet(ws, env());
     assert.deepEqual(ws.runs[0]!.stepResults?.[0]?.recordIds, ["PROJECT_ALPHA"]);
@@ -116,7 +116,7 @@ describe("C2 fleet execution and approval regressions", () => {
     assert.equal(approveRunAction(ws, id, "gmail_send", NOW), ws);
     const halted = { ...ws, halted: true };
     assert.equal(approveRunAction(halted, id, "browser", NOW), halted);
-    ws = approveRunAction(ws, id, "browser", NOW);
+    ws = approveRunAction(ws, id, ws.runs[0]!.pendingApproval!.id, NOW);
     assert.equal(ws.runs[0]!.state, "queued");
     ws.runs[0]!.goal = "https://example.com/b";
     let calls = 0;
@@ -124,10 +124,10 @@ describe("C2 fleet execution and approval regressions", () => {
     ws = tickFleet(ws, { ...env(NEXT), browser: driver });
     assert.equal(ws.runs[0]!.state, "waiting_approval");
     assert.equal(calls, 0);
-    ws = approveRunAction(ws, id, "browser", NEXT);
+    ws = approveRunAction(ws, id, ws.runs[0]!.pendingApproval!.id, NEXT);
     ws = tickFleet(ws, { ...env(NEXT), browser: driver });
     assert.equal(calls, 1);
-    assert.equal(ws.runs[0]!.approvals?.[0]?.consumedAt, NEXT);
+    assert.equal(ws.runs[0]!.approvalHistory?.find(entry => entry.state === "consumed")?.updatedAt, NEXT);
     ws = tickFleet(ws, env(NEXT));
     assert.equal(approveRunAction(ws, id, "browser", NEXT), ws);
   });
@@ -139,7 +139,7 @@ describe("C2 fleet execution and approval regressions", () => {
     const browser = () => { calls++; return { ok: true as const, title: "fixture", excerpt: "" }; };
     ws = tickFleet(ws, { ...env(), browser });
     assert.equal(ws.runs[0]!.state, "waiting_approval");
-    ws = approveRunAction(ws, ws.runs[0]!.id, "browser", NOW);
+    ws = approveRunAction(ws, ws.runs[0]!.id, ws.runs[0]!.pendingApproval!.id, NOW);
     ws = tickFleet(ws, { ...env("2026-11-25T12:11:00.000Z"), browser });
     assert.equal(ws.runs[0]!.state, "waiting_approval");
     assert.equal(calls, 0);
@@ -147,23 +147,23 @@ describe("C2 fleet execution and approval regressions", () => {
 
   it("AA-059 a driver failure after dispatch consumes approval and records an unknown external outcome", () => {
     let ws = tickFleet(queued("Browser operator", "https://example.com/a"), env());
-    ws = approveRunAction(ws, ws.runs[0]!.id, "browser", NOW);
+    ws = approveRunAction(ws, ws.runs[0]!.id, ws.runs[0]!.pendingApproval!.id, NOW);
     let calls = 0;
     ws = tickFleet(ws, { ...env(NEXT), browser: () => { calls++; throw new Error("fixture driver closed"); } });
     assert.equal(calls, 1);
     assert.equal(ws.runs[0]!.state, "failed");
-    assert.equal(ws.runs[0]!.cancellation, "outcome_unknown");
-    assert.equal(ws.runs[0]!.approvals?.[0]?.consumedAt, NEXT);
+    assert.equal(ws.runs[0]!.stopDispatchOutcome, "outcome_unknown");
+    assert.equal(ws.runs[0]!.approvalHistory?.find(entry => entry.state === "consumed")?.updatedAt, NEXT);
     assert.equal(tickFleet(ws, env(NEXT)), ws);
   });
 
   it("AA-059 differentiates a stopped queued run from a potentially dispatched run", () => {
     const ws = queued();
     const id = ws.runs[0]!.id;
-    assert.equal(cancelRun(ws, id, NOW).runs[0]!.cancellation, "not_dispatched");
+    assert.equal(cancelRun(ws, id, NOW).runs[0]!.stopDispatchOutcome, "not_dispatched");
     ws.runs[0]!.state = "running";
     const stopped = haltFleet({ ...ws, halted: true }, NEXT);
-    assert.equal(stopped.runs[0]!.cancellation, "outcome_unknown");
+    assert.equal(stopped.runs[0]!.stopDispatchOutcome, "outcome_unknown");
     assert.match(stopped.runs[0]!.error, /previously dispatched/);
   });
 

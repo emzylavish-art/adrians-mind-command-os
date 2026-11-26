@@ -447,6 +447,8 @@ export async function handleMindTurn(request: Request): Promise<Response> {
   // write fails. The initial durable record remains explicitly unconfirmed.
   await recordUsage(accounted).catch(() => undefined);
   response.headers.set("x-mind-dispatch", dispatched ? "sent" : streaming ? "pending" : "none");
+  if (answerDispatched || !streaming) response.headers.set("x-mind-primary-dispatched", answerDispatched ? "1" : "0");
+  else response.headers.delete("x-mind-primary-dispatched");
   response = trackUsageResponse(response, accounted, (receipt) => recordUsage({ ...receipt, dispatched: answerDispatched }));
   // The insert is the protection. A failed audit update must not hide a real reply.
   try {

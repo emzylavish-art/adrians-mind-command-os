@@ -6,7 +6,7 @@ import { scheduleOccurrences } from "./schedule-policy.ts";
 
 const NOW = "2026-11-25T12:00:00.000Z";
 const LATER = "2026-11-25T12:01:00.000Z";
-function queued(tools: FleetTool[], goal = "Read https://example.test/a", extra = {}) {
+function queued(tools: FleetTool[], goal = tools.includes("browser") ? "Read https://example.test/a" : "Fixture task", extra = {}) {
   const agent = addCustomAgent(emptyWorkspace(), { name: "Fixture", instructions: "Only use approved resources.", tools, ...extra }, NOW);
   assert.ok(agent.ok);
   const run = enqueueRun(agent.ws, agent.agent.id, goal, NOW);
@@ -152,7 +152,7 @@ test("AA218/219: a successful empty search is a structured successful result", (
 });
 
 test("AA219/217: the model receives structured sources and records the selected provider", () => {
-  let ws = tick(queued(["web_search", "model"], "Analyze fixture", { chatProvider: "gemini" }), { search: () => ({ ok: true, citations: [{ id: "S1", title: "Source", url: "https://example.test", excerpt: "UNIQUE_PASSAGE" }], error: "" }) });
+  let ws = tick(queued(["web_search", "model"], "Research and analyze fixture", { chatProvider: "gemini" }), { search: () => ({ ok: true, citations: [{ id: "S1", title: "Source", url: "https://example.test", excerpt: "UNIQUE_PASSAGE" }], error: "" }) });
   ws = tick(ws);
   ws = approve(ws);
   ws = tick(ws, { model: request => {

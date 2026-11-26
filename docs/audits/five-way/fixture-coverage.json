@@ -1,0 +1,3054 @@
+{
+  "commit": "70cded50c11e89fb2502c296346bae4e32777a51",
+  "cases": "evidence/70cded5-test-cases.json",
+  "meaning": "Source-linked suite lookup. Each path resolves to exact test names, outcomes and lines in the case inventory. An empty array means no unique executable file resolved from the source reference. A passing suite alone does not establish the finding or a deployed behavior.",
+  "findings": {
+    "C1/AA-001 @ C1/M01": [
+      "src/lib/mind/connectors/c1-notion-recovery.test.ts"
+    ],
+    "C1/AA-002 @ C1/M02": [
+      "src/lib/mind/connectors/c1-identity-contract.test.ts"
+    ],
+    "C1/AA-003 @ C1/M03": [
+      "src/lib/mind/voice/provider-fallback.test.ts",
+      "src/lib/mind/voice/transcription-policy.test.ts"
+    ],
+    "C1/AA-004 @ C1/M03": [
+      "src/lib/mind/voice/selected-route.test.ts"
+    ],
+    "C1/AA-005 @ C1/M04": [
+      "src/lib/mind/connected-mcp.test.ts"
+    ],
+    "C1/AA-006 @ C1/M04": [],
+    "C1/AA-007 @ C1/M05": [],
+    "C1/AA-008 @ C1/M05": [],
+    "C1/AA-009 @ C1/M05": [
+      "src/lib/mind/memory/dispatch-policy.test.ts"
+    ],
+    "C1/AA-010 @ C1/M06": [],
+    "C1/AA-011 @ C1/M06": [
+      "src/lib/mind/workspace-reconciliation.test.ts"
+    ],
+    "C1/AA-012 @ C1/M06": [],
+    "C1/AA-013 @ C1/M06": [],
+    "C1/AA-014 @ C1/M07": [
+      "src/lib/mind/c1-runtime-regressions.test.ts"
+    ],
+    "C1/AA-015 @ C1/M07": [],
+    "C1/AA-016 @ C1/M07": [],
+    "C1/AA-017 @ C1/M07": [],
+    "C1/AA-018 @ C1/M07": [],
+    "C1/AA-019 @ C1/M08": [],
+    "C1/AA-020 @ C1/M08": [],
+    "C1/AA-021 @ C1/M08": [],
+    "C1/AA-022 @ C1/M08": [],
+    "C1/AA-023 @ C1/M08": [],
+    "C1/AA-024 @ C1/M09": [],
+    "C1/AA-025 @ C1/M09": [],
+    "C1/AA-026 @ C1/M09": [],
+    "C1/AA-027 @ C1/M09": [],
+    "C1/AA-028 @ C1/M09": [],
+    "C1/AA-029 @ C1/M09": [],
+    "C1/AA-030 @ C1/M10": [],
+    "C1/AA-031 @ C1/M10": [],
+    "C1/AA-032 @ C1/M10": [],
+    "C1/AA-033 @ C1/M10": [],
+    "C1/AA-034 @ C1/M10": [],
+    "C1/AA-035 @ C1/M10": [],
+    "C1/AA-036 @ C1/M11": [],
+    "C1/AA-037 @ C1/M11": [],
+    "C1/AA-038 @ C1/M11": [],
+    "C1/AA-039 @ C1/M11": [],
+    "C1/AA-040 @ C1/M11": [],
+    "C1/AA-041 @ C1/M11": [],
+    "C1/AA-042 @ C1/M11": [],
+    "C1/AA-043 @ C1/M12": [],
+    "C1/AA-044 @ C1/M12": [],
+    "C1/AA-045 @ C1/M12": [],
+    "C1/AA-046 @ C1/M12": [],
+    "C1/AA-047 @ C1/M12": [],
+    "C1/AA-048 @ C1/M12": [],
+    "C1/AA-049 @ C1/M12": [],
+    "C1/AA-050 @ C1/M13": [
+      "src/lib/mind/reading-position.test.ts"
+    ],
+    "C1/AA-051 @ C1/M13": [
+      "src/lib/mind/reading-position.test.ts"
+    ],
+    "C1/AA-052 @ C1/M13": [],
+    "C1/AA-053 @ C1/M13": [],
+    "C1/AA-054 @ C1/M13": [],
+    "C1/AA-055 @ C1/M13": [
+      "src/components/mind/view-scroll-position.test.ts"
+    ],
+    "C1/AA-056 @ C1/M14": [
+      "src/lib/auth/identity-continuity.test.ts"
+    ],
+    "C1/AA-057 @ C1/M14": [],
+    "C1/AA-058 @ C1/M14": [],
+    "C1/AA-059 @ C1/M14": [],
+    "C1/AA-060 @ C1/M14": [],
+    "C1/AA-061 @ C1/M14": [],
+    "C1/AA-062 @ C1/M15": [],
+    "C1/AA-063 @ C1/M15": [],
+    "C1/AA-064 @ C1/M15": [],
+    "C1/AA-065 @ C1/M15": [],
+    "C1/AA-066 @ C1/M15": [
+      "src/lib/mind/browser-work-pump.test.ts"
+    ],
+    "C1/AA-067 @ C1/M15": [],
+    "C1/AA-068 @ C1/M15": [
+      "src/lib/mind/browser-work-pump.test.ts"
+    ],
+    "C1/AA-069 @ C1/M16": [
+      "src/lib/mind/failure-envelope.test.ts"
+    ],
+    "C1/AA-070 @ C1/M16": [],
+    "C1/AA-071 @ C1/M16": [],
+    "C1/AA-072 @ C1/M16": [],
+    "C1/AA-073 @ C1/M16": [],
+    "C1/AA-074 @ C1/M16": [],
+    "C1/AA-075 @ C1/M17": [],
+    "C1/AA-076 @ C1/M17": [],
+    "C1/AA-077 @ C1/M17": [],
+    "C1/AA-078 @ C1/M17": [],
+    "C1/AA-079 @ C1/M17": [],
+    "C1/AA-080 @ C1/M17": [],
+    "C1/AA-081 @ C1/M17": [],
+    "C1/AA-082 @ C1/M18": [
+      "src/lib/mind/media/operations.test.ts"
+    ],
+    "C1/AA-083 @ C1/M18": [
+      "src/components/mind/retained-video.test.ts"
+    ],
+    "C1/AA-084 @ C1/M18": [
+      "src/lib/mind/media/video-poll.test.ts"
+    ],
+    "C1/AA-085 @ C1/M18": [
+      "src/lib/mind/media/video-progress.test.ts"
+    ],
+    "C1/AA-086 @ C1/M18": [
+      "src/lib/mind/media/operations.test.ts"
+    ],
+    "C1/AA-087 @ C1/M18": [
+      "src/lib/mind/media/asset-lifecycle.test.ts"
+    ],
+    "C1/AA-088 @ C1/M18": [
+      "src/lib/mind/media/account-blob-isolation.test.ts"
+    ],
+    "C1/AA-089 @ C1/M18": [
+      "src/lib/mind/media/asset-lifecycle.test.ts"
+    ],
+    "C1/AA-090 @ C1/M18": [
+      "src/lib/mind/media/asset-lifecycle.test.ts"
+    ],
+    "C1/AA-091 @ C1/M19": [],
+    "C1/AA-092 @ C1/M19": [],
+    "C1/AA-093 @ C1/M19": [],
+    "C1/AA-094 @ C1/M19": [],
+    "C1/AA-095 @ C1/M19": [],
+    "C1/AA-096 @ C1/M19": [],
+    "C1/AA-097 @ C1/M20": [],
+    "C1/AA-098 @ C1/M20": [
+      "scripts/visual/policy.test.mjs"
+    ],
+    "C1/AA-099 @ C1/M20": [
+      "scripts/visual/fixture-states.test.mjs",
+      "scripts/visual/policy.test.mjs"
+    ],
+    "C1/AA-100 @ C1/M20": [
+      "scripts/visual/fixture-states.test.mjs"
+    ],
+    "C1/AA-101 @ C1/M20": [
+      "scripts/verification/evidence.test.mjs"
+    ],
+    "C1/AA-102 @ C1/M20": [
+      "scripts/verification/evidence.test.mjs"
+    ],
+    "C1/AA-103 @ C1/M20": [
+      "scripts/verification/evidence.test.mjs"
+    ],
+    "C1/AA-104 @ C1/M21": [],
+    "C1/AA-105 @ C1/M21": [],
+    "C1/AA-106 @ C1/M21": [],
+    "C1/AA-107 @ C1/M21": [],
+    "C1/AA-108 @ C1/M21": [],
+    "C1/AA-109 @ C1/M22": [
+      "src/lib/mind/operation-scope.test.ts"
+    ],
+    "C1/AA-110 @ C1/M22": [
+      "src/lib/mind/operation-scope.test.ts"
+    ],
+    "C1/AA-111 @ C1/M22": [
+      "src/lib/mind/operation-scope.test.ts"
+    ],
+    "C1/AA-112 @ C1/M22": [],
+    "C1/AA-113 @ C1/M22": [
+      "src/lib/mind/operation-scope.test.ts"
+    ],
+    "C1/AA-114 @ C1/M22": [
+      "src/lib/mind/operation-scope.test.ts"
+    ],
+    "C2/AA-001 @ C2/M01": [
+      "src/lib/mind/notion-entrypoint-recovery.test.ts",
+      "src/lib/mind/notion-recovery.test.ts"
+    ],
+    "C2/AA-002 @ C2/M01": [
+      "src/lib/mind/durable-recovery.test.ts",
+      "src/lib/mind/notion-entrypoint-recovery.test.ts",
+      "src/lib/mind/notion-recovery.test.ts"
+    ],
+    "C2/AA-003 @ C2/M02": [
+      "src/components/mind/dashboard-3d/c2-dashboard-recovery.test.ts",
+      "src/components/mind/dashboard-3d/mobile-structure-wired.test.ts",
+      "src/components/mind/dashboard-3d/motion/reduced-motion.test.ts",
+      "src/components/mind/dashboard-3d/postfx/context-loss.test.ts",
+      "src/lib/mind/dashboard/graph-filters.test.ts",
+      "src/lib/mind/dashboard/spend.test.ts",
+      "src/lib/mind/dashboard/time-scrub.test.ts"
+    ],
+    "C2/AA-004 @ C2/M02": [
+      "src/components/mind/dashboard-3d/c2-dashboard-recovery.test.ts",
+      "src/components/mind/dashboard-3d/mobile-structure-wired.test.ts",
+      "src/components/mind/dashboard-3d/motion/reduced-motion.test.ts",
+      "src/components/mind/dashboard-3d/postfx/context-loss.test.ts",
+      "src/lib/mind/dashboard/graph-filters.test.ts",
+      "src/lib/mind/dashboard/spend.test.ts",
+      "src/lib/mind/dashboard/time-scrub.test.ts"
+    ],
+    "C2/AA-005 @ C2/M03": [
+      "src/lib/mind/c2-workspace-recovery.test.ts",
+      "src/lib/mind/skills.test.ts"
+    ],
+    "C2/AA-006 @ C2/M03": [
+      "src/lib/mind/c2-workspace-recovery.test.ts",
+      "src/lib/mind/skills.test.ts"
+    ],
+    "C2/AA-007 @ C2/M03": [
+      "src/lib/mind/c2-workspace-recovery.test.ts",
+      "src/lib/mind/retry-fidelity.test.ts"
+    ],
+    "C2/AA-008 @ C2/M04": [
+      "src/components/mind/dashboard-3d/c2-dashboard-recovery.test.ts",
+      "src/components/mind/dashboard-3d/mobile-structure-wired.test.ts",
+      "src/components/mind/dashboard-3d/motion/reduced-motion.test.ts",
+      "src/components/mind/dashboard-3d/postfx/context-loss.test.ts",
+      "src/lib/mind/dashboard/graph-filters.test.ts",
+      "src/lib/mind/dashboard/spend.test.ts",
+      "src/lib/mind/dashboard/time-scrub.test.ts"
+    ],
+    "C2/AA-009 @ C2/M04": [
+      "src/components/mind/dashboard-3d/c2-dashboard-recovery.test.ts",
+      "src/components/mind/dashboard-3d/mobile-structure-wired.test.ts",
+      "src/components/mind/dashboard-3d/motion/reduced-motion.test.ts",
+      "src/components/mind/dashboard-3d/postfx/context-loss.test.ts",
+      "src/lib/mind/dashboard/graph-filters.test.ts",
+      "src/lib/mind/dashboard/spend.test.ts",
+      "src/lib/mind/dashboard/time-scrub.test.ts"
+    ],
+    "C2/AA-010 @ C2/M04": [
+      "src/components/mind/dashboard-3d/c2-dashboard-recovery.test.ts",
+      "src/components/mind/dashboard-3d/mobile-structure-wired.test.ts",
+      "src/components/mind/dashboard-3d/motion/reduced-motion.test.ts",
+      "src/components/mind/dashboard-3d/postfx/context-loss.test.ts",
+      "src/lib/mind/dashboard/graph-filters.test.ts",
+      "src/lib/mind/dashboard/spend.test.ts",
+      "src/lib/mind/dashboard/time-scrub.test.ts"
+    ],
+    "C2/AA-011 @ C2/M05": [
+      "src/lib/mind/c2-workspace-recovery.test.ts"
+    ],
+    "C2/AA-012 @ C2/M05": [
+      "src/lib/mind/c2-workspace-recovery.test.ts",
+      "src/lib/mind/workspace.test.ts"
+    ],
+    "C2/AA-013 @ C2/M05": [
+      "src/lib/mind/c2-workspace-recovery.test.ts"
+    ],
+    "C2/AA-014 @ C2/M06": [
+      "src/lib/mind/c2-interface-recovery.test.ts",
+      "src/lib/mind/voice/staged-pipeline.test.ts"
+    ],
+    "C2/AA-015 @ C2/M06": [
+      "src/lib/mind/voice/staged-pipeline.test.ts"
+    ],
+    "C2/AA-016 @ C2/M06": [
+      "src/lib/mind/voice/staged-pipeline.test.ts"
+    ],
+    "C2/AA-017 @ C2/M06": [
+      "src/lib/mind/c2-interface-recovery.test.ts",
+      "src/lib/mind/voice/staged-pipeline.test.ts"
+    ],
+    "C2/AA-018 @ C2/M07": [
+      "src/lib/mind/connection-board.test.ts",
+      "src/lib/mind/connectors/token-recovery.test.ts",
+      "src/lib/mind/service-board-status.test.ts"
+    ],
+    "C2/AA-019 @ C2/M07": [
+      "src/lib/mind/intent.test.ts"
+    ],
+    "C2/AA-020 @ C2/M07": [
+      "src/lib/mind/connection-board.test.ts",
+      "src/lib/mind/connectors/token-recovery.test.ts",
+      "src/lib/mind/service-board-status.test.ts"
+    ],
+    "C2/AA-021 @ C2/M08": [
+      "src/lib/mind/bot-model.test.ts",
+      "src/lib/mind/c2-workspace-recovery.test.ts"
+    ],
+    "C2/AA-022 @ C2/M08": [
+      "src/lib/mind/c2-workspace-recovery.test.ts"
+    ],
+    "C2/AA-023 @ C2/M08": [
+      "src/lib/mind/c2-workspace-recovery.test.ts",
+      "src/lib/mind/fleet-audit-recovery.test.ts",
+      "src/lib/mind/fleet.test.ts"
+    ],
+    "C2/AA-024 @ C2/M08": [
+      "src/lib/mind/c2-workspace-recovery.test.ts"
+    ],
+    "C2/AA-025 @ C2/M09": [
+      "src/lib/mind/fleet-audit-recovery.test.ts",
+      "src/lib/mind/fleet.test.ts"
+    ],
+    "C2/AA-026 @ C2/M09": [
+      "src/lib/mind/fleet-audit-recovery.test.ts",
+      "src/lib/mind/fleet.test.ts"
+    ],
+    "C2/AA-027 @ C2/M09": [
+      "src/lib/mind/fleet-audit-recovery.test.ts",
+      "src/lib/mind/fleet.test.ts"
+    ],
+    "C2/AA-028 @ C2/M09": [
+      "src/lib/mind/fleet-audit-recovery.test.ts",
+      "src/lib/mind/fleet.test.ts",
+      "src/lib/mind/workspace-archive-manifest.test.ts"
+    ],
+    "C2/AA-029 @ C2/M10": [
+      "src/lib/mind/c2-interface-recovery.test.ts",
+      "src/lib/mind/notion-entrypoint-recovery.test.ts"
+    ],
+    "C2/AA-030 @ C2/M10": [
+      "src/lib/mind/c2-interface-recovery.test.ts"
+    ],
+    "C2/AA-031 @ C2/M10": [
+      "src/lib/mind/c2-interface-recovery.test.ts",
+      "src/lib/mind/durable-recovery.test.ts",
+      "src/lib/mind/notion-entrypoint-recovery.test.ts"
+    ],
+    "C2/AA-032 @ C2/M10": [
+      "src/components/mind/c2-command-entrypoints.test.ts",
+      "src/lib/mind/c2-interface-recovery.test.ts"
+    ],
+    "C2/AA-033 @ C2/M11": [
+      "src/lib/mind/fleet-audit-recovery.test.ts",
+      "src/lib/mind/fleet.test.ts"
+    ],
+    "C2/AA-034 @ C2/M11": [
+      "src/lib/mind/fleet-audit-recovery.test.ts",
+      "src/lib/mind/fleet.test.ts"
+    ],
+    "C2/AA-035 @ C2/M11": [
+      "src/lib/mind/fleet-audit-recovery.test.ts",
+      "src/lib/mind/fleet.test.ts"
+    ],
+    "C2/AA-036 @ C2/M11": [
+      "src/lib/mind/fleet-audit-recovery.test.ts",
+      "src/lib/mind/fleet.test.ts"
+    ],
+    "C2/AA-037 @ C2/M11": [
+      "src/lib/mind/fleet-audit-recovery.test.ts",
+      "src/lib/mind/fleet.test.ts"
+    ],
+    "C2/AA-038 @ C2/M12": [
+      "src/lib/mind/research-audit-recovery.test.ts",
+      "src/lib/mind/research-failure-action.test.ts",
+      "src/lib/mind/research.test.ts"
+    ],
+    "C2/AA-039 @ C2/M12": [
+      "src/lib/mind/research-audit-recovery.test.ts",
+      "src/lib/mind/research-failure-action.test.ts",
+      "src/lib/mind/research.test.ts"
+    ],
+    "C2/AA-040 @ C2/M12": [
+      "src/lib/mind/research-audit-recovery.test.ts",
+      "src/lib/mind/research-failure-action.test.ts",
+      "src/lib/mind/research.test.ts"
+    ],
+    "C2/AA-041 @ C2/M12": [
+      "src/lib/mind/research-audit-recovery.test.ts",
+      "src/lib/mind/research-failure-action.test.ts",
+      "src/lib/mind/research.test.ts"
+    ],
+    "C2/AA-042 @ C2/M12": [
+      "src/lib/mind/research-audit-recovery.test.ts",
+      "src/lib/mind/research-failure-action.test.ts",
+      "src/lib/mind/research.test.ts"
+    ],
+    "C2/AA-043 @ C2/M12": [
+      "src/lib/mind/research-audit-recovery.test.ts",
+      "src/lib/mind/research-failure-action.test.ts",
+      "src/lib/mind/research.test.ts"
+    ],
+    "C2/AA-044 @ C2/M13": [
+      "src/lib/mind/c2-model-provider-contract.test.ts",
+      "src/lib/mind/catalog-modules.test.ts",
+      "src/lib/mind/connected-mcp.test.ts",
+      "src/lib/mind/live-turn.test.ts",
+      "src/lib/mind/mcp-selected.test.ts",
+      "src/lib/mind/model-consult.test.ts",
+      "src/lib/mind/provider-catalog.test.ts",
+      "src/lib/mind/provider-http.test.ts",
+      "src/lib/mind/stream.test.ts"
+    ],
+    "C2/AA-045 @ C2/M13": [
+      "src/lib/mind/c2-model-provider-contract.test.ts",
+      "src/lib/mind/catalog-modules.test.ts",
+      "src/lib/mind/live-turn.test.ts",
+      "src/lib/mind/model-consult.test.ts",
+      "src/lib/mind/provider-catalog.test.ts",
+      "src/lib/mind/stream.test.ts"
+    ],
+    "C2/AA-046 @ C2/M13": [
+      "src/lib/mind/c2-model-provider-contract.test.ts",
+      "src/lib/mind/catalog-modules.test.ts",
+      "src/lib/mind/live-turn.test.ts",
+      "src/lib/mind/model-consult.test.ts",
+      "src/lib/mind/provider-catalog.test.ts",
+      "src/lib/mind/stream.test.ts"
+    ],
+    "C2/AA-047 @ C2/M13": [
+      "src/lib/mind/c2-model-provider-contract.test.ts",
+      "src/lib/mind/catalog-modules.test.ts",
+      "src/lib/mind/live-turn.test.ts",
+      "src/lib/mind/model-consult.test.ts",
+      "src/lib/mind/provider-catalog.test.ts",
+      "src/lib/mind/stream.test.ts"
+    ],
+    "C2/AA-048 @ C2/M13": [
+      "src/lib/mind/c2-model-provider-contract.test.ts",
+      "src/lib/mind/catalog-modules.test.ts",
+      "src/lib/mind/live-turn.test.ts",
+      "src/lib/mind/model-consult.test.ts",
+      "src/lib/mind/provider-catalog.test.ts",
+      "src/lib/mind/stream.test.ts"
+    ],
+    "C2/AA-049 @ C2/M13": [
+      "src/lib/mind/c2-model-provider-contract.test.ts",
+      "src/lib/mind/catalog-modules.test.ts",
+      "src/lib/mind/live-turn.test.ts",
+      "src/lib/mind/model-consult.test.ts",
+      "src/lib/mind/provider-catalog.test.ts",
+      "src/lib/mind/stream.test.ts"
+    ],
+    "C2/AA-050 @ C2/M14": [
+      "src/lib/mind/c2-workspace-recovery.test.ts",
+      "src/lib/mind/workspace.test.ts"
+    ],
+    "C2/AA-051 @ C2/M14": [
+      "src/lib/mind/c2-workspace-recovery.test.ts",
+      "src/lib/mind/fleet-audit-recovery.test.ts",
+      "src/lib/mind/workspace-archive-manifest.test.ts"
+    ],
+    "C2/AA-052 @ C2/M14": [
+      "src/lib/mind/c2-workspace-recovery.test.ts",
+      "src/lib/mind/workspace-archive-manifest.test.ts"
+    ],
+    "C2/AA-053 @ C2/M14": [
+      "src/lib/mind/c2-workspace-recovery.test.ts"
+    ],
+    "C2/AA-054 @ C2/M14": [
+      "src/lib/mind/c2-workspace-recovery.test.ts",
+      "src/lib/mind/workspace.test.ts"
+    ],
+    "C2/AA-055 @ C2/M14": [
+      "src/lib/mind/c2-workspace-recovery.test.ts",
+      "src/lib/mind/workspace-archive-manifest.test.ts"
+    ],
+    "C2/AA-056 @ C2/M15": [
+      "src/components/mind/c2-command-entrypoints.test.ts",
+      "src/lib/mind/fleet-audit-recovery.test.ts",
+      "src/lib/mind/policy.test.ts"
+    ],
+    "C2/AA-057 @ C2/M15": [
+      "src/lib/mind/fleet-audit-recovery.test.ts",
+      "src/lib/mind/fleet.test.ts"
+    ],
+    "C2/AA-058 @ C2/M15": [
+      "src/lib/mind/fleet-audit-recovery.test.ts",
+      "src/lib/mind/fleet.test.ts"
+    ],
+    "C2/AA-059 @ C2/M15": [
+      "src/lib/mind/fleet-audit-recovery.test.ts",
+      "src/lib/mind/fleet.test.ts"
+    ],
+    "C2/AA-060 @ C2/M16": [
+      "src/lib/mind/c2-interface-recovery.test.ts"
+    ],
+    "C2/AA-061 @ C2/M16": [
+      "src/lib/mind/tools-timeline.test.ts"
+    ],
+    "C2/AA-062 @ C2/M16": [
+      "src/lib/mind/fleet-audit-recovery.test.ts",
+      "src/lib/mind/fleet.test.ts"
+    ],
+    "C2/AA-063 @ C2/M16": [
+      "src/lib/mind/c2-interface-recovery.test.ts"
+    ],
+    "C2/AA-064 @ C2/M17": [
+      "src/lib/mind/c2-interface-recovery.test.ts"
+    ],
+    "C2/AA-065 @ C2/M17": [
+      "src/lib/mind/c2-interface-recovery.test.ts"
+    ],
+    "C2/AA-066 @ C2/M17": [
+      "src/components/mind/c2-command-entrypoints.test.ts"
+    ],
+    "C2/AA-067 @ C2/M17": [
+      "src/lib/mind/c2-interface-recovery.test.ts"
+    ],
+    "C2/AA-068 @ C2/M17": [
+      "src/lib/mind/c2-interface-recovery.test.ts"
+    ],
+    "C2/AA-069 @ C2/M18": [
+      "src/lib/mind/media/history-audit.test.ts"
+    ],
+    "C2/AA-070 @ C2/M18": [
+      "src/lib/mind/c2-workspace-recovery.test.ts"
+    ],
+    "C2/AA-071 @ C2/M18": [
+      "src/lib/mind/c2-workspace-recovery.test.ts"
+    ],
+    "C2/AA-072 @ C2/M18": [
+      "src/lib/mind/c2-workspace-recovery.test.ts",
+      "src/lib/mind/conversation-actions.test.ts"
+    ],
+    "C2/AA-073 @ C2/M18": [
+      "src/lib/mind/c2-workspace-recovery.test.ts",
+      "src/lib/mind/conversation-actions.test.ts"
+    ],
+    "C2/AA-074 @ C2/M18": [
+      "src/lib/mind/c2-workspace-recovery.test.ts",
+      "src/lib/mind/transcript.test.ts"
+    ],
+    "C2/AA-075 @ C2/M18": [
+      "src/lib/mind/c2-workspace-recovery.test.ts",
+      "src/lib/mind/transcript.test.ts"
+    ],
+    "C2/AA-076 @ C2/M19": [],
+    "C2/AA-077 @ C2/M20": [
+      "src/lib/mind/durable-recovery.test.ts",
+      "src/lib/mind/execution-ledger.test.ts"
+    ],
+    "C2/AA-078 @ C2/M20": [
+      "src/lib/mind/durable-recovery.test.ts",
+      "src/lib/mind/execution-ledger.test.ts"
+    ],
+    "C2/AA-079 @ C2/M20": [
+      "src/lib/mind/diagnostic-entrypoint.test.ts"
+    ],
+    "C2/AA-080 @ C2/M20": [
+      "src/lib/mind/diagnostic-entrypoint.test.ts",
+      "src/lib/mind/halt-file.test.ts"
+    ],
+    "C2/AA-081 @ C2/M20": [
+      "src/lib/mind/durable-recovery.test.ts",
+      "src/lib/mind/execution-ledger.test.ts"
+    ],
+    "C2/AA-082 @ C2/M21": [
+      "scripts/test-inventory.test.mjs"
+    ],
+    "C2/AA-083 @ C2/M21": [
+      "src/lib/mind/durable-recovery.test.ts",
+      "src/lib/mind/execution-ledger.test.ts"
+    ],
+    "C2/AA-084 @ C2/M21": [
+      "src/lib/mind/c2-model-provider-contract.test.ts",
+      "src/lib/mind/catalog-modules.test.ts",
+      "src/lib/mind/live-turn.test.ts",
+      "src/lib/mind/model-consult.test.ts",
+      "src/lib/mind/provider-catalog.test.ts",
+      "src/lib/mind/stream.test.ts"
+    ],
+    "C2/AA-085 @ C2/M21": [],
+    "C2/AA-086 @ C2/M22": [
+      "src/lib/mind/fleet-audit-recovery.test.ts",
+      "src/lib/mind/workbench-command.test.ts"
+    ],
+    "C2/AA-087 @ C2/M22": [
+      "src/lib/mind/fleet-audit-recovery.test.ts",
+      "src/lib/mind/workbench-command.test.ts"
+    ],
+    "C2/AA-088 @ C2/M22": [
+      "src/lib/mind/fleet-audit-recovery.test.ts",
+      "src/lib/mind/workbench-command.test.ts"
+    ],
+    "C2/AA-089 @ C2/M22": [
+      "src/lib/mind/fleet-audit-recovery.test.ts",
+      "src/lib/mind/workbench-command.test.ts"
+    ],
+    "C2/AA-090 @ C2/M23": [
+      "src/lib/mind/c2-model-provider-contract.test.ts",
+      "src/lib/mind/catalog-modules.test.ts",
+      "src/lib/mind/connected-mcp.test.ts",
+      "src/lib/mind/live-turn.test.ts",
+      "src/lib/mind/mcp-selected.test.ts",
+      "src/lib/mind/model-consult.test.ts",
+      "src/lib/mind/provider-catalog.test.ts",
+      "src/lib/mind/provider-http.test.ts",
+      "src/lib/mind/stream.test.ts"
+    ],
+    "C2/AA-091 @ C2/M23": [
+      "src/lib/mind/durable-recovery.test.ts",
+      "src/lib/mind/limits.test.ts",
+      "src/lib/mind/voice-cloning/service.test.ts"
+    ],
+    "C2/AA-092 @ C2/M23": [
+      "src/lib/mind/execution-ledger.test.ts",
+      "src/lib/mind/limits.test.ts"
+    ],
+    "C2/AA-093 @ C2/M23": [
+      "src/components/mind/dashboard-3d/c2-dashboard-recovery.test.ts",
+      "src/components/mind/dashboard-3d/mobile-structure-wired.test.ts",
+      "src/components/mind/dashboard-3d/motion/reduced-motion.test.ts",
+      "src/components/mind/dashboard-3d/postfx/context-loss.test.ts",
+      "src/lib/mind/dashboard/graph-filters.test.ts",
+      "src/lib/mind/dashboard/spend.test.ts",
+      "src/lib/mind/dashboard/time-scrub.test.ts"
+    ],
+    "C2/AA-094 @ C2/M23": [
+      "src/components/mind/dashboard-3d/c2-dashboard-recovery.test.ts",
+      "src/components/mind/dashboard-3d/mobile-structure-wired.test.ts",
+      "src/components/mind/dashboard-3d/motion/reduced-motion.test.ts",
+      "src/components/mind/dashboard-3d/postfx/context-loss.test.ts",
+      "src/lib/mind/dashboard/graph-filters.test.ts",
+      "src/lib/mind/dashboard/spend.test.ts",
+      "src/lib/mind/dashboard/time-scrub.test.ts"
+    ],
+    "C2/AA-095 @ C2/M23": [
+      "src/lib/mind/c2-model-provider-contract.test.ts",
+      "src/lib/mind/media/history-audit.test.ts",
+      "src/lib/mind/provider-catalog.test.ts"
+    ],
+    "C2/AA-096 @ C2/M24": [
+      "src/lib/mind/c2-workspace-recovery.test.ts",
+      "src/lib/mind/fleet-audit-recovery.test.ts"
+    ],
+    "C2/AA-097 @ C2/M24": [
+      "src/lib/mind/c2-workspace-recovery.test.ts",
+      "src/lib/mind/fleet-audit-recovery.test.ts"
+    ],
+    "C2/AA-098 @ C2/M24": [
+      "src/lib/mind/c2-workspace-recovery.test.ts",
+      "src/lib/mind/fleet-audit-recovery.test.ts"
+    ],
+    "C2/AA-099 @ C2/M24": [
+      "src/lib/mind/fleet-audit-recovery.test.ts",
+      "src/lib/mind/fleet.test.ts"
+    ],
+    "C2/AA-100 @ C2/M24": [
+      "src/lib/mind/fleet-audit-recovery.test.ts",
+      "src/lib/mind/fleet.test.ts"
+    ],
+    "C2/AA-101 @ C2/M25": [
+      "src/lib/mind/fleet-audit-recovery.test.ts",
+      "src/lib/mind/fleet.test.ts"
+    ],
+    "C2/AA-102 @ C2/M25": [
+      "src/lib/mind/fleet-audit-recovery.test.ts",
+      "src/lib/mind/fleet.test.ts"
+    ],
+    "C2/AA-103 @ C2/M25": [
+      "src/lib/mind/fleet-audit-recovery.test.ts",
+      "src/lib/mind/fleet.test.ts"
+    ],
+    "C2/AA-104 @ C2/M25": [
+      "src/lib/mind/fleet-audit-recovery.test.ts",
+      "src/lib/mind/fleet.test.ts"
+    ],
+    "C2/AA-105 @ C2/M26": [
+      "src/lib/mind/connectors/token-recovery.test.ts"
+    ],
+    "C2/AA-106 @ C2/M26": [
+      "src/lib/mind/connectors/token-recovery.test.ts"
+    ],
+    "C2/AA-107 @ C2/M26": [
+      "src/lib/mind/connectors/token-recovery.test.ts"
+    ],
+    "C2/AA-108 @ C2/M26": [
+      "src/lib/mind/connectors/token-recovery.test.ts",
+      "src/lib/mind/durable-recovery.test.ts",
+      "src/lib/mind/notion-entrypoint-recovery.test.ts",
+      "src/lib/mind/notion-recovery.test.ts"
+    ],
+    "C2/AA-109 @ C2/M27": [
+      "src/lib/mind/c2-model-provider-contract.test.ts",
+      "src/lib/mind/catalog-modules.test.ts",
+      "src/lib/mind/connected-mcp.test.ts",
+      "src/lib/mind/live-turn.test.ts",
+      "src/lib/mind/mcp-selected.test.ts",
+      "src/lib/mind/model-consult.test.ts",
+      "src/lib/mind/provider-catalog.test.ts",
+      "src/lib/mind/provider-http.test.ts",
+      "src/lib/mind/stream.test.ts"
+    ],
+    "C2/AA-110 @ C2/M27": [
+      "src/lib/mind/c2-model-profile-store.test.ts",
+      "src/lib/mind/c2-model-provider-contract.test.ts",
+      "src/lib/mind/catalog-modules.test.ts",
+      "src/lib/mind/connected-mcp.test.ts",
+      "src/lib/mind/live-turn.test.ts",
+      "src/lib/mind/mcp-selected.test.ts",
+      "src/lib/mind/model-consult.test.ts",
+      "src/lib/mind/provider-catalog.test.ts",
+      "src/lib/mind/provider-http.test.ts",
+      "src/lib/mind/stream.test.ts"
+    ],
+    "C2/AA-111 @ C2/M27": [
+      "src/lib/mind/c2-model-profile-store.test.ts",
+      "src/lib/mind/c2-model-provider-contract.test.ts",
+      "src/lib/mind/catalog-modules.test.ts",
+      "src/lib/mind/live-turn.test.ts",
+      "src/lib/mind/model-consult.test.ts",
+      "src/lib/mind/provider-catalog.test.ts",
+      "src/lib/mind/stream.test.ts"
+    ],
+    "C2/AA-112 @ C2/M27": [
+      "src/lib/mind/connected-mcp.test.ts",
+      "src/lib/mind/mcp-selected.test.ts",
+      "src/lib/mind/provider-catalog.test.ts",
+      "src/lib/mind/provider-http.test.ts"
+    ],
+    "C2/AA-113 @ C2/M27": [
+      "src/lib/mind/c2-model-provider-contract.test.ts",
+      "src/lib/mind/catalog-modules.test.ts",
+      "src/lib/mind/connected-mcp.test.ts",
+      "src/lib/mind/live-turn.test.ts",
+      "src/lib/mind/mcp-selected.test.ts",
+      "src/lib/mind/model-consult.test.ts",
+      "src/lib/mind/provider-catalog.test.ts",
+      "src/lib/mind/provider-http.test.ts",
+      "src/lib/mind/stream.test.ts"
+    ],
+    "C2/AA-114 @ C2/M28": [
+      "src/lib/mind/logic-routes.test.ts",
+      "src/lib/mind/media/history-audit.test.ts",
+      "src/lib/mind/media/history.test.ts"
+    ],
+    "C2/AA-115 @ C2/M28": [
+      "src/lib/mind/logic-routes.test.ts",
+      "src/lib/mind/media/history-audit.test.ts",
+      "src/lib/mind/media/history.test.ts"
+    ],
+    "C2/AA-116 @ C2/M28": [
+      "src/lib/mind/logic-routes.test.ts",
+      "src/lib/mind/media/history-audit.test.ts",
+      "src/lib/mind/media/history.test.ts"
+    ],
+    "C2/AA-117 @ C2/M28": [
+      "src/lib/mind/library-documents.test.ts",
+      "src/lib/mind/pdf-text-audit.test.ts",
+      "src/lib/mind/pdf-text.test.ts"
+    ],
+    "C2/AA-118 @ C2/M28": [
+      "src/lib/mind/library-documents.test.ts",
+      "src/lib/mind/pdf-text-audit.test.ts",
+      "src/lib/mind/pdf-text.test.ts"
+    ],
+    "C2/AA-119 @ C2/M28": [
+      "src/lib/mind/library-documents.test.ts",
+      "src/lib/mind/pdf-text-audit.test.ts",
+      "src/lib/mind/pdf-text.test.ts"
+    ],
+    "C2/AA-120 @ C2/M29": [
+      "src/lib/mind/c2-interface-recovery.test.ts"
+    ],
+    "C2/AA-121 @ C2/M29": [
+      "src/lib/mind/c2-interface-recovery.test.ts"
+    ],
+    "C2/AA-122 @ C2/M29": [
+      "src/lib/mind/c2-interface-recovery.test.ts"
+    ],
+    "C2/AA-123 @ C2/M29": [
+      "src/lib/mind/c2-interface-recovery.test.ts"
+    ],
+    "C2/AA-124 @ C2/M29": [
+      "src/lib/mind/c2-interface-recovery.test.ts"
+    ],
+    "C2/AA-125 @ C2/M29": [
+      "src/lib/mind/c2-workspace-recovery.test.ts",
+      "src/lib/mind/palette-index.test.ts",
+      "src/lib/mind/palette-label.test.ts"
+    ],
+    "C2/AA-126 @ C2/M30": [
+      "src/lib/mind/c2-interface-recovery.test.ts"
+    ],
+    "C2/AA-127 @ C2/M30": [
+      "src/lib/mind/c2-interface-recovery.test.ts",
+      "src/lib/mind/personalities/index.test.ts"
+    ],
+    "C2/AA-128 @ C2/M30": [
+      "src/lib/mind/c2-interface-recovery.test.ts"
+    ],
+    "C2/AA-129 @ C2/M30": [
+      "src/lib/mind/persona-select-action.test.ts",
+      "src/lib/mind/personas/selection.test.ts"
+    ],
+    "C2/AA-130 @ C2/M30": [
+      "src/lib/mind/integration-persona-explore.test.ts",
+      "src/lib/mind/personas/selection.test.ts"
+    ],
+    "C2/AA-131 @ C2/M30": [
+      "src/lib/mind/integration-persona-explore.test.ts",
+      "src/lib/mind/personas/selection.test.ts"
+    ],
+    "C2/AA-132 @ C2/M31": [
+      "src/lib/mind/persistence.test.ts",
+      "src/lib/mind/workspace-archive-manifest.test.ts"
+    ],
+    "C2/AA-133 @ C2/M31": [
+      "src/lib/mind/sync.test.ts"
+    ],
+    "C2/AA-134 @ C2/M31": [
+      "src/lib/mind/file-persist.test.ts"
+    ],
+    "C2/AA-135 @ C2/M31": [
+      "src/lib/mind/persistence.test.ts",
+      "src/lib/mind/workspace-archive-manifest.test.ts"
+    ],
+    "C2/AA-136 @ C2/M31": [
+      "src/lib/mind/workspace-archive-manifest.test.ts"
+    ],
+    "C3/AA-001 @ C3/M01 cumulative ledger": [
+      "src/lib/mind/notion-selection.test.ts",
+      "src/lib/mind/notion.test.ts"
+    ],
+    "C3/AA-002 @ C3/M01": [
+      "src/lib/mind/voice/speak-mounted.test.ts",
+      "src/lib/mind/voice/speak-output-contract.test.ts",
+      "src/lib/mind/voice/stage-receipts.test.ts"
+    ],
+    "C3/AA-003 @ C3/M01": [
+      "src/lib/mind/ai-provider-lifecycle.test.ts",
+      "src/lib/mind/ai-provider-native.test.ts",
+      "src/lib/mind/ai-provider-stream.test.ts",
+      "src/lib/mind/consultation-failure.test.ts",
+      "src/lib/mind/dispatch-identities.test.ts",
+      "src/lib/mind/financial-policy.test.ts",
+      "src/lib/mind/mcp/http-provider-stream.test.ts",
+      "src/lib/mind/model-capabilities.test.ts",
+      "src/lib/mind/model-controls.test.ts",
+      "src/lib/mind/model-route.test.ts",
+      "src/lib/mind/model-tiers.test.ts",
+      "src/lib/mind/provider-call-stream.test.ts",
+      "src/lib/mind/provider-call.test.ts",
+      "src/lib/mind/provider-dependencies.test.ts",
+      "src/lib/mind/provider-http.test.ts",
+      "src/lib/mind/provider-lifecycle.test.ts",
+      "src/lib/mind/provider-usage.test.ts",
+      "src/lib/mind/rpc-provider-request.test.ts",
+      "src/lib/mind/turn-primary-selection.test.ts",
+      "src/lib/mind/voice/http-budget.test.ts",
+      "src/lib/mind/voice/provider-selection.test.ts",
+      "src/lib/mind/voice/speak-action.test.ts",
+      "src/lib/mind/voice/stage-receipts.test.ts"
+    ],
+    "C3/AA-004 @ C3/M02": [
+      "src/lib/mind/account-preferences.test.ts"
+    ],
+    "C3/AA-005 @ C3/M02": [
+      "src/lib/mind/account-preferences.test.ts"
+    ],
+    "C3/AA-006 @ C3/M03": [
+      "src/lib/mind/dashboard/observability.test.ts",
+      "src/lib/mind/dashboard/operational-health.test.ts",
+      "src/lib/mind/dashboard/status-poll.test.ts",
+      "src/lib/mind/worker-health.test.ts"
+    ],
+    "C3/AA-007 @ C3/M03": [
+      "src/lib/mind/dashboard/observability.test.ts",
+      "src/lib/mind/dashboard/operational-health.test.ts",
+      "src/lib/mind/dashboard/status-poll.test.ts",
+      "src/lib/mind/worker-health.test.ts"
+    ],
+    "C3/AA-008 @ C3/M04": [
+      "src/lib/mind/live-turn.test.ts",
+      "src/lib/mind/retry-fidelity.test.ts",
+      "src/lib/mind/turn-timeouts.test.ts"
+    ],
+    "C3/AA-009 @ C3/M04": [
+      "src/lib/mind/live-turn.test.ts",
+      "src/lib/mind/retry-fidelity.test.ts",
+      "src/lib/mind/turn-timeouts.test.ts"
+    ],
+    "C3/AA-010 @ C3/M04": [
+      "src/lib/mind/live-turn.test.ts",
+      "src/lib/mind/retry-fidelity.test.ts",
+      "src/lib/mind/turn-timeouts.test.ts"
+    ],
+    "C3/AA-011 @ C3/M05": [
+      "src/lib/mind/kimi/build-guidance.test.ts",
+      "src/lib/mind/kimi/build-result.test.ts",
+      "src/lib/mind/kimi/build-review.test.ts",
+      "src/lib/mind/kimi/file-recovery.test.ts",
+      "src/lib/mind/kimi/hosted/acp-client.test.ts",
+      "src/lib/mind/kimi/hosted/file-receipts.test.ts"
+    ],
+    "C3/AA-012 @ C3/M05": [
+      "src/lib/mind/kimi/build-guidance.test.ts",
+      "src/lib/mind/kimi/build-result.test.ts",
+      "src/lib/mind/kimi/build-review.test.ts",
+      "src/lib/mind/kimi/file-recovery.test.ts",
+      "src/lib/mind/kimi/hosted/acp-client.test.ts",
+      "src/lib/mind/kimi/hosted/file-receipts.test.ts"
+    ],
+    "C3/AA-013 @ C3/M05": [
+      "src/lib/mind/code-handoff.test.ts",
+      "src/lib/mind/kimi/build-guidance.test.ts",
+      "src/lib/mind/kimi/build-result.test.ts",
+      "src/lib/mind/kimi/build-review.test.ts",
+      "src/lib/mind/kimi/file-recovery.test.ts",
+      "src/lib/mind/kimi/hosted/acp-client.test.ts",
+      "src/lib/mind/kimi/hosted/file-receipts.test.ts"
+    ],
+    "C3/AA-014 @ C3/M06": [
+      "src/lib/mind/memory/policy.test.ts"
+    ],
+    "C3/AA-015 @ C3/M06": [
+      "src/lib/mind/conversation-context.test.ts",
+      "src/lib/mind/memory/retrieval.test.ts"
+    ],
+    "C3/AA-016 @ C3/M06": [
+      "src/lib/mind/memory/retrieval.test.ts"
+    ],
+    "C3/AA-017 @ C3/M06": [
+      "src/lib/mind/memory/retrieval.test.ts"
+    ],
+    "C3/AA-018 @ C3/M07": [
+      "src/lib/mind/mcp/registry.test.ts",
+      "src/lib/mind/plugin-catalog.test.ts"
+    ],
+    "C3/AA-019 @ C3/M07": [
+      "src/lib/mind/mcp/registry.test.ts",
+      "src/lib/mind/plugin-catalog.test.ts"
+    ],
+    "C3/AA-020 @ C3/M07": [
+      "src/lib/mind/mcp/registry.test.ts",
+      "src/lib/mind/plugin-catalog.test.ts"
+    ],
+    "C3/AA-021 @ C3/M07": [
+      "src/lib/mind/mcp/registry.test.ts",
+      "src/lib/mind/plugin-catalog.test.ts"
+    ],
+    "C3/AA-022 @ C3/M08": [
+      "src/lib/mind/browser-permissions.test.ts",
+      "src/lib/mind/kimi/hosted/web-browser.test.ts"
+    ],
+    "C3/AA-023 @ C3/M08": [
+      "src/lib/mind/browser-permissions.test.ts",
+      "src/lib/mind/kimi/hosted/web-browser.test.ts"
+    ],
+    "C3/AA-024 @ C3/M08": [
+      "src/lib/mind/browser-permissions.test.ts",
+      "src/lib/mind/kimi/hosted/web-browser.test.ts"
+    ],
+    "C3/AA-025 @ C3/M08": [
+      "src/lib/mind/browser-permissions.test.ts",
+      "src/lib/mind/kimi/hosted/web-browser.test.ts"
+    ],
+    "C3/AA-026 @ C3/M09": [
+      "src/lib/mind/consult-selection.test.ts",
+      "src/lib/mind/mcp-selected.test.ts",
+      "src/lib/mind/model-consult.test.ts"
+    ],
+    "C3/AA-027 @ C3/M09": [
+      "src/lib/mind/consult-selection.test.ts",
+      "src/lib/mind/mcp-selected.test.ts",
+      "src/lib/mind/model-consult.test.ts"
+    ],
+    "C3/AA-028 @ C3/M09": [
+      "src/lib/mind/consult-selection.test.ts",
+      "src/lib/mind/mcp-selected.test.ts",
+      "src/lib/mind/model-consult.test.ts"
+    ],
+    "C3/AA-029 @ C3/M09": [
+      "src/lib/mind/consult-selection.test.ts",
+      "src/lib/mind/mcp-selected.test.ts",
+      "src/lib/mind/model-consult.test.ts"
+    ],
+    "C3/AA-030 @ C3/M09": [
+      "src/lib/mind/consult-selection.test.ts",
+      "src/lib/mind/mcp-selected.test.ts",
+      "src/lib/mind/model-consult.test.ts"
+    ],
+    "C3/AA-031 @ C3/M10": [
+      "src/lib/mind/project-workspace.test.ts"
+    ],
+    "C3/AA-032 @ C3/M10": [
+      "src/lib/mind/project-workspace.test.ts"
+    ],
+    "C3/AA-033 @ C3/M10": [
+      "src/lib/mind/project-workspace.test.ts"
+    ],
+    "C3/AA-034 @ C3/M10": [
+      "src/lib/mind/project-workspace.test.ts"
+    ],
+    "C3/AA-035 @ C3/M10": [
+      "src/lib/mind/project-workspace.test.ts"
+    ],
+    "C3/AA-036 @ C3/M10": [
+      "src/lib/mind/project-workspace.test.ts"
+    ],
+    "C3/AA-037 @ C3/M11": [
+      "src/lib/mind/dispatch-controls.test.ts",
+      "src/lib/mind/provider-http.test.ts",
+      "src/lib/mind/provider-usage.test.ts"
+    ],
+    "C3/AA-038 @ C3/M11": [
+      "src/lib/mind/dispatch-controls.test.ts",
+      "src/lib/mind/provider-http.test.ts",
+      "src/lib/mind/provider-usage.test.ts"
+    ],
+    "C3/AA-039 @ C3/M11": [
+      "src/lib/mind/ai-provider-lifecycle.test.ts",
+      "src/lib/mind/ai-provider-native.test.ts",
+      "src/lib/mind/ai-provider-stream.test.ts",
+      "src/lib/mind/consultation-failure.test.ts",
+      "src/lib/mind/dispatch-attempt.test.ts",
+      "src/lib/mind/mcp/http-provider-stream.test.ts",
+      "src/lib/mind/model-capabilities.test.ts",
+      "src/lib/mind/model-controls.test.ts",
+      "src/lib/mind/model-route.test.ts",
+      "src/lib/mind/model-tiers.test.ts",
+      "src/lib/mind/provider-call-stream.test.ts",
+      "src/lib/mind/provider-call.test.ts",
+      "src/lib/mind/provider-dependencies.test.ts",
+      "src/lib/mind/provider-http.test.ts",
+      "src/lib/mind/provider-lifecycle.test.ts",
+      "src/lib/mind/provider-usage.test.ts",
+      "src/lib/mind/turn-primary-selection.test.ts",
+      "src/lib/mind/voice/http-budget.test.ts",
+      "src/lib/mind/voice/provider-selection.test.ts",
+      "src/lib/mind/voice/speak-action.test.ts",
+      "src/lib/mind/voice/stage-receipts.test.ts"
+    ],
+    "C3/AA-040 @ C3/M11": [
+      "src/lib/mind/dispatch-controls.test.ts",
+      "src/lib/mind/provider-http.test.ts",
+      "src/lib/mind/provider-usage.test.ts"
+    ],
+    "C3/AA-041 @ C3/M11": [
+      "scripts/mind-endpoints.test.mjs",
+      "src/lib/mind/agent-model-dispatch.test.ts",
+      "src/lib/mind/agent-request.test.ts",
+      "src/lib/mind/agent.test.ts",
+      "src/lib/mind/ai-provider-lifecycle.test.ts",
+      "src/lib/mind/consultation-failure.test.ts",
+      "src/lib/mind/dashboard/operational-health.test.ts",
+      "src/lib/mind/dispatch-attempt.test.ts",
+      "src/lib/mind/dispatch-controls.test.ts",
+      "src/lib/mind/dispatch-identities.test.ts",
+      "src/lib/mind/financial-policy.test.ts",
+      "src/lib/mind/fleet-dispatch.test.ts",
+      "src/lib/mind/fleet-external.test.ts",
+      "src/lib/mind/image-analysis-dispatch.test.ts",
+      "src/lib/mind/legacy-turn.test.ts",
+      "src/lib/mind/media/monetary-dispatch.test.ts",
+      "src/lib/mind/media/video-job-store.test.ts",
+      "src/lib/mind/provider-http.test.ts",
+      "src/lib/mind/provider-usage.test.ts",
+      "src/lib/mind/rpc-provider-request.test.ts",
+      "src/lib/mind/voice/http-budget.test.ts",
+      "src/lib/mind/voice/speak-action.test.ts",
+      "src/lib/mind/voice/speak-mounted.test.ts"
+    ],
+    "C3/AA-042 @ C3/M12": [
+      "src/lib/mind/library-documents.test.ts"
+    ],
+    "C3/AA-043 @ C3/M12": [
+      "src/lib/mind/library-documents.test.ts"
+    ],
+    "C3/AA-044 @ C3/M12": [
+      "src/lib/mind/library-documents.test.ts"
+    ],
+    "C3/AA-045 @ C3/M12": [
+      "src/lib/mind/library-documents.test.ts"
+    ],
+    "C3/AA-046 @ C3/M12": [
+      "src/lib/mind/library-documents.test.ts"
+    ],
+    "C3/AA-047 @ C3/M12": [
+      "src/lib/mind/generated-artifacts.test.ts"
+    ],
+    "C3/AA-048 @ C3/M12": [
+      "src/lib/mind/generated-artifacts.test.ts"
+    ],
+    "C3/AA-049 @ C3/M13": [
+      "scripts/navigation-drawer.test.mjs",
+      "src/lib/mind/render-window.test.ts",
+      "src/lib/mind/visual-polish-contract.test.ts"
+    ],
+    "C3/AA-050 @ C3/M13": [
+      "scripts/navigation-drawer.test.mjs",
+      "src/lib/mind/render-window.test.ts",
+      "src/lib/mind/visual-polish-contract.test.ts"
+    ],
+    "C3/AA-051 @ C3/M13": [
+      "scripts/navigation-drawer.test.mjs",
+      "src/lib/mind/render-window.test.ts",
+      "src/lib/mind/visual-polish-contract.test.ts"
+    ],
+    "C3/AA-052 @ C3/M13": [
+      "scripts/navigation-drawer.test.mjs",
+      "src/lib/mind/render-window.test.ts",
+      "src/lib/mind/visual-polish-contract.test.ts"
+    ],
+    "C3/AA-053 @ C3/M13": [
+      "scripts/navigation-drawer.test.mjs",
+      "src/lib/mind/render-window.test.ts",
+      "src/lib/mind/visual-polish-contract.test.ts"
+    ],
+    "C3/AA-054 @ C3/M14": [
+      "src/lib/mind/research-reports.test.ts",
+      "src/lib/mind/research.test.ts",
+      "src/lib/mind/xai-search.test.ts"
+    ],
+    "C3/AA-055 @ C3/M14": [
+      "src/lib/mind/research-reports.test.ts",
+      "src/lib/mind/research.test.ts",
+      "src/lib/mind/xai-search.test.ts"
+    ],
+    "C3/AA-056 @ C3/M14": [
+      "src/lib/mind/research-reports.test.ts",
+      "src/lib/mind/research.test.ts",
+      "src/lib/mind/xai-search.test.ts"
+    ],
+    "C3/AA-057 @ C3/M14": [
+      "src/lib/mind/research-reports.test.ts",
+      "src/lib/mind/research.test.ts",
+      "src/lib/mind/xai-search.test.ts"
+    ],
+    "C3/AA-058 @ C3/M14": [
+      "src/lib/mind/research-reports.test.ts",
+      "src/lib/mind/research.test.ts",
+      "src/lib/mind/xai-search.test.ts"
+    ],
+    "C3/AA-059 @ C3/M14": [
+      "src/lib/mind/research-reports.test.ts",
+      "src/lib/mind/research.test.ts",
+      "src/lib/mind/xai-search.test.ts"
+    ],
+    "C3/AA-060 @ C3/M15": [
+      "src/lib/mind/worker-pass.test.ts"
+    ],
+    "C3/AA-061 @ C3/M15": [
+      "src/lib/mind/fleet-contract.test.ts",
+      "src/lib/mind/schedule-worker.test.ts"
+    ],
+    "C3/AA-062 @ C3/M15": [
+      "src/lib/mind/schedule-worker.test.ts",
+      "src/lib/mind/worker-pass.test.ts"
+    ],
+    "C3/AA-063 @ C3/M15": [
+      "src/lib/mind/schedule-worker.test.ts",
+      "src/lib/mind/worker-pass.test.ts"
+    ],
+    "C3/AA-064 @ C3/M15": [
+      "src/lib/mind/fleet-contract.test.ts",
+      "src/lib/mind/notifications.test.ts"
+    ],
+    "C3/AA-065 @ C3/M15": [
+      "src/lib/mind/worker-health.test.ts",
+      "src/lib/mind/worker-pass.test.ts"
+    ],
+    "C3/AA-066 @ C3/M16": [
+      "src/lib/mind/desktop-update.test.ts"
+    ],
+    "C3/AA-067 @ C3/M16": [],
+    "C3/AA-068 @ C3/M16": [
+      "src/lib/mind/desktop-update.test.ts"
+    ],
+    "C3/AA-069 @ C3/M16": [],
+    "C3/AA-070 @ C3/M16": [],
+    "C3/AA-071 @ C3/M16": [
+      "src/lib/mind/desktop-update.test.ts"
+    ],
+    "C3/AA-072 @ C3/M17": [
+      "src/lib/mind/integration-persona-explore.test.ts",
+      "src/lib/mind/personas/selection.test.ts",
+      "src/lib/mind/use-mind-workspace.test.ts",
+      "src/lib/mind/workspace-changes.test.ts"
+    ],
+    "C3/AA-073 @ C3/M17": [
+      "src/lib/mind/integration-persona-explore.test.ts",
+      "src/lib/mind/personas/selection.test.ts",
+      "src/lib/mind/use-mind-workspace.test.ts",
+      "src/lib/mind/workspace-changes.test.ts"
+    ],
+    "C3/AA-074 @ C3/M17": [
+      "src/lib/mind/integration-persona-explore.test.ts",
+      "src/lib/mind/personas/selection.test.ts",
+      "src/lib/mind/use-mind-workspace.test.ts",
+      "src/lib/mind/workspace-changes.test.ts"
+    ],
+    "C3/AA-075 @ C3/M17": [
+      "src/lib/mind/data-retention.test.ts",
+      "src/lib/mind/persistence-lifecycle.test.ts",
+      "src/lib/mind/store.test.ts"
+    ],
+    "C3/AA-076 @ C3/M17": [
+      "src/lib/mind/data-retention.test.ts",
+      "src/lib/mind/persistence-lifecycle.test.ts",
+      "src/lib/mind/store.test.ts"
+    ],
+    "C3/AA-077 @ C3/M18": [
+      "src/lib/mind/adrian-pc.test.ts"
+    ],
+    "C3/AA-078 @ C3/M18": [
+      "src/lib/mind/adrian-pc.test.ts"
+    ],
+    "C3/AA-079 @ C3/M18": [
+      "src/lib/mind/adrian-pc.test.ts"
+    ],
+    "C3/AA-080 @ C3/M18": [],
+    "C3/AA-081 @ C3/M18": [
+      "src/lib/mind/adrian-pc.test.ts"
+    ],
+    "C3/AA-082 @ C3/M18": [
+      "src/lib/mind/pc-capability.test.ts"
+    ],
+    "C3/AA-083 @ C3/M19": [
+      "src/lib/mind/live-turn.test.ts",
+      "src/lib/mind/recovery-inbox.test.ts"
+    ],
+    "C3/AA-084 @ C3/M19": [
+      "src/lib/mind/live-turn.test.ts",
+      "src/lib/mind/recovery-inbox.test.ts"
+    ],
+    "C3/AA-085 @ C3/M19": [
+      "src/lib/mind/ai-provider-lifecycle.test.ts",
+      "src/lib/mind/consultation-failure.test.ts",
+      "src/lib/mind/live-turn.test.ts",
+      "src/lib/mind/provider-http.test.ts",
+      "src/lib/mind/recovery-inbox.test.ts",
+      "src/lib/mind/turn-error.test.ts",
+      "src/lib/mind/voice/http-budget.test.ts"
+    ],
+    "C3/AA-086 @ C3/M19": [
+      "src/lib/mind/live-turn.test.ts",
+      "src/lib/mind/recovery-inbox.test.ts"
+    ],
+    "C3/AA-087 @ C3/M19": [
+      "src/lib/mind/live-turn.test.ts",
+      "src/lib/mind/recovery-inbox.test.ts"
+    ],
+    "C3/AA-088 @ C3/M20": [
+      "src/lib/mind/palette-coverage.test.ts",
+      "src/lib/mind/palette-keys.test.ts",
+      "src/lib/mind/palette-label.test.ts"
+    ],
+    "C3/AA-089 @ C3/M20": [
+      "src/lib/mind/palette-coverage.test.ts",
+      "src/lib/mind/palette-keys.test.ts",
+      "src/lib/mind/palette-label.test.ts"
+    ],
+    "C3/AA-090 @ C3/M20": [
+      "src/lib/mind/palette-coverage.test.ts",
+      "src/lib/mind/palette-keys.test.ts",
+      "src/lib/mind/palette-label.test.ts"
+    ],
+    "C3/AA-091 @ C3/M20": [
+      "src/lib/mind/palette-coverage.test.ts",
+      "src/lib/mind/palette-keys.test.ts",
+      "src/lib/mind/palette-label.test.ts"
+    ],
+    "C3/AA-092 @ C3/M20": [
+      "src/lib/mind/palette-coverage.test.ts",
+      "src/lib/mind/palette-keys.test.ts",
+      "src/lib/mind/palette-label.test.ts"
+    ],
+    "C3/AA-093 @ C3/M20": [
+      "src/lib/mind/palette-coverage.test.ts",
+      "src/lib/mind/palette-keys.test.ts",
+      "src/lib/mind/palette-label.test.ts"
+    ],
+    "C3/AA-094 @ C3/M21": [
+      "src/lib/mind/persistence-lifecycle.test.ts",
+      "src/lib/mind/transcript.test.ts"
+    ],
+    "C3/AA-095 @ C3/M21": [
+      "src/lib/mind/persistence-lifecycle.test.ts",
+      "src/lib/mind/transcript.test.ts"
+    ],
+    "C3/AA-096 @ C3/M21": [
+      "src/lib/mind/persistence-lifecycle.test.ts",
+      "src/lib/mind/transcript.test.ts"
+    ],
+    "C3/AA-097 @ C3/M21": [
+      "src/lib/mind/persistence-lifecycle.test.ts",
+      "src/lib/mind/transcript.test.ts"
+    ],
+    "C3/AA-098 @ C3/M21": [
+      "src/lib/mind/persistence-lifecycle.test.ts",
+      "src/lib/mind/transcript.test.ts"
+    ],
+    "C3/AA-099 @ C3/M21": [
+      "src/lib/mind/conversation-comparison.test.ts"
+    ],
+    "C3/AA-100 @ C3/M22": [
+      "src/lib/mind/decision-router.test.ts",
+      "src/lib/mind/kimi/build-guidance.test.ts",
+      "src/lib/mind/skill-activation.test.ts",
+      "src/lib/mind/skill-library.test.ts",
+      "src/lib/mind/skill-runtime.test.ts",
+      "src/lib/mind/skills.test.ts"
+    ],
+    "C3/AA-101 @ C3/M22": [
+      "src/lib/mind/decision-router.test.ts",
+      "src/lib/mind/kimi/build-guidance.test.ts",
+      "src/lib/mind/skill-activation.test.ts",
+      "src/lib/mind/skill-library.test.ts",
+      "src/lib/mind/skill-runtime.test.ts",
+      "src/lib/mind/skills.test.ts"
+    ],
+    "C3/AA-102 @ C3/M22": [
+      "src/lib/mind/decision-router.test.ts",
+      "src/lib/mind/kimi/build-guidance.test.ts",
+      "src/lib/mind/skill-activation.test.ts",
+      "src/lib/mind/skill-library.test.ts",
+      "src/lib/mind/skill-runtime.test.ts",
+      "src/lib/mind/skills.test.ts"
+    ],
+    "C3/AA-103 @ C3/M22": [
+      "src/lib/mind/decision-router.test.ts",
+      "src/lib/mind/kimi/build-guidance.test.ts",
+      "src/lib/mind/skill-activation.test.ts",
+      "src/lib/mind/skill-library.test.ts",
+      "src/lib/mind/skill-runtime.test.ts",
+      "src/lib/mind/skills.test.ts"
+    ],
+    "C3/AA-104 @ C3/M22": [
+      "src/lib/mind/decision-router.test.ts",
+      "src/lib/mind/kimi/build-guidance.test.ts",
+      "src/lib/mind/skill-activation.test.ts",
+      "src/lib/mind/skill-library.test.ts",
+      "src/lib/mind/skill-runtime.test.ts",
+      "src/lib/mind/skills.test.ts"
+    ],
+    "C3/AA-105 @ C3/M22": [
+      "src/lib/mind/decision-router.test.ts",
+      "src/lib/mind/kimi/build-guidance.test.ts",
+      "src/lib/mind/skill-activation.test.ts",
+      "src/lib/mind/skill-library.test.ts",
+      "src/lib/mind/skill-runtime.test.ts",
+      "src/lib/mind/skills.test.ts"
+    ],
+    "C3/AA-106 @ C3/M22": [
+      "scripts/visual/skill-receipt-fixture.test.mjs",
+      "src/lib/mind/decision-router.test.ts",
+      "src/lib/mind/kimi/build-guidance.test.ts",
+      "src/lib/mind/kimi/build-result.test.ts",
+      "src/lib/mind/kimi/paired-build-receipt.test.ts",
+      "src/lib/mind/skill-activation.test.ts",
+      "src/lib/mind/skill-library.test.ts",
+      "src/lib/mind/skill-receipts.test.ts",
+      "src/lib/mind/skill-runtime.test.ts",
+      "src/lib/mind/skills.test.ts"
+    ],
+    "C3/AA-107 @ C3/M23": [
+      "src/lib/mind/fleet-contract.test.ts"
+    ],
+    "C3/AA-108 @ C3/M23": [
+      "src/lib/mind/fleet-contract.test.ts"
+    ],
+    "C3/AA-109 @ C3/M23": [
+      "src/lib/mind/fleet-contract.test.ts"
+    ],
+    "C3/AA-110 @ C3/M23": [
+      "src/lib/mind/fleet-contract.test.ts"
+    ],
+    "C3/AA-111 @ C3/M23": [
+      "src/lib/mind/fleet-contract.test.ts"
+    ],
+    "C3/AA-112 @ C3/M23": [
+      "src/lib/mind/fleet-contract.test.ts",
+      "src/lib/mind/fleet-external.test.ts"
+    ],
+    "C3/AA-113 @ C3/M23": [
+      "src/lib/mind/fleet-mutation-action.test.ts",
+      "src/lib/mind/workbench-command.test.ts"
+    ],
+    "C3/AA-114 @ C3/M24": [
+      "src/lib/mind/kimi/build-guidance.test.ts",
+      "src/lib/mind/kimi/build-result.test.ts",
+      "src/lib/mind/kimi/build-review.test.ts",
+      "src/lib/mind/kimi/file-recovery.test.ts",
+      "src/lib/mind/kimi/hosted/acp-client.test.ts",
+      "src/lib/mind/kimi/hosted/file-receipts.test.ts"
+    ],
+    "C3/AA-115 @ C3/M24": [
+      "src/lib/mind/kimi/build-guidance.test.ts",
+      "src/lib/mind/kimi/build-result.test.ts",
+      "src/lib/mind/kimi/build-review.test.ts",
+      "src/lib/mind/kimi/file-recovery.test.ts",
+      "src/lib/mind/kimi/hosted/acp-client.test.ts",
+      "src/lib/mind/kimi/hosted/file-receipts.test.ts"
+    ],
+    "C3/AA-116 @ C3/M24": [
+      "src/lib/mind/kimi/build-guidance.test.ts",
+      "src/lib/mind/kimi/build-result.test.ts",
+      "src/lib/mind/kimi/build-review.test.ts",
+      "src/lib/mind/kimi/file-recovery.test.ts",
+      "src/lib/mind/kimi/hosted/acp-client.test.ts",
+      "src/lib/mind/kimi/hosted/file-receipts.test.ts"
+    ],
+    "C3/AA-117 @ C3/M24": [
+      "src/lib/mind/kimi/build-guidance.test.ts",
+      "src/lib/mind/kimi/build-result.test.ts",
+      "src/lib/mind/kimi/build-review.test.ts",
+      "src/lib/mind/kimi/file-recovery.test.ts",
+      "src/lib/mind/kimi/hosted/acp-client.test.ts",
+      "src/lib/mind/kimi/hosted/file-receipts.test.ts"
+    ],
+    "C3/AA-118 @ C3/M24": [
+      "src/lib/mind/kimi/build-guidance.test.ts",
+      "src/lib/mind/kimi/build-result.test.ts",
+      "src/lib/mind/kimi/build-review.test.ts",
+      "src/lib/mind/kimi/file-recovery.test.ts",
+      "src/lib/mind/kimi/hosted/acp-client.test.ts",
+      "src/lib/mind/kimi/hosted/file-receipts.test.ts"
+    ],
+    "C3/AA-119 @ C3/M24": [
+      "src/lib/mind/kimi/build-guidance.test.ts",
+      "src/lib/mind/kimi/build-result.test.ts",
+      "src/lib/mind/kimi/build-review.test.ts",
+      "src/lib/mind/kimi/file-recovery.test.ts",
+      "src/lib/mind/kimi/hosted/acp-client.test.ts",
+      "src/lib/mind/kimi/hosted/file-receipts.test.ts"
+    ],
+    "C3/AA-120 @ C3/M24": [
+      "src/lib/mind/kimi/build-guidance.test.ts",
+      "src/lib/mind/kimi/build-result.test.ts",
+      "src/lib/mind/kimi/build-review.test.ts",
+      "src/lib/mind/kimi/file-recovery.test.ts",
+      "src/lib/mind/kimi/hosted/acp-client.test.ts",
+      "src/lib/mind/kimi/hosted/file-receipts.test.ts"
+    ],
+    "C3/AA-121 @ C3/M24": [
+      "src/lib/mind/kimi/build-guidance.test.ts",
+      "src/lib/mind/kimi/build-result.test.ts",
+      "src/lib/mind/kimi/build-review.test.ts",
+      "src/lib/mind/kimi/file-recovery.test.ts",
+      "src/lib/mind/kimi/hosted/acp-client.test.ts",
+      "src/lib/mind/kimi/hosted/file-receipts.test.ts"
+    ],
+    "C3/AA-122 @ C3/M25": [
+      "src/lib/mind/dashboard/observability.test.ts",
+      "src/lib/mind/dashboard/operational-health.test.ts",
+      "src/lib/mind/dashboard/status-poll.test.ts",
+      "src/lib/mind/worker-health.test.ts"
+    ],
+    "C3/AA-123 @ C3/M25": [
+      "src/lib/mind/dashboard/observability.test.ts",
+      "src/lib/mind/dashboard/operational-health.test.ts",
+      "src/lib/mind/dashboard/status-poll.test.ts",
+      "src/lib/mind/worker-health.test.ts"
+    ],
+    "C3/AA-124 @ C3/M25": [
+      "src/lib/mind/dashboard/observability.test.ts",
+      "src/lib/mind/dashboard/operational-health.test.ts",
+      "src/lib/mind/dashboard/status-poll.test.ts",
+      "src/lib/mind/worker-health.test.ts"
+    ],
+    "C3/AA-125 @ C3/M25": [
+      "src/lib/mind/dashboard/observability.test.ts",
+      "src/lib/mind/dashboard/operational-health.test.ts",
+      "src/lib/mind/dashboard/status-poll.test.ts",
+      "src/lib/mind/worker-health.test.ts"
+    ],
+    "C3/AA-126 @ C3/M25": [
+      "src/lib/mind/dashboard/observability.test.ts",
+      "src/lib/mind/dashboard/operational-health.test.ts",
+      "src/lib/mind/dashboard/status-poll.test.ts",
+      "src/lib/mind/worker-health.test.ts"
+    ],
+    "C3/AA-127 @ C3/M25": [
+      "src/lib/mind/dashboard/observability.test.ts",
+      "src/lib/mind/dashboard/operational-health.test.ts",
+      "src/lib/mind/dashboard/status-poll.test.ts",
+      "src/lib/mind/worker-health.test.ts"
+    ],
+    "C3/AA-128 @ C3/M25": [
+      "src/lib/mind/dashboard/observability.test.ts",
+      "src/lib/mind/dashboard/operational-health.test.ts",
+      "src/lib/mind/dashboard/status-poll.test.ts",
+      "src/lib/mind/worker-health.test.ts"
+    ],
+    "C3/AA-129 @ C3/M25": [
+      "src/lib/mind/dashboard/observability.test.ts",
+      "src/lib/mind/dashboard/operational-health.test.ts",
+      "src/lib/mind/dashboard/status-poll.test.ts",
+      "src/lib/mind/worker-health.test.ts"
+    ],
+    "C3/AA-130 @ C3/M26": [
+      "src/lib/auth/session-center.test.ts",
+      "src/lib/auth/session-resolution.test.ts",
+      "src/lib/mind/live-turn.test.ts",
+      "src/lib/mind/mcp-list-auth.test.ts"
+    ],
+    "C3/AA-131 @ C3/M26": [
+      "src/lib/auth/session-center.test.ts",
+      "src/lib/auth/session-resolution.test.ts",
+      "src/lib/mind/live-turn.test.ts",
+      "src/lib/mind/mcp-list-auth.test.ts"
+    ],
+    "C3/AA-132 @ C3/M26": [
+      "src/lib/auth/session-center.test.ts",
+      "src/lib/auth/session-resolution.test.ts",
+      "src/lib/mind/live-turn.test.ts",
+      "src/lib/mind/mcp-list-auth.test.ts"
+    ],
+    "C3/AA-133 @ C3/M26": [
+      "src/lib/auth/session-center.test.ts",
+      "src/lib/auth/session-resolution.test.ts",
+      "src/lib/mind/live-turn.test.ts",
+      "src/lib/mind/mcp-list-auth.test.ts"
+    ],
+    "C3/AA-134 @ C3/M26": [
+      "src/lib/auth/session-center.test.ts",
+      "src/lib/auth/session-resolution.test.ts",
+      "src/lib/mind/live-turn.test.ts",
+      "src/lib/mind/mcp-list-auth.test.ts"
+    ],
+    "C3/AA-135 @ C3/M26": [
+      "src/lib/auth/session-center.test.ts",
+      "src/lib/auth/session-resolution.test.ts",
+      "src/lib/mind/live-turn.test.ts",
+      "src/lib/mind/mcp-list-auth.test.ts"
+    ],
+    "C3/AA-136 @ C3/M27": [
+      "src/lib/mind/media/blob-store.test.ts",
+      "src/lib/mind/media/image-reference.test.ts",
+      "src/lib/mind/media/imagine-harden-h4h7.test.ts",
+      "src/lib/mind/media/imagine.test.ts",
+      "src/lib/mind/media/monetary-dispatch.test.ts",
+      "src/lib/mind/media/video-job-store.test.ts",
+      "src/lib/mind/media/video-recovery.test.ts"
+    ],
+    "C3/AA-137 @ C3/M27": [
+      "src/lib/mind/media/blob-store.test.ts",
+      "src/lib/mind/media/image-reference.test.ts",
+      "src/lib/mind/media/imagine-harden-h4h7.test.ts",
+      "src/lib/mind/media/imagine.test.ts",
+      "src/lib/mind/media/video-capabilities.test.ts",
+      "src/lib/mind/media/video-recovery.test.ts"
+    ],
+    "C3/AA-138 @ C3/M27": [
+      "src/lib/mind/media/blob-store.test.ts",
+      "src/lib/mind/media/image-reference.test.ts",
+      "src/lib/mind/media/imagine-harden-h4h7.test.ts",
+      "src/lib/mind/media/imagine.test.ts",
+      "src/lib/mind/media/video-recovery.test.ts"
+    ],
+    "C3/AA-139 @ C3/M27": [
+      "src/lib/mind/media/blob-store.test.ts",
+      "src/lib/mind/media/image-reference.test.ts",
+      "src/lib/mind/media/imagine-harden-h4h7.test.ts",
+      "src/lib/mind/media/imagine.test.ts",
+      "src/lib/mind/media/monetary-dispatch.test.ts",
+      "src/lib/mind/media/video-job-store.test.ts",
+      "src/lib/mind/media/video-recovery.test.ts"
+    ],
+    "C3/AA-140 @ C3/M27": [
+      "src/lib/mind/media/blob-store.test.ts",
+      "src/lib/mind/media/image-reference.test.ts",
+      "src/lib/mind/media/imagine-harden-h4h7.test.ts",
+      "src/lib/mind/media/imagine.test.ts",
+      "src/lib/mind/media/monetary-dispatch.test.ts",
+      "src/lib/mind/media/video-job-store.test.ts",
+      "src/lib/mind/media/video-recovery.test.ts"
+    ],
+    "C3/AA-141 @ C3/M27": [
+      "src/lib/mind/media/blob-store.test.ts",
+      "src/lib/mind/media/image-reference.test.ts",
+      "src/lib/mind/media/imagine-harden-h4h7.test.ts",
+      "src/lib/mind/media/imagine.test.ts",
+      "src/lib/mind/media/video-recovery.test.ts"
+    ],
+    "C3/AA-142 @ C3/M27": [
+      "src/lib/mind/media/blob-store.test.ts",
+      "src/lib/mind/media/image-reference.test.ts",
+      "src/lib/mind/media/imagine-harden-h4h7.test.ts",
+      "src/lib/mind/media/imagine.test.ts",
+      "src/lib/mind/media/video-recovery.test.ts"
+    ],
+    "C3/AA-143 @ C3/M27": [
+      "src/lib/mind/media/blob-store.test.ts",
+      "src/lib/mind/media/image-reference.test.ts",
+      "src/lib/mind/media/imagine-harden-h4h7.test.ts",
+      "src/lib/mind/media/imagine.test.ts",
+      "src/lib/mind/media/video-recovery.test.ts"
+    ],
+    "C3/AA-144 @ C3/M28": [
+      "src/lib/mind/dialog-focus.test.ts",
+      "src/lib/mind/menu-state.test.ts",
+      "src/lib/mind/visual-polish-contract.test.ts",
+      "src/lib/mind/voice/speak-mounted.test.ts"
+    ],
+    "C3/AA-145 @ C3/M28": [
+      "src/lib/mind/menu-state.test.ts",
+      "src/lib/mind/visual-polish-contract.test.ts",
+      "src/lib/mind/voice/speak-mounted.test.ts"
+    ],
+    "C3/AA-146 @ C3/M28": [
+      "src/lib/mind/menu-state.test.ts",
+      "src/lib/mind/visual-polish-contract.test.ts",
+      "src/lib/mind/voice/speak-mounted.test.ts"
+    ],
+    "C3/AA-147 @ C3/M28": [
+      "src/lib/mind/menu-state.test.ts",
+      "src/lib/mind/visual-polish-contract.test.ts",
+      "src/lib/mind/voice/speak-mounted.test.ts"
+    ],
+    "C3/AA-148 @ C3/M28": [
+      "src/lib/mind/menu-state.test.ts",
+      "src/lib/mind/visual-polish-contract.test.ts",
+      "src/lib/mind/voice/speak-mounted.test.ts"
+    ],
+    "C3/AA-149 @ C3/M28": [
+      "src/lib/mind/menu-state.test.ts",
+      "src/lib/mind/visual-polish-contract.test.ts",
+      "src/lib/mind/voice/speak-mounted.test.ts"
+    ],
+    "C3/AA-150 @ C3/M28": [
+      "src/lib/mind/menu-state.test.ts",
+      "src/lib/mind/visual-polish-contract.test.ts",
+      "src/lib/mind/voice/speak-mounted.test.ts"
+    ],
+    "C3/AA-151 @ C3/M28": [
+      "src/lib/mind/menu-state.test.ts",
+      "src/lib/mind/visual-polish-contract.test.ts",
+      "src/lib/mind/voice/speak-mounted.test.ts"
+    ],
+    "C3/AA-152 @ C3/M29": [
+      "scripts/frontend-architecture.test.mjs",
+      "src/lib/mind/render-window.test.ts",
+      "src/lib/mind/workspace-loader.test.ts"
+    ],
+    "C3/AA-153 @ C3/M29": [
+      "scripts/frontend-architecture.test.mjs",
+      "src/lib/mind/render-window.test.ts",
+      "src/lib/mind/workspace-loader.test.ts"
+    ],
+    "C3/AA-154 @ C3/M29": [
+      "scripts/frontend-architecture.test.mjs",
+      "src/lib/mind/render-window.test.ts",
+      "src/lib/mind/workspace-loader.test.ts"
+    ],
+    "C3/AA-155 @ C3/M29": [
+      "scripts/frontend-architecture.test.mjs",
+      "src/lib/mind/render-window.test.ts",
+      "src/lib/mind/workspace-loader.test.ts"
+    ],
+    "C3/AA-156 @ C3/M29": [
+      "scripts/frontend-architecture.test.mjs",
+      "src/lib/mind/render-window.test.ts",
+      "src/lib/mind/workspace-loader.test.ts"
+    ],
+    "C3/AA-157 @ C3/M29": [
+      "scripts/frontend-architecture.test.mjs",
+      "src/lib/mind/render-window.test.ts",
+      "src/lib/mind/workspace-loader.test.ts"
+    ],
+    "C3/AA-158 @ C3/M29": [
+      "scripts/frontend-architecture.test.mjs",
+      "src/lib/mind/render-window.test.ts",
+      "src/lib/mind/workspace-loader.test.ts"
+    ],
+    "C3/AA-159 @ C3/M29": [
+      "scripts/frontend-architecture.test.mjs",
+      "src/lib/mind/render-window.test.ts",
+      "src/lib/mind/use-mind-workspace.test.ts",
+      "src/lib/mind/workspace-loader.test.ts"
+    ],
+    "C3/AA-160 @ C3/M30": [],
+    "C3/AA-161 @ C3/M30": [],
+    "C3/AA-162 @ C3/M30": [],
+    "C3/AA-163 @ C3/M30": [],
+    "C3/AA-164 @ C3/M30": [
+      "scripts/desktop/full-package.test.mjs"
+    ],
+    "C3/AA-165 @ C3/M30": [
+      "src/lib/mind/pc-capability.test.ts"
+    ],
+    "C3/AA-166 @ C3/M30": [],
+    "C3/AA-167 @ C3/M30": [],
+    "C3/AA-168 @ C3/M31": [
+      "src/lib/mind/notifications.test.ts"
+    ],
+    "C3/AA-169 @ C3/M31": [
+      "src/lib/mind/notifications.test.ts"
+    ],
+    "C3/AA-170 @ C3/M31": [
+      "src/lib/mind/notifications.test.ts"
+    ],
+    "C3/AA-171 @ C3/M31": [
+      "src/lib/mind/notifications.test.ts"
+    ],
+    "C3/AA-172 @ C3/M31": [
+      "src/lib/mind/notifications.test.ts"
+    ],
+    "C3/AA-173 @ C3/M31": [
+      "src/lib/mind/notifications.test.ts"
+    ],
+    "C3/AA-174 @ C3/M31": [
+      "src/lib/mind/notifications.test.ts"
+    ],
+    "C3/AA-175 @ C3/M31": [
+      "src/lib/mind/notifications.test.ts"
+    ],
+    "C3/AA-176 @ C3/M32": [
+      "src/lib/mind/data-retention.test.ts",
+      "src/lib/mind/workspace-changes.test.ts"
+    ],
+    "C3/AA-177 @ C3/M32": [
+      "src/lib/mind/data-retention.test.ts",
+      "src/lib/mind/persistence-lifecycle.test.ts",
+      "src/lib/mind/store.test.ts"
+    ],
+    "C3/AA-178 @ C3/M32": [
+      "src/lib/mind/data-retention.test.ts",
+      "src/lib/mind/persistence-lifecycle.test.ts",
+      "src/lib/mind/store.test.ts"
+    ],
+    "C3/AA-179 @ C3/M32": [
+      "src/lib/mind/data-retention.test.ts",
+      "src/lib/mind/persistence-lifecycle.test.ts",
+      "src/lib/mind/store.test.ts"
+    ],
+    "C3/AA-180 @ C3/M32": [
+      "src/lib/mind/data-retention.test.ts",
+      "src/lib/mind/persistence-lifecycle.test.ts",
+      "src/lib/mind/store.test.ts"
+    ],
+    "C3/AA-181 @ C3/M32": [
+      "src/lib/mind/data-retention.test.ts",
+      "src/lib/mind/persistence-lifecycle.test.ts",
+      "src/lib/mind/store.test.ts"
+    ],
+    "C3/AA-182 @ C3/M32": [
+      "src/lib/mind/data-retention.test.ts"
+    ],
+    "C3/AA-183 @ C3/M32": [
+      "src/lib/mind/data-retention.test.ts",
+      "src/lib/mind/persistence-lifecycle.test.ts",
+      "src/lib/mind/store.test.ts"
+    ],
+    "C3/AA-184 @ C3/M33": [
+      "src/lib/mind/ai-provider-lifecycle.test.ts",
+      "src/lib/mind/ai-provider-native.test.ts",
+      "src/lib/mind/ai-provider-stream.test.ts",
+      "src/lib/mind/consultation-failure.test.ts",
+      "src/lib/mind/mcp/http-provider-stream.test.ts",
+      "src/lib/mind/model-capabilities.test.ts",
+      "src/lib/mind/model-controls.test.ts",
+      "src/lib/mind/model-route.test.ts",
+      "src/lib/mind/model-tiers.test.ts",
+      "src/lib/mind/provider-call-stream.test.ts",
+      "src/lib/mind/provider-call.test.ts",
+      "src/lib/mind/provider-dependencies.test.ts",
+      "src/lib/mind/provider-lifecycle.test.ts",
+      "src/lib/mind/provider-usage.test.ts",
+      "src/lib/mind/turn-primary-selection.test.ts",
+      "src/lib/mind/voice/http-budget.test.ts",
+      "src/lib/mind/voice/provider-selection.test.ts",
+      "src/lib/mind/voice/speak-action.test.ts",
+      "src/lib/mind/voice/stage-receipts.test.ts"
+    ],
+    "C3/AA-185 @ C3/M33": [
+      "src/lib/mind/ai-provider-lifecycle.test.ts",
+      "src/lib/mind/ai-provider-native.test.ts",
+      "src/lib/mind/ai-provider-stream.test.ts",
+      "src/lib/mind/consultation-failure.test.ts",
+      "src/lib/mind/mcp/http-provider-stream.test.ts",
+      "src/lib/mind/model-capabilities.test.ts",
+      "src/lib/mind/model-controls.test.ts",
+      "src/lib/mind/model-route.test.ts",
+      "src/lib/mind/model-tiers.test.ts",
+      "src/lib/mind/provider-call-stream.test.ts",
+      "src/lib/mind/provider-call.test.ts",
+      "src/lib/mind/provider-dependencies.test.ts",
+      "src/lib/mind/provider-lifecycle.test.ts",
+      "src/lib/mind/provider-usage.test.ts",
+      "src/lib/mind/turn-primary-selection.test.ts",
+      "src/lib/mind/voice/http-budget.test.ts",
+      "src/lib/mind/voice/provider-selection.test.ts",
+      "src/lib/mind/voice/speak-action.test.ts",
+      "src/lib/mind/voice/stage-receipts.test.ts"
+    ],
+    "C3/AA-186 @ C3/M33": [
+      "src/lib/mind/ai-provider-lifecycle.test.ts",
+      "src/lib/mind/ai-provider-native.test.ts",
+      "src/lib/mind/ai-provider-stream.test.ts",
+      "src/lib/mind/consultation-failure.test.ts",
+      "src/lib/mind/mcp/http-provider-stream.test.ts",
+      "src/lib/mind/model-capabilities.test.ts",
+      "src/lib/mind/model-controls.test.ts",
+      "src/lib/mind/model-route.test.ts",
+      "src/lib/mind/model-tiers.test.ts",
+      "src/lib/mind/provider-call-stream.test.ts",
+      "src/lib/mind/provider-call.test.ts",
+      "src/lib/mind/provider-dependencies.test.ts",
+      "src/lib/mind/provider-lifecycle.test.ts",
+      "src/lib/mind/provider-usage.test.ts",
+      "src/lib/mind/turn-primary-selection.test.ts",
+      "src/lib/mind/voice/http-budget.test.ts",
+      "src/lib/mind/voice/provider-selection.test.ts",
+      "src/lib/mind/voice/speak-action.test.ts",
+      "src/lib/mind/voice/stage-receipts.test.ts"
+    ],
+    "C3/AA-187 @ C3/M33": [
+      "src/lib/mind/ai-provider-lifecycle.test.ts",
+      "src/lib/mind/ai-provider-native.test.ts",
+      "src/lib/mind/ai-provider-stream.test.ts",
+      "src/lib/mind/consultation-failure.test.ts",
+      "src/lib/mind/mcp/http-provider-stream.test.ts",
+      "src/lib/mind/model-capabilities.test.ts",
+      "src/lib/mind/model-controls.test.ts",
+      "src/lib/mind/model-route.test.ts",
+      "src/lib/mind/model-tiers.test.ts",
+      "src/lib/mind/provider-call-stream.test.ts",
+      "src/lib/mind/provider-call.test.ts",
+      "src/lib/mind/provider-dependencies.test.ts",
+      "src/lib/mind/provider-lifecycle.test.ts",
+      "src/lib/mind/provider-usage.test.ts",
+      "src/lib/mind/turn-primary-selection.test.ts",
+      "src/lib/mind/voice/http-budget.test.ts",
+      "src/lib/mind/voice/provider-selection.test.ts",
+      "src/lib/mind/voice/speak-action.test.ts",
+      "src/lib/mind/voice/stage-receipts.test.ts"
+    ],
+    "C3/AA-188 @ C3/M33": [
+      "src/lib/mind/ai-provider-lifecycle.test.ts",
+      "src/lib/mind/ai-provider-native.test.ts",
+      "src/lib/mind/ai-provider-stream.test.ts",
+      "src/lib/mind/consultation-failure.test.ts",
+      "src/lib/mind/mcp/http-provider-stream.test.ts",
+      "src/lib/mind/model-capabilities.test.ts",
+      "src/lib/mind/model-controls.test.ts",
+      "src/lib/mind/model-route.test.ts",
+      "src/lib/mind/model-tiers.test.ts",
+      "src/lib/mind/provider-call-stream.test.ts",
+      "src/lib/mind/provider-call.test.ts",
+      "src/lib/mind/provider-dependencies.test.ts",
+      "src/lib/mind/provider-lifecycle.test.ts",
+      "src/lib/mind/provider-usage.test.ts",
+      "src/lib/mind/turn-primary-selection.test.ts",
+      "src/lib/mind/voice/http-budget.test.ts",
+      "src/lib/mind/voice/provider-selection.test.ts",
+      "src/lib/mind/voice/speak-action.test.ts",
+      "src/lib/mind/voice/stage-receipts.test.ts"
+    ],
+    "C3/AA-189 @ C3/M33": [
+      "src/lib/mind/ai-provider-lifecycle.test.ts",
+      "src/lib/mind/ai-provider-native.test.ts",
+      "src/lib/mind/ai-provider-stream.test.ts",
+      "src/lib/mind/consultation-failure.test.ts",
+      "src/lib/mind/mcp/http-provider-stream.test.ts",
+      "src/lib/mind/model-capabilities.test.ts",
+      "src/lib/mind/model-controls.test.ts",
+      "src/lib/mind/model-route.test.ts",
+      "src/lib/mind/model-tiers.test.ts",
+      "src/lib/mind/provider-call-stream.test.ts",
+      "src/lib/mind/provider-call.test.ts",
+      "src/lib/mind/provider-dependencies.test.ts",
+      "src/lib/mind/provider-lifecycle.test.ts",
+      "src/lib/mind/provider-usage.test.ts",
+      "src/lib/mind/turn-primary-selection.test.ts",
+      "src/lib/mind/voice/http-budget.test.ts",
+      "src/lib/mind/voice/provider-selection.test.ts",
+      "src/lib/mind/voice/speak-action.test.ts",
+      "src/lib/mind/voice/stage-receipts.test.ts"
+    ],
+    "C3/AA-190 @ C3/M33": [
+      "src/lib/mind/ai-provider-lifecycle.test.ts",
+      "src/lib/mind/ai-provider-native.test.ts",
+      "src/lib/mind/ai-provider-stream.test.ts",
+      "src/lib/mind/consultation-failure.test.ts",
+      "src/lib/mind/mcp/http-provider-stream.test.ts",
+      "src/lib/mind/model-capabilities.test.ts",
+      "src/lib/mind/model-controls.test.ts",
+      "src/lib/mind/model-route.test.ts",
+      "src/lib/mind/model-tiers.test.ts",
+      "src/lib/mind/provider-call-stream.test.ts",
+      "src/lib/mind/provider-call.test.ts",
+      "src/lib/mind/provider-dependencies.test.ts",
+      "src/lib/mind/provider-lifecycle.test.ts",
+      "src/lib/mind/provider-usage.test.ts",
+      "src/lib/mind/turn-primary-selection.test.ts",
+      "src/lib/mind/voice/http-budget.test.ts",
+      "src/lib/mind/voice/provider-selection.test.ts",
+      "src/lib/mind/voice/speak-action.test.ts",
+      "src/lib/mind/voice/stage-receipts.test.ts"
+    ],
+    "C3/AA-191 @ C3/M33": [
+      "scripts/migration-plan.test.mjs",
+      "src/lib/mind/ai-provider-lifecycle.test.ts",
+      "src/lib/mind/ai-provider-native.test.ts",
+      "src/lib/mind/ai-provider-stream.test.ts",
+      "src/lib/mind/consultation-failure.test.ts",
+      "src/lib/mind/environment-model-catalog.test.ts",
+      "src/lib/mind/legacy-turn.test.ts",
+      "src/lib/mind/logic-routes.test.ts",
+      "src/lib/mind/mcp/http-provider-stream.test.ts",
+      "src/lib/mind/model-capabilities.test.ts",
+      "src/lib/mind/model-controls.test.ts",
+      "src/lib/mind/model-route.test.ts",
+      "src/lib/mind/model-tiers.test.ts",
+      "src/lib/mind/provider-call-stream.test.ts",
+      "src/lib/mind/provider-call.test.ts",
+      "src/lib/mind/provider-dependencies.test.ts",
+      "src/lib/mind/provider-lifecycle.test.ts",
+      "src/lib/mind/provider-usage.test.ts",
+      "src/lib/mind/turn-primary-selection.test.ts",
+      "src/lib/mind/voice/http-budget.test.ts",
+      "src/lib/mind/voice/provider-selection.test.ts",
+      "src/lib/mind/voice/speak-action.test.ts",
+      "src/lib/mind/voice/stage-receipts.test.ts"
+    ],
+    "C3/AA-192 @ C3/M34": [
+      "src/lib/mind/conversation-context.test.ts",
+      "src/lib/mind/limits.test.ts",
+      "src/lib/mind/logic-routes.test.ts",
+      "src/lib/mind/media/history.test.ts"
+    ],
+    "C3/AA-193 @ C3/M34": [
+      "src/lib/mind/conversation-context.test.ts",
+      "src/lib/mind/limits.test.ts",
+      "src/lib/mind/logic-routes.test.ts",
+      "src/lib/mind/media/history.test.ts"
+    ],
+    "C3/AA-194 @ C3/M34": [
+      "src/lib/mind/ai-provider-lifecycle.test.ts",
+      "src/lib/mind/ai-provider-native.test.ts",
+      "src/lib/mind/conversation-context.test.ts",
+      "src/lib/mind/limits.test.ts",
+      "src/lib/mind/logic-routes.test.ts",
+      "src/lib/mind/media/history.test.ts",
+      "src/lib/mind/model-capabilities.test.ts"
+    ],
+    "C3/AA-195 @ C3/M34": [
+      "src/lib/mind/conversation-context.test.ts",
+      "src/lib/mind/limits.test.ts",
+      "src/lib/mind/logic-routes.test.ts",
+      "src/lib/mind/media/history.test.ts"
+    ],
+    "C3/AA-196 @ C3/M34": [
+      "src/lib/mind/ai-provider-lifecycle.test.ts",
+      "src/lib/mind/ai-provider-native.test.ts",
+      "src/lib/mind/conversation-context.test.ts",
+      "src/lib/mind/limits.test.ts",
+      "src/lib/mind/logic-routes.test.ts",
+      "src/lib/mind/media/history.test.ts",
+      "src/lib/mind/model-capabilities.test.ts"
+    ],
+    "C3/AA-197 @ C3/M34": [
+      "src/lib/mind/conversation-context.test.ts",
+      "src/lib/mind/limits.test.ts",
+      "src/lib/mind/logic-routes.test.ts",
+      "src/lib/mind/media/history.test.ts"
+    ],
+    "C3/AA-198 @ C3/M34": [
+      "src/lib/mind/conversation-context.test.ts",
+      "src/lib/mind/limits.test.ts",
+      "src/lib/mind/logic-routes.test.ts",
+      "src/lib/mind/media/history.test.ts"
+    ],
+    "C3/AA-199 @ C3/M34": [
+      "src/lib/mind/conversation-context.test.ts",
+      "src/lib/mind/limits.test.ts",
+      "src/lib/mind/logic-routes.test.ts",
+      "src/lib/mind/media/history.test.ts"
+    ],
+    "C3/AA-200 @ C3/M35": [
+      "src/lib/mind/memory/retrieval.test.ts"
+    ],
+    "C3/AA-201 @ C3/M35": [
+      "src/lib/mind/memory/retrieval.test.ts"
+    ],
+    "C3/AA-202 @ C3/M35": [
+      "src/lib/mind/memory/retrieval.test.ts"
+    ],
+    "C3/AA-203 @ C3/M35": [
+      "src/lib/mind/memory/retrieval.test.ts"
+    ],
+    "C3/AA-204 @ C3/M35": [
+      "src/lib/mind/conversation-context.test.ts",
+      "src/lib/mind/knowledge-index.test.ts"
+    ],
+    "C3/AA-205 @ C3/M35": [
+      "src/lib/mind/conversation-context.test.ts",
+      "src/lib/mind/knowledge-index.test.ts"
+    ],
+    "C3/AA-206 @ C3/M35": [
+      "src/lib/mind/conversation-context.test.ts",
+      "src/lib/mind/knowledge-index.test.ts"
+    ],
+    "C3/AA-207 @ C3/M35": [
+      "src/lib/mind/conversation-context.test.ts",
+      "src/lib/mind/knowledge-index.test.ts"
+    ],
+    "C3/AA-208 @ C3/M36": [
+      "src/lib/mind/fleet-contract.test.ts",
+      "src/lib/mind/workbench-command.test.ts"
+    ],
+    "C3/AA-209 @ C3/M36": [
+      "src/lib/mind/fleet-contract.test.ts"
+    ],
+    "C3/AA-210 @ C3/M36": [
+      "src/lib/mind/fleet-contract.test.ts"
+    ],
+    "C3/AA-211 @ C3/M36": [
+      "src/lib/mind/fleet-contract.test.ts",
+      "src/lib/mind/fleet-external.test.ts"
+    ],
+    "C3/AA-212 @ C3/M36": [
+      "src/lib/mind/fleet-contract.test.ts"
+    ],
+    "C3/AA-213 @ C3/M36": [
+      "src/lib/mind/fleet-contract.test.ts"
+    ],
+    "C3/AA-214 @ C3/M36": [
+      "src/lib/mind/fleet-contract.test.ts"
+    ],
+    "C3/AA-215 @ C3/M36": [
+      "src/lib/mind/fleet-contract.test.ts"
+    ],
+    "C3/AA-216 @ C3/M37": [
+      "src/lib/mind/fleet-dispatch.test.ts",
+      "src/lib/mind/fleet-external.test.ts"
+    ],
+    "C3/AA-217 @ C3/M37": [
+      "src/lib/mind/fleet-external.test.ts",
+      "src/lib/mind/fleet-gmail.test.ts"
+    ],
+    "C3/AA-218 @ C3/M37": [
+      "src/lib/mind/fleet-contract.test.ts"
+    ],
+    "C3/AA-219 @ C3/M37": [
+      "src/lib/mind/fleet-contract.test.ts"
+    ],
+    "C3/AA-220 @ C3/M37": [
+      "src/lib/mind/fleet-contract.test.ts"
+    ],
+    "C3/AA-221 @ C3/M37": [
+      "src/lib/mind/fleet-contract.test.ts"
+    ],
+    "C3/AA-222 @ C3/M37": [
+      "src/lib/mind/fleet-contract.test.ts",
+      "src/lib/mind/fleet-external.test.ts",
+      "src/lib/mind/worker-pass.test.ts"
+    ],
+    "C3/AA-223 @ C3/M37": [
+      "src/lib/mind/fleet-contract.test.ts"
+    ],
+    "C3/AA-224 @ C3/M38": [
+      "src/lib/mind/ai-provider-lifecycle.test.ts",
+      "src/lib/mind/ai-provider-native.test.ts",
+      "src/lib/mind/ai-provider-stream.test.ts",
+      "src/lib/mind/consultation-failure.test.ts",
+      "src/lib/mind/mcp/http-provider-stream.test.ts",
+      "src/lib/mind/model-capabilities.test.ts",
+      "src/lib/mind/model-controls.test.ts",
+      "src/lib/mind/model-route.test.ts",
+      "src/lib/mind/model-tiers.test.ts",
+      "src/lib/mind/provider-call-stream.test.ts",
+      "src/lib/mind/provider-call.test.ts",
+      "src/lib/mind/provider-dependencies.test.ts",
+      "src/lib/mind/provider-lifecycle.test.ts",
+      "src/lib/mind/provider-usage.test.ts",
+      "src/lib/mind/turn-primary-selection.test.ts",
+      "src/lib/mind/voice/http-budget.test.ts",
+      "src/lib/mind/voice/provider-selection.test.ts",
+      "src/lib/mind/voice/speak-action.test.ts",
+      "src/lib/mind/voice/stage-receipts.test.ts"
+    ],
+    "C3/AA-225 @ C3/M38": [
+      "src/lib/mind/ai-provider-lifecycle.test.ts",
+      "src/lib/mind/ai-provider-native.test.ts",
+      "src/lib/mind/ai-provider-stream.test.ts",
+      "src/lib/mind/consultation-failure.test.ts",
+      "src/lib/mind/mcp/http-provider-stream.test.ts",
+      "src/lib/mind/model-capabilities.test.ts",
+      "src/lib/mind/model-controls.test.ts",
+      "src/lib/mind/model-route.test.ts",
+      "src/lib/mind/model-tiers.test.ts",
+      "src/lib/mind/provider-call-stream.test.ts",
+      "src/lib/mind/provider-call.test.ts",
+      "src/lib/mind/provider-dependencies.test.ts",
+      "src/lib/mind/provider-lifecycle.test.ts",
+      "src/lib/mind/provider-usage.test.ts",
+      "src/lib/mind/turn-primary-selection.test.ts",
+      "src/lib/mind/voice/http-budget.test.ts",
+      "src/lib/mind/voice/provider-selection.test.ts",
+      "src/lib/mind/voice/speak-action.test.ts",
+      "src/lib/mind/voice/stage-receipts.test.ts"
+    ],
+    "C3/AA-226 @ C3/M38": [
+      "src/lib/mind/ai-provider-lifecycle.test.ts",
+      "src/lib/mind/ai-provider-native.test.ts",
+      "src/lib/mind/ai-provider-stream.test.ts",
+      "src/lib/mind/consultation-failure.test.ts",
+      "src/lib/mind/mcp/http-provider-stream.test.ts",
+      "src/lib/mind/model-capabilities.test.ts",
+      "src/lib/mind/model-controls.test.ts",
+      "src/lib/mind/model-route.test.ts",
+      "src/lib/mind/model-tiers.test.ts",
+      "src/lib/mind/provider-call-stream.test.ts",
+      "src/lib/mind/provider-call.test.ts",
+      "src/lib/mind/provider-dependencies.test.ts",
+      "src/lib/mind/provider-lifecycle.test.ts",
+      "src/lib/mind/provider-usage.test.ts",
+      "src/lib/mind/turn-primary-selection.test.ts",
+      "src/lib/mind/voice/http-budget.test.ts",
+      "src/lib/mind/voice/provider-selection.test.ts",
+      "src/lib/mind/voice/speak-action.test.ts",
+      "src/lib/mind/voice/stage-receipts.test.ts"
+    ],
+    "C3/AA-227 @ C3/M38": [
+      "src/lib/mind/ai-provider-lifecycle.test.ts",
+      "src/lib/mind/ai-provider-native.test.ts",
+      "src/lib/mind/ai-provider-stream.test.ts",
+      "src/lib/mind/consultation-failure.test.ts",
+      "src/lib/mind/mcp/http-provider-stream.test.ts",
+      "src/lib/mind/model-capabilities.test.ts",
+      "src/lib/mind/model-controls.test.ts",
+      "src/lib/mind/model-route.test.ts",
+      "src/lib/mind/model-tiers.test.ts",
+      "src/lib/mind/provider-call-stream.test.ts",
+      "src/lib/mind/provider-call.test.ts",
+      "src/lib/mind/provider-dependencies.test.ts",
+      "src/lib/mind/provider-lifecycle.test.ts",
+      "src/lib/mind/provider-usage.test.ts",
+      "src/lib/mind/turn-primary-selection.test.ts",
+      "src/lib/mind/voice/http-budget.test.ts",
+      "src/lib/mind/voice/provider-selection.test.ts",
+      "src/lib/mind/voice/speak-action.test.ts",
+      "src/lib/mind/voice/stage-receipts.test.ts"
+    ],
+    "C3/AA-228 @ C3/M38": [
+      "src/lib/mind/ai-provider-lifecycle.test.ts",
+      "src/lib/mind/ai-provider-native.test.ts",
+      "src/lib/mind/ai-provider-stream.test.ts",
+      "src/lib/mind/consultation-failure.test.ts",
+      "src/lib/mind/mcp/http-provider-stream.test.ts",
+      "src/lib/mind/model-capabilities.test.ts",
+      "src/lib/mind/model-controls.test.ts",
+      "src/lib/mind/model-route.test.ts",
+      "src/lib/mind/model-tiers.test.ts",
+      "src/lib/mind/provider-call-stream.test.ts",
+      "src/lib/mind/provider-call.test.ts",
+      "src/lib/mind/provider-dependencies.test.ts",
+      "src/lib/mind/provider-lifecycle.test.ts",
+      "src/lib/mind/provider-usage.test.ts",
+      "src/lib/mind/turn-primary-selection.test.ts",
+      "src/lib/mind/voice/http-budget.test.ts",
+      "src/lib/mind/voice/provider-selection.test.ts",
+      "src/lib/mind/voice/speak-action.test.ts",
+      "src/lib/mind/voice/stage-receipts.test.ts"
+    ],
+    "C3/AA-229 @ C3/M38": [
+      "src/lib/mind/ai-provider-lifecycle.test.ts",
+      "src/lib/mind/ai-provider-native.test.ts",
+      "src/lib/mind/ai-provider-stream.test.ts",
+      "src/lib/mind/consultation-failure.test.ts",
+      "src/lib/mind/mcp/http-provider-stream.test.ts",
+      "src/lib/mind/model-capabilities.test.ts",
+      "src/lib/mind/model-controls.test.ts",
+      "src/lib/mind/model-route.test.ts",
+      "src/lib/mind/model-tiers.test.ts",
+      "src/lib/mind/provider-call-stream.test.ts",
+      "src/lib/mind/provider-call.test.ts",
+      "src/lib/mind/provider-dependencies.test.ts",
+      "src/lib/mind/provider-lifecycle.test.ts",
+      "src/lib/mind/provider-usage.test.ts",
+      "src/lib/mind/turn-primary-selection.test.ts",
+      "src/lib/mind/voice/http-budget.test.ts",
+      "src/lib/mind/voice/provider-selection.test.ts",
+      "src/lib/mind/voice/speak-action.test.ts",
+      "src/lib/mind/voice/stage-receipts.test.ts"
+    ],
+    "C3/AA-230 @ C3/M38": [
+      "src/lib/mind/ai-provider-lifecycle.test.ts",
+      "src/lib/mind/ai-provider-native.test.ts",
+      "src/lib/mind/ai-provider-stream.test.ts",
+      "src/lib/mind/consultation-failure.test.ts",
+      "src/lib/mind/mcp/http-provider-stream.test.ts",
+      "src/lib/mind/model-capabilities.test.ts",
+      "src/lib/mind/model-controls.test.ts",
+      "src/lib/mind/model-route.test.ts",
+      "src/lib/mind/model-tiers.test.ts",
+      "src/lib/mind/provider-call-stream.test.ts",
+      "src/lib/mind/provider-call.test.ts",
+      "src/lib/mind/provider-dependencies.test.ts",
+      "src/lib/mind/provider-lifecycle.test.ts",
+      "src/lib/mind/provider-usage.test.ts",
+      "src/lib/mind/turn-primary-selection.test.ts",
+      "src/lib/mind/voice/http-budget.test.ts",
+      "src/lib/mind/voice/provider-selection.test.ts",
+      "src/lib/mind/voice/speak-action.test.ts",
+      "src/lib/mind/voice/stage-receipts.test.ts"
+    ],
+    "C3/AA-231 @ C3/M38": [
+      "src/lib/mind/ai-provider-lifecycle.test.ts",
+      "src/lib/mind/ai-provider-native.test.ts",
+      "src/lib/mind/ai-provider-stream.test.ts",
+      "src/lib/mind/consultation-failure.test.ts",
+      "src/lib/mind/mcp/http-provider-stream.test.ts",
+      "src/lib/mind/model-capabilities.test.ts",
+      "src/lib/mind/model-controls.test.ts",
+      "src/lib/mind/model-route.test.ts",
+      "src/lib/mind/model-tiers.test.ts",
+      "src/lib/mind/provider-call-stream.test.ts",
+      "src/lib/mind/provider-call.test.ts",
+      "src/lib/mind/provider-dependencies.test.ts",
+      "src/lib/mind/provider-lifecycle.test.ts",
+      "src/lib/mind/provider-usage.test.ts",
+      "src/lib/mind/turn-primary-selection.test.ts",
+      "src/lib/mind/voice/http-budget.test.ts",
+      "src/lib/mind/voice/provider-selection.test.ts",
+      "src/lib/mind/voice/speak-action.test.ts",
+      "src/lib/mind/voice/stage-receipts.test.ts"
+    ],
+    "C3/AA-232 @ C3/M39": [
+      "scripts/migration-compatibility.test.mjs",
+      "scripts/release-evidence.test.mjs",
+      "scripts/test-inventory.test.mjs",
+      "scripts/vercel-migration-contract.test.mjs"
+    ],
+    "C3/AA-233 @ C3/M39": [
+      "scripts/migration-compatibility.test.mjs",
+      "scripts/release-evidence.test.mjs",
+      "scripts/test-inventory.test.mjs",
+      "scripts/vercel-migration-contract.test.mjs"
+    ],
+    "C3/AA-234 @ C3/M39": [
+      "scripts/migration-compatibility.test.mjs",
+      "scripts/release-evidence.test.mjs",
+      "scripts/test-inventory.test.mjs",
+      "scripts/vercel-migration-contract.test.mjs"
+    ],
+    "C3/AA-235 @ C3/M39": [
+      "scripts/migration-compatibility.test.mjs",
+      "scripts/release-evidence.test.mjs",
+      "scripts/test-inventory.test.mjs",
+      "scripts/vercel-migration-contract.test.mjs"
+    ],
+    "C3/AA-236 @ C3/M39": [
+      "scripts/migration-compatibility.test.mjs",
+      "scripts/release-evidence.test.mjs",
+      "scripts/test-inventory.test.mjs",
+      "scripts/vercel-migration-contract.test.mjs"
+    ],
+    "C3/AA-237 @ C3/M39": [
+      "scripts/migration-compatibility.test.mjs",
+      "scripts/release-evidence.test.mjs",
+      "scripts/test-inventory.test.mjs",
+      "scripts/vercel-migration-contract.test.mjs"
+    ],
+    "C3/AA-238 @ C3/M39": [
+      "scripts/migration-compatibility.test.mjs",
+      "scripts/release-evidence.test.mjs",
+      "scripts/test-inventory.test.mjs",
+      "scripts/vercel-migration-contract.test.mjs"
+    ],
+    "C3/AA-239 @ C3/M39": [
+      "scripts/migration-compatibility.test.mjs",
+      "scripts/release-evidence.test.mjs",
+      "scripts/test-inventory.test.mjs",
+      "scripts/vercel-migration-contract.test.mjs"
+    ],
+    "C3/AA-240 @ C3/M40": [
+      "src/lib/mind/file-persist.test.ts",
+      "src/lib/mind/memory/owner-ops.test.ts",
+      "src/lib/mind/memory/scoped-durability.test.ts",
+      "src/lib/mind/store.test.ts",
+      "src/lib/mind/workspace-changes.test.ts"
+    ],
+    "C3/AA-241 @ C3/M40": [
+      "src/lib/mind/store.test.ts",
+      "src/lib/mind/workspace-changes.test.ts"
+    ],
+    "C3/AA-242 @ C3/M40": [
+      "src/lib/mind/file-persist.test.ts",
+      "src/lib/mind/memory/owner-ops.test.ts",
+      "src/lib/mind/memory/scoped-durability.test.ts",
+      "src/lib/mind/store.test.ts",
+      "src/lib/mind/workspace-changes.test.ts"
+    ],
+    "C3/AA-243 @ C3/M40": [
+      "src/lib/mind/file-persist.test.ts",
+      "src/lib/mind/memory/owner-ops.test.ts",
+      "src/lib/mind/memory/scoped-durability.test.ts",
+      "src/lib/mind/store.test.ts",
+      "src/lib/mind/workspace-changes.test.ts"
+    ],
+    "C3/AA-244 @ C3/M40": [
+      "src/lib/mind/file-persist.test.ts",
+      "src/lib/mind/memory/owner-ops.test.ts",
+      "src/lib/mind/memory/scoped-durability.test.ts",
+      "src/lib/mind/store.test.ts",
+      "src/lib/mind/workspace-changes.test.ts"
+    ],
+    "C3/AA-245 @ C3/M40": [
+      "scripts/migration-compatibility.test.mjs",
+      "scripts/migration-plan.test.mjs",
+      "scripts/migration-runner.test.mjs"
+    ],
+    "C3/AA-246 @ C3/M40": [
+      "scripts/migration-compatibility.test.mjs",
+      "scripts/migration-plan.test.mjs",
+      "scripts/migration-runner.test.mjs"
+    ],
+    "C3/AA-247 @ C3/M40": [
+      "scripts/migration-compatibility.test.mjs",
+      "scripts/release-evidence.test.mjs",
+      "scripts/vercel-migration-contract.test.mjs"
+    ],
+    "C3/AA-248 @ C3/M40": [
+      "src/lib/database-readiness.test.ts",
+      "src/lib/mind/file-persist.test.ts",
+      "src/lib/mind/store.test.ts"
+    ],
+    "C3/AA-249 @ C3/M41": [
+      "scripts/navigation-drawer.test.mjs",
+      "src/lib/mind/integration-persona-explore.test.ts",
+      "src/lib/mind/integration-security-c16.test.ts",
+      "src/lib/mind/integration-voice-banner.test.ts",
+      "src/lib/mind/memory-mount.test.ts",
+      "src/lib/mind/visual-polish-contract.test.ts"
+    ],
+    "C3/AA-250 @ C3/M41": [
+      "scripts/frontend-architecture.test.mjs",
+      "src/lib/mind/menu-state.test.ts",
+      "src/lib/mind/resource-state.test.ts",
+      "src/lib/mind/workspace-loader.test.ts"
+    ],
+    "C3/AA-251 @ C3/M41": [
+      "scripts/frontend-architecture.test.mjs",
+      "src/lib/mind/menu-state.test.ts",
+      "src/lib/mind/resource-state.test.ts",
+      "src/lib/mind/workspace-loader.test.ts"
+    ],
+    "C3/AA-252 @ C3/M41": [
+      "scripts/frontend-architecture.test.mjs",
+      "src/lib/mind/menu-state.test.ts",
+      "src/lib/mind/resource-state.test.ts",
+      "src/lib/mind/workspace-loader.test.ts"
+    ],
+    "C3/AA-253 @ C3/M41": [
+      "scripts/frontend-architecture.test.mjs",
+      "src/lib/mind/menu-state.test.ts",
+      "src/lib/mind/resource-state.test.ts",
+      "src/lib/mind/workspace-loader.test.ts"
+    ],
+    "C3/AA-254 @ C3/M41": [
+      "scripts/frontend-architecture.test.mjs",
+      "src/lib/mind/menu-state.test.ts",
+      "src/lib/mind/resource-state.test.ts",
+      "src/lib/mind/workspace-loader.test.ts"
+    ],
+    "C3/AA-255 @ C3/M41": [
+      "scripts/frontend-architecture.test.mjs",
+      "scripts/navigation-drawer.test.mjs",
+      "src/lib/mind/integration-persona-explore.test.ts",
+      "src/lib/mind/integration-security-c16.test.ts",
+      "src/lib/mind/integration-voice-banner.test.ts",
+      "src/lib/mind/memory-mount.test.ts",
+      "src/lib/mind/menu-state.test.ts",
+      "src/lib/mind/resource-state.test.ts",
+      "src/lib/mind/visual-polish-contract.test.ts",
+      "src/lib/mind/workspace-loader.test.ts"
+    ],
+    "C3/AA-256 @ C3/M41": [
+      "scripts/frontend-architecture.test.mjs",
+      "src/lib/mind/menu-state.test.ts",
+      "src/lib/mind/resource-state.test.ts",
+      "src/lib/mind/workspace-loader.test.ts"
+    ],
+    "C4/AA-001 @ C4/M01": [
+      "src/lib/mind/adrian-analysis-regressions.test.ts",
+      "src/lib/mind/audit-connection-integrity.test.ts"
+    ],
+    "C4/AA-002 @ C4/M01": [
+      "src/lib/mind/audit-connection-integrity.test.ts"
+    ],
+    "C4/AA-003 @ C4/M02": [
+      "scripts/adrian-audit-deliver-lifecycle.test.mjs",
+      "scripts/adrian-audit-speak-lifecycle.test.mjs",
+      "scripts/adrian-audit-voice-auth.test.mjs",
+      "src/lib/mind/voice/direct-mode.test.ts",
+      "src/lib/mind/voice/provider-fallback.test.ts"
+    ],
+    "C4/AA-004 @ C4/M02": [
+      "scripts/adrian-audit-deliver-lifecycle.test.mjs",
+      "scripts/adrian-audit-speak-lifecycle.test.mjs",
+      "scripts/adrian-audit-voice-auth.test.mjs",
+      "src/lib/mind/voice/direct-mode.test.ts",
+      "src/lib/mind/voice/provider-fallback.test.ts"
+    ],
+    "C4/AA-005 @ C4/M02": [
+      "scripts/adrian-audit-deliver-lifecycle.test.mjs",
+      "scripts/adrian-audit-speak-lifecycle.test.mjs",
+      "scripts/adrian-audit-voice-auth.test.mjs",
+      "src/lib/mind/voice/direct-mode.test.ts",
+      "src/lib/mind/voice/provider-fallback.test.ts"
+    ],
+    "C4/AA-006 @ C4/M03": [
+      "scripts/adrian-audit-client-ui.test.mjs",
+      "src/lib/mind/adrian-analysis-regressions.test.ts",
+      "src/lib/mind/app-location.test.ts"
+    ],
+    "C4/AA-007 @ C4/M03": [
+      "scripts/adrian-audit-client-ui.test.mjs",
+      "src/lib/mind/adrian-analysis-regressions.test.ts",
+      "src/lib/mind/app-location.test.ts"
+    ],
+    "C4/AA-008 @ C4/M03": [
+      "scripts/adrian-audit-client-ui.test.mjs",
+      "src/lib/mind/adrian-analysis-regressions.test.ts",
+      "src/lib/mind/app-location.test.ts"
+    ],
+    "C4/AA-009 @ C4/M04": [
+      "scripts/adrian-audit-build.test.mjs"
+    ],
+    "C4/AA-010 @ C4/M04": [
+      "scripts/adrian-audit-build.test.mjs"
+    ],
+    "C4/AA-011 @ C4/M05": [
+      "scripts/adrian-audit-client-ui.test.mjs"
+    ],
+    "C4/AA-012 @ C4/M05": [
+      "scripts/adrian-audit-client-ui.test.mjs"
+    ],
+    "C4/AA-013 @ C4/M05": [
+      "scripts/adrian-audit-client-ui.test.mjs"
+    ],
+    "C4/AA-014 @ C4/M05": [
+      "scripts/adrian-audit-client-ui.test.mjs"
+    ],
+    "C4/AA-015 @ C4/M05": [
+      "scripts/adrian-audit-client-ui.test.mjs",
+      "src/lib/mind/schedule-clock.test.ts",
+      "src/lib/mind/schedule-worker.test.ts"
+    ],
+    "C4/AA-016 @ C4/M05": [
+      "scripts/adrian-audit-client-ui.test.mjs",
+      "src/lib/mind/schedule-clock.test.ts",
+      "src/lib/mind/schedule-worker.test.ts"
+    ],
+    "C4/AA-017 @ C4/M06": [
+      "src/lib/mind/audit-connection-integrity.test.ts",
+      "src/lib/mind/connected-mcp.test.ts",
+      "src/lib/mind/custom-connection.test.ts",
+      "src/lib/mind/mcp/registry.test.ts"
+    ],
+    "C4/AA-018 @ C4/M06": [
+      "src/lib/mind/audit-connection-integrity.test.ts",
+      "src/lib/mind/connected-mcp.test.ts",
+      "src/lib/mind/custom-connection.test.ts",
+      "src/lib/mind/mcp/registry.test.ts"
+    ],
+    "C4/AA-019 @ C4/M06": [
+      "src/lib/mind/audit-connection-integrity.test.ts",
+      "src/lib/mind/connected-mcp.test.ts",
+      "src/lib/mind/custom-connection.test.ts",
+      "src/lib/mind/mcp/registry.test.ts"
+    ],
+    "C4/AA-020 @ C4/M07": [
+      "scripts/adrian-audit-deliver-lifecycle.test.mjs",
+      "src/lib/mind/adrian-analysis-regressions.test.ts"
+    ],
+    "C4/AA-021 @ C4/M07": [
+      "scripts/adrian-audit-deliver-lifecycle.test.mjs",
+      "src/lib/mind/adrian-analysis-regressions.test.ts"
+    ],
+    "C4/AA-022 @ C4/M07": [
+      "scripts/adrian-audit-deliver-lifecycle.test.mjs",
+      "src/lib/mind/adrian-analysis-regressions.test.ts"
+    ],
+    "C4/AA-023 @ C4/M08": [
+      "scripts/adrian-audit-build.test.mjs",
+      "src/lib/mind/halt-file.test.ts",
+      "src/lib/mind/pc-pairing/pairing.test.ts"
+    ],
+    "C4/AA-024 @ C4/M08": [
+      "scripts/adrian-audit-build.test.mjs",
+      "src/lib/mind/halt-file.test.ts",
+      "src/lib/mind/pc-pairing/pairing.test.ts"
+    ],
+    "C4/AA-025 @ C4/M08": [
+      "src/lib/mind/audit-connection-integrity.test.ts",
+      "src/lib/mind/connected-mcp.test.ts",
+      "src/lib/mind/custom-connection.test.ts",
+      "src/lib/mind/mcp/registry.test.ts"
+    ],
+    "C4/AA-026 @ C4/M08": [
+      "scripts/adrian-audit-build.test.mjs",
+      "src/lib/mind/halt-file.test.ts",
+      "src/lib/mind/pc-pairing/pairing.test.ts"
+    ],
+    "C4/AA-027 @ C4/M09": [
+      "src/lib/mind/sync.test.ts",
+      "src/lib/mind/use-mind-workspace.test.ts",
+      "src/lib/mind/workspace-hook-lifecycle.test.ts",
+      "src/lib/mind/workspace-reconciliation.test.ts"
+    ],
+    "C4/AA-028 @ C4/M09": [
+      "src/lib/mind/sync.test.ts",
+      "src/lib/mind/use-mind-workspace.test.ts",
+      "src/lib/mind/workspace-hook-lifecycle.test.ts",
+      "src/lib/mind/workspace-reconciliation.test.ts"
+    ],
+    "C4/AA-029 @ C4/M09": [
+      "src/lib/mind/sync.test.ts",
+      "src/lib/mind/use-mind-workspace.test.ts",
+      "src/lib/mind/workspace-hook-lifecycle.test.ts",
+      "src/lib/mind/workspace-reconciliation.test.ts"
+    ],
+    "C4/AA-030 @ C4/M09": [
+      "src/lib/mind/sync.test.ts",
+      "src/lib/mind/use-mind-workspace.test.ts",
+      "src/lib/mind/workspace-hook-lifecycle.test.ts",
+      "src/lib/mind/workspace-reconciliation.test.ts"
+    ],
+    "C4/AA-031 @ C4/M10": [
+      "src/components/mind/message-rendering.test.ts",
+      "src/lib/mind/adrian-analysis-regressions.test.ts",
+      "src/lib/mind/media/attachment-integrity.test.ts",
+      "src/lib/mind/media/blob-store.test.ts",
+      "src/lib/mind/persistence-incremental.test.ts"
+    ],
+    "C4/AA-032 @ C4/M10": [
+      "src/components/mind/message-rendering.test.ts",
+      "src/lib/mind/adrian-analysis-regressions.test.ts",
+      "src/lib/mind/media/attachment-integrity.test.ts",
+      "src/lib/mind/media/blob-store.test.ts",
+      "src/lib/mind/persistence-incremental.test.ts"
+    ],
+    "C4/AA-033 @ C4/M10": [
+      "src/components/mind/message-rendering.test.ts",
+      "src/lib/mind/adrian-analysis-regressions.test.ts",
+      "src/lib/mind/media/attachment-integrity.test.ts",
+      "src/lib/mind/media/blob-store.test.ts",
+      "src/lib/mind/persistence-incremental.test.ts"
+    ],
+    "C4/AA-034 @ C4/M10": [
+      "src/components/mind/message-rendering.test.ts",
+      "src/lib/mind/adrian-analysis-regressions.test.ts",
+      "src/lib/mind/media/attachment-integrity.test.ts",
+      "src/lib/mind/media/blob-store.test.ts",
+      "src/lib/mind/persistence-incremental.test.ts"
+    ],
+    "C4/AA-035 @ C4/M10": [
+      "src/components/mind/message-rendering.test.ts",
+      "src/lib/mind/adrian-analysis-regressions.test.ts",
+      "src/lib/mind/media/attachment-integrity.test.ts",
+      "src/lib/mind/media/blob-store.test.ts",
+      "src/lib/mind/persistence-incremental.test.ts"
+    ],
+    "C4/AA-036 @ C4/M11": [
+      "src/lib/mind/adrian-analysis-regressions.test.ts",
+      "src/lib/mind/logic-routes.test.ts",
+      "src/lib/mind/media/history.test.ts",
+      "src/lib/mind/retry-fidelity.test.ts"
+    ],
+    "C4/AA-037 @ C4/M11": [
+      "src/lib/mind/adrian-analysis-regressions.test.ts",
+      "src/lib/mind/logic-routes.test.ts",
+      "src/lib/mind/media/history.test.ts",
+      "src/lib/mind/retry-fidelity.test.ts"
+    ],
+    "C4/AA-038 @ C4/M11": [
+      "src/lib/mind/adrian-analysis-regressions.test.ts",
+      "src/lib/mind/logic-routes.test.ts",
+      "src/lib/mind/media/history.test.ts",
+      "src/lib/mind/retry-fidelity.test.ts"
+    ],
+    "C4/AA-039 @ C4/M12": [
+      "scripts/adrian-audit-deliver-lifecycle.test.mjs",
+      "src/lib/mind/adrian-analysis-regressions.test.ts",
+      "src/lib/mind/live-turn.test.ts",
+      "src/lib/mind/relay.test.ts",
+      "src/lib/mind/stream-integrity.test.ts"
+    ],
+    "C4/AA-040 @ C4/M12": [
+      "scripts/adrian-audit-deliver-lifecycle.test.mjs",
+      "src/lib/mind/adrian-analysis-regressions.test.ts",
+      "src/lib/mind/live-turn.test.ts",
+      "src/lib/mind/relay.test.ts",
+      "src/lib/mind/stream-integrity.test.ts"
+    ],
+    "C4/AA-041 @ C4/M12": [
+      "scripts/adrian-audit-deliver-lifecycle.test.mjs",
+      "src/lib/mind/adrian-analysis-regressions.test.ts",
+      "src/lib/mind/live-turn.test.ts",
+      "src/lib/mind/relay.test.ts",
+      "src/lib/mind/stream-integrity.test.ts"
+    ],
+    "C4/AA-042 @ C4/M12": [
+      "scripts/adrian-audit-deliver-lifecycle.test.mjs",
+      "src/lib/mind/adrian-analysis-regressions.test.ts",
+      "src/lib/mind/live-turn.test.ts",
+      "src/lib/mind/relay.test.ts",
+      "src/lib/mind/stream-integrity.test.ts"
+    ],
+    "C4/AA-043 @ C4/M13": [
+      "scripts/adrian-audit-deliver-lifecycle.test.mjs",
+      "src/lib/mind/adrian-analysis-regressions.test.ts",
+      "src/lib/mind/custom-provider-receipt.test.ts",
+      "src/lib/mind/persistence-incremental.test.ts",
+      "src/lib/mind/provider-receipt.test.ts",
+      "src/lib/mind/stream-integrity.test.ts"
+    ],
+    "C4/AA-044 @ C4/M13": [
+      "scripts/adrian-audit-deliver-lifecycle.test.mjs",
+      "src/lib/mind/adrian-analysis-regressions.test.ts",
+      "src/lib/mind/custom-provider-receipt.test.ts",
+      "src/lib/mind/persistence-incremental.test.ts",
+      "src/lib/mind/provider-receipt.test.ts",
+      "src/lib/mind/stream-integrity.test.ts"
+    ],
+    "C4/AA-045 @ C4/M13": [
+      "scripts/adrian-audit-deliver-lifecycle.test.mjs",
+      "src/lib/mind/adrian-analysis-regressions.test.ts",
+      "src/lib/mind/custom-provider-receipt.test.ts",
+      "src/lib/mind/persistence-incremental.test.ts",
+      "src/lib/mind/provider-receipt.test.ts",
+      "src/lib/mind/stream-integrity.test.ts"
+    ],
+    "C4/AA-046 @ C4/M13": [
+      "scripts/adrian-audit-deliver-lifecycle.test.mjs",
+      "src/lib/mind/adrian-analysis-regressions.test.ts",
+      "src/lib/mind/custom-provider-receipt.test.ts",
+      "src/lib/mind/persistence-incremental.test.ts",
+      "src/lib/mind/provider-receipt.test.ts",
+      "src/lib/mind/stream-integrity.test.ts"
+    ],
+    "C4/AA-047 @ C4/M14": [
+      "scripts/adrian-audit-client-ui.test.mjs",
+      "src/lib/mind/adrian-analysis-regressions.test.ts",
+      "src/lib/mind/palette-label.test.ts"
+    ],
+    "C4/AA-048 @ C4/M14": [
+      "scripts/adrian-audit-client-ui.test.mjs",
+      "src/lib/mind/adrian-analysis-regressions.test.ts",
+      "src/lib/mind/palette-label.test.ts"
+    ],
+    "C4/AA-049 @ C4/M14": [
+      "scripts/adrian-audit-client-ui.test.mjs",
+      "src/lib/mind/adrian-analysis-regressions.test.ts",
+      "src/lib/mind/palette-label.test.ts"
+    ],
+    "C4/AA-050 @ C4/M14": [
+      "scripts/adrian-audit-client-ui.test.mjs",
+      "src/lib/mind/adrian-analysis-regressions.test.ts",
+      "src/lib/mind/palette-label.test.ts"
+    ],
+    "C4/AA-051 @ C4/M14": [
+      "scripts/adrian-audit-client-ui.test.mjs",
+      "src/lib/mind/adrian-analysis-regressions.test.ts",
+      "src/lib/mind/palette-label.test.ts"
+    ],
+    "C4/AA-052 @ C4/M15": [
+      "scripts/adrian-audit-client-ui.test.mjs"
+    ],
+    "C4/AA-053 @ C4/M15": [
+      "scripts/adrian-audit-client-ui.test.mjs",
+      "src/lib/mind/adrian-analysis-regressions.test.ts",
+      "src/lib/mind/palette-label.test.ts"
+    ],
+    "C4/AA-054 @ C4/M15": [
+      "scripts/adrian-audit-client-ui.test.mjs"
+    ],
+    "C4/AA-055 @ C4/M15": [
+      "scripts/adrian-audit-client-ui.test.mjs"
+    ],
+    "C4/AA-056 @ C4/M15": [
+      "scripts/adrian-audit-client-ui.test.mjs"
+    ],
+    "C4/AA-057 @ C4/M16": [
+      "scripts/adrian-audit-client-ui.test.mjs",
+      "scripts/adrian-audit-voice-auth.test.mjs",
+      "scripts/sign-out-plan.test.mjs",
+      "src/lib/auth/session-user.test.ts",
+      "src/lib/mind/workspace-hook-lifecycle.test.ts"
+    ],
+    "C4/AA-058 @ C4/M16": [
+      "scripts/adrian-audit-client-ui.test.mjs",
+      "scripts/adrian-audit-voice-auth.test.mjs",
+      "scripts/sign-out-plan.test.mjs",
+      "src/lib/auth/session-user.test.ts",
+      "src/lib/mind/workspace-hook-lifecycle.test.ts"
+    ],
+    "C4/AA-059 @ C4/M16": [
+      "scripts/adrian-audit-client-ui.test.mjs",
+      "scripts/adrian-audit-voice-auth.test.mjs",
+      "scripts/sign-out-plan.test.mjs",
+      "src/lib/auth/session-user.test.ts",
+      "src/lib/mind/workspace-hook-lifecycle.test.ts"
+    ],
+    "C4/AA-060 @ C4/M16": [
+      "scripts/adrian-audit-client-ui.test.mjs",
+      "scripts/adrian-audit-voice-auth.test.mjs",
+      "scripts/sign-out-plan.test.mjs",
+      "src/lib/auth/session-user.test.ts",
+      "src/lib/mind/workspace-hook-lifecycle.test.ts"
+    ],
+    "C4/AA-061 @ C4/M16": [
+      "scripts/adrian-audit-deliver-lifecycle.test.mjs",
+      "src/lib/mind/adrian-analysis-regressions.test.ts",
+      "src/lib/mind/live-turn.test.ts",
+      "src/lib/mind/relay.test.ts",
+      "src/lib/mind/stream-integrity.test.ts"
+    ],
+    "C4/AA-062 @ C4/M17": [
+      "src/components/mind/message-rendering.test.ts"
+    ],
+    "C4/AA-063 @ C4/M17": [
+      "src/components/mind/message-rendering.test.ts"
+    ],
+    "C4/AA-064 @ C4/M17": [
+      "src/components/mind/message-rendering.test.ts"
+    ],
+    "C4/AA-065 @ C4/M17": [
+      "src/lib/mind/persistence-incremental.test.ts",
+      "src/lib/mind/store.test.ts"
+    ],
+    "C4/AA-066 @ C4/M17": [
+      "scripts/adrian-audit-client-ui.test.mjs",
+      "src/lib/mind/adrian-analysis-regressions.test.ts",
+      "src/lib/mind/palette-label.test.ts"
+    ],
+    "C5/AA-001 @ docs/audit-handoff/C5.md#L130": [
+      "src/lib/auth/session-user.test.ts",
+      "src/lib/mind/c5-provider-recovery.test.ts",
+      "src/lib/mind/connected-mcp.test.ts",
+      "src/lib/mind/notion.test.ts"
+    ],
+    "C5/AA-002 @ docs/audit-handoff/C5.md#L131": [
+      "src/lib/auth/session-user.test.ts",
+      "src/lib/mind/c5-provider-recovery.test.ts",
+      "src/lib/mind/connected-mcp.test.ts",
+      "src/lib/mind/notion.test.ts"
+    ],
+    "C5/AA-003 @ docs/audit-handoff/C5.md#L132": [
+      "src/lib/auth/session-user.test.ts",
+      "src/lib/mind/c5-provider-recovery.test.ts",
+      "src/lib/mind/connected-mcp.test.ts",
+      "src/lib/mind/notion.test.ts"
+    ],
+    "C5/AA-004 @ docs/audit-handoff/C5.md#L133": [
+      "src/lib/mind/bot-model.test.ts",
+      "src/lib/mind/logic-routes.test.ts",
+      "src/lib/mind/memory-send-policy.test.ts",
+      "src/lib/mind/model-tier-memory.test.ts",
+      "src/lib/mind/selection-routing.test.ts",
+      "src/lib/mind/selection-sync.test.ts"
+    ],
+    "C5/AA-005 @ docs/audit-handoff/C5.md#L134": [
+      "src/lib/mind/bot-model.test.ts",
+      "src/lib/mind/logic-routes.test.ts",
+      "src/lib/mind/memory-send-policy.test.ts",
+      "src/lib/mind/model-tier-memory.test.ts",
+      "src/lib/mind/selection-routing.test.ts",
+      "src/lib/mind/selection-sync.test.ts"
+    ],
+    "C5/AA-006 @ docs/audit-handoff/C5.md#L135": [
+      "src/lib/mind/bot-model.test.ts",
+      "src/lib/mind/logic-routes.test.ts",
+      "src/lib/mind/memory-send-policy.test.ts",
+      "src/lib/mind/model-tier-memory.test.ts",
+      "src/lib/mind/selection-routing.test.ts",
+      "src/lib/mind/selection-sync.test.ts"
+    ],
+    "C5/AA-007 @ docs/audit-handoff/C5.md#L136": [
+      "src/lib/mind/voice/composed-turn.test.ts",
+      "src/lib/mind/voice/explicit-provider.test.ts",
+      "src/lib/mind/voice/provider-fallback.test.ts",
+      "src/lib/mind/voice/realtime-session.test.ts",
+      "src/lib/mind/voice/speak-mounted.test.ts",
+      "src/lib/mind/voice/voice-input.test.ts"
+    ],
+    "C5/AA-008 @ docs/audit-handoff/C5.md#L137": [
+      "src/lib/mind/voice/composed-turn.test.ts",
+      "src/lib/mind/voice/explicit-provider.test.ts",
+      "src/lib/mind/voice/provider-fallback.test.ts",
+      "src/lib/mind/voice/realtime-session.test.ts",
+      "src/lib/mind/voice/speak-mounted.test.ts",
+      "src/lib/mind/voice/usage.test.ts",
+      "src/lib/mind/voice/voice-input.test.ts",
+      "src/lib/mind/whisper-flow/provider.test.ts"
+    ],
+    "C5/AA-009 @ docs/audit-handoff/C5.md#L138": [
+      "src/lib/mind/voice/composed-turn.test.ts",
+      "src/lib/mind/voice/explicit-provider.test.ts",
+      "src/lib/mind/voice/provider-fallback.test.ts",
+      "src/lib/mind/voice/realtime-session.test.ts",
+      "src/lib/mind/voice/speak-mounted.test.ts",
+      "src/lib/mind/voice/voice-input.test.ts"
+    ],
+    "C5/AA-010 @ docs/audit-handoff/C5.md#L139": [
+      "src/lib/auth/session-user.test.ts",
+      "src/lib/mind/c5-provider-recovery.test.ts",
+      "src/lib/mind/connected-mcp.test.ts",
+      "src/lib/mind/notion.test.ts",
+      "src/lib/mind/usage-dispatch.test.ts"
+    ],
+    "C5/AA-011 @ docs/audit-handoff/C5.md#L140": [
+      "src/lib/auth/session-user.test.ts",
+      "src/lib/mind/c5-provider-recovery.test.ts",
+      "src/lib/mind/connected-mcp.test.ts",
+      "src/lib/mind/notion.test.ts"
+    ],
+    "C5/AA-012 @ docs/audit-handoff/C5.md#L141": [
+      "src/lib/auth/session-user.test.ts",
+      "src/lib/mind/c5-provider-recovery.test.ts",
+      "src/lib/mind/connected-mcp.test.ts",
+      "src/lib/mind/notion.test.ts"
+    ],
+    "C5/AA-013 @ docs/audit-handoff/C5.md#L142": [
+      "src/lib/auth/session-user.test.ts",
+      "src/lib/mind/c5-provider-recovery.test.ts",
+      "src/lib/mind/connected-mcp.test.ts",
+      "src/lib/mind/notion.test.ts"
+    ],
+    "C5/AA-014 @ docs/audit-handoff/C5.md#L143": [
+      "src/lib/auth/session-user.test.ts",
+      "src/lib/mind/c5-provider-recovery.test.ts",
+      "src/lib/mind/connected-mcp.test.ts",
+      "src/lib/mind/notion.test.ts"
+    ],
+    "C5/AA-015 @ docs/audit-handoff/C5.md#L144": [
+      "src/lib/auth/session-user.test.ts",
+      "src/lib/mind/c5-provider-recovery.test.ts",
+      "src/lib/mind/connected-mcp.test.ts",
+      "src/lib/mind/notion.test.ts"
+    ],
+    "C5/AA-016 @ docs/audit-handoff/C5.md#L145": [
+      "src/lib/auth/session-user.test.ts",
+      "src/lib/mind/c5-provider-recovery.test.ts",
+      "src/lib/mind/connected-mcp.test.ts",
+      "src/lib/mind/notion.test.ts"
+    ],
+    "C5/AA-017 @ docs/audit-handoff/C5.md#L146": [
+      "src/lib/mind/memory-send-preparation.test.ts"
+    ],
+    "C5/AA-018 @ docs/audit-handoff/C5.md#L147": [
+      "src/lib/mind/core-runtime.test.ts",
+      "src/lib/mind/fleet-model.test.ts",
+      "src/lib/mind/fleet.test.ts",
+      "src/lib/mind/kimi/c5-build.test.ts",
+      "src/lib/mind/pc-pairing/pairing.test.ts",
+      "src/lib/mind/schedule-worker.test.ts",
+      "src/lib/mind/worker-pass.test.ts"
+    ],
+    "C5/AA-019 @ docs/audit-handoff/C5.md#L148": [
+      "src/lib/mind/core-runtime.test.ts",
+      "src/lib/mind/fleet-model.test.ts",
+      "src/lib/mind/fleet.test.ts",
+      "src/lib/mind/kimi/c5-build.test.ts",
+      "src/lib/mind/pc-pairing/pairing.test.ts",
+      "src/lib/mind/schedule-worker.test.ts",
+      "src/lib/mind/worker-pass.test.ts"
+    ],
+    "C5/AA-020 @ docs/audit-handoff/C5.md#L149": [
+      "src/lib/mind/core-runtime.test.ts",
+      "src/lib/mind/fleet-model.test.ts",
+      "src/lib/mind/fleet.test.ts",
+      "src/lib/mind/kimi/c5-build.test.ts",
+      "src/lib/mind/pc-pairing/pairing.test.ts",
+      "src/lib/mind/schedule-worker.test.ts",
+      "src/lib/mind/worker-pass.test.ts"
+    ],
+    "C5/AA-021 @ docs/audit-handoff/C5.md#L150": [
+      "src/lib/mind/archive-review.test.ts"
+    ],
+    "C5/AA-022 @ docs/audit-handoff/C5.md#L151": [
+      "src/lib/mind/archive-review.test.ts"
+    ],
+    "C5/AA-023 @ docs/audit-handoff/C5.md#L152": [
+      "src/lib/mind/archive-review.test.ts"
+    ],
+    "C5/AA-024 @ docs/audit-handoff/C5.md#L153": [
+      "src/lib/mind/archive-review.test.ts"
+    ],
+    "C5/AA-025 @ docs/audit-handoff/C5.md#L154": [
+      "src/lib/mind/core-runtime.test.ts",
+      "src/lib/mind/fleet-model.test.ts",
+      "src/lib/mind/fleet.test.ts",
+      "src/lib/mind/kimi/c5-build.test.ts",
+      "src/lib/mind/pc-pairing/pairing.test.ts",
+      "src/lib/mind/schedule-worker.test.ts",
+      "src/lib/mind/worker-pass.test.ts"
+    ],
+    "C5/AA-026 @ docs/audit-handoff/C5.md#L155": [
+      "src/lib/mind/core-runtime.test.ts",
+      "src/lib/mind/fleet-model.test.ts",
+      "src/lib/mind/fleet.test.ts",
+      "src/lib/mind/kimi/c5-build.test.ts",
+      "src/lib/mind/pc-pairing/pairing.test.ts",
+      "src/lib/mind/schedule-worker.test.ts",
+      "src/lib/mind/worker-pass.test.ts"
+    ],
+    "C5/AA-027 @ docs/audit-handoff/C5.md#L156": [
+      "src/lib/mind/core-runtime.test.ts",
+      "src/lib/mind/fleet-model.test.ts",
+      "src/lib/mind/fleet.test.ts",
+      "src/lib/mind/kimi/c5-build.test.ts",
+      "src/lib/mind/pc-pairing/pairing.test.ts",
+      "src/lib/mind/schedule-worker.test.ts",
+      "src/lib/mind/worker-pass.test.ts"
+    ],
+    "C5/AA-028 @ docs/audit-handoff/C5.md#L157": [
+      "src/lib/mind/core-runtime.test.ts",
+      "src/lib/mind/fleet-model.test.ts",
+      "src/lib/mind/fleet.test.ts",
+      "src/lib/mind/kimi/c5-build.test.ts",
+      "src/lib/mind/pc-pairing/pairing.test.ts",
+      "src/lib/mind/schedule-worker.test.ts",
+      "src/lib/mind/worker-pass.test.ts"
+    ],
+    "C5/AA-029 @ docs/audit-handoff/C5.md#L158": [
+      "src/lib/mind/core-runtime.test.ts",
+      "src/lib/mind/fleet-model.test.ts",
+      "src/lib/mind/fleet.test.ts",
+      "src/lib/mind/kimi/c5-build.test.ts",
+      "src/lib/mind/pc-pairing/pairing.test.ts",
+      "src/lib/mind/schedule-worker.test.ts",
+      "src/lib/mind/worker-pass.test.ts"
+    ],
+    "C5/AA-030 @ docs/audit-handoff/C5.md#L159": [
+      "src/lib/mind/core-runtime.test.ts",
+      "src/lib/mind/fleet-model.test.ts",
+      "src/lib/mind/fleet.test.ts",
+      "src/lib/mind/kimi/c5-build.test.ts",
+      "src/lib/mind/pc-pairing/pairing.test.ts",
+      "src/lib/mind/schedule-worker.test.ts",
+      "src/lib/mind/worker-pass.test.ts"
+    ],
+    "C5/AA-031 @ docs/audit-handoff/C5.md#L160": [
+      "src/lib/mind/core-runtime.test.ts",
+      "src/lib/mind/fleet-model.test.ts",
+      "src/lib/mind/fleet.test.ts",
+      "src/lib/mind/kimi/c5-build.test.ts",
+      "src/lib/mind/pc-pairing/pairing.test.ts",
+      "src/lib/mind/schedule-worker.test.ts",
+      "src/lib/mind/worker-pass.test.ts"
+    ],
+    "C5/AA-032 @ docs/audit-handoff/C5.md#L161": [
+      "src/lib/mind/core-runtime.test.ts",
+      "src/lib/mind/fleet-model.test.ts",
+      "src/lib/mind/fleet.test.ts",
+      "src/lib/mind/kimi/c5-build.test.ts",
+      "src/lib/mind/pc-pairing/pairing.test.ts",
+      "src/lib/mind/schedule-worker.test.ts",
+      "src/lib/mind/worker-pass.test.ts"
+    ],
+    "C5/AA-033 @ docs/audit-handoff/C5.md#L162": [
+      "src/lib/mind/core-runtime.test.ts",
+      "src/lib/mind/fleet-model.test.ts",
+      "src/lib/mind/fleet.test.ts",
+      "src/lib/mind/kimi/c5-build.test.ts",
+      "src/lib/mind/pc-pairing/pairing.test.ts",
+      "src/lib/mind/schedule-worker.test.ts",
+      "src/lib/mind/worker-pass.test.ts"
+    ],
+    "C5/AA-034 @ docs/audit-handoff/C5.md#L163": [
+      "src/lib/mind/core-runtime.test.ts",
+      "src/lib/mind/fleet-model.test.ts",
+      "src/lib/mind/fleet.test.ts",
+      "src/lib/mind/kimi/c5-build.test.ts",
+      "src/lib/mind/pc-pairing/pairing.test.ts",
+      "src/lib/mind/schedule-worker.test.ts",
+      "src/lib/mind/worker-pass.test.ts"
+    ],
+    "C5/AA-035 @ docs/audit-handoff/C5.md#L164": [
+      "src/lib/mind/core-runtime.test.ts",
+      "src/lib/mind/fleet-model.test.ts",
+      "src/lib/mind/fleet.test.ts",
+      "src/lib/mind/kimi/c5-build.test.ts",
+      "src/lib/mind/pc-pairing/pairing.test.ts",
+      "src/lib/mind/schedule-worker.test.ts",
+      "src/lib/mind/worker-pass.test.ts"
+    ],
+    "C5/AA-036 @ docs/audit-handoff/C5.md#L165": [
+      "src/lib/mind/core-runtime.test.ts",
+      "src/lib/mind/fleet-model.test.ts",
+      "src/lib/mind/fleet.test.ts",
+      "src/lib/mind/kimi/c5-build.test.ts",
+      "src/lib/mind/pc-pairing/pairing.test.ts",
+      "src/lib/mind/schedule-worker.test.ts",
+      "src/lib/mind/worker-pass.test.ts"
+    ],
+    "C5/AA-037 @ docs/audit-handoff/C5.md#L166": [
+      "src/lib/mind/core-runtime.test.ts",
+      "src/lib/mind/fleet-model.test.ts",
+      "src/lib/mind/fleet.test.ts",
+      "src/lib/mind/kimi/c5-build.test.ts",
+      "src/lib/mind/pc-pairing/pairing.test.ts",
+      "src/lib/mind/schedule-worker.test.ts",
+      "src/lib/mind/worker-pass.test.ts"
+    ],
+    "C5/AA-038 @ docs/audit-handoff/C5.md#L167": [
+      "src/lib/mind/usage-dispatch.test.ts",
+      "src/lib/mind/usage-ledger.test.ts"
+    ],
+    "C5/AA-039 @ docs/audit-handoff/C5.md#L168": [
+      "src/lib/mind/usage-dispatch.test.ts",
+      "src/lib/mind/usage-ledger.test.ts"
+    ],
+    "C5/AA-040 @ docs/audit-handoff/C5.md#L169": [
+      "src/lib/mind/usage-dispatch.test.ts",
+      "src/lib/mind/usage-ledger.test.ts"
+    ],
+    "C5/AA-041 @ docs/audit-handoff/C5.md#L170": [
+      "src/lib/mind/usage-dispatch.test.ts",
+      "src/lib/mind/usage-ledger.test.ts"
+    ],
+    "C5/AA-042 @ docs/audit-handoff/C5.md#L171": [
+      "src/lib/mind/usage-dispatch.test.ts",
+      "src/lib/mind/usage-ledger.test.ts"
+    ],
+    "C5/LEGACY-AA018 @ docs/audit-handoff/C5.md#L172": [
+      "src/lib/mind/memory-send-preparation.test.ts"
+    ],
+    "C5/LEGACY-AA019 @ docs/audit-handoff/C5.md#L173": [
+      "src/lib/mind/core-runtime.test.ts",
+      "src/lib/mind/fleet-model.test.ts",
+      "src/lib/mind/fleet.test.ts",
+      "src/lib/mind/kimi/c5-build.test.ts",
+      "src/lib/mind/pc-pairing/pairing.test.ts",
+      "src/lib/mind/schedule-worker.test.ts",
+      "src/lib/mind/worker-pass.test.ts"
+    ],
+    "C5/LEGACY-AA020 @ docs/audit-handoff/C5.md#L174": [
+      "src/lib/mind/core-runtime.test.ts",
+      "src/lib/mind/fleet-model.test.ts",
+      "src/lib/mind/fleet.test.ts",
+      "src/lib/mind/kimi/c5-build.test.ts",
+      "src/lib/mind/pc-pairing/pairing.test.ts",
+      "src/lib/mind/schedule-worker.test.ts",
+      "src/lib/mind/worker-pass.test.ts"
+    ],
+    "C5/LEGACY-AA021 @ docs/audit-handoff/C5.md#L175": [
+      "src/lib/mind/core-runtime.test.ts",
+      "src/lib/mind/fleet-model.test.ts",
+      "src/lib/mind/fleet.test.ts",
+      "src/lib/mind/kimi/c5-build.test.ts",
+      "src/lib/mind/pc-pairing/pairing.test.ts",
+      "src/lib/mind/schedule-worker.test.ts",
+      "src/lib/mind/worker-pass.test.ts"
+    ]
+  }
+}

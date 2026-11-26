@@ -328,7 +328,7 @@ export async function executeConsultPlan(
     }
   }
   await Promise.all(Array.from({ length: Math.min(plan.helpers.length, plan.maxConcurrency ?? 2) }, () => worker()));
-  return { help: returnedHelp(replies), receipts };
+  return { help: returnedHelp(replies).filter(reply => reply.ok), receipts };
 }
 
 /** Bounded concurrent helper work; each selected call has its own result receipt. */

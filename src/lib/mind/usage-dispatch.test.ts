@@ -1,3 +1,7 @@
+import { withExecutionReceipts } from "./execution-response.ts";
+import { providerResponse, consultationResponse } from "./provider-response.ts";
+import { validatePrimaryConfiguration } from "./turn-primary-selection.ts";
+import { toNativeProviderTurns } from "./ai-provider-native.ts";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { test } from "node:test";
@@ -5,6 +9,8 @@ import { runInNewContext } from "node:vm";
 import ts from "typescript";
 import { readJsonObjectBody } from "./request-body.ts";
 import { decideFetchSite } from "./request-guard.ts";
+import { recoverableTurnResponse, readTurnRecovery } from "./turn-recovery.ts";
+import { turnErrorCode } from "./turn-error.ts";
 import { turnOperationExpiry } from "./turn-receipt.ts";
 import { trackUsageResponse } from "./usage-ledger.server.ts";
 import type { UsageReceipt } from "./usage-ledger.ts";
@@ -31,7 +37,22 @@ type FixtureOptions = {
 
 function fixture(options: FixtureOptions) {
   const operationId = `${Date.now()}-${crypto.randomUUID()}`;
-  const sql = { fixture: "owner-database" };
+  let retained: { response_body: string; response_status: number; response_type: string } | undefined;
+  const sql = async (query: TemplateStringsArray, ...values: unknown[]) => {
+    const statement = query.join("?");
+    if (statement.includes("select response_body")) {
+      assert.deepEqual(values, ["fixture-owner", operationId]);
+      return retained ? [retained] : [];
+    }
+    const storing = statement.includes("set response_body");
+    assert.deepEqual(values.slice(-2), ["fixture-owner", operationId]);
+    if (storing) retained = { response_body: String(values[0]), response_status: Number(values[1]), response_type: String(values[2]) };
+    else assert.match(statement, /update mind_turn_receipt set responded/);
+    const retryable = !storing && values[1] === true;
+    state.finished.push(retryable);
+    state.receipt = retryable ? "retryable" : "responded";
+    return [];
+  };
   const state = {
     attempts: [] as UsageReceipt[],
     durable: new Map<string, UsageReceipt>(),
@@ -47,7 +68,7 @@ function fixture(options: FixtureOptions) {
       assert.equal(specifier, "../db", "Only the SQL boundary can be imported by this fixture");
       return { getSql: async () => sql };
     },
-    decideFetchSite, readJsonObjectBody, turnOperationExpiry, trackUsageResponse,
+    decideFetchSite, readJsonObjectBody, turnOperationExpiry, trackUsageResponse, turnErrorCode, readTurnRecovery, recoverableTurnResponse,
     requireUserId: async () => "fixture-owner",
     envCheck: () => ({ ok: true }),
     claimTurn: async (database: unknown, owner: string, id: string) => {
@@ -69,10 +90,10 @@ function fixture(options: FixtureOptions) {
       if (options.failWrite?.(state.attempts.length, receipt)) throw new Error("fixture accounting unavailable");
       state.durable.set(receipt.id, structuredClone(receipt));
     },
-    dispatchMindTurn: async (_request: Request, owner: string, _body: Record<string, unknown>, markDispatched: () => void) => {
+    dispatchMindTurn: async (_request: Request, owner: string, _body: Record<string, unknown>, markDispatched: (stage: "answer") => void) => {
       assert.equal(owner, "fixture-owner");
       state.dispatches++;
-      return options.dispatch(() => { state.providerCalls++; markDispatched(); });
+      return options.dispatch(() => { state.providerCalls++; markDispatched("answer"); });
     },
   });
   assert.equal(typeof exported.handleMindTurn, "function");
@@ -101,6 +122,8 @@ test("C5 actual turn handler refuses dispatch when the initial durable usage wri
   assert.equal(f.state.receipt, "retryable");
   const recovered = await f.send();
   assert.equal(recovered.status, 200);
+  assert.equal(recovered.headers.get("x-mind-primary-dispatched"), "1");
+  await recovered.text();
   assert.equal(f.state.providerCalls, 1);
   assert.deepEqual(f.state.finished, [true, false]);
 });
@@ -115,12 +138,15 @@ test("C5 actual turn handler records rejected preflight as undispatched and leav
   assert.equal(blocked.status, 503);
   assert.equal(blocked.headers.get("x-mind-dispatch"), "none");
   assert.equal(f.state.providerCalls, 0);
+  await blocked.text();
   const record = f.state.durable.get(`${f.operationId}/answer`)!;
   assert.equal(record.outcome, "rejected_before_dispatch");
   assert.equal(record.dispatched, false);
   assert.deepEqual(f.state.finished, [true]);
   ready = true;
-  assert.equal((await f.send()).status, 200);
+  const resumed = await f.send();
+  assert.equal(resumed.status, 200);
+  await resumed.text();
   assert.equal(f.state.providerCalls, 1);
   assert.deepEqual(f.state.finished, [true, false]);
 });
@@ -154,8 +180,9 @@ test("C5 actual turn handler preserves response bytes after final accounting fai
       assert.equal(f.state.attempts.at(-1)?.promptTokens, 7);
     }
     const replay = await f.send();
-    assert.equal(replay.status, 409);
-    assert.equal((await replay.json()).duplicate, true);
+    assert.equal(replay.status, 200);
+    assert.equal(replay.headers.get("x-mind-recovered"), "true");
+    assert.equal(await replay.text(), body.text);
     assert.equal(f.state.dispatches, 1);
     assert.equal(f.state.providerCalls, 1);
     assert.equal(f.state.durable.get(`${f.operationId}/answer`)?.outcome, "unconfirmed");
@@ -174,6 +201,20 @@ test("C5 actual orchestration records two helpers and one primary without losing
     runInNewContext(code, {
       exports: exported, Response, Error, Date, crypto, DEV_USER_ID: "dev-user",
       require: (specifier: string) => { assert.equal(specifier, "./halt.server.ts"); return { readHaltState: async () => "off", haltIsOn: async () => false }; },
+      consumeSharedMindRateLimit: async () => true, randomUUID: () => operationId,
+      process: { env: {} }, ADRIAN_MIND_IDENTITY: "fixture coordinator",
+      withExecutionReceipts, providerResponse, consultationResponse, validatePrimaryConfiguration, toNativeProviderTurns,
+      catalogForProvider: () => undefined, validateEnvironmentModel: async () => ({ ok: true }),
+      readCheckpoints: () => [],
+      directTurnContext: () => ({ ok: true, messages: [{ role: "user", content: "Fixture question" }] }),
+      dispatchContext: (identity: unknown) => identity, financialProviderId: (id: string) => id,
+      validateHelperConfiguration: async (_owner: string, id: string) => ({ ok: true, provider: id, model: "fixture-" + id }),
+      reserveOwnerDispatch: async () => ({ ok: true }), settleDispatchResult: async () => {},
+      runSettledDispatch: async (_owner: string, _reservation: unknown, send: () => Promise<unknown>) => send(),
+      applyOwnerMemoryPolicy: async (_owner: string, body: Record<string, unknown>) => ({ ok: true, body }),
+      assertCurrentMemoryContext: async () => ({ ok: true }), assertOwnerMemoryDispatch: async () => ({ ok: true }),
+      turnErrorCode, parseModelControls: () => ({ ok: true, controls: {} }), listEnvironmentModelCatalogs: async () => [],
+      validateCustomProviderSelection: async () => ({ ok: true, capabilities: { imageInput: "unsupported" } }),
       createChatTurnPreflight: () => async () => null,
       modulesConnectedNow: async () => ["custom:fixture:primary", "openai", "gemini"].map(id => ({ id, label: id, connected: true })),
       planModelConsult, collectConsultHelp, orchestratorInstruction,
@@ -186,13 +227,13 @@ test("C5 actual orchestration records two helpers and one primary without losing
         calls.push(id); mark();
         return { ok: true, text: `fixture help ${id}`, model: `fixture-${id}`, requestId: `request-${id}`, usage: id === "openai" ? { prompt_tokens: 3, completion_tokens: 5 } : unknownHelper ? null : { prompt_tokens: 7, completion_tokens: 9 } };
       },
-      executeCustomChat: async (_owner: string, _chosen: unknown, messages: { content: string }[], _signal: AbortSignal, mark: () => void) => {
+      executeCustomChat: async (_owner: string, _chosen: unknown, messages: { content: string }[], _signal: AbortSignal, options: { onDispatch: () => void }) => {
         assert.match(messages[0].content, /fixture help openai/); assert.match(messages[0].content, /fixture help gemini/);
-        calls.push("primary"); mark();
+        calls.push("primary"); options.onDispatch();
         return { ok: true, text: "fixture final", provider: "custom:fixture:primary", model: "fixture-primary", requestId: "request-primary", usage: { prompt_tokens: 11, completion_tokens: 13 } };
       },
     });
-    const body = { text: "Fixture question", memory: "off", provider: initial.provider, orchestrator: initial.provider, composerMode: "orchestrator", modelTier: "Fast" };
+    const body = { text: "Fixture question", memory: "off", provider: initial.provider, orchestrator: initial.provider, composerMode: "orchestrator", modelTier: "Fast", consult: { helperIds: ["openai", "gemini"], allowPaidHelpers: true } };
     const response = await exported.dispatch!(new Request("https://fixture.example/api/mind/turn", { method: "POST" }), "fixture-owner", body, () => {}, initial, record);
     assert.equal(response.status, 200);
     await trackUsageResponse(response, { ...initial, dispatched: true }, record).text();

@@ -20,7 +20,11 @@ export const OPENAI_CHAT_MODEL = "gpt-4o-mini";
 export type AnswerProvider = "xAI" | "OpenAI";
 
 export type FallbackOk<T> = { ok: true; provider: AnswerProvider } & T;
-export type FallbackFail = { ok: false; error: string; provider: null };
+export type FallbackFail = { ok: false; error: string; provider: null; status?: number };
+
+function definitiveRejection(status?: number) {
+  return status !== undefined && [400, 401, 402, 403, 404, 422, 429].includes(status);
+}
 
 export function isXaiAuthFailure(status: number, body = ""): boolean {
   if (status === 401) return true;
@@ -43,7 +47,7 @@ export async function openAiSpeech(input: {
   text: string;
   apiKey: string;
   fetchImpl: typeof fetch;
-}): Promise<{ ok: true; audio: string } | { ok: false; error: string }> {
+}): Promise<{ ok: true; audio: string } | { ok: false; error: string; status?: number }> {
   let res: Response;
   try {
     res = await input.fetchImpl(OPENAI_TTS_URL, {
@@ -55,7 +59,7 @@ export async function openAiSpeech(input: {
   } catch {
     return { ok: false, error: "OpenAI speech did not answer." };
   }
-  if (!res.ok) return { ok: false, error: `OpenAI speech returned ${res.status}.` };
+  if (!res.ok) return { ok: false, status: res.status, error: `OpenAI speech returned ${res.status}.` };
   const bytes = Buffer.from(await res.arrayBuffer());
   if (bytes.length < 32 || bytes.length > 2_000_000) return { ok: false, error: "OpenAI speech returned audio that could not be played." };
   return { ok: true, audio: bytes.toString("base64") };
@@ -177,7 +181,7 @@ export async function transcribeWithFallback(input: {
     failure = result;
     attempts.push({ provider, outcome: "failed", code: result.code, status: result.status });
     // Silence is a successful recognition attempt with no words, not permission to resend audio.
-    if (result.code === "empty_transcript") break;
+    if (!definitiveRejection(result.status)) break;
   }
   return { ok: false, error: failure.error, code: failure.code ?? "network_failure", provider: null, attempts };
 }
@@ -201,6 +205,8 @@ export async function speakWithFallback(input: {
   };
   const first = await attempt(primary);
   if (first.ok || !input.fallbackProvider || input.fallbackProvider === primary) return first;
+  const primaryConfigured = primary === "xai" ? Boolean(input.xaiKey) : Boolean(input.openaiKey);
+  if (primaryConfigured && !definitiveRejection(first.status)) return first;
   const fallback = await attempt(input.fallbackProvider);
   return fallback.ok ? fallback : { ok: false, error: honestBoth("played"), provider: null };
 }
@@ -211,6 +217,7 @@ export async function directChatWithFallback(input: {
   openaiKey?: string;
   fetchImpl?: typeof fetch;
   xaiModel?: string;
+  fallbackProvider?: "openai" | null;
 }): Promise<FallbackOk<{ text: string; model: string }> | FallbackFail> {
   const fetchImpl = input.fetchImpl ?? fetch;
   const model = input.xaiModel || "grok-4.5";
@@ -242,6 +249,7 @@ export async function directChatWithFallback(input: {
       return { ok: false, error: `xAI chat returned ${res.status}. Nothing was substituted.`, provider: null };
     }
   }
+  if (input.fallbackProvider !== "openai" || !input.openaiKey) return { ok: false, error: "The selected xAI chat route is unavailable. No alternative was called.", provider: null };
   const second = await openAiDirectChat({ messages: input.messages, apiKey: input.openaiKey ?? "", fetchImpl });
   if (!second.ok) return { ok: false, error: honestBoth("sent"), provider: null };
   return { ok: true, text: second.text, model: second.model, provider: "OpenAI" };
