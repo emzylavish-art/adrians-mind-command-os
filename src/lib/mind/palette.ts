@@ -87,15 +87,10 @@ export function paletteHits(input: PaletteInput): PaletteHit[] {
     }
   }
   for (const chat of input.chats) {
-    const message = chat.messages.find((item) => matches(item.content, search));
-    if (matches(chat.title, search) || message) {
-      
-      rows.push({
-        key: chat.id, label: chat.title, meta: chat.humanCode ? "Intelligence" : "Chat",
-        view: chat.humanCode ? "code" : "chat", ref: chat.id,
-        messageId: message?.id, excerpt: message ? excerpt(message.content, search) : undefined,
-      });
-    }
+    const messages = chat.messages.filter((item) => matches(item.content, search));
+    const base = { label: chat.title, meta: chat.humanCode ? "Intelligence" : "Chat", view: chat.humanCode ? "code" as const : "chat" as const, ref: chat.id };
+    if (matches(chat.title, search) && !messages.length) rows.push({ ...base, key: chat.id });
+    messages.forEach((message, index) => rows.push({ ...base, key: `chat-${chat.id}-${message.id ?? index}`, messageId: message.id, excerpt: excerpt(message.content, search) }));
   }
   for (const note of input.memories) {
     if (!note.archived && matches(note.text, search)) {
@@ -108,8 +103,11 @@ export function paletteHits(input: PaletteInput): PaletteHit[] {
     }
   }
   const rank = (row: PaletteHit) => {
-    if (row.label.toLowerCase() !== search) return 0;
-    return row.ref && (row.view === "chat" || row.view === "code") ? 2 : 1;
+    const label = row.label.toLowerCase();
+    if (label === search) return row.ref && (row.view === "chat" || row.view === "code") ? 5 : 4;
+    if (label.startsWith(search)) return 3;
+    if (matches(label, search)) return 2;
+    return row.excerpt?.toLowerCase().includes(search) ? 1 : 0;
   };
   return rows.sort((a, b) => rank(b) - rank(a));
 }
