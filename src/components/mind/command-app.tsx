@@ -21,7 +21,8 @@ import { InstructionLibrary, SkillPlanPreview } from "@/components/mind/instruct
 import { defaultSkillPreferences, loadSkillPreferences, saveSkillPreferences, skillPreferenceKey, type SkillPreferences } from "@/lib/mind/skill-preferences";
 import type { TurnBody } from "@/lib/mind/turn.server";
 import { KnowledgeSettings } from "@/components/mind/knowledge-settings";
-import { ResearchEvidence, ResearchLibrary } from "@/components/mind/research-library";
+import { ResearchEvidence } from "@/components/mind/research-evidence";
+import { ResearchLibrary } from "@/components/mind/research-library";
 import { RetainedVideo } from "@/components/mind/retained-video";
 import { researchFollowupContext, mergeResearchEvidence } from "@/lib/mind/research-followup";
 import { identifyImages, prepareMediaExport } from "@/lib/mind/media/asset-lifecycle";
@@ -1739,6 +1740,7 @@ function CommandSession({ account }: { account: ReturnType<typeof useCurrentUser
   const [notionPreview, setNotionPreview] = useState<{ owner: string | null; chatId: string; text: string } | null>(null);
   useEffect(() => {
     notionEpoch.current++;
+    setNotionSelection(null);
     setNotionPreview(null);
     setNotionQuery(""); setNotionPages([]); setNotionNote(null);
   }, [draftOwner]);
@@ -2757,7 +2759,7 @@ function CommandSession({ account }: { account: ReturnType<typeof useCurrentUser
 
   async function askNotion(chat: Chat, text: string, confirmed = false, pageId: string | null = null, workspaceId = chat.notionWorkspaceId, operationId?: string, cursor: string | null = null) {
     if (turnOwner.current !== draftOwner || !wsRef.current.chats.some((item) => item.id === chat.id)) return;
-    if ((confirmed || operationId) && wsRef.current.chats.find((item) => item.id === chat.id)?.notionWorkspaceId !== workspaceId) {
+    if ((confirmed || operationId || pageId || cursor) && wsRef.current.chats.find((item) => item.id === chat.id)?.notionWorkspaceId !== workspaceId) {
       setError("This conversation's Notion workspace changed after the operation was prepared. Restore the original workspace to check its existing result, or prepare a new request and approval for the new workspace. Nothing was sent.");
       return;
     }
@@ -2782,11 +2784,15 @@ function CommandSession({ account }: { account: ReturnType<typeof useCurrentUser
         return;
       }
       if (confirmed && operationId) setWs((prev) => saveRecovery(prev, { id: operationId, operationId, at: new Date().toISOString(), action: "notion_operation", target: "notion", chatId: chat.id, workspaceId, pageId, text, outcome: "uncertain", message: "Notion write outcome has not been confirmed. Check this existing operation before starting another write.", state: "open" }));
-      const result = await notionCommand({ data: { text, confirmed, pageId, workspaceId, operationId, cursor } });
+      const result = await notionCommand({ data: { text, confirmed, pageId, workspaceId, operationId, cursor, chatId: chat.id } });
       if (turnOwner.current !== draftOwner) return;
       setBusy(false);
       if (epoch !== notionEpoch.current || wsRef.current.chats.find((item) => item.id === chat.id)?.notionWorkspaceId !== workspaceId) return;
       setNotion((current) => current ?? { state: result.state, detail: result.error || "Notion answered from the server." });
+      if (result.ambiguous) {
+        setNotionSelection({ chat, text, workspaceId, pages: result.pages, cursor: result.nextCursor ?? null });
+        return;
+      }
       if (result.needsConfirmation && result.pages[0]) {
         const target = result.pages[0];
         setPending({
@@ -2805,8 +2811,9 @@ function CommandSession({ account }: { account: ReturnType<typeof useCurrentUser
         const message = result.error || "Notion did not complete the requested operation.";
         const savedId = result.operationId ?? operationId;
         if (savedId) setWs((prev) => saveRecovery(prev, { id: savedId, operationId: savedId, at: new Date().toISOString(), action: "notion_operation", target: "notion", chatId: chat.id, workspaceId, pageId: pageId ?? result.pages[0]?.id ?? null, text, outcome: result.outcome, message, state: "open" }));
-        const retry = result.recovery === "reconnect" ? null : () => { void askNotion(chat, text, false, pageId, workspaceId, savedId); };
-        reportFailure(message, "notion_operation_failed", "notion", retry, result.recovery === "reconnect" ? "setup" : result.needsConfirmation ? "none" : "retry");
+        const needsSetup = result.recovery === "reconnect" || result.recovery === "permissions" || result.recovery === "workspace_removed" || result.recovery === "page_unavailable";
+        const retry = needsSetup ? null : () => { void askNotion(chat, text, false, pageId, workspaceId, savedId); };
+        reportFailure(message, "notion_operation_failed", "notion", retry, needsSetup ? "setup" : result.needsConfirmation ? "none" : "retry");
         recordToolTurn(chat, text, message, undefined, { tool: "notion", ok: false, action: "chat" });
         return;
       }

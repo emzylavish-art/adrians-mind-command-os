@@ -144,7 +144,7 @@ export const runFleetModelStep = createServerFn({ method: "POST" })
   .validator((input: { ownerId?: string; expectedRevision?: string; runId: string; freeOnly?: boolean; allowPaid?: boolean }) => input)
   .handler(async ({ data, context }) => {
     if (data.ownerId !== context.userId) return { ok: false as const, error: "The signed-in account changed. Nothing ran." };
-    if (!allowMindRequest("fleet_model", context.userId, 6)) return { ok: false as const, error: "Too many model steps. Wait a minute." };
+    if (!await allowMindRequest("fleet_model", context.userId, 6)) return { ok: false as const, error: "Too many model steps. Wait a minute." };
     const { runFleetModelStepForUser } = await import("./fleet-model.server");
     return runFleetModelStepForUser(context.userId, data);
   });
@@ -174,7 +174,7 @@ export const searchWeb = createServerFn({ method: "POST" })
       return { ok: false as const, configured: false, citations: [] as { title: string; url: string }[],
         error: data.freeOnly ? "Free-only mode is active. No verified free web search route is available." : "Shorten the research question to 300 characters before searching." };
     }
-    if (!allowMindRequest("search", context.userId, 6)) {
+    if (!await allowMindRequest("search", context.userId, 6)) {
       return { ok: false as const, configured: false, citations: [] as { title: string; url: string }[], error: "Too many searches. Wait a minute and try again." };
     }
     const endpoint = process.env.MIND_SEARCH_ENDPOINT?.trim();
@@ -249,15 +249,16 @@ export const notionDisconnect = createServerFn({ method: "POST" })
 
 export const notionCommand = createServerFn({ method: "POST" })
   .middleware([authMiddleware])
-  .validator((input: { text?: string; confirmed?: boolean; pageId?: string | null; workspaceId?: string; cursor?: string | null; operationId?: string }) => ({
-    text: typeof input.text === "string" ? input.text.slice(0, 2000) : "",
+  .validator((input: { text?: string; confirmed?: boolean; pageId?: string | null; workspaceId?: string; cursor?: string | null; operationId?: string; chatId?: string }) => ({
+    text: typeof input.text === "string" ? input.text.slice(0, 8001) : "",
+    chatId: typeof input.chatId === "string" ? input.chatId.slice(0, 80) : undefined,
     workspaceId: typeof input.workspaceId === "string" ? input.workspaceId : undefined,
     cursor: typeof input.cursor === "string" ? input.cursor.slice(0, 200) : null,
     operationId: typeof input.operationId === "string" ? input.operationId.slice(0, 128) : undefined,
     confirmed: input.confirmed === true,
     pageId: typeof input.pageId === "string" ? input.pageId.slice(0, 80) : null,
   }))
-  .handler(async ({ data, context }) => {
+  .handler(async ({ data, context }): Promise<NotionTurn> => {
     const { haltIsOn } = await import("./halt.server");
     if (await haltIsOn(context.userId)) {
       return {
@@ -273,7 +274,7 @@ export const notionCommand = createServerFn({ method: "POST" })
         verified: false,
       };
     }
-    if (!allowMindRequest("notion", context.userId, 8)) {
+    if (!await allowMindRequest("notion", context.userId, 8)) {
       return {
         ok: false as const,
         state: "connected" as const,
@@ -288,21 +289,33 @@ export const notionCommand = createServerFn({ method: "POST" })
       };
     }
     const { runNotionTurn } = await import("./notion");
-    const { resolveNotionTokenPersistent, resolveWorkspaceGrant, resolveNotionGrantPersistent } = await import("./connectors/notion-oauth");
-    const { notionGrantGeneration } = await import("./connectors/notion-operation-status.server");
+    const { resolveNotionGrantPersistent } = await import("./connectors/notion-oauth");
+    const { resolveOAuthAccessToken } = await import("./connectors/token-refresh");
+    const { notionGrantGeneration, observationFromTurn, saveNotionObservation } = await import("./connectors/notion-operation-status.server");
     const { sqlNotionOperationStore } = await import("./notion-operation-store");
     const { getSql } = await import("../db");
-    const currentGeneration = async () => {
-      const grant = data.workspaceId && await resolveNotionGrantPersistent(context.userId, data.workspaceId);
-      return grant ? notionGrantGeneration(grant) : undefined;
-    };
-    const generation = await currentGeneration();
+    const startedAt = new Date().toISOString();
+    const sql = await getSql();
+    const authorization = await resolveOAuthAccessToken({ ownerId: context.userId, connector: "notion", workspaceId: data.workspaceId });
+    if (!authorization.ok) {
+      return {
+        ok: false, state: authorization.reconnect ? "disconnected" : "connected",
+        action: "none", needsConfirmation: false, ambiguous: false, pages: [], content: "",
+        error: authorization.error, wrote: false, verified: false,
+        recovery: authorization.reconnect ? "reconnect" : "retry_read",
+      } satisfies NotionTurn;
+    }
+    const generation = notionGrantGeneration(authorization.grant);
     const result = await runNotionTurn({
-      operationStore: sqlNotionOperationStore(await getSql(), context.userId),
+      operationStore: sqlNotionOperationStore(sql, context.userId),
       operationId: data.operationId,
       grantGeneration: generation,
-      mayDispatch: async () => Boolean(generation) && !await haltIsOn(context.userId) && generation === await currentGeneration(),
-      token: data.workspaceId ? await resolveWorkspaceGrant(context.userId, data.workspaceId) : await resolveNotionTokenPersistent(context.userId),
+      mayDispatch: async () => {
+        if (!data.workspaceId || await haltIsOn(context.userId)) return false;
+        const current = await resolveNotionGrantPersistent(context.userId, data.workspaceId);
+        return Boolean(current && generation === notionGrantGeneration(current));
+      },
+      token: authorization.token,
       workspaceId: data.workspaceId,
       disabled: false,
       text: data.text,
@@ -311,6 +324,15 @@ export const notionCommand = createServerFn({ method: "POST" })
       cursor: data.cursor,
       fetch: globalThis.fetch,
     });
+    const observation = observationFromTurn(authorization.grant, result, data.chatId, startedAt);
+    if (observation) {
+      try {
+        await saveNotionObservation(sql, context.userId, observation);
+        result.statusSaved = true;
+      } catch {
+        result.statusSaved = false;
+      }
+    }
     try {
       const { randomUUID } = await import("node:crypto");
       const { writeToolRun } = await import("./notion-record");
@@ -496,7 +518,7 @@ export const saveAccountAttachment = createServerFn({ method: "POST" })
   .handler(async ({ data, context }) => {
     if (data.ownerId !== context.userId) return { ok: false as const, error: "The account changed before saving the image." };
     if (typeof data.dataUrl !== "string") return { ok: false as const, error: "No image bytes were supplied." };
-    if (!allowMindRequest("attachment-save", context.userId, 80)) return { ok: false as const, error: "Too many image saves. Try again shortly; the device copy was kept." };
+    if (!await allowMindRequest("attachment-save", context.userId, 80)) return { ok: false as const, error: "Too many image saves. Try again shortly; the device copy was kept." };
     try {
       const { getSql } = await import("../db");
       const { putAccountAttachment } = await import("./media/account-attachments.server");
@@ -531,7 +553,7 @@ export const saveMindChanges = createServerFn({ method: "POST" })
     const { validateWorkspaceChanges } = await import("./workspace-changes");
     const checked = validateWorkspaceChanges(data.changes);
     if (!checked.ok) return checked;
-    if (!allowMindRequest("save", context.userId, 20)) return { ok: false as const, error: "Too many saves. The browser copy was kept." };
+    if (!await allowMindRequest("save", context.userId, 20)) return { ok: false as const, error: "Too many saves. The browser copy was kept." };
     try {
       const { getSql } = await import("../db");
       const { writeWorkspaceChanges } = await import("./store");
@@ -567,7 +589,7 @@ export const speakText = createServerFn({ method: "POST" })
     if (!parsed.ok) return { ok: false as const, error: parsed.error };
     const { haltIsOn } = await import("./halt.server");
     if (await haltIsOn(context.userId)) return { ok: false as const, error: "Emergency stop is on. Nothing was read aloud." };
-    if (!allowMindRequest("speak", context.userId, 8)) return { ok: false as const, error: "Too many voice requests. Wait a minute." };
+    if (!await allowMindRequest("speak", context.userId, 8)) return { ok: false as const, error: "Too many voice requests. Wait a minute." };
     const text = parsed.text;
     const { resolveSelectedSpeechCredential, speakSelected } = await import("./voice/provider-selection.server");
     const selected = await resolveSelectedSpeechCredential(context.userId, data.provider);

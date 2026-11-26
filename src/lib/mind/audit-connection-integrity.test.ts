@@ -1,5 +1,4 @@
 import assert from "node:assert/strict";
-import { randomUUID } from "node:crypto";
 import { mkdtemp, readFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -8,7 +7,7 @@ import { PGlite } from "@electric-sql/pglite";
 import type { Sql } from "../db.ts";
 import { runNotionTurn } from "./notion.ts";
 import { notionIntegrationStatus } from "./notion-integration-status.ts";
-import { notionReceiptStore } from "./notion-write-receipt.ts";
+import { sqlNotionOperationStore } from "./notion-operation-store.ts";
 import { callCustomConnection, listCustomConnections, readOperationSchema, saveCustomConnection, validateArgs } from "./custom-connection.ts";
 import { runConnectedMcpTurn } from "./connected-mcp.server.ts";
 import { callRegistryTool } from "./mcp/registry.ts";
@@ -26,7 +25,13 @@ function sqlFor(database: () => PGlite): Sql {
 const note = "preserve this exact note";
 const text = `Append ${note} to the Notion page about roadmap`;
 const page = { object: "page", id: "page-a", url: "https://www.notion.so/page-a", properties: { Name: { title: [{ plain_text: "Roadmap" }] } } };
-const block = { id: "new-block-id", type: "paragraph", paragraph: { rich_text: [{ plain_text: note }] } };
+const block = { id: "new-block-id", parent: { page_id: "page-a" }, type: "paragraph", paragraph: { rich_text: [{ plain_text: note }] } };
+
+async function installOperationSchema(database: PGlite) {
+  for (const filename of ["0004_tool_run.sql", "0007_oauth_connections.sql", "0018_c2_execution_recovery.sql"]) {
+    await database.exec(await readFile(new URL("../../../migrations/" + filename, import.meta.url), "utf8"));
+  }
+}
 
 test("AA001 acknowledged append uses its new block identity; recovery survives restart and never repeats PATCH", async () => {
   const directory = await mkdtemp(join(tmpdir(), "audit-notion-receipts-"));
@@ -37,33 +42,36 @@ test("AA001 acknowledged append uses its new block identity; recovery survives r
   const fetch = async (url: string, init?: RequestInit) => {
     const path = new URL(url).pathname;
     calls.push(`${init?.method} ${path}`);
-    const body = path === "/v1/search" ? { results: [page] }
+    const body = path === "/v1/pages/page-a" ? page : path === "/v1/search" ? { results: [page] }
       : init?.method === "PATCH" ? { results: [block] }
       : path === "/v1/blocks/new-block-id" ? block : { results: [{ ...block, id: "old-identical-block" }] };
     const status = path === "/v1/blocks/new-block-id" && !readbackAllowed ? 403 : 200;
     return { ok: status === 200, status, json: async () => body };
   };
-  const operationId = randomUUID();
-  const input = { token: "fixture-not-a-key", disabled: false, text, confirmed: true, pageId: "page-a", workspaceId: "workspace-a", operationId, fetch };
+  const operationStore = sqlNotionOperationStore(sql, "owner-a");
+  const input = { token: "fixture-not-a-key", disabled: false, text, confirmed: true, pageId: "page-a", workspaceId: "workspace-a", operationStore, fetch };
   try {
-    await database.exec(await readFile(new URL("../../../migrations/0004_tool_run.sql", import.meta.url), "utf8"));
-    const first = await runNotionTurn({ ...input, receipts: notionReceiptStore(sql, "owner-a") });
+    await installOperationSchema(database);
+    const held = await runNotionTurn({ ...input, pageId: null, confirmed: false });
+    const operationId = held.operationId;
+    assert.ok(operationId);
+    const first = await runNotionTurn({ ...input, operationId });
     assert.equal(first.wrote, true);
     assert.equal(first.verified, false);
-    assert.equal(first.recovery, "verify_only");
+    assert.equal(first.recovery, "verify_existing");
     assert.equal(calls.some((call) => /children\?/.test(call)), false, "a preview or old identical block cannot verify the new write");
     await database.close();
     database = new PGlite(directory);
     readbackAllowed = true;
-    const recovered = await runNotionTurn({ ...input, confirmed: false, recoveryOnly: true, receipts: notionReceiptStore(sql, "owner-a") });
+    const recovered = await runNotionTurn({ ...input, confirmed: false, operationId, operationStore: sqlNotionOperationStore(sql, "owner-a") });
     assert.equal(recovered.verified, true);
     assert.equal(calls.filter((call) => call.startsWith("PATCH")).length, 1);
     assert.equal(calls.filter((call) => call.includes("search")).length, 1, "recovery remains on the acknowledged destination");
-    const changed = await runNotionTurn({ ...input, workspaceId: "workspace-b", receipts: notionReceiptStore(sql, "owner-a") });
-    assert.match(changed.error, /cannot be reused/);
+    const changed = await runNotionTurn({ ...input, workspaceId: "workspace-b", operationId });
+    assert.equal(changed.errorCode, "selection_changed");
     assert.equal(calls.filter((call) => call.startsWith("PATCH")).length, 1);
-    assert.equal(await notionReceiptStore(sql, "owner-b").read(operationId), null);
-    const stored = JSON.stringify((await database.query("select detail from mind_tool_run")).rows);
+    assert.equal(await sqlNotionOperationStore(sql, "owner-b").read(operationId), null);
+    const stored = JSON.stringify((await database.query("select * from mind_notion_operation")).rows);
     assert.equal(stored.includes(note), false);
     assert.equal(stored.includes("fixture-not-a-key"), false);
   } finally {
@@ -77,22 +85,24 @@ test("AA001 simultaneous confirmation and lost acknowledgement issue at most one
   const sql = sqlFor(() => database);
   let appends = 0;
   try {
-    await database.exec(await readFile(new URL("../../../migrations/0004_tool_run.sql", import.meta.url), "utf8"));
+    await installOperationSchema(database);
     const input = {
-      token: "synthetic", disabled: false, text, confirmed: true, pageId: "page-a", workspaceId: "workspace-a", operationId: randomUUID(),
-      receipts: notionReceiptStore(sql, "owner"),
+      token: "synthetic", disabled: false, text, confirmed: true, pageId: "page-a", workspaceId: "workspace-a", operationStore: sqlNotionOperationStore(sql, "owner"),
       fetch: async (_url: string, init?: RequestInit) => {
         if (init?.method === "PATCH") { appends += 1; throw new Error("Acknowledgement lost after fixture commit"); }
-        return { ok: true, status: 200, json: async () => ({ results: [page] }) };
+        return { ok: true, status: 200, json: async () => page };
       },
     };
-    const attempts = await Promise.all([runNotionTurn(input), runNotionTurn(input)]);
+    const held = await runNotionTurn({ ...input, confirmed: false });
+    assert.ok(held.operationId);
+    const confirmation = { ...input, operationId: held.operationId };
+    const attempts = await Promise.all([runNotionTurn(confirmation), runNotionTurn(confirmation)]);
     assert.equal(appends, 1);
     assert.ok(attempts.every((result) => !result.ok));
-    const retry = await runNotionTurn({ ...input, recoveryOnly: true });
+    const retry = await runNotionTurn({ ...confirmation, confirmed: false });
     assert.equal(appends, 1);
-    assert.equal(retry.writeOutcome, "unknown");
-    assert.equal(retry.recovery, "inspect_page");
+    assert.equal(retry.outcome, "uncertain");
+    assert.equal(retry.recovery, "verify_existing");
     assert.doesNotMatch(retry.error, /Nothing was changed/);
   } finally { await database.close(); }
 });

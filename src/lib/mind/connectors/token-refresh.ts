@@ -8,7 +8,7 @@ import type { FetchLike, OAuthProviderEnv } from "./oauth-provider.ts";
 import { readOAuthRecovery, saveOAuthRecovery } from "./recovery.ts";
 import { tokenExpiresAt } from "./token-expiry.ts";
 
-type TokenResult = { ok: true; token: string; refreshed: boolean } | { ok: false; error: string; reconnect: boolean };
+type TokenResult = { ok: true; token: string; grant: StoredConnection; refreshed: boolean } | { ok: false; error: string; reconnect: boolean };
 const localClaims = new Set<string>();
 
 async function claimRefresh(ownerId: string, connector: ConnectorId, workspaceId: string): Promise<(() => Promise<void>) | null> {
@@ -48,7 +48,7 @@ export async function resolveOAuthAccessToken(input: {
     if (prior?.connectionAt === conn.connectedAt && prior.status === "reconnect_required") return { ok: false, error: prior.detail, reconnect: true };
     const token = decryptSecret(conn.accessTokenEnc);
     if (!token) return { ok: false, error: "The saved authorization could not be read. Reconnect this integration.", reconnect: true };
-    if (!input.forceRefresh && (!conn.expiresAt || Date.parse(conn.expiresAt) > now + 30_000)) return { ok: true, token, refreshed: false };
+    if (!input.forceRefresh && (!conn.expiresAt || Date.parse(conn.expiresAt) > now + 30_000)) return { ok: true, token, grant: conn, refreshed: false };
     const env = input.env ?? provider.readEnv();
     const refresh = conn.refreshTokenEnc ? decryptSecret(conn.refreshTokenEnc) : null;
     if (!refresh || !env.clientId || !env.clientSecret || !env.tokenUrl) return { ok: false, error: `${provider.displayName} authorization expired. Reconnect the same account or workspace.`, reconnect: true };
@@ -61,7 +61,7 @@ export async function resolveOAuthAccessToken(input: {
     if (conn.connectedAt !== original.connectedAt || conn.workspaceId !== original.workspaceId || conn.accountLabel !== original.accountLabel) return { ok: false, error: "The selected connection changed before renewal. Retry from the current account; no action was sent.", reconnect: true };
     if (!input.forceRefresh && conn.expiresAt && Date.parse(conn.expiresAt) > now + 30_000) {
       const current = decryptSecret(conn.accessTokenEnc);
-      if (current) return { ok: true, token: current, refreshed: false };
+      if (current) return { ok: true, token: current, grant: conn, refreshed: false };
     }
     const refreshToken = conn.refreshTokenEnc ? decryptSecret(conn.refreshTokenEnc) : null;
     if (!refreshToken) return { ok: false, error: "The selected authorization changed. Reconnect the same account or workspace.", reconnect: true };
@@ -91,7 +91,7 @@ export async function resolveOAuthAccessToken(input: {
     const saved = hasDurableOAuthStore() ? await replaceDurableGrant(conn, next) : replaceLocalGrant(conn, next);
     if (!saved) return { ok: false, error: "The selected connection changed during renewal. No action was sent using the replacement account.", reconnect: true };
     await saveOAuthRecovery(input.ownerId, input.connector, { connectionAt: conn.connectedAt, status: "refreshed", detail: "Authorization renewed for the same connection. Operation permissions are checked when used.", at: new Date(now).toISOString() });
-    return { ok: true, token: json.access_token, refreshed: true };
+    return { ok: true, token: json.access_token, grant: next, refreshed: true };
   } catch {
     return { ok: false, error: "Authorization recovery storage is unavailable. No external action was repeated.", reconnect: false };
   } finally { await release?.().catch(() => undefined); }

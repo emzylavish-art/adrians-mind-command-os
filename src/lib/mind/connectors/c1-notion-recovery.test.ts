@@ -1,3 +1,4 @@
+import { memoryStore } from "../notion-test-fixture.ts";
 import assert from "node:assert/strict";
 import { after, test } from "node:test";
 import { runInNewContext } from "node:vm";
@@ -15,33 +16,43 @@ function wire(status: number, message: string) {
   const calls: string[] = [];
   return { calls, fetch: async (url: string, init?: RequestInit) => {
     calls.push(String(init?.method));
+    if (url.endsWith("/pages/P")) return { ok: true, status: 200, json: async () => page };
+    if (url.endsWith("/blocks/new")) return { ok: true, status: 200, json: async () => ({ id: "new", parent: { page_id: "P" }, type: "paragraph", paragraph: { rich_text: [{ plain_text: "a note" }] } }) };
     if (url.endsWith("/search")) return { ok: true, status: 200, json: async () => ({ results: [page] }) };
-    if (init?.method === "PATCH") return { ok: status < 400, status, json: async () => ({ code: "restricted_resource", message }) };
+    if (init?.method === "PATCH") return { ok: status < 400, status, json: async () => status < 400 ? { results: [{ id: "new" }] } : { code: "restricted_resource", message } };
     return { ok: true, status: 200, json: async () => ({ results: [{ type: "paragraph", paragraph: { rich_text: [{ plain_text: "a note" }] } }] }) };
   } };
 }
 const input = { token: "fixture-token", disabled: false, text: "Append a note to Notion page P", pageId: "P", confirmed: true };
 
+async function confirmedAppend(fetch: ReturnType<typeof wire>["fetch"]) {
+  const grant = { ...input, workspaceId: "A", operationStore: memoryStore().store, fetch };
+  const held = await runNotionTurn({ ...grant, confirmed: false });
+  assert.ok(held.operationId);
+  return runNotionTurn({ ...grant, operationId: held.operationId });
+}
+
 test("C1 AA001: partial access keeps reads, records typed denial, and requires new approval after repair", async () => {
   const denied = wire(403, "Insufficient permissions to perform this operation");
-  const result = await runNotionTurn({ ...input, fetch: denied.fetch });
+  const result = await confirmedAppend(denied.fetch);
   assert.equal(result.state, "connected");
   assert.equal(result.wrote, false);
   assert.equal(result.verified, false);
   assert.equal(result.failure?.httpStatus, 403);
   assert.equal(result.failure?.code, "restricted_resource");
   assert.equal(result.failure?.recovery, "review_access");
-  assert.deepEqual(denied.calls, ["POST", "PATCH"]);
+  assert.deepEqual(denied.calls, ["GET", "GET", "PATCH"]);
   const read = await runNotionTurn({ ...input, text: "Read Notion page P", fetch: denied.fetch });
   assert.equal(read.ok, true);
-  const pending = await runNotionTurn({ ...input, confirmed: false, token: "renewed-fixture", fetch: denied.fetch });
+  const connection = { ...input, workspaceId: "A", operationStore: memoryStore().store, fetch: denied.fetch };
+  const pending = await runNotionTurn({ ...connection, confirmed: false, grantGeneration: "old-grant" });
   assert.equal(pending.needsConfirmation, true);
-  const oldApproval = await runNotionTurn({ ...input, grantGeneration: "renewed-grant", reviewedGrantGeneration: "old-grant", fetch: denied.fetch });
-  assert.equal(oldApproval.needsConfirmation, true);
-  const missingApproval = await runNotionTurn({ ...input, grantGeneration: "renewed-grant", fetch: denied.fetch });
+  const oldApproval = await runNotionTurn({ ...connection, grantGeneration: "renewed-grant", operationId: pending.operationId });
+  assert.equal(oldApproval.errorCode, "selection_changed");
+  const missingApproval = await runNotionTurn({ ...connection, grantGeneration: "renewed-grant" });
   assert.equal(missingApproval.needsConfirmation, true);
   assert.equal(denied.calls.filter((method) => method === "PATCH").length, 1);
-  const limit = await runNotionTurn({ ...input, fetch: wire(403, "Workspace block limit exceeded").fetch });
+  const limit = await confirmedAppend(wire(403, "Workspace block limit exceeded").fetch);
   assert.equal(limit.failure?.recovery, "workspace_limit");
   assert.equal(limit.failure?.kind, "block_limit");
 });
@@ -49,7 +60,7 @@ test("C1 AA001: partial access keeps reads, records typed denial, and requires n
 test("C1 AA001: operation status persists by owner/workspace/page/action; unrelated reads never clear append denial", async () => {
   assert.equal(dbSource, "pglite");
   const sql = await getSql();
-  const denied = await runNotionTurn({ ...input, fetch: wire(403, "Insufficient permissions").fetch });
+  const denied = await confirmedAppend(wire(403, "Insufficient permissions").fetch);
   const observation = observationFromTurn(grant, denied, "chat-P");
   assert.ok(observation);
   await saveNotionObservation(sql, grant.ownerId, observation);
@@ -63,7 +74,7 @@ test("C1 AA001: operation status persists by owner/workspace/page/action; unrela
   assert.match(notionObservationMessage(observation, "grant-B"), /Access updated; append.*has not been verified/);
   assert.equal(JSON.stringify(rows).includes("fixture-token"), false);
   assert.equal(JSON.stringify(rows).includes("a note"), false, "retrieved contents and intended write text are not status metadata");
-  const repaired = await runNotionTurn({ ...input, fetch: wire(200, "").fetch });
+  const repaired = await confirmedAppend(wire(200, "").fetch);
   assert.equal(repaired.verified, true);
   await saveNotionObservation(sql, grant.ownerId, observationFromTurn({ ...grant, grantGeneration: "grant-B" }, repaired)!);
   assert.equal((await readNotionObservations(sql, grant.ownerId, "A")).find((row) => row.operation === "append")?.ok, true);

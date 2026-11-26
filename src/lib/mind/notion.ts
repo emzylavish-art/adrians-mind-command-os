@@ -36,7 +36,7 @@ export type NotionTurn = {
   executionId?: string;
   errorCode?: "permission_required" | "reconnect_required" | "rate_limited" | "unavailable" | "not_found" | "storage_unavailable" | "selection_changed";
   httpStatus?: number;
-  recovery?: "reconnect" | "retry_read" | "verify_existing" | "confirm";
+  recovery?: "reconnect" | "retry_read" | "verify_existing" | "confirm" | "permissions" | "page_unavailable" | "workspace_removed";
   outcome?: "not_dispatched" | "rejected" | "accepted" | "uncertain" | "verified";
   nextCursor?: string | null;
   writeOutcome?: NotionWriteOutcome;
@@ -79,9 +79,10 @@ export function parseNotionIntent(text: string): NotionIntent {
   const lower = raw.toLowerCase();
   if (!/\bnotion\b/.test(lower)) return { action: "unclear" };
   if (/\b(append|add|update|write)\b/.test(lower)) {
-    const note = raw.match(/\b(?:append|add|write)\s+(.+?)\s+(?:to|onto)\b/i)?.[1]?.trim();
+    const note = raw.match(/\b(?:append|add|write)\s+([\s\S]+?)\s+(?:to|onto)\s+(?:the\s+)?Notion\b/i)?.[1]?.trim()
+      ?? raw.match(/\b(?:append|add|write)\s+([\s\S]+?)\s+(?:to|onto)\b/i)?.[1]?.trim();
     const query = raw.match(/\b(?:page|about|called|titled)\s+(.+?)(?:\.|$)/i)?.[1]?.trim() || raw.replace(/\bnotion\b/gi, "").trim();
-    return { action: "append", query: query.slice(0, 200), note: (note || raw).slice(0, 1500) };
+    return { action: "append", query: query.slice(0, 200), note: note || raw };
   }
   if (/\b(read|open|show)\b/.test(lower)) {
     const query = raw.match(/\b(?:page|about|called|titled)\s+(.+?)(?:\.|$)/i)?.[1]?.trim() || raw.replace(/\bnotion\b/gi, "").trim();
@@ -125,7 +126,7 @@ export function pagesFromSearch(body: unknown): NotionPage[] {
   return pages;
 }
 
-export function textFromBlocks(body: unknown): string {
+function blockText(body: unknown): string {
   if (!body || typeof body !== "object" || !Array.isArray((body as { results?: unknown }).results)) return "";
   const lines: string[] = [];
   for (const item of (body as { results: unknown[] }).results) {
@@ -138,14 +139,18 @@ export function textFromBlocks(body: unknown): string {
     const line = rich.map((part) => (part && typeof part === "object" && "plain_text" in part ? String(part.plain_text ?? "") : "")).join("").trim();
     if (line) lines.push(line);
   }
-  return lines.join("\n").slice(0, 4000);
+  return lines.join("\n");
+}
+
+export function textFromBlocks(body: unknown): string {
+  return blockText(body).slice(0, 4000);
 }
 
 function empty(state: NotionTurn["state"], action: string, error: string): NotionTurn {
   return { ok: false, state, action, needsConfirmation: false, ambiguous: false, pages: [], content: "", error, wrote: false, verified: false };
 }
 
-type NotionCallFailure = { ok: false; error: string; errorCode: NonNullable<NotionTurn["errorCode"]>; httpStatus?: number; uncertain: boolean };
+type NotionCallFailure = { ok: false; error: string; errorCode: NonNullable<NotionTurn["errorCode"]>; httpStatus?: number; uncertain: boolean; body?: unknown };
 
 async function callNotion(fetchImpl: FetchLike, token: string, path: string, init: RequestInit): Promise<{ ok: true; body: unknown } | NotionCallFailure> {
   let response: { ok: boolean; status: number; json: () => Promise<unknown> };
@@ -168,14 +173,14 @@ async function callNotion(fetchImpl: FetchLike, token: string, path: string, ini
       : status === 404 ? "This Notion page is unavailable to the selected workspace. Check its shared pages."
       : status === 429 ? "Notion is rate limited. Wait before checking this operation again."
       : `Notion returned ${status}. Check the existing operation before retrying a write.`;
-    return { ok: false, error, errorCode, httpStatus: status, uncertain: init.method === "PATCH" && status >= 500 };
+    return { ok: false, error, errorCode, body, httpStatus: status, uncertain: init.method === "PATCH" && status >= 500 };
   }
   return { ok: true, body };
 }
 
-function failureTurn(action: string, failed: NotionCallFailure, pages: NotionPage[] = []): NotionTurn {
-  return { ...empty("connected", action, failed.error), pages, errorCode: failed.errorCode, httpStatus: failed.httpStatus,
-    recovery: failed.uncertain ? "verify_existing" : failed.errorCode === "permission_required" || failed.errorCode === "reconnect_required" ? "reconnect" : "retry_read",
+function failureTurn(action: NotionOperationKind, failed: NotionCallFailure, pages: NotionPage[] = []): NotionTurn {
+  return { ...empty("connected", action, failed.error), pages, failure: classifyNotionFailure(action, failed.httpStatus ?? 0, failed.body), errorCode: failed.errorCode, httpStatus: failed.httpStatus,
+    recovery: failed.uncertain ? "verify_existing" : failed.errorCode === "permission_required" ? "permissions" : failed.errorCode === "reconnect_required" ? "reconnect" : "retry_read",
     outcome: failed.uncertain ? "uncertain" : "rejected" };
 }
 
@@ -196,7 +201,7 @@ async function verifyAppend(input: { fetch: FetchLike; token: string; page: Noti
       const block = result.body as { id?: string; parent?: { page_id?: string; block_id?: string } } | null;
       const parentId = block?.parent?.page_id ?? block?.parent?.block_id;
       if (block?.id !== id || !parentId || parentId.replaceAll("-", "") !== input.page.id.replaceAll("-", "")) break;
-      content += textFromBlocks({ results: [result.body] }) + "\n";
+      content += blockText({ results: [result.body] }) + "\n";
     }
     verified = !failure && content.trim() === input.note;
   } else {
@@ -230,6 +235,8 @@ export async function runNotionTurn(input: {
   grantGeneration?: string;
   mayDispatch?: () => Promise<boolean>;
 }): Promise<NotionTurn> {
+  if (input.text.length > 8000) return empty("connected", "none", "Notion commands support up to 8,000 characters. Shorten this request before submitting it.");
+  if (!input.token && input.workspaceId) return { ...empty("disconnected", "none", "The selected Notion workspace is unavailable. Reconnect the original workspace."), recovery: "workspace_removed" };
   const connection = notionConnection(input.token, input.disabled);
   if (connection.state !== "connected" || !input.token) return empty(connection.state, "none", connection.detail);
   const intent = parseNotionIntent(input.text);
@@ -259,7 +266,7 @@ export async function runNotionTurn(input: {
     const selected = await callNotion(input.fetch, input.token, `/pages/${encodeURIComponent(input.pageId)}`, { method: "GET" });
     if (!selected.ok) return failureTurn(intent.action, selected);
     pages = pagesFromSearch({ results: [selected.body] });
-    if (pages[0]?.id !== input.pageId) return empty("connected", intent.action, "The selected page is unavailable in this workspace. Reconnect the required page; no other page was used.");
+    if (pages[0]?.id !== input.pageId) return { ...empty("connected", intent.action, "The selected Notion page is unavailable in this workspace. Check its shared pages."), recovery: "page_unavailable" };
   } else {
     const found = await callNotion(input.fetch, input.token, "/search", {
       method: "POST",
@@ -282,7 +289,7 @@ export async function runNotionTurn(input: {
     if (!blocks.ok) return failureTurn("read", blocks, [picked]);
     return { ok: true, state: "connected", action: "read", needsConfirmation: false, ambiguous: false, pages: [picked], content: textFromBlocks(blocks.body), error: "", wrote: false, verified: false };
   }
-  const note = intent.note.slice(0, 1500);
+  const note = intent.note;
   if (!input.operationStore || !input.workspaceId) return { ...empty("connected", "append", "Select a workspace and prepare a durable write approval before appending."), errorCode: "storage_unavailable" };
   const contentFingerprint = createHash("sha256").update(JSON.stringify([input.workspaceId ?? "", note, picked.id])).digest("hex");
   const boundFingerprint = input.grantGeneration ? contentFingerprint + ":" + input.grantGeneration : contentFingerprint;
@@ -315,9 +322,11 @@ export async function runNotionTurn(input: {
     if (operation) await input.operationStore.finish(operation.id, "rejected");
     return { ...empty("connected", "append", "The connection changed or execution stopped before dispatch. Review the operation again."), errorCode: "selection_changed" };
   }
+  // Keep one paragraph identity for readback even when Notion requires multiple rich-text spans.
+  const spans = note.match(/[\s\S]{1,1000}/gu) ?? [];
   const wrote = await callNotion(input.fetch, input.token, `/blocks/${picked.id}/children`, {
     method: "PATCH",
-    body: JSON.stringify({ children: [{ object: "block", type: "paragraph", paragraph: { rich_text: [{ type: "text", text: { content: note } }] } }] }),
+    body: JSON.stringify({ children: [{ object: "block", type: "paragraph", paragraph: { rich_text: spans.map((content) => ({ type: "text", text: { content } })) } }] }),
   });
   if (!wrote.ok) {
     if (operation && input.operationStore) await input.operationStore.finish(operation.id, wrote.uncertain ? "uncertain" : "rejected").catch(() => undefined);

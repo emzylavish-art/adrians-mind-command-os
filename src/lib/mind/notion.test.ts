@@ -1,6 +1,5 @@
 import assert from "node:assert/strict";
-import { randomUUID } from "node:crypto";
-import type { NotionReceiptStore, NotionWriteReceipt } from "./notion-write-receipt.ts";
+import { memoryStore } from "./notion-test-fixture.ts";
 import { mkdtempSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -8,11 +7,6 @@ import { describe, it } from "node:test";
 import type { Sql } from "../db.ts";
 import { readToolRuns, writeToolRun } from "./notion-record.ts";
 import { NOTION_SETUP, notionConnection, pagesFromSearch, parseNotionIntent, readNotionPref, runNotionTurn, setNotionPrefDirectory, textFromBlocks, writeNotionPref } from "./notion.ts";
-
-function receipts(): NotionReceiptStore {
-  const rows = new Map<string, NotionWriteReceipt>();
-  return { read: async (id) => rows.get(id) ?? null, claim: async (id, value) => { if (rows.has(id)) return false; rows.set(id, value); return true; }, save: async (id, value) => { rows.set(id, value); } };
-}
 
 const page = (id: string, title: string) => ({
   object: "page",
@@ -108,33 +102,37 @@ describe("notion", () => {
     const routes = {
       "POST /search": { body: { results: [page("p1", "Roadmap")] } },
       "PATCH /blocks/p1/children": { body: { results: [{ id: "new-block" }] } },
-      "GET /blocks/new-block": { body: { id: "new-block", type: "paragraph", paragraph: { rich_text: [{ plain_text: "today's priorities" }] } } },
+      "GET /blocks/new-block": { body: { id: "new-block", parent: { page_id: "p1" }, type: "paragraph", paragraph: { rich_text: [{ plain_text: "today's priorities" }] } } },
     };
-    const held = await runNotionTurn({ token: "secret", disabled: false, text: "Append today's priorities to the Notion page about roadmap", confirmed: false, pageId: null, fetch: fakeFetch(routes).fetch });
+    const input = { token: "secret", disabled: false, text: "Append today's priorities to the Notion page about roadmap", workspaceId: "A", operationStore: memoryStore().store, fetch: fakeFetch(routes).fetch };
+    const held = await runNotionTurn({ ...input, confirmed: false, pageId: null });
     assert.equal(held.needsConfirmation, true);
     assert.equal(held.wrote, false);
-    const done = await runNotionTurn({ token: "secret", disabled: false, text: "Append today's priorities to the Notion page about roadmap", confirmed: true, pageId: "p1", operationId: randomUUID(), receipts: receipts(), fetch: fakeFetch(routes).fetch });
+    const done = await runNotionTurn({ ...input, confirmed: true, pageId: "p1", operationId: held.operationId });
     assert.equal(done.verified, true);
     assert.equal(done.wrote, true);
   });
 
   it("does not call a write successful when the read-back misses the text", async () => {
-    const result = await runNotionTurn({
+    const input = {
       token: "secret",
       disabled: false,
       text: "Append today's priorities to the Notion page about roadmap",
-      confirmed: true,
+      workspaceId: "A",
       pageId: "p1",
-      operationId: randomUUID(), receipts: receipts(),
+      operationStore: memoryStore().store,
       fetch: fakeFetch({
         "POST /search": { body: { results: [page("p1", "Roadmap")] } },
         "PATCH /blocks/p1/children": { body: { results: [{ id: "new-block" }] } },
-        "GET /blocks/new-block": { body: { id: "new-block", type: "paragraph", paragraph: { rich_text: [{ plain_text: "different" }] } } },
+        "GET /blocks/new-block": { body: { id: "new-block", parent: { page_id: "p1" }, type: "paragraph", paragraph: { rich_text: [{ plain_text: "different" }] } } },
       }).fetch,
-    });
+    };
+    const held = await runNotionTurn({ ...input, confirmed: false });
+    const result = await runNotionTurn({ ...input, confirmed: true, operationId: held.operationId });
     assert.equal(result.ok, false);
     assert.equal(result.verified, false);
-    assert.match(result.error, /could not be verified/);
+    assert.equal(result.wrote, true);
+    assert.equal(result.recovery, "verify_existing");
   });
 
   it("reports an API error and does not invent pages", async () => {
@@ -148,7 +146,7 @@ describe("notion", () => {
     });
     assert.equal(result.ok, false);
     assert.equal(result.pages.length, 0);
-    assert.match(result.error, /rejected.*credential/);
+    assert.equal(result.errorCode, "reconnect_required");
     assert.equal(result.error.includes("secret-token"), false);
   });
 
