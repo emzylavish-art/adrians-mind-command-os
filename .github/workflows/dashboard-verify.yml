@@ -56,7 +56,12 @@ jobs:
           node-version: "24.11.1"
           cache: npm
       - run: npm ci
-      - run: node scripts/rehearse-postgres.mjs ${{ job.services.postgres.ports[5432] }} previous-production
+      - run: |
+          test -n "$REHEARSAL_CONTAINER"
+          node scripts/rehearse-postgres.mjs "$REHEARSAL_PORT" previous-production "$REHEARSAL_CONTAINER"
+        env:
+          REHEARSAL_PORT: ${{ job.services.postgres.ports[5432] }}
+          REHEARSAL_CONTAINER: ${{ job.services.postgres.id }}
 
   typecheck:
     runs-on: ubuntu-latest

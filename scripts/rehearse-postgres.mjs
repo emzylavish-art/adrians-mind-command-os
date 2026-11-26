@@ -17,6 +17,8 @@ const admin = new pg.Client(options);
 const files = (await readdir("migrations")).filter((name) => name.endsWith(".sql")).sort();
 const sources = Object.fromEntries(await Promise.all(files.map(async (name) => [name, await readFile("migrations/" + name, "utf8")])));
 const prior = resolve(process.argv[3] || "previous-production");
+const serviceContainer = process.argv[4];
+assert(!serviceContainer || /^[a-f0-9]{64}$/.test(serviceContainer), "Expected the disposable PostgreSQL service container ID");
 const baseline = "18d5b9364e6bdcfec028eeccf56fe596946ed8ce";
 assert.equal(execFileSync("git", ["-C", prior, "rev-parse", "HEAD"], { encoding: "utf8" }).trim(), baseline);
 const previousFiles = (await readdir(join(prior, "migrations"))).filter(name => name.endsWith(".sql")).sort();
@@ -56,6 +58,28 @@ async function migrate(client, set) {
   }
 }
 
+async function rehearseRestore(database) {
+  const backup = execFileSync("docker", ["exec", serviceContainer, "pg_dump", "-U", options.user, "--format=custom", database]);
+  assert(backup.length > 0, "The prior schema and data must produce a backup");
+  const restoredDatabase = database + "_restore";
+  await admin.query("CREATE DATABASE " + restoredDatabase);
+  const restored = new pg.Client({ ...options, database: restoredDatabase });
+  try {
+    execFileSync("docker", ["exec", "-i", serviceContainer, "pg_restore", "-U", options.user, "--exit-on-error", "--single-transaction", "-d", restoredDatabase], { input: backup });
+    await restored.connect();
+    const recorded = await restored.query("SELECT name FROM _migrations ORDER BY name");
+    assert.deepEqual(recorded.rows.map(row => row.name), previousFiles);
+    const snapshot = await oldStore.readSnapshot(oldAppSql(restored), "fixture");
+    assert.equal(snapshot.projects.find(row => row.id === "before")?.name, "Prior application");
+    assert.deepEqual((await migrate(restored, sources)).applied, files.filter(name => !(name in base)));
+    assert.equal((await migrate(restored, sources)).applied.length, 0);
+    console.log(JSON.stringify({ disposableBackupRestored: true, restoredLegacyMigrations: recorded.rowCount, restoredWorkspace: true, restoredDatabaseUpgrade: true }));
+  } finally {
+    await restored.end();
+    await admin.query("DROP DATABASE " + restoredDatabase);
+  }
+}
+
 await admin.connect();
 try {
   for (const mode of ["clean", "upgrade"]) {
@@ -78,6 +102,7 @@ try {
           const workspace = emptyWorkspace();
           workspace.projects.push({ id: "before", name: "Prior application", description: "", createdAt: new Date().toISOString() });
           assert.ok(await oldStore.writeSnapshot(oldAppSql(first), "fixture", workspace));
+          if (serviceContainer) await rehearseRestore(database);
           await assert.rejects(migrate(first, { ...sources, "9999_fixture.sql": "SELECT missing_rehearsal_function()" }), { code: "42883" });
           assert.equal((await first.query("SELECT name FROM _migrations")).rowCount, Object.keys(base).length);
         }
