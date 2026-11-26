@@ -53,6 +53,25 @@ async function freshOwner(url: string, owner = "owner") {
   return saved.servers.find((s) => s.kind === "http")!;
 }
 
+function compileRegistryFixture(storage: Record<string, unknown>, dns: Record<string, unknown>, globals: Record<string, unknown> = {}) {
+  const compile = (path: URL, imports: Record<string, unknown>): Record<string, (...args: any[]) => any> => {
+    const module = { exports: {} };
+    const code = ts.transpileModule(readFileSync(path, "utf8"), { compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 } }).outputText;
+    runInNewContext(code, { module, exports: module.exports, require: (name: string) => { assert.ok(name in imports, name); return imports[name]; },
+      fetch: async () => { throw Error("Native network is forbidden in this fixture"); }, URL, AbortController, Buffer, setTimeout, clearTimeout, ...globals });
+    return module.exports;
+  };
+  const custom = compile(new URL("../custom-connection.ts", import.meta.url), {
+    "node:crypto": { createHash, randomUUID }, "./mcp/http-dns-pin.ts": dns,
+    "./mcp/registry-store.ts": storage, "./mcp/call-contract.ts": callContract, "./mcp/http-body.ts": { readCappedBody },
+  });
+  return compile(new URL("./registry.ts", import.meta.url), {
+    "node:crypto": { randomUUID }, "./tools.ts": { BUILTIN_TOOL_DEFS: [] }, "./stdio-policy.ts": { isBlockedChildEnvKey: () => false },
+    "./registry-store.ts": storage, "./call-contract.ts": callContract, "./http-dns-pin.ts": dns,
+    "../halt.server.ts": { haltIsOn: async () => false }, "./http-body.ts": { readCappedBody }, "../custom-connection.ts": custom,
+  });
+}
+
 describe("http MCP registry hardening (REGRESSION)", () => {
   it("default discovery uses the validated pin while an explicit synthetic adapter remains injectable", async () => {
     for (const injected of [false, true]) {
@@ -80,22 +99,7 @@ describe("http MCP registry hardening (REGRESSION)", () => {
           calls.push("pinned"); return response(init);
         },
       };
-      const compile = (path: URL, imports: Record<string, unknown>): Record<string, (...args: any[]) => any> => {
-        const module = { exports: {} };
-        const code = ts.transpileModule(readFileSync(path, "utf8"), { compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 } }).outputText;
-        runInNewContext(code, { module, exports: module.exports, require: (name: string) => { assert.ok(name in imports, name); return imports[name]; },
-          fetch: nativeFetch, URL, AbortController, Buffer, setTimeout, clearTimeout });
-        return module.exports;
-      };
-      const custom = compile(new URL("../custom-connection.ts", import.meta.url), {
-        "node:crypto": { createHash, randomUUID }, "./mcp/http-dns-pin.ts": dns,
-        "./mcp/registry-store.ts": storage, "./mcp/call-contract.ts": callContract, "./mcp/http-body.ts": { readCappedBody },
-      });
-      const registry = compile(new URL("./registry.ts", import.meta.url), {
-        "node:crypto": { randomUUID }, "./tools.ts": { BUILTIN_TOOL_DEFS: [] }, "./stdio-policy.ts": { isBlockedChildEnvKey: () => false },
-        "./registry-store.ts": storage, "./call-contract.ts": callContract, "./http-dns-pin.ts": dns,
-        "../halt.server.ts": { haltIsOn: async () => false }, "./http-body.ts": { readCappedBody }, "../custom-connection.ts": custom,
-      });
+      const registry = compileRegistryFixture(storage, dns, { fetch: nativeFetch });
       const tools = await registry.listRegistryTools("fixture-owner", injected ? injectedFetch : undefined, { http: { timeoutMs: 300 } });
       assert.equal(tools.find((tool: { name: string }) => tool.name === "ping")?.status, "ok");
       assert.deepEqual(calls, ["validate-pin", injected ? "injected" : "pinned", "validate-pin", injected ? "injected" : "pinned"]);
@@ -153,12 +157,77 @@ describe("http MCP registry hardening (REGRESSION)", () => {
     assert.equal(fetched, 0);
   });
 
-  it("times out a hung server instead of hanging the Tools list or call", async () => {
+  it("schedules the actual 300 ms list and call deadlines, aborts at expiry, and never retries", { timeout: 15_000 }, async () => {
+    // Parallel CI can pause this process for seconds. Exercise the actual timer
+    // callback at 299/300 ms instead of mistaking scheduler delay for API policy.
+    for (const operation of ["list", "call"] as const) {
+      const clock = { now: 0, next: 0, scheduled: [] as number[], timers: new Map<number, { at: number; fire: () => void }>() };
+      const advance = (milliseconds: number) => {
+        clock.now += milliseconds;
+        for (const [id, timer] of [...clock.timers]) if (timer.at <= clock.now) { clock.timers.delete(id); timer.fire(); }
+      };
+      const calls: string[] = [];
+      const observed = { signal: undefined as AbortSignal | undefined, aborts: 0, ready: () => {} };
+      const ready = new Promise<void>(resolve => { observed.ready = resolve; });
+      let rows = [{ id: "fixture-server", label: "Fixture", kind: "http", protocol: "mcp", enabled: true, url: "https://mcp.example.test/rpc", state: "unchecked" }];
+      const storage = {
+        registryBuiltinId: () => "builtin-mind", databaseConfigured: () => true,
+        loadRegistry: async () => ({ servers: rows.map(row => ({ ...row })) }),
+        saveRegistry: async (_owner: string, next: typeof rows) => { rows = next; return { ok: true }; },
+      };
+      const dns = {
+        isLocalHostname: () => false, isPrivateAddressLiteral: () => false,
+        resolveAndPinMcpHostname: async () => ({ ok: true, pinnedAddress: "203.0.113.42", hostname: "mcp.example.test" }),
+        pinnedHttpFetch: async (_url: URL, _address: string, _host: string, init: RequestInit) => {
+          const message = JSON.parse(String(init.body)) as { id: number; method: string };
+          calls.push(message.method);
+          if (message.method === "initialize") return Response.json({ jsonrpc: "2.0", id: message.id, result: { protocolVersion: "2024-11-05" } });
+          assert.equal(message.method, operation === "list" ? "tools/list" : "tools/call");
+          assert.ok(init.signal);
+          observed.signal = init.signal;
+          init.signal.addEventListener("abort", () => { observed.aborts++; }, { once: true });
+          observed.ready();
+          // Deliberately ignore cancellation: the adapter deadline must settle
+          // even when the remote transport never resolves or rejects.
+          return new Promise<Response>(() => {});
+        },
+      };
+      const registry = compileRegistryFixture(storage, dns, {
+        setTimeout: (fire: () => void, delay: number) => { const id = ++clock.next; clock.scheduled.push(delay); clock.timers.set(id, { at: clock.now + delay, fire }); return id; },
+        clearTimeout: (id: number) => { clock.timers.delete(id); },
+      });
+      let settled = false;
+      const pending = (operation === "list"
+        ? registry.listRegistryTools("fixture-owner", undefined, { http: { timeoutMs: 300 } })
+        : registry.callRegistryTool({ userId: "fixture-owner", serverId: "fixture-server", tool: "ping", getSql: noSql, http: { timeoutMs: 300 } }))
+        .then((result: any) => { settled = true; return result; });
+      await ready;
+      assert.deepEqual(clock.scheduled, [300, 300], "initialize and the next request both receive the requested deadline");
+      assert.equal(clock.timers.size, 1, "the completed initialize deadline was cleared");
+      advance(299);
+      await Promise.resolve();
+      assert.equal(settled, false); assert.equal(observed.signal?.aborted, false); assert.equal(observed.aborts, 0);
+      advance(1);
+      assert.equal(observed.signal?.aborted, true); assert.equal(observed.aborts, 1);
+      const result = await pending;
+      if (operation === "list") {
+        const row = result.find((tool: { serverId: string }) => tool.serverId === "fixture-server");
+        assert.equal(row.status, "timeout"); assert.equal(row.name, "(timeout)");
+      } else { assert.equal(result.status, "timeout"); assert.equal(result.ok, false); }
+      assert.equal(clock.timers.size, 0);
+      advance(100_000);
+      await Promise.resolve();
+      assert.deepEqual(calls, ["initialize", operation === "list" ? "tools/list" : "tools/call"]);
+      assert.equal(calls.filter(method => method === "tools/call").length, operation === "list" ? 0 : 1);
+      assert.equal(observed.aborts, 1);
+    }
+  });
+
+  it("times out a hung server instead of hanging the Tools list or call", { timeout: 15_000 }, async () => {
     const url = await listen(() => {
       /* never answer */
     });
     const server = await freshOwner(url);
-    const started = Date.now();
     const tools = await listRegistryTools("owner", undefined, { http: { timeoutMs: 300 } });
     const row = tools.find((t) => t.serverId === server.id);
     assert.equal(row?.status, "timeout");
@@ -167,7 +236,6 @@ describe("http MCP registry hardening (REGRESSION)", () => {
     const called = await callRegistryTool({ userId: "owner", serverId: server.id, tool: "x", getSql: noSql, http: { timeoutMs: 300 } });
     assert.equal(called.status, "timeout");
     assert.equal(called.ok, false);
-    assert.ok(Date.now() - started < 5000);
   });
 
   it("does not follow redirects (no blind SSRF, no token forwarding)", async () => {
