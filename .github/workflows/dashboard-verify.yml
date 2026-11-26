@@ -42,12 +42,18 @@ jobs:
         options: --health-cmd pg_isready --health-interval 5s --health-timeout 5s --health-retries 10
     steps:
       - uses: actions/checkout@v4
+      - name: Check out the previous production application for upgrade testing
+        uses: actions/checkout@v4
+        with:
+          ref: 18d5b9364e6bdcfec028eeccf56fe596946ed8ce
+          path: previous-production
+          persist-credentials: false
       - uses: actions/setup-node@v4
         with:
           node-version: "24.11.1"
           cache: npm
       - run: npm ci
-      - run: node scripts/rehearse-postgres.mjs ${{ job.services.postgres.ports[5432] }}
+      - run: node scripts/rehearse-postgres.mjs ${{ job.services.postgres.ports[5432] }} previous-production
 
   typecheck:
     runs-on: ubuntu-latest

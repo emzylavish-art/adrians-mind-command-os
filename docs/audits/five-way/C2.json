@@ -1410,7 +1410,15 @@
         "src/lib/mind/provider-http.test.ts",
         "src/lib/mind/stream.test.ts"
       ],
-      "disposition": "Combined verification pending"
+      "disposition": "Combined verification pending",
+      "combinedEvidence": {
+        "commit": "d60778b5cf3192ec511d7d8044521ff47bf20a1d",
+        "environment": "isolated local fixtures",
+        "test": "src/lib/mind/limits.test.ts and src/lib/mind/c2-model-provider-contract.test.ts",
+        "result": "passed",
+        "observed": "concurrent helper and answer preflights share one chat-window decision and separately consume dispatch slots",
+        "limits": "Hosted budget settlement and account-level price reconciliation pending."
+      }
     },
     {
       "finding": "C2/AA-091",
@@ -1785,7 +1793,15 @@
         "src/lib/mind/provider-catalog.test.ts",
         "src/lib/mind/stream.test.ts"
       ],
-      "disposition": "Combined verification pending"
+      "disposition": "Combined verification pending",
+      "combinedEvidence": {
+        "commit": "d60778b5cf3192ec511d7d8044521ff47bf20a1d",
+        "environment": "isolated local fixtures",
+        "test": "src/lib/mind/c2-model-provider-contract.test.ts",
+        "result": "passed",
+        "observed": "actual adapter records identity/status for the specific owner and model under fixture transport",
+        "limits": "Real provider and authenticated settings checks pending."
+      }
     },
     {
       "finding": "C2/AA-112",

@@ -37,7 +37,8 @@ export function runLocalPlan(
   for (const step of steps) {
     if (ws.toolPermissions?.[step.tool] === false) {
       lines.push(`${step.tool}: this tool is turned off for the workspace. Nothing was read.`);
-      return { ok: false, lines };
+      results.push({ stepId: step.id, tool: step.tool, ok: false, output: "", error: "Tool disabled", records: [] });
+      return { ok: false, lines, results };
     }
     const decision = decide({
       autonomy: input.autonomy,

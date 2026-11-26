@@ -327,7 +327,15 @@
       "expected": "Parsers must agree on errors, framing, terminal markers and cancellation.",
       "implementation": "docs/adrian-analysis-implementation-checklist.md#L59",
       "regression": "[G14](#g14-streaming-and-send-recovery)",
-      "disposition": "Combined verification pending"
+      "disposition": "Combined verification pending",
+      "combinedEvidence": {
+        "commit": "d60778b5cf3192ec511d7d8044521ff47bf20a1d",
+        "environment": "isolated local fixtures",
+        "test": "src/lib/mind/stream-integrity.test.ts",
+        "result": "passed",
+        "observed": "LF, CRLF and split UTF-8, upstream DONE, malformed frame, cancellation and premature EOF",
+        "limits": "Client and provider adapter fixtures passed. Hosted streaming checks pending."
+      }
     },
     {
       "finding": "C4/AA-042",

@@ -697,11 +697,10 @@ async function dispatchMindTurn(request: Request, userId: string, data: Record<s
       setPrimaryContext(context.messages);
       const blocked = await preflight();
       if (blocked) return blocked;
-      markPrimaryDispatched();
       return providerResponse(async (onDelta, signal) => {
         const routed = await runSettledDispatch(userId, primaryReservationId, () => routeSelectedModel({
           id: requestedProvider, systemPrompt: context.systemPrompt, history: context.history,
-          controls: controls.controls, prompt: text, env: process.env, signal, onDelta, fetch: globalThis.fetch,
+          controls: controls.controls, prompt: text, env: process.env, signal, onDelta, onDispatch: markPrimaryDispatched, fetch: globalThis.fetch,
         }));
         return { ...routed, provider: requestedProvider === "nemotron" ? "openrouter" : requestedProvider };
       }, result => ({ text: result.text, model: result.model, requestedModel: result.requestedModel, provider: result.provider,
@@ -742,10 +741,10 @@ async function dispatchMindTurn(request: Request, userId: string, data: Record<s
       setPrimaryContext(context.messages);
       const blocked = await preflight();
       if (blocked) return blocked;
-      markPrimaryDispatched();
       const selectedProvider = selected.id;
       return providerResponse(async (onDelta, signal) => {
         const called = await runSettledDispatch(userId, primaryReservationId, () => callConfiguredProvider({
+          onDispatch: markPrimaryDispatched,
           id: selectedProvider, model: selected.model, key, prompt: text, systemPrompt: context.systemPrompt,
           history: context.history, controls: controls.controls, signal, onDelta, fetch: globalThis.fetch,
         }));

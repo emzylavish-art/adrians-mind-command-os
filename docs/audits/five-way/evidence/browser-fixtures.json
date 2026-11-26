@@ -1,0 +1,2013 @@
+[
+  {
+    "commit": "a686e2f624ba58408e5448c26fa55483c3b6ba77",
+    "recordedCheckout": "f2702b7239b1fd7f8fb922829b043a7d230eedf8",
+    "sourceState": {
+      "sha256": "ea6e539c8bd3ae0f89a3b32395b4f4429f4ef5c0bcf6a97d7f21231c2b7bb3c2",
+      "files": 1071
+    },
+    "browser": "153.0.8010.0",
+    "environment": "local-synthetic-no-provider",
+    "routeDescription": "Sign-in-off Chromium application fixture with synthetic workspace records and no provider",
+    "performance": {
+      "lcpWithin2500ms": 9,
+      "observedInteractionWithin200ms": 5,
+      "clsWithinPointOne": 4
+    },
+    "failures": [],
+    "states": [
+      {
+        "fixture": "chromium-390x844-100",
+        "messages": 1,
+        "metrics": {
+          "lcpMs": 2444,
+          "cls": 0.19616586511464768,
+          "maxObservedInteractionMs": 168,
+          "interactionEntries": 16,
+          "eventTiming": "supported; events below16ms may not be reported",
+          "longTaskCount": 17,
+          "maxLongTaskMs": 151,
+          "heap": {
+            "usedJsBytes": 109000000,
+            "totalJsBytes": 167000000,
+            "limitJsBytes": 3760000000
+          },
+          "supported": [
+            "element",
+            "event",
+            "first-input",
+            "interaction-contentful-paint",
+            "largest-contentful-paint",
+            "layout-shift",
+            "long-animation-frame",
+            "longtask",
+            "mark",
+            "measure",
+            "navigation",
+            "paint",
+            "resource",
+            "soft-navigation",
+            "visibility-state"
+          ]
+        },
+        "thresholds": {
+          "lcpWithin2500ms": true,
+          "observedInteractionWithin200ms": true,
+          "clsWithinPointOne": false
+        }
+      },
+      {
+        "fixture": "chromium-390x844-100",
+        "messages": 50,
+        "metrics": {
+          "lcpMs": 2372,
+          "cls": 0.19616586511464768,
+          "maxObservedInteractionMs": 136,
+          "interactionEntries": 22,
+          "eventTiming": "supported; events below16ms may not be reported",
+          "longTaskCount": 13,
+          "maxLongTaskMs": 202,
+          "heap": {
+            "usedJsBytes": 109000000,
+            "totalJsBytes": 167000000,
+            "limitJsBytes": 3760000000
+          },
+          "supported": [
+            "element",
+            "event",
+            "first-input",
+            "interaction-contentful-paint",
+            "largest-contentful-paint",
+            "layout-shift",
+            "long-animation-frame",
+            "longtask",
+            "mark",
+            "measure",
+            "navigation",
+            "paint",
+            "resource",
+            "soft-navigation",
+            "visibility-state"
+          ]
+        },
+        "thresholds": {
+          "lcpWithin2500ms": true,
+          "observedInteractionWithin200ms": true,
+          "clsWithinPointOne": false
+        }
+      },
+      {
+        "fixture": "chromium-390x844-100",
+        "messages": 500,
+        "metrics": {
+          "lcpMs": 2644,
+          "cls": 0.19616586511464768,
+          "maxObservedInteractionMs": 240,
+          "interactionEntries": 22,
+          "eventTiming": "supported; events below16ms may not be reported",
+          "longTaskCount": 21,
+          "maxLongTaskMs": 323,
+          "heap": {
+            "usedJsBytes": 109000000,
+            "totalJsBytes": 167000000,
+            "limitJsBytes": 3760000000
+          },
+          "supported": [
+            "element",
+            "event",
+            "first-input",
+            "interaction-contentful-paint",
+            "largest-contentful-paint",
+            "layout-shift",
+            "long-animation-frame",
+            "longtask",
+            "mark",
+            "measure",
+            "navigation",
+            "paint",
+            "resource",
+            "soft-navigation",
+            "visibility-state"
+          ]
+        },
+        "thresholds": {
+          "lcpWithin2500ms": false,
+          "observedInteractionWithin200ms": false,
+          "clsWithinPointOne": false
+        }
+      },
+      {
+        "fixture": "chromium-390x844-100",
+        "messages": 2000,
+        "metrics": {
+          "lcpMs": 2764,
+          "cls": 0.19616586511464768,
+          "maxObservedInteractionMs": 392,
+          "interactionEntries": 22,
+          "eventTiming": "supported; events below16ms may not be reported",
+          "longTaskCount": 20,
+          "maxLongTaskMs": 367,
+          "heap": {
+            "usedJsBytes": 109000000,
+            "totalJsBytes": 167000000,
+            "limitJsBytes": 3760000000
+          },
+          "supported": [
+            "element",
+            "event",
+            "first-input",
+            "interaction-contentful-paint",
+            "largest-contentful-paint",
+            "layout-shift",
+            "long-animation-frame",
+            "longtask",
+            "mark",
+            "measure",
+            "navigation",
+            "paint",
+            "resource",
+            "soft-navigation",
+            "visibility-state"
+          ]
+        },
+        "thresholds": {
+          "lcpWithin2500ms": false,
+          "observedInteractionWithin200ms": false,
+          "clsWithinPointOne": false
+        }
+      },
+      {
+        "fixture": "chromium-844x390-100",
+        "messages": 1,
+        "metrics": {
+          "lcpMs": 2364,
+          "cls": 0.06724434810528047,
+          "maxObservedInteractionMs": 144,
+          "interactionEntries": 16,
+          "eventTiming": "supported; events below16ms may not be reported",
+          "longTaskCount": 18,
+          "maxLongTaskMs": 180,
+          "heap": {
+            "usedJsBytes": 81400000,
+            "totalJsBytes": 139000000,
+            "limitJsBytes": 3760000000
+          },
+          "supported": [
+            "element",
+            "event",
+            "first-input",
+            "interaction-contentful-paint",
+            "largest-contentful-paint",
+            "layout-shift",
+            "long-animation-frame",
+            "longtask",
+            "mark",
+            "measure",
+            "navigation",
+            "paint",
+            "resource",
+            "soft-navigation",
+            "visibility-state"
+          ]
+        },
+        "thresholds": {
+          "lcpWithin2500ms": true,
+          "observedInteractionWithin200ms": true,
+          "clsWithinPointOne": true
+        }
+      },
+      {
+        "fixture": "chromium-844x390-100",
+        "messages": 50,
+        "metrics": {
+          "lcpMs": 404,
+          "cls": 0.06724434810528047,
+          "maxObservedInteractionMs": 208,
+          "interactionEntries": 22,
+          "eventTiming": "supported; events below16ms may not be reported",
+          "longTaskCount": 19,
+          "maxLongTaskMs": 225,
+          "heap": {
+            "usedJsBytes": 81400000,
+            "totalJsBytes": 139000000,
+            "limitJsBytes": 3760000000
+          },
+          "supported": [
+            "element",
+            "event",
+            "first-input",
+            "interaction-contentful-paint",
+            "largest-contentful-paint",
+            "layout-shift",
+            "long-animation-frame",
+            "longtask",
+            "mark",
+            "measure",
+            "navigation",
+            "paint",
+            "resource",
+            "soft-navigation",
+            "visibility-state"
+          ]
+        },
+        "thresholds": {
+          "lcpWithin2500ms": true,
+          "observedInteractionWithin200ms": false,
+          "clsWithinPointOne": true
+        }
+      },
+      {
+        "fixture": "chromium-844x390-100",
+        "messages": 500,
+        "metrics": {
+          "lcpMs": 328,
+          "cls": 0.06724434810528047,
+          "maxObservedInteractionMs": 264,
+          "interactionEntries": 22,
+          "eventTiming": "supported; events below16ms may not be reported",
+          "longTaskCount": 22,
+          "maxLongTaskMs": 278,
+          "heap": {
+            "usedJsBytes": 81400000,
+            "totalJsBytes": 139000000,
+            "limitJsBytes": 3760000000
+          },
+          "supported": [
+            "element",
+            "event",
+            "first-input",
+            "interaction-contentful-paint",
+            "largest-contentful-paint",
+            "layout-shift",
+            "long-animation-frame",
+            "longtask",
+            "mark",
+            "measure",
+            "navigation",
+            "paint",
+            "resource",
+            "soft-navigation",
+            "visibility-state"
+          ]
+        },
+        "thresholds": {
+          "lcpWithin2500ms": true,
+          "observedInteractionWithin200ms": false,
+          "clsWithinPointOne": true
+        }
+      },
+      {
+        "fixture": "chromium-844x390-100",
+        "messages": 2000,
+        "metrics": {
+          "lcpMs": 536,
+          "cls": 0.06724434810528047,
+          "maxObservedInteractionMs": 240,
+          "interactionEntries": 22,
+          "eventTiming": "supported; events below16ms may not be reported",
+          "longTaskCount": 20,
+          "maxLongTaskMs": 400,
+          "heap": {
+            "usedJsBytes": 81400000,
+            "totalJsBytes": 139000000,
+            "limitJsBytes": 3760000000
+          },
+          "supported": [
+            "element",
+            "event",
+            "first-input",
+            "interaction-contentful-paint",
+            "largest-contentful-paint",
+            "layout-shift",
+            "long-animation-frame",
+            "longtask",
+            "mark",
+            "measure",
+            "navigation",
+            "paint",
+            "resource",
+            "soft-navigation",
+            "visibility-state"
+          ]
+        },
+        "thresholds": {
+          "lcpWithin2500ms": true,
+          "observedInteractionWithin200ms": false,
+          "clsWithinPointOne": true
+        }
+      },
+      {
+        "fixture": "chromium-320x500-100",
+        "messages": 1,
+        "metrics": {
+          "lcpMs": 2052,
+          "cls": 0.19810684375,
+          "maxObservedInteractionMs": 160,
+          "interactionEntries": 16,
+          "eventTiming": "supported; events below16ms may not be reported",
+          "longTaskCount": 19,
+          "maxLongTaskMs": 172,
+          "heap": {
+            "usedJsBytes": 86400000,
+            "totalJsBytes": 148000000,
+            "limitJsBytes": 3760000000
+          },
+          "supported": [
+            "element",
+            "event",
+            "first-input",
+            "interaction-contentful-paint",
+            "largest-contentful-paint",
+            "layout-shift",
+            "long-animation-frame",
+            "longtask",
+            "mark",
+            "measure",
+            "navigation",
+            "paint",
+            "resource",
+            "soft-navigation",
+            "visibility-state"
+          ]
+        },
+        "thresholds": {
+          "lcpWithin2500ms": true,
+          "observedInteractionWithin200ms": true,
+          "clsWithinPointOne": false
+        }
+      },
+      {
+        "fixture": "chromium-320x500-100",
+        "messages": 50,
+        "metrics": {
+          "lcpMs": 2396,
+          "cls": 0.19810684375,
+          "maxObservedInteractionMs": 152,
+          "interactionEntries": 22,
+          "eventTiming": "supported; events below16ms may not be reported",
+          "longTaskCount": 15,
+          "maxLongTaskMs": 232,
+          "heap": {
+            "usedJsBytes": 86400000,
+            "totalJsBytes": 148000000,
+            "limitJsBytes": 3760000000
+          },
+          "supported": [
+            "element",
+            "event",
+            "first-input",
+            "interaction-contentful-paint",
+            "largest-contentful-paint",
+            "layout-shift",
+            "long-animation-frame",
+            "longtask",
+            "mark",
+            "measure",
+            "navigation",
+            "paint",
+            "resource",
+            "soft-navigation",
+            "visibility-state"
+          ]
+        },
+        "thresholds": {
+          "lcpWithin2500ms": true,
+          "observedInteractionWithin200ms": true,
+          "clsWithinPointOne": false
+        }
+      },
+      {
+        "fixture": "chromium-320x500-100",
+        "messages": 500,
+        "metrics": {
+          "lcpMs": 2260,
+          "cls": 0.19810684375,
+          "maxObservedInteractionMs": 280,
+          "interactionEntries": 22,
+          "eventTiming": "supported; events below16ms may not be reported",
+          "longTaskCount": 23,
+          "maxLongTaskMs": 283,
+          "heap": {
+            "usedJsBytes": 86400000,
+            "totalJsBytes": 148000000,
+            "limitJsBytes": 3760000000
+          },
+          "supported": [
+            "element",
+            "event",
+            "first-input",
+            "interaction-contentful-paint",
+            "largest-contentful-paint",
+            "layout-shift",
+            "long-animation-frame",
+            "longtask",
+            "mark",
+            "measure",
+            "navigation",
+            "paint",
+            "resource",
+            "soft-navigation",
+            "visibility-state"
+          ]
+        },
+        "thresholds": {
+          "lcpWithin2500ms": true,
+          "observedInteractionWithin200ms": false,
+          "clsWithinPointOne": false
+        }
+      },
+      {
+        "fixture": "chromium-320x500-100",
+        "messages": 2000,
+        "metrics": {
+          "lcpMs": 2688,
+          "cls": 0.19810684375,
+          "maxObservedInteractionMs": 288,
+          "interactionEntries": 22,
+          "eventTiming": "supported; events below16ms may not be reported",
+          "longTaskCount": 19,
+          "maxLongTaskMs": 384,
+          "heap": {
+            "usedJsBytes": 86400000,
+            "totalJsBytes": 148000000,
+            "limitJsBytes": 3760000000
+          },
+          "supported": [
+            "element",
+            "event",
+            "first-input",
+            "interaction-contentful-paint",
+            "largest-contentful-paint",
+            "layout-shift",
+            "long-animation-frame",
+            "longtask",
+            "mark",
+            "measure",
+            "navigation",
+            "paint",
+            "resource",
+            "soft-navigation",
+            "visibility-state"
+          ]
+        },
+        "thresholds": {
+          "lcpWithin2500ms": false,
+          "observedInteractionWithin200ms": false,
+          "clsWithinPointOne": false
+        }
+      },
+      {
+        "fixture": "chromium-1024x768-200",
+        "messages": 1,
+        "metrics": {
+          "lcpMs": 3020,
+          "cls": 0.5782493436320996,
+          "maxObservedInteractionMs": 216,
+          "interactionEntries": 16,
+          "eventTiming": "supported; events below16ms may not be reported",
+          "longTaskCount": 21,
+          "maxLongTaskMs": 225,
+          "heap": {
+            "usedJsBytes": 91700000,
+            "totalJsBytes": 148000000,
+            "limitJsBytes": 3760000000
+          },
+          "supported": [
+            "element",
+            "event",
+            "first-input",
+            "interaction-contentful-paint",
+            "largest-contentful-paint",
+            "layout-shift",
+            "long-animation-frame",
+            "longtask",
+            "mark",
+            "measure",
+            "navigation",
+            "paint",
+            "resource",
+            "soft-navigation",
+            "visibility-state"
+          ]
+        },
+        "thresholds": {
+          "lcpWithin2500ms": false,
+          "observedInteractionWithin200ms": false,
+          "clsWithinPointOne": false
+        }
+      },
+      {
+        "fixture": "chromium-1024x768-200",
+        "messages": 50,
+        "metrics": {
+          "lcpMs": 3212,
+          "cls": 0.5782493436320996,
+          "maxObservedInteractionMs": 208,
+          "interactionEntries": 22,
+          "eventTiming": "supported; events below16ms may not be reported",
+          "longTaskCount": 18,
+          "maxLongTaskMs": 259,
+          "heap": {
+            "usedJsBytes": 91700000,
+            "totalJsBytes": 148000000,
+            "limitJsBytes": 3760000000
+          },
+          "supported": [
+            "element",
+            "event",
+            "first-input",
+            "interaction-contentful-paint",
+            "largest-contentful-paint",
+            "layout-shift",
+            "long-animation-frame",
+            "longtask",
+            "mark",
+            "measure",
+            "navigation",
+            "paint",
+            "resource",
+            "soft-navigation",
+            "visibility-state"
+          ]
+        },
+        "thresholds": {
+          "lcpWithin2500ms": false,
+          "observedInteractionWithin200ms": false,
+          "clsWithinPointOne": false
+        }
+      },
+      {
+        "fixture": "chromium-1024x768-200",
+        "messages": 500,
+        "metrics": {
+          "lcpMs": 3500,
+          "cls": 0.5782493436320996,
+          "maxObservedInteractionMs": 256,
+          "interactionEntries": 22,
+          "eventTiming": "supported; events below16ms may not be reported",
+          "longTaskCount": 24,
+          "maxLongTaskMs": 405,
+          "heap": {
+            "usedJsBytes": 91700000,
+            "totalJsBytes": 148000000,
+            "limitJsBytes": 3760000000
+          },
+          "supported": [
+            "element",
+            "event",
+            "first-input",
+            "interaction-contentful-paint",
+            "largest-contentful-paint",
+            "layout-shift",
+            "long-animation-frame",
+            "longtask",
+            "mark",
+            "measure",
+            "navigation",
+            "paint",
+            "resource",
+            "soft-navigation",
+            "visibility-state"
+          ]
+        },
+        "thresholds": {
+          "lcpWithin2500ms": false,
+          "observedInteractionWithin200ms": false,
+          "clsWithinPointOne": false
+        }
+      },
+      {
+        "fixture": "chromium-1024x768-200",
+        "messages": 2000,
+        "metrics": {
+          "lcpMs": 3356,
+          "cls": 0.5782493436320996,
+          "maxObservedInteractionMs": 264,
+          "interactionEntries": 22,
+          "eventTiming": "supported; events below16ms may not be reported",
+          "longTaskCount": 22,
+          "maxLongTaskMs": 415,
+          "heap": {
+            "usedJsBytes": 91700000,
+            "totalJsBytes": 148000000,
+            "limitJsBytes": 3760000000
+          },
+          "supported": [
+            "element",
+            "event",
+            "first-input",
+            "interaction-contentful-paint",
+            "largest-contentful-paint",
+            "layout-shift",
+            "long-animation-frame",
+            "longtask",
+            "mark",
+            "measure",
+            "navigation",
+            "paint",
+            "resource",
+            "soft-navigation",
+            "visibility-state"
+          ]
+        },
+        "thresholds": {
+          "lcpWithin2500ms": false,
+          "observedInteractionWithin200ms": false,
+          "clsWithinPointOne": false
+        }
+      }
+    ],
+    "screenshots": [
+      {
+        "file": "a686e2f-chromium-390x844-100-2000-turns.png",
+        "sha256": "487c982e943b3d083dc8038251c4c1fec83ff1c5d831a62bc854fec0fb3254d3",
+        "viewport": "390x844",
+        "history": 2000,
+        "route": "/?section=chat&chat=layout-2000"
+      }
+    ]
+  },
+  {
+    "commit": "0c036a2b097f8b1d6a7dd149d3a6358e10ff4661",
+    "recordedCheckout": "0c036a2b097f8b1d6a7dd149d3a6358e10ff4661",
+    "sourceState": {
+      "sha256": "da0fcf36e43995e1e24f52820469eef732cc37c609797a4833e26b5c8b8eb9d9",
+      "files": 1071
+    },
+    "browser": "153.0.8010.0",
+    "environment": "local-synthetic-no-provider",
+    "routeDescription": "Sign-in-off Chromium application fixture with synthetic workspace records and no provider",
+    "performance": {
+      "lcpWithin2500ms": 7,
+      "observedInteractionWithin200ms": 5,
+      "clsWithinPointOne": 4
+    },
+    "failures": [],
+    "states": [
+      {
+        "fixture": "chromium-390x844-100",
+        "messages": 1,
+        "metrics": {
+          "lcpMs": 2236,
+          "cls": 0.19616586511464768,
+          "maxObservedInteractionMs": 160,
+          "interactionEntries": 19,
+          "eventTiming": "supported; events below16ms may not be reported",
+          "longTaskCount": 23,
+          "maxLongTaskMs": 171,
+          "heap": {
+            "usedJsBytes": 103000000,
+            "totalJsBytes": 167000000,
+            "limitJsBytes": 3760000000
+          },
+          "supported": [
+            "element",
+            "event",
+            "first-input",
+            "interaction-contentful-paint",
+            "largest-contentful-paint",
+            "layout-shift",
+            "long-animation-frame",
+            "longtask",
+            "mark",
+            "measure",
+            "navigation",
+            "paint",
+            "resource",
+            "soft-navigation",
+            "visibility-state"
+          ]
+        },
+        "thresholds": {
+          "lcpWithin2500ms": true,
+          "observedInteractionWithin200ms": true,
+          "clsWithinPointOne": false
+        }
+      },
+      {
+        "fixture": "chromium-390x844-100",
+        "messages": 50,
+        "metrics": {
+          "lcpMs": 2364,
+          "cls": 0.19616586511464768,
+          "maxObservedInteractionMs": 200,
+          "interactionEntries": 22,
+          "eventTiming": "supported; events below16ms may not be reported",
+          "longTaskCount": 17,
+          "maxLongTaskMs": 210,
+          "heap": {
+            "usedJsBytes": 103000000,
+            "totalJsBytes": 167000000,
+            "limitJsBytes": 3760000000
+          },
+          "supported": [
+            "element",
+            "event",
+            "first-input",
+            "interaction-contentful-paint",
+            "largest-contentful-paint",
+            "layout-shift",
+            "long-animation-frame",
+            "longtask",
+            "mark",
+            "measure",
+            "navigation",
+            "paint",
+            "resource",
+            "soft-navigation",
+            "visibility-state"
+          ]
+        },
+        "thresholds": {
+          "lcpWithin2500ms": true,
+          "observedInteractionWithin200ms": true,
+          "clsWithinPointOne": false
+        }
+      },
+      {
+        "fixture": "chromium-390x844-100",
+        "messages": 500,
+        "metrics": {
+          "lcpMs": 2472,
+          "cls": 0.19616586511464768,
+          "maxObservedInteractionMs": 248,
+          "interactionEntries": 24,
+          "eventTiming": "supported; events below16ms may not be reported",
+          "longTaskCount": 22,
+          "maxLongTaskMs": 329,
+          "heap": {
+            "usedJsBytes": 103000000,
+            "totalJsBytes": 167000000,
+            "limitJsBytes": 3760000000
+          },
+          "supported": [
+            "element",
+            "event",
+            "first-input",
+            "interaction-contentful-paint",
+            "largest-contentful-paint",
+            "layout-shift",
+            "long-animation-frame",
+            "longtask",
+            "mark",
+            "measure",
+            "navigation",
+            "paint",
+            "resource",
+            "soft-navigation",
+            "visibility-state"
+          ]
+        },
+        "thresholds": {
+          "lcpWithin2500ms": true,
+          "observedInteractionWithin200ms": false,
+          "clsWithinPointOne": false
+        }
+      },
+      {
+        "fixture": "chromium-390x844-100",
+        "messages": 2000,
+        "metrics": {
+          "lcpMs": 2740,
+          "cls": 0.19616586511464768,
+          "maxObservedInteractionMs": 288,
+          "interactionEntries": 24,
+          "eventTiming": "supported; events below16ms may not be reported",
+          "longTaskCount": 23,
+          "maxLongTaskMs": 368,
+          "heap": {
+            "usedJsBytes": 103000000,
+            "totalJsBytes": 167000000,
+            "limitJsBytes": 3760000000
+          },
+          "supported": [
+            "element",
+            "event",
+            "first-input",
+            "interaction-contentful-paint",
+            "largest-contentful-paint",
+            "layout-shift",
+            "long-animation-frame",
+            "longtask",
+            "mark",
+            "measure",
+            "navigation",
+            "paint",
+            "resource",
+            "soft-navigation",
+            "visibility-state"
+          ]
+        },
+        "thresholds": {
+          "lcpWithin2500ms": false,
+          "observedInteractionWithin200ms": false,
+          "clsWithinPointOne": false
+        }
+      },
+      {
+        "fixture": "chromium-844x390-100",
+        "messages": 1,
+        "metrics": {
+          "lcpMs": 2280,
+          "cls": 0.06724434810528047,
+          "maxObservedInteractionMs": 152,
+          "interactionEntries": 19,
+          "eventTiming": "supported; events below16ms may not be reported",
+          "longTaskCount": 21,
+          "maxLongTaskMs": 134,
+          "heap": {
+            "usedJsBytes": 86400000,
+            "totalJsBytes": 148000000,
+            "limitJsBytes": 3760000000
+          },
+          "supported": [
+            "element",
+            "event",
+            "first-input",
+            "interaction-contentful-paint",
+            "largest-contentful-paint",
+            "layout-shift",
+            "long-animation-frame",
+            "longtask",
+            "mark",
+            "measure",
+            "navigation",
+            "paint",
+            "resource",
+            "soft-navigation",
+            "visibility-state"
+          ]
+        },
+        "thresholds": {
+          "lcpWithin2500ms": true,
+          "observedInteractionWithin200ms": true,
+          "clsWithinPointOne": true
+        }
+      },
+      {
+        "fixture": "chromium-844x390-100",
+        "messages": 50,
+        "metrics": {
+          "lcpMs": 416,
+          "cls": 0.06724434810528047,
+          "maxObservedInteractionMs": 240,
+          "interactionEntries": 25,
+          "eventTiming": "supported; events below16ms may not be reported",
+          "longTaskCount": 22,
+          "maxLongTaskMs": 440,
+          "heap": {
+            "usedJsBytes": 86400000,
+            "totalJsBytes": 148000000,
+            "limitJsBytes": 3760000000
+          },
+          "supported": [
+            "element",
+            "event",
+            "first-input",
+            "interaction-contentful-paint",
+            "largest-contentful-paint",
+            "layout-shift",
+            "long-animation-frame",
+            "longtask",
+            "mark",
+            "measure",
+            "navigation",
+            "paint",
+            "resource",
+            "soft-navigation",
+            "visibility-state"
+          ]
+        },
+        "thresholds": {
+          "lcpWithin2500ms": true,
+          "observedInteractionWithin200ms": false,
+          "clsWithinPointOne": true
+        }
+      },
+      {
+        "fixture": "chromium-844x390-100",
+        "messages": 500,
+        "metrics": {
+          "lcpMs": 884,
+          "cls": 0.06403766196170606,
+          "maxObservedInteractionMs": 416,
+          "interactionEntries": 23,
+          "eventTiming": "supported; events below16ms may not be reported",
+          "longTaskCount": 27,
+          "maxLongTaskMs": 544,
+          "heap": {
+            "usedJsBytes": 86400000,
+            "totalJsBytes": 148000000,
+            "limitJsBytes": 3760000000
+          },
+          "supported": [
+            "element",
+            "event",
+            "first-input",
+            "interaction-contentful-paint",
+            "largest-contentful-paint",
+            "layout-shift",
+            "long-animation-frame",
+            "longtask",
+            "mark",
+            "measure",
+            "navigation",
+            "paint",
+            "resource",
+            "soft-navigation",
+            "visibility-state"
+          ]
+        },
+        "thresholds": {
+          "lcpWithin2500ms": true,
+          "observedInteractionWithin200ms": false,
+          "clsWithinPointOne": true
+        }
+      },
+      {
+        "fixture": "chromium-844x390-100",
+        "messages": 2000,
+        "metrics": {
+          "lcpMs": 396,
+          "cls": 0.05375135199810633,
+          "maxObservedInteractionMs": 256,
+          "interactionEntries": 24,
+          "eventTiming": "supported; events below16ms may not be reported",
+          "longTaskCount": 23,
+          "maxLongTaskMs": 374,
+          "heap": {
+            "usedJsBytes": 86400000,
+            "totalJsBytes": 148000000,
+            "limitJsBytes": 3760000000
+          },
+          "supported": [
+            "element",
+            "event",
+            "first-input",
+            "interaction-contentful-paint",
+            "largest-contentful-paint",
+            "layout-shift",
+            "long-animation-frame",
+            "longtask",
+            "mark",
+            "measure",
+            "navigation",
+            "paint",
+            "resource",
+            "soft-navigation",
+            "visibility-state"
+          ]
+        },
+        "thresholds": {
+          "lcpWithin2500ms": true,
+          "observedInteractionWithin200ms": false,
+          "clsWithinPointOne": true
+        }
+      },
+      {
+        "fixture": "chromium-320x500-100",
+        "messages": 1,
+        "metrics": {
+          "lcpMs": 2760,
+          "cls": 0.19810684375,
+          "maxObservedInteractionMs": 328,
+          "interactionEntries": 21,
+          "eventTiming": "supported; events below16ms may not be reported",
+          "longTaskCount": 25,
+          "maxLongTaskMs": 312,
+          "heap": {
+            "usedJsBytes": 91700000,
+            "totalJsBytes": 148000000,
+            "limitJsBytes": 3760000000
+          },
+          "supported": [
+            "element",
+            "event",
+            "first-input",
+            "interaction-contentful-paint",
+            "largest-contentful-paint",
+            "layout-shift",
+            "long-animation-frame",
+            "longtask",
+            "mark",
+            "measure",
+            "navigation",
+            "paint",
+            "resource",
+            "soft-navigation",
+            "visibility-state"
+          ]
+        },
+        "thresholds": {
+          "lcpWithin2500ms": false,
+          "observedInteractionWithin200ms": false,
+          "clsWithinPointOne": false
+        }
+      },
+      {
+        "fixture": "chromium-320x500-100",
+        "messages": 50,
+        "metrics": {
+          "lcpMs": 2596,
+          "cls": 0.19810684375,
+          "maxObservedInteractionMs": 136,
+          "interactionEntries": 23,
+          "eventTiming": "supported; events below16ms may not be reported",
+          "longTaskCount": 18,
+          "maxLongTaskMs": 265,
+          "heap": {
+            "usedJsBytes": 91700000,
+            "totalJsBytes": 148000000,
+            "limitJsBytes": 3760000000
+          },
+          "supported": [
+            "element",
+            "event",
+            "first-input",
+            "interaction-contentful-paint",
+            "largest-contentful-paint",
+            "layout-shift",
+            "long-animation-frame",
+            "longtask",
+            "mark",
+            "measure",
+            "navigation",
+            "paint",
+            "resource",
+            "soft-navigation",
+            "visibility-state"
+          ]
+        },
+        "thresholds": {
+          "lcpWithin2500ms": false,
+          "observedInteractionWithin200ms": true,
+          "clsWithinPointOne": false
+        }
+      },
+      {
+        "fixture": "chromium-320x500-100",
+        "messages": 500,
+        "metrics": {
+          "lcpMs": 3136,
+          "cls": 0.19810684375,
+          "maxObservedInteractionMs": 272,
+          "interactionEntries": 23,
+          "eventTiming": "supported; events below16ms may not be reported",
+          "longTaskCount": 30,
+          "maxLongTaskMs": 654,
+          "heap": {
+            "usedJsBytes": 91700000,
+            "totalJsBytes": 148000000,
+            "limitJsBytes": 3760000000
+          },
+          "supported": [
+            "element",
+            "event",
+            "first-input",
+            "interaction-contentful-paint",
+            "largest-contentful-paint",
+            "layout-shift",
+            "long-animation-frame",
+            "longtask",
+            "mark",
+            "measure",
+            "navigation",
+            "paint",
+            "resource",
+            "soft-navigation",
+            "visibility-state"
+          ]
+        },
+        "thresholds": {
+          "lcpWithin2500ms": false,
+          "observedInteractionWithin200ms": false,
+          "clsWithinPointOne": false
+        }
+      },
+      {
+        "fixture": "chromium-320x500-100",
+        "messages": 2000,
+        "metrics": {
+          "lcpMs": 3120,
+          "cls": 0.19810684375,
+          "maxObservedInteractionMs": 528,
+          "interactionEntries": 22,
+          "eventTiming": "supported; events below16ms may not be reported",
+          "longTaskCount": 23,
+          "maxLongTaskMs": 365,
+          "heap": {
+            "usedJsBytes": 91700000,
+            "totalJsBytes": 148000000,
+            "limitJsBytes": 3760000000
+          },
+          "supported": [
+            "element",
+            "event",
+            "first-input",
+            "interaction-contentful-paint",
+            "largest-contentful-paint",
+            "layout-shift",
+            "long-animation-frame",
+            "longtask",
+            "mark",
+            "measure",
+            "navigation",
+            "paint",
+            "resource",
+            "soft-navigation",
+            "visibility-state"
+          ]
+        },
+        "thresholds": {
+          "lcpWithin2500ms": false,
+          "observedInteractionWithin200ms": false,
+          "clsWithinPointOne": false
+        }
+      },
+      {
+        "fixture": "chromium-1024x768-200",
+        "messages": 1,
+        "metrics": {
+          "lcpMs": 2760,
+          "cls": 0.5782493436320996,
+          "maxObservedInteractionMs": 176,
+          "interactionEntries": 20,
+          "eventTiming": "supported; events below16ms may not be reported",
+          "longTaskCount": 24,
+          "maxLongTaskMs": 151,
+          "heap": {
+            "usedJsBytes": 68000000,
+            "totalJsBytes": 139000000,
+            "limitJsBytes": 3760000000
+          },
+          "supported": [
+            "element",
+            "event",
+            "first-input",
+            "interaction-contentful-paint",
+            "largest-contentful-paint",
+            "layout-shift",
+            "long-animation-frame",
+            "longtask",
+            "mark",
+            "measure",
+            "navigation",
+            "paint",
+            "resource",
+            "soft-navigation",
+            "visibility-state"
+          ]
+        },
+        "thresholds": {
+          "lcpWithin2500ms": false,
+          "observedInteractionWithin200ms": true,
+          "clsWithinPointOne": false
+        }
+      },
+      {
+        "fixture": "chromium-1024x768-200",
+        "messages": 50,
+        "metrics": {
+          "lcpMs": 3856,
+          "cls": 0.5691869450965896,
+          "maxObservedInteractionMs": 240,
+          "interactionEntries": 24,
+          "eventTiming": "supported; events below16ms may not be reported",
+          "longTaskCount": 22,
+          "maxLongTaskMs": 316,
+          "heap": {
+            "usedJsBytes": 68000000,
+            "totalJsBytes": 139000000,
+            "limitJsBytes": 3760000000
+          },
+          "supported": [
+            "element",
+            "event",
+            "first-input",
+            "interaction-contentful-paint",
+            "largest-contentful-paint",
+            "layout-shift",
+            "long-animation-frame",
+            "longtask",
+            "mark",
+            "measure",
+            "navigation",
+            "paint",
+            "resource",
+            "soft-navigation",
+            "visibility-state"
+          ]
+        },
+        "thresholds": {
+          "lcpWithin2500ms": false,
+          "observedInteractionWithin200ms": false,
+          "clsWithinPointOne": false
+        }
+      },
+      {
+        "fixture": "chromium-1024x768-200",
+        "messages": 500,
+        "metrics": {
+          "lcpMs": 4100,
+          "cls": 0.5782493436320996,
+          "maxObservedInteractionMs": 544,
+          "interactionEntries": 25,
+          "eventTiming": "supported; events below16ms may not be reported",
+          "longTaskCount": 25,
+          "maxLongTaskMs": 524,
+          "heap": {
+            "usedJsBytes": 68000000,
+            "totalJsBytes": 139000000,
+            "limitJsBytes": 3760000000
+          },
+          "supported": [
+            "element",
+            "event",
+            "first-input",
+            "interaction-contentful-paint",
+            "largest-contentful-paint",
+            "layout-shift",
+            "long-animation-frame",
+            "longtask",
+            "mark",
+            "measure",
+            "navigation",
+            "paint",
+            "resource",
+            "soft-navigation",
+            "visibility-state"
+          ]
+        },
+        "thresholds": {
+          "lcpWithin2500ms": false,
+          "observedInteractionWithin200ms": false,
+          "clsWithinPointOne": false
+        }
+      },
+      {
+        "fixture": "chromium-1024x768-200",
+        "messages": 2000,
+        "metrics": {
+          "lcpMs": 3704,
+          "cls": 0.6543194520830488,
+          "maxObservedInteractionMs": 296,
+          "interactionEntries": 23,
+          "eventTiming": "supported; events below16ms may not be reported",
+          "longTaskCount": 25,
+          "maxLongTaskMs": 369,
+          "heap": {
+            "usedJsBytes": 68000000,
+            "totalJsBytes": 139000000,
+            "limitJsBytes": 3760000000
+          },
+          "supported": [
+            "element",
+            "event",
+            "first-input",
+            "interaction-contentful-paint",
+            "largest-contentful-paint",
+            "layout-shift",
+            "long-animation-frame",
+            "longtask",
+            "mark",
+            "measure",
+            "navigation",
+            "paint",
+            "resource",
+            "soft-navigation",
+            "visibility-state"
+          ]
+        },
+        "thresholds": {
+          "lcpWithin2500ms": false,
+          "observedInteractionWithin200ms": false,
+          "clsWithinPointOne": false
+        }
+      }
+    ],
+    "screenshots": [
+      {
+        "file": "0c036a2-chromium-390x844-100-2000-turns.png",
+        "sha256": "487c982e943b3d083dc8038251c4c1fec83ff1c5d831a62bc854fec0fb3254d3",
+        "viewport": "390x844",
+        "history": 2000,
+        "route": "/?section=chat&chat=layout-2000"
+      }
+    ]
+  },
+  {
+    "commit": "d60778b5cf3192ec511d7d8044521ff47bf20a1d",
+    "recordedCheckout": "d60778b5cf3192ec511d7d8044521ff47bf20a1d",
+    "sourceState": {
+      "sha256": "44dcf962ff93820f75b283c88c51a1f489b38a8332b786d4de5096c9be71cac3",
+      "files": 1071
+    },
+    "browser": "153.0.8010.0",
+    "environment": "local-synthetic-no-provider",
+    "routeDescription": "Sign-in-off Chromium application fixture with synthetic workspace records and no provider",
+    "performance": {
+      "lcpWithin2500ms": 5,
+      "observedInteractionWithin200ms": 3,
+      "clsWithinPointOne": 4
+    },
+    "failures": [],
+    "states": [
+      {
+        "fixture": "chromium-390x844-100",
+        "messages": 1,
+        "metrics": {
+          "lcpMs": 2456,
+          "cls": 0.19616586511464768,
+          "maxObservedInteractionMs": 120,
+          "interactionEntries": 19,
+          "eventTiming": "supported; events below16ms may not be reported",
+          "longTaskCount": 19,
+          "maxLongTaskMs": 140,
+          "heap": {
+            "usedJsBytes": 103000000,
+            "totalJsBytes": 167000000,
+            "limitJsBytes": 3760000000
+          },
+          "supported": [
+            "element",
+            "event",
+            "first-input",
+            "interaction-contentful-paint",
+            "largest-contentful-paint",
+            "layout-shift",
+            "long-animation-frame",
+            "longtask",
+            "mark",
+            "measure",
+            "navigation",
+            "paint",
+            "resource",
+            "soft-navigation",
+            "visibility-state"
+          ]
+        },
+        "thresholds": {
+          "lcpWithin2500ms": true,
+          "observedInteractionWithin200ms": true,
+          "clsWithinPointOne": false
+        }
+      },
+      {
+        "fixture": "chromium-390x844-100",
+        "messages": 50,
+        "metrics": {
+          "lcpMs": 2556,
+          "cls": 0.19616586511464768,
+          "maxObservedInteractionMs": 216,
+          "interactionEntries": 23,
+          "eventTiming": "supported; events below16ms may not be reported",
+          "longTaskCount": 18,
+          "maxLongTaskMs": 285,
+          "heap": {
+            "usedJsBytes": 103000000,
+            "totalJsBytes": 167000000,
+            "limitJsBytes": 3760000000
+          },
+          "supported": [
+            "element",
+            "event",
+            "first-input",
+            "interaction-contentful-paint",
+            "largest-contentful-paint",
+            "layout-shift",
+            "long-animation-frame",
+            "longtask",
+            "mark",
+            "measure",
+            "navigation",
+            "paint",
+            "resource",
+            "soft-navigation",
+            "visibility-state"
+          ]
+        },
+        "thresholds": {
+          "lcpWithin2500ms": false,
+          "observedInteractionWithin200ms": false,
+          "clsWithinPointOne": false
+        }
+      },
+      {
+        "fixture": "chromium-390x844-100",
+        "messages": 500,
+        "metrics": {
+          "lcpMs": 2516,
+          "cls": 0.19616586511464768,
+          "maxObservedInteractionMs": 288,
+          "interactionEntries": 24,
+          "eventTiming": "supported; events below16ms may not be reported",
+          "longTaskCount": 26,
+          "maxLongTaskMs": 348,
+          "heap": {
+            "usedJsBytes": 103000000,
+            "totalJsBytes": 167000000,
+            "limitJsBytes": 3760000000
+          },
+          "supported": [
+            "element",
+            "event",
+            "first-input",
+            "interaction-contentful-paint",
+            "largest-contentful-paint",
+            "layout-shift",
+            "long-animation-frame",
+            "longtask",
+            "mark",
+            "measure",
+            "navigation",
+            "paint",
+            "resource",
+            "soft-navigation",
+            "visibility-state"
+          ]
+        },
+        "thresholds": {
+          "lcpWithin2500ms": false,
+          "observedInteractionWithin200ms": false,
+          "clsWithinPointOne": false
+        }
+      },
+      {
+        "fixture": "chromium-390x844-100",
+        "messages": 2000,
+        "metrics": {
+          "lcpMs": 2964,
+          "cls": 0.19616586511464768,
+          "maxObservedInteractionMs": 256,
+          "interactionEntries": 24,
+          "eventTiming": "supported; events below16ms may not be reported",
+          "longTaskCount": 22,
+          "maxLongTaskMs": 456,
+          "heap": {
+            "usedJsBytes": 103000000,
+            "totalJsBytes": 167000000,
+            "limitJsBytes": 3760000000
+          },
+          "supported": [
+            "element",
+            "event",
+            "first-input",
+            "interaction-contentful-paint",
+            "largest-contentful-paint",
+            "layout-shift",
+            "long-animation-frame",
+            "longtask",
+            "mark",
+            "measure",
+            "navigation",
+            "paint",
+            "resource",
+            "soft-navigation",
+            "visibility-state"
+          ]
+        },
+        "thresholds": {
+          "lcpWithin2500ms": false,
+          "observedInteractionWithin200ms": false,
+          "clsWithinPointOne": false
+        }
+      },
+      {
+        "fixture": "chromium-844x390-100",
+        "messages": 1,
+        "metrics": {
+          "lcpMs": 2824,
+          "cls": 0.06724434810528047,
+          "maxObservedInteractionMs": 256,
+          "interactionEntries": 20,
+          "eventTiming": "supported; events below16ms may not be reported",
+          "longTaskCount": 23,
+          "maxLongTaskMs": 222,
+          "heap": {
+            "usedJsBytes": 86400000,
+            "totalJsBytes": 139000000,
+            "limitJsBytes": 3760000000
+          },
+          "supported": [
+            "element",
+            "event",
+            "first-input",
+            "interaction-contentful-paint",
+            "largest-contentful-paint",
+            "layout-shift",
+            "long-animation-frame",
+            "longtask",
+            "mark",
+            "measure",
+            "navigation",
+            "paint",
+            "resource",
+            "soft-navigation",
+            "visibility-state"
+          ]
+        },
+        "thresholds": {
+          "lcpWithin2500ms": false,
+          "observedInteractionWithin200ms": false,
+          "clsWithinPointOne": true
+        }
+      },
+      {
+        "fixture": "chromium-844x390-100",
+        "messages": 50,
+        "metrics": {
+          "lcpMs": 396,
+          "cls": 0.06724434810528047,
+          "maxObservedInteractionMs": 136,
+          "interactionEntries": 23,
+          "eventTiming": "supported; events below16ms may not be reported",
+          "longTaskCount": 19,
+          "maxLongTaskMs": 235,
+          "heap": {
+            "usedJsBytes": 86400000,
+            "totalJsBytes": 139000000,
+            "limitJsBytes": 3760000000
+          },
+          "supported": [
+            "element",
+            "event",
+            "first-input",
+            "interaction-contentful-paint",
+            "largest-contentful-paint",
+            "layout-shift",
+            "long-animation-frame",
+            "longtask",
+            "mark",
+            "measure",
+            "navigation",
+            "paint",
+            "resource",
+            "soft-navigation",
+            "visibility-state"
+          ]
+        },
+        "thresholds": {
+          "lcpWithin2500ms": true,
+          "observedInteractionWithin200ms": true,
+          "clsWithinPointOne": true
+        }
+      },
+      {
+        "fixture": "chromium-844x390-100",
+        "messages": 500,
+        "metrics": {
+          "lcpMs": 352,
+          "cls": 0.06724434810528047,
+          "maxObservedInteractionMs": 296,
+          "interactionEntries": 24,
+          "eventTiming": "supported; events below16ms may not be reported",
+          "longTaskCount": 22,
+          "maxLongTaskMs": 278,
+          "heap": {
+            "usedJsBytes": 86400000,
+            "totalJsBytes": 139000000,
+            "limitJsBytes": 3760000000
+          },
+          "supported": [
+            "element",
+            "event",
+            "first-input",
+            "interaction-contentful-paint",
+            "largest-contentful-paint",
+            "layout-shift",
+            "long-animation-frame",
+            "longtask",
+            "mark",
+            "measure",
+            "navigation",
+            "paint",
+            "resource",
+            "soft-navigation",
+            "visibility-state"
+          ]
+        },
+        "thresholds": {
+          "lcpWithin2500ms": true,
+          "observedInteractionWithin200ms": false,
+          "clsWithinPointOne": true
+        }
+      },
+      {
+        "fixture": "chromium-844x390-100",
+        "messages": 2000,
+        "metrics": {
+          "lcpMs": 600,
+          "cls": 0.06724434810528047,
+          "maxObservedInteractionMs": 304,
+          "interactionEntries": 23,
+          "eventTiming": "supported; events below16ms may not be reported",
+          "longTaskCount": 22,
+          "maxLongTaskMs": 330,
+          "heap": {
+            "usedJsBytes": 86400000,
+            "totalJsBytes": 139000000,
+            "limitJsBytes": 3760000000
+          },
+          "supported": [
+            "element",
+            "event",
+            "first-input",
+            "interaction-contentful-paint",
+            "largest-contentful-paint",
+            "layout-shift",
+            "long-animation-frame",
+            "longtask",
+            "mark",
+            "measure",
+            "navigation",
+            "paint",
+            "resource",
+            "soft-navigation",
+            "visibility-state"
+          ]
+        },
+        "thresholds": {
+          "lcpWithin2500ms": true,
+          "observedInteractionWithin200ms": false,
+          "clsWithinPointOne": true
+        }
+      },
+      {
+        "fixture": "chromium-320x500-100",
+        "messages": 1,
+        "metrics": {
+          "lcpMs": 2656,
+          "cls": 0.19810684375,
+          "maxObservedInteractionMs": 264,
+          "interactionEntries": 21,
+          "eventTiming": "supported; events below16ms may not be reported",
+          "longTaskCount": 25,
+          "maxLongTaskMs": 352,
+          "heap": {
+            "usedJsBytes": 86400000,
+            "totalJsBytes": 148000000,
+            "limitJsBytes": 3760000000
+          },
+          "supported": [
+            "element",
+            "event",
+            "first-input",
+            "interaction-contentful-paint",
+            "largest-contentful-paint",
+            "layout-shift",
+            "long-animation-frame",
+            "longtask",
+            "mark",
+            "measure",
+            "navigation",
+            "paint",
+            "resource",
+            "soft-navigation",
+            "visibility-state"
+          ]
+        },
+        "thresholds": {
+          "lcpWithin2500ms": false,
+          "observedInteractionWithin200ms": false,
+          "clsWithinPointOne": false
+        }
+      },
+      {
+        "fixture": "chromium-320x500-100",
+        "messages": 50,
+        "metrics": {
+          "lcpMs": 2892,
+          "cls": 0.18989492500000002,
+          "maxObservedInteractionMs": 224,
+          "interactionEntries": 22,
+          "eventTiming": "supported; events below16ms may not be reported",
+          "longTaskCount": 23,
+          "maxLongTaskMs": 248,
+          "heap": {
+            "usedJsBytes": 86400000,
+            "totalJsBytes": 148000000,
+            "limitJsBytes": 3760000000
+          },
+          "supported": [
+            "element",
+            "event",
+            "first-input",
+            "interaction-contentful-paint",
+            "largest-contentful-paint",
+            "layout-shift",
+            "long-animation-frame",
+            "longtask",
+            "mark",
+            "measure",
+            "navigation",
+            "paint",
+            "resource",
+            "soft-navigation",
+            "visibility-state"
+          ]
+        },
+        "thresholds": {
+          "lcpWithin2500ms": false,
+          "observedInteractionWithin200ms": false,
+          "clsWithinPointOne": false
+        }
+      },
+      {
+        "fixture": "chromium-320x500-100",
+        "messages": 500,
+        "metrics": {
+          "lcpMs": 2832,
+          "cls": 0.19810684375,
+          "maxObservedInteractionMs": 272,
+          "interactionEntries": 23,
+          "eventTiming": "supported; events below16ms may not be reported",
+          "longTaskCount": 25,
+          "maxLongTaskMs": 424,
+          "heap": {
+            "usedJsBytes": 86400000,
+            "totalJsBytes": 148000000,
+            "limitJsBytes": 3760000000
+          },
+          "supported": [
+            "element",
+            "event",
+            "first-input",
+            "interaction-contentful-paint",
+            "largest-contentful-paint",
+            "layout-shift",
+            "long-animation-frame",
+            "longtask",
+            "mark",
+            "measure",
+            "navigation",
+            "paint",
+            "resource",
+            "soft-navigation",
+            "visibility-state"
+          ]
+        },
+        "thresholds": {
+          "lcpWithin2500ms": false,
+          "observedInteractionWithin200ms": false,
+          "clsWithinPointOne": false
+        }
+      },
+      {
+        "fixture": "chromium-320x500-100",
+        "messages": 2000,
+        "metrics": {
+          "lcpMs": 2476,
+          "cls": 0.19810684375,
+          "maxObservedInteractionMs": 360,
+          "interactionEntries": 24,
+          "eventTiming": "supported; events below16ms may not be reported",
+          "longTaskCount": 21,
+          "maxLongTaskMs": 400,
+          "heap": {
+            "usedJsBytes": 86400000,
+            "totalJsBytes": 148000000,
+            "limitJsBytes": 3760000000
+          },
+          "supported": [
+            "element",
+            "event",
+            "first-input",
+            "interaction-contentful-paint",
+            "largest-contentful-paint",
+            "layout-shift",
+            "long-animation-frame",
+            "longtask",
+            "mark",
+            "measure",
+            "navigation",
+            "paint",
+            "resource",
+            "soft-navigation",
+            "visibility-state"
+          ]
+        },
+        "thresholds": {
+          "lcpWithin2500ms": true,
+          "observedInteractionWithin200ms": false,
+          "clsWithinPointOne": false
+        }
+      },
+      {
+        "fixture": "chromium-1024x768-200",
+        "messages": 1,
+        "metrics": {
+          "lcpMs": 2704,
+          "cls": 0.6543194520830488,
+          "maxObservedInteractionMs": 184,
+          "interactionEntries": 19,
+          "eventTiming": "supported; events below16ms may not be reported",
+          "longTaskCount": 21,
+          "maxLongTaskMs": 151,
+          "heap": {
+            "usedJsBytes": 64000000,
+            "totalJsBytes": 139000000,
+            "limitJsBytes": 3760000000
+          },
+          "supported": [
+            "element",
+            "event",
+            "first-input",
+            "interaction-contentful-paint",
+            "largest-contentful-paint",
+            "layout-shift",
+            "long-animation-frame",
+            "longtask",
+            "mark",
+            "measure",
+            "navigation",
+            "paint",
+            "resource",
+            "soft-navigation",
+            "visibility-state"
+          ]
+        },
+        "thresholds": {
+          "lcpWithin2500ms": false,
+          "observedInteractionWithin200ms": true,
+          "clsWithinPointOne": false
+        }
+      },
+      {
+        "fixture": "chromium-1024x768-200",
+        "messages": 50,
+        "metrics": {
+          "lcpMs": 3532,
+          "cls": 0.5782493436320996,
+          "maxObservedInteractionMs": 208,
+          "interactionEntries": 24,
+          "eventTiming": "supported; events below16ms may not be reported",
+          "longTaskCount": 20,
+          "maxLongTaskMs": 443,
+          "heap": {
+            "usedJsBytes": 64000000,
+            "totalJsBytes": 139000000,
+            "limitJsBytes": 3760000000
+          },
+          "supported": [
+            "element",
+            "event",
+            "first-input",
+            "interaction-contentful-paint",
+            "largest-contentful-paint",
+            "layout-shift",
+            "long-animation-frame",
+            "longtask",
+            "mark",
+            "measure",
+            "navigation",
+            "paint",
+            "resource",
+            "soft-navigation",
+            "visibility-state"
+          ]
+        },
+        "thresholds": {
+          "lcpWithin2500ms": false,
+          "observedInteractionWithin200ms": false,
+          "clsWithinPointOne": false
+        }
+      },
+      {
+        "fixture": "chromium-1024x768-200",
+        "messages": 500,
+        "metrics": {
+          "lcpMs": 4744,
+          "cls": 0.5691869450965896,
+          "maxObservedInteractionMs": 368,
+          "interactionEntries": 22,
+          "eventTiming": "supported; events below16ms may not be reported",
+          "longTaskCount": 28,
+          "maxLongTaskMs": 806,
+          "heap": {
+            "usedJsBytes": 64000000,
+            "totalJsBytes": 139000000,
+            "limitJsBytes": 3760000000
+          },
+          "supported": [
+            "element",
+            "event",
+            "first-input",
+            "interaction-contentful-paint",
+            "largest-contentful-paint",
+            "layout-shift",
+            "long-animation-frame",
+            "longtask",
+            "mark",
+            "measure",
+            "navigation",
+            "paint",
+            "resource",
+            "soft-navigation",
+            "visibility-state"
+          ]
+        },
+        "thresholds": {
+          "lcpWithin2500ms": false,
+          "observedInteractionWithin200ms": false,
+          "clsWithinPointOne": false
+        }
+      },
+      {
+        "fixture": "chromium-1024x768-200",
+        "messages": 2000,
+        "metrics": {
+          "lcpMs": 3708,
+          "cls": 0.5782493436320996,
+          "maxObservedInteractionMs": 288,
+          "interactionEntries": 23,
+          "eventTiming": "supported; events below16ms may not be reported",
+          "longTaskCount": 26,
+          "maxLongTaskMs": 369,
+          "heap": {
+            "usedJsBytes": 64000000,
+            "totalJsBytes": 139000000,
+            "limitJsBytes": 3760000000
+          },
+          "supported": [
+            "element",
+            "event",
+            "first-input",
+            "interaction-contentful-paint",
+            "largest-contentful-paint",
+            "layout-shift",
+            "long-animation-frame",
+            "longtask",
+            "mark",
+            "measure",
+            "navigation",
+            "paint",
+            "resource",
+            "soft-navigation",
+            "visibility-state"
+          ]
+        },
+        "thresholds": {
+          "lcpWithin2500ms": false,
+          "observedInteractionWithin200ms": false,
+          "clsWithinPointOne": false
+        }
+      }
+    ],
+    "screenshots": [
+      {
+        "file": "d60778b-chromium-390x844-100-2000-turns.png",
+        "sha256": "487c982e943b3d083dc8038251c4c1fec83ff1c5d831a62bc854fec0fb3254d3",
+        "viewport": "390x844",
+        "history": 2000,
+        "route": "/?section=chat&chat=layout-2000"
+      },
+      {
+        "file": "d60778b-chromium-844x390-100-2000-turns.png",
+        "sha256": "0b0222abee57f0a2d1d4435cdaed9d3eae5095607ffc632d9a50f0324070066d",
+        "viewport": "844x390",
+        "history": 2000,
+        "route": "/?section=chat&chat=layout-2000"
+      }
+    ]
+  }
+]

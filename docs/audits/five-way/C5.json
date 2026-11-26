@@ -239,7 +239,15 @@
       "expected": "Reviewed model step pins provider/tier/instructions/knowledge/memory, claims durably, calls normal adapter once and records actual usage; explicit budget/free-only prevent implicit paid execution.",
       "implementation": "[F](#files-f), [U](#files-u); B52",
       "regression": "[F](#files-f), [U](#files-u); B52",
-      "disposition": "Combined verification pending"
+      "disposition": "Combined verification pending",
+      "combinedEvidence": {
+        "commit": "d60778b5cf3192ec511d7d8044521ff47bf20a1d",
+        "environment": "isolated local fixtures",
+        "test": "src/lib/mind/fleet-model.test.ts",
+        "result": "passed",
+        "observed": "two workers claim once, free-only refusal, stop, late completion, owner-controlled snapshot protection",
+        "limits": "Production provider, native execution and invoice evidence unavailable."
+      }
     },
     {
       "finding": "C5/AA-031",
@@ -343,7 +351,15 @@
       "expected": "Actual deliver handler blocks delete/correct/archive/memory-off during prepare GET and fingerprint. Baseline now describes the same source that builds the body; a preexisting stale source is rejected. Unchanged context posts once.",
       "implementation": "[M](#files-m); M14",
       "regression": "[M](#files-m); M14",
-      "disposition": "Combined verification pending"
+      "disposition": "Fixed and tested on combined commit (handler fixture)",
+      "combinedEvidence": {
+        "commit": "d60778b5cf3192ec511d7d8044521ff47bf20a1d",
+        "environment": "isolated local fixtures",
+        "test": "src/lib/mind/memory-send-preparation.test.ts",
+        "result": "passed",
+        "observed": "all 14 account/draft preparation and fingerprint cases, including unchanged operation and canceled uncertain retry",
+        "limits": "Actual send handler executed with isolated browser state and synthetic transport."
+      }
     },
     {
       "finding": "C5/LEGACY-AA019",

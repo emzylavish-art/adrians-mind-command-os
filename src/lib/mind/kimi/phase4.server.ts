@@ -76,8 +76,11 @@ export async function handleKimiVoice(request: Request): Promise<Response> {
   try {
     const ownerId = await owner(request);
     if (await haltIsOn(ownerId)) return json({ ok: false, error: "Emergency stop is on. Voice task was not queued." }, 403);
-    const agent = onlineAgents(ownerId)[0];
-    const body = (await request.json().catch(() => ({}))) as { transcript?: string; cwd?: string; instructions?: string; operationId?: unknown; taskId?: unknown; projectId?: unknown };
+    const body = (await request.json().catch(() => ({}))) as { agentId?: string; transcript?: string; cwd?: string; instructions?: string; operationId?: unknown; taskId?: unknown; projectId?: unknown };
+    const agents = await onlineAgents(ownerId);
+    if (body.agentId === undefined && agents.length > 1) return json({ ok: false, error: "Choose a computer before submitting the voice task. No alternate was selected." }, 409);
+    const agent = body.agentId === "hosted" ? undefined : body.agentId === undefined ? agents[0] : agents.find((item) => item.id === body.agentId);
+    if (body.agentId !== undefined && body.agentId !== "hosted" && !agent) return json({ ok: false, error: "The selected computer is unavailable. No alternate was selected." }, 409);
     const transcript = typeof body.transcript === "string" ? body.transcript.trim() : "";
     if (!transcript || transcript.length > 4_000) return json({ ok: false, error: "Provide a transcript between 1 and 4,000 characters. Nothing was truncated or sent." }, 400);
     const instructions = typeof body.instructions === "string" ? body.instructions.trim() : "";
@@ -94,7 +97,7 @@ export async function handleKimiVoice(request: Request): Promise<Response> {
       const auditSaved = await recordKimiAttempt({ ownerId, status: turn.ok ? "session_created" : "failed", error: turn.error });
       return json({ ok: turn.ok, executed: turn.requestDispatched === true, requestDispatched: turn.requestDispatched === true, error: turn.error, output: turn.output || "", outputComplete: turn.outputComplete, outputCharacters: turn.outputCharacters, operationId: turn.operationId, toolReceipts: turn.toolReceipts, filesChanged: turn.filesChanged, verification: turn.verification, sessionId: turn.sessionId, package: packageLabel(turn.command), auditSaved, persistenceWarning: auditSaved ? undefined : "The coding result was received, but the account attempt record could not be saved.", limitation: "Audio was not sent to Kimi. The transcript ran in the hosted Build workspace." }, turn.ok ? 200 : 409);
     }
-    const job = enqueueJob({ ownerId, agentId: agent.id, kind: "kimi-acp", command: "kimi acp", confirm: false, payload: { prompt, cwd: body.cwd?.trim().slice(0, 500) || undefined, source: "adrian-speak" } });
+    const job = await enqueueJob({ ownerId, agentId: agent.id, kind: "kimi-acp", command: "kimi acp", confirm: false, payload: { prompt, cwd: body.cwd?.trim().slice(0, 500) || undefined, source: "adrian-speak" } });
     return json({ ok: true, jobId: job.id, status: job.status, limitation: "Audio was not sent to Kimi. The transcript uses the same Build session queue." }, 202);
   } catch (error) { return fail(error); }
 }

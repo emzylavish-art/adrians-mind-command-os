@@ -487,7 +487,15 @@
       "expected": "An accepted turn receipt can recover the exact final result without another model dispatch.",
       "implementation": "src/lib/mind/turn-recovery.ts; src/lib/mind/turn.server.ts; src/lib/mind/c1-durable-runtime.test.ts; migrations/0018_c1_resource_authority.sql",
       "regression": "Runtime PGlite AA061 fixture checks exact response, owner isolation and temporary retention.",
-      "disposition": "Combined verification pending"
+      "disposition": "Combined verification pending",
+      "combinedEvidence": {
+        "commit": "d60778b5cf3192ec511d7d8044521ff47bf20a1d",
+        "environment": "isolated local fixtures",
+        "test": "src/lib/mind/c1-durable-runtime.test.ts",
+        "result": "passed",
+        "observed": "ordinary response and temporary retention, owner isolation, cancellation before delayed transport",
+        "limits": "Fixture establishes the stored response and its operation state. End-to-end authenticated replay is pending."
+      }
     },
     {
       "finding": "C1/AA-062",

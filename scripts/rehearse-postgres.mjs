@@ -1,5 +1,8 @@
 // CI supplies an ephemeral PostgreSQL service on loopback. Never read an app DB URL.
 import assert from "node:assert/strict";
+import { execFileSync } from "node:child_process";
+import { resolve, join } from "node:path";
+import { pathToFileURL } from "node:url";
 import { randomUUID } from "node:crypto";
 import { readdir, readFile } from "node:fs/promises";
 import pg from "pg";
@@ -13,7 +16,33 @@ const options = { host: "127.0.0.1", port, user: "rehearsal", password: "", data
 const admin = new pg.Client(options);
 const files = (await readdir("migrations")).filter((name) => name.endsWith(".sql")).sort();
 const sources = Object.fromEntries(await Promise.all(files.map(async (name) => [name, await readFile("migrations/" + name, "utf8")])));
-const base = Object.fromEntries(Object.entries(sources).filter(([name]) => name.slice(0, 4) <= "0016"));
+const prior = resolve(process.argv[3] || "previous-production");
+const baseline = "18d5b9364e6bdcfec028eeccf56fe596946ed8ce";
+assert.equal(execFileSync("git", ["-C", prior, "rev-parse", "HEAD"], { encoding: "utf8" }).trim(), baseline);
+const previousFiles = (await readdir(join(prior, "migrations"))).filter(name => name.endsWith(".sql")).sort();
+const base = {};
+for (const name of previousFiles) {
+  base[name] = await readFile(join(prior, "migrations", name), "utf8");
+  assert.equal(sources[name], base[name], "Changed or removed deployed migration: " + name);
+}
+const oldStore = await import(pathToFileURL(join(prior, "src/lib/mind/store.ts")).href);
+const { emptyWorkspace } = await import(pathToFileURL(join(prior, "src/lib/mind/workspace.ts")).href);
+function oldAppSql(client) {
+  const sql = async (parts, ...args) => {
+    const query = parts.reduce((text, part, index) => text + (index ? "$" + index : "") + part, "");
+    return (await client.query(query, args)).rows;
+  };
+  sql.query = async (query, args) => (await client.query(query, args)).rows;
+  sql.transaction = async work => {
+    await client.query("BEGIN");
+    try {
+      const result = await work(sql);
+      await client.query("COMMIT");
+      return result;
+    } catch (error) { await client.query("ROLLBACK"); throw error; }
+  };
+  return sql;
+}
 
 async function migrate(client, set) {
   await client.query("BEGIN");
@@ -38,8 +67,17 @@ try {
       const second = await pool.connect();
       try {
         if (mode === "upgrade") {
-          await migrate(first, base);
-          await first.query("INSERT INTO mind_snapshot (user_id,payload,updated_at) VALUES ($1,$2,now())", ["fixture", { message: "before" }]);
+          // Production's earlier migrator committed one file at a time and did not store checksums.
+          await first.query("CREATE TABLE _migrations (name TEXT PRIMARY KEY, applied_at TIMESTAMPTZ NOT NULL DEFAULT now())");
+          for (const [name, sql] of Object.entries(base)) {
+            await first.query("BEGIN");
+            await first.query(sql);
+            await first.query("INSERT INTO _migrations(name) VALUES ($1)", [name]);
+            await first.query("COMMIT");
+          }
+          const workspace = emptyWorkspace();
+          workspace.projects.push({ id: "before", name: "Prior application", description: "", createdAt: new Date().toISOString() });
+          assert.ok(await oldStore.writeSnapshot(oldAppSql(first), "fixture", workspace));
           await assert.rejects(migrate(first, { ...sources, "9999_fixture.sql": "SELECT missing_rehearsal_function()" }), { code: "42883" });
           assert.equal((await first.query("SELECT name FROM _migrations")).rowCount, Object.keys(base).length);
         }
@@ -49,9 +87,19 @@ try {
         assert.deepEqual(applied, expected);
         assert.equal((await migrate(first, sources)).applied.length, 0);
         if (mode === "upgrade") {
-          assert.deepEqual((await second.query("SELECT payload FROM mind_snapshot WHERE user_id='fixture'")).rows[0].payload, { message: "before" });
-          await second.query("UPDATE mind_snapshot SET payload=$1,updated_at=now() WHERE user_id='fixture'", [{ message: "after" }]);
-          assert.deepEqual((await first.query("SELECT payload FROM mind_snapshot WHERE user_id='fixture'")).rows[0].payload, { message: "after" });
+          const checksums = await first.query("SELECT name FROM _migrations WHERE checksum_origin='legacy-baseline' ORDER BY name");
+          assert.deepEqual(checksums.rows.map(row => row.name), previousFiles);
+          const oldSql = oldAppSql(second);
+          const snapshot = await oldStore.readSnapshot(oldSql, "fixture");
+          const project = snapshot.projects.find(row => row.id === "before");
+          assert.equal(project?.name, "Prior application");
+          await first.query("INSERT INTO mind_usage_ledger(user_id, operation_id, stage, payload) VALUES ('fixture','post-upgrade','answer','{}')");
+          const revision = oldStore.snapshotRevision(snapshot);
+          project.name = "Written after upgrade";
+          assert.ok(await oldStore.writeSnapshot(oldSql, "fixture", snapshot, revision));
+          assert.equal((await oldStore.readSnapshot(oldSql, "fixture")).projects.find(row => row.id === "before").name, project.name);
+          assert.equal((await first.query("SELECT operation_id FROM mind_usage_ledger WHERE user_id='fixture'")).rows[0].operation_id, "post-upgrade");
+          console.log(JSON.stringify({ oldApplication: baseline, legacyChecksums: checksums.rowCount, snapshotReadWrite: true, newUsagePreserved: true }));
         }
         console.log(JSON.stringify({ mode, applied: applied.length, concurrentApplications: runs.map((r) => r.applied.length), rerun: 0 }));
       } finally { first.release(); second.release(); }

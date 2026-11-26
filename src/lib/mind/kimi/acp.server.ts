@@ -59,9 +59,11 @@ export async function handleKimiSession(request: Request): Promise<Response> {
       const requestedCwd = typeof body.cwd === "string" && body.cwd.trim() ? body.cwd.trim().slice(0, MAX_CWD) : undefined;
       const mode = body.mode === "plan" || body.mode === "auto" || body.mode === "yolo" || body.mode === "default" ? body.mode as CodingMode : undefined;
       const resumeSessionId = typeof body.resumeSessionId === "string" ? body.resumeSessionId.trim().slice(0, 80) : "";
-      const agents = onlineAgents(ownerId);
-      const agent = body.agentId === undefined ? agents[0] : agents.find((item) => item.id === body.agentId);
-      if (body.agentId !== undefined && !agent) return json({ ok: false, error: "The selected Build PC is offline. Reconnect it before submitting." }, 409);
+      const agents = await onlineAgents(ownerId);
+      if (body.agentId === undefined && agents.length > 1) return json({ ok: false, error: "Choose the computer for this Build task. No alternate was selected." }, 409);
+      const agent = body.agentId === "hosted" ? undefined : body.agentId === undefined ? agents[0] : agents.find((item) => item.id === body.agentId);
+      if (body.agentId !== undefined && body.agentId !== "hosted" && !agent) return json({ ok: false, error: "The selected Build PC is offline. Reconnect it before submitting." }, 409);
+      if (agent && !buildRuntimeCapabilities(ownerId, [agent])[1]?.coding) return json({ ok: false, error: "The selected computer has not reported an available coding runtime. Reconnect or update it before submitting." }, 409);
       if (body.jobKey !== undefined && (typeof body.jobKey !== "string" || !/^[a-f0-9]{32}$/.test(body.jobKey))) return json({ ok: false, error: "Invalid job ID." }, 400);
       if (!agent) {
         if (ownerId !== "dev-user") return json({ ok: false, executed: false, error: machineRequired }, 409);
@@ -131,7 +133,7 @@ export async function handleKimiSession(request: Request): Promise<Response> {
           package: packageLabel(hosted.command),
         }, accepted ? 200 : hosted.status === "not_configured" ? 503 : 409);
       }
-      const job = enqueueJob({
+      const job = await enqueueJob({
         jobKey: typeof body.jobKey === "string" ? body.jobKey : undefined,
         ownerId,
         agentId: agent.id,
@@ -159,7 +161,7 @@ export async function handleKimiSession(request: Request): Promise<Response> {
     try {
       const ownerId = await ownerIdFromRequest(request);
       const jobId = new URL(request.url).searchParams.get("jobId") || "";
-      const job = readJob(jobId);
+      const job = await readJob(jobId);
       if (!job || job.ownerId !== ownerId || job.kind !== "kimi-acp") return json({ ok: false, error: "Kimi job not found." }, 404);
       return json({
         ok: true,
@@ -171,7 +173,7 @@ export async function handleKimiSession(request: Request): Promise<Response> {
           output: job.output || "",
           error: job.error || "",
         },
-        events: listJobEvents(ownerId, job.id),
+        events: await listJobEvents(ownerId, job.id),
         receipt: pairedBuildReceipt(job, ownerId),
       });
     } catch (error) {
