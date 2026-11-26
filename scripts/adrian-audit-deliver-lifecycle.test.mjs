@@ -26,6 +26,7 @@ import { consumeMindTurn, checkTurnReceipt, prepareTurnId, shouldStoreReply, STO
 import { boundAbortSignal } from "../src/lib/mind/turn-timeouts.ts";
 import { applyExecutionUsage } from "../src/lib/mind/execution-usage.ts";
 import { classifyHonestFailure, honestFailureAuditAction, normalizeClientFailureMessage, imageRetryPlan } from "../src/lib/mind/failure-states.ts";
+import { parseCustomProviderChoice } from "../src/lib/mind/provider-catalog.ts";
 
 const source = ts.createSourceFile("command-app.tsx", readFileSync(new URL("../src/components/mind/command-app.tsx", import.meta.url), "utf8"), ts.ScriptTarget.Latest, true, ts.ScriptKind.TSX);
 const compiled = new Map();
@@ -71,7 +72,7 @@ function fixture(overrides = {}) {
     projectInstructionsForChat, collectAccountSkillApplications, preferenceStorage: { getItem: () => null }, enabledSkills: {}, loadModelControls,
     currentFreeOnly: { current: false }, researchHistory: [], researchReferencesInText, memoriesForChat, withReplyVersion, failureKindForAction,
     ensureChatMedia: async (chat) => chat,
-    snapshotImages, shouldBlockForEmergencyStop, routeForBotChat, isLogicRouteId, chosenProvider, failover,
+    snapshotImages, shouldBlockForEmergencyStop, routeForBotChat, isLogicRouteId, chosenProvider, failover, parseCustomProviderChoice,
     resolveSendPath: () => ({ path: "direct" }), completedHistory, resolveChatMessages, historyForDeliver,
     currentMemoryContext, workspaceForChat, relevantMemories, eveAccessNotes, chatTurnBody, contextReceiptNotice,
     historyTextForImages: (text) => text, // This fixture has no image inputs.

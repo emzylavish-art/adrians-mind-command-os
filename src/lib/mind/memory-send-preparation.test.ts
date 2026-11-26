@@ -23,6 +23,7 @@ import { chosenProvider, failover } from "./providers.ts";
 import { exactModelForChat } from "./selection-sync.ts";
 import { historyTextForImages } from "./media/pack.ts";
 import { normalizeClientFailureMessage } from "./failure-states.ts";
+import { parseCustomProviderChoice } from "./provider-catalog.ts";
 import type { Chat, Workspace } from "./types.ts";
 
 const app = readFileSync(new URL("../../components/mind/command-app.tsx", import.meta.url).pathname.replace("/lib/components/", "/components/"), "utf8");
@@ -84,7 +85,7 @@ function harness(options: { pause?: "prepare" | "fingerprint"; uncertainFirst?: 
     providerChoice: "grok", modelTier: "Fast", grokConfigured: true, grokModel: null, providerModels: {},
     logicRoute: null, logicRoutes: [], discovered: [], liveProviders: {}, failoverPolicy: "none",
     composerEffort: "Fast", routingMode: "A", consultModel: "grok", consultModules: [], ADRIAN_MIND_IDENTITY: "fixture identity",
-    failureKindForAction, normalizeBotKnowledge, routeForBotChat, chosenProvider, failover, isLogicRouteId, exactModelForChat,
+    failureKindForAction, normalizeBotKnowledge, routeForBotChat, chosenProvider, failover, isLogicRouteId, exactModelForChat, parseCustomProviderChoice,
     resolveSendPath: () => ({ path: "direct" }), getBearerToken: () => "", previewPathPrefix: () => "",
     setGenerationStatus: noop, setTurnChat: noop, setLiveText: noop, setToolTimeline: noop, setLastResolvedTier: noop, setLastModelUsed: noop, setBusy: noop, setNotice: noop,
     setError: (error: string | null) => { if (error) errors.push(error); },

@@ -53,6 +53,7 @@ import { loadModelControls, supportsTierReasoning } from "@/lib/mind/model-tiers
 import { LibraryDocumentPreview } from "@/components/mind/library-document-preview";
 import { accountOriginalFileStore, prepareLibraryDocument, saveLibraryDocument, updateLibraryDocument } from "@/lib/mind/library-documents";
 import { createResearchRunGuard, loadResearchReports, makeResearchReport, researchAttachment, researchReferencesInText, saveResearchReport, type ResearchReport } from "@/lib/mind/research-reports";
+import type { ResearchResult } from "@/lib/mind/research";
 import { NotificationInbox } from "./notification-inbox";
 import { workspaceNotices, isQuietHour, DEFAULT_NOTIFICATION_PREFERENCES, type NotificationPreferences } from "@/lib/mind/notifications";
 import { ARCHIVE_CATEGORIES, selectArchiveCategories, type ArchiveCategory, deleteLocalFile, deleteProject, refreshBotChat } from "@/lib/mind/workspace";
@@ -2720,7 +2721,7 @@ function CommandSession({ account, accountPending }: { account: ReturnType<typeo
     setBusy(true);
     setError(null);
     try {
-      const result: ResearchReport["result"] = await searchWeb({ data: { query, operationId, projectId: chat.projectId, freeOnly: researchFreeOnly } });
+      const result: ResearchResult = await searchWeb({ data: { query, operationId, projectId: chat.projectId, freeOnly: researchFreeOnly } });
       if (turnOwner.current !== draftOwner) return;
       setBusy(false);
       if (!wsRef.current.chats.some((item) => item.id === chat.id)) return;
@@ -3730,7 +3731,7 @@ ${message.content}`;
     const researchGeneration = researchRunGuard.current.begin();
     setResearchPending(true);
     try {
-      const result: ResearchReport["result"] = await searchWeb({ data: { query, operationId, projectId, freeOnly: researchFreeOnly, retryQueries: retry?.steps?.filter((step) => !step.ok).map((step) => step.query) } });
+      const result: ResearchResult = await searchWeb({ data: { query, operationId, projectId, freeOnly: researchFreeOnly, retryQueries: retry?.steps?.filter((step) => !step.ok).map((step) => step.query) } });
       if (!draftOwner || turnOwner.current !== draftOwner || !researchRunGuard.current.current(researchGeneration)) return;
       setError(null);
       setWs((prev) => pushAudit(prev, result.configured && result.ok ? "research_result" : "research_refused", "search", result.ok ? `${result.citations.length} sources` : "no citation"));
