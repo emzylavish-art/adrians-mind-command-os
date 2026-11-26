@@ -1,0 +1,6 @@
+{
+  "schemaVersion": 1,
+  "keys": {},
+  "installerSignersSha256": [],
+  "note": "No publisher key or certificate has been provisioned. Remote installation remains blocked until reviewed public trust material is bundled in a release. Never accept a trust key supplied by an update feed."
+}

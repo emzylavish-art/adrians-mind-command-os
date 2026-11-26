@@ -11,6 +11,8 @@ import { nitro } from "nitro/vite";
 import { grokPwaPlugin } from "./scripts/grok-pwa-plugin.mjs";
 // @ts-expect-error JS plugin alongside the TS vite config
 import { appEnvPlugin } from "./scripts/app-env-plugin.mjs";
+// @ts-expect-error JS build plugin alongside the TS Vite config
+import { nativeBuildIdentityPlugin } from "./scripts/native-build-identity.mjs";
 import { isMigrationFile } from "./scripts/migration-plan.mjs";
 
 /** The files `src/lib/db.ts` globs — same directory, same non-recursive scope. */
@@ -171,6 +173,7 @@ export default defineConfig(({ command, isPreview }) => ({
     exclude: ["@nuancelabs/js-sdk"],
   },
   plugins: [
+    nativeBuildIdentityPlugin(),
     pgliteBootstrapPlugin(),
     // Before tanstackStart so /auth/popup never falls through to the SPA.
     authPopupPlugin(),

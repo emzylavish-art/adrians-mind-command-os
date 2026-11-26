@@ -1,219 +1,135 @@
 import { execFile } from "node:child_process";
-import { lstat, mkdir, readdir, readFile, writeFile } from "node:fs/promises";
+import { lstat, mkdir, mkdtemp, readdir, readFile, rm, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { promisify } from "node:util";
 import { consequentialSpeechRefusal } from "./frontier-2031.ts";
 import { destructiveSpeechRefusal } from "./reversibility.ts";
 import { resolveXaiInferenceApiKey } from "./media/xai-key.ts";
+import { executePcPlan, planPcRequest, type PcAction, type PcExecution } from "./pc-action-plan.ts";
+import { analyzePcScreenshot, boundedOperation, type VisionPolicy } from "./pc-vision.ts";
+import { currentLocalDestination, nativeCloudAllowed } from "./native-policy.server.ts";
 
 const execFileAsync = promisify(execFile);
 
-const FILE_INTENT = /\b(my files|my desktop|list (my )?(files|desktop)|open my (files|desktop)|go to my files)\b/i;
-const MOUSE_INTENT = /\b(move the mouse|move my mouse|click|control my (pc|computer))\b/i;
-const TYPE_INTENT = /\btype\s+"([^"]{1,200})"/i;
-const DICTATION_INTENT = /\binsert dictation at cursor:\s*([\s\S]{1,20000})/i;
-const READ_INTENT = /\bread file\s+([A-Za-z0-9._ /-]+)/i;
-const WRITE_INTENT = /\bwrite file\s+([A-Za-z0-9._ /-]+):\s*([\s\S]{1,20000})/i;
-const FOLDER_INTENT = /\bmake folder\s+([A-Za-z0-9._ -]+)/i;
-const RUN_INTENT = /\brun command\s+([^\n]{1,400})/i;
-const CLICK_INTENT = /\bclick\s+(\d{1,4})\s+(\d{1,4})\b/i;
-const SCREEN_INTENT = /\b(look at my screen|what is on my screen|drive the screen|read my screen)\b/i;
-const BROWSER_INTENT = /\bopen my browser(?:\s+(https?:\/\/\S+))?\b/i;
-const APP_INTENT = /\blaunch app\s+([A-Za-z0-9 ._-]{1,80})/i;
-const WINDOW_INTENT = /\b(list windows|switch window\s+([A-Za-z0-9 ._-]{1,80}))/i;
-const RIGHT_CLICK = /\bright-click\s+(\d{1,4})\s+(\d{1,4})\b/i;
-const DOUBLE_CLICK = /\bdouble-click\s+(\d{1,4})\s+(\d{1,4})\b/i;
-const SCROLL = /\bscroll\s+(up|down)\b/i;
-const DRAG = /\bdrag\s+(\d{1,4})\s+(\d{1,4})\s+to\s+(\d{1,4})\s+(\d{1,4})\b/i;
-const WINDOW_ACTION = /\b(minimize|maximize|close) window\s+([A-Za-z0-9 ._-]{1,80})/i;
-const MONITORS = /\blist monitors\b/i;
-const A11Y = /\bread accessibility\b/i;
-const FIND_BUTTON = /\bfind button\s+(.{1,80})/i;
-const VISION = /\bunderstand (?:the )?screenshot\b/i;
-const WORKER = /\bkeep working after close\b/i;
-
 export function adrianPcEnabled(env: NodeJS.ProcessEnv = process.env): boolean {
-  return env.ADRIAN_PC === "1";
+  return env.ADRIAN_PC === "1" && !env.VERCEL;
 }
 
 export function buttonMatchDecision(names: string[]): { click: boolean; output: string } {
-  const matches = names.map((name) => name.trim()).filter(Boolean);
-  if (matches.length === 0) return { click: false, output: "No button matched. Nothing was clicked." };
-  if (matches.length > 1) return { click: false, output: `${matches.length} buttons matched. Nothing was clicked.` };
-  return { click: true, output: `Exactly one button matched: ${matches[0]}.` };
+  const matches = names.map(name => name.trim()).filter(Boolean);
+  return { click: false, output: matches.length === 0 ? "No button matched. Nothing was clicked." : matches.length === 1 ? `Exactly one button matched: ${matches[0]}. Nothing was clicked. Use an explicit click with its window name.` : `${matches.length} buttons matched. Nothing was clicked.` };
 }
-
 function insideRoot(root: string, target: string): string | null {
   const resolvedRoot = path.resolve(root);
   const resolved = path.resolve(target);
-  if (resolved !== resolvedRoot && !resolved.startsWith(resolvedRoot + path.sep)) return null;
-  return resolved;
+  return resolved === resolvedRoot || resolved.startsWith(resolvedRoot + path.sep) ? resolved : null;
 }
+function psLiteral(value: string): string { return "'" + value.replace(/'/g, "''") + "'"; }
 
-export async function runAdrianPc(input: {
-  text: string;
-  halted: boolean;
-  root?: string;
-  platform?: NodeJS.Platform;
-  findButtons?: (name: string) => Promise<string[]>;
-  clickButton?: (name: string) => Promise<boolean>;
-  captureScreen?: () => Promise<Buffer | null>;
-  readImage?: (png: Buffer) => Promise<string>;
-}): Promise<{ ran: boolean; output: string }> {
-  const text = input.text.trim();
-  if (!text) return { ran: false, output: "" };
-  if (input.halted) return { ran: true, output: "Emergency stop is on. Nothing ran." };
-  const refused = consequentialSpeechRefusal(text);
-  if (refused) return { ran: true, output: refused };
-  const destructive = destructiveSpeechRefusal(text);
-  if (destructive) return { ran: true, output: destructive };
-  const wantsFiles = FILE_INTENT.test(text);
-  const wantsMouse = MOUSE_INTENT.test(text) && !CLICK_INTENT.test(text);
-  const typed = text.match(TYPE_INTENT);
-  const dictated = text.match(DICTATION_INTENT);
-  const readName = text.match(READ_INTENT);
-  const writeMatch = text.match(WRITE_INTENT);
-  const folder = text.match(FOLDER_INTENT);
-  const command = text.match(RUN_INTENT);
-  const click = text.match(CLICK_INTENT);
-  const wantsScreen = SCREEN_INTENT.test(text);
-  const browser = text.match(BROWSER_INTENT);
-  const app = text.match(APP_INTENT);
-  const windows = text.match(WINDOW_INTENT);
-  const extra = RIGHT_CLICK.test(text) || DOUBLE_CLICK.test(text) || SCROLL.test(text) || DRAG.test(text) || WINDOW_ACTION.test(text) || MONITORS.test(text) || A11Y.test(text) || FIND_BUTTON.test(text) || VISION.test(text) || WORKER.test(text);
-  if (!wantsFiles && !wantsMouse && !typed && !dictated && !readName && !writeMatch && !folder && !command && !click && !wantsScreen && !browser && !app && !windows && !extra) return { ran: false, output: "" };
-
+type PcInput = {
+  text: string; halted: boolean; recheckHalt?: () => boolean | Promise<boolean>;
+  root?: string; platform?: NodeJS.Platform; deviceId?: string; signal?: AbortSignal;
+  authorize?: (action: PcAction) => boolean | Promise<boolean>;
+  executeAction?: (action: PcAction) => Promise<{ state: "completed" | "verified" | "failed" | "blocked" | "unconfirmed"; output: string; attempted?: boolean }>;
+  findButtons?: (name: string, window?: string) => Promise<string[]>;
+  clickButton?: (name: string, window: string) => Promise<boolean>;
+  captureScreen?: (signal?: AbortSignal) => Promise<Buffer | null>;
+  readImage?: (png: Buffer, signal?: AbortSignal) => Promise<string>;
+  visionPolicy?: VisionPolicy;
+};
+export async function runAdrianPc(input: PcInput): Promise<PcExecution> {
+  const plan = planPcRequest(input.text);
+  const refusal = consequentialSpeechRefusal(input.text) || destructiveSpeechRefusal(input.text);
+  if (refusal) { plan.error = refusal; plan.recognized = true; }
   const root = path.resolve(input.root || path.join(os.homedir(), "Desktop"));
   const platform = input.platform || process.platform;
-  const lines: string[] = [];
-
-  if (wantsFiles) {
-    const listed = await listOwnerFolder(root);
-    lines.push(listed);
-  }
-  if (wantsMouse) {
-    lines.push(await movePointer(platform));
-  }
-  if (typed) {
-    lines.push(await typeText(platform, typed[1]));
-  }
-  if (dictated) {
-    const typedResult = await typeText(platform, dictated[1].trim());
-    lines.push(typedResult.startsWith("Adrian typed")
-      ? "Inserted the dictation at the focused Windows cursor. Nothing was sent."
-      : `The words were kept and nothing was sent: ${dictated[1].trim()}`);
-  }
-  if (readName) lines.push(await readOwnerFile(root, readName[1].trim()));
-  if (writeMatch) lines.push(await writeOwnerFile(root, writeMatch[1].trim(), writeMatch[2]));
-  if (folder) lines.push(await makeOwnerFolder(root, folder[1].trim()));
-  if (command) lines.push(await runOwnerCommand(root, platform, command[1].trim()));
-  if (click) lines.push(await clickPointer(platform, Number(click[1]), Number(click[2])));
-  if (wantsScreen) lines.push(await inspectScreen(root, platform));
-  if (browser) lines.push(await openBrowser(platform, browser[1]));
-  if (app) lines.push(await launchApp(platform, app[1].trim()));
-  if (windows) lines.push(await windowsCommand(platform, windows[2]));
-  if (FIND_BUTTON.test(text)) lines.push(await findNamedButton(text, platform, input.findButtons, input.clickButton));
-  if (VISION.test(text)) lines.push(await understandScreenshot(platform, input.captureScreen, input.readImage));
-  if (extra && !FIND_BUTTON.test(text) && !VISION.test(text)) lines.push(await extraPc(text, platform));
-  return { ran: true, output: lines.join("\n") };
+  const halted = async () => input.halted || !!await input.recheckHalt?.();
+  return executePcPlan(plan, {
+    deviceId: input.deviceId || currentLocalDestination().deviceId, halted,
+    authorize: input.authorize, signal: input.signal,
+    execute: input.executeAction || (async action => {
+      const blocked = (output: string) => ({ state: "blocked" as const, output, attempted: false });
+      if (action.kind === "worker") return blocked("Closing the renderer is different from keeping the desktop process running. No independent worker was started.");
+      if (action.kind === "vision") return understandScreenshot(platform, input, halted);
+      const portable = ["list_files", "read_file", "write_file", "make_folder", "run_command"];
+      if (platform !== "win32" && !portable.includes(action.kind) && !(action.kind === "find_button" && input.findButtons) && !(action.kind === "invoke_button" && input.findButtons && input.clickButton)) return blocked("This computer is not Windows. The screen was not captured; nothing was clicked or typed.");
+      const [first, second, third, fourth] = action.args;
+      if (["read_file", "write_file", "make_folder"].includes(action.kind) && !await safeOwnerPath(root, first)) return blocked("That path is outside the owner folder or crosses a symbolic link. Nothing was read, written, or created.");
+      let output = "";
+      switch (action.kind) {
+        case "list_files": output = await listOwnerFolder(root); break;
+        case "read_file": output = await readOwnerFile(root, first); break;
+        case "write_file": output = await writeOwnerFile(root, first, second); break;
+        case "make_folder": output = await makeOwnerFolder(root, first); break;
+        case "run_command": output = await runOwnerCommand(root, platform, first); break;
+        case "move_pointer": output = await movePointer(platform); break;
+        case "click": output = await clickPointer(platform, Number(first), Number(second)); break;
+        case "right_click": output = await windowsButton(Number(first), Number(second), "right"); break;
+        case "double_click": output = await windowsButton(Number(first), Number(second), "double"); break;
+        case "scroll": output = await windowsScroll(first.toLowerCase() === "up" ? 120 : -120); break;
+        case "drag": output = await windowsDrag(Number(first), Number(second), Number(third), Number(fourth)); break;
+        case "type_text": case "dictation": output = await typeText(platform, first); break;
+        case "capture_screen": output = await inspectScreen(root, platform); break;
+        case "open_browser": output = await openBrowser(platform, first); break;
+        case "launch_app": output = await launchApp(platform, first); break;
+        case "list_windows": output = await windowsCommand(platform, undefined); break;
+        case "focus_window": output = await windowsCommand(platform, first); break;
+        case "window_action": output = await windowsFrame(first, second); break;
+        case "list_monitors": output = await windowsMonitors(); break;
+        case "accessibility": output = await windowsAccessibility(); break;
+        case "find_button": {
+          const names = input.findButtons ? await input.findButtons(first) : await windowsFindButtons(first);
+          return { state: "completed", output: buttonMatchDecision(names).output, attempted: true };
+        }
+        case "invoke_button": {
+          const names = input.findButtons ? await input.findButtons(first, second) : await windowsFindButtons(first, second);
+          if (names.length !== 1 || names[0] !== first) return blocked("The exact button is not unique in the selected window. Nothing was clicked.");
+          if (await halted() || input.signal?.aborted || (input.authorize && !await input.authorize(action))) return blocked("The action lost its current permission before invocation. Nothing was clicked.");
+          const clicked = input.clickButton ? await input.clickButton(first, second) : await windowsInvokeButton(first, second);
+          return { state: clicked ? "completed" : "unconfirmed", attempted: true, output: clicked ? `Windows acknowledged the requested ${first} invocation in ${second}. The resulting application state is not independently verified.` : "Windows did not confirm the button invocation. Inspect the selected window before retrying." };
+        }
+      }
+      const failed = /(?:could not|did not|not a file|outside the owner|too large|not on this computer)/i.test(output);
+      return { state: failed ? action.permission === "modify" ? "unconfirmed" : "failed" : "completed", output, attempted: true };
+    }),
+  });
 }
 
-async function findNamedButton(
-  text: string,
-  platform: NodeJS.Platform,
-  findButtons?: (name: string) => Promise<string[]>,
-  clickButton?: (name: string) => Promise<boolean>,
-): Promise<string> {
-  const wanted = text.match(FIND_BUTTON)?.[1]?.trim() ?? "";
-  if (platform !== "win32" && !findButtons) return "This computer is not Windows. The button was not clicked.";
-  const names = findButtons ? await findButtons(wanted) : await windowsFindButtons(wanted);
-  const decision = buttonMatchDecision(names);
-  if (!decision.click) return decision.output;
-  const clicked = clickButton ? await clickButton(names[0] ?? wanted) : await windowsInvokeButton(names[0] ?? wanted);
-  return clicked ? `${decision.output} Adrian clicked it.` : `${decision.output} Windows did not click it.`;
-}
-
-async function understandScreenshot(
-  platform: NodeJS.Platform,
-  captureScreen?: () => Promise<Buffer | null>,
-  readImage?: (png: Buffer) => Promise<string>,
-): Promise<string> {
-  const png = captureScreen ? await captureScreen() : await captureScreenPng(platform);
-  if (!png || png.length < 32) return "The screen was not captured. No vision model was called.";
-  if (readImage) {
-    const text = (await readImage(png)).trim();
-    return text ? `Vision reading: ${text}` : "The vision model returned no reading. Nothing was invented.";
-  }
-  const key = resolveXaiInferenceApiKey();
-  if (!key) return "The screen was captured. No connected vision key was found. Nothing was invented.";
-  return readScreenshotWithGrok(png, key);
-}
-
-export async function readScreenshotWithGrok(png: Buffer, apiKey: string, model = "grok-4.3"): Promise<string> {
-  const body = {
-    model,
-    input: [{
-      role: "user",
-      content: [
-        { type: "input_image", image_url: `data:image/png;base64,${png.toString("base64")}` },
-        { type: "input_text", text: "Describe only what is visible in this screenshot. Do not guess hidden content." },
-      ],
-    }],
-  };
-  let response: Response;
+async function understandScreenshot(platform: NodeJS.Platform, input: PcInput, halted: () => Promise<boolean>): Promise<{ state: "completed" | "blocked" | "failed" | "unconfirmed"; output: string; attempted: boolean }> {
+  const policy = input.visionPolicy;
+  if (policy?.allowExternalImage !== true || typeof policy.model !== "string" || !policy.model || policy.captureScope !== "primary-screen" || !nativeCloudAllowed()) return { state: "blocked", attempted: false, output: "Select a vision model and explicitly allow this primary-screen image to leave the device. Local-only mode prohibits external vision. No screenshot was sent." };
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), typeof policy.timeoutMs === "number" && Number.isFinite(policy.timeoutMs) ? Math.min(60_000, Math.max(1, policy.timeoutMs)) : 20_000);
+  const signal = input.signal ? AbortSignal.any([input.signal, controller.signal]) : controller.signal;
+  let providerStarted = false;
+  let captureStarted = false;
   try {
-    response = await fetch("https://api.x.ai/v1/responses", {
-      method: "POST",
-      headers: { authorization: `Bearer ${apiKey}`, "content-type": "application/json" },
-      body: JSON.stringify(body),
-    });
-  } catch {
-    return "The screen was captured. The connected vision model could not be reached. Nothing was invented.";
-  }
-  const raw = await response.text();
-  if (!response.ok) {
-    if (model === "grok-4.3" && /image|vision|unsupported|invalid/i.test(raw)) return readScreenshotWithGrok(png, apiKey, "grok-4.7");
-    return `The screen was captured. ${model} returned ${response.status}. Nothing was invented.`;
-  }
-  const text = extractModelText(raw);
-  return text ? `Vision reading from ${model}: ${text}` : `The screen was captured. ${model} returned no reading. Nothing was invented.`;
-}
-
-function extractModelText(raw: string): string {
-  try {
-    const parsed = JSON.parse(raw) as { output?: Array<{ content?: Array<{ text?: string }> }>; choices?: Array<{ message?: { content?: string } }> };
-    const parts = (parsed.output ?? []).flatMap((item) => item.content ?? []).map((part) => part.text ?? "").filter(Boolean);
-    if (parts.length) return parts.join(" ").slice(0, 2000);
-    return String(parsed.choices?.[0]?.message?.content ?? "").slice(0, 2000);
-  } catch {
-    return "";
-  }
-}
-
-async function extraPc(text: string, platform: NodeJS.Platform): Promise<string> {
-  if (WORKER.test(text)) return "No worker stays up after the app closes. Nothing was started.";
-  if (platform !== "win32") return "This computer is not Windows. Nothing was clicked, dragged, closed, or captured.";
-  if (A11Y.test(text)) return windowsAccessibility();
-  if (MONITORS.test(text)) {
-    try {
-      const { stdout } = await execFileAsync("powershell.exe", ["-NoProfile", "-Command", "Add-Type -AssemblyName System.Windows.Forms; [System.Windows.Forms.Screen]::AllScreens | ForEach-Object { $_.DeviceName }"], { timeout: 8000, windowsHide: true });
-      return String(stdout || "").trim() || "Windows returned no monitors.";
-    } catch {
-      return "Windows did not list monitors.";
+    if (await halted() || signal.aborted) return { state: "blocked", attempted: false, output: "Screenshot processing was stopped before capture. No provider was called." };
+    captureStarted = true;
+    const png = await boundedOperation(() => input.captureScreen ? input.captureScreen(signal) : captureScreenPng(platform, signal), signal);
+    if (!png || png.length < 32) return { state: "failed", attempted: true, output: "The screen was not captured. No vision model was called." };
+    if (await halted() || signal.aborted || !nativeCloudAllowed()) return { state: "blocked", attempted: true, output: "Screenshot permission changed after capture. No image was sent to a provider." };
+    if (input.readImage) {
+      providerStarted = true;
+      const text = (await boundedOperation(() => input.readImage!(png, signal), signal)).trim();
+      return { state: text ? "completed" : "failed", attempted: true, output: text ? `Vision reading from injected adapter (live provider unverified): ${text}` : "The vision adapter returned no reading. Nothing was invented." };
     }
-  }
-  const action = text.match(WINDOW_ACTION);
-  if (action) return windowsFrame(action[1].toLowerCase(), action[2].trim());
-  const right = text.match(RIGHT_CLICK);
-  if (right) return windowsButton(Number(right[1]), Number(right[2]), "right");
-  const double = text.match(DOUBLE_CLICK);
-  if (double) return windowsButton(Number(double[1]), Number(double[2]), "double");
-  const scroll = text.match(SCROLL);
-  if (scroll) return windowsScroll(scroll[1].toLowerCase() === "up" ? 120 : -120);
-  const drag = text.match(DRAG);
-  if (drag) return windowsDrag(Number(drag[1]), Number(drag[2]), Number(drag[3]), Number(drag[4]));
-  return "That pointer action was not recognized. Nothing moved.";
+    const result = await analyzePcScreenshot(png, resolveXaiInferenceApiKey() || "", policy, { signal, authorize: async () => !await halted() && nativeCloudAllowed() });
+    return { state: result.state === "canceled" ? "blocked" : result.state, output: result.output, attempted: captureStarted || result.attempted };
+  } catch { return { state: providerStarted ? "unconfirmed" : "failed", attempted: captureStarted, output: providerStarted ? "Screenshot processing stopped after provider dispatch. Its external outcome is unknown; no automatic retry started." : "Screen capture was canceled, failed, or timed out. No vision model was called." }; }
+  finally { clearTimeout(timer); controller.abort(); }
+}
+
+export async function readScreenshotWithGrok(png: Buffer, apiKey: string, model = "", policy?: Partial<VisionPolicy>): Promise<string> {
+  return (await analyzePcScreenshot(png, apiKey, { model, allowExternalImage: policy?.allowExternalImage === true, allowFallback: policy?.allowFallback === true, fallbackModel: policy?.fallbackModel, captureScope: "primary-screen", timeoutMs: policy?.timeoutMs })).output;
+}
+
+async function windowsMonitors(): Promise<string> {
+  try {
+    const { stdout } = await execFileAsync("powershell.exe", ["-NoProfile", "-Command", "Add-Type -AssemblyName System.Windows.Forms; [System.Windows.Forms.Screen]::AllScreens | ForEach-Object { $_.DeviceName }"], { timeout: 8000, windowsHide: true });
+    return String(stdout || "").trim() || "Windows returned no monitors.";
+  } catch { return "Windows did not list monitors."; }
 }
 
 async function windowsButton(x: number, y: number, kind: "right" | "double"): Promise<string> {
@@ -251,8 +167,8 @@ async function windowsDrag(x1: number, y1: number, x2: number, y2: number): Prom
 async function windowsFrame(action: string, title: string): Promise<string> {
   const show = action === "minimize" ? 6 : action === "maximize" ? 3 : 0;
   const script = action === "close"
-    ? `Get-Process | Where-Object { $_.MainWindowTitle -eq ${JSON.stringify(title)} } | ForEach-Object { $_.CloseMainWindow() | Out-Null }; 'asked'`
-    : `Add-Type -TypeDefinition 'using System; using System.Runtime.InteropServices; public class AdrianFrame { [DllImport("user32.dll")] public static extern bool ShowWindow(IntPtr h, int n); [DllImport("user32.dll")] public static extern IntPtr FindWindow(string c, string w); }'; $h=[AdrianFrame]::FindWindow($null, ${JSON.stringify(title)}); if ($h -eq [IntPtr]::Zero) { 'missing' } else { [AdrianFrame]::ShowWindow($h, ${show}) | Out-Null; 'asked' }`;
+    ? `Get-Process | Where-Object { $_.MainWindowTitle -eq ${psLiteral(title)} } | ForEach-Object { $_.CloseMainWindow() | Out-Null }; 'asked'`
+    : `Add-Type -TypeDefinition 'using System; using System.Runtime.InteropServices; public class AdrianFrame { [DllImport("user32.dll")] public static extern bool ShowWindow(IntPtr h, int n); [DllImport("user32.dll")] public static extern IntPtr FindWindow(string c, string w); }'; $h=[AdrianFrame]::FindWindow($null, ${psLiteral(title)}); if ($h -eq [IntPtr]::Zero) { 'missing' } else { [AdrianFrame]::ShowWindow($h, ${show}) | Out-Null; 'asked' }`;
   try {
     const { stdout } = await execFileAsync("powershell.exe", ["-NoProfile", "-Command", script], { timeout: 8000, windowsHide: true });
     return String(stdout || "").includes("missing") ? `Windows did not find ${title}. Nothing was changed.` : `Adrian asked Windows to ${action} ${title}.`;
@@ -271,18 +187,18 @@ async function windowsAccessibility(): Promise<string> {
   }
 }
 
-async function windowsFindButtons(name: string): Promise<string[]> {
-  const script = `Add-Type -AssemblyName UIAutomationClient; $root=[System.Windows.Automation.AutomationElement]::RootElement; $cond=New-Object System.Windows.Automation.PropertyCondition([System.Windows.Automation.AutomationElement]::ControlTypeProperty, [System.Windows.Automation.ControlType]::Button); $all=$root.FindAll([System.Windows.Automation.TreeScope]::Descendants, $cond); $hits=@(); foreach ($b in $all) { if ($b.Current.Name -eq ${JSON.stringify(name)}) { $hits += $b.Current.Name } }; $hits -join "\`n"`;
+async function windowsFindButtons(name: string, windowTitle?: string): Promise<string[]> {
+  const script = `Add-Type -AssemblyName UIAutomationClient; $root=[System.Windows.Automation.AutomationElement]::RootElement; ${windowTitle ? `$wins=@($root.FindAll([System.Windows.Automation.TreeScope]::Children,[System.Windows.Automation.Condition]::TrueCondition) | Where-Object { $_.Current.Name -eq ${psLiteral(windowTitle)} }); if ($wins.Count -ne 1) { exit }; $root=$wins[0];` : ""} $cond=New-Object System.Windows.Automation.PropertyCondition([System.Windows.Automation.AutomationElement]::ControlTypeProperty, [System.Windows.Automation.ControlType]::Button); $all=$root.FindAll([System.Windows.Automation.TreeScope]::Descendants, $cond); $hits=@(); foreach ($b in $all) { if ($b.Current.Name -eq ${psLiteral(name)}) { $hits += $b.Current.Name } }; $hits -join "\`n"`;
   try {
     const { stdout } = await execFileAsync("powershell.exe", ["-NoProfile", "-Command", script], { timeout: 15000, windowsHide: true });
     return String(stdout || "").split(/\r?\n/).map((line) => line.trim()).filter(Boolean);
   } catch {
-    return [];
+    throw new Error("Windows button discovery failed; no result was established.");
   }
 }
 
-async function windowsInvokeButton(name: string): Promise<boolean> {
-  const script = `Add-Type -AssemblyName UIAutomationClient; $root=[System.Windows.Automation.AutomationElement]::RootElement; $cond=New-Object System.Windows.Automation.PropertyCondition([System.Windows.Automation.AutomationElement]::ControlTypeProperty, [System.Windows.Automation.ControlType]::Button); $all=$root.FindAll([System.Windows.Automation.TreeScope]::Descendants, $cond); $hits=@($all | Where-Object { $_.Current.Name -eq ${JSON.stringify(name)} }); if ($hits.Count -ne 1) { 'refused' } else { $hits[0].GetCurrentPattern([System.Windows.Automation.InvokePattern]::Pattern).Invoke(); 'clicked' }`;
+async function windowsInvokeButton(name: string, windowTitle: string): Promise<boolean> {
+  const script = `Add-Type -AssemblyName UIAutomationClient; $root=[System.Windows.Automation.AutomationElement]::RootElement; ${windowTitle ? `$wins=@($root.FindAll([System.Windows.Automation.TreeScope]::Children,[System.Windows.Automation.Condition]::TrueCondition) | Where-Object { $_.Current.Name -eq ${psLiteral(windowTitle)} }); if ($wins.Count -ne 1) { exit }; $root=$wins[0];` : ""} $cond=New-Object System.Windows.Automation.PropertyCondition([System.Windows.Automation.AutomationElement]::ControlTypeProperty, [System.Windows.Automation.ControlType]::Button); $all=$root.FindAll([System.Windows.Automation.TreeScope]::Descendants, $cond); $hits=@($all | Where-Object { $_.Current.Name -eq ${psLiteral(name)} }); if ($hits.Count -ne 1) { 'refused' } else { $hits[0].GetCurrentPattern([System.Windows.Automation.InvokePattern]::Pattern).Invoke(); 'clicked' }`;
   try {
     const { stdout } = await execFileAsync("powershell.exe", ["-NoProfile", "-Command", script], { timeout: 15000, windowsHide: true });
     return String(stdout || "").includes("clicked");
@@ -291,30 +207,22 @@ async function windowsInvokeButton(name: string): Promise<boolean> {
   }
 }
 
-async function captureScreenPng(platform: NodeJS.Platform): Promise<Buffer | null> {
-  const shot = path.join(os.tmpdir(), "adrian-screen.png");
-  if (platform === "win32") {
-    const script = `Add-Type -AssemblyName System.Windows.Forms; Add-Type -AssemblyName System.Drawing; $bounds=[System.Windows.Forms.Screen]::PrimaryScreen.Bounds; $bitmap=New-Object System.Drawing.Bitmap $bounds.Width, $bounds.Height; $graphics=[System.Drawing.Graphics]::FromImage($bitmap); $graphics.CopyFromScreen($bounds.Location, [System.Drawing.Point]::Empty, $bounds.Size); $bitmap.Save(${JSON.stringify(shot)}); $graphics.Dispose(); $bitmap.Dispose()`;
-    try {
-      await execFileAsync("powershell.exe", ["-NoProfile", "-Command", script], { timeout: 15000, windowsHide: true });
-      return await readFile(shot);
-    } catch {
-      return null;
-    }
-  }
-  if (!process.env.DISPLAY) return null;
+async function captureScreenPng(platform: NodeJS.Platform, signal?: AbortSignal): Promise<Buffer | null> {
+  if (platform !== "win32") return null;
+  const dir = await mkdtemp(path.join(os.tmpdir(), "adrian-screen-"));
+  const shot = path.join(dir, "primary.png");
+  const script = `Add-Type -AssemblyName System.Windows.Forms; Add-Type -AssemblyName System.Drawing; $bounds=[System.Windows.Forms.Screen]::PrimaryScreen.Bounds; $bitmap=New-Object System.Drawing.Bitmap $bounds.Width, $bounds.Height; $graphics=[System.Drawing.Graphics]::FromImage($bitmap); try { $graphics.CopyFromScreen($bounds.Location, [System.Drawing.Point]::Empty, $bounds.Size); $bitmap.Save(${psLiteral(shot)}) } finally { $graphics.Dispose(); $bitmap.Dispose() }`;
   try {
-    await execFileAsync("ffmpeg", ["-y", "-f", "x11grab", "-video_size", "1280x720", "-i", process.env.DISPLAY, "-frames:v", "1", shot], { timeout: 15000 });
-    return await readFile(shot);
-  } catch {
-    return null;
-  }
+    await execFileAsync("powershell.exe", ["-NoProfile", "-Command", script], { timeout: 15000, windowsHide: true, signal });
+    return signal?.aborted ? null : await readFile(shot);
+  } catch { return null; }
+  finally { await rm(dir, { recursive: true, force: true }).catch(() => undefined); }
 }
 
 async function launchApp(platform: NodeJS.Platform, name: string): Promise<string> {
   if (platform !== "win32") return "This computer is not Windows. The app was not launched.";
   try {
-    await execFileAsync("powershell.exe", ["-NoProfile", "-Command", `Start-Process ${JSON.stringify(name)}`], { timeout: 8000, windowsHide: true });
+    await execFileAsync("powershell.exe", ["-NoProfile", "-Command", `Start-Process ${psLiteral(name)}`], { timeout: 8000, windowsHide: true });
     return `Adrian asked Windows to launch ${name}.`;
   } catch {
     return "Windows did not launch that app.";
@@ -333,7 +241,7 @@ async function windowsCommand(platform: NodeJS.Platform, title: string | undefin
     }
   }
   try {
-    const script = `$wshell = New-Object -ComObject WScript.Shell; if ($wshell.AppActivate(${JSON.stringify(title)})) { 'focused' } else { 'not-found' }`;
+    const script = `$wshell = New-Object -ComObject WScript.Shell; if ($wshell.AppActivate(${psLiteral(title)})) { 'focused' } else { 'not-found' }`;
     const { stdout } = await execFileAsync("powershell.exe", ["-NoProfile", "-Command", script], { timeout: 8000, windowsHide: true });
     return String(stdout || "").includes("focused") ? `Adrian asked Windows to focus ${title}.` : `Windows did not find ${title}. Nothing was focused.`;
   } catch {
@@ -357,8 +265,22 @@ async function listOwnerFolder(root: string): Promise<string> {
   }
 }
 
+async function safeOwnerPath(root: string, name: string): Promise<string | null> {
+  const safe = insideRoot(root, path.resolve(root, name));
+  if (!safe) return null;
+  const rootStat = await lstat(root).catch(() => null);
+  if (!rootStat?.isDirectory() || rootStat.isSymbolicLink()) return null;
+  let current = path.resolve(root);
+  for (const segment of path.relative(root, safe).split(path.sep).filter(Boolean)) {
+    current = path.join(current, segment);
+    const info = await lstat(current).catch((error: NodeJS.ErrnoException) => { if (error.code === "ENOENT") return null; throw error; });
+    if (info?.isSymbolicLink()) return null;
+  }
+  return safe;
+}
+
 export async function readOwnerFile(root: string, name: string): Promise<string> {
-  const safe = insideRoot(root, path.join(root, name));
+  const safe = await safeOwnerPath(root, name);
   if (!safe) return "That file is outside the owner folder. Nothing was read.";
   try {
     const info = await lstat(safe);
@@ -372,7 +294,7 @@ export async function readOwnerFile(root: string, name: string): Promise<string>
 }
 
 async function writeOwnerFile(root: string, name: string, content: string): Promise<string> {
-  const safe = insideRoot(root, path.join(root, name));
+  const safe = await safeOwnerPath(root, name);
   if (!safe) return "That file is outside the owner folder. Nothing was written.";
   await mkdir(path.dirname(safe), { recursive: true });
   await writeFile(safe, content, "utf8");
@@ -380,7 +302,7 @@ async function writeOwnerFile(root: string, name: string, content: string): Prom
 }
 
 async function makeOwnerFolder(root: string, name: string): Promise<string> {
-  const safe = insideRoot(root, path.join(root, name));
+  const safe = await safeOwnerPath(root, name);
   if (!safe) return "That folder is outside the owner folder. Nothing was created.";
   await mkdir(safe, { recursive: true });
   return `Adrian created ${safe}.`;
@@ -394,7 +316,7 @@ async function runOwnerCommand(root: string, platform: NodeJS.Platform, command:
     const text = `${stdout || ""}${stderr || ""}`.trim();
     return text ? `Adrian ran the command in ${root}:\n${text.slice(0, 4000)}` : `Adrian ran the command in ${root}. It returned no output.`;
   } catch {
-    return "Adrian could not finish that command. Nothing else was changed.";
+    return "Adrian could not confirm that command completed. Its effects may be partial; inspect the device before retrying.";
   }
 }
 
@@ -429,7 +351,7 @@ $bounds = [System.Windows.Forms.Screen]::PrimaryScreen.Bounds
 $bitmap = New-Object System.Drawing.Bitmap $bounds.Width, $bounds.Height
 $graphics = [System.Drawing.Graphics]::FromImage($bitmap)
 $graphics.CopyFromScreen($bounds.Location, [System.Drawing.Point]::Empty, $bounds.Size)
-$bitmap.Save(${JSON.stringify(shot)})
+$bitmap.Save(${psLiteral(shot)})
 $graphics.Dispose(); $bitmap.Dispose()
 Write-Output ("size=" + $bounds.Width + "x" + $bounds.Height)
 `;
@@ -445,7 +367,7 @@ async function openBrowser(platform: NodeJS.Platform, url: string | undefined): 
   if (platform !== "win32") return "This computer is not Windows. The browser was not opened.";
   const target = url && /^https:\/\//.test(url) ? url : "https://www.bing.com";
   try {
-    await execFileAsync("powershell.exe", ["-NoProfile", "-Command", `Start-Process ${JSON.stringify(target)}`], { timeout: 8000, windowsHide: true });
+    await execFileAsync("powershell.exe", ["-NoProfile", "-Command", `Start-Process ${psLiteral(target)}`], { timeout: 8000, windowsHide: true });
     return `Adrian opened the browser at ${target}.`;
   } catch {
     return "Windows did not open the browser. Nothing was clicked.";

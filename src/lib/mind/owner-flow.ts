@@ -12,7 +12,7 @@ export const CANNOT_RUN = [
   "Microphone after the browser closes",
 ] as const;
 
-export { PUBLIC_INSTALLER as INSTALLER_HREF } from "./desktop-update.ts";
+export { PUBLIC_INSTALLER as INSTALLER_HREF } from "./desktop-update-info.ts";
 
 export const DESKTOP_ACTIONS = [
   { id: "mouse", label: "Mouse" },

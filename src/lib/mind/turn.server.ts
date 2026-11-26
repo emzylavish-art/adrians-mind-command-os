@@ -12,6 +12,8 @@ import { callConfiguredProvider, httpStatusForProviderSelection, routeSelectedMo
 import { configuredProviders } from "./provider-call";
 import { ADRIAN_MIND_IDENTITY, builtinModules, collectConsultHelp, customModules, orchestratorInstruction, planModelConsult } from "./model-consult.ts";
 import { adrianPcEnabled, runAdrianPc } from "./adrian-pc.server.ts";
+import { nativeCloudAllowed } from "./native-policy.server.ts";
+import { resolveSafeOllamaBase } from "./voice/ollama-host.ts";
 import { consequentialSpeechRefusal } from "./frontier-2031.ts";
 import { destructiveSpeechRefusal } from "./reversibility.ts";
 import { ensureLocalCapabilityFile, runLocalCommand } from "./local-capabilities.ts";
@@ -377,10 +379,12 @@ async function dispatchMindTurn(request: Request, userId: string, data: Record<s
   if (stopped) return stopped;
   const localOwner = userId === DEV_USER_ID && isLoopbackPreview() && !process.env.VERCEL;
   if (localOwner && adrianPcEnabled() && typeof body.text === "string" && body.text.trim()) {
-    const pc = await runAdrianPc({ text: body.text, halted: false });
-    if (pc.ran) {
-      markDispatched();
-      body = { ...body, text: `${body.text}\n\nAdrian PC result: ${pc.output}` };
+    const pc = await runAdrianPc({ text: body.text, halted: false, recheckHalt: async () => (await readHaltState(userId)) !== "off", signal: request.signal });
+    if (pc.recognized) {
+      if (pc.attempted) markDispatched();
+      const done = { text: pc.output, model: "adrian-local", provider: "Adrian", usage: null, usedIds: [], requestId: null, pcReceipt: pc };
+      const stream = `event: delta\ndata: ${JSON.stringify({ text: pc.output })}\n\nevent: done\ndata: ${JSON.stringify(done)}\n\n`;
+      return new Response(stream, { headers: { "content-type": "text/event-stream", "cache-control": "no-store" } });
     }
   }
   if (localOwner && typeof body.text === "string") {
@@ -396,6 +400,10 @@ async function dispatchMindTurn(request: Request, userId: string, data: Record<s
       const stream = `event: delta\ndata: ${JSON.stringify({ text: local })}\n\nevent: done\ndata: ${JSON.stringify(done)}\n\n`;
       return new Response(stream, { headers: { "content-type": "text/event-stream", "cache-control": "no-store" } });
     }
+  }
+  if (!nativeCloudAllowed()) {
+    const localModel = body.provider === "ollama" && !body.logicRoute && body.composerMode !== "orchestrator" && resolveSafeOllamaBase(process.env.MIND_OLLAMA_BASE_URL || process.env.OLLAMA_HOST, { allowRemote: false }).ok;
+    if (!localModel) return json({ ok: false, outcome: "not_sent", error: "Local-only mode is active. Choose an available loopback Ollama model or explicitly enable connected services in the desktop Network menu. No cloud provider or fallback was called." }, 409);
   }
   const ratePreflight = createChatTurnPreflight(userId, async () => false);
   const preflight = async () => (await checkStop()) ?? ratePreflight();

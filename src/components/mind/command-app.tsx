@@ -10,7 +10,8 @@ import { loadMcpWithHttpFallback } from "@/lib/mind/mcp-list-http";
 import { getRecentChats } from "@/lib/mind/recent-chats";
 import { ConversationSections } from "@/components/mind/conversation-sections";
 import { CloudBrowserSettings } from "@/components/mind/cloud-browser-settings";
-import { PUBLIC_INSTALLER } from "@/lib/mind/desktop-update";
+import { PUBLIC_INSTALLER } from "@/lib/mind/desktop-update-info";
+import { NativeDevicePanel } from "@/components/mind/native-device-panel";
 import { DesktopUpdateNote } from "@/components/mind/desktop-update-note";
 import { ActionOverlay, ActionsButton } from "@/components/mind/conversation-menu";
 import { applyArchive, applyFavorite, applyProject, applyRename, conversationSharePath, quoteIntoNewChat, scheduleConversation, type ConversationAction } from "@/lib/mind/conversation-actions";
@@ -1956,7 +1957,7 @@ export function CommandApp() {
         if (run.id.startsWith("scheduled:") || run.parentId?.startsWith("scheduled:")) continue;
         if (run.state !== "queued" || desktopActedRef.current.has(run.id) || !spokenPcCommand(run.goal)) continue;
         desktopActedRef.current.add(run.id);
-        void fetch("/api/mind/pc/status", { method: "POST", credentials: "include", headers: { "content-type": "application/json" }, body: JSON.stringify({ text: run.goal }) });
+        void fetch("/api/mind/pc/status", { method: "POST", credentials: "include", headers: { "content-type": "application/json" }, body: JSON.stringify({ text: run.goal, destination: "current-device" }) });
       }
       const next = tickFleet(runDueSchedules(current, now), { now, workerId: "browser-worker" });
       setWs(next);
@@ -4796,7 +4797,7 @@ ${message.content}`;
         return;
       }
       if (spokenPcCommand(text)) {
-        const acted = await fetch("/api/mind/pc/status", { method: "POST", credentials: "include", headers: { "content-type": "application/json" }, body: JSON.stringify({ text }) }).then((response) => response.json()).catch(() => null) as { output?: string; error?: string } | null;
+        const acted = await fetch("/api/mind/pc/status", { method: "POST", credentials: "include", headers: { "content-type": "application/json" }, body: JSON.stringify({ text, destination: "current-device" }) }).then((response) => response.json()).catch(() => null) as { output?: string; error?: string } | null;
         if (!isCurrent()) return;
         const extra = acted?.output || acted?.error || "";
         made.reply = extra ? `${made.reply} ${extra}` : made.reply;
@@ -6238,8 +6239,8 @@ ${message.content}`;
                   </p>
                 </MenuCluster>
                 <MenuCluster label="Install" wide>
-                  <a role="menuitem" className="flex min-h-11 items-center rounded-2xl px-3 text-sm" style={menuChip} href={PUBLIC_INSTALLER} data-testid="header-download-installer">Windows release · four parts</a>
-                  <p className="px-3 pb-2 text-xs text-muted" data-testid="installer-note">Unsigned Windows app. It contains this product, including Build. It does not control the mouse, keyboard, or browser.</p>
+                  <a role="menuitem" className="flex min-h-11 items-center rounded-2xl px-3 text-sm" style={menuChip} href={PUBLIC_INSTALLER} data-testid="header-download-installer">Windows release files</a>
+                  <p className="px-3 pb-2 text-xs text-muted" data-testid="installer-note">Published release files are separate from installed-device readiness. The installed app reports its exact executor, permissions, feature availability and operation receipts.</p>
                   <DesktopUpdateNote />
                 </MenuCluster>
                 </div>
@@ -7580,7 +7581,7 @@ ${message.content}`;
             </section>
           )}
           {view === "scheduled" && <FleetPanel key="scheduled" mode="scheduled" ws={ws} setWs={setWs} initialAgentId={botDestinationId} />}
-          {view === "tools" && <FleetPanel mode="tools" ws={ws} setWs={setWs} onFailure={(message, retry, surface) => reportFailure(message, surface === "mcp" ? "mcp_tool_failed" : "open_page_failed", surface === "mcp" ? "mcp:tools" : "browser", retry)} />}
+          {view === "tools" && <><NativeDevicePanel key={account?.id ?? "signed-out"} ownerId={account?.id ?? null} halted={ws.halted} /><FleetPanel mode="tools" ws={ws} setWs={setWs} onFailure={(message, retry, surface) => reportFailure(message, surface === "mcp" ? "mcp_tool_failed" : "open_page_failed", surface === "mcp" ? "mcp:tools" : "browser", retry)} /></>}
           {view === "build" && (
             <section className="page-shell">
               <BuildWorkspace freeOnly={researchFreeOnly} key={draftOwner ?? "signed-out"} ownerId={draftOwner ?? undefined} onDiscuss={(text) => handToHumanCode(text, "From Build")} onResult={(text) => {

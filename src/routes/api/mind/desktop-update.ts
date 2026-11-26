@@ -3,7 +3,7 @@ import {
   decideUpdate,
   publicManifest,
   publishedManifest,
-  readCloudManifest,
+  readCloudCheck,
   updateNote,
 } from "@/lib/mind/desktop-update";
 
@@ -28,11 +28,16 @@ export const Route = createFileRoute("/api/mind/desktop-update")({
         const local = publicManifest(publishedManifest);
         const check = new URL(request.url).searchParams.get("check");
         if (check !== "cloud") return json(local);
-        const cloud = await readCloudManifest();
+        const checkResult = await readCloudCheck(undefined, { installedBuild: local.build });
+        const cloud = checkResult.selected;
         const decision = decideUpdate(local.build, cloud);
         return json({
           ...local,
+          serverBuild: local.build,
+          installedRuntime: null,
           cloud,
+          feeds: checkResult.feeds.map(feed => feed.ok ? { source: feed.source, ok: true, detail: feed.detail } : feed),
+          candidates: checkResult.checks,
           decision,
           note: updateNote(local.build, cloud, decision),
         });
