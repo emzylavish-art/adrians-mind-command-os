@@ -163,6 +163,8 @@ export function normalizeWorkspace(input: unknown): Workspace {
         ...(typeof row.stage === "string" ? { stage: row.stage } : {}),
         ...(["unconfirmed", "rejected_before_dispatch", "completed", "failed", "canceled"].includes(String(row.outcome)) ? { outcome: row.outcome as UsageEntry["outcome"] } : {}),
         ...(typeof row.dispatched === "boolean" ? { dispatched: row.dispatched } : {}),
+        ...(["queued", "running", "completed", "failed", "canceled"].includes(String(row.executionState)) ? { executionState: row.executionState as UsageEntry["executionState"] } : {}),
+        ...(["not_sent", "sent", "unknown"].includes(String(row.providerDispatch)) ? { providerDispatch: row.providerDispatch as UsageEntry["providerDispatch"] } : {}),
         provider: typeof row.provider === "string" ? row.provider : undefined,
         requestedModel: typeof row.requestedModel === "string" ? row.requestedModel : undefined,
         model: str(row.model, "unknown"),

@@ -48,7 +48,7 @@ export async function setDurableHalt(userId: string, on: boolean): Promise<{ ok:
         cancellation = cancelOwnerJobs(userId);
       } catch { cancellation = { cancelled: 0, pending: 0, unknown: 1 }; }
     }
-    return { ok: true, halted: on, cancellation };
+    return { ok: true, halted: on, ...(cancellation ? { cancellation } : {}) };
   } catch {
     return { ok: false, error: "The emergency stop could not be saved. Check storage and retry." };
   }

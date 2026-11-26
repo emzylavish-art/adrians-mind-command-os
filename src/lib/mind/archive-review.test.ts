@@ -47,14 +47,14 @@ describe("C5 archive transfer privacy and conflict contracts", () => {
   it("previews record conflicts and keeps newer local project/file/agent/schedule records during Merge", () => {
     const current = fixture();
     current.agents = [{ id: "agent", name: "new agent" }] as Workspace["agents"];
-    current.schedules = [{ id: "schedule", instructions: "new task" }] as Workspace["schedules"];
+    current.schedules = [{ id: "schedule", instruction: "new task" }] as Workspace["schedules"];
     const old = structuredClone(current);
     old.projects[0].description = "old description"; old.files[0].text = "old file";
-    old.agents[0].name = "old agent"; old.schedules[0].instructions = "old task";
+    old.agents[0].name = "old agent"; old.schedules[0].instruction = "old task";
     assert.deepEqual(archiveReview(current, old).conflicts.map(x => x.category).sort(), ["agents", "files", "projects", "schedules"]);
     const merged = mergeWorkspace(current, old);
     assert.equal(merged.projects[0].description, "PROJECT_BODY_MARKER");
-    assert.equal(merged.files[0].text, "FILE_BODY_MARKER"); assert.equal(merged.agents[0].name, "new agent"); assert.equal(merged.schedules[0].instructions, "new task");
+    assert.equal(merged.files[0].text, "FILE_BODY_MARKER"); assert.equal(merged.agents[0].name, "new agent"); assert.equal(merged.schedules[0].instruction, "new task");
   });
   it("quarantines unresolved and undeclared scopes even after manual unarchive, until explicitly resolved", async () => {
     const destination = fixture();

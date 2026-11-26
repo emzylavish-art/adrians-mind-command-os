@@ -10,6 +10,7 @@ import { resolveXaiInferenceApiKey } from "../media/xai-key.ts";
 import { resolveVoiceApiKey } from "./keys.ts";
 import { recordReceipt } from "../receipts.server.ts";
 import { directChatWithFallback, speakWithFallback, transcribeWithFallback } from "./provider-fallback.ts";
+import { createVoiceUsageTracker } from "./usage.server.ts";
 
 const run = promisify(execFile);
 
@@ -44,8 +45,9 @@ export async function handleVoiceCall(request: Request): Promise<Response> {
   if (await haltIsOn(userId)) return stopped();
   const key = resolveVoiceApiKey();
   if (!key) return json({ ok: false, error: "No voice key is configured. Nothing was spoken." }, 400);
-  const caller = await speakWithFallback({ text: "Say only the word cedarline.", voiceId: "eve", xaiKey: key });
-  if (!caller.ok) return json({ ok: false, error: caller.error }, 502);
+  const usage = createVoiceUsageTracker(userId);
+  const caller = await speakWithFallback({ text: "Say only the word cedarline.", voiceId: "eve", xaiKey: key, fetchImpl: usage.fetch("speech") });
+  if (!caller.ok) return json({ ok: false, error: usage.error || caller.error }, usage.error ? 503 : 502);
   let audio: Uint8Array = Buffer.from(caller.audio, "base64");
   let mime = "audio/mpeg";
   let filename = "caller.mp3";
@@ -57,23 +59,24 @@ export async function handleVoiceCall(request: Request): Promise<Response> {
     // The speech file can still be transcribed as mpeg when conversion is unavailable.
   }
   if (await haltIsOn(userId)) return stopped();
-  const heard = await transcribeWithFallback({ bytes: audio, xaiKey: key, filename, mime });
-  if (!heard.ok) return json({ ok: false, error: heard.error }, 502);
+  const heard = await transcribeWithFallback({ bytes: audio, xaiKey: key, filename, mime, fetchImpl: usage.fetch("transcription") });
+  if (!heard.ok) return json({ ok: false, error: usage.error || heard.error }, usage.error ? 503 : 502);
   const chatKey = resolveXaiInferenceApiKey() || key;
   if (await haltIsOn(userId)) return stopped();
   const chat = await directChatWithFallback({
     xaiKey: chatKey,
+    fetchImpl: usage.fetch("answer"),
     xaiModel: "grok-4.20-0309-non-reasoning",
     messages: [
       { role: "system", content: "Reply with only the single word the caller asked you to say. No punctuation." },
       { role: "user", content: heard.text },
     ],
   });
-  if (!chat.ok) return json({ ok: false, error: chat.error, heard: heard.text }, 502);
+  if (!chat.ok) return json({ ok: false, error: usage.error || chat.error, heard: heard.text }, usage.error ? 503 : 502);
   const reply = chat.text.replace(/[^A-Za-z0-9-]/g, "").slice(0, 40) || chat.text.slice(0, 40);
   if (await haltIsOn(userId)) return stopped();
-  const spoken = await speakWithFallback({ text: reply, voiceId: "eve", xaiKey: key });
-  if (!spoken.ok) return json({ ok: false, error: spoken.error, heard: heard.text, reply }, 502);
+  const spoken = await speakWithFallback({ text: reply, voiceId: "eve", xaiKey: key, fetchImpl: usage.fetch("speech") });
+  if (!spoken.ok) return json({ ok: false, error: usage.error || spoken.error, heard: heard.text, reply }, usage.error ? 503 : 502);
   await recordReceipt(userId, { state: "EXECUTED", action: "speak-call", detail: `Heard and spoke a reply. Provider ${spoken.provider}.` });
   return json({ ok: true, heard: heard.text, reply, audio: spoken.audio, mime: spoken.mime, provider: spoken.provider });
 }

@@ -183,7 +183,7 @@ import {
   toggleMute,
 } from "@/lib/mind/voice/spam-guard";
 import { createCallHistory, type CallHistory } from "@/lib/mind/voice/voice-chat-turn";
-import type { Chat, Msg, Workspace } from "@/lib/mind/types";
+import type { Chat, Msg, Workspace, MemoryScope } from "@/lib/mind/types";
 import { ServiceBoard } from "@/components/mind/service-board";
 import { EveWorkbench } from "@/components/mind/eve-workbench";
 import { FleetPanel } from "@/components/mind/fleet-panels";
@@ -1673,7 +1673,7 @@ export function CommandApp() {
   const inspectFileRef = useRef<HTMLInputElement>(null);
   const clearedStop = useRef(false);
   const [stopSync, setStopSync] = useState<{ owner: string | null; state: "idle" | "pending" | "confirmed" | "unconfirmed"; detail: string }>({ owner: null, state: "idle", detail: "" });
-  const stopSyncFlight = useRef<{ owner: string | null; on: boolean } | null>(null);
+  const stopSyncFlight = useRef<{ owner: string | null; on: boolean; restop?: boolean } | null>(null);
   const stopConfirmed = stopSync.owner === turnOwner.current && stopSync.state === "confirmed";
   const stopPending = stopSync.owner === turnOwner.current && stopSync.state === "pending";
   const stopControlLabel = ws.halted ? stopPending ? "Confirming stop…" : stopConfirmed ? "Clear stop" : "Retry stop synchronization" : "Emergency stop";
@@ -1926,6 +1926,16 @@ export function CommandApp() {
   }
 
   const selectionSnapshot = useRef<{ owner: string; selection: StoredSelection; failover: "none" | "grok" } | null>(null);
+  useEffect(() => {
+    const onRetention = (event: Event) => {
+      const detail = (event as CustomEvent<{ ownerId?: string; before?: string }>).detail;
+      if (!draftOwner || detail?.ownerId !== draftOwner || turnOwner.current !== draftOwner || !detail.before || !Number.isFinite(Date.parse(detail.before))) return;
+      const cutoff = Date.parse(detail.before);
+      setWs(current => ({ ...current, usage: current.usage.filter(row => Date.parse(row.at) >= cutoff) }));
+    };
+    window.addEventListener("adrian-usage-retention", onRetention);
+    return () => window.removeEventListener("adrian-usage-retention", onRetention);
+  }, [draftOwner, setWs]);
   const [selectionOwner, setSelectionOwner] = useState<string | null>(null);
   useEffect(() => {
     const owner = draftOwner ?? "guest";
@@ -4334,7 +4344,16 @@ ${message.content}`;
     turnAbort.current?.abort();
     agentAbort.current?.abort();
     const owner = turnOwner.current;
-    if (stopSyncFlight.current?.owner === owner) return;
+    if (stopSyncFlight.current?.owner === owner) {
+      if (!stopSyncFlight.current.on) {
+        // Preserve the newer stop intent, then reassert it after the older
+        // release settles so request ordering cannot leave the server released.
+        stopSyncFlight.current.restop = true;
+        setStopSync({ owner, state: "pending", detail: "Local protection is active. A stop will be synchronized after the pending release settles." });
+        setNotice("Local stop is active. Waiting for the earlier release to settle before synchronizing the new stop.");
+      }
+      return;
+    }
     const attempt = { owner, on: true };
     stopSyncFlight.current = attempt;
     setError(null);
@@ -4375,12 +4394,13 @@ ${message.content}`;
     const owner = turnOwner.current;
     if (!owner) { setError("Sign in to confirm release of the server stop. Local protection remains active."); return; }
     if (stopSyncFlight.current?.owner === owner) return;
-    const attempt = { owner, on: false };
+    const attempt = { owner, on: false, restop: false };
     stopSyncFlight.current = attempt;
     setError(null);
     try {
       const result = await setExecutionHalt({ data: { on: false, ownerId: owner || undefined } });
       if (turnOwner.current !== owner || stopSyncFlight.current !== attempt) return;
+      if (attempt.restop) return;
       if (!result.ok) {
         setError(result.error);
         setSpeakCall((current) => ({ ...current, error: result.error }));
@@ -4397,7 +4417,10 @@ ${message.content}`;
       setError(message);
       setSpeakCall((current) => ({ ...current, error: message }));
     } finally {
-      if (stopSyncFlight.current === attempt) stopSyncFlight.current = null;
+      if (stopSyncFlight.current === attempt) {
+        stopSyncFlight.current = null;
+        if (attempt.restop && turnOwner.current === owner) await pressEmergencyStop();
+      }
     }
   }
   function explain(text: string) {

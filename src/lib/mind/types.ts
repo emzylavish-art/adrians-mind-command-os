@@ -107,6 +107,9 @@ export type UsageEntry = {
   stage?: string;
   outcome?: "unconfirmed" | "rejected_before_dispatch" | "completed" | "failed" | "canceled";
   dispatched?: boolean;
+  /** Runtime progress is separate from evidence that a provider answered. */
+  executionState?: "queued" | "running" | "completed" | "failed" | "canceled";
+  providerDispatch?: "not_sent" | "sent" | "unknown";
   chatId: string;
   at: string;
   provider?: string;

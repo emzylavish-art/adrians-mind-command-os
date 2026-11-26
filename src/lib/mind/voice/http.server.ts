@@ -15,6 +15,7 @@ import { speakWithFallback, transcribeWithFallback } from "./provider-fallback.t
 import { parseCloudSpeechPolicy } from "./route-preferences.ts";
 import { decodeAudioBase64, validateSpeakTextInput, validateTranscribeAudioInput } from "./voice-input.ts";
 import { isSpeakCode, speakFailure, voiceSecretExpired, type SpeakCode } from "./speak-failures.ts";
+import { createVoiceUsageTracker, type VoiceUsageWriter } from "./usage.server.ts";
 
 export type VoiceHttpDeps = {
   requireUser?: (request: Request) => Promise<string>;
@@ -23,6 +24,7 @@ export type VoiceHttpDeps = {
   secretsPath?: string;
   now?: () => number;
   halted?: (userId: string) => Promise<boolean>;
+  recordUsage?: VoiceUsageWriter;
 };
 
 function json(body: unknown, status = 200) {
@@ -89,11 +91,13 @@ export async function handleVoiceSession(request: Request, deps: VoiceHttpDeps =
   if (!opened.ok) return opened.response;
   const blocked = await haltOrLimit(opened.userId, "voice_secret", 20, deps);
   if (blocked) return blocked;
+  const usage = createVoiceUsageTracker(opened.userId, { record: deps.recordUsage, fetchImpl: deps.fetchImpl, now: deps.now });
   const minted = await mintRealtimeClientSecret({
     env: deps.env,
-    fetchImpl: deps.fetchImpl,
+    fetchImpl: usage.fetch("realtime-session"),
     secretsPath: deps.secretsPath,
   });
+  if (usage.error) return json({ ok: false, error: usage.error }, 503);
   if (!minted.ok) return providerOrNetwork(minted.error);
   if (voiceSecretExpired(minted.expiresAt, deps.now?.() ?? Date.now())) return coded("session_expired");
   return json({ ok: true, expiresAt: minted.expiresAt });
@@ -114,6 +118,7 @@ export async function handleVoiceStt(request: Request, deps: VoiceHttpDeps = {})
   const decoded = decodeAudioBase64(parsed.audioBase64);
   if (!decoded.ok) return json({ ok: false, code: "empty_transcript", error: decoded.error });
   const env = deps.env ?? process.env;
+  const usage = createVoiceUsageTracker(opened.userId, { record: deps.recordUsage, fetchImpl: deps.fetchImpl, now: deps.now });
   const transcribed = await transcribeWithFallback({
     ...policy.value,
     bytes: decoded.bytes,
@@ -121,8 +126,9 @@ export async function handleVoiceStt(request: Request, deps: VoiceHttpDeps = {})
     openaiKey: env.OPENAI_API_KEY?.trim() || undefined,
     filename: parsed.filename,
     mime: parsed.mime,
-    fetchImpl: deps.fetchImpl,
+    fetchImpl: usage.fetch("transcription"),
   });
+  if (usage.error) return json({ ok: false, error: usage.error }, 503);
   if (!transcribed.ok) {
     if (/no words were recognized/i.test(transcribed.error)) return coded("empty_transcript");
     return providerOrNetwork(transcribed.error);
@@ -144,6 +150,7 @@ export async function handleVoiceTts(request: Request, deps: VoiceHttpDeps = {})
   if (!parsed.ok) return json({ ok: false, code: "chat_failed", error: parsed.error });
   const env = deps.env ?? process.env;
   const voiceId = typeof read.body.voiceId === "string" ? read.body.voiceId : undefined;
+  const usage = createVoiceUsageTracker(opened.userId, { record: deps.recordUsage, fetchImpl: deps.fetchImpl, now: deps.now });
   const spoken = await speakWithFallback({
     ...policy.value,
     text: parsed.text,
@@ -151,8 +158,9 @@ export async function handleVoiceTts(request: Request, deps: VoiceHttpDeps = {})
     xaiKey: resolveVoiceApiKey(env, deps.secretsPath),
     // Selection and explicit fallback, never key presence, control dispatch.
     openaiKey: env.OPENAI_API_KEY?.trim() || undefined,
-    fetchImpl: deps.fetchImpl,
+    fetchImpl: usage.fetch("speech"),
   });
+  if (usage.error) return json({ ok: false, error: usage.error }, 503);
   if (!spoken.ok) return providerOrNetwork(spoken.error);
   return json({ ok: true, audio: spoken.audio, mime: spoken.mime, provider: spoken.provider });
 }

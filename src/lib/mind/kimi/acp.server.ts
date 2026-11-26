@@ -9,7 +9,8 @@ import { adrianBuildCommand, adrianHostedWorkspace, closeHostedCodingSession, pa
 import { snapshotHostedWorkspace } from "./hosted/shell.server.ts";
 import { recordKimiAttempt } from "./persist.ts";
 import { readBuildSourceReceipt } from "./source-receipt.ts";
-import { createHash } from "node:crypto";
+import { createHash, randomUUID } from "node:crypto";
+import { buildRuntimeUsage, observeBuildRuntime, recordUsageObservation, type UsageRecorder } from "../usage-observation.server.ts";
 
 const MAX_PROMPT = 8_000;
 const MAX_CWD = 500;
@@ -41,7 +42,8 @@ async function ownerIdFromRequest(request: Request): Promise<string> {
   return requireUserId(bearer);
 }
 
-export async function handleKimiSession(request: Request): Promise<Response> {
+export async function handleKimiSession(request: Request, deps: { recordUsage?: UsageRecorder } = {}): Promise<Response> {
+  const record = deps.recordUsage ?? recordUsageObservation;
   if (request.method === "POST") {
     const origin = assertSameOrigin(request);
     if (!origin.ok) return json({ ok: false, error: origin.error }, 403);
@@ -82,7 +84,11 @@ export async function handleKimiSession(request: Request): Promise<Response> {
           const workspace = cwd || adrianHostedWorkspace();
           const checkpoint = snapshotHostedWorkspace();
           const watched = fileChange(workspace, prompt);
-          const turn = await runCodingTurn({ prompt, cwd: workspace, mode, resumeSessionId: resumeSessionId || undefined, fork: body.fork === true });
+          const turn = await observeBuildRuntime({
+            ownerId, operationId: `build:${randomUUID()}`, record,
+            run: () => runCodingTurn({ prompt, cwd: workspace, mode, resumeSessionId: resumeSessionId || undefined, fork: body.fork === true }),
+            state: result => result.ok ? "completed" : "failed",
+          });
           const filesChanged = watched.flatMap((item) => {
             const after = safeRead(join(workspace, item.path));
             return item.before === after ? [] : [{ ...item, after }];
@@ -109,7 +115,13 @@ export async function handleKimiSession(request: Request): Promise<Response> {
             checkpoint,
           }, turn.ok ? 200 : 409);
         }
-        const hosted = await runHostedPrompt(prompt, adrianBuildCommand(), cwd || adrianHostedWorkspace());
+        const hosted = await observeBuildRuntime({
+          ownerId, operationId: `build:${randomUUID()}`, record,
+          run: () => runHostedPrompt(prompt, adrianBuildCommand(), cwd || adrianHostedWorkspace()),
+          // Legacy ACP can report session_created after partial output at its
+          // timeout. It does not prove completion of the coding request.
+          state: result => result.status === "session_created" ? undefined : "failed",
+        });
         await recordKimiAttempt({ ownerId, status: hosted.status, error: hosted.error });
         const accepted = hosted.status === "session_created";
         return json({
@@ -133,6 +145,11 @@ export async function handleKimiSession(request: Request): Promise<Response> {
         confirm: false,
         payload: { prompt, cwd: requestedCwd, ...(sourceReceipt ? { sourceReceipt } : {}) },
       });
+      await record(ownerId, buildRuntimeUsage({
+        operationId: `build:${job.id}`, at: job.createdAt,
+        state: job.status === "queued" ? "queued" : job.status === "done" ? "completed" : job.status === "cancelled" ? "canceled" : job.status === "error" || job.status === "timeout" ? "failed" : "running",
+        started: job.status !== "queued",
+      })).catch(() => undefined);
       return json({
         ok: true,
         jobId: job.id,
@@ -155,6 +172,11 @@ export async function handleKimiSession(request: Request): Promise<Response> {
       const jobId = new URL(request.url).searchParams.get("jobId") || "";
       const job = readJob(jobId);
       if (!job || job.ownerId !== ownerId || job.kind !== "kimi-acp") return json({ ok: false, error: "Kimi job not found." }, 404);
+      await record(ownerId, buildRuntimeUsage({
+        operationId: `build:${job.id}`, at: job.createdAt,
+        state: job.status === "queued" ? "queued" : job.status === "done" ? "completed" : job.status === "cancelled" ? "canceled" : job.status === "error" || job.status === "timeout" ? "failed" : "running",
+        started: job.status !== "queued",
+      })).catch(() => undefined);
       return json({
         ok: true,
         job: {

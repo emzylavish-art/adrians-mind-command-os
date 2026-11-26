@@ -85,6 +85,44 @@ test("C5 actual emergency-stop handler retries activation without releasing loca
   assert.equal(h.wsRef.current.schedules[0].enabled, false);
 });
 
+test("C5 a new emergency stop survives an older pending release and reasserts the server stop", async () => {
+  const app = readFileSync(new URL("../../../components/mind/command-app.tsx", import.meta.url), "utf8");
+  const stopHandlers = app.slice(app.indexOf("  function toggleStop()"), app.indexOf("  function explain(text:"));
+  const body = ts.transpileModule(`
+    const wsRef = { current: { halted: false, schedules: [{ enabled: true }] } };
+    const turnOwner = { current: "owner-A" }; const stopSyncFlight = { current: null }; const clearedStop = { current: false };
+    const turnAbort = { current: null }, agentAbort = { current: null };
+    const stopVoiceSession = () => {}; const pushAudit = (ws) => ws; const haltFleet = (ws) => ws;
+    const state = { sync: null, notice: "", error: null, published: [] }; let stopConfirmed = false;
+    const setWs = (fn) => { wsRef.current = fn(wsRef.current); state.published.push(wsRef.current.halted); };
+    const setError = (value) => { state.error = value; }; const setNotice = (value) => { state.notice = value; }; const setSpeakCall = () => {};
+    const setStopSync = (value) => { state.sync = value; stopConfirmed = value.state === "confirmed"; };
+    ${stopHandlers}
+    return { pressEmergencyStop, clearEmergencyStop, wsRef, state };
+  `, { compilerOptions: { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.None } }).outputText;
+  for (const acknowledgeNewStop of [true, false]) {
+    const calls: boolean[] = [];
+    let release!: (value: { ok: boolean }) => void;
+    const h = new Function("setExecutionHalt", body)(async ({ data }: { data: { on: boolean } }) => {
+      calls.push(data.on);
+      if (!data.on) return new Promise(resolve => { release = resolve; });
+      if (calls.length === 3 && !acknowledgeNewStop) throw Error("fixture stop response lost");
+      return { ok: true };
+    });
+    await h.pressEmergencyStop();
+    const releasing = h.clearEmergencyStop();
+    await h.pressEmergencyStop();
+    assert.equal(h.wsRef.current.halted, true);
+    assert.deepEqual(calls, [true, false], "New activation waits for the older release to settle");
+    release({ ok: true }); await releasing;
+    assert.deepEqual(calls, [true, false, true]);
+    assert.equal(h.wsRef.current.halted, true);
+    assert.equal(h.state.published.includes(false), false, "Older release must never publish an unhalted workspace");
+    assert.equal(h.state.sync.state, acknowledgeNewStop ? "confirmed" : "unconfirmed");
+    assert.equal(h.wsRef.current.schedules[0].enabled, false);
+  }
+});
+
 test("C5 actual Build handler distinguishes saved execution, verified save and failed save", async () => {
   const app = readFileSync(new URL("../../../components/mind/build-workspace.tsx", import.meta.url), "utf8");
   const runBuild = app.slice(app.indexOf('  async function runBuild(policy:'), app.indexOf('  async function planWithGrok()'));

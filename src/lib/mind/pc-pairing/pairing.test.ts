@@ -172,9 +172,9 @@ it("C5 stop cancels queued jobs and reports running cancellation as pending for 
   const agent = registerAgent({ ownerId: "owner" });
   const other = registerAgent({ ownerId: "other" });
   if (!agent.ok || !other.ok) throw Error("fixture registration");
-  const queued = enqueueJob({ ownerId: "owner", agentId: agent.agentId, kind: "kimi-acp", command: "fixture" });
-  const running = enqueueJob({ ownerId: "owner", agentId: agent.agentId, kind: "shell", command: "fixture" });
-  const unrelated = enqueueJob({ ownerId: "other", agentId: other.agentId, kind: "shell", command: "fixture" });
+  const queued = enqueueJob({ ownerId: "owner", agentId: agent.agentId, kind: "kimi-acp", command: "fixture", confirm: false });
+  const running = enqueueJob({ ownerId: "owner", agentId: agent.agentId, kind: "shell", command: "fixture", confirm: true });
+  const unrelated = enqueueJob({ ownerId: "other", agentId: other.agentId, kind: "shell", command: "fixture", confirm: true });
   acceptJob(agent.agentId, running.id, "fixture-running");
   assert.deepEqual(cancelOwnerJobs("owner"), { cancelled: 1, pending: 1, unknown: 0 });
   assert.equal(readJob(queued.id)?.status, "cancelled");

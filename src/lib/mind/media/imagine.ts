@@ -1,3 +1,5 @@
+import { imagineUsageAttempt } from "./imagine-usage.ts";
+import type { UsageRecorder } from "../usage-observation.server.ts";
 import { IMAGINE_MAX_N, checkImagineRateLimit, imagineRateLimitKey, mapImagineHttpError } from "./harden.ts";
 import { reserveImagine } from "./spend-ledger.ts";
 import { fetchPinnedUrl, resolveAndPinUrl, type LookupFn } from "./ssrf.ts";
@@ -133,7 +135,9 @@ export async function generateImagineImages(
     endpoint?: string;
     lookup?: LookupFn;
     /** Required for production spend controls (rate limit + daily ledger). */
-    meter?: { ownerId: string; sessionId?: string };
+    meter?: { ownerId: string; sessionId?: string; chatId?: string };
+    recordUsage?: UsageRecorder;
+    operationId?: string;
     /** Test-only escape hatch — never set from HTTP/agent routes. */
     skipSpendControls?: boolean;
   } = {},
@@ -158,14 +162,20 @@ export async function generateImagineImages(
   const fetchImpl = options.fetchImpl ?? fetch;
   const endpoint = options.endpoint ?? XAI_IMAGES_GENERATIONS_URL;
 
+  const attempt = imagineUsageAttempt({ ownerId: options.meter?.ownerId, chatId: options.meter?.chatId, model, stage: "generation", operationId: options.operationId, record: options.recordUsage });
+  try { await attempt.prepare(); }
+  catch { return { ok: false, error: "Execution accounting is unavailable. The image provider was not contacted.", status: 503 }; }
   const reservation = options.skipSpendControls ? null : await reserveImagine({
     ownerId: options.meter?.ownerId ?? "",
     model,
     n: n,
   });
-  if (reservation && !reservation.ok) return reservation;
-  let response: Response;
+  if (reservation && !reservation.ok) return attempt.finish(reservation);
+  let response: Response | undefined;
+  const accounting = { payload: undefined as unknown };
+  const finish = (result: ImagineResult) => attempt.finish(result, response, accounting.payload);
   try {
+    attempt.dispatch();
     response = await fetchImpl(endpoint, {
       method: "POST",
       headers: {
@@ -180,21 +190,22 @@ export async function generateImagineImages(
       }),
     });
   } catch {
-    return { ok: false, error: "Could not reach the xAI image generation endpoint.", status: 502 };
+    return finish({ ok: false, error: "Could not reach the xAI image generation endpoint.", status: 502 });
   }
 
   let body: unknown;
   try {
     body = await response.json();
   } catch {
-    return {
+    return finish({
       ok: false,
       error: `Image generation returned a non-JSON response (HTTP ${response.status}).`,
       status: response.status,
-    };
+    });
   }
 
   const record = body && typeof body === "object" ? (body as Record<string, unknown>) : {};
+  accounting.payload = record;
   if (!response.ok) {
     const err = record.error;
     const raw =
@@ -203,12 +214,12 @@ export async function generateImagineImages(
         : err && typeof err === "object" && typeof (err as { message?: unknown }).message === "string"
           ? String((err as { message: string }).message)
           : `Image generation failed (HTTP ${response.status}).`;
-    return { ok: false, error: mapImagineHttpError(response.status, raw), status: response.status };
+    return finish({ ok: false, error: mapImagineHttpError(response.status, raw), status: response.status });
   }
 
   const rawData = Array.isArray(record.data) ? record.data : [];
   if (rawData.length === 0) {
-    return { ok: false, error: "Image generation returned no images.", status: response.status };
+    return finish({ ok: false, error: "Image generation returned no images.", status: response.status });
   }
 
   const images: ImagineImage[] = [];
@@ -217,30 +228,30 @@ export async function generateImagineImages(
     const row = item as Record<string, unknown>;
     if (typeof row.b64_json === "string" && row.b64_json) {
       const built = dataUrlFromB64(row.b64_json, typeof row.mime_type === "string" ? row.mime_type : undefined);
-      if (!built.ok) return { ok: false, error: built.error, status: response.status };
+      if (!built.ok) return finish({ ok: false, error: built.error, status: response.status });
       images.push({ dataUrl: built.dataUrl, mime: built.mime });
       continue;
     }
     if (typeof row.url === "string" && row.url) {
       const downloaded = await downloadUrlToDataUrl(row.url, fetchImpl, options.lookup);
-      if (!downloaded.ok) return { ok: false, error: downloaded.error, status: response.status };
+      if (!downloaded.ok) return finish({ ok: false, error: downloaded.error, status: response.status });
       images.push({ dataUrl: downloaded.dataUrl, mime: downloaded.mime, sourceUrl: row.url });
     }
   }
 
   if (images.length === 0) {
-    return { ok: false, error: "Image generation returned no usable image payloads.", status: response.status };
+    return finish({ ok: false, error: "Image generation returned no usable image payloads.", status: response.status });
   }
 
   const resolvedModel = typeof record.model === "string" && record.model ? record.model : model;
   await reservation?.confirm();
-  return {
+  return finish({
     ok: true,
     model: resolvedModel,
     reportedModel: typeof record.model === "string" && record.model.trim() ? record.model : undefined,
     images,
     usage: record.usage,
-  };
+  });
 }
 
 
@@ -279,7 +290,9 @@ export async function editImagineImage(
     fetchImpl?: FetchLike;
     endpoint?: string;
     lookup?: LookupFn;
-    meter?: { ownerId: string; sessionId?: string };
+    meter?: { ownerId: string; sessionId?: string; chatId?: string };
+    recordUsage?: UsageRecorder;
+    operationId?: string;
     skipSpendControls?: boolean;
   } = {},
 ): Promise<ImagineResult> {
@@ -319,14 +332,20 @@ export async function editImagineImage(
   if (imageUrls.length === 1) requestBody.image_url = imageUrls[0];
   else requestBody.image_urls = imageUrls;
 
+  const attempt = imagineUsageAttempt({ ownerId: options.meter?.ownerId, chatId: options.meter?.chatId, model, stage: "edit", operationId: options.operationId, record: options.recordUsage });
+  try { await attempt.prepare(); }
+  catch { return { ok: false, error: "Execution accounting is unavailable. The image provider was not contacted.", status: 503 }; }
   const reservation = options.skipSpendControls ? null : await reserveImagine({
     ownerId: options.meter?.ownerId ?? "",
     model,
     n: 1,
   });
-  if (reservation && !reservation.ok) return reservation;
-  let response: Response;
+  if (reservation && !reservation.ok) return attempt.finish(reservation);
+  let response: Response | undefined;
+  const accounting = { payload: undefined as unknown };
+  const finish = (result: ImagineResult) => attempt.finish(result, response, accounting.payload);
   try {
+    attempt.dispatch();
     response = await fetchImpl(endpoint, {
       method: "POST",
       headers: {
@@ -336,21 +355,22 @@ export async function editImagineImage(
       body: JSON.stringify(requestBody),
     });
   } catch {
-    return { ok: false, error: "Could not reach the xAI image edits endpoint.", status: 502 };
+    return finish({ ok: false, error: "Could not reach the xAI image edits endpoint.", status: 502 });
   }
 
   let responseJson: unknown;
   try {
     responseJson = await response.json();
   } catch {
-    return {
+    return finish({
       ok: false,
       error: `Image editing returned a non-JSON response (HTTP ${response.status}).`,
       status: response.status,
-    };
+    });
   }
 
   const record = responseJson && typeof responseJson === "object" ? (responseJson as Record<string, unknown>) : {};
+  accounting.payload = record;
   if (!response.ok) {
     const err = record.error;
     const raw =
@@ -359,12 +379,12 @@ export async function editImagineImage(
         : err && typeof err === "object" && typeof (err as { message?: unknown }).message === "string"
           ? String((err as { message: string }).message)
           : `Image editing failed (HTTP ${response.status}).`;
-    return { ok: false, error: mapImagineHttpError(response.status, raw), status: response.status };
+    return finish({ ok: false, error: mapImagineHttpError(response.status, raw), status: response.status });
   }
 
   const rawData = Array.isArray(record.data) ? record.data : [];
   if (rawData.length === 0) {
-    return { ok: false, error: "Image editing returned no images.", status: response.status };
+    return finish({ ok: false, error: "Image editing returned no images.", status: response.status });
   }
 
   const images: ImagineImage[] = [];
@@ -373,28 +393,28 @@ export async function editImagineImage(
     const row = item as Record<string, unknown>;
     if (typeof row.b64_json === "string" && row.b64_json) {
       const built = dataUrlFromB64(row.b64_json, typeof row.mime_type === "string" ? row.mime_type : undefined);
-      if (!built.ok) return { ok: false, error: built.error, status: response.status };
+      if (!built.ok) return finish({ ok: false, error: built.error, status: response.status });
       images.push({ dataUrl: built.dataUrl, mime: built.mime });
       continue;
     }
     if (typeof row.url === "string" && row.url) {
       const downloaded = await downloadUrlToDataUrl(row.url, fetchImpl, options.lookup);
-      if (!downloaded.ok) return { ok: false, error: downloaded.error, status: response.status };
+      if (!downloaded.ok) return finish({ ok: false, error: downloaded.error, status: response.status });
       images.push({ dataUrl: downloaded.dataUrl, mime: downloaded.mime, sourceUrl: row.url });
     }
   }
 
   if (images.length === 0) {
-    return { ok: false, error: "Image editing returned no usable image payloads.", status: response.status };
+    return finish({ ok: false, error: "Image editing returned no usable image payloads.", status: response.status });
   }
 
   const resolvedModel = typeof record.model === "string" && record.model ? record.model : model;
   await reservation?.confirm();
-  return {
+  return finish({
     ok: true,
     model: resolvedModel,
     reportedModel: typeof record.model === "string" && record.model.trim() ? record.model : undefined,
     images,
     usage: record.usage,
-  };
+  });
 }

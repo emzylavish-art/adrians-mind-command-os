@@ -8,6 +8,8 @@ import { decideFetchSite } from "./request-guard.ts";
 import { turnOperationExpiry } from "./turn-receipt.ts";
 import { trackUsageResponse } from "./usage-ledger.server.ts";
 import type { UsageReceipt } from "./usage-ledger.ts";
+import { usageTotals } from "./usage-ledger.ts";
+import { collectConsultHelp, orchestratorInstruction, planModelConsult } from "./model-consult.ts";
 
 // Execute the checked-in HTTP handler with isolated account/storage/provider
 // boundaries. The response-accounting wrapper and request parsing remain real.
@@ -157,5 +159,48 @@ test("C5 actual turn handler preserves response bytes after final accounting fai
     assert.equal(f.state.dispatches, 1);
     assert.equal(f.state.providerCalls, 1);
     assert.equal(f.state.durable.get(`${f.operationId}/answer`)?.outcome, "unconfirmed");
+  }
+});
+
+test("C5 actual orchestration records two helpers and one primary without losing unknown usage", async () => {
+  const code = ts.transpileModule(`${declaration("json")}\n${declaration("dispatchMindTurn")}\nexports.dispatch = dispatchMindTurn;`, { compilerOptions: { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.CommonJS } }).outputText;
+  for (const unknownHelper of [false, true]) {
+    const operationId = `fixture-orchestration-${unknownHelper}`;
+    const initial: UsageReceipt = { id: `${operationId}/answer`, operationId, stage: "answer", channel: "orchestrator", chatId: "fixture-chat", at: "2026-11-01T00:00:00Z", provider: "custom:fixture:primary", model: "unknown", requestId: null, promptTokens: null, completionTokens: null, outcome: "unconfirmed", dispatched: false };
+    const rows = new Map<string, UsageReceipt>([[initial.id, initial]]);
+    const calls: string[] = [];
+    const exported: { dispatch?: (request: Request, owner: string, body: unknown, mark: () => void, usage: UsageReceipt, record: (row: UsageReceipt) => Promise<void>) => Promise<Response> } = {};
+    const record = async (row: UsageReceipt) => { rows.set(row.id, structuredClone(row)); };
+    runInNewContext(code, {
+      exports: exported, Response, Error, Date, crypto, DEV_USER_ID: "dev-user",
+      require: (specifier: string) => { assert.equal(specifier, "./halt.server.ts"); return { readHaltState: async () => "off", haltIsOn: async () => false }; },
+      createChatTurnPreflight: () => async () => null,
+      modulesConnectedNow: async () => ["custom:fixture:primary", "openai", "gemini"].map(id => ({ id, label: id, connected: true })),
+      planModelConsult, collectConsultHelp, orchestratorInstruction,
+      sanitizeAttachments: () => [], parseModelTierField: () => ({ ok: true }), resolveRequestedRoute: () => ({ ok: true, route: null }),
+      parseCustomProviderChoice: () => ({ ok: true, model: "primary" }), isHistory: () => true, isNote: () => true,
+      checkTurnSize: () => ({ ok: true }), envCheck: () => ({ ok: true }),
+      assembleTurn: (body: { consultHelp: string }) => ({ ok: true, messages: [{ role: "system", content: body.consultHelp }], usedIds: [] }),
+      toAdapterMessages: (messages: unknown[]) => ({ ok: true, messages }),
+      askConnectedModule: async (_owner: string, id: string, _text: string, mark: () => void) => {
+        calls.push(id); mark();
+        return { ok: true, text: `fixture help ${id}`, model: `fixture-${id}`, requestId: `request-${id}`, usage: id === "openai" ? { prompt_tokens: 3, completion_tokens: 5 } : unknownHelper ? null : { prompt_tokens: 7, completion_tokens: 9 } };
+      },
+      executeCustomChat: async (_owner: string, _chosen: unknown, messages: { content: string }[], _signal: AbortSignal, mark: () => void) => {
+        assert.match(messages[0].content, /fixture help openai/); assert.match(messages[0].content, /fixture help gemini/);
+        calls.push("primary"); mark();
+        return { ok: true, text: "fixture final", provider: "custom:fixture:primary", model: "fixture-primary", requestId: "request-primary", usage: { prompt_tokens: 11, completion_tokens: 13 } };
+      },
+    });
+    const body = { text: "Fixture question", memory: "off", provider: initial.provider, orchestrator: initial.provider, composerMode: "orchestrator", modelTier: "Fast" };
+    const response = await exported.dispatch!(new Request("https://fixture.example/api/mind/turn", { method: "POST" }), "fixture-owner", body, () => {}, initial, record);
+    assert.equal(response.status, 200);
+    await trackUsageResponse(response, { ...initial, dispatched: true }, record).text();
+    assert.deepEqual(calls, ["openai", "gemini", "primary"]);
+    assert.equal(rows.size, 3);
+    const entries = [...rows.values()].map(row => ({ ...row, kind: row.promptTokens == null || row.completionTokens == null ? "unknown" as const : "actual" as const }));
+    assert.deepEqual(usageTotals(entries), { operations: 3, incomplete: unknownHelper ? 1 : 0, knownPromptTokens: unknownHelper ? 14 : 21, knownCompletionTokens: unknownHelper ? 18 : 27 });
+    assert.deepEqual(new Set(entries.map(row => row.provider)), new Set(["openai", "gemini", "custom:fixture:primary"]));
+    assert.ok(entries.every(row => row.operationId === operationId && row.outcome === "completed"));
   }
 });

@@ -21,7 +21,7 @@ describe("C5 explicit audio destinations", () => {
   it("selects OpenAI directly without contacting xAI, and attributes the transcript", async () => {
     const calls: string[] = [];
     const response = await handleVoiceStt(req({ provider: "openai" }), {
-      requireUser: async () => "c5-stt-openai", halted: async () => false, env: { XAI_API_KEY: "fake", OPENAI_API_KEY: "fake" },
+      requireUser: async () => "c5-stt-openai", halted: async () => false, recordUsage: async () => {}, env: { XAI_API_KEY: "fake", OPENAI_API_KEY: "fake" },
       fetchImpl: (async (url) => { calls.push(String(url)); return new Response(JSON.stringify({ text: "hello" })); }) as typeof fetch,
     });
     assert.deepEqual(await response.json(), { ok: true, text: "hello", provider: "OpenAI" });
@@ -47,7 +47,7 @@ describe("C5 explicit audio destinations", () => {
   it("selects OpenAI speech explicitly and never infers fallback from a configured key", async () => {
     let calls = 0;
     const fetchImpl = (async (url) => { calls++; assert.match(String(url), /api\.openai\.com/); return new Response(recording); }) as typeof fetch;
-    const response = await handleVoiceTts(req({ provider: "openai", text: "answer" }), { requireUser: async () => "c5-tts-openai", halted: async () => false, env: { XAI_API_KEY: "fake", OPENAI_API_KEY: "fake" }, fetchImpl });
+    const response = await handleVoiceTts(req({ provider: "openai", text: "answer" }), { requireUser: async () => "c5-tts-openai", halted: async () => false, recordUsage: async () => {}, env: { XAI_API_KEY: "fake", OPENAI_API_KEY: "fake" }, fetchImpl });
     assert.equal((await response.json()).provider, "OpenAI"); assert.equal(calls, 1);
     const missingXai = await speakWithFallback({ text: "answer", openaiKey: "fake", fetchImpl: (async () => assert.fail("no inferred fallback")) as typeof fetch });
     assert.equal(missingXai.ok, false);

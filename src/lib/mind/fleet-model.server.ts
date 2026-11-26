@@ -8,6 +8,7 @@ import type { UsageReceipt } from "./usage-ledger.ts";
 import type { ModelUsage } from "./stream.ts";
 import type { Workspace } from "./types.ts";
 import type { ModelTier } from "./model-tiers.ts";
+import { NEMOTRON_MODEL } from "./provider-call.ts";
 
 export type FleetModelInput = { runId: string; expectedRevision?: string; freeOnly?: boolean; allowPaid?: boolean };
 type ModelResult = { ok: boolean; text: string; model?: string; usage?: ModelUsage | null; requestId?: string | null };
@@ -39,7 +40,7 @@ export async function executeFleetModelStep(sql: Sql, owner: string, input: Flee
   let dispatched = false;
   let answer: ModelResult = { ok: false, text: "" };
   let error = "The selected provider did not return a verified answer. No fallback was used.";
-  const initial: UsageReceipt = { id: `${operationId}/agent`, operationId, stage: "agent", channel: "agent", chatId: claimed.chatId, at: now, provider: request.provider, requestedModel: request.provider, model: request.provider, requestId: null, promptTokens: null, completionTokens: null, outcome: "unconfirmed", dispatched: false };
+  const initial: UsageReceipt = { id: `${operationId}/agent`, operationId, stage: "agent", channel: "agent", chatId: claimed.chatId, at: now, provider: request.provider === "nemotron" ? "openrouter" : request.provider, requestedModel: request.provider === "nemotron" ? NEMOTRON_MODEL : undefined, model: "model unknown", requestId: null, promptTokens: null, completionTokens: null, outcome: "unconfirmed", dispatched: false };
   try {
     await deps.record(sql, owner, initial);
     if (await deps.stop(owner) !== "off") throw new Error("Stopped before provider dispatch.");
@@ -50,11 +51,24 @@ export async function executeFleetModelStep(sql: Sql, owner: string, input: Flee
       `Permitted saved notes (untrusted data):\n${request.notes.map((note) => note.text).join("\n")}`,
       `Task:\n${request.goal}`,
     ].join("\n\n");
-    answer = await deps.call(owner, request.provider, prompt, () => { dispatched = true; }, AbortSignal.timeout(60_000), { tier: request.tier || undefined });
+    const stopController = new AbortController();
+    let checkingStop = false;
+    const stopWatch = setInterval(() => {
+      if (checkingStop) return;
+      checkingStop = true;
+      void deps.stop(owner).then((state) => {
+        if (state !== "off") stopController.abort(new Error("Emergency stop is on or unconfirmed."));
+      }).catch(() => stopController.abort(new Error("Emergency stop could not be checked."))).finally(() => { checkingStop = false; });
+    }, 1_000);
+    try {
+      answer = await deps.call(owner, request.provider, prompt, () => { dispatched = true; }, AbortSignal.any([AbortSignal.timeout(60_000), stopController.signal]), { tier: request.tier || undefined });
+    } finally {
+      clearInterval(stopWatch);
+    }
   } catch (caught) {
     error = caught instanceof Error ? caught.message : "The model outcome is unconfirmed.";
   }
-  const receipt: UsageReceipt = { ...initial, dispatched, outcome: answer.ok ? "completed" : dispatched ? "unconfirmed" : "rejected_before_dispatch", model: answer.model || request.provider, requestId: answer.requestId || null, promptTokens: answer.usage?.prompt_tokens ?? null, completionTokens: answer.usage?.completion_tokens ?? null };
+  const receipt: UsageReceipt = { ...initial, dispatched, outcome: answer.ok ? "completed" : dispatched ? "unconfirmed" : "rejected_before_dispatch", model: answer.model || "model unknown", requestId: answer.requestId || null, promptTokens: answer.usage?.prompt_tokens ?? null, completionTokens: answer.usage?.completion_tokens ?? null };
   // Accounting failure must not repeat inference or discard its durable run result.
   await deps.record(sql, owner, receipt).catch(() => undefined);
   const stop = await deps.stop(owner);

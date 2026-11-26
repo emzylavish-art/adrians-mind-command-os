@@ -1,6 +1,6 @@
 import type { Sql } from "../db.ts";
 import { pullMindEvents } from "./stream.ts";
-import type { UsageReceipt } from "./usage-ledger.ts";
+import { USAGE_RETENTION_BATCH, usageRetentionCutoff, type UsageReceipt } from "./usage-ledger.ts";
 import { validTokenCount } from "./provider-usage.ts";
 
 /** No prompts, credentials, account labels, or response text are persisted here. */
@@ -26,6 +26,31 @@ export async function readUsageLedger(sql: Sql, ownerId: string, input: { offset
   const to = input.to && Number.isFinite(Date.parse(input.to)) ? new Date(input.to).toISOString() : new Date().toISOString();
   const rows = await sql<{ payload: UsageReceipt }>`select payload from mind_usage_ledger where user_id = ${ownerId} and at >= ${from} and at <= ${to} order by at desc, operation_id, stage limit ${limit + 1} offset ${offset}`;
   return { entries: rows.slice(0, limit).map(row => typeof row.payload === "string" ? JSON.parse(row.payload) : row.payload), nextOffset: rows.length > limit && Number.isSafeInteger(offset + limit) ? offset + limit : null, from, to };
+}
+
+export async function previewUsageRetention(sql: Sql, ownerId: string, beforeDate: string) {
+  const before = usageRetentionCutoff(beforeDate);
+  if (!before) throw new Error("Choose a valid UTC cutoff date that is not in the future.");
+  const rows = await sql<{ count: number | string }>`select count(*) as count from mind_usage_ledger where user_id = ${ownerId} and at < ${before}`;
+  const matching = Number(rows[0]?.count ?? 0);
+  if (!Number.isSafeInteger(matching) || matching < 0) throw new Error("Retention review is unavailable.");
+  return { before, matching, batchLimit: USAGE_RETENTION_BATCH };
+}
+
+/** Explicit, bounded owner action. Never delete turn receipts or schedule cleanup. */
+export async function deleteUsageBefore(sql: Sql, ownerId: string, beforeDate: string, confirmation: string) {
+  const before = usageRetentionCutoff(beforeDate);
+  if (!before || confirmation !== `DELETE_USAGE_BEFORE:${before}`) throw new Error("Confirm the exact UTC retention cutoff before deleting receipts.");
+  const removed = await sql<{ operation_id: string }>`delete from mind_usage_ledger where (user_id, operation_id, stage) in (
+    select user_id, operation_id, stage from mind_usage_ledger
+    where user_id = ${ownerId} and at < ${before}
+    order by at, operation_id, stage limit ${USAGE_RETENTION_BATCH}
+  ) returning operation_id`;
+  // The bounded delete is one atomic statement. Do not report failure after a
+  // successful deletion merely because a later count query was unavailable.
+  let remaining: number | null = null;
+  try { remaining = (await previewUsageRetention(sql, ownerId, beforeDate)).matching; } catch { /* Explicitly unknown. */ }
+  return { before, deleted: removed.length, remaining, batchLimit: USAGE_RETENTION_BATCH };
 }
 
 /** Observe the existing response; never repeat inference to obtain accounting. */
