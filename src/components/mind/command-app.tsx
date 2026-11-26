@@ -784,7 +784,7 @@ function CommandSession({ account, accountPending }: { account: ReturnType<typeo
   const loopback = typeof window !== "undefined" && (window.location.hostname === "127.0.0.1" || window.location.hostname === "localhost");
   const { ws, setWs, ready, syncNote, serverHeld, saveError, retrySave, clearStoredCopy, ensureChatMedia, prioritizeChatMedia, mediaProgress } = useMindWorkspace(account?.id ?? null, account?.emailVerified ? account.primaryEmail : null);
   const applyAccessibility = (value: AccessibilityPreferences) => { document.documentElement.style.setProperty("--mind-text-scale", String(value.textScale / 100)); document.documentElement.dataset.contrast = value.contrast; document.documentElement.dataset.readingSpacing = value.spacing; };
-  useEffect(() => { applyAccessibility(readAccessibility(preferenceStorage.getItem(ACCESSIBILITY_KEY))); return () => { document.documentElement.style.removeProperty("--mind-text-scale"); delete document.documentElement.dataset.contrast; delete document.documentElement.dataset.readingSpacing; }; }, [preferenceStorage]);
+  useLayoutEffect(() => { applyAccessibility(readAccessibility(preferenceStorage.getItem(ACCESSIBILITY_KEY))); return () => { document.documentElement.style.removeProperty("--mind-text-scale"); delete document.documentElement.dataset.contrast; delete document.documentElement.dataset.readingSpacing; }; }, [preferenceStorage]);
   const router = useRouter();
   const chromeMenus = useExclusiveMenus();
   const [view, setViewState] = useState<View>("command");
