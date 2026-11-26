@@ -14,10 +14,10 @@ export type RetryHistoryItem = {
 export function historyForDeliver(
   messages: RetryHistoryItem[],
   resume: boolean,
-  limit = 12,
+  limit = Number.POSITIVE_INFINITY,
 ): RetryHistoryItem[] {
   const base = resume ? messages.slice(0, -1) : messages;
-  return base.slice(-limit);
+  return Number.isFinite(limit) ? base.slice(-limit) : base;
 }
 
 /** Prefer the live chat from the current workspace so resume history is not stale. */

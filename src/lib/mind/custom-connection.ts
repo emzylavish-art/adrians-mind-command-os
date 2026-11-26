@@ -3,7 +3,8 @@
  * Bearer tokens are sealed with CONNECTOR_TOKEN_SECRET before a database write.
  * model.generate is refused. Gmail OAuth is not started here.
  */
-import { randomUUID } from "node:crypto";
+import { createHash, randomUUID } from "node:crypto";
+import { haltIsOn } from "./halt.server.ts";
 import {
   isLocalHostname,
   isPrivateAddressLiteral,
@@ -17,9 +18,19 @@ import { safeReason, mcpRpcFromResult } from "./mcp/call-contract.ts";
 
 export type ArgType = "string" | "boolean" | "integer";
 
+export type OperationProperty = {
+  type: ArgType;
+  description?: string;
+  enum?: (string | number | boolean)[];
+  minimum?: number;
+  maximum?: number;
+  minLength?: number;
+  maxLength?: number;
+  pattern?: string;
+};
 export type OperationSchema = {
   type: "object";
-  properties: Record<string, { type: ArgType; description?: string }>;
+  properties: Record<string, OperationProperty>;
   required: string[];
 };
 
@@ -28,6 +39,8 @@ export type PublicOperation = {
   description: string;
   inputSchema: OperationSchema | null;
   compatible: boolean;
+  /** Canonical fingerprint of the complete advertised definition. */
+  revision?: string;
 };
 
 export type ConnectionState = "unchecked" | "ready" | "unauthorized" | "missing_config" | "incompatible" | "failed";
@@ -46,7 +59,7 @@ export type PublicConnection = {
   error: string;
 };
 
-export type CallStatus = "ok" | "error" | "unauthorized" | "missing_config" | "incompatible" | "timeout";
+export type CallStatus = "ok" | "error" | "unauthorized" | "missing_config" | "incompatible" | "definition_changed" | "timeout";
 
 export type ConnectionDb = RegistryDb;
 
@@ -68,7 +81,10 @@ function hostOf(url: string): string {
 function toPublic(server: RegistryRecord): PublicConnection | null {
   if (!server.url || server.kind === "builtin" || server.kind === "command") return null;
   const kind = server.protocol === "http" ? "http" : "mcp";
-  const operations = Array.isArray(server.operations) ? server.operations as PublicOperation[] : [];
+  const operations = (Array.isArray(server.operations) ? server.operations as PublicOperation[] : []).map((operation) => ({
+    ...operation,
+    revision: operation.revision || operationRevision(operation),
+  }));
   return {
     enabled: server.enabled,
     id: server.id,
@@ -108,48 +124,90 @@ export function endpointProblem(value: string): { ok: true; url: string; host: s
   return { ok: true, url: parsed.toString(), host: parsed.host };
 }
 
+function canonical(value: unknown): string {
+  if (Array.isArray(value)) return `[${value.map(canonical).join(",")}]`;
+  if (value && typeof value === "object") return `{${Object.entries(value as Record<string, unknown>).filter(([, value]) => value !== undefined).sort(([a], [b]) => a.localeCompare(b)).map(([key, value]) => `${JSON.stringify(key)}:${canonical((key === "required" || key === "enum") && Array.isArray(value) ? [...value].sort((a, b) => JSON.stringify(a).localeCompare(JSON.stringify(b))) : value)}`).join(",")}}`;
+  return JSON.stringify(value) ?? "null";
+}
+
+export function operationRevision(operation: Pick<PublicOperation, "name" | "description" | "inputSchema">): string {
+  return createHash("sha256").update(canonical({ name: operation.name, description: operation.description, inputSchema: operation.inputSchema })).digest("hex");
+}
+
+/** Patterns outside this deliberately bounded, single-atom subset are incompatible. */
+function supportedPattern(pattern: string): boolean {
+  return pattern.length <= 160 && /^\^?(?:\[(?:\\.|[^\]\\])+\]|[A-Za-z0-9 _-])(?:[+*?]|\{[0-9]{1,3}(?:,[0-9]{0,3})?\})?\$?$/.test(pattern);
+}
+
 export function readOperationSchema(input: unknown): OperationSchema | null {
   if (!input || typeof input !== "object" || Array.isArray(input)) return null;
   const schema = input as Record<string, unknown>;
   if (schema.type !== "object" || !schema.properties || typeof schema.properties !== "object" || Array.isArray(schema.properties)) return null;
-  const properties: OperationSchema["properties"] = {};
+  const rootKeys = new Set(["type", "properties", "required", "additionalProperties", "description", "title", "$schema", "$id"]);
+  if (Object.keys(schema).some((key) => !rootKeys.has(key)) || (schema.additionalProperties !== undefined && typeof schema.additionalProperties !== "boolean")) return null;
+  const properties: OperationSchema["properties"] = Object.create(null);
   const fields = Object.entries(schema.properties);
   if (fields.length > 12) return null;
+  const keys = new Set(["type", "description", "title", "default", "examples", "enum", "minimum", "maximum", "minLength", "maxLength", "pattern"]);
   for (const [key, raw] of fields) {
-    if (!/^[A-Za-z_][A-Za-z0-9_]{0,40}$/.test(key) || !raw || typeof raw !== "object") return null;
-    const type = (raw as { type?: unknown }).type;
+    if (!/^[A-Za-z_][A-Za-z0-9_]{0,40}$/.test(key) || ["__proto__", "constructor", "prototype"].includes(key) || !raw || typeof raw !== "object" || Array.isArray(raw)) return null;
+    const prop = raw as Record<string, unknown>;
+    if (Object.keys(prop).some((key) => !keys.has(key))) return null;
+    const type = prop.type;
     if (type !== "string" && type !== "boolean" && type !== "integer") return null;
-    const description = typeof (raw as { description?: unknown }).description === "string" ? (raw as { description: string }).description.slice(0, 160) : undefined;
-    properties[key] = description ? { type, description } : { type };
+    const spec: OperationProperty = { type };
+    if (typeof prop.description === "string") spec.description = prop.description.slice(0, 160);
+    if (prop.enum !== undefined) {
+      if (!Array.isArray(prop.enum) || !prop.enum.length || prop.enum.length > 50 || prop.enum.some((value) => type === "integer" ? !Number.isSafeInteger(value) : typeof value !== type || (typeof value === "string" && value.length > 500))) return null;
+      spec.enum = prop.enum as (string | number | boolean)[];
+    }
+    for (const bound of ["minimum", "maximum", "minLength", "maxLength"] as const) {
+      if (prop[bound] === undefined) continue;
+      const value = prop[bound];
+      if (typeof value !== "number" || !Number.isFinite(value)) return null;
+      if (bound === "minimum" || bound === "maximum") { if (type !== "integer") return null; }
+      else if (type !== "string" || !Number.isSafeInteger(value) || value < 0) return null;
+      spec[bound] = value;
+    }
+    if ((spec.minimum !== undefined && spec.maximum !== undefined && spec.minimum > spec.maximum) || (spec.minLength !== undefined && spec.maxLength !== undefined && spec.minLength > spec.maxLength)) return null;
+    if (prop.pattern !== undefined) {
+      if (type !== "string" || typeof prop.pattern !== "string" || !supportedPattern(prop.pattern)) return null;
+      try { new RegExp(prop.pattern, "u"); } catch { return null; }
+      spec.pattern = prop.pattern;
+    }
+    properties[key] = spec;
   }
-  const required = Array.isArray(schema.required)
-    ? schema.required.filter((item): item is string => typeof item === "string" && item in properties)
-    : [];
+  if (schema.required !== undefined && (!Array.isArray(schema.required) || schema.required.some((item) => typeof item !== "string" || !Object.hasOwn(properties, item)))) return null;
+  const required = Array.isArray(schema.required) ? [...new Set(schema.required as string[])].sort() : [];
   return { type: "object", properties, required };
 }
 
 export function validateArgs(schema: OperationSchema, args: Record<string, unknown>): { ok: true; args: Record<string, string | number | boolean> } | { ok: false; error: string } {
-  const unexpected = Object.keys(args).filter((key) => !(key in schema.properties));
+  const unexpected = Object.keys(args).filter((key) => !Object.hasOwn(schema.properties, key));
   if (unexpected.length) return { ok: false, error: `Unexpected argument ${unexpected[0]}. Nothing was called.` };
   const out: Record<string, string | number | boolean> = {};
   for (const [key, spec] of Object.entries(schema.properties)) {
     const value = args[key];
-    if (value == null || value === "") {
+    const fail = (detail: string) => ({ ok: false as const, error: `${key} ${detail}. Nothing was called.` });
+    if (value == null) {
       if (schema.required.includes(key)) return { ok: false, error: `Missing ${key}. Nothing was called.` };
       continue;
     }
     if (spec.type === "string") {
-      if (typeof value !== "string") return { ok: false, error: `${key} must be a string. Nothing was called.` };
-      if (value.length > 500) return { ok: false, error: `${key} exceeds 500 characters. Nothing was called.` };
-      out[key] = value;
+      if (typeof value !== "string") return fail("must be a string");
+      if ([...value].length > 500) return fail("exceeds 500 characters");
+      if (spec.minLength !== undefined && [...value].length < spec.minLength) return fail(`needs at least ${spec.minLength} characters`);
+      if (spec.maxLength !== undefined && [...value].length > spec.maxLength) return fail(`exceeds ${spec.maxLength} characters`);
+      if (spec.pattern && !new RegExp(spec.pattern, "u").test(value)) return fail("does not match the advertised pattern");
     } else if (spec.type === "boolean") {
-      if (typeof value !== "boolean") return { ok: false, error: `${key} must be boolean. Nothing was called.` };
-      out[key] = value;
-    } else if (!Number.isInteger(value)) {
-      return { ok: false, error: `${key} must be an integer. Nothing was called.` };
+      if (typeof value !== "boolean") return fail("must be boolean");
     } else {
-      out[key] = value as number;
+      if (!Number.isSafeInteger(value)) return fail("must be an integer within the supported range");
+      if (spec.minimum !== undefined && (value as number) < spec.minimum) return fail(`must be at least ${spec.minimum}`);
+      if (spec.maximum !== undefined && (value as number) > spec.maximum) return fail(`must be at most ${spec.maximum}`);
     }
+    if (spec.enum && !spec.enum.includes(value as string | number | boolean)) return fail("must be one of the advertised choices");
+    out[key] = value as string | number | boolean;
   }
   return { ok: true, args: out };
 }
@@ -245,6 +303,7 @@ function operationFromTool(tool: { name?: unknown; description?: unknown; inputS
     description: typeof tool.description === "string" ? tool.description.slice(0, 180) : "",
     inputSchema: schema,
     compatible: Boolean(schema),
+    revision: createHash("sha256").update(canonical(tool)).digest("hex"),
   };
 }
 
@@ -300,10 +359,11 @@ export async function saveCustomConnection(db: ConnectionDb | null, userId: stri
   return { ok: true, connection: listed.find((item) => item.id === row.id) ?? toPublic({ ...row, token: undefined, tokenEnc: token ? "sealed" : undefined })! };
 }
 
-async function refreshMcp(db: ConnectionDb | null, userId: string, id: string, deps: { fetch?: FetchLike; lookup?: DnsLookupFn }): Promise<PublicConnection> {
+export async function refreshMcp(db: ConnectionDb | null, userId: string, id: string, deps: { fetch?: FetchLike; lookup?: DnsLookupFn }): Promise<PublicConnection> {
   const loaded = await loadRegistry(userId, db);
   const row = loaded.servers.find((item) => item.id === id);
   if (!row?.url) return { id, label: "", kind: "mcp", host: "", method: "MCP", auth: "none", hasToken: false, state: "failed", operations: [], error: "That connection is not saved." };
+  if (!row.enabled) return { ...toPublic(row)!, error: "This connection is disabled. No tools were refreshed." };
   const fail = async (state: ConnectionState, error: string) => {
     row.state = state;
     row.operations = [];
@@ -353,7 +413,7 @@ async function refreshMcp(db: ConnectionDb | null, userId: string, id: string, d
   } while (cursor);
   row.operations = operations;
   row.state = operations.some((item) => item.compatible) ? "ready" : "incompatible";
-  row.error = row.state === "incompatible" ? "No tool advertised an object argument schema. A generic text argument was not assumed." : "";
+  row.error = row.state === "incompatible" ? "No tool has a supported argument schema. Nested or composed schemas and complex patterns are not supported. Nothing was called." : "";
   await writeRow(db, userId, row);
   return toPublic(row)!;
 }
@@ -369,11 +429,13 @@ export async function callCustomConnection(input: {
   lookup?: DnsLookupFn;
   timeoutMs?: number;
   maxBytes?: number;
+  reviewedRevision?: string;
+  isHalted?: (userId: string) => boolean | Promise<boolean>;
 }): Promise<{ ok: boolean; status: CallStatus; text: string; connection: PublicConnection | null; transport: McpCallTransport | null; rpc: McpCallRpc }> {
   const started = Date.now();
   const loaded = await loadRegistry(input.userId, input.db);
   const row = loaded.servers.find((item) => item.id === input.id);
-  const connection = row ? toPublic(row) : null;
+  let connection = row ? toPublic(row) : null;
   if (!row || !connection) return { ok: false, status: "error", text: "That connection is not saved. Nothing was called.", connection: null, transport: null, rpc: null };
   if (!row.enabled) return { ok: false, status: "error", text: "This connection is disabled.", connection, transport: null, rpc: null };
   if (input.operation.toLowerCase() === "model.generate") {
@@ -443,6 +505,48 @@ export async function callCustomConnection(input: {
     }, input, token);
     if (!ready.ok) return reportTransportFailure(ready);
   }
+  const reviewedRevision = input.reviewedRevision || operation.revision;
+  const operations: PublicOperation[] = [];
+  const cursors = new Set<string>();
+  let cursor: string | undefined;
+  do {
+    const listed = await send(row.url ?? "", {
+      method: "POST",
+      headers: { ...headers, "content-type": "application/json", accept: "application/json, text/event-stream", ...protocolHeaders },
+      body: JSON.stringify({ jsonrpc: "2.0", id: 10 + cursors.size, method: "tools/list", params: cursor ? { cursor } : {} }),
+    }, input, token);
+    if (!listed.ok) return reportTransportFailure(listed);
+    const discovered = rpcEnvelope(listed.text).result as { tools?: Parameters<typeof operationFromTool>[0][]; nextCursor?: unknown } | undefined;
+    if (!Array.isArray(discovered?.tools)) return { ok: false, status: "incompatible", text: "Current tool definitions could not be verified. Nothing was called.", connection, transport: null, rpc: null };
+    operations.push(...discovered.tools.map(operationFromTool).filter((item): item is PublicOperation => Boolean(item)));
+    cursor = typeof discovered.nextCursor === "string" ? discovered.nextCursor : undefined;
+    if (operations.length > 256 || (cursor && (cursors.has(cursor) || cursors.size >= 15))) return { ok: false, status: "incompatible", text: "Tool discovery was incomplete. Nothing was called.", connection, transport: null, rpc: null };
+    if (cursor) cursors.add(cursor);
+  } while (cursor);
+  const fresh = operations.find((item) => item.name === operation.name);
+  const state = operations.some((item) => item.compatible) ? "ready" : "incompatible";
+  const updated = { operations, state, error: state === "ready" ? "" : "No supported tool schema is available." };
+  // Merge only discovery fields, and only while this exact saved connection still exists/enabled.
+  if (input.db) {
+    const changed = await input.db.query(
+      "UPDATE mind_mcp_registry SET record = record || $3::jsonb WHERE user_id=$1 AND id=$2 AND record->>'url'=$4 AND record->>'tokenEnc' IS NOT DISTINCT FROM $5 AND record->>'enabled'='true' AND COALESCE(record->>'deleted','false')='false' RETURNING record",
+      [input.userId, row.id, JSON.stringify(updated), row.url, row.tokenEnc ?? null],
+    );
+    if (!changed.length) return { ok: false, status: "error", text: "The connection changed or was removed during review. Nothing was called.", connection: null, transport: null, rpc: null };
+  } else {
+    const latest = (await loadRegistry(input.userId, input.db)).servers.find((item) => item.id === row.id);
+    if (!latest?.enabled || latest.url !== row.url || latest.tokenEnc !== row.tokenEnc) return { ok: false, status: "error", text: "The connection changed or was removed during review. Nothing was called.", connection: null, transport: null, rpc: null };
+    await writeRow(input.db, input.userId, { ...latest, ...updated });
+  }
+  connection = toPublic({ ...row, ...updated });
+  if (!fresh?.compatible || !fresh.inputSchema) return { ok: false, status: "incompatible", text: "This tool is no longer available with a supported schema. Nothing was called.", connection, transport: null, rpc: null };
+  if (!reviewedRevision || fresh.revision !== reviewedRevision) return { ok: false, status: "definition_changed", text: "The tool definition changed. Review the updated operation and arguments, then confirm again. Nothing was called.", connection, transport: null, rpc: null };
+  const latest = (await loadRegistry(input.userId, input.db)).servers.find((item) => item.id === row.id);
+  if (!latest?.enabled || latest.url !== row.url || latest.tokenEnc !== row.tokenEnc) return { ok: false, status: "error", text: "The connection changed or was removed before dispatch. Nothing was called.", connection: null, transport: null, rpc: null };
+  // Re-read the durable stop after every preparation await and immediately before effectful dispatch.
+  let stopped = true;
+  try { stopped = await (input.isHalted ?? haltIsOn)(input.userId); } catch { /* unavailable is stopped */ }
+  if (stopped) return { ok: false, status: "error", text: "Emergency stop is on or unavailable. No MCP tool was called.", connection, transport: null, rpc: null };
   const called = await send(row.url ?? "", {
     method: "POST",
     headers: { ...headers, "content-type": "application/json", accept: "application/json, text/event-stream", ...protocolHeaders },

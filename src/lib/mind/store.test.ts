@@ -38,7 +38,11 @@ function memorySql() {
     }
     return [];
   }) as Sql;
-  sql.query = async () => [];
+  sql.query = async (text, values = []) => {
+    const table = text.match(/^delete from (mind_[a-z_]+) where user_id = \$1 and id = \$2$/)?.[1];
+    if (table) bucket(table).delete(`${values[0]}:${values[1]}`);
+    return [];
+  };
   return { sql, tables };
 }
 

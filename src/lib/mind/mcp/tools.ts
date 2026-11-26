@@ -1,4 +1,3 @@
-import { resolveNotionTokenPersistent } from "../connectors/notion-oauth.ts";
 /**
  * Built-in MCP tool handlers for Adrian's Mind.
  * Honest failures only — never invent success for Notion, PC, or SQL.
@@ -18,6 +17,13 @@ export type NotionFetch = (url: string, init?: RequestInit) => Promise<{
 }>;
 
 const NOTION_VERSION = "2022-06-28";
+
+async function resolveNotionTokenPersistent(ownerId?: string): Promise<string | undefined> {
+  // Registry discovery and non-Notion tools do not need an OAuth database.
+  // Resolve it only when an actual Notion operation needs a saved credential.
+  const notion = await import("../connectors/notion-oauth.ts");
+  return notion.resolveNotionTokenPersistent(ownerId);
+}
 
 export function notionTokenFromEnv(env: NodeJS.ProcessEnv = process.env): string | undefined {
   const token = env.NOTION_TOKEN?.trim() || env.NOTION_API_KEY?.trim();

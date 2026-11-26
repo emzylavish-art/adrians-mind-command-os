@@ -18,8 +18,8 @@ if (!Number.isInteger(count) || count < 1 || count > 32 ||
 const manifest = JSON.parse(readFileSync(new URL("../package.json", import.meta.url), "utf8"));
 const command = manifest.scripts?.test ?? "";
 const sections = command.split(" && ");
-const prefix = "node --experimental-strip-types --test ";
-if (sections.length !== 2 || !sections[1].startsWith(prefix)) {
+const prefix = sections[1]?.match(/^node --experimental-strip-types --test (?:--test-concurrency=\d+ )?/)?.[0];
+if (sections.length !== 2 || !prefix) {
   console.error("Test script has changed; refusing to silently omit test files.");
   process.exit(2);
 }

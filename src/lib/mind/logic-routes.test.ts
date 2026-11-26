@@ -251,7 +251,7 @@ it("drops the oldest historical image to fit the request while retaining text an
   const image = { dataUrl: "data:image/png;base64," + "a".repeat(980_000) };
   const history = [1, 2].map((n) => ({ role: "user", content: String(n), images: [image] }));
   const body = chatTurnBody({ text: "continue", memory: "off", halted: false, history, memoryContext: [],
-    provider: "gemini", modelTier: "Auto", logicRoute: null, images: [image] });
+    provider: "grok", modelTier: "Auto", logicRoute: null, images: [image] });
   assert.ok(Buffer.byteLength(JSON.stringify(body)) <= 2_500_000);
   assert.deepEqual(body.history, [{ ...history[0], images: [] }, history[1]]);
   assert.deepEqual(body.images, [image]);

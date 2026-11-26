@@ -17,6 +17,7 @@ export type McpResultCode =
   | "unauthorized"
   | "missing_config"
   | "incompatible"
+  | "definition_changed"
   | "ssrf_denied"
   | "timeout"
   | "disabled";
@@ -56,6 +57,7 @@ export type McpCallContract = {
 
 export function mcpResultCode(text: string, status: string, ok: boolean): McpResultCode {
   if (ok) return "ok";
+  if (status === "definition_changed") return "definition_changed";
   if (status === "timeout" || /did not answer within/i.test(text)) return "timeout";
   if (/disabled/i.test(text)) return "disabled";
   if (/private|link-local|metadata|refused/i.test(text)) return "ssrf_denied";
@@ -161,6 +163,7 @@ const DISPLAY_REASONS: Record<McpResultCode, string> = {
   unauthorized: "The server refused the call.",
   missing_config: "Not configured. Nothing was retried.",
   incompatible: "The call does not match the advertised schema.",
+  definition_changed: "The tool definition changed. Review the updated operation and confirm again. Nothing was called.",
   ssrf_denied: "That address is not allowed.",
   timeout: "The server did not answer in time. Nothing was retried.",
   disabled: "The server is disabled.",
@@ -179,7 +182,7 @@ export function mcpPublicException(error: unknown): { status: 401 | 500; message
 }
 
 export function reasonCode(status: string): McpResultCode {
-  if (status === "ok" || status === "unauthorized" || status === "missing_config" || status === "incompatible" || status === "timeout" || status === "disabled" || status === "ssrf_denied") {
+  if (status === "ok" || status === "definition_changed" || status === "unauthorized" || status === "missing_config" || status === "incompatible" || status === "timeout" || status === "disabled" || status === "ssrf_denied") {
     return status;
   }
   return "error";

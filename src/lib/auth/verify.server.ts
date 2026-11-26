@@ -1,5 +1,5 @@
 import { getRequest } from "@tanstack/react-start/server";
-import { localPreviewIdentityAllowed } from "./session-user.ts";
+import { localPreviewIdentityAllowed, verifiedSessionIdentity, verifiedSupabaseCandidate } from "./session-user.ts";
 import { gateIdentityEnabled } from "./gate-identity.server";
 import { auth, authConfigured } from "./server";
 
@@ -31,7 +31,7 @@ export class UnauthorizedError extends Error {
   }
 }
 
-export type VerifiedUser = { id: string; email: string | null };
+export type VerifiedUser = { id: string; email: string | null; sessionSource?: "supabase" | "better-auth" | "both" };
 
 /**
  * Resolve the signed-in user from the current request, or `null` when auth isn't
@@ -44,18 +44,11 @@ export type VerifiedUser = { id: string; email: string | null };
  * plugin resolves it). When deployed no token is passed and the cookie is used.
  */
 async function readSupabaseSessionUser(): Promise<VerifiedUser | null> {
-  try {
-    const { readSupabaseEnv, createSupabaseServerClient } = await import(
-      "../supabase/server"
-    );
-    if (!readSupabaseEnv()) return null;
-    const supabase = createSupabaseServerClient();
-    const { data, error } = await supabase.auth.getUser();
-    if (error || !data.user?.id) return null;
-    return { id: data.user.id, email: data.user.email ?? null };
-  } catch {
-    return null;
-  }
+  const { readSupabaseEnv, createSupabaseServerClient } = await import("../supabase/server");
+  if (!readSupabaseEnv()) return null;
+  const supabase = createSupabaseServerClient();
+  const { data, error } = await supabase.auth.getUser();
+  return verifiedSupabaseCandidate({ user: data.user, error });
 }
 
 async function readBetterAuthSessionUser(
@@ -79,16 +72,10 @@ async function readBetterAuthSessionUser(
 export async function getSessionUser(
   bearerToken?: string,
 ): Promise<VerifiedUser | null> {
-  const { pickSessionUser } = await import("./session-user");
-  const supabaseUser = await readSupabaseSessionUser();
-  // When Supabase Auth is configured and has a user, that is the owner session
-  // MCP list / turn / halt endpoints accept. Better Auth remains a fallback for
-  // existing broker sessions.
-  if (supabaseUser) {
-    return pickSessionUser({ supabaseUser, betterAuthUser: null });
-  }
-  const betterAuthUser = await readBetterAuthSessionUser(bearerToken);
-  return pickSessionUser({ supabaseUser: null, betterAuthUser });
+  const [supabaseUser, betterAuthUser] = await Promise.all([
+    readSupabaseSessionUser(), readBetterAuthSessionUser(bearerToken),
+  ]);
+  return verifiedSessionIdentity({ supabaseUser, betterAuthUser });
 }
 
 /**

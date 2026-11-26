@@ -84,6 +84,7 @@ export function createIndexedDbBlobStore(name = MEDIA_BLOB_DB): MediaBlobStore {
         tx.objectStore(MEDIA_BLOB_STORE).put(dataUrl, id);
         tx.oncomplete = () => resolve();
         tx.onerror = () => reject(tx.error ?? new Error("IndexedDB put failed."));
+        tx.onabort = () => reject(tx.error ?? new Error("IndexedDB put was aborted."));
       });
       db.close();
     },
@@ -105,23 +106,62 @@ export function createIndexedDbBlobStore(name = MEDIA_BLOB_DB): MediaBlobStore {
         tx.objectStore(MEDIA_BLOB_STORE).delete(id);
         tx.oncomplete = () => resolve();
         tx.onerror = () => reject(tx.error ?? new Error("IndexedDB delete failed."));
+        tx.onabort = () => reject(tx.error ?? new Error("IndexedDB delete was aborted."));
       });
       db.close();
     },
   };
 }
 
-/** New attachments live in the account database. Existing snapshots can still resolve legacy IDs. */
-export function accountImageStore(owner: string | null) {
+/** Legacy reads require references from the verified legacy owner's stored snapshot.
+ * Successful migration removes the old bytes only after the scoped write commits. */
+export function scopedImageStore(
+  scoped: MediaBlobStore,
+  legacy: MediaBlobStore,
+  allowedLegacyIds: Set<string>,
+  remoteGet?: (id: string) => Promise<string | undefined>,
+): MediaBlobStore {
+  return {
+    put: scoped.put,
+    delete: scoped.delete,
+    async get(id) {
+      const own = await scoped.get(id).catch(() => undefined);
+      if (own) return own;
+      if (/^acct_[a-f0-9]{64}$/.test(id) && remoteGet) {
+        const bytes = await remoteGet(id);
+        if (bytes) {
+          await scoped.put(id, bytes).catch(() => {});
+          return bytes;
+        }
+      }
+      if (!allowedLegacyIds.has(id)) return undefined;
+      const bytes = await legacy.get(id);
+      if (!bytes) return undefined;
+      try {
+        await scoped.put(id, bytes);
+        await legacy.delete?.(id);
+        allowedLegacyIds.delete(id);
+      } catch { /* Original bytes remain recoverable after interrupted migration. */ }
+      return bytes;
+    },
+  };
+}
+
+/** New attachments never perform an unrestricted shared-database fallback. */
+export function accountImageStore(owner: string | null, remoteGet?: (id: string) => Promise<string | undefined>) {
   const name = MEDIA_BLOB_DB + ".owner." + encodeURIComponent(owner ?? "");
   const scoped = createIndexedDbBlobStore(name);
   const legacy = createIndexedDbBlobStore();
+  const allowedLegacyIds = new Set<string>();
+  const store = scopedImageStore(scoped, legacy, allowedLegacyIds, remoteGet);
   return {
-    put: scoped.put,
-    async get(id: string) {
-      return (await scoped.get(id)) ?? (await legacy.get(id));
+    ...store,
+    allowOwnedLegacyReferences(ids: string[]) {
+      for (const id of ids) allowedLegacyIds.add(id);
     },
     async clear() {
+      for (const id of allowedLegacyIds) await legacy.delete?.(id);
+      allowedLegacyIds.clear();
       if (typeof indexedDB === "undefined") return;
       await new Promise<void>((resolve, reject) => {
         const request = indexedDB.deleteDatabase(name);

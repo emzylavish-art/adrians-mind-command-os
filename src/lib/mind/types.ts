@@ -40,6 +40,9 @@ export type Msg = {
   deliveryOperationId?: string;
   deliveryRoute?: { provider: string; tier: ModelTier; model: string | null; orchestrated: boolean; fingerprint: string };
   delivery?: "submitted" | "unconfirmed" | "stopped" | "failed";
+  replyStatus?: "streaming" | "interrupted" | "complete";
+  replyOperationId?: string;
+  contextNotice?: string;
   kind?: "error";
   /** Inline image attachments shown in the bubble and sent on the originating turn. */
   images?: MsgImage[];
@@ -108,6 +111,10 @@ export type UsageEntry = {
   promptTokens: number | null;
   completionTokens: number | null;
   kind: "actual" | "partial" | "unknown";
+  operationId?: string;
+  outcome?: "completed" | "failed" | "stopped" | "unknown";
+  role?: "primary" | "helper";
+  executionLocation?: "local" | "hosted";
 };
 
 export type AuditEntry = {

@@ -679,6 +679,11 @@ export async function callRegistryTool(input: {
     params: { protocolVersion: "2024-11-05", capabilities: {}, clientInfo: { name: "adrians-mind", version: "1" } },
   }, input.http);
   if (!opened.ok) return rpcFailureResult(server.id, input.tool, opened, started);
+  const current = (await readServers(input.userId, input.registryDb)).find((item) => item.id === server.id);
+  if (!current?.enabled || current.url !== server.url || current.tokenEnc !== server.tokenEnc) return { status: "error", ok: false, serverId: server.id, tool: input.tool, text: "The MCP connection changed before dispatch. Nothing was called.", transport: null, rpc: null };
+  let stopped = true;
+  try { stopped = await (input.isHalted ?? haltIsOn)(input.userId); } catch { /* fail closed */ }
+  if (stopped) return { status: "error", ok: false, serverId: server.id, tool: input.tool, text: "Emergency stop is on or unavailable. No MCP tool was called.", transport: null, rpc: null };
   const called = await registryRpc(fetchImpl, server.url, server.token ?? "", opened.session, {
     jsonrpc: "2.0",
     id: 3,

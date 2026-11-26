@@ -22,7 +22,7 @@ export function buildHistoryMessages(
 ): { role: "user" | "assistant"; content: ChatContent }[] {
   const maxImages = options.maxImages ?? MAX_HISTORY_IMAGES;
   const maxChars = options.maxImageChars ?? MAX_HISTORY_IMAGE_CHARS;
-  const sliced = history.slice(-12);
+  const sliced = history;
 
   // Decide which user-message indices keep images (scan from end).
   let imagesLeft = maxImages;

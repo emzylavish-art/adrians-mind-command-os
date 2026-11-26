@@ -126,6 +126,8 @@ export async function openAiDirectChat(input: {
 
 export async function transcribeWithFallback(input: {
   bytes: Uint8Array;
+  /** Explicit transcription choice. A configured key does not authorize a fallback. */
+  provider?: "xai" | "openai";
   xaiKey?: string;
   openaiKey?: string;
   filename?: string;
@@ -133,26 +135,23 @@ export async function transcribeWithFallback(input: {
   fetchImpl?: typeof fetch;
 }): Promise<FallbackOk<{ text: string }> | FallbackFail> {
   const fetchImpl = input.fetchImpl ?? fetch;
-  if (input.xaiKey) {
-    const first = await transcribeWavBytes({
-      bytes: input.bytes,
-      apiKey: input.xaiKey,
-      filename: input.filename,
-      mime: input.mime,
-      fetchImpl,
+  const provider = input.provider ?? "xai";
+  if (provider === "openai") {
+    if (!input.openaiKey) return { ok: false, error: "OpenAI transcription is not configured. No audio was sent.", provider: null };
+    const result = await openAiTranscribe({
+      bytes: input.bytes, apiKey: input.openaiKey, filename: input.filename, mime: input.mime, fetchImpl,
     });
-    if (first.ok) return { ok: true, text: first.text, provider: "xAI" };
+    return result.ok
+      ? { ok: true, text: result.text, provider: "OpenAI" }
+      : { ok: false, error: result.error, provider: null };
   }
-  if (!input.openaiKey) return { ok: false, error: honestBoth("transcribed"), provider: null };
-  const second = await openAiTranscribe({
-    bytes: input.bytes,
-    apiKey: input.openaiKey,
-    filename: input.filename,
-    mime: input.mime,
-    fetchImpl,
+  if (!input.xaiKey) return { ok: false, error: "xAI transcription is not configured. No audio was sent.", provider: null };
+  const result = await transcribeWavBytes({
+    bytes: input.bytes, apiKey: input.xaiKey, filename: input.filename, mime: input.mime, fetchImpl,
   });
-  if (!second.ok) return { ok: false, error: honestBoth("transcribed"), provider: null };
-  return { ok: true, text: second.text, provider: "OpenAI" };
+  return result.ok
+    ? { ok: true, text: result.text, provider: "xAI" }
+    : { ok: false, error: result.error, provider: null };
 }
 
 export async function speakWithFallback(input: {

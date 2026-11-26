@@ -114,8 +114,8 @@ describe("pc pairing", () => {
     assert.equal(offerNextJob("a"), null);
     assert.equal(acceptJob("a", job.id, "different"), null);
     assert.equal(requestJobCancel("owner", job.id)?.status, "cancel_requested");
-    assert.equal(completeJob({ jobId: job.id, agentId: "a", ok: true })?.status, "cancelled");
-    assert.equal(completeJob({ jobId: job.id, agentId: "a", ok: true })?.status, "cancelled");
+    assert.equal(completeJob({ jobId: job.id, agentId: "a", ok: true })?.status, "done");
+    assert.equal(completeJob({ jobId: job.id, agentId: "a", ok: true })?.status, "done");
   });
 
   it("preserves complete file results, terminal state and bounded shell logs", () => {

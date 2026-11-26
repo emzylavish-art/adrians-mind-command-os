@@ -1,6 +1,7 @@
 /** Bounded provider-specific chat calls with normalised assistant text. */
 import { reportedModel } from "./stream.ts";
 import { isOpenRouterFreeModel, OPENROUTER_FREE_MODEL_REQUIRED, OPENROUTER_FREE_ROUTING } from "./provider-catalog.ts";
+import { normalizeProviderReceipt, type ProviderReceipt } from "./provider-receipt.ts";
 
 export type ProviderName = "grok" | "openai" | "anthropic" | "gemini" | "openrouter";
 type OtherProvider = Exclude<ProviderName, "grok">;
@@ -71,10 +72,10 @@ export async function callConfiguredProvider(input: {
   history?: History[];
   signal?: AbortSignal;
   fetch: FetchLike;
-}): Promise<{ ok: boolean; text: string; error: string; model?: string; httpStatus?: number; retryAfter?: string }> {
-  if (!input.key) return { ok: false, text: "", error: "No " + input.id + " key is configured. Nothing was sent." };
+}): Promise<{ ok: boolean; text: string; error: string; model?: string; requestedModel?: string; httpStatus?: number; retryAfter?: string; dispatched?: boolean } & Partial<ProviderReceipt>> {
+  if (!input.key) return { ok: false, text: "", error: "No " + input.id + " key is configured. Nothing was sent.", dispatched: false };
   const prompt = input.prompt.trim();
-  if (!prompt) return { ok: false, text: "", error: "Write a message first." };
+  if (!prompt) return { ok: false, text: "", error: "Write a message first.", dispatched: false };
   const history = (input.history ?? [])
     .filter((m) => (m.role === "user" || m.role === "assistant") && typeof m.content === "string");
   const systemPrompt = input.systemPrompt?.trim();
@@ -85,7 +86,7 @@ export async function callConfiguredProvider(input: {
   ];
   const models = { ...MODELS, [input.id]: input.model || MODELS[input.id] };
   if (input.id === "openrouter" && !isOpenRouterFreeModel(models.openrouter)) {
-    return { ok: false, text: "", error: OPENROUTER_FREE_MODEL_REQUIRED, httpStatus: 400 };
+    return { ok: false, text: "", error: OPENROUTER_FREE_MODEL_REQUIRED, httpStatus: 400, dispatched: false };
   }
   const endpoints: Record<OtherProvider, { url: string; init: RequestInit }> = {
     openai: {
@@ -112,28 +113,33 @@ export async function callConfiguredProvider(input: {
     },
   };
   const target = endpoints[input.id];
+  if (input.signal?.aborted) return { ok: false, text: "", error: "The request was stopped before dispatch.", dispatched: false };
   let response: Awaited<ReturnType<FetchLike>>;
   try {
     response = await input.fetch(target.url, { method: "POST", ...target.init, signal: input.signal ? AbortSignal.any([input.signal, AbortSignal.timeout(25_000)]) : AbortSignal.timeout(25_000) });
   } catch {
-    return { ok: false, text: "", error: input.id + " could not be reached. Nothing was substituted." };
+    return { ok: false, text: "", error: input.id + " could not be reached. Nothing was substituted.", dispatched: true, ...normalizeProviderReceipt(input.id, null) };
   }
+  const raw = await response.text().catch(() => "");
+  let payload: Record<string, any> | null = null;
+  try { if (raw.length <= 500_000) { const parsed = JSON.parse(raw); if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) payload = parsed; } } catch { /* Unknown receipt remains unknown. */ }
+  const receipt = { ...normalizeProviderReceipt(input.id, payload, response.headers), dispatched: true,
+    model: reportedModel(input.id === "gemini" ? payload?.modelVersion : payload?.model), requestedModel: models[input.id] };
   if (response.status === 429) {
     const rawDelay = response.headers?.get("retry-after")?.trim();
     const retryAfter = rawDelay && (/^\d{1,8}$/.test(rawDelay) || (rawDelay.length <= 40 && Number.isFinite(Date.parse(rawDelay)))) ? rawDelay : undefined;
-    return { ok: false, text: "", httpStatus: 429, retryAfter, error: input.id + " rate limited the request. Nothing was substituted." };
+    return { ...receipt, ok: false, text: "", httpStatus: 429, retryAfter, error: input.id + " rate limited the request. Nothing was substituted." };
   }
-  if (response.status === 401 || response.status === 403) return { ok: false, text: "", httpStatus: response.status, error: input.id + " rejected the API key or account permissions." };
-  if (!response.ok) return { ok: false, text: "", httpStatus: response.status >= 400 && response.status < 500 ? response.status : undefined, error: input.id + " returned HTTP " + response.status + ". Nothing was substituted." };
+  if (response.status === 401 || response.status === 403) return { ...receipt, ok: false, text: "", httpStatus: response.status, error: input.id + " rejected the API key or account permissions." };
+  if (!response.ok) return { ...receipt, ok: false, text: "", httpStatus: response.status >= 400 && response.status < 500 ? response.status : undefined, error: input.id + " returned HTTP " + response.status + ". Nothing was substituted." };
   try {
-    const raw = await response.text();
-    if (raw.length > 500_000) return { ok: false, text: "", error: input.id + " returned a response larger than the supported limit." };
-    const payload = JSON.parse(raw);
+    if (raw.length > 500_000) return { ...receipt, ok: false, text: "", error: input.id + " returned a response larger than the supported limit." };
+    if (!payload) return { ...receipt, ok: false, text: "", error: input.id + " returned an unreadable response." };
     const parsed = payload && typeof payload === "object" ? extractAssistantText(input.id, payload) : "";
-    return parsed ? { ok: true, text: parsed, model: reportedModel(input.id === "gemini" ? payload.modelVersion : payload.model), error: "" } :
-      { ok: false, text: "", error: input.id + " returned no assistant text or an unsupported response format." };
+    return parsed ? { ...receipt, ok: true, text: parsed, model: reportedModel(input.id === "gemini" ? payload.modelVersion : payload.model), error: "" } :
+      { ...receipt, ok: false, text: "", error: input.id + " returned no assistant text or an unsupported response format." };
   } catch {
-    return { ok: false, text: "", error: input.id + " returned an unreadable response." };
+    return { ...receipt, ok: false, text: "", error: input.id + " returned an unreadable response." };
   }
 }
 export function httpStatusForProviderSelection(error: string): 400 | 503 {
@@ -153,12 +159,12 @@ export async function routeSelectedModel(input: {
   history?: History[];
   signal?: AbortSignal;
   fetch: FetchLike;
-}): Promise<{ ok: boolean; text: string; error: string; model: string; requestedModel?: string; httpStatus?: number; retryAfter?: string }> {
+}): Promise<{ ok: boolean; text: string; error: string; model: string; requestedModel?: string; httpStatus?: number; retryAfter?: string; dispatched?: boolean } & Partial<ProviderReceipt>> {
   const prompt = input.prompt.trim();
-  if (!prompt) return { ok: false, text: "", error: "Write a message first. Nothing was sent.", model: input.id };
+  if (!prompt) return { ok: false, text: "", error: "Write a message first. Nothing was sent.", model: "model unknown", dispatched: false };
   if (input.id === "nemotron" || input.id === "openrouter") {
     const key = input.env.OPENROUTER_API_KEY;
-    if (!key) return { ok: false, text: "", error: "OpenRouter is selected, but no OpenRouter key is connected. Nothing was sent and Grok was not substituted.", model: input.id };
+    if (!key) return { ok: false, text: "", error: "OpenRouter is selected, but no OpenRouter key is connected. Nothing was sent and Grok was not substituted.", model: "model unknown", dispatched: false };
     const model = input.id === "nemotron" ? NEMOTRON_MODEL : input.env.OPENROUTER_MODEL?.trim() ?? "";
     const called = await callConfiguredProvider({
       id: "openrouter",
@@ -174,21 +180,26 @@ export async function routeSelectedModel(input: {
   }
   if (input.id === "ollama") {
     const url = input.env.LOCAL_MODEL_URL;
-    if (!url) return { ok: false, text: "", error: "Local model is selected, but no local runner is reachable. Nothing was sent and Grok was not substituted.", model: "ollama" };
+    if (!url) return { ok: false, text: "", error: "Local model is selected, but no local runner is reachable. Nothing was sent and Grok was not substituted.", model: "model unknown", dispatched: false };
     let response: Awaited<ReturnType<FetchLike>>;
+    if (input.signal?.aborted) return { ok: false, text: "", error: "The request was stopped before dispatch.", model: "ollama", dispatched: false };
     try {
       response = await input.fetch(url, { method: "POST", signal: input.signal, headers: { "content-type": "application/json" }, body: JSON.stringify({ model: input.env.OLLAMA_MODEL || "local", prompt, ...(input.systemPrompt ? { system: input.systemPrompt } : {}) }) });
     } catch {
-      return { ok: false, text: "", error: "Local model runner could not be reached. Nothing was substituted.", model: "ollama" };
+      return { ok: false, text: "", error: "Local model runner could not be reached. Nothing was substituted.", model: "ollama", dispatched: true, ...normalizeProviderReceipt("ollama", null) };
     }
-    if (!response.ok) return { ok: false, text: "", error: "Local model runner returned HTTP " + response.status + ". Nothing was substituted.", model: "ollama" };
     try {
-      const json = JSON.parse(await response.text()) as { text?: unknown; model?: unknown };
-      const text = typeof json.text === "string" ? json.text.trim() : "";
-      return text ? { ok: true, text, error: "", model: reportedModel(json.model) } : { ok: false, text: "", error: "Local model runner returned no text. Nothing was substituted.", model: "ollama" };
+      const raw = await response.text();
+      const json = (raw.length <= 500_000 ? JSON.parse(raw) : null) as { text?: unknown; response?: unknown; model?: unknown; message?: { content?: unknown } } | null;
+      if (!json || typeof json !== "object" || Array.isArray(json)) throw new Error("Invalid local response");
+      const returned = json.text ?? json.response ?? json.message?.content;
+      const text = typeof returned === "string" ? returned.trim() : "";
+      const receipt = { ...normalizeProviderReceipt("ollama", json, response.headers), dispatched: true, requestedModel: input.env.OLLAMA_MODEL || "local", model: reportedModel(json.model) };
+      if (!response.ok) return { ...receipt, ok: false, text: "", error: "Local model runner returned HTTP " + response.status + ". Nothing was substituted." };
+      return text ? { ...receipt, ok: true, text, error: "" } : { ...receipt, ok: false, text: "", error: "Local model runner returned no text. Nothing was substituted." };
     } catch {
-      return { ok: false, text: "", error: "Local model runner returned an unreadable response.", model: "ollama" };
+      return { ok: false, text: "", error: "Local model runner returned an unreadable response.", model: "ollama", dispatched: true, ...normalizeProviderReceipt("ollama", null, response.headers) };
     }
   }
-  return { ok: false, text: "", error: "That model is not a routed runner. Nothing was substituted.", model: input.id };
+  return { ok: false, text: "", error: "That model is not a routed runner. Nothing was substituted.", model: "model unknown", dispatched: false };
 }

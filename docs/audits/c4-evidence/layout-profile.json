@@ -1,0 +1,41 @@
+{
+  "chromium": "153.0.8010.0",
+  "evidence": "Actual gpt-shell CSS and theme tokens in isolated representative schedule/IDE chrome markup; minimal Tailwind sizing utilities reproduced explicitly; CodeMirror and full application not mounted; no physical device",
+  "geometry": [
+    {
+      "viewport": 320,
+      "timezoneWidth": 257.22,
+      "value": "America/Argentina/Buenos_Aires",
+      "documentWidth": 320,
+      "fieldsInsideViewport": true
+    },
+    {
+      "viewport": 768,
+      "timezoneWidth": 346.61,
+      "value": "America/Argentina/Buenos_Aires",
+      "documentWidth": 768,
+      "fieldsInsideViewport": true
+    },
+    {
+      "viewport": 1280,
+      "timezoneWidth": 281.55,
+      "value": "America/Argentina/Buenos_Aires",
+      "documentWidth": 1280,
+      "fieldsInsideViewport": true
+    }
+  ],
+  "themes": [
+    {
+      "theme": "dark",
+      "surfaceToken": "#0c1018",
+      "asideBackground": "rgb(12, 16, 24)",
+      "tabColor": "rgb(244, 246, 251)"
+    },
+    {
+      "theme": "light",
+      "surfaceToken": "#ffffff",
+      "asideBackground": "rgb(255, 255, 255)",
+      "tabColor": "rgb(10, 13, 20)"
+    }
+  ]
+}

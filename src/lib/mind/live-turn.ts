@@ -1,14 +1,17 @@
 import { pullMindEvents, type ModelUsage } from "./stream.ts";
+import type { ConsultExecutionReceipt } from "./model-consult.ts";
+import { readExecutionReceipts, readPrimaryFailureReceipt, type PrimaryFailureReceipt } from "./execution-receipt.ts";
 
 import { outcomeFromDoneEvent, rememberTierOutcome } from "./model-tier-memory.ts";
 import { CHAT_DISCONNECT_REPLY, CHAT_TIMEOUT_REPLY, isTimeoutAbort } from "./turn-timeouts.ts";
 
-export const STOPPED_REPLY = "Stopped. The unfinished reply was not saved.";
+export const STOPPED_REPLY = "Stopped listening for this reply. Any received partial text is kept as incomplete; provider cancellation is unconfirmed.";
 export { CHAT_TIMEOUT_REPLY, CHAT_DISCONNECT_REPLY };
 
-export type LiveTurnResult =
-  | { ok: true; text: string; model: string; usage: ModelUsage | null; usedIds: string[]; requestId: string | null; modelTier?: string; resolvedTier?: string; tierReason?: string; memorySaved?: boolean; savedMemoryId?: string | null; provider?: string; requestedModel?: string; credentialFallback?: string | null }
-  | { ok: false; error: string; deliveryUncertain?: true };
+export type LiveTurnResult = (
+  | { ok: true; text: string; model: string; usage: ModelUsage | null; usedIds: string[]; requestId: string | null; modelTier?: string; resolvedTier?: string; tierReason?: string; memorySaved?: boolean; savedMemoryId?: string | null; provider?: string; requestedModel?: string; credentialFallback?: string | null; executionLocation?: "local" | "hosted" }
+  | ({ ok: false; error: string; deliveryUncertain?: true } & PrimaryFailureReceipt)
+) & { executions?: ConsultExecutionReceipt[]; dispatched?: boolean };
 
 export function shouldStoreReply(result: LiveTurnResult): result is Extract<LiveTurnResult, { ok: true }> {
   return result.ok && result.text.trim().length > 0;
@@ -47,12 +50,23 @@ function readOrAbort(reader: ReadableStreamDefaultReader<Uint8Array>, signal: Ab
 /** Prepare a send on the server clock before any inference request. */
 export async function prepareTurnId(url: string, headers: HeadersInit, signal: AbortSignal, fetchImpl: typeof fetch = fetch): Promise<string> {
   const response = await fetchImpl(url, { method: "GET", headers, signal, credentials: "same-origin", cache: "no-store" });
+  if (response.status === 401) throw new Error("Sign in to the same account to prepare this send. No model was called.");
   if (!response.ok) throw new Error("Could not prepare this send. No model was called.");
   const value = await response.json() as { operationId?: unknown };
   if (typeof value.operationId !== "string" || !/^\d{13}-[a-f0-9-]{36}$/i.test(value.operationId)) {
     throw new Error("The server did not supply a send ID. No model was called.");
   }
   return value.operationId;
+}
+
+export async function checkTurnReceipt(url: string, operationId: string, headers: HeadersInit, signal?: AbortSignal, fetchImpl: typeof fetch = fetch): Promise<{ state: string; ownerId: string; executions?: ConsultExecutionReceipt[] }> {
+  const response = await fetchImpl(`${url}?operationId=${encodeURIComponent(operationId)}`, { method: "GET", headers, signal, credentials: "same-origin", cache: "no-store" });
+  if (response.status === 401) throw new Error("Sign in to the original account to check this send. No message was resent.");
+  if (!response.ok) throw new Error("The earlier send could not be checked. No message was resent.");
+  const result = await response.json() as { state?: unknown; ownerId?: unknown; executions?: unknown };
+  if (typeof result.state !== "string" || !result.state || typeof result.ownerId !== "string" || !result.ownerId) throw new Error("The send receipt was unavailable. No message was resent.");
+  const executions = readExecutionReceipts(result.executions, operationId);
+  return { state: result.state, ownerId: result.ownerId, ...(executions.length ? { executions } : {}) };
 }
 
 export async function consumeMindTurn(input: {
@@ -64,6 +78,9 @@ export async function consumeMindTurn(input: {
   onDelta: (text: string) => void;
 }): Promise<LiveTurnResult> {
   const fetchImpl = input.fetchImpl ?? fetch;
+  const bodyOperation = input.body && typeof input.body === "object" ? (input.body as { operationId?: unknown }).operationId : undefined;
+  const operationId = new Headers(input.headers).get("x-mind-turn-id") || (typeof bodyOperation === "string" ? bodyOperation : undefined);
+  const receiveReceipts = (value: unknown) => readExecutionReceipts(value, operationId);
   let response: Response;
   try {
     response = await fetchImpl(input.url, {
@@ -80,9 +97,16 @@ export async function consumeMindTurn(input: {
     return {
       ok: false,
       error: input.signal.aborted ? STOPPED_REPLY : CHAT_DISCONNECT_REPLY,
-        ...(input.signal.aborted ? {} : { deliveryUncertain: true }),
+      ...(input.signal.aborted ? {} : { deliveryUncertain: true }),
     };
   }
+  const dispatchHeader = response.headers.get("x-mind-primary-dispatched");
+  const dispatched = dispatchHeader === "1" ? true : dispatchHeader === "0" ? false : undefined;
+  let executions: ConsultExecutionReceipt[] = [];
+  let primaryFailure: PrimaryFailureReceipt = {};
+  const receiptFields = () => executions.length ? { executions } : {};
+  const dispatchFields = () => dispatched === undefined ? {} : { dispatched };
+  const failureFields = () => ({ ...primaryFailure, ...receiptFields(), ...dispatchFields() });
   const type = response.headers.get("content-type") ?? "";
   if (!response.ok || !type.includes("text/event-stream")) {
     let message =
@@ -93,21 +117,26 @@ export async function consumeMindTurn(input: {
           : "The model service could not be reached.";
     let uncertain = response.status >= 500 || response.status === 409 || response.ok;
     try {
-      const payload = (await response.json()) as { error?: string; duplicate?: boolean };
+      const payload = (await response.json()) as { error?: string; duplicate?: boolean; executions?: unknown };
       uncertain ||= payload.duplicate === true;
       if (typeof payload.error === "string" && payload.error.trim()) message = payload.error;
+      executions = receiveReceipts(payload.executions);
+      primaryFailure = readPrimaryFailureReceipt(payload);
     } catch {
       /* the status message stands */
     }
-    return { ok: false, error: message, ...(uncertain ? { deliveryUncertain: true } : {}) };
+    return { ok: false, error: message, ...(uncertain ? { deliveryUncertain: true } : {}), ...failureFields() };
   }
-  if (!response.body) return { ok: false, error: "The model service returned an empty reply.", deliveryUncertain: true };
+  if (!response.body) return { ok: false, error: "The model service returned an empty reply.", deliveryUncertain: true, ...failureFields() };
   const reader = response.body.getReader();
   const decoder = new TextDecoder();
   let carry = "";
-  const stop = async (): Promise<LiveTurnResult> => {
-    await reader.cancel().catch(() => undefined);
-    return { ok: false, error: STOPPED_REPLY };
+  const stop = (): LiveTurnResult => {
+    // Stop reading immediately; an upstream cancellation handshake may never
+    // resolve and is not evidence that the provider stopped its computation.
+    void reader.cancel().catch(() => undefined);
+    if (isTimeoutAbort(input.signal, input.signal.reason)) return { ok: false, error: CHAT_TIMEOUT_REPLY, deliveryUncertain: true, ...failureFields() };
+    return { ok: false, error: STOPPED_REPLY, ...failureFields() };
   };
   while (true) {
     if (input.signal.aborted) return stop();
@@ -115,14 +144,15 @@ export async function consumeMindTurn(input: {
     try {
       step = await readOrAbort(reader, input.signal);
     } catch (caught) {
-      await reader.cancel().catch(() => undefined);
+      void reader.cancel().catch(() => undefined);
       if (isTimeoutAbort(input.signal, caught) || isTimeoutAbort(input.signal, input.signal.reason)) {
-        return { ok: false, error: CHAT_TIMEOUT_REPLY, deliveryUncertain: true };
+        return { ok: false, error: CHAT_TIMEOUT_REPLY, deliveryUncertain: true, ...failureFields() };
       }
       return {
         ok: false,
         error: input.signal.aborted ? STOPPED_REPLY : CHAT_DISCONNECT_REPLY,
         ...(input.signal.aborted ? {} : { deliveryUncertain: true }),
+        ...failureFields(),
       };
     }
     if (input.signal.aborted) return stop();
@@ -132,10 +162,12 @@ export async function consumeMindTurn(input: {
     carry = pulled.rest;
     for (const event of pulled.events) {
       if (input.signal.aborted) return stop();
+      if (event.event === "executions") executions = receiveReceipts([...executions, ...event.executions]);
       if (event.event === "delta") input.onDelta(event.text);
       if (event.event === "error" || event.event === "canceled") {
-        await reader.cancel().catch(() => undefined);
-        return { ok: false, error: event.error, deliveryUncertain: true };
+        primaryFailure = readPrimaryFailureReceipt(event);
+        void reader.cancel().catch(() => undefined);
+        return { ok: false, error: event.event === "canceled" ? STOPPED_REPLY : event.error, deliveryUncertain: true, ...failureFields() };
       }
       if (event.event === "done") {
         const finished: LiveTurnResult = {
@@ -153,6 +185,9 @@ export async function consumeMindTurn(input: {
           provider: event.provider,
           requestedModel: event.requestedModel,
           credentialFallback: event.credentialFallback ?? null,
+          ...(event.executionLocation ? { executionLocation: event.executionLocation } : {}),
+          ...receiptFields(),
+          ...dispatchFields(),
         };
         const outcome = outcomeFromDoneEvent(event);
         if (outcome) rememberTierOutcome(outcome);
@@ -162,5 +197,5 @@ export async function consumeMindTurn(input: {
       }
     }
   }
-  return { ok: false, error: "The model connection closed before the reply finished. The provider may have processed this request.", deliveryUncertain: true };
+  return { ok: false, error: "The model connection closed before the reply finished. The provider may have processed this request.", deliveryUncertain: true, ...failureFields() };
 }

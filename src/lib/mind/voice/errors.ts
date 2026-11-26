@@ -39,7 +39,7 @@ export function formatMicCaptureError(err: unknown): string | null {
   return null;
 }
 
-export const DIRECT_FALLBACK_NOTICE = "Using Direct — no paired computer for Orchestrator.";
+export const DIRECT_FALLBACK_NOTICE = "Orchestrator is unavailable. Your voice preference is unchanged. Connect the selected Ollama runtime or explicitly choose Direct.";
 
 /** Voice starts on the server xAI path unless a paired computer is actually available. */
 export function defaultVoiceMode(): VoiceRoutingMode {
@@ -47,23 +47,22 @@ export function defaultVoiceMode(): VoiceRoutingMode {
 }
 
 /**
- * Orchestrator without a paired computer is Direct.
- * The caller shows `notice` and continues the Direct session. It does not surface the Ollama error.
+ * Runtime availability never rewrites the saved mode or authorizes another provider.
+ * A blocked route must stop before minting a cloud session.
  */
 export function resolveVoiceMode(
   mode: VoiceRoutingMode | null | undefined,
   pairedComputer: boolean,
-): { mode: VoiceRoutingMode; fellBack: boolean; notice: string | null } {
+): { mode: VoiceRoutingMode; fellBack: boolean; blocked: boolean; notice: string | null } {
   const selected: VoiceRoutingMode = mode === "orchestrator" ? "orchestrator" : "direct";
   if (selected === "orchestrator" && !pairedComputer) {
-    return { mode: "direct", fellBack: true, notice: DIRECT_FALLBACK_NOTICE };
+    return { mode: "orchestrator", fellBack: false, blocked: true, notice: DIRECT_FALLBACK_NOTICE };
   }
-  return { mode: selected, fellBack: false, notice: null };
+  return { mode: selected, fellBack: false, blocked: false, notice: null };
 }
 
 /**
- * Hydrate a stored mode. A stale orchestrator value with no paired computer becomes Direct
- * so the next session does not start on the failing path.
+ * Hydrate a stored choice independently of temporary runtime availability.
  */
 export function hydrateResolvedVoiceMode(raw: string | null | undefined, pairedComputer: boolean): VoiceRoutingMode {
   return resolveVoiceMode(raw === "orchestrator" ? "orchestrator" : "direct", pairedComputer).mode;
@@ -71,11 +70,12 @@ export function hydrateResolvedVoiceMode(raw: string | null | undefined, pairedC
 
 /**
  * Persist only after client hydrate.
- * Do not write orchestrator back when no paired computer is available.
+ * Availability is checked when starting; it does not revoke a user preference.
  */
 export function shouldPersistVoiceMode(hydrated: boolean, mode?: VoiceRoutingMode, pairedComputer?: boolean): boolean {
   if (!hydrated) return false;
-  if (mode === "orchestrator" && pairedComputer === false) return false;
+  void mode;
+  void pairedComputer;
   return true;
 }
 
@@ -87,6 +87,7 @@ export async function beginVoiceModeSession(input: {
   connect: (secret: string) => Promise<void>;
 }): Promise<{ mode: VoiceRoutingMode; notice: string | null; error: string | null; connected: boolean }> {
   const route = resolveVoiceMode(input.mode, input.pairedComputer);
+  if (route.blocked) return { mode: route.mode, notice: route.notice, error: route.notice, connected: false };
   const secret = await input.mint();
   if (!secret.ok || !secret.value) {
     return {

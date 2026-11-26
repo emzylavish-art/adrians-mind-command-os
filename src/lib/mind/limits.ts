@@ -1,3 +1,4 @@
+import { MAX_HISTORY_MESSAGES } from "./context-budget.ts";
 export type LimitState = Map<string, number[]>;
 
 export const CHAT_RATE_LIMIT_REPLY = "Too many messages. Wait a minute and try again.";
@@ -131,10 +132,11 @@ export function checkTurnSize(input: {
   images?: { dataUrl?: string }[];
 }): { ok: true } | { ok: false; error: string } {
   if (input.text.length > 8000) return { ok: false, error: "That message is too long." };
-  if (input.history.length > 12) return { ok: false, error: "That conversation history is too long." };
+  if (input.history.length > MAX_HISTORY_MESSAGES) return { ok: false, error: "That conversation history is too long." };
   if (input.history.some((item) => (item.content ?? "").length > 8000)) {
     return { ok: false, error: "A previous message is too long." };
   }
+  if (new TextEncoder().encode(input.history.map((item) => item.content ?? "").join("\n")).byteLength > 64_000) return { ok: false, error: "That conversation exceeds the context budget." };
   if (input.memoryContext.length > 12) return { ok: false, error: "Too many notes were attached." };
   if (input.memoryContext.some((item) => (item.text ?? "").length > 2000)) {
     return { ok: false, error: "A note is too long to send." };

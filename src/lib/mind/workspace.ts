@@ -4,6 +4,7 @@ import { emptyFleet, readFleet } from "./fleet.ts";
 import { normalizeBotModel } from "./bot-model.ts";
 import { normalizeBotKnowledge } from "./bot-model.ts";
 import { DEFAULT_PERSONALITY_ID, normalizeCustomPersonality, resolvePersonalityId } from "./personalities/index.ts";
+import { attachmentIssues, attachmentManifest } from "./media/attachment-integrity.ts";
 import type {
   AuditEntry,
   Autonomy,
@@ -153,6 +154,8 @@ export function normalizeWorkspace(input: unknown): Workspace {
   if (Array.isArray(input.usage)) {
     for (const row of input.usage) {
       if (!isRecord(row) || !str(row.id)) continue;
+      const promptTokens = typeof row.promptTokens === "number" && Number.isSafeInteger(row.promptTokens) && row.promptTokens >= 0 ? row.promptTokens : null;
+      const completionTokens = typeof row.completionTokens === "number" && Number.isSafeInteger(row.completionTokens) && row.completionTokens >= 0 ? row.completionTokens : null;
       base.usage.push({
         id: str(row.id),
         chatId: str(row.chatId),
@@ -161,9 +164,13 @@ export function normalizeWorkspace(input: unknown): Workspace {
         requestedModel: typeof row.requestedModel === "string" ? row.requestedModel : undefined,
         model: str(row.model, "unknown"),
         requestId: typeof row.requestId === "string" ? row.requestId : null,
-        promptTokens: typeof row.promptTokens === "number" ? row.promptTokens : null,
-        completionTokens: typeof row.completionTokens === "number" ? row.completionTokens : null,
-        kind: usageKind(row.promptTokens, row.completionTokens),
+        promptTokens,
+        completionTokens,
+        kind: usageKind(promptTokens, completionTokens),
+        ...(typeof row.operationId === "string" ? { operationId: row.operationId.slice(0, 120) } : {}),
+        ...(row.outcome === "completed" || row.outcome === "failed" || row.outcome === "stopped" || row.outcome === "unknown" ? { outcome: row.outcome } : {}),
+        ...(row.role === "primary" || row.role === "helper" ? { role: row.role } : {}),
+        ...(row.executionLocation === "local" || row.executionLocation === "hosted" ? { executionLocation: row.executionLocation } : {}),
       });
     }
   }
@@ -209,6 +216,9 @@ function normalizeChat(row: unknown): Chat | null {
         ...(typeof msg.requestedModel === "string" && msg.requestedModel.trim() ? { requestedModel: msg.requestedModel.trim().slice(0, 150) } : {}),
         ...(msg.role === "user" && typeof msg.deliveryOperationId === "string" && /^\d{13}-[a-f0-9-]{36}$/i.test(msg.deliveryOperationId) ? { deliveryOperationId: msg.deliveryOperationId } : {}),
         ...(msg.role === "user" && (msg.delivery === "submitted" || msg.delivery === "unconfirmed" || msg.delivery === "stopped" || msg.delivery === "failed") ? { delivery: msg.delivery } : {}),
+        ...(msg.replyStatus === "streaming" || msg.replyStatus === "interrupted" || msg.replyStatus === "complete" ? { replyStatus: msg.replyStatus } : {}),
+        ...(typeof msg.replyOperationId === "string" ? { replyOperationId: msg.replyOperationId.slice(0, 120) } : {}),
+        ...(typeof msg.contextNotice === "string" ? { contextNotice: msg.contextNotice.slice(0, 2000) } : {}),
         ...publicImages(msg.images),
         ...publicVideo(msg.videoUrl),
         ...(msg.memorySaved === true
@@ -262,9 +272,11 @@ function normalizeFile(row: unknown): LocalFile | null {
 function publicImages(value: unknown): { images: NonNullable<Msg["images"]> } | Record<string, never> {
   if (!Array.isArray(value)) return {};
   const images: NonNullable<Msg["images"]> = [];
-  for (const item of value.slice(0, 4)) {
+  for (const item of value) {
     if (!isRecord(item)) continue;
-    const dataUrl = typeof item.dataUrl === "string" && item.dataUrl.startsWith("data:image/") && item.dataUrl.length < 1_500_000 ? item.dataUrl : undefined;
+    // Storage normalization preserves bytes. Transport validators enforce limits
+    // before saving, so a successful save can never hide an oversized omission.
+    const dataUrl = typeof item.dataUrl === "string" && item.dataUrl.startsWith("data:image/") ? item.dataUrl : undefined;
     const blobId = typeof item.blobId === "string" && item.blobId.length > 0 && item.blobId.length < 200 ? item.blobId : undefined;
     if (!dataUrl && !blobId) continue;
     images.push({
@@ -468,12 +480,13 @@ export async function packWorkspace(ws: Workspace, includeTemporary: boolean) {
     format: 1 as const,
     sha256: await sha256(canonical(workspace)),
     counts: counts(workspace),
+    attachments: attachmentManifest(workspace),
     workspace,
   };
 }
 
 export async function unpackWorkspace(raw: string): Promise<
-  | { ok: true; workspace: Workspace; counts: ReturnType<typeof counts> }
+  | { ok: true; workspace: Workspace; counts: ReturnType<typeof counts>; attachments: ReturnType<typeof attachmentManifest>; warnings: string[] }
   | { ok: false; error: string }
 > {
   let parsed: unknown;
@@ -491,7 +504,10 @@ export async function unpackWorkspace(raw: string): Promise<
   if (actual !== parsed.sha256) {
     return { ok: false, error: "Archive hash does not match. Nothing was imported." };
   }
-  return { ok: true, workspace, counts: counts(workspace) };
+  const attachments = attachmentManifest(workspace);
+  const warnings = attachmentIssues(workspace).map((issue) => `${issue.name}: ${issue.reason}`);
+  if (!attachments.complete) warnings.unshift(`${attachments.referenced - attachments.included} image attachment(s) have references but no image bytes in this archive. They may be unavailable on another device.`);
+  return { ok: true, workspace, counts: counts(workspace), attachments, warnings };
 }
 
 export function mergeMemoryState(current: Workspace, incoming: Workspace): Pick<Workspace, "memories" | "deletedMemoryIds"> {
