@@ -82,7 +82,7 @@ function TreeRows(props: { nodes: TreeNode[]; depth: number; selected: string; o
   );
 }
 
-function HighlightedEditor(props: { path: string; text: string; disabled: boolean; selection?: BuildEditorSelection; onSelectionChange?: (selection: BuildEditorSelection) => void; onChange: (value: string) => void }) {
+function HighlightedEditor(props: { path: string; text: string; disabled: boolean; jumpTo?: { from: number; to: number }; selection?: BuildEditorSelection; onSelectionChange?: (selection: BuildEditorSelection) => void; onChange: (value: string) => void }) {
   const host = useRef<HTMLDivElement>(null);
   const viewRef = useRef<EditorView | null>(null);
   const onChange = useRef(props.onChange);
@@ -133,11 +133,23 @@ function HighlightedEditor(props: { path: string; text: string; disabled: boolea
     editor.dispatch({ changes: { from: 0, to: shown.length, insert: props.text } });
   }, [props.text]);
 
+  useEffect(() => {
+    const editor = viewRef.current;
+    if (!editor || !props.jumpTo) return;
+    const from = Math.max(0, Math.min(props.jumpTo.from, editor.state.doc.length));
+    const to = Math.max(from, Math.min(props.jumpTo.to, editor.state.doc.length));
+    editor.dispatch({ selection: { anchor: from, head: to }, scrollIntoView: true });
+    editor.focus();
+  }, [props.jumpTo]);
+
   return <div ref={host} className="code-ide-editor" data-testid="code-ide-editor" />;
 }
 
 export function CodeIde(props: {
   ownerId?: string;
+  bufferSource?: CodeBufferSource;
+  relatedFiles?: IdeFile[];
+  onOpenRelated?: (path: string, source: CodeBufferSource) => void;
   files: IdeFile[];
   matches: string[];
   tabs: { id: string; path: string; workspace: string; cwd?: string }[];
@@ -161,6 +173,9 @@ export function CodeIde(props: {
   onCheck: () => void;
 }) {
   const tree = fileTree(props.files);
+  const outline = useMemo(() => inspectCodeBuffer({ path: props.selected, text: props.text, revision: props.bufferSource?.revision }), [props.selected, props.text, props.bufferSource?.revision]);
+  const [jump, setJump] = useState<{ id: string; bufferRevision: string; from: number; to: number; request: number }>();
+  const navigate = (from: number, to: number) => setJump((current) => ({ id: props.selectedId, bufferRevision: outline.bufferRevision, from, to, request: (current?.request ?? 0) + 1 }));
   const dirty = props.selected !== "" && props.dirty.includes(props.selectedId);
   const [completions, setCompletions] = useState<string[]>([]);
   const [debugText, setDebugText] = useState("");
@@ -258,10 +273,25 @@ export function CodeIde(props: {
           {!props.tabs.length ? <span className="code-ide-empty">No file open</span> : null}
         </div>
         {props.selected ? (
-          <HighlightedEditor key={props.selectedId} path={props.selected} text={props.text} selection={props.selection} onSelectionChange={props.onSelectionChange} disabled={props.busy} onChange={props.onChange} />
+          <HighlightedEditor key={props.selectedId} path={props.selected} text={props.text} jumpTo={jump?.id === props.selectedId && jump.bufferRevision === outline.bufferRevision ? jump : undefined} selection={props.selection} onSelectionChange={props.onSelectionChange} disabled={props.busy} onChange={props.onChange} />
         ) : (
           <p className="code-ide-empty">Select a file from the tree.</p>
         )}
+        {props.selected && <details className="code-ide-navigation">
+          <summary>Symbols and dependencies · current buffer</summary>
+          <p>{outline.detail}</p>
+          <p className="break-all">Workspace: {props.bufferSource?.workspace ?? "not recorded"}{props.bufferSource?.cwd ? ` · ${props.bufferSource.cwd}` : ""}. Reviewed file revision: {outline.savedRevision ?? "not recorded"}. {dirty ? "Showing unsaved draft syntax." : "Showing the last loaded buffer."}</p>
+          {outline.status === "parsed" && <>
+            <h4>Definitions ({outline.symbols.length})</h4>
+            {outline.symbols.length ? <ul>{outline.symbols.map((symbol) => <li key={`${symbol.kind}:${symbol.from}`}><button type="button" onClick={() => navigate(symbol.from, symbol.to)}>{symbol.name} · {symbol.kind}{symbol.exported ? " · exported" : ""} · line {symbol.line}</button></li>)}</ul> : <p>No supported declaration nodes were found.</p>}
+            <h4>Declared module relationships ({outline.dependencies.length})</h4>
+            <p>Opening is limited to matching files already loaded or listed for this buffer's workspace. Package aliases and runtime resolution require separate analysis.</p>
+            <ul>{outline.dependencies.map((dependency) => {
+              const resolved = resolveKnownDependency(props.selected, dependency, props.relatedFiles ?? []);
+              return <li key={`${dependency.kind}:${dependency.from}`}><button type="button" onClick={() => navigate(dependency.from, dependency.to)}>{dependency.specifier} · {dependency.kind} · line {dependency.line}</button>{resolved.status === "resolved" && props.bufferSource && props.onOpenRelated ? <button type="button" disabled={props.busy} onClick={() => props.onOpenRelated?.(resolved.path, props.bufferSource!)}>Open {resolved.path}</button> : <span>{resolved.status === "unavailable" ? resolved.reason : "The source workspace is unavailable."}</span>}</li>;
+            })}</ul>
+          </>}
+        </details>}
         <div className="code-ide-status">
           <button type="button" disabled={!props.selected || props.busy || !dirty} onClick={props.onSave}>{props.busy ? "Saving…" : "Save reviewed file"}</button>
           {props.selected && <button type="button" disabled={props.busy} onClick={props.onCheck}>Check disk copy</button>}

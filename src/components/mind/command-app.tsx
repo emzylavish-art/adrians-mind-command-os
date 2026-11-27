@@ -9,10 +9,11 @@ import { checkpointReply, completedHistory } from "@/lib/mind/partial-reply";
 import { ResearchEvidence } from "@/components/mind/research-evidence";
 import { stageCodeHandoff } from "@/lib/mind/code-handoff";
 import type { TurnErrorCode } from "@/lib/mind/turn-error";
-import { ChatPane } from "./chat-pane";
+import { ChatPane, type ChatReadingPositions } from "./chat-pane";
 import { BrowserDictationControl, VoiceModeButton, ComposerEffortControl, ProviderPicker } from "./chat-controls";
 import { stamp, PRODUCT_LOGO } from "./chat-presentation";
 import { useExclusiveMenus } from "@/lib/mind/use-exclusive-menus";
+import { useViewScrollPosition } from "@/lib/mind/use-view-scroll-position";
 import { ResourceState } from "./resource-state";
 import { GeneratedArtifactWorkspace } from "@/components/mind/generated-artifact-workspace";
 import { saveGeneratedArtifact } from "@/lib/mind/generated-artifacts";
@@ -61,7 +62,7 @@ import { WorkspaceDialog as Overlay } from "./workspace-dialog";
 import type { NotionPage } from "@/lib/mind/notion";
 import { AccountPreferencesProvider, useAccountPreferences } from "./account-preferences-context";
 import { accountPreferenceKey } from "@/lib/mind/account-preferences";
-import { lazy, Suspense, useEffect, useLayoutEffect, useMemo, useRef, useState, type KeyboardEvent as ReactKeyboardEvent, type MouseEvent as ReactMouseEvent, type ReactNode, useSyncExternalStore, useDeferredValue } from "react";
+import { lazy, Suspense, useEffect, useMemo, useRef, useState, type KeyboardEvent as ReactKeyboardEvent, type MouseEvent as ReactMouseEvent, type ReactNode, useSyncExternalStore, useDeferredValue } from "react";
 import { Link, useRouter, useRouterState } from "@tanstack/react-router";
 import "./command-drawer-nav.css";
 import "./command-search.css";
@@ -820,6 +821,7 @@ function CommandSession({ account, accountPending }: { account: ReturnType<typeo
   const [botDestinationId, setBotDestinationId] = useState("");
   const [focusRunId, setFocusRunId] = useState<string | null>(null);
   const [cardFocus, setCardFocus] = useState<{ id: string } | null>(null);
+  const chatReadingPositions = useRef<ChatReadingPositions>(new Map());
   useEffect(() => {
     if (!cardFocus) return;
     const frame = requestAnimationFrame(() => {
@@ -854,17 +856,11 @@ function CommandSession({ account, accountPending }: { account: ReturnType<typeo
   const pageScrollRef = useRef<HTMLDivElement>(null);
   useEffect(() => {
     if (view !== "settings") return;
-    if (pageScrollRef.current) pageScrollRef.current.scrollTop = 0;
     const frame = requestAnimationFrame(() => document.getElementById("settings-heading")?.focus({ preventScroll: true }));
     return () => cancelAnimationFrame(frame);
   }, [view, settingsPane]);
-  const pagePositions = useRef(new Map<View, number>());
-  useLayoutEffect(() => {
-    const scroller = pageScrollRef.current;
-    if (!scroller) return;
-    scroller.scrollTop = pagePositions.current.get(view) ?? 0;
-    return () => { pagePositions.current.set(view, scroller.scrollTop); };
-  }, [view]);
+  const pageScrollKey = view === "settings" ? `settings/${settingsPane ?? "index"}` : view;
+  const rememberPageScroll = useViewScrollPosition(pageScrollRef, account?.id ?? null, initialLocationResolved ? pageScrollKey : "opening");
   useEffect(() => {
     if (!navOpen) {
       if (navWasOpenRef.current) {
@@ -4226,13 +4222,18 @@ ${message.content}`;
     try {
       const started = await beginRecoverableVideo({ operationId, chatId, projectId: chat.projectId || undefined, taskId: operationId, prompt, settings: loadVideoSettings(preferenceStorage), temporary: chat.temporary === true, freeOnly: currentFreeOnly.current }, context);
       if (turnOwner.current !== owner) return;
-      if (!started.ok) { setError(started.error); return; }
+      if (!started.ok) { setNotice(null); setError(started.error); return; }
       setNotice("The saved video job is rendering. You can leave this view and resume status checks in Media recovery.");
       const result = started.state === "done" ? started : await pollRecoverableVideo(started.job, context);
       if (turnOwner.current !== owner) return;
       if (result.ok && result.state === "done") commitVideoJob(result.job);
       else setError(result.ok ? "The saved job is still rendering. Resume its status checks in Media recovery." : result.error);
-    } catch { if (turnOwner.current === owner) setError("Video status is unavailable. Check the saved operation in Media recovery before starting another generation."); }
+    } catch {
+      if (turnOwner.current === owner) {
+        setNotice(null);
+        setError("Video status is unavailable. Check the saved operation in Media recovery before starting another generation.");
+      }
+    }
     finally { videoInFlight.current = false; }
   }
 
@@ -6952,7 +6953,7 @@ ${message.content}`;
         {notice && (notice.startsWith("This link points at") || notice.startsWith("That bot is archived") || notice.startsWith("Link copied") || notice.startsWith("Clipboard copy")) ? (
           <p role="status" data-testid="share-notice" className="mx-3 mb-2 rounded-panel border border-line px-3 py-2 text-sm text-muted">{notice}</p>
         ) : null}
-        <div ref={(node) => { pageScrollRef.current = node; pinPageScroller(node); }} className={`min-h-0 flex-1 ${view === "chat" || view === "dashboard" || view === "intelligence" ? "overflow-hidden" : "overflow-auto pb-24"}`}>
+        <div ref={(node) => { pageScrollRef.current = node; pinPageScroller(node); }} onScroll={rememberPageScroll} className={`min-h-0 flex-1 ${view === "chat" || view === "dashboard" || view === "intelligence" ? "overflow-hidden" : "overflow-auto pb-24"}`}>
           {view === "intelligence" && (
             <EveWorkbench
               workspace={ws}
@@ -7485,6 +7486,7 @@ ${message.content}`;
               onEdit={editMessage}
               onReplyVersion={(messageId, versionId) => setWs((current) => active ? selectReplyVersion(current, active.id, messageId, versionId) : current)}
               revealMessageId={cardFocus?.id.startsWith("message-") ? cardFocus.id.slice(8) : undefined}
+              readingPositions={chatReadingPositions.current}
               onRegenerate={regenerate}
               onRetry={retryLast}
               onExport={exportActive}

@@ -16,6 +16,7 @@ import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { ComposerBar, type ComposerModelId, DictationPill as PreviewDictationPill, LiveSpeakControl, LiveVoiceBar as PresentationalLiveVoiceBar, VoiceModeStage } from "@/components/mind/voice-ui";
 import { routeForBotChat } from "@/lib/mind/bot-model";
 import { INITIAL_MESSAGE_WINDOW, messageWindow } from "@/lib/mind/render-window";
+import { nextReadingPosition } from "@/lib/mind/reading-position";
 import { Image, Mic, MicOff, Paperclip, Camera, Plus, Square, Volume2 } from "lucide-react";
 import { ConversationSections } from "@/components/mind/conversation-sections";
 import { MemoryChatToggle } from "@/components/mind/memory-chat-toggle";
@@ -41,6 +42,8 @@ import { stamp } from "./chat-presentation";
 import { ConversationComparison } from "./conversation-comparison";
 
 /** Conversation surface isolated from account, persistence and service orchestration. */
+
+export type ChatReadingPositions = Map<string, { top: number; following: boolean; count: number }>;
 
 export function ChatPane({
   chatSettingsOpen,
@@ -73,6 +76,7 @@ export function ChatPane({
   onEdit,
   onReplyVersion,
   revealMessageId,
+  readingPositions,
   onRegenerate,
   onRetry,
   onExport,
@@ -190,6 +194,7 @@ export function ChatPane({
   onEdit: (messageId: string, text: string) => Promise<boolean>;
   onReplyVersion?: (messageId: string, versionId: string) => void;
   revealMessageId?: string;
+  readingPositions: ChatReadingPositions;
   onRegenerate: () => void;
   onRetry: () => void;
   onExport: (textOnly?: boolean) => void;
@@ -321,30 +326,49 @@ export function ChatPane({
   const turns = useRef<HTMLDivElement>(null);
   const following = useRef(true);
   const previousScrollTop = useRef(0);
+  const lastScrollInput = useRef(-Infinity);
   const [detached, setDetached] = useState(false);
+  const chatId = active?.id;
+  const [expandedHistory, setExpandedHistory] = useState<{ chatId?: string; count: number }>();
+  const messageCount = expandedHistory?.chatId === chatId && expandedHistory
+    ? expandedHistory.count
+    : (chatId && readingPositions.get(chatId)?.count) || INITIAL_MESSAGE_WINDOW;
+  const renderedMessages = useMemo(() => messageWindow(active?.messages ?? [], messageCount, revealMessageId), [active?.messages, messageCount, revealMessageId]);
+
+  function savePosition(top: number, count = messageCount) {
+    if (chatId) readingPositions.set(chatId, { top, following: following.current, count });
+  }
+
+  function noteScrollInput() {
+    lastScrollInput.current = performance.now();
+  }
 
   useLayoutEffect(() => {
     const pane = transcript.current;
     const content = turns.current;
     if (!pane || !content) return;
-    following.current = true;
-    setDetached(false);
+    const saved = chatId ? readingPositions.get(chatId) : undefined;
+    following.current = saved?.following ?? true;
+    lastScrollInput.current = -Infinity;
+    setDetached(!following.current);
     function followTail() {
       if (pane && following.current) {
         pane.scrollTop = pane.scrollHeight;
         previousScrollTop.current = pane.scrollTop;
       }
     }
-    followTail();
+    if (following.current) followTail();
+    else {
+      pane.scrollTop = saved?.top ?? 0;
+      previousScrollTop.current = pane.scrollTop;
+    }
     const observer = new ResizeObserver(followTail);
     observer.observe(content);
     observer.observe(pane);
     return () => observer.disconnect();
-  }, [active?.id]);
+  }, [chatId, readingPositions]);
   const [composerExpanded, setComposerExpanded] = useState(false);
-  const [messageCount, setMessageCount] = useState(INITIAL_MESSAGE_WINDOW);
-  useEffect(() => { setMessageCount(INITIAL_MESSAGE_WINDOW); setDismissedMessages(new Set()); }, [active?.id]);
-  const renderedMessages = useMemo(() => messageWindow(active?.messages ?? [], messageCount, revealMessageId), [active?.messages, messageCount, revealMessageId]);
+  useEffect(() => { setDismissedMessages(new Set()); }, [chatId]);
   const lastReply = [...(active?.messages ?? [])].reverse().find((msg) => msg.role === "assistant");
   return (
     <div id="chat-thread" className="thread-shell flex h-full min-h-0 flex-col xl:flex-row">
@@ -429,26 +453,45 @@ export function ChatPane({
             </div>
           )}
         </details>
-        <div ref={transcript} className="min-h-0 flex-1 overflow-auto p-4" onFocusCapture={(event) => {
-          if (event.target instanceof HTMLElement && event.target.matches("article.turn[id^='message-']")) {
-            following.current = false;
-            setDetached(true);
-          }
-        }} onScroll={(event) => {
-          const pane = event.currentTarget;
-          const end = Math.max(0, pane.scrollHeight - pane.clientHeight);
-          const top = pane.scrollTop;
-          // Growing content can increase the distance from the tail before its resize callback.
-          // Only an actual upward scroll should detach a reader who was following.
-          if (end - top < 32) following.current = true;
-          else if (top < Math.min(previousScrollTop.current, end) - 1) following.current = false;
-          previousScrollTop.current = top;
-          setDetached(!following.current);
-        }}>
+        <div
+          ref={transcript}
+          data-following={!detached}
+          className="transcript-pane min-h-0 flex-1 overflow-auto p-4"
+          onWheelCapture={noteScrollInput}
+          onTouchMoveCapture={noteScrollInput}
+          onPointerDown={(event) => { if (event.target === event.currentTarget) noteScrollInput(); }}
+          onKeyDownCapture={(event) => {
+            if (["ArrowUp", "ArrowDown", "PageUp", "PageDown", "Home", "End", " "].includes(event.key)) noteScrollInput();
+          }}
+          onFocusCapture={(event) => {
+            if (event.target instanceof HTMLElement && event.target.matches("article.turn[id^='message-']")) {
+              following.current = false;
+              setDetached(true);
+              savePosition(event.currentTarget.scrollTop);
+            }
+          }}
+          onScroll={(event) => {
+            const pane = event.currentTarget;
+            const position = nextReadingPosition({ top: previousScrollTop.current, following: following.current }, {
+              top: pane.scrollTop, height: pane.scrollHeight, viewport: pane.clientHeight,
+              userInitiated: performance.now() - lastScrollInput.current < 350,
+            });
+            following.current = position.following;
+            previousScrollTop.current = position.top;
+            setDetached(!position.following);
+            savePosition(position.top);
+          }}
+        >
         {detached && <button type="button" className="jump-to-latest" onClick={() => {
           following.current = true;
+          lastScrollInput.current = -Infinity;
           setDetached(false);
-          if (transcript.current) transcript.current.scrollTop = transcript.current.scrollHeight;
+          const pane = transcript.current;
+          if (pane) {
+            pane.scrollTop = pane.scrollHeight;
+            previousScrollTop.current = pane.scrollTop;
+            savePosition(pane.scrollTop);
+          }
         }}>Jump to latest</button>}
           <div ref={turns} className="space-y-3">
           {copyError ? <p role="alert" className="text-sm text-danger">{copyError}</p> : null}
@@ -463,8 +506,19 @@ export function ChatPane({
           )}
           {renderedMessages.hiddenCount > 0 ? <button type="button" className="min-h-11 w-full rounded-panel border border-line px-4 text-sm" onClick={() => {
             const pane = transcript.current; const height = pane?.scrollHeight ?? 0; const top = pane?.scrollTop ?? 0;
-            following.current = false; setDetached(true); setMessageCount((current) => current + INITIAL_MESSAGE_WINDOW);
-            requestAnimationFrame(() => { if (pane) pane.scrollTop = top + pane.scrollHeight - height; });
+            const count = messageCount + INITIAL_MESSAGE_WINDOW;
+            following.current = false;
+            lastScrollInput.current = -Infinity;
+            setDetached(true);
+            setExpandedHistory({ chatId, count });
+            savePosition(top, count);
+            requestAnimationFrame(() => {
+              if (pane) {
+                pane.scrollTop = top + pane.scrollHeight - height;
+                previousScrollTop.current = pane.scrollTop;
+                savePosition(pane.scrollTop, count);
+              }
+            });
           }}>Load earlier messages ({renderedMessages.hiddenCount})</button> : null}
           {renderedMessages.messages.filter((msg) => !dismissedMessages.has(msg.id)).map((msg) => {
             const last = active?.messages.at(-1);

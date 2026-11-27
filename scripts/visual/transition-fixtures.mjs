@@ -23,7 +23,7 @@ let startupPage;
 async function observedState(page) {
   return page.evaluate(() => {
     const pane = document.querySelector("#chat-thread > section > .overflow-auto");
-    const pagePane = document.querySelector('main.main-stage > div[style*="overflow-y"]');
+    const pagePane = document.querySelector('main.main-stage > div.min-h-0.flex-1');
     const drawer = document.querySelector('[aria-label="Workspace navigation"]');
     return { path: location.pathname + location.search, view: document.querySelector("#mind-workspace")?.dataset.view,
       pane: pane ? { top: pane.scrollTop, height: pane.scrollHeight, viewport: pane.clientHeight, tailDistance: pane.scrollHeight - pane.scrollTop - pane.clientHeight } : null,
@@ -107,7 +107,9 @@ try {
     await page.getByRole("button", { name: `Load earlier messages (${longHistory - initialHistory})`, exact: true }).click();
     await page.waitForFunction((expected) => document.querySelectorAll("article.turn").length === expected, initialHistory * 2);
     assert.equal(await page.locator("#message-long-a-0").count(), 0, "The oldest message must still be outside the render window before reveal.");
-    await page.evaluate(() => dispatchEvent(new CustomEvent("adrian:reveal-message", { detail: "long-a-0" })));
+    await page.getByRole("button", { name: "Search workspace", exact: true }).click();
+    await page.getByRole("combobox", { name: "Search", exact: true }).fill("Fixture long-a message 0.");
+    await page.locator('[id="palette-hit-chat-long-a-message-long-a-0"]').click();
     await page.locator("#message-long-a-0").waitFor();
     await page.waitForFunction(() => document.activeElement?.id === "message-long-a-0", undefined, { timeout: 5000 });
     return { afterLoadEarlier: initialHistory * 2, revealedOldestMessage: true };
@@ -141,10 +143,10 @@ try {
     await page.waitForFunction(() => document.getSelection()?.toString() === "renamedFixture", undefined, { timeout: 5000 });
     await page.getByText("Showing unsaved draft syntax.", { exact: false }).waitFor();
     await page.getByRole("button", { name: "Open dependency.ts", exact: true }).click();
-    await page.getByRole("navigation", { name: "Open files", exact: true }).getByRole("button", { name: "dependency.ts", exact: true }).waitFor();
+    await page.getByRole("tablist", { name: "Open files", exact: true }).getByRole("tab", { name: "dependency.ts", exact: true }).waitFor();
     await page.waitForFunction(() => document.querySelector('.cm-content[contenteditable="true"]')?.textContent.includes("export const dependency = 1;"));
-    assert.equal(await page.getByRole("navigation", { name: "Open files", exact: true }).getByRole("button", { name: "dependency.ts", exact: true }).getAttribute("aria-pressed"), "true");
-    await page.getByRole("navigation", { name: "Open files", exact: true }).getByRole("button", { name: "fixture.ts •", exact: true }).click();
+    assert.equal(await page.getByRole("tablist", { name: "Open files", exact: true }).getByRole("tab", { name: "dependency.ts", exact: true }).getAttribute("aria-selected"), "true");
+    await page.getByRole("tablist", { name: "Open files", exact: true }).getByRole("tab", { name: "fixture.ts •", exact: true }).click();
     await page.waitForFunction(() => document.querySelector('.cm-content[contenteditable="true"]')?.textContent.includes("renamedFixture"));
     return { language: "TypeScript", selectedSymbol: "renamedFixture", unsavedDraftRetained: true, relatedFile: "dependency.ts", relatedWorkspace: "hosted", apiResponses: "synthetic read/list only; no provider or file writes" };
   });
@@ -187,18 +189,18 @@ try {
   });
   await check(phone, "page-reading-position", async () => {
     await navigate(phone, "/?section=settings&pane=data", "settings");
-    await phone.getByRole("button", { name: "Save account limits", exact: true }).waitFor();
-    const scroller = phone.locator('main.main-stage > div[style*="overflow-y"]');
+    await phone.getByRole("heading", { name: "Data and retention", exact: true }).waitFor();
+    const scroller = phone.locator('main.main-stage > div.min-h-0.flex-1');
     await scroller.hover(); await phone.mouse.wheel(0, 1600);
-    await phone.waitForFunction(() => document.querySelector('main.main-stage > div[style*="overflow-y"]')?.scrollTop > 300, undefined, { timeout: 5000 });
+    await phone.waitForFunction(() => document.querySelector('main.main-stage > div.min-h-0.flex-1')?.scrollTop > 300, undefined, { timeout: 5000 });
     await phone.evaluate(() => new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve))));
     const before = await scroller.evaluate((node) => node.scrollTop);
     observations["page-reading-position"] = { expectedTop: before, before: await observedState(phone) };
     await navigate(phone, "/?section=projects", "projects");
     observations["page-reading-position"].shortPage = await observedState(phone);
     await navigate(phone, "/?section=settings&pane=data", "settings");
-    await phone.getByRole("button", { name: "Save account limits", exact: true }).waitFor();
-    await phone.waitForFunction((expected) => Math.abs(document.querySelector('main.main-stage > div[style*="overflow-y"]').scrollTop - expected) < 3, before, { timeout: 5000 });
+    await phone.getByRole("heading", { name: "Data and retention", exact: true }).waitFor();
+    await phone.waitForFunction((expected) => Math.abs(document.querySelector('main.main-stage > div.min-h-0.flex-1').scrollTop - expected) < 3, before, { timeout: 5000 });
     return { longPage: "Settings Data", shorterPage: "Projects", restoredScrollTop: before, input: "real mouse wheel" };
   });
   await check(phone, "mobile-drawer-reduce-and-resize", async () => {
@@ -256,28 +258,37 @@ try {
       await videoPage.getByTestId("home-command").fill(`Synthetic ${outcome} video start; no provider may be called`);
       await videoPage.getByTestId("home-command").press("Enter");
       await videoPage.waitForFunction(() => window.__syntheticVideo.starts.length === 1);
-      await videoPage.getByText("Submitting the video request…", { exact: true }).filter({ visible: true }).waitFor();
+      await videoPage.getByText("Submitting the video with a saved recovery reference. No automatic generation retry will occur.", { exact: true }).filter({ visible: true }).waitFor();
       await videoPage.clock.fastForward(5500);
-      assert.equal(await videoPage.getByText(/Video accepted|Rendering is in progress|Rendering video/i).filter({ visible: true }).count(), 0);
+      assert.equal(await videoPage.getByText(/Video accepted|Rendering is in progress|Rendering video|saved video job is rendering/i).filter({ visible: true }).count(), 0);
       assert.equal(await videoPage.evaluate(() => window.__syntheticVideo.statuses.length), 0);
       await videoPage.screenshot({ path: resolve(output, `transition-video-${outcome}-submitting.png`), fullPage: false });
       if (outcome === "rejected") {
         await videoPage.evaluate(() => window.__syntheticVideo.answerStart({ ok: false, error: "Synthetic video start rejected before acceptance." }, 503));
         await videoPage.getByText("Synthetic video start rejected before acceptance.", { exact: true }).filter({ visible: true }).first().waitFor();
         await videoPage.clock.fastForward(5500);
-        assert.equal(await videoPage.getByText("Submitting the video request…", { exact: true }).filter({ visible: true }).count(), 0);
-        assert.equal(await videoPage.getByText(/Video accepted|Rendering is in progress|Rendering video/i).filter({ visible: true }).count(), 0);
+        assert.equal(await videoPage.getByText("Submitting the video with a saved recovery reference. No automatic generation retry will occur.", { exact: true }).filter({ visible: true }).count(), 0);
+        assert.equal(await videoPage.getByText(/Video accepted|Rendering is in progress|Rendering video|saved video job is rendering/i).filter({ visible: true }).count(), 0);
         assert.equal(await videoPage.evaluate(() => window.__syntheticVideo.statuses.length), 0);
       } else {
-        await videoPage.evaluate(() => window.__syntheticVideo.answerStart({ ok: true, requestId: "synthetic-video-accepted", model: "synthetic-video-model" }, 200));
-        await videoPage.getByText("Video accepted. Rendering is in progress.", { exact: true }).filter({ visible: true }).waitFor();
+        await videoPage.evaluate(() => {
+          const state = window.__syntheticVideo;
+          const { operationId, chatId, prompt } = state.starts[0];
+          const at = new Date().toISOString();
+          state.job = { ownerId: "dev-user", operationId, chatId, prompt, requestId: "synthetic-video-accepted", model: "synthetic-video-model", state: "accepted", createdAt: at, updatedAt: at, expiresAt: null, url: "", error: "", temporary: false };
+          state.answerStart({ ok: true, state: "pending", job: state.job, requestId: state.job.requestId, model: state.job.model }, 200);
+        });
+        await videoPage.getByText("The saved video job is rendering. You can leave this view and resume status checks in Media recovery.", { exact: true }).filter({ visible: true }).waitFor();
         await videoPage.clock.fastForward(5500);
         await videoPage.waitForFunction(() => window.__syntheticVideo.statuses.length === 1);
         const status = await videoPage.evaluate(() => window.__syntheticVideo.statuses[0]);
-        assert.equal(status.requestId, "synthetic-video-accepted");
         assert.equal(status.operationId, await videoPage.evaluate(() => window.__syntheticVideo.starts[0].operationId));
-        await videoPage.evaluate(() => window.__syntheticVideo.answerStatus({ ok: true, state: "done", url: "https://fixture.invalid/synthetic-retained-video.mp4", model: "synthetic-video-model" }, 200));
-        await videoPage.getByText("Video is ready.", { exact: true }).filter({ visible: true }).waitFor();
+        await videoPage.evaluate(() => {
+          const state = window.__syntheticVideo;
+          const job = { ...state.job, state: "completed", url: "https://fixture.invalid/synthetic-retained-video.mp4", updatedAt: new Date().toISOString() };
+          state.answerStatus({ ok: true, state: "done", job, url: job.url, requestId: job.requestId, model: job.model }, 200);
+        });
+        await videoPage.getByText("Video is ready in its original conversation. Its saved operation is available in Media recovery.", { exact: true }).filter({ visible: true }).waitFor();
         await videoPage.clock.fastForward(5500);
         assert.equal(await videoPage.evaluate(() => window.__syntheticVideo.statuses.length), 1);
       }

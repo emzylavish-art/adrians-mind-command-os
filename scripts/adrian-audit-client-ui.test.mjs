@@ -86,7 +86,7 @@ test("AA006/007/008: actual location effects preserve first Back entry, Settings
   cleanup();
 });
 
-test("AA006: entering a Settings pane resets the actual page scroller and focuses its heading", () => {
+test("AA006: entering a Settings pane focuses its heading without overriding the restored position", () => {
   const scroller = { scrollTop: 405 };
   let focused = false;
   const frame = [];
@@ -97,7 +97,7 @@ test("AA006: entering a Settings pane resets the actual page scroller and focuse
   });
   assert.ok(call.arguments[1].getText(source).includes("settingsPane"));
   run(); frame[0]();
-  assert.equal(scroller.scrollTop, 0);
+  assert.equal(scroller.scrollTop, 405);
   assert.equal(focused, true);
 });
 
