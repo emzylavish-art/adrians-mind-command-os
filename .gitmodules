@@ -93,3 +93,6 @@
 [submodule "upstream/cap"]
 	path = upstream/cap
 	url = https://github.com/CapSoftware/Cap.git
+[submodule "security-lab/artex"]
+	path = security-lab/artex
+	url = https://github.com/jiwoochris/artex-global.git
