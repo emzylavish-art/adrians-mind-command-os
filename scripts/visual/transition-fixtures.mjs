@@ -152,6 +152,60 @@ try {
   });
   report.desktopTransport = transport.summary(); await context.close();
 
+  const providerContext = await browser.newContext({ viewport: { width: 1440, height: 900 }, serviceWorkers: "block" });
+  const providerModels = { gemini: "gemini-fixture-model", openrouter: "fixture/free-model:free" };
+  const providerTransport = await installVisualFixture(providerContext, origin, "chat-interrupted", { providerModels, preserveOnReload: true });
+  const requests = [];
+  const providerPath = origin + "/?section=chat&chat=fixture-chat";
+  let selectedRoute;
+  await providerContext.route((url) => url.origin === origin && url.pathname === "/api/mind/turn", async (route) => {
+    const request = route.request();
+    if (request.method() === "GET") {
+      return route.fulfill({ json: { operationId: `1760000000000-${crypto.randomUUID()}` } });
+    }
+    if (request.method() !== "POST") return route.abort("blockedbyclient");
+    const { provider, requestedModel, freeOnly } = request.postDataJSON();
+    requests.push({ provider, requestedModel, freeOnly });
+    if (provider !== selectedRoute || requestedModel !== providerModels[selectedRoute] || (freeOnly === true) !== (provider === "openrouter")) {
+      return route.fulfill({ status: 409, json: { ok: false, error: "The fixture received a different route than the selected provider." } });
+    }
+    const done = { text: `Synthetic ${provider} response`, provider, model: requestedModel, usage: null, usedIds: [], requestId: `fixture-${provider}-receipt` };
+    return route.fulfill({ contentType: "text/event-stream", body: `event: done\ndata: ${JSON.stringify(done)}\n\n` });
+  });
+  const providerPage = await providerContext.newPage();
+  await providerPage.goto(providerPath, { waitUntil: "domcontentloaded" });
+  await providerPage.locator("#message-fixture-message").waitFor();
+  for (const provider of Object.keys(providerModels)) {
+    await check(providerPage, `selected-${provider}-immediate-send-and-reload`, async () => {
+      selectedRoute = provider;
+      const initialCount = requests.length;
+      const controls = providerPage.getByRole("button", { name: "Open controls", exact: true });
+      const choice = providerPage.getByTestId(`control-module-${provider}`);
+      const composer = providerPage.locator("form.thread-composer");
+      await providerPage.waitForFunction(() => Object.keys(localStorage).some((key) => key.endsWith(".amcos.failover.v1") && localStorage.getItem(key) === "none"));
+      await composer.getByRole("textbox", { name: "Message", exact: true }).fill("Synthetic provider routing check");
+      await controls.click();
+      await choice.click();
+      await composer.getByRole("button", { name: "Send", exact: true }).click();
+      const reply = providerPage.locator("article.turn-assistant").filter({ hasText: `Synthetic ${provider} response` });
+      await reply.waitFor();
+      assert.match(await reply.innerText(), new RegExp(`${provider} · ${providerModels[provider]}`));
+      assert.equal(requests.length, initialCount + 1);
+      assert.deepEqual({ ...requests.at(-1), freeOnly: requests.at(-1).freeOnly === true }, { provider, requestedModel: providerModels[provider], freeOnly: provider === "openrouter" });
+      await providerPage.screenshot({ path: resolve(output, `transition-${provider}-synthetic-receipt.png`) });
+      await providerPage.reload({ waitUntil: "domcontentloaded" });
+      await controls.click();
+      await choice.waitFor();
+      assert.equal(await choice.getAttribute("aria-checked"), "true");
+      await controls.click();
+      assert.equal(requests.length, initialCount + 1);
+      return { provider, model: providerModels[provider], paidFallbackEnabled: false, reloadSelection: true, inference: "mocked HTTP response" };
+    });
+  }
+  report.providerTransport = providerTransport.summary();
+  report.providerRequests = requests;
+  await providerContext.close();
+
   const mobile = await browser.newContext({ viewport: { width: 390, height: 844 }, isMobile: true, serviceWorkers: "block" });
   const mobileTransport = await installVisualFixture(mobile, origin, "chat-interrupted", { workspace });
   // A seeded message exists only after client hydration; the SSR home alone is not an interaction-ready signal.

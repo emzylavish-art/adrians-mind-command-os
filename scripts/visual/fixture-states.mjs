@@ -32,7 +32,7 @@ export const VISUAL_FIXTURES = {
     return { ...blank(), agents: [agent], runs: [{ id: "fixture-run", agentId: agent.id, parentId: null, depth: 0, goal: "Synthetic blocked task", state: "waiting_approval", step: 0, maxSteps: 1, workerId: null, leaseUntil: null, approvedActions: [], plan: [], result: "", error: "Fixture approval required", createdAt: at, updatedAt: at }] };
   } },
 };
-export function fixtureResponse(name, method, pathname, body = {}) {
+export function fixtureResponse(name, method, pathname, body = {}, providerModels = {}) {
   const fixture = VISUAL_FIXTURES[name];
   if (!fixture) throw new Error("Unknown visual fixture.");
   if (method === "GET" && pathname === "/api/auth/get-session") return json({ user: { id: "fixture-owner", name: "Synthetic fixture owner", email: "fixture@example.invalid", emailVerified: false }, session: { id: "fixture-session", userId: "fixture-owner", expiresAt: "2099-01-01T00:00:00.000Z" } });
@@ -42,7 +42,7 @@ export function fixtureResponse(name, method, pathname, body = {}) {
     const rpc = (result) => json({ result, context: {} });
     if (/^listNotionWorkspaces(?:_|$)/.test(exported)) return rpc(fixture.notion ? [{ id: "fixture-workspace", name: "Synthetic workspace", active: true, issues: [] }] : []);
     if (/^(?:mcpList|mcpRegistryList)(?:_|$)/.test(exported)) return rpc({ servers: [] });
-    if (/^mindStatus(?:_|$)/.test(exported)) return rpc({ ok: true, grok: "configured", model: "synthetic-fixture-model", modelTiers: [], environmentCatalogs: [], database: "Synthetic local fixture", isolation: "clear", executionHalted: false, executionHaltState: "off", signedIn: true, persistence: "Synthetic browser state only", databaseBackend: "pglite", providerModels: {}, searchProvider: "Unavailable", providers: { grok: true }, logicRoutes: [], checkedAt: at });
+    if (/^mindStatus(?:_|$)/.test(exported)) return rpc({ ok: true, grok: "configured", model: "synthetic-fixture-model", modelTiers: [], environmentCatalogs: [], database: "Synthetic local fixture", isolation: "clear", executionHalted: false, executionHaltState: "off", signedIn: true, persistence: "Synthetic browser state only", databaseBackend: "pglite", providerModels, searchProvider: "Unavailable", providers: { grok: true, ...Object.fromEntries(Object.keys(providerModels).map((id) => [id, true])) }, logicRoutes: [], checkedAt: at });
     if (/^notionStatus(?:_|$)/.test(exported)) return rpc(fixture.notion || { state: "disconnected", detail: "Synthetic unconnected fixture." });
     if (/^readExecutionControl(?:_|$)/.test(exported)) return rpc({ halted: false, state: "off" });
   }
@@ -84,17 +84,22 @@ export async function installVisualFixture(context, baseUrl, name, options = {})
     if (choice === "fixture") {
       counts.fulfilled++;
       let body = {}; try { body = request.postDataJSON() || {}; } catch { /* Unknown RPC format stays refused. */ }
-      return route.fulfill(fixtureResponse(name, request.method(), new URL(request.url()).pathname, body));
+      return route.fulfill(fixtureResponse(name, request.method(), new URL(request.url()).pathname, body, options.providerModels));
     }
     return route.continue();
   });
   await context.routeWebSocket("**/*", (socket) => { counts.blocked++; socket.close(); });
-  await context.addInitScript(({ workspace, fixtureId }) => {
-    window.localStorage.clear(); window.sessionStorage.clear();
-    window.localStorage.setItem("amcos.workspace.v1", JSON.stringify(workspace));
-    window.localStorage.setItem("amcos.workspace.v1.u.fixture-owner", JSON.stringify(workspace));
+  await context.addInitScript(({ workspace, fixtureId, preserveOnReload, origin }) => {
+    if (location.origin !== origin) return;
+    if (!preserveOnReload || sessionStorage.getItem("mind.fixture.initialized") !== fixtureId) {
+      localStorage.clear();
+      sessionStorage.clear();
+      localStorage.setItem("amcos.workspace.v1", JSON.stringify(workspace));
+      localStorage.setItem("amcos.workspace.v1.u.fixture-owner", JSON.stringify(workspace));
+      sessionStorage.setItem("mind.fixture.initialized", fixtureId);
+    }
     const markFixture = () => { if (document.documentElement) document.documentElement.dataset.visualFixture = fixtureId; };
     markFixture(); document.addEventListener("DOMContentLoaded", markFixture, { once: true });
-  }, { workspace: options.workspace || (fixture.workspace ? fixture.workspace() : blank()), fixtureId: name });
+  }, { workspace: options.workspace || (fixture.workspace ? fixture.workspace() : blank()), fixtureId: name, preserveOnReload: options.preserveOnReload === true, origin: new URL(baseUrl).origin });
   return { summary: () => ({ ...counts, mode: "intercepted synthetic responses", physicalDevice: false }) };
 }
