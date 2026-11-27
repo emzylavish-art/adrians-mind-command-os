@@ -489,6 +489,25 @@ async function dispatchMindTurn(request: Request, userId: string, data: Record<s
   if (body.memory === "off" && initialNotes.length) return json({ ok: false, error: "Memory is off. No saved notes or helper requests were sent." }, 400);
 
   const localOwner = userId === DEV_USER_ID && isLoopbackPreview() && !process.env.VERCEL;
+  const { githubAction, runGithubAction } = await import("./github-turn.ts");
+  const action = typeof body.text === "string" && !sanitizeAttachments(body.images).length ? githubAction(body.text) : null;
+  if (action) {
+    const { resolveOAuthAccessToken } = await import("./connectors/token-refresh.ts");
+    const grant = await resolveOAuthAccessToken({ ownerId: userId, connector: "github" });
+    if (!grant.ok) return json({ ok: false, error: grant.error + " Open Connections → GitHub." }, 409);
+    const halted = await checkStop();
+    if (halted) return halted;
+    try {
+      if (usage) { usage.provider = "GitHub"; usage.model = "GitHub API"; delete usage.requestedModel; }
+      markDispatched();
+      const result = await runGithubAction(action, grant.token, request.signal);
+      const done = { ...result, model: "GitHub API", provider: "GitHub", usage: null, usedIds: [] };
+      return new Response("event: delta\ndata: " + JSON.stringify({text: result.text}) + "\n\nevent: done\ndata: " + JSON.stringify(done) + "\n\n", { headers: { "content-type": "text/event-stream", "cache-control": "no-store" } });
+    } catch (error) {
+      const detail = error instanceof Error && /^(GitHub|Reconnect GitHub)/.test(error.message) ? error.message : "GitHub's response could not be verified.";
+      return json({ ok: false, provider: "GitHub", error: detail + (action.kind === "update" ? " Check the branch history before retrying." : "") }, 502);
+    }
+  }
   if (localOwner && adrianPcEnabled() && typeof body.text === "string" && body.text.trim()) {
     const pc = await runAdrianPc({ text: body.text, halted: false });
     if (pc.ran) {

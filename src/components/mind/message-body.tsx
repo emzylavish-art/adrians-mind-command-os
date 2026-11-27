@@ -94,13 +94,17 @@ const AnswerTabsContent = memo(function AnswerTabsContent({
   onDownloadImage,
   onFailure,
 }: MessageBodyProps) {
-  const tabs = ["answer", "links", "images"] as const;
-  const [tab, setTab] = useState<(typeof tabs)[number]>("answer");
+  type Section = "answer" | "links" | "images";
+  const [selected, setTab] = useState<Section>("answer");
   const id = useId();
-  const links = useMemo(() => {
+  const { links, embedded } = useMemo(() => {
+    const embedded = new Map<string, string>();
     const destinations = new Map<string, string>();
     for (const block of splitBlocks(text)) {
       if (block.kind !== "text") continue;
+      for (const match of block.text.replace(/`[^`]*`/g, "").matchAll(MD_IMAGE)) {
+        if (/^(https?:\/\/|data:image\/)/i.test(match[2])) embedded.set(match[2], match[1] || "Image");
+      }
       const body = block.text.replace(MD_IMAGE, "").replace(/`[^`]*`/g, "");
       const prose = body.replace(/\[([^\]]+)\]\((https?:\/\/[^\s)]+)\)/g, (_, label: string, url: string) => {
         destinations.set(url, label);
@@ -111,12 +115,19 @@ const AnswerTabsContent = memo(function AnswerTabsContent({
         if (!destinations.has(url)) destinations.set(url, url);
       }
     }
-    return [...destinations.entries()];
+    return { links: [...destinations.entries()], embedded };
   }, [text]);
-  const pictures = images ?? [];
+  const pictures = [...images ?? []];
+  for (const [dataUrl, name] of embedded) {
+    if (!pictures.some(image => image.dataUrl === dataUrl)) pictures.push({ dataUrl, name });
+  }
+  const tabs: Section[] = ["answer"];
+  if (links.length) tabs.push("links");
+  if (pictures.length) tabs.push("images");
+  const tab = tabs.includes(selected) ? selected : "answer";
   return (
     <div data-testid="answer-tabs">
-      <div className="mb-2 flex flex-wrap gap-2" role="tablist" aria-label="Answer, links, and images" onKeyDown={(event) => {
+      {tabs.length > 1 && <div className="mb-3 flex flex-wrap gap-1" role="tablist" aria-label="Answer, links, and images" onKeyDown={(event) => {
         const index = tabs.indexOf(tab);
         const next = event.key === "ArrowLeft" ? (index + tabs.length - 1) % tabs.length
           : event.key === "ArrowRight" ? (index + 1) % tabs.length
@@ -127,12 +138,12 @@ const AnswerTabsContent = memo(function AnswerTabsContent({
         event.currentTarget.querySelectorAll<HTMLButtonElement>("[role=tab]")[next]?.focus();
       }}>
         {tabs.map((item) => (
-          <button key={item} id={`${id}-${item}`} type="button" role="tab" aria-selected={tab === item} aria-controls={`${id}-panel`} tabIndex={tab === item ? 0 : -1} className={`chat-button chat-button--secondary${tab === item ? " is-selected" : ""}`} disabled={item === "links" ? links.length === 0 : item === "images" ? pictures.length === 0 : false} aria-disabled={item === "links" ? links.length === 0 : item === "images" ? pictures.length === 0 : undefined} onClick={() => setTab(item)}>
+          <button key={item} id={`${id}-${item}`} type="button" role="tab" aria-selected={tab === item} aria-controls={`${id}-panel`} tabIndex={tab === item ? 0 : -1} className={`chat-button chat-button--secondary${tab === item ? " is-selected" : ""}`} onClick={() => setTab(item)}>
             {item === "answer" ? "Answer" : item === "links" ? `Links${links.length ? ` ${links.length}` : ""}` : `Images${pictures.length ? ` ${pictures.length}` : ""}`}
           </button>
         ))}
-      </div>
-      <div id={`${id}-panel`} role="tabpanel" aria-labelledby={`${id}-${tab}`} tabIndex={0}>
+      </div>}
+      <div id={`${id}-panel`} role={tabs.length > 1 ? "tabpanel" : undefined} aria-labelledby={tabs.length > 1 ? `${id}-${tab}` : undefined} tabIndex={tabs.length > 1 ? 0 : undefined}>
       {tab === "links" ? (
         links.length ? <ul className="space-y-1">{links.map(([href, label]) => <li key={href}><a className="break-all text-accent underline" href={href} target="_blank" rel="noreferrer">{label}</a></li>)}</ul> : <p className="text-sm text-muted">No links were returned with this answer.</p>
       ) : tab === "images" ? (

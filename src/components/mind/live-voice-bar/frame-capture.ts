@@ -18,7 +18,7 @@ export type FrameStreamHandle = {
   gate: FrameGate;
 };
 
-function canvasJpeg(video: HTMLVideoElement, quality = 0.7): string | null {
+export function canvasJpeg(video: HTMLVideoElement, quality = 0.7): string | null {
   const w = video.videoWidth || 0;
   const h = video.videoHeight || 0;
   if (!w || !h) return null;

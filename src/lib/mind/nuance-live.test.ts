@@ -12,7 +12,8 @@ import {
   redactSecrets,
   sessionRequest,
 } from "./nuance-live.ts";
-import { isSafeSecretsPath, readNuanceKey, saveNuanceKey } from "./nuance-live.server.ts";
+import { isSafeSecretsPath, readNuanceKey, readOwnerNuanceKey, saveNuanceKey, saveOwnerNuanceKey } from "./nuance-live.server.ts";
+import type { Sql } from "../db.ts";
 
 const FAKE_KEY = "nk_testkey012345678901234567890";
 
@@ -100,4 +101,32 @@ test("the key file stays outside the repo and round-trips", () => {
   } finally {
     rmSync(dir, { recursive: true, force: true });
   }
+});
+
+test("hosted Nuance keys are encrypted, owner-scoped, and confirmed after save", async () => {
+  const rows = new Map<string, string>();
+  const sql = (async () => []) as unknown as Sql;
+  sql.query = async <T>(text: string, params: unknown[] = []) => {
+    const owner = String(params[0] ?? "");
+    if (/^select access_token_enc/i.test(text.trim())) {
+      const encrypted = rows.get(owner);
+      return (encrypted ? [{ access_token_enc: encrypted }] : []) as T[];
+    }
+    if (/^insert into mind_oauth_connections/i.test(text.trim())) {
+      assert.equal(params[1], "nuance");
+      rows.set(owner, String(params[2] ?? ""));
+      return [] as T[];
+    }
+    throw new Error("unexpected query");
+  };
+  const deps = { sql, secret: "nuance-test-encryption-secret" };
+  assert.deepEqual(await saveOwnerNuanceKey("owner-a", FAKE_KEY, deps), { ok: true });
+  assert.notEqual(rows.get("owner-a"), FAKE_KEY);
+  assert.equal(await readOwnerNuanceKey("owner-a", deps), FAKE_KEY);
+  assert.equal(await readOwnerNuanceKey("owner-b", deps), null);
+  assert.deepEqual(await saveOwnerNuanceKey("owner-b", "not-a-key", deps), {
+    ok: false,
+    error: "That is not a Nuance key. Nothing was saved.",
+  });
+  assert.equal(JSON.stringify([...rows.entries()]).includes(FAKE_KEY), false);
 });

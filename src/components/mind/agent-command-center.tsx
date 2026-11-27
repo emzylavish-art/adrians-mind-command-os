@@ -64,7 +64,10 @@ function AgentRow({ bot, onSelect }: { bot: BotNode; onSelect: (bot: BotNode) =>
 }
 
 export function AgentCommandCenter() {
-  const [operations, setOperations] = useState(false);
+  // Keep the live fleet graph visible on first load. Account connections and
+  // operational health remain above it, but the primary dashboard must not be
+  // hidden behind an undiscoverable disclosure control.
+  const [operations, setOperations] = useState(true);
   return <div className="h-full overflow-y-auto bg-bg text-fg">
     <OwnerDashboard />
     <OperationalHealthCenter />

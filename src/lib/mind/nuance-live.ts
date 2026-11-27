@@ -141,7 +141,7 @@ export async function mintNuanceSession(input: {
   apiUrl?: string;
 }): Promise<MintResult> {
   if (!isNuanceKey(input.key)) {
-    return { ok: false, error: "A Nuance key is not saved on this computer.", status: 409 };
+    return { ok: false, error: "A Nuance key is not saved for this account.", status: 409 };
   }
   const personaId = input.personaId ?? "sonia";
   if (!isSelectablePersona(personaId)) {

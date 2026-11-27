@@ -1,6 +1,13 @@
 import { useEffect, useRef, useState } from "react";
 import { NUANCE_PERSONAS, type NuancePersonaChoice } from "@/lib/mind/nuance-live";
 
+import { getBearerToken } from "@/lib/auth/client";
+
+function callHeaders(): Record<string, string> {
+  const token = getBearerToken();
+  return { "content-type": "application/json", ...(token ? { authorization: `Bearer ${token}` } : {}) };
+}
+
 type NuanceUser = {
   audioTrack?: unknown;
   isMuted?: boolean;
@@ -10,6 +17,7 @@ type NuanceUser = {
 };
 
 type NuanceConversation = {
+  readonly id: string | null;
   connect: () => Promise<void>;
   disconnect: () => Promise<void>;
   user: NuanceUser;
@@ -80,6 +88,7 @@ export function NuanceCallCard(props: { halted: boolean }) {
   const videoRef = useRef<HTMLVideoElement>(null);
   const audioRef = useRef<HTMLAudioElement>(null);
   const conversationRef = useRef<NuanceConversation | null>(null);
+  const generation = useRef(0);
   const mintOnce = useRef(false);
   const tokenIssued = useRef(false);
   const [configured, setConfigured] = useState(false);
@@ -92,16 +101,17 @@ export function NuanceCallCard(props: { halted: boolean }) {
   const [live, setLive] = useState(false);
   const [transcript, setTranscript] = useState("");
 
-  async function releaseServerCall() {
+  async function releaseServerCall(id: string) {
     await fetch("/api/mind/nuance/session", {
       method: "POST",
       credentials: "same-origin",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify({ action: "end" }),
+      headers: callHeaders(),
+      body: JSON.stringify({ action: "end", id }),
     }).catch(() => undefined);
   }
 
   async function hangUp() {
+    generation.current++;
     const current = conversationRef.current;
     conversationRef.current = null;
     mintOnce.current = false;
@@ -113,10 +123,9 @@ export function NuanceCallCard(props: { halted: boolean }) {
       try {
         await current.disconnect();
       } catch {
-        // The room is already gone.
+        if (current.id) await releaseServerCall(current.id);
       }
     }
-    await releaseServerCall();
   }
 
   useEffect(() => {
@@ -134,8 +143,8 @@ export function NuanceCallCard(props: { halted: boolean }) {
 
   useEffect(() => {
     let stop = false;
-    void fetch("/api/mind/nuance/session", { credentials: "same-origin", cache: "no-store" })
-      .then((response) => response.json())
+    void fetch("/api/mind/nuance/session", { credentials: "same-origin", headers: callHeaders(), cache: "no-store" })
+      .then((response) => { if (!response.ok) throw new Error(); return response.json(); })
       .then((data: { configured?: boolean; personas?: NuancePersonaChoice[]; active?: number }) => {
         if (stop) return;
         const saved = data.configured === true;
@@ -145,7 +154,7 @@ export function NuanceCallCard(props: { halted: boolean }) {
         setStatus(open
           ? "A video call is already open. Hang up before starting another."
           : saved
-            ? "Key saved on this computer."
+            ? "Key saved securely for this account."
             : "Paste a Nuance key to start a video call.");
       })
       .catch(() => {
@@ -156,21 +165,24 @@ export function NuanceCallCard(props: { halted: boolean }) {
 
   async function saveKey() {
     setStatus("Saving the key.");
+    try {
     const response = await fetch("/api/mind/nuance/key", {
       method: "POST",
       credentials: "same-origin",
-      headers: { "content-type": "application/json" },
+      headers: callHeaders(),
       body: JSON.stringify({ key: keyDraft.trim() }),
     });
-    const data = await response.json() as { ok?: boolean; error?: string };
-    setKeyDraft("");
-    if (!response.ok || data.ok !== true) {
-      setConfigured(false);
+    const data = await response.json() as { ok?: boolean; configured?: boolean; error?: string };
+    if (!response.ok || data.ok !== true || data.configured !== true) {
       setStatus(data.error || "The key was not saved.");
       return;
     }
     setConfigured(true);
-    setStatus("Key saved on this computer.");
+    setKeyDraft("");
+    setStatus("Key saved securely for this account.");
+    } catch {
+      setStatus("Save could not be confirmed. Reload to check the saved key.");
+    }
   }
 
   async function toggleMute() {
@@ -194,30 +206,34 @@ export function NuanceCallCard(props: { halted: boolean }) {
       setStatus(choice?.reason || "That persona is not on the Nuance API. Nothing was started.");
       return;
     }
+    const attempt = ++generation.current;
+    mintOnce.current = true;
     setTranscript("");
     setStatus("Opening the microphone.");
     const microphone = await openMicrophone();
+    if (attempt !== generation.current) { if (microphone.ok) microphone.stop(); return; }
     if (!microphone.ok) {
+      mintOnce.current = false;
       setMic(microphone.error);
       setStatus(microphone.error);
       return;
     }
-    setMic("Microphone is live.");
+    setMic("Microphone permission granted. Connecting audio…");
     microphone.stop();
-    mintOnce.current = true;
     tokenIssued.current = false;
     setStatus(`Starting ${choice.name}. One session only.`);
     setLive(true);
     try {
       const sdk = await loadSdk();
+      if (attempt !== generation.current) return;
       const conversation = sdk.createNuanceConversation({
         token: async () => {
-          if (tokenIssued.current) throw new Error("A second session was not started.");
+          if (attempt !== generation.current || tokenIssued.current) throw new Error("A second session was not started.");
           tokenIssued.current = true;
           const response = await fetch("/api/mind/nuance/session", {
             method: "POST",
             credentials: "same-origin",
-            headers: { "content-type": "application/json" },
+            headers: callHeaders(),
             body: JSON.stringify({ action: "start", persona: choice.id, camera: false }),
           });
           const data = await response.json() as { token?: string; error?: string };
@@ -233,11 +249,13 @@ export function NuanceCallCard(props: { halted: boolean }) {
       });
       conversationRef.current = conversation;
       conversation.onInterfaceEvent((event) => {
+        if (attempt !== generation.current) return;
         if (event.type === "session.output_transcript.delta" && typeof event.delta === "string") {
           setTranscript((current) => `${current}${event.delta}`.slice(-2000));
         }
       });
       conversation.onChange((event) => {
+        if (attempt !== generation.current) return;
         const video = videoRef.current;
         const audio = audioRef.current;
         if (event.type === "tracks-changed" && video && audio) {
@@ -247,13 +265,17 @@ export function NuanceCallCard(props: { halted: boolean }) {
         }
         if (event.type === "avatar-presented") {
           setStatus(`${choice.name} is on the call. ${choice.name} is an AI.`);
-          setMic("Microphone is live.");
+          setMic(conversation.user.audioTrack && !conversation.user.isMuted ? "Microphone is live." : "Waiting for microphone audio.");
           void conversation.sendInterfaceEvent({
             type: "response.create",
             response: { instructions: `Greet the owner in one short sentence and say you are ${choice.name}, an AI.` },
           });
         }
         if (event.type === "session-ended") {
+          if (conversationRef.current !== conversation) return;
+          conversationRef.current = null;
+          mintOnce.current = false;
+          tokenIssued.current = false;
           setLive(false);
           setMic("Microphone is off.");
           setStatus("The video call ended.");
@@ -261,6 +283,7 @@ export function NuanceCallCard(props: { halted: boolean }) {
       });
       await conversation.connect();
     } catch (error) {
+      if (attempt !== generation.current) return;
       await hangUp();
       setStatus(safeStatus(error, callError(error)));
     }

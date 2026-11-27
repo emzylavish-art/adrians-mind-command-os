@@ -1,4 +1,6 @@
 import { loadVoiceStages, VOICE_STAGES_KEY } from "../src/lib/mind/voice/provider-selection.ts";
+import { snapshotImages } from "../src/lib/mind/retry-fidelity.ts";
+import { resolveSendPath } from "../src/lib/mind/composer-modes.ts";
 import { snapshotSpeakRetryParams } from "../src/lib/mind/voice/speak-action.ts";
 import { createVoiceStagesReceipt, recordVoiceStage, recordVoicePlayback, storeVoiceReceipt } from "../src/lib/mind/voice/stage-receipts.ts";
 import assert from "node:assert/strict";
@@ -80,7 +82,8 @@ test("AA003: actual recorded Speak keeps its first new chat, uses selected answe
   const cleanup = scopeCleanup(host.context);
   const context = host.context;
   context.speakChatTurn = callback(commandSource, "speakChatTurn", {
-    activeId: null, wsRef: context.wsRef,
+    activeId: null, wsRef: context.wsRef, voiceSession: context.voiceSession,
+    view: "chat", draftScope: "fixture", persistDraft: false, pendingImagesRef: { current: [] }, snapshotImages, composerEffort: "auto", resolveSendPath,
     createChat: () => ({ chat: { id: "new-chat", memory: "off", temporary: false, messages: [] } }),
     memoryChoice: "off", autonomy: "ask", temporary: false, chatProjectId: null, projectChoice: null, defaultPersonalityId: null,
     setActiveId: (id) => { host.state.activeId = id; cleanup(); }, setView: () => {},

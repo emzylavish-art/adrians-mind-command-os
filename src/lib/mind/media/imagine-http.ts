@@ -9,7 +9,7 @@ import {
   mapImagineHttpError,
   setImagineRateLimitStore,
 } from "./harden.ts";
-import { createFileRateLimitStore, DEFAULT_IMAGINE_RATE_LIMIT_PATH } from "./rate-limit-store.ts";
+import { createFileRateLimitStore, resolveImagineRateLimitPath } from "./rate-limit-store.ts";
 import { imagineUsage } from "./spend-ledger.ts";
 import { editImagineImage, generateImagineImages, normalizeImaginePrompt, resolveImagineModel } from "./imagine.ts";
 import { readOwnerVideo, startOwnerVideo } from "./video.ts";
@@ -22,7 +22,7 @@ import { pollVideoJob, startVideoJob } from "./video-jobs.ts";
 import { downloadOwnedVideo } from "./video-download.server.ts";
 
 try {
-  setImagineRateLimitStore(createFileRateLimitStore(DEFAULT_IMAGINE_RATE_LIMIT_PATH));
+  setImagineRateLimitStore(createFileRateLimitStore(resolveImagineRateLimitPath()));
 } catch {
   /* memory store remains the default */
 }
@@ -173,11 +173,12 @@ export async function handleImagineGenerate(request: Request): Promise<Response>
     const status = clientErrorStatus(result);
     const error = mapImagineHttpError(status, result.error);
     // Do not echo the requested arbitrary model id back when rejecting — return allowlisted model only.
-    return json({ ok: false, error, model, approvalId: result.approvalId }, status);
+    return json({ ok: false, error, provider: "xai", model, approvalId: result.approvalId }, status);
   }
 
   return json({
     ok: true,
+    provider: "xai",
     model: result.reportedModel,
     requestedModel: model,
     images: result.images.map((image, index) => ({

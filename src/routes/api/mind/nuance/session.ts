@@ -9,7 +9,7 @@ import {
   endSavedConversation,
   listSavedActiveConversations,
   mintSavedNuanceSessionForPersona,
-  readNuanceKey,
+  readOwnerNuanceKey,
 } from "@/lib/mind/nuance-live.server";
 
 function reply(data: unknown, status = 200): Response {
@@ -33,10 +33,11 @@ export const Route = createFileRoute("/api/mind/nuance/session")({
       GET: async ({ request }) => {
         const user = await caller(request);
         if (user instanceof Response) return user;
-        const active = readNuanceKey() ? await listSavedActiveConversations() : { ok: true as const, ids: [] };
+        const configured = await readOwnerNuanceKey(user) !== null;
+        const active = configured ? await listSavedActiveConversations(user) : { ok: true as const, ids: [] };
         return reply({
           ok: true,
-          configured: readNuanceKey() !== null,
+          configured,
           personas: NUANCE_PERSONAS,
           active: active.ok ? active.ids.length : 0,
         });
@@ -68,17 +69,11 @@ export const Route = createFileRoute("/api/mind/nuance/session")({
         }
         if (action === "end") {
           if (endId) {
-            const ended = await endSavedConversation(endId);
+            const ended = await endSavedConversation(user, endId);
             if (!ended.ok) return reply({ ok: false, error: ended.error }, 502);
             return reply({ ok: true, ended: 1 });
           }
-          const active = await listSavedActiveConversations();
-          if (!active.ok) return reply({ ok: false, error: active.error }, active.status);
-          for (const id of active.ids) {
-            const ended = await endSavedConversation(id);
-            if (!ended.ok) return reply({ ok: false, error: ended.error }, 502);
-          }
-          return reply({ ok: true, ended: active.ids.length });
+          return reply({ ok: false, error: "Select the call to end." }, 400);
         }
         if (await haltIsOn(user)) return reply({ ok: false, error: "Emergency stop is on or unavailable. Session was not started." }, 403);
         const minted = await externalResourceCall({ owner: user, provider: "nuance", model: persona, unknownTokens: true }, () => mintSavedNuanceSessionForPersona(user, camera, persona));

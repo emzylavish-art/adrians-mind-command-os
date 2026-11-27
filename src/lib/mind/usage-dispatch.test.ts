@@ -1,3 +1,4 @@
+import * as githubTurn from "./github-turn.ts";
 import { withExecutionReceipts } from "./execution-response.ts";
 import { providerResponse, consultationResponse } from "./provider-response.ts";
 import { validatePrimaryConfiguration } from "./turn-primary-selection.ts";
@@ -200,7 +201,7 @@ test("C5 actual orchestration records two helpers and one primary without losing
     const record = async (row: UsageReceipt) => { rows.set(row.id, structuredClone(row)); };
     runInNewContext(code, {
       exports: exported, Response, Error, Date, crypto, DEV_USER_ID: "dev-user",
-      require: (specifier: string) => { assert.equal(specifier, "./halt.server.ts"); return { readHaltState: async () => "off", haltIsOn: async () => false }; },
+      require: (specifier: string) => { if (specifier === "./github-turn.ts") return githubTurn; assert.equal(specifier, "./halt.server.ts"); return { readHaltState: async () => "off", haltIsOn: async () => false }; },
       consumeSharedMindRateLimit: async () => true, randomUUID: () => operationId,
       process: { env: {} }, ADRIAN_MIND_IDENTITY: "fixture coordinator",
       withExecutionReceipts, providerResponse, consultationResponse, validatePrimaryConfiguration, toNativeProviderTurns,

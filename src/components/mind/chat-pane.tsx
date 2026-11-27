@@ -17,7 +17,7 @@ import { ComposerBar, type ComposerModelId, DictationPill as PreviewDictationPil
 import { routeForBotChat } from "@/lib/mind/bot-model";
 import { INITIAL_MESSAGE_WINDOW, messageWindow } from "@/lib/mind/render-window";
 import { nextReadingPosition } from "@/lib/mind/reading-position";
-import { Image, Mic, MicOff, Paperclip, Camera, Plus, Square, Volume2 } from "lucide-react";
+import { Copy, Check, Image, Mic, MicOff, Paperclip, Camera, Plus, Square, Volume2 } from "lucide-react";
 import { ConversationSections } from "@/components/mind/conversation-sections";
 import { MemoryChatToggle } from "@/components/mind/memory-chat-toggle";
 import { ChatMediaGallery } from "@/components/mind/media/chat-media-gallery";
@@ -528,19 +528,6 @@ export function ChatPane({
             <article key={msg.id} id={"message-" + msg.id} tabIndex={-1} className={`turn w-full max-w-none px-1 py-2 text-sm ${msg.role === "user" ? "turn-user" : "turn-assistant"}`}>
               <p className="mb-1 text-xs text-muted">{msg.role === "user" ? "You" : [msg.provider, msg.model].filter(Boolean).join(" · ") || "Assistant · model unreported"} · {stamp(msg.at)}</p>
               {msg.partialReply ? <details className="mb-3 rounded-panel border border-line p-3" open><summary>Incomplete response · not included as a completed answer</summary><MessageBody text={msg.partialReply} /><button type="button" className="min-h-11 px-3 text-xs" onClick={() => { void navigator.clipboard?.writeText(msg.partialReply!).then(() => setCopiedId(msg.id)).catch(() => setCopyError("Copy failed. Select the text and copy it manually.")); }}>{copiedId === msg.id ? "Copied incomplete response" : "Copy incomplete response"}</button></details> : null}
-              {msg.replyVersions && msg.replyVersions.length > 1 ? <details className="mb-2 text-sm"><summary>Answer versions ({msg.replyVersions.length})</summary><label>Use version <select className="min-h-11 border border-line rounded-panel bg-surface px-2" aria-label="Answer version" value={msg.selectedReplyVersionId} disabled={busy} onChange={(event) => onReplyVersion?.(msg.id, event.target.value)}>{msg.replyVersions.map((version, index) => <option key={version.id} value={version.id}>{index + 1} · {version.provider ?? version.model ?? "Provider unreported"} · {stamp(version.at)}</option>)}</select></label><div className="mt-2 grid gap-3 md:grid-cols-2">{msg.replyVersions.map((version, index) => <details key={version.id} className="rounded-panel border border-line p-2"><summary>Compare version {index + 1}</summary><MessageBody text={version.content} /></details>)}</div></details> : null}
-              {msg.contextReceipt && ("version" in msg.contextReceipt ? <ContextReceiptDetails receipt={msg.contextReceipt} /> :
-                <details><summary>Conversation context</summary><p>{msg.contextReceipt.includedMessages} of {msg.contextReceipt.availableMessages} messages included, {msg.contextReceipt.omittedMessages} omitted.</p>
-                  {msg.contextReceipt.imageWarnings.map((warning, index) => <p key={index}>{warning}</p>)}</details>)}
-              {msg.voiceStages && <VoiceStageReceipt receipt={msg.voiceStages} />}
-              {msg.deliveryMode && <p className="text-xs text-muted">Delivery: {msg.deliveryMode === "streamed" ? "provider stream" : "completed response buffered by this route"}</p>}
-              {msg.consultation?.length ? <details className="text-xs"><summary className="min-h-11 cursor-pointer">Consultation · {msg.consultation.length} selected helpers</summary>{msg.consultation.map((item) => <div key={item.id} className="my-2 rounded-panel border border-line p-2"><p>{item.id} · {item.ok ? "returned" : "failed"}{item.truncated ? ` · excerpt from ${item.originalCharacters} characters` : ""}</p><p>{item.error}</p><pre className="max-h-64 overflow-auto whitespace-pre-wrap">{item.text}</pre></div>)}</details> : null}
-              {msg.skillReceipts?.length ? <details className="mb-2 text-xs text-muted"><summary className="min-h-11 cursor-pointer">Skills considered ({msg.skillReceipts.length})</summary><ul>{msg.skillReceipts.map((item) => <li key={item.skillId}>{item.skillId} · version {item.version} · {skillReceiptSummary(item)}</li>)}</ul></details> : null}
-              {msg.researchRefs?.length ? <details className="mb-2 text-xs text-muted"><summary>Saved research references</summary><ul>{msg.researchRefs.map((item) => <li key={`${item.reportId}:${item.version}`}>{item.question} · version {item.version} · {item.reportId} · retrieved {stamp(item.at)}</li>)}</ul></details> : null}
-              {msg.memoryUsedIds?.length ? <details className="mb-2 text-xs text-muted"><summary>{msg.memoryUsedIds.length} saved notes used for this response</summary><ul>{msg.memoryUsedIds.map((id) => <li key={id}>{id}</li>)}</ul></details> : null}
-              {msg.requestedModel && msg.model !== msg.requestedModel && (
-                <p className="mb-1 break-words text-xs text-muted">Requested {msg.requestedModel}</p>
-              )}
               {msg.delivery && !(busy && msg.delivery === "submitted" && last?.id === msg.id) && (
                 <p className="mb-1 text-xs text-muted" role="status">
                   {msg.deliveryRoute && <span>{msg.deliveryRoute.provider} · {msg.deliveryRoute.model ?? msg.deliveryRoute.tier}. </span>}
@@ -567,6 +554,26 @@ export function ChatPane({
                   {msg.videoUrl ? <video className="owner-video mt-2" src={msg.videoUrl} controls playsInline preload="metadata" /> : null}
                 </>
               )}
+              {(msg.replyVersions && msg.replyVersions.length > 1 || msg.contextReceipt || msg.voiceStages || msg.deliveryMode || msg.consultation?.length || msg.skillReceipts?.length || msg.researchRefs?.length || msg.memoryUsedIds?.length || msg.requestedModel && msg.model !== msg.requestedModel) ? (
+                <details className="mt-2 text-xs text-muted">
+                  <summary className="w-fit cursor-pointer py-2">Response details</summary>
+                  <div className="grid min-w-0 gap-2 pl-3">
+              {msg.replyVersions && msg.replyVersions.length > 1 ? <details className="mb-2 text-sm"><summary>Answer versions ({msg.replyVersions.length})</summary><label>Use version <select className="min-h-11 border border-line rounded-panel bg-surface px-2" aria-label="Answer version" value={msg.selectedReplyVersionId} disabled={busy} onChange={(event) => onReplyVersion?.(msg.id, event.target.value)}>{msg.replyVersions.map((version, index) => <option key={version.id} value={version.id}>{index + 1} · {version.provider ?? version.model ?? "Provider unreported"} · {stamp(version.at)}</option>)}</select></label><div className="mt-2 grid gap-3 md:grid-cols-2">{msg.replyVersions.map((version, index) => <details key={version.id} className="rounded-panel border border-line p-2"><summary>Compare version {index + 1}</summary><MessageBody text={version.content} /></details>)}</div></details> : null}
+              {msg.contextReceipt && ("version" in msg.contextReceipt ? <ContextReceiptDetails receipt={msg.contextReceipt} /> :
+                <details><summary>Conversation context</summary><p>{msg.contextReceipt.includedMessages} of {msg.contextReceipt.availableMessages} messages included, {msg.contextReceipt.omittedMessages} omitted.</p>
+                  {msg.contextReceipt.imageWarnings.map((warning, index) => <p key={index}>{warning}</p>)}</details>)}
+              {msg.voiceStages && <VoiceStageReceipt receipt={msg.voiceStages} />}
+              {msg.deliveryMode && <p className="text-xs text-muted">Delivery: {msg.deliveryMode === "streamed" ? "provider stream" : "completed response buffered by this route"}</p>}
+              {msg.consultation?.length ? <details className="text-xs"><summary className="min-h-11 cursor-pointer">Consultation · {msg.consultation.length} selected helpers</summary>{msg.consultation.map((item) => <div key={item.id} className="my-2 rounded-panel border border-line p-2"><p>{item.id} · {item.ok ? "returned" : "failed"}{item.truncated ? ` · excerpt from ${item.originalCharacters} characters` : ""}</p><p>{item.error}</p><pre className="max-h-64 overflow-auto whitespace-pre-wrap">{item.text}</pre></div>)}</details> : null}
+              {msg.skillReceipts?.length ? <details className="mb-2 text-xs text-muted"><summary className="min-h-11 cursor-pointer">Skills considered ({msg.skillReceipts.length})</summary><ul>{msg.skillReceipts.map((item) => <li key={item.skillId}>{item.skillId} · version {item.version} · {skillReceiptSummary(item)}</li>)}</ul></details> : null}
+              {msg.researchRefs?.length ? <details className="mb-2 text-xs text-muted"><summary>Saved research references</summary><ul>{msg.researchRefs.map((item) => <li key={`${item.reportId}:${item.version}`}>{item.question} · version {item.version} · {item.reportId} · retrieved {stamp(item.at)}</li>)}</ul></details> : null}
+              {msg.memoryUsedIds?.length ? <details className="mb-2 text-xs text-muted"><summary>{msg.memoryUsedIds.length} saved notes used for this response</summary><ul>{msg.memoryUsedIds.map((id) => <li key={id}>{id}</li>)}</ul></details> : null}
+              {msg.requestedModel && msg.model !== msg.requestedModel && (
+                <p className="mb-1 break-words text-xs text-muted">Requested {msg.requestedModel}</p>
+              )}
+                  </div>
+                </details>
+              ) : null}
               <div className="mt-2 flex flex-wrap items-center gap-2" role="toolbar" aria-label="Reply actions">
                 {msg.kind === "error" ? (
                   <>
@@ -587,10 +594,10 @@ export function ChatPane({
                     }).catch(() => { setCopiedId(null); setCopyError("Copy failed. Select the text and copy it manually."); });
                   }}
                 >
-                  {copiedId === msg.id ? "Copied" : "Copy"}
+                  <span className="inline-flex items-center gap-1.5 whitespace-nowrap">{copiedId === msg.id ? <Check size={16} aria-hidden="true" /> : <Copy size={16} aria-hidden="true" />}{copiedId === msg.id ? "Copied" : "Copy"}</span>
                 </button>
                 {msg.role === "assistant" && (
-                  <button type="button" className="chat-button chat-button--ghost" onClick={() => (speaking && speakingMessageId === msg.id ? onStopSpeak?.() : onSpeak(msg.content, msg.id))}>
+                  <button type="button" className="inline-flex min-h-11 items-center gap-1.5 whitespace-nowrap rounded-full px-3 text-xs" onClick={() => (speaking && speakingMessageId === msg.id ? onStopSpeak?.() : onSpeak(msg.content, msg.id))}>
                     <Volume2 size={20} strokeWidth={1.75} /> {replyActions({ role: "assistant", busy: false, speaking: speaking && speakingMessageId === msg.id, hasSources: replyHasSources(msg.content) }).includes("stop-playback") ? "Stop" : "Read aloud"}
                   </button>
                 )}

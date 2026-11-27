@@ -6,7 +6,7 @@ import { DEFAULT_VOICE_ROUTE, readVoiceRoutePreferences, writeVoiceRoutePreferen
 import { loadVoiceSettings, saveVoiceSettings } from "@/lib/mind/voice/settings";
 import { createPortal } from "react-dom";
 import { ArrowUp, AudioLines, Camera, Mic, MicOff, MonitorUp, PhoneOff, Plus, Settings, Volume2, VolumeX, X } from "lucide-react";
-import { openCameraStream, openScreenStream } from "@/components/mind/live-voice-bar/frame-capture";
+import { canvasJpeg, openCameraStream, openScreenStream } from "@/components/mind/live-voice-bar/frame-capture";
 import { sharedAudioOutput } from "@/lib/mind/voice/audio-output";
 import type { SpeakSelection, SpeakStageReceipt } from "@/lib/mind/voice/staged-pipeline";
 import {
@@ -65,6 +65,9 @@ export function SpeakStage(props: {
   onMicMute: (muted: boolean) => void;
   recording: boolean;
   onAsk?: (text: string, playback: { canSpeak: () => boolean }) => Promise<string | null | { reply?: string; error?: string; speech?: "played" | "muted" }>;
+  attachments?: { name: string }[];
+  onAttachImage?: (file: File) => Promise<{ ok: true; name: string } | { ok: false; error: string }>;
+  onRemoveAttachment?: (index: number) => void;
   onKeepRecording?: (stream: MediaStream) => void;
   onEmergencyStop?: () => void;
   halted?: boolean;
@@ -98,7 +101,6 @@ export function SpeakStage(props: {
   const [reply, setReply] = useState("");
   const [voice, setVoice] = useState<XaiBuiltinVoice>("eve");
   const [rate, setRate] = useState<RateId>("natural");
-  const [uploadName, setUploadName] = useState<string | null>(null);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [speakerMuted, setSpeakerMuted] = useState(false);
   const speakerMutedRef = useRef(false);
@@ -232,6 +234,7 @@ export function SpeakStage(props: {
     }
     streamRef.current = opened.stream;
     opened.stream.getVideoTracks()[0]?.addEventListener("ended", () => {
+      if (streamRef.current !== opened.stream) return;
       stopVideo();
       setNotice(next === "screen" ? "Screen share ended." : "Camera ended.");
     });
@@ -239,8 +242,23 @@ export function SpeakStage(props: {
       videoRef.current.srcObject = opened.stream;
       await videoRef.current.play().catch(() => undefined);
     }
+    if (streamRef.current !== opened.stream) return;
     setSource(next);
-    setNotice(next === "camera" ? "Camera is on. It stays on this device until you end Speak." : "Screen share is on. It stays on this device until you end Speak.");
+    setNotice("Preview is on. Attach a frame to include it in your next turn.");
+  }
+
+  async function attachFrame() {
+    if (!props.onAttachImage || !videoRef.current || !streamRef.current || props.halted) return;
+    const generation = mediaGeneration.current;
+    try {
+      const jpeg = canvasJpeg(videoRef.current);
+      if (!jpeg) { setNotice("Waiting for the first frame. Try again in a moment."); return; }
+      const bytes = Uint8Array.from(atob(jpeg), char => char.charCodeAt(0));
+      const result = await props.onAttachImage(new File([bytes], `${source}-${Date.now()}.jpg`, { type: "image/jpeg" }));
+      if (generation === mediaGeneration.current && openRef.current) setNotice(result.ok ? "Frame attached to your next turn." : result.error);
+    } catch {
+      if (generation === mediaGeneration.current && openRef.current) setNotice("The frame could not be attached. Try again.");
+    }
   }
 
   async function startLive() {
@@ -331,7 +349,7 @@ export function SpeakStage(props: {
   }
 
   async function ask() {
-    const text = line.trim();
+    const text = line.trim() || (props.attachments?.length ? "Describe the attached image." : "");
     if (!text || !props.onAsk || asking || props.halted) return;
     if (!props.signedIn) { props.onSignIn(); return; }
     const generation = callGeneration.current, output = outputGeneration.current;
@@ -364,7 +382,8 @@ export function SpeakStage(props: {
 
   if (!props.open) return null;
   const status = props.halted ? "Emergency stop is on" : props.callError ? "Voice unavailable" : props.live ? (props.micMuted ? "Microphone muted" : "Live conversation") : connecting ? "Connecting…" : "Ready to start";
-  const transcript = [props.heard && `You: ${props.heard}`, (reply || props.spoken) && `Adrian: ${reply || props.spoken}`, uploadName].filter(Boolean).join("\n");
+  const attachedNames = props.attachments?.map((item) => item.name) ?? [];
+  const transcript = [props.heard && `You: ${props.heard}`, (reply || props.spoken) && `Adrian: ${reply || props.spoken}`, attachedNames.length ? `Attached: ${attachedNames.join(", ")}` : null].filter(Boolean).join("\n");
 
   const stage = (
     <div ref={dialogRef} tabIndex={-1} className="speak-stage speak-call" role="dialog" aria-modal="true" aria-label="Speak" data-testid="speak-stage"
@@ -407,7 +426,9 @@ export function SpeakStage(props: {
       </section>
       <div className="speak-call__dock">
       <div className="speak-call__pills" aria-label="Call controls">
-        <button type="button" aria-label="Screen share" aria-pressed={source === "screen"} onClick={() => void show("screen")}><MonitorUp /></button>
+        <button type="button" aria-label="Camera" aria-pressed={source === "camera"} disabled={props.halted} onClick={() => void show("camera")}><Camera /></button>
+        {source !== "none" && <button type="button" disabled={props.halted || !props.onAttachImage} onClick={() => void attachFrame()}>Attach frame</button>}
+        <button type="button" disabled={props.halted} aria-label="Screen share" aria-pressed={source === "screen"} onClick={() => void show("screen")}><MonitorUp /></button>
         <button type="button" aria-label={speakerMuted ? "Unmute speaker" : "Mute speaker"} aria-pressed={speakerMuted} onClick={toggleSpeaker}>{speakerMuted ? <VolumeX /> : <Volume2 />}</button>
         <button type="button" disabled={!props.live} aria-label={activation === "push" ? "Hold to talk" : props.micMuted ? "Unmute microphone" : "Mute microphone"} aria-pressed={props.live && !props.micMuted}
           onClick={() => { if (activation !== "push") props.onMicMute(!props.micMuted); }}
@@ -424,9 +445,16 @@ export function SpeakStage(props: {
       <form className="speak-call__bar" onSubmit={(event) => { event.preventDefault(); void ask(); }}>
         <button type="button" aria-label="Add a file" onClick={() => fileRef.current?.click()}><Plus /></button>
         <input aria-label="Ask Anything" placeholder="Ask Anything" value={line} onChange={(event) => setLine(event.target.value)} />
-        {line.trim() && <button type="submit" aria-label="Send to Adrian" disabled={asking || props.halted}><ArrowUp /></button>}
+        {(line.trim() || attachedNames.length > 0) && <button type="submit" aria-label="Send to Adrian" disabled={asking || props.halted}><ArrowUp /></button>}
         <button type="button" className="speak-call__end" aria-label="End call" onClick={() => { stopVideo(); props.onClose(); }}><PhoneOff /></button>
       </form>
+      {attachedNames.length > 0 ? (
+        <div className="speak-call__transcript" data-testid="speak-attachments" aria-label="Speak attachments">
+          {attachedNames.map((name, index) => (
+            <span key={`${name}-${index}`}>{name}<button type="button" aria-label={`Remove ${name}`} onClick={() => props.onRemoveAttachment?.(index)}>×</button></span>
+          ))}
+        </div>
+      ) : null}
       </div>
       {settingsOpen ? (
         <section className="speak-sheet" aria-label="Voice settings">
@@ -453,7 +481,6 @@ export function SpeakStage(props: {
           <div className="speak-sheet__rates" role="group" aria-label="Speaking pace">
             {RATES.map((item) => <button key={item.id} type="button" aria-pressed={rate === item.id} onClick={() => chooseRate(item.id)}>{item.label}</button>)}
           </div>
-          <button type="button" aria-pressed={source === "camera"} onClick={() => void show("camera")}><Camera /> Camera</button>
           {props.onKeepRecording && <button type="button" disabled={!props.signedIn || props.halted || connecting || props.live || props.recording || recordingPending} onClick={() => void startRecording()}>Record this tab separately</button>}
           {!props.signedIn ? <button type="button" onClick={props.onSignIn}>Sign in to start the live call</button> : null}
         </section>
@@ -461,15 +488,25 @@ export function SpeakStage(props: {
       <input
         ref={fileRef}
         type="file"
-        accept="image/*,.pdf,.txt,.md,.csv,.json"
+        accept="image/png,image/jpeg,image/gif,image/webp"
         hidden
         onChange={(event) => {
           const file = event.target.files?.[0];
           event.target.value = "";
           if (!file) return;
-          setUploadName(file.name);
-          setShowTranscript(true);
-          setNotice(`${file.name} is on this screen. It stays on this device until a signed-in call can use it.`);
+          if (!props.onAttachImage) {
+            setNotice("Image attachment is unavailable in this Speak session.");
+            return;
+          }
+          setNotice(`Preparing ${file.name}…`);
+          void props.onAttachImage(file).then((result) => {
+            if (!openRef.current) return;
+            if (!result.ok) { setNotice(result.error); return; }
+            setShowTranscript(true);
+            setNotice(`${result.name} is attached to the active Speak turn. Speak stays open.`);
+          }).catch(() => {
+            if (openRef.current) setNotice("That image could not be attached. Speak stayed open.");
+          });
         }}
       />
     </div>

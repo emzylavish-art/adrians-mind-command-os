@@ -12,6 +12,7 @@ import { collectAccountSkillApplications, skillReceiptSummary, type SkillApplica
 import { BrowserEnvironments } from "@/components/mind/browser-environments";
 import { OwnerFlow } from "@/components/mind/owner-flow";
 import { ActionOverlay } from "@/components/mind/conversation-menu";
+import { getBearerToken } from "@/lib/auth/client";
 import { chatTurnBody } from "@/lib/mind/logic-routes";
 import { consumeMindTurn, prepareTurnId } from "@/lib/mind/live-turn";
 import { boundAbortSignal } from "@/lib/mind/turn-timeouts";
@@ -77,6 +78,7 @@ function eventLabel(event: BuildEvent): string {
 }
 
 type BuildWorkspaceProps = {
+  plannerRef?: { current: ((words: string, images: unknown[]) => Promise<string | undefined>) | null };
   ownerId?: string;
   enabledSkills?: Record<string, boolean>;
   freeOnly?: boolean;
@@ -103,6 +105,12 @@ function BuildWorkspaceSession(props: BuildWorkspaceProps) {
   const [companion, setCompanion] = useState<CompanionState>({});
   const [band, setBand] = useState<"actions" | "files" | "message" | "editor">("message");
   const [prompt, setPrompt] = useState("");
+  const taskField = useRef<HTMLTextAreaElement>(null);
+  const planningController = useRef<AbortController | null>(null);
+  useEffect(() => {
+    if (props.halted) planningController.current?.abort();
+    return () => planningController.current?.abort();
+  }, [props.halted]);
   const [cwd, setCwd] = useState("");
   const [job, setJob] = useState<BuildJob | null>(null);
   const [events, setEvents] = useState<BuildEvent[]>([]);
@@ -641,11 +649,11 @@ function BuildWorkspaceSession(props: BuildWorkspaceProps) {
     }
   }
 
-  async function planWithGrok() {
+  async function planWithGrok(words = prompt, images: unknown[] = [], github = /^\/github(?:\s|$)/i.test(words)) {
     if (planFlight.current || props.halted) return;
     const owner = props.ownerId;
-    if (props.freeOnly) { setNotice("Free-only is selected. Build has no verified free coding model for this action."); return; }
-    const text = prompt.trim();
+    if (props.freeOnly && !github) { setNotice("Free-only is selected. Build has no verified free coding model for this action."); return; }
+    const text = words.trim();
     if (!text) {
       setNotice("Describe the task before asking Grok for a plan.");
       return;
@@ -654,13 +662,14 @@ function BuildWorkspaceSession(props: BuildWorkspaceProps) {
     setPlanning(true);
     setPlan("");
     setPlanModel("");
-    setNotice("Asking Grok for a plan. This does not edit files.");
+    setNotice(github ? "Contacting GitHub…" : "Asking Grok for a plan.");
     const controller = new AbortController();
+    planningController.current = controller;
     const timeout = AbortSignal.timeout(30_000);
     const signal = typeof AbortSignal.any === "function" ? AbortSignal.any([controller.signal, timeout]) : timeout;
     try {
       const body = chatTurnBody({
-          text: `Plan this Adrian Build task. Do not claim any file was written.\n\n${text}`,
+          text: github ? words : `Plan this Adrian Build task. Do not claim any file was written.\n\n${text}`,
           memory: "off",
           halted: false,
           history: [],
@@ -668,7 +677,7 @@ function BuildWorkspaceSession(props: BuildWorkspaceProps) {
           provider: "grok",
           modelTier: "Heavy",
           logicRoute: null,
-          images: [],
+          images,
       });
       const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(JSON.stringify(body)));
       const fingerprint = Array.from(new Uint8Array(digest), (byte) => byte.toString(16).padStart(2, "0")).join("");
@@ -677,18 +686,20 @@ function BuildWorkspaceSession(props: BuildWorkspaceProps) {
       if (!id) {
         try { id = sessionStorage.getItem(key) || undefined; } catch { /* the open tab can still recover */ }
       }
-      id ??= await prepareTurnId("/api/mind/turn", {}, signal);
+      const token = getBearerToken();
+      const headers: Record<string, string> = token ? { authorization: `Bearer ${token}` } : {};
+      id ??= await prepareTurnId("/api/mind/turn", headers, signal);
       if (planOwner.current !== owner || signal.aborted) return;
       planAttempts.current.set(key, id);
       try { sessionStorage.setItem(key, id); } catch { /* retained in this tab */ }
       const result = await consumeMindTurn({
         url: "/api/mind/turn",
         signal,
-        headers: { "content-type": "application/json", "x-mind-turn-id": id },
+        headers: { ...headers, "content-type": "application/json", "x-mind-turn-id": id },
         body,
-        onDelta: (chunk) => { if (planOwner.current === owner) setPlan((current) => current + chunk); },
+        onDelta: (chunk) => { if (mounted.current && !signal.aborted && planOwner.current === owner) setPlan((current) => current + chunk); },
       });
-      if (planOwner.current !== owner) return;
+      if (!mounted.current || signal.aborted || planOwner.current !== owner) return;
       if (result.ok || !result.deliveryUncertain) {
         planAttempts.current.delete(key);
         try { sessionStorage.removeItem(key); } catch { /* browser storage unavailable */ }
@@ -699,14 +710,22 @@ function BuildWorkspaceSession(props: BuildWorkspaceProps) {
       }
       setPlan(result.text);
       setPlanModel(result.model);
-      setNotice("Grok returned a plan. No file was written.");
+      setNotice(github ? "GitHub request completed." : "Grok returned a plan. No file was written.");
+      return result.text;
     } catch {
-      setNotice("The Grok plan could not be completed. No file was written.");
+      setNotice(github ? "GitHub did not confirm the request. Check the branch before retrying." : "The Grok plan could not be completed.");
     } finally {
       planFlight.current = false;
       setPlanning(false);
     }
   }
+
+  useEffect(() => {
+    const target = props.plannerRef;
+    if (!target) return;
+    target.current = (words, images) => planWithGrok(/^\/github(?:\s|$)/i.test(words) ? words : [prompt, words].filter(Boolean).join("\n\n"), images);
+    return () => { target.current = null; };
+  });
 
   async function cancelBuild() {
     if (!job?.id || !active || job.status === "cancel_requested") return;
@@ -904,7 +923,13 @@ function BuildWorkspaceSession(props: BuildWorkspaceProps) {
           <FolderOpen className="size-4 text-accent" aria-hidden="true" />
           <p className="font-semibold">Adrian Build</p>
         </div>
-        <textarea value={prompt} onChange={(event) => setPrompt(event.target.value)} placeholder="Ask Adrian Build to create, edit, debug, or explain code…" className="min-h-20 w-full rounded-panel border border-line bg-transparent p-3 text-sm outline-none focus:border-accent" aria-label="Coding task" />
+        <textarea ref={taskField} value={prompt} onChange={(event) => setPrompt(event.target.value)} placeholder="Describe the change you want to build…" className="min-h-24 w-full rounded-panel border border-line bg-transparent p-3 text-sm outline-none focus:border-accent" aria-label="Coding task" />
+        <div className="flex flex-wrap items-center gap-2" aria-label="Build planning tools">
+          <button type="button" className="min-h-11 rounded-panel border border-line px-3" disabled={props.halted} onClick={() => { taskField.current?.focus(); window.dispatchEvent(new Event("adrian:handy-mic")); }}>Dictate task</button>
+          <button type="button" className="min-h-11 rounded-panel border border-line px-3" disabled={props.halted} onClick={props.onOpenSpeak}>Speak and attach images</button>
+          <button type="button" className="min-h-11 rounded-panel border border-line px-3" disabled={props.halted || planning || !prompt.trim()} onClick={() => void planWithGrok()}>{planning ? "Working…" : /^\/github(?:\s|$)/i.test(prompt) ? "Run GitHub request" : "Plan with Grok"}</button>
+          <button type="button" className="min-h-11 rounded-panel border border-line px-3" disabled={props.halted || planning} onClick={() => void planWithGrok("/github repos", [], true)}>Check GitHub repos</button>
+        </div>
         <details className="rounded-panel border border-line p-3">
           <summary className="cursor-pointer text-sm font-semibold">Workspace and advanced controls</summary>
           <div className="mt-3 flex gap-2"><input value={cwd} onChange={(event) => setCwd(event.target.value)} placeholder="Optional local path, or leave blank for the hosted workspace" className="min-h-11 min-w-0 flex-1 rounded-panel border border-line bg-transparent px-3 text-sm outline-none focus:border-accent" aria-label="Approved workspace path" /><button type="button" disabled={fileBusy} onClick={() => void browseWorkspace()} className="inline-flex min-h-11 items-center gap-2 rounded-panel border border-line px-3 text-sm disabled:opacity-50"><FolderOpen className="size-4" />{fileBusy ? "Loading…" : "Browse"}</button></div>
@@ -917,7 +942,6 @@ function BuildWorkspaceSession(props: BuildWorkspaceProps) {
           <input value={transcript} onChange={(event) => setTranscript(event.target.value)} placeholder="Dictate or paste an Adrian Speak transcript" className="min-h-11 min-w-40 flex-1 rounded-panel border border-line bg-transparent px-3 text-sm outline-none focus:border-accent" aria-label="Voice transcript" />
           <button type="button" disabled={!transcript.trim()} onClick={() => void submitVoice()} className="min-h-11 rounded-panel border border-line px-3 text-sm disabled:opacity-50">Send transcript</button>
           <button type="button" onClick={speakResult} className="min-h-11 rounded-panel border border-line px-3 text-sm">Read result</button>
-          <button type="button" disabled={planning || !prompt.trim()} onClick={() => void planWithGrok()} className="min-h-11 rounded-panel border border-line px-3 text-sm disabled:opacity-50">{planning ? "Planning…" : "Plan with Grok"}</button>
           <button type="button" disabled={!prompt.trim()} onClick={() => props.onDiscuss?.(prompt)} className="min-h-11 rounded-panel border border-line px-3 text-sm disabled:opacity-50">Discuss in Intelligence</button>
           <button type="button" onClick={() => props.onResult?.(buildResultHandoff(buildReceipt?.filesChanged?.length ? buildReceipt.filesChanged : lastDiff ? [lastDiff] : [], job?.output || notice || prompt || "Build has no result yet.", buildReceipt?.operationId, { completed: job?.status === "done", error: job?.error, outputComplete: buildReceipt?.outputComplete }))} className="min-h-11 rounded-panel border border-line px-3 text-sm">Save result in Intelligence</button>
           </div>
@@ -943,7 +967,7 @@ function BuildWorkspaceSession(props: BuildWorkspaceProps) {
       </form>
 
       {notice ? <p className="dense-card text-sm" role="status">{notice}</p> : null}
-      {plan ? <section className="dense-card space-y-2"><h3 className="font-semibold">Grok plan{planModel ? ` · ${planModel}` : ""}</h3><p className="text-xs text-muted">This is a reply. It did not edit a file, run a terminal, or commit.</p><pre className="whitespace-pre-wrap text-sm">{plan}</pre></section> : null}
+      {plan ? <section className="dense-card space-y-2"><h3 className="font-semibold">Build reply{planModel ? ` · ${planModel}` : ""}</h3><pre className="whitespace-pre-wrap text-sm">{plan}</pre></section> : null}
       {fileNotice ? <p className="dense-card text-sm" role="status">{fileNotice}</p> : null}
 
       {!hasWorkspaceSurface ? <div className="promo-banner text-sm"><ShieldCheck className="size-5 text-accent" aria-hidden="true" /><div><p className="font-semibold">Honest runtime boundary</p><p className="text-muted">This workspace never fabricates agent output. It shows queued, running, permission, error, and completed states from the ACP event stream.</p></div></div> : null}

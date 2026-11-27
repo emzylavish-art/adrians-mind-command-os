@@ -147,8 +147,7 @@ import { SharedFleet } from "@/components/mind/shared-fleet";
 
 const DashboardApp = lazy(() => import("@/components/mind/agent-command-center").then((mod) => ({ default: mod.AgentCommandCenter })));
 import { isLiveVoiceOccupied, LIVE_VOICE_BUSY_MESSAGE } from "@/lib/mind/voice-live/occupancy";
-import { probeOllamaConductor, runOllamaConductor } from "@/lib/mind/voice/ollama-conductor";
-import { formatVoiceClientError, resolveVoiceMode, DIRECT_FALLBACK_NOTICE } from "@/lib/mind/voice/errors";
+import { formatVoiceClientError } from "@/lib/mind/voice/errors";
 import { commitVoiceMode, toggleVoiceMode, type VoiceRoutingMode } from "@/lib/mind/voice/mode";
 import {
   getServerVoiceMode,
@@ -225,7 +224,6 @@ import {
   createSpeakQueue,
   createTranscriptDedupe,
   endFlight,
-  enqueueSpeak,
   nextMuteState,
   secretNeedsRemint,
   shouldAcceptTranscript,
@@ -335,7 +333,7 @@ import {
 } from "@/lib/mind/failure-states";
 import { eveAccessNotes } from "@/lib/mind/eve-access";
 import { createTaskRecorder, recordingEndsWithDocument } from "@/lib/mind/task-recording";
-import { decideComputerAction, spokenPcCommand } from "@/lib/mind/computer-control";
+import { spokenPcCommand } from "@/lib/mind/computer-control";
 import {
   commandSendPlan,
   historyForDeliver,
@@ -981,6 +979,10 @@ function CommandSession({ account, accountPending }: { account: ReturnType<typeo
   currentVoiceScope.current = voiceScope;
   const auxiliaryHistory = useRef<{ scope: string; record: CallHistory } | null>(null);
   const voiceSession = useRef<RealtimeVoiceSession | null>(null);
+  const liveThread = useRef<{ scope: string; id: string } | null>(null);
+  const latestVoiceTranscript = useRef(handleVoiceTranscript);
+  latestVoiceTranscript.current = handleVoiceTranscript;
+  const buildPlanner = useRef<((words: string, images: unknown[]) => Promise<string | undefined>) | null>(null);
   const listenRef = useRef<(opts?: { mode?: "toggle" | "start" | "stop" }) => void>(() => undefined);
   const voiceMode = useSyncExternalStore(subscribeVoiceMode, getVoiceMode, getServerVoiceMode);
   const voiceModeRef = useRef<VoiceRoutingMode>(voiceMode);
@@ -1286,6 +1288,8 @@ function CommandSession({ account, accountPending }: { account: ReturnType<typeo
   const [importError, setImportError] = useState<string | null>(null);
   const [staged, setStaged, setStagedInScope] = useComposerDraft<Staged | null>(draftScope, "file", null, persistDraft);
   const [pendingImages, setPendingImages, setImagesInScope] = useComposerDraft<ImageAttachment[]>(draftScope, "images", EMPTY_DRAFT_IMAGES, persistDraft);
+  const pendingImagesRef = useRef(pendingImages);
+  pendingImagesRef.current = pendingImages;
   const [excerpt, setExcerpt] = useState<{ scope: string; file: Staged; limit: number } | null>(null);
   const excerptRef = useRef<HTMLTextAreaElement>(null);
   const [cameraOpen, setCameraOpen] = useState(false);
@@ -4077,7 +4081,10 @@ ${message.content}`;
         ),
       }));
     }
-    const rememberImagineFailure = (failure: ReturnType<typeof imageGenerationFailure>) => {
+    const rememberImagineFailure = (
+      failure: ReturnType<typeof imageGenerationFailure>,
+      receipt?: { provider?: string; model?: string },
+    ) => {
       setWs((prev) => ({
         ...prev,
         chats: prev.chats.map((item) =>
@@ -4092,6 +4099,8 @@ ${message.content}`;
                     kind: "error" as const,
                     content: failure.message,
                     at: new Date().toISOString(),
+                    provider: receipt?.provider?.trim() || undefined,
+                    model: receipt?.model?.trim() || undefined,
                   },
                 ],
               }
@@ -4113,6 +4122,7 @@ ${message.content}`;
       const payload = (await response.json()) as {
         ok?: boolean;
         error?: string;
+        provider?: string;
         model?: string;
         images?: { dataUrl: string; mime?: string; name?: string }[];
       };
@@ -4127,6 +4137,7 @@ ${message.content}`;
             n: 1,
             target: `imagine:${chatId}`,
           }),
+          { provider: payload.provider, model: payload.model },
         );
         return;
       }
@@ -4137,6 +4148,7 @@ ${message.content}`;
         mime: image.mime,
       }));
       const model = payload.model?.trim();
+      const provider = payload.provider?.trim() || "xai";
       setImagesInScope(imageScope, persistImages, (previous) => {
         if (previous.length + images.length > 4) {
           setNotice("Image created in this chat. The composer is full.");
@@ -4160,6 +4172,7 @@ ${message.content}`;
                       role: "assistant" as const,
                       content: model ? `Generated with ${model}.` : "Image generated. The provider did not report a model.",
                       at: new Date().toISOString(),
+                      provider,
                       model,
                       images: images.map((image) => ({ dataUrl: image.dataUrl, name: image.name, origin: image.origin, lineage: image.lineage, preparation: image.preparation })),
                     },
@@ -4455,18 +4468,30 @@ ${message.content}`;
     setError(null);
   }
 
-  async function addImageAttachment(file: File) {
+  async function addImageAttachment(file: File): Promise<{ ok: true; name: string } | { ok: false; error: string }> {
     const rejected = explainRejectedImageFile(file);
     if (rejected) {
       setError(rejected);
       setNotice(null);
-      return;
+      return { ok: false, error: rejected };
+    }
+    if (pendingImagesRef.current.length >= 4) {
+      const error = "You can attach up to 4 images per message.";
+      setError(error);
+      setNotice(null);
+      return { ok: false, error };
     }
     try {
       const owner = draftOwner;
       const scope = draftScope;
       const scaled = await fileToDownscaledDataUrl(file, loadImagePreparationQuality(preferenceStorage));
-      if (turnOwner.current !== owner || uploadDestination.current.scope !== scope) return;
+      if (turnOwner.current !== owner || uploadDestination.current.scope !== scope) return { ok: false, error: "The conversation changed before the image finished preparing." };
+      if (pendingImagesRef.current.length >= 4) {
+        const error = "You can attach up to 4 images per message.";
+        setError(error);
+        setNotice(null);
+        return { ok: false, error };
+      }
       setPendingImages((prev) => {
         if (prev.length >= 4) {
           setError("You can attach up to 4 images per message.");
@@ -4475,10 +4500,15 @@ ${message.content}`;
         }
         setError(null);
         setNotice(`Image “${scaled.name}” staged${scaled.scaled ? " (downscaled)" : ""}. Send uses the selected chat route.`);
-        return [...prev, { dataUrl: scaled.dataUrl, name: scaled.name, mime: scaled.mime, origin: "attached", preparation: scaled.preparation }];
+        const next = [...prev, { dataUrl: scaled.dataUrl, name: scaled.name, mime: scaled.mime, origin: "attached" as const, preparation: scaled.preparation }];
+        pendingImagesRef.current = next;
+        return next;
       });
+      return { ok: true, name: scaled.name };
     } catch {
-      setError("That image could not be prepared.");
+      const error = "That image could not be prepared.";
+      setError(error);
+      return { ok: false, error };
     }
   }
 
@@ -4979,7 +5009,19 @@ ${message.content}`;
   }
 
   async function speakChatTurn(transcript: string, options?: { stay?: boolean; provider?: string; taskId?: string; answerRequest?: SpeakRetryParams["answerRequest"] }) {
-    const targetId = options?.answerRequest?.chatId ?? activeId;
+    const attachmentScope = draftScope;
+    const attachmentPersist = persistDraft;
+    const attachments = options?.answerRequest ? [] : snapshotImages(pendingImagesRef.current);
+    if (view === "build" && !options?.answerRequest) {
+      const plan = await buildPlanner.current?.(transcript, attachments);
+      if (!plan) return { ok: false as const, error: "Build could not complete the plan. Check the Build task status." };
+      if (attachments.length) {
+        setImagesInScope(attachmentScope, attachmentPersist, current => current.filter(image => !attachments.some(sent => sent.dataUrl === image.dataUrl && sent.name === image.name)));
+      }
+      return { ok: true as const, text: plan };
+    }
+    const keepLiveThread = options?.stay && voiceSession.current?.isOpen;
+    const targetId = options?.answerRequest?.chatId ?? activeId ?? (keepLiveThread && liveThread.current?.scope === voiceScope ? liveThread.current.id : null);
     let chat = (targetId ? wsRef.current.chats.find((item) => item.id === targetId) : null) ?? null;
     if (options?.answerRequest && !chat) return { ok: false as const, error: "The original voice conversation was removed. Its reviewed request was not sent." };
     let source = wsRef.current;
@@ -4993,8 +5035,11 @@ ${message.content}`;
       });
       chat = made.chat;
       source = { ...source, chats: [made.chat, ...source.chats] };
-      setActiveId(made.chat.id);
-      if (!options?.stay) setView("chat");
+      if (keepLiveThread) liveThread.current = { scope: voiceScope, id: made.chat.id };
+      else {
+        setActiveId(made.chat.id);
+        if (!options?.stay) setView("chat");
+      }
       setWs((prev) => pushAudit({ ...prev, chats: [made.chat, ...prev.chats] }, "create_chat", made.chat.id, "speak"));
     }
     const spokenStyle = speakStylePersonality(typeof localStorage === "undefined" ? null : preferenceStorage.getItem("adrian-speak-style"));
@@ -5008,11 +5053,17 @@ ${message.content}`;
     }
     const returned: { receipt?: TurnReplyReceipt; failure?: { error: string; dispatched: false; approvalId?: string; answerRequest: NonNullable<SpeakRetryParams["answerRequest"]> } } = {};
     const replay = options?.answerRequest;
-    const reply = await deliver({ ...chat, personalityId: spokenStyle }, transcript, source, Boolean(replay), [], {
-      selectedProviderOnly: true,
+    const reply = await deliver({ ...chat, personalityId: spokenStyle }, transcript, source, Boolean(replay), attachments, {
+      // Direct recorded voice retains its explicitly selected answer provider.
+      // When Orchestrator is selected, Speak uses the same selected orchestrator
+      // and helper plan as the normal chat composer.
+      selectedProviderOnly: resolveSendPath(composerEffort).path !== "orchestrator",
       ...(replay ? { knownUnsent: true, request: { id: replay.operationId, body: replay.body } } : {}),
       onFailure: (failure) => { returned.failure = failure; }, onReply: (receipt) => { returned.receipt = receipt; }, provider: options?.provider, taskId: options?.taskId, accessNotes: chat.memory === "on" && !chat.temporary ? eveAccessNotes(workspaceForChat(source, chat)) : [] });
     if (!reply) return returned.failure ? { ok: false as const, ...returned.failure } : { ok: false as const, error: "The chat turn failed. Its delivery was not confirmed; no automatic replay will run." };
+    if (attachments.length) {
+      setImagesInScope(attachmentScope, attachmentPersist, current => current.filter(image => !attachments.some(sent => sent.dataUrl === image.dataUrl && sent.name === image.name)));
+    }
     return { ok: true as const, text: reply, replyReceipt: returned.receipt, provider: returned.receipt?.provider ?? "not reported", model: returned.receipt?.model };
   }
 
@@ -5273,7 +5324,7 @@ ${message.content}`;
     setVoiceMicMuted(toggleMute(voiceMutedRef.current));
   }
 
-  async function handleVoiceTranscript(transcript: string, record: CallHistory, mode: VoiceRoutingMode, isCurrent: () => boolean) {
+  async function handleVoiceTranscript(transcript: string, _record: CallHistory, _mode: VoiceRoutingMode, isCurrent: () => boolean) {
     if (!isCurrent()) return;
     if (!shouldAcceptTranscript(transcriptDedupeRef.current, transcript)) return;
     const sanitized = sanitizeVoiceTranscript(transcript);
@@ -5298,26 +5349,19 @@ ${message.content}`;
       setWs(made.ws);
       setNotice(made.reply);
       if (speakStageOpenRef.current) setSpeakCall((current) => ({ ...current, heard: text, reply: made.reply, error: "" }));
-      if (mode === "orchestrator") await speak(made.reply);
-      else speakOnOpenSession(made.reply);
+      await speak(made.reply);
       return;
     }
-    appendLiveTranscript("user", text, record);
-    if (mode === "direct") return;
-    const conducted = await runOllamaConductor(text, {
-      baseUrl: preferenceStorage.getItem("amcos.ollama.base") || undefined,
-      model: preferenceStorage.getItem("amcos.ollama.model") || undefined,
-    });
+    const turn = await speakChatTurn(text, { stay: true });
     if (!isCurrent()) return;
-    if (!conducted.ok) {
-      setError(conducted.error);
-      if (speakStageOpenRef.current) setSpeakCall((current) => ({ ...current, error: conducted.error }));
-      if (overlayOpenRef.current) setOverlayError(conducted.error);
+    if (!turn.ok) {
+      setError(turn.error);
+      if (speakStageOpenRef.current) setSpeakCall((current) => ({ ...current, error: turn.error }));
+      if (overlayOpenRef.current) setOverlayError(turn.error);
       return;
     }
-    appendLiveTranscript("assistant", conducted.text, record, conducted.model, "ollama");
-    if (speakStageOpenRef.current) setSpeakCall((current) => ({ ...current, reply: conducted.text }));
-    await speak(conducted.text);
+    if (speakStageOpenRef.current) setSpeakCall((current) => ({ ...current, reply: turn.text, error: "" }));
+    await speak(turn.text, turn.replyReceipt?.messageId);
   }
 
   function clearStageTimeout() {
@@ -5391,13 +5435,6 @@ ${message.content}`;
       if (overlayOpenRef.current && voiceSession.current?.isOpen) setOverlayPhase("listening");
     }, SPEAKING_MIN_VISIBLE_MS);
     return next;
-  }
-
-  function speakOnOpenSession(text: string) {
-    const session = voiceSession.current;
-    if (!session?.isOpen) return;
-    const decision = enqueueSpeak(speakQueueRef.current, text);
-    if (decision === "start") session.speakText(text);
   }
 
   function commitDictation(action: DictationAction, announce = true) {
@@ -5718,6 +5755,8 @@ ${message.content}`;
   }
 
   function closeSpeakStage() {
+    if (liveThread.current?.scope === voiceScope && view === "chat") setActiveId(liveThread.current.id);
+    liveThread.current = null;
     interruptSpeakPlayback();
     speakStageOpenRef.current = false;
     setSpeakStageOpen(false);
@@ -5866,20 +5905,6 @@ ${message.content}`;
     };
 
     try {
-      if (voiceModeRef.current === "orchestrator") {
-        const probe = await probeOllamaConductor({
-          baseUrl: (typeof localStorage !== "undefined" && preferenceStorage.getItem("amcos.ollama.base")) || undefined,
-          model: (typeof localStorage !== "undefined" && preferenceStorage.getItem("amcos.ollama.model")) || undefined,
-        });
-        const route = resolveVoiceMode("orchestrator", probe.ok);
-        if (route.fellBack) {
-          applyVoiceMode("direct");
-          const notice = route.notice ?? DIRECT_FALLBACK_NOTICE;
-          setNotice(notice);
-          if (overlayOpenRef.current) setOverlayNotice(notice);
-        }
-      }
-
       publishConnectStage("getting_session");
       if (mintAbort.signal.aborted) return;
       setNotice("Minting voice session… (press mic or release Space to cancel)");
@@ -5951,7 +5976,7 @@ ${message.content}`;
             const turn = ++turnNumber;
             setVoiceLiveTranscript(clampLiveTranscript(text));
             if (speakStageOpenRef.current) setSpeakCall((current) => ({ ...current, heard: text, error: "" }));
-            void handleVoiceTranscript(text, record, sessionMode, () => isCurrent() && turnNumber === turn);
+            void latestVoiceTranscript.current(text, record, sessionMode, () => isCurrent() && turnNumber === turn);
           },
           onAssistantTranscript: (text) => {
             if (!isCurrent() || sessionMode === "orchestrator") return;
@@ -6067,7 +6092,7 @@ ${message.content}`;
         },
         sharedAudioOutput,
         undefined,
-        { voice: voiceChoiceRef.current, instructions: voiceBuilt.instructions, transcriptOnly: voiceBuilt.silent,
+        { voice: voiceChoiceRef.current, instructions: voiceBuilt.instructions, transcriptOnly: true,
           voiceIsolation: loadVoiceSettings(preferenceStorage).activation === "isolation",
         },
       );
@@ -8145,7 +8170,7 @@ ${message.content}`;
           {view === "tools" && <FleetPanel mode="tools" ws={ws} setWs={setWs} onFailure={(message, retry, surface) => reportFailure(message, surface === "mcp" ? "mcp_tool_failed" : "open_page_failed", surface === "mcp" ? "mcp:tools" : "browser", retry)} />}
           {view === "build" && (
             <section className="page-shell">
-              <BuildWorkspace enabledSkills={enabledSkills} freeOnly={researchFreeOnly} key={draftOwner ?? "signed-out"} ownerId={draftOwner ?? undefined} onDiscuss={(text) => handToHumanCode(text, "From Build")} onResult={(text) => {
+              <BuildWorkspace plannerRef={buildPlanner} enabledSkills={enabledSkills} freeOnly={researchFreeOnly} key={draftOwner ?? "signed-out"} ownerId={draftOwner ?? undefined} onDiscuss={(text) => handToHumanCode(text, "From Build")} onResult={(text) => {
                 const id = sessionStorage.getItem(`adrian-human-return.${draftOwner || "signed-out"}`);
                 if (!id || !wsRef.current.chats.some((chat) => chat.id === id && isIntelligenceThread(chat.customPersonality))) { handToHumanCode(text, "Build result"); return; }
                 sessionStorage.removeItem(`adrian-human-return.${draftOwner || "signed-out"}`);
@@ -8885,7 +8910,7 @@ ${message.content}`;
             </section>
           )}
         </div>
-        <HandyDictation freeOnly={researchFreeOnly} />
+        <HandyDictation ownerId={draftOwner} freeOnly={researchFreeOnly} />
       </main>
       {excerpt && excerpt.scope === draftScope && (
         <Overlay labelledBy="excerpt-title" onDismiss={() => setExcerpt(null)}>
@@ -9105,6 +9130,13 @@ ${message.content}`;
         live={voiceListening}
         onClose={closeSpeakStage}
         onKeepRecording={keepTaskRecording}
+        attachments={pendingImages.map((image) => ({ name: image.name || "image" }))}
+        onAttachImage={addImageAttachment}
+        onRemoveAttachment={(index) => setPendingImages((previous) => {
+          const next = previous.filter((_, current) => current !== index);
+          pendingImagesRef.current = next;
+          return next;
+        })}
         onHandCode={(text) => handToHumanCode(text, "From Speak")}
         onStyle={(style) => {
           const personalityId = speakStylePersonality(style);
@@ -9136,9 +9168,7 @@ ${message.content}`;
         onEmergencyStop={() => { void pressEmergencyStop(); }}
         onClearStop={() => { void clearEmergencyStop(); }}
         onAsk={async (text, context) => {
-          const blocked = decideComputerAction({ text, halted: wsRef.current.halted === true, paired: false, actor: "eve" });
-          if (blocked.kind !== "none") return { error: blocked.message };
-          const turn = await speakChatTurn(text);
+          const turn = await speakChatTurn(text, { stay: true });
           if (!turn.ok) return { error: turn.error };
           if (!speakStageOpenRef.current || wsRef.current.halted || !context.canSpeak()) return { reply: turn.text, error: "The answer was saved. Playback was canceled before speech synthesis." };
           const spoken = await speak(turn.text, "replyReceipt" in turn ? turn.replyReceipt?.messageId : undefined);

@@ -129,7 +129,7 @@ test("C5 a new emergency stop survives an older pending release and reasserts th
 
 test("C5 actual Build handler distinguishes saved execution, verified save and failed save", async () => {
   const app = readFileSync(new URL("../../../components/mind/build-workspace.tsx", import.meta.url), "utf8");
-  const runBuild = app.slice(app.indexOf('  async function runBuild(policy:'), app.indexOf('  async function planWithGrok()'));
+  const runBuild = app.slice(app.indexOf('  async function runBuild(policy:'), app.indexOf('  async function planWithGrok('));
   const body = ts.transpileModule(`
     const props = { ownerId: "owner-A", freeOnly: false }; const haltedRef = { current: false }; const planOwner = { current: "owner-A" };
     const prompt = "Inspect fixture file"; const cwd = "/fixture"; const mode = "plan"; const sessionId = "";
