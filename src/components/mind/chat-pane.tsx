@@ -751,6 +751,9 @@ export function ChatPane({
               <button type="button" className="chat-pill min-h-11 border border-line px-3 text-sm" data-testid="stop-reply" onClick={onStop}>Stop this reply</button>
             </div>
           )}
+          {notice && (cue.length > 0 || notice.startsWith("This draft is available in this tab only.")) && (
+            <p className="mb-2 px-2 text-sm text-muted" role="status" data-testid="cue-notice">{notice}</p>
+          )}
           <div className="thread-draft">
           {onPickModule && (!active || active.messages.length === 0) ? <ModuleSuggestions draft={draft} onPick={onPickModule} /> : null}
           <textarea
