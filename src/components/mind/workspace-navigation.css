@@ -30,12 +30,12 @@
 
 #mind-workspace #chat-thread .chat-reading-column > .turn-user {
   width: fit-content;
-  max-width: min(100%, 64ch);
+  max-width: min(100%, 56ch) !important;
   margin-inline: 0 auto;
 }
 
 #mind-workspace #chat-thread .chat-reading-column > .turn-assistant {
-  max-width: 84ch;
+  max-width: min(100%, 84ch) !important;
   margin-inline: auto 0;
   text-align: start;
   font-size: 1rem;
