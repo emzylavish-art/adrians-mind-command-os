@@ -773,6 +773,54 @@ try {
   });
   report.mobileTransport = mobileTransport.summary(); await mobile.close();
 
+  const fleetContext = await browser.newContext({ viewport: { width: 1440, height: 900 }, serviceWorkers: "block" });
+  const fleetTransport = await installVisualFixture(fleetContext, origin, "chat-interrupted");
+  let fleetHealth = "healthy";
+  await fleetContext.route((url) => url.origin === origin && url.pathname === "/api/mind/dashboard/status", (route) => route.fulfill({
+    json: { ok: true, generatedAt: new Date().toISOString(),
+      bots: [{ id: "dashboard", name: "Synthetic fleet lane", health: fleetHealth, lock: null, branch: null, lastActivityAt: null, commits: [], notes: "", reason: "Synthetic development status" }],
+      commits: [], projects: null, constellations: [], constellationEdges: [], notionGraph: { available: false, pages: [], edges: [], botPageMap: {} },
+      sources: { gitOk: false, locksOk: false, commitsSource: "none" }, spend: { available: false } },
+  }));
+  const fleetPath = origin + "/?section=dashboard";
+  // Dashboard introduces a lazy dependency graph. Warm it before the timed poll.
+  const fleetWarmup = await fleetContext.newPage();
+  startupPage = fleetWarmup;
+  try {
+    await fleetWarmup.goto(fleetPath, { waitUntil: "domcontentloaded" });
+    await fleetWarmup.getByTestId("dash3d-graph-chrome").waitFor({ timeout: 15000 });
+  } catch {
+    await fleetWarmup.reload({ waitUntil: "domcontentloaded" });
+    await fleetWarmup.getByTestId("dash3d-graph-chrome").waitFor();
+  }
+  await fleetWarmup.close();
+  const fleetPage = await fleetContext.newPage();
+  startupPage = fleetPage;
+  await fleetPage.clock.install();
+  await fleetPage.goto(fleetPath, { waitUntil: "domcontentloaded" });
+  await check(fleetPage, "fleet-list-filtered-selection", async () => {
+    const chrome = fleetPage.getByTestId("dash3d-graph-chrome");
+    await chrome.getByRole("button", { name: "List", exact: true }).click();
+    await fleetPage.getByRole("heading", { name: "Fleet list", exact: true }).waitFor();
+    const list = fleetPage.getByRole("region", { name: "Operations list", exact: true });
+    const record = list.getByRole("button", { name: "Synthetic fleet lane", exact: true });
+    await chrome.getByRole("button", { name: "Filters", exact: true }).click();
+    await chrome.getByTestId("graph-filter-health-healthy").click();
+    await fleetPage.keyboard.press("Escape");
+    await record.press("Enter");
+    const detail = fleetPage.getByTestId("node-detail");
+    await detail.getByText("Synthetic fleet lane", { exact: true }).waitFor();
+    fleetHealth = "blocked";
+    await fleetPage.clock.fastForward(21000);
+    await detail.getByText("Synthetic fleet lane is hidden by the current fleet filters. Its details remain open.", { exact: true }).waitFor();
+    assert.equal(await detail.getByText("blocked", { exact: true }).count(), 1);
+    assert.equal(await record.count(), 0);
+    assert.equal(await chrome.getByRole("button", { name: "List", exact: true }).getAttribute("aria-pressed"), "true");
+    assert.equal(await fleetPage.locator("canvas").count(), 0);
+    return { statusChange: "healthy to blocked", selectedRecordRetained: true, filteredRecordExcluded: true, listIsExplicit: true, transport: "synthetic snapshot" };
+  });
+  report.fleetTransport = fleetTransport.summary(); await fleetContext.close();
+
   for (const outcome of ["rejected", "accepted"]) {
     const videoContext = await browser.newContext({ viewport: { width: 1440, height: 1000 }, serviceWorkers: "block" });
     const videoTransport = await installVisualFixture(videoContext, origin, "chat-interrupted");

@@ -56,6 +56,7 @@ export function DashboardApp({ embedded = false, status }: { embedded?: boolean;
   const [selection, setSelection] = useState<{ scope: string | null; id: string } | null>(null);
   const [webglError, setWebglError] = useState<string | null>(null);
   const [rendererMode, setRendererMode] = useState<"graph" | "universe">("graph");
+  const [preferFleetList, setPreferFleetList] = useState(false);
   const workspace = useWorkspaceGraph(rendererMode === "graph");
   const state = useMemo(() => publicState.status === "ready" && workspace.graph
     ? { ...publicState, data: { ...publicState.data, notionGraph: workspace.graph } }
@@ -219,7 +220,11 @@ export function DashboardApp({ embedded = false, status }: { embedded?: boolean;
     const allow = filterBotIds(sceneData.bots, sceneData.constellationEdges ?? [], graphFilter);
     return sceneData.bots.filter((bot) => allow.has(bot.id));
   }, [sceneData, graphFilter]);
-  const graphicsAvailable = !webglError && (!narrow || sceneInteract);
+  const explicitFleetList = rendererMode === "graph" && preferFleetList;
+  const fleetList = rendererMode === "graph" && state.status === "ready" && (explicitFleetList || Boolean(webglError));
+  const graphicsAvailable = !fleetList && !webglError && (!narrow || sceneInteract);
+  const selectionIsFiltered = rendererMode === "graph" && selected !== null &&
+    !visibleBots.some((bot) => bot.id === selected.id);
   const healthTimeLabel = scrubView.mode === "live"
     ? "Latest received health"
     : scrubView.mode === "before_history"
@@ -263,6 +268,7 @@ export function DashboardApp({ embedded = false, status }: { embedded?: boolean;
       data-reduced-motion={reducedMotion ? "1" : "0"}
       data-narrow={narrow ? "1" : "0"}
       data-scene-interact={!narrow || sceneInteract ? "1" : "0"}
+      data-fleet-list={fleetList ? "1" : undefined}
       data-panel-focus={panelFocus ?? ""}
       data-fly-level={fly.level}
       data-labels={operatorPrefs.layers.labels ? "1" : "0"}
@@ -279,7 +285,7 @@ export function DashboardApp({ embedded = false, status }: { embedded?: boolean;
               {rendererMode === "graph" ? "Fleet 3D graph" : "Painterly 3D universe"}
             </h1>
             <p className="dash3d-muted" style={{ margin: "0.15rem 0 0", fontSize: "0.72rem" }}>
-              Drag rotate · scroll zoom · click node · Cmd/Ctrl-K search
+              {fleetList ? "Select a record to view details · Cmd/Ctrl-K search" : "Drag rotate · scroll zoom · click node · Cmd/Ctrl-K search"}
             </p>
             <p className="dash3d-muted" role="status" data-telemetry-state={telemetry.tone} style={{ margin: "0.2rem 0 0", fontSize: "0.72rem", color: telemetry.tone === "stale" ? "#fbbf24" : undefined }}>
               {telemetry.label}. Development activity; runtime readiness unverified.
@@ -296,12 +302,17 @@ export function DashboardApp({ embedded = false, status }: { embedded?: boolean;
             <button
               type="button"
               data-testid="switch-force-graph"
-              aria-pressed={rendererMode === "graph"}
+              aria-pressed={rendererMode === "graph" && !fleetList}
               className="dash3d-glass dash3d-zoomout"
-              onClick={() => { setRendererMode("graph"); setWebglError(null); }}
+              onClick={() => { setRendererMode("graph"); setPreferFleetList(false); setWebglError(null); }}
             >
               Graph
             </button>
+            {rendererMode === "graph" && (
+              <button type="button" className="dash3d-glass dash3d-zoomout" aria-pressed={fleetList} onClick={() => setPreferFleetList(true)}>
+                List
+              </button>
+            )}
             <button
               type="button"
               data-testid="switch-painterly-universe"
@@ -394,19 +405,21 @@ export function DashboardApp({ embedded = false, status }: { embedded?: boolean;
         </Suspense>
       ) : null}
 
-      {webglError ? (
+      {fleetList || webglError ? (
         <section className="dash3d-fallback dash3d-operations-fallback" aria-label="Operations list">
           <div className="dash3d-glass">
-            <h2>{rendererMode === "graph" ? "Graph" : "Universe"} graphics unavailable</h2>
+            <h2>{explicitFleetList ? "Fleet list" : `${rendererMode === "graph" ? "Graph" : "Universe"} graphics unavailable`}</h2>
             <p className="dash3d-title">Operations overview</p>
-            <p className="dash3d-muted">{healthTimeLabel}. Your records remain available in List view.</p>
-            <button type="button" className="dash3d-pill" data-testid="retry-3d" onClick={() => setWebglError(null)}>Retry 3D</button>
-            <p className="dash3d-muted">{webglError}</p>
+            <p className="dash3d-muted">{healthTimeLabel}.</p>
+            {webglError && !explicitFleetList && <>
+              <button type="button" className="dash3d-pill" data-testid="retry-3d" onClick={() => setWebglError(null)}>Retry 3D</button>
+              <p className="dash3d-muted">{webglError}</p>
+            </>}
             {state.status === "ready" ? (
               <ul className="dash3d-list" style={{ marginTop: "0.75rem", textAlign: "left" }}>
                 {visibleBots.map((b) => (
                   <li key={b.id}>
-                    <button type="button" className="dash3d-pill" onClick={() => setSelectedBotId(b.id)}>
+                    <button type="button" className="dash3d-pill" onClick={() => rendererMode === "graph" ? selectGraphBot(b) : setSelectedBotId(b.id)}>
                       <span className={`dash3d-dot ${b.health}`} />
                       {b.name}
                     </button>
@@ -447,7 +460,7 @@ export function DashboardApp({ embedded = false, status }: { embedded?: boolean;
         <MobileChrome
           sceneInteract={sceneInteract}
           onSceneInteract={setSceneInteract}
-          graphicsAvailable={!webglError}
+          graphicsAvailable={!fleetList && !webglError}
           filtersSlot={<GraphFiltersPanel triggerOnly filter={graphFilter} onFilterChange={setGraphFilter} />}
           focused={panelFocus}
           onJump={jumpToPanel}
@@ -578,6 +591,7 @@ export function DashboardApp({ embedded = false, status }: { embedded?: boolean;
       <NodeDetailPanel
         bot={selected}
         healthTimeLabel={scrubView.mode !== "live" ? healthTimeLabel : undefined}
+        hiddenByFilters={selectionIsFiltered}
         notionPage={notionPage}
         open={Boolean(selected || notionPage)}
         spend={spendView}

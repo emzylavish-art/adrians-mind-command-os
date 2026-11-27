@@ -149,6 +149,7 @@ export function NodeDetailPanel({
   notionNeighbors,
   portraitSrc,
   healthTimeLabel,
+  hiddenByFilters,
 }: {
   bot: BotNode | null;
   notionPage: NotionSnapPage | null;
@@ -159,6 +160,7 @@ export function NodeDetailPanel({
   notionNeighbors?: NotionSnapPage[];
   portraitSrc?: string | null;
   healthTimeLabel?: string;
+  hiddenByFilters?: boolean;
 }) {
   const detail =
     bot && status
@@ -180,6 +182,9 @@ export function NodeDetailPanel({
         <button type="button" className="dash3d-side-close" onClick={onClose} aria-label="Close details">
           ×
         </button>
+        <div role="status">
+          {hiddenByFilters && bot && <p className="dash3d-muted">{bot.name} is hidden by the current fleet filters. Its details remain open.</p>}
+        </div>
         {detail ? <BotDetailBody detail={detail} spend={spend} portraitSrc={portraitSrc} healthTimeLabel={healthTimeLabel} /> : null}
         {!detail && bot ? (
           <p className="dash3d-muted">Detail data {NO_SOURCE}</p>

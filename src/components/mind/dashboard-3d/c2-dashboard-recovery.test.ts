@@ -102,6 +102,30 @@ test("C2 AA008/009: fallback, search and selected details retain historical heal
   nodes.find((n) => n.type === "TimeScrubber")!.props.onScrubMs(null);
   nodes = h.render();
   assert.equal(nodes.find((n) => n.type === "NodeDetailPanel")!.props.bot.health, "blocked");
+  assert.equal(nodes.find((n) => n.type === "NodeDetailPanel")!.props.hiddenByFilters, true);
+});
+
+test("L01 P03/P06: chosen Fleet List preserves the selected record, updates its health and explains filter exclusion", () => {
+  const h = dashboardFixture();
+  h.data.bots[0] = { ...h.data.bots[0], health: "healthy", reason: "Latest healthy" };
+  let nodes = h.render();
+  nodes.find((n) => n.type === "button" && n.props.children === "List")!.props.onClick();
+  nodes = h.render();
+  assert.equal(nodes.some((node) => node.type === "LazyGraph"), false);
+  const list = nodes.find((n) => n.props["aria-label"] === "Operations list")!;
+  descendants(list).find((n) => n.type === "button" && n.props.children.includes("Dashboard"))!.props.onClick();
+  nodes = h.render();
+  nodes.find((n) => n.type === "GraphFiltersPanel")!.props.onFilterChange({ ...DEFAULT_GRAPH_FILTER, health: "healthy" });
+  h.data.bots[0] = { ...h.data.bots[0], health: "blocked", reason: "Latest blocked" };
+  nodes = h.render();
+  assert.equal(nodes.find((n) => n.type === "NodeDetailPanel")!.props.bot.health, "blocked");
+  assert.equal(nodes.find((n) => n.type === "NodeDetailPanel")!.props.hiddenByFilters, true);
+  nodes.find((n) => n.props["data-testid"] === "switch-force-graph")!.props.onClick();
+  nodes = h.render();
+  assert.equal(nodes.find((n) => n.type === "LazyGraph")!.props.filter.health, "healthy");
+  assert.equal(nodes.find((n) => n.type === "NodeDetailPanel")!.props.bot.id, "dashboard");
+  nodes.find((n) => n.type === "GraphFiltersPanel")!.props.onFilterChange(DEFAULT_GRAPH_FILTER);
+  assert.equal(h.render().find((n) => n.type === "NodeDetailPanel")!.props.hiddenByFilters, false);
 });
 
 test("C2 AA010: mobile navigation mounts support content before focus, including hidden-layer explanation", () => {

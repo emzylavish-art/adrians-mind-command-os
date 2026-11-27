@@ -59,20 +59,19 @@
   background: rgb(5 7 13 / 0.92);
 }
 
-/* A failed renderer is a normal-flow list dashboard, including inside an
-   embedded viewport. The header cannot cover operational rows. */
-.dash3d-root[data-renderer-unavailable="1"] {
+/* Keep list rows below the controls, including inside the workspace. */
+.dash3d-root[data-fleet-list="1"] {
   display: flex;
   flex-direction: column;
   overflow: auto;
 }
-.dash3d-root[data-renderer-unavailable="1"] .dash3d-graph-chrome {
+.dash3d-root[data-fleet-list="1"] .dash3d-graph-chrome {
   position: relative;
   inset: auto;
   flex: 0 0 auto;
   margin: 0.75rem;
 }
-.dash3d-root[data-renderer-unavailable="1"] .dash3d-operations-fallback {
+.dash3d-root[data-fleet-list="1"] .dash3d-operations-fallback {
   position: relative;
   inset: auto;
   flex: 0 0 auto;
