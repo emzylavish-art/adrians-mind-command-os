@@ -383,7 +383,7 @@ export function SpeakStage(props: {
   if (!props.open) return null;
   const status = props.halted ? "Emergency stop is on" : props.callError ? "Voice unavailable" : props.live ? (props.micMuted ? "Microphone muted" : "Live conversation") : connecting ? "Connecting…" : "Ready to start";
   const attachedNames = props.attachments?.map((item) => item.name) ?? [];
-  const transcript = [props.heard && `You: ${props.heard}`, (reply || props.spoken) && `Adrian: ${reply || props.spoken}`, attachedNames.length ? `Attached: ${attachedNames.join(", ")}` : null].filter(Boolean).join("\n");
+  const transcript = [props.heard && `You: ${props.heard}`, (reply || props.spoken) && `Adrian: ${reply || props.spoken}`].filter(Boolean).join("\n");
 
   const stage = (
     <div ref={dialogRef} tabIndex={-1} className="speak-stage speak-call" role="dialog" aria-modal="true" aria-label="Speak" data-testid="speak-stage"
@@ -449,9 +449,12 @@ export function SpeakStage(props: {
         <button type="button" className="speak-call__end" aria-label="End call" onClick={() => { stopVideo(); props.onClose(); }}><PhoneOff /></button>
       </form>
       {attachedNames.length > 0 ? (
-        <div className="speak-call__transcript" data-testid="speak-attachments" aria-label="Speak attachments">
+        <div className="speak-call__attachments" data-testid="speak-attachments" aria-label="Speak attachments">
           {attachedNames.map((name, index) => (
-            <span key={`${name}-${index}`}>{name}<button type="button" aria-label={`Remove ${name}`} onClick={() => props.onRemoveAttachment?.(index)}>×</button></span>
+            <span className="speak-attachment" key={`${name}-${index}`} title={name}>
+              <span>{/^camera-\d+\.jpg$/.test(name) ? "Camera frame" : /^screen-\d+\.jpg$/.test(name) ? "Screen frame" : name}</span>
+              <button type="button" aria-label={`Remove ${name}`} onClick={() => props.onRemoveAttachment?.(index)}><X size={14} aria-hidden="true" /></button>
+            </span>
           ))}
         </div>
       ) : null}

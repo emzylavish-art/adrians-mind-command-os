@@ -863,6 +863,23 @@ html.eve-call-open body > *:not([data-testid="speak-stage"]) {
   padding: 0 0.8rem;
 }
 
+.speak-call__attachments {
+  display: flex;
+  justify-content: center;
+  flex-wrap: wrap;
+  gap: .375rem;
+}
+.speak-attachment {
+  display: inline-flex;
+  align-items: center;
+  max-width: 100%;
+  padding-inline-start: .75rem;
+  border: 1px solid rgb(255 255 255 / 18%);
+  border-radius: 999px;
+  font-size: .8125rem;
+}
+.speak-attachment > span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.speak-attachment button { display: grid; place-items: center; min-width: 44px; min-height: 44px; }
 .speak-call__transcript {
   width: min(100% - 1.5rem, 52rem);
   max-width: none;
