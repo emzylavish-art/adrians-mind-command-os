@@ -1941,6 +1941,9 @@ function CommandSession({ account, accountPending }: { account: ReturnType<typeo
       void mindStatus()
       .then((status) => {
         if (!active || generation !== statusGeneration) return;
+        if (!Array.isArray(status.environmentCatalogs) || !Array.isArray(status.modelTiers)) {
+          throw new Error("The service returned incomplete model status.");
+        }
         setGrokConfigured(status.grok === "configured");
         setSearchProvider(status.searchProvider);
         setProviderModels(status.providerModels);

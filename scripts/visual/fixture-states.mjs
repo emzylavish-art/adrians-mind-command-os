@@ -42,7 +42,7 @@ export function fixtureResponse(name, method, pathname, body = {}) {
     const rpc = (result) => json({ result, context: {} });
     if (/^listNotionWorkspaces(?:_|$)/.test(exported)) return rpc(fixture.notion ? [{ id: "fixture-workspace", name: "Synthetic workspace", active: true, issues: [] }] : []);
     if (/^(?:mcpList|mcpRegistryList)(?:_|$)/.test(exported)) return rpc({ servers: [] });
-    if (/^mindStatus(?:_|$)/.test(exported)) return rpc({ ok: true, grok: "configured", model: "synthetic-fixture-model", modelTiers: [], database: "Synthetic local fixture", isolation: "clear", executionHalted: false, executionHaltState: "off", signedIn: true, persistence: "Synthetic browser state only", databaseBackend: "pglite", providerModels: {}, searchProvider: "Unavailable", providers: { grok: true }, logicRoutes: [], checkedAt: at });
+    if (/^mindStatus(?:_|$)/.test(exported)) return rpc({ ok: true, grok: "configured", model: "synthetic-fixture-model", modelTiers: [], environmentCatalogs: [], database: "Synthetic local fixture", isolation: "clear", executionHalted: false, executionHaltState: "off", signedIn: true, persistence: "Synthetic browser state only", databaseBackend: "pglite", providerModels: {}, searchProvider: "Unavailable", providers: { grok: true }, logicRoutes: [], checkedAt: at });
     if (/^notionStatus(?:_|$)/.test(exported)) return rpc(fixture.notion || { state: "disconnected", detail: "Synthetic unconnected fixture." });
     if (/^readExecutionControl(?:_|$)/.test(exported)) return rpc({ halted: false, state: "off" });
   }
