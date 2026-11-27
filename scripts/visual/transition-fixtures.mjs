@@ -197,10 +197,16 @@ try {
       await controls.click();
       await choice.waitFor();
       assert.equal(await choice.getAttribute("aria-checked"), "true");
-      await controls.click();
+      await providerPage.keyboard.press("Escape");
+      await providerPage.getByTestId("controls-menu").waitFor({ state: "hidden" });
       assert.equal(requests.length, initialCount + 1);
       return { provider, model: providerModels[provider], paidFallbackEnabled: false, reloadSelection: true, inference: "mocked HTTP response" };
     });
+    const menu = providerPage.getByTestId("controls-menu");
+    if (await menu.isVisible()) {
+      await providerPage.keyboard.press("Escape");
+      await menu.waitFor({ state: "hidden" });
+    }
   }
   report.providerTransport = providerTransport.summary();
   report.providerRequests = requests;

@@ -73,11 +73,12 @@ try {
   await latest.waitFor();
   const before = await page.evaluate(() => ({ width: innerWidth, ratio: devicePixelRatio }));
   report.zoom = await worker.evaluate(async (target) => {
-    const tab = (await chrome.tabs.query({})).find((entry) => entry.url === target);
+    const tabs = globalThis.chrome.tabs;
+    const tab = (await tabs.query({})).find((entry) => entry.url === target);
     if (tab?.id === undefined) throw new Error("Could not locate the synthetic tab.");
-    const original = await chrome.tabs.getZoom(tab.id);
-    await chrome.tabs.setZoom(tab.id, 2);
-    return { original, applied: await chrome.tabs.getZoom(tab.id) };
+    const original = await tabs.getZoom(tab.id);
+    await tabs.setZoom(tab.id, 2);
+    return { original, applied: await tabs.getZoom(tab.id) };
   }, url);
   assert.deepEqual(report.zoom, { original: 1, applied: 2 });
   await page.waitForFunction(({ width, ratio }) => Math.abs(innerWidth * 2 - width) <= 2 && devicePixelRatio === ratio * 2, before);
