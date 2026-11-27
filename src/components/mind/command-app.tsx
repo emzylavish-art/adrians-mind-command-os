@@ -832,17 +832,21 @@ function CommandSession({ account, accountPending }: { account: ReturnType<typeo
     return !["section", "chat", "project", "file", "bot", "agentId"].some((key) => params.has(key));
   });
   const [view, setViewState] = useState<View>("command");
-  const controlReturn = useRef<View>("command");
+  const [workspaceReturn, setWorkspaceReturn] = useState<
+    { surface: "controls"; origin: View } |
+    { surface: "connected"; origin: "command" | "chat" | "build" } |
+    null
+  >(null);
+  const pluginOrigin = workspaceReturn?.surface === "connected" ? workspaceReturn.origin : null;
   function openControlCenter() {
-    if (view !== "controls") controlReturn.current = view;
     setView("controls");
+    if (view !== "controls") setWorkspaceReturn({ surface: "controls", origin: view });
     setNavOpen(false);
     closeMenus();
   }
-  const [pluginOrigin, setPluginOrigin] = useState<"command" | "chat" | "build" | null>(null);
   function browseComposerPlugins() {
-    if (view === "command" || view === "chat" || view === "build") setPluginOrigin(view);
     setView("connected");
+    if (view === "command" || view === "chat" || view === "build") setWorkspaceReturn({ surface: "connected", origin: view });
   }
   const applyingLocation = useRef(false);
   const locationHistory = useRef<"push" | "replace">("push");
@@ -855,7 +859,7 @@ function CommandSession({ account, accountPending }: { account: ReturnType<typeo
     return params.size ? "/?" + params.toString() : "/";
   }
   function setView(next: View) {
-    if (next !== "connected") setPluginOrigin(null);
+    setWorkspaceReturn((entry) => entry?.surface === next ? entry : null);
     setViewState(next);
   }
   const [imagineEdit, setImagineEdit] = useState<{ image: string; source: EditableImage; chatId: string | null; draftScope: string; text: string; operationId: string; result?: ImageAttachment; returnFocus: HTMLElement | null } | null>(null);
@@ -8351,7 +8355,7 @@ ${message.content}`;
           )}
           {view === "controls" && ready && <WorkspaceControlCenter account={accountLabel} thread={active} workspace={ws}
             selectedModel={`${effectiveProvider} · ${modelTier}`} freeOnly={researchFreeOnly} listening={voiceListening}
-            onReturn={() => setView(controlReturn.current)} onOpen={(destination, id) => {
+            onReturn={() => setView(workspaceReturn?.surface === "controls" ? workspaceReturn.origin : "command")} onOpen={(destination, id) => {
               const panes = { account: null, models: "keys", permissions: "safety", voice: "voice", profile: "profile" } as const;
               switch (destination) {
                 case "account": case "models": case "permissions": case "voice": case "profile":
