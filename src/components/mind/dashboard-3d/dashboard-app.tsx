@@ -282,7 +282,7 @@ export function DashboardApp({ embedded = false, status }: { embedded?: boolean;
               ADRIAN&apos;S MIND
             </p>
             <h1 className="dash3d-title" style={{ margin: "0.1rem 0 0" }}>
-              {rendererMode === "graph" ? "Fleet 3D graph" : "Painterly 3D universe"}
+              {fleetList ? "Fleet activity" : rendererMode === "graph" ? "Fleet 3D graph" : "Painterly 3D universe"}
             </h1>
             <p className="dash3d-muted" style={{ margin: "0.15rem 0 0", fontSize: "0.72rem" }}>
               {fleetList ? "Select a record to view details · Cmd/Ctrl-K search" : "Drag rotate · scroll zoom · click node · Cmd/Ctrl-K search"}
@@ -406,7 +406,7 @@ export function DashboardApp({ embedded = false, status }: { embedded?: boolean;
       ) : null}
 
       {fleetList || webglError ? (
-        <section className="dash3d-fallback dash3d-operations-fallback" aria-label="Operations list">
+        <section className={fleetList ? "dash3d-fleet-list" : "dash3d-fallback dash3d-operations-fallback"} aria-label="Operations list">
           <div className="dash3d-glass">
             <h2>{explicitFleetList ? "Fleet list" : `${rendererMode === "graph" ? "Graph" : "Universe"} graphics unavailable`}</h2>
             <p className="dash3d-title">Operations overview</p>
@@ -419,8 +419,8 @@ export function DashboardApp({ embedded = false, status }: { embedded?: boolean;
               <ul className="dash3d-list" style={{ marginTop: "0.75rem", textAlign: "left" }}>
                 {visibleBots.map((b) => (
                   <li key={b.id}>
-                    <button type="button" className="dash3d-pill" onClick={() => rendererMode === "graph" ? selectGraphBot(b) : setSelectedBotId(b.id)}>
-                      <span className={`dash3d-dot ${b.health}`} />
+                    <button type="button" className="dash3d-pill" aria-label={fleetList ? `${b.name}, ${b.health}` : undefined} onClick={() => rendererMode === "graph" ? selectGraphBot(b) : setSelectedBotId(b.id)}>
+                      <span className={`dash3d-dot ${b.health}`} aria-hidden={fleetList || undefined} />
                       {b.name}
                     </button>
                   </li>

@@ -803,7 +803,7 @@ try {
     await chrome.getByRole("button", { name: "List", exact: true }).click();
     await fleetPage.getByRole("heading", { name: "Fleet list", exact: true }).waitFor();
     const list = fleetPage.getByRole("region", { name: "Operations list", exact: true });
-    const record = list.getByRole("button", { name: "Synthetic fleet lane", exact: true });
+    const record = list.getByRole("button", { name: "Synthetic fleet lane, healthy", exact: true });
     await chrome.getByRole("button", { name: "Filters", exact: true }).click();
     await chrome.getByTestId("graph-filter-health-healthy").click();
     await fleetPage.keyboard.press("Escape");
@@ -814,7 +814,7 @@ try {
     await fleetPage.clock.fastForward(21000);
     await detail.getByText("Synthetic fleet lane is hidden by the current fleet filters. Its details remain open.", { exact: true }).waitFor();
     assert.equal(await detail.getByText("blocked", { exact: true }).count(), 1);
-    assert.equal(await record.count(), 0);
+    assert.equal(await list.getByRole("button", { name: /^Synthetic fleet lane,/ }).count(), 0);
     assert.equal(await chrome.getByRole("button", { name: "List", exact: true }).getAttribute("aria-pressed"), "true");
     assert.equal(await fleetPage.locator("canvas").count(), 0);
     return { statusChange: "healthy to blocked", selectedRecordRetained: true, filteredRecordExcluded: true, listIsExplicit: true, transport: "synthetic snapshot" };

@@ -71,14 +71,11 @@
   flex: 0 0 auto;
   margin: 0.75rem;
 }
-.dash3d-root[data-fleet-list="1"] .dash3d-operations-fallback {
-  position: relative;
-  inset: auto;
+.dash3d-fleet-list {
   flex: 0 0 auto;
-  display: block;
-  padding: 0.75rem;
-  text-align: left;
+  margin: 0 0.75rem 0.75rem;
 }
+.dash3d-fleet-list > .dash3d-glass,
 .dash3d-operations-fallback > .dash3d-glass {
   max-height: none;
   overflow: visible;
