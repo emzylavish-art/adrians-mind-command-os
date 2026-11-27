@@ -1847,7 +1847,12 @@
         "files": [
           "src/components/mind/message-rendering.test.ts"
         ],
-        "lookup": "Exact-head CI logs and named source fixtures must be checked individually; case-level proof has not yet been recorded."
+        "lookup": "Exact-head CI logs and named source fixtures must be checked individually; case-level proof has not yet been recorded.",
+        "reviewedFixtureFiles": [
+          "src/components/mind/message-rendering.test.ts",
+          "scripts/profile-c4-render-counts.mjs"
+        ],
+        "reviewedAssertionScope": "Mounted component checks parser and callback behavior. The separate before/after profiler exercises 20 updates across 20, 200 and 1,000 messages; run it independently to get parser counts."
       },
       "nextCheck": "Compare the named fixture cases and remaining source limits against this original acceptance. Live and physical evidence must be recorded separately when required."
     },
@@ -1870,7 +1875,11 @@
         "files": [
           "src/components/mind/message-rendering.test.ts"
         ],
-        "lookup": "Exact-head CI logs and named source fixtures must be checked individually; case-level proof has not yet been recorded."
+        "lookup": "Exact-head CI logs and named source fixtures must be checked individually; case-level proof has not yet been recorded.",
+        "reviewedFixtureFiles": [
+          "src/components/mind/message-rendering.test.ts"
+        ],
+        "reviewedAssertionScope": "Mounted Data hook checks disabled work outside Settings Data and no extra serialization during unrelated state changes."
       },
       "nextCheck": "Compare the named fixture cases and remaining source limits against this original acceptance. Live and physical evidence must be recorded separately when required."
     },

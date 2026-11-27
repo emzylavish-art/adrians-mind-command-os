@@ -48,6 +48,12 @@ jobs:
           node-version: '24.11.1'
           cache: npm
       - run: npm ci
+      - name: Measure historical message parser work
+        run: |
+          baseline=18d5b9364e6bdcfec028eeccf56fe596946ed8ce
+          git fetch --no-tags --depth=1 origin "$baseline"
+          mkdir -p "$RUNNER_TEMP/browser-transitions"
+          node scripts/profile-c4-render-counts.mjs "$baseline" > "$RUNNER_TEMP/browser-transitions/render-counts.json"
       - name: Run isolated Chromium transitions
         run: |
           export BROWSER_EXECUTABLE_PATH="$(command -v google-chrome)"

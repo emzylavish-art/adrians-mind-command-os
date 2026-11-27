@@ -923,7 +923,12 @@
           "src/lib/mind/schedule-worker.test.ts",
           "src/lib/mind/worker-pass.test.ts"
         ],
-        "lookup": "Exact-head CI logs and named source fixtures must be checked individually; case-level proof has not yet been recorded."
+        "lookup": "Exact-head CI logs and named source fixtures must be checked individually; case-level proof has not yet been recorded.",
+        "reviewedFixtureFiles": [
+          "src/lib/mind/fleet.test.ts",
+          "src/lib/mind/fleet-audit-recovery.test.ts"
+        ],
+        "reviewedAssertionScope": "Tests retain the original chat through completion, deduplicate repeated ticks, and reject removed, archived or replaced destinations. A separate fleet case checks worker environment."
       },
       "nextCheck": "Compare the named fixture cases and remaining source limits against this original acceptance. Live and physical evidence must be recorded separately when required."
     },
@@ -959,7 +964,12 @@
           "src/lib/mind/schedule-worker.test.ts",
           "src/lib/mind/worker-pass.test.ts"
         ],
-        "lookup": "Exact-head CI logs and named source fixtures must be checked individually; case-level proof has not yet been recorded."
+        "lookup": "Exact-head CI logs and named source fixtures must be checked individually; case-level proof has not yet been recorded.",
+        "reviewedFixtureFiles": [
+          "src/lib/mind/fleet.test.ts",
+          "src/lib/mind/fleet-audit-recovery.test.ts"
+        ],
+        "reviewedAssertionScope": "Tests distinguish approval waiting, explicit skip/queue policy, independent scheduled occurrences and bounded missed-run handling."
       },
       "nextCheck": "Compare the named fixture cases and remaining source limits against this original acceptance. Live and physical evidence must be recorded separately when required."
     },
@@ -995,7 +1005,12 @@
           "src/lib/mind/schedule-worker.test.ts",
           "src/lib/mind/worker-pass.test.ts"
         ],
-        "lookup": "Exact-head CI logs and named source fixtures must be checked individually; case-level proof has not yet been recorded."
+        "lookup": "Exact-head CI logs and named source fixtures must be checked individually; case-level proof has not yet been recorded.",
+        "reviewedFixtureFiles": [
+          "src/lib/mind/fleet-model.test.ts",
+          "src/lib/mind/fleet.test.ts"
+        ],
+        "reviewedAssertionScope": "The server fixture races two workers to prove one model dispatch. Separate browser/local fixture rejects a mismatched execution environment. These cases do not prove deployment worker configuration."
       },
       "nextCheck": "Compare the named fixture cases and remaining source limits against this original acceptance. Live and physical evidence must be recorded separately when required."
     },
@@ -1039,7 +1054,11 @@
           "src/lib/mind/schedule-worker.test.ts",
           "src/lib/mind/worker-pass.test.ts"
         ],
-        "lookup": "Exact-head CI logs and named source fixtures must be checked individually; case-level proof has not yet been recorded."
+        "lookup": "Exact-head CI logs and named source fixtures must be checked individually; case-level proof has not yet been recorded.",
+        "reviewedFixtureFiles": [
+          "src/lib/mind/fleet-model.test.ts"
+        ],
+        "reviewedAssertionScope": "Tests check declared input and instructions, one mocked Gemini adapter call and usage receipt, free-only refusal of paid routing, no replay after an uncertain result, and actual provider attribution on an OpenRouter route."
       },
       "nextCheck": "Compare the named fixture cases and remaining source limits against this original acceptance. Live and physical evidence must be recorded separately when required."
     },

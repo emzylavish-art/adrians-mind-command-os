@@ -194,7 +194,12 @@
       "recordUrl": "https://app.notion.com/p/4231aa276323814ba23ef6527ad64388?pvs=204",
       "caseReports": {
         "files": [],
-        "lookup": "Exact-head CI logs and named source fixtures must be checked individually; case-level proof has not yet been recorded."
+        "lookup": "Exact-head CI logs and named source fixtures must be checked individually; case-level proof has not yet been recorded.",
+        "reviewedFixtureFiles": [
+          "src/lib/mind/workspace-reconciliation.test.ts",
+          "src/lib/mind/workspace-hook-lifecycle.test.ts"
+        ],
+        "reviewedAssertionScope": "Independent project fields and additions survive reconciliation. The mounted hook fixture also covers a local input racing an initial server read and storage events; other collections require their own evidence."
       },
       "nextCheck": "Resolve the exact combined test for this record from its committed source evidence and execute its acceptance path before closure."
     },
@@ -230,7 +235,11 @@
       "recordUrl": "https://app.notion.com/p/4231aa276323814ba23ef6527ad64388?pvs=204",
       "caseReports": {
         "files": [],
-        "lookup": "Exact-head CI logs and named source fixtures must be checked individually; case-level proof has not yet been recorded."
+        "lookup": "Exact-head CI logs and named source fixtures must be checked individually; case-level proof has not yet been recorded.",
+        "reviewedFixtureFiles": [
+          "src/lib/mind/workspace-reconciliation.test.ts"
+        ],
+        "reviewedAssertionScope": "Checks both values in a same-field conflict, explicit resolution, prevention of stale conflict resurrection, and missing-common-ancestor handling."
       },
       "nextCheck": "Resolve the exact combined test for this record from its committed source evidence and execute its acceptance path before closure."
     },
@@ -247,7 +256,11 @@
       "recordUrl": "https://app.notion.com/p/4231aa276323814ba23ef6527ad64388?pvs=204",
       "caseReports": {
         "files": [],
-        "lookup": "Exact-head CI logs and named source fixtures must be checked individually; case-level proof has not yet been recorded."
+        "lookup": "Exact-head CI logs and named source fixtures must be checked individually; case-level proof has not yet been recorded.",
+        "reviewedFixtureFiles": [
+          "src/lib/mind/workspace-reconciliation.test.ts"
+        ],
+        "reviewedAssertionScope": "Splits a large workspace and long transcript into bounded batches, resumes after one confirmed batch, and keeps a single message edit below 1 KB."
       },
       "nextCheck": "Resolve the exact combined test for this record from its committed source evidence and execute its acceptance path before closure."
     },
@@ -333,7 +346,11 @@
       "recordUrl": "https://app.notion.com/p/4231aa2763238171b61ded08986e6b29?pvs=204",
       "caseReports": {
         "files": [],
-        "lookup": "Exact-head CI logs and named source fixtures must be checked individually; case-level proof has not yet been recorded."
+        "lookup": "Exact-head CI logs and named source fixtures must be checked individually; case-level proof has not yet been recorded.",
+        "reviewedFixtureFiles": [
+          "src/lib/mind/c1-runtime-regressions.test.ts"
+        ],
+        "reviewedAssertionScope": "AA016/017 fixture caps simultaneous helpers at two, keeps failed receipts, and prevents a queued helper from dispatching after cancellation."
       },
       "nextCheck": "Resolve the exact combined test for this record from its committed source evidence and execute its acceptance path before closure."
     },
@@ -417,7 +434,11 @@
       "recordUrl": "https://app.notion.com/p/4231aa27632381d6a2e8d69d24e7feac?pvs=204",
       "caseReports": {
         "files": [],
-        "lookup": "Exact-head CI logs and named source fixtures must be checked individually; case-level proof has not yet been recorded."
+        "lookup": "Exact-head CI logs and named source fixtures must be checked individually; case-level proof has not yet been recorded.",
+        "reviewedFixtureFiles": [
+          "src/lib/mind/c1-runtime-regressions.test.ts"
+        ],
+        "reviewedAssertionScope": "AA020/021 fixture distinguishes browser-local execution, an unverified objective, and exhausted budget. Hosted and scheduled execution are outside this fixture."
       },
       "nextCheck": "Resolve the exact combined test for this record from its committed source evidence and execute its acceptance path before closure."
     },
@@ -488,7 +509,11 @@
         "candidateExplicitIdMatches": [
           "src/lib/mind/c1-research-skills.test.ts"
         ],
-        "candidateWarning": "Candidate paths match an explicit ID in a C1 test file; verify the actual case against the acceptance before assigning coverage."
+        "candidateWarning": "Candidate paths match an explicit ID in a C1 test file; verify the actual case against the acceptance before assigning coverage.",
+        "reviewedFixtureFiles": [
+          "src/lib/mind/c1-research-skills.test.ts"
+        ],
+        "reviewedAssertionScope": "AA024 fixtures separate an inspected excerpt from provider synthesis, check conflicts after controlled text inspection, and refuse a private redirect before fetching it."
       },
       "nextCheck": "Resolve the exact combined test for this record from its committed source evidence and execute its acceptance path before closure."
     },
@@ -530,7 +555,11 @@
       "recordUrl": "https://app.notion.com/p/4231aa2763238142af7ed04c954f6825?pvs=204",
       "caseReports": {
         "files": [],
-        "lookup": "Exact-head CI logs and named source fixtures must be checked individually; case-level proof has not yet been recorded."
+        "lookup": "Exact-head CI logs and named source fixtures must be checked individually; case-level proof has not yet been recorded.",
+        "reviewedFixtureFiles": [
+          "src/lib/mind/c1-research-skills.test.ts"
+        ],
+        "reviewedAssertionScope": "AA024/026 checks citations alongside the reported answer, model, response ID and usage, and retains discovered evidence as distinct from inspected content."
       },
       "nextCheck": "Resolve the exact combined test for this record from its committed source evidence and execute its acceptance path before closure."
     },
@@ -576,7 +605,11 @@
         "candidateExplicitIdMatches": [
           "src/lib/mind/c1-research-skills.test.ts"
         ],
-        "candidateWarning": "Candidate paths match an explicit ID in a C1 test file; verify the actual case against the acceptance before assigning coverage."
+        "candidateWarning": "Candidate paths match an explicit ID in a C1 test file; verify the actual case against the acceptance before assigning coverage.",
+        "reviewedFixtureFiles": [
+          "src/lib/mind/c1-research-skills.test.ts"
+        ],
+        "reviewedAssertionScope": "AA028 checks follow-up passages and evidence status, retains prior successful results on retry, and marks external content as untrusted."
       },
       "nextCheck": "Resolve the exact combined test for this record from its committed source evidence and execute its acceptance path before closure."
     },
@@ -622,7 +655,11 @@
         "candidateExplicitIdMatches": [
           "src/lib/mind/c1-research-skills.test.ts"
         ],
-        "candidateWarning": "Candidate paths match an explicit ID in a C1 test file; verify the actual case against the acceptance before assigning coverage."
+        "candidateWarning": "Candidate paths match an explicit ID in a C1 test file; verify the actual case against the acceptance before assigning coverage.",
+        "reviewedFixtureFiles": [
+          "src/lib/mind/c1-research-skills.test.ts"
+        ],
+        "reviewedAssertionScope": "AA030/031 distinguishes local tool and connector categories and tests disabled tool permission through direct and named-skill dispatch."
       },
       "nextCheck": "Resolve the exact combined test for this record from its committed source evidence and execute its acceptance path before closure."
     },
@@ -639,7 +676,12 @@
       "recordUrl": "https://app.notion.com/p/4231aa276323814dbf40cef97b4305d3?pvs=204",
       "caseReports": {
         "files": [],
-        "lookup": "Exact-head CI logs and named source fixtures must be checked individually; case-level proof has not yet been recorded."
+        "lookup": "Exact-head CI logs and named source fixtures must be checked individually; case-level proof has not yet been recorded.",
+        "reviewedFixtureFiles": [
+          "src/lib/mind/c1-research-skills.test.ts",
+          "src/lib/mind/workspace-reconciliation.test.ts"
+        ],
+        "reviewedAssertionScope": "Direct and named-skill dispatch respect disabled tools. Missing-base permission conflicts are separately shown as reviewable in the reconciliation fixture."
       },
       "nextCheck": "Resolve the exact combined test for this record from its committed source evidence and execute its acceptance path before closure."
     },
@@ -686,7 +728,12 @@
           "src/lib/mind/c1-durable-runtime.test.ts",
           "src/lib/mind/c1-research-skills.test.ts"
         ],
-        "candidateWarning": "Candidate paths match an explicit ID in a C1 test file; verify the actual case against the acceptance before assigning coverage."
+        "candidateWarning": "Candidate paths match an explicit ID in a C1 test file; verify the actual case against the acceptance before assigning coverage.",
+        "reviewedFixtureFiles": [
+          "src/lib/mind/c1-research-skills.test.ts",
+          "src/lib/mind/c1-durable-runtime.test.ts"
+        ],
+        "reviewedAssertionScope": "Tests pin the reviewed source revision and body, refuse changed or removed instructions, and distinguish recorded instruction attachment from execution success."
       },
       "nextCheck": "Resolve the exact combined test for this record from its committed source evidence and execute its acceptance path before closure."
     },
@@ -1224,7 +1271,11 @@
       "recordUrl": "https://app.notion.com/p/4231aa276323811985e2cac3d3a06889?pvs=204",
       "caseReports": {
         "files": [],
-        "lookup": "Exact-head CI logs and named source fixtures must be checked individually; case-level proof has not yet been recorded."
+        "lookup": "Exact-head CI logs and named source fixtures must be checked individually; case-level proof has not yet been recorded.",
+        "reviewedFixtureFiles": [
+          "src/components/mind/message-rendering.test.ts"
+        ],
+        "reviewedAssertionScope": "Twenty live-token updates do not reparse unchanged historical content. Editing history triggers parsing, and the image action uses the current handler."
       },
       "nextCheck": "Resolve the exact combined test for this record from its committed source evidence and execute its acceptance path before closure."
     },
@@ -1258,7 +1309,11 @@
       "recordUrl": "https://app.notion.com/p/4231aa276323811985e2cac3d3a06889?pvs=204",
       "caseReports": {
         "files": [],
-        "lookup": "Exact-head CI logs and named source fixtures must be checked individually; case-level proof has not yet been recorded."
+        "lookup": "Exact-head CI logs and named source fixtures must be checked individually; case-level proof has not yet been recorded.",
+        "reviewedFixtureFiles": [
+          "src/components/mind/message-rendering.test.ts"
+        ],
+        "reviewedAssertionScope": "The mounted Data hook serializes only the visible Data view, caches unchanged data, and processes changed data when Data becomes visible."
       },
       "nextCheck": "Resolve the exact combined test for this record from its committed source evidence and execute its acceptance path before closure."
     },
@@ -1275,7 +1330,11 @@
       "recordUrl": "https://app.notion.com/p/4231aa276323811985e2cac3d3a06889?pvs=204",
       "caseReports": {
         "files": [],
-        "lookup": "Exact-head CI logs and named source fixtures must be checked individually; case-level proof has not yet been recorded."
+        "lookup": "Exact-head CI logs and named source fixtures must be checked individually; case-level proof has not yet been recorded.",
+        "reviewedFixtureFiles": [
+          "src/lib/mind/workspace-reconciliation.test.ts"
+        ],
+        "reviewedAssertionScope": "Asserts a small change produces a bounded payload and applies to an existing snapshot. This fixture measures payload bytes rather than physical database writes."
       },
       "nextCheck": "Resolve the exact combined test for this record from its committed source evidence and execute its acceptance path before closure."
     },
