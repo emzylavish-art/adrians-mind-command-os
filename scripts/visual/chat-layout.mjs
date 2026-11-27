@@ -109,6 +109,19 @@ for (const [width, height, rootPercent] of viewports) {
         localStorage.setItem("amcos.workspace.v1", JSON.stringify({ chats, projects, files, deletedChatIds: ["fixture-deleted-conversation"], deletedMemoryIds: ["fixture-deleted-note"] }));
         localStorage.setItem("amcos.account-preferences.v1.dev-user.amcos.accessibility.v1", JSON.stringify({ textScale: rootPercent, contrast: "standard", spacing: "standard" }));
       }, { appOrigin: origin, counts, rootPercent, skillReceipts: skillReceiptFixture() });
+      // Vite can invalidate the cold dependency graph before measurements begin.
+      if (width === viewports[0][0] && height === viewports[0][1]) {
+        const warmup = await context.newPage();
+        const ready = warmup.locator('#mind-workspace[data-workspace-ready="true"]');
+        await warmup.goto(origin, { waitUntil: "domcontentloaded" });
+        try {
+          await ready.waitFor({ timeout: 15_000 });
+        } catch {
+          await warmup.reload({ waitUntil: "domcontentloaded" });
+          await ready.waitFor();
+        }
+        await warmup.close();
+      }
       page = await context.newPage();
       page.setDefaultTimeout(15_000);
       const consoleErrors = [];
@@ -214,7 +227,8 @@ for (const [width, height, rootPercent] of viewports) {
         await menu.waitFor({ state: "hidden" });
         assert(await trigger.evaluate((element) => document.activeElement === element), "More lost focus on Escape.");
         const transcript = page.locator("#chat-thread > section > .overflow-auto");
-        await transcript.evaluate((el) => { el.scrollTop -= 400; });
+        await transcript.hover();
+        await page.mouse.wheel(0, -400);
         await page.getByRole("button", { name: "Jump to latest" }).click();
         await page.waitForFunction(() => {
           const el = document.querySelector("#chat-thread > section > .overflow-auto");

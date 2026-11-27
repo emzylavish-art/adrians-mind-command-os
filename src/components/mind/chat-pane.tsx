@@ -63,6 +63,7 @@ export function ChatPane({
   draft,
   error,
   notice,
+  videoStatus,
   setDraft,
   onPickModule,
   onPick,
@@ -181,6 +182,7 @@ export function ChatPane({
   draft: string;
   error: string | null;
   notice: string | null;
+  videoStatus?: { text: string; failed?: boolean };
   setDraft: (value: string) => void;
   onPickModule?: (item: ModuleSuggestion) => void;
   onPick: (id: string) => void;
@@ -482,7 +484,7 @@ export function ChatPane({
             savePosition(position.top);
           }}
         >
-        {detached && <button type="button" className="jump-to-latest" onClick={() => {
+        {detached && <div className="sticky top-0 z-10 h-0 pointer-events-none"><button type="button" className="jump-to-latest pointer-events-auto" onClick={() => {
           following.current = true;
           lastScrollInput.current = -Infinity;
           setDetached(false);
@@ -492,7 +494,7 @@ export function ChatPane({
             previousScrollTop.current = pane.scrollTop;
             savePosition(pane.scrollTop);
           }
-        }}>Jump to latest</button>}
+        }}>Jump to latest</button></div>}
           <div ref={turns} className="space-y-3">
           {copyError ? <p role="alert" className="text-sm text-danger">{copyError}</p> : null}
           <ChatMediaGallery messages={active?.messages} onUseInComposer={onSaveImage} onEditImagine={onEditImagine} onDownload={onDownloadImage} />
@@ -679,6 +681,7 @@ export function ChatPane({
             </div>
           )}
           {error && <p className="rounded-panel border border-line bg-surface px-3 py-2 text-sm text-danger" role="status">{error}</p>}
+          {videoStatus && <p data-testid="video-operation-status" role="status" className={`rounded-panel border border-line bg-surface px-3 py-2 text-sm ${videoStatus.failed ? "text-danger" : "text-muted"}`}>{videoStatus.text}</p>}
           {busy && liveText && (
             <article className="turn turn-assistant w-full max-w-none px-1 py-2 text-sm">
               <p className="mb-1 text-xs text-muted">{modelTier} · writing</p>

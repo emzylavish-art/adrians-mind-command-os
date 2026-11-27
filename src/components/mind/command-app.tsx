@@ -9,7 +9,8 @@ import { checkpointReply, completedHistory } from "@/lib/mind/partial-reply";
 import { ResearchEvidence } from "@/components/mind/research-evidence";
 import { stageCodeHandoff } from "@/lib/mind/code-handoff";
 import type { TurnErrorCode } from "@/lib/mind/turn-error";
-import { ChatPane, type ChatReadingPositions } from "./chat-pane";
+import { ChatPane } from "./chat-pane";
+import type { ChatReadingPositions } from "./chat-pane";
 import { BrowserDictationControl, VoiceModeButton, ComposerEffortControl, ProviderPicker } from "./chat-controls";
 import { stamp, PRODUCT_LOGO } from "./chat-presentation";
 import { useExclusiveMenus } from "@/lib/mind/use-exclusive-menus";
@@ -1136,6 +1137,7 @@ function CommandSession({ account, accountPending }: { account: ReturnType<typeo
   }, [draftOwner]);
   const imagineInFlight = useRef(false);
   const videoInFlight = useRef(false);
+  const [videoStatus, setVideoStatus] = useState<{ chatId: string; text: string; failed?: boolean }>();
   const mcpInFlight = useRef(false);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
@@ -4193,7 +4195,7 @@ ${message.content}`;
     setWs((previous) => ({ ...previous, chats: previous.chats.map((chat) => chat.id === job.chatId && !chat.messages.some((message) => message.id === `video:${job.operationId}`)
       ? { ...chat, messages: [...chat.messages, { id: `video:${job.operationId}`, role: "assistant" as const, content: `Generated with ${job.model}. The provider link may expire. Open Media settings and recovery to save a copy on this device.`, at: job.updatedAt, model: job.model, provider: "xai", videoUrl: job.url }] }
       : chat) }));
-    setNotice("Video is ready in its original conversation. Its saved operation is available in Media recovery.");
+    setVideoStatus({ chatId: job.chatId, text: "Video is ready in its original conversation. Its saved operation is available in Media recovery." });
   }
 
   async function runVideo(promptRaw?: string) {
@@ -4212,7 +4214,7 @@ ${message.content}`;
     }
     const chatId = chat.id, operationId = crypto.randomUUID();
     setView("chat"); setDraft(""); setError(null);
-    setNotice("Submitting the video with a saved recovery reference. No automatic generation retry will occur.");
+    setVideoStatus({ chatId, text: "Submitting the video with a saved recovery reference. No automatic generation retry will occur." });
     setWs((previous) => ({ ...previous, chats: previous.chats.map((item) => item.id === chatId
       ? { ...item, title: item.messages.length ? item.title : prompt.replace(/\s+/g, " ").slice(0, 48), messages: [...item.messages, { id: `${operationId}:prompt`, role: "user" as const, content: `/video ${prompt}`, at: new Date().toISOString() }] }
       : item) }));
@@ -4222,16 +4224,20 @@ ${message.content}`;
     try {
       const started = await beginRecoverableVideo({ operationId, chatId, projectId: chat.projectId || undefined, taskId: operationId, prompt, settings: loadVideoSettings(preferenceStorage), temporary: chat.temporary === true, freeOnly: currentFreeOnly.current }, context);
       if (turnOwner.current !== owner) return;
-      if (!started.ok) { setNotice(null); setError(started.error); return; }
-      setNotice("The saved video job is rendering. You can leave this view and resume status checks in Media recovery.");
+      if (!started.ok) {
+        setVideoStatus({ chatId, text: started.error, failed: true });
+        return;
+      }
+      if (started.state === "pending") {
+        setVideoStatus({ chatId, text: "The saved video job is rendering. You can leave this view and resume status checks in Media recovery." });
+      }
       const result = started.state === "done" ? started : await pollRecoverableVideo(started.job, context);
       if (turnOwner.current !== owner) return;
       if (result.ok && result.state === "done") commitVideoJob(result.job);
-      else setError(result.ok ? "The saved job is still rendering. Resume its status checks in Media recovery." : result.error);
+      else setVideoStatus({ chatId, text: result.ok ? "The saved job is still rendering. Resume its status checks in Media recovery." : result.error, failed: !result.ok });
     } catch {
       if (turnOwner.current === owner) {
-        setNotice(null);
-        setError("Video status is unavailable. Check the saved operation in Media recovery before starting another generation.");
+        setVideoStatus({ chatId, text: "Video status is unavailable. Check the saved operation in Media recovery before starting another generation.", failed: true });
       }
     }
     finally { videoInFlight.current = false; }
@@ -7473,6 +7479,7 @@ ${message.content}`;
               draft={draft}
               error={error}
               notice={notice}
+              videoStatus={videoStatus?.chatId === active?.id ? videoStatus : undefined}
               setDraft={setDraft}
               onPickModule={pickModule}
               onPick={(id) => setActiveId(id)}

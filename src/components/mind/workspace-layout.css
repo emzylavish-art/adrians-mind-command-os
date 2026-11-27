@@ -7,12 +7,6 @@
   overflow: hidden !important;
 }
 
-#mind-workspace #chat-thread .jump-to-latest {
-  position: sticky;
-  top: 0;
-  z-index: 1;
-}
-
 #mind-workspace #chat-thread form.thread-composer {
   display: flex !important;
   flex-direction: column !important;

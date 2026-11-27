@@ -273,9 +273,9 @@ try {
       } else {
         await videoPage.evaluate(() => {
           const state = window.__syntheticVideo;
-          const { operationId, chatId, prompt } = state.starts[0];
+          const { operationId, chatId, prompt, aspectRatio, duration, resolution } = state.starts[0];
           const at = new Date().toISOString();
-          state.job = { ownerId: "dev-user", operationId, chatId, prompt, requestId: "synthetic-video-accepted", model: "synthetic-video-model", state: "accepted", createdAt: at, updatedAt: at, expiresAt: null, url: "", error: "", temporary: false };
+          state.job = { ownerId: "dev-user", operationId, chatId, prompt, settings: { aspectRatio, duration, resolution }, requestId: "synthetic-video-accepted", model: "synthetic-video-model", state: "accepted", createdAt: at, updatedAt: at, expiresAt: null, url: "", error: "", temporary: false };
           state.answerStart({ ok: true, state: "pending", job: state.job, requestId: state.job.requestId, model: state.job.model }, 200);
         });
         await videoPage.getByText("The saved video job is rendering. You can leave this view and resume status checks in Media recovery.", { exact: true }).filter({ visible: true }).waitFor();
