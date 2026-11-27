@@ -3546,10 +3546,43 @@ button[aria-pressed="true"] {
   opacity: 0.35 !important;
 }
 .suggestion-chip,
-[data-testid="answer-tabs"] .chat-button {
-  background: transparent;
-  border-color: transparent;
+.turn-assistant [role="tablist"] {
+  width: fit-content;
+  max-width: 100%;
+  column-gap: .25rem;
+  margin-block: .125rem .65rem;
 }
+.turn-assistant [role="tab"] {
+  min-height: 44px;
+  padding-inline: .85rem;
+  border: 0;
+  border-radius: .5rem;
+  background: transparent;
+  color: var(--mind-muted);
+  font-size: .8125rem;
+  font-weight: 600;
+}
+.turn-assistant [role="tab"][aria-selected="true"] {
+  background: color-mix(in srgb, currentColor 9%, transparent);
+  color: var(--mind-fg, inherit);
+  box-shadow: none;
+}
+.turn-assistant .md-ol { list-style: decimal outside; }
+.turn-assistant .md-ul { list-style: disc outside; }
+.turn-assistant .md-prose li + li { margin-block-start: .3em; }
+.turn-assistant .md-link {
+  text-decoration: underline;
+  text-underline-offset: .18em;
+}
+.turn-assistant [role="toolbar"] > details > summary {
+  display: inline-flex;
+  min-width: 44px;
+  min-height: 44px;
+  align-items: center;
+  justify-content: center;
+  list-style: none;
+}
+.turn-assistant [role="toolbar"] > details > summary::-webkit-details-marker { display: none; }
 
 /* chat-first-paint-2026 */
 .gpt-home {
