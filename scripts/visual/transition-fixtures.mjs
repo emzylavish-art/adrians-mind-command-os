@@ -19,6 +19,7 @@ const initialHistory = 100;
 const lastLongMessage = `#message-long-a-${longHistory - 1}`;
 const workspace = { ...VISUAL_FIXTURES["chat-interrupted"].workspace(), chats: [chat("long-a", longHistory), chat("long-b", 30)] };
 const observations = {};
+let startupPage;
 async function observedState(page) {
   return page.evaluate(() => {
     const pane = document.querySelector("#chat-thread > section > .overflow-auto");
@@ -71,7 +72,20 @@ try {
       return new Response(stream, { headers: { "content-type": "text/event-stream" } });
     };
   });
+  // Vite may invalidate its initial client graph while discovering dependencies.
+  // Warm that graph in a separate page before measuring any workspace transition.
+  const warmup = await context.newPage();
+  startupPage = warmup;
+  await warmup.goto(origin, { waitUntil: "domcontentloaded" });
+  try {
+    await warmup.locator('#mind-workspace[data-workspace-ready="true"]').waitFor({ timeout: 15000 });
+  } catch {
+    await warmup.reload({ waitUntil: "domcontentloaded" });
+    await warmup.locator('#mind-workspace[data-workspace-ready="true"]').waitFor();
+  }
+  await warmup.close();
   const page = await context.newPage();
+  startupPage = page;
   await page.goto(origin + "/?section=chat&chat=long-a", { waitUntil: "domcontentloaded" });
   await page.locator(lastLongMessage).waitFor();
   const pane = page.locator("#chat-thread > section > .overflow-auto");
@@ -273,7 +287,11 @@ try {
     report[`video${outcome}Transport`] = videoTransport.summary();
     await videoContext.close();
   }
-} catch (error) { report.failures.push({ id: "startup", status: "failed", error: error instanceof Error ? error.message : String(error) }); }
+} catch (error) {
+  const screenshot = "transition-startup-failed.png";
+  if (startupPage && !startupPage.isClosed()) await startupPage.screenshot({ path: resolve(output, screenshot) }).catch(() => {});
+  report.failures.push({ id: "startup", status: "failed", error: error instanceof Error ? error.message : String(error), screenshot });
+}
 finally { await browser.close(); }
 writeFileSync(resolve(output, "transitions.json"), JSON.stringify(report, null, 2) + "\n");
 console.log(JSON.stringify({ checks: report.checks.length, failures: report.failures.length, output })); process.exitCode = report.failures.length ? 1 : 0;
