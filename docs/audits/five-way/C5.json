@@ -928,7 +928,23 @@
           "src/lib/mind/fleet.test.ts",
           "src/lib/mind/fleet-audit-recovery.test.ts"
         ],
-        "reviewedAssertionScope": "Tests retain the original chat through completion, deduplicate repeated ticks, and reject removed, archived or replaced destinations. A separate fleet case checks worker environment."
+        "reviewedAssertionScope": "Tests retain the original chat through completion, deduplicate repeated ticks, and reject removed, archived or replaced destinations. A separate fleet case checks worker environment.",
+        "combinedEvidence": {
+          "revision": "30e9b86633f4324c356da34215c6ef5128c48e2f",
+          "environment": "Isolated CI fixtures. Hosted worker configuration and delivery remain unverified.",
+          "checks": [
+            {
+              "path": "src/lib/mind/fleet-audit-recovery.test.ts",
+              "run": "https://github.com/emzylavish-art/adrians-mind-command-os/actions/runs/45941425026/job/140316387470",
+              "assertion": "AA-028 delivers a completed result only to the selected conversation, once"
+            },
+            {
+              "path": "src/lib/mind/fleet-audit-recovery.test.ts",
+              "run": "https://github.com/emzylavish-art/adrians-mind-command-os/actions/runs/45941425026/job/140316387470",
+              "assertion": "AA-028 never resurrects or substitutes a missing or archived result destination"
+            }
+          ]
+        }
       },
       "nextCheck": "Compare the named fixture cases and remaining source limits against this original acceptance. Live and physical evidence must be recorded separately when required."
     },
@@ -969,7 +985,23 @@
           "src/lib/mind/fleet.test.ts",
           "src/lib/mind/fleet-audit-recovery.test.ts"
         ],
-        "reviewedAssertionScope": "Tests distinguish approval waiting, explicit skip/queue policy, independent scheduled occurrences and bounded missed-run handling."
+        "reviewedAssertionScope": "Tests distinguish approval waiting, explicit skip/queue policy, independent scheduled occurrences and bounded missed-run handling.",
+        "combinedEvidence": {
+          "revision": "30e9b86633f4324c356da34215c6ef5128c48e2f",
+          "environment": "Isolated CI fixtures. Hosted worker configuration and delivery remain unverified.",
+          "checks": [
+            {
+              "path": "src/lib/mind/fleet.test.ts",
+              "run": "https://github.com/emzylavish-art/adrians-mind-command-os/actions/runs/45941425026/job/140316387434",
+              "assertion": "C5 scheduled occurrences"
+            },
+            {
+              "path": "src/lib/mind/fleet-audit-recovery.test.ts",
+              "run": "https://github.com/emzylavish-art/adrians-mind-command-os/actions/runs/45941425026/job/140316387470",
+              "assertion": "AA-027 waits by default and tracks separately authorized overlapping outcomes"
+            }
+          ]
+        }
       },
       "nextCheck": "Compare the named fixture cases and remaining source limits against this original acceptance. Live and physical evidence must be recorded separately when required."
     },
@@ -1010,7 +1042,23 @@
           "src/lib/mind/fleet-model.test.ts",
           "src/lib/mind/fleet.test.ts"
         ],
-        "reviewedAssertionScope": "The server fixture races two workers to prove one model dispatch. Separate browser/local fixture rejects a mismatched execution environment. These cases do not prove deployment worker configuration."
+        "reviewedAssertionScope": "The server fixture races two workers to prove one model dispatch. Separate browser/local fixture rejects a mismatched execution environment. These cases do not prove deployment worker configuration.",
+        "combinedEvidence": {
+          "revision": "30e9b86633f4324c356da34215c6ef5128c48e2f",
+          "environment": "Isolated CI fixtures. Hosted worker configuration and delivery remain unverified.",
+          "checks": [
+            {
+              "path": "src/lib/mind/fleet-model.test.ts",
+              "run": "https://github.com/emzylavish-art/adrians-mind-command-os/actions/runs/45941425026/job/140316387459",
+              "assertion": "C5 two workers claim one model operation and record its actual provider usage"
+            },
+            {
+              "path": "src/lib/mind/fleet.test.ts",
+              "run": "https://github.com/emzylavish-art/adrians-mind-command-os/actions/runs/45941425026/job/140316387434",
+              "assertion": "C5 a browser worker does not execute a queued occurrence assigned to another environment"
+            }
+          ]
+        }
       },
       "nextCheck": "Compare the named fixture cases and remaining source limits against this original acceptance. Live and physical evidence must be recorded separately when required."
     },
@@ -1058,7 +1106,23 @@
         "reviewedFixtureFiles": [
           "src/lib/mind/fleet-model.test.ts"
         ],
-        "reviewedAssertionScope": "Tests check declared input and instructions, one mocked Gemini adapter call and usage receipt, free-only refusal of paid routing, no replay after an uncertain result, and actual provider attribution on an OpenRouter route."
+        "reviewedAssertionScope": "Tests check declared input and instructions, one mocked Gemini adapter call and usage receipt, free-only refusal of paid routing, no replay after an uncertain result, and actual provider attribution on an OpenRouter route.",
+        "combinedEvidence": {
+          "revision": "30e9b86633f4324c356da34215c6ef5128c48e2f",
+          "environment": "Isolated CI fixtures. Hosted worker configuration and delivery remain unverified.",
+          "checks": [
+            {
+              "path": "src/lib/mind/fleet-model.test.ts",
+              "run": "https://github.com/emzylavish-art/adrians-mind-command-os/actions/runs/45941425026/job/140316387459",
+              "assertion": "C5 two workers claim one model operation and record its actual provider usage"
+            },
+            {
+              "path": "src/lib/mind/fleet-model.test.ts",
+              "run": "https://github.com/emzylavish-art/adrians-mind-command-os/actions/runs/45941425026/job/140316387459",
+              "assertion": "C5 free-only and unconfirmed provider results cannot trigger a paid fallback or replay"
+            }
+          ]
+        }
       },
       "nextCheck": "Compare the named fixture cases and remaining source limits against this original acceptance. Live and physical evidence must be recorded separately when required."
     },

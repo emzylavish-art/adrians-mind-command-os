@@ -156,6 +156,49 @@ try {
   const mobileTransport = await installVisualFixture(mobile, origin, "chat-interrupted", { workspace });
   // A seeded message exists only after client hydration; the SSR home alone is not an interaction-ready signal.
   const phone = await mobile.newPage(); await phone.goto(origin + "/?section=chat&chat=long-a", { waitUntil: "domcontentloaded" }); await phone.locator(lastLongMessage).waitFor();
+  await check(phone, "mobile-keyboard-viewport-and-draft", async () => {
+    const composer = phone.locator("form.thread-composer");
+    const message = composer.getByRole("textbox", { name: "Message", exact: true });
+    const draft = "Synthetic keyboard draft";
+    await message.fill(draft);
+    const normalHeight = await phone.evaluate(() => Math.round(window.visualViewport.height));
+    const keyboardHeight = normalHeight - 300;
+    try {
+      // Shrink only the visible viewport, as an overlay keyboard does.
+      await phone.evaluate((height) => {
+        const viewport = window.visualViewport;
+        Object.defineProperty(viewport, "height", { configurable: true, value: height });
+        viewport.dispatchEvent(new Event("resize"));
+      }, keyboardHeight);
+      await phone.waitForFunction((height) => {
+        const pane = document.querySelector(".transcript-pane");
+        const composer = document.querySelector("form.thread-composer");
+        if (!pane || !composer) return false;
+        const bounds = composer.getBoundingClientRect();
+        return parseFloat(document.documentElement.style.getPropertyValue("--mind-visible-height")) === height
+          && pane.clientHeight > 48
+          && pane.getBoundingClientRect().bottom <= bounds.top + 1
+          && bounds.bottom >= height - 24 && bounds.bottom <= height + 1
+          && pane.scrollHeight - pane.scrollTop - pane.clientHeight <= 2;
+      }, keyboardHeight);
+      assert.equal(await message.evaluate((node) => document.activeElement === node), true);
+      assert.equal(await message.inputValue(), draft);
+      await phone.screenshot({ path: resolve(output, "transition-mobile-keyboard-open.png"), fullPage: false, clip: { x: 0, y: 0, width: 390, height: keyboardHeight } });
+    } finally {
+      await phone.evaluate(() => {
+        const viewport = window.visualViewport;
+        delete viewport.height;
+        viewport.dispatchEvent(new Event("resize"));
+      });
+    }
+    await phone.waitForFunction((height) => {
+      const pane = document.querySelector(".transcript-pane");
+      return parseFloat(document.documentElement.style.getPropertyValue("--mind-visible-height")) === height
+        && pane && pane.scrollHeight - pane.scrollTop - pane.clientHeight <= 2;
+    }, normalHeight);
+    assert.equal(await message.inputValue(), draft);
+    return { normalHeight, keyboardHeight, input: "synthetic visual viewport resize", retainedDraftAndFocus: true };
+  });
   await navigate(phone, "/?section=command", "command"); await phone.locator("#command-home").waitFor();
   await check(phone, "mobile-drawer-current-focus", async () => {
     const open = phone.getByRole("button", { name: "Open menu", exact: true }); await open.click();

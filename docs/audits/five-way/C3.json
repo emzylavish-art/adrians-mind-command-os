@@ -12312,7 +12312,7 @@
           "path": "scripts/visual/transition-fixtures.mjs",
           "run": "https://github.com/emzylavish-art/adrians-mind-command-os/actions/runs/45940949066/artifacts/15172971055",
           "assertion": "page-reading-position; earlier-and-reveal-message",
-          "scope": "The fixture restores Projects scroll after Activity, and Settings Data after a switch, and reaches an older conversation message through the real search route. Return from every resource and physical-device behavior remain open."
+          "scope": "The transition fixture restores Settings Data scroll after visiting Projects and reaches an older conversation message through workspace search. Return from every resource and physical-device behavior remain open."
         }
       },
       "nextCheck": "Compare the named fixture cases and remaining source limits against this original acceptance. Live and physical evidence must be recorded separately when required."
