@@ -150,3 +150,31 @@ jobs:
           name: mind-interface-inventory
           path: out/interface-audit.*
           retention-days: 30
+
+  lint-report:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "24.11.1"
+          cache: npm
+      - run: npm ci
+      - name: Record ESLint findings
+        run: |
+          report="$RUNNER_TEMP/mind-lint"
+          mkdir -p "$report"
+          git rev-parse HEAD > "$report/revision.txt"
+          result=0
+          npm run lint -- --format json --output-file "$report/eslint.json" || result=$?
+          test "$result" -le 1
+          test -s "$report/eslint.json"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: lint-report-${{ github.event.pull_request.head.sha || github.sha }}
+          path: ${{ runner.temp }}/mind-lint
+          if-no-files-found: error
