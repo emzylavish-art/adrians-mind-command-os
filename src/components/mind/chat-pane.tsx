@@ -2,6 +2,8 @@ import type { Chat } from "@/lib/mind/types";
 import { CONVERSATIONAL_PERSONALITIES, type PersonalityId } from "@/lib/mind/personalities";
 import { type ModuleSuggestion } from "@/lib/intent/module-suggestions";
 import { type CuedMessage } from "@/lib/mind/message-cue";
+import { ComposerQueue } from "./composer-queue";
+export { ComposerQueue };
 import { type ConversationAction } from "@/lib/mind/conversation-actions";
 import { type DictationMachineState } from "@/lib/mind/voice/dictation-machine";
 import { type Autonomy } from "@/lib/mind/policy";
@@ -70,8 +72,13 @@ export function ChatPane({
   onPick,
   onSend,
   cue,
+  canQueue,
+  onQueue,
   onDropCue,
-  onReleaseCue,
+  onMoveCue,
+  onEditCue,
+  onHoldCue,
+  onRestoreCue,
   canStop,
   onStop,
   onRename,
@@ -192,8 +199,13 @@ export function ChatPane({
   onPick: (id: string) => void;
   onSend: () => void;
   cue: CuedMessage[];
+  canQueue: boolean;
+  onQueue: () => void;
   onDropCue: (id: string) => void;
-  onReleaseCue: () => void;
+  onMoveCue: (id: string, offset: -1 | 1) => void;
+  onEditCue: (id: string, text: string) => void;
+  onHoldCue: () => void;
+  onRestoreCue: (id: string) => void;
   canStop: boolean;
   onStop: () => void;
   onRename: (title: string) => void;
@@ -709,31 +721,6 @@ export function ChatPane({
           {voiceListening ? <div className="flex items-center gap-2"><VoiceLevelMeter level={voiceLevel} listening={voiceListening} /></div> : null}
         </div>
 
-        {cue.length > 0 ? (
-          <div className="rounded-panel border border-line p-2" data-testid="message-cue">
-            <p className="text-xs uppercase tracking-wide text-muted">Next</p>
-            <ol className="space-y-1">
-              {cue.map((item, index) => (
-                <li
-                  key={item.id}
-                  className="min-w-0"
-                  data-testid="cued-message"
-                  onPointerDown={(event) => {
-                    const timer = window.setTimeout(() => onDropCue(item.id), 550);
-                    event.currentTarget.dataset.hold = String(timer);
-                  }}
-                  onPointerUp={(event) => window.clearTimeout(Number(event.currentTarget.dataset.hold))}
-                  onPointerLeave={(event) => window.clearTimeout(Number(event.currentTarget.dataset.hold))}
-                  onPointerCancel={(event) => window.clearTimeout(Number(event.currentTarget.dataset.hold))}
-                >
-                  <div className="flex items-center gap-2"><span className="min-w-0 flex-1 break-words text-sm">{index + 1}. {item.text}</span><button type="button" className="min-h-11 min-w-11" aria-label={`Remove queued message ${index + 1}`} onPointerDown={(event) => event.stopPropagation()} onClick={() => onDropCue(item.id)}>Remove</button></div>
-                </li>
-              ))}
-            </ol>
-            {notice ? <p className="mt-1 text-sm text-muted" role="status" data-testid="cue-notice">{notice}</p> : null}
-            {!busy ? <button type="button" className="mt-1 min-h-11 px-2 text-sm text-accent" onClick={onReleaseCue}>Send next</button> : null}
-          </div>
-        ) : null}
         {lastReply ? (
           <div className="next-guesses px-3 pb-1" data-testid="next-guesses">
             <button type="button" className="suggestion-chip shrink-0" onClick={() => setDraft("Go deeper on that")}>Go deeper</button>
@@ -872,6 +859,10 @@ export function ChatPane({
               {speaking ? "Stop" : "Read aloud"}
             </button></div>
 
+            <ComposerQueue title="Chat queue" items={cue} canQueue={canQueue}
+              description="Waiting messages follow a successful reply in this conversation. Held messages return to the composer for review."
+              canRestore={!draft.trim() && pendingImages.length === 0 && !stagedName}
+              onQueue={onQueue} onRemove={onDropCue} onMove={onMoveCue} onEdit={onEditCue} onPause={onHoldCue} onRestore={onRestoreCue} />
             <button type={busy ? "button" : "submit"} onClick={busy ? onStop : undefined} disabled={halted || (!busy && !draft.trim() && pendingImages.length === 0 && !stagedName)} className="composer-send min-h-11 min-w-16 rounded-panel bg-accent px-4 text-sm font-semibold text-accent-ink disabled:opacity-50">{busy ? "Stop" : "Send"}</button>
             <button type="button" className="composer-mic-dictate inline-flex min-h-11 items-center gap-2 rounded-full border border-line px-3 text-sm" data-testid="composer-mic-dictate" aria-label="Mic" title="Mic types into the field. It does not open Speak." onClick={onDictationMic}>
               <Mic className="size-4" /> Mic

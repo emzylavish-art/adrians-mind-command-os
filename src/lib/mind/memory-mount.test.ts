@@ -22,7 +22,7 @@ const memoryManagerSrc = readFileSync(join(root, "components/mind/memory-manager
 
 describe("memory UX mount in command-app", () => {
   it("imports and mounts MemorySavedIndicator + MemoryChatToggle", () => {
-    assert.match(commandApp, /import \{ ChatPane \} from "\.\/chat-pane"/);
+    assert.match(commandApp, /import \{[^}]*\bChatPane\b[^}]*\} from "\.\/chat-pane"/);
     assert.match(commandApp, /<ChatPane\b/);
     for (const needle of [
       'from "@/components/mind/memory-saved-indicator"',

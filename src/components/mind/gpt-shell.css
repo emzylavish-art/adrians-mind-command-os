@@ -1433,15 +1433,15 @@ img.service-mark.on-tile {
 
 
 /* One row on the phone and the desktop. No letter stacks, no banner over the field. */
-.gpt-home form button {
+.gpt-home form button:not(.queue-add, .queue-view) {
   overflow: hidden !important;
   font-size: 0 !important;
   line-height: 0 !important;
   color: transparent !important;
 }
 
-.main-stage .gpt-home form button.text-sm,
-.main-stage .gpt-home form button {
+.main-stage .gpt-home form button.text-sm:not(.queue-add, .queue-view),
+.main-stage .gpt-home form button:not(.queue-add, .queue-view) {
   font-size: 0 !important;
   line-height: 0 !important;
   color: transparent !important;
@@ -1452,13 +1452,13 @@ img.service-mark.on-tile {
   padding: 0 !important;
 }
 
-.main-stage .gpt-home form button svg {
+.main-stage .gpt-home form button:not(.queue-add, .queue-view) svg {
   color: #fff !important;
   width: 1.15rem !important;
   height: 1.15rem !important;
 }
 
-.gpt-home form button svg {
+.gpt-home form button:not(.queue-add, .queue-view) svg {
   color: #fff !important;
 }
 

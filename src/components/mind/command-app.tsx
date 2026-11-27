@@ -18,7 +18,7 @@ import { AppearanceSettings, KeyboardSettings, SendKey, useInterfaceSettings } f
 import { ArchiveSettings, StorageSettings } from "./storage-settings";
 import { chord, submitOnKey, KEY_ACTIONS, type Action as ShortcutAction } from "@/lib/mind/interface-preferences";
 import type { SettingsPane } from "@/lib/mind/app-location";
-import { ChatPane } from "./chat-pane";
+import { ChatPane, ComposerQueue } from "./chat-pane";
 import type { ChatReadingPositions } from "./chat-pane";
 import { BrowserDictationControl, VoiceModeButton, ComposerEffortControl, ProviderPicker } from "./chat-controls";
 import { stamp, PRODUCT_LOGO } from "./chat-presentation";
@@ -324,7 +324,7 @@ import { COMPOSER_MODES, effortForModelTier, effortModelTier, loadComposerEffort
 import { ADRIAN_MIND_IDENTITY, builtinModules, customModules, loadConsultModel, planModelConsult, saveConsultModel, type ConsultModule } from "@/lib/mind/model-consult";
 import { planRouting, readRatings, readRoutingMode, readRoutingPanel, ROUTING_MODE_LABEL, saveRating, writeRoutingMode, writeRoutingPanel, type ResponseRating, type RoutingMode } from "@/lib/mind/routing-modes";
 import { canSend } from "@/lib/mind/send-gate";
-import { cueMessage, dropCued, restoreCue, takeNextCue, type CuedMessage } from "@/lib/mind/message-cue";
+import { cueMessage, dropCued, EMPTY_CUE, moveCued, readCue, type CuedMessage } from "@/lib/mind/message-cue";
 import { saveFailureMessage } from "@/lib/mind/save-error";
 import { resetVoice } from "@/lib/mind/settings-reset";
 import { FirstSteps } from "@/components/mind/first-steps";
@@ -1142,6 +1142,7 @@ function CommandSession({ account, accountPending }: { account: ReturnType<typeo
   const draftScope = JSON.stringify([draftOwner, view === "build" ? workTarget.projectId ? ["build", workTarget.projectId] : "build" : draftChat?.id ?? "home", draftPrivate]);
   const persistDraft = Boolean(draftOwner) && !draftPrivate;
   const [draft, setDraft, setDraftInScope] = useComposerDraft(draftScope, "text", "", persistDraft);
+  const [queuedDrafts, setQueuedDrafts, setQueueInScope] = useComposerDraft(draftScope, "queue", EMPTY_CUE, persistDraft);
   const [busy, setBusy] = useState(false);
   const [liveText, setLiveText] = useState("");
   const [generationStatus, setGenerationStatus] = useState("");
@@ -1281,17 +1282,14 @@ function CommandSession({ account, accountPending }: { account: ReturnType<typeo
   const turnGen = useRef(0);
   const turnInFlight = useRef(false);
   const deliverStoredUser = useRef(false);
-  type QueuedChatMessage = CuedMessage & {
-    chatId: string;
-    ownerId: string;
-    paused?: boolean;
-    dispatch: (chat: Chat, workspace: Workspace) => Promise<boolean>;
+  type QueueDispatch = {
+    projectId: string | null;
+    dispatch: (chat: Chat, workspace: Workspace, text: string) => Promise<boolean>;
   };
   const turnOwner = useRef(draftOwner);
   turnOwner.current = draftOwner;
   const [turnChat, setTurnChat] = useState<{ ownerId: string | null; chatId: string } | null>(null);
-  const cueRef = useRef<QueuedChatMessage[]>([]);
-  const [cued, setCued] = useState<QueuedChatMessage[]>([]);
+  const cueRef = useRef(new Map<string, QueueDispatch>());
   useEffect(() => {
     return () => {
       turnOwner.current = null;
@@ -1300,8 +1298,7 @@ function CommandSession({ account, accountPending }: { account: ReturnType<typeo
       turnAbort.current?.abort();
       turnAbort.current = null;
       turnInFlight.current = false;
-      cueRef.current = [];
-      setCued([]);
+      cueRef.current.clear();
       setPending(null);
       setBusy(false);
       setLiveText("");
@@ -1511,7 +1508,7 @@ function CommandSession({ account, accountPending }: { account: ReturnType<typeo
 
   useEffect(() => {
     if (ws.halted) {
-      if (cueRef.current.some((entry) => !entry.paused)) rememberCue(cueRef.current.map((entry) => ({ ...entry, paused: true })));
+      cueRef.current.clear();
       setAvatarPresence("offline");
       return;
     }
@@ -2608,6 +2605,14 @@ function CommandSession({ account, accountPending }: { account: ReturnType<typeo
     const unique = [...new Set(ids)];
     if (unique.length === 0) return;
     requestProtected("delete", `delete-chats:${unique.slice().sort().join(",")}`, label, "Remove these transcripts from this workspace and synchronize their deletion when the server accepts the save. Saved notes, files, quoted copies and previously exported archives remain until separately deleted.", "Approve delete", () => {
+      if (draftOwner) {
+        for (const chat of wsRef.current.chats.filter(item => unique.includes(item.id))) {
+          setQueueInScope(JSON.stringify([draftOwner, chat.id, chat.temporary]), !chat.temporary, previous => {
+            for (const row of readCue(previous)) cueRef.current.delete(row.id);
+            return EMPTY_CUE;
+          });
+        }
+      }
       setWs((prev) => pushAudit(removeConversations(prev, unique), "delete_chat", unique[0] ?? "chat", unique.length === 1 ? "approved" : `${unique.length} removed`, unique));
       setActiveId((current) => (current && unique.includes(current) ? null : current));
       setNavOpen(false);
@@ -2676,6 +2681,7 @@ function CommandSession({ account, accountPending }: { account: ReturnType<typeo
     }
     if (action === "archive") {
       const archived = targets.some((chat) => chat.archived !== true);
+      if (archived) for (const chat of targets) holdConversationQueue(chat);
       setWs((prev) => pushAudit(applyArchive(prev, ids, archived), "archive_chat", ids[0] ?? "chat", archived ? "archived" : "restored"));
       if (archived && activeId && ids.includes(activeId)) setActiveId(null);
       return;
@@ -3667,6 +3673,7 @@ function CommandSession({ account, accountPending }: { account: ReturnType<typeo
   }
 
   function stopReply() {
+    holdChatQueue();
     turnAbort.current?.abort();
   }
 
@@ -3954,7 +3961,7 @@ ${message.content}`;
       if (file) setStagedInScope(scope, persist, (current) => current ?? file);
       if (images.length) setImagesInScope(scope, persist, (current) => current.length ? current : images);
     }
-    if (finished) await releaseNextCue();
+    if (finished) await releaseNextCue(made.chat.id);
   }
 
   async function startResearch(question = researchText, retry?: ResearchReport, operationId = crypto.randomUUID(), projectId: string | null = active?.projectId ?? null) {
@@ -4085,59 +4092,86 @@ ${message.content}`;
     }
   }
 
-  function rememberCue(next: QueuedChatMessage[]) {
-    cueRef.current = next;
-    setCued(next);
+  function holdChatQueue() {
+    setQueuedDrafts(previous => readCue(previous).map(row => ({ ...row, paused: true })));
   }
 
-  async function releaseNextCue(onlyChatId?: string, single = false) {
+  function holdConversationQueue(chat: Chat) {
+    if (!draftOwner || turnOwner.current !== draftOwner) return;
+    setQueueInScope(JSON.stringify([draftOwner, chat.id, chat.temporary]), !chat.temporary,
+      previous => readCue(previous).map(row => ({ ...row, paused: true })));
+  }
+
+  async function releaseNextCue(chatId: string) {
     if (wsRef.current.halted || turnInFlight.current || !draftOwner || turnOwner.current !== draftOwner) return;
-    const held = takeNextCue(cueRef.current, (item) => item.ownerId === draftOwner && (single || !item.paused) && (!onlyChatId || item.chatId === onlyChatId));
-    const entry = held.next;
-    if (!entry) return;
-    rememberCue(held.queue);
-    const chat = wsRef.current.chats.find((item) => item.id === entry.chatId);
-    if (!chat) {
-      setNotice("A queued message was dropped because its conversation was removed.");
-      if (!single) await releaseNextCue(onlyChatId);
+    const chat = wsRef.current.chats.find(item => item.id === chatId && !item.archived);
+    if (!chat) return;
+    if (document.hidden || currentVoiceScope.current !== JSON.stringify([draftOwner, "chat", chatId])) {
+      holdConversationQueue(chat);
       return;
     }
-    const finished = await entry.dispatch(chat, wsRef.current);
-    if (turnOwner.current !== entry.ownerId) return;
-    if (!finished && !deliverStoredUser.current) {
-      rememberCue(restoreCue(cueRef.current, wsRef.current.halted ? { ...entry, paused: true } : entry));
-      setNotice("The next message stayed queued in its conversation.");
+    const scope = JSON.stringify([draftOwner, chat.id, chat.temporary]);
+    const claimed: { row?: CuedMessage; runtime?: QueueDispatch } = {};
+    setQueueInScope(scope, !chat.temporary, previous => {
+      const rows = readCue(previous);
+      const row = rows.find(item => item.paused === false);
+      if (!row) return previous;
+      const runtime = cueRef.current.get(row.id);
+      if (!runtime || runtime.projectId !== chat.projectId) {
+        return rows.map(item => ({ ...item, paused: true }));
+      }
+      claimed.row = row;
+      claimed.runtime = runtime;
+      return rows.map(item => item.id === row.id ? { ...item, claimed: true, paused: true } : item);
+    });
+    const { row, runtime } = claimed;
+    if (!row || !runtime) return;
+    cueRef.current.delete(row.id);
+    const finished = await runtime.dispatch(chat, wsRef.current, row.text);
+    if (turnOwner.current !== draftOwner) return;
+    setQueueInScope(scope, !chat.temporary, previous => {
+      const rows = readCue(previous);
+      if (finished || deliverStoredUser.current) return dropCued(rows, row.id);
+      return rows.map(item => ({ ...item, paused: true, claimed: item.id === row.id ? false : item.claimed }));
+    });
+    if (!finished) return;
+    await releaseNextCue(chatId);
+  }
+
+  function addChatQueue(waitForReply: boolean) {
+    if ((view === "chat" && active?.archived) || !draftOwner || accountPending || wsRef.current.halted) return;
+    const text = draft.trim();
+    if (!text) return;
+    if (staged || pendingImages.length || parseImagineCommand(text) !== null || /^\//.test(text)) {
+      setError("Queue accepts plain text. Review attachments and slash commands in the composer.");
       return;
     }
-    if (finished && !single) await releaseNextCue(onlyChatId);
+    const id = crypto.randomUUID();
+    setQueuedDrafts(previous => {
+      const result = cueMessage(readCue(previous), { id, text, paused: !waitForReply });
+      if (result.error) { setError(result.error); return previous; }
+      if (waitForReply && active) cueRef.current.set(id, { projectId: active.projectId, dispatch: (chat, source, words) => deliverPlanned(chat, words, source, []) });
+      setDraft("");
+      setError(null);
+      setNotice(null);
+      return result.queue;
+    });
+  }
+
+  function restoreChatQueue(id: string) {
+    if (draft.trim() || staged || pendingImages.length) return;
+    const row = readCue(queuedDrafts).find(item => item.id === id && !item.claimed);
+    if (!row) return;
+    cueRef.current.delete(id);
+    setDraft(row.text);
+    setQueuedDrafts(previous => dropCued(readCue(previous), id));
   }
 
   async function sendInChat(hold = false) {
     if (!selectionLoaded) { setNotice("Loading your model selection. Your draft is ready to send when it finishes."); return; }
     if (wsRef.current.halted) { setError("Emergency stop is on."); return; }
     if (hold || busy || turnInFlight.current) {
-      const text = draft.trim();
-      if (!active || !draftOwner || !text) return;
-      if (staged || pendingImages.length || parseImagineCommand(text) !== null) {
-        setError("Wait for the active reply before sending an attachment or an image request.");
-        return;
-      }
-      const result = cueMessage(cueRef.current, {
-        id: crypto.randomUUID(),
-        text,
-        chatId: active.id,
-        ownerId: draftOwner,
-        paused: hold,
-        dispatch: (chat, source) => deliverPlanned(chat, text, source, []),
-      });
-      if (result.error) {
-        setError(result.error);
-        return;
-      }
-      rememberCue(result.queue);
-      setDraft("");
-      setError(null);
-      setNotice(hold ? "Prompt held. Open the conversation queue to send it." : "Queued. This message will send in this conversation.");
+      addChatQueue(!hold && turnChat?.chatId === active?.id && turnChat?.ownerId === draftOwner && turnInFlight.current);
       return;
     }
     if (!active) {
@@ -4211,7 +4245,7 @@ ${message.content}`;
     const source = ws;
     if (settleIntent(active, full, source)) {
       if (file && !active.temporary) setWs((prev) => addLocalFile(prev, { name: file.name, text: file.text, projectId: active.projectId }));
-      await releaseNextCue();
+      holdConversationQueue(active);
       return;
     }
     if (file && !active.temporary) {
@@ -4220,12 +4254,13 @@ ${message.content}`;
     const effortPath = resolveSendPath(composerEffort);
     if (effortPath.notice) setNotice(effortPath.notice);
     const finished = await deliverPlanned(active, full, ws, images);
+    if (!finished) holdConversationQueue(active);
     if (!finished && !deliverStoredUser.current) {
       setDraft((current) => current || text);
       if (file) setStaged((current) => current ?? file);
       if (images.length) setPendingImages((current) => current.length ? current : images);
     }
-    if (finished) await releaseNextCue();
+    if (finished) await releaseNextCue(active.id);
   }
 
   async function runImagine(promptRaw?: string, targetChat: Chat | null = active, opts?: { retry?: boolean; operationId?: string }) {
@@ -6449,6 +6484,7 @@ ${message.content}`;
       const composer = target?.matches("textarea") ? target.closest<HTMLFormElement>("form[data-mind-chat-composer]") : null;
       if (!composer || !["command", "chat"].includes(view)) return false;
       if (id === "send") { composer.requestSubmit(); return true; }
+      if (id === "queue" && view === "command") { addChatQueue(false); return true; }
       if (!active || view !== "chat") { setNotice("Open the intended conversation to send or queue its draft."); return true; }
       void sendInChat(id === "queue"); return true;
     }
@@ -7613,6 +7649,15 @@ ${message.content}`;
                       {voiceListening ? <Square className="size-4" /> : <Mic className="size-4" />}
                     </button></div>
 
+                    <ComposerQueue title="New chat queue" items={readCue(queuedDrafts)}
+                      description="Keep drafts for future conversations. Move one to the composer when you want to review and send it."
+                      canQueue={Boolean(draftOwner && !accountPending && !ws.halted && draft.trim())}
+                      canRestore={!draft.trim() && !staged && !pendingImages.length}
+                      onQueue={() => addChatQueue(false)}
+                      onRemove={id => setQueuedDrafts(previous => dropCued(readCue(previous), id))}
+                      onMove={(id, offset) => setQueuedDrafts(previous => moveCued(readCue(previous), id, offset))}
+                      onEdit={(id, text) => setQueuedDrafts(previous => readCue(previous).map(row => row.id === id ? { ...row, text: text.trim() } : row))}
+                      onRestore={restoreChatQueue} />
                     <button type="submit" disabled={busy || ws.halted || (!draft.trim() && pendingImages.length === 0 && !staged)} className="composer-send inline-flex min-h-11 items-center gap-2 rounded-panel bg-accent px-4 text-sm font-semibold text-accent-ink disabled:opacity-50">
                       <Send size={20} strokeWidth={1.75} /> {busy ? "Sending" : "Send"}
                     </button>
@@ -7849,9 +7894,14 @@ ${message.content}`;
               onPickModule={pickModule}
               onPick={(id) => setActiveId(id)}
               onSend={() => void sendInChat()}
-              cue={cued.filter((item) => item.ownerId === draftOwner && item.chatId === active?.id)}
-              onDropCue={(id) => rememberCue(dropCued(cueRef.current, id))}
-              onReleaseCue={() => { if (active) void releaseNextCue(active.id, true); }}
+              cue={readCue(queuedDrafts).map(row => ({ ...row, paused: ws.halted || row.paused || !cueRef.current.has(row.id) }))}
+              canQueue={Boolean(!active?.archived && draftOwner && selectionLoaded && !accountPending && !ws.halted && draft.trim())}
+              onQueue={() => addChatQueue(turnChat?.chatId === active?.id && turnChat?.ownerId === draftOwner && turnInFlight.current)}
+              onDropCue={id => { cueRef.current.delete(id); setQueuedDrafts(previous => dropCued(readCue(previous), id)); }}
+              onMoveCue={(id, offset) => setQueuedDrafts(previous => moveCued(readCue(previous), id, offset))}
+              onEditCue={(id, text) => setQueuedDrafts(previous => readCue(previous).map(row => row.id === id ? { ...row, text: text.trim(), paused: true } : row))}
+              onHoldCue={holdChatQueue}
+              onRestoreCue={restoreChatQueue}
               canStop={busy && turnChat?.ownerId === draftOwner && turnChat?.chatId === active?.id}
               onStop={stopReply}
               onRename={renameActive}
@@ -8083,6 +8133,7 @@ ${message.content}`;
                           className="min-h-11 rounded-panel border border-line px-3 text-sm"
                           onClick={() =>
                             requestProtected("delete", `delete-project:${project.id}`, `Delete “${project.name}”`, "Chats and files stay in the workspace and are unlinked. Project notes are archived with their original scope so they cannot become global memory. Only the project record is removed.", "Approve delete", () => {
+                              if (draftOwner) setQueueInScope(JSON.stringify([draftOwner, ["work-tasks", project.id]]), true, EMPTY_CUE);
                               setWs((prev) =>
                                 pushAudit(
                                   removeProject(prev, project.id),

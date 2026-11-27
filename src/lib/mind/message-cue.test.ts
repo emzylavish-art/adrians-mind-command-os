@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { cueMessage, dropCued, restoreCue, takeNextCue } from "./message-cue.ts";
+import { cueMessage, CUE_TEXT_LIMIT, dropCued, moveCued, readCue, restoreCue, takeNextCue } from "./message-cue.ts";
 import type { CuedMessage } from "./message-cue.ts";
 
 test("cues a line and releases it in order", () => {
@@ -37,6 +37,26 @@ test("puts an unsent line back at the front", () => {
   assert.equal(restoreCue(restored, held).length, 2);
 });
 
+test("reads only supported data and prevents an interrupted claim from becoming eligible", () => {
+  assert.deepEqual(readCue([
+    { id: "claimed", text: "Check the existing conversation", claimed: true, paused: false },
+    { id: "claimed", text: "Duplicate identity" },
+    { id: "held", text: "Keep this draft" },
+    { id: "oversized", text: "x".repeat(CUE_TEXT_LIMIT + 1) },
+    { id: "waiting", text: "Only eligible with live routing", paused: false, unknown: "ignored" },
+  ]), [
+    { id: "claimed", text: "Check the existing conversation", claimed: true, paused: true },
+    { id: "held", text: "Keep this draft", claimed: false, paused: true },
+    { id: "waiting", text: "Only eligible with live routing", claimed: false, paused: false },
+  ]);
+});
+
+test("reorders only the chosen adjacent entries and never silently truncates text", () => {
+  const rows = [{ id: "first", text: "First" }, { id: "second", text: "Second" }, { id: "last", text: "Last" }];
+  assert.deepEqual(moveCued(rows, "second", -1).map(item => item.id), ["second", "first", "last"]);
+  assert.strictEqual(moveCued(rows, "last", 1), rows);
+  assert.strictEqual(cueMessage(rows, "x".repeat(CUE_TEXT_LIMIT + 1), "too-long").queue, rows);
+});
 
 test("keeps the queued chat and selected provider when releasing from a different conversation", () => {
   const first = { id: "1", text: "First", chatId: "a", provider: "gemini" };

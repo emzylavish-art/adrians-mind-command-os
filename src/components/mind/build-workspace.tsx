@@ -17,6 +17,9 @@ import { readVoicePreferences } from "@/lib/mind/voice-preferences";
 import type { ModelTier, ModelTierCatalogRow } from "@/lib/mind/model-tiers";
 import type { ImageAttachment } from "@/lib/mind/media";
 import { ComposerMore, MenuCluster, menuChip } from "@/components/mind/menu-material";
+import { ComposerQueue } from "@/components/mind/composer-queue";
+import { cueMessage, dropCued, EMPTY_CUE, moveCued, readCue } from "@/lib/mind/message-cue";
+import { useComposerDraft } from "@/lib/mind/use-composer-draft";
 import { chatTurnBody } from "@/lib/mind/logic-routes";
 import { consumeMindTurn, prepareTurnId } from "@/lib/mind/live-turn";
 import { boundAbortSignal } from "@/lib/mind/turn-timeouts";
@@ -167,6 +170,9 @@ function BuildWorkspaceSession(props: BuildWorkspaceProps & { projectId: string 
   const [companion, setCompanion] = useState<CompanionState>({});
   const [band, setBand] = useState<"actions" | "files" | "message" | "editor">("message");
   const [prompt, setPrompt] = useState("");
+  const [queuedTasks, setQueuedTasks] = useComposerDraft(
+    JSON.stringify([props.ownerId ?? null, ["work-tasks", projectId]]), "queue", EMPTY_CUE, Boolean(props.ownerId),
+  );
   const [incomingTask, setIncomingTask] = useState<{ text: string; threadId: string | null; mode: string | null; chat?: ChatBuildHandoff } | null>(null);
   const [sourceChatId, setSourceChatId] = useState<string>();
   const [workMedia, setWorkMedia] = useState<WorkMedia>();
@@ -696,6 +702,37 @@ function BuildWorkspaceSession(props: BuildWorkspaceProps & { projectId: string 
     await runBuild("saved");
   }
 
+  function queueTask() {
+    if (!props.ownerId || haltedRef.current) return;
+    if (props.composer?.staged || props.composer?.images.length || sourceChatId || /^\//.test(prompt.trim())) {
+      setNotice("Queue accepts plain text. Review attachments, handoffs and slash commands in the task composer.");
+      return;
+    }
+    const result = cueMessage(readCue(queuedTasks), { id: crypto.randomUUID(), text: prompt, paused: true });
+    if (result.error) { setNotice(result.error); return; }
+    setQueuedTasks(result.queue);
+    setPrompt("");
+    setNotice(null);
+  }
+
+  const canRestoreTask = !prompt.trim() && !sourceChatId && !props.composer?.staged && !props.composer?.images.length;
+  const taskQueue = <ComposerQueue title="Work and Build queue" items={readCue(queuedTasks)}
+    description="Tasks wait in this project. Move one to the composer to review its branch, workspace and action before submitting."
+    canQueue={Boolean(props.ownerId && draftHydrated && !props.halted && prompt.trim())}
+    canRestore={canRestoreTask && draftHydrated && Boolean(props.ownerId)}
+    onQueue={queueTask}
+    onRemove={id => setQueuedTasks(previous => dropCued(readCue(previous), id))}
+    onMove={(id, offset) => setQueuedTasks(previous => moveCued(readCue(previous), id, offset))}
+    onEdit={(id, text) => setQueuedTasks(previous => readCue(previous).map(row => row.id === id ? { ...row, text: text.trim() } : row))}
+    onRestore={id => {
+      const row = readCue(queuedTasks).find(item => item.id === id && !item.claimed);
+      if (!row || !canRestoreTask) return;
+      setPrompt(row.text);
+      setQueuedTasks(previous => dropCued(readCue(previous), id));
+      setBand("message");
+      requestAnimationFrame(() => taskField.current?.focus());
+    }} />;
+
   function withTaskFile(words: string) {
     const file = props.composer?.staged;
     return file ? [words.trim(), `Attached file ${file.name}:\n${file.text}`].join("\n\n") : words.trim();
@@ -1056,6 +1093,7 @@ function BuildWorkspaceSession(props: BuildWorkspaceProps & { projectId: string 
           ] as const).map(([id, label]) => (
             <button key={id} type="button" className={`min-h-11 rounded-panel border px-3 text-sm ${band === id ? "border-accent bg-accent text-accent-ink" : "border-line"}`} aria-pressed={band === id} onClick={() => setBand(id)}>{label}</button>
           ))}
+          {band !== "message" && taskQueue}
         </div>
       </nav>
 
@@ -1225,6 +1263,7 @@ function BuildWorkspaceSession(props: BuildWorkspaceProps & { projectId: string 
           <button type="submit" disabled={loading || Boolean(active) || !prompt.trim()} className="inline-flex min-h-11 items-center gap-2 rounded-panel bg-accent px-4 text-sm font-semibold text-accent-ink disabled:cursor-not-allowed disabled:opacity-50">
             <Send className="size-4" aria-hidden="true" /> {loading ? "Queueing…" : active ? "Task running…" : mode === "plan" ? "Ask Build" : mode === "default" ? "Review build" : "Run build"}
           </button>
+          {band === "message" && taskQueue}
           <span className="text-xs text-muted">{mode === "plan" ? "Ask explains only. No file is changed." : mode === "default" ? "Review reads the workspace. Writes require Run mode." : "Run can change files and use tools in this workspace."}</span>
         </div>
       </form>

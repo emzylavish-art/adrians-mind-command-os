@@ -14,6 +14,7 @@ import * as Dialog from "@radix-ui/react-dialog";
 import { ModalOverlay } from "../src/components/mind/modal-overlay.ts";
 
 const source = ts.createSourceFile("command-app.tsx", readFileSync(new URL("../src/components/mind/command-app.tsx", import.meta.url), "utf8"), ts.ScriptTarget.Latest, true, ts.ScriptKind.TSX);
+const queueSource = ts.createSourceFile("composer-queue.tsx", readFileSync(new URL("../src/components/mind/composer-queue.tsx", import.meta.url), "utf8"), ts.ScriptTarget.Latest, true, ts.ScriptKind.TSX);
 const chatSource = ts.createSourceFile("chat-pane.tsx", readFileSync(new URL("../src/components/mind/chat-pane.tsx", import.meta.url), "utf8"), ts.ScriptTarget.Latest, true, ts.ScriptKind.TSX);
 const cloudSource = ts.createSourceFile("cloud-picker.tsx", readFileSync(new URL("../src/components/mind/media/cloud-picker.tsx", import.meta.url), "utf8"), ts.ScriptTarget.Latest, true, ts.ScriptKind.TSX);
 function find(file, predicate) {
@@ -222,14 +223,11 @@ test("AA015: actual scheduler waits for identity and re-registers with the new o
 
 test("AA052: the actual queue removal button is keyboard-focusable, identifies its row and preserves other messages", () => {
   let queue = [{ id: "a", text: "first" }, { id: "b", text: "second" }, { id: "c", text: "third" }];
-  const button = find(chatSource, (n) => ts.isJsxElement(n) && n.openingElement.tagName.getText(chatSource) === "button" && n.openingElement.attributes.getText(chatSource).includes("Remove queued message"));
-  let stopped = false;
-  const rendered = expression(button, { React, item: queue[1], index: 1, onDropCue: (id) => { queue = dropCued(queue, id); } }, chatSource);
+  const button = find(queueSource, (n) => ts.isJsxElement(n) && n.openingElement.tagName.getText(queueSource) === "button" && n.openingElement.attributes.getText(queueSource).includes("Remove queued message"));
+  const rendered = expression(button, { React, item: queue[1], index: 1, onRemove: (id) => { queue = dropCued(queue, id); } }, queueSource);
   assert.equal(rendered.props.type, "button");
   assert.equal(rendered.props["aria-label"], "Remove queued message 2");
-  rendered.props.onPointerDown({ stopPropagation: () => { stopped = true; } });
   rendered.props.onClick();
-  assert.equal(stopped, true);
   assert.deepEqual(queue.map((item) => item.id), ["a", "c"]);
 });
 
