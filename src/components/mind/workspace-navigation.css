@@ -51,6 +51,29 @@
   line-height: inherit;
 }
 
+@media (max-height: 27rem) {
+  #mind-workspace[data-view="chat"] .topbar {
+    flex-wrap: nowrap !important;
+    height: auto !important;
+    min-height: 3.5rem !important;
+    max-height: none !important;
+    padding-block: .25rem !important;
+  }
+
+  #mind-workspace[data-view="chat"] .topbar:not(:has(#command-palette)) {
+    overflow-x: auto !important;
+    overflow-y: hidden !important;
+  }
+
+  #mind-workspace[data-view="chat"] .topbar > * {
+    flex-shrink: 0;
+  }
+
+  #mind-workspace #chat-thread .next-guesses {
+    display: none !important;
+  }
+}
+
 .build-reading-result {
   min-width: 0;
   overflow-wrap: anywhere;
