@@ -1071,11 +1071,17 @@ export function selectDelegatedAgent(agents: AgentDefinition[], parent: AgentDef
   return eligible.map(agent => ({ agent, score: score(agent) })).filter(item => item.score > 0).sort((a, b) => b.score - a.score || a.agent.tools.length - b.agent.tools.length || a.agent.id.localeCompare(b.agent.id))[0]?.agent ?? parent;
 }
 
+export function hasUnresolvedRunOutcome(run: AgentRun): boolean {
+  return run.stopDispatchOutcome === "outcome_unknown"
+    || run.externalOperation?.state === "dispatching" || run.externalOperation?.state === "unknown"
+    || run.modelOperation?.state === "claimed" || run.modelOperation?.state === "uncertain";
+}
+
 /** Clear only explicitly selected terminal records; unresolved dispatches and active parents retain evidence. */
 export function clearFinishedRuns(ws: Workspace, ids: string[]): Workspace {
   const selected = new Set(ids);
   const active = new Set(ws.runs.filter(run => !TERMINAL.has(run.state)).map(run => run.id));
-  const removed = new Set(ws.runs.filter(run => selected.has(run.id) && TERMINAL.has(run.state) && run.externalOperation?.state !== "unknown" && run.externalOperation?.state !== "dispatching" && (!run.parentId || !active.has(run.parentId))).map(run => run.id));
+  const removed = new Set(ws.runs.filter(run => selected.has(run.id) && TERMINAL.has(run.state) && !hasUnresolvedRunOutcome(run) && (!run.parentId || !active.has(run.parentId))).map(run => run.id));
   return { ...ws,
     runs: ws.runs.filter(run => !removed.has(run.id)),
     runEvents: ws.runEvents.filter(event => !removed.has(event.runId)),
@@ -1090,11 +1096,11 @@ export function pauseRun(ws: Workspace, runId: string): Workspace {
 
 export function resumeRun(ws: Workspace, runId: string): Workspace {
   if (ws.halted) return ws;
-  return { ...ws, runs: ws.runs.map((run) => (run.id === runId && (run.state === "paused" || run.state === "waiting_external") && canTransition(run.state, "queued") ? { ...run, state: "queued", updatedAt: stamp() } : run)) };
+  return { ...ws, runs: ws.runs.map((run) => (run.id === runId && (run.state === "paused" || run.state === "waiting_external") && !hasUnresolvedRunOutcome(run) && canTransition(run.state, "queued") ? { ...run, state: "queued", updatedAt: stamp() } : run)) };
 }
 
 function stopDispatchOutcome(run: AgentRun): NonNullable<AgentRun["stopDispatchOutcome"]> {
-  if (run.stopDispatchOutcome === "outcome_unknown" || run.externalOperation?.state === "dispatching" || run.externalOperation?.state === "unknown" || run.modelOperation?.state === "claimed") return "outcome_unknown";
+  if (hasUnresolvedRunOutcome(run)) return "outcome_unknown";
   if (run.stepResults?.length || run.externalOperation?.state === "succeeded") return "confirmed_result";
   return run.state === "running" ? "outcome_unknown" : "not_dispatched";
 }
@@ -1473,6 +1479,9 @@ export function runDueSchedules(ws: Workspace, now: string, environment: NonNull
     const occurrences = [...(job.occurrences ?? [])];
     const activeIds = new Set([job.lastQueuedRunId, ...occurrences.map((entry) => entry.runId)]);
     const active = next.runs.filter((run) => activeIds.has(run.id) && !TERMINAL.has(run.state));
+    if (next.runs.some(run => (run.scheduleId === job.id || activeIds.has(run.id)) && hasUnresolvedRunOutcome(run))) {
+      return { ...job, lastError: "A previous scheduled action has an unresolved outcome. Review its saved run before continuing.", lastAttemptAt: now };
+    }
     const skipOverlap = active.length > 0 && job.overlapPolicy === "skip";
     if (active.length && !skipOverlap && (job.overlapPolicy !== "parallel" || active.length >= (job.maxParallel ?? 2))) {
       return { ...job, lastError: "Waiting for the previous scheduled run.", lastAttemptAt: now };
@@ -1532,10 +1541,10 @@ export function completeFleetModelStep(ws: Workspace, request: FleetModelRequest
     if (ws.halted || run.state === "canceled") {
       if (outcome.ok && outcome.provider === request.provider && outcome.text?.trim()) {
         const updated = recordStep(run, run.plan[run.step]!, now, outcome.text, [], false, { provider: outcome.provider, model: outcome.model, operationId: request.operationId });
-        return { ...updated, state: "canceled" as const, modelOperation: { ...run.modelOperation, state: "completed" as const, model: outcome.model },
+        return { ...updated, state: "canceled" as const, stopDispatchOutcome: "confirmed_result" as const, modelOperation: { ...run.modelOperation, state: "completed" as const, model: outcome.model },
           error: "Stopped. The provider had already returned this result. No further steps ran." };
       }
-      return { ...run, modelOperation: outcome.dispatched === false ? undefined : { ...run.modelOperation, state: "uncertain" as const },
+      return { ...run, stopDispatchOutcome: outcome.dispatched === false ? (run.stepResults?.length ? "confirmed_result" as const : "not_dispatched" as const) : "outcome_unknown" as const, modelOperation: outcome.dispatched === false ? undefined : { ...run.modelOperation, state: "uncertain" as const },
         error: outcome.dispatched === false ? "Stopped before dispatch." : "Stopped while a provider outcome was pending; no new work started." };
     }
     if (!outcome.ok || outcome.provider !== request.provider || !outcome.text?.trim()) return { ...run, modelOperation: outcome.dispatched === false ? undefined : { ...run.modelOperation, state: "uncertain" as const }, state: "waiting_external" as const, error: outcome.error || "The requested provider result could not be verified. It was not retried." };

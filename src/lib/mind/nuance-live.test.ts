@@ -41,9 +41,16 @@ test("Sam and Mira can be selected and Emma cannot", () => {
 
 test("an active conversation list keeps only ids", () => {
   const ids = activeConversationIds(JSON.stringify({
-    items: [{ id: "51d8137c-3d4a-4d6c-a373-e47ac75ffb80", status: "connected" }, { id: "not-an-id" }],
+    items: [{ id: "51d8137c-3d4a-4d6c-a373-e47ac75ffb80", status: "connected" }],
   }));
   assert.deepEqual(ids, ["51d8137c-3d4a-4d6c-a373-e47ac75ffb80"]);
+});
+
+test("a failed or unreadable Nuance check never looks like a verified empty list", () => {
+  assert.deepEqual(activeConversationIds('{"items":[]}'), []);
+  assert.equal(activeConversationIds('{"items":[{"id":"unknown"}]}'), null);
+  assert.equal(activeConversationIds('{"message":"temporarily unavailable"}'), null);
+  assert.equal(activeConversationIds("not JSON"), null);
 });
 
 test("a reserved persona error does not keep the key", () => {

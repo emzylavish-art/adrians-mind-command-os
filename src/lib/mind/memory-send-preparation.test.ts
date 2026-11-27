@@ -76,7 +76,7 @@ function harness(options: { pause?: "prepare" | "fingerprint"; uncertainFirst?: 
   const noop = () => undefined;
   const context = vm.createContext({
     document: { hidden: false, addEventListener: noop, removeEventListener: noop },
-    completedHistory, checkpointReply, withReplyVersion, currentMemoryContext, accountPending: false, account: { id: "fixture-owner" },
+    completedHistory, checkpointReply, withReplyVersion, currentMemoryContext, accountPending: false, selectionLoaded: true, account: { id: "fixture-owner" },
     speakStageOpenRef: { current: false }, checkTurnReceipt: (url: string, id: string, headers: HeadersInit) => checkTurnReceipt(url, id, headers, undefined, fetchImpl),
     crypto, TextEncoder, TextDecoder, AbortController, DOMException, setTimeout, clearTimeout, Date,
     window: { location: { hostname: "fixture.test", pathname: "/" } },

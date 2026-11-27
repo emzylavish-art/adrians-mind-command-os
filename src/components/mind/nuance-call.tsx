@@ -150,7 +150,7 @@ export function NuanceCallCard(props: { halted: boolean }) {
     let stop = false;
     void fetch("/api/mind/nuance/session", { credentials: "same-origin", headers: callHeaders(), cache: "no-store" })
       .then((response) => { if (!response.ok) throw new Error(); return response.json(); })
-      .then((data: { configured?: boolean; personas?: NuancePersonaChoice[]; active?: number }) => {
+      .then((data: { configured?: boolean; personas?: NuancePersonaChoice[]; active?: number | null; providerState?: string; providerDetail?: string | null }) => {
         if (stop) return;
         const saved = data.configured === true;
         setConfigured(saved);
@@ -158,9 +158,9 @@ export function NuanceCallCard(props: { halted: boolean }) {
         const open = typeof data.active === "number" && data.active > 0;
         setStatus(open
           ? "A video call is already open. Hang up before starting another."
-          : saved
-            ? "Key saved securely for this account."
-            : "Paste a Nuance key to start a video call.");
+          : !saved ? "Paste a Nuance key to start a video call."
+            : data.providerState === "verified" ? "Key saved for this account. Nuance verified there are no open calls."
+              : data.providerDetail || "Key saved for this account. Nuance call status is unavailable.");
       })
       .catch(() => {
         if (!stop) setStatus("The key status could not be read.");

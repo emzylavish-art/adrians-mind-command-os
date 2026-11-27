@@ -210,6 +210,7 @@ function maySave(form, config) {
 }
 
 function renderStatus(status) {
+  if (![status.sessions, status.ready, status.drafts].every(Array.isArray)) throw new Error("The PC did not return complete account, queue, and draft status.");
   const state = document.querySelector("#runtime-state");
   state.textContent = status.state || "unknown";
   state.classList.toggle("up", status.state === "running");
@@ -247,7 +248,7 @@ function renderStatus(status) {
         return card(item.summary || item.display_name || "Contact", `${item.account_id || "account"} · ${item.region || ""}`, refresh);
       }).join("")
     : empty("No ready contacts");
-  document.querySelector("#drafts").innerHTML = drafts.length
+  document.querySelector("#draft-list").innerHTML = drafts.length
     ? drafts.map((item) => {
         const id = escapeHtml((item.jeff_output || {}).draft_id || "");
         const account = escapeHtml(item.account_id || "unknown account");
@@ -304,26 +305,22 @@ async function refresh() {
 }
 
 async function act(path, body) {
+  if (document.body.classList.contains("busy")) return;
+  const actionResult = document.querySelector("#action-result");
+  const showResult = (text) => { actionResult.hidden = false; actionResult.textContent = text; };
   document.body.classList.add("busy");
+  showResult("Waiting for the PC's action receipt.");
   try {
     const result = await call(path, { method: "POST", body: JSON.stringify(body) });
-    if (result && result.status === "queued") {
-      setNote("Queued. Nothing is sent until the saved session confirms the line.");
-    }
-    if (result && result.status === "not_wired") {
-      setNote("Screen capture is not wired. Nothing was recorded.");
-    }
-    if (result && result.sent === false) {
-      setNote(result.status === "stored_local"
-        ? "Local backup stored on the PC. Nothing was sent."
-        : "Remote backup did not send. The PC has no remote key, or the store refused it.");
-    }
-    if (result && result.score !== undefined && result.summary && !result.delivered) {
-      setNote("Score refreshed. Nothing was sent.");
-    }
-    refresh();
+    if (result?.status === "queued") showResult("Queued. Delivery has not been confirmed.");
+    else if (result?.status === "not_wired") showResult("Screen capture is unavailable. Nothing was recorded.");
+    else if (result?.status === "stored_local" && result.sent === false) showResult("Local backup stored on the PC. Nothing was sent.");
+    else if (result?.sent === false) showResult("The PC reported that nothing was sent.");
+    else if (result?.score !== undefined && result.summary && !result.delivered) showResult("Score refreshed. Nothing was sent.");
+    else showResult("The PC responded. Check the updated records for the action outcome.");
+    await refresh();
   } catch (error) {
-    setNote(explain(error));
+    showResult(`${explain(error)} Check the saved records before repeating the action.`);
   } finally {
     document.body.classList.remove("busy");
   }

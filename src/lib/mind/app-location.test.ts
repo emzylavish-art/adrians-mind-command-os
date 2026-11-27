@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import {
   canonicalShareSearch,
+  embeddedWorkspaceSearch,
   backShareHistory,
   currentShareSearch,
   forwardShareHistory,
@@ -17,6 +18,12 @@ import {
 } from "./app-location.ts";
 
 const sections = ["command", "chat", "projects", "files", "agents", "settings"];
+
+it("returns from embedded tools to workspace selectors and discards unrelated search values", () => {
+  assert.equal(embeddedWorkspaceSearch("?section=chat&chat=fixture-1&token=synthetic&resume=speak"), "?section=chat&chat=fixture-1");
+  assert.equal(embeddedWorkspaceSearch("?section=files&file=fixture-2"), "?section=files&file=fixture-2");
+  assert.equal(embeddedWorkspaceSearch("?section=%2F%2Fevil.invalid&chat=%2Fescape"), "");
+});
 const catalog = {
   chats: [{ id: "chat-1" }],
   projects: [{ id: "project-1" }],

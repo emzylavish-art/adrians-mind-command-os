@@ -9,6 +9,16 @@ export function buildBufferKey(target: BuildFileTarget, path: string): string {
   return JSON.stringify([target.workspace, target.cwd || "", path]);
 }
 
+export function matchesBuildSave(buffer: BuildEditorBuffer, result: (BuildFileTarget & { path?: string; before?: string; after?: string }) | null): boolean {
+  return !!result && result.path === buffer.path && buildBufferKey(result, result.path) === buildBufferKey(buffer, buffer.path)
+    && result.before === buffer.saved && result.after === buffer.draft;
+}
+
+export function applyBuildSave(current: BuildEditorBuffer | undefined, reviewed: BuildEditorBuffer): BuildEditorBuffer | undefined {
+  if (!current || current.saved !== reviewed.saved) return current;
+  return { ...current, saved: reviewed.draft };
+}
+
 export function buildDraftKey(owner: string): string {
   return `amcos.build-editor.v1.${encodeURIComponent(owner)}`;
 }

@@ -1,4 +1,4 @@
-import type { SessionCandidate } from "./session-user.ts";
+import type { SessionCandidate, SessionIdentity } from "./session-user.ts";
 export type SessionRead = { state: "verified"; user: SessionCandidate } | { state: "absent" | "rejected" | "unavailable" };
 export class SessionResolutionError extends Error {
   readonly code: "session_unavailable" | "identity_conflict" | "session_rejected";
@@ -10,11 +10,14 @@ export class SessionResolutionError extends Error {
   get status() { return this.code === "session_unavailable" ? 503 : this.code === "identity_conflict" ? 409 : 401; }
 }
 /** An unavailable or rejected authority never becomes permission to try another identity. */
-export function reconcileSessionReads(primary: SessionRead, secondary: SessionRead): SessionCandidate | null {
+export function reconcileSessionReads(primary: SessionRead, secondary: SessionRead): SessionIdentity | null {
   if (primary.state === "unavailable" || secondary.state === "unavailable") throw new SessionResolutionError("session_unavailable");
   if (primary.state === "rejected" || secondary.state === "rejected") throw new SessionResolutionError("session_rejected");
   if (primary.state === "verified" && secondary.state === "verified" && primary.user.id !== secondary.user.id) throw new SessionResolutionError("identity_conflict");
-  return primary.state === "verified" ? primary.user : secondary.state === "verified" ? secondary.user : null;
+  if (primary.state === "verified") {
+    return { ...primary.user, sessionSource: secondary.state === "verified" ? "both" : "supabase" };
+  }
+  return secondary.state === "verified" ? { ...secondary.user, sessionSource: "better-auth" } : null;
 }
 export function classifySessionError(error: unknown, credentialPresent: boolean): SessionRead {
   const row = error && typeof error === "object" ? error as { name?: string; status?: number; code?: string } : {};

@@ -212,6 +212,67 @@ try {
   report.providerRequests = requests;
   await providerContext.close();
 
+  const embedded = await browser.newContext({ viewport: { width: 1280, height: 840 }, serviceWorkers: "block", reducedMotion: "reduce" });
+  await installVisualFixture(embedded, origin, "chat-interrupted", { preserveOnReload: true });
+  let socialApprovals = 0;
+  const socialData = new Map([
+    ["/api/status", () => ({ state: "running", sessions: [], ready: [], drafts: [{ account_id: "fixture", draft_text: "Synthetic review draft", jeff_output: { draft_id: "fixture-draft" } }] })],
+    ["/api/config", () => ({ limits: { per_contact_daily: { US: 1, NG: 1 }, per_account_daily: 1 }, timing: { gap_min_seconds: 1, gap_max_seconds: 2 } })],
+    ...["/api/optouts", "/api/audit", "/api/captures"].map(path => [path, () => ({ items: [] })]),
+    ["/api/drafts/approve", () => { socialApprovals++; return { status: "queued" }; }],
+  ]);
+  await embedded.route(url => url.origin === origin && socialData.has(url.pathname), route => route.fulfill({ json: socialData.get(new URL(route.request().url()).pathname)() }));
+  await embedded.route(url => url.origin === "http://127.0.0.1:8000", route => route.fulfill({
+    headers: { "access-control-allow-origin": "*", "access-control-allow-headers": "authorization, content-type" },
+    json: new URL(route.request().url()).pathname === "/dashboard-data" ? { session: { logged_in: true }, health: { healthy: true } } : {},
+  }));
+  const embeddedPage = await embedded.newPage();
+  const embeddedChat = `${origin}/?section=chat&chat=fixture-chat`;
+  for (const [id, title] of [["social", "Adrian Social"], ["gpt-wrapper", "GPT wrapper"]]) {
+    await embeddedPage.goto(embeddedChat, { waitUntil: "domcontentloaded" });
+    await embeddedPage.locator("#message-fixture-message").waitFor();
+    await check(embeddedPage, `${id}-host-entry-and-exit`, async () => {
+      const draft = `Synthetic ${id} return draft`;
+      const message = embeddedPage.locator("form.thread-composer").getByRole("textbox", { name: "Message", exact: true });
+      await message.fill(draft);
+      await embeddedPage.getByTestId(`nav-route-${id}`).click();
+      await embeddedPage.getByTitle(title, { exact: true }).waitFor();
+      const exit = embeddedPage.getByRole("link", { name: "Back to workspace" });
+      assert.match(await exit.getAttribute("href"), /[?&]chat=fixture-chat/);
+      for (const viewport of [{ width: 390, height: 844 }, { width: 844, height: 390 }]) {
+        await embeddedPage.setViewportSize(viewport);
+        const box = await exit.boundingBox();
+        assert.ok(box && box.height >= 44 && box.y + box.height <= viewport.height);
+        await embeddedPage.screenshot({ path: resolve(output, `transition-${id}-host-${viewport.width}.png`) });
+      }
+      await exit.focus();
+      await embeddedPage.keyboard.press("Enter");
+      await embeddedPage.locator("#message-fixture-message").waitFor();
+      assert.equal(await message.inputValue(), draft);
+      await embeddedPage.setViewportSize({ width: 1280, height: 840 });
+      return { host: id, keyboardExit: true, destination: "original fixture chat", restoredDraft: true, portraitAndLandscape: true };
+    });
+  }
+  await embeddedPage.goto(`${origin}/social`, { waitUntil: "domcontentloaded" });
+  await check(embeddedPage, "social-internal-queue-receipt", async () => {
+    const frame = embeddedPage.frameLocator('iframe[title="Adrian Social"]');
+    await frame.locator('#overview button:has(#count-drafts)').click();
+    await frame.getByRole("heading", { name: "PC checks, in order" }).waitFor();
+    await frame.getByRole("button", { name: "Approve", exact: true }).click();
+    await frame.getByText("Queued. Delivery has not been confirmed.", { exact: true }).waitFor();
+    await frame.locator("#link-state").filter({ hasText: "Live. All reads finished." }).waitFor();
+    assert.equal(await frame.locator('[id="drafts"]').count(), 1);
+    assert.equal(socialApprovals, 1);
+    return { queue: "fixture response", deliveryConfirmed: false, guardRetained: true };
+  });
+  await embeddedPage.goto(`${origin}/gpt-wrapper`, { waitUntil: "domcontentloaded" });
+  await check(embeddedPage, "wrapper-internal-signed-in-status", async () => {
+    const frame = embeddedPage.frameLocator('iframe[title="GPT wrapper"]');
+    await frame.getByText("Browser signed in", { exact: true }).waitFor();
+    return { signedIn: "fixture response", apiExecution: "unverified" };
+  });
+  await embedded.close();
+
   const mobile = await browser.newContext({ viewport: { width: 390, height: 844 }, isMobile: true, serviceWorkers: "block" });
   const mobileTransport = await installVisualFixture(mobile, origin, "chat-interrupted", { workspace });
   // A seeded message exists only after client hydration; the SSR home alone is not an interaction-ready signal.

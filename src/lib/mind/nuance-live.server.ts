@@ -12,6 +12,7 @@ import {
   isSelectablePersona,
   mintNuanceSession,
   NUANCE_API_URL,
+  publicNuanceError,
   publicPersonaRefusal,
   type MintResult,
   type NuancePersonaId,
@@ -144,10 +145,11 @@ async function nuanceGet(path: string, key: string): Promise<{ ok: true; text: s
   try {
     const response = await fetch(`${NUANCE_API_URL}${path}`, {
       headers: { authorization: `Bearer ${key}` },
+      signal: AbortSignal.timeout(10_000),
     });
     const text = await response.text();
     if (!response.ok) {
-      return { ok: false, error: "The video call could not be checked. Nothing was started.", status: response.status };
+      return { ok: false, error: publicNuanceError(response.status, text), status: response.status };
     }
     return { ok: true, text };
   } catch {
@@ -160,7 +162,9 @@ export async function listSavedActiveConversations(userId: string): Promise<{ ok
   if (!key) return { ok: false, error: "A Nuance key is not saved for this account.", status: 409 };
   const listed = await nuanceGet("/conversations/active", key);
   if (!listed.ok) return listed;
-  return { ok: true, ids: activeConversationIds(listed.text) };
+  const ids = activeConversationIds(listed.text);
+  if (!ids) return { ok: false, error: "Nuance returned an unreadable call list. Nothing was started.", status: 502 };
+  return { ok: true, ids };
 }
 
 export async function readSavedNuanceUsage(userId: string): Promise<{ ok: true; available: number; active: number } | { ok: false; error: string; status: number }> {
@@ -170,8 +174,8 @@ export async function readSavedNuanceUsage(userId: string): Promise<{ ok: true; 
   if (!usage.ok) return usage;
   try {
     const parsed = JSON.parse(usage.text) as { available_credits?: unknown; active_sessions?: unknown };
-    const available = typeof parsed.available_credits === "number" ? parsed.available_credits : 0;
-    const active = typeof parsed.active_sessions === "number" ? parsed.active_sessions : 0;
+    const { available_credits: available, active_sessions: active } = parsed;
+    if (typeof available !== "number" || !Number.isFinite(available) || typeof active !== "number" || !Number.isSafeInteger(active) || active < 0) throw new Error();
     return { ok: true, available, active };
   } catch {
     return { ok: false, error: "The video call could not be checked. Nothing was started.", status: 502 };

@@ -3,6 +3,7 @@ import { readFileSync } from "node:fs";
 import { test } from "node:test";
 import ts from "typescript";
 import { readBuildSourceReceipt } from "./source-receipt.ts";
+import { applyBuildSave, matchesBuildSave } from "./build-review.ts";
 
 const source = readFileSync(new URL("../../../components/mind/code-ide.tsx", import.meta.url), "utf8");
 const toolBody = source.slice(source.indexOf("  async function runTool("), source.indexOf('  return (\n    <div className="code-ide"'));
@@ -130,6 +131,7 @@ test("C5 a new emergency stop survives an older pending release and reasserts th
 test("C5 actual Build handler distinguishes saved execution, verified save and failed save", async () => {
   const app = readFileSync(new URL("../../../components/mind/build-workspace.tsx", import.meta.url), "utf8");
   const runBuild = app.slice(app.indexOf('  function withTaskFile('), app.indexOf('  async function planWithGrok('));
+  const rememberSave = app.slice(app.indexOf('  function rememberVerifiedSave('), app.indexOf('  async function checkFileState('));
   const body = ts.transpileModule(`
     const props = { ownerId: "owner-A", freeOnly: false, composer: { staged: { name: "brief.txt", text: "review brief contents" }, images: [] } }; const haltedRef = { current: false }; const planOwner = { current: "owner-A" };
     const prompt = "Inspect fixture file"; const cwd = "/fixture"; const mode = "plan"; const sessionId = "";
@@ -142,12 +144,13 @@ test("C5 actual Build handler distinguishes saved execution, verified save and f
     const setBuffers = (fn) => { buffersRef.current = fn(buffersRef.current); }; const setJob = () => {}; const setPanel = () => {};
     const localStorage = { setItem: () => {} }; const sessionStorage = { getItem: () => null };
     const refreshJob = async () => {}; const setSessionId = () => {}; const setLastDiff = () => {};
+    ${rememberSave}
     ${runBuild}
     return { runBuild, state, buffersRef };
   `, { compilerOptions: { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.None } }).outputText;
   for (const policy of ["saved", "save", "failure"] as const) {
     let writes = 0, dispatches = 0;
-    const h = new Function("fetch", "runFileOperation", body)(async (_url: string, init: RequestInit) => { dispatches++; assert.match(JSON.parse(String(init.body)).prompt, /Attached file brief\.txt:\nreview brief contents/); return Response.json({ ok: true, jobId: "fixture-job" }); }, async (_operation: string, _path: string, text: string, extra: { expectedContent: string }) => { writes++; assert.equal(extra.expectedContent, "revision A"); return policy === "failure" ? null : { path: "a.ts", before: "revision A", after: text }; });
+    const h = new Function("fetch", "runFileOperation", "matchesBuildSave", "applyBuildSave", body)(async (_url: string, init: RequestInit) => { dispatches++; assert.match(JSON.parse(String(init.body)).prompt, /Attached file brief\.txt:\nreview brief contents/); return Response.json({ ok: true, jobId: "fixture-job" }); }, async (_operation: string, _path: string, text: string, extra: { expectedContent: string }) => { writes++; assert.equal(extra.expectedContent, "revision A"); return policy === "failure" ? null : { workspace: "fixture-pc", cwd: "/fixture", path: "a.ts", before: "revision A", after: text }; }, matchesBuildSave, applyBuildSave);
     await h.runBuild(policy === "saved" ? "saved" : "save");
     assert.equal(writes, policy === "saved" ? 0 : 1);
     assert.equal(dispatches, policy === "failure" ? 0 : 1);

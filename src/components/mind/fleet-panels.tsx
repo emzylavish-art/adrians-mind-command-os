@@ -22,6 +22,7 @@ import {
   approveRunAction,
   approveRunBatch,
   clearFinishedRuns,
+  hasUnresolvedRunOutcome,
   revokeRunApproval,
   configureSchedulePolicy,
   reviewMissedSchedule,
@@ -423,7 +424,7 @@ export function FleetPanel({
       if (!result.ok || !Array.isArray(result.removedIds)) { setNote(result.error || "History deletion was not confirmed."); return; }
       const removedIds = result.removedIds.filter(id => runIds.includes(id));
       setWs(prev => clearFinishedRuns(prev, removedIds));
-      setNote(`Removed ${removedIds.length} saved finished records. Active runs and unresolved external outcomes were retained.`);
+    setNote(`Removed ${removedIds.length} saved finished records. Active runs and unresolved outcomes were retained.`);
     } catch { if (generation === connectedGeneration.current) setNote("History deletion could not be verified. Refresh the saved history before trying again."); }
   }
 
@@ -654,8 +655,8 @@ export function FleetPanel({
             const anchor = document.createElement("a"); anchor.href = url; anchor.download = "adrian-run-history.json"; anchor.click(); setTimeout(() => URL.revokeObjectURL(url), 1000);
           }}>Download run history</button>
           <button type="button" className="min-h-11 rounded-panel border border-line px-3 text-sm" onClick={() => {
-            const finished = ws.runs.filter(run => ["completed", "failed", "canceled"].includes(run.state));
-            if (finished.length && window.confirm(`Delete ${finished.length} finished run records and their execution evidence? Download history first if you need a copy. Unresolved external outcomes and evidence needed by active parents will be retained.`)) void clearSavedRunHistory(finished.map(run => run.id));
+            const finished = ws.runs.filter(run => ["completed", "failed", "canceled"].includes(run.state) && !hasUnresolvedRunOutcome(run));
+            if (finished.length && window.confirm(`Delete ${finished.length} finished run records and their execution evidence? Download history first if you need a copy. Unresolved outcomes and evidence needed by active parents will be retained.`)) void clearSavedRunHistory(finished.map(run => run.id));
           }}>Clear finished history…</button>
         </div>
         <details className="mt-3 rounded-panel border border-line p-3">
@@ -719,7 +720,8 @@ export function FleetPanel({
               </details>}
               <div className="mt-2 flex flex-wrap gap-2">
                 {(run.state === "queued" || run.state === "running") ? <button type="button" className="min-h-11 rounded-panel border border-line px-3" onClick={() => setWs((prev) => pauseRun(prev, run.id))}>Pause</button> : null}
-                {(run.state === "paused" || run.state === "waiting_external") ? <button type="button" className="min-h-11 rounded-panel border border-line px-3" onClick={() => setWs((prev) => resumeRun(prev, run.id))}>{run.state === "waiting_external" ? "Retry this step" : "Resume"}</button> : null}
+                {hasUnresolvedRunOutcome(run) && <p className="self-center text-sm text-muted">Review the existing operation before retrying.</p>}
+                {(run.state === "paused" || run.state === "waiting_external") && !hasUnresolvedRunOutcome(run) ? <button type="button" className="min-h-11 rounded-panel border border-line px-3" onClick={() => setWs((prev) => resumeRun(prev, run.id))}>{run.state === "waiting_external" ? "Retry this step" : "Resume"}</button> : null}
                 {!["completed", "failed", "canceled"].includes(run.state) ? <button type="button" className="min-h-11 rounded-panel border border-line px-3" onClick={() => setWs((prev) => cancelRun(prev, run.id))}>Stop run</button> : null}
                 {run.state === "waiting_approval" && run.pendingApproval?.state === "requested" ? <button type="button" className="min-h-11 rounded-panel border border-line px-3" onClick={() => setWs((prev) => approveRunAction(prev, run.id, run.pendingApproval!.id))}>Approve this action once</button> : null}
                 {run.pendingApproval && ["requested", "granted"].includes(run.pendingApproval.state) ? <button type="button" className="min-h-11 rounded-panel border border-line px-3" onClick={() => setWs((prev) => revokeRunApproval(prev, run.id))}>Revoke authorization</button> : null}

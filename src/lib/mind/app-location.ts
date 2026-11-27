@@ -46,6 +46,17 @@ export function isShareId(value: string | null | undefined): value is string {
   return typeof value === "string" && ID_PATTERN.test(value);
 }
 
+/** Keep only the workspace selectors; embedded tools get no incidental URL parameters. */
+export function embeddedWorkspaceSearch(search: string): string {
+  const source = paramsFrom(search);
+  const result = new URLSearchParams();
+  for (const key of ["section", "pane", ...SHARE_ITEM_KEYS]) {
+    const value = source.get(key);
+    if (isShareId(value)) result.set(key, value);
+  }
+  return result.size ? `?${result}` : "";
+}
+
 function paramsFrom(search: string) {
   const raw = search.startsWith("?") ? search.slice(1) : search;
   return new URLSearchParams(raw);

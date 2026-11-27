@@ -64,7 +64,7 @@ function fixture(overrides = {}) {
   const state = { busy: false, liveText: "", turnChat: null, failure: null, speak: {} };
   const listeners = new Map();
   const context = {
-    accountPending: false, account: { id: "owner-a" }, draftOwner: "owner-a", turnOwner: { current: "owner-a" },
+    accountPending: false, selectionLoaded: true, account: { id: "owner-a" }, draftOwner: "owner-a", turnOwner: { current: "owner-a" },
     turnInFlight: { current: false }, turnAbort: { current: null }, turnGen: { current: 0 }, deliverStoredUser: { current: false },
     wsRef: { current: ws }, providerChoice: "gemini", modelTier: "Fast", grokConfigured: false, grokModel: null,
     liveProviders: { gemini: true }, providerModels: { gemini: "selected-gemini-model" }, discovered: [], logicRoute: null, logicRoutes: [],
@@ -240,6 +240,10 @@ test("AA044/061: pending auth and failed preparation create no provider executio
   assert.equal(await pending.start(), null);
   assert.equal(pending.calls.network.length, 0);
   assert.equal(pending.context.wsRef.current.chats[0].messages.length, 0);
+  const loadingSelection = fixture({ selectionLoaded: false });
+  assert.equal(await loadingSelection.start(), null);
+  assert.equal(loadingSelection.calls.network.length, 0);
+  assert.equal(loadingSelection.context.wsRef.current.chats[0].messages.length, 0);
   const failed = fixture();
   failed.context.network = async (url, options) => { failed.calls.network.push({ url: String(url), method: options.method }); return Response.json({ error: "expired" }, { status: 401 }); };
   assert.equal(await failed.start(), null);

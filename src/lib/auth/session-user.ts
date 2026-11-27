@@ -3,6 +3,7 @@
  * Used by verify.server so MCP list and other owner APIs accept Supabase cookies.
  */
 export type SessionCandidate = { id: string; email: string | null; emailVerified?: boolean; displayName?: string | null; profileImageUrl?: string | null };
+export type SessionIdentity = SessionCandidate & { sessionSource?: "supabase" | "better-auth" | "both" };
 
 export class SessionConflictError extends Error {
   readonly status = 409;

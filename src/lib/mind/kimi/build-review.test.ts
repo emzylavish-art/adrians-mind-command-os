@@ -1,6 +1,19 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { buildBufferKey, buildDiff, buildDraftKey, buildResultHandoff, normalizeBuildSelection, parseBuildDraft, serializeBuildDraft } from "./build-review.ts";
+import { applyBuildSave, buildBufferKey, buildDiff, buildDraftKey, buildResultHandoff, matchesBuildSave, normalizeBuildSelection, parseBuildDraft, serializeBuildDraft } from "./build-review.ts";
+
+test("Build save requires a matching receipt and preserves typing added while saving", () => {
+  const reviewed = { workspace: "pc-a", cwd: "fixture", path: "notes.txt", saved: "old", draft: "submitted" };
+  const result = { workspace: reviewed.workspace, cwd: reviewed.cwd, path: reviewed.path, before: "old", after: "submitted" };
+  assert.equal(matchesBuildSave(reviewed, result), true);
+  assert.equal(matchesBuildSave(reviewed, { ...result, after: undefined }), false);
+  assert.equal(matchesBuildSave(reviewed, { ...result, before: "newer on disk" }), false);
+  assert.equal(matchesBuildSave(reviewed, { ...result, workspace: "pc-b" }), false);
+  const edited = { ...reviewed, draft: "submitted plus new typing" };
+  assert.deepEqual(applyBuildSave(edited, reviewed), { ...edited, saved: "submitted" });
+  const reopened = { ...edited, saved: "reopened from disk" };
+  assert.equal(applyBuildSave(reopened, reviewed), reopened);
+});
 
 test("Build draft recovery preserves separate files and original save baselines per account", () => {
   const one = { workspace: "hosted", path: "one.ts", saved: "old", draft: "new" };

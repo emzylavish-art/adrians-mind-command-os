@@ -21,7 +21,7 @@ import { chatTurnBody } from "@/lib/mind/logic-routes";
 import { consumeMindTurn, prepareTurnId } from "@/lib/mind/live-turn";
 import { boundAbortSignal } from "@/lib/mind/turn-timeouts";
 import { createBuildPlanningGate } from "@/lib/mind/kimi/build-lifecycle";
-import { buildBufferKey as bufferKey, buildDraftKey, buildResultHandoff, parseBuildDraft, serializeBuildDraft, type BuildEditorBuffer as EditorBuffer, type BuildFileTarget as FileTarget } from "@/lib/mind/kimi/build-review";
+import { applyBuildSave, buildBufferKey as bufferKey, buildDraftKey, buildResultHandoff, matchesBuildSave, parseBuildDraft, serializeBuildDraft, type BuildEditorBuffer as EditorBuffer, type BuildFileTarget as FileTarget } from "@/lib/mind/kimi/build-review";
 import { buildResultKey, parseBuildResult, serializeBuildResult, type BuildStoredReceipt } from "@/lib/mind/kimi/build-result";
 import { previewPathPrefix } from "@/lib/preview-path-prefix";
 
@@ -129,6 +129,7 @@ function BuildWorkspaceSession(props: BuildWorkspaceProps) {
   const [companion, setCompanion] = useState<CompanionState>({});
   const [band, setBand] = useState<"actions" | "files" | "message" | "editor">("message");
   const [prompt, setPrompt] = useState("");
+  const [incomingTask, setIncomingTask] = useState<{ text: string; threadId: string | null; mode: string | null } | null>(null);
   const taskField = useRef<HTMLTextAreaElement>(null);
   const planningController = useRef<AbortController | null>(null);
   useEffect(() => {
@@ -380,13 +381,20 @@ function BuildWorkspaceSession(props: BuildWorkspaceProps) {
     const buffer = buffers[selectedFile];
     if (!buffer) return;
     if (buffer.workspace !== "hosted" && !buffer.cwd) { setFileNotice("Update the companion and reopen the file to identify its workspace root before saving."); return; }
-    const result = await runFileOperation("write", buffer.path, editorText, { workspace: buffer.workspace, cwd: buffer.cwd, expectedContent: buffer.saved });
-    if (result?.path) {
-      const verified = result.after ?? editorText;
-      setBuffers((prev) => prev[selectedFile] ? { ...prev, [selectedFile]: { ...prev[selectedFile], saved: verified } } : prev);
-      setLastDiff({ path: result.path, before: result.before || "", after: verified });
-      setFileNotice(`Saved ${result.path}. The before/after text is the reviewed result, not an assumed write.`);
-    }
+    const result = await runFileOperation("write", buffer.path, buffer.draft, { workspace: buffer.workspace, cwd: buffer.cwd, expectedContent: buffer.saved });
+    if (!mounted.current || !result) return;
+    if (!matchesBuildSave(buffer, result)) { setFileNotice("The save receipt could not confirm the target and text. Check the saved file before repeating the write. Your draft was kept."); return; }
+    rememberVerifiedSave(selectedFile, buffer);
+    setLastDiff({ path: buffer.path, before: buffer.saved, after: buffer.draft });
+    setFileNotice(`Saved ${buffer.path}. Any typing since Save remains in the draft.`);
+  }
+
+  function rememberVerifiedSave(key: string, buffer: EditorBuffer) {
+    setBuffers(previous => {
+      const current = previous[key];
+      const saved = applyBuildSave(current, buffer);
+      return saved && saved !== current ? { ...previous, [key]: saved } : previous;
+    });
   }
 
   async function checkFileState() {
@@ -491,6 +499,8 @@ function BuildWorkspaceSession(props: BuildWorkspaceProps) {
         setBuffers(restored.buffers); setTabs(restored.tabs); setSelectedFile(restored.selectedFile); setPrompt(restored.prompt); setCwd(restored.cwd ?? ""); setPlanningTier(restored.planningTier ?? null);
         if (Object.values(restored.buffers).some(buffer => buffer.saved !== buffer.draft)) setFileNotice("Recovered unsaved drafts for this account. Saving will check that each original file is unchanged.");
       }
+      const text = sessionStorage.getItem(`adrian-build-draft.${owner}`);
+      if (text) setIncomingTask({ text, threadId: sessionStorage.getItem(`adrian-build-task-source.${owner}`), mode: sessionStorage.getItem(`adrian-build-mode.${owner}`) });
     } catch { setFileNotice("Editor draft recovery could not be read. Existing files have not been changed."); }
     setDraftHydrated(true);
   }, [props.ownerId]);
@@ -516,18 +526,28 @@ function BuildWorkspaceSession(props: BuildWorkspaceProps) {
     }).catch(() => { if (mounted.current) setBrowserNotice("Coding browser status could not be verified. Starting a session is an explicit action."); });
     const live = sessionStorage.getItem(`adrian-build-live-session.${props.ownerId || "signed-out"}`);
     if (live) setSessionId(live);
-    const draft = sessionStorage.getItem(`adrian-build-draft.${props.ownerId || "signed-out"}`);
-    if (!draft) return;
-    setPrompt(draft);
-    sessionStorage.removeItem(`adrian-build-draft.${props.ownerId || "signed-out"}`);
-    const fromHuman = Boolean(sessionStorage.getItem(`adrian-human-return.${props.ownerId || "signed-out"}`));
-    const requested = sessionStorage.getItem(`adrian-build-mode.${props.ownerId || "signed-out"}`);
-    if (requested === "auto" || requested === "plan" || requested === "default") {
-      setMode(requested);
-      sessionStorage.removeItem(`adrian-build-mode.${props.ownerId || "signed-out"}`);
-    }
-    setNotice(fromHuman ? "Opened from Intelligence. Review the task, then press Run build. The result returns to that thread." : "Opened from Chat. Review the task, then press Run build.");
   }, []);
+
+  function acceptIncomingTask(append: boolean) {
+    if (!incomingTask || !props.ownerId) return;
+    const owner = props.ownerId;
+    const nextPrompt = append && prompt.trim() ? `${prompt}\n\n${incomingTask.text}` : incomingTask.text;
+    try {
+      const encoded = serializeBuildDraft({ owner, buffers: buffersRef.current, tabs, selectedFile, prompt: nextPrompt, cwd, ...(planningTier ? { planningTier } : {}) });
+      sessionStorage.setItem(buildDraftKey(owner), encoded);
+      if (sessionStorage.getItem(buildDraftKey(owner)) !== encoded) throw new Error("Build draft did not read back.");
+      if (incomingTask.threadId) sessionStorage.setItem(`adrian-human-return.${owner}`, incomingTask.threadId);
+      else sessionStorage.removeItem(`adrian-human-return.${owner}`);
+      sessionStorage.removeItem(`adrian-build-draft.${owner}`);
+      sessionStorage.removeItem(`adrian-build-task-source.${owner}`);
+      sessionStorage.removeItem(`adrian-build-mode.${owner}`);
+    } catch { setNotice("The handoff could not be saved. Your Build draft was kept."); return; }
+    setPrompt(nextPrompt);
+    if (incomingTask.mode === "auto" || incomingTask.mode === "plan" || incomingTask.mode === "default") setMode(incomingTask.mode);
+    setIncomingTask(null);
+    setNotice(incomingTask.threadId ? "Task added from Intelligence. Review it before running. Its result returns to the source thread." : "Task added from Chat. Review it before running.");
+    taskField.current?.focus();
+  }
 
   useEffect(() => {
     if (!editorDirty) return;
@@ -610,15 +630,18 @@ function BuildWorkspaceSession(props: BuildWorkspaceProps) {
     try {
       const target = { workspace, cwd: targetCwd };
       const relevant = Object.entries(buffersRef.current).filter(([, buffer]) => buffer.workspace === target.workspace && (buffer.cwd || "") === target.cwd);
+      const savedPaths: string[] = [];
+      const partialSaves = () => savedPaths.length ? ` Verified saves: ${savedPaths.join(", ")}.` : "";
       if (policy === "save") {
         const unrelated = Object.values(buffersRef.current).some((buffer) => buffer.draft !== buffer.saved && (buffer.workspace !== target.workspace || (buffer.cwd || "") !== target.cwd));
         if (unrelated) { setNotice("Unsaved files belong to another workspace. Save them there, or choose Run saved version. No task started."); return; }
         for (const [key, buffer] of relevant) {
           if (buffer.draft === buffer.saved) continue;
-          if (!mounted.current || haltedRef.current || planOwner.current !== props.ownerId || buffersRef.current[key]?.draft !== buffer.draft) { setNotice("The reviewed buffer or owner changed. No task started."); return; }
+          if (!mounted.current || haltedRef.current || planOwner.current !== props.ownerId || buffersRef.current[key]?.draft !== buffer.draft || buffersRef.current[key]?.saved !== buffer.saved) { setNotice(`The reviewed buffer or owner changed. No task started.${partialSaves()}`); return; }
           const result = await runFileOperation("write", buffer.path, buffer.draft, { workspace: buffer.workspace, cwd: buffer.cwd, expectedContent: buffer.saved });
-          if (!result || result.after !== buffer.draft) { setNotice("A file save was not verified. No Build task started. Your drafts were kept."); return; }
-          setBuffers((previous) => previous[key] ? { ...previous, [key]: { ...previous[key], saved: result.after! } } : previous);
+          if (!matchesBuildSave(buffer, result)) { setNotice(`A file save could not be verified. No Build task started. Your drafts were kept.${partialSaves()}`); return; }
+          savedPaths.push(buffer.path);
+          rememberVerifiedSave(key, buffer);
         }
       }
       const files: { path: string; sha256: string }[] = [];
@@ -627,7 +650,7 @@ function BuildWorkspaceSession(props: BuildWorkspaceProps) {
         const hash = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(content));
         files.push({ path: buffer.path, sha256: Array.from(new Uint8Array(hash), (byte) => byte.toString(16).padStart(2, "0")).join("") });
       }
-      if (!mounted.current || haltedRef.current || planOwner.current !== props.ownerId || relevant.some(([key, buffer]) => !buffersRef.current[key] || (policy === "save" && buffersRef.current[key].draft !== buffer.draft))) { setNotice("Build stopped before submission."); return; }
+      if (!mounted.current || haltedRef.current || planOwner.current !== props.ownerId || relevant.some(([key, buffer]) => !buffersRef.current[key] || (policy === "save" && buffersRef.current[key].draft !== buffer.draft))) { setNotice(`Build stopped before submission.${partialSaves()}`); return; }
       const receipt = { ...target, files, policy };
       setExecutionReceipt(receipt);
       if (jobKey) {
@@ -959,6 +982,11 @@ function BuildWorkspaceSession(props: BuildWorkspaceProps) {
           <p className="font-semibold">Adrian Build</p>
         </div>
         <textarea ref={taskField} value={prompt} onChange={(event) => setPrompt(event.target.value)} placeholder="Describe the change you want to build…" className="min-h-24 w-full rounded-panel border border-line bg-transparent p-3 text-sm outline-none focus:border-accent" aria-label="Coding task" />
+        {incomingTask && <details className="rounded-panel border border-line p-3">
+          <summary className="min-h-11 cursor-pointer">Review task from {incomingTask.threadId ? "Intelligence" : "Chat"}</summary>
+          <p className="max-h-48 overflow-auto whitespace-pre-wrap break-words text-sm">{incomingTask.text}</p>
+          <button type="button" disabled={active || loading} className="min-h-11 underline" onClick={() => acceptIncomingTask(Boolean(prompt.trim()))}>{prompt.trim() ? "Add to current task" : "Use this task"}</button>
+        </details>}
         {props.composer && <div className="flex flex-wrap items-center gap-2" aria-label="Work attachments and project">
           <ComposerMore testId="work-composer-more-menu">
             <MenuCluster label="Add to Work">

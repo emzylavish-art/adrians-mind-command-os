@@ -44,6 +44,10 @@ function fixture(options: { loseWriteResponse?: boolean; denied?: boolean; omitB
   let lost = false;
   let lastError = "";
   let failureAction: string | undefined;
+  const notionSearchRequest = { current: { picker: 0 } };
+  const currentVoiceScope = { current: "chat-a" };
+  let finishPage: (() => void) | undefined;
+  let pickedPageCount = 0;
   const exports: { askNotion?: (...args: unknown[]) => Promise<void> } = {};
   const fetch = async (url: string, init?: RequestInit) => {
     if (init?.method === "PATCH") {
@@ -57,18 +61,22 @@ function fixture(options: { loseWriteResponse?: boolean; denied?: boolean; omitB
   };
   const context = {
     exports, Date,
-    wsRef, turnOwner: { current: "owner-a" }, draftOwner: "owner-a", notionEpoch: { current: 0 },
+    wsRef, turnOwner: { current: "owner-a" }, draftOwner: "owner-a", notionEpoch: { current: 0 }, notionSearchRequest, currentVoiceScope,
     saveRecovery, closeRecovery,
     setWs: (update: (previous: ReturnType<typeof emptyWorkspace>) => ReturnType<typeof emptyWorkspace>) => { wsRef.current = update(wsRef.current); },
     setBusy: () => {}, setError: (error: string | null) => { lastError = error ?? ""; },
-    setNotion: () => {}, setNotionPreview: () => {}, recordToolTurn: () => {},
+    setNotion: () => {}, setNotionPreview: () => {}, recordToolTurn: () => {}, setNotionSelection: () => { pickedPageCount++; },
     setPending: (value: { run: () => void }) => { pending = value; },
     reportFailure: (message: string, _action: string, _target: string, callback: (() => void) | null, recoveryAction?: string) => { lastError = message; retry = callback; failureAction = recoveryAction; },
     mountFailure: (failure: { message: string }, callback: () => void) => ({ ...failure, retry: callback }),
     emitFailure: (_channel: string, failure: { message: string; retry: () => void }) => { lastError = failure.message; retry = failure.retry; return true; },
     listNotionWorkspaces: async () => { throw new Error("An already-bound chat must not substitute its selected workspace."); },
-    notionCommand: async ({ data }: { data: { text: string; confirmed: boolean; operationId?: string; workspaceId?: string; pageId?: string | null } }) => {
+    notionCommand: async ({ data }: { data: { text: string; confirmed: boolean; operationId?: string; workspaceId?: string; pageId?: string | null; cursor?: string | null } }) => {
       requests.push({ ...data });
+      if (data.cursor) {
+        await new Promise<void>(resolve => { finishPage = resolve; });
+        return { ambiguous: true, pages: [page], nextCursor: null };
+      }
       const result = await runNotionTurn({ ...data, pageId: data.pageId ?? null, token: "fixture-only", disabled: false, fetch, operationStore: store });
       if (options.loseWriteResponse && data.confirmed && !lost) { lost = true; throw new Error("response lost after accepted append"); }
       return result;
@@ -78,12 +86,31 @@ function fixture(options: { loseWriteResponse?: boolean; denied?: boolean; omitB
   return {
     chat, wsRef, rows, requests,
     ask: () => exports.askNotion!(chat, text),
+    nextPage: () => exports.askNotion!(chat, text, false, null, chat.notionWorkspaceId, undefined, "fixture-cursor"),
+    dismissPicker: () => { notionSearchRequest.current.picker++; },
+    changeConversation: () => { currentVoiceScope.current = "chat-b"; },
+    finishPage: () => { assert.ok(finishPage); finishPage(); },
+    get pickedPageCount() { return pickedPageCount; },
     confirm: () => { assert.ok(pending); pending!.run(); },
     retry: () => { assert.ok(retry); retry!(); },
     allowRead: () => { readsAllowed = true; },
     get writes() { return writes; }, get lastError() { return lastError; }, get retryAvailable() { return !!retry; }, get failureAction() { return failureAction; },
   };
 }
+
+test("late Notion pages cannot reopen a dismissed picker or cross conversations", async () => {
+  const app = fixture();
+  const first = app.nextPage();
+  app.dismissPicker(); app.finishPage(); await first;
+  assert.equal(app.pickedPageCount, 0);
+  const second = app.nextPage();
+  app.changeConversation(); app.finishPage(); await second;
+  assert.equal(app.pickedPageCount, 0);
+  const third = app.nextPage();
+  app.finishPage(); await third;
+  assert.equal(app.pickedPageCount, 1);
+  assert.equal(app.writes, 0);
+});
 
 async function until(check: () => boolean) {
   for (let i = 0; i < 30; i++) { if (check()) return; await new Promise<void>((resolve) => setImmediate(resolve)); }

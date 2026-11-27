@@ -62,7 +62,8 @@
         <button type="button" data-panel="tools" data-group="record">Tools</button>
       </nav>
     </header>
-    <p id="link-state" class="status-line">Not connected. The PC service is not answering this browser yet.</p>
+    <p id="link-state" class="status-line" role="status">Not connected. The PC service is not answering this browser yet.</p>
+    <p id="action-result" class="status-line" role="status" hidden></p>
     <main>
       <section id="overview" class="panel on" data-group="operate">
         <p class="lead">This page asks the PC. It does not deliver a message.</p>
@@ -146,7 +147,7 @@
 
       <section id="drafts" class="panel" data-group="inbox">
         <p class="hint">Approve queues the draft after the checks. Reject discards it. Nothing is marked sent unless the saved session shows that line.</p>
-        <div id="drafts"><div class="card"><strong>No pending drafts</strong><p class="meta">Approval stays on.</p></div></div>
+        <div id="draft-list"><div class="card"><strong>Drafts unavailable</strong><p class="meta">Connect to the PC to check pending drafts.</p></div></div>
         <h2>PC checks, in order</h2>
         <ol class="checks">
           <li><strong>Key.</strong> A wrong key stops before this list. Nothing is written.</li>

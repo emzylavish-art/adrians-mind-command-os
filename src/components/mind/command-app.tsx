@@ -95,7 +95,7 @@ import { DesktopUpdateNote } from "@/components/mind/desktop-update-note";
 import { ActionOverlay, ActionsButton } from "@/components/mind/conversation-menu";
 import { applyArchive, applyFavorite, applyProject, applyRename, conversationSharePath, quoteIntoNewChat, scheduleConversation, type ConversationAction } from "@/lib/mind/conversation-actions";
 import { conversationSection, HIDDEN_SETTINGS_SECTIONS_KEY, hideSection, readHiddenSections, removeConversations, restoreSection } from "@/lib/mind/conversation-sections";
-import { settingsPaneFromSearch, resolveShare, sameShareLocation, shareMissLabel, shareWriteDropsMissing, shareWriteForView, writeShareSearch } from "@/lib/mind/app-location";
+import { embeddedWorkspaceSearch, settingsPaneFromSearch, resolveShare, sameShareLocation, shareMissLabel, shareWriteDropsMissing, shareWriteForView, writeShareSearch } from "@/lib/mind/app-location";
 import { routeForBotChat } from "@/lib/mind/bot-model";
 import { UserButton } from "@/lib/auth/gates";
 import {
@@ -797,7 +797,7 @@ export function CommandApp() {
     <button type="button" className="ml-3 min-h-11 underline" onClick={() => { setError(""); retry?.(); }}>Retry verification</button>
   </main>;
   if (isPending) return <main role="status" className="p-4">Verifying your account…</main>;
-  return <AccountPreferencesProvider ownerId={account?.id ?? null}><SurfaceErrorBoundary key={account?.id ?? "guest"} name="Workspace"><CommandSession account={account} accountPending={isPending} /></SurfaceErrorBoundary></AccountPreferencesProvider>;
+  return <AccountPreferencesProvider ownerId={account?.id ?? null}><SurfaceErrorBoundary key={JSON.stringify([account?.id, account?.sessionEpoch])} name="Workspace"><CommandSession account={account} accountPending={isPending} /></SurfaceErrorBoundary></AccountPreferencesProvider>;
 }
 
 function CommandSession({ account, accountPending }: { account: ReturnType<typeof useCurrentUserState>["user"]; accountPending: boolean }) {
@@ -1812,7 +1812,7 @@ function CommandSession({ account, accountPending }: { account: ReturnType<typeo
   const [notion, setNotion] = useState<{ state: "unconfigured" | "disconnected" | "connected"; detail: string } | null>(null);
   const [notionQuery, setNotionQuery] = useState("");
   const notionEpoch = useRef(0);
-  const notionSearchRequest = useRef(0);
+  const notionSearchRequest = useRef({ settings: 0, picker: 0 });
   const searchIssue = notionSearchIssue(ws.audit);
   const [notionSelection, setNotionSelection] = useState<{ chat: Chat; text: string; workspaceId: string; pages: NotionPage[]; cursor: string | null } | null>(null);
   const [notionPreview, setNotionPreview] = useState<{ owner: string | null; chatId: string; text: string } | null>(null);
@@ -1822,7 +1822,11 @@ function CommandSession({ account, accountPending }: { account: ReturnType<typeo
     setNotionPreview(null);
     setNotionQuery(""); setNotionPages([]); setNotionNote(null);
   }, [draftOwner]);
-  useEffect(() => { setNotionPreview(null); }, [activeId, view]);
+  useEffect(() => { dismissNotionSelection(); setNotionPreview(null); }, [activeId, view]);
+  function dismissNotionSelection() {
+    notionSearchRequest.current.picker++;
+    setNotionSelection(null);
+  }
   const [notionPages, setNotionPages] = useState<{ id: string; title: string; url: string }[]>([]);
   const [notionNote, setNotionNote] = useState<string | null>(null);
   const [mcpServers, setMcpServers] = useState<SavedMcpServer[]>([]);
@@ -2855,6 +2859,9 @@ function CommandSession({ account, accountPending }: { account: ReturnType<typeo
     setBusy(true);
     setError(null);
     const epoch = notionEpoch.current;
+    const pickerRequest = ++notionSearchRequest.current.picker;
+    const pickerScope = currentVoiceScope.current;
+    const pickerIsCurrent = () => pickerRequest === notionSearchRequest.current.picker && pickerScope === currentVoiceScope.current;
     try {
       if (!workspaceId) {
         const spaces = await listNotionWorkspaces();
@@ -2877,9 +2884,10 @@ function CommandSession({ account, accountPending }: { account: ReturnType<typeo
       if (turnOwner.current !== draftOwner) return;
       setBusy(false);
       if (epoch !== notionEpoch.current || wsRef.current.chats.find((item) => item.id === chat.id)?.notionWorkspaceId !== workspaceId) return;
+      if (cursor && !pickerIsCurrent()) return;
       setNotion((current) => current ?? { state: result.state, detail: result.error || "Notion answered from the server." });
       if (result.ambiguous) {
-        setNotionSelection({ chat, text, workspaceId, pages: result.pages, cursor: result.nextCursor ?? null });
+        if (pickerIsCurrent()) setNotionSelection({ chat, text, workspaceId, pages: result.pages, cursor: result.nextCursor ?? null });
         return;
       }
       if (result.needsConfirmation && result.pages[0]) {
@@ -2915,6 +2923,7 @@ function CommandSession({ account, accountPending }: { account: ReturnType<typeo
     } catch {
       if (turnOwner.current !== draftOwner) return;
       setBusy(false);
+      if (cursor && !pickerIsCurrent()) return;
       if (!wsRef.current.chats.some((item) => item.id === chat.id)) return;
       const message = confirmed && operationId ? "Notion's write response was lost. The outcome is uncertain. Check the existing operation; do not repeat the append." : "Notion could not be reached. No write was confirmed from this request.";
       const retry = () => {
@@ -3036,7 +3045,7 @@ function CommandSession({ account, accountPending }: { account: ReturnType<typeo
     images: ImageAttachment[] = [],
     options?: { onFailure?: (failure: { error: string; dispatched: false; approvalId?: string; answerRequest: NonNullable<SpeakRetryParams["answerRequest"]> }) => void; onReply?: (reply: TurnReplyReceipt) => void; provider?: string; taskId?: string; logicRoute?: LogicRouteId | null; skipUserMessage?: boolean; isolateOutputs?: boolean; accessNotes?: { id: string; text: string }[]; request?: TurnRequest; selectedProviderOnly?: boolean; knownUnsent?: boolean; operationId?: string; replaceReplyId?: string; recovery?: Msg["deliveryRoute"] },
   ): Promise<string | null> {
-    if (accountPending || turnInFlight.current || turnOwner.current !== draftOwner) return null;
+    if (accountPending || !selectionLoaded || turnInFlight.current || turnOwner.current !== draftOwner) return null;
     if (options?.request && !options.knownUnsent) {
       await reconcileSend(chat.id, options.request.id);
       return null;
@@ -3676,7 +3685,7 @@ ${message.content}`;
   }
 
   async function deliverPlanned(chat: Chat, full: string, source: Workspace, images: ImageAttachment[]): Promise<boolean> {
-    if (turnOwner.current !== draftOwner) return false;
+    if (!selectionLoaded || turnOwner.current !== draftOwner) return false;
     deliverStoredUser.current = false;
     const bot = routeForBotChat(chat, { provider: providerChoice, modelTier });
     const primary = bot.fromBot ? (isLogicRouteId(bot.provider) ? bot.provider : null) : logicRoute ?? (isLogicRouteId(providerChoice) ? providerChoice : null);
@@ -3708,6 +3717,7 @@ ${message.content}`;
   }
 
   async function sendCommand() {
+    if (!selectionLoaded) { setNotice("Loading your model selection. Your draft is ready to send when it finishes."); return; }
     if (busy || turnInFlight.current) return;
     const text = draft.trim();
     const images = snapshotImages(pendingImages);
@@ -3968,6 +3978,7 @@ ${message.content}`;
   }
 
   async function sendInChat(hold = false) {
+    if (!selectionLoaded) { setNotice("Loading your model selection. Your draft is ready to send when it finishes."); return; }
     if (wsRef.current.halted) { setError("Emergency stop is on."); return; }
     if (hold || busy || turnInFlight.current) {
       const text = draft.trim();
@@ -4778,9 +4789,9 @@ ${message.content}`;
 
   async function searchConnectedNotion(query: string) {
     if (!query || wsRef.current.halted || turnOwner.current !== draftOwner) return;
-    const request = ++notionSearchRequest.current;
+    const request = ++notionSearchRequest.current.settings;
     const epoch = notionEpoch.current;
-    const current = () => request === notionSearchRequest.current && epoch === notionEpoch.current && turnOwner.current === draftOwner;
+    const current = () => request === notionSearchRequest.current.settings && epoch === notionEpoch.current && turnOwner.current === draftOwner;
     let message: string;
     try {
       const result = await notionCommand({ data: { text: `Search my Notion for ${query}`, confirmed: false, pageId: null } });
@@ -5075,7 +5086,7 @@ ${message.content}`;
         ? `Fix only the files named here. ${rest}`.trim()
         : `Do this in the hosted workspace and report what changed. ${rest || text}`.trim();
     sessionStorage.setItem(`adrian-build-draft.${draftOwner || "signed-out"}`, task);
-    sessionStorage.setItem(`adrian-human-return.${draftOwner || "signed-out"}`, id);
+    sessionStorage.setItem(`adrian-build-task-source.${draftOwner || "signed-out"}`, id);
     if (command === "/fix" || command === "/run" || command === "/test") sessionStorage.setItem(`adrian-build-mode.${draftOwner || "signed-out"}`, "auto");
     setWs((prev) => appendHumanResult(prev, id, text, "Handed to Build. File changes happen only after you press Run build. This thread stays here."));
     setView("build");
@@ -6356,7 +6367,7 @@ ${message.content}`;
   }
 
   return (
-    <div id="mind-workspace" data-workspace-ready={ready ? "true" : "false"} className="shell flex h-dvh flex-col bg-bg text-fg md:flex-row" data-view={view} data-search={paletteOpen ? "open" : "closed"}>
+    <div id="mind-workspace" tabIndex={-1} data-workspace-ready={ready ? "true" : "false"} className="shell flex h-dvh flex-col bg-bg text-fg md:flex-row" data-view={view} data-search={paletteOpen ? "open" : "closed"}>
       <ChatBits key={account?.id ?? "guest"} panel={bitsPanel} chats={ws.chats.filter(chat => !chat.archived && !chat.temporary).map(chat => ({ id: chat.id, title: shownChatTitle(chat) }))} onActivate={(id) => {
         if (!account) { window.location.assign("/login?next=" + encodeURIComponent("?section=chat")); return; }
         if (id && ws.chats.some(chat => chat.id === id && !chat.archived)) setActiveId(id);
@@ -6371,11 +6382,11 @@ ${message.content}`;
         if (!result.ok || !payload.ok || !payload.images?.[0]?.dataUrl) throw new Error(payload.error || "The image provider returned no companion.");
         return payload.images[0].dataUrl;
       }} />
-      {notionSelection ? <Overlay labelledBy="notion-choice-title" onDismiss={() => setNotionSelection(null)}>
+      {notionSelection ? <Overlay labelledBy="notion-choice-title" onDismiss={dismissNotionSelection}>
         <h2 id="notion-choice-title" className="text-lg font-semibold">Choose the Notion page</h2>
         <p className="mt-2 text-sm text-muted">Workspace: {notionSelection.workspaceId}. Select the exact destination. Selecting a page does not approve a write.</p>
-        <ul className="mt-3 max-h-80 overflow-auto space-y-2">{notionSelection.pages.map((page) => <li key={page.id}><button type="button" className="min-h-11 w-full rounded-panel border border-line p-3 text-left" onClick={() => { const choice = notionSelection; setNotionSelection(null); void askNotion(choice.chat, choice.text, false, page.id, choice.workspaceId); }}><strong>{page.title}</strong><span className="block break-all text-xs text-muted">{page.url}</span></button></li>)}</ul>
-        <div className="mt-4 flex gap-3"><button type="button" className="min-h-11 rounded-panel border border-line px-4" onClick={() => setNotionSelection(null)}>Cancel</button>{notionSelection.cursor ? <button type="button" className="min-h-11 rounded-panel border border-line px-4" disabled={busy} onClick={() => void askNotion(notionSelection.chat, notionSelection.text, false, null, notionSelection.workspaceId, undefined, notionSelection.cursor)}>More results</button> : null}</div>
+        <ul className="mt-3 max-h-80 overflow-auto space-y-2">{notionSelection.pages.map((page) => <li key={page.id}><button type="button" disabled={busy} className="min-h-11 w-full rounded-panel border border-line p-3 text-left" onClick={() => { const choice = notionSelection; dismissNotionSelection(); void askNotion(choice.chat, choice.text, false, page.id, choice.workspaceId); }}><strong>{page.title}</strong><span className="block break-all text-xs text-muted">{page.url}</span></button></li>)}</ul>
+        <div className="mt-4 flex gap-3"><button type="button" className="min-h-11 rounded-panel border border-line px-4" onClick={dismissNotionSelection}>Cancel</button>{notionSelection.cursor ? <button type="button" className="min-h-11 rounded-panel border border-line px-4" disabled={busy} onClick={() => void askNotion(notionSelection.chat, notionSelection.text, false, null, notionSelection.workspaceId, undefined, notionSelection.cursor)}>More results</button> : null}</div>
       </Overlay> : null}
       <MenuMotion />
       {navOpen ? <button type="button" className="fixed inset-0 md:hidden" aria-label="Close menu" style={{ zIndex: 150, background: "transparent" }} onClick={() => setNavOpen(false)} /> : null}
@@ -6483,6 +6494,7 @@ ${message.content}`;
           </Link>
           <Link
             to="/social"
+            search={{ workspace: embeddedWorkspaceSearch(router.state.location.searchStr) }}
             data-testid="nav-route-social"
             aria-label="Social"
             className={`nav-item flex min-h-11 items-center gap-3 rounded-2xl px-3 text-sm font-medium text-muted ${railCollapsed ? "justify-center" : ""}`}
@@ -6493,6 +6505,7 @@ ${message.content}`;
           </Link>
           <Link
             to="/gpt-wrapper"
+            search={{ workspace: embeddedWorkspaceSearch(router.state.location.searchStr) }}
             data-testid="nav-route-gpt-wrapper"
             aria-label="GPT wrapper"
             className={`nav-item flex min-h-11 items-center gap-3 rounded-2xl px-3 text-sm font-medium text-muted ${railCollapsed ? "justify-center" : ""}`}
@@ -7737,6 +7750,8 @@ ${message.content}`;
               onStopSpeak={interruptSpeakPlayback}
               onOpenSpeak={openSpeakStage}
               onOpenBuild={(text) => {
+                sessionStorage.removeItem(`adrian-build-task-source.${draftOwner || "signed-out"}`);
+                sessionStorage.removeItem(`adrian-build-mode.${draftOwner || "signed-out"}`);
                 sessionStorage.setItem(`adrian-build-draft.${draftOwner || "signed-out"}`, text);
                 setView("build");
                 setNavOpen(false);
@@ -8238,7 +8253,7 @@ ${message.content}`;
                     setFailure((active) => active?.auditId === issue.id ? null : active);
                   }
                   setNotionPreview(null);
-                  setNotionSelection(null);
+                  dismissNotionSelection();
                   setNotion({ state: "disconnected", detail: "Notion disconnected." });
                   setNotionQuery("");
                   setNotionPages([]);
@@ -8397,7 +8412,7 @@ ${message.content}`;
               onNew={openHumanCode}
               onOpen={(id) => { setActiveId(id); setView("code"); }}
               onSend={(id, text, image) => sendHumanCode(id, text, image)}
-              onBuild={(text) => { if (activeId) sessionStorage.setItem(`adrian-human-return.${draftOwner || "signed-out"}`, activeId); sessionStorage.setItem(`adrian-build-draft.${draftOwner || "signed-out"}`, text); setView("build"); setNavOpen(false); }}
+              onBuild={(text) => { if (activeId) sessionStorage.setItem(`adrian-build-task-source.${draftOwner || "signed-out"}`, activeId); else sessionStorage.removeItem(`adrian-build-task-source.${draftOwner || "signed-out"}`); sessionStorage.removeItem(`adrian-build-mode.${draftOwner || "signed-out"}`); sessionStorage.setItem(`adrian-build-draft.${draftOwner || "signed-out"}`, text); setView("build"); setNavOpen(false); }}
               halted={ws.halted}
             />
           )}

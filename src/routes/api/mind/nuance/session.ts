@@ -34,12 +34,14 @@ export const Route = createFileRoute("/api/mind/nuance/session")({
         const user = await caller(request);
         if (user instanceof Response) return user;
         const configured = await readOwnerNuanceKey(user) !== null;
-        const active = configured ? await listSavedActiveConversations(user) : { ok: true as const, ids: [] };
+        const active = configured ? await listSavedActiveConversations(user) : null;
         return reply({
           ok: true,
           configured,
           personas: NUANCE_PERSONAS,
-          active: active.ok ? active.ids.length : 0,
+          active: active?.ok ? active.ids.length : null,
+          providerState: !active ? "unconfigured" : active.ok ? "verified" : active.status === 401 || active.status === 403 ? "rejected" : "unavailable",
+          providerDetail: active && !active.ok ? active.error : null,
         });
       },
       POST: async ({ request }) => {
