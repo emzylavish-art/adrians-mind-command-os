@@ -14,7 +14,10 @@ const browser = await chromium.launch({ executablePath: process.env.BROWSER_EXEC
 report.browserVersion = browser.version();
 const at = "2026-01-01T00:00:00.000Z";
 const chat = (id, count) => ({ id, title: `Synthetic conversation ${id}`, memory: "off", temporary: false, autonomy: "ask", projectId: null, retrievalLog: [], messages: Array.from({ length: count }, (_, index) => ({ id: `${id}-${index}`, role: index % 2 ? "assistant" : "user", content: `Fixture ${id} message ${index}. ` + "This is synthetic text for reading-position and layout verification. ".repeat(7), at, ...(index % 2 ? { provider: "fixture", model: "synthetic-model" } : {}) })) });
-const workspace = { ...VISUAL_FIXTURES["chat-interrupted"].workspace(), chats: [chat("long-a", 180), chat("long-b", 30)] };
+const longHistory = 250;
+const initialHistory = 100;
+const lastLongMessage = `#message-long-a-${longHistory - 1}`;
+const workspace = { ...VISUAL_FIXTURES["chat-interrupted"].workspace(), chats: [chat("long-a", longHistory), chat("long-b", 30)] };
 const observations = {};
 async function observedState(page) {
   return page.evaluate(() => {
@@ -70,10 +73,10 @@ try {
   });
   const page = await context.newPage();
   await page.goto(origin + "/?section=chat&chat=long-a", { waitUntil: "domcontentloaded" });
-  await page.locator("#message-long-a-179").waitFor();
+  await page.locator(lastLongMessage).waitFor();
   const pane = page.locator("#chat-thread > section > .overflow-auto");
   await check(page, "long-chat-reading-position", async () => {
-    assert.equal(await page.locator("article.turn").count(), 80);
+    assert.equal(await page.locator("article.turn").count(), initialHistory);
     await pane.hover();
     await page.mouse.wheel(0, -5000);
     await page.getByRole("button", { name: "Jump to latest", exact: true }).waitFor();
@@ -81,18 +84,19 @@ try {
     observations["long-chat-reading-position"] = { expectedTop: before, before: await observedState(page) };
     await navigate(page, "/?section=chat&chat=long-b", "chat"); await page.locator("#message-long-b-29").waitFor();
     observations["long-chat-reading-position"].chatB = await observedState(page);
-    await navigate(page, "/?section=chat&chat=long-a", "chat"); await page.locator("#message-long-a-179").waitFor();
+    await navigate(page, "/?section=chat&chat=long-a", "chat"); await page.locator(lastLongMessage).waitFor();
     await page.waitForFunction((expected) => Math.abs(document.querySelector("#chat-thread > section > .overflow-auto").scrollTop - expected) < 3, before, { timeout: 5000 });
-    return { initialRenderedMessages: 80, totalMessages: 180, restoredScrollTop: before, navigation: "same-document history route changes" };
+    return { initialRenderedMessages: initialHistory, totalMessages: longHistory, restoredScrollTop: before, navigation: "same-document history route changes" };
   });
   await check(page, "earlier-and-reveal-message", async () => {
     await pane.evaluate((element) => { element.scrollTop = 0; });
-    await page.getByRole("button", { name: /Show 80 earlier messages/ }).click();
-    await page.waitForFunction(() => document.querySelectorAll("article.turn").length === 160);
+    await page.getByRole("button", { name: `Load earlier messages (${longHistory - initialHistory})`, exact: true }).click();
+    await page.waitForFunction((expected) => document.querySelectorAll("article.turn").length === expected, initialHistory * 2);
+    assert.equal(await page.locator("#message-long-a-0").count(), 0, "The oldest message must still be outside the render window before reveal.");
     await page.evaluate(() => dispatchEvent(new CustomEvent("adrian:reveal-message", { detail: "long-a-0" })));
     await page.locator("#message-long-a-0").waitFor();
     await page.waitForFunction(() => document.activeElement?.id === "message-long-a-0", undefined, { timeout: 5000 });
-    return { afterLoadEarlier: 160, revealedOldestMessage: true };
+    return { afterLoadEarlier: initialHistory * 2, revealedOldestMessage: true };
   });
   await check(page, "stream-to-markdown-tail", async () => {
     await page.getByRole("button", { name: "Jump to latest", exact: true }).click();
@@ -135,7 +139,7 @@ try {
   const mobile = await browser.newContext({ viewport: { width: 390, height: 844 }, isMobile: true, serviceWorkers: "block" });
   const mobileTransport = await installVisualFixture(mobile, origin, "chat-interrupted", { workspace });
   // A seeded message exists only after client hydration; the SSR home alone is not an interaction-ready signal.
-  const phone = await mobile.newPage(); await phone.goto(origin + "/?section=chat&chat=long-a", { waitUntil: "domcontentloaded" }); await phone.locator("#message-long-a-179").waitFor();
+  const phone = await mobile.newPage(); await phone.goto(origin + "/?section=chat&chat=long-a", { waitUntil: "domcontentloaded" }); await phone.locator(lastLongMessage).waitFor();
   await navigate(phone, "/?section=command", "command"); await phone.locator("#command-home").waitFor();
   await check(phone, "mobile-drawer-current-focus", async () => {
     const open = phone.getByRole("button", { name: "Open menu", exact: true }); await open.click();

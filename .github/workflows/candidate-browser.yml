@@ -35,3 +35,33 @@ jobs:
             ${{ runner.temp }}/browser-fixtures/*.json
             ${{ runner.temp }}/browser-fixtures/server.log
           if-no-files-found: error
+  browser-transitions:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24.11.1'
+          cache: npm
+      - run: npm ci
+      - name: Run isolated Chromium transitions
+        run: |
+          export BROWSER_EXECUTABLE_PATH="$(command -v google-chrome)"
+          test -x "$BROWSER_EXECUTABLE_PATH"
+          node scripts/visual/run-c3-fixture.mjs
+        env:
+          FIXTURE_SCRIPT: scripts/visual/transition-fixtures.mjs
+          VISUAL_ARTIFACT_DIR: ${{ runner.temp }}/browser-transitions
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: chromium-transitions-${{ github.event.pull_request.head.sha || github.sha }}
+          path: |
+            ${{ runner.temp }}/browser-transitions/*.png
+            ${{ runner.temp }}/browser-transitions/*.json
+            ${{ runner.temp }}/browser-transitions/server.log
+          if-no-files-found: error
