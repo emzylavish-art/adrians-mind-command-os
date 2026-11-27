@@ -1,0 +1,47 @@
+[
+  {
+    "command": "python -m json.tool team/manifest.json",
+    "exit_code": 0,
+    "output": ""
+  },
+  {
+    "command": "python -m json.tool tools/registry.json",
+    "exit_code": 0,
+    "output": ""
+  },
+  {
+    "command": "python -m json.tool tools/bootstrap/upstream-sources.json",
+    "exit_code": 0,
+    "output": ""
+  },
+  {
+    "command": "python tools/bootstrap/validate_bootstrap.py",
+    "exit_code": 0,
+    "output": "Bootstrap metadata validation passed.\n"
+  },
+  {
+    "command": "python team/validate_manifest.py",
+    "exit_code": 0,
+    "output": "{\n  \"status\": \"ready\",\n  \"result\": [\n    \"Validated 14 agents, 17 callable tool declarations, 29 registry entries, and 17 upstream source checkouts.\"\n  ]\n}\n"
+  },
+  {
+    "command": "python -m unittest discover -s tools/rea -p test_*.py",
+    "exit_code": 0,
+    "output": "..\n----------------------------------------------------------------------\nRan 2 tests in 0.001s\n\nOK\n"
+  },
+  {
+    "command": "python -m unittest discover -s tools/security_review -p test_*.py",
+    "exit_code": 0,
+    "output": "...\n----------------------------------------------------------------------\nRan 3 tests in 0.001s\n\nOK\n"
+  },
+  {
+    "command": "python -m unittest discover -s tools/knowledge -p test_*.py",
+    "exit_code": 0,
+    "output": "...\n----------------------------------------------------------------------\nRan 3 tests in 0.001s\n\nOK\n"
+  },
+  {
+    "command": "python -m unittest discover -s team -p test_*.py",
+    "exit_code": 0,
+    "output": ".........................................................................................\n----------------------------------------------------------------------\nRan 89 tests in 4.340s\n\nOK\n"
+  }
+]

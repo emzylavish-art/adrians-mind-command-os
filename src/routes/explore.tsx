@@ -1,25 +1,31 @@
+import { AccountPreferencesProvider } from "@/components/mind/account-preferences-context";
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import { PersonaDirectoryView } from "@/components/mind/persona-directory";
-import { emptyWorkspace, loadWorkspace } from "@/lib/mind/workspace";
+import { emptyWorkspace, loadWorkspaceForAccount } from "@/lib/mind/workspace";
 import type { Workspace } from "@/lib/mind/types";
+import { useCurrentUserState } from "@/lib/auth/use-current-user";
 
 export const Route = createFileRoute("/explore")({ component: ExplorePage });
 
 function ExplorePage() {
+  const { user, isPending } = useCurrentUserState();
+  const ownerId = user?.id ?? null;
+  const verifiedEmail = user?.emailVerified ? user.primaryEmail : null;
   const [ws, setWs] = useState<Workspace>(emptyWorkspace);
-  const [ready, setReady] = useState(false);
+  const [loadedOwner, setLoadedOwner] = useState<string | null>(null);
 
   useEffect(() => {
+    if (!ownerId) { setWs(emptyWorkspace()); setLoadedOwner(null); return; }
     try {
-      setWs(loadWorkspace(localStorage));
+      setWs(loadWorkspaceForAccount(localStorage, ownerId, verifiedEmail));
     } catch {
       setWs(emptyWorkspace());
     }
-    setReady(true);
-  }, []);
+    setLoadedOwner(ownerId);
+  }, [ownerId, verifiedEmail]);
 
-  if (!ready) {
+  if (isPending || !ownerId || loadedOwner !== ownerId) {
     return (
       <main className="min-h-screen bg-bg p-6 text-fg">
           <Link
@@ -28,7 +34,7 @@ function ExplorePage() {
         >
           Back to Chat
         </Link>
-        <p className="mt-4 text-sm text-muted">Loading local workspace…</p>
+        <p className="mt-4 text-sm text-muted">{!isPending && !ownerId ? "Sign in from Chat to open your account’s personas." : "Loading your local workspace…"}</p>
       </main>
     );
   }
@@ -43,10 +49,13 @@ function ExplorePage() {
             <p className="text-sm text-muted">Filter local templates, save one, then open it in Chat. Nothing here starts a remote bot.</p>
           </div>
         </div>
+        <AccountPreferencesProvider ownerId={ownerId}>
         <PersonaDirectoryView
           ws={ws}
           setWs={setWs}
+          ownerId={ownerId}
         />
+        </AccountPreferencesProvider>
       </div>
     </main>
   );

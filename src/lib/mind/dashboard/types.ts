@@ -43,6 +43,20 @@ export type BotNode = {
   commits: string[];
   notes: string;
   reason: string;
+  /** Development locks and Git activity do not establish runtime readiness. */
+  healthBasis?: "development";
+  runtimeHealth?: "unverified";
+};
+
+export type TelemetryReceipt = {
+  outcome: "available" | "empty" | "partial" | "unavailable" | "failed" | "private";
+  basis: "live" | "snapshot" | "derived" | "private";
+  collectedAt: string;
+  updatedAt: string | null;
+  freshness: "current" | "historical" | "unknown" | "not_applicable";
+  count: number | null;
+  /** Fixed diagnostic code, never the exception message or a filesystem path. */
+  errorCode?: "collection_failed" | "unavailable" | "partial_read" | "invalid_records" | "private_source";
 };
 
 export type GitCommit = {
@@ -93,6 +107,7 @@ export type DashboardStatus = {
     /** Env override rejected by the path allowlist (fallback used). */
     locksRejected?: string;
     repoRejected?: string;
+    telemetry?: Record<string, TelemetryReceipt>;
   };
   /** Lane constellations for the universe view */
   constellations: import("./constellations.ts").Constellation[];

@@ -1,0 +1,4186 @@
+{
+  "schemaVersion": 1,
+  "revision": "b17e90c5728f7f1a9f303f703fcf073cbdd2175e",
+  "command": "env -u DATABASE_URL -u POSTGRES_URL TMPDIR=<private test directory> npm test",
+  "exitCode": 0,
+  "regressionFiles": 416,
+  "passedFiles": 416,
+  "failedFiles": [],
+  "totals": {
+    "tests": 2299,
+    "pass": 2295,
+    "fail": 0,
+    "skipped": 4,
+    "cancelled": 0,
+    "todo": 0
+  },
+  "logSha256": "2cfd020ce9aa512e468f096988e7d0f5a5c27a60389f1c2b2e1cc6d250975157",
+  "files": [
+    {
+      "file": "scripts/agent/file-recovery.test.mjs",
+      "tests": 2,
+      "pass": 2,
+      "fail": 0,
+      "skipped": 0,
+      "cancelled": 0,
+      "todo": 0,
+      "skips": []
+    },
+    {
+      "file": "scripts/brand-check.test.mjs",
+      "tests": 29,
+      "pass": 26,
+      "fail": 0,
+      "skipped": 3,
+      "cancelled": 0,
+      "todo": 0,
+      "skips": [
+        "SKILL.md and AGENTS.md name the marker path and bound this script uses # skipping: gitignored .grok/skills/og is absent in this worktree",
+        "the sections that own the brand-task prohibition never affirm a wait # skipping: gitignored .grok/skills/og is absent in this worktree",
+        "SKILL.md tells the pass to self-check with the flag this CLI accepts # skipping: gitignored .grok/skills/og is absent in this worktree"
+      ]
+    },
+    {
+      "file": "scripts/browser-smoke-verdict.test.mjs",
+      "tests": 40,
+      "pass": 40,
+      "fail": 0,
+      "skipped": 0,
+      "cancelled": 0,
+      "todo": 0,
+      "skips": []
+    },
+    {
+      "file": "scripts/c1-migration-upgrade.test.mjs",
+      "tests": 1,
+      "pass": 1,
+      "fail": 0,
+      "skipped": 0,
+      "cancelled": 0,
+      "todo": 0,
+      "skips": []
+    },
+    {
+      "file": "scripts/check-auth-invariant.test.mjs",
+      "tests": 11,
+      "pass": 11,
+      "fail": 0,
+      "skipped": 0,
+      "cancelled": 0,
+      "todo": 0,
+      "skips": []
+    },
+    {
+      "file": "scripts/dashboard-owner-auth.test.mjs",
+      "tests": 2,
+      "pass": 2,
+      "fail": 0,
+      "skipped": 0,
+      "cancelled": 0,
+      "todo": 0,
+      "skips": []
+    },
+    {
+      "file": "scripts/dashboard-status-auth.test.mjs",
+      "tests": 3,
+      "pass": 3,
+      "fail": 0,
+      "skipped": 0,
+      "cancelled": 0,
+      "todo": 0,
+      "skips": []
+    },
+    {
+      "file": "scripts/dashboard/status-auth.test.mjs",
+      "tests": 3,
+      "pass": 3,
+      "fail": 0,
+      "skipped": 0,
+      "cancelled": 0,
+      "todo": 0,
+      "skips": []
+    },
+    {
+      "file": "scripts/database-url.test.mjs",
+      "tests": 3,
+      "pass": 3,
+      "fail": 0,
+      "skipped": 0,
+      "cancelled": 0,
+      "todo": 0,
+      "skips": []
+    },
+    {
+      "file": "scripts/desktop/full-package.test.mjs",
+      "tests": 2,
+      "pass": 2,
+      "fail": 0,
+      "skipped": 0,
+      "cancelled": 0,
+      "todo": 0,
+      "skips": []
+    },
+    {
+      "file": "scripts/grok-pwa-plugin.test.mjs",
+      "tests": 49,
+      "pass": 49,
+      "fail": 0,
+      "skipped": 0,
+      "cancelled": 0,
+      "todo": 0,
+      "skips": []
+    },
+    {
+      "file": "scripts/kimi-schema.test.mjs",
+      "tests": 1,
+      "pass": 1,
+      "fail": 0,
+      "skipped": 0,
+      "cancelled": 0,
+      "todo": 0,
+      "skips": []
+    },
+    {
+      "file": "scripts/migration-plan.test.mjs",
+      "tests": 7,
+      "pass": 7,
+      "fail": 0,
+      "skipped": 0,
+      "cancelled": 0,
+      "todo": 0,
+      "skips": []
+    },
+    {
+      "file": "scripts/mind-browser.test.mjs",
+      "tests": 2,
+      "pass": 2,
+      "fail": 0,
+      "skipped": 0,
+      "cancelled": 0,
+      "todo": 0,
+      "skips": []
+    },
+    {
+      "file": "scripts/mind-endpoints.test.mjs",
+      "tests": 1,
+      "pass": 1,
+      "fail": 0,
+      "skipped": 0,
+      "cancelled": 0,
+      "todo": 0,
+      "skips": []
+    },
+    {
+      "file": "scripts/mind-worker.test.mjs",
+      "tests": 1,
+      "pass": 1,
+      "fail": 0,
+      "skipped": 0,
+      "cancelled": 0,
+      "todo": 0,
+      "skips": []
+    },
+    {
+      "file": "scripts/navigation-drawer.test.mjs",
+      "tests": 7,
+      "pass": 7,
+      "fail": 0,
+      "skipped": 0,
+      "cancelled": 0,
+      "todo": 0,
+      "skips": []
+    },
+    {
+      "file": "scripts/postgres-ssl.test.mjs",
+      "tests": 2,
+      "pass": 2,
+      "fail": 0,
+      "skipped": 0,
+      "cancelled": 0,
+      "todo": 0,
+      "skips": []
+    },
+    {
+      "file": "scripts/preview.test.mjs",
+      "tests": 20,
+      "pass": 20,
+      "fail": 0,
+      "skipped": 0,
+      "cancelled": 0,
+      "todo": 0,
+      "skips": []
+    },
+    {
+      "file": "scripts/security/endpoint-inventory.test.mjs",
+      "tests": 4,
+      "pass": 4,
+      "fail": 0,
+      "skipped": 0,
+      "cancelled": 0,
+      "todo": 0,
+      "skips": []
+    },
+    {
+      "file": "scripts/sign-out-plan.test.mjs",
+      "tests": 18,
+      "pass": 18,
+      "fail": 0,
+      "skipped": 0,
+      "cancelled": 0,
+      "todo": 0,
+      "skips": []
+    },
+    {
+      "file": "scripts/signup-route.test.mjs",
+      "tests": 3,
+      "pass": 3,
+      "fail": 0,
+      "skipped": 0,
+      "cancelled": 0,
+      "todo": 0,
+      "skips": []
+    },
+    {
+      "file": "scripts/test-inventory.test.mjs",
+      "tests": 1,
+      "pass": 1,
+      "fail": 0,
+      "skipped": 0,
+      "cancelled": 0,
+      "todo": 0,
+      "skips": []
+    },
+    {
+      "file": "scripts/vercel-migration-contract.test.mjs",
+      "tests": 5,
+      "pass": 5,
+      "fail": 0,
+      "skipped": 0,
+      "cancelled": 0,
+      "todo": 0,
+      "skips": []
+    },
+    {
+      "file": "scripts/verification/evidence.test.mjs",
+      "tests": 4,
+      "pass": 4,
+      "fail": 0,
+      "skipped": 0,
+      "cancelled": 0,
+      "todo": 0,
+      "skips": []
+    },
+    {
+      "file": "scripts/verify-grok.test.mjs",
+      "tests": 1,
+      "pass": 1,
+      "fail": 0,
+      "skipped": 0,
+      "cancelled": 0,
+      "todo": 0,
+      "skips": []
+    },
+    {
+      "file": "scripts/verify-xai.test.mjs",
+      "tests": 2,
+      "pass": 2,
+      "fail": 0,
+      "skipped": 0,
+      "cancelled": 0,
+      "todo": 0,
+      "skips": []
+    },
+    {
+      "file": "scripts/visual/fixture-states.test.mjs",
+      "tests": 2,
+      "pass": 2,
+      "fail": 0,
+      "skipped": 0,
+      "cancelled": 0,
+      "todo": 0,
+      "skips": []
+    },
+    {
+      "file": "scripts/visual/policy.test.mjs",
+      "tests": 3,
+      "pass": 3,
+      "fail": 0,
+      "skipped": 0,
+      "cancelled": 0,
+      "todo": 0,
+      "skips": []
+    },
+    {
+      "file": "scripts/with-app-env.test.mjs",
+      "tests": 12,
+      "pass": 12,
+      "fail": 0,
+      "skipped": 0,
+      "cancelled": 0,
+      "todo": 0,
+      "skips": []
+    },
+    {
+      "file": "scripts/write-atomic.test.mjs",
+      "tests": 11,
+      "pass": 10,
+      "fail": 0,
+      "skipped": 1,
+      "cancelled": 0,
+      "todo": 0,
+      "skips": [
+        "every hand-over the og skill prints is one this script accepts # skipping: gitignored .grok/skills/og is absent in this worktree"
+      ]
+    },
+    {
+      "file": "src/components/mind/composer-turn-host.test.ts",
+      "tests": 2,
+      "pass": 2,
+      "fail": 0,
+      "skipped": 0,
+      "cancelled": 0,
+      "todo": 0,
+      "skips": []
+    },
+    {
+      "file": "src/components/mind/dashboard-3d/atmosphere/hacker-dispose.test.ts",
+      "tests": 2,
+      "pass": 2,
+      "fail": 0,
+      "skipped": 0,
+      "cancelled": 0,
+      "todo": 0,
+      "skips": []
+    },
+    {
+      "file": "src/components/mind/dashboard-3d/atmosphere/health-tone.test.ts",
+      "tests": 5,
+      "pass": 5,
+      "fail": 0,
+      "skipped": 0,
+      "cancelled": 0,
+      "todo": 0,
+      "skips": []
+    },
+    {
+      "file": "src/components/mind/dashboard-3d/atmosphere/missing-health.test.ts",
+      "tests": 5,
+      "pass": 5,
+      "fail": 0,
+      "skipped": 0,
+      "cancelled": 0,
+      "todo": 0,
+      "skips": []
+    },
+    {
+      "file": "src/components/mind/dashboard-3d/materials/paper-grain.test.ts",
+      "tests": 21,
+      "pass": 21,
+      "fail": 0,
+      "skipped": 0,
+      "cancelled": 0,
+      "todo": 0,
+      "skips": []
+    },
+    {
+      "file": "src/components/mind/dashboard-3d/mobile-structure-wired.test.ts",
+      "tests": 5,
+      "pass": 5,
+      "fail": 0,
+      "skipped": 0,
+      "cancelled": 0,
+      "todo": 0,
+      "skips": []
+    },
+    {
+      "file": "src/components/mind/dashboard-3d/motion/ease.test.ts",
+      "tests": 6,
+      "pass": 6,
+      "fail": 0,
+      "skipped": 0,
+      "cancelled": 0,
+      "todo": 0,
+      "skips": []
+    },
+    {
+      "file": "src/components/mind/dashboard-3d/motion/motion-clock.test.ts",
+      "tests": 4,
+      "pass": 4,
+      "fail": 0,
+      "skipped": 0,
+      "cancelled": 0,
+      "todo": 0,
+      "skips": []
+    },
+    {
+      "file": "src/components/mind/dashboard-3d/motion/orbit-drift.test.ts",
+      "tests": 2,
+      "pass": 2,
+      "fail": 0,
+      "skipped": 0,
+      "cancelled": 0,
+      "todo": 0,
+      "skips": []
+    },
+    {
+      "file": "src/components/mind/dashboard-3d/motion/reduced-motion.test.ts",
+      "tests": 7,
+      "pass": 7,
+      "fail": 0,
+      "skipped": 0,
+      "cancelled": 0,
+      "todo": 0,
+      "skips": []
+    },
+    {
+      "file": "src/components/mind/dashboard-3d/motion/sanitize.test.ts",
+      "tests": 5,
+      "pass": 5,
+      "fail": 0,
+      "skipped": 0,
+      "cancelled": 0,
+      "todo": 0,
+      "skips": []
+    },
+    {
+      "file": "src/components/mind/dashboard-3d/motion/star-pulse.test.ts",
+      "tests": 4,
+      "pass": 4,
+      "fail": 0,
+      "skipped": 0,
+      "cancelled": 0,
+      "todo": 0,
+      "skips": []
+    },
+    {
+      "file": "src/components/mind/dashboard-3d/particles/comet-tail.test.ts",
+      "tests": 5,
+      "pass": 5,
+      "fail": 0,
+      "skipped": 0,
+      "cancelled": 0,
+      "todo": 0,
+      "skips": []
+    },
+    {
+      "file": "src/components/mind/dashboard-3d/particles/commit-comets.test.ts",
+      "tests": 2,
+      "pass": 2,
+      "fail": 0,
+      "skipped": 0,
+      "cancelled": 0,
+      "todo": 0,
+      "skips": []
+    },
+    {
+      "file": "src/components/mind/dashboard-3d/particles/dust-field.test.ts",
+      "tests": 3,
+      "pass": 3,
+      "fail": 0,
+      "skipped": 0,
+      "cancelled": 0,
+      "todo": 0,
+      "skips": []
+    },
+    {
+      "file": "src/components/mind/dashboard-3d/particles/hacker-pass-c3.test.ts",
+      "tests": 6,
+      "pass": 6,
+      "fail": 0,
+      "skipped": 0,
+      "cancelled": 0,
+      "todo": 0,
+      "skips": []
+    },
+    {
+      "file": "src/components/mind/dashboard-3d/particles/hacker-pass.test.ts",
+      "tests": 31,
+      "pass": 31,
+      "fail": 0,
+      "skipped": 0,
+      "cancelled": 0,
+      "todo": 0,
+      "skips": []
+    },
+    {
+      "file": "src/components/mind/dashboard-3d/particles/motion-lod.test.ts",
+      "tests": 6,
+      "pass": 6,
+      "fail": 0,
+      "skipped": 0,
+      "cancelled": 0,
+      "todo": 0,
+      "skips": []
+    },
+    {
+      "file": "src/components/mind/dashboard-3d/postfx/bloom-hdr-chain.test.ts",
+      "tests": 3,
+      "pass": 3,
+      "fail": 0,
+      "skipped": 0,
+      "cancelled": 0,
+      "todo": 0,
+      "skips": []
+    },
+    {
+      "file": "src/components/mind/dashboard-3d/postfx/bloom-policy.test.ts",
+      "tests": 3,
+      "pass": 3,
+      "fail": 0,
+      "skipped": 0,
+      "cancelled": 0,
+      "todo": 0,
+      "skips": []
+    },
+    {
+      "file": "src/components/mind/dashboard-3d/postfx/bloom-tuning.test.ts",
+      "tests": 3,
+      "pass": 3,
+      "fail": 0,
+      "skipped": 0,
+      "cancelled": 0,
+      "todo": 0,
+      "skips": []
+    },
+    {
+      "file": "src/components/mind/dashboard-3d/postfx/color-grade.test.ts",
+      "tests": 3,
+      "pass": 3,
+      "fail": 0,
+      "skipped": 0,
+      "cancelled": 0,
+      "todo": 0,
+      "skips": []
+    },
+    {
+      "file": "src/components/mind/dashboard-3d/postfx/context-loss.test.ts",
+      "tests": 3,
+      "pass": 3,
+      "fail": 0,
+      "skipped": 0,
+      "cancelled": 0,
+      "todo": 0,
+      "skips": []
+    },
+    {
+      "file": "src/components/mind/dashboard-3d/postfx/exposure-ride.test.ts",
+      "tests": 6,
+      "pass": 6,
+      "fail": 0,
+      "skipped": 0,
+      "cancelled": 0,
+      "todo": 0,
+      "skips": []
+    },
+    {
+      "file": "src/components/mind/dashboard-3d/postfx/god-rays.test.ts",
+      "tests": 4,
+      "pass": 4,
+      "fail": 0,
+      "skipped": 0,
+      "cancelled": 0,
+      "todo": 0,
+      "skips": []
+    },
+    {
+      "file": "src/components/mind/dashboard-3d/postfx/hacker-dispose.test.ts",
+      "tests": 3,
+      "pass": 3,
+      "fail": 0,
+      "skipped": 0,
+      "cancelled": 0,
+      "todo": 0,
+      "skips": []
+    },
+    {
+      "file": "src/components/mind/incident-recovery-card.test.ts",
+      "tests": 2,
+      "pass": 2,
+      "fail": 0,
+      "skipped": 0,
+      "cancelled": 0,
+      "todo": 0,
+      "skips": []
+    },
+    {
+      "file": "src/components/mind/knowledge-settings.test.ts",
+      "tests": 3,
+      "pass": 3,
+      "fail": 0,
+      "skipped": 0,
+      "cancelled": 0,
+      "todo": 0,
+      "skips": []
+    },
+    {
+      "file": "src/components/mind/live-voice-bar/settings-popover.test.ts",
+      "tests": 2,
+      "pass": 2,
+      "fail": 0,
+      "skipped": 0,
+      "cancelled": 0,
+      "todo": 0,
+      "skips": []
+    },
+    {
+      "file": "src/components/mind/logic-route-reload.test.ts",
+      "tests": 1,
+      "pass": 1,
+      "fail": 0,
+      "skipped": 0,
+      "cancelled": 0,
+      "todo": 0,
+      "skips": []
+    },
+    {
+      "file": "src/components/mind/mcp-failure-mount.test.ts",
+      "tests": 5,
+      "pass": 5,
+      "fail": 0,
+      "skipped": 0,
+      "cancelled": 0,
+      "todo": 0,
+      "skips": []
+    },
+    {
+      "file": "src/components/mind/media/accept-image-files.test.ts",
+      "tests": 3,
+      "pass": 3,
+      "fail": 0,
+      "skipped": 0,
+      "cancelled": 0,
+      "todo": 0,
+      "skips": []
+    },
+    {
+      "file": "src/components/mind/message-rendering.test.ts",
+      "tests": 2,
+      "pass": 2,
+      "fail": 0,
+      "skipped": 0,
+      "cancelled": 0,
+      "todo": 0,
+      "skips": []
+    },
+    {
+      "file": "src/components/mind/model-tier-chip.test.ts",
+      "tests": 3,
+      "pass": 3,
+      "fail": 0,
+      "skipped": 0,
+      "cancelled": 0,
+      "todo": 0,
+      "skips": []
+    },
+    {
+      "file": "src/components/mind/motion/mono-motion-graphic.test.ts",
+      "tests": 2,
+      "pass": 2,
+      "fail": 0,
+      "skipped": 0,
+      "cancelled": 0,
+      "todo": 0,
+      "skips": []
+    },
+    {
+      "file": "src/components/mind/retained-video.test.ts",
+      "tests": 1,
+      "pass": 1,
+      "fail": 0,
+      "skipped": 0,
+      "cancelled": 0,
+      "todo": 0,
+      "skips": []
+    },
+    {
+      "file": "src/components/mind/run-evidence.test.ts",
+      "tests": 2,
+      "pass": 2,
+      "fail": 0,
+      "skipped": 0,
+      "cancelled": 0,
+      "todo": 0,
+      "skips": []
+    },
+    {
+      "file": "src/components/mind/surface-failure-host.test.ts",
+      "tests": 5,
+      "pass": 5,
+      "fail": 0,
+      "skipped": 0,
+      "cancelled": 0,
+      "todo": 0,
+      "skips": []
+    },
+    {
+      "file": "src/components/mind/view-scroll-position.test.ts",
+      "tests": 2,
+      "pass": 2,
+      "fail": 0,
+      "skipped": 0,
+      "cancelled": 0,
+      "todo": 0,
+      "skips": []
+    },
+    {
+      "file": "src/lib/app-data/app-data.test.ts",
+      "tests": 25,
+      "pass": 25,
+      "fail": 0,
+      "skipped": 0,
+      "cancelled": 0,
+      "todo": 0,
+      "skips": []
+    },
+    {
+      "file": "src/lib/app-data/readiness-schedule.test.ts",
+      "tests": 3,
+      "pass": 3,
+      "fail": 0,
+      "skipped": 0,
+      "cancelled": 0,
+      "todo": 0,
+      "skips": []
+    },
+    {
+      "file": "src/lib/auth/gate-identity.test.ts",
+      "tests": 24,
+      "pass": 24,
+      "fail": 0,
+      "skipped": 0,
+      "cancelled": 0,
+      "todo": 0,
+      "skips": []
+    },
+    {
+      "file": "src/lib/auth/identity-continuity.test.ts",
+      "tests": 1,
+      "pass": 1,
+      "fail": 0,
+      "skipped": 0,
+      "cancelled": 0,
+      "todo": 0,
+      "skips": []
+    },
+    {
+      "file": "src/lib/auth/login-providers.test.ts",
+      "tests": 15,
+      "pass": 15,
+      "fail": 0,
+      "skipped": 0,
+      "cancelled": 0,
+      "todo": 0,
+      "skips": []
+    },
+    {
+      "file": "src/lib/auth/runtime-origins.test.ts",
+      "tests": 2,
+      "pass": 2,
+      "fail": 0,
+      "skipped": 0,
+      "cancelled": 0,
+      "todo": 0,
+      "skips": []
+    },
+    {
+      "file": "src/lib/auth/session-user.test.ts",
+      "tests": 5,
+      "pass": 5,
+      "fail": 0,
+      "skipped": 0,
+      "cancelled": 0,
+      "todo": 0,
+      "skips": []
+    },
+    {
+      "file": "src/lib/auth/sign-in-gate.test.ts",
+      "tests": 3,
+      "pass": 3,
+      "fail": 0,
+      "skipped": 0,
+      "cancelled": 0,
+      "todo": 0,
+      "skips": []
+    },
+    {
+      "file": "src/lib/intent/module-suggestions.test.ts",
+      "tests": 5,
+      "pass": 5,
+      "fail": 0,
+      "skipped": 0,
+      "cancelled": 0,
+      "todo": 0,
+      "skips": []
+    },
+    {
+      "file": "src/lib/local-data.test.ts",
+      "tests": 3,
+      "pass": 3,
+      "fail": 0,
+      "skipped": 0,
+      "cancelled": 0,
+      "todo": 0,
+      "skips": []
+    },
+    {
+      "file": "src/lib/mind/account-shell.test.ts",
+      "tests": 1,
+      "pass": 1,
+      "fail": 0,
+      "skipped": 0,
+      "cancelled": 0,
+      "todo": 0,
+      "skips": []
+    },
+    {
+      "file": "src/lib/mind/adrian-agents.test.ts",
+      "tests": 3,
+      "pass": 3,
+      "fail": 0,
+      "skipped": 0,
+      "cancelled": 0,
+      "todo": 0,
+      "skips": []
+    },
+    {
+      "file": "src/lib/mind/adrian-pc.test.ts",
+      "tests": 11,
+      "pass": 11,
+      "fail": 0,
+      "skipped": 0,
+      "cancelled": 0,
+      "todo": 0,
+      "skips": []
+    },
+    {
+      "file": "src/lib/mind/agent-session.test.ts",
+      "tests": 1,
+      "pass": 1,
+      "fail": 0,
+      "skipped": 0,
+      "cancelled": 0,
+      "todo": 0,
+      "skips": []
+    },
+    {
+      "file": "src/lib/mind/agent.test.ts",
+      "tests": 14,
+      "pass": 14,
+      "fail": 0,
+      "skipped": 0,
+      "cancelled": 0,
+      "todo": 0,
+      "skips": []
+    },
+    {
+      "file": "src/lib/mind/ai-provider-native.test.ts",
+      "tests": 8,
+      "pass": 8,
+      "fail": 0,
+      "skipped": 0,
+      "cancelled": 0,
+      "todo": 0,
+      "skips": []
+    },
+    {
+      "file": "src/lib/mind/app-location.test.ts",
+      "tests": 12,
+      "pass": 12,
+      "fail": 0,
+      "skipped": 0,
+      "cancelled": 0,
+      "todo": 0,
+      "skips": []
+    },
+    {
+      "file": "src/lib/mind/apple-motion.test.ts",
+      "tests": 4,
+      "pass": 4,
+      "fail": 0,
+      "skipped": 0,
+      "cancelled": 0,
+      "todo": 0,
+      "skips": []
+    },
+    {
+      "file": "src/lib/mind/avatar/human-rig.test.ts",
+      "tests": 4,
+      "pass": 4,
+      "fail": 0,
+      "skipped": 0,
+      "cancelled": 0,
+      "todo": 0,
+      "skips": []
+    },
+    {
+      "file": "src/lib/mind/avatar/visemes.test.ts",
+      "tests": 5,
+      "pass": 5,
+      "fail": 0,
+      "skipped": 0,
+      "cancelled": 0,
+      "todo": 0,
+      "skips": []
+    },
+    {
+      "file": "src/lib/mind/blocks.test.ts",
+      "tests": 2,
+      "pass": 2,
+      "fail": 0,
+      "skipped": 0,
+      "cancelled": 0,
+      "todo": 0,
+      "skips": []
+    },
+    {
+      "file": "src/lib/mind/blueprint-surface.test.ts",
+      "tests": 1,
+      "pass": 1,
+      "fail": 0,
+      "skipped": 0,
+      "cancelled": 0,
+      "todo": 0,
+      "skips": []
+    },
+    {
+      "file": "src/lib/mind/bot-model.test.ts",
+      "tests": 4,
+      "pass": 4,
+      "fail": 0,
+      "skipped": 0,
+      "cancelled": 0,
+      "todo": 0,
+      "skips": []
+    },
+    {
+      "file": "src/lib/mind/browser-permissions.test.ts",
+      "tests": 2,
+      "pass": 2,
+      "fail": 0,
+      "skipped": 0,
+      "cancelled": 0,
+      "todo": 0,
+      "skips": []
+    },
+    {
+      "file": "src/lib/mind/browser-work-pump.test.ts",
+      "tests": 3,
+      "pass": 3,
+      "fail": 0,
+      "skipped": 0,
+      "cancelled": 0,
+      "todo": 0,
+      "skips": []
+    },
+    {
+      "file": "src/lib/mind/c1-durable-runtime.test.ts",
+      "tests": 10,
+      "pass": 10,
+      "fail": 0,
+      "skipped": 0,
+      "cancelled": 0,
+      "todo": 0,
+      "skips": []
+    },
+    {
+      "file": "src/lib/mind/c1-research-skills.test.ts",
+      "tests": 9,
+      "pass": 9,
+      "fail": 0,
+      "skipped": 0,
+      "cancelled": 0,
+      "todo": 0,
+      "skips": []
+    },
+    {
+      "file": "src/lib/mind/c1-runtime-regressions.test.ts",
+      "tests": 13,
+      "pass": 13,
+      "fail": 0,
+      "skipped": 0,
+      "cancelled": 0,
+      "todo": 0,
+      "skips": []
+    },
+    {
+      "file": "src/lib/mind/catalog-modules.test.ts",
+      "tests": 4,
+      "pass": 4,
+      "fail": 0,
+      "skipped": 0,
+      "cancelled": 0,
+      "todo": 0,
+      "skips": []
+    },
+    {
+      "file": "src/lib/mind/characters/index.test.ts",
+      "tests": 2,
+      "pass": 2,
+      "fail": 0,
+      "skipped": 0,
+      "cancelled": 0,
+      "todo": 0,
+      "skips": []
+    },
+    {
+      "file": "src/lib/mind/chat-motion.test.ts",
+      "tests": 3,
+      "pass": 3,
+      "fail": 0,
+      "skipped": 0,
+      "cancelled": 0,
+      "todo": 0,
+      "skips": []
+    },
+    {
+      "file": "src/lib/mind/chat-spacing.test.ts",
+      "tests": 2,
+      "pass": 2,
+      "fail": 0,
+      "skipped": 0,
+      "cancelled": 0,
+      "todo": 0,
+      "skips": []
+    },
+    {
+      "file": "src/lib/mind/chip-sse-contract.test.ts",
+      "tests": 5,
+      "pass": 5,
+      "fail": 0,
+      "skipped": 0,
+      "cancelled": 0,
+      "todo": 0,
+      "skips": []
+    },
+    {
+      "file": "src/lib/mind/composer-controls.test.ts",
+      "tests": 4,
+      "pass": 4,
+      "fail": 0,
+      "skipped": 0,
+      "cancelled": 0,
+      "todo": 0,
+      "skips": []
+    },
+    {
+      "file": "src/lib/mind/composer-modes.test.ts",
+      "tests": 5,
+      "pass": 5,
+      "fail": 0,
+      "skipped": 0,
+      "cancelled": 0,
+      "todo": 0,
+      "skips": []
+    },
+    {
+      "file": "src/lib/mind/computer-control.test.ts",
+      "tests": 5,
+      "pass": 5,
+      "fail": 0,
+      "skipped": 0,
+      "cancelled": 0,
+      "todo": 0,
+      "skips": []
+    },
+    {
+      "file": "src/lib/mind/connected-mcp-health.test.ts",
+      "tests": 1,
+      "pass": 1,
+      "fail": 0,
+      "skipped": 0,
+      "cancelled": 0,
+      "todo": 0,
+      "skips": []
+    },
+    {
+      "file": "src/lib/mind/connected-mcp.test.ts",
+      "tests": 16,
+      "pass": 16,
+      "fail": 0,
+      "skipped": 0,
+      "cancelled": 0,
+      "todo": 0,
+      "skips": []
+    },
+    {
+      "file": "src/lib/mind/connection-attention.test.ts",
+      "tests": 1,
+      "pass": 1,
+      "fail": 0,
+      "skipped": 0,
+      "cancelled": 0,
+      "todo": 0,
+      "skips": []
+    },
+    {
+      "file": "src/lib/mind/connection-board.test.ts",
+      "tests": 4,
+      "pass": 4,
+      "fail": 0,
+      "skipped": 0,
+      "cancelled": 0,
+      "todo": 0,
+      "skips": []
+    },
+    {
+      "file": "src/lib/mind/connectors/c1-identity-contract.test.ts",
+      "tests": 3,
+      "pass": 3,
+      "fail": 0,
+      "skipped": 0,
+      "cancelled": 0,
+      "todo": 0,
+      "skips": []
+    },
+    {
+      "file": "src/lib/mind/connectors/c1-notion-recovery.test.ts",
+      "tests": 3,
+      "pass": 3,
+      "fail": 0,
+      "skipped": 0,
+      "cancelled": 0,
+      "todo": 0,
+      "skips": []
+    },
+    {
+      "file": "src/lib/mind/connectors/gmail-oauth-status.test.ts",
+      "tests": 3,
+      "pass": 3,
+      "fail": 0,
+      "skipped": 0,
+      "cancelled": 0,
+      "todo": 0,
+      "skips": []
+    },
+    {
+      "file": "src/lib/mind/connectors/google-account.test.ts",
+      "tests": 1,
+      "pass": 1,
+      "fail": 0,
+      "skipped": 0,
+      "cancelled": 0,
+      "todo": 0,
+      "skips": []
+    },
+    {
+      "file": "src/lib/mind/connectors/notion-oauth.test.ts",
+      "tests": 5,
+      "pass": 5,
+      "fail": 0,
+      "skipped": 0,
+      "cancelled": 0,
+      "todo": 0,
+      "skips": []
+    },
+    {
+      "file": "src/lib/mind/connectors/oauth-security.test.ts",
+      "tests": 10,
+      "pass": 10,
+      "fail": 0,
+      "skipped": 0,
+      "cancelled": 0,
+      "todo": 0,
+      "skips": []
+    },
+    {
+      "file": "src/lib/mind/connectors/providers-oauth.test.ts",
+      "tests": 15,
+      "pass": 15,
+      "fail": 0,
+      "skipped": 0,
+      "cancelled": 0,
+      "todo": 0,
+      "skips": []
+    },
+    {
+      "file": "src/lib/mind/connectors/status-http.test.ts",
+      "tests": 3,
+      "pass": 3,
+      "fail": 0,
+      "skipped": 0,
+      "cancelled": 0,
+      "todo": 0,
+      "skips": []
+    },
+    {
+      "file": "src/lib/mind/connectors/workspace-grants.test.ts",
+      "tests": 2,
+      "pass": 2,
+      "fail": 0,
+      "skipped": 0,
+      "cancelled": 0,
+      "todo": 0,
+      "skips": []
+    },
+    {
+      "file": "src/lib/mind/conversation-actions.test.ts",
+      "tests": 6,
+      "pass": 6,
+      "fail": 0,
+      "skipped": 0,
+      "cancelled": 0,
+      "todo": 0,
+      "skips": []
+    },
+    {
+      "file": "src/lib/mind/conversation-sections.test.ts",
+      "tests": 4,
+      "pass": 4,
+      "fail": 0,
+      "skipped": 0,
+      "cancelled": 0,
+      "todo": 0,
+      "skips": []
+    },
+    {
+      "file": "src/lib/mind/copy-code-action.test.ts",
+      "tests": 4,
+      "pass": 4,
+      "fail": 0,
+      "skipped": 0,
+      "cancelled": 0,
+      "todo": 0,
+      "skips": []
+    },
+    {
+      "file": "src/lib/mind/core-runtime.test.ts",
+      "tests": 2,
+      "pass": 2,
+      "fail": 0,
+      "skipped": 0,
+      "cancelled": 0,
+      "todo": 0,
+      "skips": []
+    },
+    {
+      "file": "src/lib/mind/custom-connection.test.ts",
+      "tests": 11,
+      "pass": 11,
+      "fail": 0,
+      "skipped": 0,
+      "cancelled": 0,
+      "todo": 0,
+      "skips": []
+    },
+    {
+      "file": "src/lib/mind/dashboard/bot-detail.test.ts",
+      "tests": 3,
+      "pass": 3,
+      "fail": 0,
+      "skipped": 0,
+      "cancelled": 0,
+      "todo": 0,
+      "skips": []
+    },
+    {
+      "file": "src/lib/mind/dashboard/camera-rig.test.ts",
+      "tests": 6,
+      "pass": 6,
+      "fail": 0,
+      "skipped": 0,
+      "cancelled": 0,
+      "todo": 0,
+      "skips": []
+    },
+    {
+      "file": "src/lib/mind/dashboard/chart-series.test.ts",
+      "tests": 4,
+      "pass": 4,
+      "fail": 0,
+      "skipped": 0,
+      "cancelled": 0,
+      "todo": 0,
+      "skips": []
+    },
+    {
+      "file": "src/lib/mind/dashboard/constellations.test.ts",
+      "tests": 4,
+      "pass": 4,
+      "fail": 0,
+      "skipped": 0,
+      "cancelled": 0,
+      "todo": 0,
+      "skips": []
+    },
+    {
+      "file": "src/lib/mind/dashboard/flyover.test.ts",
+      "tests": 12,
+      "pass": 12,
+      "fail": 0,
+      "skipped": 0,
+      "cancelled": 0,
+      "todo": 0,
+      "skips": []
+    },
+    {
+      "file": "src/lib/mind/dashboard/git-result.test.ts",
+      "tests": 3,
+      "pass": 3,
+      "fail": 0,
+      "skipped": 0,
+      "cancelled": 0,
+      "todo": 0,
+      "skips": []
+    },
+    {
+      "file": "src/lib/mind/dashboard/graph-filters.test.ts",
+      "tests": 2,
+      "pass": 2,
+      "fail": 0,
+      "skipped": 0,
+      "cancelled": 0,
+      "todo": 0,
+      "skips": []
+    },
+    {
+      "file": "src/lib/mind/dashboard/health-sound.test.ts",
+      "tests": 3,
+      "pass": 3,
+      "fail": 0,
+      "skipped": 0,
+      "cancelled": 0,
+      "todo": 0,
+      "skips": []
+    },
+    {
+      "file": "src/lib/mind/dashboard/health.test.ts",
+      "tests": 8,
+      "pass": 8,
+      "fail": 0,
+      "skipped": 0,
+      "cancelled": 0,
+      "todo": 0,
+      "skips": []
+    },
+    {
+      "file": "src/lib/mind/dashboard/hud-order.test.ts",
+      "tests": 2,
+      "pass": 2,
+      "fail": 0,
+      "skipped": 0,
+      "cancelled": 0,
+      "todo": 0,
+      "skips": []
+    },
+    {
+      "file": "src/lib/mind/dashboard/label-cull.test.ts",
+      "tests": 2,
+      "pass": 2,
+      "fail": 0,
+      "skipped": 0,
+      "cancelled": 0,
+      "todo": 0,
+      "skips": []
+    },
+    {
+      "file": "src/lib/mind/dashboard/landing-status.test.ts",
+      "tests": 2,
+      "pass": 2,
+      "fail": 0,
+      "skipped": 0,
+      "cancelled": 0,
+      "todo": 0,
+      "skips": []
+    },
+    {
+      "file": "src/lib/mind/dashboard/locks.test.ts",
+      "tests": 3,
+      "pass": 3,
+      "fail": 0,
+      "skipped": 0,
+      "cancelled": 0,
+      "todo": 0,
+      "skips": []
+    },
+    {
+      "file": "src/lib/mind/dashboard/notion-graph.test.ts",
+      "tests": 3,
+      "pass": 3,
+      "fail": 0,
+      "skipped": 0,
+      "cancelled": 0,
+      "todo": 0,
+      "skips": []
+    },
+    {
+      "file": "src/lib/mind/dashboard/notion-mirror.test.ts",
+      "tests": 3,
+      "pass": 3,
+      "fail": 0,
+      "skipped": 0,
+      "cancelled": 0,
+      "todo": 0,
+      "skips": []
+    },
+    {
+      "file": "src/lib/mind/dashboard/operator-palette.test.ts",
+      "tests": 4,
+      "pass": 4,
+      "fail": 0,
+      "skipped": 0,
+      "cancelled": 0,
+      "todo": 0,
+      "skips": []
+    },
+    {
+      "file": "src/lib/mind/dashboard/projects.test.ts",
+      "tests": 4,
+      "pass": 4,
+      "fail": 0,
+      "skipped": 0,
+      "cancelled": 0,
+      "todo": 0,
+      "skips": []
+    },
+    {
+      "file": "src/lib/mind/dashboard/public-notion-boundary.test.ts",
+      "tests": 1,
+      "pass": 1,
+      "fail": 0,
+      "skipped": 0,
+      "cancelled": 0,
+      "todo": 0,
+      "skips": []
+    },
+    {
+      "file": "src/lib/mind/dashboard/queue-parse.test.ts",
+      "tests": 3,
+      "pass": 3,
+      "fail": 0,
+      "skipped": 0,
+      "cancelled": 0,
+      "todo": 0,
+      "skips": []
+    },
+    {
+      "file": "src/lib/mind/dashboard/require-dashboard-user.test.ts",
+      "tests": 1,
+      "pass": 1,
+      "fail": 0,
+      "skipped": 0,
+      "cancelled": 0,
+      "todo": 0,
+      "skips": []
+    },
+    {
+      "file": "src/lib/mind/dashboard/safe-paths.test.ts",
+      "tests": 4,
+      "pass": 4,
+      "fail": 0,
+      "skipped": 0,
+      "cancelled": 0,
+      "todo": 0,
+      "skips": []
+    },
+    {
+      "file": "src/lib/mind/dashboard/sky-feed.test.ts",
+      "tests": 3,
+      "pass": 3,
+      "fail": 0,
+      "skipped": 0,
+      "cancelled": 0,
+      "todo": 0,
+      "skips": []
+    },
+    {
+      "file": "src/lib/mind/dashboard/sky-flow.test.ts",
+      "tests": 4,
+      "pass": 4,
+      "fail": 0,
+      "skipped": 0,
+      "cancelled": 0,
+      "todo": 0,
+      "skips": []
+    },
+    {
+      "file": "src/lib/mind/dashboard/spend.test.ts",
+      "tests": 4,
+      "pass": 4,
+      "fail": 0,
+      "skipped": 0,
+      "cancelled": 0,
+      "todo": 0,
+      "skips": []
+    },
+    {
+      "file": "src/lib/mind/dashboard/status-poll.test.ts",
+      "tests": 3,
+      "pass": 3,
+      "fail": 0,
+      "skipped": 0,
+      "cancelled": 0,
+      "todo": 0,
+      "skips": []
+    },
+    {
+      "file": "src/lib/mind/dashboard/time-scrub.test.ts",
+      "tests": 4,
+      "pass": 4,
+      "fail": 0,
+      "skipped": 0,
+      "cancelled": 0,
+      "todo": 0,
+      "skips": []
+    },
+    {
+      "file": "src/lib/mind/dashboard/wat-clock.test.ts",
+      "tests": 1,
+      "pass": 1,
+      "fail": 0,
+      "skipped": 0,
+      "cancelled": 0,
+      "todo": 0,
+      "skips": []
+    },
+    {
+      "file": "src/lib/mind/decision-router.test.ts",
+      "tests": 10,
+      "pass": 10,
+      "fail": 0,
+      "skipped": 0,
+      "cancelled": 0,
+      "todo": 0,
+      "skips": []
+    },
+    {
+      "file": "src/lib/mind/delegated-authority.test.ts",
+      "tests": 2,
+      "pass": 2,
+      "fail": 0,
+      "skipped": 0,
+      "cancelled": 0,
+      "todo": 0,
+      "skips": []
+    },
+    {
+      "file": "src/lib/mind/desktop-update.test.ts",
+      "tests": 10,
+      "pass": 10,
+      "fail": 0,
+      "skipped": 0,
+      "cancelled": 0,
+      "todo": 0,
+      "skips": []
+    },
+    {
+      "file": "src/lib/mind/document-originals.test.ts",
+      "tests": 1,
+      "pass": 1,
+      "fail": 0,
+      "skipped": 0,
+      "cancelled": 0,
+      "todo": 0,
+      "skips": []
+    },
+    {
+      "file": "src/lib/mind/eve-access.test.ts",
+      "tests": 1,
+      "pass": 1,
+      "fail": 0,
+      "skipped": 0,
+      "cancelled": 0,
+      "todo": 0,
+      "skips": []
+    },
+    {
+      "file": "src/lib/mind/eve-projection.test.ts",
+      "tests": 2,
+      "pass": 2,
+      "fail": 0,
+      "skipped": 0,
+      "cancelled": 0,
+      "todo": 0,
+      "skips": []
+    },
+    {
+      "file": "src/lib/mind/execution-evidence.test.ts",
+      "tests": 3,
+      "pass": 3,
+      "fail": 0,
+      "skipped": 0,
+      "cancelled": 0,
+      "todo": 0,
+      "skips": []
+    },
+    {
+      "file": "src/lib/mind/execution-gate.test.ts",
+      "tests": 1,
+      "pass": 1,
+      "fail": 0,
+      "skipped": 0,
+      "cancelled": 0,
+      "todo": 0,
+      "skips": []
+    },
+    {
+      "file": "src/lib/mind/execution-ledger.test.ts",
+      "tests": 7,
+      "pass": 7,
+      "fail": 0,
+      "skipped": 0,
+      "cancelled": 0,
+      "todo": 0,
+      "skips": []
+    },
+    {
+      "file": "src/lib/mind/failure-banner-markup.test.ts",
+      "tests": 23,
+      "pass": 23,
+      "fail": 0,
+      "skipped": 0,
+      "cancelled": 0,
+      "todo": 0,
+      "skips": []
+    },
+    {
+      "file": "src/lib/mind/failure-envelope.test.ts",
+      "tests": 11,
+      "pass": 11,
+      "fail": 0,
+      "skipped": 0,
+      "cancelled": 0,
+      "todo": 0,
+      "skips": []
+    },
+    {
+      "file": "src/lib/mind/failure-mount.test.ts",
+      "tests": 3,
+      "pass": 3,
+      "fail": 0,
+      "skipped": 0,
+      "cancelled": 0,
+      "todo": 0,
+      "skips": []
+    },
+    {
+      "file": "src/lib/mind/failure-states.test.ts",
+      "tests": 34,
+      "pass": 34,
+      "fail": 0,
+      "skipped": 0,
+      "cancelled": 0,
+      "todo": 0,
+      "skips": []
+    },
+    {
+      "file": "src/lib/mind/file-persist.test.ts",
+      "tests": 1,
+      "pass": 1,
+      "fail": 0,
+      "skipped": 0,
+      "cancelled": 0,
+      "todo": 0,
+      "skips": []
+    },
+    {
+      "file": "src/lib/mind/files-read.test.ts",
+      "tests": 2,
+      "pass": 2,
+      "fail": 0,
+      "skipped": 0,
+      "cancelled": 0,
+      "todo": 0,
+      "skips": []
+    },
+    {
+      "file": "src/lib/mind/first-steps.test.ts",
+      "tests": 4,
+      "pass": 4,
+      "fail": 0,
+      "skipped": 0,
+      "cancelled": 0,
+      "todo": 0,
+      "skips": []
+    },
+    {
+      "file": "src/lib/mind/fleet-mutation-action.test.ts",
+      "tests": 3,
+      "pass": 3,
+      "fail": 0,
+      "skipped": 0,
+      "cancelled": 0,
+      "todo": 0,
+      "skips": []
+    },
+    {
+      "file": "src/lib/mind/fleet.test.ts",
+      "tests": 16,
+      "pass": 16,
+      "fail": 0,
+      "skipped": 0,
+      "cancelled": 0,
+      "todo": 0,
+      "skips": []
+    },
+    {
+      "file": "src/lib/mind/fleet/assignment.test.ts",
+      "tests": 3,
+      "pass": 3,
+      "fail": 0,
+      "skipped": 0,
+      "cancelled": 0,
+      "todo": 0,
+      "skips": []
+    },
+    {
+      "file": "src/lib/mind/fleet/departments.test.ts",
+      "tests": 5,
+      "pass": 5,
+      "fail": 0,
+      "skipped": 0,
+      "cancelled": 0,
+      "todo": 0,
+      "skips": []
+    },
+    {
+      "file": "src/lib/mind/fleet/equal-capabilities.test.ts",
+      "tests": 6,
+      "pass": 6,
+      "fail": 0,
+      "skipped": 0,
+      "cancelled": 0,
+      "todo": 0,
+      "skips": []
+    },
+    {
+      "file": "src/lib/mind/fleet/shared-memory.test.ts",
+      "tests": 2,
+      "pass": 2,
+      "fail": 0,
+      "skipped": 0,
+      "cancelled": 0,
+      "todo": 0,
+      "skips": []
+    },
+    {
+      "file": "src/lib/mind/frontier-2031.test.ts",
+      "tests": 12,
+      "pass": 12,
+      "fail": 0,
+      "skipped": 0,
+      "cancelled": 0,
+      "todo": 0,
+      "skips": []
+    },
+    {
+      "file": "src/lib/mind/github-tools.test.ts",
+      "tests": 3,
+      "pass": 3,
+      "fail": 0,
+      "skipped": 0,
+      "cancelled": 0,
+      "todo": 0,
+      "skips": []
+    },
+    {
+      "file": "src/lib/mind/greeting.test.ts",
+      "tests": 1,
+      "pass": 1,
+      "fail": 0,
+      "skipped": 0,
+      "cancelled": 0,
+      "todo": 0,
+      "skips": []
+    },
+    {
+      "file": "src/lib/mind/halt-file.test.ts",
+      "tests": 3,
+      "pass": 3,
+      "fail": 0,
+      "skipped": 0,
+      "cancelled": 0,
+      "todo": 0,
+      "skips": []
+    },
+    {
+      "file": "src/lib/mind/halt-policy.test.ts",
+      "tests": 3,
+      "pass": 3,
+      "fail": 0,
+      "skipped": 0,
+      "cancelled": 0,
+      "todo": 0,
+      "skips": []
+    },
+    {
+      "file": "src/lib/mind/handy-dictation.test.ts",
+      "tests": 3,
+      "pass": 3,
+      "fail": 0,
+      "skipped": 0,
+      "cancelled": 0,
+      "todo": 0,
+      "skips": []
+    },
+    {
+      "file": "src/lib/mind/hardening-adversarial.test.ts",
+      "tests": 16,
+      "pass": 16,
+      "fail": 0,
+      "skipped": 0,
+      "cancelled": 0,
+      "todo": 0,
+      "skips": []
+    },
+    {
+      "file": "src/lib/mind/image-analyze.test.ts",
+      "tests": 2,
+      "pass": 2,
+      "fail": 0,
+      "skipped": 0,
+      "cancelled": 0,
+      "todo": 0,
+      "skips": []
+    },
+    {
+      "file": "src/lib/mind/image-retry-plan.test.ts",
+      "tests": 1,
+      "pass": 1,
+      "fail": 0,
+      "skipped": 0,
+      "cancelled": 0,
+      "todo": 0,
+      "skips": []
+    },
+    {
+      "file": "src/lib/mind/incidents.test.ts",
+      "tests": 2,
+      "pass": 2,
+      "fail": 0,
+      "skipped": 0,
+      "cancelled": 0,
+      "todo": 0,
+      "skips": []
+    },
+    {
+      "file": "src/lib/mind/integration-persona-explore.test.ts",
+      "tests": 6,
+      "pass": 6,
+      "fail": 0,
+      "skipped": 0,
+      "cancelled": 0,
+      "todo": 0,
+      "skips": []
+    },
+    {
+      "file": "src/lib/mind/integration-security-c16.test.ts",
+      "tests": 5,
+      "pass": 5,
+      "fail": 0,
+      "skipped": 0,
+      "cancelled": 0,
+      "todo": 0,
+      "skips": []
+    },
+    {
+      "file": "src/lib/mind/integration-security-c17.test.ts",
+      "tests": 4,
+      "pass": 4,
+      "fail": 0,
+      "skipped": 0,
+      "cancelled": 0,
+      "todo": 0,
+      "skips": []
+    },
+    {
+      "file": "src/lib/mind/integration-security-c19.test.ts",
+      "tests": 4,
+      "pass": 4,
+      "fail": 0,
+      "skipped": 0,
+      "cancelled": 0,
+      "todo": 0,
+      "skips": []
+    },
+    {
+      "file": "src/lib/mind/integration-voice-banner.test.ts",
+      "tests": 4,
+      "pass": 4,
+      "fail": 0,
+      "skipped": 0,
+      "cancelled": 0,
+      "todo": 0,
+      "skips": []
+    },
+    {
+      "file": "src/lib/mind/intent.test.ts",
+      "tests": 5,
+      "pass": 5,
+      "fail": 0,
+      "skipped": 0,
+      "cancelled": 0,
+      "todo": 0,
+      "skips": []
+    },
+    {
+      "file": "src/lib/mind/kimi/account-workspace.test.ts",
+      "tests": 1,
+      "pass": 1,
+      "fail": 0,
+      "skipped": 0,
+      "cancelled": 0,
+      "todo": 0,
+      "skips": []
+    },
+    {
+      "file": "src/lib/mind/kimi/acp-phase4.test.ts",
+      "tests": 9,
+      "pass": 9,
+      "fail": 0,
+      "skipped": 0,
+      "cancelled": 0,
+      "todo": 0,
+      "skips": []
+    },
+    {
+      "file": "src/lib/mind/kimi/code-navigation.test.ts",
+      "tests": 3,
+      "pass": 3,
+      "fail": 0,
+      "skipped": 0,
+      "cancelled": 0,
+      "todo": 0,
+      "skips": []
+    },
+    {
+      "file": "src/lib/mind/kimi/hosted-files.test.ts",
+      "tests": 2,
+      "pass": 2,
+      "fail": 0,
+      "skipped": 0,
+      "cancelled": 0,
+      "todo": 0,
+      "skips": []
+    },
+    {
+      "file": "src/lib/mind/kimi/hosted/acp-client.test.ts",
+      "tests": 3,
+      "pass": 3,
+      "fail": 0,
+      "skipped": 0,
+      "cancelled": 0,
+      "todo": 0,
+      "skips": []
+    },
+    {
+      "file": "src/lib/mind/kimi/hosted/resource-dispatch.test.ts",
+      "tests": 2,
+      "pass": 2,
+      "fail": 0,
+      "skipped": 0,
+      "cancelled": 0,
+      "todo": 0,
+      "skips": []
+    },
+    {
+      "file": "src/lib/mind/kimi/hosted/web-browser.test.ts",
+      "tests": 1,
+      "pass": 1,
+      "fail": 0,
+      "skipped": 0,
+      "cancelled": 0,
+      "todo": 0,
+      "skips": []
+    },
+    {
+      "file": "src/lib/mind/kimi/phase4.test.ts",
+      "tests": 2,
+      "pass": 2,
+      "fail": 0,
+      "skipped": 0,
+      "cancelled": 0,
+      "todo": 0,
+      "skips": []
+    },
+    {
+      "file": "src/lib/mind/kimi/runtime-capabilities.test.ts",
+      "tests": 2,
+      "pass": 2,
+      "fail": 0,
+      "skipped": 0,
+      "cancelled": 0,
+      "todo": 0,
+      "skips": []
+    },
+    {
+      "file": "src/lib/mind/knowledge.test.ts",
+      "tests": 9,
+      "pass": 9,
+      "fail": 0,
+      "skipped": 0,
+      "cancelled": 0,
+      "todo": 0,
+      "skips": []
+    },
+    {
+      "file": "src/lib/mind/limits.test.ts",
+      "tests": 3,
+      "pass": 3,
+      "fail": 0,
+      "skipped": 0,
+      "cancelled": 0,
+      "todo": 0,
+      "skips": []
+    },
+    {
+      "file": "src/lib/mind/live-turn.test.ts",
+      "tests": 9,
+      "pass": 9,
+      "fail": 0,
+      "skipped": 0,
+      "cancelled": 0,
+      "todo": 0,
+      "skips": []
+    },
+    {
+      "file": "src/lib/mind/local-capabilities.test.ts",
+      "tests": 3,
+      "pass": 3,
+      "fail": 0,
+      "skipped": 0,
+      "cancelled": 0,
+      "todo": 0,
+      "skips": []
+    },
+    {
+      "file": "src/lib/mind/local-tools.test.ts",
+      "tests": 2,
+      "pass": 2,
+      "fail": 0,
+      "skipped": 0,
+      "cancelled": 0,
+      "todo": 0,
+      "skips": []
+    },
+    {
+      "file": "src/lib/mind/logic-routes.test.ts",
+      "tests": 13,
+      "pass": 13,
+      "fail": 0,
+      "skipped": 0,
+      "cancelled": 0,
+      "todo": 0,
+      "skips": []
+    },
+    {
+      "file": "src/lib/mind/markdown-safe.test.ts",
+      "tests": 15,
+      "pass": 15,
+      "fail": 0,
+      "skipped": 0,
+      "cancelled": 0,
+      "todo": 0,
+      "skips": []
+    },
+    {
+      "file": "src/lib/mind/mcp-call-action.test.ts",
+      "tests": 4,
+      "pass": 4,
+      "fail": 0,
+      "skipped": 0,
+      "cancelled": 0,
+      "todo": 0,
+      "skips": []
+    },
+    {
+      "file": "src/lib/mind/mcp-entrypoints.test.ts",
+      "tests": 4,
+      "pass": 4,
+      "fail": 0,
+      "skipped": 0,
+      "cancelled": 0,
+      "todo": 0,
+      "skips": []
+    },
+    {
+      "file": "src/lib/mind/mcp-list-auth.test.ts",
+      "tests": 8,
+      "pass": 8,
+      "fail": 0,
+      "skipped": 0,
+      "cancelled": 0,
+      "todo": 0,
+      "skips": []
+    },
+    {
+      "file": "src/lib/mind/mcp-list-http.test.ts",
+      "tests": 6,
+      "pass": 6,
+      "fail": 0,
+      "skipped": 0,
+      "cancelled": 0,
+      "todo": 0,
+      "skips": []
+    },
+    {
+      "file": "src/lib/mind/mcp-list-state.test.ts",
+      "tests": 39,
+      "pass": 39,
+      "fail": 0,
+      "skipped": 0,
+      "cancelled": 0,
+      "todo": 0,
+      "skips": []
+    },
+    {
+      "file": "src/lib/mind/mcp-registry-list-auth.test.ts",
+      "tests": 6,
+      "pass": 6,
+      "fail": 0,
+      "skipped": 0,
+      "cancelled": 0,
+      "todo": 0,
+      "skips": []
+    },
+    {
+      "file": "src/lib/mind/mcp-registry.test.ts",
+      "tests": 11,
+      "pass": 11,
+      "fail": 0,
+      "skipped": 0,
+      "cancelled": 0,
+      "todo": 0,
+      "skips": []
+    },
+    {
+      "file": "src/lib/mind/mcp-selected.test.ts",
+      "tests": 2,
+      "pass": 2,
+      "fail": 0,
+      "skipped": 0,
+      "cancelled": 0,
+      "todo": 0,
+      "skips": []
+    },
+    {
+      "file": "src/lib/mind/mcp-storage-status.test.ts",
+      "tests": 4,
+      "pass": 4,
+      "fail": 0,
+      "skipped": 0,
+      "cancelled": 0,
+      "todo": 0,
+      "skips": []
+    },
+    {
+      "file": "src/lib/mind/mcp-toggle-action.test.ts",
+      "tests": 4,
+      "pass": 4,
+      "fail": 0,
+      "skipped": 0,
+      "cancelled": 0,
+      "todo": 0,
+      "skips": []
+    },
+    {
+      "file": "src/lib/mind/mcp.test.ts",
+      "tests": 6,
+      "pass": 6,
+      "fail": 0,
+      "skipped": 0,
+      "cancelled": 0,
+      "todo": 0,
+      "skips": []
+    },
+    {
+      "file": "src/lib/mind/mcp/builtin-server.test.ts",
+      "tests": 7,
+      "pass": 7,
+      "fail": 0,
+      "skipped": 0,
+      "cancelled": 0,
+      "todo": 0,
+      "skips": []
+    },
+    {
+      "file": "src/lib/mind/mcp/call-acceptance.test.ts",
+      "tests": 5,
+      "pass": 5,
+      "fail": 0,
+      "skipped": 0,
+      "cancelled": 0,
+      "todo": 0,
+      "skips": []
+    },
+    {
+      "file": "src/lib/mind/mcp/csrf-origin.test.ts",
+      "tests": 15,
+      "pass": 15,
+      "fail": 0,
+      "skipped": 0,
+      "cancelled": 0,
+      "todo": 0,
+      "skips": []
+    },
+    {
+      "file": "src/lib/mind/mcp/driver-trust.test.ts",
+      "tests": 2,
+      "pass": 2,
+      "fail": 0,
+      "skipped": 0,
+      "cancelled": 0,
+      "todo": 0,
+      "skips": []
+    },
+    {
+      "file": "src/lib/mind/mcp/http-dns-pin.test.ts",
+      "tests": 6,
+      "pass": 6,
+      "fail": 0,
+      "skipped": 0,
+      "cancelled": 0,
+      "todo": 0,
+      "skips": []
+    },
+    {
+      "file": "src/lib/mind/mcp/pglite-guard.test.ts",
+      "tests": 41,
+      "pass": 41,
+      "fail": 0,
+      "skipped": 0,
+      "cancelled": 0,
+      "todo": 0,
+      "skips": []
+    },
+    {
+      "file": "src/lib/mind/mcp/privacy-boundary.test.ts",
+      "tests": 5,
+      "pass": 5,
+      "fail": 0,
+      "skipped": 0,
+      "cancelled": 0,
+      "todo": 0,
+      "skips": []
+    },
+    {
+      "file": "src/lib/mind/mcp/registry-http.test.ts",
+      "tests": 6,
+      "pass": 6,
+      "fail": 0,
+      "skipped": 0,
+      "cancelled": 0,
+      "todo": 0,
+      "skips": []
+    },
+    {
+      "file": "src/lib/mind/mcp/registry.test.ts",
+      "tests": 11,
+      "pass": 11,
+      "fail": 0,
+      "skipped": 0,
+      "cancelled": 0,
+      "todo": 0,
+      "skips": []
+    },
+    {
+      "file": "src/lib/mind/mcp/stdio.test.ts",
+      "tests": 15,
+      "pass": 15,
+      "fail": 0,
+      "skipped": 0,
+      "cancelled": 0,
+      "todo": 0,
+      "skips": []
+    },
+    {
+      "file": "src/lib/mind/mcp/tools.test.ts",
+      "tests": 12,
+      "pass": 12,
+      "fail": 0,
+      "skipped": 0,
+      "cancelled": 0,
+      "todo": 0,
+      "skips": []
+    },
+    {
+      "file": "src/lib/mind/media/account-blob-isolation.test.ts",
+      "tests": 1,
+      "pass": 1,
+      "fail": 0,
+      "skipped": 0,
+      "cancelled": 0,
+      "todo": 0,
+      "skips": []
+    },
+    {
+      "file": "src/lib/mind/media/asset-lifecycle.test.ts",
+      "tests": 3,
+      "pass": 3,
+      "fail": 0,
+      "skipped": 0,
+      "cancelled": 0,
+      "todo": 0,
+      "skips": []
+    },
+    {
+      "file": "src/lib/mind/media/blob-store.test.ts",
+      "tests": 7,
+      "pass": 7,
+      "fail": 0,
+      "skipped": 0,
+      "cancelled": 0,
+      "todo": 0,
+      "skips": []
+    },
+    {
+      "file": "src/lib/mind/media/chat-gallery.test.ts",
+      "tests": 2,
+      "pass": 2,
+      "fail": 0,
+      "skipped": 0,
+      "cancelled": 0,
+      "todo": 0,
+      "skips": []
+    },
+    {
+      "file": "src/lib/mind/media/client-barrel.test.ts",
+      "tests": 1,
+      "pass": 1,
+      "fail": 0,
+      "skipped": 0,
+      "cancelled": 0,
+      "todo": 0,
+      "skips": []
+    },
+    {
+      "file": "src/lib/mind/media/clipboard-guard.test.ts",
+      "tests": 3,
+      "pass": 3,
+      "fail": 0,
+      "skipped": 0,
+      "cancelled": 0,
+      "todo": 0,
+      "skips": []
+    },
+    {
+      "file": "src/lib/mind/media/cloud/connection.test.ts",
+      "tests": 4,
+      "pass": 4,
+      "fail": 0,
+      "skipped": 0,
+      "cancelled": 0,
+      "todo": 0,
+      "skips": []
+    },
+    {
+      "file": "src/lib/mind/media/data-url.test.ts",
+      "tests": 6,
+      "pass": 6,
+      "fail": 0,
+      "skipped": 0,
+      "cancelled": 0,
+      "todo": 0,
+      "skips": []
+    },
+    {
+      "file": "src/lib/mind/media/harden.test.ts",
+      "tests": 11,
+      "pass": 11,
+      "fail": 0,
+      "skipped": 0,
+      "cancelled": 0,
+      "todo": 0,
+      "skips": []
+    },
+    {
+      "file": "src/lib/mind/media/history.test.ts",
+      "tests": 3,
+      "pass": 3,
+      "fail": 0,
+      "skipped": 0,
+      "cancelled": 0,
+      "todo": 0,
+      "skips": []
+    },
+    {
+      "file": "src/lib/mind/media/imagine-harden-h4h7.test.ts",
+      "tests": 7,
+      "pass": 7,
+      "fail": 0,
+      "skipped": 0,
+      "cancelled": 0,
+      "todo": 0,
+      "skips": []
+    },
+    {
+      "file": "src/lib/mind/media/imagine.test.ts",
+      "tests": 11,
+      "pass": 11,
+      "fail": 0,
+      "skipped": 0,
+      "cancelled": 0,
+      "todo": 0,
+      "skips": []
+    },
+    {
+      "file": "src/lib/mind/media/operations.test.ts",
+      "tests": 4,
+      "pass": 4,
+      "fail": 0,
+      "skipped": 0,
+      "cancelled": 0,
+      "todo": 0,
+      "skips": []
+    },
+    {
+      "file": "src/lib/mind/media/spend-ledger.test.ts",
+      "tests": 3,
+      "pass": 3,
+      "fail": 0,
+      "skipped": 0,
+      "cancelled": 0,
+      "todo": 0,
+      "skips": []
+    },
+    {
+      "file": "src/lib/mind/media/spend-reservation.test.ts",
+      "tests": 1,
+      "pass": 1,
+      "fail": 0,
+      "skipped": 0,
+      "cancelled": 0,
+      "todo": 0,
+      "skips": []
+    },
+    {
+      "file": "src/lib/mind/media/ssrf.test.ts",
+      "tests": 10,
+      "pass": 10,
+      "fail": 0,
+      "skipped": 0,
+      "cancelled": 0,
+      "todo": 0,
+      "skips": []
+    },
+    {
+      "file": "src/lib/mind/media/storage/rotation.test.ts",
+      "tests": 10,
+      "pass": 10,
+      "fail": 0,
+      "skipped": 0,
+      "cancelled": 0,
+      "todo": 0,
+      "skips": []
+    },
+    {
+      "file": "src/lib/mind/media/storage/spoof.test.ts",
+      "tests": 1,
+      "pass": 1,
+      "fail": 0,
+      "skipped": 0,
+      "cancelled": 0,
+      "todo": 0,
+      "skips": []
+    },
+    {
+      "file": "src/lib/mind/media/video-poll.test.ts",
+      "tests": 3,
+      "pass": 3,
+      "fail": 0,
+      "skipped": 0,
+      "cancelled": 0,
+      "todo": 0,
+      "skips": []
+    },
+    {
+      "file": "src/lib/mind/media/video-progress.test.ts",
+      "tests": 2,
+      "pass": 2,
+      "fail": 0,
+      "skipped": 0,
+      "cancelled": 0,
+      "todo": 0,
+      "skips": []
+    },
+    {
+      "file": "src/lib/mind/memory-action.test.ts",
+      "tests": 4,
+      "pass": 4,
+      "fail": 0,
+      "skipped": 0,
+      "cancelled": 0,
+      "todo": 0,
+      "skips": []
+    },
+    {
+      "file": "src/lib/mind/memory-mount.test.ts",
+      "tests": 8,
+      "pass": 8,
+      "fail": 0,
+      "skipped": 0,
+      "cancelled": 0,
+      "todo": 0,
+      "skips": []
+    },
+    {
+      "file": "src/lib/mind/memory/dispatch-policy.test.ts",
+      "tests": 6,
+      "pass": 6,
+      "fail": 0,
+      "skipped": 0,
+      "cancelled": 0,
+      "todo": 0,
+      "skips": []
+    },
+    {
+      "file": "src/lib/mind/memory/owner-ops.test.ts",
+      "tests": 7,
+      "pass": 7,
+      "fail": 0,
+      "skipped": 0,
+      "cancelled": 0,
+      "todo": 0,
+      "skips": []
+    },
+    {
+      "file": "src/lib/mind/memory/scoped-durability.test.ts",
+      "tests": 3,
+      "pass": 3,
+      "fail": 0,
+      "skipped": 0,
+      "cancelled": 0,
+      "todo": 0,
+      "skips": []
+    },
+    {
+      "file": "src/lib/mind/message-cue.test.ts",
+      "tests": 5,
+      "pass": 5,
+      "fail": 0,
+      "skipped": 0,
+      "cancelled": 0,
+      "todo": 0,
+      "skips": []
+    },
+    {
+      "file": "src/lib/mind/model-consult.test.ts",
+      "tests": 4,
+      "pass": 4,
+      "fail": 0,
+      "skipped": 0,
+      "cancelled": 0,
+      "todo": 0,
+      "skips": []
+    },
+    {
+      "file": "src/lib/mind/model-route.test.ts",
+      "tests": 3,
+      "pass": 3,
+      "fail": 0,
+      "skipped": 0,
+      "cancelled": 0,
+      "todo": 0,
+      "skips": []
+    },
+    {
+      "file": "src/lib/mind/model-tier-memory.test.ts",
+      "tests": 1,
+      "pass": 1,
+      "fail": 0,
+      "skipped": 0,
+      "cancelled": 0,
+      "todo": 0,
+      "skips": []
+    },
+    {
+      "file": "src/lib/mind/model-tiers.test.ts",
+      "tests": 17,
+      "pass": 17,
+      "fail": 0,
+      "skipped": 0,
+      "cancelled": 0,
+      "todo": 0,
+      "skips": []
+    },
+    {
+      "file": "src/lib/mind/notion-failure-action.test.ts",
+      "tests": 15,
+      "pass": 15,
+      "fail": 0,
+      "skipped": 0,
+      "cancelled": 0,
+      "todo": 0,
+      "skips": []
+    },
+    {
+      "file": "src/lib/mind/notion.test.ts",
+      "tests": 12,
+      "pass": 12,
+      "fail": 0,
+      "skipped": 0,
+      "cancelled": 0,
+      "todo": 0,
+      "skips": []
+    },
+    {
+      "file": "src/lib/mind/nuance-live.test.ts",
+      "tests": 9,
+      "pass": 9,
+      "fail": 0,
+      "skipped": 0,
+      "cancelled": 0,
+      "todo": 0,
+      "skips": []
+    },
+    {
+      "file": "src/lib/mind/oauth-board-action.test.ts",
+      "tests": 5,
+      "pass": 5,
+      "fail": 0,
+      "skipped": 0,
+      "cancelled": 0,
+      "todo": 0,
+      "skips": []
+    },
+    {
+      "file": "src/lib/mind/open-page-action.test.ts",
+      "tests": 5,
+      "pass": 5,
+      "fail": 0,
+      "skipped": 0,
+      "cancelled": 0,
+      "todo": 0,
+      "skips": []
+    },
+    {
+      "file": "src/lib/mind/operation-scope.test.ts",
+      "tests": 3,
+      "pass": 3,
+      "fail": 0,
+      "skipped": 0,
+      "cancelled": 0,
+      "todo": 0,
+      "skips": []
+    },
+    {
+      "file": "src/lib/mind/orchestrator.test.ts",
+      "tests": 6,
+      "pass": 6,
+      "fail": 0,
+      "skipped": 0,
+      "cancelled": 0,
+      "todo": 0,
+      "skips": []
+    },
+    {
+      "file": "src/lib/mind/owner-flow.test.ts",
+      "tests": 4,
+      "pass": 4,
+      "fail": 0,
+      "skipped": 0,
+      "cancelled": 0,
+      "todo": 0,
+      "skips": []
+    },
+    {
+      "file": "src/lib/mind/pairing/actions.test.ts",
+      "tests": 6,
+      "pass": 6,
+      "fail": 0,
+      "skipped": 0,
+      "cancelled": 0,
+      "todo": 0,
+      "skips": []
+    },
+    {
+      "file": "src/lib/mind/pairing/adversarial.test.ts",
+      "tests": 9,
+      "pass": 9,
+      "fail": 0,
+      "skipped": 0,
+      "cancelled": 0,
+      "todo": 0,
+      "skips": []
+    },
+    {
+      "file": "src/lib/mind/pairing/emergency-stop.test.ts",
+      "tests": 6,
+      "pass": 6,
+      "fail": 0,
+      "skipped": 0,
+      "cancelled": 0,
+      "todo": 0,
+      "skips": []
+    },
+    {
+      "file": "src/lib/mind/pairing/handshake.test.ts",
+      "tests": 4,
+      "pass": 4,
+      "fail": 0,
+      "skipped": 0,
+      "cancelled": 0,
+      "todo": 0,
+      "skips": []
+    },
+    {
+      "file": "src/lib/mind/pairing/integrity.test.ts",
+      "tests": 2,
+      "pass": 2,
+      "fail": 0,
+      "skipped": 0,
+      "cancelled": 0,
+      "todo": 0,
+      "skips": []
+    },
+    {
+      "file": "src/lib/mind/pairing/report.test.ts",
+      "tests": 1,
+      "pass": 1,
+      "fail": 0,
+      "skipped": 0,
+      "cancelled": 0,
+      "todo": 0,
+      "skips": []
+    },
+    {
+      "file": "src/lib/mind/pairing/status.test.ts",
+      "tests": 3,
+      "pass": 3,
+      "fail": 0,
+      "skipped": 0,
+      "cancelled": 0,
+      "todo": 0,
+      "skips": []
+    },
+    {
+      "file": "src/lib/mind/palette-keys.test.ts",
+      "tests": 5,
+      "pass": 5,
+      "fail": 0,
+      "skipped": 0,
+      "cancelled": 0,
+      "todo": 0,
+      "skips": []
+    },
+    {
+      "file": "src/lib/mind/palette-label.test.ts",
+      "tests": 3,
+      "pass": 3,
+      "fail": 0,
+      "skipped": 0,
+      "cancelled": 0,
+      "todo": 0,
+      "skips": []
+    },
+    {
+      "file": "src/lib/mind/paperclip-bridge.test.ts",
+      "tests": 5,
+      "pass": 5,
+      "fail": 0,
+      "skipped": 0,
+      "cancelled": 0,
+      "todo": 0,
+      "skips": []
+    },
+    {
+      "file": "src/lib/mind/pc-approval-action.test.ts",
+      "tests": 5,
+      "pass": 5,
+      "fail": 0,
+      "skipped": 0,
+      "cancelled": 0,
+      "todo": 0,
+      "skips": []
+    },
+    {
+      "file": "src/lib/mind/pc-capability.test.ts",
+      "tests": 1,
+      "pass": 1,
+      "fail": 0,
+      "skipped": 0,
+      "cancelled": 0,
+      "todo": 0,
+      "skips": []
+    },
+    {
+      "file": "src/lib/mind/pc-pairing/approvals.test.ts",
+      "tests": 6,
+      "pass": 6,
+      "fail": 0,
+      "skipped": 0,
+      "cancelled": 0,
+      "todo": 0,
+      "skips": []
+    },
+    {
+      "file": "src/lib/mind/pc-pairing/pairing.test.ts",
+      "tests": 8,
+      "pass": 8,
+      "fail": 0,
+      "skipped": 0,
+      "cancelled": 0,
+      "todo": 0,
+      "skips": []
+    },
+    {
+      "file": "src/lib/mind/pdf-text.test.ts",
+      "tests": 5,
+      "pass": 5,
+      "fail": 0,
+      "skipped": 0,
+      "cancelled": 0,
+      "todo": 0,
+      "skips": []
+    },
+    {
+      "file": "src/lib/mind/persistence.test.ts",
+      "tests": 5,
+      "pass": 5,
+      "fail": 0,
+      "skipped": 0,
+      "cancelled": 0,
+      "todo": 0,
+      "skips": []
+    },
+    {
+      "file": "src/lib/mind/persona-select-action.test.ts",
+      "tests": 3,
+      "pass": 3,
+      "fail": 0,
+      "skipped": 0,
+      "cancelled": 0,
+      "todo": 0,
+      "skips": []
+    },
+    {
+      "file": "src/lib/mind/personalities/index.test.ts",
+      "tests": 5,
+      "pass": 5,
+      "fail": 0,
+      "skipped": 0,
+      "cancelled": 0,
+      "todo": 0,
+      "skips": []
+    },
+    {
+      "file": "src/lib/mind/personas/directory.test.ts",
+      "tests": 4,
+      "pass": 4,
+      "fail": 0,
+      "skipped": 0,
+      "cancelled": 0,
+      "todo": 0,
+      "skips": []
+    },
+    {
+      "file": "src/lib/mind/personas/selection.test.ts",
+      "tests": 6,
+      "pass": 6,
+      "fail": 0,
+      "skipped": 0,
+      "cancelled": 0,
+      "todo": 0,
+      "skips": []
+    },
+    {
+      "file": "src/lib/mind/policy.test.ts",
+      "tests": 5,
+      "pass": 5,
+      "fail": 0,
+      "skipped": 0,
+      "cancelled": 0,
+      "todo": 0,
+      "skips": []
+    },
+    {
+      "file": "src/lib/mind/provider-call.test.ts",
+      "tests": 9,
+      "pass": 9,
+      "fail": 0,
+      "skipped": 0,
+      "cancelled": 0,
+      "todo": 0,
+      "skips": []
+    },
+    {
+      "file": "src/lib/mind/provider-catalog.test.ts",
+      "tests": 3,
+      "pass": 3,
+      "fail": 0,
+      "skipped": 0,
+      "cancelled": 0,
+      "todo": 0,
+      "skips": []
+    },
+    {
+      "file": "src/lib/mind/provider-http.test.ts",
+      "tests": 6,
+      "pass": 6,
+      "fail": 0,
+      "skipped": 0,
+      "cancelled": 0,
+      "todo": 0,
+      "skips": []
+    },
+    {
+      "file": "src/lib/mind/providers.test.ts",
+      "tests": 5,
+      "pass": 5,
+      "fail": 0,
+      "skipped": 0,
+      "cancelled": 0,
+      "todo": 0,
+      "skips": []
+    },
+    {
+      "file": "src/lib/mind/rate-limit.test.ts",
+      "tests": 4,
+      "pass": 4,
+      "fail": 0,
+      "skipped": 0,
+      "cancelled": 0,
+      "todo": 0,
+      "skips": []
+    },
+    {
+      "file": "src/lib/mind/rea.test.ts",
+      "tests": 5,
+      "pass": 5,
+      "fail": 0,
+      "skipped": 0,
+      "cancelled": 0,
+      "todo": 0,
+      "skips": []
+    },
+    {
+      "file": "src/lib/mind/reading-position.test.ts",
+      "tests": 3,
+      "pass": 3,
+      "fail": 0,
+      "skipped": 0,
+      "cancelled": 0,
+      "todo": 0,
+      "skips": []
+    },
+    {
+      "file": "src/lib/mind/recent-chats.test.ts",
+      "tests": 4,
+      "pass": 4,
+      "fail": 0,
+      "skipped": 0,
+      "cancelled": 0,
+      "todo": 0,
+      "skips": []
+    },
+    {
+      "file": "src/lib/mind/registry.test.ts",
+      "tests": 3,
+      "pass": 3,
+      "fail": 0,
+      "skipped": 0,
+      "cancelled": 0,
+      "todo": 0,
+      "skips": []
+    },
+    {
+      "file": "src/lib/mind/relay.test.ts",
+      "tests": 10,
+      "pass": 10,
+      "fail": 0,
+      "skipped": 0,
+      "cancelled": 0,
+      "todo": 0,
+      "skips": []
+    },
+    {
+      "file": "src/lib/mind/reply-actions.test.ts",
+      "tests": 2,
+      "pass": 2,
+      "fail": 0,
+      "skipped": 0,
+      "cancelled": 0,
+      "todo": 0,
+      "skips": []
+    },
+    {
+      "file": "src/lib/mind/request-body.test.ts",
+      "tests": 39,
+      "pass": 39,
+      "fail": 0,
+      "skipped": 0,
+      "cancelled": 0,
+      "todo": 0,
+      "skips": []
+    },
+    {
+      "file": "src/lib/mind/request-guard.test.ts",
+      "tests": 5,
+      "pass": 5,
+      "fail": 0,
+      "skipped": 0,
+      "cancelled": 0,
+      "todo": 0,
+      "skips": []
+    },
+    {
+      "file": "src/lib/mind/research-failure-action.test.ts",
+      "tests": 10,
+      "pass": 10,
+      "fail": 0,
+      "skipped": 0,
+      "cancelled": 0,
+      "todo": 0,
+      "skips": []
+    },
+    {
+      "file": "src/lib/mind/research.test.ts",
+      "tests": 10,
+      "pass": 10,
+      "fail": 0,
+      "skipped": 0,
+      "cancelled": 0,
+      "todo": 0,
+      "skips": []
+    },
+    {
+      "file": "src/lib/mind/retry-fidelity.test.ts",
+      "tests": 10,
+      "pass": 10,
+      "fail": 0,
+      "skipped": 0,
+      "cancelled": 0,
+      "todo": 0,
+      "skips": []
+    },
+    {
+      "file": "src/lib/mind/reversibility.test.ts",
+      "tests": 3,
+      "pass": 3,
+      "fail": 0,
+      "skipped": 0,
+      "cancelled": 0,
+      "todo": 0,
+      "skips": []
+    },
+    {
+      "file": "src/lib/mind/routing-modes.test.ts",
+      "tests": 5,
+      "pass": 5,
+      "fail": 0,
+      "skipped": 0,
+      "cancelled": 0,
+      "todo": 0,
+      "skips": []
+    },
+    {
+      "file": "src/lib/mind/safe-keys.test.ts",
+      "tests": 3,
+      "pass": 3,
+      "fail": 0,
+      "skipped": 0,
+      "cancelled": 0,
+      "todo": 0,
+      "skips": []
+    },
+    {
+      "file": "src/lib/mind/schedule-clock.test.ts",
+      "tests": 2,
+      "pass": 2,
+      "fail": 0,
+      "skipped": 0,
+      "cancelled": 0,
+      "todo": 0,
+      "skips": []
+    },
+    {
+      "file": "src/lib/mind/schedule-worker.test.ts",
+      "tests": 2,
+      "pass": 2,
+      "fail": 0,
+      "skipped": 0,
+      "cancelled": 0,
+      "todo": 0,
+      "skips": []
+    },
+    {
+      "file": "src/lib/mind/selection-routing.test.ts",
+      "tests": 7,
+      "pass": 7,
+      "fail": 0,
+      "skipped": 0,
+      "cancelled": 0,
+      "todo": 0,
+      "skips": []
+    },
+    {
+      "file": "src/lib/mind/send-gate.test.ts",
+      "tests": 3,
+      "pass": 3,
+      "fail": 0,
+      "skipped": 0,
+      "cancelled": 0,
+      "todo": 0,
+      "skips": []
+    },
+    {
+      "file": "src/lib/mind/service-board-status.test.ts",
+      "tests": 12,
+      "pass": 12,
+      "fail": 0,
+      "skipped": 0,
+      "cancelled": 0,
+      "todo": 0,
+      "skips": []
+    },
+    {
+      "file": "src/lib/mind/settings-reset.test.ts",
+      "tests": 3,
+      "pass": 3,
+      "fail": 0,
+      "skipped": 0,
+      "cancelled": 0,
+      "todo": 0,
+      "skips": []
+    },
+    {
+      "file": "src/lib/mind/skill-library.test.ts",
+      "tests": 4,
+      "pass": 4,
+      "fail": 0,
+      "skipped": 0,
+      "cancelled": 0,
+      "todo": 0,
+      "skips": []
+    },
+    {
+      "file": "src/lib/mind/skills.test.ts",
+      "tests": 3,
+      "pass": 3,
+      "fail": 0,
+      "skipped": 0,
+      "cancelled": 0,
+      "todo": 0,
+      "skips": []
+    },
+    {
+      "file": "src/lib/mind/speak-bot.test.ts",
+      "tests": 4,
+      "pass": 4,
+      "fail": 0,
+      "skipped": 0,
+      "cancelled": 0,
+      "todo": 0,
+      "skips": []
+    },
+    {
+      "file": "src/lib/mind/store.test.ts",
+      "tests": 8,
+      "pass": 8,
+      "fail": 0,
+      "skipped": 0,
+      "cancelled": 0,
+      "todo": 0,
+      "skips": []
+    },
+    {
+      "file": "src/lib/mind/stream.test.ts",
+      "tests": 12,
+      "pass": 12,
+      "fail": 0,
+      "skipped": 0,
+      "cancelled": 0,
+      "todo": 0,
+      "skips": []
+    },
+    {
+      "file": "src/lib/mind/supabase-account-action.test.ts",
+      "tests": 5,
+      "pass": 5,
+      "fail": 0,
+      "skipped": 0,
+      "cancelled": 0,
+      "todo": 0,
+      "skips": []
+    },
+    {
+      "file": "src/lib/mind/sync.test.ts",
+      "tests": 2,
+      "pass": 2,
+      "fail": 0,
+      "skipped": 0,
+      "cancelled": 0,
+      "todo": 0,
+      "skips": []
+    },
+    {
+      "file": "src/lib/mind/system-dictation.test.ts",
+      "tests": 2,
+      "pass": 2,
+      "fail": 0,
+      "skipped": 0,
+      "cancelled": 0,
+      "todo": 0,
+      "skips": []
+    },
+    {
+      "file": "src/lib/mind/talking-head-face.test.ts",
+      "tests": 1,
+      "pass": 1,
+      "fail": 0,
+      "skipped": 0,
+      "cancelled": 0,
+      "todo": 0,
+      "skips": []
+    },
+    {
+      "file": "src/lib/mind/three-tier-router.test.ts",
+      "tests": 8,
+      "pass": 8,
+      "fail": 0,
+      "skipped": 0,
+      "cancelled": 0,
+      "todo": 0,
+      "skips": []
+    },
+    {
+      "file": "src/lib/mind/timeout-integration.test.ts",
+      "tests": 2,
+      "pass": 2,
+      "fail": 0,
+      "skipped": 0,
+      "cancelled": 0,
+      "todo": 0,
+      "skips": []
+    },
+    {
+      "file": "src/lib/mind/tools-timeline.test.ts",
+      "tests": 6,
+      "pass": 6,
+      "fail": 0,
+      "skipped": 0,
+      "cancelled": 0,
+      "todo": 0,
+      "skips": []
+    },
+    {
+      "file": "src/lib/mind/transcript.test.ts",
+      "tests": 8,
+      "pass": 8,
+      "fail": 0,
+      "skipped": 0,
+      "cancelled": 0,
+      "todo": 0,
+      "skips": []
+    },
+    {
+      "file": "src/lib/mind/turn-receipt.test.ts",
+      "tests": 2,
+      "pass": 2,
+      "fail": 0,
+      "skipped": 0,
+      "cancelled": 0,
+      "todo": 0,
+      "skips": []
+    },
+    {
+      "file": "src/lib/mind/turn-timeouts.test.ts",
+      "tests": 4,
+      "pass": 4,
+      "fail": 0,
+      "skipped": 0,
+      "cancelled": 0,
+      "todo": 0,
+      "skips": []
+    },
+    {
+      "file": "src/lib/mind/use-mind-workspace.test.ts",
+      "tests": 4,
+      "pass": 4,
+      "fail": 0,
+      "skipped": 0,
+      "cancelled": 0,
+      "todo": 0,
+      "skips": []
+    },
+    {
+      "file": "src/lib/mind/visual-polish-contract.test.ts",
+      "tests": 4,
+      "pass": 4,
+      "fail": 0,
+      "skipped": 0,
+      "cancelled": 0,
+      "todo": 0,
+      "skips": []
+    },
+    {
+      "file": "src/lib/mind/voice-cloning/attacker-pass.test.ts",
+      "tests": 10,
+      "pass": 10,
+      "fail": 0,
+      "skipped": 0,
+      "cancelled": 0,
+      "todo": 0,
+      "skips": []
+    },
+    {
+      "file": "src/lib/mind/voice-cloning/consent.test.ts",
+      "tests": 8,
+      "pass": 8,
+      "fail": 0,
+      "skipped": 0,
+      "cancelled": 0,
+      "todo": 0,
+      "skips": []
+    },
+    {
+      "file": "src/lib/mind/voice-cloning/limits.test.ts",
+      "tests": 6,
+      "pass": 6,
+      "fail": 0,
+      "skipped": 0,
+      "cancelled": 0,
+      "todo": 0,
+      "skips": []
+    },
+    {
+      "file": "src/lib/mind/voice-cloning/local-flow.test.ts",
+      "tests": 1,
+      "pass": 1,
+      "fail": 0,
+      "skipped": 0,
+      "cancelled": 0,
+      "todo": 0,
+      "skips": []
+    },
+    {
+      "file": "src/lib/mind/voice-cloning/local-provider.test.ts",
+      "tests": 10,
+      "pass": 10,
+      "fail": 0,
+      "skipped": 0,
+      "cancelled": 0,
+      "todo": 0,
+      "skips": []
+    },
+    {
+      "file": "src/lib/mind/voice-cloning/resource-policy.test.ts",
+      "tests": 2,
+      "pass": 2,
+      "fail": 0,
+      "skipped": 0,
+      "cancelled": 0,
+      "todo": 0,
+      "skips": []
+    },
+    {
+      "file": "src/lib/mind/voice-cloning/service.test.ts",
+      "tests": 5,
+      "pass": 5,
+      "fail": 0,
+      "skipped": 0,
+      "cancelled": 0,
+      "todo": 0,
+      "skips": []
+    },
+    {
+      "file": "src/lib/mind/voice-live/attachments.test.ts",
+      "tests": 3,
+      "pass": 3,
+      "fail": 0,
+      "skipped": 0,
+      "cancelled": 0,
+      "todo": 0,
+      "skips": []
+    },
+    {
+      "file": "src/lib/mind/voice-live/bar-state.test.ts",
+      "tests": 2,
+      "pass": 2,
+      "fail": 0,
+      "skipped": 0,
+      "cancelled": 0,
+      "todo": 0,
+      "skips": []
+    },
+    {
+      "file": "src/lib/mind/voice-live/barge-in.test.ts",
+      "tests": 3,
+      "pass": 3,
+      "fail": 0,
+      "skipped": 0,
+      "cancelled": 0,
+      "todo": 0,
+      "skips": []
+    },
+    {
+      "file": "src/lib/mind/voice-live/connect-timeout.test.ts",
+      "tests": 3,
+      "pass": 3,
+      "fail": 0,
+      "skipped": 0,
+      "cancelled": 0,
+      "todo": 0,
+      "skips": []
+    },
+    {
+      "file": "src/lib/mind/voice-live/live-session.test.ts",
+      "tests": 9,
+      "pass": 9,
+      "fail": 0,
+      "skipped": 0,
+      "cancelled": 0,
+      "todo": 0,
+      "skips": []
+    },
+    {
+      "file": "src/lib/mind/voice-live/session-instructions.test.ts",
+      "tests": 3,
+      "pass": 3,
+      "fail": 0,
+      "skipped": 0,
+      "cancelled": 0,
+      "todo": 0,
+      "skips": []
+    },
+    {
+      "file": "src/lib/mind/voice-live/spam-guard.test.ts",
+      "tests": 4,
+      "pass": 4,
+      "fail": 0,
+      "skipped": 0,
+      "cancelled": 0,
+      "todo": 0,
+      "skips": []
+    },
+    {
+      "file": "src/lib/mind/voice-live/speaker-gain.test.ts",
+      "tests": 1,
+      "pass": 1,
+      "fail": 0,
+      "skipped": 0,
+      "cancelled": 0,
+      "todo": 0,
+      "skips": []
+    },
+    {
+      "file": "src/lib/mind/voice-live/types.test.ts",
+      "tests": 3,
+      "pass": 3,
+      "fail": 0,
+      "skipped": 0,
+      "cancelled": 0,
+      "todo": 0,
+      "skips": []
+    },
+    {
+      "file": "src/lib/mind/voice/attack-pass.test.ts",
+      "tests": 13,
+      "pass": 13,
+      "fail": 0,
+      "skipped": 0,
+      "cancelled": 0,
+      "todo": 0,
+      "skips": []
+    },
+    {
+      "file": "src/lib/mind/voice/audio-output.test.ts",
+      "tests": 6,
+      "pass": 6,
+      "fail": 0,
+      "skipped": 0,
+      "cancelled": 0,
+      "todo": 0,
+      "skips": []
+    },
+    {
+      "file": "src/lib/mind/voice/barge-in.test.ts",
+      "tests": 8,
+      "pass": 8,
+      "fail": 0,
+      "skipped": 0,
+      "cancelled": 0,
+      "todo": 0,
+      "skips": []
+    },
+    {
+      "file": "src/lib/mind/voice/client-secret.test.ts",
+      "tests": 5,
+      "pass": 5,
+      "fail": 0,
+      "skipped": 0,
+      "cancelled": 0,
+      "todo": 0,
+      "skips": []
+    },
+    {
+      "file": "src/lib/mind/voice/connection-stages.test.ts",
+      "tests": 2,
+      "pass": 2,
+      "fail": 0,
+      "skipped": 0,
+      "cancelled": 0,
+      "todo": 0,
+      "skips": []
+    },
+    {
+      "file": "src/lib/mind/voice/dictation-machine.test.ts",
+      "tests": 5,
+      "pass": 5,
+      "fail": 0,
+      "skipped": 0,
+      "cancelled": 0,
+      "todo": 0,
+      "skips": []
+    },
+    {
+      "file": "src/lib/mind/voice/dictation.test.ts",
+      "tests": 1,
+      "pass": 1,
+      "fail": 0,
+      "skipped": 0,
+      "cancelled": 0,
+      "todo": 0,
+      "skips": []
+    },
+    {
+      "file": "src/lib/mind/voice/direct-mode.test.ts",
+      "tests": 4,
+      "pass": 4,
+      "fail": 0,
+      "skipped": 0,
+      "cancelled": 0,
+      "todo": 0,
+      "skips": []
+    },
+    {
+      "file": "src/lib/mind/voice/error-contract.test.ts",
+      "tests": 1,
+      "pass": 1,
+      "fail": 0,
+      "skipped": 0,
+      "cancelled": 0,
+      "todo": 0,
+      "skips": []
+    },
+    {
+      "file": "src/lib/mind/voice/errors.test.ts",
+      "tests": 5,
+      "pass": 5,
+      "fail": 0,
+      "skipped": 0,
+      "cancelled": 0,
+      "todo": 0,
+      "skips": []
+    },
+    {
+      "file": "src/lib/mind/voice/hold-to-talk.test.ts",
+      "tests": 6,
+      "pass": 6,
+      "fail": 0,
+      "skipped": 0,
+      "cancelled": 0,
+      "todo": 0,
+      "skips": []
+    },
+    {
+      "file": "src/lib/mind/voice/keys.test.ts",
+      "tests": 3,
+      "pass": 3,
+      "fail": 0,
+      "skipped": 0,
+      "cancelled": 0,
+      "todo": 0,
+      "skips": []
+    },
+    {
+      "file": "src/lib/mind/voice/level.test.ts",
+      "tests": 4,
+      "pass": 4,
+      "fail": 0,
+      "skipped": 0,
+      "cancelled": 0,
+      "todo": 0,
+      "skips": []
+    },
+    {
+      "file": "src/lib/mind/voice/levels.test.ts",
+      "tests": 4,
+      "pass": 4,
+      "fail": 0,
+      "skipped": 0,
+      "cancelled": 0,
+      "todo": 0,
+      "skips": []
+    },
+    {
+      "file": "src/lib/mind/voice/limits.test.ts",
+      "tests": 2,
+      "pass": 2,
+      "fail": 0,
+      "skipped": 0,
+      "cancelled": 0,
+      "todo": 0,
+      "skips": []
+    },
+    {
+      "file": "src/lib/mind/voice/listen-guard.test.ts",
+      "tests": 2,
+      "pass": 2,
+      "fail": 0,
+      "skipped": 0,
+      "cancelled": 0,
+      "todo": 0,
+      "skips": []
+    },
+    {
+      "file": "src/lib/mind/voice/live-transcript.test.ts",
+      "tests": 2,
+      "pass": 2,
+      "fail": 0,
+      "skipped": 0,
+      "cancelled": 0,
+      "todo": 0,
+      "skips": []
+    },
+    {
+      "file": "src/lib/mind/voice/mic-probe.test.ts",
+      "tests": 3,
+      "pass": 3,
+      "fail": 0,
+      "skipped": 0,
+      "cancelled": 0,
+      "todo": 0,
+      "skips": []
+    },
+    {
+      "file": "src/lib/mind/voice/mode-store.test.ts",
+      "tests": 2,
+      "pass": 2,
+      "fail": 0,
+      "skipped": 0,
+      "cancelled": 0,
+      "todo": 0,
+      "skips": []
+    },
+    {
+      "file": "src/lib/mind/voice/mode.test.ts",
+      "tests": 5,
+      "pass": 5,
+      "fail": 0,
+      "skipped": 0,
+      "cancelled": 0,
+      "todo": 0,
+      "skips": []
+    },
+    {
+      "file": "src/lib/mind/voice/nav-stack.test.ts",
+      "tests": 1,
+      "pass": 1,
+      "fail": 0,
+      "skipped": 0,
+      "cancelled": 0,
+      "todo": 0,
+      "skips": []
+    },
+    {
+      "file": "src/lib/mind/voice/ollama-conductor.test.ts",
+      "tests": 5,
+      "pass": 5,
+      "fail": 0,
+      "skipped": 0,
+      "cancelled": 0,
+      "todo": 0,
+      "skips": []
+    },
+    {
+      "file": "src/lib/mind/voice/ollama-host.test.ts",
+      "tests": 2,
+      "pass": 2,
+      "fail": 0,
+      "skipped": 0,
+      "cancelled": 0,
+      "todo": 0,
+      "skips": []
+    },
+    {
+      "file": "src/lib/mind/voice/ollama-probe.test.ts",
+      "tests": 2,
+      "pass": 2,
+      "fail": 0,
+      "skipped": 0,
+      "cancelled": 0,
+      "todo": 0,
+      "skips": []
+    },
+    {
+      "file": "src/lib/mind/voice/one-audio.test.ts",
+      "tests": 1,
+      "pass": 1,
+      "fail": 0,
+      "skipped": 0,
+      "cancelled": 0,
+      "todo": 0,
+      "skips": []
+    },
+    {
+      "file": "src/lib/mind/voice/one-voice.test.ts",
+      "tests": 4,
+      "pass": 4,
+      "fail": 0,
+      "skipped": 0,
+      "cancelled": 0,
+      "todo": 0,
+      "skips": []
+    },
+    {
+      "file": "src/lib/mind/voice/provider-fallback.test.ts",
+      "tests": 4,
+      "pass": 4,
+      "fail": 0,
+      "skipped": 0,
+      "cancelled": 0,
+      "todo": 0,
+      "skips": []
+    },
+    {
+      "file": "src/lib/mind/voice/realtime-session.test.ts",
+      "tests": 6,
+      "pass": 6,
+      "fail": 0,
+      "skipped": 0,
+      "cancelled": 0,
+      "todo": 0,
+      "skips": []
+    },
+    {
+      "file": "src/lib/mind/voice/realtime.test.ts",
+      "tests": 4,
+      "pass": 4,
+      "fail": 0,
+      "skipped": 0,
+      "cancelled": 0,
+      "todo": 0,
+      "skips": []
+    },
+    {
+      "file": "src/lib/mind/voice/selected-route.test.ts",
+      "tests": 1,
+      "pass": 1,
+      "fail": 0,
+      "skipped": 0,
+      "cancelled": 0,
+      "todo": 0,
+      "skips": []
+    },
+    {
+      "file": "src/lib/mind/voice/session-timeout.test.ts",
+      "tests": 3,
+      "pass": 3,
+      "fail": 0,
+      "skipped": 0,
+      "cancelled": 0,
+      "todo": 0,
+      "skips": []
+    },
+    {
+      "file": "src/lib/mind/voice/settings.test.ts",
+      "tests": 3,
+      "pass": 3,
+      "fail": 0,
+      "skipped": 0,
+      "cancelled": 0,
+      "todo": 0,
+      "skips": []
+    },
+    {
+      "file": "src/lib/mind/voice/shortcut.test.ts",
+      "tests": 3,
+      "pass": 3,
+      "fail": 0,
+      "skipped": 0,
+      "cancelled": 0,
+      "todo": 0,
+      "skips": []
+    },
+    {
+      "file": "src/lib/mind/voice/spam-guard.test.ts",
+      "tests": 7,
+      "pass": 7,
+      "fail": 0,
+      "skipped": 0,
+      "cancelled": 0,
+      "todo": 0,
+      "skips": []
+    },
+    {
+      "file": "src/lib/mind/voice/speak-action.test.ts",
+      "tests": 6,
+      "pass": 6,
+      "fail": 0,
+      "skipped": 0,
+      "cancelled": 0,
+      "todo": 0,
+      "skips": []
+    },
+    {
+      "file": "src/lib/mind/voice/speak-control.test.ts",
+      "tests": 2,
+      "pass": 2,
+      "fail": 0,
+      "skipped": 0,
+      "cancelled": 0,
+      "todo": 0,
+      "skips": []
+    },
+    {
+      "file": "src/lib/mind/voice/speak-e2e.test.ts",
+      "tests": 1,
+      "pass": 1,
+      "fail": 0,
+      "skipped": 0,
+      "cancelled": 0,
+      "todo": 0,
+      "skips": []
+    },
+    {
+      "file": "src/lib/mind/voice/speak-mounted.test.ts",
+      "tests": 6,
+      "pass": 6,
+      "fail": 0,
+      "skipped": 0,
+      "cancelled": 0,
+      "todo": 0,
+      "skips": []
+    },
+    {
+      "file": "src/lib/mind/voice/speak-queue-regression.test.ts",
+      "tests": 2,
+      "pass": 2,
+      "fail": 0,
+      "skipped": 0,
+      "cancelled": 0,
+      "todo": 0,
+      "skips": []
+    },
+    {
+      "file": "src/lib/mind/voice/stt.test.ts",
+      "tests": 3,
+      "pass": 3,
+      "fail": 0,
+      "skipped": 0,
+      "cancelled": 0,
+      "todo": 0,
+      "skips": []
+    },
+    {
+      "file": "src/lib/mind/voice/test-audio.test.ts",
+      "tests": 2,
+      "pass": 2,
+      "fail": 0,
+      "skipped": 0,
+      "cancelled": 0,
+      "todo": 0,
+      "skips": []
+    },
+    {
+      "file": "src/lib/mind/voice/transcript-routing.test.ts",
+      "tests": 2,
+      "pass": 2,
+      "fail": 0,
+      "skipped": 0,
+      "cancelled": 0,
+      "todo": 0,
+      "skips": []
+    },
+    {
+      "file": "src/lib/mind/voice/transcription-policy.test.ts",
+      "tests": 4,
+      "pass": 4,
+      "fail": 0,
+      "skipped": 0,
+      "cancelled": 0,
+      "todo": 0,
+      "skips": []
+    },
+    {
+      "file": "src/lib/mind/voice/voice-chat-turn.test.ts",
+      "tests": 4,
+      "pass": 4,
+      "fail": 0,
+      "skipped": 0,
+      "cancelled": 0,
+      "todo": 0,
+      "skips": []
+    },
+    {
+      "file": "src/lib/mind/voice/voice-input.test.ts",
+      "tests": 7,
+      "pass": 7,
+      "fail": 0,
+      "skipped": 0,
+      "cancelled": 0,
+      "todo": 0,
+      "skips": []
+    },
+    {
+      "file": "src/lib/mind/voice/voices.test.ts",
+      "tests": 2,
+      "pass": 2,
+      "fail": 0,
+      "skipped": 0,
+      "cancelled": 0,
+      "todo": 0,
+      "skips": []
+    },
+    {
+      "file": "src/lib/mind/whisper-flow/commands.test.ts",
+      "tests": 10,
+      "pass": 10,
+      "fail": 0,
+      "skipped": 0,
+      "cancelled": 0,
+      "todo": 0,
+      "skips": []
+    },
+    {
+      "file": "src/lib/mind/whisper-flow/dictate-timeout.test.ts",
+      "tests": 2,
+      "pass": 2,
+      "fail": 0,
+      "skipped": 0,
+      "cancelled": 0,
+      "todo": 0,
+      "skips": []
+    },
+    {
+      "file": "src/lib/mind/whisper-flow/insert.test.ts",
+      "tests": 5,
+      "pass": 5,
+      "fail": 0,
+      "skipped": 0,
+      "cancelled": 0,
+      "todo": 0,
+      "skips": []
+    },
+    {
+      "file": "src/lib/mind/whisper-flow/llm-refine.test.ts",
+      "tests": 3,
+      "pass": 3,
+      "fail": 0,
+      "skipped": 0,
+      "cancelled": 0,
+      "todo": 0,
+      "skips": []
+    },
+    {
+      "file": "src/lib/mind/whisper-flow/machine.test.ts",
+      "tests": 4,
+      "pass": 4,
+      "fail": 0,
+      "skipped": 0,
+      "cancelled": 0,
+      "todo": 0,
+      "skips": []
+    },
+    {
+      "file": "src/lib/mind/whisper-flow/provider.test.ts",
+      "tests": 4,
+      "pass": 4,
+      "fail": 0,
+      "skipped": 0,
+      "cancelled": 0,
+      "todo": 0,
+      "skips": []
+    },
+    {
+      "file": "src/lib/mind/whisper-flow/refine.test.ts",
+      "tests": 5,
+      "pass": 5,
+      "fail": 0,
+      "skipped": 0,
+      "cancelled": 0,
+      "todo": 0,
+      "skips": []
+    },
+    {
+      "file": "src/lib/mind/whisper-flow/retry.test.ts",
+      "tests": 4,
+      "pass": 4,
+      "fail": 0,
+      "skipped": 0,
+      "cancelled": 0,
+      "todo": 0,
+      "skips": []
+    },
+    {
+      "file": "src/lib/mind/whisper-flow/session.test.ts",
+      "tests": 3,
+      "pass": 3,
+      "fail": 0,
+      "skipped": 0,
+      "cancelled": 0,
+      "todo": 0,
+      "skips": []
+    },
+    {
+      "file": "src/lib/mind/whisper-flow/stt-client-errors.test.ts",
+      "tests": 2,
+      "pass": 2,
+      "fail": 0,
+      "skipped": 0,
+      "cancelled": 0,
+      "todo": 0,
+      "skips": []
+    },
+    {
+      "file": "src/lib/mind/workbench-command.test.ts",
+      "tests": 3,
+      "pass": 3,
+      "fail": 0,
+      "skipped": 0,
+      "cancelled": 0,
+      "todo": 0,
+      "skips": []
+    },
+    {
+      "file": "src/lib/mind/worker-loop.test.ts",
+      "tests": 2,
+      "pass": 2,
+      "fail": 0,
+      "skipped": 0,
+      "cancelled": 0,
+      "todo": 0,
+      "skips": []
+    },
+    {
+      "file": "src/lib/mind/worker-pass.test.ts",
+      "tests": 5,
+      "pass": 5,
+      "fail": 0,
+      "skipped": 0,
+      "cancelled": 0,
+      "todo": 0,
+      "skips": []
+    },
+    {
+      "file": "src/lib/mind/workspace-nav.test.ts",
+      "tests": 1,
+      "pass": 1,
+      "fail": 0,
+      "skipped": 0,
+      "cancelled": 0,
+      "todo": 0,
+      "skips": []
+    },
+    {
+      "file": "src/lib/mind/workspace-reconciliation.test.ts",
+      "tests": 9,
+      "pass": 9,
+      "fail": 0,
+      "skipped": 0,
+      "cancelled": 0,
+      "todo": 0,
+      "skips": []
+    },
+    {
+      "file": "src/lib/mind/workspace.test.ts",
+      "tests": 12,
+      "pass": 12,
+      "fail": 0,
+      "skipped": 0,
+      "cancelled": 0,
+      "todo": 0,
+      "skips": []
+    },
+    {
+      "file": "src/lib/mind/xai-adapter.probes.test.ts",
+      "tests": 19,
+      "pass": 19,
+      "fail": 0,
+      "skipped": 0,
+      "cancelled": 0,
+      "todo": 0,
+      "skips": []
+    },
+    {
+      "file": "src/lib/mind/xai-adapter.test.ts",
+      "tests": 6,
+      "pass": 6,
+      "fail": 0,
+      "skipped": 0,
+      "cancelled": 0,
+      "todo": 0,
+      "skips": []
+    },
+    {
+      "file": "src/lib/preview-path-prefix.test.ts",
+      "tests": 4,
+      "pass": 4,
+      "fail": 0,
+      "skipped": 0,
+      "cancelled": 0,
+      "todo": 0,
+      "skips": []
+    },
+    {
+      "file": "src/lib/supabase/auth-flow.test.ts",
+      "tests": 4,
+      "pass": 4,
+      "fail": 0,
+      "skipped": 0,
+      "cancelled": 0,
+      "todo": 0,
+      "skips": []
+    },
+    {
+      "file": "src/lib/supabase/callback-redirect.test.ts",
+      "tests": 2,
+      "pass": 2,
+      "fail": 0,
+      "skipped": 0,
+      "cancelled": 0,
+      "todo": 0,
+      "skips": []
+    },
+    {
+      "file": "src/lib/supabase/cookies.test.ts",
+      "tests": 4,
+      "pass": 4,
+      "fail": 0,
+      "skipped": 0,
+      "cancelled": 0,
+      "todo": 0,
+      "skips": []
+    },
+    {
+      "file": "src/lib/supabase/env.test.ts",
+      "tests": 6,
+      "pass": 6,
+      "fail": 0,
+      "skipped": 0,
+      "cancelled": 0,
+      "todo": 0,
+      "skips": []
+    },
+    {
+      "file": "src/lib/supabase/gate.test.ts",
+      "tests": 3,
+      "pass": 3,
+      "fail": 0,
+      "skipped": 0,
+      "cancelled": 0,
+      "todo": 0,
+      "skips": []
+    },
+    {
+      "file": "src/lib/supabase/oauth-redirect.test.ts",
+      "tests": 6,
+      "pass": 6,
+      "fail": 0,
+      "skipped": 0,
+      "cancelled": 0,
+      "todo": 0,
+      "skips": []
+    },
+    {
+      "file": "src/lib/supabase/safe-redirect.test.ts",
+      "tests": 5,
+      "pass": 5,
+      "fail": 0,
+      "skipped": 0,
+      "cancelled": 0,
+      "todo": 0,
+      "skips": []
+    }
+  ]
+}

@@ -4,6 +4,7 @@ import { handleIdeTools } from "@/lib/mind/kimi/ide.server";
 export const Route = createFileRoute("/api/mind/build/ide")({
   server: {
     handlers: {
+      GET: ({ request }) => handleIdeTools(request),
       POST: ({ request }) => handleIdeTools(request),
     },
   },

@@ -1,0 +1,2885 @@
+{
+  "sourceChecklist": "docs/adrian-analysis-implementation-checklist.md",
+  "rows": [
+    {
+      "finding": "C4/AA-001",
+      "source": "C4/M01",
+      "expected": "Accepted or uncertain append recovery must never append again.",
+      "implementation": "docs/adrian-analysis-implementation-checklist.md#L19",
+      "regression": "[G01](#g01-notion-recovery)",
+      "disposition": "Combined verification pending",
+      "recordUrl": "https://app.notion.com/p/4231aa2763238104bb34df725195c48b?pvs=204",
+      "sourceDisposition": "fixed and tested",
+      "sourceFiles": [
+        "src/lib/mind/notion.ts",
+        "src/lib/mind/notion-write-receipt.ts",
+        "src/lib/mind/server.ts",
+        "src/lib/mind/notion-recovery.ts",
+        "src/components/mind/command-app.tsx"
+      ],
+      "caseReports": {
+        "files": [
+          "src/lib/mind/adrian-analysis-regressions.test.ts",
+          "src/lib/mind/audit-connection-integrity.test.ts"
+        ],
+        "reviewedFixtureFiles": [
+          "src/lib/mind/audit-connection-integrity.test.ts"
+        ],
+        "reviewedAssertionScope": "PGlite with synthetic transport checks acknowledged block-ID readback after restart, exact original page, account separation, duplicate old text, simultaneous confirmation, lost acknowledgement and no second PATCH. Real Notion grant repair and live readback remain unverified.",
+        "combinedEvidence": {
+          "revision": "761fe89f94ec001ba17379d088b4ce8a761cda33",
+          "path": "src/lib/mind/audit-connection-integrity.test.ts",
+          "run": "https://github.com/emzylavish-art/adrians-mind-command-os/actions/runs/45940949081/job/140314862237",
+          "assertion": "AA001 simultaneous confirmation and lost acknowledgement issue at most one append",
+          "scope": "Simultaneous approval and lost acknowledgement reached synthetic Notion only once. Production-equivalent reconnect and original-destination readback remain open.",
+          "executedRevision": "c0d4ea708c6ac5a7187cd2d0ca498e17c80559d4",
+          "checkout": "GitHub PR merge ref had the identical Git tree 71762908a426062709d3d7876e04d5a57ef1073a. Browser artifacts use the exact head."
+        },
+        "exactFixtureResults": {
+          "revision": "56f987e34187e12c63ae885b4c6e499465213e42",
+          "scope": "Combined fixture behavior using controlled test data and transports. External services and physical devices are separate acceptance checks.",
+          "checks": [
+            {
+              "path": "src/lib/mind/audit-connection-integrity.test.ts",
+              "assertion": "AA001 acknowledged append uses its new block identity; recovery survives restart and never repeats PATCH",
+              "run": "https://github.com/emzylavish-art/adrians-mind-command-os/actions/runs/45941873848/job/140317783421"
+            },
+            {
+              "path": "src/lib/mind/audit-connection-integrity.test.ts",
+              "assertion": "AA001 simultaneous confirmation and lost acknowledgement issue at most one append",
+              "run": "https://github.com/emzylavish-art/adrians-mind-command-os/actions/runs/45941873848/job/140317783421"
+            },
+            {
+              "path": "src/lib/mind/adrian-analysis-regressions.test.ts",
+              "assertion": "AA001 Notion recovery remains owner/workspace/page/operation bound across reload",
+              "run": "https://github.com/emzylavish-art/adrians-mind-command-os/actions/runs/45941873848/job/140317783421"
+            }
+          ]
+        }
+      },
+      "nextCheck": "The linked assertions passed. Verify the remaining acceptance conditions and source limits before closing this finding."
+    },
+    {
+      "finding": "C4/AA-002",
+      "source": "C4/M01",
+      "expected": "Connection labels and timestamps must describe evidence for the current owner.",
+      "implementation": "docs/adrian-analysis-implementation-checklist.md#L20",
+      "regression": "[G02](#g02-integration-status)",
+      "disposition": "Combined verification pending",
+      "recordUrl": "https://app.notion.com/p/4231aa2763238104bb34df725195c48b?pvs=204",
+      "sourceDisposition": "fixed and tested",
+      "sourceFiles": [
+        "src/components/mind/notion-integration-card.tsx",
+        "src/lib/mind/notion-integration-status.ts",
+        "src/components/mind/command-app.tsx"
+      ],
+      "caseReports": {
+        "files": [
+          "src/lib/mind/audit-connection-integrity.test.ts"
+        ],
+        "exactFixtureResults": {
+          "revision": "56f987e34187e12c63ae885b4c6e499465213e42",
+          "scope": "Combined fixture behavior using controlled test data and transports. External services and physical devices are separate acceptance checks.",
+          "checks": [
+            {
+              "path": "src/lib/mind/audit-connection-integrity.test.ts",
+              "assertion": "AA002 integration status uses the saved owner's grant and its own check time, never a catalog timestamp",
+              "run": "https://github.com/emzylavish-art/adrians-mind-command-os/actions/runs/45941873848/job/140317783421"
+            }
+          ]
+        }
+      },
+      "nextCheck": "The linked assertions passed. Verify the remaining acceptance conditions and source limits before closing this finding."
+    },
+    {
+      "finding": "C4/AA-003",
+      "source": "C4/M02",
+      "expected": "Typed and recorded microphone answers must use the selected capable text route.",
+      "implementation": "docs/adrian-analysis-implementation-checklist.md#L21",
+      "regression": "[G03](#g03-voice-stages)",
+      "disposition": "Combined verification pending",
+      "combinedTests": [
+        "scripts/adrian-audit-speak-lifecycle.test.mjs",
+        "scripts/adrian-audit-deliver-lifecycle.test.mjs"
+      ],
+      "combinedFixture": "Production callback and HTTP fixture exercised on the chat/recorded Speak integration tree. See the chat and Speak checkpoint in integration-receipt.md. Authenticated staging remains unverified.",
+      "recordUrl": "https://app.notion.com/p/4231aa276323816ab14bef85ae5a036e?pvs=204",
+      "sourceDisposition": "fixed and tested",
+      "sourceFiles": [
+        "src/lib/mind/voice/stage-routing.ts",
+        "src/lib/mind/voice/provider-fallback.ts",
+        "src/lib/mind/voice/http.server.ts",
+        "src/lib/mind/voice/errors.ts",
+        "src/components/mind/speak-stage.tsx",
+        "src/components/mind/command-app.tsx"
+      ],
+      "caseReports": {
+        "files": [
+          "scripts/adrian-audit-deliver-lifecycle.test.mjs",
+          "scripts/adrian-audit-speak-lifecycle.test.mjs",
+          "scripts/adrian-audit-voice-auth.test.mjs",
+          "src/lib/mind/voice/direct-mode.test.ts",
+          "src/lib/mind/voice/provider-fallback.test.ts"
+        ],
+        "exactFixtureResults": {
+          "revision": "56f987e34187e12c63ae885b4c6e499465213e42",
+          "scope": "Combined fixture behavior using controlled test data and transports. External services and physical devices are separate acceptance checks.",
+          "checks": [
+            {
+              "path": "scripts/adrian-audit-speak-lifecycle.test.mjs",
+              "assertion": "AA003: actual recorded Speak keeps its first new chat, uses selected answer route, and waits for browser completion",
+              "run": "https://github.com/emzylavish-art/adrians-mind-command-os/actions/runs/45941873848/job/140317783409"
+            },
+            {
+              "path": "scripts/adrian-audit-speak-lifecycle.test.mjs",
+              "assertion": "AA003: muting while the selected answer is delayed saves it without synthesis or false playback success",
+              "run": "https://github.com/emzylavish-art/adrians-mind-command-os/actions/runs/45941873848/job/140317783409"
+            },
+            {
+              "path": "scripts/adrian-audit-speak-lifecycle.test.mjs",
+              "assertion": "AA003: mute aborts active browser audio even when the engine emits no cancellation event",
+              "run": "https://github.com/emzylavish-art/adrians-mind-command-os/actions/runs/45941873848/job/140317783409"
+            },
+            {
+              "path": "scripts/adrian-audit-speak-lifecycle.test.mjs",
+              "assertion": "AA003: owner change or interruption rejects a late answer without mutating the new owner's voice UI",
+              "run": "https://github.com/emzylavish-art/adrians-mind-command-os/actions/runs/45941873848/job/140317783409"
+            },
+            {
+              "path": "scripts/adrian-audit-speak-lifecycle.test.mjs",
+              "assertion": "AA003: actual SpeakStage ask callback ignores delayed close/reopen results and reports muted replies accurately",
+              "run": "https://github.com/emzylavish-art/adrians-mind-command-os/actions/runs/45941873848/job/140317783409"
+            },
+            {
+              "path": "scripts/adrian-audit-speak-lifecycle.test.mjs",
+              "assertion": "AA003: denied microphone and free-only recorded input dispatch no transcription or answer",
+              "run": "https://github.com/emzylavish-art/adrians-mind-command-os/actions/runs/45941873848/job/140317783409"
+            },
+            {
+              "path": "scripts/adrian-audit-speak-lifecycle.test.mjs",
+              "assertion": "AA003: browser read-aloud outside Speak preserves the saved volume",
+              "run": "https://github.com/emzylavish-art/adrians-mind-command-os/actions/runs/45941873848/job/140317783409"
+            },
+            {
+              "path": "scripts/adrian-audit-voice-auth.test.mjs",
+              "assertion": "AA003: selected text-only provider answers independently of speech engine; failed playback retry does not resend",
+              "run": "https://github.com/emzylavish-art/adrians-mind-command-os/actions/runs/45941873848/job/140317783409"
+            },
+            {
+              "path": "scripts/adrian-audit-voice-auth.test.mjs",
+              "assertion": "AA003: voice pipeline preferences stay owner scoped and survive reload",
+              "run": "https://github.com/emzylavish-art/adrians-mind-command-os/actions/runs/45941873848/job/140317783409"
+            },
+            {
+              "path": "scripts/adrian-audit-voice-auth.test.mjs",
+              "assertion": "AA003: browser speech waits for playback, respects volume and aborts delayed speech",
+              "run": "https://github.com/emzylavish-art/adrians-mind-command-os/actions/runs/45941873848/job/140317783409"
+            }
+          ]
+        }
+      },
+      "nextCheck": "The linked assertions passed. Verify the remaining acceptance conditions and source limits before closing this finding."
+    },
+    {
+      "finding": "C4/AA-004",
+      "source": "C4/M02",
+      "expected": "Failed transcription must not silently authorize a different paid provider.",
+      "implementation": "docs/adrian-analysis-implementation-checklist.md#L22",
+      "regression": "[G03](#g03-voice-stages)",
+      "disposition": "Combined verification pending",
+      "recordUrl": "https://app.notion.com/p/4231aa276323816ab14bef85ae5a036e?pvs=204",
+      "sourceDisposition": "fixed and tested",
+      "sourceFiles": [
+        "src/lib/mind/voice/stage-routing.ts",
+        "src/lib/mind/voice/provider-fallback.ts",
+        "src/lib/mind/voice/http.server.ts",
+        "src/lib/mind/voice/errors.ts",
+        "src/components/mind/speak-stage.tsx",
+        "src/components/mind/command-app.tsx"
+      ],
+      "caseReports": {
+        "files": [
+          "scripts/adrian-audit-deliver-lifecycle.test.mjs",
+          "scripts/adrian-audit-speak-lifecycle.test.mjs",
+          "scripts/adrian-audit-voice-auth.test.mjs",
+          "src/lib/mind/voice/direct-mode.test.ts",
+          "src/lib/mind/voice/provider-fallback.test.ts"
+        ],
+        "exactFixtureResults": {
+          "revision": "56f987e34187e12c63ae885b4c6e499465213e42",
+          "scope": "Combined fixture behavior using controlled test data and transports. External services and physical devices are separate acceptance checks.",
+          "checks": [
+            {
+              "path": "scripts/adrian-audit-voice-auth.test.mjs",
+              "assertion": "AA004: transcription failure never authorizes an implicit paid provider switch",
+              "run": "https://github.com/emzylavish-art/adrians-mind-command-os/actions/runs/45941873848/job/140317783409"
+            },
+            {
+              "path": "scripts/adrian-audit-voice-auth.test.mjs",
+              "assertion": "AA004: explicit OpenAI is the sole transcription provider; free-only and invalid selections dispatch nothing",
+              "run": "https://github.com/emzylavish-art/adrians-mind-command-os/actions/runs/45941873848/job/140317783409"
+            }
+          ]
+        }
+      },
+      "nextCheck": "The linked assertions passed. Verify the remaining acceptance conditions and source limits before closing this finding."
+    },
+    {
+      "finding": "C4/AA-005",
+      "source": "C4/M02",
+      "expected": "Unavailable local direction must preserve the selected preference.",
+      "implementation": "docs/adrian-analysis-implementation-checklist.md#L23",
+      "regression": "[G03](#g03-voice-stages)",
+      "disposition": "Fixed and tested on combined commit (isolated fixture)",
+      "recordUrl": "https://app.notion.com/p/4231aa276323816ab14bef85ae5a036e?pvs=204",
+      "sourceDisposition": "fixed and tested",
+      "sourceFiles": [
+        "src/lib/mind/voice/stage-routing.ts",
+        "src/lib/mind/voice/provider-fallback.ts",
+        "src/lib/mind/voice/http.server.ts",
+        "src/lib/mind/voice/errors.ts",
+        "src/components/mind/speak-stage.tsx",
+        "src/components/mind/command-app.tsx"
+      ],
+      "caseReports": {
+        "files": [
+          "scripts/adrian-audit-deliver-lifecycle.test.mjs",
+          "scripts/adrian-audit-speak-lifecycle.test.mjs",
+          "scripts/adrian-audit-voice-auth.test.mjs",
+          "src/lib/mind/voice/direct-mode.test.ts",
+          "src/lib/mind/voice/provider-fallback.test.ts"
+        ],
+        "exactFixtureResults": {
+          "revision": "56f987e34187e12c63ae885b4c6e499465213e42",
+          "scope": "Combined fixture behavior using controlled test data and transports. External services and physical devices are separate acceptance checks.",
+          "checks": [
+            {
+              "path": "src/lib/mind/voice/direct-mode.test.ts",
+              "assertion": "preserves a saved orchestrator preference when the runtime is temporarily unavailable",
+              "run": "https://github.com/emzylavish-art/adrians-mind-command-os/actions/runs/45941873848/job/140317783598"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "finding": "C4/AA-006",
+      "source": "C4/M03",
+      "expected": "Settings pane must survive deep link, back and reload.",
+      "implementation": "docs/adrian-analysis-implementation-checklist.md#L24",
+      "regression": "[G04](#g04-navigation)",
+      "disposition": "Fixed and tested on combined commit (isolated fixture)",
+      "combinedTests": [
+        "scripts/adrian-audit-client-ui.test.mjs"
+      ],
+      "combinedFixture": "The relevant callback or search fixture passed on the subsequent integration tree. Use its combined CI for exact-head verification. Physical devices, native execution and third-party delivery require separate evidence.",
+      "recordUrl": "https://app.notion.com/p/4231aa276323816c8bc4ea9ba2413a8a?pvs=204",
+      "sourceDisposition": "fixed and tested",
+      "sourceFiles": [
+        "src/lib/mind/app-location.ts",
+        "src/components/mind/command-app.tsx"
+      ],
+      "caseReports": {
+        "files": [
+          "scripts/adrian-audit-client-ui.test.mjs",
+          "src/lib/mind/adrian-analysis-regressions.test.ts",
+          "src/lib/mind/app-location.test.ts"
+        ],
+        "exactFixtureResults": {
+          "revision": "56f987e34187e12c63ae885b4c6e499465213e42",
+          "scope": "Combined fixture behavior using controlled test data and transports. External services and physical devices are separate acceptance checks.",
+          "checks": [
+            {
+              "path": "scripts/adrian-audit-client-ui.test.mjs",
+              "assertion": "AA006/007/008: actual location effects preserve first Back entry, Settings pane history and the Intelligence thread",
+              "run": "https://github.com/emzylavish-art/adrians-mind-command-os/actions/runs/45941873848/job/140317783409"
+            },
+            {
+              "path": "scripts/adrian-audit-client-ui.test.mjs",
+              "assertion": "AA006: entering a Settings pane focuses its heading without overriding the restored position",
+              "run": "https://github.com/emzylavish-art/adrians-mind-command-os/actions/runs/45941873848/job/140317783409"
+            },
+            {
+              "path": "src/lib/mind/adrian-analysis-regressions.test.ts",
+              "assertion": "AA006/008 settings panes and Intelligence identity survive navigation serialization",
+              "run": "https://github.com/emzylavish-art/adrians-mind-command-os/actions/runs/45941873848/job/140317783421"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "finding": "C4/AA-007",
+      "source": "C4/M03",
+      "expected": "The first user navigation must be a Back-reachable history entry.",
+      "implementation": "docs/adrian-analysis-implementation-checklist.md#L25",
+      "regression": "[G04](#g04-navigation)",
+      "disposition": "Fixed and tested on combined commit (isolated fixture)",
+      "combinedTests": [
+        "scripts/adrian-audit-client-ui.test.mjs"
+      ],
+      "combinedFixture": "The relevant callback or search fixture passed on the subsequent integration tree. Use its combined CI for exact-head verification. Physical devices, native execution and third-party delivery require separate evidence.",
+      "recordUrl": "https://app.notion.com/p/4231aa276323816c8bc4ea9ba2413a8a?pvs=204",
+      "sourceDisposition": "fixed and tested",
+      "sourceFiles": [
+        "src/lib/mind/app-location.ts",
+        "src/components/mind/command-app.tsx"
+      ],
+      "caseReports": {
+        "files": [
+          "scripts/adrian-audit-client-ui.test.mjs",
+          "src/lib/mind/adrian-analysis-regressions.test.ts",
+          "src/lib/mind/app-location.test.ts"
+        ],
+        "exactFixtureResults": {
+          "revision": "56f987e34187e12c63ae885b4c6e499465213e42",
+          "scope": "Combined fixture behavior using controlled test data and transports. External services and physical devices are separate acceptance checks.",
+          "checks": [
+            {
+              "path": "scripts/adrian-audit-client-ui.test.mjs",
+              "assertion": "AA006/007/008: actual location effects preserve first Back entry, Settings pane history and the Intelligence thread",
+              "run": "https://github.com/emzylavish-art/adrians-mind-command-os/actions/runs/45941873848/job/140317783409"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "finding": "C4/AA-008",
+      "source": "C4/M03",
+      "expected": "Intelligence reload must restore the selected thread.",
+      "implementation": "docs/adrian-analysis-implementation-checklist.md#L26",
+      "regression": "[G04](#g04-navigation)",
+      "disposition": "Fixed and tested on combined commit (isolated fixture)",
+      "combinedTests": [
+        "scripts/adrian-audit-client-ui.test.mjs"
+      ],
+      "combinedFixture": "The relevant callback or search fixture passed on the subsequent integration tree. Use its combined CI for exact-head verification. Physical devices, native execution and third-party delivery require separate evidence.",
+      "recordUrl": "https://app.notion.com/p/4231aa276323816c8bc4ea9ba2413a8a?pvs=204",
+      "sourceDisposition": "fixed and tested",
+      "sourceFiles": [
+        "src/lib/mind/app-location.ts",
+        "src/components/mind/command-app.tsx"
+      ],
+      "caseReports": {
+        "files": [
+          "scripts/adrian-audit-client-ui.test.mjs",
+          "src/lib/mind/adrian-analysis-regressions.test.ts",
+          "src/lib/mind/app-location.test.ts"
+        ],
+        "exactFixtureResults": {
+          "revision": "56f987e34187e12c63ae885b4c6e499465213e42",
+          "scope": "Combined fixture behavior using controlled test data and transports. External services and physical devices are separate acceptance checks.",
+          "checks": [
+            {
+              "path": "scripts/adrian-audit-client-ui.test.mjs",
+              "assertion": "AA006/007/008: actual location effects preserve first Back entry, Settings pane history and the Intelligence thread",
+              "run": "https://github.com/emzylavish-art/adrians-mind-command-os/actions/runs/45941873848/job/140317783409"
+            },
+            {
+              "path": "src/lib/mind/adrian-analysis-regressions.test.ts",
+              "assertion": "AA006/008 settings panes and Intelligence identity survive navigation serialization",
+              "run": "https://github.com/emzylavish-art/adrians-mind-command-os/actions/runs/45941873848/job/140317783421"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "finding": "C4/AA-009",
+      "source": "C4/M04",
+      "expected": "Debug must truthfully reflect the host capability.",
+      "implementation": "docs/adrian-analysis-implementation-checklist.md#L27",
+      "regression": "[G05](#g05-build-editor)",
+      "disposition": "Fixed and tested on combined commit (isolated fixture)",
+      "recordUrl": "https://app.notion.com/p/4231aa276323817095bbd25f8bb9962c?pvs=204",
+      "sourceDisposition": "fixed and tested",
+      "sourceFiles": [
+        "src/lib/mind/kimi/ide-capabilities.ts",
+        "src/lib/mind/kimi/ide.server.ts",
+        "src/components/mind/code-ide.tsx",
+        "src/components/mind/gpt-shell.css"
+      ],
+      "caseReports": {
+        "files": [
+          "scripts/adrian-audit-build.test.mjs"
+        ],
+        "exactFixtureResults": {
+          "revision": "56f987e34187e12c63ae885b4c6e499465213e42",
+          "scope": "Combined fixture behavior using controlled test data and transports. External services and physical devices are separate acceptance checks.",
+          "checks": [
+            {
+              "path": "scripts/adrian-audit-build.test.mjs",
+              "assertion": "AA009: website Debug advertises actual unavailable capability and never dispatches a debugger",
+              "run": "https://github.com/emzylavish-art/adrians-mind-command-os/actions/runs/45941873848/job/140317783409"
+            },
+            {
+              "path": "scripts/adrian-audit-build.test.mjs",
+              "assertion": "AA009: local Debug keeps dirty, busy, workspace and halt guards",
+              "run": "https://github.com/emzylavish-art/adrians-mind-command-os/actions/runs/45941873848/job/140317783409"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "finding": "C4/AA-010",
+      "source": "C4/M04",
+      "expected": "Editor themes and empty output should remain clean and readable.",
+      "implementation": "docs/adrian-analysis-implementation-checklist.md#L28",
+      "regression": "[G05](#g05-build-editor)",
+      "disposition": "Fixed and tested on combined commit (isolated fixture)",
+      "recordUrl": "https://app.notion.com/p/4231aa276323817095bbd25f8bb9962c?pvs=204",
+      "sourceDisposition": "fixed and tested",
+      "sourceFiles": [
+        "src/lib/mind/kimi/ide-capabilities.ts",
+        "src/lib/mind/kimi/ide.server.ts",
+        "src/components/mind/code-ide.tsx",
+        "src/components/mind/gpt-shell.css"
+      ],
+      "caseReports": {
+        "files": [
+          "scripts/adrian-audit-build.test.mjs"
+        ],
+        "exactFixtureResults": {
+          "revision": "56f987e34187e12c63ae885b4c6e499465213e42",
+          "scope": "Combined fixture behavior using controlled test data and transports. External services and physical devices are separate acceptance checks.",
+          "checks": [
+            {
+              "path": "scripts/adrian-audit-build.test.mjs",
+              "assertion": "AA010: actual editor renders no empty result strip, and disabled Debug has an availability explanation",
+              "run": "https://github.com/emzylavish-art/adrians-mind-command-os/actions/runs/45941873848/job/140317783409"
+            },
+            {
+              "path": "scripts/adrian-audit-build.test.mjs",
+              "assertion": "AA010: live shell appearance reconfigures CodeMirror without losing dirty text or cursor selection",
+              "run": "https://github.com/emzylavish-art/adrians-mind-command-os/actions/runs/45941873848/job/140317783409"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "finding": "C4/AA-011",
+      "source": "C4/M05",
+      "expected": "Library upload must use the visible destination.",
+      "implementation": "docs/adrian-analysis-implementation-checklist.md#L29",
+      "regression": "[G06](#g06-library-destinations)",
+      "disposition": "Fixed and tested on combined commit (isolated fixture)",
+      "combinedTests": [
+        "scripts/adrian-audit-client-ui.test.mjs"
+      ],
+      "combinedFixture": "The relevant callback or search fixture passed on the subsequent integration tree. Use its combined CI for exact-head verification. Physical devices, native execution and third-party delivery require separate evidence.",
+      "recordUrl": "https://app.notion.com/p/4231aa27632381b28fcae62e9ed26666?pvs=204",
+      "sourceDisposition": "fixed and tested",
+      "sourceFiles": [
+        "src/components/mind/command-app.tsx",
+        "src/components/mind/media/cloud-picker.tsx"
+      ],
+      "caseReports": {
+        "files": [
+          "scripts/adrian-audit-client-ui.test.mjs"
+        ],
+        "exactFixtureResults": {
+          "revision": "56f987e34187e12c63ae885b4c6e499465213e42",
+          "scope": "Combined fixture behavior using controlled test data and transports. External services and physical devices are separate acceptance checks.",
+          "checks": [
+            {
+              "path": "scripts/adrian-audit-client-ui.test.mjs",
+              "assertion": "AA011/014: actual Library upload uses its visible destination, rejects signed-out writes and ignores an old owner's pending read",
+              "run": "https://github.com/emzylavish-art/adrians-mind-command-os/actions/runs/45941873848/job/140317783409"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "finding": "C4/AA-012",
+      "source": "C4/M05",
+      "expected": "Preview must belong to the selected Library scope.",
+      "implementation": "docs/adrian-analysis-implementation-checklist.md#L30",
+      "regression": "[G06](#g06-library-destinations)",
+      "disposition": "Fixed and tested on combined commit (isolated fixture)",
+      "combinedTests": [
+        "scripts/adrian-audit-client-ui.test.mjs"
+      ],
+      "combinedFixture": "The relevant callback or search fixture passed on the subsequent integration tree. Use its combined CI for exact-head verification. Physical devices, native execution and third-party delivery require separate evidence.",
+      "recordUrl": "https://app.notion.com/p/4231aa27632381b28fcae62e9ed26666?pvs=204",
+      "sourceDisposition": "fixed and tested",
+      "sourceFiles": [
+        "src/components/mind/command-app.tsx",
+        "src/components/mind/media/cloud-picker.tsx"
+      ],
+      "caseReports": {
+        "files": [
+          "scripts/adrian-audit-client-ui.test.mjs"
+        ],
+        "exactFixtureResults": {
+          "revision": "56f987e34187e12c63ae885b4c6e499465213e42",
+          "scope": "Combined fixture behavior using controlled test data and transports. External services and physical devices are separate acceptance checks.",
+          "checks": [
+            {
+              "path": "scripts/adrian-audit-client-ui.test.mjs",
+              "assertion": "AA012: actual Library preview excludes a previously opened file after project selection changes",
+              "run": "https://github.com/emzylavish-art/adrians-mind-command-os/actions/runs/45941873848/job/140317783409"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "finding": "C4/AA-013",
+      "source": "C4/M05",
+      "expected": "Drive Library import must save to that destination, without sending/staging chat.",
+      "implementation": "docs/adrian-analysis-implementation-checklist.md#L31",
+      "regression": "[G06](#g06-library-destinations)",
+      "disposition": "Fixed and tested on combined commit (isolated fixture)",
+      "combinedTests": [
+        "scripts/adrian-audit-client-ui.test.mjs"
+      ],
+      "combinedFixture": "The relevant callback or search fixture passed on the subsequent integration tree. Use its combined CI for exact-head verification. Physical devices, native execution and third-party delivery require separate evidence.",
+      "recordUrl": "https://app.notion.com/p/4231aa27632381b28fcae62e9ed26666?pvs=204",
+      "sourceDisposition": "fixed and tested",
+      "sourceFiles": [
+        "src/components/mind/command-app.tsx",
+        "src/components/mind/media/cloud-picker.tsx"
+      ],
+      "caseReports": {
+        "files": [
+          "scripts/adrian-audit-client-ui.test.mjs"
+        ],
+        "exactFixtureResults": {
+          "revision": "56f987e34187e12c63ae885b4c6e499465213e42",
+          "scope": "Combined fixture behavior using controlled test data and transports. External services and physical devices are separate acceptance checks.",
+          "checks": [
+            {
+              "path": "scripts/adrian-audit-client-ui.test.mjs",
+              "assertion": "AA013: cloud Library uses the captured project and never stages chat text; changed chat scope cannot accept attachment",
+              "run": "https://github.com/emzylavish-art/adrians-mind-command-os/actions/runs/45941873848/job/140317783409"
+            },
+            {
+              "path": "scripts/adrian-audit-client-ui.test.mjs",
+              "assertion": "AA013: actual CloudPicker purpose rejects Library images and ignores a response after close",
+              "run": "https://github.com/emzylavish-art/adrians-mind-command-os/actions/runs/45941873848/job/140317783409"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "finding": "C4/AA-014",
+      "source": "C4/M05",
+      "expected": "Signed-out Library must not claim account persistence.",
+      "implementation": "docs/adrian-analysis-implementation-checklist.md#L32",
+      "regression": "[G06](#g06-library-destinations)",
+      "disposition": "Fixed and tested on combined commit (isolated fixture)",
+      "combinedTests": [
+        "scripts/adrian-audit-client-ui.test.mjs"
+      ],
+      "combinedFixture": "The relevant callback or search fixture passed on the subsequent integration tree. Use its combined CI for exact-head verification. Physical devices, native execution and third-party delivery require separate evidence.",
+      "recordUrl": "https://app.notion.com/p/4231aa27632381b28fcae62e9ed26666?pvs=204",
+      "sourceDisposition": "fixed and tested",
+      "sourceFiles": [
+        "src/components/mind/command-app.tsx",
+        "src/components/mind/media/cloud-picker.tsx"
+      ],
+      "caseReports": {
+        "files": [
+          "scripts/adrian-audit-client-ui.test.mjs"
+        ],
+        "exactFixtureResults": {
+          "revision": "56f987e34187e12c63ae885b4c6e499465213e42",
+          "scope": "Combined fixture behavior using controlled test data and transports. External services and physical devices are separate acceptance checks.",
+          "checks": [
+            {
+              "path": "scripts/adrian-audit-client-ui.test.mjs",
+              "assertion": "AA011/014: actual Library upload uses its visible destination, rejects signed-out writes and ignores an old owner's pending read",
+              "run": "https://github.com/emzylavish-art/adrians-mind-command-os/actions/runs/45941873848/job/140317783409"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "finding": "C4/AA-015",
+      "source": "C4/M05",
+      "expected": "Scheduler must use the current owner after delayed auth or switching.",
+      "implementation": "docs/adrian-analysis-implementation-checklist.md#L33",
+      "regression": "[G07](#g07-schedules)",
+      "disposition": "Fixed and tested on combined commit (isolated fixture)",
+      "combinedTests": [
+        "scripts/adrian-audit-client-ui.test.mjs"
+      ],
+      "combinedFixture": "The relevant callback or search fixture passed on the subsequent integration tree. Use its combined CI for exact-head verification. Physical devices, native execution and third-party delivery require separate evidence.",
+      "recordUrl": "https://app.notion.com/p/4231aa27632381b28fcae62e9ed26666?pvs=204",
+      "sourceDisposition": "fixed and tested",
+      "sourceFiles": [
+        "src/components/mind/command-app.tsx",
+        "src/components/mind/gpt-shell.css"
+      ],
+      "caseReports": {
+        "files": [
+          "scripts/adrian-audit-client-ui.test.mjs",
+          "src/lib/mind/schedule-clock.test.ts",
+          "src/lib/mind/schedule-worker.test.ts"
+        ],
+        "exactFixtureResults": {
+          "revision": "56f987e34187e12c63ae885b4c6e499465213e42",
+          "scope": "Combined fixture behavior using controlled test data and transports. External services and physical devices are separate acceptance checks.",
+          "checks": [
+            {
+              "path": "scripts/adrian-audit-client-ui.test.mjs",
+              "assertion": "AA015: actual scheduler waits for identity and re-registers with the new owner's updater",
+              "run": "https://github.com/emzylavish-art/adrians-mind-command-os/actions/runs/45941873848/job/140317783409"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "finding": "C4/AA-016",
+      "source": "C4/M05",
+      "expected": "Time zone must remain readable in the responsive schedule form.",
+      "implementation": "docs/adrian-analysis-implementation-checklist.md#L34",
+      "regression": "[G07](#g07-schedules)",
+      "disposition": "Combined verification pending",
+      "recordUrl": "https://app.notion.com/p/4231aa27632381b28fcae62e9ed26666?pvs=204",
+      "sourceDisposition": "fixed and tested — responsive CSS changed; browser geometry result is tracked in verification",
+      "sourceFiles": [
+        "src/components/mind/command-app.tsx",
+        "src/components/mind/gpt-shell.css"
+      ],
+      "caseReports": {
+        "files": [
+          "scripts/adrian-audit-client-ui.test.mjs",
+          "src/lib/mind/schedule-clock.test.ts",
+          "src/lib/mind/schedule-worker.test.ts"
+        ],
+        "lookup": "Exact-head CI logs and named source fixtures must be checked individually; case-level proof has not yet been recorded."
+      },
+      "nextCheck": "Compare the named fixture cases and remaining source limits against this original acceptance. Live and physical evidence must be recorded separately when required."
+    },
+    {
+      "finding": "C4/AA-017",
+      "source": "C4/M06",
+      "expected": "Changed MCP capabilities must invalidate old approval.",
+      "implementation": "docs/adrian-analysis-implementation-checklist.md#L35",
+      "regression": "[G08](#g08-mcp-approvals-and-cancellation)",
+      "disposition": "Fixed and tested on combined commit (isolated fixture)",
+      "recordUrl": "https://app.notion.com/p/4231aa27632381038d80dd42a09592fa?pvs=204",
+      "sourceDisposition": "fixed and tested",
+      "sourceFiles": [
+        "src/lib/mind/custom-connection.ts",
+        "src/lib/mind/custom-connection-fns.ts",
+        "src/lib/mind/mcp/call-contract.ts",
+        "src/lib/mind/mcp/registry.ts",
+        "src/lib/mind/mcp/tools.ts",
+        "src/lib/mind/connected-mcp.server.ts",
+        "src/components/mind/custom-connections.tsx"
+      ],
+      "caseReports": {
+        "files": [
+          "src/lib/mind/audit-connection-integrity.test.ts",
+          "src/lib/mind/connected-mcp.test.ts",
+          "src/lib/mind/custom-connection.test.ts",
+          "src/lib/mind/mcp/registry.test.ts"
+        ],
+        "exactFixtureResults": {
+          "revision": "56f987e34187e12c63ae885b4c6e499465213e42",
+          "scope": "Combined fixture behavior using controlled test data and transports. External services and physical devices are separate acceptance checks.",
+          "checks": [
+            {
+              "path": "src/lib/mind/audit-connection-integrity.test.ts",
+              "assertion": "AA017 changed MCP schemas and descriptions require fresh review; unchanged call is executed once",
+              "run": "https://github.com/emzylavish-art/adrians-mind-command-os/actions/runs/45941873848/job/140317783421"
+            },
+            {
+              "path": "src/lib/mind/audit-connection-integrity.test.ts",
+              "assertion": "AA017 missing tools, failed discovery, and a connection disabled during discovery all refuse dispatch",
+              "run": "https://github.com/emzylavish-art/adrians-mind-command-os/actions/runs/45941873848/job/140317783421"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "finding": "C4/AA-018",
+      "source": "C4/M06",
+      "expected": "Every supported schema constraint must be enforced before dispatch.",
+      "implementation": "docs/adrian-analysis-implementation-checklist.md#L36",
+      "regression": "[G08](#g08-mcp-approvals-and-cancellation)",
+      "disposition": "Combined verification pending",
+      "recordUrl": "https://app.notion.com/p/4231aa27632381038d80dd42a09592fa?pvs=204",
+      "sourceDisposition": "fixed and tested",
+      "sourceFiles": [
+        "src/lib/mind/custom-connection.ts",
+        "src/lib/mind/custom-connection-fns.ts",
+        "src/lib/mind/mcp/call-contract.ts",
+        "src/lib/mind/mcp/registry.ts",
+        "src/lib/mind/mcp/tools.ts",
+        "src/lib/mind/connected-mcp.server.ts",
+        "src/components/mind/custom-connections.tsx"
+      ],
+      "caseReports": {
+        "files": [
+          "src/lib/mind/audit-connection-integrity.test.ts",
+          "src/lib/mind/connected-mcp.test.ts",
+          "src/lib/mind/custom-connection.test.ts",
+          "src/lib/mind/mcp/registry.test.ts"
+        ],
+        "exactFixtureResults": {
+          "revision": "56f987e34187e12c63ae885b4c6e499465213e42",
+          "scope": "Combined fixture behavior using controlled test data and transports. External services and physical devices are separate acceptance checks.",
+          "checks": [
+            {
+              "path": "src/lib/mind/audit-connection-integrity.test.ts",
+              "assertion": "AA018 constraints survive discovery and reject invalid arguments before dispatch",
+              "run": "https://github.com/emzylavish-art/adrians-mind-command-os/actions/runs/45941873848/job/140317783421"
+            }
+          ]
+        }
+      },
+      "nextCheck": "The linked assertions passed. Verify the remaining acceptance conditions and source limits before closing this finding."
+    },
+    {
+      "finding": "C4/AA-019",
+      "source": "C4/M06",
+      "expected": "Dismissed or replaced MCP operation results must not restore stale UI.",
+      "implementation": "docs/adrian-analysis-implementation-checklist.md#L37",
+      "regression": "[G08](#g08-mcp-approvals-and-cancellation)",
+      "disposition": "Fixed and tested on combined commit (isolated fixture)",
+      "recordUrl": "https://app.notion.com/p/4231aa27632381038d80dd42a09592fa?pvs=204",
+      "sourceDisposition": "fixed and tested",
+      "sourceFiles": [
+        "src/lib/mind/custom-connection.ts",
+        "src/lib/mind/custom-connection-fns.ts",
+        "src/lib/mind/mcp/call-contract.ts",
+        "src/lib/mind/mcp/registry.ts",
+        "src/lib/mind/mcp/tools.ts",
+        "src/lib/mind/connected-mcp.server.ts",
+        "src/components/mind/custom-connections.tsx"
+      ],
+      "caseReports": {
+        "files": [
+          "src/lib/mind/audit-connection-integrity.test.ts",
+          "src/lib/mind/connected-mcp.test.ts",
+          "src/lib/mind/custom-connection.test.ts",
+          "src/lib/mind/mcp/registry.test.ts"
+        ],
+        "exactFixtureResults": {
+          "revision": "56f987e34187e12c63ae885b4c6e499465213e42",
+          "scope": "Combined fixture behavior using controlled test data and transports. External services and physical devices are separate acceptance checks.",
+          "checks": [
+            {
+              "path": "src/lib/mind/audit-connection-integrity.test.ts",
+              "assertion": "AA019 dismiss invalidates a delayed result and out-of-order replies cannot replace the new attempt",
+              "run": "https://github.com/emzylavish-art/adrians-mind-command-os/actions/runs/45941873848/job/140317783421"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "finding": "C4/AA-020",
+      "source": "C4/M07",
+      "expected": "Dispatch must use current saved-memory permission.",
+      "implementation": "docs/adrian-analysis-implementation-checklist.md#L38",
+      "regression": "[G09](#g09-current-context-permission)",
+      "disposition": "Fixed and tested on combined commit (isolated fixture)",
+      "combinedTests": [
+        "scripts/adrian-audit-deliver-lifecycle.test.mjs"
+      ],
+      "combinedFixture": "Production callback and HTTP fixture exercised on the chat/recorded Speak integration tree. See the chat and Speak checkpoint in integration-receipt.md. Authenticated staging remains unverified.",
+      "recordUrl": "https://app.notion.com/p/4231aa27632381c9a3fbd326e2ff1435?pvs=204",
+      "sourceDisposition": "fixed and tested",
+      "sourceFiles": [
+        "src/lib/mind/context-permission.ts",
+        "src/lib/mind/context-budget.ts",
+        "src/lib/mind/logic-routes.ts",
+        "src/components/mind/command-app.tsx"
+      ],
+      "caseReports": {
+        "files": [
+          "scripts/adrian-audit-deliver-lifecycle.test.mjs",
+          "src/lib/mind/adrian-analysis-regressions.test.ts"
+        ],
+        "exactFixtureResults": {
+          "revision": "56f987e34187e12c63ae885b4c6e499465213e42",
+          "scope": "Combined fixture behavior using controlled test data and transports. External services and physical devices are separate acceptance checks.",
+          "checks": [
+            {
+              "path": "scripts/adrian-audit-deliver-lifecycle.test.mjs",
+              "assertion": "AA020/021: actual deliver captures newly revoked memory after preparation, not its stale chat argument",
+              "run": "https://github.com/emzylavish-art/adrians-mind-command-os/actions/runs/45941873848/job/140317783409"
+            },
+            {
+              "path": "scripts/adrian-audit-deliver-lifecycle.test.mjs",
+              "assertion": "AA020/021: memory revocation, project switch or note change during hashing prevents provider dispatch",
+              "run": "https://github.com/emzylavish-art/adrians-mind-command-os/actions/runs/45941873848/job/140317783409"
+            },
+            {
+              "path": "scripts/adrian-audit-deliver-lifecycle.test.mjs",
+              "assertion": "AA020/061: owner change or emergency halt during fingerprint calculation cannot dispatch the prepared body",
+              "run": "https://github.com/emzylavish-art/adrians-mind-command-os/actions/runs/45941873848/job/140317783409"
+            },
+            {
+              "path": "src/lib/mind/adrian-analysis-regressions.test.ts",
+              "assertion": "AA020/022 memory context changes immediately with revocation, archive, project or temporary mode",
+              "run": "https://github.com/emzylavish-art/adrians-mind-command-os/actions/runs/45941873848/job/140317783421"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "finding": "C4/AA-021",
+      "source": "C4/M07",
+      "expected": "Recovery must not replay a previously authorized context payload.",
+      "implementation": "docs/adrian-analysis-implementation-checklist.md#L39",
+      "regression": "[G09](#g09-current-context-permission)",
+      "disposition": "Fixed and tested on combined commit (isolated fixture)",
+      "combinedTests": [
+        "scripts/adrian-audit-deliver-lifecycle.test.mjs"
+      ],
+      "combinedFixture": "Production callback and HTTP fixture exercised on the chat/recorded Speak integration tree. See the chat and Speak checkpoint in integration-receipt.md. Authenticated staging remains unverified.",
+      "recordUrl": "https://app.notion.com/p/4231aa27632381c9a3fbd326e2ff1435?pvs=204",
+      "sourceDisposition": "fixed and tested",
+      "sourceFiles": [
+        "src/lib/mind/context-permission.ts",
+        "src/lib/mind/context-budget.ts",
+        "src/lib/mind/logic-routes.ts",
+        "src/components/mind/command-app.tsx"
+      ],
+      "caseReports": {
+        "files": [
+          "scripts/adrian-audit-deliver-lifecycle.test.mjs",
+          "src/lib/mind/adrian-analysis-regressions.test.ts"
+        ],
+        "exactFixtureResults": {
+          "revision": "56f987e34187e12c63ae885b4c6e499465213e42",
+          "scope": "Combined fixture behavior using controlled test data and transports. External services and physical devices are separate acceptance checks.",
+          "checks": [
+            {
+              "path": "scripts/adrian-audit-deliver-lifecycle.test.mjs",
+              "assertion": "AA020/021: actual deliver captures newly revoked memory after preparation, not its stale chat argument",
+              "run": "https://github.com/emzylavish-art/adrians-mind-command-os/actions/runs/45941873848/job/140317783409"
+            },
+            {
+              "path": "scripts/adrian-audit-deliver-lifecycle.test.mjs",
+              "assertion": "AA020/021: memory revocation, project switch or note change during hashing prevents provider dispatch",
+              "run": "https://github.com/emzylavish-art/adrians-mind-command-os/actions/runs/45941873848/job/140317783409"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "finding": "C4/AA-022",
+      "source": "C4/M07",
+      "expected": "Saved memory, history, knowledge and personality must be distinguished.",
+      "implementation": "docs/adrian-analysis-implementation-checklist.md#L40",
+      "regression": "[G09](#g09-current-context-permission)",
+      "disposition": "Combined verification pending",
+      "recordUrl": "https://app.notion.com/p/4231aa27632381c9a3fbd326e2ff1435?pvs=204",
+      "sourceDisposition": "fixed and tested",
+      "sourceFiles": [
+        "src/lib/mind/context-permission.ts",
+        "src/lib/mind/context-budget.ts",
+        "src/lib/mind/logic-routes.ts",
+        "src/components/mind/command-app.tsx"
+      ],
+      "caseReports": {
+        "files": [
+          "scripts/adrian-audit-deliver-lifecycle.test.mjs",
+          "src/lib/mind/adrian-analysis-regressions.test.ts"
+        ],
+        "exactFixtureResults": {
+          "revision": "56f987e34187e12c63ae885b4c6e499465213e42",
+          "scope": "Combined fixture behavior using controlled test data and transports. External services and physical devices are separate acceptance checks.",
+          "checks": [
+            {
+              "path": "src/lib/mind/adrian-analysis-regressions.test.ts",
+              "assertion": "AA020/022 memory context changes immediately with revocation, archive, project or temporary mode",
+              "run": "https://github.com/emzylavish-art/adrians-mind-command-os/actions/runs/45941873848/job/140317783421"
+            }
+          ]
+        }
+      },
+      "nextCheck": "The linked assertions passed. Verify the remaining acceptance conditions and source limits before closing this finding."
+    },
+    {
+      "finding": "C4/AA-023",
+      "source": "C4/M08",
+      "expected": "Global stop must affect Build even when its screen is absent.",
+      "implementation": "docs/adrian-analysis-implementation-checklist.md#L41",
+      "regression": "[G10](#g10-durable-stop-and-build-lifecycle)",
+      "disposition": "Fixed and tested on combined commit (isolated fixture)",
+      "recordUrl": "https://app.notion.com/p/4231aa2763238195aaa0e254f75a8962?pvs=204",
+      "sourceDisposition": "fixed and tested",
+      "sourceFiles": [
+        "src/lib/mind/halt.server.ts",
+        "src/lib/mind/pc-pairing/store.ts",
+        "src/routes/api/mind/pc/result.ts",
+        "src/lib/mind/kimi/build-lifecycle.ts",
+        "src/components/mind/build-workspace.tsx",
+        "src/components/mind/command-app.tsx"
+      ],
+      "caseReports": {
+        "files": [
+          "scripts/adrian-audit-build.test.mjs",
+          "src/lib/mind/halt-file.test.ts",
+          "src/lib/mind/pc-pairing/pairing.test.ts"
+        ],
+        "exactFixtureResults": {
+          "revision": "56f987e34187e12c63ae885b4c6e499465213e42",
+          "scope": "Combined fixture behavior using controlled test data and transports. External services and physical devices are separate acceptance checks.",
+          "checks": [
+            {
+              "path": "scripts/adrian-audit-build.test.mjs",
+              "assertion": "AA023: account halt cancels queued Build jobs and requests running cancellation without a mounted screen",
+              "run": "https://github.com/emzylavish-art/adrians-mind-command-os/actions/runs/45941873848/job/140317783409"
+            },
+            {
+              "path": "scripts/adrian-audit-build.test.mjs",
+              "assertion": "AA023: completion before stop and explicit runtime cancellation remain different outcomes",
+              "run": "https://github.com/emzylavish-art/adrians-mind-command-os/actions/runs/45941873848/job/140317783409"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "finding": "C4/AA-024",
+      "source": "C4/M08",
+      "expected": "Stopped planning must ignore late chunks and block queued submission.",
+      "implementation": "docs/adrian-analysis-implementation-checklist.md#L42",
+      "regression": "[G10](#g10-durable-stop-and-build-lifecycle)",
+      "disposition": "Combined verification pending",
+      "recordUrl": "https://app.notion.com/p/4231aa2763238195aaa0e254f75a8962?pvs=204",
+      "sourceDisposition": "fixed and tested",
+      "sourceFiles": [
+        "src/lib/mind/halt.server.ts",
+        "src/lib/mind/pc-pairing/store.ts",
+        "src/routes/api/mind/pc/result.ts",
+        "src/lib/mind/kimi/build-lifecycle.ts",
+        "src/components/mind/build-workspace.tsx",
+        "src/components/mind/command-app.tsx"
+      ],
+      "caseReports": {
+        "files": [
+          "scripts/adrian-audit-build.test.mjs",
+          "src/lib/mind/halt-file.test.ts",
+          "src/lib/mind/pc-pairing/pairing.test.ts"
+        ],
+        "exactFixtureResults": {
+          "revision": "56f987e34187e12c63ae885b4c6e499465213e42",
+          "scope": "Combined fixture behavior using controlled test data and transports. External services and physical devices are separate acceptance checks.",
+          "checks": [
+            {
+              "path": "scripts/adrian-audit-build.test.mjs",
+              "assertion": "AA024: emergency stop aborts deferred planning and makes late chunks/results obsolete",
+              "run": "https://github.com/emzylavish-art/adrians-mind-command-os/actions/runs/45941873848/job/140317783409"
+            }
+          ]
+        }
+      },
+      "nextCheck": "The linked assertions passed. Verify the remaining acceptance conditions and source limits before closing this finding."
+    },
+    {
+      "finding": "C4/AA-025",
+      "source": "C4/M08",
+      "expected": "Halt/disable must be checked after tool initialization.",
+      "implementation": "docs/adrian-analysis-implementation-checklist.md#L43",
+      "regression": "[G08](#g08-mcp-approvals-and-cancellation)",
+      "disposition": "Fixed and tested on combined commit (isolated fixture)",
+      "recordUrl": "https://app.notion.com/p/4231aa2763238195aaa0e254f75a8962?pvs=204",
+      "sourceDisposition": "fixed and tested",
+      "sourceFiles": [
+        "src/lib/mind/custom-connection.ts",
+        "src/lib/mind/custom-connection-fns.ts",
+        "src/lib/mind/mcp/call-contract.ts",
+        "src/lib/mind/mcp/registry.ts",
+        "src/lib/mind/mcp/tools.ts",
+        "src/lib/mind/connected-mcp.server.ts",
+        "src/components/mind/custom-connections.tsx"
+      ],
+      "caseReports": {
+        "files": [
+          "src/lib/mind/audit-connection-integrity.test.ts",
+          "src/lib/mind/connected-mcp.test.ts",
+          "src/lib/mind/custom-connection.test.ts",
+          "src/lib/mind/mcp/registry.test.ts"
+        ],
+        "exactFixtureResults": {
+          "revision": "56f987e34187e12c63ae885b4c6e499465213e42",
+          "scope": "Combined fixture behavior using controlled test data and transports. External services and physical devices are separate acceptance checks.",
+          "checks": [
+            {
+              "path": "src/lib/mind/audit-connection-integrity.test.ts",
+              "assertion": "AA025 halt arriving during MCP initialization prevents both custom and registry dispatch",
+              "run": "https://github.com/emzylavish-art/adrians-mind-command-os/actions/runs/45941873848/job/140317783421"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "finding": "C4/AA-026",
+      "source": "C4/M08",
+      "expected": "Cancellation requested must not be labeled confirmed completion.",
+      "implementation": "docs/adrian-analysis-implementation-checklist.md#L44",
+      "regression": "[G10](#g10-durable-stop-and-build-lifecycle)",
+      "disposition": "Combined verification pending",
+      "recordUrl": "https://app.notion.com/p/4231aa2763238195aaa0e254f75a8962?pvs=204",
+      "sourceDisposition": "fixed and tested",
+      "sourceFiles": [
+        "src/lib/mind/halt.server.ts",
+        "src/lib/mind/pc-pairing/store.ts",
+        "src/routes/api/mind/pc/result.ts",
+        "src/lib/mind/kimi/build-lifecycle.ts",
+        "src/components/mind/build-workspace.tsx",
+        "src/components/mind/command-app.tsx"
+      ],
+      "caseReports": {
+        "files": [
+          "scripts/adrian-audit-build.test.mjs",
+          "src/lib/mind/halt-file.test.ts",
+          "src/lib/mind/pc-pairing/pairing.test.ts"
+        ],
+        "lookup": "Exact-head CI logs and named source fixtures must be checked individually; case-level proof has not yet been recorded."
+      },
+      "nextCheck": "Compare the named fixture cases and remaining source limits against this original acceptance. Live and physical evidence must be recorded separately when required."
+    },
+    {
+      "finding": "C4/AA-027",
+      "source": "C4/M09",
+      "expected": "CAS conflict retry must fetch and use a current revision.",
+      "implementation": "docs/adrian-analysis-implementation-checklist.md#L45",
+      "regression": "[G11](#g11-workspace-reconciliation)",
+      "disposition": "Fixed and tested on combined commit (isolated fixture)",
+      "recordUrl": "https://app.notion.com/p/4231aa276323815fbc73edcb28d97371?pvs=204",
+      "sourceDisposition": "fixed and tested",
+      "sourceFiles": [
+        "src/lib/mind/sync.ts",
+        "src/lib/mind/workspace-edits.ts",
+        "src/lib/mind/use-mind-workspace.ts"
+      ],
+      "caseReports": {
+        "files": [
+          "src/lib/mind/sync.test.ts",
+          "src/lib/mind/use-mind-workspace.test.ts",
+          "src/lib/mind/workspace-hook-lifecycle.test.ts",
+          "src/lib/mind/workspace-reconciliation.test.ts"
+        ],
+        "exactFixtureResults": {
+          "revision": "56f987e34187e12c63ae885b4c6e499465213e42",
+          "scope": "Combined fixture behavior using controlled test data and transports. External services and physical devices are separate acceptance checks.",
+          "checks": [
+            {
+              "path": "src/lib/mind/workspace-reconciliation.test.ts",
+              "assertion": "refreshes on Retry save and preserves independent conversations across devices",
+              "run": "https://github.com/emzylavish-art/adrians-mind-command-os/actions/runs/45941873848/job/140317783450"
+            },
+            {
+              "path": "src/lib/mind/workspace-reconciliation.test.ts",
+              "assertion": "uses another fresh comparison if the server advances during recovery",
+              "run": "https://github.com/emzylavish-art/adrians-mind-command-os/actions/runs/45941873848/job/140317783450"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "finding": "C4/AA-028",
+      "source": "C4/M09",
+      "expected": "A partial local snapshot must not delete unseen remote records.",
+      "implementation": "docs/adrian-analysis-implementation-checklist.md#L46",
+      "regression": "[G11](#g11-workspace-reconciliation)",
+      "disposition": "Fixed and tested on combined commit (isolated fixture)",
+      "recordUrl": "https://app.notion.com/p/4231aa276323815fbc73edcb28d97371?pvs=204",
+      "sourceDisposition": "fixed and tested",
+      "sourceFiles": [
+        "src/lib/mind/sync.ts",
+        "src/lib/mind/workspace-edits.ts",
+        "src/lib/mind/use-mind-workspace.ts"
+      ],
+      "caseReports": {
+        "files": [
+          "src/lib/mind/sync.test.ts",
+          "src/lib/mind/use-mind-workspace.test.ts",
+          "src/lib/mind/workspace-hook-lifecycle.test.ts",
+          "src/lib/mind/workspace-reconciliation.test.ts"
+        ],
+        "exactFixtureResults": {
+          "revision": "56f987e34187e12c63ae885b4c6e499465213e42",
+          "scope": "Combined fixture behavior using controlled test data and transports. External services and physical devices are separate acceptance checks.",
+          "checks": [
+            {
+              "path": "src/lib/mind/workspace-hook-lifecycle.test.ts",
+              "assertion": "C4 actual hook preserves remote conversations when local input arrives during initial load",
+              "run": "https://github.com/emzylavish-art/adrians-mind-command-os/actions/runs/45941873848/job/140317783421"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "finding": "C4/AA-029",
+      "source": "C4/M09",
+      "expected": "Storage events must reconcile all workspace collections.",
+      "implementation": "docs/adrian-analysis-implementation-checklist.md#L47",
+      "regression": "[G11](#g11-workspace-reconciliation)",
+      "disposition": "Combined verification pending",
+      "recordUrl": "https://app.notion.com/p/4231aa276323815fbc73edcb28d97371?pvs=204",
+      "sourceDisposition": "fixed and tested",
+      "sourceFiles": [
+        "src/lib/mind/sync.ts",
+        "src/lib/mind/workspace-edits.ts",
+        "src/lib/mind/use-mind-workspace.ts"
+      ],
+      "caseReports": {
+        "files": [
+          "src/lib/mind/sync.test.ts",
+          "src/lib/mind/use-mind-workspace.test.ts",
+          "src/lib/mind/workspace-hook-lifecycle.test.ts",
+          "src/lib/mind/workspace-reconciliation.test.ts"
+        ],
+        "exactFixtureResults": {
+          "revision": "56f987e34187e12c63ae885b4c6e499465213e42",
+          "scope": "Combined fixture behavior using controlled test data and transports. External services and physical devices are separate acceptance checks.",
+          "checks": [
+            {
+              "path": "src/lib/mind/workspace-reconciliation.test.ts",
+              "assertion": "merges independent fields and reflects creation, rename and deletion across tabs",
+              "run": "https://github.com/emzylavish-art/adrians-mind-command-os/actions/runs/45941873848/job/140317783450"
+            }
+          ]
+        }
+      },
+      "nextCheck": "The linked assertions passed. Verify the remaining acceptance conditions and source limits before closing this finding."
+    },
+    {
+      "finding": "C4/AA-030",
+      "source": "C4/M09",
+      "expected": "Unrelated field edits must merge and true conflicts must be reviewable.",
+      "implementation": "docs/adrian-analysis-implementation-checklist.md#L48",
+      "regression": "[G11](#g11-workspace-reconciliation)",
+      "disposition": "Fixed and tested on combined commit (isolated fixture)",
+      "recordUrl": "https://app.notion.com/p/4231aa276323815fbc73edcb28d97371?pvs=204",
+      "sourceDisposition": "fixed and tested",
+      "sourceFiles": [
+        "src/lib/mind/sync.ts",
+        "src/lib/mind/workspace-edits.ts",
+        "src/lib/mind/use-mind-workspace.ts"
+      ],
+      "caseReports": {
+        "files": [
+          "src/lib/mind/sync.test.ts",
+          "src/lib/mind/use-mind-workspace.test.ts",
+          "src/lib/mind/workspace-hook-lifecycle.test.ts",
+          "src/lib/mind/workspace-reconciliation.test.ts"
+        ],
+        "exactFixtureResults": {
+          "revision": "56f987e34187e12c63ae885b4c6e499465213e42",
+          "scope": "Combined fixture behavior using controlled test data and transports. External services and physical devices are separate acceptance checks.",
+          "checks": [
+            {
+              "path": "src/lib/mind/workspace-reconciliation.test.ts",
+              "assertion": "same-field conflicts preserve both values across normalization and require explicit resolution",
+              "run": "https://github.com/emzylavish-art/adrians-mind-command-os/actions/runs/45941873848/job/140317783450"
+            },
+            {
+              "path": "src/lib/mind/workspace-reconciliation.test.ts",
+              "assertion": "applies an explicit conflicting-field choice while retaining unrelated changes",
+              "run": "https://github.com/emzylavish-art/adrians-mind-command-os/actions/runs/45941873848/job/140317783450"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "finding": "C4/AA-031",
+      "source": "C4/M10",
+      "expected": "Portable image references require verified owner-scoped bytes.",
+      "implementation": "docs/adrian-analysis-implementation-checklist.md#L49",
+      "regression": "[G12](#g12-attachment-integrity)",
+      "disposition": "Fixed and tested on combined commit (isolated fixture)",
+      "recordUrl": "https://app.notion.com/p/4231aa27632381eb9f12ce61ad7460a4?pvs=204",
+      "sourceDisposition": "fixed and tested",
+      "sourceFiles": [
+        "migrations/0017_c4_account_attachments.sql",
+        "src/lib/mind/media/account-attachments.server.ts",
+        "src/lib/mind/media/attachment-integrity.ts",
+        "src/lib/mind/media/blob-store.ts",
+        "src/lib/mind/use-mind-workspace.ts",
+        "src/lib/mind/workspace.ts",
+        "src/components/mind/message-body.tsx",
+        "src/components/mind/command-app.tsx"
+      ],
+      "caseReports": {
+        "files": [
+          "src/components/mind/message-rendering.test.ts",
+          "src/lib/mind/adrian-analysis-regressions.test.ts",
+          "src/lib/mind/media/attachment-integrity.test.ts",
+          "src/lib/mind/media/blob-store.test.ts",
+          "src/lib/mind/persistence-incremental.test.ts"
+        ],
+        "exactFixtureResults": {
+          "revision": "56f987e34187e12c63ae885b4c6e499465213e42",
+          "scope": "Combined fixture behavior using controlled test data and transports. External services and physical devices are separate acceptance checks.",
+          "checks": [
+            {
+              "path": "src/lib/mind/media/attachment-integrity.test.ts",
+              "assertion": "verifies upload before replacing bytes and retrieves on a clean second device",
+              "run": "https://github.com/emzylavish-art/adrians-mind-command-os/actions/runs/45941873848/job/140317783421"
+            },
+            {
+              "path": "src/lib/mind/media/attachment-integrity.test.ts",
+              "assertion": "does not trust a supplied account blob ID for different image bytes",
+              "run": "https://github.com/emzylavish-art/adrians-mind-command-os/actions/runs/45941873848/job/140317783421"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "finding": "C4/AA-032",
+      "source": "C4/M10",
+      "expected": "Oversized image failure must preserve the original local bytes.",
+      "implementation": "docs/adrian-analysis-implementation-checklist.md#L50",
+      "regression": "[G12](#g12-attachment-integrity)",
+      "disposition": "Combined verification pending",
+      "recordUrl": "https://app.notion.com/p/4231aa27632381eb9f12ce61ad7460a4?pvs=204",
+      "sourceDisposition": "fixed and tested",
+      "sourceFiles": [
+        "migrations/0017_c4_account_attachments.sql",
+        "src/lib/mind/media/account-attachments.server.ts",
+        "src/lib/mind/media/attachment-integrity.ts",
+        "src/lib/mind/media/blob-store.ts",
+        "src/lib/mind/use-mind-workspace.ts",
+        "src/lib/mind/workspace.ts",
+        "src/components/mind/message-body.tsx",
+        "src/components/mind/command-app.tsx"
+      ],
+      "caseReports": {
+        "files": [
+          "src/components/mind/message-rendering.test.ts",
+          "src/lib/mind/adrian-analysis-regressions.test.ts",
+          "src/lib/mind/media/attachment-integrity.test.ts",
+          "src/lib/mind/media/blob-store.test.ts",
+          "src/lib/mind/persistence-incremental.test.ts"
+        ],
+        "exactFixtureResults": {
+          "revision": "56f987e34187e12c63ae885b4c6e499465213e42",
+          "scope": "Combined fixture behavior using controlled test data and transports. External services and physical devices are separate acceptance checks.",
+          "checks": [
+            {
+              "path": "src/lib/mind/media/attachment-integrity.test.ts",
+              "assertion": "normalization preserves an image at the old 1,500,000-character boundary",
+              "run": "https://github.com/emzylavish-art/adrians-mind-command-os/actions/runs/45941873848/job/140317783421"
+            },
+            {
+              "path": "src/lib/mind/media/attachment-integrity.test.ts",
+              "assertion": "keeps local bytes and does not fabricate a reference after upload failure",
+              "run": "https://github.com/emzylavish-art/adrians-mind-command-os/actions/runs/45941873848/job/140317783421"
+            }
+          ]
+        }
+      },
+      "nextCheck": "The linked assertions passed. Verify the remaining acceptance conditions and source limits before closing this finding."
+    },
+    {
+      "finding": "C4/AA-033",
+      "source": "C4/M10",
+      "expected": "Missing images must be visible and excluded honestly from requests.",
+      "implementation": "docs/adrian-analysis-implementation-checklist.md#L51",
+      "regression": "[G12](#g12-attachment-integrity)",
+      "disposition": "Fixed and tested on combined commit (isolated fixture)",
+      "recordUrl": "https://app.notion.com/p/4231aa27632381eb9f12ce61ad7460a4?pvs=204",
+      "sourceDisposition": "fixed and tested",
+      "sourceFiles": [
+        "migrations/0017_c4_account_attachments.sql",
+        "src/lib/mind/media/account-attachments.server.ts",
+        "src/lib/mind/media/attachment-integrity.ts",
+        "src/lib/mind/media/blob-store.ts",
+        "src/lib/mind/use-mind-workspace.ts",
+        "src/lib/mind/workspace.ts",
+        "src/components/mind/message-body.tsx",
+        "src/components/mind/command-app.tsx"
+      ],
+      "caseReports": {
+        "files": [
+          "src/components/mind/message-rendering.test.ts",
+          "src/lib/mind/adrian-analysis-regressions.test.ts",
+          "src/lib/mind/media/attachment-integrity.test.ts",
+          "src/lib/mind/media/blob-store.test.ts",
+          "src/lib/mind/persistence-incremental.test.ts"
+        ],
+        "exactFixtureResults": {
+          "revision": "56f987e34187e12c63ae885b4c6e499465213e42",
+          "scope": "Combined fixture behavior using controlled test data and transports. External services and physical devices are separate acceptance checks.",
+          "checks": [
+            {
+              "path": "src/lib/mind/adrian-analysis-regressions.test.ts",
+              "assertion": "AA033/038 context receipt counts omitted images and gives missing-byte recovery",
+              "run": "https://github.com/emzylavish-art/adrians-mind-command-os/actions/runs/45941873848/job/140317783421"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "finding": "C4/AA-034",
+      "source": "C4/M10",
+      "expected": "Archive integrity must state whether attachment bytes are complete.",
+      "implementation": "docs/adrian-analysis-implementation-checklist.md#L52",
+      "regression": "[G12](#g12-attachment-integrity)",
+      "disposition": "Fixed and tested on combined commit (isolated fixture)",
+      "recordUrl": "https://app.notion.com/p/4231aa27632381eb9f12ce61ad7460a4?pvs=204",
+      "sourceDisposition": "fixed and tested",
+      "sourceFiles": [
+        "migrations/0017_c4_account_attachments.sql",
+        "src/lib/mind/media/account-attachments.server.ts",
+        "src/lib/mind/media/attachment-integrity.ts",
+        "src/lib/mind/media/blob-store.ts",
+        "src/lib/mind/use-mind-workspace.ts",
+        "src/lib/mind/workspace.ts",
+        "src/components/mind/message-body.tsx",
+        "src/components/mind/command-app.tsx"
+      ],
+      "caseReports": {
+        "files": [
+          "src/components/mind/message-rendering.test.ts",
+          "src/lib/mind/adrian-analysis-regressions.test.ts",
+          "src/lib/mind/media/attachment-integrity.test.ts",
+          "src/lib/mind/media/blob-store.test.ts",
+          "src/lib/mind/persistence-incremental.test.ts"
+        ],
+        "exactFixtureResults": {
+          "revision": "56f987e34187e12c63ae885b4c6e499465213e42",
+          "scope": "Combined fixture behavior using controlled test data and transports. External services and physical devices are separate acceptance checks.",
+          "checks": [
+            {
+              "path": "src/lib/mind/media/attachment-integrity.test.ts",
+              "assertion": "distinguishes a valid archive from a complete attachment backup on export and import",
+              "run": "https://github.com/emzylavish-art/adrians-mind-command-os/actions/runs/45941873848/job/140317783421"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "finding": "C4/AA-035",
+      "source": "C4/M10",
+      "expected": "Unowned legacy caches must not cross account boundaries.",
+      "implementation": "docs/adrian-analysis-implementation-checklist.md#L53",
+      "regression": "[G12](#g12-attachment-integrity)",
+      "disposition": "Combined verification pending",
+      "recordUrl": "https://app.notion.com/p/4231aa27632381eb9f12ce61ad7460a4?pvs=204",
+      "sourceDisposition": "fixed and tested",
+      "sourceFiles": [
+        "migrations/0017_c4_account_attachments.sql",
+        "src/lib/mind/media/account-attachments.server.ts",
+        "src/lib/mind/media/attachment-integrity.ts",
+        "src/lib/mind/media/blob-store.ts",
+        "src/lib/mind/use-mind-workspace.ts",
+        "src/lib/mind/workspace.ts",
+        "src/components/mind/message-body.tsx",
+        "src/components/mind/command-app.tsx"
+      ],
+      "caseReports": {
+        "files": [
+          "src/components/mind/message-rendering.test.ts",
+          "src/lib/mind/adrian-analysis-regressions.test.ts",
+          "src/lib/mind/media/attachment-integrity.test.ts",
+          "src/lib/mind/media/blob-store.test.ts",
+          "src/lib/mind/persistence-incremental.test.ts"
+        ],
+        "exactFixtureResults": {
+          "revision": "56f987e34187e12c63ae885b4c6e499465213e42",
+          "scope": "Combined fixture behavior using controlled test data and transports. External services and physical devices are separate acceptance checks.",
+          "checks": [
+            {
+              "path": "src/lib/mind/media/attachment-integrity.test.ts",
+              "assertion": "migrates only owner-validated legacy references and leaves interrupted migrations recoverable",
+              "run": "https://github.com/emzylavish-art/adrians-mind-command-os/actions/runs/45941873848/job/140317783421"
+            }
+          ]
+        }
+      },
+      "nextCheck": "The linked assertions passed. Verify the remaining acceptance conditions and source limits before closing this finding."
+    },
+    {
+      "finding": "C4/AA-036",
+      "source": "C4/M11",
+      "expected": "Early important context must not be lost to repeated fixed last-12 slicing.",
+      "implementation": "docs/adrian-analysis-implementation-checklist.md#L54",
+      "regression": "[G13](#g13-context-selection)",
+      "disposition": "Combined verification pending",
+      "recordUrl": "https://app.notion.com/p/4231aa276323810d9de1d5dd42755a1e?pvs=204",
+      "sourceDisposition": "fixed and tested",
+      "sourceFiles": [
+        "src/lib/mind/context-budget.ts",
+        "src/lib/mind/logic-routes.ts",
+        "src/lib/mind/retry-fidelity.ts",
+        "src/lib/mind/media/history.ts",
+        "src/lib/mind/limits.ts",
+        "src/lib/mind/turn.server.ts"
+      ],
+      "caseReports": {
+        "files": [
+          "src/lib/mind/adrian-analysis-regressions.test.ts",
+          "src/lib/mind/logic-routes.test.ts",
+          "src/lib/mind/media/history.test.ts",
+          "src/lib/mind/retry-fidelity.test.ts"
+        ],
+        "exactFixtureResults": {
+          "revision": "56f987e34187e12c63ae885b4c6e499465213e42",
+          "scope": "Combined fixture behavior using controlled test data and transports. External services and physical devices are separate acceptance checks.",
+          "checks": [
+            {
+              "path": "src/lib/mind/adrian-analysis-regressions.test.ts",
+              "assertion": "AA036/037 context keeps early constraints and recent turns within explicit provider budgets",
+              "run": "https://github.com/emzylavish-art/adrians-mind-command-os/actions/runs/45941873848/job/140317783421"
+            }
+          ]
+        }
+      },
+      "nextCheck": "The linked assertions passed. Verify the remaining acceptance conditions and source limits before closing this finding."
+    },
+    {
+      "finding": "C4/AA-037",
+      "source": "C4/M11",
+      "expected": "Budgeting should use verified per-model input/output capacities when available.",
+      "implementation": "docs/adrian-analysis-implementation-checklist.md#L55",
+      "regression": "[G13](#g13-context-selection)",
+      "disposition": "Blocked/deferred with exact reason and next step",
+      "recordUrl": "https://app.notion.com/p/4231aa276323810d9de1d5dd42755a1e?pvs=204",
+      "sourceDisposition": "proposal needing a decision — conservative ceilings implemented/tested; verified upstream model-capacity registry is not available",
+      "sourceFiles": [
+        "src/lib/mind/context-budget.ts",
+        "src/lib/mind/logic-routes.ts",
+        "src/lib/mind/retry-fidelity.ts",
+        "src/lib/mind/media/history.ts",
+        "src/lib/mind/limits.ts",
+        "src/lib/mind/turn.server.ts"
+      ],
+      "caseReports": {
+        "files": [
+          "src/lib/mind/adrian-analysis-regressions.test.ts",
+          "src/lib/mind/logic-routes.test.ts",
+          "src/lib/mind/media/history.test.ts",
+          "src/lib/mind/retry-fidelity.test.ts"
+        ],
+        "lookup": "Exact-head CI logs and named source fixtures must be checked individually; case-level proof has not yet been recorded."
+      },
+      "nextCheck": "Model-specific capacity metadata and conservative limits are implemented. Verify upstream capacities for the actual selected models. Unreported limits remain unknown."
+    },
+    {
+      "finding": "C4/AA-038",
+      "source": "C4/M11",
+      "expected": "Image-budget omission must be visible in the send context receipt.",
+      "implementation": "docs/adrian-analysis-implementation-checklist.md#L56",
+      "regression": "[G13](#g13-context-selection)",
+      "disposition": "Fixed and tested on combined commit (isolated fixture)",
+      "recordUrl": "https://app.notion.com/p/4231aa276323810d9de1d5dd42755a1e?pvs=204",
+      "sourceDisposition": "fixed and tested",
+      "sourceFiles": [
+        "src/lib/mind/context-budget.ts",
+        "src/lib/mind/logic-routes.ts",
+        "src/lib/mind/retry-fidelity.ts",
+        "src/lib/mind/media/history.ts",
+        "src/lib/mind/limits.ts",
+        "src/lib/mind/turn.server.ts"
+      ],
+      "caseReports": {
+        "files": [
+          "src/lib/mind/adrian-analysis-regressions.test.ts",
+          "src/lib/mind/logic-routes.test.ts",
+          "src/lib/mind/media/history.test.ts",
+          "src/lib/mind/retry-fidelity.test.ts"
+        ],
+        "exactFixtureResults": {
+          "revision": "56f987e34187e12c63ae885b4c6e499465213e42",
+          "scope": "Combined fixture behavior using controlled test data and transports. External services and physical devices are separate acceptance checks.",
+          "checks": [
+            {
+              "path": "src/lib/mind/adrian-analysis-regressions.test.ts",
+              "assertion": "AA033/038 context receipt counts omitted images and gives missing-byte recovery",
+              "run": "https://github.com/emzylavish-art/adrians-mind-command-os/actions/runs/45941873848/job/140317783421"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "finding": "C4/AA-039",
+      "source": "C4/M12",
+      "expected": "Received partial text must survive interruption.",
+      "implementation": "docs/adrian-analysis-implementation-checklist.md#L57",
+      "regression": "[G14](#g14-streaming-and-send-recovery)",
+      "disposition": "Fixed and tested on combined commit (isolated fixture)",
+      "combinedTests": [
+        "scripts/adrian-audit-deliver-lifecycle.test.mjs"
+      ],
+      "combinedFixture": "Production callback and HTTP fixture exercised on the chat/recorded Speak integration tree. See the chat and Speak checkpoint in integration-receipt.md. Authenticated staging remains unverified.",
+      "recordUrl": "https://app.notion.com/p/4231aa27632381b383fdd59196635d40?pvs=204",
+      "sourceDisposition": "fixed and tested",
+      "sourceFiles": [
+        "src/lib/mind/partial-reply.ts",
+        "src/lib/mind/live-turn.ts",
+        "src/lib/mind/stream.ts",
+        "src/lib/mind/relay.ts",
+        "src/lib/mind/turn-receipt.ts",
+        "src/lib/mind/turn.server.ts",
+        "src/lib/mind/transcript.ts",
+        "src/lib/mind/workspace.ts",
+        "src/components/mind/command-app.tsx"
+      ],
+      "caseReports": {
+        "files": [
+          "scripts/adrian-audit-deliver-lifecycle.test.mjs",
+          "src/lib/mind/adrian-analysis-regressions.test.ts",
+          "src/lib/mind/live-turn.test.ts",
+          "src/lib/mind/relay.test.ts",
+          "src/lib/mind/stream-integrity.test.ts"
+        ],
+        "exactFixtureResults": {
+          "revision": "56f987e34187e12c63ae885b4c6e499465213e42",
+          "scope": "Combined fixture behavior using controlled test data and transports. External services and physical devices are separate acceptance checks.",
+          "checks": [
+            {
+              "path": "scripts/adrian-audit-deliver-lifecycle.test.mjs",
+              "assertion": "AA039/040: an interrupted long stream preserves every received character and retry performs only receipt GET",
+              "run": "https://github.com/emzylavish-art/adrians-mind-command-os/actions/runs/45941873848/job/140317783409"
+            },
+            {
+              "path": "scripts/adrian-audit-deliver-lifecycle.test.mjs",
+              "assertion": "AA039/040: a stopped partial remains incomplete and account-expired recovery never posts again",
+              "run": "https://github.com/emzylavish-art/adrians-mind-command-os/actions/runs/45941873848/job/140317783409"
+            },
+            {
+              "path": "scripts/adrian-audit-deliver-lifecycle.test.mjs",
+              "assertion": "AA039/044: completed long reply replaces its checkpoint once, preserves text and reports the actual answer provider",
+              "run": "https://github.com/emzylavish-art/adrians-mind-command-os/actions/runs/45941873848/job/140317783409"
+            },
+            {
+              "path": "src/lib/mind/adrian-analysis-regressions.test.ts",
+              "assertion": "AA039/040/042 partial checkpoints survive normalization, preserve operation and cannot regenerate",
+              "run": "https://github.com/emzylavish-art/adrians-mind-command-os/actions/runs/45941873848/job/140317783421"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "finding": "C4/AA-040",
+      "source": "C4/M12",
+      "expected": "Stopped/uncertain retry must not silently create a new paid execution.",
+      "implementation": "docs/adrian-analysis-implementation-checklist.md#L58",
+      "regression": "[G14](#g14-streaming-and-send-recovery)",
+      "disposition": "Fixed and tested on combined commit (isolated fixture)",
+      "combinedTests": [
+        "scripts/adrian-audit-deliver-lifecycle.test.mjs"
+      ],
+      "combinedFixture": "Production callback and HTTP fixture exercised on the chat/recorded Speak integration tree. See the chat and Speak checkpoint in integration-receipt.md. Authenticated staging remains unverified.",
+      "recordUrl": "https://app.notion.com/p/4231aa27632381b383fdd59196635d40?pvs=204",
+      "sourceDisposition": "fixed and tested",
+      "sourceFiles": [
+        "src/lib/mind/partial-reply.ts",
+        "src/lib/mind/live-turn.ts",
+        "src/lib/mind/stream.ts",
+        "src/lib/mind/relay.ts",
+        "src/lib/mind/turn-receipt.ts",
+        "src/lib/mind/turn.server.ts",
+        "src/lib/mind/transcript.ts",
+        "src/lib/mind/workspace.ts",
+        "src/components/mind/command-app.tsx"
+      ],
+      "caseReports": {
+        "files": [
+          "scripts/adrian-audit-deliver-lifecycle.test.mjs",
+          "src/lib/mind/adrian-analysis-regressions.test.ts",
+          "src/lib/mind/live-turn.test.ts",
+          "src/lib/mind/relay.test.ts",
+          "src/lib/mind/stream-integrity.test.ts"
+        ],
+        "exactFixtureResults": {
+          "revision": "56f987e34187e12c63ae885b4c6e499465213e42",
+          "scope": "Combined fixture behavior using controlled test data and transports. External services and physical devices are separate acceptance checks.",
+          "checks": [
+            {
+              "path": "scripts/adrian-audit-deliver-lifecycle.test.mjs",
+              "assertion": "AA039/040: an interrupted long stream preserves every received character and retry performs only receipt GET",
+              "run": "https://github.com/emzylavish-art/adrians-mind-command-os/actions/runs/45941873848/job/140317783409"
+            },
+            {
+              "path": "scripts/adrian-audit-deliver-lifecycle.test.mjs",
+              "assertion": "AA039/040: a stopped partial remains incomplete and account-expired recovery never posts again",
+              "run": "https://github.com/emzylavish-art/adrians-mind-command-os/actions/runs/45941873848/job/140317783409"
+            },
+            {
+              "path": "scripts/adrian-audit-deliver-lifecycle.test.mjs",
+              "assertion": "AA040/044: fingerprint preparation failure is a failed unsent message, not uncertain provider delivery",
+              "run": "https://github.com/emzylavish-art/adrians-mind-command-os/actions/runs/45941873848/job/140317783409"
+            },
+            {
+              "path": "scripts/adrian-audit-deliver-lifecycle.test.mjs",
+              "assertion": "AA040/061: delayed recovery for the old owner cannot update the new owner's workspace or failure UI",
+              "run": "https://github.com/emzylavish-art/adrians-mind-command-os/actions/runs/45941873848/job/140317783409"
+            },
+            {
+              "path": "src/lib/mind/adrian-analysis-regressions.test.ts",
+              "assertion": "AA039/040/042 partial checkpoints survive normalization, preserve operation and cannot regenerate",
+              "run": "https://github.com/emzylavish-art/adrians-mind-command-os/actions/runs/45941873848/job/140317783421"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "finding": "C4/AA-041",
+      "source": "C4/M12",
+      "expected": "Parsers must agree on errors, framing, terminal markers and cancellation.",
+      "implementation": "docs/adrian-analysis-implementation-checklist.md#L59",
+      "regression": "[G14](#g14-streaming-and-send-recovery)",
+      "disposition": "Fixed and tested on combined commit (isolated fixture)",
+      "combinedEvidence": {
+        "commit": "d60778b5cf3192ec511d7d8044521ff47bf20a1d",
+        "environment": "isolated local fixtures",
+        "test": "src/lib/mind/stream-integrity.test.ts",
+        "result": "passed",
+        "observed": "LF, CRLF and split UTF-8, upstream DONE, malformed frame, cancellation and premature EOF",
+        "limits": "Client and provider adapter fixtures passed. Hosted streaming checks pending."
+      },
+      "recordUrl": "https://app.notion.com/p/4231aa27632381b383fdd59196635d40?pvs=204",
+      "sourceDisposition": "fixed and tested",
+      "sourceFiles": [
+        "src/lib/mind/partial-reply.ts",
+        "src/lib/mind/live-turn.ts",
+        "src/lib/mind/stream.ts",
+        "src/lib/mind/relay.ts",
+        "src/lib/mind/turn-receipt.ts",
+        "src/lib/mind/turn.server.ts",
+        "src/lib/mind/transcript.ts",
+        "src/lib/mind/workspace.ts",
+        "src/components/mind/command-app.tsx"
+      ],
+      "caseReports": {
+        "files": [
+          "scripts/adrian-audit-deliver-lifecycle.test.mjs",
+          "src/lib/mind/adrian-analysis-regressions.test.ts",
+          "src/lib/mind/live-turn.test.ts",
+          "src/lib/mind/relay.test.ts",
+          "src/lib/mind/stream-integrity.test.ts"
+        ],
+        "exactFixtureResults": {
+          "revision": "56f987e34187e12c63ae885b4c6e499465213e42",
+          "scope": "Combined fixture behavior using controlled test data and transports. External services and physical devices are separate acceptance checks.",
+          "checks": [
+            {
+              "path": "src/lib/mind/stream-integrity.test.ts",
+              "assertion": "AA041 JSON answers containing data: remain JSON; provider errors and malformed deltas never become success",
+              "run": "https://github.com/emzylavish-art/adrians-mind-command-os/actions/runs/45941873848/job/140317783450"
+            },
+            {
+              "path": "src/lib/mind/stream-integrity.test.ts",
+              "assertion": "AA041 upstream DONE is terminal and cannot append later deltas or lose confirmed usage",
+              "run": "https://github.com/emzylavish-art/adrians-mind-command-os/actions/runs/45941873848/job/140317783450"
+            },
+            {
+              "path": "src/lib/mind/stream-integrity.test.ts",
+              "assertion": "AA041 the upstream terminal marker finishes the answer without waiting for socket EOF",
+              "run": "https://github.com/emzylavish-art/adrians-mind-command-os/actions/runs/45941873848/job/140317783450"
+            },
+            {
+              "path": "src/lib/mind/stream-integrity.test.ts",
+              "assertion": "AA041 every CRLF boundary and UTF-8 byte boundary produces the same visible and final text as LF",
+              "run": "https://github.com/emzylavish-art/adrians-mind-command-os/actions/runs/45941873848/job/140317783450"
+            },
+            {
+              "path": "src/lib/mind/stream-integrity.test.ts",
+              "assertion": "AA041 final done is authoritative; repeated legitimate deltas are not deduplicated by content",
+              "run": "https://github.com/emzylavish-art/adrians-mind-command-os/actions/runs/45941873848/job/140317783450"
+            },
+            {
+              "path": "src/lib/mind/stream-integrity.test.ts",
+              "assertion": "AA041 a bare DONE marker, broken frame, error, canceled, and premature EOF cannot store a completed answer",
+              "run": "https://github.com/emzylavish-art/adrians-mind-command-os/actions/runs/45941873848/job/140317783450"
+            },
+            {
+              "path": "src/lib/mind/stream-integrity.test.ts",
+              "assertion": "AA041 Stop and timeout finish promptly even if upstream reader cancellation never resolves",
+              "run": "https://github.com/emzylavish-art/adrians-mind-command-os/actions/runs/45941873848/job/140317783450"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "finding": "C4/AA-042",
+      "source": "C4/M12",
+      "expected": "Streaming checkpoints must be clearly incomplete after reload.",
+      "implementation": "docs/adrian-analysis-implementation-checklist.md#L60",
+      "regression": "[G14](#g14-streaming-and-send-recovery)",
+      "disposition": "Fixed and tested on combined commit (isolated fixture)",
+      "recordUrl": "https://app.notion.com/p/4231aa27632381b383fdd59196635d40?pvs=204",
+      "sourceDisposition": "fixed and tested",
+      "sourceFiles": [
+        "src/lib/mind/partial-reply.ts",
+        "src/lib/mind/live-turn.ts",
+        "src/lib/mind/stream.ts",
+        "src/lib/mind/relay.ts",
+        "src/lib/mind/turn-receipt.ts",
+        "src/lib/mind/turn.server.ts",
+        "src/lib/mind/transcript.ts",
+        "src/lib/mind/workspace.ts",
+        "src/components/mind/command-app.tsx"
+      ],
+      "caseReports": {
+        "files": [
+          "scripts/adrian-audit-deliver-lifecycle.test.mjs",
+          "src/lib/mind/adrian-analysis-regressions.test.ts",
+          "src/lib/mind/live-turn.test.ts",
+          "src/lib/mind/relay.test.ts",
+          "src/lib/mind/stream-integrity.test.ts"
+        ],
+        "exactFixtureResults": {
+          "revision": "56f987e34187e12c63ae885b4c6e499465213e42",
+          "scope": "Combined fixture behavior using controlled test data and transports. External services and physical devices are separate acceptance checks.",
+          "checks": [
+            {
+              "path": "src/lib/mind/adrian-analysis-regressions.test.ts",
+              "assertion": "AA039/040/042 partial checkpoints survive normalization, preserve operation and cannot regenerate",
+              "run": "https://github.com/emzylavish-art/adrians-mind-command-os/actions/runs/45941873848/job/140317783421"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "finding": "C4/AA-043",
+      "source": "C4/M13",
+      "expected": "Returned provider usage and actual model must reach recorded usage.",
+      "implementation": "docs/adrian-analysis-implementation-checklist.md#L61",
+      "regression": "[G15](#g15-execution-receipts)",
+      "disposition": "Combined verification pending",
+      "recordUrl": "https://app.notion.com/p/4231aa27632381adbc7bd929061e72bd?pvs=204",
+      "sourceDisposition": "fixed and tested",
+      "sourceFiles": [
+        "migrations/0018_c4_model_execution_receipts.sql",
+        "src/lib/mind/provider-receipt.ts",
+        "src/lib/mind/provider-call.ts",
+        "src/lib/mind/logic-route-adapter.server.ts",
+        "src/lib/mind/ai-provider-config.server.ts",
+        "src/lib/mind/model-consult.ts",
+        "src/lib/mind/model-execution.server.ts",
+        "src/lib/mind/execution-response.ts",
+        "src/lib/mind/execution-receipt.ts",
+        "src/lib/mind/execution-usage.ts",
+        "src/lib/mind/turn.server.ts",
+        "src/lib/mind/workspace.ts",
+        "src/components/mind/command-app.tsx",
+        "team/provider_router.py"
+      ],
+      "caseReports": {
+        "files": [
+          "scripts/adrian-audit-deliver-lifecycle.test.mjs",
+          "src/lib/mind/adrian-analysis-regressions.test.ts",
+          "src/lib/mind/custom-provider-receipt.test.ts",
+          "src/lib/mind/persistence-incremental.test.ts",
+          "src/lib/mind/provider-receipt.test.ts",
+          "src/lib/mind/stream-integrity.test.ts"
+        ],
+        "exactFixtureResults": {
+          "revision": "56f987e34187e12c63ae885b4c6e499465213e42",
+          "scope": "Combined fixture behavior using controlled test data and transports. External services and physical devices are separate acceptance checks.",
+          "checks": [
+            {
+              "path": "src/lib/mind/adrian-analysis-regressions.test.ts",
+              "assertion": "AA043/044/046 helper receipts survive a failed final answer and reconcile without double counting",
+              "run": "https://github.com/emzylavish-art/adrians-mind-command-os/actions/runs/45941873848/job/140317783421"
+            },
+            {
+              "path": "src/lib/mind/custom-provider-receipt.test.ts",
+              "assertion": "AA043/044: custom-provider failure keeps reported usage, actual model and request identity",
+              "run": "https://github.com/emzylavish-art/adrians-mind-command-os/actions/runs/45941873848/job/140317783421"
+            },
+            {
+              "path": "src/lib/mind/stream-integrity.test.ts",
+              "assertion": "AA043/046 relay cancellation before inference does not mark a primary dispatch",
+              "run": "https://github.com/emzylavish-art/adrians-mind-command-os/actions/runs/45941873848/job/140317783450"
+            },
+            {
+              "path": "src/lib/mind/stream-integrity.test.ts",
+              "assertion": "AA043/046 receipts survive final success, error, canceled, EOF, client stop, and timeout",
+              "run": "https://github.com/emzylavish-art/adrians-mind-command-os/actions/runs/45941873848/job/140317783450"
+            },
+            {
+              "path": "src/lib/mind/stream-integrity.test.ts",
+              "assertion": "AA043/046 helper receipts survive JSON final-model failure and reconnect GET without resending",
+              "run": "https://github.com/emzylavish-art/adrians-mind-command-os/actions/runs/45941873848/job/140317783450"
+            },
+            {
+              "path": "src/lib/mind/stream-integrity.test.ts",
+              "assertion": "AA043/046 stream receipts stay bound to the actual send header",
+              "run": "https://github.com/emzylavish-art/adrians-mind-command-os/actions/runs/45941873848/job/140317783450"
+            },
+            {
+              "path": "src/lib/mind/stream-integrity.test.ts",
+              "assertion": "AA043/046 server prefix transport retains receipts when a final stream disconnects",
+              "run": "https://github.com/emzylavish-art/adrians-mind-command-os/actions/runs/45941873848/job/140317783450"
+            },
+            {
+              "path": "src/lib/mind/stream-integrity.test.ts",
+              "assertion": "AA043/046 failure accounting distinguishes a dispatched primary from helpers-only execution",
+              "run": "https://github.com/emzylavish-art/adrians-mind-command-os/actions/runs/45941873848/job/140317783450"
+            },
+            {
+              "path": "src/lib/mind/stream-integrity.test.ts",
+              "assertion": "AA043/046 a completed local tool reply can explicitly report no primary model dispatch",
+              "run": "https://github.com/emzylavish-art/adrians-mind-command-os/actions/runs/45941873848/job/140317783450"
+            },
+            {
+              "path": "src/lib/mind/stream-integrity.test.ts",
+              "assertion": "AA043/046 failed primary retains only reported identity and valid token counters",
+              "run": "https://github.com/emzylavish-art/adrians-mind-command-os/actions/runs/45941873848/job/140317783450"
+            },
+            {
+              "path": "src/lib/mind/stream-integrity.test.ts",
+              "assertion": "AA043/046 receipt validation rejects false identities and usage, strips extra material, and counts repeated IDs once",
+              "run": "https://github.com/emzylavish-art/adrians-mind-command-os/actions/runs/45941873848/job/140317783450"
+            }
+          ]
+        }
+      },
+      "nextCheck": "The linked assertions passed. Verify the remaining acceptance conditions and source limits before closing this finding."
+    },
+    {
+      "finding": "C4/AA-044",
+      "source": "C4/M13",
+      "expected": "Failed/uncertain calls need honest usage; known preflight rejection is not execution.",
+      "implementation": "docs/adrian-analysis-implementation-checklist.md#L62",
+      "regression": "[G15](#g15-execution-receipts)",
+      "disposition": "Fixed and tested on combined commit (isolated fixture)",
+      "combinedTests": [
+        "scripts/adrian-audit-deliver-lifecycle.test.mjs"
+      ],
+      "combinedFixture": "Production callback and HTTP fixture exercised on the chat/recorded Speak integration tree. See the chat and Speak checkpoint in integration-receipt.md. Authenticated staging remains unverified.",
+      "recordUrl": "https://app.notion.com/p/4231aa27632381adbc7bd929061e72bd?pvs=204",
+      "sourceDisposition": "fixed and tested",
+      "sourceFiles": [
+        "migrations/0018_c4_model_execution_receipts.sql",
+        "src/lib/mind/provider-receipt.ts",
+        "src/lib/mind/provider-call.ts",
+        "src/lib/mind/logic-route-adapter.server.ts",
+        "src/lib/mind/ai-provider-config.server.ts",
+        "src/lib/mind/model-consult.ts",
+        "src/lib/mind/model-execution.server.ts",
+        "src/lib/mind/execution-response.ts",
+        "src/lib/mind/execution-receipt.ts",
+        "src/lib/mind/execution-usage.ts",
+        "src/lib/mind/turn.server.ts",
+        "src/lib/mind/workspace.ts",
+        "src/components/mind/command-app.tsx",
+        "team/provider_router.py"
+      ],
+      "caseReports": {
+        "files": [
+          "scripts/adrian-audit-deliver-lifecycle.test.mjs",
+          "src/lib/mind/adrian-analysis-regressions.test.ts",
+          "src/lib/mind/custom-provider-receipt.test.ts",
+          "src/lib/mind/persistence-incremental.test.ts",
+          "src/lib/mind/provider-receipt.test.ts",
+          "src/lib/mind/stream-integrity.test.ts"
+        ],
+        "exactFixtureResults": {
+          "revision": "56f987e34187e12c63ae885b4c6e499465213e42",
+          "scope": "Combined fixture behavior using controlled test data and transports. External services and physical devices are separate acceptance checks.",
+          "checks": [
+            {
+              "path": "scripts/adrian-audit-deliver-lifecycle.test.mjs",
+              "assertion": "AA039/044: completed long reply replaces its checkpoint once, preserves text and reports the actual answer provider",
+              "run": "https://github.com/emzylavish-art/adrians-mind-command-os/actions/runs/45941873848/job/140317783409"
+            },
+            {
+              "path": "scripts/adrian-audit-deliver-lifecycle.test.mjs",
+              "assertion": "AA044/061: pending auth and failed preparation create no provider execution or sent message",
+              "run": "https://github.com/emzylavish-art/adrians-mind-command-os/actions/runs/45941873848/job/140317783409"
+            },
+            {
+              "path": "scripts/adrian-audit-deliver-lifecycle.test.mjs",
+              "assertion": "AA044: an explicit server rejection before dispatch is not recorded as a provider execution",
+              "run": "https://github.com/emzylavish-art/adrians-mind-command-os/actions/runs/45941873848/job/140317783409"
+            },
+            {
+              "path": "scripts/adrian-audit-deliver-lifecycle.test.mjs",
+              "assertion": "AA040/044: fingerprint preparation failure is a failed unsent message, not uncertain provider delivery",
+              "run": "https://github.com/emzylavish-art/adrians-mind-command-os/actions/runs/45941873848/job/140317783409"
+            },
+            {
+              "path": "scripts/adrian-audit-deliver-lifecycle.test.mjs",
+              "assertion": "AA044: a dispatched provider failure preserves known request metadata and partial usage without inventing zero",
+              "run": "https://github.com/emzylavish-art/adrians-mind-command-os/actions/runs/45941873848/job/140317783409"
+            },
+            {
+              "path": "src/lib/mind/adrian-analysis-regressions.test.ts",
+              "assertion": "AA043/044/046 helper receipts survive a failed final answer and reconcile without double counting",
+              "run": "https://github.com/emzylavish-art/adrians-mind-command-os/actions/runs/45941873848/job/140317783421"
+            },
+            {
+              "path": "src/lib/mind/custom-provider-receipt.test.ts",
+              "assertion": "AA043/044: custom-provider failure keeps reported usage, actual model and request identity",
+              "run": "https://github.com/emzylavish-art/adrians-mind-command-os/actions/runs/45941873848/job/140317783421"
+            },
+            {
+              "path": "src/lib/mind/custom-provider-receipt.test.ts",
+              "assertion": "AA044: missing custom configuration, credentials and DNS preflight never claim dispatch",
+              "run": "https://github.com/emzylavish-art/adrians-mind-command-os/actions/runs/45941873848/job/140317783421"
+            },
+            {
+              "path": "src/lib/mind/stream-integrity.test.ts",
+              "assertion": "AA044 prepare 401 requires the same account and makes no inference call",
+              "run": "https://github.com/emzylavish-art/adrians-mind-command-os/actions/runs/45941873848/job/140317783450"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "finding": "C4/AA-045",
+      "source": "C4/M13",
+      "expected": "Recent history must not be confused with configurable lifetime accounting.",
+      "implementation": "docs/adrian-analysis-implementation-checklist.md#L63",
+      "regression": "[G15](#g15-execution-receipts)",
+      "disposition": "Blocked/deferred with exact reason and next step",
+      "recordUrl": "https://app.notion.com/p/4231aa27632381adbc7bd929061e72bd?pvs=204",
+      "sourceDisposition": "proposal needing a decision — recent list is explicitly bounded/tested; lifetime retention/privacy policy is unspecified",
+      "sourceFiles": [
+        "migrations/0018_c4_model_execution_receipts.sql",
+        "src/lib/mind/provider-receipt.ts",
+        "src/lib/mind/provider-call.ts",
+        "src/lib/mind/logic-route-adapter.server.ts",
+        "src/lib/mind/ai-provider-config.server.ts",
+        "src/lib/mind/model-consult.ts",
+        "src/lib/mind/model-execution.server.ts",
+        "src/lib/mind/execution-response.ts",
+        "src/lib/mind/execution-receipt.ts",
+        "src/lib/mind/execution-usage.ts",
+        "src/lib/mind/turn.server.ts",
+        "src/lib/mind/workspace.ts",
+        "src/components/mind/command-app.tsx",
+        "team/provider_router.py"
+      ],
+      "caseReports": {
+        "files": [
+          "scripts/adrian-audit-deliver-lifecycle.test.mjs",
+          "src/lib/mind/adrian-analysis-regressions.test.ts",
+          "src/lib/mind/custom-provider-receipt.test.ts",
+          "src/lib/mind/persistence-incremental.test.ts",
+          "src/lib/mind/provider-receipt.test.ts",
+          "src/lib/mind/stream-integrity.test.ts"
+        ],
+        "lookup": "Exact-head CI logs and named source fixtures must be checked individually; case-level proof has not yet been recorded."
+      },
+      "nextCheck": "Usage history and bounded owner-confirmed deletion are implemented. A lifetime billing record requires a separate retention and billing-source decision."
+    },
+    {
+      "finding": "C4/AA-046",
+      "source": "C4/M13",
+      "expected": "Every dispatched helper must have its own deduplicated execution receipt.",
+      "implementation": "docs/adrian-analysis-implementation-checklist.md#L64",
+      "regression": "[G15](#g15-execution-receipts)",
+      "disposition": "Combined verification pending",
+      "combinedFixtureEvidence": {
+        "commit": "af2bc424709e2a8574e743e598cf0f850abb8958",
+        "result": "Focused helpers recorded successful, refused and unconfirmed calls. Stable operation and stage identities merge duplicated browser observations.",
+        "test": "src/lib/mind/provider-receipt.test.ts",
+        "scope": "Local fixtures. Full release remains gated by combined checks and staging."
+      },
+      "recordUrl": "https://app.notion.com/p/4231aa27632381adbc7bd929061e72bd?pvs=204",
+      "sourceDisposition": "fixed and tested",
+      "sourceFiles": [
+        "migrations/0018_c4_model_execution_receipts.sql",
+        "src/lib/mind/provider-receipt.ts",
+        "src/lib/mind/provider-call.ts",
+        "src/lib/mind/logic-route-adapter.server.ts",
+        "src/lib/mind/ai-provider-config.server.ts",
+        "src/lib/mind/model-consult.ts",
+        "src/lib/mind/model-execution.server.ts",
+        "src/lib/mind/execution-response.ts",
+        "src/lib/mind/execution-receipt.ts",
+        "src/lib/mind/execution-usage.ts",
+        "src/lib/mind/turn.server.ts",
+        "src/lib/mind/workspace.ts",
+        "src/components/mind/command-app.tsx",
+        "team/provider_router.py"
+      ],
+      "caseReports": {
+        "files": [
+          "scripts/adrian-audit-deliver-lifecycle.test.mjs",
+          "src/lib/mind/adrian-analysis-regressions.test.ts",
+          "src/lib/mind/custom-provider-receipt.test.ts",
+          "src/lib/mind/persistence-incremental.test.ts",
+          "src/lib/mind/provider-receipt.test.ts",
+          "src/lib/mind/stream-integrity.test.ts"
+        ],
+        "exactFixtureResults": {
+          "revision": "56f987e34187e12c63ae885b4c6e499465213e42",
+          "scope": "Combined fixture behavior using controlled test data and transports. External services and physical devices are separate acceptance checks.",
+          "checks": [
+            {
+              "path": "src/lib/mind/adrian-analysis-regressions.test.ts",
+              "assertion": "AA043/044/046 helper receipts survive a failed final answer and reconcile without double counting",
+              "run": "https://github.com/emzylavish-art/adrians-mind-command-os/actions/runs/45941873848/job/140317783421"
+            },
+            {
+              "path": "src/lib/mind/stream-integrity.test.ts",
+              "assertion": "AA043/046 relay cancellation before inference does not mark a primary dispatch",
+              "run": "https://github.com/emzylavish-art/adrians-mind-command-os/actions/runs/45941873848/job/140317783450"
+            },
+            {
+              "path": "src/lib/mind/stream-integrity.test.ts",
+              "assertion": "AA043/046 receipts survive final success, error, canceled, EOF, client stop, and timeout",
+              "run": "https://github.com/emzylavish-art/adrians-mind-command-os/actions/runs/45941873848/job/140317783450"
+            },
+            {
+              "path": "src/lib/mind/stream-integrity.test.ts",
+              "assertion": "AA043/046 helper receipts survive JSON final-model failure and reconnect GET without resending",
+              "run": "https://github.com/emzylavish-art/adrians-mind-command-os/actions/runs/45941873848/job/140317783450"
+            },
+            {
+              "path": "src/lib/mind/stream-integrity.test.ts",
+              "assertion": "AA043/046 stream receipts stay bound to the actual send header",
+              "run": "https://github.com/emzylavish-art/adrians-mind-command-os/actions/runs/45941873848/job/140317783450"
+            },
+            {
+              "path": "src/lib/mind/stream-integrity.test.ts",
+              "assertion": "AA043/046 server prefix transport retains receipts when a final stream disconnects",
+              "run": "https://github.com/emzylavish-art/adrians-mind-command-os/actions/runs/45941873848/job/140317783450"
+            },
+            {
+              "path": "src/lib/mind/stream-integrity.test.ts",
+              "assertion": "AA043/046 failure accounting distinguishes a dispatched primary from helpers-only execution",
+              "run": "https://github.com/emzylavish-art/adrians-mind-command-os/actions/runs/45941873848/job/140317783450"
+            },
+            {
+              "path": "src/lib/mind/stream-integrity.test.ts",
+              "assertion": "AA043/046 a completed local tool reply can explicitly report no primary model dispatch",
+              "run": "https://github.com/emzylavish-art/adrians-mind-command-os/actions/runs/45941873848/job/140317783450"
+            },
+            {
+              "path": "src/lib/mind/stream-integrity.test.ts",
+              "assertion": "AA043/046 failed primary retains only reported identity and valid token counters",
+              "run": "https://github.com/emzylavish-art/adrians-mind-command-os/actions/runs/45941873848/job/140317783450"
+            },
+            {
+              "path": "src/lib/mind/stream-integrity.test.ts",
+              "assertion": "AA043/046 receipt validation rejects false identities and usage, strips extra material, and counts repeated IDs once",
+              "run": "https://github.com/emzylavish-art/adrians-mind-command-os/actions/runs/45941873848/job/140317783450"
+            }
+          ]
+        }
+      },
+      "nextCheck": "The linked assertions passed. Verify the remaining acceptance conditions and source limits before closing this finding."
+    },
+    {
+      "finding": "C4/AA-047",
+      "source": "C4/M14",
+      "expected": "Every matching message in a chat must be reachable.",
+      "implementation": "docs/adrian-analysis-implementation-checklist.md#L65",
+      "regression": "[G16](#g16-local-search)",
+      "disposition": "Fixed and tested on combined commit (isolated fixture)",
+      "combinedTests": [
+        "src/lib/mind/adrian-analysis-regressions.test.ts"
+      ],
+      "combinedFixture": "The relevant callback or search fixture passed on the subsequent integration tree. Use its combined CI for exact-head verification. Physical devices, native execution and third-party delivery require separate evidence.",
+      "recordUrl": "https://app.notion.com/p/4231aa27632381d8b12dd07d9d1c7487?pvs=204",
+      "sourceDisposition": "fixed and tested",
+      "sourceFiles": [
+        "src/lib/mind/palette.ts",
+        "src/components/mind/command-app.tsx",
+        "src/components/mind/fleet-panels.tsx",
+        "src/components/mind/bot-builder.tsx"
+      ],
+      "caseReports": {
+        "files": [
+          "scripts/adrian-audit-client-ui.test.mjs",
+          "src/lib/mind/adrian-analysis-regressions.test.ts",
+          "src/lib/mind/palette-label.test.ts"
+        ],
+        "exactFixtureResults": {
+          "revision": "56f987e34187e12c63ae885b4c6e499465213e42",
+          "scope": "Combined fixture behavior using controlled test data and transports. External services and physical devices are separate acceptance checks.",
+          "checks": [
+            {
+              "path": "src/lib/mind/adrian-analysis-regressions.test.ts",
+              "assertion": "AA047/048/049 search finds multiple keyword matches, ranks exact titles and has stable identities",
+              "run": "https://github.com/emzylavish-art/adrians-mind-command-os/actions/runs/45941873848/job/140317783421"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "finding": "C4/AA-048",
+      "source": "C4/M14",
+      "expected": "Ranking must favor deterministic meaningful matches.",
+      "implementation": "docs/adrian-analysis-implementation-checklist.md#L66",
+      "regression": "[G16](#g16-local-search)",
+      "disposition": "Fixed and tested on combined commit (isolated fixture)",
+      "combinedTests": [
+        "src/lib/mind/adrian-analysis-regressions.test.ts"
+      ],
+      "combinedFixture": "The relevant callback or search fixture passed on the subsequent integration tree. Use its combined CI for exact-head verification. Physical devices, native execution and third-party delivery require separate evidence.",
+      "recordUrl": "https://app.notion.com/p/4231aa27632381d8b12dd07d9d1c7487?pvs=204",
+      "sourceDisposition": "fixed and tested",
+      "sourceFiles": [
+        "src/lib/mind/palette.ts",
+        "src/components/mind/command-app.tsx",
+        "src/components/mind/fleet-panels.tsx",
+        "src/components/mind/bot-builder.tsx"
+      ],
+      "caseReports": {
+        "files": [
+          "scripts/adrian-audit-client-ui.test.mjs",
+          "src/lib/mind/adrian-analysis-regressions.test.ts",
+          "src/lib/mind/palette-label.test.ts"
+        ],
+        "exactFixtureResults": {
+          "revision": "56f987e34187e12c63ae885b4c6e499465213e42",
+          "scope": "Combined fixture behavior using controlled test data and transports. External services and physical devices are separate acceptance checks.",
+          "checks": [
+            {
+              "path": "src/lib/mind/adrian-analysis-regressions.test.ts",
+              "assertion": "AA047/048/049 search finds multiple keyword matches, ranks exact titles and has stable identities",
+              "run": "https://github.com/emzylavish-art/adrians-mind-command-os/actions/runs/45941873848/job/140317783421"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "finding": "C4/AA-049",
+      "source": "C4/M14",
+      "expected": "Reordered keywords and exact phrases must be supported locally.",
+      "implementation": "docs/adrian-analysis-implementation-checklist.md#L67",
+      "regression": "[G16](#g16-local-search)",
+      "disposition": "Fixed and tested on combined commit (isolated fixture)",
+      "combinedTests": [
+        "src/lib/mind/adrian-analysis-regressions.test.ts"
+      ],
+      "combinedFixture": "The relevant callback or search fixture passed on the subsequent integration tree. Use its combined CI for exact-head verification. Physical devices, native execution and third-party delivery require separate evidence.",
+      "recordUrl": "https://app.notion.com/p/4231aa27632381d8b12dd07d9d1c7487?pvs=204",
+      "sourceDisposition": "fixed and tested",
+      "sourceFiles": [
+        "src/lib/mind/palette.ts",
+        "src/components/mind/command-app.tsx",
+        "src/components/mind/fleet-panels.tsx",
+        "src/components/mind/bot-builder.tsx"
+      ],
+      "caseReports": {
+        "files": [
+          "scripts/adrian-audit-client-ui.test.mjs",
+          "src/lib/mind/adrian-analysis-regressions.test.ts",
+          "src/lib/mind/palette-label.test.ts"
+        ],
+        "exactFixtureResults": {
+          "revision": "56f987e34187e12c63ae885b4c6e499465213e42",
+          "scope": "Combined fixture behavior using controlled test data and transports. External services and physical devices are separate acceptance checks.",
+          "checks": [
+            {
+              "path": "src/lib/mind/adrian-analysis-regressions.test.ts",
+              "assertion": "AA047/048/049 search finds multiple keyword matches, ranks exact titles and has stable identities",
+              "run": "https://github.com/emzylavish-art/adrians-mind-command-os/actions/runs/45941873848/job/140317783421"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "finding": "C4/AA-050",
+      "source": "C4/M14",
+      "expected": "Supported saved record types need exact destinations.",
+      "implementation": "docs/adrian-analysis-implementation-checklist.md#L68",
+      "regression": "[G16](#g16-local-search)",
+      "disposition": "Fixed and tested on combined commit (isolated fixture)",
+      "combinedTests": [
+        "src/lib/mind/adrian-analysis-regressions.test.ts"
+      ],
+      "combinedFixture": "The relevant callback or search fixture passed on the subsequent integration tree. Use its combined CI for exact-head verification. Physical devices, native execution and third-party delivery require separate evidence.",
+      "recordUrl": "https://app.notion.com/p/4231aa27632381d8b12dd07d9d1c7487?pvs=204",
+      "sourceDisposition": "fixed and tested",
+      "sourceFiles": [
+        "src/lib/mind/palette.ts",
+        "src/components/mind/command-app.tsx",
+        "src/components/mind/fleet-panels.tsx",
+        "src/components/mind/bot-builder.tsx"
+      ],
+      "caseReports": {
+        "files": [
+          "scripts/adrian-audit-client-ui.test.mjs",
+          "src/lib/mind/adrian-analysis-regressions.test.ts",
+          "src/lib/mind/palette-label.test.ts"
+        ],
+        "exactFixtureResults": {
+          "revision": "56f987e34187e12c63ae885b4c6e499465213e42",
+          "scope": "Combined fixture behavior using controlled test data and transports. External services and physical devices are separate acceptance checks.",
+          "checks": [
+            {
+              "path": "src/lib/mind/adrian-analysis-regressions.test.ts",
+              "assertion": "AA050/051 each new local record category has exact focus and match-centered evidence",
+              "run": "https://github.com/emzylavish-art/adrians-mind-command-os/actions/runs/45941873848/job/140317783421"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "finding": "C4/AA-051",
+      "source": "C4/M14",
+      "expected": "Excerpts must show the matched content.",
+      "implementation": "docs/adrian-analysis-implementation-checklist.md#L69",
+      "regression": "[G16](#g16-local-search)",
+      "disposition": "Fixed and tested on combined commit (isolated fixture)",
+      "combinedTests": [
+        "src/lib/mind/adrian-analysis-regressions.test.ts"
+      ],
+      "combinedFixture": "The relevant callback or search fixture passed on the subsequent integration tree. Use its combined CI for exact-head verification. Physical devices, native execution and third-party delivery require separate evidence.",
+      "recordUrl": "https://app.notion.com/p/4231aa27632381d8b12dd07d9d1c7487?pvs=204",
+      "sourceDisposition": "fixed and tested",
+      "sourceFiles": [
+        "src/lib/mind/palette.ts",
+        "src/components/mind/command-app.tsx",
+        "src/components/mind/fleet-panels.tsx",
+        "src/components/mind/bot-builder.tsx"
+      ],
+      "caseReports": {
+        "files": [
+          "scripts/adrian-audit-client-ui.test.mjs",
+          "src/lib/mind/adrian-analysis-regressions.test.ts",
+          "src/lib/mind/palette-label.test.ts"
+        ],
+        "exactFixtureResults": {
+          "revision": "56f987e34187e12c63ae885b4c6e499465213e42",
+          "scope": "Combined fixture behavior using controlled test data and transports. External services and physical devices are separate acceptance checks.",
+          "checks": [
+            {
+              "path": "src/lib/mind/adrian-analysis-regressions.test.ts",
+              "assertion": "AA050/051 each new local record category has exact focus and match-centered evidence",
+              "run": "https://github.com/emzylavish-art/adrians-mind-command-os/actions/runs/45941873848/job/140317783421"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "finding": "C4/AA-052",
+      "source": "C4/M15",
+      "expected": "Queue removal must be a keyboard-accessible named action.",
+      "implementation": "docs/adrian-analysis-implementation-checklist.md#L70",
+      "regression": "[G17](#g17-accessible-actions)",
+      "disposition": "Fixed and tested on combined commit (isolated fixture)",
+      "combinedTests": [
+        "scripts/adrian-audit-client-ui.test.mjs"
+      ],
+      "combinedFixture": "The relevant callback or search fixture passed on the subsequent integration tree. Use its combined CI for exact-head verification. Physical devices, native execution and third-party delivery require separate evidence.",
+      "recordUrl": "https://app.notion.com/p/4231aa2763238112b552d4b569b60cab?pvs=204",
+      "sourceDisposition": "fixed and tested",
+      "sourceFiles": [
+        "src/components/mind/command-app.tsx",
+        "src/components/mind/modal-overlay.ts",
+        "src/components/mind/gpt-shell.css"
+      ],
+      "caseReports": {
+        "files": [
+          "scripts/adrian-audit-client-ui.test.mjs"
+        ],
+        "exactFixtureResults": {
+          "revision": "56f987e34187e12c63ae885b4c6e499465213e42",
+          "scope": "Combined fixture behavior using controlled test data and transports. External services and physical devices are separate acceptance checks.",
+          "checks": [
+            {
+              "path": "scripts/adrian-audit-client-ui.test.mjs",
+              "assertion": "AA052: the actual queue removal button is keyboard-focusable, identifies its row and preserves other messages",
+              "run": "https://github.com/emzylavish-art/adrians-mind-command-os/actions/runs/45941873848/job/140317783409"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "finding": "C4/AA-053",
+      "source": "C4/M15",
+      "expected": "Pinning must be visible and operable without a context menu.",
+      "implementation": "docs/adrian-analysis-implementation-checklist.md#L71",
+      "regression": "[G16](#g16-local-search)",
+      "disposition": "Fixed and tested on combined commit (isolated fixture)",
+      "combinedTests": [
+        "scripts/adrian-audit-client-ui.test.mjs"
+      ],
+      "combinedFixture": "The relevant callback or search fixture passed on the subsequent integration tree. Use its combined CI for exact-head verification. Physical devices, native execution and third-party delivery require separate evidence.",
+      "recordUrl": "https://app.notion.com/p/4231aa2763238112b552d4b569b60cab?pvs=204",
+      "sourceDisposition": "fixed and tested",
+      "sourceFiles": [
+        "src/lib/mind/palette.ts",
+        "src/components/mind/command-app.tsx",
+        "src/components/mind/fleet-panels.tsx",
+        "src/components/mind/bot-builder.tsx"
+      ],
+      "caseReports": {
+        "files": [
+          "scripts/adrian-audit-client-ui.test.mjs",
+          "src/lib/mind/adrian-analysis-regressions.test.ts",
+          "src/lib/mind/palette-label.test.ts"
+        ],
+        "exactFixtureResults": {
+          "revision": "56f987e34187e12c63ae885b4c6e499465213e42",
+          "scope": "Combined fixture behavior using controlled test data and transports. External services and physical devices are separate acceptance checks.",
+          "checks": [
+            {
+              "path": "scripts/adrian-audit-client-ui.test.mjs",
+              "assertion": "AA053: the actual Alt+P handler pins and unpins the selected result without navigating",
+              "run": "https://github.com/emzylavish-art/adrians-mind-command-os/actions/runs/45941873848/job/140317783409"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "finding": "C4/AA-054",
+      "source": "C4/M15",
+      "expected": "Blocking dialogs must contain focus and restore their invoker.",
+      "implementation": "docs/adrian-analysis-implementation-checklist.md#L72",
+      "regression": "[G17](#g17-accessible-actions)",
+      "disposition": "Fixed and tested on combined commit (isolated fixture)",
+      "recordUrl": "https://app.notion.com/p/4231aa2763238112b552d4b569b60cab?pvs=204",
+      "sourceDisposition": "fixed and tested",
+      "sourceFiles": [
+        "src/components/mind/command-app.tsx",
+        "src/components/mind/modal-overlay.ts",
+        "src/components/mind/gpt-shell.css"
+      ],
+      "caseReports": {
+        "files": [
+          "scripts/adrian-audit-client-ui.test.mjs"
+        ],
+        "exactFixtureResults": {
+          "revision": "56f987e34187e12c63ae885b4c6e499465213e42",
+          "scope": "Combined fixture behavior using controlled test data and transports. External services and physical devices are separate acceptance checks.",
+          "checks": [
+            {
+              "path": "scripts/adrian-audit-client-ui.test.mjs",
+              "assertion": "AA054: actual modal uses the accessible dialog primitive and restores its invoking control without a Radix Trigger",
+              "run": "https://github.com/emzylavish-art/adrians-mind-command-os/actions/runs/45941873848/job/140317783409"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "finding": "C4/AA-055",
+      "source": "C4/M15",
+      "expected": "Shortcut hints must match the input platform.",
+      "implementation": "docs/adrian-analysis-implementation-checklist.md#L73",
+      "regression": "[G17](#g17-accessible-actions)",
+      "disposition": "Fixed and tested on combined commit (isolated fixture)",
+      "combinedTests": [
+        "scripts/adrian-audit-client-ui.test.mjs"
+      ],
+      "combinedFixture": "The relevant callback or search fixture passed on the subsequent integration tree. Use its combined CI for exact-head verification. Physical devices, native execution and third-party delivery require separate evidence.",
+      "recordUrl": "https://app.notion.com/p/4231aa2763238112b552d4b569b60cab?pvs=204",
+      "sourceDisposition": "fixed and tested",
+      "sourceFiles": [
+        "src/components/mind/command-app.tsx",
+        "src/components/mind/modal-overlay.ts",
+        "src/components/mind/gpt-shell.css"
+      ],
+      "caseReports": {
+        "files": [
+          "scripts/adrian-audit-client-ui.test.mjs"
+        ],
+        "exactFixtureResults": {
+          "revision": "56f987e34187e12c63ae885b4c6e499465213e42",
+          "scope": "Combined fixture behavior using controlled test data and transports. External services and physical devices are separate acceptance checks.",
+          "checks": [
+            {
+              "path": "scripts/adrian-audit-client-ui.test.mjs",
+              "assertion": "AA055: the actual shortcut indicator names the current platform",
+              "run": "https://github.com/emzylavish-art/adrians-mind-command-os/actions/runs/45941873848/job/140317783409"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "finding": "C4/AA-056",
+      "source": "C4/M15",
+      "expected": "Response lifecycle must be announced without token spam.",
+      "implementation": "docs/adrian-analysis-implementation-checklist.md#L74",
+      "regression": "[G17](#g17-accessible-actions)",
+      "disposition": "Fixed and tested on combined commit (isolated fixture)",
+      "combinedTests": [
+        "scripts/adrian-audit-client-ui.test.mjs"
+      ],
+      "combinedFixture": "The relevant callback or search fixture passed on the subsequent integration tree. Use its combined CI for exact-head verification. Physical devices, native execution and third-party delivery require separate evidence.",
+      "recordUrl": "https://app.notion.com/p/4231aa2763238112b552d4b569b60cab?pvs=204",
+      "sourceDisposition": "fixed and tested",
+      "sourceFiles": [
+        "src/components/mind/command-app.tsx",
+        "src/components/mind/modal-overlay.ts",
+        "src/components/mind/gpt-shell.css"
+      ],
+      "caseReports": {
+        "files": [
+          "scripts/adrian-audit-client-ui.test.mjs"
+        ],
+        "exactFixtureResults": {
+          "revision": "56f987e34187e12c63ae885b4c6e499465213e42",
+          "scope": "Combined fixture behavior using controlled test data and transports. External services and physical devices are separate acceptance checks.",
+          "checks": [
+            {
+              "path": "scripts/adrian-audit-client-ui.test.mjs",
+              "assertion": "AA056: lifecycle announcements are atomic and streamed tokens are outside the live region",
+              "run": "https://github.com/emzylavish-art/adrians-mind-command-os/actions/runs/45941873848/job/140317783409"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "finding": "C4/AA-057",
+      "source": "C4/M16",
+      "expected": "All auth sources must resolve to one verified owner or an explicit conflict.",
+      "implementation": "docs/adrian-analysis-implementation-checklist.md#L75",
+      "regression": "[G18](#g18-canonical-identity)",
+      "disposition": "Fixed and tested on combined commit (isolated fixture)",
+      "combinedTests": [
+        "scripts/adrian-audit-client-ui.test.mjs"
+      ],
+      "combinedFixture": "The relevant callback or search fixture passed on the subsequent integration tree. Use its combined CI for exact-head verification. Physical devices, native execution and third-party delivery require separate evidence.",
+      "recordUrl": "https://app.notion.com/p/4231aa2763238124b037e9eb5f111253?pvs=204",
+      "sourceDisposition": "fixed and tested",
+      "sourceFiles": [
+        "src/lib/auth/client.ts",
+        "src/lib/auth/popup.server.ts",
+        "src/lib/auth/popup-message.ts",
+        "src/lib/auth/session-user.ts",
+        "src/lib/auth/session-state.ts",
+        "src/lib/auth/session-http.ts",
+        "src/lib/auth/use-current-user.ts",
+        "src/lib/auth/verify.server.ts",
+        "src/routes/api/mind/session.ts",
+        "src/routeTree.gen.ts",
+        "src/lib/supabase/actions.ts",
+        "src/lib/mind/use-mind-workspace.ts",
+        "src/components/mind/command-app.tsx"
+      ],
+      "caseReports": {
+        "files": [
+          "scripts/adrian-audit-client-ui.test.mjs",
+          "scripts/adrian-audit-voice-auth.test.mjs",
+          "scripts/sign-out-plan.test.mjs",
+          "src/lib/auth/session-user.test.ts",
+          "src/lib/mind/workspace-hook-lifecycle.test.ts"
+        ],
+        "exactFixtureResults": {
+          "revision": "56f987e34187e12c63ae885b4c6e499465213e42",
+          "scope": "Combined fixture behavior using controlled test data and transports. External services and physical devices are separate acceptance checks.",
+          "checks": [
+            {
+              "path": "scripts/adrian-audit-client-ui.test.mjs",
+              "assertion": "AA057: conflicting identity recovery explicitly ends both sessions and surfaces a failed sign-out",
+              "run": "https://github.com/emzylavish-art/adrians-mind-command-os/actions/runs/45941873848/job/140317783409"
+            },
+            {
+              "path": "scripts/adrian-audit-voice-auth.test.mjs",
+              "assertion": "AA057: canonical identity accepts one verified source and blocks disagreement",
+              "run": "https://github.com/emzylavish-art/adrians-mind-command-os/actions/runs/45941873848/job/140317783409"
+            },
+            {
+              "path": "scripts/adrian-audit-voice-auth.test.mjs",
+              "assertion": "AA057/058: identity loading, service failure and sign-out are different; old owner response cannot win",
+              "run": "https://github.com/emzylavish-art/adrians-mind-command-os/actions/runs/45941873848/job/140317783409"
+            },
+            {
+              "path": "scripts/adrian-audit-voice-auth.test.mjs",
+              "assertion": "AA057: an unavailable identity authority cannot silently select the other account",
+              "run": "https://github.com/emzylavish-art/adrians-mind-command-os/actions/runs/45941873848/job/140317783409"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "finding": "C4/AA-058",
+      "source": "C4/M16",
+      "expected": "Pending auth must not display or hydrate another scope.",
+      "implementation": "docs/adrian-analysis-implementation-checklist.md#L76",
+      "regression": "[G18](#g18-canonical-identity)",
+      "disposition": "Combined verification pending",
+      "combinedFixture": "Pending-auth workspace hook remained unready with zero storage reads, server loads and saves. On verified owner transition it became ready. Interactive staging verification remains pending.",
+      "combinedTests": [
+        "src/lib/mind/workspace-hook-lifecycle.test.ts"
+      ],
+      "recordUrl": "https://app.notion.com/p/4231aa2763238124b037e9eb5f111253?pvs=204",
+      "sourceDisposition": "fixed and tested",
+      "sourceFiles": [
+        "src/lib/auth/client.ts",
+        "src/lib/auth/popup.server.ts",
+        "src/lib/auth/popup-message.ts",
+        "src/lib/auth/session-user.ts",
+        "src/lib/auth/session-state.ts",
+        "src/lib/auth/session-http.ts",
+        "src/lib/auth/use-current-user.ts",
+        "src/lib/auth/verify.server.ts",
+        "src/routes/api/mind/session.ts",
+        "src/routeTree.gen.ts",
+        "src/lib/supabase/actions.ts",
+        "src/lib/mind/use-mind-workspace.ts",
+        "src/components/mind/command-app.tsx"
+      ],
+      "caseReports": {
+        "files": [
+          "scripts/adrian-audit-client-ui.test.mjs",
+          "scripts/adrian-audit-voice-auth.test.mjs",
+          "scripts/sign-out-plan.test.mjs",
+          "src/lib/auth/session-user.test.ts",
+          "src/lib/mind/workspace-hook-lifecycle.test.ts"
+        ],
+        "exactFixtureResults": {
+          "revision": "56f987e34187e12c63ae885b4c6e499465213e42",
+          "scope": "Combined fixture behavior using controlled test data and transports. External services and physical devices are separate acceptance checks.",
+          "checks": [
+            {
+              "path": "scripts/adrian-audit-voice-auth.test.mjs",
+              "assertion": "AA057/058: identity loading, service failure and sign-out are different; old owner response cannot win",
+              "run": "https://github.com/emzylavish-art/adrians-mind-command-os/actions/runs/45941873848/job/140317783409"
+            }
+          ]
+        }
+      },
+      "nextCheck": "The linked assertions passed. Verify the remaining acceptance conditions and source limits before closing this finding."
+    },
+    {
+      "finding": "C4/AA-059",
+      "source": "C4/M16",
+      "expected": "OAuth completion must bind to the initiated popup transaction.",
+      "implementation": "docs/adrian-analysis-implementation-checklist.md#L77",
+      "regression": "[G18](#g18-canonical-identity)",
+      "disposition": "Fixed and tested on combined commit (isolated fixture)",
+      "recordUrl": "https://app.notion.com/p/4231aa2763238124b037e9eb5f111253?pvs=204",
+      "sourceDisposition": "fixed and tested",
+      "sourceFiles": [
+        "src/lib/auth/client.ts",
+        "src/lib/auth/popup.server.ts",
+        "src/lib/auth/popup-message.ts",
+        "src/lib/auth/session-user.ts",
+        "src/lib/auth/session-state.ts",
+        "src/lib/auth/session-http.ts",
+        "src/lib/auth/use-current-user.ts",
+        "src/lib/auth/verify.server.ts",
+        "src/routes/api/mind/session.ts",
+        "src/routeTree.gen.ts",
+        "src/lib/supabase/actions.ts",
+        "src/lib/mind/use-mind-workspace.ts",
+        "src/components/mind/command-app.tsx"
+      ],
+      "caseReports": {
+        "files": [
+          "scripts/adrian-audit-client-ui.test.mjs",
+          "scripts/adrian-audit-voice-auth.test.mjs",
+          "scripts/sign-out-plan.test.mjs",
+          "src/lib/auth/session-user.test.ts",
+          "src/lib/mind/workspace-hook-lifecycle.test.ts"
+        ],
+        "exactFixtureResults": {
+          "revision": "56f987e34187e12c63ae885b4c6e499465213e42",
+          "scope": "Combined fixture behavior using controlled test data and transports. External services and physical devices are separate acceptance checks.",
+          "checks": [
+            {
+              "path": "scripts/adrian-audit-voice-auth.test.mjs",
+              "assertion": "AA059: popup completion binds origin, window and transaction; malformed tokens are ignored",
+              "run": "https://github.com/emzylavish-art/adrians-mind-command-os/actions/runs/45941873848/job/140317783409"
+            },
+            {
+              "path": "scripts/adrian-audit-voice-auth.test.mjs",
+              "assertion": "AA059: canceled popup listener is removed and cannot complete a later attempt",
+              "run": "https://github.com/emzylavish-art/adrians-mind-command-os/actions/runs/45941873848/job/140317783409"
+            },
+            {
+              "path": "scripts/adrian-audit-voice-auth.test.mjs",
+              "assertion": "AA059/060: a gesture-opened waiting popup starts no OAuth until account cleanup finishes",
+              "run": "https://github.com/emzylavish-art/adrians-mind-command-os/actions/runs/45941873848/job/140317783409"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "finding": "C4/AA-060",
+      "source": "C4/M16",
+      "expected": "Canceled/failed account switching must retain recoverable scoped work.",
+      "implementation": "docs/adrian-analysis-implementation-checklist.md#L78",
+      "regression": "[G18](#g18-canonical-identity)",
+      "disposition": "Fixed and tested on combined commit (isolated fixture)",
+      "recordUrl": "https://app.notion.com/p/4231aa2763238124b037e9eb5f111253?pvs=204",
+      "sourceDisposition": "fixed and tested",
+      "sourceFiles": [
+        "src/lib/auth/client.ts",
+        "src/lib/auth/popup.server.ts",
+        "src/lib/auth/popup-message.ts",
+        "src/lib/auth/session-user.ts",
+        "src/lib/auth/session-state.ts",
+        "src/lib/auth/session-http.ts",
+        "src/lib/auth/use-current-user.ts",
+        "src/lib/auth/verify.server.ts",
+        "src/routes/api/mind/session.ts",
+        "src/routeTree.gen.ts",
+        "src/lib/supabase/actions.ts",
+        "src/lib/mind/use-mind-workspace.ts",
+        "src/components/mind/command-app.tsx"
+      ],
+      "caseReports": {
+        "files": [
+          "scripts/adrian-audit-client-ui.test.mjs",
+          "scripts/adrian-audit-voice-auth.test.mjs",
+          "scripts/sign-out-plan.test.mjs",
+          "src/lib/auth/session-user.test.ts",
+          "src/lib/mind/workspace-hook-lifecycle.test.ts"
+        ],
+        "exactFixtureResults": {
+          "revision": "56f987e34187e12c63ae885b4c6e499465213e42",
+          "scope": "Combined fixture behavior using controlled test data and transports. External services and physical devices are separate acceptance checks.",
+          "checks": [
+            {
+              "path": "scripts/adrian-audit-voice-auth.test.mjs",
+              "assertion": "AA060: switching a known deployed account stops if prior sign-out is not confirmed",
+              "run": "https://github.com/emzylavish-art/adrians-mind-command-os/actions/runs/45941873848/job/140317783409"
+            },
+            {
+              "path": "scripts/adrian-audit-voice-auth.test.mjs",
+              "assertion": "AA060: the actual draft hook saves immediately and recovers only under its original owner",
+              "run": "https://github.com/emzylavish-art/adrians-mind-command-os/actions/runs/45941873848/job/140317783409"
+            },
+            {
+              "path": "scripts/adrian-audit-voice-auth.test.mjs",
+              "assertion": "AA059/060: a gesture-opened waiting popup starts no OAuth until account cleanup finishes",
+              "run": "https://github.com/emzylavish-art/adrians-mind-command-os/actions/runs/45941873848/job/140317783409"
+            },
+            {
+              "path": "scripts/adrian-audit-voice-auth.test.mjs",
+              "assertion": "AA060: blocked or early-canceled popup leaves the old account untouched",
+              "run": "https://github.com/emzylavish-art/adrians-mind-command-os/actions/runs/45941873848/job/140317783409"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "finding": "C4/AA-061",
+      "source": "C4/M16",
+      "expected": "Expired sessions must offer original-owner receipt recovery without resending.",
+      "implementation": "docs/adrian-analysis-implementation-checklist.md#L79",
+      "regression": "[G14](#g14-streaming-and-send-recovery)",
+      "disposition": "Combined verification pending",
+      "combinedTests": [
+        "scripts/adrian-audit-deliver-lifecycle.test.mjs"
+      ],
+      "combinedFixture": "Production callback and HTTP fixture exercised on the chat/recorded Speak integration tree. See the chat and Speak checkpoint in integration-receipt.md. Authenticated staging remains unverified.",
+      "recordUrl": "https://app.notion.com/p/4231aa2763238124b037e9eb5f111253?pvs=204",
+      "sourceDisposition": "fixed and tested",
+      "sourceFiles": [
+        "src/lib/mind/partial-reply.ts",
+        "src/lib/mind/live-turn.ts",
+        "src/lib/mind/stream.ts",
+        "src/lib/mind/relay.ts",
+        "src/lib/mind/turn-receipt.ts",
+        "src/lib/mind/turn.server.ts",
+        "src/lib/mind/transcript.ts",
+        "src/lib/mind/workspace.ts",
+        "src/components/mind/command-app.tsx"
+      ],
+      "caseReports": {
+        "files": [
+          "scripts/adrian-audit-deliver-lifecycle.test.mjs",
+          "src/lib/mind/adrian-analysis-regressions.test.ts",
+          "src/lib/mind/live-turn.test.ts",
+          "src/lib/mind/relay.test.ts",
+          "src/lib/mind/stream-integrity.test.ts"
+        ],
+        "exactFixtureResults": {
+          "revision": "56f987e34187e12c63ae885b4c6e499465213e42",
+          "scope": "Combined fixture behavior using controlled test data and transports. External services and physical devices are separate acceptance checks.",
+          "checks": [
+            {
+              "path": "scripts/adrian-audit-deliver-lifecycle.test.mjs",
+              "assertion": "AA020/061: owner change or emergency halt during fingerprint calculation cannot dispatch the prepared body",
+              "run": "https://github.com/emzylavish-art/adrians-mind-command-os/actions/runs/45941873848/job/140317783409"
+            },
+            {
+              "path": "scripts/adrian-audit-deliver-lifecycle.test.mjs",
+              "assertion": "AA044/061: pending auth and failed preparation create no provider execution or sent message",
+              "run": "https://github.com/emzylavish-art/adrians-mind-command-os/actions/runs/45941873848/job/140317783409"
+            },
+            {
+              "path": "scripts/adrian-audit-deliver-lifecycle.test.mjs",
+              "assertion": "AA040/061: delayed recovery for the old owner cannot update the new owner's workspace or failure UI",
+              "run": "https://github.com/emzylavish-art/adrians-mind-command-os/actions/runs/45941873848/job/140317783409"
+            }
+          ]
+        }
+      },
+      "nextCheck": "The linked assertions passed. Verify the remaining acceptance conditions and source limits before closing this finding."
+    },
+    {
+      "finding": "C4/AA-062",
+      "source": "C4/M17",
+      "expected": "Long history needs measured bounded repeated work while retaining navigation.",
+      "implementation": "docs/adrian-analysis-implementation-checklist.md#L80",
+      "regression": "[G19](#g19-rendering-performance)",
+      "disposition": "Blocked/deferred with exact reason and next step",
+      "recordUrl": "https://app.notion.com/p/4231aa276323817e8455cb3953a72033?pvs=204",
+      "sourceDisposition": "fixed and tested — profiling/memoization stage; conditional virtualization is not implemented",
+      "sourceFiles": [
+        "src/components/mind/message-body.tsx",
+        "src/components/mind/command-app.tsx",
+        "scripts/profile-c4-history.mjs",
+        "scripts/profile-c4-render-counts.mjs"
+      ],
+      "caseReports": {
+        "files": [
+          "src/components/mind/message-rendering.test.ts"
+        ],
+        "lookup": "Exact-head CI logs and named source fixtures must be checked individually; case-level proof has not yet been recorded."
+      },
+      "nextCheck": "Rendering fixtures cover five distinct C1/C4 cases. Measure representative authenticated histories and assistive navigation before choosing conditional virtualization."
+    },
+    {
+      "finding": "C4/AA-063",
+      "source": "C4/M17",
+      "expected": "New stream chunks must not reparse unchanged historical content.",
+      "implementation": "docs/adrian-analysis-implementation-checklist.md#L81",
+      "regression": "[G19](#g19-rendering-performance)",
+      "disposition": "Fixed and tested on combined commit (handler fixture)",
+      "recordUrl": "https://app.notion.com/p/4231aa276323817e8455cb3953a72033?pvs=204",
+      "sourceDisposition": "fixed and tested",
+      "sourceFiles": [
+        "src/components/mind/message-body.tsx",
+        "src/components/mind/command-app.tsx",
+        "scripts/profile-c4-history.mjs",
+        "scripts/profile-c4-render-counts.mjs"
+      ],
+      "caseReports": {
+        "files": [
+          "src/components/mind/message-rendering.test.ts"
+        ],
+        "lookup": "Exact-head CI logs and named source fixtures must be checked individually; case-level proof has not yet been recorded.",
+        "reviewedFixtureFiles": [
+          "src/components/mind/message-rendering.test.ts",
+          "scripts/profile-c4-render-counts.mjs"
+        ],
+        "reviewedAssertionScope": "Mounted component checks parser and callback behavior. The separate before/after profiler exercises 20 updates across 20, 200 and 1,000 messages; run it independently to get parser counts.",
+        "combinedEvidence": {
+          "revision": "761fe89f94ec001ba17379d088b4ce8a761cda33",
+          "path": "scripts/profile-c4-render-counts.mjs",
+          "run": "https://github.com/emzylavish-art/adrians-mind-command-os/actions/runs/45940949066/artifacts/15172971055",
+          "assertion": "render-counts.json",
+          "scope": "The independent C4 profiler recorded 820→20, 8,020→20 and 40,020→20 parses per parser in 20 updates at 20, 200 and 1,000 messages. This measures parser invocations, while C1 separately checks the mounted rendering boundary."
+        }
+      }
+    },
+    {
+      "finding": "C4/AA-064",
+      "source": "C4/M17",
+      "expected": "Hidden storage statistics must not serialize each workspace update.",
+      "implementation": "docs/adrian-analysis-implementation-checklist.md#L82",
+      "regression": "[G19](#g19-rendering-performance)",
+      "disposition": "Fixed and tested on combined commit (handler fixture)",
+      "recordUrl": "https://app.notion.com/p/4231aa276323817e8455cb3953a72033?pvs=204",
+      "sourceDisposition": "fixed and tested",
+      "sourceFiles": [
+        "src/components/mind/message-body.tsx",
+        "src/components/mind/command-app.tsx",
+        "scripts/profile-c4-history.mjs",
+        "scripts/profile-c4-render-counts.mjs"
+      ],
+      "caseReports": {
+        "files": [
+          "src/components/mind/message-rendering.test.ts"
+        ],
+        "lookup": "Exact-head CI logs and named source fixtures must be checked individually; case-level proof has not yet been recorded.",
+        "reviewedFixtureFiles": [
+          "src/components/mind/message-rendering.test.ts"
+        ],
+        "reviewedAssertionScope": "Mounted Data hook checks disabled work outside Settings Data and no extra serialization during unrelated state changes.",
+        "combinedEvidence": {
+          "revision": "761fe89f94ec001ba17379d088b4ce8a761cda33",
+          "path": "src/components/mind/message-rendering.test.ts",
+          "run": "https://github.com/emzylavish-art/adrians-mind-command-os/actions/runs/45940949081/job/140314862240",
+          "assertion": "AA064 actual visibility-aware workspace hook serializes only visible Data and changed records",
+          "scope": "The integrated visible-Data assertion passed. C4 and C1 verify the same requirement through this one mounted hook.",
+          "executedRevision": "c0d4ea708c6ac5a7187cd2d0ca498e17c80559d4",
+          "checkout": "GitHub PR merge ref had the identical Git tree 71762908a426062709d3d7876e04d5a57ef1073a. Browser artifacts use the exact head."
+        }
+      }
+    },
+    {
+      "finding": "C4/AA-065",
+      "source": "C4/M17",
+      "expected": "Small edits must produce proportionate database writes.",
+      "implementation": "docs/adrian-analysis-implementation-checklist.md#L83",
+      "regression": "[G20](#g20-incremental-persistence)",
+      "disposition": "Fixed and tested on combined commit (isolated fixture)",
+      "recordUrl": "https://app.notion.com/p/4231aa276323817e8455cb3953a72033?pvs=204",
+      "sourceDisposition": "fixed and tested",
+      "sourceFiles": [
+        "src/lib/mind/store.ts",
+        "src/lib/mind/server.ts",
+        "src/lib/mind/persistence-incremental.test.ts"
+      ],
+      "caseReports": {
+        "files": [
+          "src/lib/mind/persistence-incremental.test.ts",
+          "src/lib/mind/store.test.ts"
+        ],
+        "exactFixtureResults": {
+          "revision": "56f987e34187e12c63ae885b4c6e499465213e42",
+          "scope": "Combined fixture behavior using controlled test data and transports. External services and physical devices are separate acceptance checks.",
+          "checks": [
+            {
+              "path": "src/lib/mind/persistence-incremental.test.ts",
+              "assertion": "C4 incremental snapshots retain owner isolation, CAS and atomic rollback",
+              "run": "https://github.com/emzylavish-art/adrians-mind-command-os/actions/runs/45941873848/job/140317783421"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "finding": "C4/AA-066",
+      "source": "C4/M17",
+      "expected": "Palette recalculation must follow searchable record changes.",
+      "implementation": "docs/adrian-analysis-implementation-checklist.md#L84",
+      "regression": "[G16](#g16-local-search)",
+      "disposition": "Combined verification pending",
+      "recordUrl": "https://app.notion.com/p/4231aa276323817e8455cb3953a72033?pvs=204",
+      "sourceDisposition": "fixed and tested",
+      "sourceFiles": [
+        "src/lib/mind/palette.ts",
+        "src/components/mind/command-app.tsx",
+        "src/components/mind/fleet-panels.tsx",
+        "src/components/mind/bot-builder.tsx"
+      ],
+      "caseReports": {
+        "files": [
+          "scripts/adrian-audit-client-ui.test.mjs",
+          "src/lib/mind/adrian-analysis-regressions.test.ts",
+          "src/lib/mind/palette-label.test.ts"
+        ],
+        "lookup": "Exact-head CI logs and named source fixtures must be checked individually; case-level proof has not yet been recorded."
+      },
+      "nextCheck": "Compare the named fixture cases and remaining source limits against this original acceptance. Live and physical evidence must be recorded separately when required."
+    }
+  ]
+}

@@ -1,3 +1,4 @@
+import { MAX_HISTORY_MESSAGES } from "./context-budget.ts";
 export type LimitState = Map<string, number[]>;
 
 export const CHAT_RATE_LIMIT_REPLY = "Too many messages. Wait a minute and try again.";
@@ -32,14 +33,16 @@ export function consumeToken(
 }
 
 const windows = new Map<string, number[]>();
+const windowDurations = new Map<string, number>();
 
 /** Soft cap on distinct rate-limit keys (after TTL prune). */
 export const MAX_RATE_LIMIT_KEYS = 2_000;
 
-function pruneRateLimitWindows(now: number, windowMs: number): void {
+function pruneRateLimitWindows(now: number): void {
   for (const [key, stamps] of windows) {
+    const windowMs = windowDurations.get(key) ?? 60_000;
     const recent = stamps.filter((stamp) => now - stamp < windowMs);
-    if (recent.length === 0) windows.delete(key);
+    if (recent.length === 0) { windows.delete(key); windowDurations.delete(key); }
     else windows.set(key, recent);
   }
   if (windows.size <= MAX_RATE_LIMIT_KEYS) return;
@@ -49,7 +52,10 @@ function pruneRateLimitWindows(now: number, windowMs: number): void {
     return aMax - bMax;
   });
   const excess = windows.size - MAX_RATE_LIMIT_KEYS;
-  for (let i = 0; i < excess; i += 1) windows.delete(ordered[i]![0]);
+  for (let i = 0; i < excess; i += 1) {
+    windows.delete(ordered[i]![0]);
+    windowDurations.delete(ordered[i]![0]);
+  }
 }
 
 export function allowMindRequest(bucket: string, userId: string, limit: number, windowMs = 60_000, now = Date.now()): boolean {
@@ -69,36 +75,46 @@ export function consumeMindRateLimit(
   windowMs = 60_000,
   now = Date.now(),
 ): RateLimitResult {
-  pruneRateLimitWindows(now, windowMs);
-  const result = consumeToken(windows, `${bucket}:${userId}`, limit, windowMs, now);
-  pruneRateLimitWindows(now, windowMs);
+  pruneRateLimitWindows(now);
+  const key = JSON.stringify([bucket, userId, windowMs]);
+  windowDurations.set(key, windowMs);
+  const result = consumeToken(windows, key, limit, windowMs, now);
+  pruneRateLimitWindows(now);
   return result;
 }
 
-/** Share a single chat token across the helper and final calls of one HTTP turn. */
-export function createChatTurnPreflight(userId: string, isHalted: () => Promise<boolean>) {
-  let charged = false;
+/** Charge one turn token and a separate bounded slot for every provider dispatch. */
+export function createChatTurnPreflight(
+  userId: string,
+  isHalted: () => Promise<boolean>,
+  consume: (bucket: string, owner: string, limit: number) => RateLimitResult | Promise<RateLimitResult & { unavailable?: boolean }> = consumeMindRateLimit,
+) {
+  let chatWindow: Promise<RateLimitResult & { unavailable?: boolean }> | undefined;
   return async (): Promise<Response | null> => {
-    if (await isHalted()) {
-      return Response.json({ ok: false, error: "Emergency stop is on. Nothing was sent." }, { status: 403 });
-    }
-    if (!charged) {
-      const limit = consumeMindRateLimit("chat", userId, 12);
-      if (!limit.ok) return jsonRateLimited(CHAT_RATE_LIMIT_REPLY, limit.retryAfterSec);
-      charged = true;
-    }
-    return null;
+    if (await isHalted()) return Response.json({ ok: false, error: "Emergency stop is on. Nothing was sent." }, { status: 403 });
+    // Concurrent helpers share one chat-window decision and each consume their own dispatch allowance.
+    chatWindow ??= Promise.resolve(consume("chat", userId, 12));
+    const chat = await chatWindow;
+    if (!chat.ok) return chat.unavailable
+      ? Response.json({ ok: false, error: "Usage limits could not be checked. Nothing was sent." }, { status: 503 })
+      : jsonRateLimited(CHAT_RATE_LIMIT_REPLY, chat.retryAfterSec);
+    const dispatch = await consume("provider-dispatch", userId, 24);
+    if (dispatch.ok) return null;
+    if ("unavailable" in dispatch && dispatch.unavailable) return Response.json({ ok: false, error: "Provider limits could not be checked. Nothing was sent." }, { status: 503 });
+    return jsonRateLimited("Provider call limit reached. No additional helper or answer call was sent.", dispatch.retryAfterSec);
   };
 }
 
 /** Test-only: clear the process-wide rate-limit windows. */
 export function resetMindRateLimitsForTests(): void {
   windows.clear();
+  windowDurations.clear();
 }
 
 /** Test-only: run TTL prune + size cap. */
 export function pruneMindRateLimitsForTests(now: number, windowMs: number): void {
-  pruneRateLimitWindows(now, windowMs);
+  void windowMs;
+  pruneRateLimitWindows(now);
 }
 
 export function rateLimitMapSizeForTests(): number {
@@ -131,11 +147,13 @@ export function checkTurnSize(input: {
   images?: { dataUrl?: string }[];
 }): { ok: true } | { ok: false; error: string } {
   if (input.text.length > 8000) return { ok: false, error: "That message is too long." };
-  if (input.history.length > 12) return { ok: false, error: "That conversation history is too long." };
-  if (input.history.some((item) => (item.content ?? "").length > 8000)) {
-    return { ok: false, error: "A previous message is too long." };
+  // Payload safety is separate from model context allocation. A long stored reply
+  // is allowed as a candidate; assembleTurn prepares a bounded extractive view.
+  if (input.history.length > 10000 || input.history.reduce((sum, item) => sum + (item.content ?? "").length, 0) > 1_000_000) return { ok: false, error: "That history exceeds the request envelope. Select the relevant conversation range; the original remains saved." };
+  if (input.history.some((item) => (item.content ?? "").length > 500_000)) {
+    return { ok: false, error: "A previous message exceeds the safe request envelope. Attach the relevant passage; the original remains saved." };
   }
-  if (input.memoryContext.length > 12) return { ok: false, error: "Too many notes were attached." };
+  if (input.memoryContext.length > 64) return { ok: false, error: "Too many notes were attached." };
   if (input.memoryContext.some((item) => (item.text ?? "").length > 2000)) {
     return { ok: false, error: "A note is too long to send." };
   }

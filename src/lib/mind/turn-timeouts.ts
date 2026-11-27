@@ -19,7 +19,7 @@ function readBudgetMs(raw: string | undefined, fallback: number): number {
   if (!raw?.trim()) return fallback;
   const n = Number(raw.trim());
   if (!Number.isFinite(n) || n < 1_000) return fallback;
-  return Math.floor(n);
+  return Math.min(120_000, Math.floor(n));
 }
 
 export function chatTurnTimeoutMs(env: Record<string, string | undefined> = process.env): number {

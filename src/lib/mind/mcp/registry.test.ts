@@ -11,6 +11,7 @@ import {
   listRegistryServers,
   listRegistryTools,
   registerExternalServer,
+  removeRegistryServer,
   setMcpRegistryDirectory,
   setServerEnabled,
 } from "./registry.ts";
@@ -36,6 +37,28 @@ describe("mcp registry", () => {
     });
     assert.equal(called.ok, false);
     assert.match(called.text, /disabled/i);
+  });
+
+  it("disabling, re-enabling and removing invalidate pending owner MCP approvals", async () => {
+    setMcpRegistryDirectory(mkdtempSync(join(tmpdir(), "mind-mcp-revoke-")));
+    const records = new Map<string, { id: string; record: unknown }>();
+    const revoked: unknown[][] = [];
+    const db = { query: async <T>(text: string, params: unknown[] = []): Promise<T[]> => {
+      if (text.startsWith("DELETE FROM mind_mcp_call_approvals")) { revoked.push(params); return []; }
+      if (text.startsWith("select record")) return [...records.values()].map(item => ({ record: item.record })) as T[];
+      if (text.startsWith("select id")) return [...records.values()].map(item => ({ id: item.id })) as T[];
+      if (text.startsWith("insert into mind_mcp_registry")) { records.set(String(params[1]), { id: String(params[1]), record: JSON.parse(String(params[2])) }); return []; }
+      if (text.startsWith("delete from mind_mcp_registry")) { records.delete(String(params[1])); return []; }
+      throw new Error("Unexpected fixture SQL");
+    } };
+    const saved = await registerExternalServer("owner", { label: "Fixture", url: "https://mcp.example/tools" }, db);
+    assert.equal(saved.ok, true); if (!saved.ok) return;
+    const server = saved.servers.find(item => item.label === "Fixture")!;
+    await setServerEnabled("owner", server.id, false, db);
+    await setServerEnabled("owner", server.id, true, db);
+    await removeRegistryServer("owner", server.id, db);
+    assert.deepEqual(revoked, [["owner"], ["owner"], ["owner"]]);
+    assert.equal((await listRegistryServers("owner", db)).some(item => item.id === server.id), false);
   });
 
   it("calls pglite_query on the built-in server", async () => {

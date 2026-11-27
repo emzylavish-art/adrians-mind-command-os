@@ -1,7 +1,8 @@
 import { useEffect, useState } from "react";
+import { BrowserEnvironments } from "@/components/mind/browser-environments";
 import {
   browserAddress, browserPermissions, browserPreferencesKey, defaultBrowserPreferences,
-  parseBrowserPreferences, websitePermission, type BrowserPermission, type BrowserPreferences,
+  parseBrowserPreferences, authorizeBrowserAction, type BrowserPermission, type BrowserPreferences,
 } from "@/lib/mind/browser-permissions";
 
 const labels: Record<BrowserPermission, string> = { ask: "Always ask", allow: "Allow opening", block: "Block" };
@@ -22,6 +23,7 @@ export function CloudBrowserSettings({ owner }: { owner: string | null }) {
   const key = owner ? browserPreferencesKey(owner) : null;
 
   useEffect(() => {
+    setSettings(null); setNotice(""); setAddress(""); setSite("");
     if (!key) return;
     function read() {
       try { setSettings(parseBrowserPreferences(localStorage.getItem(key!))); }
@@ -50,17 +52,19 @@ export function CloudBrowserSettings({ owner }: { owner: string | null }) {
   function handoff() {
     const target = browserAddress(address);
     if (!key || !target) { setNotice("Enter an HTTP or HTTPS website address."); return; }
-    let permission: BrowserPermission;
-    try { permission = websitePermission(parseBrowserPreferences(localStorage.getItem(key)), target); }
+    let authorization;
+    try { authorization = authorizeBrowserAction(parseBrowserPreferences(localStorage.getItem(key)), target, "open"); }
     catch { setNotice("Could not verify browser permissions."); return; }
-    if (permission === "block") { setNotice(`Website opening is blocked for ${target.origin}.`); return; }
-    if (permission === "ask" && !window.confirm(`Open ${target.href} in your browser?`)) return;
+    if (!authorization.allowed) { setNotice(authorization.reason); return; }
+    if (authorization.needsConfirmation && !window.confirm(`Open ${target.href} in your browser?`)) { setNotice("Website handoff cancelled. No agent action was dispatched."); return; }
     window.open(target.href, "_blank", "noopener,noreferrer");
+    setNotice(`Requested a personal-browser tab for ${target.origin}. Check your browser if it blocked the popup. Adrian cannot inspect or control that tab.`);
   }
 
   return <section className="settings-card space-y-5 rounded-panel p-4 text-sm" aria-labelledby="cloud-browser-title">
     <h3 id="cloud-browser-title" className="font-display text-xl font-bold">Cloud browser</h3>
     <p className="text-muted">Mind OS can hand a website over to your browser. You control that tab. Autonomous cloud browsing is unavailable.</p>
+    <BrowserEnvironments />
     {!key ? <p>Sign in to manage your website permissions.</p> : settings && <>
       <div className="settings-row flex-wrap"><div><p className="font-semibold">Default permissions</p><p className="text-muted">Applies to website handoffs from this panel.</p></div>
         <PermissionSelect label="Default permissions" value={settings.defaultPermission} onChange={(defaultPermission) => update((prev) => ({ ...prev, defaultPermission }))} /></div>

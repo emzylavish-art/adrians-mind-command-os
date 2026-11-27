@@ -1,4 +1,5 @@
 import json
+import io
 import os
 import unittest
 from unittest.mock import MagicMock, patch
@@ -97,8 +98,9 @@ class ProviderRouterTests(unittest.TestCase):
     def test_openai_compatible_stream_is_reassembled(self):
         response = MagicMock()
         response.read.return_value = (
-            b'data: {"choices":[{"delta":{"content":"hel"}}]}\n'
+            b'data: {"model":"actual-stream-model","choices":[{"delta":{"content":"hel"}}]}\n'
             b'data: {"choices":[{"delta":{"content":"lo"}}]}\n'
+            b'data: {"choices":[],"usage":{"prompt_tokens":3,"completion_tokens":2}}\n'
             b'data: [DONE]\n'
         )
         response.__enter__.return_value = response
@@ -113,6 +115,8 @@ class ProviderRouterTests(unittest.TestCase):
             result = provider_router.generate("astra", [{"role": "user", "content": "hi"}], stream=True)
         self.assertEqual(result["content"], "hello")
         self.assertTrue(result["streamed"])
+        self.assertEqual(result["model"], "actual-stream-model")
+        self.assertEqual(result["usage"], {"prompt_tokens": 3, "completion_tokens": 2})
 
     def test_openai_compatible_route_uses_exact_configured_model(self):
         response = MagicMock()
@@ -127,8 +131,47 @@ class ProviderRouterTests(unittest.TestCase):
             provider_router.urllib.request, "urlopen", return_value=response
         ):
             result = provider_router.generate("openai", [{"role": "user", "content": "hi"}])
-        self.assertEqual(result["model"], "provider-model")
+        self.assertEqual(result["requested_model"], "provider-model")
+        self.assertEqual(result["model"], "model unknown")
         self.assertEqual(result["content"], "api reply")
+
+    def test_receipt_preserves_upstream_model_usage_and_request_id(self):
+        response = MagicMock()
+        response.read.return_value = json.dumps({
+            "model": "reported-model", "usage": {"prompt_tokens": 12, "completion_tokens": 7},
+            "choices": [{"message": {"content": "reply"}}],
+        }).encode()
+        response.headers = {"x-request-id": "fixture-request"}
+        response.__enter__.return_value = response
+        env = {"OPENAI_API_KEY": "fixture", "OPENAI_MODEL": "requested-model", "OPENAI_API_BASE_URL": "https://fixture.invalid/chat/completions",
+               "MIND_COMMAND_BUDGET_LIMIT_USD": "10", "MIND_COMMAND_BUDGET_SPENT_USD": "0"}
+        with patch.dict(os.environ, env, clear=True), patch.object(provider_router.urllib.request, "urlopen", return_value=response):
+            result = provider_router.generate("openai", [{"role": "user", "content": "hi"}])
+        self.assertEqual(result["model"], "reported-model")
+        self.assertEqual(result["requested_model"], "requested-model")
+        self.assertEqual(result["usage"], {"prompt_tokens": 12, "completion_tokens": 7})
+        self.assertEqual(result["request_id"], "fixture-request")
+
+    def test_failed_http_receipt_keeps_safe_metadata_without_echoing_error_body(self):
+        env = {"OPENAI_API_KEY": "fixture", "OPENAI_MODEL": "requested-model", "OPENAI_API_BASE_URL": "https://fixture.invalid/chat/completions",
+               "MIND_COMMAND_BUDGET_LIMIT_USD": "10", "MIND_COMMAND_BUDGET_SPENT_USD": "0"}
+        body = json.dumps({"model": "actual-model", "usage": {"prompt_tokens": 4, "completion_tokens": -2}, "error": "private upstream detail"}).encode()
+        error = provider_router.urllib.error.HTTPError("https://fixture.invalid", 500, "error", {"x-request-id": "failed-request"}, io.BytesIO(body))
+        with patch.dict(os.environ, env, clear=True), patch.object(provider_router.urllib.request, "urlopen", side_effect=error):
+            with self.assertRaises(provider_router.ProviderError) as caught:
+                provider_router.generate("openai", [{"role": "user", "content": "hi"}])
+        receipt = caught.exception.receipt
+        self.assertTrue(receipt["dispatched"])
+        self.assertEqual(receipt["model"], "actual-model")
+        self.assertEqual(receipt["request_id"], "failed-request")
+        self.assertEqual(receipt["usage"], {"prompt_tokens": 4})
+        self.assertNotIn("private upstream", str(caught.exception) + json.dumps(receipt))
+
+    def test_preflight_receipt_does_not_claim_provider_dispatch(self):
+        with patch.dict(os.environ, {}, clear=True):
+            with self.assertRaises(provider_router.ProviderError) as caught:
+                provider_router.generate("grok", [{"role": "user", "content": "hi"}])
+        self.assertEqual(caught.exception.receipt, {"dispatched": False})
 
 
 if __name__ == "__main__":

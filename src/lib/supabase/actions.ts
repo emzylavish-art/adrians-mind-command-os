@@ -3,6 +3,7 @@
  * Session cookies are written only on the server (HttpOnly).
  */
 import { createServerFn } from "@tanstack/react-start";
+import { isolationMiddleware } from "@/lib/auth/middleware";
 import { redirect } from "@tanstack/react-router";
 import { safeRedirectPath } from "./safe-redirect";
 import { buildAuthCallbackUrl } from "./oauth-redirect";
@@ -95,6 +96,7 @@ export const requireDashboardUser = createServerFn({ method: "GET" }).handler(
 );
 
 export const signInWithPassword = createServerFn({ method: "POST" })
+  .middleware([isolationMiddleware])
   .validator((input: { email?: string; password?: string; next?: string }) => ({
     email: asString(input.email, 320),
     password: asString(input.password, 200),
@@ -126,6 +128,7 @@ export const signInWithPassword = createServerFn({ method: "POST" })
   });
 
 export const signUpWithPassword = createServerFn({ method: "POST" })
+  .middleware([isolationMiddleware])
   .validator((input: { email?: string; password?: string; next?: string }) => ({
     email: asString(input.email, 320),
     password: asString(input.password, 200),
@@ -175,6 +178,7 @@ export const signUpWithPassword = createServerFn({ method: "POST" })
   });
 
 export const startOAuth = createServerFn({ method: "POST" })
+  .middleware([isolationMiddleware])
   .validator(
     (input: {
       provider?: string;
@@ -224,16 +228,42 @@ export const startOAuth = createServerFn({ method: "POST" })
     return { ok: true as const, url: oauth.url };
   });
 
-export const signOutSupabase = createServerFn({ method: "POST" }).handler(
+/** End only this app's Supabase session; failures are reported before navigation. */
+export const endSupabaseSession = createServerFn({ method: "POST" }).middleware([isolationMiddleware]).handler(async () => {
+  const { assertSameSiteRequest } = await import("../auth/isolation.server");
+  assertSameSiteRequest();
+  const { readSupabaseEnv, createSupabaseServerClient } = await loadServer();
+  if (!readSupabaseEnv()) return { ok: true as const };
+  try {
+    const { error } = await createSupabaseServerClient().auth.signOut();
+    if (error) return { ok: false as const, error: "The account session could not be ended. Please try again." };
+    return { ok: true as const };
+  } catch {
+    return { ok: false as const, error: "The account session could not be ended. Please try again." };
+  }
+});
+
+export const signOutSupabase = createServerFn({ method: "POST" }).middleware([isolationMiddleware]).handler(
   async () => {
+    const { assertSameSiteRequest } = await import("../auth/isolation.server");
+    assertSameSiteRequest();
     const { readSupabaseEnv, createSupabaseServerClient } = await loadServer();
     if (readSupabaseEnv()) {
-      try {
-        const supabase = createSupabaseServerClient();
-        await supabase.auth.signOut();
-      } catch {
-        // Still send the visitor to login even if sign-out errors.
-      }
+      const { error } = await createSupabaseServerClient().auth.signOut();
+      if (error) throw new Error("The account session could not be ended. Retry sign out.");
+    }
+    // Keep older callers on the same contract as the current Account control:
+    // leaving a second accepted session alive must not appear as signed out.
+    const { auth, authConfigured } = await import("../auth/server");
+    if (authConfigured) {
+      const { getRequest, getResponseHeaders, setResponseHeader } = await import("@tanstack/react-start/server");
+      const request = getRequest();
+      const headers = new Headers(request.headers);
+      headers.set("content-type", "application/json");
+      const response = await auth.handler(new Request(new URL("/api/auth/sign-out", request.url), { method: "POST", headers, body: "{}" }));
+      if (!response.ok) throw new Error("A second account session could not be ended. Retry sign out.");
+      const cookies = [...getResponseHeaders().getSetCookie(), ...response.headers.getSetCookie()];
+      if (cookies.length) setResponseHeader("set-cookie", cookies);
     }
     throw redirect({ to: "/login" });
   },

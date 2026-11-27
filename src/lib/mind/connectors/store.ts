@@ -1,4 +1,4 @@
-import { createHash, randomBytes } from "node:crypto";
+import { createHash, randomBytes, randomUUID } from "node:crypto";
 import { mkdirSync, readFileSync, writeFileSync, unlinkSync, existsSync, readdirSync, renameSync } from "node:fs";
 import { join, resolve, relative, sep, isAbsolute } from "node:path";
 import { decryptSecret, encryptSecret } from "./crypto.ts";
@@ -34,6 +34,10 @@ export type StoredConnection = {
   connector: ConnectorId;
   ownerId: string;
   accessTokenEnc: string;
+  /** Unique authorization instance, independent of timestamps and labels. */
+  grantGeneration?: string;
+  /** Verified provider subject; display email is never an identity key. */
+  externalAccountId?: string;
   refreshTokenEnc?: string;
   workspaceName?: string;
   workspaceId?: string;
@@ -42,6 +46,8 @@ export type StoredConnection = {
   connectedAt: string;
   tokenType?: string;
   scopes?: string;
+  expiresAt?: string;
+  scopeEvidence?: "provider" | "requested" | "unknown";
 };
 
 export type ConnectionPublic = {
@@ -51,6 +57,12 @@ export type ConnectionPublic = {
   workspaceName?: string;
   accountLabel?: string;
   connectedAt?: string;
+  workspaceId?: string;
+  scopes?: string[];
+  authorization?: "saved" | "expired";
+  expiresAt?: string;
+  scopeEvidence?: "provider" | "requested" | "unknown";
+  recovery?: { status: string; detail: string; at: string };
 };
 
 export type PendingOAuth = {
@@ -100,6 +112,7 @@ export function readConnection(ownerId: string, connector: ConnectorId): StoredC
 export function clearConnection(ownerId: string, connector: ConnectorId, expectedConnectedAt?: string) {
   const active = readConnection(ownerId, connector);
   if (expectedConnectedAt && active?.connectedAt !== expectedConnectedAt) throw new Error("The selected connection changed. Refresh before disconnecting.");
+  if (active) saveLocalOAuthRecovery(ownerId, connector, { connectionAt: active.connectedAt, status: "revocation_unknown", detail: "Local access removed. Provider-side revocation is not yet confirmed.", at: new Date().toISOString() });
   const workspace = connector === "notion" ? active?.workspaceId : null;
   if (workspace) {
     const archived = workspaceFile(ownerId, workspace);
@@ -122,6 +135,36 @@ export function clearConnection(ownerId: string, connector: ConnectorId, expecte
   return active;
 }
 
+export type OAuthRecovery = { connectionAt: string; status: string; detail: string; at: string };
+
+function localOAuthRecoveryRows(ownerId: string, connector: ConnectorId): OAuthRecovery[] {
+  try {
+    const value = JSON.parse(readFileSync(ownerFile(ownerId, `${connector}-recovery.json`), "utf8")) as unknown;
+    // Read compatibility with the first single-record format.
+    const rows = Array.isArray(value) ? value : [value];
+    return rows.filter((row): row is OAuthRecovery => !!row && typeof row === "object" && typeof row.connectionAt === "string" && typeof row.status === "string" && typeof row.detail === "string" && typeof row.at === "string");
+  } catch { return []; }
+}
+
+/** Sanitized security metadata deliberately outlives credential removal and later reconnects. */
+export function saveLocalOAuthRecovery(ownerId: string, connector: ConnectorId, recovery: OAuthRecovery): void {
+  ensureOwnerDir(ownerId);
+  const file = ownerFile(ownerId, `${connector}-recovery.json`);
+  const temp = file + "." + randomBytes(8).toString("hex");
+  const rows = [recovery, ...localOAuthRecoveryRows(ownerId, connector).filter((row) => row.connectionAt !== recovery.connectionAt)];
+  // Retain every unresolved revocation; bound only historical resolved records.
+  let resolved = 0;
+  const kept = rows.filter((row) => row.status === "revocation_unknown" || ++resolved <= 20);
+  writeFileSync(temp, JSON.stringify(kept), { mode: 0o600 });
+  renameSync(temp, file);
+}
+
+export function readLocalOAuthRecovery(ownerId: string, connector: ConnectorId, connectionAt?: string): OAuthRecovery | null {
+  const rows = localOAuthRecoveryRows(ownerId, connector).sort((a, b) => b.at.localeCompare(a.at));
+  if (connectionAt) return rows.find((row) => row.connectionAt === connectionAt) ?? null;
+  return rows.find((row) => row.status === "revocation_unknown") ?? rows[0] ?? null;
+}
+
 export function getAccessToken(ownerId: string, connector: ConnectorId): string | null {
   const conn = readConnection(ownerId, connector);
   if (!conn) return null;
@@ -134,10 +177,10 @@ export function getRefreshToken(ownerId: string, connector: ConnectorId): string
   return decryptSecret(conn.refreshTokenEnc);
 }
 
-export function sameExternalAccount(previous: StoredConnection | null, incoming: { workspaceId?: string; accountLabel?: string }): boolean {
+export function sameExternalAccount(previous: StoredConnection | null, incoming: { workspaceId?: string; externalAccountId?: string; accountLabel?: string }): boolean {
   if (!previous) return false;
   if (previous.workspaceId || incoming.workspaceId) return Boolean(previous.workspaceId && previous.workspaceId === incoming.workspaceId);
-  return Boolean(previous.accountLabel?.includes("@") && previous.accountLabel === incoming.accountLabel);
+  return Boolean(previous.externalAccountId && previous.externalAccountId === incoming.externalAccountId);
 }
 
 function notionWorkspaceDir(owner: string) {
@@ -182,8 +225,11 @@ export function storeAccessToken(input: {
   workspaceId?: string;
   botId?: string;
   accountLabel?: string;
+  externalAccountId?: string;
   tokenType?: string;
   scopes?: string;
+  expiresAt?: string;
+  scopeEvidence?: "provider" | "requested" | "unknown";
 }): StoredConnection {
   const access = encryptSecret(input.accessToken);
   const active = readConnection(input.ownerId, input.connector);
@@ -199,6 +245,8 @@ export function storeAccessToken(input: {
     connector: input.connector,
     ownerId: input.ownerId,
     accessTokenEnc: access.ciphertext,
+    grantGeneration: randomUUID(),
+    externalAccountId: input.externalAccountId,
     refreshTokenEnc: refresh?.ciphertext,
     workspaceName: input.workspaceName,
     workspaceId: input.workspaceId,
@@ -207,6 +255,8 @@ export function storeAccessToken(input: {
     connectedAt: new Date().toISOString(),
     tokenType: input.tokenType,
     scopes: input.scopes,
+    expiresAt: input.expiresAt,
+    scopeEvidence: input.scopeEvidence,
   };
   if (input.connector === "notion" && input.workspaceId) {
     archiveWorkspace(conn);
@@ -347,9 +397,21 @@ export function toPublic(
   return {
     connector,
     state: "connected",
-    detail: `Connected to ${label}${conn.connectedAt ? ` · since ${conn.connectedAt}` : ""}. Tokens stay on the server.`,
+    detail: `Connected to ${label}${conn.connectedAt ? ` · since ${conn.connectedAt}` : ""}. Tokens stay on the server.${["gmail", "google_calendar", "google_drive", "youtube"].includes(connector) && !conn.externalAccountId ? " Account identity is unavailable; a reconnect may be needed before reusing this grant’s refresh credential." : ""}`,
     workspaceName: conn.workspaceName,
     accountLabel: conn.accountLabel,
     connectedAt: conn.connectedAt,
   };
+}
+
+/** Compare the exact grant before rotating credentials. Never re-creates a disconnected grant. */
+export function replaceLocalGrant(expected: StoredConnection, next: StoredConnection): boolean {
+  const active = readConnection(expected.ownerId, expected.connector);
+  const current = expected.connector === "notion" && expected.workspaceId
+    ? localNotionWorkspaces(expected.ownerId).find((row) => row.workspaceId === expected.workspaceId)
+    : active;
+  if (!current || current.connectedAt !== expected.connectedAt || current.accessTokenEnc !== expected.accessTokenEnc) return false;
+  if (next.connector === "notion" && next.workspaceId) archiveWorkspace(next);
+  if (active?.connectedAt === expected.connectedAt && active.accessTokenEnc === expected.accessTokenEnc) saveConnection(next);
+  return true;
 }

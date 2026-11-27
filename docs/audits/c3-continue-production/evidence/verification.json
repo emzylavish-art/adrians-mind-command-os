@@ -1,0 +1,259 @@
+{
+  "schema": "mind-audit-verification/v1",
+  "recorded_at_utc": "2026-11-26T05:28:10.539971+00:00",
+  "audit_chat": "Adrian Analysis — Continue Production Audit",
+  "chapter": "C3",
+  "base_sha": "18d5b9364e6bdcfec028eeccf56fe596946ed8ce",
+  "website_branch": "audit/continue-production-c3-20261125-659f",
+  "native_branch": "audit/continue-production-c3-native-20261125-659f",
+  "coverage": {
+    "already fixed with proof": 2,
+    "blocked with the exact missing step": 3,
+    "fixed and tested": 249,
+    "proposal needing a decision": 2
+  },
+  "runtime_source": {
+    "sha256": "edf69eaabda0fbfe434629d43625563f7471ad1c3c534a8f29f41a70b8717a91",
+    "files": 924,
+    "definition": "scripts/visual/chat-layout.mjs sourceDigest(): sorted tracked and untracked src/scripts/migrations/package.json/vite.config.ts runtime files; excludes .test. files and documentation. The final browser report records start/end equality.",
+    "published_source_sha256": "0dd7bf8ab98729e9a135e04babb6604ef6502c656420f645bef43e731a1d57a9",
+    "formatting_normalization": "format-normalization.json",
+    "normalization_note": "After the full test/type/build/browser passes, staged whitespace validation found five newly added runtime files with trailing whitespace or blank EOF lines. Only that whitespace was removed. Their emitted JavaScript is byte-identical before/after, as recorded in format-normalization.json; no feature/test logic changed."
+  },
+  "test_inventory": {
+    "files": 460,
+    "sha256": "114fc58e78afbc05c38f6554f94af8bae39ca60d1c74f833a756dbaf9d259c20"
+  },
+  "checks": [
+    {
+      "name": "normal deterministic test runner",
+      "command": "TMPDIR=/workspace/scratch/659f1d0aea7c/test-tmp NODE_OPTIONS=--max-old-space-size=512 MIND_TEST_CONCURRENCY=1 npm test",
+      "exit_code": 0,
+      "counts": {
+        "tests": 2538,
+        "suites": 489,
+        "pass": 2533,
+        "fail": 0,
+        "cancelled": 0,
+        "skipped": 5,
+        "todo": 0
+      },
+      "skips": [
+        "﹣ SKILL.md and AGENTS.md name the marker path and bound this script uses (0.320773ms) # skipping: gitignored .grok/skills/og is absent in this worktree",
+        "﹣ the sections that own the brand-task prohibition never affirm a wait (0.16558ms) # skipping: gitignored .grok/skills/og is absent in this worktree",
+        "﹣ SKILL.md tells the pass to self-check with the flag this CLI accepts (0.109945ms) # skipping: gitignored .grok/skills/og is absent in this worktree",
+        "﹣ every hand-over the og skill prints is one this script accepts (0.82259ms) # skipping: gitignored .grok/skills/og is absent in this worktree",
+        "﹣ Speak detection asks the loaded Handy engine and does not invent words (0.149725ms) # Requires explicit MIND_TEST_HANDY_LIVE=1 and a local audio fixture; no live service called by normal tests"
+      ],
+      "duration_ms": 161747.997926,
+      "log": {
+        "path": "logs/npm-test.txt",
+        "original_sha256": "ad79064928301985ec80ba27a5cac167265652fb4aa7e2c9feb4712794506661",
+        "saved_sha256": "ad79064928301985ec80ba27a5cac167265652fb4aa7e2c9feb4712794506661",
+        "normalization": "ANSI color escapes and trailing whitespace removed; original raw-log digest retained."
+      }
+    },
+    {
+      "name": "full TypeScript",
+      "command": "NODE_OPTIONS=--max-old-space-size=2048 npm run typecheck",
+      "exit_code": 0,
+      "log": {
+        "path": "logs/typecheck.txt",
+        "original_sha256": "2befdc60bbb72c439a93e0cf34121ba86d8fa0c3772737ca80d416d34311f065",
+        "saved_sha256": "62af7b10d8f8db74f9978f72ada790b7389269b8e8fbc819fe0b5f58f2694cb7",
+        "normalization": "ANSI color escapes and trailing whitespace removed; original raw-log digest retained."
+      }
+    },
+    {
+      "name": "sanitized production build",
+      "command": "env -i PATH=\"$PATH\" TMPDIR=/workspace/scratch/659f1d0aea7c/test-tmp NODE_OPTIONS=--max-old-space-size=2048 ADRIAN_DATA_DIR=/workspace/scratch/659f1d0aea7c/build-fixture-data XAI_INFERENCE_ENV_FILE=/workspace/scratch/659f1d0aea7c/no-fixture-credentials VITE_AUTH_ENABLED=true npm run build",
+      "exit_code": 0,
+      "warnings": [
+        "Minified client chunks exceed500kB advisory",
+        "Ineffective dynamic import for kimi/persist.ts",
+        "Dependency module-level use-client directives may not be preserved"
+      ],
+      "no_production_migration": true,
+      "no_deployment": true,
+      "log": {
+        "path": "logs/production-build.txt",
+        "original_sha256": "884cc2dcdfd8deed10aed2b40b29b6c12b8302305616720d9e304dbdc94f627f",
+        "saved_sha256": "56d63dd63fd16755ae07bc97641ba8c1efb370f6981ed452369be417c5834e6c",
+        "normalization": "ANSI color escapes and trailing whitespace removed; original raw-log digest retained."
+      }
+    },
+    {
+      "name": "whole repository ESLint",
+      "command": "NODE_OPTIONS=--max-old-space-size=1024 npm run lint -- --format json --output-file <scratch-json>",
+      "exit_code": 1,
+      "result": {
+        "base_sha": "18d5b9364e6bdcfec028eeccf56fe596946ed8ce",
+        "baseline": {
+          "errors": 177,
+          "warnings": 215
+        },
+        "candidate": {
+          "errors": 176,
+          "warnings": 270
+        },
+        "introduced_errors": [],
+        "fixed_baseline_errors": [
+          {
+            "file": "src/lib/mind/ai-provider-config.server.ts",
+            "rule": "no-control-regex",
+            "message": "Unexpected control character(s) in regular expression: \\x00, \\x1f.",
+            "count": 1
+          }
+        ]
+      },
+      "note": "The whole command still fails on baseline errors. Zero introduced error instances; this is not a clean whole-repository lint pass."
+    },
+    {
+      "name": "CSS lint",
+      "command": "npm run visual:css",
+      "exit_code": 0,
+      "errors": 0,
+      "warnings": 3018,
+      "log_sha256": "42739b17a8c2a11e9587c65f7365d2bdfe31380aa9aa4f3863b57dba1e8ed2d8"
+    },
+    {
+      "name": "frontend architecture gate",
+      "command": "node scripts/frontend-architecture.mjs",
+      "exit_code": 0,
+      "ok": true,
+      "log_sha256": "32e6da06cf291b8fbae56936ec75262a03b9575b8c90face950d2faf703692f6"
+    },
+    {
+      "name": "isolated authentication invariant",
+      "command": "node scripts/check-auth-invariant.mjs --dev-url http://127.0.0.1:5193",
+      "setup": "Sanitized Vite preview and probe launched in one process namespace, fresh disposable data, VITE_AUTH_ENABLED=true; server shut down afterward. No account login or real service.",
+      "exit_code": 0,
+      "result": "dev and build agree: sign-in on",
+      "log": {
+        "path": "logs/auth-invariant.txt",
+        "original_sha256": "ebda81e3abf6b8a06cf9954f826fb2b23a0022e06f216438b07fcab05c906e6f",
+        "saved_sha256": "ebda81e3abf6b8a06cf9954f826fb2b23a0022e06f216438b07fcab05c906e6f",
+        "normalization": "ANSI color escapes and trailing whitespace removed; original raw-log digest retained."
+      }
+    },
+    {
+      "name": "repository operator checks",
+      "commands": [
+        {
+          "command": "python -m json.tool team/manifest.json",
+          "exit_code": 0,
+          "output": ""
+        },
+        {
+          "command": "python -m json.tool tools/registry.json",
+          "exit_code": 0,
+          "output": ""
+        },
+        {
+          "command": "python -m json.tool tools/bootstrap/upstream-sources.json",
+          "exit_code": 0,
+          "output": ""
+        },
+        {
+          "command": "python tools/bootstrap/validate_bootstrap.py",
+          "exit_code": 0,
+          "output": "Bootstrap metadata validation passed.\n"
+        },
+        {
+          "command": "python team/validate_manifest.py",
+          "exit_code": 0,
+          "output": "{\n  \"status\": \"ready\",\n  \"result\": [\n    \"Validated 14 agents, 17 callable tool declarations, 29 registry entries, and 17 upstream source checkouts.\"\n  ]\n}\n"
+        },
+        {
+          "command": "python -m unittest discover -s tools/rea -p test_*.py",
+          "exit_code": 0,
+          "output": "..\n----------------------------------------------------------------------\nRan 2 tests in 0.001s\n\nOK\n"
+        },
+        {
+          "command": "python -m unittest discover -s tools/security_review -p test_*.py",
+          "exit_code": 0,
+          "output": "...\n----------------------------------------------------------------------\nRan 3 tests in 0.001s\n\nOK\n"
+        },
+        {
+          "command": "python -m unittest discover -s tools/knowledge -p test_*.py",
+          "exit_code": 0,
+          "output": "...\n----------------------------------------------------------------------\nRan 3 tests in 0.001s\n\nOK\n"
+        },
+        {
+          "command": "python -m unittest discover -s team -p test_*.py",
+          "exit_code": 0,
+          "output": ".........................................................................................\n----------------------------------------------------------------------\nRan 89 tests in 4.340s\n\nOK\n"
+        }
+      ],
+      "exit_code": 0,
+      "python_tests": 97
+    },
+    {
+      "name": "diff whitespace",
+      "command": "git diff --check",
+      "exit_code": 0
+    },
+    {
+      "name": "separate native deterministic tests",
+      "branch": "audit/continue-production-c3-native-20261125-659f",
+      "head": "bdd0c0204955b5446a5d0048d28c131969390bcd",
+      "command": "npm run test:native-audit",
+      "exit_code": 0,
+      "passed": 48,
+      "failed": 0,
+      "skipped": 0,
+      "other_passed": [
+        "full TypeScript",
+        "sanitized Vite build",
+        "standalone Node server build/staging",
+        "script syntax and diff checks"
+      ],
+      "log": {
+        "path": "logs/native-test.txt",
+        "original_sha256": "bfc2164daf82194d910f2771c5b72f41f669161eabbaae7a11ebe59ecf5528f2",
+        "saved_sha256": "bfc2164daf82194d910f2771c5b72f41f669161eabbaae7a11ebe59ecf5528f2",
+        "normalization": "ANSI color escapes and trailing whitespace removed; original raw-log digest retained."
+      },
+      "publication": "native-publication.json"
+    }
+  ],
+  "browser": {
+    "latest_report": "../../c3-visual/final-integrated-report.json",
+    "latest_transcript_layout_cases": 4,
+    "latest_navigation_modal_groups": 4,
+    "latest_skill_receipt_groups": 4,
+    "latest_exit_code": 0,
+    "environment": "local Vite development, Chromium153,50-message synthetic conversation at390x844/844x390/320x500/1024x768 at200% text",
+    "service_state": "empty MCP registry; all other APIs/server functions503; external requests aborted",
+    "performance_targets": {
+      "LCP_le2500ms": {
+        "met": 1,
+        "of": 4,
+        "range_ms": [
+          2424,
+          3308
+        ]
+      },
+      "max_observed_interaction_le200ms": {
+        "met": 4,
+        "of": 4,
+        "range_ms": [
+          56,
+          184
+        ]
+      },
+      "CLS_le0_1": {
+        "met": 1,
+        "of": 4,
+        "range": [
+          0.065,
+          0.576
+        ]
+      }
+    },
+    "earlier_cases": "24 behavioral cases at their separately recorded earlier source fingerprints, not24 at the final source",
+    "limits": "No physical device, live account, external service or provider inference; local development metrics are not field INP or production performance passes."
+  },
+  "previous_failed_runs": "Earlier runs exposed and repaired modal focus escape, long-draft Send clipping, source-contract assertions, stale artifact identity, omitted skill receipts and unguarded legacy dispatch. Test-only TypeScript narrowing guards were corrected. The retained final run has zero test failures.",
+  "release_boundary": "No merge, deployment, production migration, real provider request, account connection or physical-device certification. This record accompanies the tested source; GitHub head/tree verification is recorded in the final handoff after publication."
+}

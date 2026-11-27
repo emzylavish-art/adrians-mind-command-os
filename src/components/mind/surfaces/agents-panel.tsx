@@ -1,6 +1,8 @@
 import { useEffect, useMemo, useState } from "react";
 import { AGENT_TEMPLATES, toolCatalog, type AgentDefinition, type FleetTool } from "@/lib/mind/fleet";
-import { emptyWorkspace, loadWorkspace } from "@/lib/mind/workspace";
+import type { Workspace } from "@/lib/mind/types";
+import type { PreferenceStorage } from "@/lib/mind/account-preferences";
+import { useAccountPreferences } from "@/components/mind/account-preferences-context";
 
 const SOURCE_KEY = "adrian-agents-source";
 const SORT_KEY = "adrian-agents-sort";
@@ -42,17 +44,17 @@ const CATALOG_BY_ID = new Map(CATALOG.map((item) => [item.id, item]));
 const DEFAULT_NEXT =
   "Next: save an Adrian-owned bot on this page. Paperclip is optional and is not required. Telegram waits until you paste that bot’s token.";
 
-function readKey(key: string): string | null {
+function readKey(storage: PreferenceStorage, key: string): string | null {
   try {
-    return window.localStorage.getItem(key);
+    return storage.getItem(key);
   } catch {
     return null;
   }
 }
 
-function writeKey(key: string, value: string): boolean {
+function writeKey(storage: PreferenceStorage, key: string, value: string): boolean {
   try {
-    window.localStorage.setItem(key, value);
+    storage.setItem(key, value);
     return true;
   } catch {
     return false;
@@ -60,6 +62,7 @@ function writeKey(key: string, value: string): boolean {
 }
 
 function OwnedBots() {
+  const storage = useAccountPreferences();
   const [name, setName] = useState("");
   const [telegram, setTelegram] = useState("");
   const [note, setNote] = useState("This bot belongs to Adrian’s Mind. Paperclip is not used.");
@@ -75,10 +78,10 @@ function OwnedBots() {
           return;
         }
         const row = { name: botName, telegram: telegram.trim(), source: "adrian", paperclip: false, at: new Date().toISOString() };
-        const current = readKey("adrian-owned-bots");
+        const current = readKey(storage, "adrian-owned-bots");
         const list = current ? JSON.parse(current) as unknown[] : [];
         list.unshift(row);
-        const ok = writeKey("adrian-owned-bots", JSON.stringify(list.slice(0, 40)));
+        const ok = writeKey(storage, "adrian-owned-bots", JSON.stringify(list.slice(0, 40)));
         setNote(ok
           ? `${botName} is saved on this device. It does not use Paperclip. Telegram is not contacted until you paste that bot’s token.`
           : "This browser blocked the save. The bot was not stored.");
@@ -134,8 +137,8 @@ function toolSummary(tools: FleetTool[]): string {
   return `Tools: ${labels.join(", ")}.`;
 }
 
-function readPins(known: Set<string>): string[] {
-  const raw = readKey(PINS_KEY);
+function readPins(storage: PreferenceStorage, known: Set<string>): string[] {
+  const raw = readKey(storage, PINS_KEY);
   if (!raw) return [];
   try {
     const parsed = JSON.parse(raw) as unknown;
@@ -203,8 +206,9 @@ function directoryStep(row: AgentRow, reminder: boolean): string {
  * Agents page controls. Preferences stay on this device.
  * Agent directory still owns Add, Save agent, Arm local worker, and Refresh status.
  */
-export function AgentsPanel() {
-  const [rows, setRows] = useState<AgentRow[]>(() => templateRows());
+export function AgentsPanel({ workspace }: { workspace?: Pick<Workspace, "agents"> } = {}) {
+  const storage = useAccountPreferences();
+  const rows = useMemo(() => [...templateRows(), ...savedRows(workspace?.agents ?? [])], [workspace?.agents]);
   const [source, setSource] = useState<SourceId>("both");
   const [sort, setSort] = useState<SortId>("name");
   const [filter, setFilter] = useState<FilterId>("All");
@@ -215,25 +219,18 @@ export function AgentsPanel() {
   const [savedNote, setSavedNote] = useState("Preferences load from this browser.");
 
   useEffect(() => {
-    let agents: AgentDefinition[] = [];
-    try {
-      agents = loadWorkspace(window.localStorage).agents;
-    } catch {
-      agents = emptyWorkspace().agents;
-    }
-    const built = [...templateRows(), ...savedRows(agents)];
-    setRows(built);
-    const storedSource = readKey(SOURCE_KEY);
-    const storedSort = readKey(SORT_KEY);
-    const storedFilter = readKey(FILTER_KEY);
-    const storedReminder = readKey(REMINDER_KEY);
+    const built = rows;
+    const storedSource = readKey(storage, SOURCE_KEY);
+    const storedSort = readKey(storage, SORT_KEY);
+    const storedFilter = readKey(storage, FILTER_KEY);
+    const storedReminder = readKey(storage, REMINDER_KEY);
     if (isSource(storedSource)) setSource(storedSource);
     if (isSort(storedSort)) setSort(storedSort);
     if (isFilter(storedFilter)) setFilter(storedFilter);
     if (storedReminder === "on" || storedReminder === "off") setHostedReminder(storedReminder === "on");
-    setPins(readPins(new Set(built.map((row) => row.id))));
+    setPins(readPins(storage, new Set(built.map((row) => row.id))));
     setSavedNote("Loaded the source, sort, filter, pins, and hosted reminder already stored in this browser.");
-  }, []);
+  }, [storage]);
 
   const visible = useMemo(() => {
     const needle = query.trim().toLowerCase();
@@ -255,7 +252,7 @@ export function AgentsPanel() {
   function chooseSource(nextSource: SourceId) {
     setSource(nextSource);
     const label = sourceLabel(nextSource);
-    noteSaved(`${label} as the agent source`, writeKey(SOURCE_KEY, nextSource));
+    noteSaved(`${label} as the agent source`, writeKey(storage, SOURCE_KEY, nextSource));
     setNext(
       nextSource === "saved"
         ? "Next: if a saved agent is listed below, find that same name in Agent directory and press Arm local worker. If none are listed, press Add Personal assistant."
@@ -268,24 +265,24 @@ export function AgentsPanel() {
   function chooseSort(nextSort: SortId) {
     setSort(nextSort);
     const label = SORTS.find((item) => item.id === nextSort)?.label ?? nextSort;
-    noteSaved(`${label} sort`, writeKey(SORT_KEY, nextSort));
+    noteSaved(`${label} sort`, writeKey(storage, SORT_KEY, nextSort));
   }
 
   function chooseFilter(nextFilter: FilterId) {
     setFilter(nextFilter);
-    noteSaved(`${nextFilter} as the agent filter`, writeKey(FILTER_KEY, nextFilter));
+    noteSaved(`${nextFilter} as the agent filter`, writeKey(storage, FILTER_KEY, nextFilter));
   }
 
   function togglePin(row: AgentRow) {
     const nextPins = pins.includes(row.id) ? pins.filter((id) => id !== row.id) : [...pins, row.id];
     setPins(nextPins);
-    noteSaved(`“${row.name}”`, writeKey(PINS_KEY, JSON.stringify(nextPins)));
+    noteSaved(`“${row.name}”`, writeKey(storage, PINS_KEY, JSON.stringify(nextPins)));
   }
 
   function toggleReminder() {
     const nextOn = !hostedReminder;
     setHostedReminder(nextOn);
-    noteSaved(nextOn ? "hosted reminder on" : "hosted reminder off", writeKey(REMINDER_KEY, nextOn ? "on" : "off"));
+    noteSaved(nextOn ? "hosted reminder on" : "hosted reminder off", writeKey(storage, REMINDER_KEY, nextOn ? "on" : "off"));
     setNext(
       nextOn
         ? "Next: leave Record hosted target unpressed unless you mean to record that target. Press Refresh status under Paperclip agent service before treating a bot as listed."
@@ -294,22 +291,10 @@ export function AgentsPanel() {
   }
 
   function reloadLocal() {
-    try {
-      const loaded = loadWorkspace(window.localStorage);
-      const built = [...templateRows(), ...savedRows(loaded.agents)];
-      setRows(built);
-      setPins((current) => current.filter((id) => built.some((row) => row.id === id)));
-      const savedCount = built.filter((row) => row.source === "saved").length;
-      setSavedNote("Reloaded the local workspace from this browser.");
-      setNext(
-        savedCount === 0
-          ? "Next: no saved agents were found. In Agent directory, press Add Personal assistant."
-          : `Next: ${savedCount} saved agent${savedCount === 1 ? "" : "s"} loaded. Find the one you want in Agent directory, then press Arm local worker.`,
-      );
-    } catch {
-      setRows(templateRows());
-      setNext("Next: this browser blocked workspace storage. Allow site data, reload, then open Agents again.");
-    }
+    setPins((current) => current.filter((id) => rows.some((row) => row.id === id)));
+    const savedCount = rows.filter((row) => row.source === "saved").length;
+    setSavedNote("Using the current account workspace. Changes from the directory appear immediately.");
+    setNext(savedCount ? `${savedCount} saved agents in this workspace.` : "No saved agents. Open Agent directory to create one.");
   }
 
   const emptyCopy =

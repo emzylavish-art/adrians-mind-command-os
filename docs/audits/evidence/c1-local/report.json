@@ -1,0 +1,775 @@
+{
+  "schemaVersion": 1,
+  "baseUrl": "http://127.0.0.1:4199",
+  "generatedAt": "2026-11-26T03:42:46.797Z",
+  "revision": "b17e90c5728f7f1a9f303f703fcf073cbdd2175e",
+  "dirty": false,
+  "mode": "report",
+  "fixtureOnly": true,
+  "environment": {
+    "engine": "chromium",
+    "version": "153.0.8010.0",
+    "mobile": "emulated viewport, not a physical device",
+    "authentication": "synthetic fixture identity; no live account",
+    "serviceWorkers": "blocked"
+  },
+  "states": [
+    {
+      "viewport": "desktop",
+      "theme": "dark",
+      "label": "Plugins",
+      "screenshot": "desktop-fixture-plugins-connected.png",
+      "destination": {
+        "verified": true,
+        "view": "connected",
+        "ready": "Connected",
+        "url": "http://127.0.0.1:4199/?section=connected",
+        "scope": "screen shell and specified ready content; does not prove every asynchronous service"
+      },
+      "layout": {
+        "documentOverflow": 0,
+        "overflowingControls": [],
+        "smallTargets": []
+      },
+      "axe": {
+        "violations": []
+      },
+      "fixture": {
+        "id": "plugins-connected",
+        "synthetic": true,
+        "transport": {
+          "fulfilled": 27,
+          "blocked": 4,
+          "liveApiRequests": 0,
+          "mode": "intercepted synthetic responses",
+          "physicalDevice": false
+        }
+      }
+    },
+    {
+      "viewport": "desktop",
+      "theme": "dark",
+      "label": "Plugins",
+      "screenshot": "desktop-fixture-plugins-permission-denied.png",
+      "destination": {
+        "verified": true,
+        "view": "connected",
+        "ready": "Connected",
+        "url": "http://127.0.0.1:4199/?section=connected",
+        "scope": "screen shell and specified ready content; does not prove every asynchronous service"
+      },
+      "layout": {
+        "documentOverflow": 0,
+        "overflowingControls": [],
+        "smallTargets": []
+      },
+      "axe": {
+        "violations": []
+      },
+      "fixture": {
+        "id": "plugins-permission-denied",
+        "synthetic": true,
+        "transport": {
+          "fulfilled": 27,
+          "blocked": 4,
+          "liveApiRequests": 0,
+          "mode": "intercepted synthetic responses",
+          "physicalDevice": false
+        }
+      }
+    },
+    {
+      "viewport": "desktop",
+      "theme": "dark",
+      "label": "Build",
+      "screenshot": "desktop-fixture-build-runtime-unavailable.png",
+      "destination": {
+        "verified": true,
+        "view": "build",
+        "ready": "[aria-label=\"Build sections\"]",
+        "url": "http://127.0.0.1:4199/?section=build",
+        "scope": "screen shell and specified ready content; does not prove every asynchronous service"
+      },
+      "layout": {
+        "documentOverflow": 0,
+        "overflowingControls": [],
+        "smallTargets": []
+      },
+      "axe": {
+        "violations": []
+      },
+      "diagnostics": {
+        "buildSaveStyle": {
+          "beforeAccessibility": [
+            {
+              "tag": "BUTTON",
+              "className": "",
+              "disabled": true,
+              "color": "rgb(75, 75, 82)",
+              "backgroundColor": "rgb(182, 182, 189)",
+              "backgroundImage": "none",
+              "opacity": "1",
+              "filter": "none",
+              "transition": "none"
+            },
+            {
+              "tag": "DIV",
+              "className": "code-ide-status",
+              "disabled": null,
+              "color": "rgb(244, 247, 255)",
+              "backgroundColor": "rgba(0, 0, 0, 0)",
+              "backgroundImage": "none",
+              "opacity": "1",
+              "filter": "none",
+              "transition": "all"
+            },
+            {
+              "tag": "SECTION",
+              "className": "",
+              "disabled": null,
+              "color": "rgb(244, 247, 255)",
+              "backgroundColor": "rgb(17, 17, 19)",
+              "backgroundImage": "none",
+              "opacity": "1",
+              "filter": "none",
+              "transition": "all"
+            }
+          ],
+          "afterAccessibility": [
+            {
+              "tag": "BUTTON",
+              "className": "",
+              "disabled": true,
+              "color": "rgb(75, 75, 82)",
+              "backgroundColor": "rgb(182, 182, 189)",
+              "backgroundImage": "none",
+              "opacity": "1",
+              "filter": "none",
+              "transition": "none"
+            },
+            {
+              "tag": "DIV",
+              "className": "code-ide-status",
+              "disabled": null,
+              "color": "rgb(244, 247, 255)",
+              "backgroundColor": "rgba(0, 0, 0, 0)",
+              "backgroundImage": "none",
+              "opacity": "1",
+              "filter": "none",
+              "transition": "all"
+            },
+            {
+              "tag": "SECTION",
+              "className": "",
+              "disabled": null,
+              "color": "rgb(244, 247, 255)",
+              "backgroundColor": "rgb(17, 17, 19)",
+              "backgroundImage": "none",
+              "opacity": "1",
+              "filter": "none",
+              "transition": "all"
+            }
+          ]
+        }
+      },
+      "fixture": {
+        "id": "build-runtime-unavailable",
+        "synthetic": true,
+        "transport": {
+          "fulfilled": 17,
+          "blocked": 4,
+          "liveApiRequests": 0,
+          "mode": "intercepted synthetic responses",
+          "physicalDevice": false
+        }
+      }
+    },
+    {
+      "viewport": "desktop",
+      "theme": "dark",
+      "label": "Build",
+      "screenshot": "desktop-fixture-build-revision-conflict.png",
+      "destination": {
+        "verified": true,
+        "view": "build",
+        "ready": "[aria-label=\"Build sections\"]",
+        "url": "http://127.0.0.1:4199/?section=build",
+        "scope": "screen shell and specified ready content; does not prove every asynchronous service"
+      },
+      "layout": {
+        "documentOverflow": 0,
+        "overflowingControls": [],
+        "smallTargets": []
+      },
+      "axe": {
+        "violations": []
+      },
+      "diagnostics": {
+        "buildSaveStyle": {
+          "beforeAccessibility": [
+            {
+              "tag": "BUTTON",
+              "className": "",
+              "disabled": false,
+              "color": "rgb(17, 17, 19)",
+              "backgroundColor": "rgb(245, 245, 245)",
+              "backgroundImage": "none",
+              "opacity": "1",
+              "filter": "none",
+              "transition": "none"
+            },
+            {
+              "tag": "DIV",
+              "className": "code-ide-status",
+              "disabled": null,
+              "color": "rgb(244, 247, 255)",
+              "backgroundColor": "rgba(0, 0, 0, 0)",
+              "backgroundImage": "none",
+              "opacity": "1",
+              "filter": "none",
+              "transition": "all"
+            },
+            {
+              "tag": "SECTION",
+              "className": "",
+              "disabled": null,
+              "color": "rgb(244, 247, 255)",
+              "backgroundColor": "rgb(17, 17, 19)",
+              "backgroundImage": "none",
+              "opacity": "1",
+              "filter": "none",
+              "transition": "all"
+            }
+          ],
+          "afterAccessibility": [
+            {
+              "tag": "BUTTON",
+              "className": "",
+              "disabled": false,
+              "color": "rgb(17, 17, 19)",
+              "backgroundColor": "rgb(245, 245, 245)",
+              "backgroundImage": "none",
+              "opacity": "1",
+              "filter": "none",
+              "transition": "none"
+            },
+            {
+              "tag": "DIV",
+              "className": "code-ide-status",
+              "disabled": null,
+              "color": "rgb(244, 247, 255)",
+              "backgroundColor": "rgba(0, 0, 0, 0)",
+              "backgroundImage": "none",
+              "opacity": "1",
+              "filter": "none",
+              "transition": "all"
+            },
+            {
+              "tag": "SECTION",
+              "className": "",
+              "disabled": null,
+              "color": "rgb(244, 247, 255)",
+              "backgroundColor": "rgb(17, 17, 19)",
+              "backgroundImage": "none",
+              "opacity": "1",
+              "filter": "none",
+              "transition": "all"
+            }
+          ]
+        }
+      },
+      "fixture": {
+        "id": "build-revision-conflict",
+        "synthetic": true,
+        "transport": {
+          "fulfilled": 20,
+          "blocked": 4,
+          "liveApiRequests": 0,
+          "mode": "intercepted synthetic responses",
+          "physicalDevice": false
+        }
+      }
+    },
+    {
+      "viewport": "desktop",
+      "theme": "dark",
+      "label": "Settings",
+      "screenshot": "desktop-fixture-settings-save-failed.png",
+      "destination": {
+        "verified": true,
+        "view": "settings",
+        "ready": "Settings",
+        "url": "http://127.0.0.1:4199/?section=settings&pane=data",
+        "scope": "screen shell and specified ready content; does not prove every asynchronous service"
+      },
+      "layout": {
+        "documentOverflow": 0,
+        "overflowingControls": [],
+        "smallTargets": []
+      },
+      "axe": {
+        "violations": []
+      },
+      "fixture": {
+        "id": "settings-save-failed",
+        "synthetic": true,
+        "transport": {
+          "fulfilled": 10,
+          "blocked": 4,
+          "liveApiRequests": 0,
+          "mode": "intercepted synthetic responses",
+          "physicalDevice": false
+        }
+      }
+    },
+    {
+      "viewport": "desktop",
+      "theme": "dark",
+      "label": "Chat fixture",
+      "screenshot": "desktop-fixture-chat-interrupted.png",
+      "destination": {
+        "verified": true,
+        "view": "chat",
+        "ready": "article.turn-assistant",
+        "url": "http://127.0.0.1:4199/?section=chat&chat=fixture-chat",
+        "scope": "screen shell and specified ready content; does not prove every asynchronous service"
+      },
+      "layout": {
+        "documentOverflow": 0,
+        "overflowingControls": [],
+        "smallTargets": []
+      },
+      "axe": {
+        "violations": []
+      },
+      "fixture": {
+        "id": "chat-interrupted",
+        "synthetic": true,
+        "transport": {
+          "fulfilled": 7,
+          "blocked": 4,
+          "liveApiRequests": 0,
+          "mode": "intercepted synthetic responses",
+          "physicalDevice": false
+        }
+      }
+    },
+    {
+      "viewport": "desktop",
+      "theme": "dark",
+      "label": "Runs",
+      "screenshot": "desktop-fixture-agent-blocked.png",
+      "destination": {
+        "verified": true,
+        "view": "runs",
+        "ready": "Agent runs",
+        "url": "http://127.0.0.1:4199/?section=runs",
+        "scope": "screen shell and specified ready content; does not prove every asynchronous service"
+      },
+      "layout": {
+        "documentOverflow": 0,
+        "overflowingControls": [],
+        "smallTargets": []
+      },
+      "axe": {
+        "violations": []
+      },
+      "fixture": {
+        "id": "agent-blocked",
+        "synthetic": true,
+        "transport": {
+          "fulfilled": 7,
+          "blocked": 4,
+          "liveApiRequests": 0,
+          "mode": "intercepted synthetic responses",
+          "physicalDevice": false
+        }
+      }
+    },
+    {
+      "viewport": "mobile",
+      "theme": "dark",
+      "label": "Plugins",
+      "screenshot": "mobile-fixture-plugins-connected.png",
+      "destination": {
+        "verified": true,
+        "view": "connected",
+        "ready": "Connected",
+        "url": "http://127.0.0.1:4199/?section=connected",
+        "scope": "screen shell and specified ready content; does not prove every asynchronous service"
+      },
+      "layout": {
+        "documentOverflow": 0,
+        "overflowingControls": [],
+        "smallTargets": []
+      },
+      "axe": {
+        "violations": []
+      },
+      "fixture": {
+        "id": "plugins-connected",
+        "synthetic": true,
+        "transport": {
+          "fulfilled": 27,
+          "blocked": 4,
+          "liveApiRequests": 0,
+          "mode": "intercepted synthetic responses",
+          "physicalDevice": false
+        }
+      }
+    },
+    {
+      "viewport": "mobile",
+      "theme": "dark",
+      "label": "Plugins",
+      "screenshot": "mobile-fixture-plugins-permission-denied.png",
+      "destination": {
+        "verified": true,
+        "view": "connected",
+        "ready": "Connected",
+        "url": "http://127.0.0.1:4199/?section=connected",
+        "scope": "screen shell and specified ready content; does not prove every asynchronous service"
+      },
+      "layout": {
+        "documentOverflow": 0,
+        "overflowingControls": [],
+        "smallTargets": []
+      },
+      "axe": {
+        "violations": []
+      },
+      "fixture": {
+        "id": "plugins-permission-denied",
+        "synthetic": true,
+        "transport": {
+          "fulfilled": 27,
+          "blocked": 4,
+          "liveApiRequests": 0,
+          "mode": "intercepted synthetic responses",
+          "physicalDevice": false
+        }
+      }
+    },
+    {
+      "viewport": "mobile",
+      "theme": "dark",
+      "label": "Build",
+      "screenshot": "mobile-fixture-build-runtime-unavailable.png",
+      "destination": {
+        "verified": true,
+        "view": "build",
+        "ready": "[aria-label=\"Build sections\"]",
+        "url": "http://127.0.0.1:4199/?section=build",
+        "scope": "screen shell and specified ready content; does not prove every asynchronous service"
+      },
+      "layout": {
+        "documentOverflow": 0,
+        "overflowingControls": [],
+        "smallTargets": []
+      },
+      "axe": {
+        "violations": []
+      },
+      "diagnostics": {
+        "buildSaveStyle": {
+          "beforeAccessibility": [
+            {
+              "tag": "BUTTON",
+              "className": "",
+              "disabled": true,
+              "color": "rgb(75, 75, 82)",
+              "backgroundColor": "rgb(182, 182, 189)",
+              "backgroundImage": "none",
+              "opacity": "1",
+              "filter": "none",
+              "transition": "none"
+            },
+            {
+              "tag": "DIV",
+              "className": "code-ide-status",
+              "disabled": null,
+              "color": "rgb(244, 247, 255)",
+              "backgroundColor": "rgba(0, 0, 0, 0)",
+              "backgroundImage": "none",
+              "opacity": "1",
+              "filter": "none",
+              "transition": "all"
+            },
+            {
+              "tag": "SECTION",
+              "className": "",
+              "disabled": null,
+              "color": "rgb(244, 247, 255)",
+              "backgroundColor": "rgba(0, 0, 0, 0)",
+              "backgroundImage": "none",
+              "opacity": "1",
+              "filter": "none",
+              "transition": "all"
+            }
+          ],
+          "afterAccessibility": [
+            {
+              "tag": "BUTTON",
+              "className": "",
+              "disabled": true,
+              "color": "rgb(75, 75, 82)",
+              "backgroundColor": "rgb(182, 182, 189)",
+              "backgroundImage": "none",
+              "opacity": "1",
+              "filter": "none",
+              "transition": "none"
+            },
+            {
+              "tag": "DIV",
+              "className": "code-ide-status",
+              "disabled": null,
+              "color": "rgb(244, 247, 255)",
+              "backgroundColor": "rgba(0, 0, 0, 0)",
+              "backgroundImage": "none",
+              "opacity": "1",
+              "filter": "none",
+              "transition": "all"
+            },
+            {
+              "tag": "SECTION",
+              "className": "",
+              "disabled": null,
+              "color": "rgb(244, 247, 255)",
+              "backgroundColor": "rgba(0, 0, 0, 0)",
+              "backgroundImage": "none",
+              "opacity": "1",
+              "filter": "none",
+              "transition": "all"
+            }
+          ]
+        }
+      },
+      "fixture": {
+        "id": "build-runtime-unavailable",
+        "synthetic": true,
+        "transport": {
+          "fulfilled": 12,
+          "blocked": 4,
+          "liveApiRequests": 0,
+          "mode": "intercepted synthetic responses",
+          "physicalDevice": false
+        }
+      }
+    },
+    {
+      "viewport": "mobile",
+      "theme": "dark",
+      "label": "Build",
+      "screenshot": "mobile-fixture-build-revision-conflict.png",
+      "destination": {
+        "verified": true,
+        "view": "build",
+        "ready": "[aria-label=\"Build sections\"]",
+        "url": "http://127.0.0.1:4199/?section=build",
+        "scope": "screen shell and specified ready content; does not prove every asynchronous service"
+      },
+      "layout": {
+        "documentOverflow": 0,
+        "overflowingControls": [],
+        "smallTargets": []
+      },
+      "axe": {
+        "violations": []
+      },
+      "diagnostics": {
+        "buildSaveStyle": {
+          "beforeAccessibility": [
+            {
+              "tag": "BUTTON",
+              "className": "",
+              "disabled": false,
+              "color": "rgb(17, 17, 19)",
+              "backgroundColor": "rgb(245, 245, 245)",
+              "backgroundImage": "none",
+              "opacity": "1",
+              "filter": "none",
+              "transition": "none"
+            },
+            {
+              "tag": "DIV",
+              "className": "code-ide-status",
+              "disabled": null,
+              "color": "rgb(244, 247, 255)",
+              "backgroundColor": "rgba(0, 0, 0, 0)",
+              "backgroundImage": "none",
+              "opacity": "1",
+              "filter": "none",
+              "transition": "all"
+            },
+            {
+              "tag": "SECTION",
+              "className": "",
+              "disabled": null,
+              "color": "rgb(244, 247, 255)",
+              "backgroundColor": "rgba(0, 0, 0, 0)",
+              "backgroundImage": "none",
+              "opacity": "1",
+              "filter": "none",
+              "transition": "all"
+            }
+          ],
+          "afterAccessibility": [
+            {
+              "tag": "BUTTON",
+              "className": "",
+              "disabled": false,
+              "color": "rgb(17, 17, 19)",
+              "backgroundColor": "rgb(245, 245, 245)",
+              "backgroundImage": "none",
+              "opacity": "1",
+              "filter": "none",
+              "transition": "none"
+            },
+            {
+              "tag": "DIV",
+              "className": "code-ide-status",
+              "disabled": null,
+              "color": "rgb(244, 247, 255)",
+              "backgroundColor": "rgba(0, 0, 0, 0)",
+              "backgroundImage": "none",
+              "opacity": "1",
+              "filter": "none",
+              "transition": "all"
+            },
+            {
+              "tag": "SECTION",
+              "className": "",
+              "disabled": null,
+              "color": "rgb(244, 247, 255)",
+              "backgroundColor": "rgba(0, 0, 0, 0)",
+              "backgroundImage": "none",
+              "opacity": "1",
+              "filter": "none",
+              "transition": "all"
+            }
+          ]
+        }
+      },
+      "fixture": {
+        "id": "build-revision-conflict",
+        "synthetic": true,
+        "transport": {
+          "fulfilled": 20,
+          "blocked": 4,
+          "liveApiRequests": 0,
+          "mode": "intercepted synthetic responses",
+          "physicalDevice": false
+        }
+      }
+    },
+    {
+      "viewport": "mobile",
+      "theme": "dark",
+      "label": "Settings",
+      "screenshot": "mobile-fixture-settings-save-failed.png",
+      "destination": {
+        "verified": true,
+        "view": "settings",
+        "ready": "Settings",
+        "url": "http://127.0.0.1:4199/?section=settings&pane=data",
+        "scope": "screen shell and specified ready content; does not prove every asynchronous service"
+      },
+      "layout": {
+        "documentOverflow": 0,
+        "overflowingControls": [],
+        "smallTargets": []
+      },
+      "axe": {
+        "violations": []
+      },
+      "fixture": {
+        "id": "settings-save-failed",
+        "synthetic": true,
+        "transport": {
+          "fulfilled": 10,
+          "blocked": 4,
+          "liveApiRequests": 0,
+          "mode": "intercepted synthetic responses",
+          "physicalDevice": false
+        }
+      }
+    },
+    {
+      "viewport": "mobile",
+      "theme": "dark",
+      "label": "Chat fixture",
+      "screenshot": "mobile-fixture-chat-interrupted.png",
+      "destination": {
+        "verified": true,
+        "view": "chat",
+        "ready": "article.turn-assistant",
+        "url": "http://127.0.0.1:4199/?section=chat&chat=fixture-chat",
+        "scope": "screen shell and specified ready content; does not prove every asynchronous service"
+      },
+      "layout": {
+        "documentOverflow": 0,
+        "overflowingControls": [],
+        "smallTargets": []
+      },
+      "axe": {
+        "violations": []
+      },
+      "fixture": {
+        "id": "chat-interrupted",
+        "synthetic": true,
+        "transport": {
+          "fulfilled": 7,
+          "blocked": 4,
+          "liveApiRequests": 0,
+          "mode": "intercepted synthetic responses",
+          "physicalDevice": false
+        }
+      }
+    },
+    {
+      "viewport": "mobile",
+      "theme": "dark",
+      "label": "Runs",
+      "screenshot": "mobile-fixture-agent-blocked.png",
+      "destination": {
+        "verified": true,
+        "view": "runs",
+        "ready": "Agent runs",
+        "url": "http://127.0.0.1:4199/?section=runs",
+        "scope": "screen shell and specified ready content; does not prove every asynchronous service"
+      },
+      "layout": {
+        "documentOverflow": 0,
+        "overflowingControls": [],
+        "smallTargets": []
+      },
+      "axe": {
+        "violations": []
+      },
+      "fixture": {
+        "id": "agent-blocked",
+        "synthetic": true,
+        "transport": {
+          "fulfilled": 7,
+          "blocked": 4,
+          "liveApiRequests": 0,
+          "mode": "intercepted synthetic responses",
+          "physicalDevice": false
+        }
+      }
+    }
+  ],
+  "failures": [],
+  "evaluation": {
+    "mode": "report",
+    "policyVersion": 1,
+    "findingCount": 0,
+    "blocking": [],
+    "waived": [],
+    "errors": [],
+    "comparison": null,
+    "provenanceErrors": [],
+    "releaseEligible": true,
+    "exitCode": 0
+  }
+}

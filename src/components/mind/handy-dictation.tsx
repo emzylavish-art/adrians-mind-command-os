@@ -10,11 +10,14 @@ import {
 } from "@/lib/mind/handy-dictation";
 import { createWhisperSession, type WhisperSession, type BrowserSpeechCtor } from "@/lib/mind/whisper-flow/session";
 import { SOKUJI_SOURCE, TRANSLATOR_TARGETS, translateVoice } from "@/lib/mind/voice-translator";
+import { readVoiceRoutePreferences } from "@/lib/mind/voice/route-preferences";
 import { finishDictation } from "@/lib/mind/system-dictation";
 
 type Phase = "idle" | "speak" | "saved";
 
-export function HandyDictation({ freeOnly = false }: { freeOnly?: boolean }) {
+export function HandyDictation({ freeOnly = false, ownerId }: { freeOnly?: boolean; ownerId?: string | null }) {
+  const currentOwner = useRef(ownerId);
+  currentOwner.current = ownerId;
   const currentFreeOnly = useRef(freeOnly);
   currentFreeOnly.current = freeOnly;
   const field = useRef<HTMLInputElement | HTMLTextAreaElement | null>(null);
@@ -61,6 +64,8 @@ export function HandyDictation({ freeOnly = false }: { freeOnly?: boolean }) {
     };
   }, []);
 
+  useEffect(() => { session.current?.cancel(); session.current = null; setPhase("idle"); setEngine(""); }, [ownerId]);
+
   useEffect(() => {
     if (phase !== "speak") setLevels(Array.from({ length: 9 }, () => 0.08));
   }, [phase]);
@@ -90,23 +95,27 @@ export function HandyDictation({ freeOnly = false }: { freeOnly?: boolean }) {
       },
       transcribe: async (input) => {
         if (currentFreeOnly.current) return { ok: false, error: "Free-only mode keeps cloud transcription off." };
+        const route = readVoiceRoutePreferences(window.localStorage, currentOwner.current);
+        if (route.sttProvider === "browser") return { ok: false, error: "This dictation recorder needs a cloud transcription service. Choose xAI or OpenAI in Voice settings, or use browser speech in Speak." };
         const response = await fetch("/api/mind/voice/stt", {
           method: "POST",
           credentials: "same-origin",
           headers: { "content-type": "application/json" },
           body: JSON.stringify({
             audioBase64: input.audioBase64, freeOnly: currentFreeOnly.current,
+            provider: route.sttProvider, fallbackProvider: route.sttFallbackProvider,
             mime: input.mime || "audio/webm",
             filename: (input.mime || "").includes("mp4") ? "dictation.m4a" : "dictation.webm",
           }),
         });
-        const body = await response.json() as { ok?: boolean; text?: string; engine?: string; error?: string };
+        const body = await response.json() as { ok?: boolean; text?: string; provider?: string; error?: string };
         const text = body.text?.trim() ?? "";
         if (!response.ok || !body.ok || !text) {
           return { ok: false, error: body.error || "Nothing was transcribed. Nothing was sent." };
         }
-        setEngine(body.engine || "server-stt");
-        return { ok: true, text, provider: "server" };
+        const provider = body.provider || "Transcription provider not reported";
+        setEngine(provider);
+        return { ok: true, text, provider };
       },
     });
     return session.current;
@@ -114,7 +123,7 @@ export function HandyDictation({ freeOnly = false }: { freeOnly?: boolean }) {
 
   async function start() {
     setEngine("");
-    setNote("Opening the microphone. Nothing is sent until words are recognised.");
+    setNote("Opening the microphone. The recording goes to your selected transcription service; text enters the field without sending a chat message.");
     field.current?.focus();
     try {
       await liveSession().start();
@@ -188,8 +197,8 @@ export function HandyDictation({ freeOnly = false }: { freeOnly?: boolean }) {
       data-translator={SOKUJI_SOURCE}
       data-detector="handy"
       data-flow="whisper-flow"
-      data-engine={engine || "transcribe.cpp"}
-      data-model="whisper-tiny.en"
+      data-engine={engine || "pending"}
+      data-model="not-reported"
       data-google="false"
       data-speak="separate"
       onPointerDown={(event) => {
@@ -204,7 +213,7 @@ export function HandyDictation({ freeOnly = false }: { freeOnly?: boolean }) {
       <button type="button" className="min-h-11 rounded-full border border-line px-3 text-sm" data-testid="handy-cancel" onClick={() => { session.current?.cancel(); setPhase("idle"); setActionsOpen(false); setNote("Cancelled. The recording was discarded. Text already in the field was kept."); }}>
         Cancel
       </button>
-      <button type="button" className="min-h-11 rounded-full border border-line px-3 text-sm" data-testid="dictation-done" aria-label="Done" title="Finish recording and insert the words at the cursor. Nothing is sent." onClick={() => { void mark(); }}>
+      <button type="button" className="min-h-11 rounded-full border border-line px-3 text-sm" data-testid="dictation-done" aria-label="Done" title="Finish transcription and insert the words at the cursor. The chat message is not sent." onClick={() => { void mark(); }}>
         ✓
       </button>
       {phase === "speak" || phase === "saved" ? (

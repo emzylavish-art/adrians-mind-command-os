@@ -42,7 +42,7 @@ export function oauthCallbackHtml(input: {
   const safeTitle = escapeHtml(title);
   const safeMessage = escapeHtml(input.message);
   const safeTypeJson = JSON.stringify(messageType);
-  const body = `<!doctype html><html><head><meta charset="utf-8"><title>${safeTitle}</title></head><body style="font-family:system-ui;padding:2rem"><h1>${safeTitle}</h1><p>${safeMessage}</p><p><a href="/">Back to app</a></p><script>try{window.opener&&window.opener.postMessage({type:${safeTypeJson},ok:${input.ok}},window.location.origin)}catch(e){}</script></body></html>`;
+  const body = `<!doctype html><html><head><meta charset="utf-8"><title>${safeTitle}</title></head><body style="font-family:system-ui;padding:2rem"><h1>${safeTitle}</h1><p>${safeMessage}</p><p><a id="oauth-return" href="/">Back to app</a></p><script>try{window.opener&&window.opener.postMessage({type:${safeTypeJson},ok:${input.ok}},window.location.origin)}catch(e){};try{const k="mind.oauth.return."+${JSON.stringify(known || "")};const saved=JSON.parse(sessionStorage.getItem(k)||"null");sessionStorage.removeItem(k);if(saved&&saved.state===new URLSearchParams(location.search).get("state")&&typeof saved.path==="string"&&saved.path.startsWith("/?")&&new URL(saved.path,location.origin).origin===location.origin&&new URL(saved.path,location.origin).pathname==="/"){document.getElementById("oauth-return").setAttribute("href",saved.path);document.getElementById("oauth-return").textContent="Return to your task — review before writing";}}catch(e){}</script></body></html>`;
   return new Response(body, {
     status: input.ok ? 200 : 400,
     headers: CALLBACK_SECURITY_HEADERS,

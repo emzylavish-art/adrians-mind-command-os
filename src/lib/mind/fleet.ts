@@ -1,7 +1,8 @@
-import { decide } from "./policy.ts";
 import { runLocalPlan, type LocalTool } from "./local-tools.ts";
 import { nextClock, zoneIsValid } from "./schedule-clock.ts";
-import { normalizeBotModel, type BotProvider } from "./bot-model.ts";
+import { scheduleRecovery } from "./schedule-recovery.ts";
+import { scheduleOccurrences, type ScheduleTiming, type MissedSchedulePolicy } from "./schedule-policy.ts";
+import { normalizeBotModel } from "./bot-model.ts";
 import { normalizeBotKnowledge } from "./bot-model.ts";
 import type { ModelTier } from "./model-tiers.ts";
 import type { Workspace } from "./types.ts";
@@ -28,10 +29,13 @@ export type RunState =
   | "paused"
   | "completed"
   | "failed"
-  | "canceled";
+  | "canceled"
+  | "cancel_requested";
 
 export type AgentDefinition = {
   id: string;
+  /** Stable template origin, independent of the editable name. */
+  templateId?: string;
   name: string;
   description: string;
   role: string;
@@ -48,6 +52,7 @@ export type AgentDefinition = {
   chatProvider?: string | null;
   chatTier?: ModelTier | null;
   knowledge?: string;
+  knowledgeDocumentIds?: string[];
 };
 
 export type DeploymentRecord = {
@@ -61,6 +66,16 @@ export type DeploymentRecord = {
   error: string;
 };
 
+export type RunStepResult = {
+  stepId: string;
+  tool: FleetTool;
+  output: string;
+  at: string;
+  recordIds?: string[];
+};
+
+export type RunDefinition = Pick<AgentDefinition, "version" | "tools" | "projectId" | "memory" | "approval" | "maxSteps">;
+export type RunCompletion = { execution: "finished" | "budget_exhausted" | "no_results"; objective: "unverified"; evidence: string[] };
 export type AgentRun = {
   id: string;
   agentId: string;
@@ -73,12 +88,87 @@ export type AgentRun = {
   workerId: string | null;
   leaseUntil: string | null;
   approvedActions: string[];
+  /** Legacy approvedActions are never authority. New grants bind this exact request. */
+  pendingApproval?: RunApproval;
+  approvalHistory?: RunApproval[];
+  configuration?: RunConfiguration;
+  stepResults?: FleetStepResult[];
+  verification?: { state: "unverified" | "verified" | "not_met"; detail: string };
+  externalOperation?: { id: string; stepId: string; state: "dispatching" | "succeeded" | "failed" | "unknown" | "not_sent"; startedAt: string; finishedAt?: string };
+  delegationScope?: { tools: FleetTool[]; projectId: string | null; memory: "on" | "off" };
   plan: PlanStep[];
+  definition?: RunDefinition;
+  completion?: RunCompletion;
+  executionRuntime?: "browser-local" | "scheduled-local" | "server-local";
+  stopDispatchOutcome?: "not_dispatched" | "outcome_unknown" | "confirmed_result";
+  cancellation?: { requestedAt: string; acknowledgedAt: string | null; scope: "local-worker" };
   result: string;
   error: string;
   createdAt: string;
   updatedAt: string;
+  approvals?: LegacyRunApproval[];
+  agentVersion?: number;
+  planVersion?: number;
+  chatId?: string;
+  scheduleId?: string;
+  scheduledAt?: string;
+  execution?: { provider: string | null; tier: ModelTier | null; instructions: string; knowledge: string; projectId: string | null; memory: "on" | "off" };
+  delegations?: { agentId: string; goal: string; allowedTools: FleetTool[]; maxSteps: number }[];
+  modelOperation?: { id: string; state: "claimed" | "uncertain" | "completed"; provider: string; model?: string };
 };
+
+export type RunConfiguration = Pick<AgentDefinition, "version" | "instructions" | "tools" | "projectId" | "memory" | "approval" | "chatProvider" | "chatTier" | "knowledge" | "knowledgeDocumentIds">;
+export type RunApproval = {
+  id: string;
+  tool: FleetTool;
+  stepId: string;
+  binding: string;
+  destination: string;
+  requestedAt: string;
+  expiresAt: string;
+  state: "requested" | "granted" | "consumed" | "expired" | "revoked" | "superseded";
+  updatedAt: string;
+  batchId?: string;
+};
+
+/** Historical approvals remain readable but cannot authorize dispatch. */
+type LegacyRunApproval = {
+  stepId: string;
+  expiresAt: string;
+  action: FleetTool;
+  fingerprint: string;
+  approvedAt: string;
+  consumedAt?: string;
+};
+
+export type ScheduleOccurrence = {
+  destinationChatId?: string;
+  id: string;
+  dueAt: string;
+  runId?: string;
+  state: RunState | "skipped";
+  updatedAt: string;
+  detail: string;
+  missedCount?: number;
+  deliveredAt?: string;
+  deliveryError?: string;
+};
+export type FleetStepResult = {
+  output?: string;
+  recordIds?: string[];
+  id: string;
+  stepId: string;
+  tool: FleetTool;
+  at: string;
+  status: "success" | "empty";
+  text: string;
+  originalLength: number;
+  truncated: boolean;
+  sources: { id: string; title: string; url: string; excerpt?: string }[];
+  receipt?: { provider?: string; model?: string; accountId?: string; operationId?: string };
+};
+export const RUN_APPROVAL_TTL_MS = 5 * 60_000;
+export const RUN_EVIDENCE_MAX_CHARS = 20_000;
 
 export type RunEvent = {
   id: string;
@@ -114,6 +204,9 @@ export type ScheduleJob = {
   instruction?: string;
   lastAttemptAt?: string;
   lastQueuedRunId?: string;
+  overlapPolicy?: "wait" | "queue" | "skip" | "parallel";
+  maxParallel?: number;
+  occurrences?: ScheduleOccurrence[];
   enabled: boolean;
   lastError: string;
   timeZone: string;
@@ -122,6 +215,20 @@ export type ScheduleJob = {
   leaseWorker: string | null;
   leaseUntil: string | null;
   lastStatus: "" | "ran" | "failed";
+  timing?: ScheduleTiming;
+  missedPolicy?: MissedSchedulePolicy;
+  missedOccurrences?: number;
+  recoveryPending?: boolean;
+  recoveryApprovalFor?: string;
+  executionEnvironment?: "device";
+  lastVerification?: "unverified" | "verified" | "not_met";
+  resultDelivery?: "runs" | "conversation";
+  approvedCatchUpFor?: string;
+  executionTarget?: "browser" | "local-worker" | "hosted-worker";
+  workerHeartbeatAt?: string;
+  workerId?: string;
+  missedCount?: number;
+  skippedCount?: number;
 };
 
 export type PlanNeed = "none" | "search" | "browser" | "gmail" | "model";
@@ -132,6 +239,9 @@ export type PlanStep = {
   tool: FleetTool;
   dependsOn: string[];
   need: PlanNeed;
+  input?: { url?: string; accountId?: string; connectionVersion?: string; recipients?: string[]; subject?: string; body?: string };
+  selection?: "goal" | "template";
+  inputFrom?: { stepId: string; field: "output" | "recordIds" };
 };
 
 export type FleetPin = { id: string; kind: "project" | "agent" | "chat" | "file"; ref: string };
@@ -144,6 +254,8 @@ export type BrowserSessionRecord = {
   status: "open" | "failed" | "closed";
   lastAction: string;
   excerpt: string;
+  excerptTruncated?: boolean;
+  evidenceId?: string;
   updatedAt: string;
 };
 
@@ -174,10 +286,26 @@ function needOf(tool: FleetTool): PlanNeed {
   return "none";
 }
 
+const GOAL_TOOL_INTENTS: Record<FleetTool, RegExp> = {
+    list_projects: /\b(?:list|show|find|inspect|review)\s+(?:(?:my|all|saved|available|the)\s+)*(?:projects?|project list)\b/i,
+    list_chats: /\b(?:list|show|find|inspect|review)\s+(?:(?:my|all|saved|available|the)\s+)*(?:chats?|conversations?)\b/i,
+    search_notes: /\b(?:search|find|read|show|review)\s+(?:(?:my|all|saved|relevant|the)\s+)*(?:notes?|memories|memory)\b/i,
+    web_search: /\b(?:search\s+(?:the\s+)?(?:web|internet)|research|find\s+(?:online\s+)?sources)\b/i,
+    browser: /https?:\/\/\S+|\b(?:open|read|browse|inspect)\s+(?:the\s+)?(?:page|website|url)\b/i,
+    gmail_read: /\b(?:read|find|search|list|show)\s+(?:(?:my|all|the|unread)\s+)*(?:emails?|inbox|mailbox)\b/i,
+    gmail_send: /\b(?:send|reply|forward)\s+(?:(?:an?|the)\s+)*(?:emails?|mail|message|note)\b/i,
+    model: /\b(?:summari[sz]e|reason|think|analy[sz]e|draft)\b/i,
+    delegate: /\b(?:delegate|split\s+(?:the\s+)?work)\b/i,
+};
+function explicitGoalTools(goal: string): FleetTool[] {
+  return FLEET_TOOLS.filter((tool) => GOAL_TOOL_INTENTS[tool].test(goal));
+}
+
 export function buildTaskPlan(goal: string, tools: FleetTool[]): PlanStep[] {
   const title = goal.trim().slice(0, 160);
-  return tools
-    .filter((tool) => tool !== "delegate")
+  const requested = explicitGoalTools(goal);
+  const selected = requested.length ? tools.filter(tool => requested.includes(tool)) : tools;
+  return selected
     .slice(0, 8)
     .map((tool, index) => ({
       id: `step-${index + 1}`,
@@ -185,6 +313,7 @@ export function buildTaskPlan(goal: string, tools: FleetTool[]): PlanStep[] {
       tool,
       dependsOn: index === 0 ? [] : [`step-${index}`],
       need: needOf(tool),
+      selection: requested.length ? "goal" as const : "template" as const,
     }));
 }
 
@@ -206,6 +335,7 @@ const NEXT_STATE: Record<RunState, readonly RunState[]> = {
   completed: [],
   failed: [],
   canceled: [],
+  cancel_requested: ["canceled", "failed"],
 };
 
 export function canTransition(from: RunState, to: RunState): boolean {
@@ -226,17 +356,17 @@ export function toolCatalog(): { id: FleetTool; name: string; available: boolean
   ];
 }
 
-export const AGENT_TEMPLATES: Omit<AgentDefinition, "id" | "createdAt" | "updatedAt" | "version" | "archived" | "projectId">[] = [
-  { name: "Personal assistant", description: "Reads projects, chats, and notes on this device.", role: "assistant", instructions: "Use only the granted local reads.", tools: ["list_projects", "list_chats", "search_notes"], memory: "off", maxSteps: 6, approval: "automatic" },
-  { name: "Research", description: "Searches notes, then a configured search provider. It does not invent citations.", role: "research", instructions: "Stop when search is not configured.", tools: ["search_notes", "web_search"], memory: "off", maxSteps: 4, approval: "ask" },
-  { name: "Browser operator", description: "Opens one approved http(s) page when a browser driver is attached.", role: "browser", instructions: "Do not browse without approval.", tools: ["browser"], memory: "off", maxSteps: 2, approval: "ask" },
-  { name: "Coding", description: "Lists projects on this device. It does not edit the repository.", role: "coding", instructions: "Do not claim a code change.", tools: ["list_projects"], memory: "off", maxSteps: 2, approval: "automatic" },
-  { name: "Email", description: "Reads or sends mail only after a mailbox is connected and a send is approved.", role: "email", instructions: "Never send without approval.", tools: ["gmail_read", "gmail_send"], memory: "off", maxSteps: 3, approval: "ask" },
-  { name: "Project manager", description: "Lists work, then delegates one level to the same agent without repeating delegation.", role: "manager", instructions: "Delegate once.", tools: ["list_projects", "delegate"], memory: "off", maxSteps: 4, approval: "automatic" },
-  { name: "Documents", description: "Searches notes on this device.", role: "documents", instructions: "Stay inside notes.", tools: ["search_notes"], memory: "off", maxSteps: 2, approval: "automatic" },
-  { name: "Data analysis", description: "Searches notes. It does not invent charts or totals.", role: "data", instructions: "Report only note text.", tools: ["search_notes"], memory: "off", maxSteps: 2, approval: "automatic" },
-  { name: "Knowledge", description: "Lists projects and searches notes the owner already saved.", role: "knowledge", instructions: "Do not search the web.", tools: ["list_projects", "search_notes"], memory: "on", maxSteps: 4, approval: "automatic" },
-  { name: "Content", description: "Searches notes for source material. It does not generate images or video.", role: "content", instructions: "Do not call a media API.", tools: ["search_notes"], memory: "off", maxSteps: 2, approval: "automatic" },
+export const AGENT_TEMPLATES: (Omit<AgentDefinition, "id" | "createdAt" | "updatedAt" | "version" | "archived" | "projectId"> & { templateId: string })[] = [
+  { templateId: "builtin:personal-assistant", name: "Personal assistant", description: "Reads projects, chats, and notes on this device.", role: "assistant", instructions: "Use only the granted local reads.", tools: ["list_projects", "list_chats", "search_notes"], memory: "off", maxSteps: 6, approval: "automatic" },
+  { templateId: "builtin:research", name: "Research", description: "Searches notes, then a configured search provider. It does not invent citations.", role: "research", instructions: "Stop when search is not configured.", tools: ["search_notes", "web_search"], memory: "off", maxSteps: 4, approval: "ask" },
+  { templateId: "builtin:browser-operator", name: "Browser operator", description: "Opens one approved http(s) page when a browser driver is attached.", role: "browser", instructions: "Do not browse without approval.", tools: ["browser"], memory: "off", maxSteps: 2, approval: "ask" },
+  { templateId: "builtin:coding", name: "Coding", description: "Lists projects on this device. It does not edit the repository.", role: "coding", instructions: "Do not claim a code change.", tools: ["list_projects"], memory: "off", maxSteps: 2, approval: "automatic" },
+  { templateId: "builtin:email", name: "Email", description: "Reads or sends mail only after a mailbox is connected and a send is approved.", role: "email", instructions: "Never send without approval.", tools: ["gmail_read", "gmail_send"], memory: "off", maxSteps: 3, approval: "ask" },
+  { templateId: "builtin:project-manager", name: "Project manager", description: "Lists work, then delegates one level to the same agent without repeating delegation.", role: "manager", instructions: "Delegate once.", tools: ["list_projects", "delegate"], memory: "off", maxSteps: 4, approval: "automatic" },
+  { templateId: "builtin:documents", name: "Documents", description: "Searches notes on this device.", role: "documents", instructions: "Stay inside notes.", tools: ["search_notes"], memory: "off", maxSteps: 2, approval: "automatic" },
+  { templateId: "builtin:data-analysis", name: "Data analysis", description: "Searches notes. It does not invent charts or totals.", role: "data", instructions: "Report only note text.", tools: ["search_notes"], memory: "off", maxSteps: 2, approval: "automatic" },
+  { templateId: "builtin:knowledge", name: "Knowledge", description: "Lists projects and searches notes the owner already saved.", role: "knowledge", instructions: "Do not search the web.", tools: ["list_projects", "search_notes"], memory: "on", maxSteps: 4, approval: "automatic" },
+  { templateId: "builtin:content", name: "Content", description: "Searches notes for source material. It does not generate images or video.", role: "content", instructions: "Do not call a media API.", tools: ["search_notes"], memory: "off", maxSteps: 2, approval: "automatic" },
 ];
 
 function stamp(now?: string) {
@@ -251,6 +381,67 @@ function nid(prefix: string) {
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return !!value && typeof value === "object" && !Array.isArray(value);
+}
+
+function configurationOf(agent: AgentDefinition): RunConfiguration {
+  return {
+    version: agent.version, instructions: agent.instructions, tools: [...agent.tools],
+    projectId: agent.projectId, memory: agent.memory, approval: agent.approval,
+    chatProvider: agent.chatProvider ?? null, chatTier: agent.chatTier ?? null,
+    knowledge: agent.knowledge ?? "",
+    knowledgeDocumentIds: [...(agent.knowledgeDocumentIds ?? [])].sort(),
+  };
+}
+
+function readConfiguration(value: unknown): RunConfiguration | undefined {
+  if (!isRecord(value) || typeof value.version !== "number") return undefined;
+  return {
+    version: value.version,
+    instructions: typeof value.instructions === "string" ? value.instructions.slice(0, 2000) : "",
+    tools: toolList(value.tools), projectId: typeof value.projectId === "string" ? value.projectId : null,
+    memory: value.memory === "on" ? "on" : "off", approval: value.approval === "ask" ? "ask" : "automatic",
+    ...normalizeBotModel(value), knowledge: normalizeBotKnowledge(value.knowledge).knowledge,
+    knowledgeDocumentIds: Array.isArray(value.knowledgeDocumentIds) ? [...new Set(value.knowledgeDocumentIds.filter((id): id is string => typeof id === "string" && id.length <= 200))].slice(0, 100).sort() : [],
+  };
+}
+
+function readApproval(value: unknown): RunApproval | undefined {
+  if (!isRecord(value) || typeof value.id !== "string" || typeof value.tool !== "string" || !FLEET_TOOLS.includes(value.tool as FleetTool)
+    || typeof value.stepId !== "string" || typeof value.binding !== "string" || value.binding.length > 140_000
+    || typeof value.requestedAt !== "string" || typeof value.expiresAt !== "string" || !Number.isFinite(Date.parse(value.expiresAt))) return undefined;
+  return {
+    id: value.id, tool: value.tool as FleetTool, stepId: value.stepId, binding: value.binding,
+    destination: typeof value.destination === "string" ? value.destination.slice(0, 2000) : "",
+    requestedAt: value.requestedAt, expiresAt: value.expiresAt,
+    state: ["granted", "consumed", "expired", "revoked", "superseded"].includes(String(value.state)) ? value.state as RunApproval["state"] : "requested",
+    updatedAt: typeof value.updatedAt === "string" ? value.updatedAt : value.requestedAt,
+    batchId: typeof value.batchId === "string" ? value.batchId : undefined,
+  };
+}
+
+function readStepResults(value: unknown): FleetStepResult[] {
+  if (!Array.isArray(value)) return [];
+  return value.filter(isRecord).filter(row => typeof row.stepId === "string" && (typeof row.id === "string" || typeof row.output === "string") && FLEET_TOOLS.includes(row.tool as FleetTool)).slice(0, 20).map(row => {
+    const text = typeof row.text === "string" ? row.text : typeof row.output === "string" ? row.output : "";
+    return {
+      output: text.slice(0, 4000), recordIds: Array.isArray(row.recordIds) ? row.recordIds.filter((id): id is string => typeof id === "string").slice(0, 100) : [],
+      id: String(row.id ?? row.stepId), stepId: String(row.stepId), tool: row.tool as FleetTool,
+      at: typeof row.at === "string" ? row.at : "", status: row.status === "empty" ? "empty" : "success",
+      text: text.slice(0, RUN_EVIDENCE_MAX_CHARS), originalLength: typeof row.originalLength === "number" ? row.originalLength : text.length,
+      truncated: row.truncated === true || text.length > RUN_EVIDENCE_MAX_CHARS,
+      receipt: isRecord(row.receipt) ? {
+        ...(typeof row.receipt.provider === "string" ? { provider: row.receipt.provider.slice(0, 300) } : {}),
+        ...(typeof row.receipt.model === "string" ? { model: row.receipt.model.slice(0, 200) } : {}),
+        ...(typeof row.receipt.accountId === "string" ? { accountId: row.receipt.accountId.slice(0, 200) } : {}),
+        ...(typeof row.receipt.operationId === "string" ? { operationId: row.receipt.operationId.slice(0, 300) } : {}),
+      } : undefined,
+      sources: Array.isArray(row.sources) ? row.sources.filter(isRecord).slice(0, 30).map(source => ({
+        id: typeof source.id === "string" ? source.id : "", title: typeof source.title === "string" ? source.title.slice(0, 300) : "",
+        url: typeof source.url === "string" ? source.url.slice(0, 2000) : "",
+        ...(typeof source.excerpt === "string" ? { excerpt: source.excerpt.slice(0, 2000) } : {}),
+      })) : [],
+    };
+  });
 }
 
 function toolList(value: unknown): FleetTool[] {
@@ -285,6 +476,7 @@ export function readFleet(input: unknown): FleetShape {
     for (const row of input.agents) {
       if (!isRecord(row) || typeof row.id !== "string" || typeof row.name !== "string" || !row.name.trim()) continue;
       fleet.agents.push({
+        ...(typeof row.templateId === "string" && AGENT_TEMPLATES.some(template => template.templateId === row.templateId) ? { templateId: row.templateId } : {}),
         id: row.id,
         name: row.name.slice(0, 80),
         description: typeof row.description === "string" ? row.description.slice(0, 400) : "",
@@ -301,6 +493,7 @@ export function readFleet(input: unknown): FleetShape {
         updatedAt: typeof row.updatedAt === "string" ? row.updatedAt : stamp(),
         ...normalizeBotModel(row),
         knowledge: normalizeBotKnowledge(row.knowledge).knowledge,
+        ...(Array.isArray(row.knowledgeDocumentIds) ? { knowledgeDocumentIds: [...new Set(row.knowledgeDocumentIds.filter((id): id is string => typeof id === "string" && id.length <= 200))].slice(0, 100) } : {}),
       });
     }
   }
@@ -322,7 +515,7 @@ export function readFleet(input: unknown): FleetShape {
   if (Array.isArray(input.runs)) {
     for (const row of input.runs) {
       if (!isRecord(row) || typeof row.id !== "string" || typeof row.agentId !== "string") continue;
-      const state = typeof row.state === "string" && ["queued", "running", "waiting_approval", "waiting_external", "paused", "completed", "failed", "canceled"].includes(row.state)
+      const state = typeof row.state === "string" && ["queued", "running", "waiting_approval", "waiting_external", "paused", "completed", "failed", "canceled", "cancel_requested"].includes(row.state)
         ? (row.state as RunState)
         : "failed";
       fleet.runs.push({
@@ -337,7 +530,40 @@ export function readFleet(input: unknown): FleetShape {
         workerId: typeof row.workerId === "string" ? row.workerId : null,
         leaseUntil: typeof row.leaseUntil === "string" ? row.leaseUntil : null,
         approvedActions: Array.isArray(row.approvedActions) ? row.approvedActions.filter((item): item is string => typeof item === "string").slice(0, 12) : [],
+        pendingApproval: readApproval(row.pendingApproval),
+        approvalHistory: Array.isArray(row.approvalHistory) ? row.approvalHistory.map(readApproval).filter((approval): approval is RunApproval => !!approval).slice(-40) : [],
+        agentVersion: typeof row.agentVersion === "number" ? row.agentVersion : undefined,
+        chatId: typeof row.chatId === "string" ? row.chatId : undefined,
+        scheduleId: typeof row.scheduleId === "string" ? row.scheduleId : undefined,
+        scheduledAt: typeof row.scheduledAt === "string" ? row.scheduledAt : undefined,
+        execution: isRecord(row.execution) ? {
+          provider: typeof row.execution.provider === "string" ? row.execution.provider : null,
+          tier: normalizeBotModel({ chatTier: row.execution.tier }).chatTier ?? null,
+          instructions: typeof row.execution.instructions === "string" ? row.execution.instructions.slice(0, 2000) : "",
+          knowledge: typeof row.execution.knowledge === "string" ? row.execution.knowledge.slice(0, 12000) : "",
+          projectId: typeof row.execution.projectId === "string" ? row.execution.projectId : null,
+          memory: row.execution.memory === "on" ? "on" : "off",
+        } : undefined,
+        delegations: Array.isArray(row.delegations) ? row.delegations.filter(isRecord).filter((item) => typeof item.agentId === "string" && typeof item.goal === "string").slice(0, PLAN_MAX_CHILDREN).map((item) => ({ agentId: item.agentId as string, goal: (item.goal as string).slice(0, 2000), allowedTools: toolList(item.allowedTools), maxSteps: Math.min(20, Math.max(1, Number(item.maxSteps) || 1)) })) : undefined,
+        modelOperation: isRecord(row.modelOperation) && typeof row.modelOperation.id === "string" && typeof row.modelOperation.provider === "string" && ["claimed", "uncertain", "completed"].includes(String(row.modelOperation.state)) ? { id: row.modelOperation.id, provider: row.modelOperation.provider, state: row.modelOperation.state as "claimed" | "uncertain" | "completed", model: typeof row.modelOperation.model === "string" ? row.modelOperation.model : undefined } : undefined,
+        approvals: readApprovals(row.approvals),
+        configuration: readConfiguration(row.configuration),
+        stepResults: readStepResults(row.stepResults),
+        verification: isRecord(row.verification) ? { state: row.verification.state === "verified" ? "verified" : row.verification.state === "not_met" ? "not_met" : "unverified", detail: typeof row.verification.detail === "string" ? row.verification.detail.slice(0, 500) : "" } : undefined,
+        externalOperation: isRecord(row.externalOperation) && typeof row.externalOperation.id === "string" && typeof row.externalOperation.stepId === "string" ? {
+          id: row.externalOperation.id, stepId: row.externalOperation.stepId,
+          state: row.externalOperation.state === "succeeded" || row.externalOperation.state === "failed" || row.externalOperation.state === "unknown" || row.externalOperation.state === "not_sent" ? row.externalOperation.state : "dispatching",
+          startedAt: typeof row.externalOperation.startedAt === "string" ? row.externalOperation.startedAt : "",
+          ...(typeof row.externalOperation.finishedAt === "string" ? { finishedAt: row.externalOperation.finishedAt } : {}),
+        } : undefined,
+        delegationScope: isRecord(row.delegationScope) ? { tools: toolList(row.delegationScope.tools), projectId: typeof row.delegationScope.projectId === "string" ? row.delegationScope.projectId : null, memory: row.delegationScope.memory === "on" ? "on" : "off" } : undefined,
         plan: readPlan(row.plan),
+        definition: readRunDefinition(row.definition),
+        completion: readCompletion(row.completion),
+        executionRuntime: row.executionRuntime === "scheduled-local" || row.executionRuntime === "server-local" ? row.executionRuntime : "browser-local",
+        stopDispatchOutcome: row.stopDispatchOutcome === "confirmed_result" || row.stopDispatchOutcome === "outcome_unknown" || row.stopDispatchOutcome === "not_dispatched"
+          ? row.stopDispatchOutcome : row.cancellation === "outcome_unknown" || row.cancellation === "not_dispatched" ? row.cancellation : undefined,
+        cancellation: isRecord(row.cancellation) && typeof row.cancellation.requestedAt === "string" ? { requestedAt: row.cancellation.requestedAt, acknowledgedAt: typeof row.cancellation.acknowledgedAt === "string" ? row.cancellation.acknowledgedAt : null, scope: "local-worker" } : undefined,
         result: typeof row.result === "string" ? row.result.slice(0, 4000) : "",
         error: typeof row.error === "string" ? row.error.slice(0, 500) : "",
         createdAt: typeof row.createdAt === "string" ? row.createdAt : stamp(),
@@ -394,6 +620,10 @@ export function readFleet(input: unknown): FleetShape {
         chatId: typeof row.chatId === "string" ? row.chatId : undefined,
         instruction: typeof row.instruction === "string" ? row.instruction.slice(0, 2000) : undefined,
         lastQueuedRunId: typeof row.lastQueuedRunId === "string" ? row.lastQueuedRunId : undefined,
+        overlapPolicy: row.overlapPolicy === "parallel" || row.overlapPolicy === "skip" ? row.overlapPolicy : "queue",
+        maxParallel: typeof row.maxParallel === "number" ? Math.min(4, Math.max(1, Math.floor(row.maxParallel))) : 2,
+        occurrences: readOccurrences(row.occurrences),
+        resultDelivery: row.resultDelivery === "conversation" ? "conversation" : "runs",
         lastAttemptAt: typeof row.lastAttemptAt === "string" ? row.lastAttemptAt : undefined,
         lastRunAt: typeof row.lastRunAt === "string" ? row.lastRunAt : null,
         enabled: row.enabled !== false,
@@ -404,6 +634,17 @@ export function readFleet(input: unknown): FleetShape {
         leaseWorker: typeof row.leaseWorker === "string" ? row.leaseWorker.slice(0, 80) : null,
         leaseUntil: typeof row.leaseUntil === "string" ? row.leaseUntil : null,
         lastStatus: row.lastStatus === "ran" || row.lastStatus === "failed" ? row.lastStatus : "",
+        timing: row.timing === "fixed_delay" ? "fixed_delay" : "fixed_rate",
+        missedPolicy: row.missedPolicy === "skip" || row.missedPolicy === "ask" || row.missedPolicy === "all" || row.missedPolicy === "review" || row.missedPolicy === "once" || row.missedPolicy === "run-once" || row.missedPolicy === "catch-up" ? row.missedPolicy : "latest",
+        missedOccurrences: typeof row.missedOccurrences === "number" ? Math.max(0, row.missedOccurrences) : 0,
+        recoveryPending: row.recoveryPending === true,
+        recoveryApprovalFor: typeof row.recoveryApprovalFor === "string" ? row.recoveryApprovalFor : undefined,
+        executionEnvironment: "device",
+        executionTarget: row.executionTarget === "local-worker" || row.executionTarget === "hosted-worker" ? row.executionTarget : "browser",
+        workerHeartbeatAt: typeof row.workerHeartbeatAt === "string" ? row.workerHeartbeatAt : undefined,
+        workerId: typeof row.workerId === "string" ? row.workerId : undefined,
+        skippedCount: Math.max(0, Number(row.skippedCount) || 0),
+        lastVerification: row.lastVerification === "verified" || row.lastVerification === "not_met" ? row.lastVerification : "unverified",
       });
     }
   }
@@ -426,6 +667,8 @@ export function readFleet(input: unknown): FleetShape {
         status: row.status === "open" ? "open" : row.status === "closed" ? "closed" : "failed",
         lastAction: typeof row.lastAction === "string" ? row.lastAction.slice(0, 300) : "",
         excerpt: typeof row.excerpt === "string" ? row.excerpt.slice(0, 500) : "",
+        excerptTruncated: row.excerptTruncated === true || (typeof row.excerpt === "string" && row.excerpt.length > 500),
+        evidenceId: typeof row.evidenceId === "string" ? row.evidenceId : undefined,
         updatedAt: typeof row.updatedAt === "string" ? row.updatedAt : stamp(),
       });
     }
@@ -435,19 +678,67 @@ export function readFleet(input: unknown): FleetShape {
   return fleet;
 }
 
+function readApprovals(value: unknown): LegacyRunApproval[] {
+  if (!Array.isArray(value)) return [];
+  return value.filter((row) => isRecord(row) && typeof row.stepId === "string" && typeof row.action === "string" && (FLEET_TOOLS as readonly string[]).includes(row.action) && typeof row.fingerprint === "string" && typeof row.approvedAt === "string" && typeof row.expiresAt === "string")
+    .slice(0, 20).map((row) => ({ stepId: row.stepId.slice(0, 40), action: row.action as FleetTool, fingerprint: row.fingerprint.slice(0, 12000), approvedAt: row.approvedAt, expiresAt: row.expiresAt, ...(typeof row.consumedAt === "string" ? { consumedAt: row.consumedAt } : {}) }));
+}
+
+function readRunDefinition(value: unknown): RunDefinition | undefined {
+  if (!isRecord(value) || !Number.isInteger(value.version) || !Array.isArray(value.tools)) return undefined;
+  return { version: value.version as number, tools: toolList(value.tools), projectId: typeof value.projectId === "string" ? value.projectId : null,
+    memory: value.memory === "on" ? "on" : "off", approval: value.approval === "automatic" ? "automatic" : "ask", maxSteps: typeof value.maxSteps === "number" ? Math.max(1, Math.min(20, Math.floor(value.maxSteps))) : 4 };
+}
+function readCompletion(value: unknown): RunCompletion | undefined {
+  if (!isRecord(value) || !["finished", "budget_exhausted", "no_results"].includes(String(value.execution))) return undefined;
+  return { execution: value.execution as RunCompletion["execution"], objective: "unverified", evidence: Array.isArray(value.evidence) ? value.evidence.filter((v): v is string => typeof v === "string").slice(0, 20) : [] };
+}
+function readOccurrences(value: unknown): ScheduleOccurrence[] {
+  if (!Array.isArray(value)) return [];
+  return value.flatMap((row): ScheduleOccurrence[] => {
+    if (!isRecord(row) || typeof row.updatedAt !== "string" || typeof row.state !== "string" ||
+        (row.state !== "skipped" && !Object.hasOwn(NEXT_STATE, row.state))) return [];
+    const id = row.id ?? row.runId;
+    const dueAt = row.dueAt ?? row.scheduledAt;
+    if (typeof id !== "string" || typeof dueAt !== "string") return [];
+    return [{ id, dueAt, runId: typeof row.runId === "string" ? row.runId : undefined,
+      updatedAt: row.updatedAt, state: row.state as ScheduleOccurrence["state"],
+      detail: typeof row.detail === "string" ? row.detail.slice(0, 500) : "",
+      missedCount: typeof row.missedCount === "number" ? Math.max(0, Math.floor(row.missedCount)) : 0,
+      destinationChatId: typeof row.destinationChatId === "string" ? row.destinationChatId : undefined,
+      deliveredAt: typeof row.deliveredAt === "string" ? row.deliveredAt : undefined,
+      deliveryError: typeof row.deliveryError === "string" ? row.deliveryError.slice(0, 500) : undefined }];
+  }).slice(-100);
+}
+
+function snapshotDefinition(agent: AgentDefinition): RunDefinition {
+  return { version: agent.version, tools: [...agent.tools], projectId: agent.projectId, memory: agent.memory, approval: agent.approval, maxSteps: agent.maxSteps };
+}
+
 function readPlan(value: unknown): PlanStep[] {
   if (!Array.isArray(value)) return [];
   const steps: PlanStep[] = [];
   for (const row of value) {
-    if (!isRecord(row) || typeof row.id !== "string" || typeof row.tool !== "string") continue;
-    if (!(FLEET_TOOLS as readonly string[]).includes(row.tool)) continue;
+    if (!isRecord(row) || typeof row.id !== "string" || typeof row.tool !== "string") return [];
+    if (!(FLEET_TOOLS as readonly string[]).includes(row.tool)) return [];
     const dependsOn = Array.isArray(row.dependsOn) ? row.dependsOn.filter((item): item is string => typeof item === "string").slice(0, 8) : [];
     steps.push({
       id: row.id.slice(0, 40),
       title: typeof row.title === "string" ? row.title.slice(0, 160) : "",
       tool: row.tool as FleetTool,
+      ...(row.selection === "goal" || row.selection === "template" ? { selection: row.selection } : {}),
       dependsOn,
+      ...(isRecord(row.inputFrom) && typeof row.inputFrom.stepId === "string" && (row.inputFrom.field === "output" || row.inputFrom.field === "recordIds")
+        ? { inputFrom: { stepId: row.inputFrom.stepId, field: row.inputFrom.field } } : {}),
       need: row.need === "search" || row.need === "browser" || row.need === "gmail" || row.need === "model" ? row.need : "none",
+      ...(isRecord(row.input) ? { input: {
+        ...(typeof row.input.url === "string" ? { url: row.input.url.slice(0, 2000) } : {}),
+        ...(typeof row.input.accountId === "string" ? { accountId: row.input.accountId.slice(0, 200) } : {}),
+        ...(typeof row.input.connectionVersion === "string" ? { connectionVersion: row.input.connectionVersion.slice(0, 100) } : {}),
+        ...(Array.isArray(row.input.recipients) ? { recipients: row.input.recipients.filter((value): value is string => typeof value === "string").slice(0, 50) } : {}),
+        ...(typeof row.input.subject === "string" ? { subject: row.input.subject.slice(0, 1000) } : {}),
+        ...(typeof row.input.body === "string" ? { body: row.input.body.slice(0, 8000) } : {}),
+      } } : {}),
     });
   }
   return steps.slice(0, 8);
@@ -479,6 +770,7 @@ export type BotDraft = {
   chatProvider?: string | null;
   chatTier?: ModelTier | null;
   knowledge?: string;
+  knowledgeDocumentIds?: string[];
 };
 
 export function addCustomAgent(
@@ -488,6 +780,7 @@ export function addCustomAgent(
 ): { ok: true; ws: Workspace; agent: AgentDefinition } | { ok: false; error: string } {
   const name = input.name.trim().slice(0, 80);
   if (!name) return { ok: false, error: "Name the agent." };
+  if (input.instructions.trim().length > 2000) return { ok: false, error: "Agent instructions exceed 2,000 characters. Shorten them before saving; nothing was truncated or saved." };
   const tools = toolList(input.tools);
   if (tools.length === 0) return { ok: false, error: "Choose at least one tool." };
   const at = stamp(now);
@@ -510,6 +803,7 @@ export function addCustomAgent(
     updatedAt: at,
     ...normalizeBotModel(input),
     knowledge: knowledge.knowledge,
+    knowledgeDocumentIds: [...new Set((input.knowledgeDocumentIds ?? []).filter((id) => typeof id === "string" && id.length <= 200))].slice(0, 100),
   };
   return { ok: true, agent, ws: { ...ws, agents: [agent, ...ws.agents] } };
 }
@@ -532,6 +826,7 @@ export function editBot(ws: Workspace, id: string, draft: BotDraft): ReturnType<
     chatProvider: checked.agent.chatProvider ?? null,
     chatTier: checked.agent.chatTier ?? null,
     knowledge: checked.agent.knowledge ?? "",
+    knowledgeDocumentIds: checked.agent.knowledgeDocumentIds ?? [],
     approval: original.approval === "ask" ? "ask" as const : checked.agent.approval,
     maxSteps: checked.agent.maxSteps,
     updatedAt: checked.agent.updatedAt,
@@ -594,6 +889,9 @@ export function addSchedule(ws: Workspace, name: string, agentId: string | null,
     intervalMinutes: minutes,
     nextRunAt: clock?.at ?? at,
     lastRunAt: null,
+    resultDelivery: "runs",
+    overlapPolicy: "queue",
+    occurrences: [],
     enabled: true,
     lastError: clock ? "" : "",
     timeZone: clock?.zone ?? "UTC",
@@ -602,6 +900,10 @@ export function addSchedule(ws: Workspace, name: string, agentId: string | null,
     leaseWorker: null,
     leaseUntil: null,
     lastStatus: "",
+    timing: "fixed_rate",
+    missedPolicy: "latest",
+    missedOccurrences: 0,
+    executionEnvironment: "device",
   };
   return { ok: true, ws: { ...ws, schedules: [job, ...ws.schedules] } };
 }
@@ -614,7 +916,7 @@ export function setScheduleEnabled(ws: Workspace, id: string, enabled: boolean, 
       nextRunAt = job.clockHour == null ? new Date(Date.parse(now) + job.intervalMinutes * 60_000).toISOString()
         : nextClock(now, job.timeZone, job.clockHour, job.clockMinute ?? 0).at;
     }
-    return { ...job, enabled, nextRunAt };
+    return { ...job, enabled, nextRunAt, recoveryPending: false, recoveryApprovalFor: enabled && runMissed ? nextRunAt : undefined };
   }) };
 }
 
@@ -632,9 +934,12 @@ export function enqueueRun(ws: Workspace, agentId: string, goal: string, now?: s
   if (ws.halted) return { ok: false, error: "Emergency stop is on. No new action can run." };
   const agent = ws.agents.find((item) => item.id === agentId && !item.archived);
   if (!agent) return { ok: false, error: "That agent is not on this device." };
-  const text = goal.trim().slice(0, 2000);
+  if (goal.trim().length > 2000) return { ok: false, error: "The task exceeds 2,000 characters. Shorten it before queueing; nothing was truncated or queued." };
+  const text = goal.trim();
   if (!text) return { ok: false, error: "Write what the agent should do." };
   if (ws.runs.length >= 200) return { ok: false, error: "Too many runs are stored on this device." };
+  const unavailable = explicitGoalTools(text).filter(tool => !agent.tools.includes(tool));
+  if (unavailable.length) return { ok: false, error: `This goal requires ${unavailable.join(", ")}. Choose a bot with the required permission. The bot has no substitute workflow for this request.` };
   const at = stamp(now);
   const run: AgentRun = {
     id: runId,
@@ -648,7 +953,15 @@ export function enqueueRun(ws: Workspace, agentId: string, goal: string, now?: s
     workerId: null,
     leaseUntil: null,
     approvedActions: [],
+    agentVersion: agent.version,
+    execution: { provider: agent.chatProvider || null, tier: agent.chatTier || null, instructions: agent.instructions, knowledge: agent.knowledge || "", projectId: agent.projectId, memory: agent.memory },
+    configuration: configurationOf(agent),
+    stepResults: [],
+    approvalHistory: [],
+    verification: { state: "unverified", detail: "The requested objective has not been verified." },
     plan: buildTaskPlan(text, agent.tools),
+    definition: snapshotDefinition(agent),
+    executionRuntime: runId.startsWith("scheduled:") ? "scheduled-local" : "browser-local",
     result: "",
     error: "",
     createdAt: at,
@@ -659,10 +972,102 @@ export function enqueueRun(ws: Workspace, agentId: string, goal: string, now?: s
   return { ok: true, run, ws: withFleet(ws, { ...fleet, runs: [run, ...fleet.runs] }) };
 }
 
-export function approveRunAction(ws: Workspace, runId: string, action: string): Workspace {
-  return {
-    ...ws,
-    runs: ws.runs.map((run) => (run.id === runId ? { ...run, approvedActions: [...run.approvedActions, action], state: run.state === "waiting_approval" ? "queued" : run.state, updatedAt: stamp() } : run)),
+export function reviewedRunOperation(run: AgentRun, agent: AgentDefinition): string {
+  return JSON.stringify({ run: run.id, agent: run.agentId, agentVersion: agent.version, pinnedVersion: run.agentVersion, step: run.step, tool: run.plan[run.step]?.tool, goal: run.goal, destination: quoteUrl(run.goal), projectId: agent.projectId, memory: agent.memory, approval: agent.approval, tools: agent.tools, chatId: run.chatId, scheduleId: run.scheduleId });
+}
+
+export function runOperationFingerprint(run: AgentRun, agent: AgentDefinition): string {
+  return JSON.stringify({ runId: run.id, agentId: agent.id, agentVersion: agent.version, projectId: agent.projectId, goal: run.goal, planVersion: run.planVersion ?? 0, plan: run.plan, step: run.step });
+}
+
+export function enqueueConfiguredRun(ws: Workspace, agentId: string, goal: string, inputs?: Partial<Record<FleetTool, PlanStep["input"]>>, now?: string): ReturnType<typeof enqueueRun> {
+  const agent = ws.agents.find(item => item.id === agentId);
+  if (agent?.tools.includes("model") && !agent.chatProvider) return { ok: false, error: "Select a connected answer provider in this bot's configuration before queueing a model step." };
+  for (const tool of ["gmail_read", "gmail_send"] as const) {
+    if (!agent?.tools.includes(tool)) continue;
+    const input = inputs?.[tool];
+    if (!input?.accountId || !EMAIL.test(input.accountId) || !input.connectionVersion) return { ok: false, error: "Select the current connected Gmail account before queueing this step." };
+    if (tool === "gmail_send" && (!input.recipients?.length || input.recipients.length > 50 || input.recipients.some(recipient => !EMAIL.test(recipient) || /[\r\n<>;,]/.test(recipient)) || !input.body?.trim() || input.body.length > 8000 || (input.subject?.length ?? 0) > 1000 || /[\r\n]/.test(input.subject ?? ""))) return { ok: false, error: "Review the recipients, subject and message (up to 8,000 characters). Nothing was queued." };
+  }
+  const made = enqueueRun(ws, agentId, goal, now);
+  if (!made.ok) return made;
+  const run = { ...made.run, plan: made.run.plan.map(step => ({ ...step, ...(inputs?.[step.tool] ? { input: { ...inputs[step.tool], ...(inputs[step.tool]?.recipients ? { recipients: [...inputs[step.tool]!.recipients!] } : {}) } } : {}) })) };
+  return { ...made, run, ws: { ...made.ws, runs: made.ws.runs.map(item => item.id === run.id ? run : item) } };
+}
+
+export function approveRunAction(ws: Workspace, runId: string, actionId: string, now = stamp()): Workspace {
+  if (ws.halted) return ws;
+  const runs = ws.runs.map((run) => {
+    const pending = run.pendingApproval;
+    const agent = ws.agents.find((item) => item.id === run.agentId && !item.archived);
+    const step = run.plan[run.step];
+    if (run.id !== runId || run.state !== "waiting_approval" || !pending || pending.state !== "requested" || pending.id !== actionId || !agent || !step) return run;
+    if (pending.expiresAt <= now || pending.binding !== actionBinding(run, agent, step)) {
+      return { ...run, pendingApproval: { ...pending, state: pending.expiresAt <= now ? "expired" as const : "superseded" as const, updatedAt: now }, state: "queued" as const, error: "The reviewed action expired or changed. Review the new request before it runs.", updatedAt: now };
+    }
+    return { ...run, approvedActions: [], pendingApproval: { ...pending, state: "granted" as const, updatedAt: now }, state: "queued" as const, error: "", updatedAt: now };
+  });
+  return runs.some((run, index) => run !== ws.runs[index]) ? { ...ws, runs } : ws;
+}
+
+export function assignDelegation(ws: Workspace, runId: string, index: number, agentId: string): Workspace {
+  if (ws.halted) return ws;
+  return { ...ws, runs: ws.runs.map((run) => {
+    if (run.id !== runId || run.depth > 0 || run.step > 0 || run.state !== "queued") return run;
+    const chosen = ws.agents.find((item) => item.id === agentId && !item.archived);
+    if (!chosen) return run;
+    const goals = delegationGoals(run.goal);
+    if (!goals[index]) return run;
+    const assignments = goals.map((goal, i) => run.delegations?.[i] || { agentId: run.agentId, goal, allowedTools: (run.configuration?.tools ?? []).filter(tool => tool !== "delegate"), maxSteps: run.maxSteps });
+    assignments[index] = { agentId, goal: goals[index], allowedTools: chosen.tools.filter((tool) => tool !== "delegate"), maxSteps: Math.min(run.maxSteps, chosen.maxSteps) };
+    return { ...run, delegations: assignments, approvedActions: [] };
+  }) };
+}
+
+export function revokeRunApproval(ws: Workspace, runId: string, now = stamp()): Workspace {
+  return { ...ws, runs: ws.runs.map((run) => run.id === runId && run.pendingApproval && ["requested", "granted"].includes(run.pendingApproval.state)
+    ? { ...run, pendingApproval: { ...run.pendingApproval, state: "revoked", updatedAt: now }, approvedActions: [], state: "paused", updatedAt: now, error: "Authorization revoked. Resume to request a new review." }
+    : run) };
+}
+
+/** A batch authorizes only the exact pending requests shown in its review. */
+export function approveRunBatch(ws: Workspace, requests: { runId: string; approvalId: string }[], projectId: string | null, maximum: number, now = stamp()): { ok: true; ws: Workspace; batchId: string } | { ok: false; error: string } {
+  if (ws.halted || !Number.isInteger(maximum) || maximum < 1 || maximum > 50 || requests.length < 1 || requests.length > maximum || new Set(requests.map(item => item.runId)).size !== requests.length) return { ok: false, error: "Review between one and fifty distinct operations within the selected batch limit." };
+  let next = ws;
+  const batchId = nid("authorization-batch");
+  for (const request of requests) {
+    const before = next.runs.find(run => run.id === request.runId);
+    if (!before || before.configuration?.projectId !== projectId) return { ok: false, error: "Every operation in a batch must belong to the reviewed project scope. Nothing was authorized." };
+    next = approveRunAction(next, request.runId, request.approvalId, now);
+    const granted = next.runs.find(run => run.id === request.runId);
+    if (granted?.pendingApproval?.state !== "granted" || granted.pendingApproval.id !== request.approvalId) return { ok: false, error: "A reviewed operation changed or expired. Nothing in the batch was authorized." };
+    next = { ...next, runs: next.runs.map(run => run.id === request.runId ? { ...run, pendingApproval: { ...run.pendingApproval!, batchId } } : run) };
+  }
+  return { ok: true, ws: next, batchId };
+}
+
+export function selectDelegatedAgent(agents: AgentDefinition[], parent: AgentDefinition, goal: string): AgentDefinition {
+  const words = new Set(goal.toLowerCase().match(/[a-z0-9]{3,}/g) ?? []);
+  const wanted: FleetTool[] = /\b(search|research|sources)\b/i.test(goal) ? ["web_search", "search_notes"]
+    : /\b(inbox|mail|email)\b/i.test(goal) ? ["gmail_read"] : /\b(analy[sz]e|reason|write)\b/i.test(goal) ? ["model"] : [];
+  const eligible = agents.filter(agent => agent.id !== parent.id && !agent.archived && agent.projectId === parent.projectId
+    && (parent.memory === "on" || agent.memory === "off") && agent.tools.some(tool => tool !== "delegate")
+    && agent.tools.every(tool => tool !== "delegate" && parent.tools.includes(tool))
+    && (!agent.tools.includes("model") || (agent.chatProvider === parent.chatProvider && agent.chatTier === parent.chatTier)));
+  const score = (agent: AgentDefinition) => [...new Set(`${agent.name} ${agent.role}`.toLowerCase().match(/[a-z0-9]{3,}/g) ?? [])].filter(word => words.has(word)).length * 4 + wanted.filter(tool => agent.tools.includes(tool)).length * 5;
+  return eligible.map(agent => ({ agent, score: score(agent) })).filter(item => item.score > 0).sort((a, b) => b.score - a.score || a.agent.tools.length - b.agent.tools.length || a.agent.id.localeCompare(b.agent.id))[0]?.agent ?? parent;
+}
+
+/** Clear only explicitly selected terminal records; unresolved dispatches and active parents retain evidence. */
+export function clearFinishedRuns(ws: Workspace, ids: string[]): Workspace {
+  const selected = new Set(ids);
+  const active = new Set(ws.runs.filter(run => !TERMINAL.has(run.state)).map(run => run.id));
+  const removed = new Set(ws.runs.filter(run => selected.has(run.id) && TERMINAL.has(run.state) && run.externalOperation?.state !== "unknown" && run.externalOperation?.state !== "dispatching" && (!run.parentId || !active.has(run.parentId))).map(run => run.id));
+  return { ...ws,
+    runs: ws.runs.filter(run => !removed.has(run.id)),
+    runEvents: ws.runEvents.filter(event => !removed.has(event.runId)),
+    browserSessions: ws.browserSessions.filter(session => !session.runId || !removed.has(session.runId)),
+    schedules: ws.schedules.map(job => job.lastQueuedRunId && removed.has(job.lastQueuedRunId) ? { ...job, lastQueuedRunId: undefined } : job),
   };
 }
 
@@ -675,13 +1080,19 @@ export function resumeRun(ws: Workspace, runId: string): Workspace {
   return { ...ws, runs: ws.runs.map((run) => (run.id === runId && (run.state === "paused" || run.state === "waiting_external") && canTransition(run.state, "queued") ? { ...run, state: "queued", updatedAt: stamp() } : run)) };
 }
 
+function stopDispatchOutcome(run: AgentRun): NonNullable<AgentRun["stopDispatchOutcome"]> {
+  if (run.stopDispatchOutcome === "outcome_unknown" || run.externalOperation?.state === "dispatching" || run.externalOperation?.state === "unknown" || run.modelOperation?.state === "claimed") return "outcome_unknown";
+  if (run.stepResults?.length || run.externalOperation?.state === "succeeded") return "confirmed_result";
+  return run.state === "running" ? "outcome_unknown" : "not_dispatched";
+}
+
 export function cancelRun(ws: Workspace, runId: string, now?: string): Workspace {
   const at = stamp(now);
   const fleet = readFleet(ws);
   const runs = fleet.runs.map((run) => {
     if ((run.id !== runId && run.parentId !== runId) || !canTransition(run.state, "canceled")) return run;
     event(fleet, run.id, at, "canceled", "Stopped. Unfinished work was not marked complete.");
-    return { ...run, state: "canceled" as const, error: "Stopped.", updatedAt: at, leaseUntil: null };
+    return { ...run, state: "canceled" as const, error: "Local execution stopped. Completed actions were retained.", stopDispatchOutcome: stopDispatchOutcome(run), cancellation: { requestedAt: run.cancellation?.requestedAt ?? at, acknowledgedAt: at, scope: "local-worker" as const }, updatedAt: at, leaseUntil: null, approvedActions: [], pendingApproval: run.pendingApproval ? { ...run.pendingApproval, state: "revoked" as const, updatedAt: at } : undefined };
   });
   return withFleet(ws, { ...fleet, runs });
 }
@@ -692,16 +1103,30 @@ export function haltFleet(ws: Workspace, now?: string): Workspace {
   const runs = fleet.runs.map((run) => {
     if (TERMINAL.has(run.state)) return run;
     event(fleet, run.id, at, "emergency_stop", "Emergency stop canceled this run.");
-    return { ...run, state: "canceled" as const, error: "Emergency stop is on.", updatedAt: at, leaseUntil: null };
+    return { ...run, state: "canceled" as const, error: stopDispatchOutcome(run) === "outcome_unknown" ? "Emergency stop is on. A previously dispatched operation may still complete." : "Emergency stop is on.", stopDispatchOutcome: stopDispatchOutcome(run), cancellation: { requestedAt: run.cancellation?.requestedAt ?? at, acknowledgedAt: at, scope: "local-worker" as const }, updatedAt: at, leaseUntil: null, approvedActions: [], pendingApproval: run.pendingApproval ? { ...run.pendingApproval, state: "revoked" as const, updatedAt: at } : undefined };
   });
   return withFleet(ws, { ...fleet, runs });
 }
 
+export type BrowserReadObjective = { url: string; goal: string; capability: "read_page" };
+
 export type TickEnv = {
+  runtime?: AgentRun["executionRuntime"];
   now: string;
   workerId: string;
-  browser?: (url: string) => { ok: true; title: string; excerpt: string } | { ok: false; error: string };
-  search?: (query: string) => { ok: boolean; citations: { title: string; url: string }[]; error: string };
+  browser?: (url: string, objective: { goal: string; capability: "read_page" }) => { ok: true; title: string; excerpt: string } | { ok: false; error: string };
+  search?: (query: string) => { ok: boolean; citations: { id?: string; title: string; url: string; excerpt?: string }[]; error: string };
+  /** Adapters must resolve owner credentials and validate capabilities before dispatch. */
+  model?: (request: FleetExternalRequest) => { ok: true; text: string; provider: string; model: string } | { ok: false; error: string };
+  gmail?: (request: FleetExternalRequest & { action: "gmail_read" | "gmail_send"; accountId: string }) => { ok: true; text: string; accountId: string; operationId: string } | { ok: false; error: string };
+  verify?: (run: AgentRun) => { met: boolean; detail: string };
+  environment?: "browser" | "local-worker" | "hosted-worker";
+};
+
+export type FleetExternalRequest = {
+  runId: string; stepId: string; goal: string; instructions: string; projectId?: string | null; taskId?: string;
+  provider: string | null; modelTier: ModelTier | null;
+  results: FleetStepResult[]; input: PlanStep["input"];
 };
 
 function finish(run: AgentRun, state: RunState, at: string, error = ""): AgentRun {
@@ -716,7 +1141,51 @@ function advanceWithResult(run: AgentRun, detail: string): AgentRun {
 }
 
 function quoteUrl(goal: string) {
-  return goal.split(/\s+/).find((part) => HTTP.test(part)) ?? "";
+  const urls = [...new Set(goal.split(/\s+/).filter((part) => HTTP.test(part)))];
+  if (urls.length !== 1) return "";
+  try {
+    const parsed = new URL(urls[0]!);
+    return ["http:", "https:"].includes(parsed.protocol) && !parsed.username && !parsed.password ? parsed.href : "";
+  } catch { return ""; }
+}
+
+function destinationFor(run: AgentRun, step: PlanStep): string {
+  if (step.tool === "browser") return quoteUrl(step.input?.url ?? run.goal);
+  if (step.tool === "gmail_read" || step.tool === "gmail_send") return `${step.input?.accountId ?? "No account selected"}${step.tool === "gmail_send" ? ` → ${(step.input?.recipients ?? []).join(", ")}` : ""}`;
+  if (step.tool === "model") return run.configuration?.chatProvider ?? "No provider selected";
+  return run.configuration?.projectId ?? "Permitted workspace records";
+}
+
+function actionBinding(run: AgentRun, agent: AgentDefinition, step: PlanStep): string {
+  return JSON.stringify({ runId: run.id, agentId: agent.id, configuration: configurationOf(agent), step: run.step, operation: step, goal: run.goal, destination: destinationFor(run, step) });
+}
+
+function requestApproval(run: AgentRun, agent: AgentDefinition, step: PlanStep, at: string): AgentRun {
+  const previous = run.pendingApproval;
+  const history = previous ? [...(run.approvalHistory ?? []), { ...previous, state: previous.expiresAt <= at ? "expired" as const : previous.state === "granted" ? "superseded" as const : previous.state, updatedAt: at }].slice(-40) : run.approvalHistory ?? [];
+  return finish({ ...run, approvedActions: [], approvalHistory: history, pendingApproval: {
+    id: nid("approval"), tool: step.tool, stepId: step.id, binding: actionBinding(run, agent, step),
+    destination: destinationFor(run, step), requestedAt: at, expiresAt: new Date(Date.parse(at) + RUN_APPROVAL_TTL_MS).toISOString(), state: "requested", updatedAt: at,
+  } }, "waiting_approval", at, "Review this exact action before it runs. Authorization lasts five minutes and is used once.");
+}
+
+function consumeApproval(run: AgentRun, at: string): AgentRun {
+  if (!run.pendingApproval || run.pendingApproval.state !== "granted") return run;
+  return { ...run, approvedActions: [], approvalHistory: [...(run.approvalHistory ?? []), { ...run.pendingApproval, state: "consumed" as const, updatedAt: at }].slice(-40), pendingApproval: undefined };
+}
+
+function recordStep(run: AgentRun, step: PlanStep, at: string, text: string, sources: FleetStepResult["sources"] = [], empty = false, receipt?: FleetStepResult["receipt"], recordIds: string[] = []): AgentRun {
+  const result: FleetStepResult = { recordIds, output: text.slice(0, 4000), id: `${run.id}:${step.id}`, stepId: step.id, tool: step.tool, at, status: empty ? "empty" : "success", text: text.slice(0, RUN_EVIDENCE_MAX_CHARS), originalLength: text.length, truncated: text.length > RUN_EVIDENCE_MAX_CHARS, sources: sources.slice(0, 30), receipt };
+  return advanceWithResult({ ...run, stepResults: [...(run.stepResults ?? []).filter((item) => item.stepId !== step.id), result] }, text);
+}
+
+function validRunPlan(run: AgentRun, agent: AgentDefinition): boolean {
+  const seen = new Set<string>();
+  return run.plan.length > 0 && run.plan.every((step) => {
+    if (!step.id || seen.has(step.id) || !agent.tools.includes(step.tool) || (run.configuration && !run.configuration.tools.includes(step.tool)) || (run.delegationScope && !run.delegationScope.tools.includes(step.tool)) || step.dependsOn.some(id => !seen.has(id))) return false;
+    seen.add(step.id);
+    return true;
+  });
 }
 
 export function tickFleet(ws: Workspace, env: TickEnv): Workspace {
@@ -726,7 +1195,12 @@ export function tickFleet(ws: Workspace, env: TickEnv): Workspace {
   const extra: AgentRun[] = [];
   let processed = 0;
   const runs = fleet.runs.map((run) => {
-    if (processed >= 4 || TERMINAL.has(run.state) || run.state === "paused" || run.state === "waiting_approval" || run.state === "waiting_external") return run;
+    const scheduled = fleet.schedules.find(job => job.id === run.scheduleId || run.id.startsWith(`scheduled:${job.id}:`) || run.parentId?.startsWith(`scheduled:${job.id}:`));
+    if (scheduled && (scheduled.executionTarget ?? "browser") !== (env.environment ?? "browser")) return run;
+    if (processed >= 4 || TERMINAL.has(run.state) || run.state === "paused" || run.state === "waiting_external") return run;
+    if (run.externalOperation?.state === "dispatching" || run.externalOperation?.state === "unknown") return run;
+    if (run.state === "waiting_approval" && !run.pendingApproval) return run;
+    if (run.state === "waiting_approval" && run.pendingApproval?.state === "requested" && run.pendingApproval.expiresAt > at) return run;
     if (run.leaseUntil && run.leaseUntil > at && run.workerId && run.workerId !== env.workerId) return run;
     processed += 1;
     const agent = fleet.agents.find((item) => item.id === run.agentId);
@@ -735,170 +1209,324 @@ export function tickFleet(ws: Workspace, env: TickEnv): Workspace {
       event(fleet, run.id, at, "failed", reason);
       return finish(run, "failed", at, reason);
     }
-    const claimed = { ...run, state: "running" as const, workerId: env.workerId, leaseUntil: new Date(Date.parse(at) + 30_000).toISOString(), updatedAt: at };
-    const tool = agent.tools[claimed.step];
-    if (!tool || claimed.step >= claimed.maxSteps) {
-      const lines = fleet.runEvents.filter((item) => item.runId === claimed.id && item.kind === "tool_result").map((item) => item.detail);
-      event(fleet, claimed.id, at, "completed", lines.length ? "Finished from tool results." : "Finished with no tool results.");
-      return finish({ ...claimed, result: claimed.result || lines.join("\n").slice(0, 4000) || "Finished with no tool results." }, "completed", at);
+    // Legacy records acquire a snapshot before further execution. They never inherit a legacy grant.
+    let claimed: AgentRun = { ...run, configuration: run.configuration ?? configurationOf(agent), approvedActions: [], state: "running", workerId: env.workerId, leaseUntil: new Date(Date.parse(at) + 30_000).toISOString(), updatedAt: at };
+    const fail = (error: string, state: RunState = "failed") => {
+      event(fleet, claimed.id, at, state, error);
+      return finish(claimed, state, at, error);
+    };
+    const removedTool = claimed.plan.slice(claimed.step).find(step => !agent.tools.includes(step.tool));
+    if (agent.projectId && !ws.projects.some(project => project.id === agent.projectId)) return fail("The scoped project is unavailable. No operation was dispatched.", "paused");
+    if (removedTool && claimed.configuration?.tools.includes(removedTool.tool)) return fail(`The bot no longer permits ${removedTool.tool}. The removed capability was not used.`, "paused");
+    if (!validRunPlan(claimed, agent)) return fail("The saved plan is invalid or requests a capability this agent no longer has. Queue a reviewed replacement.");
+    const currentConfiguration = configurationOf(agent);
+    // A queued plan pins step order. Permission checks compare the capability set.
+    const pinned = claimed.configuration!;
+    const reorderedActivePlan = claimed.step > 0 && JSON.stringify(pinned.tools) !== JSON.stringify(currentConfiguration.tools);
+    const reviewedConfiguration = { ...currentConfiguration, version: reorderedActivePlan ? pinned.version : currentConfiguration.version, tools: [...currentConfiguration.tools].sort() };
+    if (JSON.stringify({ ...pinned, tools: [...pinned.tools].sort() }) !== JSON.stringify(reviewedConfiguration)) return fail("The agent configuration changed after this run was queued. Queue a new run with the reviewed configuration.");
+    if (claimed.delegationScope && (agent.projectId !== claimed.delegationScope.projectId || (agent.memory === "on" && claimed.delegationScope.memory !== "on"))) return fail("The child agent's resource scope exceeds its delegation grant. Nothing was dispatched.");
+    if (claimed.step >= claimed.plan.length) {
+      if (!(claimed.stepResults?.length)) return fail("Execution ended without a confirmed tool result. The objective was not verified.");
+      let verification: AgentRun["verification"] = { state: "unverified", detail: "Execution steps finished. The requested objective still needs verification." };
+      if (env.verify) {
+        try {
+          const checked = env.verify(claimed);
+          verification = { state: checked.met ? "verified" : "not_met", detail: checked.detail.slice(0, 500) };
+        } catch { return fail("Objective verification failed. Tool results were retained; the objective was not marked verified."); }
+      }
+      event(fleet, claimed.id, at, verification.state === "not_met" ? "failed" : "completed", verification.detail);
+      return finish({ ...claimed, verification }, verification.state === "not_met" ? "failed" : "completed", at, verification.state === "not_met" ? verification.detail : "");
+    }
+    if (claimed.step >= claimed.maxSteps) {
+      claimed.completion = { execution: "budget_exhausted", objective: "unverified", evidence: (claimed.stepResults ?? []).map(result => result.id) };
+      return fail(`The step limit was reached after ${claimed.step} of ${claimed.plan.length} planned steps. The run has unfinished work. Partial results were retained.`);
+    }
+    const step = claimed.plan[claimed.step]!;
+    const tool = step.tool;
+    if (step.dependsOn.some(id => !claimed.stepResults?.some(result => result.stepId === id))) return fail("A required step result is missing. This step was not dispatched.");
+    const dependent = step.inputFrom && claimed.stepResults?.find(result => result.stepId === step.inputFrom!.stepId);
+    const stepQuery = step.inputFrom ? (step.inputFrom.field === "recordIds" ? dependent?.recordIds?.join(" ") : dependent?.text) : claimed.goal;
+    if (!stepQuery || (step.inputFrom && !step.dependsOn.includes(step.inputFrom.stepId))) return fail("A required step result is missing. The dependent operation was not dispatched.");
+    if (tool === "browser" && !destinationFor(claimed, step)) return fail("Choose one explicit http(s) destination before requesting browser approval. No page was opened.", (step.input?.url ?? claimed.goal).split(/\s+/).some(part => HTTP.test(part)) ? "failed" : "waiting_external");
+    const requiresReview = tool === "browser" || tool === "gmail_read" || tool === "gmail_send" || tool === "model" || (agent.approval === "ask" && tool !== "delegate");
+    if (requiresReview) {
+      const grant = claimed.pendingApproval;
+      if (!grant || grant.state !== "granted" || grant.expiresAt <= at || grant.binding !== actionBinding(claimed, agent, step)) {
+        const requested = requestApproval(claimed, agent, step, at);
+        event(fleet, claimed.id, at, "approval_requested", `${tool}: ${requested.pendingApproval!.destination}. Nothing was dispatched.`);
+        return requested;
+      }
     }
     if (tool === "delegate") {
-      if (claimed.depth >= 1) {
-        event(fleet, claimed.id, at, "tool_result", "Child runs do not delegate again.");
-        return advanceWithResult(claimed, "Child runs do not delegate again.");
-      }
+      if (claimed.depth >= 1) return fail("Delegated runs cannot delegate again.");
       const kids = [...fleet.runs, ...extra].filter((item) => item.parentId === claimed.id);
-      const open = kids.filter((item) => !TERMINAL.has(item.state));
       if (kids.length === 0) {
         const goals = delegationGoals(claimed.goal);
-        const plan = goals.map((part, index) => ({
-          id: `child-${index + 1}`,
-          title: part.slice(0, 160),
-          tool: "delegate" as const,
-          dependsOn: [] as string[],
-          need: "none" as const,
-        }));
-        event(fleet, claimed.id, at, "plan_generated", JSON.stringify(plan));
-        for (const part of goals) {
+        const childTools = agent.tools.filter(item => item !== "delegate");
+        if (!childTools.length) return fail("Delegation has no permitted child capability. Choose a read or analysis tool before queueing.");
+        if (fleet.runs.length + extra.length + goals.length > 200) return fail("Delegation would exceed the saved run limit. Export and clear finished history before queueing a replacement.");
+        const children: AgentRun[] = [];
+        for (const [index, part] of goals.entries()) {
+          const assignment = claimed.delegations?.[index];
+          const specialist = assignment ? fleet.agents.find(item => item.id === assignment.agentId) : selectDelegatedAgent(fleet.agents, agent, part);
+          if (!specialist || specialist.archived || specialist.projectId !== agent.projectId || (agent.memory === "off" && specialist.memory === "on") || (assignment && assignment.goal !== part)) return fail("The assigned specialist or its scope changed before dispatch.");
+          const allowedTools = specialist.tools.filter(tool => tool !== "delegate" && agent.tools.includes(tool) && (!assignment || assignment.allowedTools.includes(tool)));
+          const plan = buildTaskPlan(part.replace(/\bdelegate\b/gi, "").trim(), allowedTools);
+          if (!plan.length || explicitGoalTools(part).some(tool => tool !== "delegate" && !allowedTools.includes(tool))) return fail("The specialist lacks the required capability within the parent's authorization.");
+          if (plan.some(step => step.tool === "model") && (specialist.chatProvider !== agent.chatProvider || specialist.chatTier !== agent.chatTier)) return fail("The specialist does not use the reviewed model route.");
           const child: AgentRun = {
-            ...claimed,
-            id: nid("run"),
-            parentId: claimed.id,
-            depth: 1,
-            goal: part,
-            state: "queued",
-            step: 0,
-            workerId: null,
-            leaseUntil: null,
-            result: "",
-            error: "",
-            createdAt: at,
-            updatedAt: at,
-            approvedActions: [],
-            plan: buildTaskPlan(part, agent.tools),
+            ...claimed, id: nid("run"), parentId: claimed.id, depth: 1, goal: part, state: "queued", step: 0,
+            agentId: specialist.id, configuration: configurationOf(specialist), maxSteps: Math.min(specialist.maxSteps, claimed.maxSteps, assignment?.maxSteps ?? claimed.maxSteps),
+            delegationScope: { tools: allowedTools, projectId: agent.projectId, memory: agent.memory },
+            workerId: null, leaseUntil: null, result: "", error: "", createdAt: at, updatedAt: at,
+            approvedActions: [], pendingApproval: undefined, approvalHistory: [], stepResults: [],
+            verification: { state: "unverified", detail: "The delegated objective has not been verified." },
+            plan,
           };
-          extra.push(child);
-          event(fleet, child.id, at, "task_created", "Delegated from the parent run.");
+          children.push(child);
         }
-        event(fleet, claimed.id, at, "delegated", `Delegated ${goals.length} child run${goals.length === 1 ? "" : "s"}.`);
-        return { ...claimed, plan };
+        extra.push(...children);
+        for (const child of children) {
+          event(fleet, child.id, at, "task_created", "Delegated within the parent capability and project scope. No parent approval was inherited.");
+        }
+        event(fleet, claimed.id, at, "plan_generated", JSON.stringify(goals));
+        event(fleet, claimed.id, at, "delegated", `Delegated ${goals.length} child runs with the parent's capability ceiling.`);
+        return claimed;
       }
-      if (open.length) return claimed;
-      const detail = kids.map((item) => item.result || item.error || item.state).join(" | ");
-      if (kids.some((child) => child.state !== "completed")) {
-        const state = kids.every((child) => child.state === "canceled") ? "canceled" : "failed";
-        const outcome = kids.map((child) => child.id + ": " + child.state).join(", ");
-        event(fleet, claimed.id, at, state, outcome);
-        return finish({ ...claimed, result: detail }, state, at, outcome);
-      }
-      event(fleet, claimed.id, at, "tool_result", detail || "Child runs finished.");
-      return advanceWithResult(claimed, detail);
+      if (kids.some(item => !TERMINAL.has(item.state))) return claimed;
+      const detail = kids.map(item => item.result || item.error || item.state).join(" | ");
+      if (kids.some(child => child.state !== "completed")) return fail(kids.map(child => `${child.id}: ${child.state}`).join(", "), kids.every(child => child.state === "canceled") ? "canceled" : "failed");
+      event(fleet, claimed.id, at, "tool_result", detail);
+      return recordStep(claimed, step, at, detail);
     }
     if (LOCAL.has(tool)) {
       const local = tool as LocalTool;
       const scope = {
         ...ws,
-        projects: agent.projectId ? ws.projects.filter((project) => project.id === agent.projectId) : ws.projects,
-        chats: agent.projectId ? ws.chats.filter((chat) => chat.projectId === agent.projectId) : ws.chats,
-        memories: agent.memory === "on" ? ws.memories.filter((note) => note.scope === "global" || (note.scope === "project" && !!agent.projectId && note.projectId === agent.projectId)) : [],
+        projects: agent.projectId ? ws.projects.filter(project => project.id === agent.projectId) : ws.projects,
+        chats: (agent.projectId ? ws.chats.filter(chat => chat.projectId === agent.projectId) : ws.chats).filter(chat => !chat.temporary && !chat.archived),
+        memories: agent.memory === "on" ? ws.memories.filter(note => note.scope === "global" || (note.scope === "project" && !!agent.projectId && note.projectId === agent.projectId)) : [],
       };
-      const executed = runLocalPlan(scope, [{ id: local, tool: local, query: claimed.goal }], { autonomy: "automatic", halted: false, tokens: {} });
+      claimed = consumeApproval(claimed, at);
+      const executed = runLocalPlan(scope, [{ id: local, tool: local, query: stepQuery }], { autonomy: agent.approval, halted: ws.halted, tokens: requiresReview ? { [local]: `approve:${local}` } : {} });
       const detail = executed.lines.join(" ");
-      event(fleet, claimed.id, at, executed.ok ? "tool_result" : "failed", detail);
-      if (!executed.ok) return finish(claimed, "failed", at, detail);
-      return advanceWithResult(claimed, detail);
-    }
-    if (tool === "browser" || tool === "gmail_send") {
-      const decision = decide({
-        autonomy: agent.approval,
-        kind: "publish",
-        halted: false,
-        approvalToken: claimed.approvedActions.includes(tool) ? `approve:${claimed.id}:${tool}` : null,
-        expectedToken: `approve:${claimed.id}:${tool}`,
-      });
-      if (decision.decision !== "allow") {
-        event(fleet, claimed.id, at, "approval_requested", `${tool} needs approval. Nothing was sent or opened.`);
-        return finish({ ...claimed, state: "waiting_approval" }, "waiting_approval", at, decision.reason);
-      }
-    }
-    if (tool === "web_search") {
-      const result = env.search?.(claimed.goal) ?? { ok: false, citations: [], error: "No search provider is configured. Nothing was searched and no citations were created." };
-      if (!result.ok || result.citations.length === 0) {
-        event(fleet, claimed.id, at, "waiting_external", result.error);
-        return finish(claimed, "waiting_external", at, result.error);
-      }
-      const detail = result.citations.map((item) => `${item.title} ${item.url}`).join(" | ");
+      if (!executed.ok) return fail(detail);
       event(fleet, claimed.id, at, "tool_result", detail);
-      return advanceWithResult(claimed, detail);
+      return recordStep(claimed, step, at, detail, [], false, undefined, executed.results.flatMap(result => result.records.map(record => record.id)));
+    }
+    // Exception boundaries are per operation: another queued run still receives its turn.
+    if (tool === "web_search") {
+      if (!env.search) return fail("No search provider is configured. Nothing was searched and no citations were created.", "waiting_external");
+      claimed = consumeApproval(claimed, at);
+      try {
+        const result = env.search(stepQuery);
+        if (!result.ok) return fail(result.error || "Search failed. No successful result was recorded.", "waiting_external");
+        const sources = result.citations.slice(0, 30).map((item, index) => ({ id: item.id ?? `${claimed.id}:${step.id}:source-${index + 1}`, title: item.title.slice(0, 300), url: item.url.slice(0, 2000), ...(item.excerpt ? { excerpt: item.excerpt.slice(0, 2000) } : {}) }));
+        const detail = sources.length ? sources.map(item => `${item.title} ${item.url}${item.excerpt ? `\n${item.excerpt}` : ""}`).join("\n\n") : "Search completed with no matching sources.";
+        event(fleet, claimed.id, at, "tool_result", detail);
+        return recordStep(claimed, step, at, detail, sources, sources.length === 0);
+      } catch { return fail("The search adapter threw an exception. No search result was confirmed; other runs can continue."); }
     }
     if (tool === "browser") {
-      if (!env.browser) {
-        const error = "No browser driver is attached. No page was opened.";
-        event(fleet, claimed.id, at, "waiting_external", error);
-        return finish(claimed, "waiting_external", at, error);
-      }
-      const url = quoteUrl(claimed.goal);
-      if (!url) {
-        const error = "The goal has no http(s) URL. No page was opened.";
-        event(fleet, claimed.id, at, "failed", error);
-        return finish(claimed, "failed", at, error);
-      }
-      const opened = env.browser(url);
-      fleet.browserSessions.unshift({
-        id: nid("tab"),
-        runId: claimed.id,
-        url,
-        title: opened.ok ? opened.title : "",
-        status: opened.ok ? "open" : "failed",
-        lastAction: opened.ok ? "Opened the page." : opened.error,
-        excerpt: opened.ok ? opened.excerpt.slice(0, 500) : "",
-        updatedAt: at,
-      });
-      if (!opened.ok) {
-        event(fleet, claimed.id, at, "failed", opened.error);
-        return finish(claimed, "failed", at, opened.error);
-      }
-      const detail = `${opened.title} ${url}`;
-      event(fleet, claimed.id, at, "tool_result", detail);
-      return advanceWithResult(claimed, detail);
+      if (!env.browser) return fail("No browser driver is attached. No page was opened.", "waiting_external");
+      const url = destinationFor(claimed, step);
+      claimed = consumeApproval(claimed, at);
+      try {
+        const opened = env.browser(url, { goal: stepQuery, capability: "read_page" });
+        const evidenceId = `${claimed.id}:${step.id}`;
+        fleet.browserSessions.unshift({ id: nid("tab"), runId: claimed.id, url, title: opened.ok ? opened.title : "", status: opened.ok ? "open" : "failed", lastAction: opened.ok ? "Read the page. No page interaction was requested. Extraction is retained with the run." : opened.error, excerpt: opened.ok ? opened.excerpt.slice(0, 500) : "", excerptTruncated: opened.ok && opened.excerpt.length > 500, evidenceId: opened.ok ? evidenceId : undefined, updatedAt: at });
+        if (!opened.ok) return fail(opened.error);
+        const detail = `${opened.title} ${url}\n${opened.excerpt}`;
+        event(fleet, claimed.id, at, "tool_result", detail);
+        return recordStep(claimed, step, at, detail, [{ id: evidenceId, title: opened.title, url }]);
+      } catch { claimed = { ...claimed, stopDispatchOutcome: "outcome_unknown", externalOperation: { id: claimed.id + ":" + step.id, stepId: step.id, state: "unknown", startedAt: at } }; return fail("The browser adapter threw after dispatch. Its outcome is unknown; inspect the browser before starting a replacement run."); }
     }
+    const request: FleetExternalRequest = { runId: claimed.id, stepId: step.id, goal: claimed.goal, instructions: agent.instructions, projectId: agent.projectId, taskId: claimed.parentId ?? claimed.id, provider: agent.chatProvider ?? null, modelTier: agent.chatTier ?? null, results: claimed.stepResults ?? [], input: step.input };
     if (tool === "gmail_read" || tool === "gmail_send") {
-      const error = "No Gmail account is connected. Nothing was read or sent.";
-      event(fleet, claimed.id, at, "waiting_external", error);
-      return finish(claimed, "waiting_external", at, error);
+      if (!env.gmail) return fail("No Gmail execution adapter is attached to this worker. Nothing was read or sent.", "waiting_external");
+      if (!step.input?.accountId) return fail("Select the exact Gmail account for this operation. Nothing was read or sent.");
+      if (tool === "gmail_send" && (!step.input.recipients?.length || step.input.recipients.some(recipient => !EMAIL.test(recipient)) || !step.input.body?.trim())) return fail("Review valid recipients and the exact message before sending. Nothing was sent.");
+      claimed = consumeApproval(claimed, at);
+      try {
+        const outcome = env.gmail({ ...request, action: tool, accountId: step.input.accountId });
+        if (!outcome.ok) return fail(outcome.error);
+        if (outcome.accountId !== step.input.accountId || !outcome.operationId) return fail("The Gmail adapter did not confirm the selected account and operation. Reconcile its outcome before another attempt.");
+        event(fleet, claimed.id, at, "tool_result", outcome.text);
+        return recordStep(claimed, step, at, outcome.text, [], false, { accountId: outcome.accountId, operationId: outcome.operationId });
+      } catch { return fail("The Gmail adapter threw after dispatch. Its outcome is unknown; reconcile the selected mailbox before another attempt."); }
     }
-    const error = "This worker does not call a model. Nothing was sent.";
-    event(fleet, claimed.id, at, "waiting_external", error);
-    return finish(claimed, "waiting_external", at, error);
+    if (!env.model) return fail("This worker does not call a model without an attached adapter. Nothing was sent.", "waiting_external");
+    if (!request.provider) return fail("Select a provider for this agent before model execution. Nothing was sent.");
+    claimed = consumeApproval(claimed, at);
+    try {
+      const outcome = env.model(request);
+      if (!outcome.ok) return fail(outcome.error);
+      if (outcome.provider !== request.provider || !outcome.model || !outcome.text.trim()) return fail("The model adapter did not return a valid answer with the selected provider identity. No fallback was accepted.");
+      event(fleet, claimed.id, at, "tool_result", `${outcome.provider} · ${outcome.model}: ${outcome.text}`);
+      return recordStep(claimed, step, at, outcome.text, [], false, { provider: outcome.provider, model: outcome.model });
+    } catch { return fail("The model adapter threw after dispatch. A billable outcome may be unknown; inspect the provider receipt before retrying."); }
   });
-  const schedules = fleet.schedules.map((job) => {
+  let chats = ws.chats;
+  let scheduleChanged = false;
+  const schedules = fleet.schedules.map(job => {
+    const occurrences = (job.occurrences ?? []).map((occurrence) => {
+      const outcome = runs.find((run) => run.id === occurrence.runId);
+      if (!outcome) return occurrence;
+      let next = occurrence;
+      if (outcome.state !== occurrence.state || outcome.updatedAt !== occurrence.updatedAt) {
+        next = { ...occurrence, state: outcome.state, updatedAt: outcome.updatedAt, detail: (outcome.error || outcome.result).slice(0, 500) };
+        scheduleChanged = true;
+      }
+      if (job.resultDelivery !== "conversation" || outcome.state !== "completed" || next.deliveredAt || next.deliveryError) return next;
+      scheduleChanged = true;
+      const chat = chats.find((item) => item.id === next.destinationChatId && item.id === job.chatId && !item.archived && !item.temporary);
+      if (!chat) return { ...next, deliveryError: "The original conversation is unavailable or changed. The result remains in Runs." };
+      const messageId = "scheduled-result:" + next.id;
+      if (!chat.messages.some((message) => message.id === messageId)) {
+        chats = chats.map((item) => item.id === chat.id ? { ...item, messages: [...item.messages, {
+          id: messageId, at, role: "assistant" as const, content: outcome.result || "The scheduled task completed without text output.",
+          provider: "Local workflow", model: "scheduled result",
+        }] } : item);
+      }
+      return { ...next, deliveredAt: at };
+    });
+    job = { ...job, occurrences };
     if (!job.lastQueuedRunId) return job;
-    const run = runs.find((item) => item.id === job.lastQueuedRunId);
+    const run = runs.find(item => item.id === job.lastQueuedRunId);
     if (!run || !TERMINAL.has(run.state)) return job;
+    scheduleChanged ||= run.state === "completed"
+      ? job.lastRunAt !== run.updatedAt || job.lastStatus !== "ran"
+      : job.lastStatus !== "failed" || job.lastError !== (run.error || run.state);
     return run.state === "completed"
-      ? { ...job, lastRunAt: run.updatedAt, lastStatus: "ran" as const }
-      : { ...job, lastStatus: "failed" as const, lastError: run.error || run.state };
+      ? { ...job, lastRunAt: run.updatedAt, lastStatus: "ran" as const, lastError: "", lastVerification: run.verification?.state ?? "unverified" as const }
+      : { ...job, lastStatus: "failed" as const, lastError: run.error || run.state, lastVerification: run.verification?.state ?? "not_met" as const };
   });
-  return withFleet(ws, { ...fleet, schedules, runs: [...extra, ...runs] });
+  if (!processed && !extra.length && !scheduleChanged) return ws;
+  return withFleet({ ...ws, chats }, { ...fleet, schedules, runs: [...extra, ...runs] });
 }
 
-export function runDueSchedules(ws: Workspace, now: string): Workspace {
+export function scheduleExecutionStatus(job: ScheduleJob, now = new Date().toISOString()): string {
+  if (!job.enabled) return "Disabled";
+  const target = job.executionTarget || "browser";
+  if (target === "browser") return "Enabled · requires this app open and synchronized";
+  const heartbeat = Date.parse(job.workerHeartbeatAt || "");
+  return Number.isFinite(heartbeat) && Date.parse(now) - heartbeat < 120_000 ? `Enabled · worker ${job.workerId || target} recently checked` : `Enabled · no recent ${target} heartbeat; execution availability is unverified`;
+}
+
+function nextOccurrence(job: ScheduleJob, after: string): string {
+  return job.clockHour == null ? new Date(Date.parse(after) + job.intervalMinutes * 60_000).toISOString() : nextClock(after, job.timeZone || "UTC", job.clockHour, job.clockMinute ?? 0, after).at;
+}
+
+export function setSchedulePolicy(ws: Workspace, id: string, policy: {
+  missedPolicy?: NonNullable<ScheduleJob["missedPolicy"]>;
+  overlapPolicy?: NonNullable<ScheduleJob["overlapPolicy"]>;
+  resultDelivery?: NonNullable<ScheduleJob["resultDelivery"]>;
+}): Workspace {
   if (ws.halted) return ws;
+  return { ...ws, schedules: ws.schedules.map((job) => job.id === id ? { ...job,
+    ...(policy.missedPolicy && ["once", "skip", "review"].includes(policy.missedPolicy) ? { missedPolicy: policy.missedPolicy } : {}),
+    ...(policy.overlapPolicy && ["wait", "skip", "parallel"].includes(policy.overlapPolicy) ? { overlapPolicy: policy.overlapPolicy } : {}),
+    ...(policy.resultDelivery && ["runs", "conversation"].includes(policy.resultDelivery) ? { resultDelivery: policy.resultDelivery, occurrences: job.occurrences?.map((occurrence) => ({ ...occurrence, deliveryError: undefined })) } : {}),
+  } : job) };
+}
+
+export function configureSchedulePolicy(ws: Workspace, id: string, policy: { timing?: ScheduleTiming; missedPolicy?: MissedSchedulePolicy }): Workspace {
+  return { ...ws, schedules: ws.schedules.map(job => job.id === id ? { ...job, ...policy } : job) };
+}
+
+export function reviewMissedSchedule(ws: Workspace, id: string, runLatest: boolean, now = stamp()): Workspace {
+  if (ws.halted) return ws;
+  return { ...ws, schedules: ws.schedules.map(job => {
+    if (job.id !== id || !job.recoveryPending) return job;
+    const latest = scheduleOccurrences({ ...job, missedPolicy: runLatest ? "latest" : "skip" }, now);
+    const nextRunAt = runLatest ? latest.occurrences[0] ?? latest.nextRunAt : latest.nextRunAt;
+    return { ...job, enabled: true, recoveryPending: false, lastError: "", nextRunAt, recoveryApprovalFor: runLatest ? nextRunAt : undefined };
+  }) };
+}
+
+export function runDueSchedules(ws: Workspace, now: string, environment: NonNullable<ScheduleJob["executionTarget"]> = "browser"): Workspace {
+  if (ws.halted || !ws.schedules.some((job) => job.enabled && job.nextRunAt <= now)) return ws;
   let next = ws;
-  const jobs = ws.schedules.map((job) => {
-    if (!job.enabled || job.nextRunAt > now) return job;
-    if (job.chatId && !next.chats.some((chat) => chat.id === job.chatId && !chat.temporary)) {
+  const jobs = ws.schedules.map(job => {
+    if (!job.enabled || job.nextRunAt > now || (job.executionTarget ?? "browser") !== environment) return job;
+    if (job.chatId && !next.chats.some(chat => chat.id === job.chatId && !chat.temporary && !chat.archived)) {
       return { ...job, enabled: false, lastAttemptAt: now, lastError: "The scheduled conversation is unavailable." };
     }
-    const agent = next.agents.find((item) => item.id === job.agentId && !item.archived);
+    const agent = next.agents.find(item => item.id === job.agentId && !item.archived);
     if (!agent) return { ...job, enabled: false, lastAttemptAt: now, lastError: "That agent is not on this device. Nothing was queued." };
-    const occurrenceId = "scheduled:" + job.id + ":" + job.nextRunAt;
-    const existing = next.runs.find((run) => run.id === occurrenceId);
-    const queued = existing ? { ok: true as const, ws: next, run: existing } : enqueueRun(next, agent.id, job.instruction || job.name, now, null, 0, occurrenceId);
-    if (!queued.ok) return { ...job, enabled: false, lastAttemptAt: now, lastError: queued.error };
-    next = queued.ws;
-    const clock = job.clockHour == null ? null : nextClock(now, job.timeZone || "UTC", job.clockHour, job.clockMinute ?? 0, job.nextRunAt);
-    return { ...job, lastAttemptAt: now, lastQueuedRunId: queued.run.id, lastError: "", nextRunAt: clock?.at ?? new Date(Date.parse(now) + job.intervalMinutes * 60_000).toISOString() };
+    const recovery = scheduleOccurrences(job.recoveryApprovalFor === job.nextRunAt ? { ...job, missedPolicy: "latest" } : job, now);
+    if (recovery.needsReview) return { ...job, enabled: false, recoveryPending: true, missedOccurrences: recovery.missed, lastAttemptAt: now, lastError: "This schedule missed its time. Review the missed occurrence before resuming." };
+    const occurrences = [...(job.occurrences ?? [])];
+    const activeIds = new Set([job.lastQueuedRunId, ...occurrences.map((entry) => entry.runId)]);
+    const active = next.runs.filter((run) => activeIds.has(run.id) && !TERMINAL.has(run.state));
+    const skipOverlap = active.length > 0 && job.overlapPolicy === "skip";
+    if (active.length && !skipOverlap && (job.overlapPolicy !== "parallel" || active.length >= (job.maxParallel ?? 2))) {
+      return { ...job, lastError: "Waiting for the previous scheduled run.", lastAttemptAt: now };
+    }
+    if (skipOverlap || !recovery.occurrences.length) {
+      occurrences.push({ id: job.id + ":" + job.nextRunAt, dueAt: job.nextRunAt, updatedAt: now, state: "skipped", detail: "Skipped by schedule policy.", missedCount: recovery.missed });
+      return { ...job, nextRunAt: recovery.nextRunAt, lastAttemptAt: now, missedOccurrences: recovery.missed, skippedCount: (job.skippedCount ?? 0) + Math.max(1, recovery.missed + 1), occurrences: occurrences.slice(-100) };
+    }
+    let lastQueuedRunId = job.lastQueuedRunId;
+    for (const occurrence of recovery.occurrences) {
+      const occurrenceId = "scheduled:" + job.id + ":" + occurrence;
+      const existing = next.runs.find(run => run.id === occurrenceId);
+      const queued = existing ? { ok: true as const, ws: next, run: existing } : enqueueRun(next, agent.id, job.instruction || job.name, now, null, 0, occurrenceId);
+      if (!queued.ok) return { ...job, enabled: false, nextRunAt: occurrence, lastQueuedRunId, lastAttemptAt: now, lastError: queued.error };
+      next = existing ? queued.ws : { ...queued.ws, runs: queued.ws.runs.map(run => run.id === queued.run.id ? { ...run, chatId: job.chatId, scheduleId: job.id } : run) };
+      lastQueuedRunId = queued.run.id;
+      if (!occurrences.some((entry) => entry.runId === queued.run.id)) occurrences.push({
+        id: occurrenceId, runId: queued.run.id, dueAt: occurrence, state: queued.run.state, updatedAt: queued.run.updatedAt,
+        detail: "", missedCount: recovery.missed, destinationChatId: job.chatId,
+      });
+    }
+    return { ...job, occurrences: occurrences.slice(-100), recoveryPending: false, recoveryApprovalFor: undefined, missedOccurrences: recovery.missed, lastAttemptAt: now, lastQueuedRunId, lastError: "", nextRunAt: recovery.nextRunAt };
   });
   return { ...next, schedules: jobs };
+}
+
+export type FleetModelRequest = {
+  operationId: string;
+  runId: string;
+  agentId: string;
+  agentVersion: number;
+  provider: string;
+  tier: ModelTier | null;
+  goal: string;
+  instructions: string;
+  knowledge: string;
+  notes: { id: string; text: string }[];
+  maxCalls: 1;
+};
+
+/** A server must persist this claim before making the single permitted provider call. */
+export function claimFleetModelStep(ws: Workspace, runId: string, operationId: string, now: string): { ok: true; ws: Workspace; request: FleetModelRequest } | { ok: false; error: string } {
+  const run = ws.runs.find((item) => item.id === runId);
+  const agent = run && ws.agents.find((item) => item.id === run.agentId && !item.archived);
+  if (ws.halted || !run || !agent) return { ok: false, error: "The run is unavailable or stopped." };
+  if (run.step >= run.maxSteps || !["queued", "waiting_external"].includes(run.state) || run.plan[run.step]?.tool !== "model" || !agent.tools.includes("model")) return { ok: false, error: "This run has no permitted model step." };
+  if (run.configuration && JSON.stringify(run.configuration) !== JSON.stringify(configurationOf(agent))) return { ok: false, error: "The reviewed agent configuration changed before execution." };
+  if (run.modelOperation) return { ok: false, error: "This model operation already started. Reconcile its outcome before creating new work." };
+  if (!run.execution?.provider || !run.agentVersion || run.agentVersion !== agent.version) return { ok: false, error: "Review the agent provider and revision before starting its model step." };
+  const request: FleetModelRequest = { operationId, runId, agentId: run.agentId, agentVersion: run.agentVersion, provider: run.execution.provider, tier: run.execution.tier, goal: run.goal, instructions: run.execution.instructions, knowledge: run.execution.knowledge, notes: agent.memory === "on" && run.execution.memory === "on" ? ws.memories.filter((note) => !note.archived && (note.scope === "global" || note.scope === "project" && !!run.execution?.projectId && note.projectId === run.execution.projectId)).slice(0, 12).map(({ id, text }) => ({ id, text })) : [], maxCalls: 1 };
+  return { ok: true, request, ws: { ...ws, runs: ws.runs.map((item) => item.id === runId ? { ...item, state: "waiting_external" as const, modelOperation: { id: operationId, state: "claimed" as const, provider: request.provider }, updatedAt: now, error: "Model operation accepted; awaiting its verified result." } : item) } };
+}
+
+export function completeFleetModelStep(ws: Workspace, request: FleetModelRequest, outcome: { ok: boolean; text?: string; error?: string; provider: string; model?: string; dispatched?: boolean }, now: string): Workspace {
+  return { ...ws, runs: ws.runs.map((run) => {
+    if (run.id !== request.runId || run.modelOperation?.id !== request.operationId || run.modelOperation.state !== "claimed") return run;
+    if (ws.halted || run.state === "canceled") {
+      if (outcome.ok && outcome.provider === request.provider && outcome.text?.trim()) {
+        const updated = recordStep(run, run.plan[run.step]!, now, outcome.text, [], false, { provider: outcome.provider, model: outcome.model, operationId: request.operationId });
+        return { ...updated, state: "canceled" as const, modelOperation: { ...run.modelOperation, state: "completed" as const, model: outcome.model },
+          error: "Stopped. The provider had already returned this result. No further steps ran." };
+      }
+      return { ...run, modelOperation: outcome.dispatched === false ? undefined : { ...run.modelOperation, state: "uncertain" as const },
+        error: outcome.dispatched === false ? "Stopped before dispatch." : "Stopped while a provider outcome was pending; no new work started." };
+    }
+    if (!outcome.ok || outcome.provider !== request.provider || !outcome.text?.trim()) return { ...run, modelOperation: outcome.dispatched === false ? undefined : { ...run.modelOperation, state: "uncertain" as const }, state: "waiting_external" as const, error: outcome.error || "The requested provider result could not be verified. It was not retried." };
+    const updated = recordStep(run, run.plan[run.step]!, now, outcome.text, [], false, { provider: outcome.provider, model: outcome.model, operationId: request.operationId });
+    return { ...updated, state: "queued" as const, error: "", updatedAt: now, modelOperation: { ...run.modelOperation, state: "completed" as const, model: outcome.model } };
+  }) };
 }

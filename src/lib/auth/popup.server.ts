@@ -16,28 +16,49 @@
  * React route here paints the full app shell in the popup. The opener lives in
  * `client.ts` (`signIn` → `openSignInPopup`).
  */
-import { auth, SESSION_TOKEN_COOKIE } from "./server";
 
-/** Message shape the popup posts to the opener (must match `client.ts`). */
-type PopupMessage = {
-  source: "grok-auth-popup";
-  token: string | null;
-  error?: string;
-};
+import type { PopupMessage } from "./popup-message";
 
 /**
  * Handle `GET /auth/popup`. Invoked by the Vite `authPopupPlugin` (dev / live
  * preview). Do not re-export this from a React route file.
  */
-export async function handleAuthPopupRequest(request: Request): Promise<Response> {
+export type AuthPopupDeps = {
+  sessionTokenCookie: string;
+  start: (input: { body: { provider: string; callbackURL: string; errorCallbackURL: string }; headers: Headers; asResponse: true }) => Promise<Response>;
+};
+
+export async function handleAuthPopupRequest(request: Request, deps?: AuthPopupDeps): Promise<Response> {
   const url = new URL(request.url);
   const done = url.searchParams.get("done") === "1";
+  const transactionId = url.searchParams.get("transactionId") ?? "";
+  if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(transactionId)) {
+    return new Response("Invalid sign-in transaction", { status: 400, headers: { "cache-control": "no-store" } });
+  }
+
+  if (url.searchParams.get("wait") === "1") {
+    return new Response(`<!doctype html><html lang="en"><meta name="viewport" content="width=device-width, initial-scale=1"><title>Preparing sign-in</title><body><p>Preparing sign-in. Keep this window open.</p></body></html>`, {
+      headers: { "content-type": "text/html; charset=utf-8", "cache-control": "no-store" },
+    });
+  }
+
+  let configured: AuthPopupDeps;
+  if (deps) {
+    configured = deps;
+  } else {
+    const { auth, SESSION_TOKEN_COOKIE } = await import("./server");
+    configured = {
+      sessionTokenCookie: SESSION_TOKEN_COOKIE,
+      start: (input) => auth.api.signInSocial(input),
+    };
+  }
 
   if (done) {
     const errored = url.searchParams.has("error");
-    const token = errored ? null : readCookie(request, SESSION_TOKEN_COOKIE);
+    const token = errored ? null : readCookie(request, configured.sessionTokenCookie);
     const message: PopupMessage = {
       source: "grok-auth-popup",
+      transactionId,
       token,
       ...(errored ? { error: url.searchParams.get("error") ?? "sign_in_failed" } : {}),
     };
@@ -60,9 +81,9 @@ export async function handleAuthPopupRequest(request: Request): Promise<Response
   }
 
   // Stay first-party for the callback so the session cookie lands in THIS popup.
-  const back = `${url.origin}/auth/popup?done=1`;
+  const back = `${url.origin}/auth/popup?done=1&transactionId=${encodeURIComponent(transactionId)}`;
   try {
-    const apiRes = await auth.api.signInSocial({
+    const apiRes = await configured.start({
       body: {
         provider: providerId,
         callbackURL: back,
@@ -78,6 +99,7 @@ export async function handleAuthPopupRequest(request: Request): Promise<Response
       const detail = await apiRes.text().catch(() => "");
       return completionResponse({
         source: "grok-auth-popup",
+        transactionId,
         token: null,
         error: detail || `oauth_init_failed_${apiRes.status}`,
       });
@@ -90,6 +112,7 @@ export async function handleAuthPopupRequest(request: Request): Promise<Response
     if (!location) {
       return completionResponse({
         source: "grok-auth-popup",
+        transactionId,
         token: null,
         error: "oauth_init_missing_url",
       });
@@ -106,6 +129,7 @@ export async function handleAuthPopupRequest(request: Request): Promise<Response
     const message = err instanceof Error ? err.message : "oauth_init_threw";
     return completionResponse({
       source: "grok-auth-popup",
+      transactionId,
       token: null,
       error: message,
     });

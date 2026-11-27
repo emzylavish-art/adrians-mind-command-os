@@ -1,8 +1,15 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
-import { checkTurnSize, takeToken } from "./limits.ts";
+import { createChatTurnPreflight, checkTurnSize, takeToken, consumeMindRateLimit, resetMindRateLimitsForTests } from "./limits.ts";
 
 describe("mind request limits", () => {
+  it("retains a long-window quota when a short-window request prunes stale buckets", () => {
+    resetMindRateLimitsForTests();
+    assert.equal(consumeMindRateLimit("daily", "owner", 1, 86_400_000, 0).ok, true);
+    assert.equal(consumeMindRateLimit("chat", "other", 12, 60_000, 120_000).ok, true);
+    assert.equal(consumeMindRateLimit("daily", "owner", 1, 86_400_000, 120_001).ok, false);
+    assert.equal(consumeMindRateLimit("daily", "owner", 1, 86_400_000, 86_400_000).ok, true);
+  });
   it("stops a caller after the limit inside the window", () => {
     const state = new Map<string, number[]>();
     assert.equal(takeToken(state, "chat:a", 2, 1000, 0), true);
@@ -15,7 +22,9 @@ describe("mind request limits", () => {
   it("rejects oversized turns", () => {
     assert.equal(checkTurnSize({ text: "ok", history: [], memoryContext: [] }).ok, true);
     assert.equal(checkTurnSize({ text: "x".repeat(8001), history: [], memoryContext: [] }).ok, false);
-    assert.equal(checkTurnSize({ text: "ok", history: Array.from({ length: 13 }, () => ({ content: "a" })), memoryContext: [] }).ok, false);
+    assert.equal(checkTurnSize({ text: "ok", history: Array.from({ length: 13 }, () => ({ content: "a" })), memoryContext: [] }).ok, true);
+    assert.equal(checkTurnSize({ text: "ok", history: [{ content: "x".repeat(20000) }], memoryContext: [] }).ok, true);
+    assert.equal(checkTurnSize({ text: "ok", history: Array.from({ length: 10001 }, () => ({ content: "a" })), memoryContext: [] }).ok, false);
   });
 });
 
@@ -25,4 +34,15 @@ describe("checkTurnSize images", () => {
     const result = checkTurnSize({ text: "hi", history: [], memoryContext: [], images: [{ dataUrl: big }] });
     assert.equal(result.ok, false);
   });
+});
+
+it("concurrent helper and answer preflights share a turn token and count each dispatch", async () => {
+  const buckets: string[] = [];
+  const preflight = createChatTurnPreflight("owner", async () => false, async (bucket) => {
+    buckets.push(bucket);
+    await Promise.resolve();
+    return { ok: true };
+  });
+  assert.deepEqual(await Promise.all([preflight(), preflight(), preflight()]), [null, null, null]);
+  assert.deepEqual(buckets, ["chat", "provider-dispatch", "provider-dispatch", "provider-dispatch"]);
 });

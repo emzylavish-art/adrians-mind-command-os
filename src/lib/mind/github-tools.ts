@@ -83,6 +83,7 @@ export function runGitHubTool(text: string, root = path.join(os.tmpdir(), "adria
   if (lower === "make model") return makeCubeWithOpenScad(root);
   const translated = text.trim().match(/^translate\s+(.{1,180})\s+to\s+([A-Za-z]+)$/i);
   if (translated) return translateWithArgos(translated[1].trim(), translated[2].trim());
+  if (/^translate\b/i.test(lower)) return "Choose a target language, for example translate hello to Spanish. No text was translated.";
   return null;
 }
 

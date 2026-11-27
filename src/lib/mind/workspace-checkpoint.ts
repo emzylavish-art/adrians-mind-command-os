@@ -5,6 +5,12 @@ import { compactWorkspaceImages, hydrateWorkspaceImages, type MediaBlobStore } f
 export function createWorkspaceCheckpoint() {
   const storedImages = new WeakMap<MsgImage, MsgImage>();
 
+  function rememberHydratedImage(image: MsgImage) {
+    if (!image.blobId || !image.dataUrl) return;
+    const { dataUrl: _dataUrl, ...reference } = image;
+    storedImages.set(image, reference);
+  }
+
   function snapshot(ws: Workspace): Workspace {
     return {
       ...ws,
@@ -37,5 +43,5 @@ export function createWorkspaceCheckpoint() {
     return hydrated;
   }
 
-  return { snapshot, compact, hydrate };
+  return { snapshot, compact, hydrate, rememberHydratedImage };
 }

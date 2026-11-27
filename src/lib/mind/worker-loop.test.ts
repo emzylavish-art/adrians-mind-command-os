@@ -37,6 +37,6 @@ describe("worker loop", () => {
     assert.equal(stale.state, "offline");
     const oneShot = interpretWorkerHealth({ running: false, heartbeatAt: "2026-04-01T11:59:30.000Z" }, now, 60_000);
     assert.equal(oneShot.state, "offline");
-    assert.match(interpretWorkerHealth(null, now, 60_000).detail, /Nothing is running/);
+    assert.match(interpretWorkerHealth(null, now, 60_000).detail, /background execution is unverified/i);
   });
 });

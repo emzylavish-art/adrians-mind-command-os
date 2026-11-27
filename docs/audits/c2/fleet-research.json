@@ -1,0 +1,990 @@
+{
+  "audit": "C2 \u2014 Notion Recovery Audit / Adrian Analysis",
+  "chapterId": "4231aa276323810e913fdd2b090f4e8b",
+  "baseSha": "18d5b9364e6bdcfec028eeccf56fe596946ed8ce",
+  "evidence": "Synthetic tests and local source only. No provider/account/device live calls.",
+  "checks": [
+    {
+      "name": "Owned expanded serial suite",
+      "result": "PASS 115/115; zero failed/skipped",
+      "command": "node --max-old-space-size=256 --experimental-strip-types --test --test-concurrency=1 src/components/mind/c2-command-entrypoints.test.ts src/lib/mind/fleet-audit-recovery.test.ts src/lib/mind/fleet.test.ts src/lib/mind/workbench-command.test.ts src/lib/mind/policy.test.ts src/lib/mind/media/history-audit.test.ts src/lib/mind/media/history.test.ts src/lib/mind/pdf-text-audit.test.ts src/lib/mind/pdf-text.test.ts src/lib/mind/workspace-archive-manifest.test.ts src/lib/mind/persistence.test.ts src/lib/mind/sync.test.ts src/lib/mind/workspace.test.ts src/lib/mind/research-audit-recovery.test.ts src/lib/mind/research.test.ts src/lib/mind/research-failure-action.test.ts"
+    },
+    {
+      "name": "Strict owned pure-module typecheck",
+      "result": "PASS before final delivery/byte-budget additions; final graph verification belongs to parent"
+    },
+    {
+      "name": "File-backed PGlite restart",
+      "result": "PASS 2/2, zero failed/skipped, 5.28s. Earlier no-space and unbounded SIGKILL attempts did not pass; bounded rerun did.",
+      "command": "TMPDIR=<isolated-workspace-temp> node --max-old-space-size=256 --experimental-strip-types --test --test-reporter=tap --test-concurrency=1 src/lib/mind/file-persist.test.ts"
+    },
+    {
+      "name": "Final archive authority, request-byte and routing regressions",
+      "result": "PASS 28/28, zero failed/skipped",
+      "command": "node --max-old-space-size=256 --experimental-strip-types --test --test-concurrency=1 src/lib/mind/workspace-archive-manifest.test.ts src/lib/mind/logic-routes.test.ts src/lib/mind/media/history-audit.test.ts"
+    },
+    {
+      "name": "AA125 incremental index and existing search compatibility",
+      "result": "PASS 13/13, zero failed/skipped; 12,000-message corpus uses getter instrumentation, no wall-clock threshold. Existing palette-label expectations unchanged.",
+      "command": "node --max-old-space-size=256 --experimental-strip-types --test --test-concurrency=1 src/lib/mind/palette-index.test.ts src/lib/mind/palette-label.test.ts src/lib/mind/c2-workspace-recovery.test.ts"
+    }
+  ],
+  "findings": [
+    {
+      "id": "C2/AA-023",
+      "localId": "AA-023",
+      "title": "Deleted-project notes can remain eligible for retrieval through an orphaned bot project identity",
+      "source": "https://app.notion.com/p/4231aa27632381868c8dd844634f74af",
+      "record": "C2/M08",
+      "status": "fixed and tested",
+      "expected": "Missing projects and archived/temporary conversations must not be eligible for fleet context.",
+      "changed": "Worker pauses orphan project runs before reading context; local scope independently excludes archived and temporary chats and archived notes.",
+      "files": [
+        "src/lib/mind/fleet.ts",
+        "src/components/mind/fleet-panels.tsx",
+        "src/lib/mind/local-tools.ts"
+      ],
+      "tests": [
+        "src/lib/mind/fleet-audit-recovery.test.ts",
+        "src/lib/mind/fleet.test.ts"
+      ],
+      "remaining": []
+    },
+    {
+      "id": "C2/AA-025",
+      "localId": "AA-025",
+      "title": "Browser scheduling is not equivalent to persistent automation",
+      "source": "https://app.notion.com/p/4231aa2763238124adcaf9962f76543e",
+      "record": "C2/M09",
+      "status": "already fixed with proof",
+      "expected": "Distinguish an open-browser worker, runnable local worker scripts, and verified hosted automation.",
+      "changed": "Recovered correction confirms schedule:tick/schedule:worker already exist. UI now describes browser or running local worker; hosted deployment remains external-required.",
+      "files": [
+        "src/lib/mind/fleet.ts",
+        "src/components/mind/fleet-panels.tsx",
+        "scripts/schedule-tick.mjs",
+        "scripts/schedule-worker.mjs",
+        "package.json"
+      ],
+      "tests": [
+        "src/lib/mind/fleet-audit-recovery.test.ts",
+        "src/lib/mind/fleet.test.ts"
+      ],
+      "remaining": [
+        "No hosted worker was installed, deployed, or proven continuously running."
+      ]
+    },
+    {
+      "id": "C2/AA-026",
+      "localId": "AA-026",
+      "title": "Missed scheduled occurrences are collapsed without an explicit recovery policy",
+      "source": "https://app.notion.com/p/4231aa2763238124adcaf9962f76543e",
+      "record": "C2/M09",
+      "status": "fixed and tested",
+      "expected": "Missed occurrences and overlaps need explicit policy, anchored cadence and individual outcomes.",
+      "changed": "Added once/skip/review recovery, one-time authorized catch-up, wait/skip/bounded-parallel overlap, latest 100 occurrence records with independent run outcomes and UI.",
+      "files": [
+        "src/lib/mind/fleet.ts",
+        "src/components/mind/fleet-panels.tsx",
+        "src/lib/mind/schedule-recovery.ts"
+      ],
+      "tests": [
+        "src/lib/mind/fleet-audit-recovery.test.ts",
+        "src/lib/mind/fleet.test.ts"
+      ],
+      "remaining": [
+        "Automatic replay of every missed occurrence is intentionally not implemented. Latest 100 occurrence records are retained."
+      ]
+    },
+    {
+      "id": "C2/AA-027",
+      "localId": "AA-027",
+      "title": "Overlapping scheduled runs can lose their individual schedule-level outcome tracking",
+      "source": "https://app.notion.com/p/4231aa2763238124adcaf9962f76543e",
+      "record": "C2/M09",
+      "status": "fixed and tested",
+      "expected": "Missed occurrences and overlaps need explicit policy, anchored cadence and individual outcomes.",
+      "changed": "Added once/skip/review recovery, one-time authorized catch-up, wait/skip/bounded-parallel overlap, latest 100 occurrence records with independent run outcomes and UI.",
+      "files": [
+        "src/lib/mind/fleet.ts",
+        "src/components/mind/fleet-panels.tsx",
+        "src/lib/mind/schedule-recovery.ts"
+      ],
+      "tests": [
+        "src/lib/mind/fleet-audit-recovery.test.ts",
+        "src/lib/mind/fleet.test.ts"
+      ],
+      "remaining": [
+        "Automatic replay of every missed occurrence is intentionally not implemented. Latest 100 occurrence records are retained."
+      ]
+    },
+    {
+      "id": "C2/AA-028",
+      "localId": "AA-028",
+      "title": "Scheduled conversation execution does not inherently continue the conversation",
+      "source": "https://app.notion.com/p/4231aa2763238124adcaf9962f76543e",
+      "record": "C2/M09",
+      "status": "proposal needing a decision",
+      "expected": "Separate bot workflows and autonomous conversation continuation; explicitly select result destination.",
+      "changed": "Implemented honest bot-task semantics and optional idempotent completed-result delivery to the original saved conversation; default remains Runs. Missing/archived destination records a delivery error and never substitutes or resurrects a chat. Archive restore/import resets delivery to Runs; merging preserves the local explicitly selected conversation and cannot redirect it from archive data.",
+      "files": [
+        "src/lib/mind/fleet.ts",
+        "src/components/mind/fleet-panels.tsx"
+      ],
+      "tests": [
+        "src/lib/mind/fleet-audit-recovery.test.ts",
+        "src/lib/mind/fleet.test.ts",
+        "src/lib/mind/workspace-archive-manifest.test.ts"
+      ],
+      "remaining": [
+        "Autonomous model-driven conversation continuation, monitoring, and reminders remain separate modes requiring provider/cost/worker and delivery contracts. No hidden model call was added."
+      ]
+    },
+    {
+      "id": "C2/AA-033",
+      "localId": "AA-033",
+      "title": "Saved execution plans are not authoritative during fleet execution",
+      "source": "https://app.notion.com/p/4231aa27632381928b57cf722df45cf1",
+      "record": "C2/M11",
+      "status": "fixed and tested",
+      "expected": "Execute the saved allowed plan, enforce dependencies and transfer declared typed results; unfinished work cannot be completed merely by exhausting a budget.",
+      "changed": "Worker executes saved steps, rechecks current capability/project, validates prior receipts and inputFrom output/recordIds, captures typed result IDs, and marks exhausted partial plans failed.",
+      "files": [
+        "src/lib/mind/fleet.ts",
+        "src/components/mind/fleet-panels.tsx"
+      ],
+      "tests": [
+        "src/lib/mind/fleet-audit-recovery.test.ts",
+        "src/lib/mind/fleet.test.ts"
+      ],
+      "remaining": []
+    },
+    {
+      "id": "C2/AA-034",
+      "localId": "AA-034",
+      "title": "Fleet planning is a tool-list expansion rather than objective-driven intelligence",
+      "source": "https://app.notion.com/p/4231aa27632381928b57cf722df45cf1",
+      "record": "C2/M11",
+      "status": "fixed and tested",
+      "expected": "An explicit supported objective should choose relevant allowed tools and unknown/ambiguous goals should remain truthfully labeled.",
+      "changed": "Local deterministic intent selection narrows saved tool plans; unavailable explicit requested capabilities refuse instead of substituting an unrelated workflow; ambiguous goals preserve labeled template sequence.",
+      "files": [
+        "src/lib/mind/fleet.ts",
+        "src/components/mind/fleet-panels.tsx"
+      ],
+      "tests": [
+        "src/lib/mind/fleet-audit-recovery.test.ts",
+        "src/lib/mind/fleet.test.ts"
+      ],
+      "remaining": [
+        "This is a bounded deterministic planner, not general model-generated planning or autonomous reasoning."
+      ]
+    },
+    {
+      "id": "C2/AA-035",
+      "localId": "AA-035",
+      "title": "Declared dependencies do not transfer results between execution steps",
+      "source": "https://app.notion.com/p/4231aa27632381928b57cf722df45cf1",
+      "record": "C2/M11",
+      "status": "fixed and tested",
+      "expected": "Execute the saved allowed plan, enforce dependencies and transfer declared typed results; unfinished work cannot be completed merely by exhausting a budget.",
+      "changed": "Worker executes saved steps, rechecks current capability/project, validates prior receipts and inputFrom output/recordIds, captures typed result IDs, and marks exhausted partial plans failed.",
+      "files": [
+        "src/lib/mind/fleet.ts",
+        "src/components/mind/fleet-panels.tsx"
+      ],
+      "tests": [
+        "src/lib/mind/fleet-audit-recovery.test.ts",
+        "src/lib/mind/fleet.test.ts"
+      ],
+      "remaining": []
+    },
+    {
+      "id": "C2/AA-036",
+      "localId": "AA-036",
+      "title": "Exhausting the step budget can mark an incomplete plan as completed",
+      "source": "https://app.notion.com/p/4231aa27632381928b57cf722df45cf1",
+      "record": "C2/M11",
+      "status": "fixed and tested",
+      "expected": "Execute the saved allowed plan, enforce dependencies and transfer declared typed results; unfinished work cannot be completed merely by exhausting a budget.",
+      "changed": "Worker executes saved steps, rechecks current capability/project, validates prior receipts and inputFrom output/recordIds, captures typed result IDs, and marks exhausted partial plans failed.",
+      "files": [
+        "src/lib/mind/fleet.ts",
+        "src/components/mind/fleet-panels.tsx"
+      ],
+      "tests": [
+        "src/lib/mind/fleet-audit-recovery.test.ts",
+        "src/lib/mind/fleet.test.ts"
+      ],
+      "remaining": []
+    },
+    {
+      "id": "C2/AA-037",
+      "localId": "AA-037",
+      "title": "Agent execution can process project notes without checking archived status in its scope filter",
+      "source": "https://app.notion.com/p/4231aa27632381928b57cf722df45cf1",
+      "record": "C2/M11",
+      "status": "already fixed with proof",
+      "expected": "Archived notes must be excluded from execution.",
+      "changed": "Recovered audit correction: downstream local tool filter already excluded archived notes. Added explicit fleet scope guard as defense in depth; did not claim original privacy bypass was reproduced.",
+      "files": [
+        "src/lib/mind/fleet.ts",
+        "src/components/mind/fleet-panels.tsx",
+        "src/lib/mind/local-tools.ts"
+      ],
+      "tests": [
+        "src/lib/mind/fleet-audit-recovery.test.ts",
+        "src/lib/mind/fleet.test.ts"
+      ],
+      "remaining": []
+    },
+    {
+      "id": "C2/AA-038",
+      "localId": "AA-038",
+      "title": "Search-result discovery is not equivalent to verified research",
+      "source": "https://app.notion.com/p/4231aa2763238141b69cc3ae204385f6",
+      "record": "C2/M12",
+      "status": "proposal needing a decision",
+      "expected": "Source discovery must not be presented as independent source verification.",
+      "changed": "Added provider_returned evidence maturity, source/query/provider/time provenance, retained source inventory, and explicit not-independently-verified summaries/UI.",
+      "files": [
+        "src/lib/mind/research.ts",
+        "src/lib/mind/research-route.server.ts",
+        "src/lib/mind/xai-search.ts",
+        "src/lib/mind/server.ts",
+        "src/components/mind/command-app.tsx"
+      ],
+      "tests": [
+        "src/lib/mind/research-audit-recovery.test.ts",
+        "src/lib/mind/research.test.ts",
+        "src/lib/mind/research-failure-action.test.ts"
+      ],
+      "remaining": [
+        "A full source-opening/claim-verification research pipeline is not implemented. It needs allowed fetch scope, parser and additional provider/cost policy."
+      ]
+    },
+    {
+      "id": "C2/AA-039",
+      "localId": "AA-039",
+      "title": "Deep research behaves differently depending on the configured search provider",
+      "source": "https://app.notion.com/p/4231aa2763238141b69cc3ae204385f6",
+      "record": "C2/M12",
+      "status": "proposal needing a decision",
+      "expected": "The interface must identify the research strategy actually executed by the selected provider.",
+      "changed": "Configured search records multi_query; xAI records single_query and explicitly states that a multi-query research plan was not executed. Tests verify one xAI fixture call only.",
+      "files": [
+        "src/lib/mind/research.ts",
+        "src/lib/mind/research-route.server.ts",
+        "src/lib/mind/xai-search.ts",
+        "src/lib/mind/server.ts",
+        "src/components/mind/command-app.tsx"
+      ],
+      "tests": [
+        "src/lib/mind/research-audit-recovery.test.ts",
+        "src/lib/mind/research.test.ts",
+        "src/lib/mind/research-failure-action.test.ts"
+      ],
+      "remaining": [
+        "Multiple xAI searches per research action are not enabled because the call-budget/paid fan-out policy is not yet defined."
+      ]
+    },
+    {
+      "id": "C2/AA-040",
+      "localId": "AA-040",
+      "title": "Research retries do not retain the original provider identity",
+      "source": "https://app.notion.com/p/4231aa2763238141b69cc3ae204385f6",
+      "record": "C2/M12",
+      "status": "fixed and tested",
+      "expected": "Retries retain route identity and accumulated evidence, summaries retain sources, and citation caps preserve query coverage and answer attribution.",
+      "changed": "Added secret-free server fingerprint binding provider/endpoint/key/model, retry mismatch refusal before dispatch, preserved attempts/evidence/coverage summaries, balanced 8 citations across queries with all returned evidence retained, and xAI answer text with valid passage offsets.",
+      "files": [
+        "src/lib/mind/research.ts",
+        "src/lib/mind/research-route.server.ts",
+        "src/lib/mind/xai-search.ts",
+        "src/lib/mind/server.ts",
+        "src/components/mind/command-app.tsx"
+      ],
+      "tests": [
+        "src/lib/mind/research-audit-recovery.test.ts",
+        "src/lib/mind/research.test.ts",
+        "src/lib/mind/research-failure-action.test.ts"
+      ],
+      "remaining": [
+        "Only synthetic fetch fixtures were used; no external provider answered during implementation."
+      ]
+    },
+    {
+      "id": "C2/AA-041",
+      "localId": "AA-041",
+      "title": "Research recovery replaces the original summary with a search-success counter",
+      "source": "https://app.notion.com/p/4231aa2763238141b69cc3ae204385f6",
+      "record": "C2/M12",
+      "status": "fixed and tested",
+      "expected": "Retries retain route identity and accumulated evidence, summaries retain sources, and citation caps preserve query coverage and answer attribution.",
+      "changed": "Added secret-free server fingerprint binding provider/endpoint/key/model, retry mismatch refusal before dispatch, preserved attempts/evidence/coverage summaries, balanced 8 citations across queries with all returned evidence retained, and xAI answer text with valid passage offsets.",
+      "files": [
+        "src/lib/mind/research.ts",
+        "src/lib/mind/research-route.server.ts",
+        "src/lib/mind/xai-search.ts",
+        "src/lib/mind/server.ts",
+        "src/components/mind/command-app.tsx"
+      ],
+      "tests": [
+        "src/lib/mind/research-audit-recovery.test.ts",
+        "src/lib/mind/research.test.ts",
+        "src/lib/mind/research-failure-action.test.ts"
+      ],
+      "remaining": [
+        "Only synthetic fetch fixtures were used; no external provider answered during implementation."
+      ]
+    },
+    {
+      "id": "C2/AA-042",
+      "localId": "AA-042",
+      "title": "Citation limits can conceal the actual coverage of successful research queries",
+      "source": "https://app.notion.com/p/4231aa2763238141b69cc3ae204385f6",
+      "record": "C2/M12",
+      "status": "fixed and tested",
+      "expected": "Retries retain route identity and accumulated evidence, summaries retain sources, and citation caps preserve query coverage and answer attribution.",
+      "changed": "Added secret-free server fingerprint binding provider/endpoint/key/model, retry mismatch refusal before dispatch, preserved attempts/evidence/coverage summaries, balanced 8 citations across queries with all returned evidence retained, and xAI answer text with valid passage offsets.",
+      "files": [
+        "src/lib/mind/research.ts",
+        "src/lib/mind/research-route.server.ts",
+        "src/lib/mind/xai-search.ts",
+        "src/lib/mind/server.ts",
+        "src/components/mind/command-app.tsx"
+      ],
+      "tests": [
+        "src/lib/mind/research-audit-recovery.test.ts",
+        "src/lib/mind/research.test.ts",
+        "src/lib/mind/research-failure-action.test.ts"
+      ],
+      "remaining": [
+        "Only synthetic fetch fixtures were used; no external provider answered during implementation."
+      ]
+    },
+    {
+      "id": "C2/AA-043",
+      "localId": "AA-043",
+      "title": "The xAI search adapter discards the relationship between citations and the generated answer",
+      "source": "https://app.notion.com/p/4231aa2763238141b69cc3ae204385f6",
+      "record": "C2/M12",
+      "status": "fixed and tested",
+      "expected": "Retries retain route identity and accumulated evidence, summaries retain sources, and citation caps preserve query coverage and answer attribution.",
+      "changed": "Added secret-free server fingerprint binding provider/endpoint/key/model, retry mismatch refusal before dispatch, preserved attempts/evidence/coverage summaries, balanced 8 citations across queries with all returned evidence retained, and xAI answer text with valid passage offsets.",
+      "files": [
+        "src/lib/mind/research.ts",
+        "src/lib/mind/research-route.server.ts",
+        "src/lib/mind/xai-search.ts",
+        "src/lib/mind/server.ts",
+        "src/components/mind/command-app.tsx"
+      ],
+      "tests": [
+        "src/lib/mind/research-audit-recovery.test.ts",
+        "src/lib/mind/research.test.ts",
+        "src/lib/mind/research-failure-action.test.ts"
+      ],
+      "remaining": [
+        "Only synthetic fetch fixtures were used; no external provider answered during implementation."
+      ]
+    },
+    {
+      "id": "C2/AA-056",
+      "localId": "AA-056",
+      "title": "The shared action classifier treats unknown operation types as ordinary",
+      "source": "https://app.notion.com/p/4231aa27632381fe99b9ea856e78aaea",
+      "record": "C2/M15",
+      "status": "fixed and tested",
+      "expected": "Unregistered operation types fail closed while registered existing confirmation entry points keep working.",
+      "changed": "Explicit ordinary/protected registries; unknown operations deny. Existing tool, Notion workspace/append and MCP confirmation kinds are registered protected. Actual extracted confirmPending handler tests prove allowed kinds, unknown refusal and emergency stop.",
+      "files": [
+        "src/lib/mind/policy.ts",
+        "src/components/mind/c2-command-entrypoints.test.ts"
+      ],
+      "tests": [
+        "src/lib/mind/policy.test.ts",
+        "src/lib/mind/fleet-audit-recovery.test.ts",
+        "src/components/mind/c2-command-entrypoints.test.ts"
+      ],
+      "remaining": []
+    },
+    {
+      "id": "C2/AA-057",
+      "localId": "AA-057",
+      "title": "Fleet approvals lack a complete operation-specific authorization record",
+      "source": "https://app.notion.com/p/4231aa27632381fe99b9ea856e78aaea",
+      "record": "C2/M15",
+      "status": "fixed and tested",
+      "expected": "Approvals bind exact current operations, expire, consume once, and obey stop/eligibility. Already-dispatched outcomes must not be reported reversed.",
+      "changed": "Added fingerprinted plan/version/project/action approvals, ten-minute expiry, current-step and halted guards, dispatch consumption, and distinct not_dispatched/outcome_unknown cancellation receipts including driver exceptions.",
+      "files": [
+        "src/lib/mind/fleet.ts",
+        "src/components/mind/fleet-panels.tsx"
+      ],
+      "tests": [
+        "src/lib/mind/fleet-audit-recovery.test.ts",
+        "src/lib/mind/fleet.test.ts"
+      ],
+      "remaining": [
+        "No external driver cancellation or live account rollback is claimed."
+      ]
+    },
+    {
+      "id": "C2/AA-058",
+      "localId": "AA-058",
+      "title": "The fleet approval mutation does not independently validate emergency stop or run eligibility",
+      "source": "https://app.notion.com/p/4231aa27632381fe99b9ea856e78aaea",
+      "record": "C2/M15",
+      "status": "fixed and tested",
+      "expected": "Approvals bind exact current operations, expire, consume once, and obey stop/eligibility. Already-dispatched outcomes must not be reported reversed.",
+      "changed": "Added fingerprinted plan/version/project/action approvals, ten-minute expiry, current-step and halted guards, dispatch consumption, and distinct not_dispatched/outcome_unknown cancellation receipts including driver exceptions.",
+      "files": [
+        "src/lib/mind/fleet.ts",
+        "src/components/mind/fleet-panels.tsx"
+      ],
+      "tests": [
+        "src/lib/mind/fleet-audit-recovery.test.ts",
+        "src/lib/mind/fleet.test.ts"
+      ],
+      "remaining": [
+        "No external driver cancellation or live account rollback is claimed."
+      ]
+    },
+    {
+      "id": "C2/AA-059",
+      "localId": "AA-059",
+      "title": "Emergency stop needs an explicit distinction between stopping new work and stopping work already dispatched",
+      "source": "https://app.notion.com/p/4231aa27632381fe99b9ea856e78aaea",
+      "record": "C2/M15",
+      "status": "fixed and tested",
+      "expected": "Approvals bind exact current operations, expire, consume once, and obey stop/eligibility. Already-dispatched outcomes must not be reported reversed.",
+      "changed": "Added fingerprinted plan/version/project/action approvals, ten-minute expiry, current-step and halted guards, dispatch consumption, and distinct not_dispatched/outcome_unknown cancellation receipts including driver exceptions.",
+      "files": [
+        "src/lib/mind/fleet.ts",
+        "src/components/mind/fleet-panels.tsx"
+      ],
+      "tests": [
+        "src/lib/mind/fleet-audit-recovery.test.ts",
+        "src/lib/mind/fleet.test.ts"
+      ],
+      "remaining": [
+        "No external driver cancellation or live account rollback is claimed."
+      ]
+    },
+    {
+      "id": "C2/AA-062",
+      "localId": "AA-062",
+      "title": "Fleet polling can perform unnecessary work while no execution progress is possible",
+      "source": "https://app.notion.com/p/4231aa2763238127aa0fea0a7f655a4b",
+      "record": "C2/M16",
+      "status": "fixed and tested",
+      "expected": "Idle, terminal-only and leased fleets should not produce new snapshots without progress.",
+      "changed": "Worker preserves workspace identity when no run/schedule delivery or outcome reconciliation changed; empty due schedules return unchanged.",
+      "files": [
+        "src/lib/mind/fleet.ts",
+        "src/components/mind/fleet-panels.tsx"
+      ],
+      "tests": [
+        "src/lib/mind/fleet-audit-recovery.test.ts",
+        "src/lib/mind/fleet.test.ts"
+      ],
+      "remaining": []
+    },
+    {
+      "id": "C2/AA-069",
+      "localId": "AA-069",
+      "title": "Long conversations have a fixed recent-message context boundary",
+      "source": "https://app.notion.com/p/4231aa2763238101989ad978b9516b1a",
+      "record": "C2/M18",
+      "status": "fixed and tested",
+      "expected": "Retrieve relevant older context within the bounded request without silently treating all history as included.",
+      "changed": "Explicit image references remain first priority; up to three older turns matching at least two meaningful exact query tokens are selected before filling the recent 12-turn allowance. Root wired visible context count/omission receipts.",
+      "files": [
+        "src/lib/mind/media/history.ts",
+        "src/components/mind/command-app.tsx"
+      ],
+      "tests": [
+        "src/lib/mind/media/history-audit.test.ts"
+      ],
+      "remaining": [
+        "Lexical matches are not semantic comprehension or a whole-conversation summary."
+      ]
+    },
+    {
+      "id": "C2/AA-086",
+      "localId": "AA-086",
+      "title": "Resume commands can report success without changing execution state",
+      "source": "https://app.notion.com/p/4231aa27632381748c41da5e9f01a245",
+      "record": "C2/M22",
+      "status": "fixed and tested",
+      "expected": "Workbench results describe actual state changes, exact pending approvals and worker progress.",
+      "changed": "Repeated resume/pause/cancel and mismatched approvals report no change; step command reports state deltas or no eligible progress; focused negative cases now run in normal test discovery.",
+      "files": [
+        "src/lib/mind/workbench-command.ts",
+        "src/lib/mind/fleet.ts"
+      ],
+      "tests": [
+        "src/lib/mind/workbench-command.test.ts",
+        "src/lib/mind/fleet-audit-recovery.test.ts"
+      ],
+      "remaining": []
+    },
+    {
+      "id": "C2/AA-087",
+      "localId": "AA-087",
+      "title": "Workbench approval validation is not bound to the pending action",
+      "source": "https://app.notion.com/p/4231aa27632381748c41da5e9f01a245",
+      "record": "C2/M22",
+      "status": "fixed and tested",
+      "expected": "Workbench results describe actual state changes, exact pending approvals and worker progress.",
+      "changed": "Repeated resume/pause/cancel and mismatched approvals report no change; step command reports state deltas or no eligible progress; focused negative cases now run in normal test discovery.",
+      "files": [
+        "src/lib/mind/workbench-command.ts",
+        "src/lib/mind/fleet.ts"
+      ],
+      "tests": [
+        "src/lib/mind/workbench-command.test.ts",
+        "src/lib/mind/fleet-audit-recovery.test.ts"
+      ],
+      "remaining": []
+    },
+    {
+      "id": "C2/AA-088",
+      "localId": "AA-088",
+      "title": "Manual worker-step receipts do not describe actual execution progress",
+      "source": "https://app.notion.com/p/4231aa27632381748c41da5e9f01a245",
+      "record": "C2/M22",
+      "status": "fixed and tested",
+      "expected": "Workbench results describe actual state changes, exact pending approvals and worker progress.",
+      "changed": "Repeated resume/pause/cancel and mismatched approvals report no change; step command reports state deltas or no eligible progress; focused negative cases now run in normal test discovery.",
+      "files": [
+        "src/lib/mind/workbench-command.ts",
+        "src/lib/mind/fleet.ts"
+      ],
+      "tests": [
+        "src/lib/mind/workbench-command.test.ts",
+        "src/lib/mind/fleet-audit-recovery.test.ts"
+      ],
+      "remaining": []
+    },
+    {
+      "id": "C2/AA-089",
+      "localId": "AA-089",
+      "title": "Workbench regression tests cover basic lifecycle behavior but omit command-result fidelity",
+      "source": "https://app.notion.com/p/4231aa27632381748c41da5e9f01a245",
+      "record": "C2/M22",
+      "status": "fixed and tested",
+      "expected": "Workbench results describe actual state changes, exact pending approvals and worker progress.",
+      "changed": "Repeated resume/pause/cancel and mismatched approvals report no change; step command reports state deltas or no eligible progress; focused negative cases now run in normal test discovery.",
+      "files": [
+        "src/lib/mind/workbench-command.ts",
+        "src/lib/mind/fleet.ts"
+      ],
+      "tests": [
+        "src/lib/mind/workbench-command.test.ts",
+        "src/lib/mind/fleet-audit-recovery.test.ts"
+      ],
+      "remaining": []
+    },
+    {
+      "id": "C2/AA-099",
+      "localId": "AA-099",
+      "title": "Local discovery tools do not independently enforce archive and temporary-conversation visibility",
+      "source": "https://app.notion.com/p/4231aa27632381319a47ffec4f099e26",
+      "record": "C2/M24",
+      "status": "fixed and tested",
+      "expected": "Missing projects and archived/temporary conversations must not be eligible for fleet context.",
+      "changed": "Worker pauses orphan project runs before reading context; local scope independently excludes archived and temporary chats and archived notes.",
+      "files": [
+        "src/lib/mind/fleet.ts",
+        "src/components/mind/fleet-panels.tsx",
+        "src/lib/mind/local-tools.ts"
+      ],
+      "tests": [
+        "src/lib/mind/fleet-audit-recovery.test.ts",
+        "src/lib/mind/fleet.test.ts"
+      ],
+      "remaining": []
+    },
+    {
+      "id": "C2/AA-100",
+      "localId": "AA-100",
+      "title": "Local knowledge tools return unstructured execution results",
+      "source": "https://app.notion.com/p/4231aa27632381319a47ffec4f099e26",
+      "record": "C2/M24",
+      "status": "fixed and tested",
+      "expected": "Local execution outputs retain typed identity and scope for dependent steps.",
+      "changed": "Root added typed local record results; fleet records IDs and can transfer recordIds/output through an explicit validated dependency.",
+      "files": [
+        "src/lib/mind/local-tools.ts",
+        "src/lib/mind/fleet.ts"
+      ],
+      "tests": [
+        "src/lib/mind/fleet-audit-recovery.test.ts",
+        "src/lib/mind/fleet.test.ts"
+      ],
+      "remaining": []
+    },
+    {
+      "id": "C2/AA-101",
+      "localId": "AA-101",
+      "title": "Fleet browser execution is limited to opening a URL",
+      "source": "https://app.notion.com/p/4231aa2763238185a292c53f8c573d92",
+      "record": "C2/M25",
+      "status": "proposal needing a decision",
+      "expected": "Browser capability and result must describe actual read-page work, not general navigation/task automation.",
+      "changed": "Implemented structured read_page objective delivery to the driver and retained returned excerpts in run evidence. UI/runtime explicitly state no interaction/navigation sequence was performed.",
+      "files": [
+        "src/lib/mind/fleet.ts",
+        "src/components/mind/fleet-panels.tsx"
+      ],
+      "tests": [
+        "src/lib/mind/fleet-audit-recovery.test.ts",
+        "src/lib/mind/fleet.test.ts"
+      ],
+      "remaining": [
+        "Multi-step interactive browser automation is not implemented and needs a concrete browser adapter, typed action/approval protocol and execution budget."
+      ]
+    },
+    {
+      "id": "C2/AA-102",
+      "localId": "AA-102",
+      "title": "Browser objectives without explicit URLs fail at the inspected fleet entry point",
+      "source": "https://app.notion.com/p/4231aa2763238185a292c53f8c573d92",
+      "record": "C2/M25",
+      "status": "fixed and tested",
+      "expected": "Require an explicit recoverable destination, pass the full objective to the driver, and constrain the authorized capability.",
+      "changed": "Missing URL enters waiting_external before approval consumption. Compatible driver receives (url,{url,goal,capability:read_page}); current operation approval binds saved plan/destination and receipts state read-only capability.",
+      "files": [
+        "src/lib/mind/fleet.ts",
+        "src/components/mind/fleet-panels.tsx"
+      ],
+      "tests": [
+        "src/lib/mind/fleet-audit-recovery.test.ts",
+        "src/lib/mind/fleet.test.ts"
+      ],
+      "remaining": [
+        "Only a synthetic driver ran. A real browser driver, page interaction or live navigation was not exercised."
+      ]
+    },
+    {
+      "id": "C2/AA-103",
+      "localId": "AA-103",
+      "title": "Browser execution receives the extracted destination rather than a complete structured objective",
+      "source": "https://app.notion.com/p/4231aa2763238185a292c53f8c573d92",
+      "record": "C2/M25",
+      "status": "fixed and tested",
+      "expected": "Require an explicit recoverable destination, pass the full objective to the driver, and constrain the authorized capability.",
+      "changed": "Missing URL enters waiting_external before approval consumption. Compatible driver receives (url,{url,goal,capability:read_page}); current operation approval binds saved plan/destination and receipts state read-only capability.",
+      "files": [
+        "src/lib/mind/fleet.ts",
+        "src/components/mind/fleet-panels.tsx"
+      ],
+      "tests": [
+        "src/lib/mind/fleet-audit-recovery.test.ts",
+        "src/lib/mind/fleet.test.ts"
+      ],
+      "remaining": [
+        "Only a synthetic driver ran. A real browser driver, page interaction or live navigation was not exercised."
+      ]
+    },
+    {
+      "id": "C2/AA-104",
+      "localId": "AA-104",
+      "title": "Browser approval does not distinguish read-only navigation from consequential interactions",
+      "source": "https://app.notion.com/p/4231aa2763238185a292c53f8c573d92",
+      "record": "C2/M25",
+      "status": "fixed and tested",
+      "expected": "Require an explicit recoverable destination, pass the full objective to the driver, and constrain the authorized capability.",
+      "changed": "Missing URL enters waiting_external before approval consumption. Compatible driver receives (url,{url,goal,capability:read_page}); current operation approval binds saved plan/destination and receipts state read-only capability.",
+      "files": [
+        "src/lib/mind/fleet.ts",
+        "src/components/mind/fleet-panels.tsx"
+      ],
+      "tests": [
+        "src/lib/mind/fleet-audit-recovery.test.ts",
+        "src/lib/mind/fleet.test.ts"
+      ],
+      "remaining": [
+        "Only a synthetic driver ran. A real browser driver, page interaction or live navigation was not exercised."
+      ]
+    },
+    {
+      "id": "C2/AA-114",
+      "localId": "AA-114",
+      "title": "Historical image selection is based on recency rather than relevance",
+      "source": "https://app.notion.com/p/4231aa276323816990f8dbd5049b59b6",
+      "record": "C2/M28",
+      "status": "fixed and tested",
+      "expected": "Historical references, fitting images and assistant-generated images must reach compatible model input with honest omission metadata.",
+      "changed": "Selected named/ordinal old image turns within 12; per-image count/char budgeting; actual JSON byte-cap packing now fits individual images and returns historyImageOmissions; generated assistant artifacts become attributed user-role vision references; text-only routes omit with notices.",
+      "files": [
+        "src/lib/mind/media/history.ts",
+        "src/lib/mind/prompt.ts",
+        "src/lib/mind/logic-routes.ts",
+        "src/lib/mind/turn.server.ts",
+        "src/components/mind/command-app.tsx"
+      ],
+      "tests": [
+        "src/lib/mind/media/history-audit.test.ts",
+        "src/lib/mind/media/history.test.ts",
+        "src/lib/mind/logic-routes.test.ts"
+      ],
+      "remaining": [
+        "No live multimodal provider was called. Blob-only image bytes that are unavailable remain explicitly omitted."
+      ]
+    },
+    {
+      "id": "C2/AA-115",
+      "localId": "AA-115",
+      "title": "Historical image selection uses all-or-nothing message groups",
+      "source": "https://app.notion.com/p/4231aa276323816990f8dbd5049b59b6",
+      "record": "C2/M28",
+      "status": "fixed and tested",
+      "expected": "Historical references, fitting images and assistant-generated images must reach compatible model input with honest omission metadata.",
+      "changed": "Selected named/ordinal old image turns within 12; per-image count/char budgeting; actual JSON byte-cap packing now fits individual images and returns historyImageOmissions; generated assistant artifacts become attributed user-role vision references; text-only routes omit with notices.",
+      "files": [
+        "src/lib/mind/media/history.ts",
+        "src/lib/mind/prompt.ts",
+        "src/lib/mind/logic-routes.ts",
+        "src/lib/mind/turn.server.ts",
+        "src/components/mind/command-app.tsx"
+      ],
+      "tests": [
+        "src/lib/mind/media/history-audit.test.ts",
+        "src/lib/mind/media/history.test.ts",
+        "src/lib/mind/logic-routes.test.ts"
+      ],
+      "remaining": [
+        "No live multimodal provider was called. Blob-only image bytes that are unavailable remain explicitly omitted."
+      ]
+    },
+    {
+      "id": "C2/AA-116",
+      "localId": "AA-116",
+      "title": "Assistant-generated historical images are not included by the inspected image-history builder",
+      "source": "https://app.notion.com/p/4231aa276323816990f8dbd5049b59b6",
+      "record": "C2/M28",
+      "status": "fixed and tested",
+      "expected": "Historical references, fitting images and assistant-generated images must reach compatible model input with honest omission metadata.",
+      "changed": "Selected named/ordinal old image turns within 12; per-image count/char budgeting; actual JSON byte-cap packing now fits individual images and returns historyImageOmissions; generated assistant artifacts become attributed user-role vision references; text-only routes omit with notices.",
+      "files": [
+        "src/lib/mind/media/history.ts",
+        "src/lib/mind/prompt.ts",
+        "src/lib/mind/logic-routes.ts",
+        "src/lib/mind/turn.server.ts",
+        "src/components/mind/command-app.tsx"
+      ],
+      "tests": [
+        "src/lib/mind/media/history-audit.test.ts",
+        "src/lib/mind/media/history.test.ts",
+        "src/lib/mind/logic-routes.test.ts"
+      ],
+      "remaining": [
+        "No live multimodal provider was called. Blob-only image bytes that are unavailable remain explicitly omitted."
+      ]
+    },
+    {
+      "id": "C2/AA-117",
+      "localId": "AA-117",
+      "title": "PDF extraction has a deliberately limited document-reading implementation",
+      "source": "https://app.notion.com/p/4231aa276323816990f8dbd5049b59b6",
+      "record": "C2/M28",
+      "status": "fixed and tested",
+      "expected": "Preserve supported PDF text/structure and late document passages within separate extraction and request budgets; unsupported scans must remain honest.",
+      "changed": "Added balanced literals, quoted-line/array text and BOM Unicode handling, ordered page/chunk evidence, up to 400k retained text with a 40k preview, bounded relevant/page excerpt selection, input/inflate/extraction caps, and truthful scanned/encrypted/font-map errors. Root persists document chunks and stages selected excerpts.",
+      "files": [
+        "src/lib/mind/pdf-text.ts",
+        "src/components/mind/command-app.tsx",
+        "src/lib/mind/types.ts",
+        "src/lib/mind/workspace.ts"
+      ],
+      "tests": [
+        "src/lib/mind/pdf-text-audit.test.ts",
+        "src/lib/mind/pdf-text.test.ts"
+      ],
+      "remaining": [
+        "Full PDF specification/font-map support and OCR are not implemented. Unsupported content is labeled partial or unavailable; no OCR provider was called."
+      ]
+    },
+    {
+      "id": "C2/AA-118",
+      "localId": "AA-118",
+      "title": "PDF extraction flattens document structure and loses page-level evidence associations",
+      "source": "https://app.notion.com/p/4231aa276323816990f8dbd5049b59b6",
+      "record": "C2/M28",
+      "status": "fixed and tested",
+      "expected": "Preserve supported PDF text/structure and late document passages within separate extraction and request budgets; unsupported scans must remain honest.",
+      "changed": "Added balanced literals, quoted-line/array text and BOM Unicode handling, ordered page/chunk evidence, up to 400k retained text with a 40k preview, bounded relevant/page excerpt selection, input/inflate/extraction caps, and truthful scanned/encrypted/font-map errors. Root persists document chunks and stages selected excerpts.",
+      "files": [
+        "src/lib/mind/pdf-text.ts",
+        "src/components/mind/command-app.tsx",
+        "src/lib/mind/types.ts",
+        "src/lib/mind/workspace.ts"
+      ],
+      "tests": [
+        "src/lib/mind/pdf-text-audit.test.ts",
+        "src/lib/mind/pdf-text.test.ts"
+      ],
+      "remaining": [
+        "Full PDF specification/font-map support and OCR are not implemented. Unsupported content is labeled partial or unavailable; no OCR provider was called."
+      ]
+    },
+    {
+      "id": "C2/AA-119",
+      "localId": "AA-119",
+      "title": "PDF extraction truncates the document at a fixed character boundary",
+      "source": "https://app.notion.com/p/4231aa276323816990f8dbd5049b59b6",
+      "record": "C2/M28",
+      "status": "fixed and tested",
+      "expected": "Preserve supported PDF text/structure and late document passages within separate extraction and request budgets; unsupported scans must remain honest.",
+      "changed": "Added balanced literals, quoted-line/array text and BOM Unicode handling, ordered page/chunk evidence, up to 400k retained text with a 40k preview, bounded relevant/page excerpt selection, input/inflate/extraction caps, and truthful scanned/encrypted/font-map errors. Root persists document chunks and stages selected excerpts.",
+      "files": [
+        "src/lib/mind/pdf-text.ts",
+        "src/components/mind/command-app.tsx",
+        "src/lib/mind/types.ts",
+        "src/lib/mind/workspace.ts"
+      ],
+      "tests": [
+        "src/lib/mind/pdf-text-audit.test.ts",
+        "src/lib/mind/pdf-text.test.ts"
+      ],
+      "remaining": [
+        "Full PDF specification/font-map support and OCR are not implemented. Unsupported content is labeled partial or unavailable; no OCR provider was called."
+      ]
+    },
+    {
+      "id": "C2/AA-125",
+      "localId": "AA-125",
+      "title": "Search scans workspace content synchronously whenever its dependencies change",
+      "source": "https://app.notion.com/p/4231aa27632381168d07ce7ef138e982",
+      "record": "C2/M29",
+      "status": "fixed and tested",
+      "expected": "Repeated queries must reuse normalized workspace text and project/context metadata, rebuilding only affected immutable collections while preserving complete message matches and ranking.",
+      "changed": "Added a component-scoped reusable palette index builder with one latest snapshot per collection, weak message-object normalization cache, incremental collection/context rebuilds and no persistent per-query cache. CommandApp memoizes transformed chat metadata and the search index separately from query/keyboard state. Querying retains independent-term and exact-phrase matching, every matching message ID, exact-title priority and first matching excerpt, without a redundant title-only result.",
+      "files": [
+        "src/lib/mind/palette.ts",
+        "src/components/mind/command-app.tsx",
+        "src/lib/mind/palette-index.test.ts"
+      ],
+      "tests": [
+        "src/lib/mind/palette-index.test.ts",
+        "src/lib/mind/palette-label.test.ts",
+        "src/lib/mind/c2-workspace-recovery.test.ts"
+      ],
+      "remaining": [
+        "Queries still synchronously scan already-normalized index records; no worker-thread latency or live-device performance guarantee is claimed. Cache size follows the current workspace snapshot; prior snapshots/query results are not retained. Immutable collection/record updates are required and match current workspace state handling."
+      ]
+    },
+    {
+      "id": "C2/AA-132",
+      "localId": "AA-132",
+      "title": "Persistence readiness does not establish verified backup availability",
+      "source": "https://app.notion.com/p/4231aa276323816aa837f15db16766a8",
+      "record": "C2/M31",
+      "status": "proposal needing a decision",
+      "expected": "Storage configuration, backup existence and proven restoration are separate claims.",
+      "changed": "Storage identity and archive coverage manifest are explicit. Runtime cloudBackup/restartChecked remain false. Synthetic archive restore coverage exercises declared workspace data categories.",
+      "files": [
+        "src/lib/mind/persistence.ts",
+        "src/lib/mind/workspace-archive-manifest.ts",
+        "src/lib/mind/workspace.ts"
+      ],
+      "tests": [
+        "src/lib/mind/workspace-archive-manifest.test.ts",
+        "src/lib/mind/persistence.test.ts"
+      ],
+      "remaining": [
+        "Production backup schedule, protected backup destination, RPO/RTO and durable verification record require an infrastructure policy and later authorized live run."
+      ]
+    },
+    {
+      "id": "C2/AA-133",
+      "localId": "AA-133",
+      "title": "Browser and server synchronization uses a binary content-presence decision",
+      "source": "https://app.notion.com/p/4231aa276323816aa837f15db16766a8",
+      "record": "C2/M31",
+      "status": "already fixed with proof",
+      "expected": "Bootstrap must preserve both nonempty copies; subsequent saves require revision-aware compare-and-swap.",
+      "changed": "Existing chooseServerSync is conservative bootstrap. Full use-mind-workspace caller already reads serverRevision and sends expectedRevision. Source trace and bootstrap regressions confirm this; new disk/CAS fixture remains separately tracked.",
+      "files": [
+        "src/lib/mind/sync.ts",
+        "src/lib/mind/use-mind-workspace.ts",
+        "src/lib/mind/store.ts"
+      ],
+      "tests": [
+        "src/lib/mind/sync.test.ts"
+      ],
+      "remaining": [
+        "The AA134 isolated disk fixture now proves stale compare-and-swap refusal after database reopen. No live server/account synchronization was tested."
+      ]
+    },
+    {
+      "id": "C2/AA-134",
+      "localId": "AA-134",
+      "title": "A configured remote database does not establish restart recovery",
+      "source": "https://app.notion.com/p/4231aa276323816aa837f15db16766a8",
+      "record": "C2/M31",
+      "status": "fixed and tested",
+      "expected": "Persist a synthetic full workspace/control state, close the database, reopen it, and prove isolation and stale-write rejection.",
+      "changed": "Added and passed the normal-runner file-persist regression: isolated disk-backed PGlite closes and reopens; occurrence/run plan, deletion tombstones, control state, owner isolation and stale compare-and-swap rejection survive. Existing conversation reopen regression also passes.",
+      "files": [
+        "src/lib/mind/file-persist.test.ts"
+      ],
+      "tests": [
+        "src/lib/mind/file-persist.test.ts"
+      ],
+      "remaining": [
+        "This is synthetic local disk/PGlite recovery, not a live hosted PostgreSQL restart, production backup or physical-device proof. The constrained implementation environment needed workspace TMPDIR and Node --max-old-space-size=256; earlier unbounded attempts were SIGKILLed at about 1,059 MB RSS."
+      ]
+    },
+    {
+      "id": "C2/AA-135",
+      "localId": "AA-135",
+      "title": "Local persistence terminology is internally inconsistent",
+      "source": "https://app.notion.com/p/4231aa276323816aa837f15db16766a8",
+      "record": "C2/M31",
+      "status": "fixed and tested",
+      "expected": "Storage labels distinguish disk file from process memory without breaking old wire clients.",
+      "changed": "Added storageKind local-file/remote-postgres/refused; retained legacy backend alias for compatibility and kept independent unverified durability flags.",
+      "files": [
+        "src/lib/mind/persistence.ts"
+      ],
+      "tests": [
+        "src/lib/mind/persistence.test.ts",
+        "src/lib/mind/workspace-archive-manifest.test.ts"
+      ],
+      "remaining": []
+    },
+    {
+      "id": "C2/AA-136",
+      "localId": "AA-136",
+      "title": "Backup completeness remains unverified across Adrian's major data categories",
+      "source": "https://app.notion.com/p/4231aa276323816aa837f15db16766a8",
+      "record": "C2/M31",
+      "status": "fixed and tested",
+      "expected": "The workspace export declares portable categories and omissions, and recovery preserves execution safety.",
+      "changed": "Archive manifest inventories content, versions/tombstones, agent/run/schedule records, labels, recovery records, usage and media portability. Synthetic pack/unpack/restore fixture verifies major categories and disabled/paused execution restore behavior.",
+      "files": [
+        "src/lib/mind/workspace-archive-manifest.ts",
+        "src/lib/mind/workspace.ts"
+      ],
+      "tests": [
+        "src/lib/mind/workspace-archive-manifest.test.ts"
+      ],
+      "remaining": [
+        "Whole-account backup excludes API/OAuth secrets, server-only receipts, out-of-workspace browser preferences, unavailable blob bytes and external video content. This is not verified cloud backup."
+      ]
+    }
+  ],
+  "relatedRootFindings": [
+    "AA021/022/024 root-owned bot config/project deletion/memory copy; these are intentionally not claimed by this agent."
+  ],
+  "overlap": [
+    "fleet.ts also contains template-origin additions by Notion agent; preserve them.",
+    "logic-routes.ts preserves model agent consult/freeOnly serialization.",
+    "prompt.ts and turn.server.ts must retain text-only history exclusion.",
+    "server.ts search block coexists with Notion/receipts and model consultation blocks.",
+    "workspace.ts, types.ts and command-app.tsx integration owned by root; include final runtime typecheck."
+  ]
+}

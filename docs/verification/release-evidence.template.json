@@ -1,0 +1,59 @@
+{
+  "schemaVersion": 1,
+  "repository": "emzylavish-art/adrians-mind-command-os",
+  "candidateRevision": null,
+  "note": "Unverified template. Validation must fail until actual exact-revision evidence is supplied. This does not authorize deployment.",
+  "ci": {
+    "revision": null,
+    "status": "unverified",
+    "completedAt": null,
+    "evidence": [],
+    "checks": []
+  },
+  "build": {
+    "revision": null,
+    "status": "unverified",
+    "artifactSha256": null,
+    "artifactUrl": null,
+    "observedAt": null,
+    "evidence": []
+  },
+  "database": {
+    "revision": null,
+    "environment": null,
+    "compatibility": "unverified",
+    "migrationIds": [],
+    "observedAt": null,
+    "evidence": []
+  },
+  "deployment": {
+    "revision": null,
+    "environment": null,
+    "id": null,
+    "url": null,
+    "status": "unverified",
+    "artifactSha256": null,
+    "observedAt": null,
+    "evidence": []
+  },
+  "alias": {
+    "revision": null,
+    "url": "https://adrians-mind.vercel.app",
+    "deploymentId": null,
+    "observedAt": null,
+    "evidence": []
+  },
+  "journeys": [],
+  "environmentEvidence": {
+    "schemaVersion": 1,
+    "environments": []
+  },
+  "rollback": {
+    "revision": null,
+    "deploymentId": null,
+    "databaseCompatible": false,
+    "recoveryTested": false,
+    "observedAt": null,
+    "evidence": []
+  }
+}

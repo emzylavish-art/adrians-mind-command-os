@@ -2,8 +2,9 @@ import { createHash, randomUUID } from "node:crypto";
 import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { localDataPath } from "../local-data.ts";
+import type { OperationSchema } from "./custom-connection.ts";
 
-export type McpTool = { name: string; description: string };
+export type McpTool = { name: string; description: string; inputSchema?: OperationSchema; annotations?: { readOnlyHint?: boolean } };
 
 export type McpPublic = {
   id: string;

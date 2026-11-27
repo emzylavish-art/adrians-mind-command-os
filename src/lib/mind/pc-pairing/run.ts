@@ -4,7 +4,7 @@ import {
   onlineAgents,
   readJob,
   type PairedAgent,
-} from "./store.ts";
+} from "./coordination.server.ts";
 
 export type PairingRunResult = {
   ok: boolean;
@@ -26,26 +26,32 @@ function sleep(ms: number) {
 export async function runOnPairedAgent(input: {
   ownerId: string;
   command: string;
+  agentId?: string;
+  cwd?: string;
   /** Server-authorized only (allowlist or consumed human approval). */
   confirm: boolean;
   timeoutMs?: number;
   pollMs?: number;
   now?: number;
 }): Promise<PairingRunResult | null> {
-  const online = onlineAgents(input.ownerId, 60_000, input.now ?? Date.now());
+  const online = await onlineAgents(input.ownerId, 60_000, input.now ?? Date.now());
   if (online.length === 0) return null;
-  const agent: PairedAgent = online[0];
-  const job = enqueueJob({
+  if (input.agentId && !online.some((agent) => agent.id === input.agentId)) return { ok: false, status: "error", text: "The selected computer is unavailable. No other computer was substituted." };
+  if (!input.agentId && online.length > 1) return { ok: false, status: "error", text: "Choose the intended computer before executing this command." };
+  const agent: PairedAgent = input.agentId ? online.find((agent) => agent.id === input.agentId)! : online[0]!;
+  if (input.cwd && agent.fileProtocol !== 2) return { ok: false, status: "error", text: "Update the selected Companion before running in an explicitly reviewed workspace. Nothing ran." };
+  const job = await enqueueJob({
     ownerId: input.ownerId,
     agentId: agent.id,
     command: input.command,
+    ...(input.cwd ? { payload: { cwd: input.cwd } } : {}),
     confirm: input.confirm,
   });
   const timeoutMs = input.timeoutMs ?? 15_000;
   const pollMs = input.pollMs ?? 50;
   const deadline = Date.now() + timeoutMs;
   while (Date.now() < deadline) {
-    const current = readJob(job.id);
+    const current = await readJob(job.id);
     if (!current) break;
     if (current.status === "done") {
       return {
@@ -65,7 +71,7 @@ export async function runOnPairedAgent(input: {
     }
     await sleep(pollMs);
   }
-  markJobTimeout(job.id);
+  await markJobTimeout(job.id);
   return {
     ok: false,
     status: "error",

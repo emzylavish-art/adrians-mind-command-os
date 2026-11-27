@@ -2,8 +2,8 @@
 /**
  * Deploy-time database migrator (node-postgres, `pg`).
  *
- * Runs during `npm run build` — on every Vercel deploy — applying pending files
- * in ../migrations to DATABASE_URL or POSTGRES_URL. Each file is applied in one transaction and
+ * Runs explicitly after candidate verification (`npm run release:prepare`), applying pending files
+ * in ../migrations to DATABASE_URL or POSTGRES_URL. The complete pass is serialized and applied in one transaction and
  * recorded in a `_migrations` table, so it runs once and is safe to re-run.
  *
  * The read is non-recursive, so the opt-in auth schema under migrations/auth/
@@ -17,6 +17,7 @@ import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
 import pg from "pg";
 import { pendingMigrations } from "./migration-plan.mjs";
+import { applyMigrationSet } from "./migration-runner.mjs";
 import { resolveDatabaseUrl, resolveMigrateDatabaseUrl, supabaseDatabaseRef } from "./database-url.mjs";
 import { supabasePostgresPoolOptions } from "../src/lib/auth/postgres-ssl.mjs";
 import { guardMindEnv } from "../src/lib/mind/isolation.ts";
@@ -25,13 +26,16 @@ import { guardMindEnv } from "../src/lib/mind/isolation.ts";
 // DATABASE_URL was inherited from the project configuration. Only the
 // production deployment is allowed to update the production schema.
 // Local invocations remain explicit and continue to work.
+const requiredForRelease = process.argv.includes("--require-database");
 if (process.env.VERCEL && process.env.VERCEL_ENV !== "production") {
+  if (requiredForRelease) throw new Error("Release migration cannot run in a Vercel preview or development environment.");
   console.log("[migrate] non-production Vercel environment — skipping database migrations.");
   process.exit(0);
 }
 
 const databaseUrl = resolveMigrateDatabaseUrl(process.env);
 if (!databaseUrl) {
+  if (requiredForRelease) throw new Error("Release migration requires a configured database target.");
   console.log(
     "[migrate] DATABASE_URL/POSTGRES_URL not set — skipping (the PGLite fallback migrates itself).",
   );
@@ -65,12 +69,14 @@ async function main() {
   let entries;
   try {
     entries = await readdir(migrationsDir);
-  } catch {
+  } catch (error) {
+    if (requiredForRelease) throw error;
     console.log("[migrate] no migrations/ directory — nothing to do.");
     return;
   }
   // An app with no schema of its own must not pay for a database connection.
   if (pendingMigrations(entries, []).length === 0) {
+    if (requiredForRelease) throw new Error("Release migration inventory is empty.");
     console.log("[migrate] no migrations — nothing to do.");
     return;
   }
@@ -78,35 +84,19 @@ async function main() {
   const pool = new pg.Pool({ ...supabasePostgresPoolOptions(databaseUrl), max: 1 });
   const client = await pool.connect();
   try {
-    await client.query(
-      "CREATE TABLE IF NOT EXISTS _migrations (name TEXT PRIMARY KEY, applied_at TIMESTAMPTZ NOT NULL DEFAULT now())",
-    );
-    const applied = (await client.query("SELECT name FROM _migrations")).rows.map(
-      (r) => r.name,
-    );
-
-    let count = 0;
-    for (const { name } of pendingMigrations(entries, applied)) {
-      const text = await readFile(join(migrationsDir, name), "utf8");
-      try {
-        await client.query("BEGIN");
-        // pg's simple-query protocol runs a whole multi-statement file at once.
-        await client.query(text);
-        await client.query("INSERT INTO _migrations (name) VALUES ($1)", [name]);
-        await client.query("COMMIT");
-      } catch (err) {
-        console.error(`[migrate] error applying ${name}`);
-        try {
-          await client.query("ROLLBACK");
-        } catch {
-          // ROLLBACK fails when the connection died — keep the original error.
-        }
-        throw err;
-      }
-      console.log(`[migrate] applied ${name}`);
-      count += 1;
+    const sources = Object.fromEntries(await Promise.all(
+      pendingMigrations(entries, []).map(async ({ name }) => [name, await readFile(join(migrationsDir, name), "utf8")]),
+    ));
+    await client.query("BEGIN");
+    try {
+      const result = await applyMigrationSet(client, sources, { postgres: true, log: console.log });
+      await client.query("COMMIT");
+      for (const name of result.applied) console.log(`[migrate] applied ${name}`);
+      console.log(result.applied.length ? `[migrate] done — ${result.applied.length} migration(s) applied.` : "[migrate] up to date.");
+    } catch (error) {
+      try { await client.query("ROLLBACK"); } catch { /* preserve the original error */ }
+      throw error;
     }
-    console.log(count ? `[migrate] done — ${count} migration(s) applied.` : "[migrate] up to date.");
   } finally {
     client.release();
     await pool.end();

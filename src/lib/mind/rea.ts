@@ -4,7 +4,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { createServerFn } from "@tanstack/react-start";
 import { authMiddleware } from "@/lib/auth/middleware";
-import { allowMindRequest } from "./limits";
+import { allowSharedMindRequest as allowMindRequest } from "./rate-limit.server";
 import { interpretDoctor, interpretInspect, REA_PACKAGE, type ReaRun } from "./rea-result";
 
 export { interpretDoctor, interpretInspect, REA_PACKAGE };
@@ -26,7 +26,7 @@ function runRea(args: string[], timeout = 90000) {
 export const reaDoctor = createServerFn({ method: "POST" })
   .middleware([authMiddleware])
   .handler(async ({ context }) => {
-    if (!allowMindRequest("rea", context.userId, 6)) return { ok: false as const, error: "Too many REA checks. Wait a minute." };
+    if (!await allowMindRequest("rea", context.userId, 6)) return { ok: false as const, error: "Too many REA checks. Wait a minute." };
     const result = await runRea(["doctor", "--format", "json"]);
     return interpretDoctor(result);
   });
@@ -37,7 +37,7 @@ export const reaInspect = createServerFn({ method: "POST" })
   .handler(async ({ data, context }) => {
     const { haltIsOn } = await import("./halt.server");
     if (await haltIsOn(context.userId)) return { ok: false as const, error: "Emergency stop is on. Inspection is blocked." };
-    if (!allowMindRequest("rea", context.userId, 6)) return { ok: false as const, error: "Too many REA checks. Wait a minute." };
+    if (!await allowMindRequest("rea", context.userId, 6)) return { ok: false as const, error: "Too many REA checks. Wait a minute." };
     const text = data.text.trim().slice(0, 40000);
     if (!text) return { ok: false as const, error: "There is no file text to inspect." };
     const dir = await mkdtemp(join(tmpdir(), "mind-rea-"));

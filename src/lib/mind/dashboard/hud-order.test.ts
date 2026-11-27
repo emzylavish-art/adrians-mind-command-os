@@ -11,8 +11,13 @@ describe("hud card order", () => {
       { id: "notion", band: "needs" as const, seq: 0 },
     ]);
     assert.deepEqual(ordered.map((item) => item.id), ["notion", "money", "weather", "charts"]);
-    assert.equal(hudDefaultOpen(0), true);
-    assert.equal(hudDefaultOpen(1), true);
+  });
+
+  it("keeps supporting cards collapsed until opened so the graph stays primary", () => {
+    assert.equal(hudDefaultOpen(0), false);
+    assert.equal(hudDefaultOpen(0, "needs"), true);
+    assert.equal(hudDefaultOpen(0, "status"), false);
+    assert.equal(hudDefaultOpen(1), false);
     assert.equal(hudDefaultOpen(2), false);
   });
 });

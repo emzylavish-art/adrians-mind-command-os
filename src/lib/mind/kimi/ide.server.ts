@@ -2,9 +2,8 @@ import { spawn } from "node:child_process";
 import { createRequire } from "node:module";
 import { existsSync, readFileSync } from "node:fs";
 import { resolve } from "node:path";
-import { getSql } from "../../db.ts";
-import { accountFilePath, machineRequired } from "./account-workspace.ts";
-import { requireUserId } from "../../auth/verify.server.ts";
+import { accountFilePath } from "./account-workspace.ts";
+import { ideExecutionCapability } from "./ide-capabilities.ts";
 import { assertSameOrigin } from "../connectors/oauth-csrf.ts";
 import { adrianHostedWorkspace } from "./hosted/acp-client.ts";
 
@@ -163,25 +162,34 @@ export async function debugSourceFile(file: string, line: number): Promise<{ ok:
   }
 }
 
-export async function handleIdeTools(request: Request): Promise<Response> {
+export async function handleIdeTools(request: Request, deps: {
+  requireUser?: (bearer?: string) => Promise<string>;
+  debug?: typeof debugSourceFile;
+  halted?: (owner: string) => Promise<boolean>;
+} = {}): Promise<Response> {
   let ownerId: string;
   try {
-    ownerId = await requireUserId(request.headers.get("authorization")?.replace(/^Bearer\s+/i, "") || undefined);
+    const requireUser = deps.requireUser ?? (await import("../../auth/verify.server.ts")).requireUserId;
+    ownerId = await requireUser(request.headers.get("authorization")?.replace(/^Bearer\s+/i, "") || undefined);
   } catch {
     return json({ ok: false, error: "Sign in is required." }, 401);
   }
+  if (request.method === "GET") return json({ ok: true, debugAvailable: ownerId === "dev-user", reason: ownerId === "dev-user" ? "Local development runtime" : "No isolated debugger runtime is configured for this account." });
   if (request.method !== "POST") return json({ ok: false, error: "Method not allowed." }, 405);
   const origin = assertSameOrigin(request);
   if (!origin.ok) return json({ ok: false, error: origin.error }, 403);
   const body = await request.json().catch(() => ({})) as { action?: unknown; path?: unknown; text?: unknown; line?: unknown; column?: unknown };
+  const capability = ideExecutionCapability(ownerId);
+  if (body.action === "capabilities") return json({ ok: true, ...capability });
+  if (body.action === "debug" && !capability.debug) return json({ ok: false, code: "debug_unavailable", error: capability.reason }, 409);
   const relativePath = typeof body.path === "string" ? body.path : "";
   if (ownerId !== "dev-user") {
-    if (body.action !== "complete") return json({ ok: false, error: machineRequired }, 409);
+    if (body.action !== "complete") return json({ ok: false, error: "Unsupported IDE action." }, 400);
     const path = accountFilePath(relativePath);
     if (!path) return json({ ok: false, error: "Choose a file inside your workspace." }, 400);
     if (typeof body.text !== "string") {
       try {
-        const [row] = await (await getSql()).query<{ text_copy: string }>("select text_copy from mind_kimi_file where user_id=$1 and path=$2", [ownerId, path]);
+        const [row] = await (await (await import("../../db.ts")).getSql()).query<{ text_copy: string }>("select text_copy from mind_kimi_file where user_id=$1 and path=$2", [ownerId, path]);
         if (!row) return json({ ok: false, error: "File was not found in your workspace." }, 404);
         body.text = row.text_copy;
       } catch { return json({ ok: false, error: "Account workspace storage is unavailable." }, 503); }
@@ -196,8 +204,10 @@ export async function handleIdeTools(request: Request): Promise<Response> {
     return json({ ok: true, completions: completeSource(relativePath, text, line, column) });
   }
   if (body.action === "debug") {
+    const halted = deps.halted ?? (await import("../halt.server.ts")).haltIsOn;
+    if (await halted(ownerId)) return json({ ok: false, error: "Emergency stop is on or unavailable. Nothing was debugged." }, 403);
     const line = typeof body.line === "number" ? body.line : 1;
-    const result = await debugSourceFile(target, line);
+    const result = await (deps.debug ?? debugSourceFile)(target, line);
     return json(result, result.ok ? 200 : 422);
   }
   return json({ ok: false, error: "Unsupported IDE action." }, 400);

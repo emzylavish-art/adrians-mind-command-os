@@ -117,26 +117,43 @@ const MAX_LOCK_BYTES = 256_000;
 /** Cap commits listed per lock — huge lists from churning bots DoS the 5s status rebuild. */
 export const MAX_LOCK_COMMITS = 64;
 
-export function readLocksDir(dir: string): LockRecord[] {
+export type LocksReadResult = {
+  records: LockRecord[];
+  outcome: "available" | "empty" | "partial" | "unavailable" | "invalid";
+  updatedAt: string | null;
+  rejected: number;
+};
+
+export function readLocksDirResult(dir: string): LocksReadResult {
   let names: string[] = [];
+  let updatedAt: string | null = null;
   try {
     names = readdirSync(dir).filter((n) => n.endsWith(".lock"));
+    updatedAt = statSync(dir).mtime.toISOString();
   } catch {
-    return [];
+    return { records: [], outcome: "unavailable", updatedAt: null, rejected: 0 };
   }
   const out: LockRecord[] = [];
-  for (const name of names) {
+  let rejected = Math.max(0, names.length - 512);
+  for (const name of names.slice(0, 512)) {
     try {
       const full = join(dir, name);
       const st = statSync(full);
-      if (st.size > MAX_LOCK_BYTES) continue; // refuse huge/malformed locks
+      if (!st.isFile() || st.size > MAX_LOCK_BYTES) { rejected += 1; continue; }
       const text = readFileSync(full, "utf8");
-      out.push(parseLockText(text, name));
+      const record = parseLockText(text, name);
+      if (!record.owner && !record.status && !record.branch) { rejected += 1; continue; }
+      out.push(record);
+      if (!updatedAt || st.mtime.toISOString() > updatedAt) updatedAt = st.mtime.toISOString();
     } catch {
-      // skip unreadable
+      rejected += 1;
     }
   }
-  return out;
+  return { records: out, outcome: rejected ? (out.length ? "partial" : "invalid") : out.length ? "available" : "empty", updatedAt, rejected };
+}
+
+export function readLocksDir(dir: string): LockRecord[] {
+  return readLocksDirResult(dir).records;
 }
 
 export function locksDirFromEnv(env: NodeJS.ProcessEnv = process.env): string {

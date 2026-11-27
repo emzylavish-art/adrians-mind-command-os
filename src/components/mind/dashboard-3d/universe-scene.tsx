@@ -78,6 +78,7 @@ const HEALTH_COLOR: Record<Health, number> = {
 type Props = {
   data: DashboardStatus;
   reducedMotion: boolean;
+  filter?: GraphFilterState;
   onSelectBot: (bot: BotNode) => void;
   onSelectNotion: (pageId: string) => void;
   onSkyView: () => void;
@@ -263,9 +264,12 @@ function signatureFromStatus(data: DashboardStatus): string {
   });
 }
 
-export function UniverseScene({ data, reducedMotion, onSelectBot, onSelectNotion, onSkyView, onUnavailable, onFlyoverChange }: Props) {
+export function UniverseScene({ data, reducedMotion: requestedReducedMotion, filter, onSelectBot, onSelectNotion, onSkyView, onUnavailable, onFlyoverChange }: Props) {
   const mountRef = useRef<HTMLDivElement | null>(null);
   const dataRef = useRef(data);
+  const preferencesRef = useRef({ reducedMotion: requestedReducedMotion, filter });
+  preferencesRef.current = { reducedMotion: requestedReducedMotion, filter };
+  const updatePreferencesRef = useRef<(() => void) | null>(null);
   const cbs = useRef({ onSelectBot, onSelectNotion, onSkyView, onFlyoverChange });
   const wakeDataRef = useRef<(() => void) | null>(null);
   dataRef.current = data;
@@ -274,10 +278,14 @@ export function UniverseScene({ data, reducedMotion, onSelectBot, onSelectNotion
   useEffect(() => {
     wakeDataRef.current?.();
   }, [motionSig]);
+  useEffect(() => {
+    updatePreferencesRef.current?.();
+  }, [requestedReducedMotion, filter, data]);
 
   useEffect(() => {
     const mount = mountRef.current;
     if (!mount) return;
+    let reducedMotion = preferencesRef.current.reducedMotion;
 
     try {
       const probe = document.createElement("canvas");
@@ -733,7 +741,9 @@ export function UniverseScene({ data, reducedMotion, onSelectBot, onSelectNotion
     let comets = createCommitComets(scene, dataRef.current.commits, { max: 6 });
     let feedGlyphs = createFeedGlyphs(scene, dataRef.current.skyFeed?.events ?? []);
     let starHealthFilter: string = "all";
-    let graphAllow: Set<string> | null = null;
+    let graphAllow: Set<string> | null = preferencesRef.current.filter
+      ? filterBotIds(dataRef.current.bots, dataRef.current.constellationEdges ?? [], preferencesRef.current.filter)
+      : null;
     let labelsOn = true;
     const pulseOut = { scale: 1, glow: 2, emissive: 0.7 };
     const driftOut = { x: 0, y: 0, z: 0 };
@@ -748,7 +758,13 @@ export function UniverseScene({ data, reducedMotion, onSelectBot, onSelectNotion
 
     const rebuildPostfxBundle = () => {
       // Light #13: rebuild passes into the live composer after WebGL restore
+      exposureRide = createExposureRide({ tone: "idle", reducedMotion });
+      exposureRide.apply(renderer);
       if (!composer || reducedMotion) {
+        if (composer) composer.passes.length = 0;
+        bloomHandle = null;
+        gradeHandle = null;
+        raysHandle = null;
         return { bloom: null, grade: null, godRays: null, exposure: exposureRide };
       }
       const w = Math.max(1, mount.clientWidth || width);
@@ -793,12 +809,11 @@ export function UniverseScene({ data, reducedMotion, onSelectBot, onSelectNotion
       bloomHandle = nextBloom;
       gradeHandle = nextGrade;
       raysHandle = nextRays;
-      exposureRide = createExposureRide({ tone: "idle", reducedMotion });
-      exposureRide.apply(renderer);
       return { bloom: nextBloom, grade: nextGrade, godRays: nextRays, exposure: exposureRide };
     };
 
-    if (!reducedMotion) {
+    const ensureComposer = () => {
+      if (composer) return;
       try {
         const depthTex = new THREE.DepthTexture(Math.max(1, width), Math.max(1, height));
         const rt = new THREE.WebGLRenderTarget(Math.max(1, width), Math.max(1, height), {
@@ -808,6 +823,9 @@ export function UniverseScene({ data, reducedMotion, onSelectBot, onSelectNotion
       } catch {
         composer = new EffectComposer(renderer);
       }
+    };
+    if (!reducedMotion) {
+      ensureComposer();
       rebuildPostfxBundle();
     }
 
@@ -877,6 +895,18 @@ export function UniverseScene({ data, reducedMotion, onSelectBot, onSelectNotion
       if (raf === 0) raf = requestAnimationFrame(tick);
     };
     wakeDataRef.current = () => arm("data");
+    updatePreferencesRef.current = () => {
+      const next = preferencesRef.current;
+      if (next.reducedMotion !== reducedMotion) {
+        reducedMotion = next.reducedMotion;
+        if (!reducedMotion) ensureComposer();
+        if (!postfxRecovery.lost && !kit.contextLost) postfxRecovery.notifyRestored();
+      }
+      graphAllow = next.filter
+        ? filterBotIds(dataRef.current.bots, dataRef.current.constellationEdges ?? [], next.filter)
+        : null;
+      arm("render");
+    };
 
     function setFly(next: FlyState, fly2camera: boolean) {
       fly = next;
@@ -1128,6 +1158,7 @@ export function UniverseScene({ data, reducedMotion, onSelectBot, onSelectNotion
     const detachContext = attachPainterlyContextHandlers(renderer.domElement, kit, () => {
       layoutSig = ""; // force GPU resources to re-upload after restore
       syncCity();
+      arm("data"); // A parked reduced-motion scene has no pending frame to wake itself.
     });
 
     let last = performance.now();
@@ -1341,6 +1372,7 @@ export function UniverseScene({ data, reducedMotion, onSelectBot, onSelectNotion
 
     return () => {
       wakeDataRef.current = null;
+      updatePreferencesRef.current = null;
       window.removeEventListener("resize", onResize);
       document.removeEventListener("dash3d-focus-bot", onFocusBot);
       document.removeEventListener("dash3d-layers", onLayers);
@@ -1372,7 +1404,7 @@ export function UniverseScene({ data, reducedMotion, onSelectBot, onSelectNotion
       if (renderer.domElement.parentElement === mount) mount.removeChild(renderer.domElement);
       if (labelRenderer.domElement.parentElement === mount) mount.removeChild(labelRenderer.domElement);
     };
-  }, [reducedMotion, onUnavailable]);
+  }, [onUnavailable]);
 
   return <div className="dash3d-canvas-wrap" ref={mountRef} />;
 }

@@ -12,6 +12,9 @@ import { GROK_IMAGINE_MODEL, resolveImagineModel } from "./media/imagine-shared.
 const root = join(dirname(fileURLToPath(import.meta.url)), "../../..");
 const researchSrc = readFileSync(join(root, "src/lib/mind/research.ts"), "utf8");
 const commandApp = readFileSync(join(root, "src/components/mind/command-app.tsx"), "utf8");
+const chatPane = readFileSync(join(root, "src/components/mind/chat-pane.tsx"), "utf8");
+const chatControls = readFileSync(join(root, "src/components/mind/chat-controls.tsx"), "utf8");
+const commandSurface = [commandApp, chatPane, chatControls].join("\n");
 const imagineSrc = readFileSync(join(root, "src/lib/mind/media/imagine.ts"), "utf8");
 const hardenPath = join(root, "src/lib/mind/media/harden.ts");
 
@@ -85,7 +88,7 @@ describe("integration-security-c16", () => {
       "mcpToolFailure",
       "ServiceBoard",
     ]) {
-      assert.match(commandApp, new RegExp(needle.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")));
+      assert.match(commandSurface, new RegExp(needle.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")));
     }
     assert.match(readFileSync(join(root, "src/routes/explore.tsx"), "utf8"), /PersonaDirectoryView/);
   });

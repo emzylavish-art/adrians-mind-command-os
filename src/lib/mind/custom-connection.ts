@@ -3,7 +3,9 @@
  * Bearer tokens are sealed with CONNECTOR_TOKEN_SECRET before a database write.
  * model.generate is refused. Gmail OAuth is not started here.
  */
-import { randomUUID } from "node:crypto";
+import { createHash, randomUUID } from "node:crypto";
+import { haltIsOn } from "./halt.server.ts";
+import { connectionRevision, toolDefinitionFingerprint } from "./mcp/approval-snapshot.ts";
 import {
   isLocalHostname,
   isPrivateAddressLiteral,
@@ -14,12 +16,23 @@ import {
 import { loadRegistry, saveRegistry, type RegistryDb, type RegistryRecord } from "./mcp/registry-store.ts";
 import type { McpCallRpc, McpCallTransport } from "./mcp/call-contract.ts";
 import { safeReason, mcpRpcFromResult } from "./mcp/call-contract.ts";
+import { readCappedBody } from "./mcp/http-body.ts";
 
 export type ArgType = "string" | "boolean" | "integer";
 
+export type OperationProperty = {
+  type: ArgType;
+  description?: string;
+  enum?: (string | number | boolean)[];
+  minimum?: number;
+  maximum?: number;
+  minLength?: number;
+  maxLength?: number;
+  pattern?: string;
+};
 export type OperationSchema = {
   type: "object";
-  properties: Record<string, { type: ArgType; description?: string }>;
+  properties: Record<string, OperationProperty>;
   required: string[];
 };
 
@@ -28,11 +41,17 @@ export type PublicOperation = {
   description: string;
   inputSchema: OperationSchema | null;
   compatible: boolean;
+  /** Full advertised definition, including constraints not represented in the form. */
+  definitionFingerprint?: string;
+  annotations?: { readOnlyHint?: boolean };
+  revision?: string;
+  definitionRevision?: string;
 };
 
 export type ConnectionState = "unchecked" | "ready" | "unauthorized" | "missing_config" | "incompatible" | "failed";
 
 export type PublicConnection = {
+  revision?: string;
   enabled?: boolean;
   id: string;
   label: string;
@@ -44,9 +63,11 @@ export type PublicConnection = {
   state: ConnectionState;
   operations: PublicOperation[];
   error: string;
+  discoveryStatus?: CallStatus;
+  capabilityRevision?: string;
 };
 
-export type CallStatus = "ok" | "error" | "unauthorized" | "missing_config" | "incompatible" | "timeout";
+export type CallStatus = "ok" | "error" | "unauthorized" | "missing_config" | "incompatible" | "definition_changed" | "timeout";
 
 export type ConnectionDb = RegistryDb;
 
@@ -69,8 +90,10 @@ function toPublic(server: RegistryRecord): PublicConnection | null {
   if (!server.url || server.kind === "builtin" || server.kind === "command") return null;
   const kind = server.protocol === "http" ? "http" : "mcp";
   const operations = Array.isArray(server.operations) ? server.operations as PublicOperation[] : [];
+  const needsDiscovery = kind === "mcp" && operations.some((operation) => operation.compatible && !operation.definitionFingerprint);
   return {
     enabled: server.enabled,
+    revision: connectionRevision(server),
     id: server.id,
     label: server.label,
     kind,
@@ -78,9 +101,9 @@ function toPublic(server: RegistryRecord): PublicConnection | null {
     method: kind === "http" ? (server.httpMethod === "POST" ? "POST" : "GET") : "MCP",
     auth: server.token || server.tokenEnc ? "bearer" : "none",
     hasToken: Boolean(server.token || server.tokenEnc),
-    state: (server.state as ConnectionState) || "unchecked",
+    state: needsDiscovery ? "unchecked" : (server.state as ConnectionState) || "unchecked",
     operations,
-    error: server.secretUnreadable ? "The saved credential cannot be decrypted. Nothing was called." : server.error ?? "",
+    error: server.secretUnreadable ? "The saved credential cannot be decrypted. Nothing was called." : needsDiscovery ? "Refresh tools to review the current full definitions before calling this connection." : server.error ?? "",
   };
 }
 
@@ -108,48 +131,94 @@ export function endpointProblem(value: string): { ok: true; url: string; host: s
   return { ok: true, url: parsed.toString(), host: parsed.host };
 }
 
+function canonical(value: unknown): string {
+  if (Array.isArray(value)) return `[${value.map(canonical).join(",")}]`;
+  if (value && typeof value === "object") return `{${Object.entries(value as Record<string, unknown>).filter(([, value]) => value !== undefined).sort(([a], [b]) => a.localeCompare(b)).map(([key, value]) => `${JSON.stringify(key)}:${canonical((key === "required" || key === "enum") && Array.isArray(value) ? [...value].sort((a, b) => JSON.stringify(a).localeCompare(JSON.stringify(b))) : value)}`).join(",")}}`;
+  return JSON.stringify(value) ?? "null";
+}
+
+export function connectionCapabilityRevision(row: Pick<RegistryRecord, "id" | "url" | "enabled" | "operations">): string {
+  return createHash("sha256").update(JSON.stringify(canonical([row.id, row.url, row.enabled, row.operations ?? []]))).digest("hex");
+}
+
+export function operationRevision(operation: Pick<PublicOperation, "name" | "description" | "inputSchema">): string {
+  return createHash("sha256").update(canonical({ name: operation.name, description: operation.description, inputSchema: operation.inputSchema })).digest("hex");
+}
+
+/** Patterns outside this deliberately bounded, single-atom subset are incompatible. */
+function supportedPattern(pattern: string): boolean {
+  return pattern.length <= 160 && /^\^?(?:\[(?:\\.|[^\]\\])+\]|[A-Za-z0-9 _-])(?:[+*?]|\{[0-9]{1,3}(?:,[0-9]{0,3})?\})?\$?$/.test(pattern);
+}
+
 export function readOperationSchema(input: unknown): OperationSchema | null {
   if (!input || typeof input !== "object" || Array.isArray(input)) return null;
   const schema = input as Record<string, unknown>;
   if (schema.type !== "object" || !schema.properties || typeof schema.properties !== "object" || Array.isArray(schema.properties)) return null;
-  const properties: OperationSchema["properties"] = {};
+  const rootKeys = new Set(["type", "properties", "required", "additionalProperties", "description", "title", "$schema", "$id"]);
+  if (Object.keys(schema).some((key) => !rootKeys.has(key)) || (schema.additionalProperties !== undefined && typeof schema.additionalProperties !== "boolean")) return null;
+  const properties: OperationSchema["properties"] = Object.create(null);
   const fields = Object.entries(schema.properties);
   if (fields.length > 12) return null;
+  const keys = new Set(["type", "description", "title", "default", "examples", "enum", "minimum", "maximum", "minLength", "maxLength", "pattern"]);
   for (const [key, raw] of fields) {
-    if (!/^[A-Za-z_][A-Za-z0-9_]{0,40}$/.test(key) || !raw || typeof raw !== "object") return null;
-    const type = (raw as { type?: unknown }).type;
+    if (!/^[A-Za-z_][A-Za-z0-9_]{0,40}$/.test(key) || ["__proto__", "constructor", "prototype"].includes(key) || !raw || typeof raw !== "object" || Array.isArray(raw)) return null;
+    const prop = raw as Record<string, unknown>;
+    if (Object.keys(prop).some((key) => !keys.has(key))) return null;
+    const type = prop.type;
     if (type !== "string" && type !== "boolean" && type !== "integer") return null;
-    const description = typeof (raw as { description?: unknown }).description === "string" ? (raw as { description: string }).description.slice(0, 160) : undefined;
-    properties[key] = description ? { type, description } : { type };
+    const spec: OperationProperty = { type };
+    if (typeof prop.description === "string") spec.description = prop.description.slice(0, 160);
+    if (prop.enum !== undefined) {
+      if (!Array.isArray(prop.enum) || !prop.enum.length || prop.enum.length > 50 || prop.enum.some((value) => type === "integer" ? !Number.isSafeInteger(value) : typeof value !== type || (typeof value === "string" && value.length > 500))) return null;
+      spec.enum = prop.enum as (string | number | boolean)[];
+    }
+    for (const bound of ["minimum", "maximum", "minLength", "maxLength"] as const) {
+      if (prop[bound] === undefined) continue;
+      const value = prop[bound];
+      if (typeof value !== "number" || !Number.isFinite(value)) return null;
+      if (bound === "minimum" || bound === "maximum") { if (type !== "integer") return null; }
+      else if (type !== "string" || !Number.isSafeInteger(value) || value < 0) return null;
+      spec[bound] = value;
+    }
+    if ((spec.minimum !== undefined && spec.maximum !== undefined && spec.minimum > spec.maximum) || (spec.minLength !== undefined && spec.maxLength !== undefined && spec.minLength > spec.maxLength)) return null;
+    if (prop.pattern !== undefined) {
+      if (type !== "string" || typeof prop.pattern !== "string" || !supportedPattern(prop.pattern)) return null;
+      try { new RegExp(prop.pattern, "u"); } catch { return null; }
+      spec.pattern = prop.pattern;
+    }
+    properties[key] = spec;
   }
-  const required = Array.isArray(schema.required)
-    ? schema.required.filter((item): item is string => typeof item === "string" && item in properties)
-    : [];
+  if (schema.required !== undefined && (!Array.isArray(schema.required) || schema.required.some((item) => typeof item !== "string" || !Object.hasOwn(properties, item)))) return null;
+  const required = Array.isArray(schema.required) ? [...new Set(schema.required as string[])].sort() : [];
   return { type: "object", properties, required };
 }
 
 export function validateArgs(schema: OperationSchema, args: Record<string, unknown>): { ok: true; args: Record<string, string | number | boolean> } | { ok: false; error: string } {
-  const unexpected = Object.keys(args).filter((key) => !(key in schema.properties));
+  const unexpected = Object.keys(args).filter((key) => !Object.hasOwn(schema.properties, key));
   if (unexpected.length) return { ok: false, error: `Unexpected argument ${unexpected[0]}. Nothing was called.` };
   const out: Record<string, string | number | boolean> = {};
   for (const [key, spec] of Object.entries(schema.properties)) {
     const value = args[key];
-    if (value == null || value === "") {
+    const fail = (detail: string) => ({ ok: false as const, error: `${key} ${detail}. Nothing was called.` });
+    if (value == null) {
       if (schema.required.includes(key)) return { ok: false, error: `Missing ${key}. Nothing was called.` };
       continue;
     }
     if (spec.type === "string") {
-      if (typeof value !== "string") return { ok: false, error: `${key} must be a string. Nothing was called.` };
-      if (value.length > 500) return { ok: false, error: `${key} exceeds 500 characters. Nothing was called.` };
-      out[key] = value;
+      if (typeof value !== "string") return fail("must be a string");
+      if ([...value].length > 500) return fail("exceeds 500 characters");
+      if (spec.minLength !== undefined && [...value].length < spec.minLength) return fail(`needs at least ${spec.minLength} characters`);
+      if (spec.maxLength !== undefined && [...value].length > spec.maxLength) return fail(`exceeds ${spec.maxLength} characters`);
+      if (spec.pattern && !new RegExp(spec.pattern, "u").test(value)) return fail("does not match the advertised pattern");
     } else if (spec.type === "boolean") {
-      if (typeof value !== "boolean") return { ok: false, error: `${key} must be boolean. Nothing was called.` };
-      out[key] = value;
-    } else if (!Number.isInteger(value)) {
-      return { ok: false, error: `${key} must be an integer. Nothing was called.` };
+      if (typeof value !== "boolean") return fail("must be boolean");
     } else {
-      out[key] = value as number;
+      if (!Number.isSafeInteger(value)) return fail("must be an integer within the supported range");
+      if (spec.minimum !== undefined && (value as number) < spec.minimum) return fail(`must be at least ${spec.minimum}`);
+      if (spec.maximum !== undefined && (value as number) > spec.maximum) return fail(`must be at most ${spec.maximum}`);
     }
+    if (spec.enum && !spec.enum.includes(value as string | number | boolean)) return fail("must be one of the advertised choices");
+    out[key] = value as string | number | boolean;
   }
   return { ok: true, args: out };
 }
@@ -196,9 +265,13 @@ async function send(url: string, init: RequestInit, deps: { fetch?: FetchLike; l
     if (response.status === 401 || response.status === 403) return fail("unauthorized", `The server returned ${response.status}. Nothing was accepted.`, response.status);
     if (response.status >= 300 && response.status < 400) return fail("error", "Redirects are not followed. Nothing was called.", response.status);
     if (!response.ok) return fail("error", `The server returned ${response.status}. Nothing was called.`, response.status);
-    const text = redact(await response.text(), token);
+    const body = await readCappedBody(response, maxBytes);
     controller.signal.throwIfAborted();
-    if (Buffer.byteLength(text) > maxBytes) return fail("error", "The response was larger than the limit and was dropped. Nothing was retried.", response.status);
+    if (!body.ok) {
+      controller.abort();
+      return fail("error", `The response was larger than ${maxBytes} bytes and was dropped. Nothing was retried.`, response.status);
+    }
+    const text = redact(body.text, token);
     return { ok: true as const, status: response.status, text, sessionId: response.headers.get("mcp-session-id") };
   };
   try {
@@ -236,15 +309,18 @@ function initialized(text: string): boolean {
   return !envelope.error && Boolean(envelope.result) && typeof envelope.result === "object" && !Array.isArray(envelope.result);
 }
 
-function operationFromTool(tool: { name?: unknown; description?: unknown; inputSchema?: unknown }): PublicOperation | null {
+function operationFromTool(tool: { name?: unknown; description?: unknown; inputSchema?: unknown; annotations?: { readOnlyHint?: unknown } }): PublicOperation | null {
   if (typeof tool.name !== "string" || !tool.name.trim() || tool.name.toLowerCase() === "model.generate") return null;
   if (tool.name.length > 80) return null;
   const schema = readOperationSchema(tool.inputSchema);
   return {
     name: tool.name,
+    definitionFingerprint: toolDefinitionFingerprint(tool),
     description: typeof tool.description === "string" ? tool.description.slice(0, 180) : "",
     inputSchema: schema,
+    ...(typeof tool.annotations?.readOnlyHint === "boolean" ? { annotations: { readOnlyHint: tool.annotations.readOnlyHint } } : {}),
     compatible: Boolean(schema),
+    revision: createHash("sha256").update(canonical(tool)).digest("hex"),
   };
 }
 
@@ -300,23 +376,31 @@ export async function saveCustomConnection(db: ConnectionDb | null, userId: stri
   return { ok: true, connection: listed.find((item) => item.id === row.id) ?? toPublic({ ...row, token: undefined, tokenEnc: token ? "sealed" : undefined })! };
 }
 
-async function refreshMcp(db: ConnectionDb | null, userId: string, id: string, deps: { fetch?: FetchLike; lookup?: DnsLookupFn }): Promise<PublicConnection> {
+async function publishDiscovery(db: ConnectionDb | null, owner: string, previous: RegistryRecord, next: RegistryRecord): Promise<boolean> {
+  if (db) {
+    const changed = await db.query("UPDATE mind_mcp_registry SET record = record || $3::jsonb WHERE user_id=$1 AND id=$2 AND record->>'url'=$4 AND record->>'tokenEnc' IS NOT DISTINCT FROM $5 AND record->'operations' IS NOT DISTINCT FROM $6::jsonb AND record->>'state' IS NOT DISTINCT FROM $7 AND record->>'enabled'='true' AND record->>'deleted' IS DISTINCT FROM 'true' RETURNING id",
+      [owner, previous.id, JSON.stringify({ operations: next.operations, state: next.state, error: next.error }), previous.url, previous.tokenEnc ?? null, previous.operations === undefined ? null : JSON.stringify(previous.operations), previous.state ?? null]);
+    return changed.length === 1;
+  }
+  const latest = (await loadRegistry(owner, db)).servers.find(item => item.id === previous.id);
+  if (!latest?.enabled || connectionRevision(latest) !== connectionRevision(previous)) return false;
+  return (await writeRow(db, owner, { ...latest, operations: next.operations, state: next.state, error: next.error })).ok;
+}
+
+export async function refreshMcp(db: ConnectionDb | null, userId: string, id: string, deps: { fetch?: FetchLike; lookup?: DnsLookupFn }): Promise<PublicConnection> {
   const loaded = await loadRegistry(userId, db);
   const row = loaded.servers.find((item) => item.id === id);
   if (!row?.url) return { id, label: "", kind: "mcp", host: "", method: "MCP", auth: "none", hasToken: false, state: "failed", operations: [], error: "That connection is not saved." };
-  const fail = async (state: ConnectionState, error: string) => {
-    row.state = state;
-    row.operations = [];
-    row.error = error;
-    await writeRow(db, userId, row);
-    return toPublic(row)!;
-  };
+  if (!row.enabled) return { ...toPublic(row)!, error: "This connection is disabled. No tools were refreshed." };
+  const publish = async (next: RegistryRecord, discoveryStatus?: CallStatus) => await publishDiscovery(db, userId, row, next) ? { ...toPublic(next)!, ...(discoveryStatus ? { discoveryStatus } : {}) }
+    : { ...toPublic(row)!, state: "failed" as const, operations: [], error: "The connection changed during discovery. Refresh its current state." };
+  const fail = (state: ConnectionState, error: string, status?: CallStatus) => publish({ ...row, state, error }, status);
   const opened = await send(row.url, {
     method: "POST",
     headers: { "content-type": "application/json", accept: "application/json, text/event-stream", ...(row.token ? { authorization: `Bearer ${row.token}` } : {}) },
     body: JSON.stringify({ jsonrpc: "2.0", id: 1, method: "initialize", params: { protocolVersion: "2024-11-05", capabilities: {}, clientInfo: { name: "adrians-mind", version: "1" } } }),
   }, deps, row.token ?? "");
-  if (!opened.ok) return fail(opened.status === "unauthorized" ? "unauthorized" : "failed", opened.error);
+  if (!opened.ok) return fail(opened.status === "unauthorized" ? "unauthorized" : "failed", opened.error, opened.status);
   if (!initialized(opened.text) && !opened.sessionId) return fail("failed", "The MCP initialize handshake failed. The connection is not connected.");
   const meta = rpcEnvelope(opened.text).result;
   const version = meta && typeof meta === "object" && typeof (meta as { protocolVersion?: unknown }).protocolVersion === "string"
@@ -332,7 +416,7 @@ async function refreshMcp(db: ConnectionDb | null, userId: string, id: string, d
       headers: { "content-type": "application/json", ...protocolHeaders, ...(row.token ? { authorization: `Bearer ${row.token}` } : {}) },
       body: JSON.stringify({ jsonrpc: "2.0", method: "notifications/initialized" }),
     }, deps, row.token ?? "");
-    if (!notified.ok) return fail("failed", "The MCP initialized notification was not accepted.");
+    if (!notified.ok) return fail("failed", notified.error, notified.status);
   }
   const operations: PublicOperation[] = [];
   const cursors = new Set<string>();
@@ -343,7 +427,7 @@ async function refreshMcp(db: ConnectionDb | null, userId: string, id: string, d
       headers: { "content-type": "application/json", accept: "application/json, text/event-stream", ...protocolHeaders, ...(row.token ? { authorization: `Bearer ${row.token}` } : {}) },
       body: JSON.stringify({ jsonrpc: "2.0", id: 2 + cursors.size, method: "tools/list", params: cursor ? { cursor } : {} }),
     }, deps, row.token ?? "");
-    if (!listed.ok) return fail(listed.status === "unauthorized" ? "unauthorized" : "failed", listed.error);
+    if (!listed.ok) return fail(listed.status === "unauthorized" ? "unauthorized" : "failed", listed.error, listed.status);
     const data = rpcEnvelope(listed.text).result as { tools?: Parameters<typeof operationFromTool>[0][]; nextCursor?: unknown } | undefined;
     if (!Array.isArray(data?.tools)) return fail("failed", "Tool discovery returned an unreadable page.");
     operations.push(...data.tools.map(operationFromTool).filter((item): item is PublicOperation => Boolean(item)));
@@ -351,11 +435,8 @@ async function refreshMcp(db: ConnectionDb | null, userId: string, id: string, d
     if (operations.length > 256 || (cursor && (cursors.has(cursor) || cursors.size >= 15))) return fail("failed", "Tool discovery was incomplete. Check the server and test again.");
     if (cursor) cursors.add(cursor);
   } while (cursor);
-  row.operations = operations;
-  row.state = operations.some((item) => item.compatible) ? "ready" : "incompatible";
-  row.error = row.state === "incompatible" ? "No tool advertised an object argument schema. A generic text argument was not assumed." : "";
-  await writeRow(db, userId, row);
-  return toPublic(row)!;
+  const state = operations.some(item => item.compatible) ? "ready" : "incompatible";
+  return publish({ ...row, operations, state, error: state === "incompatible" ? "No tool has a supported argument schema. Nothing was called." : "" });
 }
 
 export async function callCustomConnection(input: {
@@ -365,6 +446,9 @@ export async function callCustomConnection(input: {
   operation: string;
   args?: Record<string, unknown>;
   confirmed?: boolean;
+  expectedRevision?: string;
+  reviewedRevision?: string;
+  isHalted?: (userId: string) => boolean | Promise<boolean>;
   fetch?: FetchLike;
   lookup?: DnsLookupFn;
   timeoutMs?: number;
@@ -376,10 +460,21 @@ export async function callCustomConnection(input: {
   const connection = row ? toPublic(row) : null;
   if (!row || !connection) return { ok: false, status: "error", text: "That connection is not saved. Nothing was called.", connection: null, transport: null, rpc: null };
   if (!row.enabled) return { ok: false, status: "error", text: "This connection is disabled.", connection, transport: null, rpc: null };
+  const revision = connectionRevision(row);
+  const stale = () => ({ ok: false, status: "incompatible" as const, text: "The connection or tool definition changed. Review the current connection and approve again. Nothing was called.", connection, transport: null, rpc: null });
+  if (input.expectedRevision && input.expectedRevision !== revision) return stale();
+  async function stillReviewed() {
+    try {
+      const latest = (await loadRegistry(input.userId, input.db)).servers.find((item) => item.id === input.id);
+      return Boolean(latest?.enabled && connectionRevision(latest) === revision && !(input.isHalted && await input.isHalted(input.userId)));
+    } catch { return false; }
+  }
+
   if (input.operation.toLowerCase() === "model.generate") {
     return { ok: false, status: "incompatible", text: "model.generate is not a connectivity check. Nothing was called.", connection, transport: null, rpc: null };
   }
   const operation = connection.operations.find((item) => item.name === input.operation);
+  if (input.reviewedRevision && input.reviewedRevision !== operation?.revision) return stale();
   if (!operation?.compatible || !operation.inputSchema) {
     return { ok: false, status: "incompatible", text: "This operation has no compatible argument schema. Nothing was called.", connection, transport: null, rpc: null };
   }
@@ -411,6 +506,7 @@ export async function callCustomConnection(input: {
     return { ok: false, status: response.status, text: response.error, connection, transport: { ok: false, status: response.httpStatus, ms: Date.now() - started }, rpc: null };
   }
   if (connection.kind === "http" && connection.method === "GET") {
+    if (!await stillReviewed()) return stale();
     const url = new URL(row.url ?? "");
     for (const [key, value] of Object.entries(checked.args)) url.searchParams.set(key, String(value));
     const sent = await send(url.toString(), { method: "GET", headers }, input, token);
@@ -419,6 +515,7 @@ export async function callCustomConnection(input: {
     return { ok: true, status: "ok", text: sent.text.slice(0, 8000), connection, transport: { ok: true, status: sent.status, ms: Date.now() - started }, rpc: null };
   }
   if (connection.kind === "http") {
+    if (!await stillReviewed()) return stale();
     const sent = await send(row.url ?? "", { method: "POST", headers: { ...headers, "content-type": "application/json" }, body: JSON.stringify(checked.args) }, input, token);
     if (!sent.ok) return reportTransportFailure(sent);
     await recordAccess("ready", "");
@@ -443,6 +540,42 @@ export async function callCustomConnection(input: {
     }, input, token);
     if (!ready.ok) return reportTransportFailure(ready);
   }
+  // Recheck the advertised definition in this exact session before a consequential call.
+  const cursors = new Set<string>();
+  let cursor: string | undefined;
+  const refreshed: PublicOperation[] = [];
+  let currentOperation: PublicOperation | null = null;
+  do {
+    const listed = await send(row.url ?? "", {
+      method: "POST", headers: { ...headers, "content-type": "application/json", accept: "application/json, text/event-stream", ...protocolHeaders },
+      body: JSON.stringify({ jsonrpc: "2.0", id: 10 + cursors.size, method: "tools/list", params: cursor ? { cursor } : {} }),
+    }, input, token);
+    if (!listed.ok) return reportTransportFailure(listed);
+    const catalogue = rpcEnvelope(listed.text).result as { tools?: Parameters<typeof operationFromTool>[0][]; nextCursor?: unknown } | undefined;
+    if (!Array.isArray(catalogue?.tools)) return stale();
+    for (const tool of catalogue.tools) {
+      const candidate = operationFromTool(tool);
+      if (candidate) refreshed.push(candidate);
+      if (refreshed.length > 256) return stale();
+      if (candidate?.name === operation.name) {
+        if (currentOperation) return stale(); // ambiguous duplicate names are not executable
+        currentOperation = candidate;
+      }
+    }
+    cursor = typeof catalogue.nextCursor === "string" ? catalogue.nextCursor : undefined;
+    if (cursor && (cursors.has(cursor) || cursors.size >= 15)) return stale();
+    if (cursor) cursors.add(cursor);
+  } while (cursor);
+  // Legacy catalogues have no full-definition fingerprint and need rediscovery first.
+  if (!operation.definitionFingerprint || currentOperation?.definitionFingerprint !== operation.definitionFingerprint) {
+    const next = { ...row, operations: refreshed, state: refreshed.some(item => item.compatible) ? "ready" : "incompatible", error: "" };
+    const published = await publishDiscovery(input.db, input.userId, row, next);
+    return { ...stale(), status: "definition_changed", connection: published ? toPublic(next) : null };
+  }
+  try {
+    if (await (input.isHalted ?? haltIsOn)(input.userId)) return { ...stale(), status: "error", text: "Emergency stop is on. No MCP tool was called." };
+  } catch { return { ...stale(), status: "error", text: "Emergency stop could not be verified. No MCP tool was called." }; }
+  if (!await stillReviewed()) return stale();
   const called = await send(row.url ?? "", {
     method: "POST",
     headers: { ...headers, "content-type": "application/json", accept: "application/json, text/event-stream", ...protocolHeaders },

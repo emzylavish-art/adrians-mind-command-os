@@ -26,6 +26,7 @@ export type ProjectBuilding = {
 };
 
 export type AgentStat = {
+  basis?: "development";
   botId: string;
   name: string;
   runs: number;
@@ -186,6 +187,7 @@ export function buildProjectsDashboard(status: Omit<DashboardStatus, "projects" 
     return {
       botId: b.id,
       name: b.name,
+      basis: "development",
       runs: runLabels || (b.lock ? 1 : 0),
       // success = lock-reported commits on a released lock (or 1 released run with none listed)
       success: released ? Math.max(1, runLabels) : 0,

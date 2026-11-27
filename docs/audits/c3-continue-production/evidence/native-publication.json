@@ -1,0 +1,18 @@
+{
+  "branch": "audit/continue-production-c3-native-20261125-659f",
+  "base_sha": "18d5b9364e6bdcfec028eeccf56fe596946ed8ce",
+  "head_sha": "bdd0c0204955b5446a5d0048d28c131969390bcd",
+  "tree_sha": "206df7d8d3d887a87d26dfcf34c3d2810b3655b4",
+  "tree_matches_tested_local_commit": true,
+  "draft_pr": "https://github.com/emzylavish-art/adrians-mind-command-os/pull/65",
+  "remote_branch_verified_with_git_ls_remote": true,
+  "github_workflow": {
+    "name": "Adrian's Mind production verification",
+    "run_id": 45752665011,
+    "status": "completed",
+    "conclusion": "success",
+    "url": "https://github.com/emzylavish-art/adrians-mind-command-os/actions/runs/45752665011"
+  },
+  "merged": false,
+  "physical_windows_or_mobile_verification": false
+}

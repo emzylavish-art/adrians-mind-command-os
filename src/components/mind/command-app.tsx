@@ -1,11 +1,77 @@
-import { lazy, Suspense, useEffect, useLayoutEffect, useMemo, useRef, useState, type KeyboardEvent as ReactKeyboardEvent, type MouseEvent as ReactMouseEvent, type ReactNode, useSyncExternalStore } from "react";
-import { Link, useRouter } from "@tanstack/react-router";
+import { failureEnvelopeFromAction, type FailureDetails } from "@/lib/mind/failure-envelope";
+import { memorySendRevision, checkMemorySendRevision } from "@/lib/mind/memory-send-policy";
+import type { StoredSelection } from "@/lib/mind/logic-routes";
+import { archiveReview, packMemoryOnly, unpackMemoryOnly, quarantineImportedMemory, resolveImportedMemory, unreviewedMemoryScopeIds } from "@/lib/mind/archive-review";
+import { applyExecutionUsage } from "@/lib/mind/execution-usage";
+import { readVoicePipeline, writeVoicePipeline, speakWithBrowser, type VoicePipelinePreferences } from "@/lib/mind/voice/stage-routing";
+import { currentMemoryContext } from "@/lib/mind/context-permission";
+import { checkpointReply, completedHistory } from "@/lib/mind/partial-reply";
+import { ResearchEvidence } from "@/components/mind/research-evidence";
+import { stageCodeHandoff } from "@/lib/mind/code-handoff";
+import type { TurnErrorCode } from "@/lib/mind/turn-error";
+import { ChatPane } from "./chat-pane";
+import type { ChatReadingPositions } from "./chat-pane";
+import { BrowserDictationControl, VoiceModeButton, ComposerEffortControl, ProviderPicker } from "./chat-controls";
+import { stamp, PRODUCT_LOGO } from "./chat-presentation";
+import { useExclusiveMenus } from "@/lib/mind/use-exclusive-menus";
+import { useViewScrollPosition } from "@/lib/mind/use-view-scroll-position";
+import { ResourceState } from "./resource-state";
+import { GeneratedArtifactWorkspace } from "@/components/mind/generated-artifact-workspace";
+import { saveGeneratedArtifact } from "@/lib/mind/generated-artifacts";
+import { accountImageStore } from "@/lib/mind/media/blob-store";
+import { retrieveProjectPassages, MAX_DOCUMENT_INPUT_BYTES, MAX_DOCUMENT_TEXT_CHARS, MAX_LIBRARY_FILES } from "@/lib/mind/knowledge";
+import { effectiveContextPolicy, freshContextPolicy, contextDisclosure } from "@/lib/mind/memory/context-policy";
+import { memoryPolicyRevision, validateMemoryDispatch } from "@/lib/mind/memory/dispatch-policy";
+import { DataRetentionCenter } from "@/components/mind/data-retention-center";
+import { loadMindCopy, readExecutionControl } from "@/lib/mind/server";
+import { MediaRecoveryPanel } from "@/components/mind/media/media-recovery-panel";
+import { beginRecoverableVideo, pollRecoverableVideo } from "@/lib/mind/media/video-recovery";
+import { loadVideoSettings } from "@/lib/mind/media/video-settings";
+import type { VideoJob } from "@/lib/mind/media/video-jobs";
+import { resolveEditableImage, imageEditLineage, type EditableImage } from "@/lib/mind/media/image-reference";
+import { loadImagePreparationQuality } from "@/lib/mind/media/image-metadata";
+import { accountSkillCatalog, collectAccountSkillApplications } from "@/lib/mind/skill-activation";
+import { retrieveAccountKnowledge, type KnowledgePassage } from "@/lib/mind/knowledge-index";
+import { KnowledgeCollectionPanel } from "@/components/mind/knowledge-collection-panel";
+import { ChatCheckpointEditor } from "@/components/mind/chat-checkpoint-editor";
+import { AccessibilitySettings } from "@/components/mind/accessibility-settings";
+import { ACCESSIBILITY_KEY, readAccessibility, type AccessibilityPreferences } from "@/lib/mind/accessibility-preferences";
+import { MemoryPrivacyControl } from "@/components/mind/memory-privacy-control";
+import { MemoryMaintenance } from "@/components/mind/memory-maintenance";
+import { MemorySelectionDetails, ContextReceiptDetails } from "@/components/mind/context-receipt";
+import { updateMemoryMetadata } from "@/lib/mind/memory/maintenance";
+import { selectMemoryContext } from "@/lib/mind/memory/relevant";
+import { SpendingControls } from "@/components/mind/spending-controls";
+import { dismissRecovery, failureKindForAction, recoveryKind, readRecoveries, serializeRecoveries, upsertRecovery, type RecoveryEntry, saveRecovery, closeRecovery } from "@/lib/mind/recovery-inbox";
+import { SurfaceErrorBoundary } from "@/components/mind/surface-error-boundary";
+import { SessionCenter } from "@/components/mind/session-center";
+import { ProjectWorkspace } from "@/components/mind/project-workspace";
+import { projectInstructionsForChat, removeProject } from "@/lib/mind/project-workspace";
+import { loadVoiceStages } from "@/lib/mind/voice/provider-selection";
+import { VoiceProviderSettings } from "@/components/mind/voice-provider-settings";
+import { ModelResponseSettings } from "@/components/mind/model-response-settings";
+import { canRetryAgentRequest, snapshotAgentRequest, summarizeAgentModelRounds, type AgentRequestSnapshot } from "@/lib/mind/agent-request";
+import { loadModelControls, supportsTierReasoning } from "@/lib/mind/model-tiers";
+import { LibraryDocumentPreview } from "@/components/mind/library-document-preview";
+import { accountOriginalFileStore, prepareLibraryDocument, saveLibraryDocument, updateLibraryDocument } from "@/lib/mind/library-documents";
+import { createResearchRunGuard, loadResearchReports, makeResearchReport, researchAttachment, researchReferencesInText, saveResearchReport, type ResearchReport } from "@/lib/mind/research-reports";
+import type { ResearchResult } from "@/lib/mind/research";
+import { NotificationInbox } from "./notification-inbox";
+import { workspaceNotices, isQuietHour, DEFAULT_NOTIFICATION_PREFERENCES, type NotificationPreferences } from "@/lib/mind/notifications";
+import { ARCHIVE_CATEGORIES, selectArchiveCategories, type ArchiveCategory, deleteLocalFile, deleteProject, refreshBotChat } from "@/lib/mind/workspace";
+import { WorkspaceDialog as Overlay } from "./workspace-dialog";
+import type { NotionPage } from "@/lib/mind/notion";
+import { AccountPreferencesProvider, useAccountPreferences } from "./account-preferences-context";
+import { accountPreferenceKey } from "@/lib/mind/account-preferences";
+import { lazy, Suspense, useEffect, useMemo, useRef, useState, type KeyboardEvent as ReactKeyboardEvent, type MouseEvent as ReactMouseEvent, type ReactNode, useSyncExternalStore, useDeferredValue } from "react";
+import { Link, useRouter, useRouterState } from "@tanstack/react-router";
 import "./command-drawer-nav.css";
 import "./command-search.css";
 import "./command-voice-mode.css";
 import "./gpt-shell.css";
 import "./visual-system.css";
-import { getBearerToken } from "@/lib/auth/client";
+import "./workspace-layout.css";
+import { getBearerToken, signOut } from "@/lib/auth/client";
 import { loadMcpWithHttpFallback } from "@/lib/mind/mcp-list-http";
 import { getRecentChats } from "@/lib/mind/recent-chats";
 import { ConversationSections } from "@/components/mind/conversation-sections";
@@ -15,7 +81,7 @@ import { DesktopUpdateNote } from "@/components/mind/desktop-update-note";
 import { ActionOverlay, ActionsButton } from "@/components/mind/conversation-menu";
 import { applyArchive, applyFavorite, applyProject, applyRename, conversationSharePath, quoteIntoNewChat, scheduleConversation, type ConversationAction } from "@/lib/mind/conversation-actions";
 import { conversationSection, HIDDEN_SETTINGS_SECTIONS_KEY, hideSection, readHiddenSections, removeConversations, restoreSection } from "@/lib/mind/conversation-sections";
-import { resolveShare, sameShareLocation, shareMissLabel, shareWriteDropsMissing, shareWriteForView, writeShareSearch } from "@/lib/mind/app-location";
+import { settingsPaneFromSearch, resolveShare, sameShareLocation, shareMissLabel, shareWriteDropsMissing, shareWriteForView, writeShareSearch } from "@/lib/mind/app-location";
 import { routeForBotChat } from "@/lib/mind/bot-model";
 import { SignedOut, UserButton } from "@/lib/auth/gates";
 import { SupabaseAccountControls } from "@/components/mind/supabase-account";
@@ -59,9 +125,9 @@ import {
 } from "lucide-react";
 import { approvalTokenFor, decide, type Autonomy } from "@/lib/mind/policy";
 import { reaDoctor, reaInspect } from "@/lib/mind/rea";
-import { CAPABILITIES, isVerifiedCapability, type CapabilityStatus } from "@/lib/mind/registry";
+import { isVerifiedCapability, CAPABILITIES, type CapabilityStatus } from "@/lib/mind/registry";
 import { REQUIREMENTS, requirementCounts } from "@/lib/mind/requirements";
-import { consumeMindTurn, prepareTurnId, shouldStoreReply, STOPPED_REPLY } from "@/lib/mind/live-turn";
+import { consumeMindTurn, prepareTurn, shouldStoreReply, STOPPED_REPLY, checkTurnReceipt } from "@/lib/mind/live-turn";
 import { boundAbortSignal } from "@/lib/mind/turn-timeouts";
 import { createVoiceClientSecret, mcpCommand, mcpList, mcpRemove, mcpRegistryList, mcpRegistryToggle, mcpSave, mindStatus, notionCommand, notionStatus, recordAgentExecution, searchWeb, setExecutionHalt, speakText } from "@/lib/mind/server";
 import { focusConnection } from "./focus-connection";
@@ -71,30 +137,18 @@ import { AiProviderConnections } from "@/components/mind/ai-provider-connections
 import type { PublicAiProvider } from "@/lib/mind/ai-provider-config.server";
 import { VoiceWaveform } from "@/components/mind/voice-waveform";
 import { VoiceLevelMeter } from "@/components/mind/voice-level-meter";
-import { VoiceLiveTranscript } from "@/components/mind/voice-live-transcript";
-import { VoicePicker } from "@/components/mind/voice-picker";
 import { LiveVoiceBar } from "@/components/mind/live-voice-bar";
-import { VoiceCloningStudioPage } from "@/components/mind/voice-cloning-studio/voice-cloning-studio";
-import { DictationPill } from "@/components/mind/dictation-pill";
+const VoiceCloningStudioPage = lazy(() => import("@/components/mind/voice-cloning-studio/voice-cloning-studio").then((module) => ({ default: module.VoiceCloningStudioPage })));
 import { VoiceModeOverlay, type VoiceOverlayPhase } from "@/components/mind/voice-mode-overlay";
 import { SpeakStage } from "@/components/mind/speak-stage";
 import { HUMAN_CODE_NOTE, HumanCodePanel, isIntelligenceThread } from "@/components/mind/human-code-panel";
 import { SpeakPanel } from "@/components/mind/surfaces/speak-panel";
 import { SharedFleet } from "@/components/mind/shared-fleet";
-import { ChatEmptyHero } from "@/components/mind/chat-empty-hero";
-import {
-  ComposerBar,
-  type ComposerModelId,
-  DictationPill as PreviewDictationPill,
-  LiveSpeakControl,
-  LiveVoiceBar as PresentationalLiveVoiceBar,
-  VoiceModeStage,
-} from "@/components/mind/voice-ui";
 
 const DashboardApp = lazy(() => import("@/components/mind/agent-command-center").then((mod) => ({ default: mod.AgentCommandCenter })));
 import { isLiveVoiceOccupied, LIVE_VOICE_BUSY_MESSAGE } from "@/lib/mind/voice-live/occupancy";
 import { probeOllamaConductor, runOllamaConductor } from "@/lib/mind/voice/ollama-conductor";
-import { DIRECT_FALLBACK_NOTICE, formatVoiceClientError, resolveVoiceMode } from "@/lib/mind/voice/errors";
+import { formatVoiceClientError, resolveVoiceMode, DIRECT_FALLBACK_NOTICE } from "@/lib/mind/voice/errors";
 import { commitVoiceMode, toggleVoiceMode, type VoiceRoutingMode } from "@/lib/mind/voice/mode";
 import {
   getServerVoiceMode,
@@ -105,7 +159,8 @@ import {
 } from "@/lib/mind/voice/mode-store";
 import { sanitizeAudioFilename } from "@/lib/mind/voice/voice-input";
 import { captureSpeakUtterance } from "@/lib/mind/voice/capture-utterance";
-import { type SpeakRetryParams } from "@/lib/mind/voice/speak-action";
+import { snapshotSpeakRetryParams, type SpeakRetryParams } from "@/lib/mind/voice/speak-action";
+import { createVoiceStagesReceipt, recordVoiceStage, recordVoicePlayback, storeVoiceReceipt, type VoiceStagesReceipt } from "@/lib/mind/voice/stage-receipts";
 import { runMountedSpeak } from "@/lib/mind/voice/speak-click";
 import { speakCanRetry } from "@/lib/mind/voice/speak-failures";
 import { interruptMessageSpeak } from "@/lib/mind/voice/speak-control";
@@ -177,20 +232,16 @@ import {
   toggleMute,
 } from "@/lib/mind/voice/spam-guard";
 import { createCallHistory, type CallHistory } from "@/lib/mind/voice/voice-chat-turn";
-import type { Chat, Msg, Workspace } from "@/lib/mind/types";
+import type { Chat, Msg, Workspace, MemoryScope } from "@/lib/mind/types";
 import { ServiceBoard } from "@/components/mind/service-board";
 import { EveWorkbench } from "@/components/mind/eve-workbench";
 import { FleetPanel } from "@/components/mind/fleet-panels";
-import { BuildWorkspace } from "@/components/mind/build-workspace";
+const BuildWorkspace = lazy(() => import("@/components/mind/build-workspace").then((module) => ({ default: module.BuildWorkspace })));
 import { ResearchPanel } from "@/components/mind/surfaces/research-panel";
-import { AnswerTabs, MessageBody } from "@/components/mind/message-body";
-import { MemorySavedIndicator } from "@/components/mind/memory-saved-indicator";
-import { MemoryChatToggle } from "@/components/mind/memory-chat-toggle";
 import { AttachmentChips } from "@/components/mind/media/attachment-chips";
 import { CameraCapture } from "@/components/mind/media/camera-capture";
 import { CloudPicker, type CloudPickerAttach } from "@/components/mind/media/cloud-picker";
 import { InlineImage } from "@/components/mind/media/inline-image";
-import { ChatMediaGallery } from "@/components/mind/media/chat-media-gallery";
 import { explainRejectedImageFile } from "@/components/mind/media/accept-image-files";
 import { imageDownloadName, listChatGalleryImages } from "@/lib/mind/media/chat-gallery";
 import { fileToDownscaledDataUrl } from "@/components/mind/media/downscale";
@@ -200,7 +251,7 @@ import { tickFleet } from "@/lib/mind/fleet";
 import { createBotFromSpeech, parseCreateBot } from "@/lib/mind/speak-bot";
 import { interpretCommand, type CommandMode } from "@/lib/mind/intent";
 import { notionSearchIssue, retainActivity } from "@/lib/mind/connection-attention";
-import { paletteHits } from "@/lib/mind/palette";
+import { createPaletteIndexBuilder, queryPaletteIndex, paletteShortcut, paletteHits } from "@/lib/mind/palette";
 import { paletteKeyAction } from "@/lib/mind/palette-keys";
 import { runLocalPlan } from "@/lib/mind/local-tools";
 import { greeting } from "@/lib/mind/greeting";
@@ -220,12 +271,13 @@ import {
   type ToolTimelineRow,
 } from "@/lib/mind/tools-timeline";
 import { describeFile } from "@/lib/mind/files-read";
-import { extractPdfText } from "@/lib/mind/pdf-text";
+import { extractPdfText, selectPdfChunks } from "@/lib/mind/pdf-text";
 import { ModelTierChip } from "@/components/mind/model-tier-chip";
 import { AnchoredCard, MenuCluster, MenuGroup, MenuMotion, MenuShelf, ComposerMore, finishMenu, menuChip, pinShelf } from "@/components/mind/menu-material";
-import { MODEL_TIERS, type ConcreteModelTier, type ModelTier } from "@/lib/mind/model-tiers";
+import { MODEL_TIERS, type ConcreteModelTier, type ModelTier, type modelTierCatalog } from "@/lib/mind/model-tiers";
+import { catalogForProvider, environmentModelReadiness, type EnvironmentModelCatalog } from "@/lib/mind/environment-model-catalog";
 import { chosenProvider, failover, providerChoicesWithKeys } from "@/lib/mind/providers";
-import { discoveredCapabilities, mcpToolCallText } from "@/lib/mind/provider-catalog";
+import { discoveredCapabilities, mcpToolCallText, parseCustomProviderChoice } from "@/lib/mind/provider-catalog";
 import { emitFailure, mountFailure, surfaceForReport } from "@/lib/mind/failure-mount";
 import { useMcpFailureMount, type McpReportedOutcome } from "./use-mcp-failure-mount";
 import { routeFailureAction, type RouteFailureAction } from "@/lib/mind/route-failure";
@@ -240,18 +292,17 @@ import {
   type LogicRouteId,
   type LogicRoutePublic,
 } from "@/lib/mind/logic-routes";
-import { runSkill, runRequestedSkill, searchSkills, SKILLS } from "@/lib/mind/skills";
+import { runSkill, runRequestedSkill, skillReadiness, SKILLS, type SkillReceipt, runLocalSkill } from "@/lib/mind/skills";
 import LocalSkillsTools from "@/components/mind/local-skills-tools";
 import { HandyDictation } from "@/components/mind/handy-dictation";
 import { detectWithHandy } from "@/lib/mind/handy-dictation";
 import { ModuleSuggestions } from "@/components/mind/module-suggestions";
 import { type ModuleSuggestion } from "@/lib/intent/module-suggestions";
 
-import { exportChat, prepareRegenerate, prepareRetry, renameChat, reviseUserTurn } from "@/lib/mind/transcript";
-import { replyActions, replyHasSources } from "@/lib/mind/reply-actions";
+import { exportChat, prepareRegenerate, prepareRetry, renameChat, createEditedBranch, withReplyVersion, selectReplyVersion } from "@/lib/mind/transcript";
 import { useComposerDraft } from "@/lib/mind/use-composer-draft";
 import { useMindWorkspace } from "@/lib/mind/use-mind-workspace";
-import { useCurrentUser } from "@/lib/auth/use-current-user";
+import { useCurrentUserState } from "@/lib/auth/use-current-user";
 import { COMPOSER_MODES, effortForModelTier, effortModelTier, loadComposerEffort, resolveSendPath, saveComposerEffort, type ComposerModeId } from "@/lib/mind/composer-modes";
 import { ADRIAN_MIND_IDENTITY, builtinModules, customModules, loadConsultModel, planModelConsult, saveConsultModel, type ConsultModule } from "@/lib/mind/model-consult";
 import { planRouting, readRatings, readRoutingMode, readRoutingPanel, ROUTING_MODE_LABEL, saveRating, writeRoutingMode, writeRoutingPanel, type ResponseRating, type RoutingMode } from "@/lib/mind/routing-modes";
@@ -320,9 +371,8 @@ import {
   updateChatPersonality,
   updateChatCustomPersonality,
 } from "@/lib/mind/workspace";
-import { WORKSPACE_ROUTE_LINKS } from "@/lib/mind/workspace-nav";
-import { CONVERSATIONAL_PERSONALITIES, resolvePersonalityId, type PersonalityId } from "@/lib/mind/personalities";
-import { clearPersonaSelection, readPersonaSelection } from "@/lib/mind/personas/selection";
+import { CONVERSATIONAL_PERSONALITIES, isPersonalityId, personalityStatus, resolvePersonalityId, type PersonalityId } from "@/lib/mind/personalities";
+import { applyPersonaHandoff, clearPersonaSelection, readHandoff } from "@/lib/mind/personas/selection";
 
 type View =
   | "command"
@@ -354,11 +404,13 @@ type Pending = {
   detail: string;
   confirm: string;
   run: () => void;
+  cancel?: () => void;
+  review?: Record<string, unknown>;
 };
 
 const EMPTY_DRAFT_IMAGES: ImageAttachment[] = [];
 
-type Staged = { name: string; text: string };
+type Staged = { name: string; text: string; source?: { fileId: string; revision: string; name: string } };
 
 function pinRailScroll(node: HTMLElement | null) {
   node?.style.setProperty("overflow-x", "hidden", "important");
@@ -473,17 +525,6 @@ const TITLES: Record<View, string> = {
   dashboard: "Dashboard",
 };
 
-function statusWord(status: CapabilityStatus) {
-  if (status === "live_verified") return "Live verified";
-  if (status === "ready") return "Ready";
-  if (status === "configured") return "Configured";
-  if (status === "blocked") return "Blocked";
-  if (status === "unconfigured") return "Not configured";
-  if (status === "local_required") return "Local only";
- if (status === "paid_required") return "Paid, not called";
- return "Not implemented";
-}
-
 const CAPABILITY_MARK: Record<string, string> = {
   "chat.grok": "grok",
   "chat.openai": "openai",
@@ -513,24 +554,7 @@ const CAPABILITY_MARK: Record<string, string> = {
   "build.workspace": "build",
 };
 
-const PRODUCT_LOGO: Record<string, string> = {
-  grok: "/brand/logos/grok.svg",
-  openai: "/brand/logos/openai.svg",
-  claude: "/brand/logos/claude.svg",
-  gemini: "/brand/logos/gemini.svg",
-  openrouter: "/brand/logos/openrouter.svg",
-  vercel: "/brand/logos/vercel.svg",
-  gmail: "/brand/logos/gmail.svg",
-  notion: "/brand/logos/notion.svg",
-  github: "/brand/logos/github.svg",
-  mcp: "/brand/logos/mcp.svg",
-  supabase: "/brand/logos/supabase.svg",
-  drive: "/brand/logos/drive.svg",
-  calendar: "/brand/logos/calendar.svg",
-  slack: "/brand/logos/slack.svg",
-  youtube: "/brand/logos/youtube.svg",
-  docs: "/brand/logos/docs.svg",
-};
+
 
 function productMark(name: string) {
   return PRODUCT_LOGO[name] ?? "/brand/logo-mark.jpg";
@@ -634,12 +658,7 @@ function humanAction(action: string) {
   return map[action] ?? action.replaceAll("_", " ");
 }
 
-function stamp(iso: string) {
-  if (!iso) return "";
-  const date = new Date(iso);
-  if (Number.isNaN(date.getTime())) return "";
-  return date.toLocaleString(undefined, { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" });
-}
+
 
 function formatBytes(bytes: number) {
   if (bytes < 1024) return `${bytes} B`;
@@ -739,11 +758,46 @@ function shownChatTitle(chat: { title?: string; messages?: { role: string; conte
   return first ? humanThreadTitle(first) : "Intelligence";
 }
 
+function statusWord(status: CapabilityStatus) {
+  if (status === "live_verified") return "Live verified";
+  if (status === "ready") return "Ready";
+  if (status === "configured") return "Configured";
+  if (status === "blocked") return "Blocked";
+  if (status === "unconfigured") return "Not configured";
+  if (status === "local_required") return "Local only";
+ if (status === "paid_required") return "Paid, not called";
+ return "Not implemented";
+}
+
+function isBackgroundConnectionCheck(target: string) {
+  return target === "notion:status" || target === "mcp:registry" || target === "mcp:list";
+}
+
 export function CommandApp() {
-  const account = useCurrentUser();
+  const { user: account, error, isPending, status, retry } = useCurrentUserState();
+  const [sessionError, setError] = useState("");
+  if (error) return <main role="alert" className="p-4">
+    <p>{sessionError || error}</p>
+    {status === "conflict" && <button type="button" className="min-h-11 underline" onClick={() => { void signOut("/login", "both").catch(caught => setError(caught instanceof Error ? caught.message : "Sessions could not be ended. Try again.")); }}>End conflicting sessions</button>}
+    <button type="button" className="ml-3 min-h-11 underline" onClick={() => { setError(""); retry?.(); }}>Retry verification</button>
+  </main>;
+  if (isPending) return <main role="status" className="p-4">Verifying your account…</main>;
+  return <AccountPreferencesProvider ownerId={account?.id ?? null}><SurfaceErrorBoundary key={account?.id ?? "guest"} name="Workspace"><CommandSession account={account} accountPending={isPending} /></SurfaceErrorBoundary></AccountPreferencesProvider>;
+}
+
+function CommandSession({ account, accountPending }: { account: ReturnType<typeof useCurrentUserState>["user"]; accountPending: boolean }) {
+  const preferenceStorage = useAccountPreferences();
   const loopback = typeof window !== "undefined" && (window.location.hostname === "127.0.0.1" || window.location.hostname === "localhost");
-  const { ws, setWs, ready, syncNote, serverHeld, saveError, retrySave, clearStoredCopy } = useMindWorkspace(account?.id ?? null, account?.emailVerified ? account.primaryEmail : null);
+  const { ws, setWs, ready, syncNote, serverHeld, saveError, retrySave, clearStoredCopy, ensureChatMedia, prioritizeChatMedia, mediaProgress } = useMindWorkspace(account?.id ?? null, account?.emailVerified ? account.primaryEmail : null);
+  const applyAccessibility = (value: AccessibilityPreferences) => { document.documentElement.style.setProperty("--mind-text-scale", String(value.textScale / 100)); document.documentElement.dataset.contrast = value.contrast; document.documentElement.dataset.readingSpacing = value.spacing; };
+  useEffect(() => { applyAccessibility(readAccessibility(preferenceStorage.getItem(ACCESSIBILITY_KEY))); return () => { document.documentElement.style.removeProperty("--mind-text-scale"); delete document.documentElement.dataset.contrast; delete document.documentElement.dataset.readingSpacing; }; }, [preferenceStorage]);
   const router = useRouter();
+  const chromeMenus = useExclusiveMenus();
+  const locationSearch = useRouterState({ select: (state) => state.location.searchStr });
+  const [initialLocationResolved, setInitialLocationResolved] = useState(() => {
+    const params = new URLSearchParams(locationSearch);
+    return !["section", "chat", "project", "file", "bot", "agentId"].some((key) => params.has(key));
+  });
   const [view, setViewState] = useState<View>("command");
   const applyingLocation = useRef(false);
   const locationHistory = useRef<"push" | "replace">("push");
@@ -758,14 +812,17 @@ export function CommandApp() {
   function setView(next: View) {
     setViewState(next);
   }
-  const [imagineEdit, setImagineEdit] = useState<{ image: string; text: string; result?: ImageAttachment; returnFocus: HTMLElement | null } | null>(null);
+  const [imagineEdit, setImagineEdit] = useState<{ image: string; source: EditableImage; chatId: string | null; draftScope: string; text: string; operationId: string; result?: ImageAttachment; returnFocus: HTMLElement | null } | null>(null);
   const [imagineEditError, setImagineEditError] = useState<string | null>(null);
   const [researchPending, setResearchPending] = useState(false);
   const researchFlight = useRef(false);
+  const researchRunGuard = useRef(createResearchRunGuard());
+  const [activeResearchId, setActiveResearchId] = useState<string | null>(null);
   const [libraryProjectId, setLibraryProjectId] = useState<string | null>(null);
   const [botDestinationId, setBotDestinationId] = useState("");
   const [focusRunId, setFocusRunId] = useState<string | null>(null);
   const [cardFocus, setCardFocus] = useState<{ id: string } | null>(null);
+  const chatReadingPositions = useRef<ChatReadingPositions>(new Map());
   useEffect(() => {
     if (!cardFocus) return;
     const frame = requestAnimationFrame(() => {
@@ -786,9 +843,12 @@ export function CommandApp() {
   const [hiddenSettings, setHiddenSettings] = useState<string[]>([]);
   const [settingsMenu, setSettingsMenu] = useState<string | null>(null);
   const [query, setQuery] = useState("");
-  const [paletteOpen, setPaletteOpen] = useState(false);
+  const deferredQuery = useDeferredValue(query);
+  const [paletteFilter, setPaletteFilter] = useState<"all" | Parameters<typeof paletteHits>[0]["filter"]>("all");
+  const [paletteLimit, setPaletteLimit] = useState(50);
+  const [paletteOpen, setPaletteOpen] = chromeMenus.bind("palette");
   const [paletteIndex, setPaletteIndex] = useState(0);
-  const [navOpen, setNavOpen] = useState(false);
+  const [navOpen, setNavOpen] = chromeMenus.bind("drawer");
   const navDrawerRef = useRef<HTMLElement>(null);
   const navCloseRef = useRef<HTMLButtonElement>(null);
   const navTriggerRef = useRef<HTMLButtonElement>(null);
@@ -796,9 +856,12 @@ export function CommandApp() {
   const [voiceSignInNotice, setVoiceSignInNotice] = useState(false);
   const pageScrollRef = useRef<HTMLDivElement>(null);
   useEffect(() => {
-    const scroller = pageScrollRef.current;
-    if (scroller) scroller.scrollTop = 0;
-  }, [view]);
+    if (view !== "settings") return;
+    const frame = requestAnimationFrame(() => document.getElementById("settings-heading")?.focus({ preventScroll: true }));
+    return () => cancelAnimationFrame(frame);
+  }, [view, settingsPane]);
+  const pageScrollKey = view === "settings" ? `settings/${settingsPane ?? "index"}` : view;
+  const rememberPageScroll = useViewScrollPosition(pageScrollRef, account?.id ?? null, initialLocationResolved ? pageScrollKey : "opening");
   useEffect(() => {
     if (!navOpen) {
       if (navWasOpenRef.current) {
@@ -821,22 +884,6 @@ export function CommandApp() {
     const previous = document.body.style.overflow;
     document.body.style.overflow = "hidden";
     const drawer = navDrawerRef.current;
-    const phone = window.matchMedia("(max-width: 767px)").matches;
-    if (drawer && phone) {
-      const light = document.documentElement.dataset.theme === "light";
-      const reduce = document.documentElement.dataset.adrianMotion === "reduce" || window.matchMedia("(prefers-reduced-motion: reduce)").matches;
-      drawer.style.setProperty("inset", "0 auto 0 0", "important");
-      drawer.style.setProperty("width", "min(18.5rem, 84vw)", "important");
-      drawer.style.setProperty("height", "100dvh", "important");
-      drawer.style.setProperty("background", light ? "#f7f7f8" : "#161618", "important");
-      drawer.style.setProperty("color", light ? "#18181b" : "#fafafa", "important");
-      drawer.style.setProperty("border-radius", "0 22px 22px 0", "important");
-      drawer.style.setProperty("box-shadow", "18px 0 48px rgba(0, 0, 0, 0.38)", "important");
-      drawer.style.setProperty("z-index", "200", "important");
-      if (!reduce) drawer.style.setProperty("animation", "adrian-drawer-in 240ms cubic-bezier(0.22, 1, 0.36, 1)", "important");
-      const stage = document.querySelector(".main-stage");
-      if (stage instanceof HTMLElement) stage.style.setProperty("visibility", "visible", "important");
-    }
     navCloseRef.current?.focus();
     const onDrawerKeyDown = (event: KeyboardEvent) => {
       if (event.key === "Escape") {
@@ -874,17 +921,6 @@ export function CommandApp() {
     document.addEventListener("keydown", onDrawerKeyDown, true);
     return () => {
       document.body.style.overflow = previous;
-      drawer?.style.removeProperty("z-index");
-      drawer?.style.removeProperty("inset");
-      drawer?.style.removeProperty("width");
-      drawer?.style.removeProperty("height");
-      drawer?.style.removeProperty("background");
-      drawer?.style.removeProperty("color");
-      drawer?.style.removeProperty("border-radius");
-      drawer?.style.removeProperty("box-shadow");
-      drawer?.style.removeProperty("animation");
-      const stage = document.querySelector(".main-stage");
-      if (stage instanceof HTMLElement) stage.style.removeProperty("visibility");
       desktop.removeEventListener("change", closeAtDesktop);
       document.removeEventListener("keydown", onDrawerKeyDown, true);
     };
@@ -938,6 +974,7 @@ export function CommandApp() {
   const [draft, setDraft, setDraftInScope] = useComposerDraft(draftScope, "text", "", persistDraft);
   const [busy, setBusy] = useState(false);
   const [liveText, setLiveText] = useState("");
+  const [generationStatus, setGenerationStatus] = useState("");
   const turnAbort = useRef<AbortController | null>(null);
   const voiceScope = JSON.stringify([draftOwner, view, activeId]);
   const currentVoiceScope = useRef(voiceScope);
@@ -965,7 +1002,7 @@ export function CommandApp() {
   const dictationRef = useRef(dictation);
   dictationRef.current = dictation;
   const dictationRecRef = useRef<BrowserSpeechRec | null>(null);
-  const serverDictationRef = useRef<DictationRecorder | null>(null);
+  const serverDictationRef = useRef<(DictationRecorder & { captureOwner: string; captureScope: string; inputProvider: string; operationId: string; projectId: string | null }) | null>(null);
   const dictationBufferRef = useRef("");
   const dictationBaseRef = useRef<string | null>(null);
   const userStoppedDictationRef = useRef(false);
@@ -977,14 +1014,17 @@ export function CommandApp() {
   const taskStream = useRef<MediaStream | null>(null);
   const [taskRecording, setTaskRecording] = useState(false);
   const [taskSeconds, setTaskSeconds] = useState(0);
-  const [speakCall, setSpeakCall] = useState({ heard: "", reply: "", error: "" });
+  const voiceOutput = useRef({ muted: false, volume: 1 });
+  const browserPlaybackAbort = useRef<AbortController | null>(null);
+  const [speakCall, setSpeakCall] = useState<{ heard: string; reply: string; error: string; answerReceipt?: string }>({ heard: "", reply: "", error: "" });
   const speakStageOpenRef = useRef(false);
   useEffect(() => {
+    if (speakStageOpenRef.current && !speakStageOpen) interruptSpeakPlayback();
     speakStageOpenRef.current = speakStageOpen;
   }, [speakStageOpen]);
   useEffect(() => {
     if (!taskRecording) return;
-    const id = window.setInterval(() => setTaskSeconds(Math.round(taskRecorder.current.elapsed() / 1000)), 500);
+    const id = window.setInterval(() => setTaskSeconds(Math.round(taskRecorder.current.elapsed() / 1000)), 1000);
     return () => window.clearInterval(id);
   }, [taskRecording]);
   useEffect(() => {
@@ -1017,8 +1057,8 @@ export function CommandApp() {
     setTaskSeconds(0);
     setNotice(blob ? "Recording stopped in this tab. It cannot continue after the browser is closed." : "Recording was already stopped.");
   }
-  const [surfaceMenu, setSurfaceMenu] = useState(false);
-  const [controlsOpen, setControlsOpen] = useState(false);
+  const [surfaceMenu, setSurfaceMenu] = chromeMenus.bind("surface");
+  const [controlsOpen, setControlsOpen] = chromeMenus.bind("controls");
   const [chatSettingsOpen, setChatSettingsOpen] = useState(false);
   const chatSettingsTrigger = useRef<HTMLButtonElement>(null);
   useEffect(() => {
@@ -1036,7 +1076,7 @@ export function CommandApp() {
   }, [view, chatSettingsOpen]);
   const [surfaceAnchor, setSurfaceAnchor] = useState<DOMRect | null>(null);
   const controlsTrigger = useRef<HTMLButtonElement>(null);
-  const [navMoreOpen, setNavMoreOpen] = useState(false);
+  const [navMoreOpen, setNavMoreOpen] = chromeMenus.bind("nav-more");
   const [navMoreHold, setNavMoreHold] = useState(false);
   const [navMoreAnchor, setNavMoreAnchor] = useState<DOMRect | null>(null);
   const [modelRowsOpen, setModelRowsOpen] = useState(false);
@@ -1062,7 +1102,6 @@ export function CommandApp() {
   const stageTimerRef = useRef(0);
   const stageGenRef = useRef(0);
   const voiceActiveRef = useRef(false);
-  const desktopActedRef = useRef(new Set<string>());
   const closeVoiceOverlayRef = useRef<() => void>(() => undefined);
   const cancelDictationRef = useRef<(announce?: boolean) => void>(() => undefined);
   const turnGen = useRef(0);
@@ -1081,6 +1120,8 @@ export function CommandApp() {
   const [cued, setCued] = useState<QueuedChatMessage[]>([]);
   useEffect(() => {
     return () => {
+      turnOwner.current = null;
+      researchRunGuard.current.cancel();
       turnGen.current++;
       turnAbort.current?.abort();
       turnAbort.current = null;
@@ -1096,6 +1137,7 @@ export function CommandApp() {
   }, [draftOwner]);
   const imagineInFlight = useRef(false);
   const videoInFlight = useRef(false);
+  const [videoStatus, setVideoStatus] = useState<{ chatId: string; text: string; failed?: boolean }>();
   const mcpInFlight = useRef(false);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
@@ -1104,7 +1146,27 @@ export function CommandApp() {
     window.addEventListener("adrian-draft-storage-full", warn);
     return () => window.removeEventListener("adrian-draft-storage-full", warn);
   }, []);
-  const [failure, setFailure] = useState<{ message: string; auditId: string; retry: (() => void) | null; kind: HonestFailureKind | null; action?: RouteFailureAction; chatId?: string } | null>(null);
+  const [pendingFailures, setPendingFailures] = useState<RecoveryEntry[]>([]);
+  const [selectedFailureId, setSelectedFailureId] = useState<string | null>(null);
+  const inConversation = view === "command" || view === "chat";
+  function visibleRecoveries(rows: RecoveryEntry[]) {
+    return inConversation ? rows.filter((row) => !isBackgroundConnectionCheck(row.target)) : rows;
+  }
+  const bannerRecoveries = visibleRecoveries(pendingFailures);
+  const failure = bannerRecoveries.find((row) => row.auditId === selectedFailureId) ?? bannerRecoveries[0] ?? null;
+  const alertFailure = failure ?? pendingFailures[0] ?? null;
+  const recoveryLoaded = useRef(false);
+  useEffect(() => { try { setPendingFailures(readRecoveries(preferenceStorage.getItem("amcos.recovery.inbox.v1"))); } catch { /* Session-only recovery still works. */ } recoveryLoaded.current = true; }, [preferenceStorage]);
+  useEffect(() => { if (!recoveryLoaded.current) return; try { preferenceStorage.setItem("amcos.recovery.inbox.v1", serializeRecoveries(pendingFailures)); } catch { /* The audit and request receipt remain separate recovery sources. */ } }, [pendingFailures, preferenceStorage]);
+  function setFailure(change: RecoveryEntry | null | ((current: RecoveryEntry | null) => RecoveryEntry | null)) {
+    setPendingFailures((rows) => {
+      if (change && typeof change !== "function") return upsertRecovery(rows, change);
+      const visible = visibleRecoveries(rows);
+      const active = visible.find((row) => row.auditId === selectedFailureId) ?? visible[0] ?? null;
+      const next = change?.(active) ?? null;
+      return next ? upsertRecovery(rows, next) : active ? dismissRecovery(rows, active.auditId) : rows;
+    });
+  }
   const reportFailureRef = useRef<(message: string, action: string, target: string, retry: (() => void) | null) => void>(() => undefined);
   const [toolTimeline, setToolTimeline] = useState<ToolTimelineRow[]>([]);
   const [timelineTickMs, setTimelineTickMs] = useState(0);
@@ -1118,6 +1180,8 @@ export function CommandApp() {
   const [databaseDetail, setDatabaseDetail] = useState("The status check has not finished.");
   const [grokConfigured, setGrokConfigured] = useState<boolean | null>(null);
   const [liveProviders, setLiveProviders] = useState<Partial<Record<"openai" | "anthropic" | "gemini" | "openrouter", boolean>>>({});
+  const [environmentCatalogs, setEnvironmentCatalogs] = useState<EnvironmentModelCatalog[]>([]);
+  const [tierCatalog, setTierCatalog] = useState<ReturnType<typeof modelTierCatalog>>([]);
   const [selectionLoaded, setSelectionLoaded] = useState(false);
   const [providerChoice, setProviderChoice] = useState("grok");
   const [customAiProviders, setCustomAiProviders] = useState<PublicAiProvider[]>([]);
@@ -1127,6 +1191,10 @@ export function CommandApp() {
   const [logicRoutes, setLogicRoutes] = useState<LogicRoutePublic[]>([]);
   const [composerEffort, setComposerEffort] = useState<ComposerModeId>("auto");
   const [consultModel, setConsultModel] = useState("");
+  const [consultHelpers, setConsultHelpers] = useState<string[]>([]);
+  const [approvedHelperDraft, setApprovedHelperDraft] = useState<string | null>(null);
+  const helperDraftKey = JSON.stringify([draftOwner, draftScope, consultModel, consultHelpers, draft.trim()]);
+  useEffect(() => { setApprovedHelperDraft(null); }, [helperDraftKey]);
   const [routingMode, setRoutingMode] = useState<RoutingMode>("A");
   const [routingPanel, setRoutingPanel] = useState<LogicRouteId[]>([]);
   const ratingOwner = account?.id ? "account:" + account.id : "device:guest";
@@ -1136,7 +1204,6 @@ export function CommandApp() {
   const [failoverPolicy, setFailoverPolicy] = useState<"none" | "grok">("none");
  const [researchCitations, setResearchCitations] = useState<{ title: string; url: string }[]>([]);
   const [researchReportQuestion, setResearchReportQuestion] = useState("");
-  type ResearchReport = { id: string; question: string; summary: string; citations: { title: string; url: string }[]; at: string; steps?: { query: string; ok: boolean; count: number }[] };
   const [researchHistory, setResearchHistory] = useState<ResearchReport[]>([]);
   const [researchSteps, setResearchSteps] = useState<ResearchReport["steps"]>([]);
   const [researchOwner, setResearchOwner] = useState<string | null>(null);
@@ -1147,6 +1214,7 @@ export function CommandApp() {
   const [agentBusy, setAgentBusy] = useState(false);
   const [agentNote, setAgentNote] = useState<string | null>(null);
   const [agentLog, setAgentLog] = useState<{ step: number; tool: string; ok: boolean; detail: string }[]>([]);
+  const [agentModelReceipts, setAgentModelReceipts] = useState<string[]>([]);
   const [agentImages, setAgentImages] = useState<ImageAttachment[]>([]);
   const agentAbort = useRef<AbortController | null>(null);
   const [system, setSystem] = useState("Checking isolation.");
@@ -1199,7 +1267,7 @@ export function CommandApp() {
   const [projectAbout, setProjectAbout] = useState("");
   const [projectOpen, setProjectOpen] = useState(false);
   const [includeTemporary, setIncludeTemporary] = useState(false);
-  const [importPreview, setImportPreview] = useState<{ workspace: Workspace; name: string } | null>(null);
+  const [importPreview, setImportPreview] = useState<{ workspace: Workspace; name: string; memoryOnly: boolean } | null>(null);
   const messagePreview = importPreview ? archiveMessagePreview(ws, importPreview.workspace) : null;
   const importCounts = importPreview ? ([
     ["chats", "Chats"], ["memories", "Notes"], ["projects", "Projects"], ["files", "Files"], ["agents", "Bots"], ["runs", "Runs"], ["schedules", "Schedules"],
@@ -1208,6 +1276,11 @@ export function CommandApp() {
     const incoming = importPreview.workspace[key];
     return { label, current: current.size, incoming: incoming.length, overlap: incoming.filter((item) => current.has(item.id)).length };
   }) : [];
+  const [restoreMemoryPreferences, setRestoreMemoryPreferences] = useState(false);
+  const [archiveCategories, setArchiveCategories] = useState<ArchiveCategory[]>([...ARCHIVE_CATEGORIES]);
+  const importReview = useMemo(() => importPreview
+    ? archiveReview(ws, selectArchiveCategories(importPreview.workspace, archiveCategories))
+    : null, [ws, importPreview, archiveCategories]);
   const [importChecking, setImportChecking] = useState(false);
   const [importStatus, setImportStatus] = useState("");
   const [importError, setImportError] = useState<string | null>(null);
@@ -1217,15 +1290,46 @@ export function CommandApp() {
   const excerptRef = useRef<HTMLTextAreaElement>(null);
   const [cameraOpen, setCameraOpen] = useState(false);
   const [cloudPickerOpen, setCloudPickerOpen] = useState(false);
+  const cloudDestination = useRef<{ owner: string | null; kind: "chat" | "library"; projectId: string | null; scope: string } | null>(null);
+  function openCloudPicker(kind: "chat" | "library" = "chat") {
+    cloudDestination.current = { owner: draftOwner, kind, projectId: kind === "library" ? libraryProjectId : null, scope: draftScope };
+    setCloudPickerOpen(true);
+  }
   const [driveConnected, setDriveConnected] = useState(false);
   const imageInputRef = useRef<HTMLInputElement>(null);
-  const [contextOpen, setContextOpen] = useState(false);
-  const [toolsOpen, setToolsOpen] = useState(false);
-  const [accountOpen, setAccountOpen] = useState(false);
-  const [bellOpen, setBellOpen] = useState(false);
+  const [contextOpen, setContextOpen] = chromeMenus.bind("context");
+  const [toolsOpen, setToolsOpen] = chromeMenus.bind("tools");
+  const [accountOpen, setAccountOpen] = chromeMenus.bind("account");
+  const [bellOpen, setBellOpen] = chromeMenus.bind("notifications");
+  const [readNotices, setReadNotices] = useState<string[]>([]);
+  const [dismissedNotices, setDismissedNotices] = useState<string[]>([]);
+  const [notificationPreferences, setNotificationPreferences] = useState<NotificationPreferences>(DEFAULT_NOTIFICATION_PREFERENCES);
+  useEffect(() => {
+    try {
+      const dismissed: unknown = JSON.parse(preferenceStorage.getItem("notifications.dismissed.v1") || "[]");
+      if (Array.isArray(dismissed)) setDismissedNotices(dismissed.filter((id): id is string => typeof id === "string"));
+      const read: unknown = JSON.parse(preferenceStorage.getItem("notifications.read.v1") || "[]");
+      if (Array.isArray(read)) setReadNotices(read.filter((id): id is string => typeof id === "string"));
+      const prefs = JSON.parse(preferenceStorage.getItem("notifications.preferences.v1") || "null") as NotificationPreferences | null;
+      if (prefs) setNotificationPreferences({ completedRuns: prefs.completedRuns !== false, activity: prefs.activity !== false, research: prefs.research !== false, media: prefs.media !== false, quietStart: Number.isInteger(prefs.quietStart) && prefs.quietStart! >= 0 && prefs.quietStart! < 24 ? prefs.quietStart : null, quietEnd: Number.isInteger(prefs.quietEnd) && prefs.quietEnd! >= 0 && prefs.quietEnd! < 24 ? prefs.quietEnd : null });
+    } catch { /* Use visible defaults if browser storage is unavailable. */ }
+  }, [preferenceStorage]);
+  const notifications = useMemo(() => workspaceNotices(ws, notificationPreferences, researchHistory), [ws.runs, ws.schedules, ws.audit, ws.agents, ws.chats, notificationPreferences, researchHistory]);
+  const unreadNoticeCount = notifications.filter((entry) => !readNotices.includes(entry.id) && !dismissedNotices.includes(entry.id) && (entry.urgent || !isQuietHour(notificationPreferences, new Date().getHours()))).length;
+  function markNoticesRead(ids: string[]) {
+    const retained = [...new Set(ids)].filter((id) => notifications.some((notice) => notice.id === id));
+    setReadNotices(retained);
+    try { preferenceStorage.setItem("notifications.read.v1", JSON.stringify(retained)); } catch { setNotice("Read marks apply for this session; browser storage is unavailable."); }
+  }
+  function changeNotificationPreferences(next: NotificationPreferences) {
+    setNotificationPreferences(next);
+    try { preferenceStorage.setItem("notifications.preferences.v1", JSON.stringify(next)); } catch { setNotice("Notification preferences apply for this session; browser storage is unavailable."); }
+  }
+
   const [now, setNow] = useState<Date | null>(null);
   const greet = typeof document !== "undefined" && document.querySelector("[data-greeting]")?.getAttribute("data-greeting") || greeting(now ?? new Date());
   const [speaking, setSpeaking] = useState(false);
+  const [speakingMessageId, setSpeakingMessageId] = useState<string | null>(null);
 
   useEffect(() => {
     if (ws.halted) {
@@ -1274,7 +1378,7 @@ export function CommandApp() {
 
   useEffect(() => {
     // Single store: hydrate from localStorage once; every badge reads the same snapshot.
-    const storage = typeof localStorage === "undefined" ? null : localStorage;
+    const storage = preferenceStorage;
     hydrateVoiceModeStore(storage);
     const choice = readStoredVoiceChoice(storage);
     voiceChoiceRef.current = choice;
@@ -1286,15 +1390,15 @@ export function CommandApp() {
     const known = Object.keys(TITLES);
     const applyLocation = () => {
       const params = new URLSearchParams(window.location.search);
-      if (params.get("mode") === "agent" && params.get("agentId")) return;
+      if (params.get("mode") === "agent" && params.get("agentId")) {
+        setInitialLocationResolved(true);
+        return;
+      }
       applyingLocation.current = true;
-      locationHistory.current = "replace";
+      locationHistory.current = "push";
       const resolved = resolveShare(window.location.search, wsRef.current, known);
       setViewState(resolved.view as View);
-      if (resolved.view === "settings") {
-        const pane = params.get("pane");
-        if (pane === "connections" || pane === "general" || pane === "keys" || pane === "voice" || pane === "data" || pane === "safety" || pane === "browser" || pane === "pages" || pane === "personalization") setSettingsPane(pane);
-      }
+      setSettingsPane(settingsPaneFromSearch(window.location.search));
       if (params.get("resume") === "speak") {
         setSpeakStageOpen(true);
         const url = new URL(window.location.href);
@@ -1315,6 +1419,7 @@ export function CommandApp() {
       if (resolved.focusId) setCardFocus({ id: resolved.focusId });
       if (resolved.missing.length) setNotice(shareMissLabel(resolved.missing));
       else if (resolved.botArchived) setNotice("That bot is archived on this device. Its history was kept.");
+      setInitialLocationResolved(true);
       requestAnimationFrame(() => {
         applyingLocation.current = false;
       });
@@ -1336,7 +1441,7 @@ export function CommandApp() {
       locationHistory.current = "push";
       return;
     }
-    const search = writeShareSearch(window.location.search, nextWrite, Object.keys(TITLES));
+    const search = writeShareSearch(window.location.search, { ...nextWrite, pane: settingsPane }, Object.keys(TITLES));
     if (sameShareLocation(window.location.pathname, window.location.hash, window.location.search, search)) {
       locationHistory.current = "push";
       return;
@@ -1346,19 +1451,23 @@ export function CommandApp() {
     locationHistory.current = "push";
     if (mode === "replace") router.history.replace(next);
     else router.history.push(next);
-  }, [ready, view, activeId, shareProjectId, openFileId, shareBotId, router]);
+  }, [ready, view, settingsPane, activeId, shareProjectId, openFileId, shareBotId, router]);
 
   const personaHandoffDone = useRef(false);
   useEffect(() => {
     if (!ready || personaHandoffDone.current || typeof window === "undefined") return;
-    const selection = readPersonaSelection(window.localStorage);
+    const ownerId = account?.id;
+    if (!ownerId) return;
+    const pending = readHandoff(preferenceStorage, ownerId, Date.now());
+    const selection = pending.handoff?.selection ?? null;
     const params = new URLSearchParams(window.location.search);
     const agentId = selection?.agentId || params.get("agentId");
     if (!agentId || (params.get("mode") !== "agent" && !selection)) return;
     personaHandoffDone.current = true;
-    const stored = loadWorkspace(window.localStorage);
-    const agent = stored.agents.find((item) => item.id === agentId && !item.archived) ?? ws.agents.find((item) => item.id === agentId && !item.archived);
-    clearPersonaSelection(window.localStorage);
+    const source = wsRef.current;
+    const handoff = applyPersonaHandoff(source, selection, agentId, pending.handoff?.agent);
+    const agent = handoff.agent;
+    clearPersonaSelection(preferenceStorage, ownerId);
     const url = new URL(window.location.href);
     url.searchParams.delete("mode");
     url.searchParams.delete("agentId");
@@ -1367,17 +1476,23 @@ export function CommandApp() {
       setNotice("That persona was not found on this device. Nothing was opened.");
       return;
     }
-    const base = ws.agents.some((item) => item.id === agent.id) ? ws : stored;
+    const base = handoff.ws;
     const opened = openBotChat(base, agent.id);
     if (!opened) return;
-    if (opened.ws !== ws) setWs(() => opened.ws);
+    if (opened.ws !== source) setWs(current => {
+      if (current === source) return opened.ws;
+      const latest = applyPersonaHandoff(current, selection, agentId, pending.handoff?.agent);
+      if (!latest.agent || latest.agent.version !== agent.version || current.deletedChatIds?.includes(opened.chat.id)) return current;
+      if (latest.ws.chats.some(chat => chat.id === opened.chat.id)) return latest.ws;
+      return { ...latest.ws, chats: [opened.chat, ...latest.ws.chats] };
+    });
     setActiveId(opened.chat.id);
     setView("chat");
     setNotice(`${agent.name} is open in Chat.`);
   }, [ready, ws, setWs]);
 
   useEffect(() => {
-    const storage = typeof localStorage === "undefined" ? null : localStorage;
+    const storage = preferenceStorage;
     setComposerEffort(loadComposerEffort(storage));
   }, []);
 
@@ -1400,8 +1515,8 @@ export function CommandApp() {
 
   useEffect(() => {
     const onStorage = (event: StorageEvent) => {
-      if (event.key !== "amcos.voice.choice.v1") return;
-      const next = readStoredVoiceChoice(typeof localStorage === "undefined" ? null : localStorage);
+      if (event.key !== accountPreferenceKey(account?.id ?? null, "amcos.voice.choice.v1")) return;
+      const next = readStoredVoiceChoice(preferenceStorage);
       voiceChoiceRef.current = next;
       setVoiceChoice(next);
       voiceSession.current?.setVoice(next);
@@ -1426,7 +1541,7 @@ export function CommandApp() {
   }, []);
 
   function applyVoiceMode(next: VoiceRoutingMode) {
-    const storage = typeof localStorage === "undefined" ? null : localStorage;
+    const storage = preferenceStorage;
     const previous = voiceModeRef.current;
     // commitVoiceMode persists; setVoiceModeStore keeps every badge on the same value.
     const committed = setVoiceModeStore(commitVoiceMode(next, storage), storage);
@@ -1437,7 +1552,7 @@ export function CommandApp() {
   }
 
   function applyVoiceChoice(next: XaiBuiltinVoice) {
-    const storage = typeof localStorage === "undefined" ? null : localStorage;
+    const storage = preferenceStorage;
     const committed = writeStoredVoiceChoice(next, storage);
     voiceChoiceRef.current = committed;
     setVoiceChoice(committed);
@@ -1445,7 +1560,7 @@ export function CommandApp() {
   }
 
   function chooseComposerEffort(mode: ComposerModeId) {
-    const storage = typeof localStorage === "undefined" ? null : localStorage;
+    const storage = preferenceStorage;
     saveComposerEffort(storage, mode);
     setComposerEffort(mode);
     const resolved = resolveSendPath(mode);
@@ -1453,7 +1568,9 @@ export function CommandApp() {
     const tier = effortModelTier(mode);
     if (tier) {
       setLogicRoute(null);
+      setGrokModel(null);
       setModelTier(tier);
+      if (active?.botProvider || active?.botTier) setWs(prev => ({ ...prev, chats: prev.chats.map(chat => chat.id === active.id ? { ...chat, botTier: tier, botExactModel: undefined } : chat) }));
     }
     applyVoiceMode(mode === "orchestrator" ? "orchestrator" : "direct");
     if (mode === "build") setView("build");
@@ -1463,19 +1580,27 @@ export function CommandApp() {
     ...builtinModules({
       grokConfigured,
       providers: liveProviders,
-      localRunner: typeof localStorage !== "undefined" && Boolean(localStorage.getItem("amcos.ollama.base")?.trim()),
+      openrouterModel: providerModels.openrouter,
+      localRunnerUrl: typeof localStorage === "undefined" ? undefined : preferenceStorage.getItem("amcos.ollama.base") ?? undefined,
+      localRunner: typeof localStorage !== "undefined" && Boolean(preferenceStorage.getItem("amcos.ollama.base")?.trim()),
     }),
     ...customModules(customAiProviders),
-  ], [grokConfigured, liveProviders, customAiProviders]);
+  ], [grokConfigured, liveProviders, customAiProviders, providerModels.openrouter, preferenceStorage]);
 
   useEffect(() => {
-    const storage = typeof localStorage === "undefined" ? null : localStorage;
+    const storage = preferenceStorage;
     const next = loadConsultModel(storage, consultModules);
     setConsultModel((current) => (consultModules.some((item) => item.id === current) ? current : next));
   }, [consultModules]);
 
+  function toggleConsultHelper(id: string) {
+    const next = consultHelpers.includes(id) ? consultHelpers.filter((value) => value !== id) : [...consultHelpers, id].slice(0, 8);
+    try { preferenceStorage.setItem("amcos.consult.helpers.v1", JSON.stringify(next)); setConsultHelpers(next); }
+    catch { setError("The helper selection could not be saved. The previous selection remains active."); }
+  }
+
   function chooseConsultModel(id: string) {
-    const storage = typeof localStorage === "undefined" ? null : localStorage;
+    const storage = preferenceStorage;
     saveConsultModel(storage, id);
     setConsultModel(id);
   }
@@ -1486,13 +1611,13 @@ export function CommandApp() {
     setModelTier(tier);
     const effort = effortForModelTier(tier);
     if (effort) {
-      saveComposerEffort(typeof localStorage === "undefined" ? null : localStorage, effort);
+      saveComposerEffort(preferenceStorage, effort);
       setComposerEffort(effort);
     }
   }
 
   function selectProviderInChat(id: string, tier?: ModelTier) {
-    if (id !== providerChoice) clearFailure();
+    if (id !== providerChoice && failure?.target === "provider") clearFailure();
     if (composerEffort === "orchestrator" || composerEffort === "build") chooseComposerEffort("auto");
     chooseRoutingMode("A");
     if (active?.agentId || active?.botProvider || active?.botTier) {
@@ -1511,7 +1636,7 @@ export function CommandApp() {
   }
 
   function chooseRoutingMode(mode: RoutingMode) {
-    const storage = typeof localStorage === "undefined" ? null : localStorage;
+    const storage = preferenceStorage;
     writeRoutingMode(storage, mode);
     setRoutingMode(mode);
   }
@@ -1519,7 +1644,7 @@ export function CommandApp() {
   function toggleRoutingSeat(id: LogicRouteId) {
     setRoutingPanel((current) => {
       const next = current.includes(id) ? current.filter((item) => item !== id) : [...current, id];
-      writeRoutingPanel(typeof localStorage === "undefined" ? null : localStorage, next);
+      writeRoutingPanel(preferenceStorage, next);
       return next;
     });
   }
@@ -1542,12 +1667,15 @@ export function CommandApp() {
   }
 
   function interruptSpeakPlayback() {
+    browserPlaybackAbort.current?.abort();
+    browserPlaybackAbort.current = null;
     interruptMessageSpeak({
       sharedAudio: sharedAudioOutput,
       abortSpeak: speakAbortRef.current,
       speechSynthesis: typeof window !== "undefined" ? window.speechSynthesis : null,
     });
     speakAbortRef.current = null;
+    setSpeakingMessageId(null);
     setSpeaking(false);
     setAvatarPresence("interrupted");
   }
@@ -1567,7 +1695,8 @@ export function CommandApp() {
       setVoiceListening(false);
       setVoiceLevel(0);
       setVoiceLiveTranscript("");
-      setSpeaking(false);
+      setSpeakingMessageId(null);
+    setSpeaking(false);
       listenGuardRef.current.end();
       clearStageTimeout();
       voiceActiveRef.current = false;
@@ -1618,9 +1747,11 @@ export function CommandApp() {
   const notionEpoch = useRef(0);
   const notionSearchRequest = useRef(0);
   const searchIssue = notionSearchIssue(ws.audit);
+  const [notionSelection, setNotionSelection] = useState<{ chat: Chat; text: string; workspaceId: string; pages: NotionPage[]; cursor: string | null } | null>(null);
   const [notionPreview, setNotionPreview] = useState<{ owner: string | null; chatId: string; text: string } | null>(null);
   useEffect(() => {
     notionEpoch.current++;
+    setNotionSelection(null);
     setNotionPreview(null);
     setNotionQuery(""); setNotionPages([]); setNotionNote(null);
   }, [draftOwner]);
@@ -1662,14 +1793,29 @@ export function CommandApp() {
   const [skillBand, setSkillBand] = useState<"device" | "installed" | "missing">("device");
   const [enabledSkills, setEnabledSkills] = useState<Record<string, boolean>>({});
   const [skillNoteQuery, setSkillNoteQuery] = useState("");
-  const [skillResult, setSkillResult] = useState<{ id: string; text: string } | null>(null);
+  const [skillResult, setSkillResult] = useState<{ id: string; text: string; receipt: SkillReceipt } | null>(null);
   const [skillStorageError, setSkillStorageError] = useState("");
+  const visibleSkillCatalog = useMemo(() => accountSkillCatalog(preferenceStorage), [preferenceStorage, skillRefreshNonce]);
+  const visibleSkills = visibleSkillCatalog.filter((skill) => {
+    const inGroup = skillBand === "device" ? skill.kind === "built-in" : skillBand === "installed" ? skill.kind === "installed" : skill.kind === "not-installed";
+    return inGroup && `${skill.name} ${skill.description}`.toLocaleLowerCase().includes(skillQuery.trim().toLocaleLowerCase());
+  });
+  useEffect(() => {
+    const refresh = () => setSkillRefreshNonce((current) => current + 1);
+    window.addEventListener("adrian-skills-changed", refresh);
+    window.addEventListener("storage", refresh);
+    return () => { window.removeEventListener("adrian-skills-changed", refresh); window.removeEventListener("storage", refresh); };
+  }, []);
   const searchRef = useRef<HTMLInputElement>(null);
   const fileRef = useRef<HTMLInputElement>(null);
   const inspectFileRef = useRef<HTMLInputElement>(null);
+  const [stopSync, setStopSync] = useState<{ owner: string | null; state: "idle" | "pending" | "confirmed" | "unconfirmed"; detail: string }>({ owner: null, state: "idle", detail: "" });
+  const stopSyncFlight = useRef<{ owner: string | null; on: boolean; restop?: boolean } | null>(null);
+  const stopConfirmed = stopSync.owner === turnOwner.current && stopSync.state === "confirmed";
   const clearedStop = useRef(false);
   const counts = requirementCounts();
   const active = ws.chats.find((chat) => chat.id === activeId) ?? null;
+  useEffect(() => { prioritizeChatMedia(activeId); }, [activeId, prioritizeChatMedia]);
   const followupPrivate = active?.temporary ?? temporary;
 
   const providerOptions = [
@@ -1677,7 +1823,19 @@ export function CommandApp() {
     ...consultModules.filter((item) => item.id === "nemotron" || item.id === "ollama")
       .map((item) => ({ id: item.id, label: item.label, enabled: item.connected, reason: "Sending checks runner availability." })),
     ...discovered.map((item) => ({ id: item.id, label: item.label, enabled: item.usable, reason: item.reason })),
-  ];
+  ].map((option) => {
+    const catalog = catalogForProvider(environmentCatalogs, option.id);
+    const selectedModel = option.id === "grok" ? grokModel : providerModels[option.id];
+    if (catalog && option.id === "grok" && !selectedModel) {
+      const automatic = tierCatalog.find(row => row.id === "Auto");
+      return automatic && !["catalogued", "unverified"].includes(automatic.availability)
+        ? { ...option, enabled: false, reason: automatic.note } : option;
+    }
+    if (!catalog || !selectedModel) return option;
+    const readiness = environmentModelReadiness(catalog, selectedModel);
+    return readiness.ok ? { ...option, reason: `${option.reason} ${readiness.availability === "catalogued" ? "Model is listed; inference is not verified." : "Model availability is unverified."}` }
+      : { ...option, enabled: false, reason: readiness.error };
+  });
   const effectiveRoute = routeForBotChat(active, { provider: providerChoice, modelTier });
   const effectiveProvider = effectiveRoute.fromBot ? effectiveRoute.provider : logicRoute ?? effectiveRoute.provider;
   const researchFreeOnly = effectiveProvider === "openrouter" || effectiveProvider === "nemotron" || /(?:%3A|:)free$/i.test(effectiveProvider)
@@ -1692,7 +1850,7 @@ export function CommandApp() {
   const controlsModelLabel = effectiveProvider === "grok" ? grokModel ?? effectiveRoute.modelTier
     : providerOptions.find((option) => option.id === effectiveProvider)?.label
       ?? logicRoutes.find((option) => option.id === effectiveProvider)?.label ?? "Selected module unavailable";
-  const storedBytes = useMemo(() => new Blob([JSON.stringify(ws)]).size, [ws]);
+  const storedBytes = useMemo(() => view === "settings" && settingsPane === "data" ? new Blob([JSON.stringify(ws)]).size : 0, [view, settingsPane, ws]);
 
   useEffect(() => {
     if (!focusAuditId || view !== "activity") return;
@@ -1736,44 +1894,59 @@ export function CommandApp() {
     function resetViewport() {
       root.style.removeProperty("--mind-visible-height");
       root.style.removeProperty("--mind-visible-top");
+      previousHeight = ""; previousTop = "";
     }
+    let viewportFrame: number | null = null;
+    let previousHeight = "", previousTop = "";
     function fitViewport() {
       if (!viewport || viewport.scale !== 1) {
         resetViewport();
         return;
       }
-      root.style.setProperty("--mind-visible-height", `${Math.round(viewport.height)}px`);
-      root.style.setProperty("--mind-visible-top", `${Math.max(0, Math.round(viewport.offsetTop))}px`);
+      const height = `${Math.round(viewport.height)}px`, top = `${Math.max(0, Math.round(viewport.offsetTop))}px`;
+      if (height !== previousHeight) root.style.setProperty("--mind-visible-height", height);
+      if (top !== previousTop) root.style.setProperty("--mind-visible-top", top);
+      previousHeight = height; previousTop = top;
     }
+    function scheduleViewport() { if (viewportFrame === null) viewportFrame = requestAnimationFrame(() => { viewportFrame = null; fitViewport(); }); }
     fitViewport();
-    viewport.addEventListener("resize", fitViewport);
-    viewport.addEventListener("scroll", fitViewport);
+    viewport.addEventListener("resize", scheduleViewport);
+    viewport.addEventListener("scroll", scheduleViewport);
     return () => {
-      viewport.removeEventListener("resize", fitViewport);
-      viewport.removeEventListener("scroll", fitViewport);
+      viewport.removeEventListener("resize", scheduleViewport);
+      viewport.removeEventListener("scroll", scheduleViewport);
+      if (viewportFrame !== null) cancelAnimationFrame(viewportFrame);
       resetViewport();
     };
   }, [view]);
 
   const timelineRunning = useMemo(() => timelineCounts(toolTimeline).running, [toolTimeline]);
   useEffect(() => {
-    if (!timelineRunning) return;
+    if (!timelineRunning || (view !== "chat" && view !== "command")) return;
     setTimelineTickMs(Date.now());
-    const id = window.setInterval(() => setTimelineTickMs(Date.now()), 250);
+    const id = window.setInterval(() => setTimelineTickMs(Date.now()), 1000);
     return () => window.clearInterval(id);
-  }, [timelineRunning]);
+  }, [timelineRunning, view]);
 
   useEffect(() => {
     if (!ready) return;
     let active = true;
     mcpOwnerActive.current = true;
     setMcpMutationBusy(false);
-    mindStatus()
+    let statusGeneration = 0;
+    const loadMindStatus = () => {
+      const generation = ++statusGeneration;
+      void mindStatus()
       .then((status) => {
-        if (!active) return;
+        if (!active || generation !== statusGeneration) return;
+        if (!Array.isArray(status.environmentCatalogs) || !Array.isArray(status.modelTiers)) {
+          throw new Error("The service returned incomplete model status.");
+        }
         setGrokConfigured(status.grok === "configured");
         setSearchProvider(status.searchProvider);
         setProviderModels(status.providerModels);
+        setEnvironmentCatalogs(status.environmentCatalogs);
+        setTierCatalog(status.modelTiers);
         if (status.providers && typeof status.providers === "object") setLiveProviders(status.providers);
         setGrok(status.grok === "configured" ? "Configured" : status.grok === "down" ? "Refused" : "Setup required");
         setStatusSignedIn(status.signedIn === true);
@@ -1789,12 +1962,20 @@ export function CommandApp() {
         }
       })
       .catch(() => {
-        if (!active) return;
+        if (!active || generation !== statusGeneration) return;
         setGrok("Status unavailable");
         setDatabasePill("Unknown");
         setDatabaseDetail("The status check did not finish.");
         setSystem("The status check did not finish.");
+        setEnvironmentCatalogs((rows) => rows.map((row) => ({ ...row, state: "unavailable", error: "Model metadata could not be refreshed. The previous selection is preserved." })));
+        setTierCatalog((rows) => rows.map((row) => ({ ...row, availability: "unavailable", note: "Model metadata could not be refreshed. Refresh connections before sending." })));
       });
+    };
+    loadMindStatus();
+    window.addEventListener("adrian-model-catalog-changed", loadMindStatus);
+    window.addEventListener("focus", loadMindStatus);
+    const refreshVisibleMetadata = () => { if (document.visibilityState === "visible") loadMindStatus(); };
+    document.addEventListener("visibilitychange", refreshVisibleMetadata);
     notionStatus()
       .then((status) => { if (active) setNotion(status); })
       .catch((caught) => {
@@ -1870,7 +2051,7 @@ export function CommandApp() {
     mcpReloadListsRef.current = loadMcpLists;
     loadMcpLists();
     try {
-      const saved = localStorage.getItem("amcos.skills.v1");
+      const saved = preferenceStorage.getItem("amcos.skills.v1");
       if (saved !== null) {
         const parsed: unknown = JSON.parse(saved);
         if (isEnabledSkillMap(parsed)) setEnabledSkills(parsed);
@@ -1881,6 +2062,9 @@ export function CommandApp() {
     }
     return () => {
       active = false;
+      window.removeEventListener("adrian-model-catalog-changed", loadMindStatus);
+      window.removeEventListener("focus", loadMindStatus);
+      document.removeEventListener("visibilitychange", refreshVisibleMetadata);
       mcpOwnerActive.current = false;
       mcpRegistryGeneration.current += 1;
       mcpSavedGeneration.current += 1;
@@ -1909,15 +2093,17 @@ export function CommandApp() {
 
   useEffect(() => {
     try {
-      const stored = readSelection(localStorage);
+      const helpers = JSON.parse(preferenceStorage.getItem("amcos.consult.helpers.v1") || "[]");
+      setConsultHelpers(Array.isArray(helpers) ? helpers.filter((id): id is string => typeof id === "string").slice(0, 8) : []);
+      const stored = readSelection(preferenceStorage);
       setProviderChoice(stored.provider);
       setModelTier(stored.modelTier);
       setGrokModel(stored.grokModel ?? null);
       setLogicRoute(stored.logicRoute);
-      const fail = localStorage.getItem("amcos.failover.v1");
+      const fail = preferenceStorage.getItem("amcos.failover.v1");
       if (fail === "grok" || fail === "none") setFailoverPolicy(fail);
-      setRoutingMode(readRoutingMode(localStorage));
-      setRoutingPanel(readRoutingPanel(localStorage));
+      setRoutingMode(readRoutingMode(preferenceStorage));
+      setRoutingPanel(readRoutingPanel(preferenceStorage));
 
     } catch {
       /* a private browser can refuse storage */
@@ -1929,8 +2115,8 @@ export function CommandApp() {
   useEffect(() => {
     if (!selectionLoaded) return;
     try {
-      writeSelection(localStorage, { provider: providerChoice, modelTier, logicRoute, grokModel: grokModel ?? undefined });
-      localStorage.setItem("amcos.failover.v1", failoverPolicy);
+      writeSelection(preferenceStorage, { provider: providerChoice, modelTier, logicRoute, grokModel: grokModel ?? undefined });
+      preferenceStorage.setItem("amcos.failover.v1", failoverPolicy);
     } catch {
       /* a private browser can refuse storage */
     }
@@ -1944,6 +2130,7 @@ export function CommandApp() {
   }, []);
 
   useEffect(() => {
+    if (!ready || accountPending || !account) return;
     const step = () => {
       const current = wsRef.current;
       if (current.halted) return;
@@ -1951,19 +2138,12 @@ export function CommandApp() {
       const due = current.schedules.some((job) => job.enabled && job.nextRunAt <= now);
       const queued = current.runs.some((run) => run.state === "queued" || run.state === "running");
       if (!due && !queued) return;
-      for (const run of current.runs) {
-        // Scheduled occurrences execute their declared agent tools. Their titles must never become PC commands.
-        if (run.id.startsWith("scheduled:") || run.parentId?.startsWith("scheduled:")) continue;
-        if (run.state !== "queued" || desktopActedRef.current.has(run.id) || !spokenPcCommand(run.goal)) continue;
-        desktopActedRef.current.add(run.id);
-        void fetch("/api/mind/pc/status", { method: "POST", credentials: "include", headers: { "content-type": "application/json" }, body: JSON.stringify({ text: run.goal }) });
-      }
       const next = tickFleet(runDueSchedules(current, now), { now, workerId: "browser-worker" });
-      setWs(next);
+      if (next !== current) setWs(next);
     };
     const id = window.setInterval(step, 15000);
     return () => window.clearInterval(id);
-  }, []);
+  }, [ready, accountPending, account?.id, setWs]);
 
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => {
@@ -2044,8 +2224,7 @@ export function CommandApp() {
     setResearchSteps([]);
     if (!draftOwner) return;
     try {
-      const stored = JSON.parse(localStorage.getItem(`amcos.research.v2.${draftOwner}`) || "[]") as ResearchReport[];
-      if (Array.isArray(stored)) setResearchHistory(stored.slice(0, 8));
+      setResearchHistory(loadResearchReports(localStorage, draftOwner));
     } catch { /* Browser storage is optional. */ }
   }, [draftOwner]);
 
@@ -2116,19 +2295,19 @@ export function CommandApp() {
     window.location.assign("/login?next=" + encodeURIComponent(loginReturnPath()));
   };
 
-  const hits = useMemo(
-    () =>
-      paletteHits({
-        query,
-        projects: ws.projects,
-        chats: ws.chats.map((chat) => ({ ...chat, title: shownChatTitle(chat), humanCode: isIntelligenceThread(chat.customPersonality) })),
-        memories: ws.memories,
-        files: ws.files,
-        agents: ws.agents,
-        runs: ws.runs,
-      }),
-    [query, ws],
-  );
+  const paletteSkills = useMemo(() => accountSkillCatalog(preferenceStorage, enabledSkills), [preferenceStorage, enabledSkills]);
+  const buildPaletteIndex = useMemo(() => createPaletteIndexBuilder(), [draftOwner]);
+  const paletteChats = useMemo(() => ws.chats.map(chat => ({ ...chat, title: shownChatTitle(chat), humanCode: isIntelligenceThread(chat.customPersonality) })), [ws.chats]);
+  const paletteSearchIndex = useMemo(() => buildPaletteIndex({
+    projects: ws.projects, chats: paletteChats, memories: ws.memories, files: ws.files, agents: ws.agents, runs: ws.runs,
+    skills: paletteSkills, schedules: ws.schedules, activity: ws.audit, research: researchHistory, connections: ws.connections,
+    browserSessions: ws.browserSessions, deployments: ws.deployments,
+  }), [buildPaletteIndex, paletteChats, ws.projects, ws.memories, ws.files, ws.agents, ws.runs, paletteSkills, ws.schedules, ws.audit, researchHistory, ws.connections, ws.browserSessions, ws.deployments]);
+  const hits = useMemo(() => {
+    if (!paletteOpen) return [];
+    const result = queryPaletteIndex(paletteSearchIndex, deferredQuery);
+    return paletteFilter && paletteFilter !== "all" ? result.filter(hit => hit.view === paletteFilter) : result;
+  }, [paletteOpen, paletteSearchIndex, deferredQuery, paletteFilter]);
 
   type ChromeMenu = "palette" | "surface" | "bell" | "account" | "controls" | "nav";
 
@@ -2162,6 +2341,12 @@ export function CommandApp() {
       setMemoryQuery("");
       setCardFocus({ id: "note-" + hit.ref });
     }
+    if (hit.view === "research" && hit.ref) {
+      const report = researchHistory.find((row) => row.id === hit.ref);
+      if (report) { setActiveResearchId(report.id); setResearchReportQuestion(report.question); setResearchText(report.question); setResearchNote(report.summary); setResearchCitations(report.citations); setResearchSteps(report.steps); setResearchBand("search"); }
+    }
+    if (hit.view === "activity" && hit.ref) { setFocusAuditId(hit.ref); setActivityQuery(""); }
+    if (hit.view === "scheduled" && hit.ref) setCardFocus({ id: `schedule-${hit.ref}` });
     if (hit.view === "projects" && hit.ref) setShareProjectId(hit.ref);
     if (hit.view === "agents" && hit.ref) setShareBotId(hit.ref);
     if (hit.view === "files" && hit.ref) {
@@ -2172,13 +2357,29 @@ export function CommandApp() {
     if (hit.view === "speak") openSpeakStage();
     else if (hit.view === "social" || hit.view === "gpt-wrapper") window.location.assign("/" + hit.view);
     else setView(hit.view);
+    if (hit.focusId) setCardFocus({ id: hit.focusId });
     setQuery("");
     setPaletteIndex(0);
     setPaletteOpen(false);
     setNavOpen(false);
   }
 
+  function palettePinKind(hit: (typeof hits)[number] | undefined) {
+    return !hit?.ref ? null : hit.meta.startsWith("Chat") || hit.meta.startsWith("Intelligence") ? "chat" as const : hit.meta === "Agent" ? "agent" as const : hit.meta === "Project" ? "project" as const : hit.meta.startsWith("File") ? "file" as const : null;
+  }
+  const selectedHitPinned = Boolean(hits[paletteIndex]?.ref && ws.pins.some((pin) => pin.ref === hits[paletteIndex].ref && pin.kind === palettePinKind(hits[paletteIndex])));
+  function pinPaletteHit(hit: (typeof hits)[number] | undefined) {
+    if (!hit?.ref) return;
+    const kind = palettePinKind(hit);
+    if (!kind) return;
+    setWs((before) => {
+      const after = togglePin(before, kind, hit.ref);
+      setNotice(after === before ? `Pin limit reached. ${hit.label} was not added.` : after.pins.some((pin) => pin.kind === kind && pin.ref === hit.ref) ? `Pinned ${hit.label}.` : `Unpinned ${hit.label}.`);
+      return after;
+    });
+  }
   function onPaletteKeyDown(event: ReactKeyboardEvent<HTMLInputElement>) {
+    if (paletteOpen && event.altKey && event.key.toLowerCase() === "p") { event.preventDefault(); pinPaletteHit(hits[paletteIndex]); return; }
     const action = paletteKeyAction({
       key: event.key,
       open: paletteOpen,
@@ -2196,6 +2397,7 @@ export function CommandApp() {
     }
     if (action.type === "move") {
       setPaletteIndex(action.index);
+      if (action.index >= paletteLimit) setPaletteLimit(Math.ceil((action.index + 1) / 50) * 50);
       return;
     }
     const hit = hits[action.index];
@@ -2220,8 +2422,8 @@ export function CommandApp() {
   function deleteSavedChats(ids: string[], label: string) {
     const unique = [...new Set(ids)];
     if (unique.length === 0) return;
-    requestProtected("delete", `delete-chats:${unique.slice().sort().join(",")}`, label, "The transcripts are removed from this browser. Saved notes stay until you delete them.", "Approve delete", () => {
-      setWs((prev) => pushAudit(removeConversations(prev, unique), "delete_chat", unique[0] ?? "chat", unique.length === 1 ? "approved" : `${unique.length} removed`));
+    requestProtected("delete", `delete-chats:${unique.slice().sort().join(",")}`, label, "Remove these transcripts from this workspace and synchronize their deletion when the server accepts the save. Saved notes, files, quoted copies and previously exported archives remain until separately deleted.", "Approve delete", () => {
+      setWs((prev) => pushAudit(removeConversations(prev, unique), "delete_chat", unique[0] ?? "chat", unique.length === 1 ? "approved" : `${unique.length} removed`, unique));
       setActiveId((current) => (current && unique.includes(current) ? null : current));
       setNavOpen(false);
     });
@@ -2452,7 +2654,7 @@ export function CommandApp() {
     if (intent.kind === "local" || intent.kind === "skill" || intent.kind === "save_skill") {
       const toolId = intent.kind === "save_skill" ? "save_chat_skill" : intent.kind === "skill" ? "search_skills" : intent.tool;
       setToolTimeline([]);
-      clearFailure();
+      setError(null);
       const turn = runAgentTurn({
         userId: "local-owner",
         sessionId: chat.id,
@@ -2540,12 +2742,12 @@ export function CommandApp() {
     return true;
   }
 
-  async function runWebResearch(chat: Chat, query: string, action: "chat" | "voice" = "chat") {
+  async function runWebResearch(chat: Chat, query: string, action: "chat" | "voice" = "chat", operationId = crypto.randomUUID()) {
     if (turnOwner.current !== draftOwner || !wsRef.current.chats.some((item) => item.id === chat.id)) return;
     setBusy(true);
     setError(null);
     try {
-      const result = await searchWeb({ data: { query, freeOnly: researchFreeOnly } });
+      const result: ResearchResult = await searchWeb({ data: { query, operationId, projectId: chat.projectId, freeOnly: researchFreeOnly } });
       if (turnOwner.current !== draftOwner) return;
       setBusy(false);
       if (!wsRef.current.chats.some((item) => item.id === chat.id)) return;
@@ -2553,10 +2755,7 @@ export function CommandApp() {
       setResearchReportQuestion(query);
       if (!result.ok) {
         const message = result.error;
-        const retry = () => {
-          void runWebResearch(chat, query, action);
-        };
-        emitFailure("research", mountFailure({ message, action: "research_failed", target: "search", outcome: result }, retry));
+        reportFailure(message, "research_failed", "search", null, "none", null, { operationId, subsystem: "research", stage: "response", operationKind: "generation", retryPolicy: "review", outcome: result.partial ? "partial" : "unknown", provider: result.route?.provider, bindings: { chatId: chat.id, reportId: result.persistence?.reportId, revision: result.route?.configurationRevision }, temporary: chat.temporary });
         recordToolTurn(chat, query, result.error, undefined, { tool: "web_search", ok: false, action });
         setResearchNote(result.error);
         return;
@@ -2573,17 +2772,18 @@ export function CommandApp() {
       setBusy(false);
       if (!wsRef.current.chats.some((item) => item.id === chat.id)) return;
       const message = "The search provider could not be reached. No citations were created.";
-      const retry = () => {
-        void runWebResearch(chat, query, action);
-      };
-      emitFailure("research", mountFailure({ message, action: "research_failed", target: "search" }, retry));
+      reportFailure(message, "research_failed", "search", null, "none", null, { operationId, subsystem: "research", stage: "response", operationKind: "generation", retryPolicy: "review", outcome: "unknown", bindings: { chatId: chat.id }, temporary: chat.temporary });
       recordToolTurn(chat, query, message, undefined, { tool: "web_search", ok: false, action });
       setResearchNote(message);
     }
   }
 
-  async function askNotion(chat: Chat, text: string, confirmed = false, pageId: string | null = null, workspaceId = chat.notionWorkspaceId) {
+  async function askNotion(chat: Chat, text: string, confirmed = false, pageId: string | null = null, workspaceId = chat.notionWorkspaceId, operationId?: string, cursor: string | null = null) {
     if (turnOwner.current !== draftOwner || !wsRef.current.chats.some((item) => item.id === chat.id)) return;
+    if ((confirmed || operationId || pageId || cursor) && wsRef.current.chats.find((item) => item.id === chat.id)?.notionWorkspaceId !== workspaceId) {
+      setError("This conversation's Notion workspace changed after the operation was prepared. Restore the original workspace to check its existing result, or prepare a new request and approval for the new workspace. Nothing was sent.");
+      return;
+    }
     setBusy(true);
     setError(null);
     const epoch = notionEpoch.current;
@@ -2604,11 +2804,16 @@ export function CommandApp() {
         });
         return;
       }
-      const result = await notionCommand({ data: { text, confirmed, pageId, workspaceId } });
+      if (confirmed && operationId) setWs((prev) => saveRecovery(prev, { id: operationId, operationId, at: new Date().toISOString(), action: "notion_operation", target: "notion", chatId: chat.id, workspaceId, pageId, text, outcome: "uncertain", message: "Notion write outcome has not been confirmed. Check this existing operation before starting another write.", state: "open" }));
+      const result = await notionCommand({ data: { text, confirmed, pageId, workspaceId, operationId, cursor, chatId: chat.id } });
       if (turnOwner.current !== draftOwner) return;
       setBusy(false);
-      if (epoch !== notionEpoch.current || !wsRef.current.chats.some((item) => item.id === chat.id)) return;
+      if (epoch !== notionEpoch.current || wsRef.current.chats.find((item) => item.id === chat.id)?.notionWorkspaceId !== workspaceId) return;
       setNotion((current) => current ?? { state: result.state, detail: result.error || "Notion answered from the server." });
+      if (result.ambiguous) {
+        setNotionSelection({ chat, text, workspaceId, pages: result.pages, cursor: result.nextCursor ?? null });
+        return;
+      }
       if (result.needsConfirmation && result.pages[0]) {
         const target = result.pages[0];
         setPending({
@@ -2618,18 +2823,22 @@ export function CommandApp() {
           detail: result.error,
           confirm: "Append",
           run: () => {
-            void askNotion(chat, text, true, target.id, workspaceId);
+            void askNotion(chat, text, true, target.id, workspaceId, result.operationId);
           },
         });
         return;
       }
       if (!result.ok) {
         const message = result.error || "Notion did not complete the requested operation.";
-        const retry = () => { void askNotion(chat, text, false, pageId, workspaceId); };
-        reportFailure(message, "notion_operation_failed", "notion", retry, result.needsConfirmation ? "none" : "retry");
+        const savedId = result.operationId ?? operationId;
+        if (savedId) setWs((prev) => saveRecovery(prev, { id: savedId, operationId: savedId, at: new Date().toISOString(), action: "notion_operation", target: "notion", chatId: chat.id, workspaceId, pageId: pageId ?? result.pages[0]?.id ?? null, text, outcome: result.outcome, message, state: "open" }));
+        const needsSetup = result.recovery === "reconnect" || result.recovery === "permissions" || result.recovery === "workspace_removed" || result.recovery === "page_unavailable";
+        const retry = needsSetup ? null : () => { void askNotion(chat, text, false, pageId, workspaceId, savedId); };
+        reportFailure(message, "notion_operation_failed", "notion", retry, needsSetup ? "setup" : result.needsConfirmation ? "none" : "retry");
         recordToolTurn(chat, text, message, undefined, { tool: "notion", ok: false, action: "chat" });
         return;
       }
+      if (result.operationId ?? operationId) setWs((prev) => closeRecovery(prev, (result.operationId ?? operationId)!, "resolved"));
       const lines = [result.error, ...result.pages.map((page) => `${page.title} — ${page.url}`), result.content].filter(Boolean);
       if (lines.length && epoch === notionEpoch.current) {
         setNotionPreview({ owner: draftOwner, chatId: chat.id, text: lines.join("\n") });
@@ -2639,9 +2848,9 @@ export function CommandApp() {
       if (turnOwner.current !== draftOwner) return;
       setBusy(false);
       if (!wsRef.current.chats.some((item) => item.id === chat.id)) return;
-      const message = "Notion could not be reached. Nothing was changed.";
+      const message = confirmed && operationId ? "Notion's write response was lost. The outcome is uncertain. Check the existing operation; do not repeat the append." : "Notion could not be reached. No write was confirmed from this request.";
       const retry = () => {
-        void askNotion(chat, text, false, pageId, workspaceId);
+        void askNotion(chat, text, false, pageId, workspaceId, operationId);
       };
       if (emitFailure("notion", mountFailure({ message, action: "notion_unreachable", target: "notion" }, retry))) return;
       setError(message);
@@ -2654,7 +2863,7 @@ export function CommandApp() {
     mcpInFlight.current = true;
     setBusy(true);
     setError(null);
-    clearFailure();
+    setError(null);
     setToolResultStatus("running");
     try {
       const result = await mcpCommand({ data: { text, confirmed, approvalServerId, approvalId } });
@@ -2678,6 +2887,13 @@ export function CommandApp() {
           label: "Call MCP tool",
           detail: result.error,
           confirm: "Call",
+          review: "approval" in result && result.approval ? result.approval : { connectionId: reviewedServerId },
+          cancel: () => {
+            if (turnOwner.current !== draftOwner || !wsRef.current.chats.some((item) => item.id === chat.id)) return;
+            const scope = JSON.stringify([draftOwner, chat.id, chat.temporary]);
+            setDraftInScope(scope, Boolean(draftOwner) && !chat.temporary, (current) => current || text);
+            setNotice("MCP call canceled. The command is kept in its original conversation draft.");
+          },
           run: () => {
             void askMcp(chat, text, true, reviewedServerId, review);
           },
@@ -2714,7 +2930,35 @@ export function CommandApp() {
     }
   }
 
-  type TurnRequest = { id: string; body: ReturnType<typeof chatTurnBody> };
+  type TurnRequest = { id: string; body: ReturnType<typeof chatTurnBody>; memoryRevision?: string };
+  type TurnReplyReceipt = { chatId: string; messageId: string; provider?: string; model?: string; requestId?: string | null };
+
+  async function reconcileSend(chatId: string, operationId: string) {
+    const owner = draftOwner;
+    if (!owner || turnOwner.current !== owner) return;
+    try {
+      const token = getBearerToken();
+      const prefix = previewPathPrefix(window.location.hostname, window.location.pathname) ?? "";
+      const receipt = await checkTurnReceipt(`${prefix}/api/mind/turn`, operationId, token ? { Authorization: `Bearer ${token}` } : {});
+      if (turnOwner.current !== owner) return;
+      if (!receipt.ownerId || receipt.ownerId !== owner || receipt.ownerId !== account?.id) {
+        reportFailure("Verify the original account before checking this send.", "auth_required", chatId, null, "setup");
+        return;
+      }
+      if (receipt.executions?.length) setWs((prev) => applyExecutionUsage(prev, chatId, receipt.executions!, new Date().toISOString()));
+      const message = receipt.state === "responded"
+        ? "The app dispatched the original request. Review the saved reply or incomplete text; provider completion may still be unconfirmed. Nothing was resent."
+        : receipt.state === "not_dispatched"
+          ? "The original request was rejected before provider dispatch. You can review the current context and explicitly send a new message."
+          : receipt.state === "not_received"
+            ? "No receipt is available yet. The earlier delivery may still arrive; nothing was resent."
+            : "The original request is still processing or its outcome is unknown. Nothing was resent.";
+      reportFailure(message, "chat_recovery_checked", chatId, () => { void reconcileSend(chatId, operationId); });
+    } catch (error) {
+      if (turnOwner.current !== owner) return;
+      reportFailure(error instanceof Error ? error.message : "The send could not be checked. Nothing was resent.", "chat_recovery_failed", chatId, () => { void reconcileSend(chatId, operationId); });
+    }
+  }
 
   async function deliver(
     chat: Chat,
@@ -2722,9 +2966,13 @@ export function CommandApp() {
     source: Workspace,
     resume = false,
     images: ImageAttachment[] = [],
-    options?: { logicRoute?: LogicRouteId | null; skipUserMessage?: boolean; isolateOutputs?: boolean; accessNotes?: { id: string; text: string }[]; request?: TurnRequest; operationId?: string; replaceReplyId?: string; recovery?: Msg["deliveryRoute"] },
+    options?: { onFailure?: (failure: { error: string; dispatched: false; approvalId?: string; answerRequest: NonNullable<SpeakRetryParams["answerRequest"]> }) => void; onReply?: (reply: TurnReplyReceipt) => void; provider?: string; taskId?: string; logicRoute?: LogicRouteId | null; skipUserMessage?: boolean; isolateOutputs?: boolean; accessNotes?: { id: string; text: string }[]; request?: TurnRequest; selectedProviderOnly?: boolean; knownUnsent?: boolean; operationId?: string; replaceReplyId?: string; recovery?: Msg["deliveryRoute"] },
   ): Promise<string | null> {
-    if (turnInFlight.current || turnOwner.current !== draftOwner) return null;
+    if (accountPending || turnInFlight.current || turnOwner.current !== draftOwner) return null;
+    if (options?.request && !options.knownUnsent) {
+      await reconcileSend(chat.id, options.request.id);
+      return null;
+    }
     const snapped = snapshotImages(images);
     if (shouldBlockForEmergencyStop(wsRef.current.halted, source.halted)) {
       reportEmergencyStop(chat.id, () => {
@@ -2734,7 +2982,7 @@ export function CommandApp() {
     }
     const botRoute = routeForBotChat(chat, { provider: providerChoice, modelTier });
     const savedRoute = options?.recovery;
-    const selectedProvider = savedRoute?.provider ?? botRoute.provider;
+    const selectedProvider = savedRoute?.provider ?? options?.provider ?? botRoute.provider;
     const selectedTier = savedRoute?.tier ?? botRoute.modelTier;
     if (selectedProvider.startsWith("mcp:")) {
       const chosen = discovered.find((item) => item.id === selectedProvider);
@@ -2759,7 +3007,7 @@ export function CommandApp() {
       const name = selectedProvider.slice("service:".length);
       if (name === "social") window.location.assign("/social");
       else if (name === "gpt-wrapper") window.location.assign("/gpt-wrapper");
-      else if (name === "drive") setCloudPickerOpen(true);
+      else if (name === "drive") openCloudPicker();
       else if (name === "notion") setView("connected");
       return null;
     }
@@ -2786,15 +3034,17 @@ export function CommandApp() {
     const otherReady = !activeLogic && !isCustomProvider && selectedProvider !== "grok" && liveProviders[selectedProvider as "openai" | "anthropic" | "gemini" | "openrouter"] === true;
     let routed = chosenProvider(activeLogic || isCustomProvider ? "grok" : selectedProvider, isCustomProvider ? true : grokConfigured);
     if (!savedRoute && !routedRunner && !otherReady && !activeLogic && !isCustomProvider && !routed.ok) {
-      const switched = failover(selectedProvider, grokConfigured === true, selectedProvider === "gemini" ? "none" : failoverPolicy);
+      const switched = failover(selectedProvider, grokConfigured === true, options?.selectedProviderOnly || selectedProvider === "gemini" || selectedProvider === "openrouter" ? "none" : failoverPolicy);
       if (switched.provider === "grok") {
         routed = chosenProvider("grok", grokConfigured);
         if (routed.ok) setNotice(switched.note);
       }
     }
-    const orchestrating = savedRoute ? savedRoute.orchestrated : resolveSendPath(composerEffort).path === "orchestrator";
+    const orchestrating = options?.selectedProviderOnly ? false : savedRoute ? savedRoute.orchestrated : resolveSendPath(composerEffort).path === "orchestrator";
+    const helperConsent = orchestrating && !currentFreeOnly.current && approvedHelperDraft === helperDraftKey
+      && text.trim() === draft.trim() && (!savedRoute || savedRoute.provider === consultModel);
     const consultPlan = orchestrating
-      ? planModelConsult({ orchestrator: savedRoute?.provider ?? consultModel, modules: consultModules, question: text })
+      ? planModelConsult({ orchestrator: savedRoute?.provider ?? consultModel, modules: consultModules, question: text, helperIds: consultHelpers, allowPaidHelpers: helperConsent, freeOnly: currentFreeOnly.current })
       : null;
     if (consultPlan && !consultPlan.ok) {
       reportFailure(consultPlan.error, "model_unavailable", "provider", () => {
@@ -2808,7 +3058,7 @@ export function CommandApp() {
       });
       return null;
     }
-    let live = resolveChatMessages(wsRef.current.chats, chat.id, chat) as Msg[];
+    let live = completedHistory(resolveChatMessages(wsRef.current.chats, chat.id, chat) as Msg[]);
     if (options?.isolateOutputs) {
       let lastUser = -1;
       live.forEach((item, index) => {
@@ -2820,38 +3070,77 @@ export function CommandApp() {
       setError("The reply changed before regeneration. Choose the current reply to regenerate.");
       return null;
     }
-    const messages = options?.replaceReplyId ? live.slice(0, -1) : selectRetryMessages(chat.messages, live);
+    let messages = options?.replaceReplyId ? live.slice(0, -1) : selectRetryMessages(completedHistory(chat.messages), live);
     if (resume && messages.at(-1)?.role === "assistant") return null;
-    const history = historyForDeliver(messages, resume);
+    let history = historyForDeliver(messages, resume);
     const title = resume || messages.length > 0 ? chat.title : text.replace(/\s+/g, " ").slice(0, 48);
     const userMessageId = options?.skipUserMessage ? null : resume ? messages.at(-1)?.id ?? null : crypto.randomUUID();
     setTurnChat({ ownerId: draftOwner, chatId: chat.id });
     setBusy(true);
     setLiveText("");
     setError(null);
-    setFailure(null);
     setToolTimeline([]);
     turnAbort.current?.abort();
     const generation = ++turnGen.current;
     const controller = new AbortController();
     turnAbort.current = controller;
-    const { signal, cleanup: clearTurnTimeout } = boundAbortSignal(controller.signal, 30_000);
+    let { signal, cleanup: clearTurnTimeout } = boundAbortSignal(controller.signal, 15_000);
+    let partialText = "";
+    let streamFrame: number | null = null;
     const token = getBearerToken();
     const prefix = previewPathPrefix(window.location.hostname, window.location.pathname) ?? "";
     turnInFlight.current = true;
+    let memoryRevision = options?.request?.memoryRevision ?? memorySendRevision(source, chat);
     let operationId: string;
+    let knowledgePassages: KnowledgePassage[] = [];
+    let projectContext: Awaited<ReturnType<typeof retrieveProjectPassages>> = [];
+    let preparedRevision: string | undefined;
     try {
-      operationId = options?.request?.id ?? options?.operationId ?? await prepareTurnId(`${prefix}/api/mind/turn`, token ? { Authorization: `Bearer ${token}` } : {}, signal);
+      const hydrated = await ensureChatMedia({ ...chat, messages }, signal);
+      if (!hydrated || generation !== turnGen.current || turnOwner.current !== draftOwner || signal.aborted) throw new Error("The conversation changed while loading its images.");
+      messages = hydrated.messages;
+      history = historyForDeliver(messages, resume);
+      if (!options?.request) {
+        const policy = effectiveContextPolicy(chat);
+        if (!policy.history) history = [];
+        [projectContext, preparedRevision] = await Promise.all([
+          retrieveProjectPassages(source, chat, text),
+          memoryPolicyRevision(source, chat),
+        ]);
+      }
+      if (draftOwner && chat.knowledgeDocumentIds?.length) {
+        const selectedKnowledge = await retrieveAccountKnowledge(draftOwner, chat.projectId, chat.knowledgeDocumentIds, text);
+        if ("error" in selectedKnowledge && selectedKnowledge.error) throw new Error(String(selectedKnowledge.error));
+        knowledgePassages = selectedKnowledge.passages;
+      }
+      const prepared = await prepareTurn(`${prefix}/api/mind/turn`, token ? { Authorization: `Bearer ${token}` } : {}, signal);
+      operationId = options?.request?.id ?? options?.operationId ?? prepared.operationId;
+      clearTurnTimeout();
+      ({ signal, cleanup: clearTurnTimeout } = boundAbortSignal(controller.signal, prepared.timeoutMs + 5_000));
       if (generation !== turnGen.current || turnOwner.current !== draftOwner || signal.aborted || wsRef.current.halted ||
           !wsRef.current.chats.some((item) => item.id === chat.id)) throw new Error();
-    } catch {
+      const updated = currentMemoryContext(wsRef.current, chat.id);
+      if (!updated || updated.chat.projectId !== chat.projectId) throw new Error("The conversation destination changed.");
+      if (!checkMemorySendRevision(wsRef.current, chat.id, memoryRevision)) {
+        if (options?.request || updated.chat.memory !== "off") throw new Error("The saved context changed.");
+        source = wsRef.current;
+        chat = updated.chat;
+        options = { ...options, accessNotes: [] };
+        projectContext = [];
+        knowledgePassages = [];
+        if (!effectiveContextPolicy(chat).history) history = [];
+        memoryRevision = memorySendRevision(source, chat);
+        preparedRevision = await memoryPolicyRevision(source, chat);
+        if (generation !== turnGen.current || turnOwner.current !== draftOwner || signal.aborted || wsRef.current.halted) throw new Error("The conversation changed.");
+      }
+    } catch (cause) {
       clearTurnTimeout();
       if (generation === turnGen.current) {
         turnInFlight.current = false;
         turnAbort.current = null;
         setBusy(false);
         setTurnChat(null);
-        setError("This send could not be prepared. No model was called.");
+        setError(cause instanceof Error && cause.message === "The saved context changed." ? "The saved context changed. Review the current conversation before sending." : "This send could not be prepared. Verify the same account and current conversation before retrying. No model was called.");
       }
       return null;
     }
@@ -2860,7 +3149,7 @@ export function CommandApp() {
       setWs((prev) => ({
         ...prev,
         chats: prev.chats.map((item) => item.id === chat.id
-          ? { ...item, messages: item.messages.map((message) => message.id === userMessageId ? { ...message, delivery, deliveryOperationId: operationId } : message) }
+          ? { ...item, messages: item.messages.map((message) => message.id === userMessageId ? { ...message, delivery, deliveryOperationId: operationId, partialReply: partialText || message.partialReply } : message) }
           : item),
       }));
     };
@@ -2870,10 +3159,11 @@ export function CommandApp() {
         id: userMessageId,
         role: "user",
         content: historyTextForImages(text, snapped),
+        researchRefs: researchReferencesInText(text, researchHistory),
         at: new Date().toISOString(),
         delivery: "submitted",
         deliveryOperationId: operationId,
-        images: snapped.length ? snapped.map((image) => ({ dataUrl: image.dataUrl, name: image.name, origin: image.origin })) : undefined,
+        images: snapped.length ? snapped.map((image) => ({ dataUrl: image.dataUrl, name: image.name, origin: image.origin, lineage: image.lineage, preparation: image.preparation })) : undefined,
       };
       setWs((prev) => ({
         ...prev,
@@ -2884,14 +3174,16 @@ export function CommandApp() {
     } else if (resume) {
       markDelivery("submitted");
     }
+    const customRoute = parseCustomProviderChoice(selectedProvider);
     const request: TurnRequest = options?.request ?? {
-      id: operationId,
+      id: operationId, memoryRevision,
       body: chatTurnBody({
-          chatId: chat.id,
+          chatId: chat.id, projectId: chat.projectId, taskId: options?.taskId ?? operationId, freeOnly: currentFreeOnly.current,
           text,
           memory: chat.memory,
           halted: wsRef.current.halted,
           history: history.map((item) => ({
+            id: item.id,
             role: item.role,
             content: item.content,
             images: item.images
@@ -2900,13 +3192,22 @@ export function CommandApp() {
           })),
           memoryContext: [
             ...(options?.accessNotes ?? []),
-            ...relevantMemories(memoriesForChat(source, chat), text).map((item) => ({ id: item.id, text: item.text })),
-          ].slice(0, 12),
+            ...relevantMemories(memoriesForChat(source, chat), text).map((item) => ({ id: item.id, text: item.text, authority: item.authority, sourceRef: item.sourceRef })),
+          ],
+          supportsHistoryImages: customRoute.ok && !activeLogic && !consultPlan
+            ? customAiProviders.find(row => row.id === customRoute.id)?.modelCapabilities?.[customRoute.model]?.imageInput === "supported"
+            : undefined,
+          checkpoints: chat.checkpoints ?? [],
           botKnowledge: chat.botKnowledge ?? "",
+          knowledgePassages, projectContext, memoryPolicyRevision: preparedRevision,
+          skillApplications: collectAccountSkillApplications(preferenceStorage, text, enabledSkills, "chat"),
+          projectInstructions: projectInstructionsForChat(source, chat.id),
           provider: consultPlan && consultPlan.ok
             ? consultPlan.plan.orchestrator
             : activeLogic ?? (isCustomProvider || otherReady || routedRunner ? selectedProvider : (routed.ok ? routed.id : selectedProvider)),
           modelTier: selectedTier,
+          modelControls: loadModelControls(preferenceStorage),
+          previousTier: [...messages].reverse().find((message) => message.role === "assistant" && message.resolvedTier)?.resolvedTier,
           requestedModel: savedRoute?.model ?? (selectedProvider === "grok" && !activeLogic && !consultPlan ? grokModel : providerModels[selectedProvider] ?? null),
           logicRoute: consultPlan && consultPlan.ok ? null : activeLogic,
           orchestrator: consultPlan && consultPlan.ok ? consultPlan.plan.orchestrator : null,
@@ -2915,37 +3216,57 @@ export function CommandApp() {
           consult: consultPlan && consultPlan.ok ? {
             available: consultPlan.plan.available,
             helpers: consultPlan.plan.helpers,
+            helperIds: consultPlan.plan.helpers.map((helper) => helper.id),
+            allowPaidHelpers: helperConsent,
             purpose: consultPlan.plan.purpose,
           } : null,
-          images: snapped.map((image) => ({ dataUrl: image.dataUrl, name: image.name, origin: image.origin })),
+          images: snapped.map((image) => ({ dataUrl: image.dataUrl, name: image.name, origin: image.origin, lineage: image.lineage, preparation: image.preparation })),
           personalityId: chat.personalityId ?? "assistant",
           customPersonality: chat.customPersonality ?? "",
         }),
     };
-    function reportTurnError(message: string, deliveryUncertain: boolean) {
-      const useOriginal = deliveryUncertain || options?.request !== undefined || options?.operationId !== undefined;
-      markDelivery(useOriginal ? "unconfirmed" : "failed");
+    if (helperConsent && orchestrating) setApprovedHelperDraft(null);
+    function reportTurnError(message: string, deliveryUncertain: boolean, code: TurnErrorCode, knownNotSent = false) {
+      const useOriginal = dispatchStarted || deliveryUncertain || knownNotSent || options?.request !== undefined || options?.operationId !== undefined;
+      markDelivery(knownNotSent ? "failed" : useOriginal ? "unconfirmed" : "failed");
       const retry = () => {
         if (turnInFlight.current || turnOwner.current !== draftOwner) return;
+        if (!knownNotSent && (dispatchStarted || deliveryUncertain)) { void reconcileSend(chat.id, operationId); return; }
         const thread = wsRef.current.chats.find((item) => item.id === chat.id);
         if (!thread) return;
+        if (useOriginal && !checkMemorySendRevision(wsRef.current, chat.id, memoryRevision)) {
+          setError("Memory permissions or notes changed. Review the message and start a fresh request.");
+          return;
+        }
         if (options?.replaceReplyId && thread.messages.at(-1)?.id === options.replaceReplyId) {
           const prior = prepareRegenerate(wsRef.current, chat.id);
-          if (!("error" in prior)) void deliver(prior.chat, text, wsRef.current, true, snapped, { ...options, request: useOriginal ? request : undefined });
+          if (!("error" in prior)) void deliver(prior.chat, text, wsRef.current, true, snapped, { ...options, knownUnsent: knownNotSent, request: useOriginal ? request : undefined });
           return;
         }
         if (thread.messages.at(-1)?.role === "assistant") return;
         void deliver(thread, text, wsRef.current, true, snapped, {
-          ...options, request: useOriginal ? request : undefined,
+          ...options, knownUnsent: knownNotSent, request: useOriginal ? request : undefined,
         });
       };
-      const kind = classifyHonestFailure(message);
-      const description = useOriginal ? `${message} Retry uses the original send ID so the server can recognize an already received request.` : message;
-      reportFailure(description, kind ? honestFailureAuditAction(kind) : "chat_failed", chat.id, retry);
+      const kind = failureKindForAction(code);
+      const description = (dispatchStarted || deliveryUncertain) && !knownNotSent ? `${message} Retry checks the original send receipt.` : message;
+      const action: RouteFailureAction = ["auth_required", "provider_credentials_rejected", "billing_required", "model_unavailable", "provider_unavailable"].includes(code) ? "setup" : ["request_invalid", "user_stopped", "emergency_stop_active"].includes(code) ? "none" : "retry";
+      reportFailure(description, code, chat.id, action === "retry" ? retry : null, action, kind);
       setFailure((current) => current ? { ...current, chatId: chat.id } : current);
     }
+    let dispatchStarted = false;
+    let lastCheckpoint = 0;
+    const partialAt = new Date().toISOString();
+    function keepPartial(status: "streaming" | "interrupted") {
+      if (partialText && generation === turnGen.current && turnOwner.current === draftOwner) {
+        setWs((prev) => checkpointReply(prev, chat.id, operationId, partialText, status, partialAt));
+      }
+    }
+    const onVisibilityChange = () => { if (document.hidden) keepPartial("interrupted"); };
+    document.addEventListener("visibilitychange", onVisibilityChange);
     try {
       const fingerprint = await sha256(JSON.stringify(request.body));
+      if (generation !== turnGen.current || turnOwner.current !== draftOwner || signal.aborted) return null;
       if (savedRoute && fingerprint !== savedRoute.fingerprint) {
         markDelivery("unconfirmed");
         setError("The original message context changed. Its previous delivery is unconfirmed. Review the thread before starting a new send.");
@@ -2958,6 +3279,18 @@ export function CommandApp() {
           ? { ...item, messages: item.messages.map((message) => message.id === userMessageId ? { ...message, deliveryRoute } : message) }
           : item) }));
       }
+      // Recheck after every asynchronous preparation, including the request hash.
+      // A changed workspace during validation cannot lend its approval to this payload.
+      const reviewed = wsRef.current;
+      const privacy = await validateMemoryDispatch(reviewed, request.body);
+      if (generation !== turnGen.current || turnOwner.current !== draftOwner || signal.aborted) return null;
+      if (wsRef.current.halted || reviewed !== wsRef.current || !privacy.ok || !checkMemorySendRevision(wsRef.current, chat.id, memoryRevision)) {
+        markDelivery(options?.request ? "unconfirmed" : "failed");
+        setError("Memory or project access changed, or execution stopped. Review the current conversation before a new send.");
+        return null;
+      }
+      dispatchStarted = true;
+      setGenerationStatus("Adrian is answering.");
       const result = await consumeMindTurn({
         url: `${prefix}/api/mind/turn`,
         signal,
@@ -2969,38 +3302,68 @@ export function CommandApp() {
         body: request.body,
         onDelta: (chunk) => {
           if (generation !== turnGen.current || turnOwner.current !== draftOwner) return;
-          setLiveText((current) => current + chunk);
+          partialText += chunk;
+          if (Date.now() - lastCheckpoint >= 1000) { keepPartial("streaming"); lastCheckpoint = Date.now(); }
+          if (streamFrame === null) streamFrame = requestAnimationFrame(() => {
+            streamFrame = null;
+            if (generation === turnGen.current && turnOwner.current === draftOwner) setLiveText(partialText);
+          });
         },
       });
       if (generation !== turnGen.current || turnOwner.current !== draftOwner) return null;
       setBusy(false);
+      if (streamFrame !== null) { cancelAnimationFrame(streamFrame); streamFrame = null; }
       setLiveText("");
       if (turnAbort.current === controller) turnAbort.current = null;
+      setGenerationStatus(result.ok ? "Reply completed." : result.error === STOPPED_REPLY ? "Reply stopped. Received text is kept as incomplete." : "Reply interrupted. Check the original send.");
       if (result.ok && result.provider) setNotice(`${result.provider} answered.`);
+      // Helpers may have completed even when the primary answer failed or was stopped.
+      if (result.consultation?.length) setWs((current) => (result.consultation ?? []).filter(helper => helper.dispatched !== false).reduce((next, helper, index) => pushUsage(next, {
+        id: `${request.id}:helper:${index}`, operationId: request.id, stage: `helper:${helper.id}`, role: "helper", chatId: chat.id, at: new Date().toISOString(), provider: helper.provider ?? helper.id,
+        model: helper.model || "model unknown", requestId: helper.requestId ?? null, promptTokens: helper.usage?.prompt_tokens ?? null, completionTokens: helper.usage?.completion_tokens ?? null,
+      }), current));
+      if (!result.ok && result.dispatched !== false && (result.primaryDispatched || result.usage || result.deliveryUncertain || partialText)) setWs((current) => pushUsage(current, {
+        id: `${request.id}:primary`, operationId: request.id, stage: "answer", role: "primary", chatId: chat.id, at: new Date().toISOString(), provider: result.provider,
+        model: result.model || "model unknown", outcome: "unknown", providerDispatch: result.primaryDispatched ? "sent" : "unknown",
+        requestedModel: result.requestedModel, executionLocation: result.executionLocation, requestId: result.requestId ?? null, promptTokens: result.usage?.prompt_tokens ?? null, completionTokens: result.usage?.completion_tokens ?? null,
+      }));
       if (!shouldStoreReply(result)) {
+        keepPartial("interrupted");
         const message = result.ok ? "The provider returned an empty reply." : result.error;
-        if (message === STOPPED_REPLY) {
+        if (!result.ok && result.code === "user_stopped") {
           markDelivery("stopped");
           return null;
         }
-        reportTurnError(message, result.ok || result.deliveryUncertain === true);
+        const knownNotSent = !result.ok && (result.dispatched === false ||
+          (!orchestrating && result.primaryDispatched === false && !result.executions?.length && !result.consultation?.length && !result.usage));
+        if (knownNotSent) options?.onFailure?.({ error: message, dispatched: false, approvalId: result.approvalId,
+          answerRequest: { chatId: chat.id, operationId: request.id, body: request.body } });
+        reportTurnError(message, result.ok || result.deliveryUncertain === true, result.ok ? "invalid_response" : result.code ?? "unknown", knownNotSent);
         return null;
       }
+      const replyMessageId = crypto.randomUUID();
       setWs((prev) => {
         const next = {
           ...prev,
           chats: prev.chats.map((item) =>
-            item.id === chat.id && (!options?.replaceReplyId || item.messages.at(-1)?.id === options.replaceReplyId)
+            item.id === chat.id && (!options?.replaceReplyId || completedHistory(item.messages).at(-1)?.id === options.replaceReplyId)
               ? {
                   ...item,
                   messages: [
-                    ...item.messages.filter((message) => message.id !== options?.replaceReplyId).map((message) => message.id === userMessageId ? { ...message, delivery: undefined, deliveryOperationId: undefined, deliveryRoute: undefined } : message),
-                    {
-                      id: crypto.randomUUID(),
+                    ...item.messages.filter((message) => message.id !== options?.replaceReplyId && message.id !== `partial:${operationId}`).map((message) => message.id === userMessageId ? { ...message, delivery: undefined, deliveryOperationId: undefined, deliveryRoute: undefined, partialReply: undefined } : message),
+                    withReplyVersion(item.messages.find((message) => message.id === options?.replaceReplyId), {
+                      replyStatus: "complete", replyOperationId: operationId,
+                      id: replyMessageId,
                       role: "assistant" as const,
                       content: result.text,
                       at: new Date().toISOString(),
                       model: result.model,
+                      memoryUsedIds: result.usedIds,
+            contextReceipt: result.contextReceipt,
+            consultation: result.consultation,
+            skillReceipts: result.skillReceipts,
+            deliveryMode: result.delivery,
+            resolvedTier: ["Fast", "Expert", "Heavy", "Build"].includes(result.resolvedTier || "") ? result.resolvedTier as Exclude<ModelTier, "Auto"> : undefined,
                       routingMode,
                       ...(result.provider ? { provider: result.provider } : {}),
                       ...(result.requestedModel ? { requestedModel: result.requestedModel } : {}),
@@ -3010,7 +3373,7 @@ export function CommandApp() {
                             savedMemoryId: result.savedMemoryId ?? null,
                           }
                         : {}),
-                    },
+                    }),
                   ],
                   retrievalLog: [{ at: new Date().toISOString(), ids: result.usedIds }, ...item.retrievalLog].slice(0, 20),
                 }
@@ -3041,7 +3404,7 @@ export function CommandApp() {
         setNotice(`Ran ${tierLabel}.`);
         return pushAudit(
           pushUsage(next, {
-            id: crypto.randomUUID(),
+            id: `${request.id}:primary`, operationId: request.id, stage: "answer", role: "primary",
             chatId: chat.id,
             at: new Date().toISOString(),
             provider: result.provider || undefined,
@@ -3056,10 +3419,18 @@ export function CommandApp() {
           tierLabel,
         );
       });
+      if (speakStageOpenRef.current) {
+        const answerReceipt = [result.provider ?? "Provider unconfirmed", result.model || "Model unconfirmed", result.requestId].filter(Boolean).join(" · ");
+        setSpeakCall((current) => ({ ...current, answerReceipt }));
+      }
+      options?.onReply?.({ chatId: chat.id, messageId: replyMessageId, provider: result.provider, model: result.model, requestId: result.requestId });
       return result.text;
     } catch (caught) {
       if (generation !== turnGen.current || turnOwner.current !== draftOwner) return null;
+      keepPartial("interrupted");
+      setGenerationStatus(controller.signal.aborted ? "Reply stopped." : "Reply interrupted. Check the original send.");
       setBusy(false);
+      if (streamFrame !== null) { cancelAnimationFrame(streamFrame); streamFrame = null; }
       setLiveText("");
       if (turnAbort.current === controller) turnAbort.current = null;
       if (controller.signal.aborted) {
@@ -3067,9 +3438,11 @@ export function CommandApp() {
         return null;
       }
       const message = normalizeClientFailureMessage(caught);
-      reportTurnError(message, true);
+      reportTurnError(message, dispatchStarted, caught instanceof DOMException && caught.name === "TimeoutError" ? "chat_timeout" : "unknown", !dispatchStarted);
       return null;
     } finally {
+      document.removeEventListener("visibilitychange", onVisibilityChange);
+      if (streamFrame !== null) cancelAnimationFrame(streamFrame);
       clearTurnTimeout();
       if (generation === turnGen.current) {
         setBusy(false);
@@ -3123,22 +3496,26 @@ export function CommandApp() {
 
   }
 
-  function editMessage(messageId: string, text: string) {
-    if (!active || busy || turnInFlight.current) return;
+  const editBranchInFlight = useRef(false);
+  async function editMessage(messageId: string, text: string): Promise<boolean> {
+    if (!active || busy || turnInFlight.current || editBranchInFlight.current) return false;
     if (shouldBlockForEmergencyStop(wsRef.current.halted)) {
-      reportEmergencyStop(active.id, () => editMessage(messageId, text));
-      return;
+      reportEmergencyStop(active.id, () => { void editMessage(messageId, text); });
+      return false;
     }
-    const revised = reviseUserTurn(wsRef.current, active.id, messageId, text);
-    if ("error" in revised) {
-      setError(revised.error);
-      return;
-    }
-    const branch = { ...revised.chat, id: crypto.randomUUID(), title: `${active.title.slice(0, 68)} (edited)`, messages: revised.chat.messages.map((msg) => ({ ...msg, id: crypto.randomUUID() })) };
-    const source = { ...wsRef.current, chats: [branch, ...wsRef.current.chats] };
-    setWs(() => source);
-    setActiveId(branch.id);
-    void deliver(branch, revised.text, source, true, snapshotImages(toImageAttachments(revised.images)));
+    const source = wsRef.current;
+    const sourceChat = source.chats.find((chat) => chat.id === active.id);
+    editBranchInFlight.current = true;
+    try {
+      const revised = await createEditedBranch(source, active.id, messageId, text);
+      if (turnOwner.current !== draftOwner || wsRef.current.chats.find((chat) => chat.id === active.id) !== sourceChat) return false;
+      if ("error" in revised) { setError(revised.error); return false; }
+      const branch = revised.chat;
+      setWs((current) => ({ ...current, chats: [branch, ...current.chats] }));
+      setActiveId(branch.id);
+      void deliver(branch, revised.text, { ...wsRef.current, chats: [branch, ...wsRef.current.chats] }, true, snapshotImages(toImageAttachments(revised.images)));
+      return true;
+    } finally { editBranchInFlight.current = false; }
   }
 
   function regenerate() {
@@ -3161,7 +3538,7 @@ export function CommandApp() {
     if (!active || busy || turnInFlight.current) return;
     const imageRetry = imageRetryPlan(active.messages, active.id);
     if (imageRetry) {
-      void runImagine(imageRetry.prompt, active, { retry: true });
+      void runImagine(imageRetry.prompt, active, { retry: true, operationId: imageRetry.operationId });
       return;
     }
     if (shouldBlockForEmergencyStop(wsRef.current.halted)) {
@@ -3175,7 +3552,11 @@ export function CommandApp() {
     }
     const last = prepared.chat.messages.at(-1);
     if (last?.role !== "user") return;
-    const unresolved = last.delivery === "submitted" || last.delivery === "unconfirmed";
+    const unresolved = last.delivery === "submitted" || last.delivery === "unconfirmed" || last.delivery === "stopped" || last.delivery === "failed";
+    if (last.deliveryOperationId && ["submitted", "unconfirmed", "stopped"].includes(last.delivery ?? "")) {
+      void reconcileSend(active.id, last.deliveryOperationId);
+      return;
+    }
     if (unresolved && (!last.deliveryOperationId || !last.deliveryRoute)) {
       setError("The outcome of this earlier send is unknown. Its original send details are unavailable. Review the conversation before starting a new send.");
       return;
@@ -3250,7 +3631,7 @@ ${message.content}`;
           currentVoiceScope.current === JSON.stringify([draftOwner, "chat", chat.id]) &&
           !wsRef.current.halted && !document.hidden && !voiceSession.current?.isOpen) {
         let readAloud = false;
-        try { readAloud = localStorage.getItem("adrian-speak-auto-read") === "on"; } catch { /* Storage may be unavailable. */ }
+        try { readAloud = preferenceStorage.getItem("adrian-speak-auto-read") === "on"; } catch { /* Storage may be unavailable. */ }
         if (readAloud) void speak(textOut);
       }
     }
@@ -3362,73 +3743,74 @@ ${message.content}`;
     if (finished) await releaseNextCue();
   }
 
-  async function startResearch(question = researchText, retry?: ResearchReport) {
+  async function startResearch(question = researchText, retry?: ResearchReport, operationId = crypto.randomUUID(), projectId: string | null = active?.projectId ?? null) {
     const query = question.trim();
     if (turnOwner.current !== draftOwner || !draftOwner) return;
     if (!query || researchFlight.current) return;
     if (wsRef.current.halted) {
       reportEmergencyStop("search", () => {
-        void startResearch(query, retry);
+        void startResearch(query, retry, operationId, projectId);
       });
       return;
     }
     researchFlight.current = true;
+    const researchGeneration = researchRunGuard.current.begin();
     setResearchPending(true);
     try {
-      const result = await searchWeb({ data: { query, freeOnly: researchFreeOnly, retryQueries: retry?.steps?.filter((step) => !step.ok).map((step) => step.query) } });
-      if (!draftOwner || turnOwner.current !== draftOwner) return;
+      const result: ResearchResult = await searchWeb({ data: { query, operationId, projectId, freeOnly: researchFreeOnly, retryQueries: retry?.steps?.filter((step) => !step.ok).map((step) => step.query) } });
+      if (!draftOwner || turnOwner.current !== draftOwner || !researchRunGuard.current.current(researchGeneration)) return;
       setError(null);
       setWs((prev) => pushAudit(prev, result.configured && result.ok ? "research_result" : "research_refused", "search", result.ok ? `${result.citations.length} sources` : "no citation"));
       if (!result.ok) {
-        reportFailure(result.error || "Research refused. No citations were created.", "research_failed", "search", () => {
-          void startResearch(query, retry);
-        });
+        reportFailure(result.error || "Research refused. No citations were created.", "research_failed", "search", null, "none", null, { operationId, subsystem: "research", stage: "response", operationKind: "generation", retryPolicy: "review", outcome: result.partial ? "partial" : "unknown", provider: result.route?.provider, bindings: { reportId: result.persistence?.reportId, revision: result.route?.configurationRevision } });
       } else {
-        const steps = retry?.steps?.map((step) => result.steps?.find((current) => current.query === step.query) ?? step) ?? result.steps;
-        const citations = [...new Map([...(retry?.citations ?? []), ...result.citations].map((item) => [item.url, item])).values()];
-        const summary = retry && steps ? `${steps.filter((step) => step.ok).length} of ${steps.length} searches succeeded.` : result.summary || "";
-        const report: ResearchReport = { id: retry?.id ?? crypto.randomUUID(), question: query, steps, summary, citations, at: new Date().toISOString() };
+        const report = makeResearchReport(query, result, retry);
+        setActiveResearchId(report.id);
         setResearchReportQuestion(query);
-        setResearchCitations(citations);
-        setResearchNote(summary);
-        setResearchSteps(steps);
-        setResearchHistory((current) => {
-          if (turnOwner.current !== draftOwner) return current;
-          const next = [report, ...current.filter((item) => item.id !== report.id)].slice(0, 8);
-          try { localStorage.setItem(`amcos.research.v2.${draftOwner}`, JSON.stringify(next)); } catch { /* private mode */ }
-          return next;
-        });
-        clearFailure();
+        setResearchCitations(report.citations);
+        setResearchNote(report.summary);
+        setResearchSteps(report.steps);
+        const saved = saveResearchReport(localStorage, draftOwner, researchHistory, report);
+        setResearchHistory(saved.history);
+        setError(saved.saved ? null : saved.error);
       }
     } catch (caught) {
+      if (!researchRunGuard.current.current(researchGeneration) || turnOwner.current !== draftOwner) return;
       const message = caught instanceof Error ? caught.message : "The search did not run. No citations were created.";
-      reportFailure(message, "research_failed", "search", () => {
-        void startResearch(query, retry);
-      });
+      reportFailure(message, "research_failed", "search", null, "none", null, { operationId, subsystem: "research", stage: "response", operationKind: "generation", retryPolicy: "review", outcome: "unknown", bindings: { reportId: retry?.id } });
     } finally {
-      researchFlight.current = false;
-      setResearchPending(false);
+      if (researchRunGuard.current.current(researchGeneration)) { researchFlight.current = false; setResearchPending(false); }
     }
   }
 
-  async function runPlanner() {
+  async function runPlanner(replay?: AgentRequestSnapshot) {
     if (currentFreeOnly.current) { setAgentNote("Free-only mode is on. This action uses a separate xAI provider that may charge."); return; }
     if (ws.halted || agentBusy) return;
-    const goal = agentGoal.trim();
+    if (!draftOwner || (replay && replay.ownerId !== draftOwner)) return;
+    const goal = replay?.goal ?? agentGoal.trim();
     if (!goal) {
       setAgentNote("Write what the agent should do.");
       return;
     }
+    const plannerScope = active ? workspaceForChat(ws, active) : emptyWorkspace();
+    const plannerImages = replay ? [] : pendingImages;
+    let requestSnapshot: AgentRequestSnapshot;
+    try {
+      requestSnapshot = replay ?? snapshotAgentRequest(draftOwner, `agent:${crypto.randomUUID()}`, {
+        goal, modelTier, projectId: active?.projectId ?? null, freeOnly: currentFreeOnly.current,
+        projects: plannerScope.projects.map(project => project.name), chats: plannerScope.chats.map(chat => chat.title), notes: plannerScope.memories.map(note => note.text),
+        images: plannerImages.map(image => ({ dataUrl: image.dataUrl, name: image.name, origin: image.origin })),
+      });
+    } catch (cause) { setAgentNote(cause instanceof Error ? cause.message : "The complete agent request could not be prepared."); return; }
     agentAbort.current?.abort();
     const controller = new AbortController();
     agentAbort.current = controller;
     setAgentBusy(true);
     setAgentNote(null);
     setAgentLog([]);
+    setAgentModelReceipts([]);
     setAgentImages([]);
-    const plannerScope = active ? workspaceForChat(ws, active) : emptyWorkspace();
-    const plannerImages = pendingImages;
-    setPendingImages([]);
+    if (!replay) setPendingImages([]);
     const prefix = previewPathPrefix(window.location.hostname, window.location.pathname) ?? "";
     const token = getBearerToken();
     try {
@@ -3436,15 +3818,7 @@ ${message.content}`;
         method: "POST",
         signal: controller.signal,
         headers: { "content-type": "application/json", ...(token ? { authorization: `Bearer ${token}` } : {}) },
-        body: JSON.stringify({
-          goal,
-          freeOnly: currentFreeOnly.current,
-          projects: plannerScope.projects.map((project) => project.name),
-          chats: plannerScope.chats.map((chat) => chat.title),
-          notes: plannerScope.memories.map((note) => note.text),
-          modelTier,
-          images: plannerImages.map((image) => ({ dataUrl: image.dataUrl, name: image.name, origin: image.origin })),
-        }),
+        body: requestSnapshot.body,
       });
       const payload = (await response.json()) as {
         ok?: boolean;
@@ -3455,10 +3829,20 @@ ${message.content}`;
         modelTier?: string;
         resolvedTier?: string;
         images?: { dataUrl: string; name?: string; mime?: string }[];
+        operationId?: string;
+        dispatched?: boolean;
+        retryable?: boolean;
+        approvalId?: string;
+        modelRounds?: unknown;
       };
-      if (controller.signal.aborted) return;
+      if (controller.signal.aborted || turnOwner.current !== requestSnapshot.ownerId) return;
+      if (canRetryAgentRequest(requestSnapshot, draftOwner, payload)) {
+        if (plannerImages.length) setPendingImages((previous) => previous.length + plannerImages.length <= 4 ? [...previous, ...plannerImages] : previous);
+        reportFailure(payload.error || "The agent request was refused before dispatch.", "agent_request_not_sent", requestSnapshot.operationId, () => { void runPlanner(requestSnapshot); });
+      }
       setAgentLog(payload.log ?? []);
-      const modelBit = payload.model ? ` Model ${payload.model}${payload.resolvedTier ? ` (${payload.modelTier ?? modelTier}→${payload.resolvedTier})` : ""}.` : "";
+      setAgentModelReceipts(summarizeAgentModelRounds(payload.modelRounds));
+      const modelBit = payload.model ? ` Requested model ${payload.model}${payload.resolvedTier ? ` (${payload.modelTier ?? requestSnapshot.modelTier}→${payload.resolvedTier})` : ""}.` : "";
       const agentImages: ImageAttachment[] = (payload.images ?? [])
         .filter((image) => typeof image.dataUrl === "string" && image.dataUrl.startsWith("data:image/"))
         .map((image, index) => ({
@@ -3476,11 +3860,14 @@ ${message.content}`;
       setAgentNote((payload.ok ? payload.text ?? "" : payload.error || "The planner did not finish.") + (payload.ok ? modelBit : "") + (agentImages.length ? ` · ${agentImages.length} image available below.` : ""));
       setWs((prev) => pushAudit(prev, "agent_plan", "bounded", payload.ok ? (agentImages.length ? "finished+imagine" : "finished") : "stopped"));
     } catch {
+      if (turnOwner.current !== requestSnapshot.ownerId) return;
       if (controller.signal.aborted) setAgentNote("Stopped. The unfinished reply was not saved.");
       else setAgentNote("The planner did not finish. Nothing was marked finished.");
     } finally {
-      if (agentAbort.current === controller) agentAbort.current = null;
-      setAgentBusy(false);
+      if (agentAbort.current === controller) {
+        agentAbort.current = null;
+        if (turnOwner.current === requestSnapshot.ownerId) setAgentBusy(false);
+      }
     }
   }
 
@@ -3625,7 +4012,7 @@ ${message.content}`;
     if (finished) await releaseNextCue();
   }
 
-  async function runImagine(promptRaw?: string, targetChat: Chat | null = active, opts?: { retry?: boolean }) {
+  async function runImagine(promptRaw?: string, targetChat: Chat | null = active, opts?: { retry?: boolean; operationId?: string }) {
     if (currentFreeOnly.current) { setError("Free-only mode is on. This action uses a separate xAI provider that may charge."); return; }
     if (imagineInFlight.current || busy) return;
     const prompt = (promptRaw ?? draft).trim();
@@ -3666,12 +4053,13 @@ ${message.content}`;
       );
     }
     const chatId = chat.id;
+    const imageOperationId = opts?.operationId ?? crypto.randomUUID();
     const imageScope = JSON.stringify([draftOwner, chatId, chat.temporary]);
     const persistImages = Boolean(draftOwner) && !chat.temporary;
     if (!targetChat && pendingImages.length) setImagesInScope(imageScope, persistImages, pendingImages);
     if (!opts?.retry) {
       const userMsg = {
-        id: crypto.randomUUID(),
+        id: crypto.randomUUID(), mediaOperationId: imageOperationId,
         role: "user" as const,
         content: `/imagine ${prompt}`,
         at: new Date().toISOString(),
@@ -3702,7 +4090,7 @@ ${message.content}`;
                     id: crypto.randomUUID(),
                     role: "assistant" as const,
                     kind: "error" as const,
-                    content: "Couldn't create the image. Nothing was saved. Try again, or edit your prompt.",
+                    content: failure.message,
                     at: new Date().toISOString(),
                   },
                 ],
@@ -3720,7 +4108,7 @@ ${message.content}`;
           "content-type": "application/json",
           ...(token ? { authorization: `Bearer ${token}` } : {}),
         },
-        body: JSON.stringify({ prompt, n: 1, freeOnly: currentFreeOnly.current }),
+        body: JSON.stringify({ prompt, operationId: imageOperationId, taskId: imageOperationId, projectId: chat.projectId, n: 1, freeOnly: currentFreeOnly.current }),
       });
       const payload = (await response.json()) as {
         ok?: boolean;
@@ -3757,7 +4145,7 @@ ${message.content}`;
         setNotice("Image created and added to the composer.");
         return [...previous, ...images];
       });
-      clearFailure();
+      setError(null);
       setWs((prev) => {
         const next = {
           ...prev,
@@ -3773,7 +4161,7 @@ ${message.content}`;
                       content: model ? `Generated with ${model}.` : "Image generated. The provider did not report a model.",
                       at: new Date().toISOString(),
                       model,
-                      images: images.map((image) => ({ dataUrl: image.dataUrl, name: image.name, origin: image.origin })),
+                      images: images.map((image) => ({ dataUrl: image.dataUrl, name: image.name, origin: image.origin, lineage: image.lineage, preparation: image.preparation })),
                     },
                   ],
                 }
@@ -3802,147 +4190,67 @@ ${message.content}`;
     }
   }
 
-  async function runVideo(promptRaw?: string) {
-    if (currentFreeOnly.current) { setError("Free-only mode is on. This action uses a separate xAI provider that may charge."); return; }
-    if (videoInFlight.current) return;
-    const prompt = (promptRaw ?? draft).trim();
-    if (!prompt) {
-      setError("Write what the video should show, then send.");
-      return;
-    }
-    if (shouldBlockForEmergencyStop(wsRef.current.halted)) {
-      reportEmergencyStop("video", () => {
-        void runVideo(prompt);
-      });
-      return;
-    }
-    setDraft("");
-    setError(null);
-    setNotice("Video started. A short clip usually takes about a minute.");
-    const token = getBearerToken();
-    const prefix = previewPathPrefix(window.location.hostname, window.location.pathname) ?? "";
-    let chat = active;
-    if (!chat) {
-      const made = createChat(ws, {
-        memory: memoryChoice,
-        autonomy,
-        temporary,
-        projectId: projectChoice || null,
-        personalityId: defaultPersonalityId,
-      });
-      chat = made.chat;
-      setActiveId(made.chat.id);
-      setView("chat");
-      setWs((prev) =>
-        pushAudit({ ...prev, chats: [made.chat, ...prev.chats] }, "create_chat", made.chat.id, "video"),
-      );
-    } else {
-      setView("chat");
-    }
-    const chatId = chat.id;
-    const userMsg = {
-      id: crypto.randomUUID(),
-      role: "user" as const,
-      content: `/video ${prompt}`,
-      at: new Date().toISOString(),
-    };
-    setWs((prev) => ({
-      ...prev,
-      chats: prev.chats.map((item) =>
-        item.id === chatId
-          ? {
-              ...item,
-              title: item.messages.length ? item.title : prompt.replace(/\s+/g, " ").slice(0, 48),
-              messages: [...item.messages, userMsg],
-            }
-          : item,
-      ),
-    }));
-    videoInFlight.current = true;
-    const fail = (message: string) => {
-      setError(message);
-      setWs((prev) => ({
-        ...prev,
-        chats: prev.chats.map((item) =>
-          item.id === chatId
-            ? {
-                ...item,
-                messages: [...item.messages, { id: crypto.randomUUID(), role: "assistant" as const, content: message, at: new Date().toISOString() }],
-              }
-            : item,
-        ),
-      }));
-    };
-    try {
-      const start = await fetch(`${prefix}/api/mind/media/generate`, {
-        method: "POST",
-        headers: {
-          "content-type": "application/json",
-          ...(token ? { authorization: `Bearer ${token}` } : {}),
-        },
-        body: JSON.stringify({ kind: "video", action: "start", prompt, duration: 5, freeOnly: currentFreeOnly.current }),
-      });
-      const started = (await start.json()) as { ok?: boolean; error?: string; requestId?: string; model?: string };
-      if (!start.ok || !started.ok || !started.requestId) {
-        fail(started.error || "Video did not start.");
-        return;
-      }
-      const requestId = started.requestId;
-      const model = started.model || "grok-imagine-video";
-      const deadline = Date.now() + 8 * 60 * 1000;
-      while (Date.now() < deadline) {
-        await new Promise((resolve) => setTimeout(resolve, 5000));
-        const statusResponse = await fetch(`${prefix}/api/mind/media/generate`, {
-          method: "POST",
-          headers: {
-            "content-type": "application/json",
-            ...(token ? { authorization: `Bearer ${token}` } : {}),
-          },
-          body: JSON.stringify({ kind: "video", action: "status", requestId }),
-        });
-        const status = (await statusResponse.json()) as { ok?: boolean; error?: string; state?: string; url?: string; model?: string };
-        if (status.state === "done" && status.url) {
-          setNotice("Video is ready.");
-          setWs((prev) => ({
-            ...prev,
-            chats: prev.chats.map((item) =>
-              item.id === chatId
-                ? {
-                    ...item,
-                    messages: [
-                      ...item.messages,
-                      {
-                        id: crypto.randomUUID(),
-                        role: "assistant" as const,
-                        content: `Generated with ${status.model || model}. The clip is below. The link expires, so play or download it while it is here.`,
-                        at: new Date().toISOString(),
-                        model: status.model || model,
-                        videoUrl: status.url,
-                      },
-                    ],
-                  }
-                : item,
-            ),
-          }));
-          return;
-        }
-        if (!statusResponse.ok || status.ok === false || status.state === "failed") {
-          fail(status.error || "Video generation failed.");
-          return;
-        }
-      }
-      fail("The video is still rendering. Nothing was invented in its place.");
-    } catch {
-      fail("Could not reach the video service.");
-    } finally {
-      videoInFlight.current = false;
-    }
+  function commitVideoJob(job: VideoJob) {
+    if (!draftOwner || turnOwner.current !== draftOwner || job.ownerId !== draftOwner || job.state !== "completed" || !job.url) return;
+    setWs((previous) => ({ ...previous, chats: previous.chats.map((chat) => chat.id === job.chatId && !chat.messages.some((message) => message.id === `video:${job.operationId}`)
+      ? { ...chat, messages: [...chat.messages, { id: `video:${job.operationId}`, role: "assistant" as const, content: `Generated with ${job.model}. The provider link may expire. Open Media settings and recovery to save a copy on this device.`, at: job.updatedAt, model: job.model, provider: "xai", videoUrl: job.url }] }
+      : chat) }));
+    setVideoStatus({ chatId: job.chatId, text: "Video is ready in its original conversation. Its saved operation is available in Media recovery." });
   }
 
-  function openImagineEditor(image: string) {
-    if (!image.startsWith("data:image/")) return;
+  async function runVideo(promptRaw?: string) {
+    if (currentFreeOnly.current) { setError("Free-only mode is on. Video generation uses a separately billed provider."); return; }
+    if (videoInFlight.current || !draftOwner) return;
+    const prompt = (promptRaw ?? draft).trim();
+    if (!prompt) { setError("Write what the video should show, then send."); return; }
+    if (shouldBlockForEmergencyStop(wsRef.current.halted)) { reportEmergencyStop("video", () => { void runVideo(prompt); }); return; }
+    const owner = draftOwner;
+    let chat = active;
+    if (!chat) {
+      const made = createChat(wsRef.current, { memory: memoryChoice, autonomy, temporary, projectId: projectChoice || null, personalityId: defaultPersonalityId });
+      chat = made.chat;
+      setActiveId(chat.id);
+      setWs((previous) => pushAudit({ ...previous, chats: [made.chat, ...previous.chats] }, "create_chat", made.chat.id, "video"));
+    }
+    const chatId = chat.id, operationId = crypto.randomUUID();
+    setView("chat"); setDraft(""); setError(null);
+    setVideoStatus({ chatId, text: "Submitting the video with a saved recovery reference. No automatic generation retry will occur." });
+    setWs((previous) => ({ ...previous, chats: previous.chats.map((item) => item.id === chatId
+      ? { ...item, title: item.messages.length ? item.title : prompt.replace(/\s+/g, " ").slice(0, 48), messages: [...item.messages, { id: `${operationId}:prompt`, role: "user" as const, content: `/video ${prompt}`, at: new Date().toISOString() }] }
+      : item) }));
+    videoInFlight.current = true;
+    const prefix = previewPathPrefix(window.location.hostname, window.location.pathname) ?? "";
+    const context = { ownerId: owner, currentOwner: () => turnOwner.current, storage: preferenceStorage, bearer: getBearerToken(), endpoint: `${prefix}/api/mind/media/generate` };
+    try {
+      const started = await beginRecoverableVideo({ operationId, chatId, projectId: chat.projectId || undefined, taskId: operationId, prompt, settings: loadVideoSettings(preferenceStorage), temporary: chat.temporary === true, freeOnly: currentFreeOnly.current }, context);
+      if (turnOwner.current !== owner) return;
+      if (!started.ok) {
+        setVideoStatus({ chatId, text: started.error, failed: true });
+        return;
+      }
+      if (started.state === "pending") {
+        setVideoStatus({ chatId, text: "The saved video job is rendering. You can leave this view and resume status checks in Media recovery." });
+      }
+      const result = started.state === "done" ? started : await pollRecoverableVideo(started.job, context);
+      if (turnOwner.current !== owner) return;
+      if (result.ok && result.state === "done") commitVideoJob(result.job);
+      else setVideoStatus({ chatId, text: result.ok ? "The saved job is still rendering. Resume its status checks in Media recovery." : result.error, failed: !result.ok });
+    } catch {
+      if (turnOwner.current === owner) {
+        setVideoStatus({ chatId, text: "Video status is unavailable. Check the saved operation in Media recovery before starting another generation.", failed: true });
+      }
+    }
+    finally { videoInFlight.current = false; }
+  }
+
+  async function openImagineEditor(image: string, targetChatId = active?.id ?? null) {
+    if (!draftOwner) return;
+    const returnFocus = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+    const resolved = await resolveEditableImage({ source: image, ownerId: draftOwner, currentOwner: () => turnOwner.current, authorizedImages: [...wsRef.current.chats.flatMap((chat) => chat.messages.flatMap((message) => message.images || [])), ...pendingImages], getOwnedBlob: (id) => accountImageStore(draftOwner).getOwned(id) });
+    if (turnOwner.current !== draftOwner) return;
+    if (!resolved.ok) { setError(resolved.error); return; }
     setImagineEditError(null);
-    setImagineEdit({ image, text: "", returnFocus: document.activeElement instanceof HTMLElement ? document.activeElement : null });
+    setImagineEdit({ image: resolved.image.dataUrl, source: resolved.image, chatId: targetChatId, draftScope, text: "", operationId: crypto.randomUUID(), returnFocus });
   }
 
   function closeImagineEditor() {
@@ -3968,6 +4276,9 @@ ${message.content}`;
       setImagineEditError("The emergency stop is active. Close this dialog to clear the stop, then reopen the editor.");
       return;
     }
+    const targetChatId = imagineEdit?.chatId ?? null;
+    const targetDraftScope = imagineEdit?.draftScope;
+    if (targetChatId && !wsRef.current.chats.some((chat) => chat.id === targetChatId)) { setImagineEditError("The original conversation was removed. No edit was sent."); return; }
     setImagineEditError(null);
     setBusy(true);
     const token = getBearerToken();
@@ -3980,7 +4291,7 @@ ${message.content}`;
           "content-type": "application/json",
           ...(token ? { authorization: `Bearer ${token}` } : {}),
         },
-        body: JSON.stringify({ prompt, image: imageDataUrl, mode: "edit", n: 1, freeOnly: currentFreeOnly.current }),
+        body: JSON.stringify({ prompt, image: imageDataUrl, operationId: imagineEdit?.operationId, taskId: imagineEdit?.operationId, projectId: wsRef.current.chats.find((chat) => chat.id === targetChatId)?.projectId ?? null, mode: "edit", n: 1, freeOnly: currentFreeOnly.current }),
       });
       const payload = (await response.json()) as {
         ok?: boolean;
@@ -4004,11 +4315,13 @@ ${message.content}`;
       }
       const images: ImageAttachment[] = payload.images.map((image, index) => ({
         dataUrl: image.dataUrl,
+        ...(imagineEdit?.source ? { lineage: imageEditLineage(imagineEdit.source, prompt, payload.model || "unreported") } : {}),
         origin: "edited",
         name: image.name || `imagine-edit-${index + 1}.jpg`,
         mime: image.mime,
       }));
-      if (!active) {
+      if (!targetChatId) {
+        if (uploadDestination.current.scope !== targetDraftScope) { setImagineEdit((current) => current && { ...current, result: images[0] }); setImagineEditError("Your composer destination changed. Download the edited image before closing; it was not attached to another conversation."); return; }
         setPendingImages((previous) => {
           if (previous.length + images.length > 4) {
             setImagineEdit((previousEdit) => previousEdit && { ...previousEdit, result: images[0] });
@@ -4023,9 +4336,9 @@ ${message.content}`;
         closeImagineEditor();
         setNotice("Edited image added to this chat.");
       }
-      clearFailure();
-      if (active) {
-        const chatId = active.id;
+      setError(null);
+      if (targetChatId) {
+        const chatId = targetChatId;
         setWs((prev) => ({
           ...prev,
           chats: prev.chats.map((item) =>
@@ -4046,7 +4359,7 @@ ${message.content}`;
                       content: payload.model ? `Edited with ${payload.model}.` : "Image edited. The provider did not report a model.",
                       at: new Date().toISOString(),
                       model: payload.model,
-                      images: images.map((image) => ({ dataUrl: image.dataUrl, name: image.name, origin: image.origin })),
+                      images: images.map((image) => ({ dataUrl: image.dataUrl, name: image.name, origin: image.origin, lineage: image.lineage, preparation: image.preparation })),
                     },
                   ],
                 }
@@ -4107,6 +4420,21 @@ ${message.content}`;
   }
 
   function applyCloudAttach(item: CloudPickerAttach) {
+    const destination = cloudDestination.current;
+    if (!destination || destination.owner !== turnOwner.current || destination.owner !== draftOwner) return;
+    if (destination.kind === "library") {
+      if (!account || item.kind !== "text") { setError("Library accepts text copies. Attach images from Chat instead."); return; }
+      if (wsRef.current.files.length >= 40) { setError("Library holds 40 text copies. Remove a copy before adding another."); return; }
+      if (!item.text.trim()) { setError("The cloud file has no readable text."); return; }
+      const savedId = crypto.randomUUID();
+      setWs((prev) => addLocalFile(prev, { id: savedId, name: item.name, text: item.text, partial: item.text.length > 40000, projectId: destination.projectId }));
+      setLibraryProjectId(destination.projectId);
+      setOpenFileId(savedId);
+      setLibraryBand("preview");
+      setNotice(`Added a text copy of “${item.name}” to Library. Account sync status is shown above.`);
+      return;
+    }
+    if (destination.scope !== draftScope) { setError("The conversation changed. Choose the cloud file again in the intended conversation."); return; }
     if (item.kind === "image") {
       setPendingImages((prev) => {
         if (prev.length >= 4) {
@@ -4135,7 +4463,10 @@ ${message.content}`;
       return;
     }
     try {
-      const scaled = await fileToDownscaledDataUrl(file);
+      const owner = draftOwner;
+      const scope = draftScope;
+      const scaled = await fileToDownscaledDataUrl(file, loadImagePreparationQuality(preferenceStorage));
+      if (turnOwner.current !== owner || uploadDestination.current.scope !== scope) return;
       setPendingImages((prev) => {
         if (prev.length >= 4) {
           setError("You can attach up to 4 images per message.");
@@ -4144,14 +4475,30 @@ ${message.content}`;
         }
         setError(null);
         setNotice(`Image “${scaled.name}” staged${scaled.scaled ? " (downscaled)" : ""}. Send uses the selected chat route.`);
-        return [...prev, { dataUrl: scaled.dataUrl, name: scaled.name, mime: scaled.mime, origin: "attached" }];
+        return [...prev, { dataUrl: scaled.dataUrl, name: scaled.name, mime: scaled.mime, origin: "attached", preparation: scaled.preparation }];
       });
     } catch {
       setError("That image could not be prepared.");
     }
   }
 
+  const uploadDestination = useRef({ owner: draftOwner, view, projectId: view === "files" ? libraryProjectId || null : projectChoice || null, scope: draftScope });
+  uploadDestination.current = { owner: draftOwner, view, projectId: view === "files" ? libraryProjectId || null : projectChoice || null, scope: draftScope };
   async function onPicked(file: File, inspection: View | null) {
+    const destination = { ...uploadDestination.current };
+    const isCurrent = () => turnOwner.current === destination.owner && uploadDestination.current.view === destination.view && uploadDestination.current.projectId === destination.projectId && uploadDestination.current.scope === destination.scope;
+    if (view === "files" && !inspection) {
+      if (accountPending || !account || !draftOwner) { setError("Sign in to save a document for this account."); return; }
+      try {
+        const document = await prepareLibraryDocument(file, { projectId: destination.projectId, store: accountOriginalFileStore(draftOwner), extractPdf: extractPdfText, isCurrent });
+        if (!isCurrent()) return;
+        const saved = saveLibraryDocument(wsRef.current, document);
+        if (!saved.ok) { setError(saved.error); return; }
+        setWs(saved.workspace); setOpenFileId(document.id); setLibraryBand("preview"); setError(null);
+        setNotice(`Saved “${file.name}” with its original bytes on this device. ${document.extraction}`);
+      } catch (caught) { if (isCurrent()) setError(caught instanceof Error ? caught.message : "The document could not be saved."); }
+      return;
+    }
     setNotice(null);
     setError(null);
     if (/\.(png|jpe?g|gif|webp)$/i.test(file.name) || (file.type || "").startsWith("image/")) {
@@ -4178,23 +4525,13 @@ ${message.content}`;
       return;
     }
     const coverage = pdf?.coverage ? `[Partial PDF: ${pdf.coverage}]\n` : "";
-    const stagedFile = { name: file.name, text: coverage + text.slice(0, 40000) };
+    const request = draft.trim();
+    const selected = pdf?.chunks?.length && request
+      ? selectPdfChunks(pdf, { query: request, maxChars: Math.max(0, 8000 - request.length - file.name.length - 160) })
+      : null;
+    const stagedFile = { name: file.name, text: selected?.text ? selected.coverage + "\n" + selected.text : coverage + text.slice(0, 40000) };
     const partial = pdf?.partial || text.length > stagedFile.text.length;
-    if (view === "files") {
-      if (wsRef.current.files.length >= 40) {
-        setError("Library holds 40 text copies. Remove an existing copy before uploading another.");
-        return;
-      }
-      const savedId = crypto.randomUUID();
-      setWs((prev) => {
-        return addLocalFile(prev, { id: savedId, name: stagedFile.name, text: coverage + text, partial, projectId: libraryProjectId || projectChoice || null });
-      });
-      setOpenFileId(savedId);
-      setLibraryBand("preview");
-      const savedCopy = partial ? `a partial text copy of “${file.name}”` : pdf ? `extracted text from “${file.name}”` : `“${file.name}”`;
-      setNotice(`Saved ${savedCopy} to Library. ${pdf?.coverage ?? ""}`.trim());
-      return;
-    }
+    if (!isCurrent()) { setNotice("The destination changed. The file was not attached to another conversation."); return; }
     const remaining = 8000 - (draft.trim() || "Read the attached file.").length - `\n\nAttached file ${file.name}:\n`.length;
     if (!inspection && stagedFile.text.length > remaining) {
       setExcerpt({ scope: draftScope, file: stagedFile, limit: Math.max(0, remaining) });
@@ -4209,8 +4546,8 @@ ${message.content}`;
     setNotice(`“${file.name}” is staged${partial ? " as a partial text copy" : pdf ? " as extracted text" : ""}. ${pdf?.coverage ?? ""} Press Send to include it, or Analyze File to run REA.`);
   }
 
-  async function downloadArchive() {
-    const pack = await packWorkspace(ws, includeTemporary);
+  async function downloadArchive(memoryOnly = false) {
+    const pack = memoryOnly ? await packMemoryOnly(ws) : await packWorkspace(ws, includeTemporary);
     const blob = new Blob([JSON.stringify(pack, null, 2)], { type: "application/json" });
     const url = URL.createObjectURL(blob);
     const link = document.createElement("a");
@@ -4227,12 +4564,17 @@ ${message.content}`;
     setImportError(null);
     setImportPreview(null);
     try {
-      const opened = await unpackWorkspace(await file.text());
+      const raw = await file.text();
+      const parsed = JSON.parse(raw);
+      const memoryOnly = parsed?.product === "adrians-mind-memory";
+      const opened = memoryOnly ? await unpackMemoryOnly(raw, wsRef.current) : await unpackWorkspace(raw);
       if (!opened.ok) {
         setImportError(opened.error);
         return;
       }
-      setImportPreview({ workspace: opened.workspace, name: file.name });
+      const checked = quarantineImportedMemory(opened.workspace, wsRef.current, unreviewedMemoryScopeIds(parsed?.workspace?.memories));
+      setArchiveCategories(memoryOnly ? ["memories"] : [...ARCHIVE_CATEGORIES]);
+      setImportPreview({ workspace: checked, name: file.name, memoryOnly });
     } catch {
       setImportError("This archive could not be read. Choose another file to try again.");
     } finally {
@@ -4241,49 +4583,96 @@ ${message.content}`;
   }
 
   function toggleStop() {
-    return wsRef.current.halted ? clearEmergencyStop() : pressEmergencyStop();
+    return wsRef.current.halted && stopConfirmed ? clearEmergencyStop() : pressEmergencyStop();
   }
   async function pressEmergencyStop() {
     stopVoiceSession();
     clearedStop.current = false;
-    if (wsRef.current.halted) return;
+    // Block same-frame sends before React publishes the halted state.
+    wsRef.current = { ...wsRef.current, halted: true };
     turnAbort.current?.abort();
     agentAbort.current?.abort();
+    const owner = turnOwner.current;
+    if (stopSyncFlight.current?.owner === owner) {
+      if (!stopSyncFlight.current.on) {
+        // Preserve the newer stop intent, then reassert it after the older
+        // release settles so request ordering cannot leave the server released.
+        stopSyncFlight.current.restop = true;
+        setStopSync({ owner, state: "pending", detail: "Local protection is active. A stop will be synchronized after the pending release settles." });
+        setNotice("Local stop is active. Waiting for the earlier release to settle before synchronizing the new stop.");
+      }
+      return;
+    }
+    const attempt = { owner, on: true };
+    stopSyncFlight.current = attempt;
     setError(null);
     setWs((prev) => {
-      if (prev.halted) return prev;
-      const updated = pushAudit({ ...prev, halted: true }, "emergency_stop", "session", "on");
+      const updated = prev.halted ? prev : pushAudit({ ...prev, halted: true }, "emergency_stop", "session", "local block activated; awaiting server confirmation");
       const stopped = haltFleet(updated);
-      return {
-        ...stopped,
-        schedules: stopped.schedules.map((job) => (job.enabled ? { ...job, enabled: false } : job)),
-      };
+      return { ...stopped, schedules: stopped.schedules.map((job) => job.enabled ? { ...job, enabled: false } : job) };
     });
-    setNotice("Emergency stop is on. Open runs were canceled and schedules were paused. Logs and memory were kept.");
+    setStopSync({ owner, state: "pending", detail: "This browser blocks new work. Server stop and remote cancellation are awaiting confirmation." });
+    setNotice("Local stop is active. Schedules are paused in this browser. Server stop and remote cancellation are awaiting confirmation.");
+    if (!owner) {
+      setStopSync({ owner, state: "unconfirmed", detail: "Local protection is active. Sign in to synchronize the server stop for your account." });
+      stopSyncFlight.current = null;
+      return;
+    }
     try {
-      const result = await setExecutionHalt({ data: { on: true } });
-      if (!result.ok) setError(result.error);
+      const result = await setExecutionHalt({ data: { on: true, ownerId: owner || undefined } });
+      if (turnOwner.current !== owner || stopSyncFlight.current !== attempt) return;
+      if (!result.ok) {
+        setStopSync({ owner, state: "unconfirmed", detail: "Local protection remains active. The server stop is unconfirmed." });
+        setError(result.error);
+        return;
+      }
+      const cancellation = result.cancellation;
+      const detail = cancellation ? `Server stop confirmed. ${cancellation.cancelled} queued job(s) canceled; ${cancellation.pending} running job cancellation(s) awaiting runtime confirmation; ${cancellation.unknown} cancellation outcome(s) unconfirmed.` : "Server stop confirmed. Remote runtime termination has not been independently confirmed.";
+      setStopSync({ owner, state: "confirmed", detail });
+      setError(null);
+      setNotice(detail);
     } catch {
-      setError("The server did not confirm the stop. Sends are blocked in this browser.");
+      if (turnOwner.current !== owner || stopSyncFlight.current !== attempt) return;
+      setStopSync({ owner, state: "unconfirmed", detail: "The server did not confirm the stop. This browser continues blocking new work." });
+      setError("The server did not confirm the stop. Retry stop synchronization to keep local protection active.");
+    } finally {
+      if (stopSyncFlight.current === attempt) stopSyncFlight.current = null;
     }
   }
   async function clearEmergencyStop() {
+    const owner = turnOwner.current;
+    if (!owner) { setError("Sign in to confirm release of the server stop. Local protection remains active."); return; }
+    if (stopSyncFlight.current?.owner === owner) return;
+    const attempt = { owner, on: false, restop: false };
+    stopSyncFlight.current = attempt;
     setError(null);
     try {
-      const result = await setExecutionHalt({ data: { on: false } });
+      const control = await readExecutionControl();
+      if (turnOwner.current !== owner || stopSyncFlight.current !== attempt || attempt.restop) return;
+      if (!control.revision || control.state === "unknown") { setError("The server stop state could not be verified. Local protection remains active."); return; }
+      const result = await setExecutionHalt({ data: { on: false, ownerId: owner, expectedRevision: control.revision } });
+      if (turnOwner.current !== owner || stopSyncFlight.current !== attempt) return;
+      if (attempt.restop) return;
       if (!result.ok) {
         setError(result.error);
         setSpeakCall((current) => ({ ...current, error: result.error }));
         return;
       }
       clearedStop.current = true;
-      setWs((prev) => (prev.halted ? pushAudit({ ...prev, halted: false }, "emergency_stop", "session", "cleared by owner") : prev));
+      setStopSync({ owner, state: "idle", detail: "" });
+      setWs((prev) => prev.halted ? pushAudit({ ...prev, halted: false }, "emergency_stop", "session", "cleared by owner") : prev);
       setSpeakCall((current) => ({ ...current, error: "" }));
-      setNotice("Emergency stop cleared. Schedules remain paused.");
+      setNotice("Emergency stop cleared. Schedules remain paused and canceled tasks do not restart.");
     } catch {
+      if (turnOwner.current !== owner || stopSyncFlight.current !== attempt) return;
       const message = "The server could not confirm the release. Emergency stop remains on.";
       setError(message);
       setSpeakCall((current) => ({ ...current, error: message }));
+    } finally {
+      if (stopSyncFlight.current === attempt) {
+        stopSyncFlight.current = null;
+        if (attempt.restop && turnOwner.current === owner) await pressEmergencyStop();
+      }
     }
   }
   function explain(text: string) {
@@ -4321,7 +4710,7 @@ ${message.content}`;
   }
 
   function clearFailure() {
-    setFailure(null);
+    if (failure) setPendingFailures((rows) => dismissRecovery(rows, failure.auditId));
     setError(null);
   }
 
@@ -4331,21 +4720,27 @@ ${message.content}`;
       ...prev,
       audit: retainActivity([{ id: auditId, at: new Date().toISOString(), action, target, result: message }, ...prev.audit]),
     }));
-   setFailure({ message, auditId, retry: onceRetry(retry), kind, action: failureAction });
-    setError(null);
-    setNotice(null);
+   const chat = wsRef.current.chats.find((row) => row.id === (outcome.bindings?.chatId ?? target));
+   const operationId = outcome.envelope?.operationId ?? (chat ? [...chat.messages].reverse().find((message) => message.deliveryOperationId)?.deliveryOperationId : undefined);
+   if (!isBackgroundConnectionCheck(target)) setSelectedFailureId(auditId);
+   setFailure({ message, auditId, target, createdAt: new Date().toISOString(), retry: onceRetry(retry), kind, action: failureAction, ...(chat ? { chatId: chat.id } : {}), ...(operationId ? { operationId } : {}) });
+    if (!isBackgroundConnectionCheck(target)) {
+      setError(null);
+      setNotice(null);
+    }
   }
 
   useMcpFailureMount(({ outcome, retry, localCorrelationId }) => {
     presentReportedFailure(outcome, localCorrelationId, outcome.retryable ? retry : null);
   });
 
-  function reportFailure(message: string, action: string, target: string, retry: (() => void) | null, failureAction: RouteFailureAction = "retry") {
-    const kind = classifyHonestFailure(message);
+  function reportFailure(message: string, action: string, target: string, retry: (() => void) | null, failureAction: RouteFailureAction = "retry", structuredKind?: HonestFailureKind | null, details?: FailureDetails & Pick<McpReportedOutcome, "bindings" | "temporary">) {
+    const envelope = details ? failureEnvelopeFromAction({ action, target, message, ...details }) : undefined;
+    const kind = envelope ? classifyHonestFailure(envelope) : recoveryKind(action, message, structuredKind);
     const auditAction = kind ? honestFailureAuditAction(kind) : action;
     const auditId = crypto.randomUUID();
     const surface = surfaceForReport(auditAction, target);
-    const outcome: McpReportedOutcome = { message, action: auditAction, target, kind, retryable: retry !== null && failureAction === "retry", failureAction };
+    const outcome: McpReportedOutcome = { message, action: auditAction, target, kind, retryable: retry !== null && failureAction === "retry", failureAction, ...(envelope ? { envelope, bindings: details?.bindings, temporary: details?.temporary } : {}) };
     if (
       surface &&
       emitFailure(
@@ -4492,13 +4887,18 @@ ${message.content}`;
       customPersonality: HUMAN_CODE_NOTE,
     });
     made.chat.title = title;
+    if (text.trim()) {
+      let storage: Storage | null = null; try { storage = sessionStorage; } catch { /* Report failed delivery below. */ }
+      const handed = stageCodeHandoff(storage, draftOwner ?? "", made.chat.id, text, made.chat.temporary);
+      if (!handed.ok) { setError(handed.error); return false; }
+    }
     setWs((prev) => pushAudit({ ...prev, chats: [made.chat, ...prev.chats] }, "create_chat", made.chat.id, "human code"));
     setActiveId(made.chat.id);
-    if (text.trim()) sessionStorage.setItem("adrian-human-draft", text.trim().slice(0, 4000));
     setView("code");
     setNavOpen(false);
     setSpeakStageOpen(false);
-    setNotice("Intelligence thread opened. Ask about code, or send a task to Build.");
+    setNotice(text.trim() ? `Complete handoff delivered: ${text.length.toLocaleString()} characters. Review it before sending a message.` : "Intelligence thread opened. Ask about code, or send a task to Build.");
+    return true;
   }
 
   async function sendHumanCode(id: string, text: string, image?: { dataUrl: string; name: string }) {
@@ -4506,7 +4906,7 @@ ${message.content}`;
     const chat = source.chats.find((item) => item.id === id);
     if (!chat) {
       setNotice("That Intelligence thread is gone. Open a new one.");
-      return;
+      return false;
     }
     setActiveId(id);
     setView("code");
@@ -4514,14 +4914,15 @@ ${message.content}`;
     const command = text.trim().split(/\s+/)[0]?.toLowerCase() ?? "";
     if (command === "/diff" || command === "/run" || command === "/test" || command === "/fix" || command === "/files") {
       setNotice(await humanCodeAction(id, command, text));
-      return;
+      return true;
     }
     const safe = text.replace(/(?:^|\n)\s*[A-Z0-9_]*(?:KEY|TOKEN|SECRET|PASSWORD)[A-Z0-9_]*\s*=\s*\S+/gi, " [secret omitted]");
     const generic = !chat.title || chat.title === "Human Code" || chat.title === "Intelligence" || chat.title === "From EVE" || chat.title === "New coding thread";
     const named = generic ? { ...chat, title: text.replace(/^\/(\S+)\s*/, "$1 ").replace(/\s+/g, " ").trim().slice(0, 48) || "Intelligence" } : chat;
     const namedSource = generic ? { ...source, chats: source.chats.map((item) => item.id === id ? named : item) } : source;
     const reply = await deliver(named, ["/explain", "/review", "/plan", "/refactor"].includes(command) ? `Coding discussion only. Do not claim a file changed. ${safe}` : safe, namedSource, false, image ? [{ dataUrl: image.dataUrl, name: image.name }] : []);
-    setNotice(reply ? "Intelligence answered. File changes still go to Build." : "Intelligence did not answer. Nothing was sent to Build.");
+    setNotice(reply ? "Intelligence answered. File changes still go to Build." : "Intelligence did not answer. The draft is retained; review the conversation before retrying.");
+    return Boolean(reply);
   }
 
   async function humanCodeAction(id: string, command: string, text: string) {
@@ -4569,7 +4970,7 @@ ${message.content}`;
       : command === "/fix"
         ? `Fix only the files named here. ${rest}`.trim()
         : `Do this in the hosted workspace and report what changed. ${rest || text}`.trim();
-    sessionStorage.setItem(`adrian-build-draft.${draftOwner || "signed-out"}`, task.slice(0, 4000));
+    sessionStorage.setItem(`adrian-build-draft.${draftOwner || "signed-out"}`, task);
     sessionStorage.setItem(`adrian-human-return.${draftOwner || "signed-out"}`, id);
     if (command === "/fix" || command === "/run" || command === "/test") sessionStorage.setItem(`adrian-build-mode.${draftOwner || "signed-out"}`, "auto");
     setWs((prev) => appendHumanResult(prev, id, text, "Handed to Build. File changes happen only after you press Run build. This thread stays here."));
@@ -4577,8 +4978,10 @@ ${message.content}`;
     return "Opened Build with this Intelligence task. The thread is still saved.";
   }
 
-  async function speakChatTurn(transcript: string, options?: { stay?: boolean }) {
-    let chat = (activeId ? wsRef.current.chats.find((item) => item.id === activeId) : null) ?? null;
+  async function speakChatTurn(transcript: string, options?: { stay?: boolean; provider?: string; taskId?: string; answerRequest?: SpeakRetryParams["answerRequest"] }) {
+    const targetId = options?.answerRequest?.chatId ?? activeId;
+    let chat = (targetId ? wsRef.current.chats.find((item) => item.id === targetId) : null) ?? null;
+    if (options?.answerRequest && !chat) return { ok: false as const, error: "The original voice conversation was removed. Its reviewed request was not sent." };
     let source = wsRef.current;
     if (!chat) {
       const made = createChat(source, {
@@ -4594,7 +4997,7 @@ ${message.content}`;
       if (!options?.stay) setView("chat");
       setWs((prev) => pushAudit({ ...prev, chats: [made.chat, ...prev.chats] }, "create_chat", made.chat.id, "speak"));
     }
-    const spokenStyle = speakStylePersonality(typeof localStorage === "undefined" ? null : localStorage.getItem("adrian-speak-style"));
+    const spokenStyle = speakStylePersonality(typeof localStorage === "undefined" ? null : preferenceStorage.getItem("adrian-speak-style"));
     if (parseCreateBot(transcript)) {
       const made = createBotFromSpeech(source, transcript);
       if (!made.ok) return { ok: false as const, error: made.error };
@@ -4603,45 +5006,81 @@ ${message.content}`;
       if (speakStageOpenRef.current) setSpeakCall((current) => ({ ...current, heard: transcript, reply: made.reply, error: "" }));
       return { ok: true as const, text: made.reply };
     }
-    const reply = await deliver({ ...chat, personalityId: spokenStyle }, transcript, source, false, [], { accessNotes: chat.memory === "on" && !chat.temporary ? eveAccessNotes(workspaceForChat(source, chat)) : [] });
-    if (!reply) return { ok: false as const, error: "The chat turn failed. Nothing was spoken." };
-    return { ok: true as const, text: reply };
+    const returned: { receipt?: TurnReplyReceipt; failure?: { error: string; dispatched: false; approvalId?: string; answerRequest: NonNullable<SpeakRetryParams["answerRequest"]> } } = {};
+    const replay = options?.answerRequest;
+    const reply = await deliver({ ...chat, personalityId: spokenStyle }, transcript, source, Boolean(replay), [], {
+      selectedProviderOnly: true,
+      ...(replay ? { knownUnsent: true, request: { id: replay.operationId, body: replay.body } } : {}),
+      onFailure: (failure) => { returned.failure = failure; }, onReply: (receipt) => { returned.receipt = receipt; }, provider: options?.provider, taskId: options?.taskId, accessNotes: chat.memory === "on" && !chat.temporary ? eveAccessNotes(workspaceForChat(source, chat)) : [] });
+    if (!reply) return returned.failure ? { ok: false as const, ...returned.failure } : { ok: false as const, error: "The chat turn failed. Its delivery was not confirmed; no automatic replay will run." };
+    return { ok: true as const, text: reply, replyReceipt: returned.receipt, provider: returned.receipt?.provider ?? "not reported", model: returned.receipt?.model };
   }
 
   async function speak(text: string, messageId = "", voiceId = voiceChoiceRef.current, replay?: SpeakRetryParams) {
-    if (currentFreeOnly.current) { setError("Free-only mode is on. Cloud voice requires a billable provider. Browser dictation is still available when supported."); return { ok: false as const, error: "Free-only mode is on. Cloud voice requires a billable provider. Browser dictation is still available when supported." }; }
-    if (!text && !replay && voiceModeRef.current === "orchestrator") {
-      const probe = await probeOllamaConductor({
-        baseUrl: (typeof localStorage !== "undefined" && localStorage.getItem("amcos.ollama.base")) || undefined,
-        model: (typeof localStorage !== "undefined" && localStorage.getItem("amcos.ollama.model")) || undefined,
-      });
-      const route = resolveVoiceMode("orchestrator", probe.ok);
-      if (route.fellBack) {
-        applyVoiceMode("direct");
-        setNotice(route.notice ?? DIRECT_FALLBACK_NOTICE);
-      }
-    }
+    const stages = loadVoiceStages(preferenceStorage);
+    const inputProvider = replay?.inputProvider ?? stages.inputProvider;
+    const outputProvider = replay?.outputProvider ?? stages.outputProvider;
+    if (currentFreeOnly.current && (!(text || replay?.reply) || outputProvider !== "browser")) { setError("Free-only mode is on. Cloud voice requires a billable provider. Browser dictation is still available when supported."); return { ok: false as const, error: "Free-only mode is on. Cloud voice requires a billable provider. Browser dictation is still available when supported." }; }
     interruptSpeakPlayback();
     const generation = ++speakGenRef.current;
     const abort = new AbortController();
     speakAbortRef.current = abort;
     setSpeaking(true);
+    setSpeakingMessageId(messageId || null);
     setAvatarPresence("processing");
     let speechFailed = false;
     let speechError = "";
     let spokeProvider = "";
+    let browserReply = "";
+    let muted = false;
+    const current = () => generation === speakGenRef.current && !abort.signal.aborted && turnOwner.current === draftOwner && !wsRef.current.halted;
+    if (!speakStageOpenRef.current) {
+      const volume = Number(preferenceStorage.getItem("adrian-speak-volume") ?? "100");
+      voiceOutput.current = { muted: false, volume: Number.isFinite(volume) ? Math.max(0, Math.min(1, volume / 100)) : 1 };
+    }
+    const answerProvider = replay?.answerProvider ?? effectiveProvider;
+    const originalTarget = replay?.replyTarget ?? (() => {
+      const chat = wsRef.current.chats.find((item) => item.messages.some((message) => message.id === messageId));
+      return chat ? { chatId: chat.id, messageId } : undefined;
+    })();
+    let replyTarget = originalTarget;
+    const previousReceipt = originalTarget ? wsRef.current.chats.find((chat) => chat.id === originalTarget.chatId)?.messages.find((message) => message.id === originalTarget.messageId)?.voiceStages : undefined;
+    const voiceProjectId = replay && "projectId" in replay ? replay.projectId : wsRef.current.chats.find((chat) => chat.id === (originalTarget?.chatId ?? activeId))?.projectId ?? null;
+    const attempt = replay ?? snapshotSpeakRetryParams({ projectId: voiceProjectId, text, messageId, voiceId, inputProvider, outputProvider, answerProvider, chatCommitted: text.length > 0, reply: text.length > 0 ? text : null });
+    const newVoiceReceipt = createVoiceStagesReceipt({ operationId: attempt.correlationId, inputProvider, answerProvider, outputProvider, readAloud: text.length > 0 });
+    let voiceReceipt: VoiceStagesReceipt = replay?.voiceStages ?? (previousReceipt && text ? { ...newVoiceReceipt, input: previousReceipt.input, answer: previousReceipt.answer } : newVoiceReceipt);
+    const persistVoiceEvidence = () => {
+      if (turnOwner.current !== draftOwner) return;
+      try { storeVoiceReceipt(preferenceStorage, voiceReceipt); window.dispatchEvent(new Event("adrian-voice-receipts-change")); } catch { /* The saved message still carries its receipt when browser preferences are unavailable. */ }
+      const target = replyTarget;
+      if (!target) return;
+      const receipt = voiceReceipt;
+      setWs((current) => ({ ...current, chats: current.chats.map((chat) => chat.id === target.chatId ? { ...chat, messages: chat.messages.map((message) => message.id === target.messageId ? { ...message, voiceStages: receipt } : message) } : chat) }));
+    };
+    const observedStage = async <T extends { ok?: boolean; provider?: unknown; model?: unknown; requestId?: unknown }>(stage: "input" | "answer" | "output", action: () => Promise<T>): Promise<T> => {
+      try { const result = await action(); voiceReceipt = recordVoiceStage(voiceReceipt, stage, { ...result, ok: result.ok === true }); persistVoiceEvidence(); return result; }
+      catch (cause) { voiceReceipt = recordVoiceStage(voiceReceipt, stage, { ok: false }); persistVoiceEvidence(); throw cause; }
+    };
     await runMountedSpeak({
+      inputProvider, outputProvider, answerProvider,
       text,
       messageId,
       voiceId,
-      replay,
-      isCurrent: () => generation === speakGenRef.current && !abort.signal.aborted,
+      replay: attempt,
+      isCurrent: current,
       deps: {
-        capture: () => captureSpeakUtterance({ maxMs: 6000, signal: abort.signal }),
-        transcribe: async (audioBase64, mime) => {
-          const detected = await detectWithHandy(audioBase64);
-          if (detected.ok) {
-            setNotice("Handy Whisper Flow detected this. Speak is the call.");
+        capture: async () => {
+          try { return await captureSpeakUtterance({ maxMs: 6000, signal: abort.signal }); }
+          catch (cause) {
+            voiceReceipt = { ...voiceReceipt, input: { ...voiceReceipt.input, state: "failed", updatedAt: new Date().toISOString() }, updatedAt: new Date().toISOString() };
+            persistVoiceEvidence(); throw cause;
+          }
+        },
+        transcribe: (audioBase64, mime) => observedStage("input", async () => {
+          if (inputProvider === "handy") {
+            const detected = await detectWithHandy(audioBase64);
+            if (!detected.ok) return { ok: false, error: detected.error || "Handy could not transcribe this recording. Choose a different input provider in Settings to try another service." };
+            if (current()) setNotice("Handy Whisper Flow detected this. Speak is the call.");
             return { ok: true, text: detected.text, provider: "handy" };
           }
           const prefix = previewPathPrefix(window.location.hostname, window.location.pathname) ?? "";
@@ -4655,37 +5094,83 @@ ${message.content}`;
               ...(token ? { Authorization: `Bearer ${token}` } : {}),
             },
             signal: abort.signal,
-            body: JSON.stringify({ audioBase64, mime, freeOnly: currentFreeOnly.current, filename: sanitizeAudioFilename("speak", mime) }),
+            body: JSON.stringify({ audioBase64, mime, provider: inputProvider, operationId: `${voiceReceipt.operationId}:input`, taskId: voiceReceipt.operationId, projectId: voiceProjectId, freeOnly: currentFreeOnly.current, filename: sanitizeAudioFilename("speak", mime) }),
           });
           try {
             const body = (await response.json()) as { ok?: boolean; text?: string; error?: string; provider?: string };
-            if (body.ok && body.provider) setNotice(`${body.provider} transcribed this.`);
+            if (current() && body.ok && body.provider) setNotice(`${body.provider} transcribed this.`);
             return body;
           } catch {
             return { ok: false, error: "The transcript request failed. Nothing was substituted." };
           }
-        },
-        chatTurn: (transcript) => speakChatTurn(transcript),
-        synthesize: async (reply, voice) => {
+        }),
+        chatTurn: (transcript) => observedStage("answer", async () => {
+          if (!current()) return { ok: false, error: "The voice request was interrupted." };
+          setSpeakCall((call) => ({ ...call, heard: transcript, error: "", answerReceipt: undefined }));
+          const result = await speakChatTurn(transcript, { stay: true, provider: answerProvider, taskId: voiceReceipt.operationId, answerRequest: attempt.answerRequest });
+          if (result.ok && current()) setSpeakCall((call) => ({ ...call, reply: result.text }));
+          if (result.ok && "replyReceipt" in result && result.replyReceipt) {
+            replyTarget = { chatId: result.replyReceipt.chatId, messageId: result.replyReceipt.messageId };
+            return { ...result, provider: result.replyReceipt.provider, model: result.replyReceipt.model, requestId: result.replyReceipt.requestId };
+          }
+          return result;
+        }),
+        synthesize: (reply, voice) => {
+          if (voiceOutput.current.muted || !voiceOutput.current.volume) { muted = true; return Promise.resolve({ ok: true, audio: "muted" }); }
+          if (outputProvider === "browser") { browserReply = reply; return Promise.resolve({ ok: true, audio: "browser-speech" }); }
+          return observedStage("output", async () => {
           noteSpokenText(reply);
-          const spoken = await speakText({ data: { text: reply, voiceId: voice, freeOnly: currentFreeOnly.current } });
+          const spoken = await speakText({ data: { text: reply, voiceId: voice, provider: outputProvider, operationId: `${voiceReceipt.operationId}:output`, taskId: voiceReceipt.operationId, projectId: voiceProjectId, freeOnly: currentFreeOnly.current } });
           if (spoken && typeof spoken === "object" && "ok" in spoken && spoken.ok) {
             const audio = "audio" in spoken && typeof spoken.audio === "string" ? spoken.audio.trim() : "";
             if (!audio) return { ok: false, error: "The provider returned no audio. Nothing was played." };
             if ("provider" in spoken && typeof spoken.provider === "string" && spoken.provider) spokeProvider = spoken.provider;
           }
           return spoken;
+          });
         },
         play: async (audio) => {
+          if (muted || voiceOutput.current.muted || !voiceOutput.current.volume) {
+            muted = true;
+            setNotice("Reply saved. Speech output is muted.");
+            return;
+          }
+          if (outputProvider === "browser") {
+            const playback = new AbortController();
+            browserPlaybackAbort.current = playback;
+            const stop = () => playback.abort();
+            abort.signal.addEventListener("abort", stop, { once: true });
+            try {
+              await speakWithBrowser({ text: browserReply, signal: playback.signal, volume: voiceOutput.current.volume });
+              if (current()) {
+                voiceReceipt = recordVoiceStage(voiceReceipt, "output", { ok: true, provider: "browser" });
+                voiceReceipt = recordVoicePlayback(voiceReceipt, "played");
+                setNotice("Browser speech finished playing the reply.");
+              }
+            } catch (cause) {
+              voiceReceipt = recordVoicePlayback(voiceReceipt, playback.signal.aborted ? "interrupted" : "failed");
+              if (playback.signal.aborted && current() && (voiceOutput.current.muted || !voiceOutput.current.volume)) { muted = true; setNotice("Reply saved. Speech output is muted."); }
+              else throw cause;
+            } finally {
+              abort.signal.removeEventListener("abort", stop);
+              if (browserPlaybackAbort.current === playback) browserPlaybackAbort.current = null;
+              if (current()) persistVoiceEvidence();
+            }
+            return;
+          }
           window.speechSynthesis?.cancel();
           voiceSession.current?.interruptPlayback();
-          const pace = localStorage.getItem("adrian-speak-rate");
-          const volume = Number(localStorage.getItem("adrian-speak-volume") ?? "100");
-          await sharedAudioOutput.playMpegBase64(audio, {
-            rate: pace === "slow" ? 0.85 : pace === "brisk" ? 1.15 : 1,
-            volume: Number.isFinite(volume) ? volume / 100 : 1,
-          });
-          setNotice(spokeProvider ? `${spokeProvider} spoke this reply.` : "The reply was spoken.");
+          const pace = preferenceStorage.getItem("adrian-speak-rate");
+          const volume = Number(preferenceStorage.getItem("adrian-speak-volume") ?? "100");
+          try {
+            await sharedAudioOutput.playMpegBase64(audio, {
+              rate: pace === "slow" ? 0.85 : pace === "brisk" ? 1.15 : 1,
+              volume: Number.isFinite(volume) ? volume / 100 : 1,
+            });
+            voiceReceipt = recordVoicePlayback(voiceReceipt, generation === speakGenRef.current && !abort.signal.aborted ? "played" : "interrupted");
+          } catch (cause) { voiceReceipt = recordVoicePlayback(voiceReceipt, abort.signal.aborted ? "interrupted" : "failed"); throw cause; }
+          finally { persistVoiceEvidence(); }
+          if (current()) setNotice(spokeProvider ? `${spokeProvider} spoke this reply.` : "The reply was spoken.");
         },
       },
       reportFailure: (message, action, target, retry) => {
@@ -4697,17 +5182,26 @@ ${message.content}`;
       },
       clearFailure,
       again: (params) => {
-        void speak(params.text, params.messageId, resolveXaiVoiceId(params.voiceId), params);
+        void speak(params.text, replyTarget?.messageId ?? params.messageId, resolveXaiVoiceId(params.voiceId), { ...params, voiceStages: voiceReceipt, replyTarget });
       },
     });
-    if (generation !== speakGenRef.current || abort.signal.aborted) return;
+    if (!current()) return { ok: false as const, error: "The voice request was interrupted." };
+    if (muted && voiceReceipt.playback === "pending") voiceReceipt = recordVoicePlayback(voiceReceipt, "not_requested");
+    if (muted && voiceReceipt.output.state === "pending") voiceReceipt = { ...voiceReceipt, playback: "not_requested", output: { ...voiceReceipt.output, state: "not_requested" } };
+    for (const stage of ["input", "answer", "output"] as const) if (voiceReceipt[stage].state === "pending") voiceReceipt = { ...voiceReceipt, [stage]: { ...voiceReceipt[stage], state: "not_requested" } };
+    if (generation !== speakGenRef.current || abort.signal.aborted) { voiceReceipt = recordVoicePlayback(voiceReceipt, "interrupted"); persistVoiceEvidence(); return; }
+    if (speechFailed && voiceReceipt.playback === "pending") voiceReceipt = recordVoicePlayback(voiceReceipt, "not_requested");
+    persistVoiceEvidence();
+    setSpeakingMessageId(null);
     setSpeaking(false);
     if (!speechFailed && !wsRef.current.halted) setAvatarPresence("idle");
-    return speechFailed ? { ok: false as const, error: speechError || "The reply was not spoken." } : { ok: true as const };
+    return speechFailed ? { ok: false as const, error: speechError || "The reply was not spoken." } : { ok: true as const, speech: muted ? "muted" as const : "played" as const };
   }
 
   useEffect(() => () => {
     if (voiceSession.current || listenMintAbortRef.current) stopVoiceSession();
+    serverDictationRef.current?.cancel();
+    serverDictationRef.current = null;
     auxiliaryHistory.current = null;
   }, [voiceScope]);
 
@@ -4811,8 +5305,8 @@ ${message.content}`;
     appendLiveTranscript("user", text, record);
     if (mode === "direct") return;
     const conducted = await runOllamaConductor(text, {
-      baseUrl: localStorage.getItem("amcos.ollama.base") || undefined,
-      model: localStorage.getItem("amcos.ollama.model") || undefined,
+      baseUrl: preferenceStorage.getItem("amcos.ollama.base") || undefined,
+      model: preferenceStorage.getItem("amcos.ollama.model") || undefined,
     });
     if (!isCurrent()) return;
     if (!conducted.ok) {
@@ -5091,7 +5585,9 @@ ${message.content}`;
   }
 
   async function startServerDictation() {
-    if (currentFreeOnly.current) { setError("This browser needs cloud transcription. Free-only mode keeps it off."); return; }
+    const inputProvider = loadVoiceStages(preferenceStorage).inputProvider;
+    if (!draftOwner) { setError("Sign in before server dictation. Nothing was recorded."); return; }
+    if (currentFreeOnly.current && inputProvider !== "handy") { setError("Free-only mode keeps the selected cloud transcription provider off. Choose Handy for local input."); return; }
     if (wsRef.current.halted) {
       setError("Emergency stop is on. Dictation was not started.");
       return;
@@ -5102,12 +5598,15 @@ ${message.content}`;
     }
     try {
       const recorder = await createDictationRecorder();
-      serverDictationRef.current = recorder;
+      if (turnOwner.current !== draftOwner || currentVoiceScope.current !== voiceScope) { recorder.cancel(); return; }
+      serverDictationRef.current = Object.assign(recorder, { captureOwner: draftOwner, captureScope: voiceScope, inputProvider, operationId: crypto.randomUUID(), projectId: active?.projectId ?? null });
       await recorder.start();
+      if (serverDictationRef.current !== recorder || currentVoiceScope.current !== voiceScope) { recorder.cancel(); return; }
       commitDictation({ type: "start" });
       dictationBaseRef.current = draftRef.current;
-      setNotice("This browser has no live speech recognition. Speak, then press Mic again. Words are inserted only after transcription. Nothing is sent.");
+      setNotice(`Dictation input is ${inputProvider}. Speak, then press Mic again. Audio goes only to that selected input provider; the transcript is inserted without sending a chat message.`);
     } catch {
+      if (turnOwner.current !== draftOwner || currentVoiceScope.current !== voiceScope) return;
       serverDictationRef.current = null;
       commitDictation({
         type: "stop_error",
@@ -5127,6 +5626,7 @@ ${message.content}`;
     commitDictation({ type: "stop_begin" }, false);
     try {
       const captured = await recorder.stop();
+      if (turnOwner.current !== recorder.captureOwner || currentVoiceScope.current !== recorder.captureScope) return;
       if (captured.blob.size < 32) {
         commitDictation({ type: "stop_empty" });
         setNotice("No words were caught. Press the mic, speak, then press it again.");
@@ -5134,21 +5634,32 @@ ${message.content}`;
       }
       const audioBase64 = await blobToBase64(captured.blob);
       const mime = captured.mime.split(";")[0] || "audio/webm";
-      const response = await fetch("/api/mind/voice/stt", {
-        method: "POST",
-        credentials: "same-origin",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({ audioBase64, mime, freeOnly: currentFreeOnly.current, filename: sanitizeAudioFilename("dictation", mime) }),
-      });
-      const body = await response.json() as { ok?: boolean; text?: string; error?: string };
+      if (turnOwner.current !== recorder.captureOwner || currentVoiceScope.current !== recorder.captureScope) return;
+      let body: { ok?: boolean; text?: string; error?: string; provider?: string };
+      if (recorder.inputProvider === "handy") {
+        const local = await detectWithHandy(audioBase64);
+        body = local.ok ? { ok: true, text: local.text, provider: "handy" } : { ok: false, error: local.error || "Handy could not transcribe this recording. No cloud provider was called." };
+      } else {
+        if (currentFreeOnly.current) { commitDictation({ type: "stop_error", message: "Free-only mode was enabled. No cloud transcription was sent." }); return; }
+        const token = getBearerToken();
+        const response = await fetch("/api/mind/voice/stt", {
+          method: "POST", credentials: "same-origin",
+          headers: { "content-type": "application/json", ...(token ? { Authorization: `Bearer ${token}` } : {}) },
+          body: JSON.stringify({ audioBase64, mime, provider: recorder.inputProvider, operationId: recorder.operationId, projectId: recorder.projectId, freeOnly: currentFreeOnly.current, filename: sanitizeAudioFilename("dictation", mime) }),
+        });
+        body = await response.json() as typeof body;
+        if (!response.ok) body.ok = false;
+      }
+      if (turnOwner.current !== recorder.captureOwner || currentVoiceScope.current !== recorder.captureScope) return;
       const text = body.text?.trim() ?? "";
-      if (response.ok && body.ok && text) {
+      if (body.ok && text) {
         commitDictation({ type: "stop_inserted", text });
         setNotice("Words inserted into the field. Press Send when you want a reply.");
         return;
       }
       commitDictation({ type: "stop_error", message: body.error || "Nothing was transcribed." });
     } catch {
+      if (turnOwner.current !== recorder.captureOwner || currentVoiceScope.current !== recorder.captureScope) return;
       commitDictation({ type: "stop_error", message: "Dictation could not finish. Nothing was inserted." });
     }
   }
@@ -5207,6 +5718,7 @@ ${message.content}`;
   }
 
   function closeSpeakStage() {
+    interruptSpeakPlayback();
     speakStageOpenRef.current = false;
     setSpeakStageOpen(false);
     if (!overlayOpenRef.current) void listen({ mode: "stop" });
@@ -5356,8 +5868,8 @@ ${message.content}`;
     try {
       if (voiceModeRef.current === "orchestrator") {
         const probe = await probeOllamaConductor({
-          baseUrl: (typeof localStorage !== "undefined" && localStorage.getItem("amcos.ollama.base")) || undefined,
-          model: (typeof localStorage !== "undefined" && localStorage.getItem("amcos.ollama.model")) || undefined,
+          baseUrl: (typeof localStorage !== "undefined" && preferenceStorage.getItem("amcos.ollama.base")) || undefined,
+          model: (typeof localStorage !== "undefined" && preferenceStorage.getItem("amcos.ollama.model")) || undefined,
         });
         const route = resolveVoiceMode("orchestrator", probe.ok);
         if (route.fellBack) {
@@ -5425,9 +5937,9 @@ ${message.content}`;
       const sessionMode = getVoiceMode();
       const voiceBuilt = voiceSessionInstructions({
         mode: sessionMode,
-        personalityId: speakStylePersonality(typeof localStorage === "undefined" ? null : localStorage.getItem("adrian-speak-style")),
+        personalityId: speakStylePersonality(typeof localStorage === "undefined" ? null : preferenceStorage.getItem("adrian-speak-style")),
         customPersonality: voiceChat?.customPersonality ?? "",
-        characterId: readStoredCharacterId(typeof localStorage === "undefined" ? null : localStorage),
+        characterId: readStoredCharacterId(preferenceStorage),
       });
       const record = makeCallHistory();
       const isCurrent = (): boolean => voiceSession.current === session && session.isOpen && !wsRef.current.halted && currentVoiceScope.current === voiceScope;
@@ -5530,7 +6042,8 @@ ${message.content}`;
             setVoiceListening(false);
             setVoiceLevel(0);
             setVoiceLiveTranscript("");
-            setSpeaking(false);
+            setSpeakingMessageId(null);
+    setSpeaking(false);
             setError(VOICE_CONNECTION_DROPPED);
             setNotice(VOICE_CONNECTION_DROPPED);
             if (overlayOpenRef.current) {
@@ -5555,7 +6068,7 @@ ${message.content}`;
         sharedAudioOutput,
         undefined,
         { voice: voiceChoiceRef.current, instructions: voiceBuilt.instructions, transcriptOnly: voiceBuilt.silent,
-          voiceIsolation: loadVoiceSettings(localStorage).activation === "isolation",
+          voiceIsolation: loadVoiceSettings(preferenceStorage).activation === "isolation",
         },
       );
       voiceSession.current = session;
@@ -5567,7 +6080,7 @@ ${message.content}`;
         return;
       }
       publishConnectStage("requesting_mic");
-      const startMuted = voiceMutedRef.current || (speakStageOpenRef.current && loadVoiceSettings(localStorage).activation === "push_to_talk");
+      const startMuted = voiceMutedRef.current || (speakStageOpenRef.current && loadVoiceSettings(preferenceStorage).activation === "push_to_talk");
       session.setMuted(startMuted);
       setVoiceMicMuted(startMuted);
       await session.startCapture();
@@ -5682,8 +6195,18 @@ ${message.content}`;
   cancelDictationRef.current = cancelBrowserDictation;
   const dictationDisabled = ws.halted || voiceListening || voiceOverlayOpen;
 
+  if (!initialLocationResolved) {
+    return <main className="flex min-h-dvh items-center justify-center bg-bg p-4 text-fg" role="status">Opening workspace…</main>;
+  }
+
   return (
-    <div id="mind-workspace" className="shell flex h-dvh flex-col bg-bg text-fg md:flex-row" data-view={view} data-search={paletteOpen ? "open" : "closed"}>
+    <div id="mind-workspace" data-workspace-ready={ready ? "true" : "false"} className="shell flex h-dvh flex-col bg-bg text-fg md:flex-row" data-view={view} data-search={paletteOpen ? "open" : "closed"}>
+      {notionSelection ? <Overlay labelledBy="notion-choice-title" onDismiss={() => setNotionSelection(null)}>
+        <h2 id="notion-choice-title" className="text-lg font-semibold">Choose the Notion page</h2>
+        <p className="mt-2 text-sm text-muted">Workspace: {notionSelection.workspaceId}. Select the exact destination. Selecting a page does not approve a write.</p>
+        <ul className="mt-3 max-h-80 overflow-auto space-y-2">{notionSelection.pages.map((page) => <li key={page.id}><button type="button" className="min-h-11 w-full rounded-panel border border-line p-3 text-left" onClick={() => { const choice = notionSelection; setNotionSelection(null); void askNotion(choice.chat, choice.text, false, page.id, choice.workspaceId); }}><strong>{page.title}</strong><span className="block break-all text-xs text-muted">{page.url}</span></button></li>)}</ul>
+        <div className="mt-4 flex gap-3"><button type="button" className="min-h-11 rounded-panel border border-line px-4" onClick={() => setNotionSelection(null)}>Cancel</button>{notionSelection.cursor ? <button type="button" className="min-h-11 rounded-panel border border-line px-4" disabled={busy} onClick={() => void askNotion(notionSelection.chat, notionSelection.text, false, null, notionSelection.workspaceId, undefined, notionSelection.cursor)}>More results</button> : null}</div>
+      </Overlay> : null}
       <MenuMotion />
       {navOpen ? <button type="button" className="fixed inset-0 md:hidden" aria-label="Close menu" style={{ zIndex: 150, background: "transparent" }} onClick={() => setNavOpen(false)} /> : null}
       <aside ref={(node) => { navDrawerRef.current = node; pinRailFrame(node); }} onMouseDown={closeNavFromBackdrop} role={navOpen ? "dialog" : undefined} aria-modal={navOpen ? true : undefined} aria-label={navOpen ? "Workspace navigation" : undefined} className={`rail gpt-rail ${navOpen ? "nav-drawer-open flex" : "hidden"} fixed inset-0 z-40 w-full flex-col overflow-hidden md:static md:flex md:h-dvh ${railCollapsed ? "md:w-[4.5rem]" : "md:w-72"} md:shrink-0`}>
@@ -6005,6 +6528,7 @@ ${message.content}`;
               value={query}
               onChange={(event) => {
                 setQuery(event.target.value);
+                setPaletteLimit(50);
                 setPaletteIndex(0);
                 closeMenus("palette");
                 setPaletteOpen(true);
@@ -6025,16 +6549,18 @@ ${message.content}`;
               aria-haspopup="listbox"
               aria-activedescendant={paletteOpen && hits.length > 0 ? `palette-hit-${hits[Math.min(Math.max(paletteIndex, 0), hits.length - 1)]!.key}` : undefined}
             />
-            <span className="pointer-events-none absolute top-1/2 right-3 -translate-y-1/2 text-xs text-muted">⌘K</span>
+            <span className="pointer-events-none absolute top-1/2 right-3 -translate-y-1/2 text-xs text-muted">{typeof navigator !== "undefined" && /Mac|iPhone|iPad/.test(navigator.platform) ? "⌘K" : "Ctrl K"}</span>
             {paletteOpen && (
               <div id="command-palette" ref={finishMenu} className="command-palette floating-menu absolute z-30 mt-2 w-full" role="listbox" aria-label="Search results">
-                <p className="px-3 pb-1 pt-1 text-[11px] font-semibold uppercase tracking-[0.14em] text-muted">Results</p>
+                <label className="flex items-center gap-2 px-3 text-xs">Filter<select className="min-h-11 max-w-full bg-bg px-2" value={paletteFilter} onChange={(event) => { setPaletteFilter(event.target.value as typeof paletteFilter); setPaletteIndex(0); setPaletteLimit(50); }}><option value="all">All resources</option>{[["chat", "Chats"], ["projects", "Projects"], ["files", "Files"], ["memory", "Notes"], ["agents", "Agents"], ["runs", "Runs"], ["research", "Research"], ["scheduled", "Schedules"], ["connected", "Connections"], ["skills", "Skills"], ["activity", "Activity"]].map(([id, label]) => <option key={id} value={id}>{label}</option>)}</select></label>
+                <p className="px-3 pb-1 pt-1 text-[11px] font-semibold uppercase tracking-[0.14em] text-muted">{hits.length} results</p>
+                {palettePinKind(hits[paletteIndex]) && <button type="button" className="min-h-11 px-3 text-xs" aria-keyshortcuts="Alt+P" aria-pressed={selectedHitPinned} onClick={() => pinPaletteHit(hits[paletteIndex])}>{selectedHitPinned ? "Unpin" : "Pin"} selected result · Alt P</button>}
                 {hits.length === 0 && <p className="px-3 py-3 text-sm text-muted">No matches.</p>}
-                {hits.map((hit, index) => {
-                  const kind = hit.meta === "Chat" || hit.meta === "Intelligence" ? "chat" : hit.meta === "Agent" ? "agent" : hit.meta === "Project" ? "project" : hit.meta === "File" ? "file" : null;
+                {hits.slice(0, paletteLimit).map((hit, index) => {
+                  const kind = palettePinKind(hit);
                   const active = hits.length > 0 && index === Math.min(Math.max(paletteIndex, 0), hits.length - 1);
                   return (
-                    <div key={hit.key}>
+                    <div key={hit.key} className="flex items-center gap-1">
                       <button
                         type="button"
                         id={`palette-hit-${hit.key}`}
@@ -6048,10 +6574,7 @@ ${message.content}`;
                           button.dataset.held = "0";
                           const timer = window.setTimeout(() => {
                             button.dataset.held = "1";
-                            const before = wsRef.current;
-                            const after = togglePin(before, kind, hit.ref);
-                            setWs(after);
-                            setNotice(after === before ? `Pin limit reached. ${hit.label} was not added.` : after.pins.some((pin) => pin.kind === kind && pin.ref === hit.ref) ? `Pinned ${hit.label}.` : `Unpinned ${hit.label}.`);
+                            pinPaletteHit(hit);
                           }, 550);
                           event.currentTarget.dataset.hold = String(timer);
                         }}
@@ -6069,9 +6592,11 @@ ${message.content}`;
                         <span className="min-w-0 truncate">{hit.label}{hit.excerpt && <small className="block truncate text-muted">{hit.excerpt}</small>}</span>
                         <span className="text-xs text-muted">{hit.meta}</span>
                       </button>
+                      {kind && hit.ref ? <button type="button" className="min-h-11 shrink-0 rounded-panel border border-line px-2 text-xs" aria-label={`${ws.pins.some((pin) => pin.kind === kind && pin.ref === hit.ref) ? "Unpin" : "Pin"} ${hit.label}`} onClick={() => pinPaletteHit(hit)}>{ws.pins.some((pin) => pin.kind === kind && pin.ref === hit.ref) ? "Unpin" : "Pin"}</button> : null}
                     </div>
                   );
                 })}
+                {hits.length > paletteLimit ? <button type="button" className="min-h-11 w-full text-sm text-accent" onClick={() => setPaletteLimit((count) => count + 50)}>Show 50 more results</button> : null}
               </div>
             )}
           </div>
@@ -6131,6 +6656,8 @@ ${message.content}`;
                       tier={modelTier}
                       onChoose={chooseModelTier}
                       grokModel={grokModel}
+                      catalog={catalogForProvider(environmentCatalogs, "grok")}
+                      tierCatalog={tierCatalog}
                       onChooseGrokModel={(model) => {
                         selectProviderInChat("grok");
                         setGrokModel(model);
@@ -6258,8 +6785,8 @@ ${message.content}`;
           </button>
           <button
             type="button"
-            className="grid size-11 min-h-11 min-w-11 shrink-0 place-items-center rounded-full border border-line bg-white/5"
-            aria-label="Alerts"
+            className="relative grid size-11 min-h-11 min-w-11 shrink-0 place-items-center rounded-full border border-line bg-white/5"
+            aria-label={`Alerts${unreadNoticeCount ? `, ${unreadNoticeCount} unread` : ""}`}
             aria-expanded={bellOpen}
             aria-controls="alerts-panel"
             data-testid="alerts-toggle"
@@ -6271,6 +6798,7 @@ ${message.content}`;
             }}
           >
             <Bell className="size-4" aria-hidden="true" />
+            {unreadNoticeCount ? <span className="pointer-events-none absolute right-1 top-0.5 text-[10px] font-semibold" aria-hidden="true">{unreadNoticeCount > 99 ? "99+" : unreadNoticeCount}</span> : null}
           </button>
           <button
             type="button"
@@ -6296,19 +6824,27 @@ ${message.content}`;
               {searchIssue && <button type="button" className="min-h-11 px-3 text-left text-sm text-danger" onClick={() => {
                 setView("connected"); setCardFocus({ id: "owner-notion-search" }); closeMenus();
               }}>Notion search needs attention · {searchIssue.result} · Open Notion search</button>}
-              {failure && failure.auditId !== searchIssue?.id && <button type="button" className="min-h-11 px-3 text-left text-sm text-danger" onClick={() => { setActivityQuery(""); setFocusAuditId(failure.auditId); setView("activity"); closeMenus(); }}>{failure.message} · View activity</button>}
-              {ws.schedules.some((job) => job.lastError) && <button type="button" className="min-h-11 px-3 text-left text-sm text-danger" onClick={() => { setView("scheduled"); closeMenus(); }}>A scheduled job needs attention · Open Scheduled</button>}
-              {!ws.halted && !searchIssue && !failure && !ws.schedules.some((job) => job.lastError) && <p className="px-3 py-2 text-sm text-muted">No current warnings.</p>}
+              {alertFailure && alertFailure.auditId !== searchIssue?.id && <button type="button" className="min-h-11 px-3 text-left text-sm text-danger" onClick={() => { setActivityQuery(""); setFocusAuditId(alertFailure.auditId); setView("activity"); closeMenus(); }}>{alertFailure.message} · View activity</button>}
+              {ws.schedules.some((job) => job.lastError) && <button type="button" className="min-h-11 px-3 text-left text-sm text-danger" onClick={() => { setView("scheduled"); closeMenus(); }}>Schedules need attention · Review individual jobs below</button>}
+              {!ws.halted && !searchIssue && !alertFailure && !ws.schedules.some((job) => job.lastError) && <p className="px-3 py-2 text-sm text-muted">No current warnings.</p>}
             </MenuGroup>
-            <MenuGroup label="Recent">
-              {ws.audit.length === 0 ? <p className="px-3 py-2 text-sm text-muted">Nothing recorded yet.</p> : null}
-              {ws.audit.slice(0, 4).map((entry) => (
-                <p key={entry.id} className="px-3 py-2 text-sm text-muted">
-                  {humanAction(entry.action)} · {stamp(entry.at)}
-                </p>
-              ))}
-              {ws.audit.length > 0 ? <button type="button" className="flex min-h-11 w-full items-center rounded-2xl px-3 text-left text-sm" onClick={() => { setActivityQuery(""); setView("activity"); closeMenus(); }}>View activity</button> : null}
-            </MenuGroup>
+            <NotificationInbox notices={notifications} read={readNotices} dismissed={dismissedNotices} onDismiss={(id) => { const next = [...new Set([...dismissedNotices, id])]; setDismissedNotices(next); try { preferenceStorage.setItem("notifications.dismissed.v1", JSON.stringify(next)); } catch { setNotice("Dismissal applies to this session; device storage is unavailable."); } }} onRead={markNoticesRead} onOpen={(entry) => {
+              if (entry.view === "runs") setFocusRunId(entry.target);
+              if (entry.view === "activity") { setFocusAuditId(entry.target); setActivityQuery(""); }
+              if (entry.view === "scheduled") setCardFocus({ id: `schedule-${entry.target}` });
+              if (entry.view === "chat") { setActiveId(entry.target); setCardFocus(entry.messageId ? { id: `message-${entry.messageId}` } : null); }
+              if (entry.view === "research") { const report = researchHistory.find((item) => item.id === entry.target); if (report) { setActiveResearchId(report.id); setResearchText(report.question); setResearchReportQuestion(report.question); setResearchNote(report.summary); setResearchCitations(report.citations); setResearchSteps(report.steps); setResearchBand("search"); } }
+              setView(entry.view); closeMenus();
+            }} />
+            <details className="p-3 text-xs"><summary>Delivery preferences</summary>
+              <label className="flex min-h-11 items-center gap-2"><input type="checkbox" checked={notificationPreferences.completedRuns} onChange={(event) => changeNotificationPreferences({ ...notificationPreferences, completedRuns: event.target.checked })} />Completed runs</label>
+              <label className="flex min-h-11 items-center gap-2"><input type="checkbox" checked={notificationPreferences.activity} onChange={(event) => changeNotificationPreferences({ ...notificationPreferences, activity: event.target.checked })} />Activity updates</label>
+              <label className="flex min-h-11 items-center gap-2"><input type="checkbox" checked={notificationPreferences.research !== false} onChange={(event) => changeNotificationPreferences({ ...notificationPreferences, research: event.target.checked })} />Research reports</label>
+              <label className="flex min-h-11 items-center gap-2"><input type="checkbox" checked={notificationPreferences.media !== false} onChange={(event) => changeNotificationPreferences({ ...notificationPreferences, media: event.target.checked })} />Generated media</label>
+              <label className="block">Quiet hours start <select className="min-h-11" value={notificationPreferences.quietStart ?? ""} onChange={(event) => changeNotificationPreferences({ ...notificationPreferences, quietStart: event.target.value === "" ? null : Number(event.target.value) })}><option value="">Off</option>{Array.from({ length: 24 }, (_, h) => <option key={h} value={h}>{h}:00</option>)}</select></label>
+              <label className="block">Quiet hours end <select className="min-h-11" value={notificationPreferences.quietEnd ?? ""} onChange={(event) => changeNotificationPreferences({ ...notificationPreferences, quietEnd: event.target.value === "" ? null : Number(event.target.value) })}><option value="">Off</option>{Array.from({ length: 24 }, (_, h) => <option key={h} value={h}>{h}:00</option>)}</select></label>
+              <p>Uses this device's time zone. Approvals and errors remain visible. Push notifications are not enabled by these controls.</p>
+            </details>
           </AnchoredCard>
         )}
         {accountOpen && (
@@ -6351,8 +6887,12 @@ ${message.content}`;
             data-testid="failure-banner"
             data-failure-kind={failure.kind ?? "unknown"}
           >
-            <p className="error-focus text-danger">{failure.message}</p>
+            <div className="min-w-0"><p className="error-focus text-danger">{failure.message}</p>
+              {failure.operationId && <p className="break-all text-xs text-muted">Original operation: {failure.operationId}</p>}
+              {bannerRecoveries.length > 1 && <label className="text-xs">Pending recoveries <select className="ml-2 min-h-11 max-w-full bg-bg" value={failure.auditId} onChange={(event) => setSelectedFailureId(event.target.value)}>{bannerRecoveries.map((row) => <option key={row.auditId} value={row.auditId}>{row.target} · {row.message.slice(0, 90)}</option>)}</select></label>}
+            </div>
             <div className="flex flex-wrap gap-2">
+              {!failure.retry && failure.chatId && <button type="button" className="min-h-11 rounded-panel border border-line px-3 text-sm" onClick={() => { setActiveId(failure.chatId!); setView("chat"); }}>Open original conversation</button>}
               {failure.action === "setup" ? (
                 <button
                   type="button"
@@ -6414,10 +6954,12 @@ ${message.content}`;
             </button>
           </div>
         ) : null}
+        <p className="sr-only" role="status" aria-live="polite" aria-atomic="true" data-testid="generation-status">{generationStatus}</p>
+        {mediaProgress && (mediaProgress.completed < mediaProgress.total || mediaProgress.missing > 0) ? <p role="status" className="mx-3 mb-2 text-xs text-muted">Historical image copies: {mediaProgress.completed} of {mediaProgress.total} checked{mediaProgress.missing ? ` · ${mediaProgress.missing} unavailable in this browser; reattach an image before asking to inspect it` : ". Workspace text is ready."}.</p> : null}
         {notice && (notice.startsWith("This link points at") || notice.startsWith("That bot is archived") || notice.startsWith("Link copied") || notice.startsWith("Clipboard copy")) ? (
           <p role="status" data-testid="share-notice" className="mx-3 mb-2 rounded-panel border border-line px-3 py-2 text-sm text-muted">{notice}</p>
         ) : null}
-        <div ref={(node) => { pageScrollRef.current = node; pinPageScroller(node); }} className={`min-h-0 flex-1 ${view === "chat" || view === "dashboard" || view === "intelligence" ? "overflow-hidden" : "overflow-auto pb-24"}`}>
+        <div ref={(node) => { pageScrollRef.current = node; pinPageScroller(node); }} onScroll={rememberPageScroll} className={`min-h-0 flex-1 ${view === "chat" || view === "dashboard" || view === "intelligence" ? "overflow-hidden" : "overflow-auto pb-24"}`}>
           {view === "intelligence" && (
             <EveWorkbench
               workspace={ws}
@@ -6441,7 +6983,7 @@ ${message.content}`;
                 const turn = await speakChatTurn(text, { stay: true });
                 if (!turn.ok) return turn;
                 showAnswer(turn.text);
-                const spoken = await speak(turn.text).catch(() => undefined);
+                const spoken = await speak(turn.text, "replyReceipt" in turn ? turn.replyReceipt?.messageId : undefined).catch(() => undefined);
                 return {
                   ...turn,
                   playbackError: spoken?.ok ? undefined : spoken?.error || "Audio playback did not finish.",
@@ -6618,7 +7160,7 @@ ${message.content}`;
                             <Camera className="size-4" /> Camera
                           </button>
                           {driveConnected ? (
-                            <button type="button" className="inline-flex items-center gap-2 rounded-panel border border-line px-3 text-sm" style={menuChip} onClick={() => setCloudPickerOpen(true)}>
+                            <button type="button" className="inline-flex items-center gap-2 rounded-panel border border-line px-3 text-sm" style={menuChip} onClick={() => openCloudPicker()}>
                               Drive
                             </button>
                           ) : null}
@@ -6672,7 +7214,15 @@ ${message.content}`;
                           </button>
                         </MenuCluster>
                         <MenuCluster label="Chat" wide>
-                          <ComposerEffortControl mode={composerEffort} onChoose={chooseComposerEffort} consultModules={consultModules} consultModel={consultModel} onConsultModel={chooseConsultModel} />
+                          <ComposerEffortControl mode={composerEffort} onChoose={chooseComposerEffort} consultModules={consultModules} consultModel={consultModel} onConsultModel={chooseConsultModel} consultHelpers={consultHelpers} onConsultHelper={toggleConsultHelper} />
+                          {resolveSendPath(composerEffort).path === "orchestrator" && consultHelpers.some((id) => {
+                            const cost = consultModules.find((item) => item.id === id)?.cost;
+                            return cost !== "free" && cost !== "local";
+                          }) && <label className="inline-flex min-h-11 items-center gap-2 text-sm">
+                            <input type="checkbox" disabled={researchFreeOnly || !draft.trim()} checked={!researchFreeOnly && approvedHelperDraft === helperDraftKey}
+                              onChange={(event) => setApprovedHelperDraft(event.target.checked ? helperDraftKey : null)} />
+                            Allow selected helpers with paid or unknown pricing for this message
+                          </label>}
                           <label className="inline-flex min-h-11 items-center gap-2 text-xs text-muted" style={{ flex: "1 1 12rem", maxWidth: "100%" }}>
                             Style
                             <select aria-label="Conversation style" value={defaultPersonalityId} onChange={(event) => setDefaultPersonalityId(event.target.value as PersonalityId)} className="min-h-11 rounded-panel border border-line bg-transparent px-2 text-sm text-fg">
@@ -6929,6 +7479,7 @@ ${message.content}`;
               draft={draft}
               error={error}
               notice={notice}
+              videoStatus={videoStatus?.chatId === active?.id ? videoStatus : undefined}
               setDraft={setDraft}
               onPickModule={pickModule}
               onPick={(id) => setActiveId(id)}
@@ -6940,6 +7491,9 @@ ${message.content}`;
               onStop={stopReply}
               onRename={renameActive}
               onEdit={editMessage}
+              onReplyVersion={(messageId, versionId) => setWs((current) => active ? selectReplyVersion(current, active.id, messageId, versionId) : current)}
+              revealMessageId={cardFocus?.id.startsWith("message-") ? cardFocus.id.slice(8) : undefined}
+              readingPositions={chatReadingPositions.current}
               onRegenerate={regenerate}
               onRetry={retryLast}
               onExport={exportActive}
@@ -6975,7 +7529,7 @@ ${message.content}`;
               onStopSpeak={interruptSpeakPlayback}
               onOpenSpeak={openSpeakStage}
               onOpenBuild={(text) => {
-                sessionStorage.setItem(`adrian-build-draft.${draftOwner || "signed-out"}`, text.slice(0, 4000));
+                sessionStorage.setItem(`adrian-build-draft.${draftOwner || "signed-out"}`, text);
                 setView("build");
                 setNavOpen(false);
               }}
@@ -6987,6 +7541,7 @@ ${message.content}`;
               onLiveVoiceError={(message) => setError(message)}
               onLiveVoiceNotice={(message) => setNotice(message)}
               speaking={speaking}
+              speakingMessageId={speakingMessageId}
               voiceListening={voiceListening}
               voiceMuted={voiceMuted}
               voiceLevel={voiceLevel}
@@ -7029,6 +7584,8 @@ ${message.content}`;
               consultModules={consultModules}
               consultModel={consultModel}
               onConsultModel={chooseConsultModel}
+              consultHelpers={consultHelpers}
+              onConsultHelper={toggleConsultHelper}
               routingMode={routingMode}
               onRoutingMode={chooseRoutingMode}
               routingPanel={routingPanel}
@@ -7041,7 +7598,7 @@ ${message.content}`;
               onAttach={() => fileRef.current?.click()}
               onAttachImage={() => imageInputRef.current?.click()}
               onOpenCamera={() => setCameraOpen(true)}
-              onOpenCloud={() => setCloudPickerOpen(true)}
+              onOpenCloud={() => openCloudPicker()}
               driveConnected={driveConnected}
               onImagine={() => {
                 const viaCmd = parseImagineCommand(draft);
@@ -7072,6 +7629,7 @@ ${message.content}`;
                 selectProviderInChat(id);
               }}
               modelTier={modelTier}
+              tierCatalog={tierCatalog}
               onModelTier={chooseModelTier}
               logicRoute={logicRoute}
               logicRoutes={logicRoutes}
@@ -7119,6 +7677,7 @@ ${message.content}`;
               <div className="mt-4 flex flex-wrap gap-2">
                 <span className="project-count px-3 py-2 text-sm">On this device ({ws.projects.length})</span>
               </div>
+              {ws.projects.filter((project) => project.id === shareProjectId).map((project) => <ProjectWorkspace key={project.id} project={project} ws={ws} onChange={setWs} onOpen={(kind, id) => { if (kind === "chat") { setChatProjectId(id); setProjectChoice(id); setActiveId(ws.chats.find((chat) => chat.projectId === id)?.id ?? null); } else if (kind === "memory") { setMemoryTab("project"); setMemoryProject(id); } else { setLibraryProjectId(id); setLibraryBand("files"); } setView(kind); }} />)}
               <div id="owner-projects">
                 {ws.projects.length === 0 && (
                   <article className="empty-state lg:col-span-2">
@@ -7149,6 +7708,7 @@ ${message.content}`;
                       </div>
                       <p className="mt-3 text-xs text-muted">Created {stamp(project.createdAt)} · {chats} {chats === 1 ? "chat" : "chats"} · {notes} {notes === 1 ? "note" : "notes"} · {files} {files === 1 ? "file" : "files"}</p>
                       <div className="mt-3 flex flex-wrap gap-2">
+                        <button type="button" className="min-h-11 rounded-panel border border-line px-3 text-sm" onClick={() => setShareProjectId(project.id)}>Workspace and tasks</button>
                         <button type="button" className="workspace-primary min-h-11 rounded-panel px-3 text-sm" onClick={() => { setChatProjectId(project.id); setProjectChoice(project.id); setActiveId(ws.chats.find((chat) => chat.projectId === project.id)?.id ?? null); setView("chat"); }}>Open chats</button>
                         <button type="button" className="min-h-11 rounded-panel border border-line px-3 text-sm" onClick={() => { setMemoryTab("project"); setMemoryProject(project.id); setView("memory"); }}>Notes</button>
                         <button type="button" className="min-h-11 rounded-panel border border-line px-3 text-sm" onClick={() => { setLibraryProjectId(project.id); setLibraryBand("files"); setView("files"); }}>Files</button>
@@ -7156,15 +7716,10 @@ ${message.content}`;
                           type="button"
                           className="min-h-11 rounded-panel border border-line px-3 text-sm"
                           onClick={() =>
-                            requestProtected("delete", `delete-project:${project.id}`, `Delete “${project.name}”`, "Chats and files stay in the workspace and are unlinked. Notes stay in Memory and are labeled if this project is gone. Nothing is erased except the project record.", "Approve delete", () => {
+                            requestProtected("delete", `delete-project:${project.id}`, `Delete “${project.name}”`, "Chats and files stay in the workspace and are unlinked. Project notes are archived with their original scope so they cannot become global memory. Only the project record is removed.", "Approve delete", () => {
                               setWs((prev) =>
                                 pushAudit(
-                                  {
-                                    ...prev,
-                                    projects: prev.projects.filter((item) => item.id !== project.id),
-                                    chats: prev.chats.map((chat) => (chat.projectId === project.id ? { ...chat, projectId: null } : chat)),
-                                    files: prev.files.map((file) => (file.projectId === project.id ? { ...file, projectId: null } : file)),
-                                  },
+                                  removeProject(prev, project.id),
                                   "delete_project",
                                   project.id,
                                   "approved",
@@ -7194,6 +7749,11 @@ ${message.content}`;
                   </div>
                 </div>
               </div>
+              {draftOwner && <MemoryPrivacyControl ownerId={draftOwner} request={(input, init) => { const token = getBearerToken(); return fetch(input, { ...init, headers: { ...init?.headers, ...(token ? { authorization: `Bearer ${token}` } : {}) } }); }} />}
+              {draftOwner && <KnowledgeCollectionPanel ownerId={draftOwner} projectId={active?.projectId ?? (memoryProject || null)} selectedIds={active?.knowledgeDocumentIds ?? []} onSelection={active ? (ids) => setWs((prev) => ({ ...prev, chats: prev.chats.map((chat) => chat.id === active.id ? { ...chat, knowledgeDocumentIds: ids } : chat) })) : undefined} onAddLibraryFile={(file) => { const saved = saveLibraryDocument(wsRef.current, file); if (!saved.ok) setError(saved.error); else setWs(saved.workspace); }} />}
+              {active && <ChatCheckpointEditor chat={active} onChange={(checkpoints) => setWs((prev) => ({ ...prev, chats: prev.chats.map((chat) => chat.id === active.id ? { ...chat, checkpoints } : chat) }))} onOpenMessage={(id) => { setCardFocus({ id: `message-${id}` }); setView("chat"); }} />}
+              <MemoryMaintenance items={ws.memories} onUpdate={(id, patch, revision) => { const changed = updateMemoryMetadata(wsRef.current, id, patch, revision); if (!changed.ok) setError(changed.error); else setWs(changed.ws); }} onOpen={(id) => setCardFocus({ id: `note-${id}` })} />
+              {active && <MemorySelectionDetails receipt={selectMemoryContext(memoriesForChat(ws, active), draft).receipt} />}
               <div className="memory-permission-card mt-4 grid gap-3 rounded-panel border p-4 md:grid-cols-[1fr_auto]">
                 <div className="flex items-center gap-3">
                   <Database aria-hidden="true" className="memory-permission-icon" />
@@ -7391,7 +7951,7 @@ ${message.content}`;
               }}
             >
               <p className="font-semibold">Bounded planner</p>
-              <p className="mt-1 text-sm text-muted">Grok may call only three local reads: projects, chats, and notes. It stops after four steps or twenty seconds. It cannot use a shell, the network, or files. A live tool call was not verified in the last test. Run spends a model request.</p>
+              <p className="mt-1 text-sm text-muted">Uses Grok for at most four local lookup steps across your projects, chats and notes. Tools cannot run a shell, browse, or change files. Each model round is checked against your spending limits and may incur a charge.</p>
               <textarea aria-label="Planner goal" value={agentGoal} onChange={(event) => setAgentGoal(event.target.value)} placeholder="What should the planner look up?" rows={3} className="mt-3 w-full rounded-panel border border-line bg-bg px-3 py-2 text-sm" />
               <div className="mt-3 flex flex-wrap gap-2">
                 <button type="submit" className="min-h-11 rounded-panel bg-accent px-4 text-sm font-semibold text-accent-ink disabled:opacity-50" disabled={ws.halted || agentBusy || !agentGoal.trim()}>Run planner</button>
@@ -7408,6 +7968,7 @@ ${message.content}`;
                 </button>
               </div>
               {agentNote ? <p className="mt-3 text-sm text-muted">{agentNote}</p> : null}
+              {agentModelReceipts.length ? <details className="mt-3 text-xs text-muted"><summary className="min-h-11 cursor-pointer">Model request receipts ({agentModelReceipts.length})</summary><ol className="space-y-2">{agentModelReceipts.map((receipt, index) => <li key={index}>{receipt}</li>)}</ol></details> : null}
               {agentImages.length > 0 && (
                 <div className="mt-3 space-y-2">
                   {agentImages.map((image, index) => (
@@ -7465,6 +8026,7 @@ ${message.content}`;
                     setFailure((active) => active?.auditId === issue.id ? null : active);
                   }
                   setNotionPreview(null);
+                  setNotionSelection(null);
                   setNotion({ state: "disconnected", detail: "Notion disconnected." });
                   setNotionQuery("");
                   setNotionPages([]);
@@ -7583,27 +8145,28 @@ ${message.content}`;
           {view === "tools" && <FleetPanel mode="tools" ws={ws} setWs={setWs} onFailure={(message, retry, surface) => reportFailure(message, surface === "mcp" ? "mcp_tool_failed" : "open_page_failed", surface === "mcp" ? "mcp:tools" : "browser", retry)} />}
           {view === "build" && (
             <section className="page-shell">
-              <BuildWorkspace freeOnly={researchFreeOnly} key={draftOwner ?? "signed-out"} ownerId={draftOwner ?? undefined} onDiscuss={(text) => handToHumanCode(text, "From Build")} onResult={(text) => {
+              <BuildWorkspace enabledSkills={enabledSkills} freeOnly={researchFreeOnly} key={draftOwner ?? "signed-out"} ownerId={draftOwner ?? undefined} onDiscuss={(text) => handToHumanCode(text, "From Build")} onResult={(text) => {
                 const id = sessionStorage.getItem(`adrian-human-return.${draftOwner || "signed-out"}`);
-                if (!id) { handToHumanCode(text, "Build result"); return; }
+                if (!id || !wsRef.current.chats.some((chat) => chat.id === id && isIntelligenceThread(chat.customPersonality))) { handToHumanCode(text, "Build result"); return; }
                 sessionStorage.removeItem(`adrian-human-return.${draftOwner || "signed-out"}`);
                 setWs((prev) => appendHumanResult(prev, id, "Build result", text || "Build finished. No output was reported."));
                 setActiveId(id);
                 setView("code");
-                setNotice("Build result saved in the Intelligence thread.");
+                setNotice("Complete Build result added to the Intelligence thread on this device.");
               }} halted={ws.halted} recording={taskRecording} recordingSeconds={taskSeconds} onOpenSpeak={openSpeakStage} onToggleStop={() => { void toggleStop(); }} onStopRecording={() => void stopTaskRecording()} />
             </section>
           )}
           {view === "code" && (
             <HumanCodePanel
-              threads={ws.chats.filter((chat) => isIntelligenceThread(chat.customPersonality)).map((chat) => ({ id: chat.id, title: shownChatTitle(chat), messages: chat.messages }))}
+              ownerId={draftOwner}
+              threads={ws.chats.filter((chat) => isIntelligenceThread(chat.customPersonality)).map((chat) => ({ id: chat.id, title: shownChatTitle(chat), temporary: chat.temporary, messages: chat.messages }))}
               activeId={activeId || ""}
               busy={busy}
               notice={notice}
               onNew={openHumanCode}
               onOpen={(id) => { setActiveId(id); setView("code"); }}
-              onSend={(id, text, image) => void sendHumanCode(id, text, image)}
-              onBuild={(text) => { if (activeId) sessionStorage.setItem(`adrian-human-return.${draftOwner || "signed-out"}`, activeId); sessionStorage.setItem(`adrian-build-draft.${draftOwner || "signed-out"}`, text.slice(0, 4000)); setView("build"); setNavOpen(false); }}
+              onSend={(id, text, image) => sendHumanCode(id, text, image)}
+              onBuild={(text) => { if (activeId) sessionStorage.setItem(`adrian-human-return.${draftOwner || "signed-out"}`, activeId); sessionStorage.setItem(`adrian-build-draft.${draftOwner || "signed-out"}`, text); setView("build"); setNavOpen(false); }}
               halted={ws.halted}
             />
           )}
@@ -7635,17 +8198,20 @@ ${message.content}`;
                 <button type="button" className="mt-3 min-h-11 rounded-panel bg-accent px-4 text-sm font-semibold text-accent-ink disabled:opacity-50" disabled={ws.halted || researchFreeOnly || searchProvider === "Unavailable" || searchProvider === "Checking search route" || researchPending || !researchText.trim()} onClick={() => void startResearch()}>
                   {researchPending ? "Searching…" : "Start research"}
                 </button>
+                {researchPending && <ResourceState phase="loading" title="Research in progress">Returned evidence will be saved for this account. Stopping the display does not assert that provider billing stopped.</ResourceState>}
+                {researchPending && <button type="button" className="ml-2 min-h-11 rounded-panel border border-line px-3 text-sm" onClick={() => { setNotice(researchRunGuard.current.cancel()); researchFlight.current = false; setResearchPending(false); }}>Stop waiting</button>}
                 {researchReportQuestion && <h3 className="mt-3 font-semibold">{researchReportQuestion}</h3>}
                 {researchNote ? <p className="mt-3 text-sm text-muted">{researchNote}</p> : null}
                 {researchCitations.length === 0 && !researchNote ? (
-                  <p className="mt-3 text-sm text-muted">Reports and their sources appear here after a search.</p>
+                  <ResourceState phase="empty" title="No research report open">Reports and their sources appear after a search. Saved reports remain in the archive.</ResourceState>
                 ) : null}
                 {researchSteps?.some((step) => !step.ok) && (
                   <button type="button" disabled={researchPending || ws.halted || researchFreeOnly} className="min-h-11 text-sm text-accent" onClick={() => {
-                    const report = researchHistory.find((item) => item.question === researchReportQuestion && item.steps === researchSteps);
+                    const report = researchHistory.find((item) => item.id === activeResearchId);
                     if (report) void startResearch(report.question, report);
                   }}>Retry missing searches</button>
                 )}
+                {researchHistory.filter((report) => report.id === activeResearchId).map((report) => <ResearchEvidence key={`${report.id}:${report.version}`} report={report} onChange={(next) => { if (!draftOwner) return; const saved = saveResearchReport(localStorage, draftOwner, researchHistory, next); setResearchHistory(saved.history); if (!saved.saved) setError(saved.error); }} />)}
                 {researchCitations.length > 0 && (
                   <ul className="mt-3 space-y-2 text-sm">
                     {researchCitations.filter((item) => /^https?:\/\//i.test(item.url)).map((item) => (
@@ -7657,8 +8223,10 @@ ${message.content}`;
                 )}
                 {researchCitations.length > 0 ? (
                   <button type="button" className="mt-3 min-h-11 rounded-panel border border-line px-3 text-sm" onClick={() => {
-                    const sources = researchCitations.filter((item) => /^https?:\/\//i.test(item.url)).map((item) => `${item.title}: ${item.url}`).join("\n");
-                    setDraftInScope(JSON.stringify([draftOwner, active?.id ?? "home", followupPrivate]), Boolean(draftOwner) && !followupPrivate, (prior) => (prior ? prior + "\n\n" : "") + `Research report for: ${researchReportQuestion || researchText}\n${researchNote || ""}\n\nSources:\n${sources}\n\nFollow-up question: `);
+                    const report = researchHistory.find((item) => item.id === activeResearchId);
+                    if (!report) { setError("Open a saved report before attaching its evidence."); return; }
+                    const attachment = researchAttachment(report);
+                    setDraftInScope(JSON.stringify([draftOwner, active?.id ?? "home", followupPrivate]), Boolean(draftOwner) && !followupPrivate, (prior) => (prior ? prior + "\n\n" : "") + `${attachment.text}\n\nFollow-up question: `);
                     setView("chat");
                     setNavOpen(false);
                   }}>Ask a follow-up in Chat</button>
@@ -7667,9 +8235,9 @@ ${message.content}`;
                   <div className="mt-4">
                     <p className="text-sm font-semibold">Recent reports</p>
                     <ul className="mt-2 space-y-2">
-                      {researchHistory.map((report) => (
+                      {researchHistory.slice(0, 8).map((report) => (
                         <li key={report.id}>
-                          <button type="button" disabled={researchPending} className="min-h-11 text-left text-sm text-accent" onClick={() => { setResearchText(report.question); setResearchReportQuestion(report.question); setResearchNote(report.summary); setResearchCitations(report.citations); setResearchSteps(report.steps); setResearchBand("search"); }}>
+                          <button type="button" disabled={researchPending} className="min-h-11 text-left text-sm text-accent" onClick={() => { setActiveResearchId(report.id); setResearchText(report.question); setResearchReportQuestion(report.question); setResearchNote(report.summary); setResearchCitations(report.citations); setResearchSteps(report.steps); setResearchBand("search"); }}>
                             {report.question} · {report.citations.length} sources
                           </button>
                         </li>
@@ -7680,7 +8248,9 @@ ${message.content}`;
                 </div>
               </div>
               <div className="mt-4" hidden={researchBand !== "saved"}>
-                <ResearchPanel onUse={setResearchText} start="saved" />
+                <h3 className="font-semibold">Saved research · {researchHistory.length}</h3>
+                <ul className="my-3 space-y-2">{researchHistory.map((report) => <li key={report.id}><button type="button" className="min-h-11 text-left text-sm text-accent" onClick={() => { setActiveResearchId(report.id); setResearchText(report.question); setResearchReportQuestion(report.question); setResearchNote(report.summary); setResearchCitations(report.citations); setResearchSteps(report.steps); setResearchBand("search"); }}>{report.question} · version {report.version} · {stamp(report.at)}</button></li>)}</ul>
+                <ResearchPanel workspace={ws} onUse={setResearchText} start="saved" />
               </div>
               <div className="mt-4" hidden={researchBand !== "files"}>
                 <ReaPanel
@@ -7701,7 +8271,7 @@ ${message.content}`;
                   <img src="/brand/logo-mark.jpg" alt="" className="size-8 rounded-lg" />
                   <div>
                     <h2 className="font-display text-3xl font-bold">Skills</h2>
-                    <p className="text-sm text-muted">Built-in skills read this device. Not installed means the outside service is not connected.</p>
+                    <p className="text-sm text-muted">Read tools show their current permission state. Approved instructions guide future chat or Build turns; service connections have separate workflows.</p>
                   </div>
                 </div>
                 <button type="button" className="min-h-11 rounded-panel border border-line px-3 text-sm" data-testid="skill-refresh" data-asked-permission="false" onClick={() => setSkillRefreshNonce((n) => n + 1)}>Refresh</button>
@@ -7722,9 +8292,10 @@ ${message.content}`;
                 <ul className="mt-2">{skillInventory.filter((name) => name.toLowerCase().includes(skillQuery.trim().toLowerCase())).map((name) => <li key={name}>{name}</li>)}</ul>
               </details>}
               <div id="owner-skills">
-                {(skillQuery.trim() ? searchSkills(skillQuery) : SKILLS).filter((skill) => skillBand === "device" ? skill.kind === "built-in" : skillBand === "installed" ? skill.kind === "installed" : skill.kind === "not-installed").map((skill) => {
+                {visibleSkills.map((skill) => {
                   const required = skill.id === "adrian-os-builder";
-                  const on = required || (skill.kind !== "not-installed" && enabledSkills[skill.id] !== false);
+                  const on = required || enabledSkills[skill.id] !== false;
+                  const readiness = skillReadiness(skill, on, ws);
                   return (
                     <article key={skill.id} className="skill-card">
                       <div className="flex items-start justify-between gap-3">
@@ -7732,10 +8303,10 @@ ${message.content}`;
                           <img src={productMark(SKILL_MARK[skill.id] ?? "skills")} alt="" className="size-8 shrink-0 rounded-lg object-contain" style={markTile(productMark(SKILL_MARK[skill.id] ?? "skills"))} />
                           <h3 className="font-semibold">{skill.name}</h3>
                         </div>
-                        <span className="rounded-full border border-line px-2 py-0.5 text-xs text-muted">{skill.kind === "not-installed" ? "Not installed" : skill.kind === "installed" ? (on ? "Installed" : "Off") : (on ? "On" : "Off")}</span>
+                        <span className="rounded-full border border-line px-2 py-0.5 text-xs text-muted">{readiness.label}</span>
                       </div>
                       <p className="mt-2 text-sm">{skill.description}</p>
-                      <p className="mt-1 text-sm text-muted">{skill.needs}</p>
+                      <p className="mt-1 text-sm text-muted">{readiness.detail}</p>
                       {skill.tool === "search_notes" && <label className="mt-2 block text-sm">Words to find<input value={skillNoteQuery} onChange={(event) => setSkillNoteQuery(event.target.value)} className="mt-1 block min-h-11 w-full rounded-panel border border-line bg-bg px-3" /></label>}
                       <div className="mt-3 flex gap-2">
                         {skill.kind !== "not-installed" && !required ? (
@@ -7746,7 +8317,7 @@ ${message.content}`;
                               const next = { ...enabledSkills, [skill.id]: !on };
                               setEnabledSkills(next);
                               try {
-                                localStorage.setItem("amcos.skills.v1", JSON.stringify(next));
+                                preferenceStorage.setItem("amcos.skills.v1", JSON.stringify(next));
                                 setSkillStorageError("");
                               } catch {
                                 setSkillStorageError("Skill setting changed in this tab but could not be saved to browser storage.");
@@ -7758,25 +8329,28 @@ ${message.content}`;
                         ) : null}
                         {skill.kind !== "not-installed" && <button
                           type="button"
-                          disabled={!on || (skill.tool === "search_notes" && !skillNoteQuery.trim())}
+                          disabled={!readiness.available || (skill.tool === "search_notes" && !skillNoteQuery.trim())}
                           className="min-h-11 rounded-panel bg-accent px-3 text-sm font-semibold text-accent-ink"
-                          onClick={() => setSkillResult({ id: skill.id, text: runSkill(ws, skill, on, skillNoteQuery).text })}
+                          onClick={() => {
+                            const result = runSkill(ws, skill, on, skillNoteQuery);
+                            setSkillResult({ id: skill.id, text: result.text, receipt: result.receipt });
+                          }}
                         >
-                          {required ? "View Build instructions" : "Run"}
+                          {!skill.tool ? "View instructions" : "Run read tool"}
                         </button>}
                         {skill.id === "notion" && <button type="button" className="min-h-11 text-sm text-accent" onClick={() => setView("connected")}>Open connections</button>}
                       </div>
-                      {skillResult?.id === skill.id && <p role="status" className="mt-2 whitespace-pre-wrap break-words rounded-panel border border-line p-3 text-sm">{skillResult.text}</p>}
+                      {skillResult?.id === skill.id && <div role="status" className="mt-2 whitespace-pre-wrap break-words rounded-panel border border-line p-3 text-sm"><p>{skillResult.text}</p><p className="mt-2 text-xs text-muted">Receipt · {skillResult.receipt.skillId} v{skillResult.receipt.version} · {skillResult.receipt.stage.replaceAll("_", " ")} · tool executed: {skillResult.receipt.stage === "tool_executed" ? skillResult.receipt.tool : "none"}. Task output remains unverified.</p></div>}
                     </article>
                   );
                 })}
-                {(skillQuery.trim() ? searchSkills(skillQuery) : SKILLS).filter((skill) => skillBand === "device" ? skill.kind === "built-in" : skillBand === "installed" ? skill.kind === "installed" : skill.kind === "not-installed").length === 0 && !(skillBand === "installed" && skillInventory.some((name) => name.toLowerCase().includes(skillQuery.trim().toLowerCase()))) && <p className="rounded-panel border border-line p-4 text-sm text-muted">No skills match “{skillQuery.trim()}” in this group.</p>}
+                {visibleSkills.length === 0 && !(skillBand === "installed" && skillInventory.some((name) => name.toLowerCase().includes(skillQuery.trim().toLowerCase()))) && <p className="rounded-panel border border-line p-4 text-sm text-muted">No skills match “{skillQuery.trim()}” in this group.</p>}
               </div>
               {skillStorageError && <p className="rounded-panel border border-danger/40 p-3 text-sm text-danger" role="alert">{skillStorageError}</p>}
               {notice && <p className="voice-copy rounded-panel border border-line bg-surface px-3 py-2 text-sm text-muted">{presentVoiceCopy(notice)}</p>}
               <details className="owner-fold">
                 <summary>Draft library</summary>
-                <LocalSkillsTools skills={SKILLS} enabledSkills={Object.fromEntries(SKILLS.map((skill) => [skill.id, skill.kind !== "not-installed" && enabledSkills[skill.id] !== false]))} />
+                <LocalSkillsTools skills={visibleSkillCatalog} enabledSkills={Object.fromEntries(visibleSkillCatalog.map((skill) => [skill.id, skill.kind !== "not-installed" && enabledSkills[skill.id] !== false]))} />
               </details>
           </section>
           {view === "files" && (
@@ -7791,7 +8365,7 @@ ${message.content}`;
                 </div>
                 <div className="flex flex-wrap gap-2">
                   <button type="button" className="min-h-11 rounded-panel bg-accent px-4 text-sm font-semibold text-accent-ink" onClick={() => fileRef.current?.click()}>Upload file</button>
-                  {driveConnected ? <button type="button" className="min-h-11 rounded-panel border border-line px-4 text-sm" onClick={() => setCloudPickerOpen(true)}>Browse Drive</button> : null}
+                  {driveConnected ? <button type="button" className="min-h-11 rounded-panel border border-line px-4 text-sm" onClick={() => openCloudPicker("library")}>Browse Drive</button> : null}
                 </div>
               </div>
               <div id="owner-library">
@@ -7829,19 +8403,19 @@ ${message.content}`;
                   </ul>
                 </aside>
                 <div className="dense-card p-4 text-sm" hidden={libraryBand !== "preview"}>
-                  {!ws.files.find((file) => file.id === openFileId) && (
+                  {!ws.files.find((file) => file.id === openFileId && (!libraryProjectId || file.projectId === libraryProjectId)) && (
                     <div className="empty-state">
                       <img src="/empty/empty-folder.svg" alt="" />
                       <p className="font-semibold">Select a file</p>
                       <p className="text-muted">Upload a file, or choose a saved text copy in Files.</p>
                     </div>
                   )}
-                  {ws.files.filter((file) => file.id === openFileId).map((file) => (
+                  {ws.files.filter((file) => file.id === openFileId && (!libraryProjectId || file.projectId === libraryProjectId)).map((file) => (
                     <div key={file.id}>
                       <p className="font-semibold [overflow-wrap:anywhere]">{file.name}</p>
                       {file.partial && <p className="text-sm text-muted">Partial text copy. Keep the original for the full contents.</p>}
                       <p className="text-xs text-muted">{formatBytes(file.bytes)} · {stamp(file.createdAt)} · {describeFile(file.name, file.text).summary}</p>
-                      <pre tabIndex={0} aria-label="File text" className="mt-3 max-h-[60dvh] overflow-auto break-words whitespace-pre-wrap rounded-panel bg-bg p-3 text-sm">{file.text}</pre>
+                      <LibraryDocumentPreview file={file} ownerId={draftOwner || ""} projects={ws.projects} onOpenSource={(id) => { setActiveId(id); setView("chat"); }} onChange={(next, expectedVersion) => { const changed = updateLibraryDocument(wsRef.current, next, expectedVersion); if (!changed.ok) setError(changed.error); else setWs(changed.workspace); }} />
                       <div className="mt-3 flex flex-wrap gap-2">
                         <button type="button" className="min-h-11 rounded-panel border border-line px-3" onClick={() => void inspectWithRea({ name: file.name, text: file.text }, "research")}>Inspect text with REA</button>
                         <button
@@ -7862,21 +8436,8 @@ ${message.content}`;
                   ))}
                 </div>
                 <div className="dense-card p-4 text-sm" hidden={libraryBand !== "media"} data-testid="library-media">
-                  <p className="font-semibold">Chat images</p>
-                  <p className="mt-1 text-xs text-muted">Grouped from saved chats. A picture is listed only when its image data is already in the chat.</p>
-                  {(["attached", "camera", "generated"] as const).map((kind) => {
-                    const items = ws.chats.flatMap((chat) => listChatGalleryImages(chat.messages).filter((item) => item.kind === kind));
-                    return (
-                      <div key={kind} className="mt-3" data-testid={`library-media-${kind}`}>
-                        <p className="text-xs uppercase tracking-wide text-muted">{kind} · {items.length}</p>
-                        {items.length === 0 ? <p className="text-sm text-muted">None saved in this browser.</p> : (
-                          <div className="mt-2 flex flex-wrap gap-2">
-                            {items.map((item) => <img key={item.key} src={item.src} alt={item.name} className="size-16 rounded-panel border border-line object-cover" />)}
-                          </div>
-                        )}
-                      </div>
-                    );
-                  })}
+                  {draftOwner && libraryBand === "media" && <GeneratedArtifactWorkspace ownerId={draftOwner} workspace={ws} onOpenChat={(id, messageId) => { setActiveId(id); setView("chat"); setCardFocus(messageId ? { id: `message-${messageId}` } : null); }} onEditImage={(source) => { void openImagineEditor(source.blobId || source.dataUrl, source.chatId); }} onSaveArtifact={(file) => { const saved = saveGeneratedArtifact(wsRef.current, file); if (saved.ok) setWs(saved.workspace); return saved; }} />}
+
                 </div>
               </div>
             </section>
@@ -7888,34 +8449,32 @@ ${message.content}`;
                   <img src="/brand/logo-mark.jpg" alt="" className="size-8 rounded-lg" />
                   <div>
                     <h2 className="font-display text-3xl font-bold">Integrations</h2>
-                    <p className="text-xs text-muted">Last check {stamp(checkedAt) || checkedAt}. Green means that behavior was verified here. Configured means a key or setting exists and a live call was not verified.</p>
+                    <p className="text-xs text-muted">Connections for the current account. Saved credentials and authorization are shown separately from a successful feature call. Provider status checked {stamp(checkedAt) || "when available"}.</p>
                   </div>
                 </div>
               </div>
-              <div id="owner-integrations" className="mt-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
-                {CAPABILITIES.map((item) => {
-                  const live = isVerifiedCapability(item.status);
-                  const page = CAPABILITY_PAGE[item.id];
-                  return (
-                    <article key={item.id} className="integration-card">
-                      <div className="flex items-start justify-between gap-3">
-                        <div className="flex min-w-0 items-center gap-3">
-                          <img src={productMark(CAPABILITY_MARK[item.id] ?? "integrations")} alt="" className="size-8 shrink-0 rounded-lg object-contain" style={markTile(productMark(CAPABILITY_MARK[item.id] ?? "integrations"))} />
-                          <h3 className="text-sm font-semibold">{item.name}</h3>
-                        </div>
-                        <span className={`rounded-full border px-2 py-0.5 text-xs ${live ? "border-ok/40 text-ok" : item.status === "blocked" || item.status === "paid_required" ? "border-danger/40 text-danger" : "border-line text-muted"}`}>
-                          {statusWord(item.status)}
-                        </span>
-                      </div>
-                      <p className="mt-2 text-sm text-muted">{item.why}</p>
-                      {page && (
-                        <button type="button" className="mt-3 min-h-11 rounded-panel border border-line px-3 text-sm" onClick={() => openCapability(item.id, setView, setSettingsPane)}>
-                          {CAPABILITY_CONNECT[item.id] ? "Set up" : "Open"}
-                        </button>
-                      )}
-                    </article>
-                  );
-                })}
+              <div id="owner-integrations" className="mt-4">
+                <ServiceBoard key={`integrations:${draftOwner ?? "guest"}`}
+                  grokConfigured={grokConfigured}
+                  providers={customAiProviders}
+                  savedMcp={mcpSavedListState.status === "ready" ? mcpServers : []}
+                  notion={notion}
+                  mcp={mcpBoard}
+                  onSetup={setNotice}
+                  onOpenConnect={(name) => {
+                    setView("connected");
+                    setCardFocus({ id: name === "Notion" ? "connection-notion" : name === "MCP" ? "owner-mcp-connect" : "owner-api-connect" });
+                  }}
+                />
+                <p className="mt-4 rounded-panel border border-line p-3 text-sm">Workspace storage: {databasePill}. {databaseDetail}</p>
+                <details className="mt-4 rounded-panel border border-line p-3">
+                  <summary className="cursor-pointer text-sm font-semibold">Feature shortcuts</summary>
+                  <div className="mt-3 grid gap-2 sm:grid-cols-2 xl:grid-cols-3">{CAPABILITIES.filter((item) => CAPABILITY_PAGE[item.id]).map((item) => (
+                    <button key={item.id} type="button" className="flex min-h-11 items-center gap-2 rounded-panel border border-line px-3 text-left text-sm" onClick={() => openCapability(item.id, setView, setSettingsPane)}>
+                      <img src={productMark(CAPABILITY_MARK[item.id] ?? "integrations")} alt="" className="size-6 object-contain" style={markTile(productMark(CAPABILITY_MARK[item.id] ?? "integrations"))} />{item.name}
+                    </button>
+                  ))}</div>
+                </details>
               </div>
             </section>
           )}
@@ -8030,7 +8589,7 @@ ${message.content}`;
                 <div className="flex items-center gap-3">
                   <img src="/brand/logo-mark.jpg" alt="" className="size-8 rounded-lg" />
                   <div>
-                    <h2 className="font-display text-3xl font-bold">Settings</h2>
+                    <h2 id="settings-heading" tabIndex={-1} className="font-display text-3xl font-bold">Settings</h2>
                     <p className="text-sm text-muted">Preferences stay in this browser. Open a group to reach its pages.</p>
                   </div>
                 </div>
@@ -8109,6 +8668,7 @@ ${message.content}`;
                   {CONVERSATIONAL_PERSONALITIES.map((profile) => <option key={profile.id} value={profile.id}>{profile.label}</option>)}
                 </select>
               </label>}
+              {settingsPane === "personalization" && <AccessibilitySettings onChange={applyAccessibility} />}
               {settingsPane === "browser" && <CloudBrowserSettings key={draftOwner ?? "signed-out"} owner={draftOwner} />}
               <div id="settings-general" hidden={settingsPane !== "general"} className="settings-card card-texture rounded-panel p-4 text-sm">
                 <div className="settings-row">
@@ -8153,6 +8713,8 @@ ${message.content}`;
                 </button>
               </div>
               {settingsPane === "connections" && <div id="settings-connections" className="space-y-4">
+                <SpendingControls usage={ws.usage} />
+                <ModelResponseSettings reasoningEnabled={supportsTierReasoning(grokModel || "")} />
               <div className="settings-card rounded-panel p-4 text-sm">
                 <p className="font-semibold">Provider failover</p>
                 <p>Selected: {controlsModelLabel}{providerModels[effectiveProvider] ? " · " + providerModels[effectiveProvider] : ""}</p>
@@ -8180,10 +8742,13 @@ ${message.content}`;
                 <SafeKeysPanel key={account?.id ?? "guest"} />
               </div>}
               {settingsPane === "voice" && <div id="settings-voice">
+                <MediaRecoveryPanel ownerId={draftOwner} freeOnly={researchFreeOnly} onComplete={commitVideoJob} onOpenChat={(id) => { if (ws.chats.some((chat) => chat.id === id)) { setActiveId(id); setView("chat"); } else setNotice("The original conversation is no longer in this workspace. Its media operation remains separately recoverable."); }} />
+                <VoiceProviderSettings providers={customAiProviders} xaiAvailable={grokConfigured === true} openaiAvailable={liveProviders.openai === true} />
                 <VoiceSettingsBlock onReset={() => applyVoiceChoice(DEFAULT_XAI_VOICE)} />
                 <SpeakPanel />
               </div>}
               <div id="settings-data" hidden={settingsPane !== "data"} className="space-y-4">
+                {settingsPane === "data" && <><SessionCenter />{draftOwner && <DataRetentionCenter ownerId={draftOwner} workspace={ws} syncNote={syncNote} onExport={() => void downloadArchive()} verifyServerCopy={() => loadMindCopy({ data: { ownerId: draftOwner } })} onLocalCleared={(targets) => { if (targets.includes("research")) { setResearchHistory([]); setActiveResearchId(null); setResearchCitations([]); setResearchNote(""); setResearchReportQuestion(""); } }} />}</>}
               <div className="settings-card rounded-panel p-4 text-sm">
                 <div className="settings-row">
                   <div>
@@ -8233,6 +8798,7 @@ ${message.content}`;
                 <button type="button" className="mt-3 min-h-11 rounded-panel bg-accent px-4 text-sm font-semibold text-accent-ink" onClick={() => void downloadArchive()}>
                   Export archive
                 </button>
+                <button type="button" className="ml-2 min-h-11 underline" onClick={() => void downloadArchive(true)}>Export memory only</button>
                 <label className="mt-3 block text-sm">
                   Import archive
                   <input
@@ -8243,7 +8809,7 @@ ${message.content}`;
                     onChange={(event) => {
                       const file = event.target.files?.[0];
                       event.target.value = "";
-                      if (file) void onImportFile(file);
+                      if (file) { setRestoreMemoryPreferences(false); void onImportFile(file); }
                     }}
                   />
                 </label>
@@ -8261,16 +8827,23 @@ ${message.content}`;
                       </tbody>
                     </table>
                     <p className="mt-1 text-muted">Merge keeps {messagePreview?.kept} device-only messages in matching chats. For conflicting messages it keeps the device version. Conflicts in this archive: {messagePreview?.conflicts.join(", ") || "none"}.</p>
+                    {Boolean(importReview?.conflicts.length) && <p className="text-muted">Merge keeps the current version of these records: {importReview?.conflicts.map(row => `${row.category} ${row.id}`).join(", ")}.</p>}
+                    {Boolean(importReview?.privacy.length) && <p className="text-muted">Archived memory settings would enable memory for: {importReview?.privacy.map(chat => chat.title || chat.id).join(", ")}.</p>}
+                    {Boolean(importReview?.unresolved.length) && <p className="text-muted">{importReview?.unresolved.length} imported notes need a scope review before use.</p>}
                     <div className="mt-2 flex flex-wrap gap-2">
-                      <button type="button" className="min-h-11 rounded-panel border border-line px-3" onClick={() => requestProtected("overwrite", "import-merge", "Merge this archive", "Merge records from the archive. For saved memory, corrections and deletions are preserved.", "Merge archive", () => { setWs((prev) => pushAudit(mergeWorkspace(prev, importPreview.workspace), "import_merge", "archive", "merged")); setImportPreview(null); setImportStatus("Archive merged with this workspace."); })}>
+                      <label className="inline-flex min-h-11 items-center gap-2"><input type="checkbox" checked={restoreMemoryPreferences} onChange={event => setRestoreMemoryPreferences(event.target.checked)} />Restore archived chat memory settings, including chats with memory enabled</label>
+                      <fieldset className="w-full"><legend className="font-semibold">Restore categories</legend><div className="flex flex-wrap gap-3">{ARCHIVE_CATEGORIES.map((category) => <label key={category} className="inline-flex min-h-11 items-center gap-2"><input type="checkbox" disabled={importPreview.memoryOnly} checked={archiveCategories.includes(category)} onChange={(event) => setArchiveCategories((current) => event.target.checked ? [...current, category] : current.filter((item) => item !== category))} />{category}</label>)}</div><p className="text-xs text-muted">Restored runs stay paused and schedules stay disabled until reviewed. Existing grants are not copied.</p></fieldset>
+                      <button type="button" className="min-h-11 rounded-panel border border-line px-3" disabled={archiveCategories.length === 0} onClick={() => requestProtected("overwrite", "import-merge", "Merge this archive", "Merge records from the archive. For saved memory, corrections and deletions are preserved.", "Merge archive", () => { setWs((prev) => pushAudit(mergeWorkspace(prev, quarantineImportedMemory(selectArchiveCategories(importPreview.workspace, archiveCategories), prev), restoreMemoryPreferences), "import_merge", "archive", "merged")); setImportPreview(null); setImportStatus("Archive merged with this workspace."); })}>
                         Merge
                       </button>
                       <button
                         type="button"
                         className="min-h-11 rounded-panel border border-line px-3"
+                        disabled={importPreview.memoryOnly || archiveCategories.length !== ARCHIVE_CATEGORIES.length}
+                        title="Replace requires every category; use Merge for selective recovery."
                         onClick={() =>
                           requestProtected("overwrite", `import-replace:${importPreview.workspace.version}`, "Replace this workspace", "Current chats, notes, projects, and files are replaced by the archive.", "Approve replace", () => {
-                            setWs((prev) => pushAudit(replaceFromArchive(prev, importPreview.workspace), "import_replace", "archive", "replaced"));
+                            setWs((prev) => pushAudit(replaceFromArchive(prev, quarantineImportedMemory(importPreview.workspace, emptyWorkspace()), restoreMemoryPreferences), "import_replace", "archive", "replaced"));
                             setImportPreview(null);
                             setImportStatus("Workspace replaced with the archive.");
                           })
@@ -8285,7 +8858,7 @@ ${message.content}`;
               </div>
               <div className="settings-card rounded-panel p-4 text-sm">
                 <p className="font-semibold">Clear this browser</p>
-                <p className="mt-1 text-muted">Removes chats, notes, projects, files, and bots stored in this browser. The sign-in account, connected keys, and emergency stop stay. A paired computer is not deleted.</p>
+                <p className="mt-1 text-muted">Removes this account’s browser chats, notes, projects, files, bots, and saved image, video, and original file copies. The sign-in account, connected keys, and emergency stop stay. A paired computer is not deleted.</p>
                 <button type="button" data-testid="wipe-browser-copy" className="mt-3 min-h-11 rounded-panel border border-line px-3 text-sm" onClick={() => setWipeAsk(account?.id ?? null)}>
                   Clear browser copy
                 </button>
@@ -8295,9 +8868,9 @@ ${message.content}`;
               <div id="settings-safety" hidden={settingsPane !== "safety"} className="space-y-4">
                 <div className="settings-card rounded-panel p-4 text-sm">
                   <button type="button" className="inline-flex min-h-11 items-center gap-2 rounded-panel border border-line px-3 text-sm font-semibold" onClick={() => void toggleStop()}>
-                    <Square className="size-4" /> {ws.halted ? "Clear emergency stop" : "Emergency stop"}
+                    <Square className="size-4" /> {ws.halted ? stopConfirmed ? "Clear emergency stop" : "Synchronize emergency stop" : "Emergency stop"}
                   </button>
-                  <p className="mt-2 text-muted">Stops new sends on this page and on the server.</p>
+                  <p className="mt-2 text-muted">{ws.halted && stopSync.owner === turnOwner.current ? stopSync.detail : "Stop new sends and request cancellation of account jobs."}</p>
                 </div>
               <div className="settings-card rounded-panel p-4 text-sm">
                 <p className="font-semibold">Requirement record</p>
@@ -8339,7 +8912,7 @@ ${message.content}`;
           <form className="space-y-3" onSubmit={(event) => { event.preventDefault(); void runImagineEdit(imagineEdit.image, imagineEdit.text); }}>
             <h2 id="imagine-edit-title" className="text-lg font-semibold">Edit image with Imagine</h2>
             <img src={imagineEdit.result?.dataUrl ?? imagineEdit.image} alt="Selected image" className="max-h-40 w-full rounded-panel object-contain" />
-            <label className="block text-sm">Describe the edit<textarea autoFocus rows={3} value={imagineEdit.text} onChange={(event) => { setImagineEdit({ ...imagineEdit, text: event.target.value }); setImagineEditError(null); }} className="mt-1 w-full rounded-panel border border-line bg-bg p-2" /></label>
+            <label className="block text-sm">Describe the edit<textarea autoFocus rows={3} value={imagineEdit.text} onChange={(event) => { setImagineEdit({ ...imagineEdit, text: event.target.value, operationId: crypto.randomUUID() }); setImagineEditError(null); }} className="mt-1 w-full rounded-panel border border-line bg-bg p-2" /></label>
             {imagineEdit.result && <button type="button" onClick={() => imagineEdit.result && downloadImageDataUrl(imagineEdit.result.dataUrl, imagineEdit.result.name || "edited")}>Download edited image</button>}
             {imagineEditError && <p role="alert" className="text-sm text-danger">{imagineEditError}</p>}
             <div className="flex flex-wrap gap-2">
@@ -8392,6 +8965,8 @@ ${message.content}`;
         }}
       />
       <CloudPicker
+        key={JSON.stringify([draftOwner, cloudDestination.current])}
+        purpose={cloudDestination.current?.kind ?? "chat"}
         open={cloudPickerOpen}
         onClose={() => setCloudPickerOpen(false)}
         onAttach={applyCloudAttach}
@@ -8399,8 +8974,8 @@ ${message.content}`;
       />
 
       {voiceSignInNotice && (
-        <Overlay>
-          <h3 className="font-display text-xl font-bold">Sign in to use Speak</h3>
+        <Overlay labelledBy="speak-sign-in-title" onDismiss={() => setVoiceSignInNotice(false)}>
+          <h3 id="speak-sign-in-title" className="font-display text-xl font-bold">Sign in to use Speak</h3>
           <p className="mt-2 text-sm text-muted">Voice starts only after you sign in and press Speak. Your microphone has not been requested.</p>
           <div className="mt-3 flex gap-2">
             <button type="button" className="min-h-11 flex-1 rounded-panel border border-line" onClick={() => setVoiceSignInNotice(false)}>Cancel</button>
@@ -8423,8 +8998,8 @@ ${message.content}`;
         </Overlay>
       )}
       {armMemory && (
-        <Overlay>
-          <h3 className="font-display text-2xl font-bold">Enable saved memory?</h3>
+        <Overlay labelledBy="enable-memory-title" onDismiss={() => setArmMemory(null)}>
+          <h3 id="enable-memory-title" className="font-display text-2xl font-bold">Enable saved memory?</h3>
           <p className="mt-2 text-sm text-muted">Retrieval starts for this command or chat. Earlier messages are not copied into global memory. Other projects stay out. You can turn it off again.</p>
           <div className="mt-3 flex gap-2">
             <button type="button" className="min-h-11 flex-1 rounded-panel border border-line" onClick={() => setArmMemory(null)}>Cancel</button>
@@ -8433,12 +9008,13 @@ ${message.content}`;
         </Overlay>
       )}
       {pending && (
-        <Overlay>
-          <h3 className="font-display text-2xl font-bold">Approval required</h3>
+        <Overlay labelledBy="approval-required-title" onDismiss={() => { pending.cancel?.(); setPending(null); }}>
+          <h3 id="approval-required-title" className="font-display text-2xl font-bold">Approval required</h3>
           <p className="mt-2 text-sm font-semibold">{pending.label}</p>
           <p className="mt-1 text-sm text-muted">{pending.detail} Automatic mode does not approve this.</p>
+          {pending.review && <pre tabIndex={0} aria-label="Exact action to approve" className="mt-3 max-h-64 overflow-auto whitespace-pre-wrap break-words rounded-panel border border-line p-3 text-xs">{JSON.stringify(pending.review, null, 2)}</pre>}
           <div className="mt-3 flex gap-2">
-            <button type="button" className="min-h-11 flex-1 rounded-panel border border-line" onClick={() => setPending(null)}>Deny</button>
+            <button type="button" className="min-h-11 flex-1 rounded-panel border border-line" onClick={() => { pending.cancel?.(); setPending(null); }}>Deny</button>
             <button type="button" className="min-h-11 flex-1 rounded-panel bg-accent font-semibold text-accent-ink" onClick={confirmPending}>{pending.confirm}</button>
           </div>
         </Overlay>
@@ -8446,7 +9022,7 @@ ${message.content}`;
       {wipeAsk && wipeAsk === account?.id && (
         <Overlay labelledBy="wipe-browser-title" onDismiss={() => setWipeAsk(null)}>
           <h3 id="wipe-browser-title" className="font-display text-2xl font-bold">Clear this browser copy?</h3>
-          <p className="mt-2 text-sm text-muted">Chats, notes, projects, files, and bots in this browser are removed. Your server copy stays available. The sign-in account, connected keys, and emergency stop stay. A paired computer is not deleted.</p>
+          <p className="mt-2 text-sm text-muted">This account’s browser chats, notes, projects, files, bots, and saved image, video, and original file copies are removed. Your server copy stays available. The sign-in account, connected keys, and emergency stop stay. A paired computer is not deleted.</p>
           <div className="mt-3 flex gap-2">
             <button type="button" className="min-h-11 flex-1 rounded-panel border border-line" onClick={() => setWipeAsk(null)}>Keep data</button>
             <button
@@ -8540,25 +9116,34 @@ ${message.content}`;
         onVoice={applyVoiceChoice}
         micMuted={voiceMuted}
         onMicMute={setVoiceMicMuted}
+        onSelectedSpeak={async () => { await speak(""); }}
+        selectedBusy={speaking}
+        selectedRoute={`Input: ${loadVoiceStages(preferenceStorage).inputProvider} · Answer: ${controlsModelLabel} · Output: ${loadVoiceStages(preferenceStorage).outputProvider}`}
+        onStopSelected={interruptSpeakPlayback}
+        onOutputSettings={(muted, volume) => {
+          voiceOutput.current = { muted, volume };
+          if (muted || volume === 0) browserPlaybackAbort.current?.abort();
+        }}
         onLive={() => {
           setSpeakCall((current) => ({ ...current, error: "" }));
           return listen({ mode: "start" });
         }}
         heard={speakCall.heard}
         spoken={speakCall.reply}
+        answerReceipt={speakCall.answerReceipt}
         callError={speakCall.error}
         halted={ws.halted}
         onEmergencyStop={() => { void pressEmergencyStop(); }}
         onClearStop={() => { void clearEmergencyStop(); }}
-        onAsk={async (text) => {
+        onAsk={async (text, context) => {
           const blocked = decideComputerAction({ text, halted: wsRef.current.halted === true, paired: false, actor: "eve" });
           if (blocked.kind !== "none") return { error: blocked.message };
           const turn = await speakChatTurn(text);
           if (!turn.ok) return { error: turn.error };
-          if (!speakStageOpenRef.current || wsRef.current.halted) return { reply: turn.text, error: "Call ended before playback." };
-          const spoken = await speak(turn.text);
+          if (!speakStageOpenRef.current || wsRef.current.halted || !context.canSpeak()) return { reply: turn.text, error: "The answer was saved. Playback was canceled before speech synthesis." };
+          const spoken = await speak(turn.text, "replyReceipt" in turn ? turn.replyReceipt?.messageId : undefined);
           if (!spoken?.ok) return { reply: turn.text, error: spoken?.error || "The reply was written, but it was not spoken." };
-          return { reply: turn.text };
+          return { reply: turn.text, speech: spoken.speech };
         }}
       />
       {taskRecording ? (
@@ -8611,7 +9196,7 @@ ${message.content}`;
           return {
             personalityId: chat?.personalityId ?? "assistant",
             customPersonality: chat?.customPersonality ?? "",
-            characterId: readStoredCharacterId(typeof localStorage === "undefined" ? null : localStorage),
+            characterId: readStoredCharacterId(preferenceStorage),
           };
         }}
       />
@@ -8619,35 +9204,7 @@ ${message.content}`;
   );
 }
 
-function BrowserDictationControl(props: {
-  state: DictationMachineState["phase"];
-  level: number;
-  elapsedSec: number;
-  disabled?: boolean;
-  compact?: boolean;
-  onMicClick: () => void;
-  onStop: () => void;
-  onCancel: () => void;
-}) {
-  return (
-    <div className="inline-flex flex-wrap items-center gap-2" data-testid="browser-dictation" title="Browser speech, not a realtime voice session">
-      <DictationPill
-        state={props.state}
-        level={props.level}
-        elapsedSec={props.elapsedSec}
-        disabled={props.disabled}
-        onMicClick={props.onMicClick}
-        onStop={props.onStop}
-        onCancel={props.onCancel}
-      />
-      {props.compact ? (
-        <span className="sr-only">Browser speech, not a realtime voice session.</span>
-      ) : (
-        <span className="text-[10px] font-semibold uppercase tracking-wide text-muted">Browser speech</span>
-      )}
-    </div>
-  );
-}
+
 
 function presentVoiceCopy(text: string): string {
   if (/127\.0\.0\.1|localhost:\d+|0\.0\.0\.0:\d+|not reachable at https?:\/\//i.test(text)) {
@@ -8656,26 +9213,7 @@ function presentVoiceCopy(text: string): string {
   return text;
 }
 
-function VoiceModeButton(props: { onClick: () => void; pressed?: boolean; compact?: boolean }) {
-  return (
-    <button
-      type="button"
-      className={
-        props.compact
-          ? `focus-ring grid size-9 place-items-center rounded-full ${props.pressed ? "bg-accent text-accent-ink" : "text-muted"}`
-          : `inline-flex min-h-11 items-center gap-2 rounded-panel border border-line px-3 text-sm ${props.pressed ? "bg-accent text-accent-ink" : "text-muted"}`
-      }
-      onClick={props.onClick}
-      aria-label="Open voice mode"
-      aria-pressed={props.pressed ?? false}
-      data-testid="open-voice-mode"
-      title="Realtime voice session. Not browser dictation."
-    >
-      <Mic className="size-4" />
-      {props.compact ? <span className="sr-only">Voice mode</span> : "Voice mode"}
-    </button>
-  );
-}
+
 
 function Quick({ label, icon: Icon, tone, onClick, comingSoon, title }: { label: string; icon: typeof Folder; tone: string; onClick: () => void; comingSoon?: boolean; title?: string }) {
   return (
@@ -8730,26 +9268,6 @@ function StatusRow({
   );
 }
 
-function Overlay({ children, labelledBy, onDismiss }: { children: ReactNode; labelledBy?: string; onDismiss?: () => void }) {
-  return (
-    <div className="overlay-backdrop fixed inset-0 z-40 grid place-items-end p-4 md:place-items-center" role="dialog" aria-modal="false" aria-labelledby={labelledBy} ref={(node) => {
-      node?.style.setProperty("background", "transparent", "important");
-      node?.style.setProperty("backdrop-filter", "none", "important");
-    }} onKeyDown={(event) => {
-      if (event.key === "Escape" && onDismiss) { event.preventDefault(); onDismiss(); return; }
-      if (event.key !== "Tab") return;
-      const targets = [...event.currentTarget.querySelectorAll<HTMLElement>('button:not([disabled]), input:not([disabled]), textarea:not([disabled]), select:not([disabled]), [tabindex]:not([tabindex="-1"])')].filter((element) => element.offsetParent !== null);
-      if (targets.length === 0) return;
-      const first = targets[0]!;
-      const last = targets.at(-1)!;
-      if (event.shiftKey && document.activeElement === first) { event.preventDefault(); last.focus(); }
-      else if (!event.shiftKey && document.activeElement === last) { event.preventDefault(); first.focus(); }
-    }}>
-      <div ref={finishMenu} className="overlay-panel w-full max-w-md">{children}</div>
-    </div>
-  );
-}
-
 function ReaPanel({
   title,
   lead,
@@ -8794,908 +9312,7 @@ function ReaPanel({
   );
 }
 
-function ChatPane({
-  chatSettingsOpen,
-  onChatSettingsToggle,
-  active,
-  chats,
-  personalityId,
-  onPersonalityChange,
-  customPersonality,
-  onCustomPersonalityChange,
-  projectId,
-  projectName,
-  onClearProject,
-  busy,
-  liveText,
-  halted,
-  draft,
-  error,
-  notice,
-  setDraft,
-  onPickModule,
-  onPick,
-  onSend,
-  cue,
-  onDropCue,
-  onReleaseCue,
-  canStop,
-  onStop,
-  onRename,
-  onEdit,
-  onRegenerate,
-  onRetry,
-  onExport,
-  onDelete,
-  onDeleteChat,
-  onDeleteSection,
-  projects = [],
-  pinnedIds = [],
-  scheduledChatIds = [],
-  onConversationAction,
-  onSave,
-  onNew,
- onSpeak,
-  onStopSpeak,
- onOpenSpeak,
-  onOpenBuild,
-  onOpenHuman,
-  onListen,
-  onListenStop,
-  onLiveUserTranscript,
-  onLiveAssistantTranscript,
-  onLiveVoiceError,
-  onLiveVoiceNotice,
-  speaking,
-  voiceListening,
-  voiceMuted,
-  voiceLevel,
-  onToggleMute,
-  dictationState,
-  dictationLevel,
-  dictationElapsed,
-  dictationDisabled,
-  onDictationMic,
-  onDictationStop,
-  onDictationCancel,
-  onOpenVoiceMode,
-  voiceOverlayOpen,
-  memoryChoice,
-  mode,
-  onMemoryChange,
-  onComposerMode,
-  composerEffort,
-  onComposerEffort,
-  consultModules,
-  consultModel,
-  onConsultModel,
-  routingMode,
-  onRoutingMode,
-  routingPanel,
-  onToggleRoute,
-  ratings,
-  onRate,
-  stagedName,
-  pendingImages,
-  onRemoveImage,
-  onAttach,
-  onAttachImage,
-  onOpenCamera,
-  onOpenCloud,
-  driveConnected = false,
-  onImagine,
-  onEditImagine,
-  onSaveImage,
-  onDownloadImage,
-  onAddImageFile,
-  onAnalyze,
-  onDoctor,
-  providerChoices: choices,
-  providerChoice,
-  onProvider,
-  modelTier,
-  onModelTier,
-  logicRoute = null,
-  logicRoutes = [],
-  onChooseLogic,
-  toolTimeline,
-  timelineNowMs,
-  agentActivity,
-  recentTasks,
-  connectedServices,
-  systemStatus,
-  onViewAudit,
-}: {
-  chatSettingsOpen: boolean;
-  onChatSettingsToggle: (open: boolean) => void;
-  active: Chat | null;
-  chats: Chat[];
-  personalityId: PersonalityId;
-  onPersonalityChange: (personalityId: PersonalityId) => void;
-  customPersonality: string;
-  onCustomPersonalityChange: (value: string) => void;
-  projectId: string | null;
-  projectName: string | null;
-  onClearProject: () => void;
-  busy: boolean;
-  liveText: string;
-  halted: boolean;
-  draft: string;
-  error: string | null;
-  notice: string | null;
-  setDraft: (value: string) => void;
-  onPickModule?: (item: ModuleSuggestion) => void;
-  onPick: (id: string) => void;
-  onSend: () => void;
-  cue: CuedMessage[];
-  onDropCue: (id: string) => void;
-  onReleaseCue: () => void;
-  canStop: boolean;
-  onStop: () => void;
-  onRename: (title: string) => void;
-  onEdit: (messageId: string, text: string) => void;
-  onRegenerate: () => void;
-  onRetry: () => void;
-  onExport: (textOnly?: boolean) => void;
-  onDelete: () => void;
-  onDeleteChat?: (id: string, title: string) => void;
-  onDeleteSection?: (label: string, ids: string[]) => void;
-  projects?: { id: string; name: string }[];
-  pinnedIds?: string[];
-  scheduledChatIds?: string[];
-  onConversationAction?: (action: ConversationAction, ids: string[], extra?: { projectId?: string | null; title?: string }) => void;
-  onSave: (content: string) => void;
-  onNew: () => void;
- onSpeak: (text: string, messageId?: string) => void;
-  onStopSpeak?: () => void;
- onOpenSpeak?: () => void;
-  onOpenBuild: (text: string) => void;
-  onOpenHuman: (text: string) => void;
-  onListen: () => void;
-  onListenStop?: () => void;
-  onLiveUserTranscript?: (text: string) => void;
-  onLiveAssistantTranscript?: (text: string) => void;
-  onLiveVoiceError?: (message: string) => void;
-  onLiveVoiceNotice?: (message: string) => void;
-  speaking: boolean;
-  voiceListening: boolean;
-  voiceMuted: boolean;
-  voiceLevel: number;
-  onToggleMute: () => void;
-  dictationState: DictationMachineState["phase"];
-  dictationLevel: number;
-  dictationElapsed: number;
-  dictationDisabled: boolean;
-  onDictationMic: () => void;
-  onDictationStop: () => void;
-  onDictationCancel: () => void;
-  onOpenVoiceMode: () => void;
-  voiceOverlayOpen: boolean;
-  memoryChoice: "off" | "on";
-  mode: Autonomy;
-  onMemoryChange: (next: "off" | "on") => void;
-  onComposerMode: (mode: Autonomy) => void;
-  composerEffort: ComposerModeId;
-  onComposerEffort: (mode: ComposerModeId) => void;
-  consultModules?: ConsultModule[];
-  consultModel?: string;
-  onConsultModel?: (id: string) => void;
-  routingMode: RoutingMode;
-  onRoutingMode: (mode: RoutingMode) => void;
-  routingPanel: LogicRouteId[];
-  onToggleRoute: (id: LogicRouteId) => void;
-  ratings: ResponseRating[];
-  onRate: (messageId: string, score: 1 | 2 | 3 | 4 | 5, model: string | null) => void;
-  stagedName: string | null;
-  pendingImages: ImageAttachment[];
-  onRemoveImage: (index: number) => void;
-  onAttach: () => void;
-  onAttachImage: () => void;
-  onOpenCamera: () => void;
-  onOpenCloud: () => void;
-  driveConnected?: boolean;
-  onImagine: () => void;
-  onEditImagine: (src: string) => void;
-  onSaveImage: (src: string, alt: string) => void;
-  onDownloadImage: (src: string, alt: string) => void;
-  onAddImageFile: (file: File) => void;
-  onAnalyze: () => void;
-  onDoctor: () => void;
-  providerChoices: { id: string; label: string; enabled: boolean; reason: string }[];
-  providerChoice: string;
-  onProvider: (id: string) => void;
-  modelTier: ModelTier;
-  onModelTier: (tier: ModelTier) => void;
-  logicRoute?: LogicRouteId | null;
-  logicRoutes?: LogicRoutePublic[];
-  onChooseLogic?: (route: LogicRouteId) => void;
-  toolTimeline: ToolTimelineRow[];
-  timelineNowMs: number;
-  agentActivity: ReturnType<typeof agentActivityFromTimeline>;
-  recentTasks: ReturnType<typeof recentTasksFromAudit>;
-  connectedServices: ReturnType<typeof connectedServicesRail>;
-  systemStatus: ReturnType<typeof systemStatusRail>;
-  onViewAudit: (auditId: string | null) => void;
-}) {
-  const [filter, setFilter] = useState("");
-  const [tools, setTools] = useState(false);
-  const [context, setContext] = useState(false);
-  const [editingId, setEditingId] = useState<string | null>(null);
-  const [editDraft, setEditDraft] = useState("");
-  const [copiedId, setCopiedId] = useState<string | null>(null);
-  const [chromeNote, setChromeNote] = useState(
-    "Voice chrome preview. Dictate uses this chat’s microphone. Speak, the live bar, and voice mode do not connect a provider.",
-  );
-  const [dictationTick, setDictationTick] = useState(0);
-  const [previewModel, setPreviewModel] = useState<ComposerModelId>("heavy");
-  const [previewModelOpen, setPreviewModelOpen] = useState(false);
-  useEffect(() => {
-    setEditingId(null);
-  }, [active?.id]);
-  useEffect(() => {
-    if (!voiceListening) {
-      setDictationTick(0);
-      return;
-    }
-    const id = window.setInterval(() => setDictationTick((n) => n + 1), 1000);
-    return () => window.clearInterval(id);
-  }, [voiceListening]);
-  const markPreview = (control: string) => {
-    setChromeNote(`${control} is preview only. No voice provider is connected.`);
-  };
-  const grokVerified = Boolean(active?.messages.some((message) => message.role === "assistant" && /^(grok|xai)$/i.test(message.provider ?? "")));
-  const chatRoute = routeForBotChat(active, { provider: providerChoice, modelTier });
-  const routeId = chatRoute.fromBot ? chatRoute.provider : logicRoute ?? chatRoute.provider;
-  const routeLabel = choices.find((choice) => choice.id === routeId)?.label
-    ?? logicRoutes.find((route) => route.id === routeId)?.label
-    ?? "Selected module unavailable";
-  const needle = filter.trim().toLowerCase();
-  const scoped = projectId ? chats.filter((chat) => chat.projectId === projectId) : chats;
-  const visible = needle ? scoped.filter((chat) => chat.title.toLowerCase().includes(needle)) : scoped;
-  const groups = ["Today", "Yesterday", "This week", "Earlier"]
-    .map((label) => ({ label, items: visible.filter((chat) => chatBucket(chat) === label) }))
-    .filter((group) => group.items.length > 0);
-  const transcript = useRef<HTMLDivElement>(null);
-  const turns = useRef<HTMLDivElement>(null);
-  const following = useRef(true);
-  const previousScrollTop = useRef(0);
-  const [detached, setDetached] = useState(false);
 
-  useLayoutEffect(() => {
-    const pane = transcript.current;
-    const content = turns.current;
-    if (!pane || !content) return;
-    following.current = true;
-    setDetached(false);
-    function followTail() {
-      if (pane && following.current) {
-        pane.scrollTop = pane.scrollHeight;
-        previousScrollTop.current = pane.scrollTop;
-      }
-    }
-    followTail();
-    const observer = new ResizeObserver(followTail);
-    observer.observe(content);
-    observer.observe(pane);
-    return () => observer.disconnect();
-  }, [active?.id]);
-  const lastReply = [...(active?.messages ?? [])].reverse().find((msg) => msg.role === "assistant");
-  return (
-    <div id="chat-thread" className="thread-shell flex h-full min-h-0 flex-col xl:flex-row">
-      {!active?.messages.length ? <aside className="flex max-h-72 shrink-0 flex-col border-b border-line xl:max-h-none xl:w-64 xl:border-r xl:border-b-0" data-testid="thread-history">
-        <div className="p-3">
-          <button type="button" onClick={onNew} className="flex min-h-11 w-full items-center justify-center gap-2 rounded-panel bg-accent text-sm font-semibold text-accent-ink">
-            <Plus className="size-4" /> New Chat
-          </button>
-        </div>
-        <div className="px-3 pb-2">
-          {projectName && (
-            <p className="mb-2 text-xs text-muted">
-              Showing chats for {projectName}.{" "}
-              <button type="button" className="text-accent" onClick={onClearProject}>Show all chats</button>
-            </p>
-          )}
-          <input value={filter} onChange={(event) => setFilter(event.target.value)} placeholder="Filter by chat title" className="min-h-11 w-full rounded-panel border border-line bg-bg px-3 text-sm" aria-label="Search conversations" />
-        </div>
-        <div className="min-h-0 flex-1 space-y-3 overflow-auto px-3 pb-3">
-          {groups.length === 0 && <p className="text-sm text-muted">{scoped.length === 0 ? (projectName ? `No chats for ${projectName} yet.` : "No conversations yet.") : "No titles match. Use workspace search to find message text."}</p>}
-          {onConversationAction && (
-            <ConversationSections
-              chats={visible}
-              activeId={active?.id}
-              projects={projects}
-              pinnedIds={pinnedIds}
-              scheduledChatIds={scheduledChatIds}
-              onOpen={onPick}
-              onAction={onConversationAction}
-              extras={(ids) => (active && ids.length === 1 && ids[0] === active.id ? [{ label: "Download text transcript", onPick: () => onExport(true) }, { label: "Download transcript JSON with attachments", onPick: () => onExport(false) }] : [])}
-            />
-          )}
-        </div>
-      </aside>
-      : null}
-      <section className="flex min-w-0 flex-1 flex-col">
-        <div className="chat-head px-4 pt-4" hidden={Boolean(active?.messages.length)}>
-          <h2 className="font-display text-3xl font-bold">{active?.title || "AI Chat"}</h2>
-         {active && customPersonality.trim() ? <p className="mt-1 text-sm text-muted">{active.title} is open in Chat. Its saved instructions are used for the next reply.</p> : null}
-          {active?.temporary && <div className="text-xs text-muted">Excluded from workspace archives by default</div>}
-          {active?.messages.some((message) => message.images?.some((image) => !image.dataUrl)) && <div className="text-xs text-muted">Some images are unavailable. Their references will be included in the transcript.</div>}
-          <details className="thread-mobile-tools mt-3">
-            <summary className="min-h-11 cursor-pointer text-sm">Provider</summary>
-            <ProviderPicker name="mind-provider-mobile" choices={choices} choice={providerChoice} onChoose={onProvider} logicRoutes={logicRoutes} grokVerified={grokVerified} />
-            <div className="mt-3">
-              {routeId === "grok" && <ModelTierPicker name="mind-tier-mobile" tier={modelTier} onChoose={onModelTier} logicRoute={logicRoute} logicRoutes={logicRoutes} onChooseLogic={onChooseLogic} />}
-            </div>
-          </details>
-        </div>
-        <details id="thread-chat-settings" className="thread-chat-settings" open={chatSettingsOpen} onToggle={(event) => onChatSettingsToggle(event.currentTarget.open)}>
-           <summary>Chat settings</summary>
-            <p className="text-sm text-muted">Only a configured provider can be selected. Another provider is not substituted.</p>
-           <div className="mt-2 flex flex-wrap items-center gap-2">
-           <label htmlFor="thread-personality" className="text-xs font-semibold text-muted">Conversation style</label>
-           <select id="thread-personality" value={personalityId} onChange={(event) => onPersonalityChange(event.target.value as PersonalityId)} className="min-h-10 rounded-panel border border-line bg-surface px-3 text-sm" disabled={!active || busy}>
-             {CONVERSATIONAL_PERSONALITIES.map((profile) => <option key={profile.id} value={profile.id}>{profile.label}</option>)}
-           </select>
-          </div>
-          {active && personalityId === "custom" && (
-            <div className="mt-2 max-w-xl space-y-1">
-              <label htmlFor="thread-custom-personality" className="text-xs font-semibold text-muted">Persona instructions</label>
-              <textarea
-                id="thread-custom-personality"
-                value={customPersonality}
-                onChange={(event) => onCustomPersonalityChange(event.target.value.slice(0, 800))}
-                maxLength={800}
-                rows={3}
-                disabled={busy}
-                placeholder="For example: concise, analytical, candid, and lightly humorous. Challenge weak assumptions respectfully."
-                className="w-full rounded-panel border border-line bg-bg px-3 py-2 text-sm"
-                aria-describedby="thread-custom-personality-help"
-              />
-              <p id="thread-custom-personality-help" className="text-xs text-muted">Up to 800 characters. This changes tone and presentation only; it cannot change tools, access, approvals or safety rules.</p>
-              <p className="text-right text-[11px] tabular-nums text-muted">{customPersonality.length}/800</p>
-            </div>
-          )}
-          {active && (
-            <div className="mt-3 max-w-md" data-testid="memory-chat-toggle-header">
-              <MemoryChatToggle memory={memoryChoice} onChange={onMemoryChange} disabled={busy || halted} />
-            </div>
-          )}
-        </details>
-        <div ref={transcript} className="min-h-0 flex-1 overflow-auto p-4" onFocusCapture={(event) => {
-          if (event.target instanceof HTMLElement && event.target.matches("article.turn[id^='message-']")) {
-            following.current = false;
-            setDetached(true);
-          }
-        }} onScroll={(event) => {
-          const pane = event.currentTarget;
-          const end = Math.max(0, pane.scrollHeight - pane.clientHeight);
-          const top = pane.scrollTop;
-          // Growing content can increase the distance from the tail before its resize callback.
-          // Only an actual upward scroll should detach a reader who was following.
-          if (end - top < 32) following.current = true;
-          else if (top < Math.min(previousScrollTop.current, end) - 1) following.current = false;
-          previousScrollTop.current = top;
-          setDetached(!following.current);
-        }}>
-          <div ref={turns} className="space-y-3">
-          <ChatMediaGallery messages={active?.messages} onUseInComposer={onSaveImage} onEditImagine={onEditImagine} onDownload={onDownloadImage} />
-          {(!active || active.messages.length === 0) && !busy && (
-            <div className="grid min-h-64 place-items-center text-center">
-              <ChatEmptyHero
-                title={chatRoute.fromBot ? `${routeLabel} · ${chatRoute.modelTier}` : routeLabel}
-                subtitle={active?.agentId ? "This conversation belongs to the bot." : undefined}
-              />
-            </div>
-          )}
-          {active?.messages.map((msg) => {
-            const last = active.messages.at(-1);
-            return (
-            <article key={msg.id} id={"message-" + msg.id} tabIndex={-1} className={`turn w-full max-w-none px-1 py-2 text-sm ${msg.role === "user" ? "turn-user" : "turn-assistant"}`}>
-              <p className="mb-1 text-xs text-muted">{msg.role === "user" ? "You" : [msg.provider, msg.model].filter(Boolean).join(" · ") || "Assistant · model unreported"} · {stamp(msg.at)}</p>
-              {msg.requestedModel && msg.model !== msg.requestedModel && (
-                <p className="mb-1 break-words text-xs text-muted">Requested {msg.requestedModel}</p>
-              )}
-              {msg.delivery && !(busy && msg.delivery === "submitted" && last?.id === msg.id) && (
-                <p className="mb-1 text-xs text-muted" role="status">
-                  {msg.deliveryRoute && <span>{msg.deliveryRoute.provider} · {msg.deliveryRoute.model ?? msg.deliveryRoute.tier}. </span>}
-                  {msg.delivery === "stopped" ? STOPPED_REPLY : msg.delivery === "failed" ? "The provider did not complete this reply." : "No finished reply was saved. The provider may already have received this message."}
-                </p>
-              )}
-              {editingId === msg.id ? (
-                <form
-                  onSubmit={(event) => {
-                    event.preventDefault();
-                    onEdit(msg.id, editDraft);
-                    setEditingId(null);
-                  }}
-                >
-                  <textarea value={editDraft} onChange={(event) => setEditDraft(event.target.value)} rows={3} className="w-full rounded-panel border border-line bg-bg px-3 py-2 text-sm" />
-                  <p className="mt-1 text-xs text-muted">This starts a new conversation from this message. Your original conversation stays intact.</p>
-                  <div className="mt-2 flex gap-2">
-                    <button type="submit" className="min-h-11 rounded-panel bg-accent px-3 text-sm font-semibold text-accent-ink" disabled={!editDraft.trim() || busy}>Send as new branch</button>
-                    <button type="button" className="min-h-11 px-3 text-sm" onClick={() => setEditingId(null)}>Cancel</button>
-                  </div>
-                </form>
-              ) : (
-                <>
-                  {msg.role === "assistant" ? <AnswerTabs text={msg.content} images={msg.images} onEditImagine={(src) => onEditImagine(src)} onSaveImage={onSaveImage} onDownloadImage={onDownloadImage} /> : <MessageBody text={msg.content} images={msg.images} onEditImagine={(src) => onEditImagine(src)} onSaveImage={onSaveImage} onDownloadImage={onDownloadImage} />}
-                  {msg.videoUrl ? <video className="owner-video mt-2" src={msg.videoUrl} controls playsInline preload="metadata" /> : null}
-                </>
-              )}
-              <div className="mt-2 flex flex-wrap items-center gap-2" role="toolbar" aria-label="Reply actions">
-                {msg.kind === "error" ? (
-                  <>
-                    <button type="button" className="min-h-11 rounded-full px-3 text-xs" onClick={onRetry}>Retry</button>
-                    <button type="button" className="min-h-11 rounded-full px-3 text-xs" onClick={() => onViewAudit(null)}>View log</button>
-                    <button type="button" className="min-h-11 rounded-full px-3 text-xs" onClick={(event) => event.currentTarget.closest("article")?.setAttribute("hidden", "")}>Dismiss</button>
-                  </>
-                ) : null}
-                {msg.kind === "error" ? null : <>
-                <button
-                  type="button"
-                  className="min-h-11 rounded-full px-3 text-xs"
-                  onClick={() => {
-                    void navigator.clipboard?.writeText(msg.content).then(() => {
-                      setCopiedId(msg.id);
-                    }).catch(() => setCopiedId(null));
-                  }}
-                >
-                  {copiedId === msg.id ? "Copied" : "Copy"}
-                </button>
-                {msg.role === "assistant" && (
-                  <button type="button" className="chat-button chat-button--ghost" onClick={() => (speaking ? onStopSpeak?.() : onSpeak(msg.content, msg.id))}>
-                    <Volume2 size={20} strokeWidth={1.75} /> {replyActions({ role: "assistant", busy: false, speaking, hasSources: replyHasSources(msg.content) }).includes("stop-playback") ? "Stop" : "Read aloud"}
-                  </button>
-                )}
-                {msg.role === "assistant" && last?.id === msg.id && (
-                  <button type="button" className="min-h-11 rounded-full px-3 text-xs" onClick={onRegenerate} disabled={busy || halted}>
-                    Regenerate
-                  </button>
-                )}
-                {msg.role === "assistant" && (
-                  <details className="relative">
-                    <summary className="chat-button chat-button--ghost" aria-label="More">⋯</summary>
-                    <div className="absolute bottom-12 left-0 z-20 flex min-w-44 flex-col rounded-2xl border border-line bg-bg p-1">
-                      {!active.temporary && <label className="px-3 py-2 text-xs">Rate this reply
-                        <select aria-label="Rate this reply" value={ratings.find((rating) => rating.messageId === msg.id)?.score ?? ""} onChange={(event) => {
-                          const score = Number(event.target.value);
-                          if (score >= 1 && score <= 5) onRate(msg.id, score as 1 | 2 | 3 | 4 | 5, msg.model ?? null);
-                        }}>
-                          <option value="" disabled>Choose rating</option>
-                          {[1, 2, 3, 4, 5].map((score) => <option key={score} value={score}>{score} / 5</option>)}
-                        </select>
-                      </label>}
-                      <button type="button" className="min-h-11 px-3 text-left text-xs" onClick={() => onOpenBuild(msg.content)}>Open in Build</button>
-                      <button type="button" className="min-h-11 px-3 text-left text-xs" onClick={() => onOpenHuman(msg.content)}>Open in Intelligence</button>
-                      {replyHasSources(msg.content) ? <p className="px-3 py-2 text-xs">Sources: {msg.content.match(/https?:\/\/\S+/g)?.join(" ")}</p> : null}
-                      <p className="px-3 py-2 text-xs">Type list capabilities. Device actions are not verified until the PC or phone runs them.</p>
-                    </div>
-                  </details>
-                )}
-                {msg.role === "user" && (
-                  <button
-                    type="button"
-                    className="min-h-11 text-xs text-accent"
-                    disabled={busy || halted}
-                    onClick={() => {
-                      setEditingId(msg.id);
-                      setEditDraft(msg.content);
-                    }}
-                  >
-                    Edit
-                  </button>
-                )}
-                {msg.role === "user" && active.memory === "on" && (
-                  <button type="button" className="min-h-11 text-xs text-accent" onClick={() => onSave(msg.content)}>Save as chat memory</button>
-                )}
-                </>}
-              </div>
-              {msg.role === "assistant" && msg.memorySaved === true ? (
-                <div className="mt-2">
-                  <MemorySavedIndicator memorySaved={true} savedMemoryId={msg.savedMemoryId} />
-                </div>
-              ) : null}
-            </article>
-            );
-          })}
-          {toolTimeline.length > 0 && (
-            <div className="w-full max-w-none rounded-panel border border-line bg-surface p-3" data-testid="executing-tools">
-              {(() => {
-                const counts = timelineCounts(toolTimeline);
-                return (
-                  <p className="mb-2 flex items-center gap-2 text-sm font-semibold">
-                    <span className={`inline-block size-2 rounded-full ${counts.failed ? "bg-danger" : counts.running ? "bg-accent" : "bg-ok"}`} />
-                    Executing tools ({counts.done}/{counts.total})
-                  </p>
-                );
-              })()}
-              <ul className="space-y-2">
-                {toolTimeline.map((row) => {
-                  const ms = elapsedMs(row, timelineNowMs);
-                  const failed = row.status === "failed" || row.status === "timed_out" || row.status === "cancelled";
-                  const done = row.endedAtMs != null && !failed;
-                  return (
-                    <li key={row.id} className="flex flex-wrap items-center gap-2 rounded-panel border border-line bg-bg px-3 py-2 text-sm" data-testid="tool-timeline-row" data-status={row.status}>
-                      <span className={`size-2 shrink-0 rounded-full ${failed ? "bg-danger" : done ? "bg-ok" : "bg-accent"}`} />
-                      <span className="min-w-0 flex-1 font-medium">{row.name}</span>
-                      <span className={`text-xs ${failed ? "text-danger" : "text-muted"}`}>{row.status}</span>
-                      <span className="text-xs text-muted tabular-nums">{formatElapsed(ms)}</span>
-                      {row.auditId ? (
-                        <button type="button" className="min-h-11 text-xs text-accent" onClick={() => onViewAudit(row.auditId!)}>
-                          View
-                        </button>
-                      ) : (
-                        <span className="text-xs text-muted">—</span>
-                      )}
-                    </li>
-                  );
-                })}
-              </ul>
-            </div>
-          )}
-          {error && <p className="rounded-panel border border-line bg-surface px-3 py-2 text-sm text-danger" role="status">{error}</p>}
-          {busy && liveText && (
-            <article className="turn turn-assistant w-full max-w-none px-1 py-2 text-sm">
-              <p className="mb-1 text-xs text-muted">{modelTier} · writing</p>
-              <p className="whitespace-pre-wrap">{liveText}</p>
-            </article>
-          )}
-          {busy && !liveText && toolTimeline.length === 0 && (
-            <div className="turn turn-assistant w-full max-w-none space-y-2 px-1 py-2" aria-live="polite">
-              <p className="text-xs text-muted">{active?.messages.at(-1)?.content.startsWith("/video") ? "Rendering the video." : active?.messages.at(-1)?.content.startsWith("/imagine") ? "Creating the image." : "Waiting for the selected provider."}</p>
-              <div className="skeleton h-3" style={{ width: "75%" }} />
-              <div className="skeleton h-3" style={{ width: "50%" }} />
-              <div className="skeleton h-3" style={{ width: "66%" }} />
-            </div>
-          )}
-          {voiceListening ? <div className="flex items-center gap-2"><VoiceLevelMeter level={voiceLevel} listening={voiceListening} /></div> : null}
-        </div>
-        </div>
-        {detached && <button type="button" className="jump-to-latest" onClick={() => {
-          following.current = true;
-          setDetached(false);
-          if (transcript.current) transcript.current.scrollTop = transcript.current.scrollHeight;
-        }}>Jump to latest</button>}
-        {cue.length > 0 ? (
-          <div className="rounded-panel border border-line p-2" data-testid="message-cue">
-            <p className="text-xs uppercase tracking-wide text-muted">Next</p>
-            <ol className="space-y-1">
-              {cue.map((item, index) => (
-                <li
-                  key={item.id}
-                  className="min-w-0"
-                  data-testid="cued-message"
-                  onPointerDown={(event) => {
-                    const timer = window.setTimeout(() => onDropCue(item.id), 550);
-                    event.currentTarget.dataset.hold = String(timer);
-                  }}
-                  onPointerUp={(event) => window.clearTimeout(Number(event.currentTarget.dataset.hold))}
-                  onPointerLeave={(event) => window.clearTimeout(Number(event.currentTarget.dataset.hold))}
-                  onPointerCancel={(event) => window.clearTimeout(Number(event.currentTarget.dataset.hold))}
-                >
-                  <span className="block break-words text-sm">{index + 1}. {item.text}</span>
-                </li>
-              ))}
-            </ol>
-            {notice ? <p className="mt-1 text-sm text-muted" role="status" data-testid="cue-notice">{notice}</p> : null}
-            {!busy ? <button type="button" className="mt-1 min-h-11 px-2 text-sm text-accent" onClick={onReleaseCue}>Send next</button> : null}
-          </div>
-        ) : null}
-        {lastReply ? (
-          <div className="next-guesses px-3 pb-1" data-testid="next-guesses">
-            <button type="button" className="suggestion-chip shrink-0" onClick={() => setDraft("Go deeper on that")}>Go deeper</button>
-            <button type="button" className="suggestion-chip shrink-0" onClick={() => setDraft("Make that shorter")}>Make it shorter</button>
-            {lastReply?.kind === "error" || lastReply?.content.startsWith("/imagine") ? null : <button type="button" className="suggestion-chip shrink-0" onClick={() => setDraft("Turn that into an image")}>Make an image</button>}
-          </div>
-        ) : null}
-        <form
-          className="floating-composer command-card composer-dock thread-composer p-3" data-composer="floating"
-          onSubmit={(event) => {
-            event.preventDefault();
-            onSend();
-          }}
-          onDragOver={(event) => {
-            if (event.dataTransfer?.types?.includes("Files")) event.preventDefault();
-          }}
-          onDrop={(event) => {
-            event.preventDefault();
-            const files = Array.from(event.dataTransfer?.files ?? []).filter((file) => (file.type || "").startsWith("image/") || /\.(png|jpe?g|gif|webp)$/i.test(file.name));
-            for (const file of files.slice(0, 4)) onAddImageFile(file);
-          }}
-        >
-          {canStop && (
-            <div className="mb-2 flex justify-end">
-              <button type="button" className="chat-pill min-h-11 border border-line px-3 text-sm" data-testid="stop-reply" onClick={onStop}>Stop this reply</button>
-            </div>
-          )}
-          <div className="thread-draft">
-          {onPickModule && (!active || active.messages.length === 0) ? <ModuleSuggestions draft={draft} onPick={onPickModule} /> : null}
-          <textarea
-            value={draft}
-            onChange={(event) => setDraft(event.target.value)}
-            onKeyDown={(event) => {
-              if (event.key === "Enter" && !event.shiftKey) {
-                event.preventDefault();
-                event.currentTarget.form?.requestSubmit();
-              }
-            }}
-            onPaste={(event) => {
-              const items = Array.from(event.clipboardData?.items ?? []);
-              const imageItems = items.filter((item) => item.type.startsWith("image/"));
-              if (imageItems.length === 0) return;
-              event.preventDefault();
-              for (const item of imageItems.slice(0, 4)) {
-                const file = item.getAsFile();
-                if (file) onAddImageFile(file);
-              }
-            }}
-            placeholder={`Message (${active?.botTier ?? modelTier})...`}
-            aria-label="Message"
-            rows={2}
-            className="input-glow min-h-11 w-full resize-none rounded-xl bg-transparent px-1 text-sm outline-none"
-          />
-          {active?.botKnowledge ? <p className="mt-1 text-xs text-muted">This chat sends its copied bot note. Saved memory stays off.</p> : null}
-          {active?.botProvider || active?.botTier ? <p className="mt-1 text-xs text-muted">This chat uses {active.botProvider ?? "Chat’s provider"} · {active.botTier ?? "Chat’s tier"}. The picker above is not changed.</p> : null}
-          <AttachmentChips images={pendingImages} onRemove={onRemoveImage} onEditImagine={(image) => onEditImagine(image.dataUrl)} />
-          {stagedName && <p className="text-xs text-muted">Staged: {stagedName}. Send includes it. Analyze runs REA on it.</p>}
-          {context && (
-            <p className="mt-2 text-xs text-muted">
-              Memory is {memoryChoice}. {memoryChoice === "off" ? (active?.botKnowledge ? "Saved memory stays off. This chat still sends its copied bot note and does not read other notes." : "This chat cannot read or save notes.") : "This chat can read notes in its scope."} Mode is {mode === "ask" ? "Ask" : "Automatic"}. Deletes still ask you.
-            </p>
-          )}
-          {tools && (
-            <div className="mt-2 rounded-panel border border-line bg-bg p-3 text-sm">
-              <MenuCluster label="Inspect">
-                <button type="button" className="min-h-11 rounded-panel border border-line px-3 text-left text-sm" style={menuChip} onClick={onDoctor}>Run REA doctor</button>
-                <button type="button" className="min-h-11 rounded-panel border border-line px-3 text-left text-sm" style={menuChip} onClick={onAnalyze}>Inspect a file with REA</button>
-              </MenuCluster>
-              <p className="text-xs text-muted">Chat stays on Grok. Imagine generates images via grok-imagine-image. Video is not called.</p>
-            </div>
-          )}
-          </div>
-          <div className="composer-toolbar mt-2 flex flex-wrap items-center gap-2">
-            <ComposerMore testId="composer-more-menu">
-                <MenuCluster label="Files">
-                  <button type="button" className="inline-flex items-center gap-2 rounded-panel border border-line/80 bg-white/5 px-3 text-sm" style={menuChip} onClick={onAttach}>
-                    <Paperclip className="size-4" /> Attach
-                  </button>
-                  <button type="button" className="inline-flex items-center gap-2 rounded-panel border border-line/80 bg-white/5 px-3 text-sm" style={menuChip} onClick={onAttachImage}>
-                    <Image className="size-4" /> Image
-                  </button>
-                  <button type="button" className="inline-flex items-center gap-2 rounded-panel border border-line/80 bg-white/5 px-3 text-sm" style={menuChip} onClick={onOpenCamera}>
-                    <Camera className="size-4" /> Camera
-                  </button>
-                  {driveConnected ? (
-                    <button type="button" className="inline-flex items-center gap-2 rounded-panel border border-line/80 bg-white/5 px-3 text-sm" style={menuChip} onClick={onOpenCloud}>
-                      Drive
-                    </button>
-                  ) : null}
-                </MenuCluster>
-                <MenuCluster label="Create">
-                  <button type="button" className="inline-flex items-center gap-2 rounded-panel border border-line/80 bg-white/5 px-3 text-sm" style={menuChip} disabled={busy || halted} onClick={onImagine}>
-                    Imagine
-                  </button>
-                </MenuCluster>
-                <MenuCluster label="Workspace">
-                  <button type="button" className="min-h-11 rounded-panel border border-line/80 bg-white/5 px-3 text-sm" style={menuChip} onClick={() => { setTools(false); setContext((open) => !open); document.querySelectorAll("details.composer-more[open]").forEach((node) => node.removeAttribute("open")); }}>Add Context</button>
-                  <button type="button" className="min-h-11 rounded-panel border border-line/80 bg-white/5 px-3 text-sm" style={menuChip} onClick={() => { setContext(false); setTools((open) => !open); document.querySelectorAll("details.composer-more[open]").forEach((node) => node.removeAttribute("open")); }}>Tools</button>
-                </MenuCluster>
-                <MenuCluster label="Chat" wide>
-                  <button type="button" className="min-h-11 rounded-panel border border-line/80 bg-white/5 px-3 text-sm" style={menuChip} onClick={onDelete} disabled={!active}>Delete</button>
-                  <button type="button" className="min-h-11 rounded-panel border border-line/80 bg-white/5 px-3 text-sm" style={menuChip} onClick={() => onMemoryChange(memoryChoice === "on" ? "off" : "on")} disabled={!active || busy || halted} aria-label={memoryChoice === "on" ? "Memory on for this chat" : "Don't use memory for this chat"}>{memoryChoice === "on" ? "Memory on" : "Memory off"}</button>
-                  <ComposerEffortControl mode={composerEffort} onChoose={onComposerEffort} consultModules={consultModules} consultModel={consultModel} onConsultModel={onConsultModel} />
-                  <label className="inline-flex min-h-11 items-center gap-2 text-xs text-muted" style={{ flex: "1 1 12rem", maxWidth: "100%" }}>
-                    Style
-                    <select aria-label="Conversation style" value={personalityId} disabled={!active || busy} onChange={(event) => onPersonalityChange(event.target.value as PersonalityId)} className="min-h-11 rounded-panel border border-line bg-transparent px-2 text-sm text-fg">
-                      {CONVERSATIONAL_PERSONALITIES.map((profile) => <option key={profile.id} value={profile.id}>{profile.label}</option>)}
-                    </select>
-                  </label>
-                </MenuCluster>
-            </ComposerMore>
-            <div className="legacy-composer-voice"><VoiceLevelMeter level={voiceLevel} listening={voiceListening} />
-            <BrowserDictationControl
-              state={dictationState}
-              level={dictationLevel}
-              elapsedSec={dictationElapsed}
-              disabled={dictationDisabled}
-              onMicClick={onDictationMic}
-              onStop={onDictationStop}
-              onCancel={onDictationCancel}
-            />
-            <VoiceModeButton pressed={voiceOverlayOpen} onClick={onOpenVoiceMode} />
-            <VoiceWaveform level={voiceLevel} active={voiceListening || speaking} className="ml-auto" />
-            <button type="button" title={voiceMicAriaLabel(voiceListening)} className={`grid size-11 place-items-center rounded-panel border border-line ${voiceListening ? "bg-accent text-accent-ink" : ""}`} onClick={onListen} aria-label={voiceMicAriaLabel(voiceListening)} aria-keyshortcuts={VOICE_TOGGLE_SHORTCUT.ariaKeyshortcuts} aria-pressed={voiceListening}>
-              {voiceListening ? <Square className="size-4" /> : <Mic className="size-4" />}
-            </button>
-            <button type="button" className="grid size-11 place-items-center rounded-panel border border-line text-muted" onClick={onToggleMute} aria-label={voiceMuted ? "Unmute microphone" : "Mute microphone"} aria-pressed={voiceMuted} disabled={!voiceListening} data-testid="voice-mute-mobile">
-              {voiceMuted ? <MicOff className="size-4" /> : <Mic className="size-4" />}
-            </button>
-            <button type="button" className="min-h-11 rounded-panel border border-line/80 bg-white/5 px-3 text-sm" disabled={!lastReply && !speaking} onClick={() => (speaking ? onStopSpeak?.() : lastReply && onSpeak(lastReply.content, lastReply.id))}>
-              {speaking ? "Stop" : "Read aloud"}
-            </button></div>
-            
-            <button type={busy ? "button" : "submit"} onClick={busy ? onStop : undefined} disabled={halted || (!busy && !draft.trim() && pendingImages.length === 0 && !stagedName)} className="composer-send min-h-11 min-w-16 rounded-panel bg-accent px-4 text-sm font-semibold text-accent-ink disabled:opacity-50">{busy ? "Stop" : "Send"}</button>
-            <button type="button" className="composer-mic-dictate inline-flex min-h-11 items-center gap-2 rounded-full border border-line px-3 text-sm" data-testid="composer-mic-dictate" aria-label="Mic" title="Mic types into the field. It does not open Speak." onClick={onDictationMic}>
-              <Mic className="size-4" /> Mic
-            </button>
-            <button type="button" className="gpt-voice inline-flex min-h-11 items-center gap-2 rounded-full bg-[#2f6bff] px-3 text-sm text-white" aria-label="Speak" title="Speak is the call. It does not type into the field." onClick={() => onOpenSpeak?.()}>
-              <Volume2 className="size-4" /> Speak
-            </button>
-          </div>
-          <div className="composer-voice-chrome" data-testid="composer-voice-chrome" hidden aria-hidden="true">
-            <p className="text-xs text-muted" role="status">{chromeNote}</p>
-            <div className="composer-voice-chrome__row">
-              <PreviewDictationPill
-                state={voiceListening ? "recording" : "idle"}
-                level={voiceLevel}
-                elapsedSec={voiceListening ? dictationTick : 0}
-                onStart={() => {
-                  setChromeNote("Dictate uses this chat’s microphone. It does not start a live voice provider.");
-                  onListen();
-                }}
-                onStop={() => {
-                  setChromeNote("Dictation stopped. No voice provider is connected.");
-                  (onListenStop ?? onListen)();
-                }}
-                onCancel={() => {
-                  setChromeNote("Dictation cancelled. No voice provider is connected.");
-                  (onListenStop ?? onListen)();
-                }}
-              />
-              <ComposerBar
-                className="composer-voice-chrome__bar"
-                model={previewModel}
-                modelMenuOpen={previewModelOpen}
-                dictationState={voiceListening ? "recording" : "idle"}
-                speakState="off"
-                level={voiceListening ? voiceLevel : 0}
-                placeholder="Preview only — not a second composer"
-                askSlot={<span className="text-xs text-muted">Preview only. This chip does not change the chat model or send a message.</span>}
-                onPlus={() => markPreview("Add attachment")}
-                onModelToggle={() => setPreviewModelOpen((open) => !open)}
-                onModelSelect={(id) => {
-                  setPreviewModel(id);
-                  setPreviewModelOpen(false);
-                  markPreview("Model chip");
-                }}
-                onDictate={() => setChromeNote("Use the single Speak control for a realtime conversation.")}
-                onSpeak={() => markPreview("Speak")}
-              />
-              <LiveSpeakControl
-                state="off"
-                level={0}
-                label="Not connected"
-                onToggle={() => markPreview("Live speak")}
-                onMute={() => markPreview("Live speak mute")}
-                onEnd={() => markPreview("Live speak end")}
-              />
-            </div>
-            <VoiceModeStage
-              open
-              overlay={false}
-              state="idle"
-              level={0}
-              modeLabel="Preview only — no voice provider is connected."
-              muted={false}
-              onMute={() => markPreview("Voice mode mute")}
-              onEnd={() => markPreview("Voice mode end")}
-            />
-            <PresentationalLiveVoiceBar
-              state="off"
-              level={0}
-              placeholder="Preview only — not a live call"
-              askSlot={<span className="text-xs text-muted">Preview only. Not a connected voice session. Type in the composer above.</span>}
-              onMute={() => markPreview("Live bar mute")}
-              onEnd={() => markPreview("Live bar end")}
-              onSpeaker={() => markPreview("Speaker")}
-              onScreenShare={() => markPreview("Screen share")}
-              onSettings={() => markPreview("Voice settings")}
-              onPlus={() => markPreview("Add attachment")}
-              onPlusItem={(id) => markPreview(`Add ${id}`)}
-              onAskFocus={() => markPreview("Live bar ask")}
-            />
-          </div>
-        </form>
-      </section>
-      <aside className="hidden w-72 shrink-0 flex-col gap-3 overflow-auto border-l border-line/70 p-3 xl:flex" data-testid="chat-right-rail">
-        <section className="glass-panel rounded-panel p-3">
-          <ProviderPicker name="mind-provider-side" choices={choices} choice={providerChoice} onChoose={onProvider} logicRoutes={logicRoutes} grokVerified={grokVerified} />
-        </section>
-        <details className="rail-pack">
-          <summary>Mode</summary>
-          <section className="glass-panel rounded-panel p-3">
-            {routeId === "grok" && <ModelTierPicker name="mind-tier-side" tier={modelTier} onChoose={onModelTier} logicRoute={logicRoute} logicRoutes={logicRoutes} onChooseLogic={onChooseLogic} />}
-          </section>
-        </details>
-        <details className="rail-pack">
-          <summary>This chat</summary>
-          <section className="glass-panel rounded-panel p-3">
-          <div className="flex flex-wrap gap-2">
-            <button type="button" onClick={() => onComposerMode("ask")} className={`min-h-11 rounded-panel px-3 text-left text-sm ${mode === "ask" ? "bg-accent text-accent-ink tile-active" : "bg-surface-2/80"}`} style={menuChip}>Ask</button>
-            <button type="button" onClick={() => onComposerMode("automatic")} className={`min-h-11 rounded-panel px-3 text-left text-sm ${mode === "automatic" ? "bg-accent text-accent-ink tile-active" : "bg-surface-2/80"}`} style={menuChip}>Automatic</button>
-          </div>
-          </section>
-          <section className="glass-panel rounded-panel p-3" data-testid="memory-chat-toggle-rail">
-          <MemoryChatToggle memory={memoryChoice} onChange={onMemoryChange} disabled={!active || busy || halted} />
-          <p className="mt-2 text-xs text-muted">Off means this chat cannot read or save notes.</p>
-        </section>
-        </details>
-        <details className="rail-pack">
-          <summary>Activity</summary>
-          <section className="glass-panel rounded-panel p-3 text-sm" data-testid="agent-activity-live">
-          <div className="flex items-center justify-between gap-2">
-            <p className="font-semibold">Agent Activity</p>
-            <span className={`rounded-full px-2 py-0.5 text-[10px] font-semibold uppercase ${agentActivity.live ? "bg-ok/20 text-ok" : "bg-surface-2 text-muted"}`}>
-              {agentActivity.live ? "Live" : "Idle"}
-            </span>
-          </div>
-          <p className="mt-2 text-xs text-muted">{agentActivity.label}</p>
-          <div className="mt-2 h-2 overflow-hidden rounded-full bg-surface-2">
-            <div className={`h-full ${agentActivity.live ? "bg-accent" : agentActivity.percent > 0 ? "bg-ok" : "bg-transparent"}`} style={{ width: `${agentActivity.percent}%` }} />
-          </div>
-          <p className="mt-2 text-xs text-muted">
-            {agentActivity.total === 0
-              ? agentActivity.detail
-              : `Step ${agentActivity.step} of ${agentActivity.total}: ${agentActivity.detail}`}
-          </p>
-        </section>
-        <section className="glass-panel rounded-panel p-3 text-sm" data-testid="recent-tasks">
-          <p className="font-semibold">Recent Tasks</p>
-          {recentTasks.length === 0 && <p className="mt-2 text-xs text-muted">No tasks yet. Actions you take show up here.</p>}
-          <ul className="mt-2 space-y-2">
-            {recentTasks.map((task) => (
-              <li key={task.id} className="flex items-start justify-between gap-2 text-xs">
-                <span className="min-w-0 truncate font-medium">{task.label}</span>
-                <span className="shrink-0 text-muted">{task.result}</span>
-              </li>
-            ))}
-          </ul>
-        </section>
-        </details>
-        {connectedServices.some((item) => item.tone === "ok") || systemStatus.rows.some((row) => row.ok) ? (
-        <details className="rail-pack">
-          <summary>Connections</summary>
-          <section className="glass-panel rounded-panel p-3 text-sm" data-testid="connected-services-rail">
-          <p className="font-semibold">Connected Services</p>
-          <ul className="mt-2 space-y-2">
-            {connectedServices.filter((item) => item.tone === "ok").map((item) => (
-              <li key={item.name} className="flex items-center justify-between gap-2 text-xs">
-                <span>{item.name}</span>
-                <span className={item.tone === "ok" ? "text-ok" : item.tone === "danger" ? "text-danger" : "text-muted"}>{item.state}</span>
-              </li>
-            ))}
-          </ul>
-        </section>
-        <section className="glass-panel rounded-panel p-3 text-sm" data-testid="system-status-rail">
-          <p className="font-semibold">System Status</p>
-          <ul className="mt-2 space-y-2">
-            {systemStatus.rows.filter((row) => row.ok).map((row) => (
-              <li key={row.name} className="flex items-center justify-between gap-2 text-xs">
-                <span>{row.name}</span>
-                <span className={row.ok ? "text-ok" : "text-muted"}>{row.state}</span>
-              </li>
-            ))}
-          </ul>
-        </section>
-        </details>
-        ) : null}
-        <section className="glass-panel rounded-panel p-3 text-sm">
-          <p className="font-semibold">{active?.title ?? "New session"}</p>
-          <p className="text-xs text-muted">On this device · Memory {memoryChoice}</p>
-        </section>
-        <div className={`voice-zone-rail ${speaking ? "is-live" : ""}`} aria-label="Voice controls">
-          <button type="button" className="inline-flex min-h-11 items-center gap-2 rounded-full border border-line/80 px-3 text-sm" onClick={onDictationMic} aria-label="Mic" title="Mic types into the field. It does not open Speak.">
-            <Mic className="size-4" /> Mic
-          </button>
-          <span className="waveform" aria-hidden="true"><span /><span /><span /><span /><span /></span>
-          <button type="button" className="inline-flex min-h-11 items-center gap-2 rounded-full border border-line/80 px-3 text-sm" onClick={() => onOpenSpeak?.()} aria-label="Speak" title="Speak is the call. It does not type into the field.">
-            <Volume2 className="size-4" /> Speak
-          </button>
-        </div>
-      </aside>
-    </div>
-  );
-}
 
 function RoutingModeControl({
   mode,
@@ -9736,55 +9353,7 @@ function RoutingModeControl({
   );
 }
 
-function ComposerEffortControl({
-  mode,
-  onChoose,
-  consultModules = [],
-  consultModel = "",
-  onConsultModel,
-}: {
-  mode: ComposerModeId;
-  onChoose: (mode: ComposerModeId) => void;
-  consultModules?: ConsultModule[];
-  consultModel?: string;
-  onConsultModel?: (id: string) => void;
-}) {
-  const resolved = resolveSendPath(mode);
-  const current = COMPOSER_MODES.find((item) => item.id === mode) ?? COMPOSER_MODES[0];
-  const connected = consultModules.filter((item) => item.connected);
-  return (
-    <div className="composer-effort" data-testid="composer-effort">
-      <label className="composer-effort-field">
-        <span>Effort</span>
-        <select value={mode} onChange={(event) => onChoose(event.target.value as ComposerModeId)}>
-          {COMPOSER_MODES.map((item) => <option key={item.id} value={item.id}>{item.label}</option>)}
-        </select>
-      </label>
-      <p className="composer-effort-description">
-        {current?.detail}
-        {resolved.notice ? ` ${resolved.notice}` : ""}
-      </p>
-      {mode === "orchestrator" ? (
-        <div className="mt-2 flex flex-wrap items-center gap-2" data-testid="orchestrator-models">
-          <span className="text-xs text-muted">Orchestrator model</span>
-          {connected.length === 0 ? <span className="text-xs text-muted">No model is connected right now. Connect one, then choose it.</span> : null}
-          {connected.map((item) => (
-            <button
-              key={item.id}
-              type="button"
-              data-testid="consult-model"
-              aria-pressed={consultModel === item.id}
-              className={`min-h-11 rounded-full px-3 text-sm ${consultModel === item.id ? "bg-accent text-accent-ink tile-active" : "border border-line/80 bg-white/5 text-muted"}`}
-              onClick={() => onConsultModel?.(item.id)}
-            >
-              {item.label}
-            </button>
-          ))}
-        </div>
-      ) : null}
-    </div>
-  );
-}
+
 
 const VOICE_PERSONALITIES: { id: VoicePersonality; label: string }[] = [
   { id: "new", label: "New" },
@@ -9806,15 +9375,16 @@ const VOICE_SPEEDS: { id: VoiceSpeed; label: string }[] = [
 ];
 
 function VoiceSettingsBlock({ onReset }: { onReset: () => void }) {
+  const preferenceStorage = useAccountPreferences();
   const [settings, setSettings] = useState<VoiceSettings>(DEFAULT_VOICE_SETTINGS);
   useEffect(() => {
-    const storage = typeof localStorage === "undefined" ? null : localStorage;
+    const storage = preferenceStorage;
     setSettings(loadVoiceSettings(storage));
   }, []);
   function update(patch: Partial<VoiceSettings>) {
     setSettings((current) => {
       const next = { ...current, ...patch };
-      const storage = typeof localStorage === "undefined" ? null : localStorage;
+      const storage = preferenceStorage;
       saveVoiceSettings(storage, next);
       if (patch.speed && storage) {
         const pace = patch.speed === "slow" ? "slow" : patch.speed === "fast" ? "brisk" : "natural";
@@ -9871,7 +9441,7 @@ function VoiceSettingsBlock({ onReset }: { onReset: () => void }) {
         data-testid="settings-reset-voice"
         className="mt-3 min-h-11 rounded-panel border border-line px-3"
         onClick={() => {
-          const storage = typeof localStorage === "undefined" ? null : localStorage;
+          const storage = preferenceStorage;
           resetVoice(storage);
           setSettings({ ...DEFAULT_VOICE_SETTINGS });
           onReset();
@@ -9884,103 +9454,24 @@ function VoiceSettingsBlock({ onReset }: { onReset: () => void }) {
   );
 }
 
-function ModelTierPicker({
-  name,
-  tier,
-  onChoose,
-  logicRoute = null,
-  logicRoutes = [],
-  onChooseLogic,
-}: {
-  name: string;
-  tier: ModelTier;
-  onChoose: (tier: ModelTier) => void;
-  logicRoute?: LogicRouteId | null;
-  logicRoutes?: LogicRoutePublic[];
-  onChooseLogic?: (route: LogicRouteId) => void;
-}) {
-  return (
-    <fieldset className="space-y-2">
-     <legend className="text-sm font-semibold">Mode</legend>
-      <p className="text-xs text-muted">These modes use the Grok key already saved on this computer.</p>
-      {MODEL_TIERS.map((item) => (
-        <label key={item} className="flex items-start gap-2 text-sm">
-          <input type="radio" name={name} checked={logicRoute == null && tier === item} onChange={() => onChoose(item)} className="mt-1" />
-          <span className="font-medium">{item}</span>
-        </label>
-      ))}
-    </fieldset>
-  );
-}
 
-function ProviderPicker({
-  name,
-  choices,
-  choice,
-  onChoose,
-  logicRoutes = [],
-  grokVerified = false,
-}: {
-  name: string;
-  choices: { id: string; label: string; enabled: boolean; reason: string }[];
-  choice: string;
-  onChoose: (id: string) => void;
-  logicRoutes?: LogicRoutePublic[];
-  grokVerified?: boolean;
-}) {
-  const visible = [
-    ...choices,
-    ...logicRoutes.filter((route) => route.ready).map((route) => ({ id: route.id, label: route.label, enabled: true, reason: route.reason })),
-  ];
-  const seen = new Set<string>();
-  const groups = new Map<string, { title: string; items: typeof choices }>();
-  for (const item of visible) {
-    if (!item.enabled || seen.has(item.id)) continue;
-    seen.add(item.id);
-    const [kind, source] = item.id.split(":");
-    const external = kind === "custom" || kind === "mcp";
-    const groupId = external ? `${kind}:${source}` : kind === "service" ? "services" : item.id;
-    const title = external ? item.label.split(": ")[0] : kind === "service" ? "Connected services" : item.label;
-    const group = groups.get(groupId) ?? { title, items: [] };
-    group.items.push(item);
-    groups.set(groupId, group);
-  }
-  const selected = visible.find((item) => item.id === choice);
-  return (
-    <div className="provider-pack">
-      <p className="text-sm font-semibold">Providers</p>
-      <p className="mt-1 text-xs text-muted">{selected ? selected.label : "Choose a provider"}</p>
-      {Array.from(groups, ([groupId, group]) => (
-        <details key={groupId} className="provider-group" open={group.items.some((item) => item.id === choice) || undefined}>
-          <summary className="flex items-center gap-2">
-            {PRODUCT_LOGO[group.title.toLowerCase()] ? <img src={PRODUCT_LOGO[group.title.toLowerCase()]} alt="" width={16} height={16} className="size-4 rounded" /> : null}
-            {group.title}
-            {groupId.startsWith("custom:") ? <span className="text-xs text-muted">{group.items.length} {group.items.length === 1 ? "model" : "models"}</span> : null}
-          </summary>
-          <div className="max-h-64 overflow-y-auto overflow-x-hidden">
-          {group.items.map((item) => (
-            <label key={item.id} className={`flex items-start gap-2 rounded-xl px-2 py-2 text-sm ${choice === item.id ? "model-option-active" : ""} ${!item.enabled ? "opacity-60" : ""}`}>
-              <input type="radio" name={name} className="mt-1" checked={choice === item.id} disabled={!item.enabled} onChange={() => { if (item.enabled) onChoose(item.id); }} />
-              <span>
-                {item.label}
-                {item.id === "grok" && item.enabled ? <span className="text-muted"> · {grokVerified ? "A reply in this chat came from Grok" : "Configured"}</span> : null}
-                <span className="block text-xs text-muted">{item.reason}</span>
-              </span>
-            </label>
-          ))}
-          </div>
-        </details>
-      ))}
-    </div>
-  );
-}
 
-function chatBucket(chat: Chat) {
-  return conversationSection(chat);
-}
+
+
+
 
 function chatStamp(chat: Chat) {
   const iso = chat.messages.at(-1)?.at ?? chat.messages[0]?.at;
   if (!iso) return "New";
   return new Date(iso).toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit" });
+}
+
+function ToolElapsed({ row }: { row: Parameters<typeof elapsedMs>[0] }) {
+  const [now, setNow] = useState(Date.now);
+  useEffect(() => {
+    if (row.endedAtMs != null) return;
+    const id = window.setInterval(() => setNow(Date.now()), 250);
+    return () => window.clearInterval(id);
+  }, [row.endedAtMs]);
+  return <span className="text-xs text-muted tabular-nums">{formatElapsed(elapsedMs(row, now))}</span>;
 }

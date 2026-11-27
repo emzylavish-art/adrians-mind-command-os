@@ -25,7 +25,9 @@ describe("workbench commands", () => {
     assert.equal(paused.workspace.runs[0]?.state, "paused");
     const canceled = applyWorkbenchCommand(paused.workspace, { type: "cancel", runId: paused.workspace.runs[0]!.id }, NOW);
     assert.equal(canceled.workspace.runs[0]?.state, "canceled");
-    assert.match(canceled.workspace.runs[0]?.error ?? "", /Stopped/);
+    assert.match(canceled.workspace.runs[0]?.error ?? "", /Local execution stopped/);
+    assert.deepEqual(canceled.workspace.runs[0]?.cancellation, { requestedAt: NOW, acknowledgedAt: NOW, scope: "local-worker" });
+    assert.equal(canceled.workspace.runs[0]?.result, paused.workspace.runs[0]?.result, "Previously completed output survives local cancellation");
   });
 
   it("refuses new work while the emergency stop is on and still allows cancel", () => {

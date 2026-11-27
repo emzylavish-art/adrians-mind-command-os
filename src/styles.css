@@ -6721,7 +6721,7 @@ aside .max-w-\[14rem\].truncate {
 .mind-speak-button { min-height: 44px; padding: 0 1.1rem; border-radius: 999px; border: 1px solid var(--color-line); background: var(--color-accent); color: var(--color-accent-ink); font-weight: 700; }
 @media (max-width: 767.98px) {
   .shell { overflow-x: hidden; }
-  .shell .rail.nav-drawer-open { z-index: 200 !important; height: 100dvh; overflow: hidden; padding-bottom: max(1.5rem, env(safe-area-inset-bottom)); }
+  .shell .rail.nav-drawer-open { background: var(--color-surface); color: var(--color-fg); z-index: 200 !important; height: 100dvh; overflow: hidden; padding-bottom: max(1.5rem, env(safe-area-inset-bottom)); }
   .shell .rail.nav-drawer-open > nav { min-height: 0; overscroll-behavior: contain; }
   .shell .topbar .voice-zone, .shell .topbar .command-voice-mode { display: none !important; }
   .shell [data-testid="voice-controls"] { display: none !important; }

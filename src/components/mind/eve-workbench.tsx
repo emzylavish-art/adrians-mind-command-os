@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { useAccountPreferences } from "@/components/mind/account-preferences-context";
 import { Activity, ArrowUpRight, Bot, CircleAlert, Clock3, FileText, Globe2, ShieldCheck } from "lucide-react";
 import { readStoredFraming, writeStoredFraming } from "@/components/mind/avatar/digital-human";
 import { EveTurn } from "@/components/mind/eve-turn";
@@ -42,13 +43,6 @@ type PaperclipView = {
   runs: { id: string }[];
 };
 
-function storageOrNull(): Storage | null {
-  try {
-    return typeof localStorage === "undefined" ? null : localStorage;
-  } catch {
-    return null;
-  }
-}
 
 export function EveWorkbench({
   workspace,
@@ -68,6 +62,7 @@ export function EveWorkbench({
   chatTitle,
   recording = false,
   recordingSeconds = 0,
+  recordingStartedAt,
   onStopRecording,
 }: {
   workspace: Workspace;
@@ -87,8 +82,10 @@ export function EveWorkbench({
   chatTitle?: string;
   recording?: boolean;
   recordingSeconds?: number;
+  recordingStartedAt?: number | null;
   onStopRecording?: () => void;
 }) {
+  const preferenceStorage = useAccountPreferences();
   const runs = [...workspace.runs].sort((a, b) => Date.parse(b.updatedAt) - Date.parse(a.updatedAt));
   const visibleRuns = runs.slice(0, 12);
   const events = [...workspace.runEvents].sort((a, b) => Date.parse(b.at) - Date.parse(a.at)).slice(0, 12);
@@ -104,8 +101,8 @@ export function EveWorkbench({
   const selected = runs.find((run) => run.id === selectedId) ?? visibleRuns[0] ?? null;
   const [goal, setGoal] = useState("");
   const [agentId, setAgentId] = useState(agents[0]?.id ?? "");
-  const [characterId, setCharacterId] = useState(() => readStoredCharacterId(storageOrNull()));
-  const [framing, setFraming] = useState<AvatarFraming>(() => readStoredFraming());
+  const [characterId, setCharacterId] = useState(() => readStoredCharacterId(preferenceStorage));
+  const [framing, setFraming] = useState<AvatarFraming>(() => readStoredFraming(preferenceStorage));
   const [expression, setExpression] = useState<AvatarExpression | null>(null);
   const [paperclip, setPaperclip] = useState<PaperclipView | null>(null);
   const [serverNote, setServerNote] = useState<string | null>(null);
@@ -166,8 +163,8 @@ export function EveWorkbench({
   }
 
   function chooseCharacter(id: string) {
-    const character = writeStoredCharacterId(id, storageOrNull());
-    writeStoredVoiceChoice(character.voiceId, storageOrNull());
+    const character = writeStoredCharacterId(id, preferenceStorage);
+    writeStoredVoiceChoice(character.voiceId, preferenceStorage);
     setCharacterId(character.id);
     if (typeof window !== "undefined") window.dispatchEvent(new Event("amcos-character"));
   }
@@ -344,7 +341,7 @@ export function EveWorkbench({
         <OwnerFlow
           halted={workspace.halted}
           recording={recording}
-          recordingSeconds={recordingSeconds}
+          recordingSeconds={recordingSeconds} recordingStartedAt={recordingStartedAt}
           onOpenSpeak={() => onTalk?.()}
           onToggleStop={onToggleStop}
           onStopRecording={() => onStopRecording?.()}
@@ -419,11 +416,12 @@ export function EveWorkbench({
                         <button type="button" className="min-h-11 rounded-panel border border-line px-3 text-xs" onClick={() => onCommand({ type: "pause", runId: run.id })}>Pause</button>
                         <button type="button" className="min-h-11 rounded-panel border border-line px-3 text-xs" onClick={() => onCommand({ type: "resume", runId: run.id })}>Resume</button>
                         <button type="button" className="min-h-11 rounded-panel border border-line px-3 text-xs" onClick={() => onCommand({ type: "cancel", runId: run.id })}>Cancel</button>
-                        {run.state === "waiting_approval" ? (
-                          <>
-                            <button type="button" className="min-h-11 rounded-panel border border-line px-3 text-xs" onClick={() => onCommand({ type: "approve", runId: run.id, action: "browser" })}>Approve browser</button>
-                            <button type="button" className="min-h-11 rounded-panel border border-line px-3 text-xs" onClick={() => onCommand({ type: "approve", runId: run.id, action: "gmail_send" })}>Approve send</button>
-                          </>
+                        {run.state === "waiting_approval" && run.pendingApproval?.state === "requested" ? (
+                          <div className="min-w-0">
+                            <p className="break-words text-sm">Review {run.pendingApproval.tool}: {run.pendingApproval.destination}</p>
+                            <p className="text-xs text-muted">Expires {stamp(run.pendingApproval.expiresAt)} · one action</p>
+                            <button type="button" className="min-h-11 rounded-panel border border-line px-3 text-xs" onClick={() => onCommand({ type: "approve", runId: run.id, actionId: run.pendingApproval!.id })}>Approve this action once</button>
+                          </div>
                         ) : null}
                       </div>
                       {run.result ? <p className="mt-2 whitespace-pre-wrap text-sm text-muted">{run.result.slice(0, 500)}</p> : null}
@@ -454,7 +452,7 @@ export function EveWorkbench({
               <EveTurn expression={expression} framing={framing} projection={heard ?? undefined} />
               <div className="mt-3 flex flex-wrap gap-2" role="group" aria-label="Avatar framing">
                 {(["full", "upper", "face", "compact"] as AvatarFraming[]).map((mode) => (
-                  <button key={mode} type="button" className={"min-h-11 rounded-panel border px-3 text-xs " + (framing === mode ? "border-accent bg-accent/10" : "border-line")} onClick={() => { setFraming(mode); writeStoredFraming(mode); }}>{mode}</button>
+                  <button key={mode} type="button" className={"min-h-11 rounded-panel border px-3 text-xs " + (framing === mode ? "border-accent bg-accent/10" : "border-line")} onClick={() => { setFraming(mode); writeStoredFraming(mode, preferenceStorage); }}>{mode}</button>
                 ))}
               </div>
               <label className="mt-3 grid gap-1 text-xs text-muted">

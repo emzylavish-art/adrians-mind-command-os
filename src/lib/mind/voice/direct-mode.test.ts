@@ -20,9 +20,10 @@ describe("Direct voice mode", () => {
     assert.equal(resolveVoiceMode("direct", false).fellBack, false);
   });
 
-  it("falls back from Orchestrator with no paired computer and the Speak loop still runs", async () => {
+  it("preserves Orchestrator when unavailable; explicit separate Speak stages still run", async () => {
     const route = resolveVoiceMode("orchestrator", false);
-    assert.equal(route.mode, "direct");
+    assert.equal(route.mode, "orchestrator");
+    assert.equal(route.blocked, true);
     assert.equal(route.notice, DIRECT_FALLBACK_NOTICE);
     const order: string[] = [];
     const result = await runSpeakAction(
@@ -54,7 +55,7 @@ describe("Direct voice mode", () => {
     assert.equal(JSON.stringify(result).includes("Orchestrator needs Ollama"), false);
   });
 
-  it("resolves a stale persisted orchestrator mode to Direct when no computer is paired", () => {
+  it("preserves a saved orchestrator preference when the runtime is temporarily unavailable", () => {
     const store = new Map<string, string>([[VOICE_MODE_STORAGE_KEY, "orchestrator"]]);
     const storage = {
       getItem: (key: string) => store.get(key) ?? null,
@@ -65,13 +66,13 @@ describe("Direct voice mode", () => {
     assert.equal(shouldPersistVoiceMode(false), false);
     assert.equal(readStoredVoiceMode(storage), "orchestrator");
     const resolved = hydrateResolvedVoiceMode(store.get(VOICE_MODE_STORAGE_KEY), false);
-    assert.equal(resolved, "direct");
-    assert.equal(shouldPersistVoiceMode(true, "orchestrator", false), false);
+    assert.equal(resolved, "orchestrator");
+    assert.equal(shouldPersistVoiceMode(true, "orchestrator", false), true);
     writeStoredVoiceMode(resolved, storage);
-    assert.equal(store.get(VOICE_MODE_STORAGE_KEY), "direct");
+    assert.equal(store.get(VOICE_MODE_STORAGE_KEY), "orchestrator");
   });
 
-  it("connects Voice mode with no paired computer and never shows the Ollama error", async () => {
+  it("blocks mint and connect when the selected Orchestrator is unavailable", async () => {
     let connected = "";
     let pending: Promise<unknown> = Promise.resolve();
     const button = createElement("button", {
@@ -81,7 +82,7 @@ describe("Direct voice mode", () => {
         pending = beginVoiceModeSession({
           mode: "orchestrator",
           pairedComputer: false,
-          mint: async () => ({ ok: true, value: "ephemeral-test-secret" }),
+          mint: async () => { throw new Error("must not mint"); },
           connect: async (secret) => {
             connected = secret;
           },
@@ -91,14 +92,14 @@ describe("Direct voice mode", () => {
     assert.match(renderToStaticMarkup(button), /data-testid="open-voice-mode"/);
     (button.props.onClick as () => void)();
     const started = await pending;
-    assert.equal(connected, "ephemeral-test-secret");
+    assert.equal(connected, "");
     const shown = JSON.stringify(started);
     assert.equal(shown.includes("Orchestrator needs Ollama"), false);
-    assert.match(shown, /Using Direct/);
+    assert.match(shown, /preference is unchanged/);
     const view = renderToStaticMarkup(
       createElement("p", { "data-testid": "voice-notice" }, DIRECT_FALLBACK_NOTICE),
     );
-    assert.match(view, /Using Direct — no paired computer for Orchestrator/);
+    assert.match(view, /Orchestrator is unavailable/);
     assert.doesNotMatch(view, /Orchestrator needs Ollama/);
   });
 });

@@ -38,7 +38,8 @@ const KEY_SHAPED = /(?:sk-|xai-|ghp_|Bearer\s+[A-Za-z0-9])/i;
 
 export function normalizeBotKnowledge(value: unknown): { knowledge: string; rejected: string } {
   if (typeof value !== "string") return { knowledge: "", rejected: "" };
-  const text = value.trim().slice(0, 4000);
+  const text = value.trim();
+  if (text.length > 100000) return { knowledge: "", rejected: "This knowledge document exceeds 100,000 characters. Keep the original in Library and attach relevant excerpts; it was not truncated or saved." };
   if (!text) return { knowledge: "", rejected: "" };
   // Reject binary control bytes in an otherwise plain-text note.
   // eslint-disable-next-line no-control-regex

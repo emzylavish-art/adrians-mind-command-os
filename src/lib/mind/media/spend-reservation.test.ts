@@ -17,7 +17,7 @@ test("one slot permits one provider dispatch and preserves an uncertain delivery
   let calls = 0;
   const ownerId = crypto.randomUUID();
   const run = () => generateImagineImages({ prompt: "a test pixel" }, {
-    apiKey: "test", meter: { ownerId },
+    apiKey: "test", reserveDispatch: async () => ({ ok: true }), meter: { ownerId },
     fetchImpl: async () => { calls++; throw new Error("Mock response lost"); },
   });
   process.env.MIND_IMAGINE_DAILY_CAP = "0";

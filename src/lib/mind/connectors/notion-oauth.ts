@@ -1,5 +1,6 @@
 import { getAccessToken } from "./store.ts";
-import { getDurableAccessToken, hasDurableOAuthStore } from "./durable-oauth.server.ts";
+import { resolveOAuthAccessToken } from "./token-refresh.ts";
+import { hasDurableOAuthStore } from "./durable-oauth.server.ts";
 import type { ConnectionPublic } from "./store.ts";
 import {
   buildAuthorizeUrl,
@@ -56,7 +57,11 @@ export function notionConnectionStatus(ownerId: string, env?: NotionOAuthEnv): C
 }
 
 export async function notionConnectionStatusPersistent(ownerId: string, env?: NotionOAuthEnv): Promise<ConnectionPublic> {
-  return connectionStatusPersistent(notion(), ownerId, env);
+  const status = await connectionStatusPersistent(notion(), ownerId, env);
+  if (status.state !== "connected") return status;
+  const spaces = await savedNotionWorkspaces(ownerId);
+  const current = spaces.find((space) => space.active);
+  return current?.attention ? { ...status, detail: `${status.detail} ${current.attention}` } : status;
 }
 
 export async function disconnectNotion(input: {
@@ -74,10 +79,8 @@ export async function resolveNotionTokenPersistent(
   env: NodeJS.ProcessEnv = process.env,
 ): Promise<string | undefined> {
   if (ownerId) {
-    const oauth = hasDurableOAuthStore()
-      ? await getDurableAccessToken(ownerId, "notion")
-      : getAccessToken(ownerId, "notion");
-    if (oauth) return oauth;
+    const resolved = await resolveOAuthAccessToken({ ownerId, connector: "notion" });
+    if (resolved.ok) return resolved.token;
   }
   return undefined;
 }
@@ -97,17 +100,33 @@ export async function savedNotionWorkspaces(owner: string) {
   const durable = hasDurableOAuthStore();
   const rows = durable ? await listDurableNotionWorkspaces(owner) : localNotionWorkspaces(owner);
   const active = durable ? await readDurableConnection(owner, "notion") : readConnection(owner, "notion");
-  return rows.map((row) => ({
+  const { getSql } = await import("../../db.ts");
+  const { readNotionObservations, notionGrantGeneration } = await import("./notion-operation-status.server.ts");
+  const { notionObservationMessage, notionReturnHref } = await import("../notion-operation-status.ts");
+  return Promise.all(rows.map(async (row) => {
+    let statusUnavailable = false;
+    const observations = await readNotionObservations(await getSql(), owner, row.workspaceId || "legacy").catch(() => { statusUnavailable = true; return []; });
+    const issues = observations.filter((item) => !item.ok);
+    const issue = issues[0];
+    return {
     id: row.workspaceId || "legacy", name: row.workspaceName || row.accountLabel || "Notion workspace",
     active: Boolean(active && active.workspaceId === row.workspaceId),
-  }));
+    attention: issue ? notionObservationMessage(issue, notionGrantGeneration(row)) : statusUnavailable ? "Operation status could not be loaded." : "",
+    issues: issues.map((item) => ({ ...item, message: notionObservationMessage(item, notionGrantGeneration(row)), returnHref: notionReturnHref(item.chatId) })),
+    statusUnavailable,
+  }; }));
 }
 
 export async function resolveWorkspaceGrant(owner: string, id: string) {
-  const { listDurableNotionWorkspaces } = await import("./durable-oauth.server.ts");
-  const { localNotionWorkspaces } = await import("./store.ts");
-  const { decryptSecret } = await import("./crypto.ts");
+  const result = await resolveOAuthAccessToken({ ownerId: owner, connector: "notion", workspaceId: id });
+  return result.ok ? result.token : undefined;
+}
+
+/** One immutable grant snapshot for identity, token, and recorded capability evidence. */
+export async function resolveNotionGrantPersistent(owner: string, id?: string) {
+  const { listDurableNotionWorkspaces, readDurableConnection } = await import("./durable-oauth.server.ts");
+  const { localNotionWorkspaces, readConnection } = await import("./store.ts");
+  if (!id) return hasDurableOAuthStore() ? readDurableConnection(owner, "notion") : readConnection(owner, "notion");
   const rows = hasDurableOAuthStore() ? await listDurableNotionWorkspaces(owner) : localNotionWorkspaces(owner);
-  const match = rows.find((row) => (row.workspaceId || "legacy") === id);
-  return match ? decryptSecret(match.accessTokenEnc) ?? undefined : undefined;
+  return rows.find((row) => (row.workspaceId || "legacy") === id) ?? null;
 }

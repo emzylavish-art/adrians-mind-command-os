@@ -6,9 +6,10 @@ import { useMindWorkspace } from "@/lib/mind/use-mind-workspace";
 export const Route = createFileRoute("/memory")({ component: MemoryPage });
 
 function MemoryPage() {
-  const { user, isPending } = useCurrentUserState();
-  const { ws, setWs, ready } = useMindWorkspace(user?.id ?? null, user?.emailVerified ? user.primaryEmail : null);
+  const { user, isPending, error } = useCurrentUserState();
+  const { ws, setWs, ready } = useMindWorkspace(user?.id ?? null, user?.emailVerified ? user.primaryEmail : null, isPending || Boolean(error));
 
+  if (error) return <main role="alert" className="p-6">{error} <button onClick={() => window.location.reload()}>Retry verification</button></main>;
   if (isPending || !ready) {
     return (
       <main className="min-h-screen bg-bg p-6 text-fg">

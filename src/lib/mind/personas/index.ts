@@ -16,6 +16,8 @@ export {
 export {
   PERSONA_SELECT_KEY,
   clearPersonaSelection,
+  consumePersonaHandoff,
+  personaSelectionKey,
   personaChatHref,
   readPersonaSelection,
   selectPersona,

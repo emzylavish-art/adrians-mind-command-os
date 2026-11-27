@@ -1,0 +1,130 @@
+{
+  "revision": "18d5b9364e6bdcfec028eeccf56fe596946ed8ce",
+  "dirty": true,
+  "generatedAt": "2026-11-26T03:32:19.805Z",
+  "synthetic": true,
+  "origin": "http://127.0.0.1:4199",
+  "browserVersion": "153.0.8010.0",
+  "extractedFrom": "transitions.json before the remaining page-layout and visible-video-notice corrections",
+  "failures": [
+    {
+      "id": "page-reading-position",
+      "status": "failed",
+      "error": "page.waitForFunction: Timeout 5000ms exceeded.",
+      "observations": {
+        "expectedTop": 1600,
+        "before": {
+          "path": "/?section=settings&pane=data",
+          "view": "settings",
+          "pane": null,
+          "pagePane": {
+            "top": 1600,
+            "height": 2409,
+            "viewport": 776,
+            "overflowAnchor": "none"
+          },
+          "messageIds": [],
+          "activeElement": "<body style=\"\"><!--$--><div id=\"mind-workspace\" class=\"shell flex h-dvh flex-col bg-bg text-fg md:flex-row\" data-view=\"settings\" data-search=\"closed\"><style>\n      @keyframes adrian-menu-in {\n        from { transform: translateY(8px) scale(0.96); }\n        to { transform: none; }\n      }\n      @keyframes adrian-menu-out {\n        from { opacity: 1; transform: none; }\n        to { opacity: 0; transform: translateY(8px); }\n      }\n      @keyframes adrian-drawer-in {\n        from { opacity: 0.72; t",
+          "selection": "",
+          "drawer": null,
+          "streamStarted": 0
+        },
+        "shortPage": {
+          "path": "/?section=projects",
+          "view": "projects",
+          "pane": null,
+          "pagePane": {
+            "top": 0,
+            "height": 916,
+            "viewport": 776,
+            "overflowAnchor": "none"
+          },
+          "messageIds": [],
+          "activeElement": "<body style=\"\"><!--$--><div id=\"mind-workspace\" class=\"shell flex h-dvh flex-col bg-bg text-fg md:flex-row\" data-view=\"projects\" data-search=\"closed\"><style>\n      @keyframes adrian-menu-in {\n        from { transform: translateY(8px) scale(0.96); }\n        to { transform: none; }\n      }\n      @keyframes adrian-menu-out {\n        from { opacity: 1; transform: none; }\n        to { opacity: 0; transform: translateY(8px); }\n      }\n      @keyframes adrian-drawer-in {\n        from { opacity: 0.72; t",
+          "selection": "",
+          "drawer": null,
+          "streamStarted": 0
+        },
+        "afterFailure": {
+          "path": "/?section=settings&pane=data",
+          "view": "settings",
+          "pane": null,
+          "pagePane": {
+            "top": 1117,
+            "height": 2409,
+            "viewport": 776,
+            "overflowAnchor": "none"
+          },
+          "messageIds": [],
+          "activeElement": "<body style=\"\"><!--$--><div id=\"mind-workspace\" class=\"shell flex h-dvh flex-col bg-bg text-fg md:flex-row\" data-view=\"settings\" data-search=\"closed\"><style>\n      @keyframes adrian-menu-in {\n        from { transform: translateY(8px) scale(0.96); }\n        to { transform: none; }\n      }\n      @keyframes adrian-menu-out {\n        from { opacity: 1; transform: none; }\n        to { opacity: 0; transform: translateY(8px); }\n      }\n      @keyframes adrian-drawer-in {\n        from { opacity: 0.72; t",
+          "selection": "",
+          "drawer": null,
+          "streamStarted": 0
+        }
+      },
+      "screenshot": "transition-page-reading-position-failed.png"
+    },
+    {
+      "id": "video-delayed-start-rejected",
+      "status": "failed",
+      "error": "locator.waitFor: Timeout 30000ms exceeded.\nCall log:\n  - waiting for getByText('Submitting the video request\u2026', { exact: true }).visible() to be visible\n",
+      "observations": {
+        "afterFailure": {
+          "path": "/?section=chat&chat=7a7c445c-9c9e-43cf-b6ab-92602737dc4b",
+          "view": "chat",
+          "pane": {
+            "top": 0,
+            "height": 806,
+            "viewport": 806,
+            "tailDistance": 0
+          },
+          "pagePane": {
+            "top": 0,
+            "height": 931,
+            "viewport": 931,
+            "overflowAnchor": "none"
+          },
+          "messageIds": [
+            "message-9b99eaa0-07bc-4b98-a306-d22604b4240e"
+          ],
+          "activeElement": "<body><!--$--><div id=\"mind-workspace\" class=\"shell flex h-dvh flex-col bg-bg text-fg md:flex-row\" data-view=\"chat\" data-search=\"closed\"><style>\n      @keyframes adrian-menu-in {\n        from { transform: translateY(8px) scale(0.96); }\n        to { transform: none; }\n      }\n      @keyframes adrian-menu-out {\n        from { opacity: 1; transform: none; }\n        to { opacity: 0; transform: translateY(8px); }\n      }\n      @keyframes adrian-drawer-in {\n        from { opacity: 0.72; transform: tra",
+          "selection": "",
+          "drawer": null,
+          "streamStarted": 0
+        }
+      },
+      "screenshot": "transition-video-delayed-start-rejected-failed.png"
+    },
+    {
+      "id": "video-delayed-start-accepted",
+      "status": "failed",
+      "error": "locator.waitFor: Timeout 30000ms exceeded.\nCall log:\n  - waiting for getByText('Submitting the video request\u2026', { exact: true }).visible() to be visible\n",
+      "observations": {
+        "afterFailure": {
+          "path": "/?section=chat&chat=27445978-e8bf-4969-af1c-2897b70ebd5b",
+          "view": "chat",
+          "pane": {
+            "top": 0,
+            "height": 806,
+            "viewport": 806,
+            "tailDistance": 0
+          },
+          "pagePane": {
+            "top": 0,
+            "height": 931,
+            "viewport": 931,
+            "overflowAnchor": "none"
+          },
+          "messageIds": [
+            "message-e191cff8-e76e-42d7-af0f-351556986bdc"
+          ],
+          "activeElement": "<body><!--$--><div id=\"mind-workspace\" class=\"shell flex h-dvh flex-col bg-bg text-fg md:flex-row\" data-view=\"chat\" data-search=\"closed\"><style>\n      @keyframes adrian-menu-in {\n        from { transform: translateY(8px) scale(0.96); }\n        to { transform: none; }\n      }\n      @keyframes adrian-menu-out {\n        from { opacity: 1; transform: none; }\n        to { opacity: 0; transform: translateY(8px); }\n      }\n      @keyframes adrian-drawer-in {\n        from { opacity: 0.72; transform: tra",
+          "selection": "",
+          "drawer": null,
+          "streamStarted": 0
+        }
+      },
+      "screenshot": "transition-video-delayed-start-accepted-failed.png"
+    }
+  ]
+}

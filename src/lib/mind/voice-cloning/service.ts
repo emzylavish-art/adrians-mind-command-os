@@ -3,7 +3,7 @@
  * Reuses resolveVoiceApiKey + transcribeWavBytes from existing voice layer (import only).
  */
 import { randomBytes } from "node:crypto";
-import { allowMindRequest } from "../limits.ts";
+import { allowSharedMindRequest as allowMindRequest } from "../rate-limit.server.ts";
 import { resolveVoiceApiKey } from "../voice/keys.ts";
 import { transcribeWavBytes } from "../voice/stt.ts";
 import {
@@ -47,12 +47,22 @@ import {
   validateProfileName,
 } from "./validate.ts";
 import { sniffAudioMagic } from "./audio-sniff.ts";
+import { resolveVoiceCloneLocalUrlFromEnv } from "./local-url.ts";
+import { isLoopbackHostname } from "../voice/ollama-host.ts";
 
 function newId(prefix: string): string {
   return `${prefix}_${randomBytes(12).toString("hex")}`;
 }
 
+export function voiceCloneIsLocalFree(providerId: string, env: Record<string, string | undefined> = process.env): boolean {
+  if (providerId !== "local-http") return false;
+  const resolved = resolveVoiceCloneLocalUrlFromEnv(env);
+  return resolved.ok && isLoopbackHostname(new URL(resolved.base).hostname);
+}
+
 export type VoiceCloningServiceDeps = {
+  /** Production boundary injected by server.ts; deterministic fixtures may inject a no-network authority. */
+  authorize?: (input: { owner: string; provider: string; operation: "consent-stt" | "clone" | "speech"; free: boolean }) => Promise<(ok: boolean) => Promise<void>>;
   store?: VoiceCloningStore;
   provider?: VoiceCloneProvider;
   apiKey?: string | undefined;
@@ -66,6 +76,13 @@ export function createVoiceCloningService(deps: VoiceCloningServiceDeps = {}) {
   const store = deps.store ?? getVoiceCloningStore();
   const now = deps.now ?? Date.now;
   const transcribe = deps.transcribe ?? transcribeWavBytes;
+  async function authorized<T extends { ok: boolean }>(owner: string, providerId: string, operation: "consent-stt" | "clone" | "speech", run: () => Promise<T>): Promise<T | { ok: false; code: string; error: string; dispatched: false }> {
+    let settle: ((ok: boolean) => Promise<void>) | undefined;
+    try { settle = await deps.authorize?.({ owner, provider: providerId, operation, free: operation !== "consent-stt" && voiceCloneIsLocalFree(providerId, deps.env ?? process.env) }); }
+    catch (error) { return { ok: false, code: "resource_policy", dispatched: false, error: error instanceof Error ? error.message : "Resource policy refused this operation. The provider was not contacted." }; }
+    try { const result = await run(); await settle?.(result.ok); return result; }
+    catch (error) { await settle?.(false); throw error; }
+  }
 
   function resolveKey(): string | undefined {
     if (deps.apiKey !== undefined) return deps.apiKey;
@@ -86,7 +103,7 @@ export function createVoiceCloningService(deps: VoiceCloningServiceDeps = {}) {
     },
 
     async createChallenge(userId: string): Promise<ConsentChallenge> {
-      if (!allowMindRequest("vcs_challenge", userId, 30)) {
+      if (!await allowMindRequest("vcs_challenge", userId, 30)) {
         throw Object.assign(new Error("Too many consent challenges. Wait a minute."), { code: "rate_limited" });
       }
       const challenge = createConsentChallenge(now());
@@ -107,7 +124,7 @@ export function createVoiceCloningService(deps: VoiceCloningServiceDeps = {}) {
       sampleAudioBase64: unknown;
       sampleMime: unknown;
     }): Promise<{ ok: true; profile: VoiceProfile } | { ok: false; error: string; code?: string }> {
-      if (!allowMindRequest("vcs_create", userId, VCS_CREATE_RATE_PER_MIN)) {
+      if (!await allowMindRequest("vcs_create", userId, VCS_CREATE_RATE_PER_MIN)) {
         return { ok: false, error: "Too many profile creates. Wait a minute.", code: "rate_limited" };
       }
       const nameV = validateProfileName(input.name);
@@ -162,14 +179,14 @@ export function createVoiceCloningService(deps: VoiceCloningServiceDeps = {}) {
       const e2eMockStt = e2eMockSttEarly;
       const stt = e2eMockStt
         ? { ok: true as const, text: challenge.phrase, duration: 1 }
-        : await transcribe({
+        : await authorized(userId, "xai-stt", "consent-stt", () => transcribe({
             bytes: consentBytes,
             apiKey: apiKey as string,
             mime: consentAudio.mime,
             filename: "consent.wav",
-          });
+          }));
       if (!stt.ok) {
-        return { ok: false, error: stt.error, code: "stt_failed" };
+        return { ok: false, error: stt.error, code: "code" in stt && stt.code === "resource_policy" ? "resource_policy" : "stt_failed" };
       }
       const verified = verifyConsentTranscript({
         transcript: stt.text,
@@ -188,7 +205,7 @@ export function createVoiceCloningService(deps: VoiceCloningServiceDeps = {}) {
         deps.env ?? process.env,
         now(),
       );
-      const clone = await activeProvider.createVoice({
+      const clone = await authorized(userId, activeProvider.id, "clone", () => activeProvider.createVoice({
         name: nameV.name,
         profileId,
         fileBytes: sampleBytes,
@@ -196,7 +213,8 @@ export function createVoiceCloningService(deps: VoiceCloningServiceDeps = {}) {
         mime: sampleAudio.mime,
         consentToken,
         consentRecordId: consentId,
-      });
+      }));
+      if (!clone.ok && clone.code === "resource_policy") return { ok: false, error: clone.error, code: clone.code };
 
       let providerVoiceId: string | null = null;
       let providerStatus: VoiceProfile["providerStatus"] = "not_configured";
@@ -253,7 +271,7 @@ export function createVoiceCloningService(deps: VoiceCloningServiceDeps = {}) {
     },
 
     async generate(userId: string, input: { profileId: unknown; text: unknown }): Promise<GenerateResult> {
-      if (!allowMindRequest("vcs_generate", userId, VCS_GENERATE_RATE_PER_MIN)) {
+      if (!await allowMindRequest("vcs_generate", userId, VCS_GENERATE_RATE_PER_MIN)) {
         return { ok: false, error: "Too many generate requests. Wait a minute.", code: "rate_limited" };
       }
       if (typeof input.profileId !== "string" || !input.profileId.trim()) {
@@ -281,11 +299,12 @@ export function createVoiceCloningService(deps: VoiceCloningServiceDeps = {}) {
 
       const selectedProvider = provider();
       if (selectedProvider.id !== profile.provider) return { ok: false, code: "provider_changed", error: "Reconnect the voice provider used to create this profile." };
-      const tts = await selectedProvider.synthesize({
+      const voiceId = profile.providerVoiceId;
+      const tts = await authorized(userId, selectedProvider.id, "speech", () => selectedProvider.synthesize({
         text: textV.text,
-        voiceId: profile.providerVoiceId,
+        voiceId,
         format: profile.provider === "local-http" ? "wav" : "mp3",
-      });
+      }));
       if (!tts.ok) return { ok: false, error: tts.error, code: tts.code };
       return {
         ok: true,
@@ -295,7 +314,7 @@ export function createVoiceCloningService(deps: VoiceCloningServiceDeps = {}) {
     },
 
     async deleteProfile(userId: string, profileId: unknown): Promise<DeleteResult> {
-      if (!allowMindRequest("vcs_delete", userId, VCS_DELETE_RATE_PER_MIN)) {
+      if (!await allowMindRequest("vcs_delete", userId, VCS_DELETE_RATE_PER_MIN)) {
         return { ok: false, error: "Too many deletes. Wait a minute.", code: "rate_limited" };
       }
       if (typeof profileId !== "string" || !profileId.trim()) {

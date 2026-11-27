@@ -1,3 +1,5 @@
+import { readExecutionEvidence, type ExecutionEvidence } from "./execution-evidence.ts";
+import { modelExecutionPlan, type ModelExecutionPlan } from "./execution-plan.ts";
 import type { LogicRouteId } from "./logic-routes.ts";
 import { isLogicRouteId, LOGIC_ROUTE_LABEL } from "./logic-routes.ts";
 
@@ -28,7 +30,7 @@ export type RoutingCall = {
 };
 
 export type RoutingPlan =
-  | { ok: true; mode: RoutingMode; calls: RoutingCall[]; merge: false; note: string }
+  | { ok: true; mode: RoutingMode; calls: RoutingCall[]; merge: false; note: string; execution?: ModelExecutionPlan }
   | { ok: false; mode: RoutingMode; reason: string };
 
 export function isRoutingMode(value: unknown): value is RoutingMode {
@@ -100,6 +102,7 @@ export function planRouting(input: {
         calls: [{ route: null, label: "Selected model", role: "single" }],
         merge: false,
         note: "Single model. No second model is called.",
+        execution: modelExecutionPlan("independent", ["selected"]),
       };
     }
     const seat = seatById(seats, primary);
@@ -112,6 +115,7 @@ export function planRouting(input: {
       calls: [callFor(seat, "single")],
       merge: false,
       note: `Single model: ${seat.label}. No second model is called.`,
+      execution: modelExecutionPlan("independent", [seat.id]),
     };
   }
 
@@ -148,7 +152,7 @@ export function planRouting(input: {
     : mode === "D"
       ? "Each answer is kept separately. No merge is made."
       : "Both answers are kept. No merge is made.";
-  return { ok: true, mode, calls: ready.map((seat) => callFor(seat, role)), merge: false, note };
+  return { ok: true, mode, calls: ready.map((seat) => callFor(seat, role)), merge: false, note, execution: modelExecutionPlan("independent", ready.map((seat) => seat.id)) };
 }
 
 export type ResponseRating = {
@@ -158,6 +162,11 @@ export type ResponseRating = {
   mode: RoutingMode | null;
   provider?: string;
   at: string;
+  evidenceType?: "subjective";
+  executionEvidence?: ExecutionEvidence;
+  executionId?: string;
+  taskCategory?: string;
+  reportedModel?: string;
 };
 
 const RATING_KEY = "amcos.responseRatings.v1";
@@ -176,7 +185,7 @@ export function readRatings(storage: Pick<Storage, "getItem"> | null | undefined
       if (!item || typeof item !== "object") return [];
       const row = item as Partial<ResponseRating>;
       if (typeof row.messageId !== "string" || !isRatingScore(row.score) || (row.mode !== null && !isRoutingMode(row.mode)) || typeof row.at !== "string") return [];
-      return [{ messageId: row.messageId, score: row.score, ...(typeof row.provider === "string" ? { provider: row.provider } : {}), model: typeof row.model === "string" ? row.model : null, mode: row.mode, at: row.at }];
+      return [{ messageId: row.messageId, score: row.score, ...(typeof row.provider === "string" ? { provider: row.provider } : {}), model: typeof row.model === "string" ? row.model : null, mode: row.mode, at: row.at, evidenceType: "subjective" as const, ...(readExecutionEvidence(row.executionEvidence, row.executionId) ? { executionEvidence: readExecutionEvidence(row.executionEvidence, row.executionId) } : {}), ...(typeof row.executionId === "string" ? { executionId: row.executionId.slice(0, 200) } : {}), ...(typeof row.taskCategory === "string" ? { taskCategory: row.taskCategory.slice(0, 100) } : {}), ...(typeof row.reportedModel === "string" ? { reportedModel: row.reportedModel.slice(0, 200) } : {}) }];
     });
   } catch {
     return [];
@@ -184,7 +193,7 @@ export function readRatings(storage: Pick<Storage, "getItem"> | null | undefined
 }
 
 export function saveRating(storage: Pick<Storage, "getItem" | "setItem"> | null | undefined, rating: ResponseRating, owner = "device:guest"): ResponseRating[] {
-  const next = [rating, ...readRatings(storage, owner).filter((item) => item.messageId !== rating.messageId)].slice(0, 200);
+  const next = [{ ...rating, evidenceType: "subjective" as const }, ...readRatings(storage, owner).filter((item) => item.messageId !== rating.messageId)].slice(0, 200);
   if (!storage) throw new Error("Rating storage unavailable");
   storage.setItem(RATING_KEY + "." + owner, JSON.stringify(next));
   return next;

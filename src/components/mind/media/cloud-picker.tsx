@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { getBearerToken } from "@/lib/auth/client";
 import { previewPathPrefix } from "@/lib/preview-path-prefix";
 import type { CloudConnectionPublic, CloudFileItem, CloudSource } from "@/lib/mind/media/cloud/types";
@@ -9,6 +9,7 @@ export type CloudPickerAttach =
 
 type Props = {
   open: boolean;
+  purpose?: "chat" | "library";
   onClose: () => void;
   onAttach: (item: CloudPickerAttach) => void;
   onNotice?: (message: string) => void;
@@ -27,7 +28,10 @@ function authHeaders(): HeadersInit {
   };
 }
 
-export function CloudPicker({ open, onClose, onAttach, onNotice }: Props) {
+export function CloudPicker({ open, onClose, onAttach, onNotice, purpose = "chat" }: Props) {
+  const requestEpoch = useRef(0);
+  const isOpen = useRef(open);
+  isOpen.current = open;
   const [sources, setSources] = useState<CloudConnectionPublic[]>([]);
   const [source, setSource] = useState<CloudSource>("google_drive");
   const [files, setFiles] = useState<CloudFileItem[]>([]);
@@ -62,10 +66,13 @@ export function CloudPicker({ open, onClose, onAttach, onNotice }: Props) {
     };
   }, [open]);
 
+  useEffect(() => { requestEpoch.current++; setBusy(false); setLoadingList(false); return () => { requestEpoch.current++; }; }, [open, source, purpose]);
+
   const current = sources.find((row) => row.source === source) ?? null;
   const connected = current?.state === "connected";
 
   async function loadList() {
+    const epoch = ++requestEpoch.current;
     setLoadingList(true);
     setError(null);
     setFiles([]);
@@ -79,6 +86,7 @@ export function CloudPicker({ open, onClose, onAttach, onNotice }: Props) {
         files?: CloudFileItem[];
         error?: string;
       };
+      if (epoch !== requestEpoch.current || !isOpen.current) return;
       if (!res.ok || !body.ok) {
         setError(body.error || "Could not list cloud files.");
         return;
@@ -86,13 +94,14 @@ export function CloudPicker({ open, onClose, onAttach, onNotice }: Props) {
       setFiles(body.files ?? []);
       if ((body.files ?? []).length === 0) setError("No files were returned from this cloud source.");
     } catch {
-      setError("Could not list cloud files.");
+      if (epoch === requestEpoch.current && isOpen.current) setError("Could not list cloud files.");
     } finally {
-      setLoadingList(false);
+      if (epoch === requestEpoch.current) setLoadingList(false);
     }
   }
 
   async function pick(file: CloudFileItem) {
+    const epoch = ++requestEpoch.current;
     setBusy(true);
     setError(null);
     try {
@@ -116,10 +125,12 @@ export function CloudPicker({ open, onClose, onAttach, onNotice }: Props) {
         text?: string;
         error?: string;
       };
+      if (epoch !== requestEpoch.current || !isOpen.current) return;
       if (!res.ok || !body.ok) {
         setError(body.error || "Could not download that file.");
         return;
       }
+      if (body.kind === "image" && purpose === "library") { setError("Library saves text copies. Choose a text file, or attach this image from Chat."); return; }
       if (body.kind === "image" && body.dataUrl && body.name) {
         onAttach({ kind: "image", dataUrl: body.dataUrl, name: body.name, mime: body.mime });
         onNotice?.(`Attached “${body.name}” from Google Drive.`);
@@ -128,15 +139,15 @@ export function CloudPicker({ open, onClose, onAttach, onNotice }: Props) {
       }
       if (body.kind === "text" && body.name && typeof body.text === "string") {
         onAttach({ kind: "text", name: body.name, text: body.text });
-        onNotice?.(`Staged text from “${body.name}” (Drive). Send includes it.`);
+        if (purpose === "chat") onNotice?.(`Staged text from “${body.name}”. Send includes it.`);
         onClose();
         return;
       }
       setError("That cloud file type is not supported for attach.");
     } catch {
-      setError("Could not download that file.");
+      if (epoch === requestEpoch.current && isOpen.current) setError("Could not download that file.");
     } finally {
-      setBusy(false);
+      if (epoch === requestEpoch.current) setBusy(false);
     }
   }
 
@@ -146,7 +157,7 @@ export function CloudPicker({ open, onClose, onAttach, onNotice }: Props) {
     <div className="fixed inset-0 z-50 grid place-items-center bg-black/70 p-4" role="dialog" aria-modal="true" aria-label="Cloud files">
       <div className="flex max-h-[90vh] w-full max-w-lg flex-col rounded-panel border border-line bg-surface p-4">
         <h3 className="font-display text-xl font-bold">Cloud files</h3>
-        <p className="mt-1 text-sm text-muted">Browse a connected Drive. OAuth/connect lives on ServiceBoard (MCP Integration).</p>
+        <p className="mt-1 text-sm text-muted">{purpose === "library" ? "Choose a text file to save in the selected Library destination." : "Choose a file to attach to this conversation."}</p>
         <div className="mt-3 flex flex-wrap gap-2">
           <button
             type="button"

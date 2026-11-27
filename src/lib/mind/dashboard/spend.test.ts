@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { describe, it } from "node:test";
+import { describe, it, test } from "node:test";
 import {
   MAX_AMOUNT_USD,
   NO_SPEND_SOURCE,
@@ -103,4 +103,26 @@ describe("spend / money (hacker + queue #7)", () => {
     assert.equal(money.available, true);
     assert.equal(money.warnings[0]?.level, "crit");
   });
+});
+
+test("C2 AA094: bounded filesystem selection prefers newest unique files and reports omitted coverage", () => {
+  const names = Array.from({ length: 10 }, (_, index) => `spend-${index}.json`);
+  const read: string[] = [];
+  const adapter = createFilesystemSpendAdapter({ roots: ["/fixture", "/fixture"] });
+  const loaded = adapter.load({
+    nowMs: NOW, exists: () => true, listNames: () => names,
+    statSize: () => 100,
+    statModifiedMs: (path) => Number(path.match(/spend-(\d+)/)?.[1]),
+    readText(path) { read.push(path); return JSON.stringify([{ at: new Date(NOW - 1000).toISOString(), amountUsd: 1 }]); },
+  });
+  assert.equal(read.length, 8);
+  assert.equal(read[0], "/fixture/spend-9.json");
+  assert.equal(new Set(read).size, 8);
+  assert.ok(!read.includes("/fixture/spend-0.json"));
+  assert.equal(loaded.ok, true);
+  if (loaded.ok) {
+    assert.match(loaded.coverage ?? "", /2 older source\(s\)/);
+    assert.equal(loaded.events.length, 8);
+    assert.equal(buildMoneyView({ loadResult: loaded, nowMs: NOW }).coverage, loaded.coverage);
+  }
 });

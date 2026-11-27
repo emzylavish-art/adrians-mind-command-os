@@ -3,14 +3,10 @@ import { parseProviderText } from "./provider-call.ts";
 export type ImageAnalysis = { ok: boolean; analyzed: boolean; provider: "openai" | null; text: string; error: string };
 
 type FetchLike = (url: string, init?: RequestInit) => Promise<{ ok: boolean; status: number; text: () => Promise<string> }>;
+export const IMAGE_ANALYSIS_MODEL = "gpt-4.1-mini";
+export type ImageAnalysisInput = { name: string; bytes: number; imageBase64: string; visionKey: string | undefined };
 
-export async function analyzeImage(input: {
-  name: string;
-  bytes: number;
-  imageBase64: string;
-  visionKey: string | undefined;
-  fetch: FetchLike;
-}): Promise<ImageAnalysis> {
+export function validateImageAnalysis(input: ImageAnalysisInput): { ok: true; mime: string } | (ImageAnalysis & { ok: false }) {
   if (!input.visionKey) {
     return { ok: false, analyzed: false, provider: null, text: "", error: "No vision key is configured. The chat key is not used for images. Nothing was analyzed." };
   }
@@ -28,13 +24,20 @@ export async function analyzeImage(input: {
   if (!mime || bytes.length !== input.bytes || bytes.length > 400_000 || bytes.toString("base64") !== input.imageBase64) {
     return { ok: false, analyzed: false, provider: null, text: "", error: "The complete supported image is required. Nothing was analyzed." };
   }
+  return { ok: true, mime };
+}
+
+export async function analyzeImage(input: ImageAnalysisInput & { fetch: FetchLike }): Promise<ImageAnalysis> {
+  const prepared = validateImageAnalysis(input);
+  if (!prepared.ok) return prepared;
+  const { mime } = prepared;
   let response: Awaited<ReturnType<FetchLike>>;
   try {
     response = await input.fetch("https://api.openai.com/v1/chat/completions", {
       method: "POST",
       headers: { authorization: `Bearer ${input.visionKey}`, "content-type": "application/json" },
       body: JSON.stringify({
-        model: "gpt-4.1-mini",
+        model: IMAGE_ANALYSIS_MODEL,
         messages: [{ role: "user", content: [{ type: "text", text: "Describe this image." }, { type: "image_url", image_url: { url: `data:${mime};base64,${input.imageBase64}` } }] }],
       }),
     });

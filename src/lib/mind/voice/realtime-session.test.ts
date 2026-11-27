@@ -30,6 +30,33 @@ class FakeSocket {
 }
 
 describe("RealtimeVoiceSession", () => {
+  it("acknowledges a personality change only after the matching live instruction update", async () => {
+    const socket = new FakeSocket();
+    const session = new RealtimeVoiceSession({}, new SharedAudioOutput(), () => { queueMicrotask(() => socket.openNow()); return socket; }, { instructions: "Storyteller", voice: "leo" });
+    await session.connect("test-token");
+    let acknowledged = false;
+    const update = session.updateInstructions("Professional; keep existing permission limits.").then(() => { acknowledged = true; });
+    const sent = JSON.parse(socket.sent.at(-1)!);
+    assert.equal(sent.type, "session.update");
+    assert.deepEqual(sent.session, { instructions: "Professional; keep existing permission limits." });
+    socket.emitMessage({ type: "session.updated", session: { instructions: "Storyteller" } });
+    await Promise.resolve(); assert.equal(acknowledged, false);
+    socket.emitMessage({ type: "session.updated", session: { instructions: "Professional; keep existing permission limits." } });
+    await update; assert.equal(acknowledged, true); assert.equal(session.isOpen, true);
+    session.close();
+  });
+
+  it("does not report a rejected live style update as active", async () => {
+    const socket = new FakeSocket();
+    const session = new RealtimeVoiceSession({}, new SharedAudioOutput(), () => { queueMicrotask(() => socket.openNow()); return socket; });
+    await session.connect("test-token");
+    const update = session.updateInstructions("Calm");
+    const rejected = assert.rejects(update, /rejected/);
+    socket.emitMessage({ type: "error", error: { message: "invalid update" } });
+    await rejected;
+    assert.equal(session.isOpen, true); session.close();
+  });
+
   it("connects with ephemeral protocol and cancels on interrupt", async () => {
     let created: FakeSocket | undefined;
     const output = new SharedAudioOutput();

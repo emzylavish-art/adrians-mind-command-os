@@ -1,7 +1,8 @@
-import { randomBytes } from "node:crypto";
-import { mkdirSync, writeFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
-import { getSql } from "../../db.ts";
+import { mkdirSync, writeFileSync, lstatSync, readFileSync } from "node:fs";
+import { createHash, randomBytes } from "node:crypto";
+import { getSql, type Sql } from "../../db.ts";
+import { restoreMissingWorkspaceFile } from "./file-recovery.ts";
 
 const SECRET = /(^|\/)\.env($|\.)|(^|\/)credentials?\.(json|txt|pem)$/i;
 
@@ -66,27 +67,59 @@ export async function renameWorkspaceFile(userId: string, from: string, to: stri
   if (!userId || !source || !dest) return false;
   try {
     const sql = await getSql();
-    await sql.query("update mind_kimi_file set path = $3, updated_at = now() where user_id = $1 and path = $2", [userId, source, dest]);
-    return true;
+    const changed = await sql.query("update mind_kimi_file set path = $3, updated_at = now() where user_id = $1 and path = $2 returning path", [userId, source, dest]);
+    return changed.length === 1;
   } catch {
     return false;
   }
 }
 
-export async function restoreWorkspaceFiles(userId: string, root: string): Promise<number> {
-  if (!userId) return 0;
+export type WorkspaceRestoreResult = { ok: boolean; restored: string[]; missing: string[]; preserved: string[]; conflicts: string[]; snapshot?: string; error?: string };
+/** Explicit recovery only: existing disk content is never overwritten. */
+export async function restoreWorkspaceFilesDetailed(userId: string, root: string, suppliedSql?: Sql, applyMissing = true, expectedSnapshot?: string): Promise<WorkspaceRestoreResult> {
+  const result: WorkspaceRestoreResult = { ok: true, restored: [], missing: [], preserved: [], conflicts: [] };
+  if (!userId) return { ...result, ok: false, error: "Sign in is required." };
   try {
-    const sql = await getSql();
+    const sql = suppliedSql ?? await getSql();
     const rows = await sql.query<{ path: string; text_copy: string }>("select path, text_copy from mind_kimi_file where user_id = $1", [userId]);
-    let count = 0;
+    result.snapshot = createHash("sha256").update(JSON.stringify(rows.map((row) => [row.path, row.text_copy]).sort((a, b) => a[0].localeCompare(b[0])))).digest("hex");
+    if (applyMissing && expectedSnapshot !== undefined && expectedSnapshot !== result.snapshot) return { ...result, ok: false, error: "Account storage changed after review. Review recovery again before restoring." };
     for (const row of rows) {
       const clean = safePath(row.path);
       if (!clean || typeof row.text_copy !== "string") continue;
       const target = resolve(root, clean);
       if (target !== root && !target.startsWith(`${root}/`)) continue;
+      const parts = clean.split("/");
+      if (parts.some((_, index) => lstatSync(resolve(root, ...parts.slice(0, index + 1)), { throwIfNoEntry: false })?.isSymbolicLink())) { result.conflicts.push(clean); continue; }
+      const current = lstatSync(target, { throwIfNoEntry: false });
+      if (current) {
+        result.preserved.push(clean);
+        if (!current.isFile() || readFileSync(target, "utf8") !== row.text_copy) result.conflicts.push(clean);
+        continue;
+      }
+      result.missing.push(clean);
+      if (!applyMissing) continue;
       mkdirSync(dirname(target), { recursive: true });
-      writeFileSync(target, row.text_copy);
-      count += 1;
+      try { writeFileSync(target, row.text_copy, { flag: "wx" }); result.restored.push(clean); }
+      catch (error) {
+        if ((error as { code?: string })?.code === "EEXIST") result.conflicts.push(clean);
+        else throw error;
+      }
+    }
+    return result;
+  } catch { return { ...result, ok: false, error: "Account recovery did not complete. Existing disk files were preserved. Review the reported partial result." }; }
+}
+
+export async function restoreWorkspaceFiles(userId: string, root: string, suppliedSql?: Sql): Promise<number> {
+  if (!userId) return 0;
+  try {
+    const sql = suppliedSql ?? await getSql();
+    const rows = await sql.query<{ path: string; text_copy: string }>("select path, text_copy from mind_kimi_file where user_id = $1", [userId]);
+    let count = 0;
+    for (const row of rows) {
+      const clean = safePath(row.path);
+      if (!clean || typeof row.text_copy !== "string") continue;
+      if (restoreMissingWorkspaceFile(root, clean, row.text_copy)) count += 1;
     }
     return count;
   } catch {

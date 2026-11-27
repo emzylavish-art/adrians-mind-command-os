@@ -1,11 +1,9 @@
-import { readdirSync, statSync } from "node:fs";
-import { join } from "node:path";
 import { createFileRoute } from "@tanstack/react-router";
 import { requireUserId } from "@/lib/auth/verify.server";
 import { assertSameOrigin } from "@/lib/mind/connectors/oauth-csrf";
 import { readJsonObjectBody } from "@/lib/mind/request-body";
 
-const root = join(process.cwd(), "skills");
+import { listInstructionMetadata, readInstructionPreferences, saveInstructionPreferences, instructionHistory } from "@/lib/mind/skill-instructions.server";
 
 function json(body: unknown, status = 200) {
   return new Response(JSON.stringify(body), {
@@ -19,22 +17,30 @@ function slug(title: string) {
   return clean || "from-chat";
 }
 
-function listSkills() {
-  return readdirSync(root, { withFileTypes: true })
-    .filter((entry) => entry.isDirectory() && statSync(join(root, entry.name, "SKILL.md"), { throwIfNoEntry: false })?.isFile())
-    .map((entry) => entry.name)
-    .sort();
-}
 
 export const Route = createFileRoute("/api/mind/skills")({
   server: {
     handlers: {
       GET: async ({ request }) => {
         const bearer = request.headers.get("authorization")?.match(/^Bearer (.+)$/i)?.[1];
-        try { await requireUserId(bearer); }
+        let owner: string;
+        try { owner = await requireUserId(bearer); }
         catch { return json({ ok: false, error: "Sign in is required." }, 401); }
-        try { return json({ ok: true, skills: listSkills() }); }
-        catch { return json({ ok: false, error: "Skill directory could not be read." }, 503); }
+        try {
+          const catalog = await listInstructionMetadata();
+          return json({ ok: true, skills: catalog.map((entry) => entry.id), catalog, ...await readInstructionPreferences(owner), history: await instructionHistory(owner) });
+        } catch { return json({ ok: false, error: "Skill catalog or assignment storage could not be read. No instructions were enabled." }, 503); }
+      },
+      PUT: async ({ request }) => {
+        const origin = assertSameOrigin(request);
+        if (!origin.ok) return json({ ok: false, error: origin.error }, 403);
+        let owner: string;
+        try { owner = await requireUserId(request.headers.get("authorization")?.match(/^Bearer (.+)$/i)?.[1]); }
+        catch { return json({ ok: false, error: "Sign in is required." }, 401); }
+        const body = await readJsonObjectBody(request, 100_000);
+        if (!body.ok) return json({ ok: false, error: body.error }, body.status);
+        try { return json({ ok: true, ...await saveInstructionPreferences(owner, body.body.preferences, body.body.expectedRevision as number, await listInstructionMetadata()) }); }
+        catch (error) { return json({ ok: false, error: error instanceof Error ? error.message : "Instruction assignment could not be saved." }, 409); }
       },
       POST: async ({ request }) => {
         const origin = assertSameOrigin(request);

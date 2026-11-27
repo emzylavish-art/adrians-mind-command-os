@@ -1,3 +1,5 @@
+import { imageMetadata } from "./image-metadata.ts";
+import type { ImagePreparationReceipt, ImageEditLineage } from "./image-metadata.ts";
 /**
  * Client-side image blob store (IndexedDB) to keep large data-URLs out of workspace JSON.
  * Backward compatible: messages with only `dataUrl` continue to work without a blobId.
@@ -15,11 +17,19 @@ export type MediaBlobStore = {
 };
 
 export type ImageRef = {
+  preparation?: ImagePreparationReceipt;
+  lineage?: ImageEditLineage;
   origin?: "attached" | "camera" | "generated" | "edited";
   dataUrl?: string;
   blobId?: string;
   name?: string;
   mime?: string;
+  assetId?: string;
+  parentAssetId?: string;
+  operationId?: string;
+  createdAt?: string;
+  editPrompt?: string;
+  preferred?: boolean;
 };
 
 
@@ -79,47 +89,80 @@ export function createIndexedDbBlobStore(name = MEDIA_BLOB_DB): MediaBlobStore {
   return {
     async put(id, dataUrl) {
       const db = await openDb(name);
-      await new Promise<void>((resolve, reject) => {
+      try { await new Promise<void>((resolve, reject) => {
         const tx = db.transaction(MEDIA_BLOB_STORE, "readwrite");
         tx.objectStore(MEDIA_BLOB_STORE).put(dataUrl, id);
         tx.oncomplete = () => resolve();
         tx.onerror = () => reject(tx.error ?? new Error("IndexedDB put failed."));
-      });
-      db.close();
+        tx.onabort = () => reject(tx.error ?? new Error("IndexedDB put aborted."));
+      }); } finally { db.close(); }
     },
     async get(id) {
       const db = await openDb(name);
-      const value = await new Promise<string | undefined>((resolve, reject) => {
+      try { return await new Promise<string | undefined>((resolve, reject) => {
         const tx = db.transaction(MEDIA_BLOB_STORE, "readonly");
         const req = tx.objectStore(MEDIA_BLOB_STORE).get(id);
         req.onsuccess = () => resolve(typeof req.result === "string" ? req.result : undefined);
         req.onerror = () => reject(req.error ?? new Error("IndexedDB get failed."));
-      });
-      db.close();
-      return value;
+        tx.onabort = () => reject(tx.error ?? new Error("IndexedDB get aborted."));
+      }); } finally { db.close(); }
     },
     async delete(id) {
       const db = await openDb(name);
-      await new Promise<void>((resolve, reject) => {
+      try { await new Promise<void>((resolve, reject) => {
         const tx = db.transaction(MEDIA_BLOB_STORE, "readwrite");
         tx.objectStore(MEDIA_BLOB_STORE).delete(id);
         tx.oncomplete = () => resolve();
         tx.onerror = () => reject(tx.error ?? new Error("IndexedDB delete failed."));
-      });
-      db.close();
+        tx.onabort = () => reject(tx.error ?? new Error("IndexedDB delete aborted."));
+      }); } finally { db.close(); }
     },
   };
 }
 
-/** New attachments live in the account database. Existing snapshots can still resolve legacy IDs. */
-export function accountImageStore(owner: string | null) {
-  const name = MEDIA_BLOB_DB + ".owner." + encodeURIComponent(owner ?? "");
-  const scoped = createIndexedDbBlobStore(name);
-  const legacy = createIndexedDbBlobStore();
+/** Legacy reads require references from the verified legacy owner's stored snapshot.
+ * Successful migration removes the old bytes only after the scoped write commits. */
+export function scopedImageStore(
+  scoped: MediaBlobStore,
+  legacy: MediaBlobStore,
+  allowedLegacyIds: Set<string>,
+  remoteGet?: (id: string) => Promise<string | undefined>,
+): MediaBlobStore {
   return {
     put: scoped.put,
+    delete: scoped.delete,
+    async get(id) {
+      const own = await scoped.get(id).catch(() => undefined);
+      if (own) return own;
+      if (/^acct_[a-f0-9]{64}$/.test(id) && remoteGet) {
+        const bytes = await remoteGet(id);
+        if (bytes) {
+          await scoped.put(id, bytes).catch(() => {});
+          return bytes;
+        }
+      }
+      if (!allowedLegacyIds.has(id)) return undefined;
+      const bytes = await legacy.get(id);
+      if (!bytes) return undefined;
+      try {
+        await scoped.put(id, bytes);
+        await legacy.delete?.(id);
+        allowedLegacyIds.delete(id);
+      } catch { /* Original bytes remain recoverable after interrupted migration. */ }
+      return bytes;
+    },
+  };
+}
+
+/** Account blobs never fall back to the unowned legacy database. Legacy inline pixels still migrate normally. */
+export function accountImageStore(owner: string | null, remoteGet?: (id: string) => Promise<string | undefined>) {
+  const name = MEDIA_BLOB_DB + ".owner." + encodeURIComponent(owner ?? "");
+  const scoped = createIndexedDbBlobStore(name);
+  return {
+    put: scoped.put,
+    getOwned: scoped.get,
     async get(id: string) {
-      return (await scoped.get(id)) ?? (await legacy.get(id));
+      return await scoped.get(id) ?? (owner && /^acct_[a-f0-9]{64}$/.test(id) ? remoteGet?.(id) : undefined);
     },
     async clear() {
       if (typeof indexedDB === "undefined") return;
@@ -150,10 +193,10 @@ export async function hydrateImageRefs(images: ImageRef[] | undefined, store: Me
           continue;
         }
         // Missing blob on reload — keep the ref so UI can show an honest placeholder.
-        out.push({ blobId: image.blobId, name: image.name, mime: image.mime, ...(image.origin ? { origin: image.origin } : {}) });
+        out.push({ blobId: image.blobId, name: image.name, mime: image.mime, ...(image.origin ? { origin: image.origin } : {}), ...imageMetadata(image) });
         continue;
       } catch {
-        out.push({ blobId: image.blobId, name: image.name, mime: image.mime, ...(image.origin ? { origin: image.origin } : {}) });
+        out.push({ blobId: image.blobId, name: image.name, mime: image.mime, ...(image.origin ? { origin: image.origin } : {}), ...imageMetadata(image) });
         continue;
       }
     }
@@ -174,10 +217,10 @@ export async function compactImageRefs(images: ImageRef[] | undefined, store: Me
     if (image.blobId && image.dataUrl && shouldOffloadDataUrl(image.dataUrl)) {
       try {
         await store.put(image.blobId, image.dataUrl);
-        out.push({ blobId: image.blobId, name: image.name, mime: image.mime, ...(image.origin ? { origin: image.origin } : {}) });
+        out.push({ blobId: image.blobId, name: image.name, mime: image.mime, ...(image.origin ? { origin: image.origin } : {}), ...imageMetadata(image) });
       } catch (error) {
         // Quota / private mode — keep inline rather than lose the image.
-        out.push({ dataUrl: image.dataUrl, blobId: image.blobId, name: image.name, mime: image.mime, ...(image.origin ? { origin: image.origin } : {}) });
+        out.push({ dataUrl: image.dataUrl, blobId: image.blobId, name: image.name, mime: image.mime, ...(image.origin ? { origin: image.origin } : {}), ...imageMetadata(image) });
         if (!isQuotaExceededError(error)) {
           /* still degraded */
         }
@@ -188,15 +231,15 @@ export async function compactImageRefs(images: ImageRef[] | undefined, store: Me
       const blobId = newMediaBlobId();
       try {
         await store.put(blobId, image.dataUrl!);
-        out.push({ blobId, name: image.name, mime: image.mime, ...(image.origin ? { origin: image.origin } : {}) });
+        out.push({ blobId, name: image.name, mime: image.mime, ...(image.origin ? { origin: image.origin } : {}), ...imageMetadata(image) });
       } catch {
-        out.push({ dataUrl: image.dataUrl, name: image.name, mime: image.mime, ...(image.origin ? { origin: image.origin } : {}) });
+        out.push({ dataUrl: image.dataUrl, name: image.name, mime: image.mime, ...(image.origin ? { origin: image.origin } : {}), ...imageMetadata(image) });
       }
       continue;
     }
     // Small / already-compact / legacy inline-only
-    if (image.dataUrl) out.push({ dataUrl: image.dataUrl, blobId: image.blobId, name: image.name, mime: image.mime, ...(image.origin ? { origin: image.origin } : {}) });
-    else if (image.blobId) out.push({ blobId: image.blobId, name: image.name, mime: image.mime, ...(image.origin ? { origin: image.origin } : {}) });
+    if (image.dataUrl) out.push({ dataUrl: image.dataUrl, blobId: image.blobId, name: image.name, mime: image.mime, ...(image.origin ? { origin: image.origin } : {}), ...imageMetadata(image) });
+    else if (image.blobId) out.push({ blobId: image.blobId, name: image.name, mime: image.mime, ...(image.origin ? { origin: image.origin } : {}), ...imageMetadata(image) });
   }
   return out;
 }
@@ -244,7 +287,7 @@ export async function imagesForExport(images: ImageRef[] | undefined, store: Med
   const hydrated = await hydrateImageRefs(images, store);
   return hydrated
     .filter((image): image is ImageRef & { dataUrl: string } => typeof image.dataUrl === "string" && image.dataUrl.startsWith("data:image/"))
-    .map((image) => ({ dataUrl: image.dataUrl, name: image.name ?? null, ...(image.origin ? { origin: image.origin } : {}) }));
+    .map((image) => ({ dataUrl: image.dataUrl, name: image.name ?? null, ...(image.origin ? { origin: image.origin } : {}), ...imageMetadata(image) }));
 }
 
 /** Prefer IndexedDB; fall back to memory when private mode / no IDB. */

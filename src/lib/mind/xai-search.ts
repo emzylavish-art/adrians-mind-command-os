@@ -1,8 +1,8 @@
 import { resolveXaiInferenceApiKey } from "./media/xai-key.ts";
-import { normalizeCitations, type ResearchCitation, type ResearchResult } from "./research.ts";
+import { normalizeCitations, researchSnippets, type ResearchCitation, type ResearchResult, type ResearchAnswer } from "./research.ts";
 
 const RESPONSES_URL = "https://api.x.ai/v1/responses";
-const SEARCH_MODEL = "grok-4.7";
+export const SEARCH_MODEL = "grok-4.7";
 
 function publicError(value: string): string {
   return value.replace(/xai-[A-Za-z0-9_-]+/g, "[key]").replace(/\s+/g, " ").trim().slice(0, 240);
@@ -65,9 +65,66 @@ function collectHits(body: unknown): { title: string; url: string }[] {
   return hits;
 }
 
+
+/** Preserve provider text and annotation offsets as attributed, unverified evidence. */
+export function extractResearchAnswer(body: unknown): ResearchAnswer {
+  if (!body || typeof body !== "object") return { text: "", annotations: [] };
+  const output = (body as { output?: unknown }).output;
+  const chunks: string[] = [];
+  const annotations: ResearchAnswer["annotations"] = [];
+  let offset = 0;
+  for (const item of Array.isArray(output) ? output : []) {
+    const content = item && typeof item === "object" ? (item as { content?: unknown }).content : undefined;
+    for (const block of Array.isArray(content) ? content : []) {
+      if (!block || typeof block !== "object") continue;
+      const row = block as { text?: unknown; annotations?: unknown };
+      if (typeof row.text !== "string" || !row.text) continue;
+      const text = row.text.slice(0, Math.max(0, 16000 - offset));
+      if (!text) break;
+      for (const annotation of Array.isArray(row.annotations) ? row.annotations : []) {
+        if (!annotation || typeof annotation !== "object") continue;
+        const a = annotation as { url?: unknown; start_index?: unknown; end_index?: unknown };
+        const normalized = normalizeCitations([{ title: "Source", url: a.url }])[0];
+        if (!normalized) continue;
+        const start = typeof a.start_index === "number" && Number.isInteger(a.start_index) && a.start_index >= 0 && a.start_index <= text.length ? a.start_index : null;
+        const end = start !== null && typeof a.end_index === "number" && Number.isInteger(a.end_index) && a.end_index >= start && a.end_index <= text.length ? a.end_index : null;
+        annotations.push({ url: normalized.url, start: start === null || end === null ? null : start + offset, end: end === null ? null : end + offset });
+      }
+      chunks.push(text);
+      offset += text.length + 2;
+    }
+  }
+  return { text: chunks.join("\n\n"), annotations: annotations.slice(0, 80) };
+}
+
+/** Retain only explicit annotated spans; a bibliography alone does not prove claim support. */
+export function researchEvidenceFromResponse(body: unknown, citations: ResearchCitation[]): { summary: string; claims: NonNullable<ResearchResult["claims"]> } {
+  if (!body || typeof body !== "object") return { summary: "", claims: [] };
+  const record = body as { output_text?: unknown; output?: unknown };
+  const blocks: { text: string; annotations?: unknown[] }[] = [];
+  for (const output of Array.isArray(record.output) ? record.output : []) {
+    if (!output || typeof output !== "object" || !Array.isArray(output.content)) continue;
+    for (const block of output.content) if (block && typeof block.text === "string") blocks.push({ text: block.text, annotations: Array.isArray(block.annotations) ? block.annotations : [] });
+  }
+  const summary = typeof record.output_text === "string" ? record.output_text : blocks.map((block) => block.text).join("\n");
+  const known = new Set(citations.map((source) => source.url));
+  const claims: NonNullable<ResearchResult["claims"]> = [];
+  for (const block of blocks) {
+    for (const raw of block.annotations ?? []) {
+      if (!raw || typeof raw !== "object") continue;
+      const annotation = raw as { url?: unknown; start_index?: unknown; end_index?: unknown };
+      const start = annotation.start_index, end = annotation.end_index;
+      if (typeof annotation.url !== "string" || !known.has(annotation.url) || typeof start !== "number" || typeof end !== "number" || !Number.isInteger(start) || !Number.isInteger(end) || start < 0 || end > block.text.length || end <= start) continue;
+      const text = block.text.slice(start, end).trim();
+      if (text) claims.push({ text, sourceUrls: [annotation.url], kind: "provider-cited" });
+    }
+  }
+  return { summary, claims };
+}
+
 export async function searchWithGrok(
   query: string,
-  options: { fetchImpl?: typeof fetch; apiKey?: string } = {},
+  options: { fetchImpl?: typeof fetch; apiKey?: string; signal?: AbortSignal; beforeDispatch?: () => Promise<string | null> } = {},
 ): Promise<ResearchResult> {
   const text = query.trim();
   if (!text) return { ok: false, configured: false, citations: [], error: "Write what you want researched." };
@@ -81,6 +138,8 @@ export async function searchWithGrok(
     };
   }
   const fetchImpl = options.fetchImpl ?? fetch;
+  const blocked = await options.beforeDispatch?.();
+  if (blocked) return { ok: false, configured: true, citations: [], error: blocked };
   let response: Response;
   try {
     response = await fetchImpl(RESPONSES_URL, {
@@ -94,7 +153,7 @@ export async function searchWithGrok(
         input: [{ role: "user", content: text }],
         tools: [{ type: "web_search" }],
       }),
-      signal: AbortSignal.timeout(25_000),
+      signal: options.signal ? AbortSignal.any([options.signal, AbortSignal.timeout(25_000)]) : AbortSignal.timeout(25_000),
     });
   } catch {
     return { ok: false, configured: true, citations: [], error: "The search provider did not answer. No citations were created." };
@@ -115,9 +174,19 @@ export async function searchWithGrok(
       error: publicError(raw || `The search provider returned ${response.status}. No citations were created.`),
     };
   }
-  const citations: ResearchCitation[] = preferDirect(normalizeCitations(collectHits(body)));
+  const citations: ResearchCitation[] = preferDirect(normalizeCitations(collectHits(body), { query: text, retrievedAt: new Date().toISOString() }));
   if (!citations.length) {
     return { ok: false, configured: true, citations: [], error: "The search returned no usable sources. No citations were created." };
   }
-  return { ok: true, configured: true, citations, error: "" };
+  const annotatedAnswer = extractResearchAnswer(body);
+  const evidence = researchEvidenceFromResponse(body, citations);
+  const record = body as Record<string, unknown>;
+  const rawUsage = record.usage && typeof record.usage === "object" ? record.usage as Record<string, unknown> : {};
+  const token = (value: unknown) => typeof value === "number" && Number.isSafeInteger(value) && value >= 0 ? value : undefined;
+  const usage = { prompt_tokens: token(rawUsage.input_tokens ?? rawUsage.prompt_tokens), completion_tokens: token(rawUsage.output_tokens ?? rawUsage.completion_tokens) };
+  return { ok: true, configured: true, citations, ...evidence, evidence: researchSnippets([], text, citations),
+    steps: [{ query: text, ok: true, count: citations.length, status: "succeeded" }],
+    reportedModel: typeof record.model === "string" ? record.model.slice(0, 160) : null,
+    usage: usage.prompt_tokens !== undefined || usage.completion_tokens !== undefined ? usage : null, providerAnswer: annotatedAnswer.text || evidence.summary,
+    annotatedAnswer, requestId: response.headers.get("x-request-id"), responseId: typeof record.id === "string" ? record.id.slice(0, 200) : null, error: "" };
 }

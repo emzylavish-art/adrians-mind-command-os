@@ -1,3 +1,6 @@
+import { useCurrentUser, useCurrentUserState } from "@/lib/auth/use-current-user";
+import { useMindWorkspace } from "@/lib/mind/use-mind-workspace";
+import { AccountPreferencesProvider, useAccountPreferences } from "../account-preferences-context";
 import { useEffect, useMemo, useState } from "react";
 import {
   PERSONA_CATEGORIES,
@@ -8,8 +11,6 @@ import {
   type PersonaCard,
   type PersonaCategoryId,
 } from "@/lib/mind/personas";
-import { emptyWorkspace, loadWorkspace } from "@/lib/mind/workspace";
-import type { Workspace } from "@/lib/mind/types";
 import { persistPersonaOpen, selectPersona } from "@/lib/mind/personas/selection";
 
 const SHELF_KEY = "adrian-explore-shelf";
@@ -35,23 +36,6 @@ type SortId = (typeof SORTS)[number]["id"];
 const DEFAULT_NEXT =
   "Next: type a name in Search personas, press Official, then press Save and open Chat on that template. That writes a local agent and opens Chat with its saved instructions. It does not start a remote bot.";
 
-function readKey(key: string): string | null {
-  try {
-    return window.localStorage.getItem(key);
-  } catch {
-    return null;
-  }
-}
-
-function writeKey(key: string, value: string): boolean {
-  try {
-    window.localStorage.setItem(key, value);
-    return true;
-  } catch {
-    return false;
-  }
-}
-
 function isShelf(value: string | null): value is ShelfId {
   return value === "all" || (value !== null && isPersonaCategoryId(value));
 }
@@ -73,18 +57,6 @@ function sourceLabel(source: SourceId): string {
   return SOURCES.find((item) => item.id === source)?.label ?? source;
 }
 
-function readPins(known: Set<string>): string[] {
-  const raw = readKey(PINS_KEY);
-  if (!raw) return [];
-  try {
-    const parsed = JSON.parse(raw) as unknown;
-    if (!Array.isArray(parsed)) return [];
-    return parsed.filter((id): id is string => typeof id === "string" && known.has(id));
-  } catch {
-    return [];
-  }
-}
-
 function openStep(card: PersonaCard): string {
   const shelf = card.source === "saved" ? "My agents" : "Official";
   return `Next: type “${card.name}” in Search personas, press ${shelf}, then press Save and open Chat on ${card.name}. That stores the local agent and opens Chat with its saved instructions. It does not start a remote bot.`;
@@ -103,7 +75,29 @@ function compareCards(sort: SortId) {
  * The directory below this panel still owns Save and open Chat.
  */
 export function ExplorePanel() {
-  const [workspace, setWorkspace] = useState<Workspace>(() => emptyWorkspace());
+  const { user: account, error, isPending } = useCurrentUserState();
+  if (error) return <p role="alert">{error} <button onClick={() => window.location.reload()}>Retry verification</button></p>;
+  if (isPending) return <p role="status">Verifying your account…</p>;
+  return <AccountPreferencesProvider ownerId={account?.id ?? null}><ExploreAccount key={account?.id ?? "guest"} account={account} /></AccountPreferencesProvider>;
+}
+function ExploreAccount({ account }: { account: ReturnType<typeof useCurrentUser> }) {
+  const { ws: workspace, setWs: setWorkspace, ready, syncNote } = useMindWorkspace(account?.id ?? null, account?.emailVerified ? account.primaryEmail : null);
+  const preferences = useAccountPreferences();
+  function readKey(key: string) { try { return preferences.getItem(key); } catch { return null; } }
+  function writeKey(key: string, value: string) { try { preferences.setItem(key, value); return true; } catch { return false; } }
+function readPins(known: Set<string>): string[] {
+  const raw = readKey(PINS_KEY);
+  if (!raw) return [];
+  try {
+    const parsed = JSON.parse(raw) as unknown;
+    if (!Array.isArray(parsed)) return [];
+    return parsed.filter((id): id is string => typeof id === "string" && known.has(id));
+  } catch {
+    return [];
+  }
+}
+
+
   const [shelf, setShelf] = useState<ShelfId>("official");
   const [source, setSource] = useState<SourceId>("both");
   const [sort, setSort] = useState<SortId>("name");
@@ -119,14 +113,8 @@ export function ExplorePanel() {
   );
 
   useEffect(() => {
-    let loaded = emptyWorkspace();
-    try {
-      loaded = loadWorkspace(window.localStorage);
-    } catch {
-      loaded = emptyWorkspace();
-    }
-    setWorkspace(loaded);
-    const built = buildPersonaDirectory({ agents: loaded.agents, deployments: loaded.deployments });
+    if (!ready) return;
+    const built = buildPersonaDirectory({ agents: workspace.agents, deployments: workspace.deployments });
     const known = new Set(built.cards.map((card) => card.id));
     const storedShelf = readKey(SHELF_KEY);
     const storedSource = readKey(SOURCE_KEY);
@@ -136,7 +124,7 @@ export function ExplorePanel() {
     if (isSort(storedSort)) setSort(storedSort);
     setPins(readPins(known));
     setSavedNote("Loaded the shelf, source, sort, and saved personas already stored in this browser.");
-  }, []);
+  }, [ready, preferences]);
 
   const visible = useMemo(() => {
     const category = savedOnly ? "all" : shelf;
@@ -190,13 +178,14 @@ export function ExplorePanel() {
   }
 
   function openInChat(card: PersonaCard) {
+    if (!ready || !account) { setNext("Wait for your account workspace to load before opening a persona."); return; }
     const result = selectPersona(workspace, card);
     if (!result.ok) {
       setNext(result.error);
       return;
     }
     try {
-      const persisted = persistPersonaOpen(window.localStorage, result.ws, result.selection);
+      const persisted = persistPersonaOpen(preferences, result.ws, result.selection, account.id);
       if (!persisted.ok) {
         setNext("Could not save this persona. Nothing was opened.");
         return;
@@ -210,20 +199,8 @@ export function ExplorePanel() {
   }
 
   function reloadLocal() {
-    try {
-      const loaded = loadWorkspace(window.localStorage);
-      setWorkspace(loaded);
-      const savedCount = loaded.agents.filter((agent) => !agent.archived).length;
-      setSavedNote("Reloaded the local workspace from this browser.");
-      setNext(
-        savedCount === 0
-          ? "Next: no saved agents were found. Press Official, then press Save and open Chat on a template."
-          : `Next: ${savedCount} saved agent${savedCount === 1 ? "" : "s"} loaded. Press My agents, then press Save and open Chat on the one you want.`,
-      );
-    } catch {
-      setWorkspace(emptyWorkspace());
-      setNext("Next: this browser blocked workspace storage. Press Back to Chat, allow site data, reload, then open Explore again.");
-    }
+    setSavedNote(syncNote);
+    setNext(`${workspace.agents.filter((agent) => !agent.archived).length} saved agents in the current account workspace. Refresh the page to reconcile newer server changes.`);
   }
 
   const emptyCopy = savedOnly

@@ -11,6 +11,9 @@ import {
 
 const root = join(dirname(fileURLToPath(import.meta.url)), "../../..");
 const commandApp = readFileSync(join(root, "src/components/mind/command-app.tsx"), "utf8");
+const chatPane = readFileSync(join(root, "src/components/mind/chat-pane.tsx"), "utf8");
+const chatControls = readFileSync(join(root, "src/components/mind/chat-controls.tsx"), "utf8");
+const commandSurface = [commandApp, chatPane, chatControls].join("\n");
 const agentRun = readFileSync(join(root, "src/lib/mind/agent-run.server.ts"), "utf8");
 
 describe("integration voice + banner wiring survives merge", () => {
@@ -29,7 +32,7 @@ describe("integration voice + banner wiring survives merge", () => {
       'data-testid="open-voice-mode"',
       'data-testid="voice-mute-mobile"',
     ]) {
-      assert.match(commandApp, new RegExp(needle.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")));
+      assert.match(commandSurface, new RegExp(needle.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")));
     }
   });
 
@@ -42,7 +45,7 @@ describe("integration voice + banner wiring survives merge", () => {
       "mcpToolFailure",
       "async function askMcp",
     ]) {
-      assert.match(commandApp, new RegExp(needle.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")));
+      assert.match(commandSurface, new RegExp(needle.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")));
     }
     // askMcp must raise the honest MCP banner path
     assert.match(commandApp, /mcpToolFailure\(\{[\s\S]*?reportFailure\(failure\.message/);
@@ -68,7 +71,7 @@ describe("integration voice + banner wiring survives merge", () => {
       "ServiceBoard",
       "fileToDownscaledDataUrl",
     ]) {
-      assert.match(commandApp, new RegExp(needle.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")));
+      assert.match(commandSurface, new RegExp(needle.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")));
     }
     assert.doesNotMatch(commandApp, /analyzeImageFile\(/);
     for (const needle of ["resolveXaiInferenceApiKey", "boundAbortSignal", "AGENT_TIMEOUT_REPLY", "agentRunTimeoutMs", "images: result.images"]) {

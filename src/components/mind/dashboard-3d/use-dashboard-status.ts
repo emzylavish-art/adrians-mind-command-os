@@ -8,16 +8,20 @@ export type StatusState = PollState<StatusData>;
 const POLL_MS = 20_000;
 const FETCH_TIMEOUT_MS = 20_000;
 
-export function useDashboardStatus() {
+export type DashboardStatusController = { state: StatusState; refresh: () => Promise<void>; refreshing: boolean };
+
+export function useDashboardStatus(enabled = true): DashboardStatusController {
   const [state, setState] = useState<StatusState>(() => initialPollState<StatusData>());
+  const [refreshing, setRefreshing] = useState(false);
   const seqRef = useRef(0);
   const inFlight = useRef<AbortController | null>(null);
 
   const refresh = useCallback(async () => {
     // In-flight guard: never stack polls (slow git calls used to pile up).
-    if (inFlight.current) return;
+    if (!enabled || inFlight.current) return;
     const ac = new AbortController();
     inFlight.current = ac;
+    setRefreshing(true);
     const seq = ++seqRef.current;
     let timedOut = false;
     const timer = window.setTimeout(() => {
@@ -33,19 +37,20 @@ export function useDashboardStatus() {
       const data = (await res.json()) as StatusData & { error?: string };
       if (data.ok === false) throw new Error(data.error || "Status endpoint failed");
       if (!data || !Array.isArray(data.bots)) throw new Error("Malformed status payload");
-      setState((prev) => reducePoll(prev, { type: "success", seq, data }));
+      if (inFlight.current === ac) setState((prev) => reducePoll(prev, { type: "success", seq, data }));
     } catch (err) {
       const aborted = (err as Error)?.name === "AbortError";
       if (aborted && !timedOut) return;
       const error = timedOut ? "The workspace map did not answer in time." : err instanceof Error ? err.message : String(err);
-      setState((prev) => reducePoll(prev, { type: "failure", seq, error, at: new Date().toISOString() }));
+      if (inFlight.current === ac) setState((prev) => reducePoll(prev, { type: "failure", seq, error, at: new Date().toISOString() }));
     } finally {
       window.clearTimeout(timer);
-      if (inFlight.current === ac) inFlight.current = null;
+      if (inFlight.current === ac) { inFlight.current = null; setRefreshing(false); }
     }
-  }, []);
+  }, [enabled]);
 
   useEffect(() => {
+    if (!enabled) return;
     void refresh();
     const id = window.setInterval(() => void refresh(), POLL_MS);
     return () => {
@@ -53,7 +58,7 @@ export function useDashboardStatus() {
       inFlight.current?.abort();
       inFlight.current = null;
     };
-  }, [refresh]);
+  }, [refresh, enabled]);
 
-  return { state, refresh };
+  return { state, refresh, refreshing };
 }

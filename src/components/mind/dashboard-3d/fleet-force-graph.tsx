@@ -5,10 +5,10 @@
  * global graphs. Obsidian APIs are not used; this host binds Adrian's Mind
  * dashboard status (bots + constellation edges + Notion pages).
  */
-import { useEffect, useMemo, useRef } from "react";
+import { useEffect, useRef } from "react";
 // The published package exports a factory; default import shape varies by bundler.
 import type { BotNode, DashboardStatus, Health } from "@/lib/mind/dashboard/types";
-import { filterBotIds, type GraphFilterState } from "@/lib/mind/dashboard/graph-filters";
+import { DEFAULT_GRAPH_FILTER, filterBotIds, type GraphFilterState } from "@/lib/mind/dashboard/graph-filters";
 import { sanitizeLabelText } from "@/lib/mind/dashboard/health";
 
 const HEALTH_COLOR: Record<Health, string> = {
@@ -69,6 +69,7 @@ type GraphApi = {
 type Props = {
   data: DashboardStatus;
   reducedMotion: boolean;
+  filter?: GraphFilterState;
   onSelectBot: (bot: BotNode) => void;
   onSelectNotion: (pageId: string) => void;
   onSkyView: () => void;
@@ -150,6 +151,7 @@ function createGraph(el: HTMLElement, importedFactory: unknown): GraphApi {
 export function FleetForceGraph({
   data,
   reducedMotion,
+  filter = DEFAULT_GRAPH_FILTER,
   onSelectBot,
   onSelectNotion,
   onSkyView,
@@ -161,11 +163,14 @@ export function FleetForceGraph({
   const hoverId = useRef<string | null>(null);
   const allowRef = useRef<Set<string> | null>(null);
   const dataRef = useRef(data);
+  const filterRef = useRef(filter);
+  const motionRef = useRef(reducedMotion);
+  filterRef.current = filter;
+  motionRef.current = reducedMotion;
   dataRef.current = data;
   const callbacks = useRef({ onSelectBot, onSelectNotion, onSkyView, onUnavailable });
   callbacks.current = { onSelectBot, onSelectNotion, onSkyView, onUnavailable };
 
-  const initialGraph = useMemo(() => buildGraph(data, null), []); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     const mount = mountRef.current;
@@ -227,13 +232,13 @@ export function FleetForceGraph({
               (t && highlighted.current.has(t)) ||
               hoverId.current === s ||
               hoverId.current === t;
-            return hot && !reducedMotion ? 2 : 0;
+            return hot && !motionRef.current ? 2 : 0;
           })
           .linkDirectionalParticleWidth(1.2)
           .linkDirectionalArrowLength(3.2)
           .linkDirectionalArrowRelPos(1)
           .nodeRelSize(4.2)
-          .graphData(initialGraph)
+          .graphData(buildGraph(dataRef.current, filterBotIds(dataRef.current.bots, dataRef.current.constellationEdges ?? [], filterRef.current)))
           .onNodeHover((node: GraphNode | null) => {
             highlighted.current.clear();
             hoverId.current = node?.id ?? null;
@@ -268,14 +273,14 @@ export function FleetForceGraph({
               graph.cameraPosition(
                 { x: hx * distRatio, y: hy * distRatio, z: hz * distRatio },
                 { x: node.x || 0, y: node.y || 0, z: node.z || 0 },
-                reducedMotion ? 0 : 900,
+                motionRef.current ? 0 : 900,
               );
             }
             if (node.kind === "bot" && node.bot) callbacks.current.onSelectBot(node.bot);
             if (node.kind === "notion") callbacks.current.onSelectNotion(node.id.replace(/^notion:/, ""));
           })
-          .cooldownTicks(reducedMotion ? 0 : 90)
-          .d3AlphaDecay(reducedMotion ? 1 : 0.022)
+          .cooldownTicks(motionRef.current ? 0 : 90)
+          .d3AlphaDecay(motionRef.current ? 1 : 0.022)
           .d3VelocityDecay(0.35);
       } catch (err) {
         callbacks.current.onUnavailable(err instanceof Error ? err.message : "WebGL graph failed to start");
@@ -310,7 +315,7 @@ export function FleetForceGraph({
         graph.cameraPosition(
           { x: hx * distRatio, y: hy * distRatio, z: hz * distRatio },
           { x: node.x || 0, y: node.y || 0, z: node.z || 0 },
-          reducedMotion ? 0 : 900,
+          motionRef.current ? 0 : 900,
         );
       };
 
@@ -324,7 +329,7 @@ export function FleetForceGraph({
         if (node.bot) callbacks.current.onSelectBot(node.bot);
       };
       const onSky = () => {
-        graphRef.current?.cameraPosition({ x: 0, y: 0, z: 280 }, { x: 0, y: 0, z: 0 }, reducedMotion ? 0 : 1100);
+        graphRef.current?.cameraPosition({ x: 0, y: 0, z: 280 }, { x: 0, y: 0, z: 0 }, motionRef.current ? 0 : 1100);
         callbacks.current.onSkyView();
       };
       const onZoom = (ev: Event) => {
@@ -336,7 +341,7 @@ export function FleetForceGraph({
         activeGraph.cameraPosition(
           { x: current.x * scale, y: current.y * scale, z: current.z * scale },
           { x: 0, y: 0, z: 0 },
-          reducedMotion ? 0 : 350,
+          motionRef.current ? 0 : 350,
         );
       };
       const onFilter = (ev: Event) => {
@@ -378,13 +383,14 @@ export function FleetForceGraph({
       cleanup?.();
       mount.replaceChildren();
     };
-  }, [initialGraph, reducedMotion]);
+  }, []);
 
   useEffect(() => {
     if (!graphRef.current) return;
+    allowRef.current = filterBotIds(data.bots, data.constellationEdges ?? [], filter);
     graphRef.current.graphData(buildGraph(data, allowRef.current));
-    if (reducedMotion) graphRef.current.cooldownTicks(0).d3AlphaDecay(1);
-  }, [data, reducedMotion]);
+    graphRef.current.cooldownTicks(reducedMotion ? 0 : 160).d3AlphaDecay(reducedMotion ? 1 : 0.025);
+  }, [data, reducedMotion, filter]);
 
   return (
     <div

@@ -41,7 +41,7 @@ export function AttachmentChips({
                 <span className="text-[10px] text-muted">blocked</span>
               )}
             </button>
-            <span className="max-w-24 truncate text-muted">{sanitizeMediaLabel(image.name) || "Image " + (index + 1)}</span>
+            <span className="max-w-40 text-muted"><span className="block truncate">{sanitizeMediaLabel(image.name) || "Image " + (index + 1)}</span>{image.preparation && <span className="block text-[10px]">{image.preparation.originalWidth}×{image.preparation.originalHeight} → {image.preparation.width}×{image.preparation.height} · {image.preparation.quality}</span>}{image.lineage && <span className="block text-[10px]">Edit v{image.lineage.version} · source preserved</span>}</span>
             {onEditImagine && (
               <button
                 type="button"

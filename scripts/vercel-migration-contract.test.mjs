@@ -7,17 +7,17 @@ import { describe, it } from "node:test";
 const root = new URL("../", import.meta.url);
 const readJson = (name) => JSON.parse(readFileSync(new URL(name, root), "utf8"));
 
-describe("production build and migration contract", () => {
-  it("Vercel must execute the audited package build, not skip database migrations", () => {
+describe("candidate build and explicit migration contract", () => {
+  it("candidate build copies assets without mutating production schema", () => {
     const vercel = readJson("vercel.json");
     const pkg = readJson("package.json");
     assert.equal(vercel.buildCommand, "npm run build");
-    assert.match(pkg.scripts.build, /node scripts\/migrate\.mjs/);
+    assert.doesNotMatch(pkg.scripts.build, /migrate/);
+    assert.match(pkg.scripts["release:prepare"], /release-promotion\.mjs/);
     assert.match(pkg.scripts.build, /node scripts\/copy-pglite-assets\.mjs/);
     const compile = pkg.scripts.build.indexOf("vite build");
-    const migration = pkg.scripts.build.indexOf("node scripts/migrate.mjs");
     const assets = pkg.scripts.build.indexOf("node scripts/copy-pglite-assets.mjs");
-    assert.ok(compile >= 0 && migration > compile && assets > migration);
+    assert.ok(compile >= 0 && assets > compile);
   });
 
   it("the desktop package copies the embedded database files and production does not serve the tiny installer stub", () => {
@@ -72,4 +72,15 @@ describe("production build and migration contract", () => {
     assert.equal(result.status, 1);
     assert.match(result.stderr, /migration database does not match/);
   });
+});
+
+it("explicit release preparation fails when SQL would be skipped", () => {
+  const file = fileURLToPath(new URL("./migrate.mjs", import.meta.url));
+  for (const env of [{}, { VERCEL: "1", VERCEL_ENV: "preview" }]) {
+    const result = spawnSync(process.execPath, [file, "--require-database"], {
+      env: { PATH: process.env.PATH, ...env }, encoding: "utf8", timeout: 10000,
+    });
+    assert.equal(result.status, 1);
+    assert.match(result.stderr, /Release migration/);
+  }
 });

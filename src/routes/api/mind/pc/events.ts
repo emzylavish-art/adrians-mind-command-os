@@ -1,6 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { requireUserId } from "@/lib/auth/verify.server";
-import { appendJobEvent, findAgentByToken, listJobEvents, readJob } from "@/lib/mind/pc-pairing/store";
+import { appendJobEvent, findAgentByToken, listJobEvents, readJob } from "@/lib/mind/pc-pairing/coordination.server";
 
 function json(body: unknown, status = 200) {
   return new Response(JSON.stringify(body), { status, headers: { "content-type": "application/json", "cache-control": "no-store" } });
@@ -15,7 +15,7 @@ export const Route = createFileRoute("/api/mind/pc/events")({
   server: {
     handlers: {
       POST: async ({ request }) => {
-        const agent = findAgentByToken(bearer(request));
+        const agent = await findAgentByToken(bearer(request));
         if (!agent) return json({ ok: false, error: "Unknown agent token." }, 401);
         const body = (await request.json().catch(() => ({}))) as { jobId?: unknown; type?: unknown; payload?: unknown };
         const jobId = typeof body.jobId === "string" ? body.jobId : "";
@@ -23,7 +23,7 @@ export const Route = createFileRoute("/api/mind/pc/events")({
         const payload = body.payload && typeof body.payload === "object" && !Array.isArray(body.payload) ? body.payload as Record<string, unknown> : {};
         if (!jobId || !type) return json({ ok: false, error: "jobId and type are required." }, 400);
         if (JSON.stringify(payload).length > 50_000) return json({ ok: false, error: "Event payload is too large." }, 413);
-        const event = appendJobEvent({ jobId, agentId: agent.id, type, payload });
+        const event = await appendJobEvent({ jobId, agentId: agent.id, type, payload });
         if (!event) return json({ ok: false, error: "Kimi job not found for this agent." }, 404);
         return json({ ok: true, eventId: event.id });
       },
@@ -33,9 +33,11 @@ export const Route = createFileRoute("/api/mind/pc/events")({
           const token = authorization?.toLowerCase().startsWith("bearer ") ? authorization.slice(7).trim() : undefined;
           const ownerId = await requireUserId(token);
           const jobId = new URL(request.url).searchParams.get("jobId") || "";
-          const job = readJob(jobId);
+          const job = await readJob(jobId);
           if (!job || job.ownerId !== ownerId) return json({ ok: false, error: "Kimi job not found." }, 404);
-          return json({ ok: true, events: listJobEvents(ownerId, jobId) });
+          const events = await listJobEvents(ownerId, jobId, Math.min(500, Math.max(1, Number(new URL(request.url).searchParams.get("limit")) || 200)), new URL(request.url).searchParams.get("after") || undefined);
+          const last = events.at(-1);
+          return json({ ok: true, events, nextCursor: last ? `${last.createdAt}|${last.id}` : null });
         } catch (error) {
           const message = error instanceof Error ? error.message : "Unauthorized";
           return json({ ok: false, error: message === "Unauthorized" ? "Sign in is required." : message }, message === "Unauthorized" ? 401 : 403);

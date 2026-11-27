@@ -4,7 +4,7 @@ import { createOwnerMemory, editOwnerMemory, deleteOwnerMemory, listOwnerMemorie
 import { rankMemories } from "./relevant.ts";
 import { addMemory, createChat, emptyWorkspace, mergeWorkspace, normalizeWorkspace, replaceFromArchive, workspaceForChat } from "../workspace.ts";
 import { eveAccessNotes } from "../eve-access.ts";
-import { readSnapshot, writeSnapshot } from "../store.ts";
+import { readSnapshot, snapshotRevision, writeSnapshot } from "../store.ts";
 import { readRatings, saveRating } from "../routing-modes.ts";
 
 it("preserves simultaneous acknowledgements, corrections and forget across stale saves and imports", async () => {
@@ -19,20 +19,22 @@ it("preserves simultaneous acknowledgements, corrections and forget across stale
   assert.deepEqual(before.memories.map((note) => note.text).sort(), ["A", "B"]);
   const a = results[0].item.id, b = results[1].item.id;
   await Promise.all([deleteOwnerMemory(sql, owner, a), editOwnerMemory(sql, owner, b, "corrected")]);
-  await writeSnapshot(sql, owner, before);
+  assert.equal(await writeSnapshot(sql, owner, before), null, "stale writes without an explicit revision are rejected");
   const after = normalizeWorkspace(await readSnapshot(sql, owner));
   assert.deepEqual(after.memories.map((note) => note.text), ["corrected"]);
   assert.deepEqual(mergeWorkspace(after, before).memories.map((note) => note.text), ["corrected"]);
   assert.deepEqual((await listOwnerMemories(sql, crypto.randomUUID())).memories, []);
   const restored = replaceFromArchive(after, before);
-  await writeSnapshot(sql, owner, restored);
+  await writeSnapshot(sql, owner, restored, snapshotRevision(await readSnapshot(sql, owner)));
   const reopened = normalizeWorkspace(await readSnapshot(sql, owner));
   assert.deepEqual(reopened.memories.map((note) => note.text).sort(), ["A", "B"]);
   assert.ok(!reopened.memories.some((note) => note.id === a));
 });
 
 it("keeps project, chat and disabled-memory markers out of voice/tool context and ranks relevant notes first", () => {
-  const one = createChat(emptyWorkspace(), { projectId: "one", temporary: false, memory: "on", autonomy: "ask" });
+  const initial = emptyWorkspace();
+  initial.projects = ["one", "two"].map((id) => ({ id, name: id, description: "", createdAt: "2026-01-01T00:00:00.000Z" }));
+  const one = createChat(initial, { projectId: "one", temporary: false, memory: "on", autonomy: "ask" });
   const two = createChat(one.ws, { projectId: "two", temporary: false, memory: "on", autonomy: "ask" });
   two.chat.title = "Foreign marker";
   let ws = two.ws;

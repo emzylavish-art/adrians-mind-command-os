@@ -1,3 +1,4 @@
+import { imagePreparationProfile, type ImagePreparationQuality, type ImagePreparationReceipt } from "@/lib/mind/media/image-metadata";
 import { dimensionsLookLikeBomb, fitWithinBox, guessMimeFromName, MAX_DATA_URL_CHARS, MAX_IMAGE_EDGE, sanitizeMediaLabel } from "@/lib/mind/media";
 
 export type DownscaleResult = {
@@ -7,6 +8,9 @@ export type DownscaleResult = {
   width: number;
   height: number;
   scaled: boolean;
+  originalWidth: number;
+  originalHeight: number;
+  preparation: ImagePreparationReceipt;
 };
 
 function readFileAsDataUrl(file: File): Promise<string> {
@@ -50,7 +54,7 @@ function bitmapSize(image: ImageBitmap | HTMLImageElement): { width: number; hei
 /** Downscale a File or data-URL to max edge (default 2048) as JPEG/PNG data-URL. */
 export async function fileToDownscaledDataUrl(
   file: File,
-  maxEdge = MAX_IMAGE_EDGE,
+  maxEdgeOrQuality: number | ImagePreparationQuality = MAX_IMAGE_EDGE,
 ): Promise<DownscaleResult> {
   if (!file || file.size === 0) {
     throw new Error("That file is empty.");
@@ -64,14 +68,16 @@ export async function fileToDownscaledDataUrl(
     throw new Error("HEIC/AVIF is not supported here. Convert to JPEG or PNG first.");
   }
   const source = await readFileAsDataUrl(file);
-  return dataUrlToDownscaled(source, sanitizeMediaLabel(file.name) || "image.jpg", maxEdge);
+  return dataUrlToDownscaled(source, sanitizeMediaLabel(file.name) || "image.jpg", maxEdgeOrQuality);
 }
 
 export async function dataUrlToDownscaled(
   dataUrl: string,
   name = "image.jpg",
-  maxEdge = MAX_IMAGE_EDGE,
+  maxEdgeOrQuality: number | ImagePreparationQuality = MAX_IMAGE_EDGE,
 ): Promise<DownscaleResult> {
+  const profile = imagePreparationProfile(typeof maxEdgeOrQuality === "string" ? maxEdgeOrQuality : "balanced", typeof maxEdgeOrQuality === "number" ? maxEdgeOrQuality : MAX_IMAGE_EDGE);
+  const maxEdge = profile.maxEdge;
   const image = await loadImageBitmap(dataUrl);
   const { width: naturalW, height: naturalH } = bitmapSize(image);
   if (dimensionsLookLikeBomb(naturalW, naturalH)) {
@@ -88,7 +94,7 @@ export async function dataUrlToDownscaled(
   let mime = preferPng ? "image/png" : guessMimeFromName(name).includes("png") ? "image/png" : "image/jpeg";
   let out = "";
   let scaled = fitted.scaled;
-  const qualities = [0.85, 0.72, 0.58, 0.45];
+  const qualities = profile.jpegQualities;
 
   const paint = (width: number, height: number) => {
     canvas.width = width;
@@ -144,6 +150,9 @@ export async function dataUrlToDownscaled(
     mime,
     width: fitted.width,
     height: fitted.height,
+    originalWidth: naturalW,
+    originalHeight: naturalH,
+    preparation: { quality: profile.quality, originalWidth: naturalW, originalHeight: naturalH, width: fitted.width, height: fitted.height, compressed: mime === "image/jpeg" || scaled || fitted.scaled },
     scaled: scaled || fitted.scaled,
   };
 }

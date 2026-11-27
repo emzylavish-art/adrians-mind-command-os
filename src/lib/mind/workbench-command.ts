@@ -13,7 +13,7 @@ export type WorkbenchCommand =
   | { type: "pause"; runId: string }
   | { type: "resume"; runId: string }
   | { type: "cancel"; runId: string }
-  | { type: "approve"; runId: string; action: "browser" | "gmail_send" }
+  | { type: "approve"; runId: string; actionId: string }
   | { type: "step" }
   | { type: "enqueue"; agentId: string; goal: string }
   | { type: "set_schedule"; id: string; enabled: boolean };
@@ -41,7 +41,7 @@ export function applyWorkbenchCommand(
     if (!run) return { ok: false, message: "That run is not in this workspace.", workspace };
     const next = pauseRun(workspace, command.runId);
     const updated = next.runs.find((item) => item.id === command.runId);
-    if (!updated || updated.state !== "paused") {
+    if (run.state === "paused" || !updated || updated.state !== "paused") {
       return { ok: false, message: `This run is ${run.state.replaceAll("_", " ")} and was not paused.`, workspace };
     }
     return { ok: true, message: "Run paused. It will not be stepped until you resume it.", workspace: next };
@@ -49,7 +49,7 @@ export function applyWorkbenchCommand(
   if (command.type === "resume") {
     const next = resumeRun(workspace, command.runId);
     const updated = next.runs.find((item) => item.id === command.runId);
-    if (!updated || updated.state !== "queued") {
+    if (!updated || updated === workspace.runs.find(item => item.id === command.runId) || updated.state !== "queued") {
       return { ok: false, message: "Only a paused run can be resumed. Nothing was queued.", workspace };
     }
     return { ok: true, message: "Run resumed and queued. It has not been executed until the worker steps.", workspace: next };
@@ -59,7 +59,7 @@ export function applyWorkbenchCommand(
     if (!before) return { ok: false, message: "That run is not in this workspace.", workspace };
     const next = cancelRun(workspace, command.runId, now);
     const updated = next.runs.find((item) => item.id === command.runId);
-    if (!updated || updated.state !== "canceled") {
+    if (before.state === "canceled" || !updated || updated.state !== "canceled") {
       return { ok: false, message: `This run is already ${before.state.replaceAll("_", " ")}. It was not changed.`, workspace };
     }
     return { ok: true, message: "Run canceled. Unfinished work was not marked complete.", workspace: next };
@@ -69,15 +69,18 @@ export function applyWorkbenchCommand(
     if (!run || run.state !== "waiting_approval") {
       return { ok: false, message: "Nothing is waiting for that approval.", workspace };
     }
-    const next = approveRunAction(workspace, command.runId, command.action);
+    const next = approveRunAction(workspace, command.runId, command.actionId, now);
+    const approved = next.runs.find(item => item.id === run.id)?.pendingApproval;
+    if (approved?.state !== "granted" || approved.id !== command.actionId) return { ok: false, message: "The pending action changed or expired. Review its current destination before approving.", workspace: next };
     return {
       ok: true,
-      message: `Approved ${command.action.replaceAll("_", " ")} for this run. The action still waits for a worker step and a real driver.`,
+      message: `Approved ${approved.tool.replaceAll("_", " ")} once for ${approved.destination}. The action still waits for its worker and adapter.`,
       workspace: next,
     };
   }
   if (command.type === "step") {
     const next = tickFleet(workspace, { now, workerId: "browser-worker" });
+    if (next === workspace) return { ok: false, message: "No run advanced.", workspace };
     return {
       ok: true,
       message: "Local worker stepped once. Only stored local tools can finish here. Search, browser and mail stay waiting until those services are actually connected.",

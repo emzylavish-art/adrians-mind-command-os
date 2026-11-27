@@ -1,0 +1,628 @@
+{
+  "commit": "4f539b105c306195ae7350ee6aea2f92da31a52e",
+  "command": "node scripts/run-tests.mjs",
+  "totals": {
+    "tests": 3097,
+    "pass": 2969,
+    "fail": 123,
+    "cancelled": 0,
+    "skipped": 5
+  },
+  "failures": [
+    {
+      "file": "scripts/adrian-audit-build.test.mjs",
+      "line": 25,
+      "test": "AA010: actual editor renders no empty result strip, and disabled Debug has an availability explanation"
+    },
+    {
+      "file": "scripts/adrian-audit-build.test.mjs",
+      "line": 137,
+      "test": "AA023: account halt cancels queued Build jobs and requests running cancellation without a mounted screen"
+    },
+    {
+      "file": "scripts/adrian-audit-client-ui.test.mjs",
+      "line": 35,
+      "test": "AA006/007/008: actual location effects preserve first Back entry, Settings pane history and the Intelligence thread"
+    },
+    {
+      "file": "scripts/adrian-audit-client-ui.test.mjs",
+      "line": 84,
+      "test": "AA006: entering a Settings pane resets the actual page scroller and focuses its heading"
+    },
+    {
+      "file": "scripts/adrian-audit-client-ui.test.mjs",
+      "line": 116,
+      "test": "AA011/014: actual Library upload uses its visible destination, rejects signed-out writes and ignores an old owner's pending read"
+    },
+    {
+      "file": "scripts/adrian-audit-client-ui.test.mjs",
+      "line": 137,
+      "test": "AA012: actual Library preview excludes a previously opened file after project selection changes"
+    },
+    {
+      "file": "scripts/adrian-audit-client-ui.test.mjs",
+      "line": 144,
+      "test": "AA013: cloud Library uses the captured project and never stages chat text; changed chat scope cannot accept attachment"
+    },
+    {
+      "file": "scripts/adrian-audit-client-ui.test.mjs",
+      "line": 183,
+      "test": "AA015: actual scheduler waits for identity and re-registers with the new owner's updater"
+    },
+    {
+      "file": "scripts/adrian-audit-client-ui.test.mjs",
+      "line": 206,
+      "test": "AA052: the actual queue removal button is keyboard-focusable, identifies its row and preserves other messages"
+    },
+    {
+      "file": "scripts/adrian-audit-client-ui.test.mjs",
+      "line": 219,
+      "test": "AA053: the actual Alt+P handler pins and unpins the selected result without navigating"
+    },
+    {
+      "file": "scripts/adrian-audit-client-ui.test.mjs",
+      "line": 244,
+      "test": "AA055: the actual shortcut indicator names the current platform"
+    },
+    {
+      "file": "scripts/adrian-audit-client-ui.test.mjs",
+      "line": 251,
+      "test": "AA056: lifecycle announcements are atomic and streamed tokens are outside the live region"
+    },
+    {
+      "file": "scripts/adrian-audit-client-ui.test.mjs",
+      "line": 308,
+      "test": "AA057: conflicting identity recovery explicitly ends both sessions and surfaces a failed sign-out"
+    },
+    {
+      "file": "scripts/adrian-audit-deliver-lifecycle.test.mjs",
+      "line": 107,
+      "test": "AA020/021: actual deliver captures newly revoked memory after preparation, not its stale chat argument"
+    },
+    {
+      "file": "scripts/adrian-audit-deliver-lifecycle.test.mjs",
+      "line": 123,
+      "test": "AA020/021: memory revocation, project switch or note change during hashing prevents provider dispatch"
+    },
+    {
+      "file": "scripts/adrian-audit-deliver-lifecycle.test.mjs",
+      "line": 143,
+      "test": "AA020/061: owner change or emergency halt during fingerprint calculation cannot dispatch the prepared body"
+    },
+    {
+      "file": "scripts/adrian-audit-deliver-lifecycle.test.mjs",
+      "line": 161,
+      "test": "AA039/040: an interrupted long stream preserves every received character and retry performs only receipt GET"
+    },
+    {
+      "file": "scripts/adrian-audit-deliver-lifecycle.test.mjs",
+      "line": 188,
+      "test": "AA039/040: a stopped partial remains incomplete and account-expired recovery never posts again"
+    },
+    {
+      "file": "scripts/adrian-audit-deliver-lifecycle.test.mjs",
+      "line": 208,
+      "test": "AA039/044: completed long reply replaces its checkpoint once, preserves text and reports the actual answer provider"
+    },
+    {
+      "file": "scripts/adrian-audit-deliver-lifecycle.test.mjs",
+      "line": 222,
+      "test": "AA044/061: pending auth and failed preparation create no provider execution or sent message"
+    },
+    {
+      "file": "scripts/adrian-audit-deliver-lifecycle.test.mjs",
+      "line": 236,
+      "test": "AA044: an explicit server rejection before dispatch is not recorded as a provider execution"
+    },
+    {
+      "file": "scripts/adrian-audit-deliver-lifecycle.test.mjs",
+      "line": 246,
+      "test": "AA040/044: fingerprint preparation failure is a failed unsent message, not uncertain provider delivery"
+    },
+    {
+      "file": "scripts/adrian-audit-deliver-lifecycle.test.mjs",
+      "line": 256,
+      "test": "AA040/061: delayed recovery for the old owner cannot update the new owner's workspace or failure UI"
+    },
+    {
+      "file": "scripts/adrian-audit-deliver-lifecycle.test.mjs",
+      "line": 275,
+      "test": "AA044: a dispatched provider failure preserves known request metadata and partial usage without inventing zero"
+    },
+    {
+      "file": "scripts/adrian-audit-speak-lifecycle.test.mjs",
+      "line": 72,
+      "test": "AA003: actual recorded Speak keeps its first new chat, uses selected answer route, and waits for browser completion"
+    },
+    {
+      "file": "scripts/adrian-audit-speak-lifecycle.test.mjs",
+      "line": 105,
+      "test": "AA003: muting while the selected answer is delayed saves it without synthesis or false playback success"
+    },
+    {
+      "file": "scripts/adrian-audit-speak-lifecycle.test.mjs",
+      "line": 120,
+      "test": "AA003: mute aborts active browser audio even when the engine emits no cancellation event"
+    },
+    {
+      "file": "scripts/adrian-audit-speak-lifecycle.test.mjs",
+      "line": 133,
+      "test": "AA003: owner change or interruption rejects a late answer without mutating the new owner's voice UI"
+    },
+    {
+      "file": "scripts/adrian-audit-speak-lifecycle.test.mjs",
+      "line": 150,
+      "test": "AA003: actual SpeakStage ask callback ignores delayed close/reopen results and reports muted replies accurately"
+    },
+    {
+      "file": "scripts/adrian-audit-speak-lifecycle.test.mjs",
+      "line": 187,
+      "test": "AA003: denied microphone and free-only recorded input dispatch no transcription or answer"
+    },
+    {
+      "file": "scripts/adrian-audit-speak-lifecycle.test.mjs",
+      "line": 201,
+      "test": "AA003: browser read-aloud outside Speak preserves the saved volume"
+    },
+    {
+      "file": "scripts/frontend-architecture.test.mjs",
+      "line": 64,
+      "test": "the current application and extracted conversation boundaries satisfy the checked-in architecture baseline"
+    },
+    {
+      "file": "scripts/security/endpoint-inventory.test.mjs",
+      "line": 10,
+      "test": "AA060 every HTTP method and RPC export has an explicit guard contract"
+    },
+    {
+      "file": "src/components/mind/c2-command-entrypoints.test.ts",
+      "line": 33,
+      "test": "C2 search pin control invokes the real workspace pin mutation and reports a full capacity accurately"
+    },
+    {
+      "file": "src/components/mind/surface-failure-host.test.ts",
+      "line": 67,
+      "test": "command-app routes failures through the shared emitter, with separate persona and Speak handling"
+    },
+    {
+      "file": "src/lib/mind/adrian-analysis-regressions.test.ts",
+      "line": 41,
+      "test": "AA020/022 memory context changes immediately with revocation, archive, project or temporary mode"
+    },
+    {
+      "file": "src/lib/mind/adrian-analysis-regressions.test.ts",
+      "line": 73,
+      "test": "AA033/038 context receipt counts omitted images and gives missing-byte recovery"
+    },
+    {
+      "file": "src/lib/mind/adrian-analysis-regressions.test.ts",
+      "line": 138,
+      "test": "AA047/048/049 search finds multiple keyword matches, ranks exact titles and has stable identities"
+    },
+    {
+      "file": "src/lib/mind/adrian-analysis-regressions.test.ts",
+      "line": 150,
+      "test": "AA050/051 each new local record category has exact focus and match-centered evidence"
+    },
+    {
+      "file": "src/lib/mind/c1-runtime-regressions.test.ts",
+      "line": 12,
+      "test": "AA014 preserves provider counters, identity and finish metadata without fabricating missing counters"
+    },
+    {
+      "file": "src/lib/mind/c1-runtime-regressions.test.ts",
+      "line": 25,
+      "test": "AA016/017 bounded helpers preserve failed receipts and stop new dispatch after cancel"
+    },
+    {
+      "file": "src/lib/mind/c1-runtime-regressions.test.ts",
+      "line": 49,
+      "test": "AA019 active run uses immutable tool order and honors revocation"
+    },
+    {
+      "file": "src/lib/mind/c1-runtime-regressions.test.ts",
+      "line": 60,
+      "test": "AA020/021 local execution is distinct from objective verification and budget exhaustion"
+    },
+    {
+      "file": "src/lib/mind/c1-runtime-regressions.test.ts",
+      "line": 68,
+      "test": "AA022 schedule retains individual occurrences and queues overlap"
+    },
+    {
+      "file": "src/lib/mind/c1-runtime-regressions.test.ts",
+      "line": 79,
+      "test": "AA023 cancellation preserves results and records local acknowledgement"
+    },
+    {
+      "file": "src/lib/mind/c2-interface-recovery.test.ts",
+      "line": 20,
+      "test": "AA064/065: actual overlay opens as a named native modal, cancels, closes and restores its opener"
+    },
+    {
+      "file": "src/lib/mind/c2-interface-recovery.test.ts",
+      "line": 54,
+      "test": "AA120\u2013124: search ranks exact titles, searches independent words, and exposes each matching message with scope"
+    },
+    {
+      "file": "src/lib/mind/c2-interface-recovery.test.ts",
+      "line": 93,
+      "test": "AA060/062/063: actual hidden-storage and polling callbacks avoid unnecessary work"
+    },
+    {
+      "file": "src/lib/mind/c2-interface-recovery.test.ts",
+      "line": 118,
+      "test": "AA017: actual Speak answer attribution is returned by that turn and cannot reuse a previous turn receipt"
+    },
+    {
+      "file": "src/lib/mind/c2-interface-recovery.test.ts",
+      "line": 132,
+      "test": "AA068: mobile drawer uses colors declared by both the dark and light themes"
+    },
+    {
+      "file": "src/lib/mind/c2-interface-recovery.test.ts",
+      "line": 142,
+      "test": "AA016: actual staged-call guard rejects account changes and every stage close aborts pending capture"
+    },
+    {
+      "file": "src/lib/mind/c2-workspace-recovery.test.ts",
+      "line": 12,
+      "test": "AA012/013: repeated attachments reuse scoped content and old archives cannot resurrect deleted files"
+    },
+    {
+      "file": "src/lib/mind/c2-workspace-recovery.test.ts",
+      "line": 66,
+      "test": "AA053/073\u2013075: metadata clocks merge independently; edits preserve a recoverable original and exports include configuration"
+    },
+    {
+      "file": "src/lib/mind/c2-workspace-recovery.test.ts",
+      "line": 98,
+      "test": "AA070/071: task evidence survives a full preference allowance and equivalent cost vocabulary"
+    },
+    {
+      "file": "src/lib/mind/c5-provider-recovery.test.ts",
+      "line": 56,
+      "test": "C5 AA010 marks custom dispatch only after the real preflight and DNS boundary"
+    },
+    {
+      "file": "src/lib/mind/c5-provider-recovery.test.ts",
+      "line": 72,
+      "test": "C5 AA011 repeated unsupported listings cannot heal a rejected credential"
+    },
+    {
+      "file": "src/lib/mind/c5-provider-recovery.test.ts",
+      "line": 99,
+      "test": "C5 AA013 actual provider route rejects a stale form owner before any mutation"
+    },
+    {
+      "file": "src/lib/mind/c5-provider-recovery.test.ts",
+      "line": 124,
+      "test": "C5 AA001/003 integration views use account observations and never map inaccessible status to disconnected"
+    },
+    {
+      "file": "src/lib/mind/c5-provider-recovery.test.ts",
+      "line": 134,
+      "test": "C5 AA012/013/014 owner-scoped UI and canonical session are wired to guarded route"
+    },
+    {
+      "file": "src/lib/mind/c5-provider-recovery.test.ts",
+      "line": 146,
+      "test": "C5 AA016 exact review and cancellation stay attached to the originating draft"
+    },
+    {
+      "file": "src/lib/mind/c5-provider-recovery.test.ts",
+      "line": 157,
+      "test": "C5 AA003 rendered Plugins badges distinguish sign-in, unavailable and a confirmed absent grant"
+    },
+    {
+      "file": "src/lib/mind/c5-provider-recovery.test.ts",
+      "line": 180,
+      "test": "C5 AA014 preview sign-out requires confirmed removal of all cookie sessions even without a bearer"
+    },
+    {
+      "file": "src/lib/mind/dashboard/hud-order.test.ts",
+      "line": 16,
+      "test": "keeps supporting cards collapsed until opened so the graph stays primary"
+    },
+    {
+      "file": "src/lib/mind/diagnostic-entrypoint.test.ts",
+      "line": 37,
+      "test": "actual status endpoint keeps unknown emergency-stop storage distinct while blocking execution"
+    },
+    {
+      "file": "src/lib/mind/diagnostic-entrypoint.test.ts",
+      "line": 50,
+      "test": "actual status endpoint identifies configuration evidence without asserting provider health"
+    },
+    {
+      "file": "src/lib/mind/fleet-audit-recovery.test.ts",
+      "line": 29,
+      "test": "AA-034 chooses explicit goal tools without adding capabilities or inventing an AI plan"
+    },
+    {
+      "file": "src/lib/mind/fleet-audit-recovery.test.ts",
+      "line": 45,
+      "test": "AA-101/104 passes the approved objective to a read-page driver and retains its evidence"
+    },
+    {
+      "file": "src/lib/mind/fleet-audit-recovery.test.ts",
+      "line": 71,
+      "test": "AA-033 pauses if the saved capability is removed instead of substituting a tool"
+    },
+    {
+      "file": "src/lib/mind/fleet-audit-recovery.test.ts",
+      "line": 81,
+      "test": "AA-035 passes a declared prior record identity and blocks missing dependencies"
+    },
+    {
+      "file": "src/lib/mind/fleet-audit-recovery.test.ts",
+      "line": 97,
+      "test": "AA-036 a step budget never reports the unexecuted remainder as completed"
+    },
+    {
+      "file": "src/lib/mind/fleet-audit-recovery.test.ts",
+      "line": 113,
+      "test": "AA-057/058 binds approval to exact plan and destination and refuses ineligible mutations"
+    },
+    {
+      "file": "src/lib/mind/fleet-audit-recovery.test.ts",
+      "line": 148,
+      "test": "AA-059 a driver failure after dispatch consumes approval and records an unknown external outcome"
+    },
+    {
+      "file": "src/lib/mind/fleet-audit-recovery.test.ts",
+      "line": 160,
+      "test": "AA-059 differentiates a stopped queued run from a potentially dispatched run"
+    },
+    {
+      "file": "src/lib/mind/fleet-audit-recovery.test.ts",
+      "line": 170,
+      "test": "AA-086/089 repeated resume, pause, cancel and mismatched approval report no change"
+    },
+    {
+      "file": "src/lib/mind/fleet-audit-recovery.test.ts",
+      "line": 181,
+      "test": "AA-062/088 leased and empty fleets preserve identity and report no advancement"
+    },
+    {
+      "file": "src/lib/mind/fleet-audit-recovery.test.ts",
+      "line": 193,
+      "test": "AA-023/099 excludes deleted-project context, archived and temporary chats"
+    },
+    {
+      "file": "src/lib/mind/fleet-contract.test.ts",
+      "line": 53,
+      "test": "AA111/223: exhausting a step limit cannot mark unfinished work complete"
+    },
+    {
+      "file": "src/lib/mind/fleet-contract.test.ts",
+      "line": 62,
+      "test": "AA111/223: completed steps and verified objectives are distinct"
+    },
+    {
+      "file": "src/lib/mind/fleet-contract.test.ts",
+      "line": 114,
+      "test": "AA212: ask-mode local reads require the specific current grant"
+    },
+    {
+      "file": "src/lib/mind/fleet-contract.test.ts",
+      "line": 154,
+      "test": "AA219/217: the model receives structured sources and records the selected provider"
+    },
+    {
+      "file": "src/lib/mind/fleet-contract.test.ts",
+      "line": 167,
+      "test": "AA216: Gmail receipt must identify the exact selected account and operation"
+    },
+    {
+      "file": "src/lib/mind/fleet.test.ts",
+      "line": 296,
+      "test": "delegation preserves its parent plan and selects explicitly assigned specialists"
+    },
+    {
+      "file": "src/lib/mind/github-tools.test.ts",
+      "line": 17,
+      "test": "leaves incomplete translation to the caller and refuses an unsupported language"
+    },
+    {
+      "file": "src/lib/mind/halt-file.test.ts",
+      "line": 11,
+      "test": "malformed stop input cannot release protection; explicit owner actions retain their meaning"
+    },
+    {
+      "file": "src/lib/mind/integration-persona-explore.test.ts",
+      "line": 59,
+      "test": "persists the account-owned persona selection without a delayed workspace writer"
+    },
+    {
+      "file": "src/lib/mind/kimi/c5-build.test.ts",
+      "line": 28,
+      "test": "C5 actual Complete handler rejects an old file response after a new selection"
+    },
+    {
+      "file": "src/lib/mind/kimi/c5-build.test.ts",
+      "line": 38,
+      "test": "C5 actual Debug handler clears pending on failure and refuses unavailable runtime"
+    },
+    {
+      "file": "src/lib/mind/kimi/c5-build.test.ts",
+      "line": 54,
+      "test": "C5 actual emergency-stop handler retries activation without releasing local protection"
+    },
+    {
+      "file": "src/lib/mind/kimi/c5-build.test.ts",
+      "line": 88,
+      "test": "C5 a new emergency stop survives an older pending release and reasserts the server stop"
+    },
+    {
+      "file": "src/lib/mind/kimi/c5-build.test.ts",
+      "line": 126,
+      "test": "C5 actual Build handler distinguishes saved execution, verified save and failed save"
+    },
+    {
+      "file": "src/lib/mind/kimi/hosted/acp-client.test.ts",
+      "line": 66,
+      "test": "answers each ACP permission request once, regardless of option order"
+    },
+    {
+      "file": "src/lib/mind/kimi/hosted/acp-client.test.ts",
+      "line": 131,
+      "test": "C1 AA034 attaches the same full skill to the one-shot hosted ACP path"
+    },
+    {
+      "file": "src/lib/mind/mcp/registry-http.test.ts",
+      "line": 76,
+      "test": "default discovery uses the validated pin while an explicit synthetic adapter remains injectable"
+    },
+    {
+      "file": "src/lib/mind/mcp/registry-http.test.ts",
+      "line": 160,
+      "test": "schedules the actual 300 ms list and call deadlines, aborts at expiry, and never retries"
+    },
+    {
+      "file": "src/lib/mind/mcp/registry-http.test.ts",
+      "line": 226,
+      "test": "times out a hung server instead of hanging the Tools list or call"
+    },
+    {
+      "file": "src/lib/mind/media/asset-lifecycle.test.ts",
+      "line": 6,
+      "test": "editing retains immutable parent identity through offload, hydration, and export"
+    },
+    {
+      "file": "src/lib/mind/memory-send-preparation.test.ts",
+      "line": 136,
+      "test": "unchanged uncertain retry keeps exactly the original operation identity and payload"
+    },
+    {
+      "file": "src/lib/mind/memory/dispatch-policy.test.ts",
+      "line": 16,
+      "test": "C1/AA007-008: saved context is rejected after memory-off, deletion, archive or revision"
+    },
+    {
+      "file": "src/lib/mind/memory/dispatch-policy.test.ts",
+      "line": 29,
+      "test": "unknown owner/conversation cannot replay saved notes, including legacy revisionless payloads"
+    },
+    {
+      "file": "src/lib/mind/memory/dispatch-policy.test.ts",
+      "line": 36,
+      "test": "authoritative dispatch rereads the authenticated owner, including revocation between two calls"
+    },
+    {
+      "file": "src/lib/mind/palette-index.test.ts",
+      "line": 49,
+      "test": "AA120/121/122 indexed queries preserve phrases, independent terms, exact title priority and all message identities"
+    },
+    {
+      "file": "src/lib/mind/palette-index.test.ts",
+      "line": 66,
+      "test": "AA125 the actual CommandApp memo boundary reuses its index when only the query changes"
+    },
+    {
+      "file": "src/lib/mind/pc-pairing/pairing.test.ts",
+      "line": 151,
+      "test": "C5 binds reviewed terminal execution to its selected computer and directory"
+    },
+    {
+      "file": "src/lib/mind/pdf-text-audit.test.ts",
+      "line": 10,
+      "test": "AA-117 reads balanced literal strings, quoted lines and explicit Unicode strings"
+    },
+    {
+      "file": "src/lib/mind/pdf-text-audit.test.ts",
+      "line": 19,
+      "test": "AA-118 retains ordered page and chunk attribution instead of flattening all pages"
+    },
+    {
+      "file": "src/lib/mind/pdf-text-audit.test.ts",
+      "line": 30,
+      "test": "AA-119 retains text after the preview limit and retrieves a relevant late passage"
+    },
+    {
+      "file": "src/lib/mind/pdf-text-audit.test.ts",
+      "line": 44,
+      "test": "unmapped glyphs, scanned pages and encryption remain explicit limitations"
+    },
+    {
+      "file": "src/lib/mind/pdf-text-audit.test.ts",
+      "line": 57,
+      "test": "retained text and provider excerpts have separate bounded budgets"
+    },
+    {
+      "file": "src/lib/mind/persistence-incremental.test.ts",
+      "line": 12,
+      "test": "C4 incremental snapshots retain owner isolation, CAS and atomic rollback"
+    },
+    {
+      "file": "src/lib/mind/provider-http.test.ts",
+      "line": 50,
+      "test": "checks the request preflight before consulting helpers and dispatching direct providers"
+    },
+    {
+      "file": "src/lib/mind/selection-sync.test.ts",
+      "line": 40,
+      "test": "C5 actual Effort handler clears the scoped override and retains the chosen provider"
+    },
+    {
+      "file": "src/lib/mind/usage-channels.test.ts",
+      "line": 91,
+      "test": "C5 AA041 actual Build handler retains queued and observed job lifecycle under one owner-bound identity"
+    },
+    {
+      "file": "src/lib/mind/usage-channels.test.ts",
+      "line": 110,
+      "test": "C5 AA041 hosted Build does not confuse a completed runtime or a legacy partial reply with provider proof"
+    },
+    {
+      "file": "src/lib/mind/usage-dispatch.test.ts",
+      "line": 88,
+      "test": "C5 actual turn handler refuses dispatch when the initial durable usage write fails and permits retry"
+    },
+    {
+      "file": "src/lib/mind/usage-dispatch.test.ts",
+      "line": 108,
+      "test": "C5 actual turn handler records rejected preflight as undispatched and leaves the same send retryable"
+    },
+    {
+      "file": "src/lib/mind/usage-dispatch.test.ts",
+      "line": 128,
+      "test": "C5 actual turn handler preserves response bytes after final accounting failure without repeating inference"
+    },
+    {
+      "file": "src/lib/mind/usage-dispatch.test.ts",
+      "line": 165,
+      "test": "C5 actual orchestration records two helpers and one primary without losing unknown usage"
+    },
+    {
+      "file": "src/lib/mind/voice/provider-fallback.test.ts",
+      "line": 73,
+      "test": "uses OpenAI STT, TTS, and chat when xAI returns 400"
+    },
+    {
+      "file": "src/lib/mind/voice/provider-fallback.test.ts",
+      "line": 115,
+      "test": "returns an honest error when xAI and OpenAI both fail"
+    },
+    {
+      "file": "src/lib/mind/workbench-command.test.ts",
+      "line": 16,
+      "test": "queues, steps, pauses and cancels a real local run"
+    },
+    {
+      "file": "src/lib/mind/workspace-hook-lifecycle.test.ts",
+      "line": 78,
+      "test": "C4 actual hook does not read guest storage or dispatch saves while auth is pending"
+    },
+    {
+      "file": "src/lib/mind/workspace-hook-lifecycle.test.ts",
+      "line": 88,
+      "test": "C4 actual hook preserves remote conversations when local input arrives during initial load"
+    },
+    {
+      "file": "src/lib/mind/workspace-hook-lifecycle.test.ts",
+      "line": 103,
+      "test": "C4 actual storage listener reconciles live creates, renames and deletes"
+    }
+  ]
+}

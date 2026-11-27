@@ -103,6 +103,7 @@ describe("provider calls", () => {
     assert.equal(parseProviderText("openrouter", JSON.stringify({ choices: [{ message: { content: [{ type: "text", text: "one" }] } }] })), "one");
     assert.equal(parseProviderText("anthropic", JSON.stringify({ content: [{ type: "text", text: "two" }] })), "two");
     assert.equal(parseProviderText("gemini", JSON.stringify({ candidates: [{ content: { parts: [{ text: "three" }] } }] })), "three");
+    assert.equal(parseProviderText("gemini", JSON.stringify({ candidates: [{ content: { parts: [{ text: "Private reasoning", thought: true }, { text: "Public answer" }] } }] })), "Public answer");
     assert.equal(parseProviderText("openai", "not json"), "");
     assert.equal(parseProviderText("anthropic", JSON.stringify({ content: [{ type: "tool_use", input: { token: "secret" } }] })), "");
   });

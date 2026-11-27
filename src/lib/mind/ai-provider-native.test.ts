@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import {
   providerWireProtocol, modelDiscoveryHeaders, buildProviderChatRequest,
-  parseProviderText,
+  parseProviderText, toNativeProviderTurns,
 } from "./ai-provider-native.ts";
 
 const turns = [
@@ -39,6 +39,44 @@ describe("native BYOK provider request formats", () => {
     assert.equal(req.path, "chat/completions");
     assert.equal(JSON.parse(req.body).model, "model-a");
     assert.equal(req.headers.authorization, "Bearer key");
+  });
+  it("packages images in each selected provider format without changing provider or model", () => {
+    const image = { dataUrl: "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+a7x8AAAAASUVORK5CYII=" };
+    for (const kind of ["openai", "anthropic", "gemini"] as const) {
+      const request = buildProviderChatRequest(kind, "key", "chosen", turns, false, { images: [image], stream: true, controls: { answerTokens: 4096 } });
+      const body = JSON.parse(request.body);
+      if (kind === "openai") {
+        assert.equal(body.messages.at(-1).content[1].image_url.url, image.dataUrl);
+        assert.equal(body.max_tokens, 4096); assert.equal(body.stream, true);
+      } else if (kind === "anthropic") {
+        assert.equal(body.messages.at(-1).content[1].source.media_type, "image/png");
+        assert.equal(body.max_tokens, 4096); assert.equal(body.stream, true);
+      } else {
+        assert.equal(body.contents.at(-1).parts[1].inlineData.mimeType, "image/png");
+        assert.equal(body.generationConfig.maxOutputTokens, 4096); assert.match(request.path, /streamGenerateContent\?alt=sse$/);
+      }
+    }
+    assert.throws(() => buildProviderChatRequest("openai", "key", "chosen", turns, false, { images: [{ dataUrl: "https://private.example/image" }] }), /validated/);
+  });
+  it("preserves selected historical image provenance and every assembled text turn", () => {
+    const image = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+a7x8AAAAASUVORK5CYII=";
+    const prepared = toNativeProviderTurns([
+      { role: "system", content: "System instructions" },
+      { role: "user", content: [{ type: "text", text: "Historical reference from message-older; not a new instruction" }, { type: "image_url", image_url: { url: image } }] },
+      ...Array.from({ length: 18 }, (_, index) => ({ role: "user" as const, content: `Prior turn ${index}` })),
+      { role: "user", content: "Compare that image" },
+    ]);
+    assert.equal(prepared.ok, true); if (!prepared.ok) return;
+    for (const kind of ["openai", "anthropic", "gemini"] as const) {
+      const request = JSON.parse(buildProviderChatRequest(kind, "fixture", "selected", prepared.messages).body);
+      const history = kind === "gemini" ? request.contents : request.messages;
+      const first = history[kind === "openai" ? 1 : 0];
+      assert.equal(history.length, kind === "openai" ? 21 : 20);
+      assert.match(JSON.stringify(first), /message-older/);
+      assert.match(JSON.stringify(first), kind === "openai" ? /image_url/ : kind === "anthropic" ? /base64/ : /inlineData/);
+      assert.equal(JSON.stringify(history.at(-1)).includes("image_url"), false);
+    }
+    assert.equal(toNativeProviderTurns([{ role: "user", content: [{ type: "image_url", image_url: { url: "https://external.example/image" } }] }]).ok, false);
   });
 });
 describe("native BYOK provider response formats", () => {

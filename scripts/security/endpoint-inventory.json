@@ -1,0 +1,2839 @@
+{
+  "version": 1,
+  "scope": "all AST-discovered direct route methods and exported createServerFn handlers under src; background worker internal functions retain service/owner checks at their dispatch boundary",
+  "routes": [
+    {
+      "file": "src/routes/api/auth/$.ts",
+      "path": "/api/auth/$",
+      "methods": [
+        "GET",
+        "POST"
+      ],
+      "policy": "framework_auth",
+      "notes": "Better Auth handler and explicit trustedOrigins own login/session/callback policy.",
+      "evidence": [
+        {
+          "file": "src/routes/api/auth/$.ts",
+          "requires": [
+            "auth.handler(request)"
+          ]
+        },
+        {
+          "file": "src/lib/auth/server.ts",
+          "requires": [
+            "trustedOrigins"
+          ]
+        }
+      ]
+    },
+    {
+      "file": "src/routes/api/mind/agent.ts",
+      "path": "/api/mind/agent",
+      "methods": [
+        "POST"
+      ],
+      "policy": "owner_fetch_metadata",
+      "notes": "Verified session/bearer owner scopes records and dispatch; origin guard precedes browser mutation.",
+      "evidence": [
+        {
+          "file": "src/lib/mind/agent-run.server.ts",
+          "requires": [
+            "requireUserId",
+            "decideFetchSite"
+          ]
+        }
+      ]
+    },
+    {
+      "file": "src/routes/api/mind/build/browser.ts",
+      "path": "/api/mind/build/browser",
+      "methods": [
+        "DELETE",
+        "GET",
+        "POST"
+      ],
+      "policy": "owner_origin",
+      "notes": "Verified session/bearer owner scopes records and dispatch; origin guard precedes browser mutation. Build and legacy Kimi aliases share the named runtime-specific handler; target selection is explicit.",
+      "evidence": [
+        {
+          "file": "src/lib/mind/kimi/hosted/browser-route.server.ts",
+          "requires": [
+            "requireUserId",
+            "assertSameOrigin"
+          ]
+        }
+      ]
+    },
+    {
+      "file": "src/routes/api/mind/build/cancel.ts",
+      "path": "/api/mind/build/cancel",
+      "methods": [
+        "POST"
+      ],
+      "policy": "owner_origin",
+      "notes": "Verified session/bearer owner scopes records and dispatch; origin guard precedes browser mutation. Build and legacy Kimi aliases share the named runtime-specific handler; target selection is explicit.",
+      "evidence": [
+        {
+          "file": "src/routes/api/mind/build/cancel.ts",
+          "requires": [
+            "requireUserId",
+            "assertSameOrigin"
+          ]
+        }
+      ]
+    },
+    {
+      "file": "src/routes/api/mind/build/capabilities.ts",
+      "path": "/api/mind/build/capabilities",
+      "methods": [
+        "GET"
+      ],
+      "policy": "owner_read",
+      "notes": "Verified session/bearer owner scopes records and dispatch; origin guard precedes browser mutation. Build and legacy Kimi aliases share the named runtime-specific handler; target selection is explicit.",
+      "evidence": [
+        {
+          "file": "src/lib/mind/kimi/phase4.server.ts",
+          "requires": [
+            "requireUserId"
+          ]
+        }
+      ]
+    },
+    {
+      "file": "src/routes/api/mind/build/files.ts",
+      "path": "/api/mind/build/files",
+      "methods": [
+        "GET",
+        "POST"
+      ],
+      "policy": "owner_origin",
+      "notes": "Verified session/bearer owner scopes records and dispatch; origin guard precedes browser mutation. Build and legacy Kimi aliases share the named runtime-specific handler; target selection is explicit.",
+      "evidence": [
+        {
+          "file": "src/lib/mind/kimi/files.server.ts",
+          "requires": [
+            "requireUserId",
+            "assertSameOrigin"
+          ]
+        }
+      ]
+    },
+    {
+      "file": "src/routes/api/mind/build/ide.ts",
+      "path": "/api/mind/build/ide",
+      "methods": [
+        "GET",
+        "POST"
+      ],
+      "policy": "owner_origin",
+      "notes": "Verified session/bearer owner scopes records and dispatch; origin guard precedes browser mutation. Build and legacy Kimi aliases share the named runtime-specific handler; target selection is explicit.",
+      "evidence": [
+        {
+          "file": "src/lib/mind/kimi/ide.server.ts",
+          "requires": [
+            "requireUserId",
+            "assertSameOrigin"
+          ]
+        }
+      ]
+    },
+    {
+      "file": "src/routes/api/mind/build/projects.ts",
+      "path": "/api/mind/build/projects",
+      "methods": [
+        "GET",
+        "POST"
+      ],
+      "policy": "owner_origin",
+      "notes": "Verified session/bearer owner scopes records and dispatch; origin guard precedes browser mutation. Build and legacy Kimi aliases share the named runtime-specific handler; target selection is explicit.",
+      "evidence": [
+        {
+          "file": "src/lib/mind/kimi/phase4.server.ts",
+          "requires": [
+            "requireUserId",
+            "assertSameOrigin"
+          ]
+        }
+      ]
+    },
+    {
+      "file": "src/routes/api/mind/build/providers.ts",
+      "path": "/api/mind/build/providers",
+      "methods": [
+        "GET",
+        "POST"
+      ],
+      "policy": "owner_origin",
+      "notes": "Verified session/bearer owner scopes records and dispatch; origin guard precedes browser mutation. Build and legacy Kimi aliases share the named runtime-specific handler; target selection is explicit.",
+      "evidence": [
+        {
+          "file": "src/routes/api/mind/build/providers.ts",
+          "requires": [
+            "requireUserId",
+            "assertSameOrigin"
+          ]
+        },
+        {
+          "file": "src/lib/mind/kimi/phase4.server.ts",
+          "requires": [
+            "requireUserId",
+            "assertSameOrigin"
+          ]
+        }
+      ]
+    },
+    {
+      "file": "src/routes/api/mind/build/runtime.ts",
+      "path": "/api/mind/build/runtime",
+      "methods": [
+        "GET",
+        "POST"
+      ],
+      "policy": "owner_origin",
+      "notes": "Verified session/bearer owner scopes records and dispatch; origin guard precedes browser mutation. Build and legacy Kimi aliases share the named runtime-specific handler; target selection is explicit.",
+      "evidence": [
+        {
+          "file": "src/lib/mind/kimi/hosted/runtime.server.ts",
+          "requires": [
+            "requireUserId",
+            "assertSameOrigin"
+          ]
+        }
+      ]
+    },
+    {
+      "file": "src/routes/api/mind/build/session.ts",
+      "path": "/api/mind/build/session",
+      "methods": [
+        "GET",
+        "POST"
+      ],
+      "policy": "owner_origin",
+      "notes": "Verified session/bearer owner scopes records and dispatch; origin guard precedes browser mutation. Build and legacy Kimi aliases share the named runtime-specific handler; target selection is explicit.",
+      "evidence": [
+        {
+          "file": "src/lib/mind/kimi/acp.server.ts",
+          "requires": [
+            "requireUserId",
+            "assertSameOrigin"
+          ]
+        }
+      ]
+    },
+    {
+      "file": "src/routes/api/mind/build/terminal.ts",
+      "path": "/api/mind/build/terminal",
+      "methods": [
+        "POST"
+      ],
+      "policy": "owner_origin",
+      "notes": "Verified session/bearer owner scopes records and dispatch; origin guard precedes browser mutation. Build and legacy Kimi aliases share the named runtime-specific handler; target selection is explicit.",
+      "evidence": [
+        {
+          "file": "src/routes/api/mind/build/terminal.ts",
+          "requires": [
+            "requireUserId",
+            "assertSameOrigin"
+          ]
+        }
+      ]
+    },
+    {
+      "file": "src/routes/api/mind/build/voice.ts",
+      "path": "/api/mind/build/voice",
+      "methods": [
+        "POST"
+      ],
+      "policy": "owner_origin",
+      "notes": "Verified session/bearer owner scopes records and dispatch; origin guard precedes browser mutation. Build and legacy Kimi aliases share the named runtime-specific handler; target selection is explicit.",
+      "evidence": [
+        {
+          "file": "src/lib/mind/kimi/phase4.server.ts",
+          "requires": [
+            "requireUserId",
+            "assertSameOrigin"
+          ]
+        }
+      ]
+    },
+    {
+      "file": "src/routes/api/mind/dashboard/health.ts",
+      "path": "/api/mind/dashboard/health",
+      "methods": [
+        "GET"
+      ],
+      "policy": "owner_read",
+      "notes": "Reads owner-scoped Dashboard and worker health; rate-limited before returning diagnostics.",
+      "evidence": [
+        {
+          "file": "src/routes/api/mind/dashboard/health.ts",
+          "requires": [
+            "requireUserId",
+            "allowMindRequest",
+            "buildOperationalHealth"
+          ]
+        }
+      ]
+    },
+    {
+      "file": "src/routes/api/mind/dashboard/status.ts",
+      "path": "/api/mind/dashboard/status",
+      "methods": [
+        "GET"
+      ],
+      "policy": "public_status",
+      "notes": "Explicit public sanitized dashboard readiness; no private connected-account records.",
+      "evidence": [
+        {
+          "file": "src/routes/api/mind/dashboard/status.ts",
+          "requires": [
+            "buildDashboardStatus"
+          ]
+        }
+      ]
+    },
+    {
+      "file": "src/routes/api/mind/desktop-update.ts",
+      "path": "/api/mind/desktop-update",
+      "methods": [
+        "GET"
+      ],
+      "policy": "public_status",
+      "notes": "Public installer update manifest only; no install or account mutation.",
+      "evidence": [
+        {
+          "file": "src/routes/api/mind/desktop-update.ts",
+          "requires": [
+            "GET:"
+          ]
+        }
+      ]
+    },
+    {
+      "file": "src/routes/api/mind/dispatch-policy.ts",
+      "path": "/api/mind/dispatch-policy",
+      "methods": [
+        "GET",
+        "POST"
+      ],
+      "policy": "owner_origin",
+      "notes": "Authenticated owner reads settings and approves changes. Browser mutations require the current origin. Financial policy actions scope the request to that owner.",
+      "evidence": [
+        {
+          "file": "src/routes/api/mind/dispatch-policy.ts",
+          "requires": [
+            "requireUserId",
+            "assertSameOrigin",
+            "readFinancialSnapshot",
+            "approveFinancialRequest"
+          ]
+        }
+      ]
+    },
+    {
+      "file": "src/routes/api/mind/fleet/execute.ts",
+      "path": "/api/mind/fleet/execute",
+      "methods": [
+        "POST"
+      ],
+      "policy": "owner_origin",
+      "notes": "Rechecks the current account, emergency control and saved run for external steps.",
+      "evidence": [
+        {
+          "file": "src/routes/api/mind/fleet/execute.ts",
+          "requires": [
+            "requireUserId",
+            "assertSameOrigin",
+            "readHaltState",
+            "runExternalFleetStep"
+          ]
+        }
+      ]
+    },
+    {
+      "file": "src/routes/api/mind/fleet/history.ts",
+      "path": "/api/mind/fleet/history",
+      "methods": [
+        "POST"
+      ],
+      "policy": "owner_origin",
+      "notes": "Clears selected terminal records from the verified owner’s workspace.",
+      "evidence": [
+        {
+          "file": "src/routes/api/mind/fleet/history.ts",
+          "requires": [
+            "requireUserId",
+            "assertSameOrigin",
+            "clearFinishedRuns",
+            "updateOwnerWorkspace"
+          ]
+        }
+      ]
+    },
+    {
+      "file": "src/routes/api/mind/kimi/browser.ts",
+      "path": "/api/mind/kimi/browser",
+      "methods": [
+        "DELETE",
+        "GET",
+        "POST"
+      ],
+      "policy": "owner_origin",
+      "notes": "Verified session/bearer owner scopes records and dispatch; origin guard precedes browser mutation. Build and legacy Kimi aliases share the named runtime-specific handler; target selection is explicit.",
+      "evidence": [
+        {
+          "file": "src/lib/mind/kimi/hosted/browser-route.server.ts",
+          "requires": [
+            "requireUserId",
+            "assertSameOrigin"
+          ]
+        }
+      ]
+    },
+    {
+      "file": "src/routes/api/mind/kimi/cancel.ts",
+      "path": "/api/mind/kimi/cancel",
+      "methods": [
+        "POST"
+      ],
+      "policy": "owner_origin",
+      "notes": "Verified session/bearer owner scopes records and dispatch; origin guard precedes browser mutation. Build and legacy Kimi aliases share the named runtime-specific handler; target selection is explicit.",
+      "evidence": [
+        {
+          "file": "src/routes/api/mind/kimi/cancel.ts",
+          "requires": [
+            "requireUserId",
+            "assertSameOrigin"
+          ]
+        }
+      ]
+    },
+    {
+      "file": "src/routes/api/mind/kimi/capabilities.ts",
+      "path": "/api/mind/kimi/capabilities",
+      "methods": [
+        "GET"
+      ],
+      "policy": "owner_read",
+      "notes": "Verified session/bearer owner scopes records and dispatch; origin guard precedes browser mutation. Build and legacy Kimi aliases share the named runtime-specific handler; target selection is explicit.",
+      "evidence": [
+        {
+          "file": "src/lib/mind/kimi/phase4.server.ts",
+          "requires": [
+            "requireUserId"
+          ]
+        }
+      ]
+    },
+    {
+      "file": "src/routes/api/mind/kimi/files.ts",
+      "path": "/api/mind/kimi/files",
+      "methods": [
+        "GET",
+        "POST"
+      ],
+      "policy": "owner_origin",
+      "notes": "Verified session/bearer owner scopes records and dispatch; origin guard precedes browser mutation. Build and legacy Kimi aliases share the named runtime-specific handler; target selection is explicit.",
+      "evidence": [
+        {
+          "file": "src/lib/mind/kimi/files.server.ts",
+          "requires": [
+            "requireUserId",
+            "assertSameOrigin"
+          ]
+        }
+      ]
+    },
+    {
+      "file": "src/routes/api/mind/kimi/ide.ts",
+      "path": "/api/mind/kimi/ide",
+      "methods": [
+        "POST"
+      ],
+      "policy": "owner_origin",
+      "notes": "Verified session/bearer owner scopes records and dispatch; origin guard precedes browser mutation. Build and legacy Kimi aliases share the named runtime-specific handler; target selection is explicit.",
+      "evidence": [
+        {
+          "file": "src/lib/mind/kimi/ide.server.ts",
+          "requires": [
+            "requireUserId",
+            "assertSameOrigin"
+          ]
+        }
+      ]
+    },
+    {
+      "file": "src/routes/api/mind/kimi/projects.ts",
+      "path": "/api/mind/kimi/projects",
+      "methods": [
+        "GET",
+        "POST"
+      ],
+      "policy": "owner_origin",
+      "notes": "Verified session/bearer owner scopes records and dispatch; origin guard precedes browser mutation. Build and legacy Kimi aliases share the named runtime-specific handler; target selection is explicit.",
+      "evidence": [
+        {
+          "file": "src/lib/mind/kimi/phase4.server.ts",
+          "requires": [
+            "requireUserId",
+            "assertSameOrigin"
+          ]
+        }
+      ]
+    },
+    {
+      "file": "src/routes/api/mind/kimi/providers.ts",
+      "path": "/api/mind/kimi/providers",
+      "methods": [
+        "GET",
+        "POST"
+      ],
+      "policy": "owner_origin",
+      "notes": "Verified session/bearer owner scopes records and dispatch; origin guard precedes browser mutation. Build and legacy Kimi aliases share the named runtime-specific handler; target selection is explicit.",
+      "evidence": [
+        {
+          "file": "src/routes/api/mind/kimi/providers.ts",
+          "requires": [
+            "requireUserId",
+            "assertSameOrigin"
+          ]
+        },
+        {
+          "file": "src/lib/mind/kimi/phase4.server.ts",
+          "requires": [
+            "requireUserId",
+            "assertSameOrigin"
+          ]
+        }
+      ]
+    },
+    {
+      "file": "src/routes/api/mind/kimi/runtime.ts",
+      "path": "/api/mind/kimi/runtime",
+      "methods": [
+        "GET",
+        "POST"
+      ],
+      "policy": "owner_origin",
+      "notes": "Verified session/bearer owner scopes records and dispatch; origin guard precedes browser mutation. Build and legacy Kimi aliases share the named runtime-specific handler; target selection is explicit.",
+      "evidence": [
+        {
+          "file": "src/lib/mind/kimi/hosted/runtime.server.ts",
+          "requires": [
+            "requireUserId",
+            "assertSameOrigin"
+          ]
+        }
+      ]
+    },
+    {
+      "file": "src/routes/api/mind/kimi/session.ts",
+      "path": "/api/mind/kimi/session",
+      "methods": [
+        "GET",
+        "POST"
+      ],
+      "policy": "owner_origin",
+      "notes": "Verified session/bearer owner scopes records and dispatch; origin guard precedes browser mutation. Build and legacy Kimi aliases share the named runtime-specific handler; target selection is explicit.",
+      "evidence": [
+        {
+          "file": "src/lib/mind/kimi/acp.server.ts",
+          "requires": [
+            "requireUserId",
+            "assertSameOrigin"
+          ]
+        }
+      ]
+    },
+    {
+      "file": "src/routes/api/mind/kimi/terminal.ts",
+      "path": "/api/mind/kimi/terminal",
+      "methods": [
+        "POST"
+      ],
+      "policy": "owner_origin",
+      "notes": "Verified session/bearer owner scopes records and dispatch; origin guard precedes browser mutation. Build and legacy Kimi aliases share the named runtime-specific handler; target selection is explicit.",
+      "evidence": [
+        {
+          "file": "src/routes/api/mind/kimi/terminal.ts",
+          "requires": [
+            "requireUserId",
+            "assertSameOrigin"
+          ]
+        }
+      ]
+    },
+    {
+      "file": "src/routes/api/mind/kimi/voice.ts",
+      "path": "/api/mind/kimi/voice",
+      "methods": [
+        "POST"
+      ],
+      "policy": "owner_origin",
+      "notes": "Verified session/bearer owner scopes records and dispatch; origin guard precedes browser mutation. Build and legacy Kimi aliases share the named runtime-specific handler; target selection is explicit.",
+      "evidence": [
+        {
+          "file": "src/lib/mind/kimi/phase4.server.ts",
+          "requires": [
+            "requireUserId",
+            "assertSameOrigin"
+          ]
+        }
+      ]
+    },
+    {
+      "file": "src/routes/api/mind/mcp/builtin.ts",
+      "path": "/api/mind/mcp/builtin",
+      "methods": [
+        "DELETE",
+        "GET",
+        "POST"
+      ],
+      "policy": "owner_origin",
+      "notes": "Verified session/bearer owner scopes records and dispatch; origin guard precedes browser mutation.",
+      "evidence": [
+        {
+          "file": "src/routes/api/mind/mcp/builtin.ts",
+          "requires": [
+            "requireUserId",
+            "assertSameOrigin"
+          ]
+        }
+      ]
+    },
+    {
+      "file": "src/routes/api/mind/mcp/call.ts",
+      "path": "/api/mind/mcp/call",
+      "methods": [
+        "POST"
+      ],
+      "policy": "owner_origin",
+      "notes": "Verified session/bearer owner scopes records and dispatch; origin guard precedes browser mutation.",
+      "evidence": [
+        {
+          "file": "src/routes/api/mind/mcp/call.ts",
+          "requires": [
+            "requireUserId",
+            "assertSameOrigin"
+          ]
+        }
+      ]
+    },
+    {
+      "file": "src/routes/api/mind/mcp/servers.ts",
+      "path": "/api/mind/mcp/servers",
+      "methods": [
+        "GET",
+        "POST"
+      ],
+      "policy": "owner_origin",
+      "notes": "Verified session/bearer owner scopes records and dispatch; origin guard precedes browser mutation.",
+      "evidence": [
+        {
+          "file": "src/routes/api/mind/mcp/servers.ts",
+          "requires": [
+            "requireUserId",
+            "assertSameOrigin"
+          ]
+        }
+      ]
+    },
+    {
+      "file": "src/routes/api/mind/mcp/tools.ts",
+      "path": "/api/mind/mcp/tools",
+      "methods": [
+        "GET"
+      ],
+      "policy": "owner_read",
+      "notes": "Verified session/bearer owner scopes records and dispatch; origin guard precedes browser mutation.",
+      "evidence": [
+        {
+          "file": "src/routes/api/mind/mcp/tools.ts",
+          "requires": [
+            "requireUserId"
+          ]
+        }
+      ]
+    },
+    {
+      "file": "src/routes/api/mind/media/cloud/fetch.ts",
+      "path": "/api/mind/media/cloud/fetch",
+      "methods": [
+        "POST"
+      ],
+      "policy": "owner_fetch_metadata",
+      "notes": "Verified session/bearer owner scopes records and dispatch; origin guard precedes browser mutation.",
+      "evidence": [
+        {
+          "file": "src/lib/mind/media/cloud/http.ts",
+          "requires": [
+            "requireUserId",
+            "decideFetchSite"
+          ]
+        }
+      ]
+    },
+    {
+      "file": "src/routes/api/mind/media/cloud/list.ts",
+      "path": "/api/mind/media/cloud/list",
+      "methods": [
+        "GET"
+      ],
+      "policy": "owner_fetch_metadata",
+      "notes": "Verified session/bearer owner scopes records and dispatch; origin guard precedes browser mutation.",
+      "evidence": [
+        {
+          "file": "src/lib/mind/media/cloud/http.ts",
+          "requires": [
+            "requireUserId",
+            "decideFetchSite"
+          ]
+        }
+      ]
+    },
+    {
+      "file": "src/routes/api/mind/media/cloud/status.ts",
+      "path": "/api/mind/media/cloud/status",
+      "methods": [
+        "GET"
+      ],
+      "policy": "owner_fetch_metadata",
+      "notes": "Verified session/bearer owner scopes records and dispatch; origin guard precedes browser mutation.",
+      "evidence": [
+        {
+          "file": "src/lib/mind/media/cloud/http.ts",
+          "requires": [
+            "requireUserId",
+            "decideFetchSite"
+          ]
+        }
+      ]
+    },
+    {
+      "file": "src/routes/api/mind/media/generate.ts",
+      "path": "/api/mind/media/generate",
+      "methods": [
+        "GET",
+        "POST"
+      ],
+      "policy": "owner_fetch_metadata",
+      "notes": "Verified session/bearer owner scopes records and dispatch; origin guard precedes browser mutation.",
+      "evidence": [
+        {
+          "file": "src/lib/mind/media/imagine-http.ts",
+          "requires": [
+            "requireUserId",
+            "decideFetchSite"
+          ]
+        }
+      ]
+    },
+    {
+      "file": "src/routes/api/mind/media/storage/status.ts",
+      "path": "/api/mind/media/storage/status",
+      "methods": [
+        "GET"
+      ],
+      "policy": "owner_fetch_metadata",
+      "notes": "Verified session/bearer owner scopes records and dispatch; origin guard precedes browser mutation.",
+      "evidence": [
+        {
+          "file": "src/lib/mind/media/storage/http.ts",
+          "requires": [
+            "requireUserId",
+            "decideFetchSite"
+          ]
+        }
+      ]
+    },
+    {
+      "file": "src/routes/api/mind/media/storage/upload.ts",
+      "path": "/api/mind/media/storage/upload",
+      "methods": [
+        "POST"
+      ],
+      "policy": "owner_fetch_metadata",
+      "notes": "Verified session/bearer owner scopes records and dispatch; origin guard precedes browser mutation.",
+      "evidence": [
+        {
+          "file": "src/lib/mind/media/storage/http.ts",
+          "requires": [
+            "requireUserId",
+            "decideFetchSite"
+          ]
+        }
+      ]
+    },
+    {
+      "file": "src/routes/api/mind/memory-policy.ts",
+      "path": "/api/mind/memory-policy",
+      "methods": [
+        "GET",
+        "POST"
+      ],
+      "policy": "owner_origin",
+      "notes": "Reads and updates the verified owner’s dispatch-time memory permissions.",
+      "evidence": [
+        {
+          "file": "src/routes/api/mind/memory-policy.ts",
+          "requires": [
+            "requireUserId",
+            "assertSameOrigin",
+            "readOwnerMemoryPolicy",
+            "writeOwnerMemoryPolicy"
+          ]
+        }
+      ]
+    },
+    {
+      "file": "src/routes/api/mind/nuance/key.ts",
+      "path": "/api/mind/nuance/key",
+      "methods": [
+        "POST"
+      ],
+      "policy": "owner_origin",
+      "notes": "Verified session/bearer owner scopes records and dispatch; origin guard precedes browser mutation.",
+      "evidence": [
+        {
+          "file": "src/routes/api/mind/nuance/key.ts",
+          "requires": [
+            "requireUserId",
+            "assertSameOrigin"
+          ]
+        }
+      ]
+    },
+    {
+      "file": "src/routes/api/mind/nuance/session.ts",
+      "path": "/api/mind/nuance/session",
+      "methods": [
+        "GET",
+        "POST"
+      ],
+      "policy": "owner_origin",
+      "notes": "Verified session/bearer owner scopes records and dispatch; origin guard precedes browser mutation.",
+      "evidence": [
+        {
+          "file": "src/routes/api/mind/nuance/session.ts",
+          "requires": [
+            "requireUserId",
+            "assertSameOrigin"
+          ]
+        }
+      ]
+    },
+    {
+      "file": "src/routes/api/mind/oauth/$connector/callback.ts",
+      "path": "/api/mind/oauth/$connector/callback",
+      "methods": [
+        "GET"
+      ],
+      "policy": "oauth_callback",
+      "notes": "Provider redirect requires code/state and current expected owner; durable exchange consumes owner-bound expiring state.",
+      "evidence": [
+        {
+          "file": "src/routes/api/mind/oauth/$connector/callback.ts",
+          "requires": [
+            "expectedOwnerId",
+            "state"
+          ]
+        },
+        {
+          "file": "src/lib/mind/connectors/durable-oauth.server.ts",
+          "requires": [
+            "state_hash",
+            "expires_at"
+          ]
+        }
+      ]
+    },
+    {
+      "file": "src/routes/api/mind/oauth/$connector/disconnect.ts",
+      "path": "/api/mind/oauth/$connector/disconnect",
+      "methods": [
+        "POST"
+      ],
+      "policy": "owner_origin",
+      "notes": "Verified session/bearer owner scopes records and dispatch; origin guard precedes browser mutation.",
+      "evidence": [
+        {
+          "file": "src/routes/api/mind/oauth/$connector/disconnect.ts",
+          "requires": [
+            "requireUserId",
+            "assertSameOrigin"
+          ]
+        }
+      ]
+    },
+    {
+      "file": "src/routes/api/mind/oauth/$connector/start.ts",
+      "path": "/api/mind/oauth/$connector/start",
+      "methods": [
+        "GET"
+      ],
+      "policy": "owner_origin",
+      "notes": "Verified session/bearer owner scopes records and dispatch; origin guard precedes browser mutation. GET creates pending OAuth state and therefore also checks origin.",
+      "evidence": [
+        {
+          "file": "src/routes/api/mind/oauth/$connector/start.ts",
+          "requires": [
+            "requireUserId",
+            "assertSameOrigin"
+          ]
+        }
+      ]
+    },
+    {
+      "file": "src/routes/api/mind/oauth/$connector/status.ts",
+      "path": "/api/mind/oauth/$connector/status",
+      "methods": [
+        "GET"
+      ],
+      "policy": "owner_read",
+      "notes": "Verified session/bearer owner scopes records and dispatch; origin guard precedes browser mutation.",
+      "evidence": [
+        {
+          "file": "src/routes/api/mind/oauth/$connector/status.ts",
+          "requires": [
+            "requireUserId"
+          ]
+        }
+      ]
+    },
+    {
+      "file": "src/routes/api/mind/oauth/notion/callback.ts",
+      "path": "/api/mind/oauth/notion/callback",
+      "methods": [
+        "GET"
+      ],
+      "policy": "oauth_callback",
+      "notes": "Provider redirect requires code/state and current expected owner; durable exchange consumes owner-bound expiring state.",
+      "evidence": [
+        {
+          "file": "src/routes/api/mind/oauth/notion/callback.ts",
+          "requires": [
+            "expectedOwnerId",
+            "state"
+          ]
+        },
+        {
+          "file": "src/lib/mind/connectors/durable-oauth.server.ts",
+          "requires": [
+            "state_hash",
+            "expires_at"
+          ]
+        }
+      ]
+    },
+    {
+      "file": "src/routes/api/mind/oauth/notion/disconnect.ts",
+      "path": "/api/mind/oauth/notion/disconnect",
+      "methods": [
+        "POST"
+      ],
+      "policy": "owner_origin",
+      "notes": "Verified session/bearer owner scopes records and dispatch; origin guard precedes browser mutation.",
+      "evidence": [
+        {
+          "file": "src/routes/api/mind/oauth/notion/disconnect.ts",
+          "requires": [
+            "requireUserId",
+            "assertSameOrigin"
+          ]
+        }
+      ]
+    },
+    {
+      "file": "src/routes/api/mind/oauth/notion/start.ts",
+      "path": "/api/mind/oauth/notion/start",
+      "methods": [
+        "GET"
+      ],
+      "policy": "owner_origin",
+      "notes": "Verified session/bearer owner scopes records and dispatch; origin guard precedes browser mutation. GET creates pending OAuth state and therefore also checks origin.",
+      "evidence": [
+        {
+          "file": "src/routes/api/mind/oauth/notion/start.ts",
+          "requires": [
+            "requireUserId",
+            "assertSameOrigin"
+          ]
+        }
+      ]
+    },
+    {
+      "file": "src/routes/api/mind/oauth/notion/status.ts",
+      "path": "/api/mind/oauth/notion/status",
+      "methods": [
+        "GET"
+      ],
+      "policy": "owner_read",
+      "notes": "Verified session/bearer owner scopes records and dispatch; origin guard precedes browser mutation.",
+      "evidence": [
+        {
+          "file": "src/routes/api/mind/oauth/notion/status.ts",
+          "requires": [
+            "requireUserId"
+          ]
+        }
+      ]
+    },
+    {
+      "file": "src/routes/api/mind/pairing/action.ts",
+      "path": "/api/mind/pairing/action",
+      "methods": [
+        "POST"
+      ],
+      "policy": "mixed_owner_device",
+      "notes": "sign: owner+origin+device ownership+halt; verify: device token+signed scope+halt; report/rotate: verified device token.",
+      "evidence": [
+        {
+          "file": "src/routes/api/mind/pairing/action.ts",
+          "requires": [
+            "handleSignAction",
+            "handleVerifyAction",
+            "handleReportAction",
+            "handleRotateToken"
+          ]
+        },
+        {
+          "file": "src/lib/mind/pairing/pairing.server.ts",
+          "requires": [
+            "requireUserId",
+            "assertSameOrigin"
+          ]
+        }
+      ]
+    },
+    {
+      "file": "src/routes/api/mind/pairing/code.ts",
+      "path": "/api/mind/pairing/code",
+      "methods": [
+        "POST"
+      ],
+      "policy": "owner_origin",
+      "notes": "Owner session plus same-origin required before minting a short-lived pairing code.",
+      "evidence": [
+        {
+          "file": "src/lib/mind/pairing/pairing.server.ts",
+          "requires": [
+            "requireUserId",
+            "assertSameOrigin"
+          ]
+        },
+        {
+          "file": "src/routes/api/mind/pairing/code.ts",
+          "requires": [
+            "handleMintPairingCode"
+          ]
+        }
+      ]
+    },
+    {
+      "file": "src/routes/api/mind/pairing/handshake.ts",
+      "path": "/api/mind/pairing/handshake",
+      "methods": [
+        "POST"
+      ],
+      "policy": "paired_device",
+      "notes": "Single-use short-lived pairing code, public-key binding, attempt throttle and pinned origin/TLS when supplied.",
+      "evidence": [
+        {
+          "file": "src/routes/api/mind/pairing/handshake.ts",
+          "requires": [
+            "handleHandshake"
+          ]
+        },
+        {
+          "file": "src/lib/mind/pairing/pairing.server.ts",
+          "requires": [
+            "exchangePairingCode"
+          ]
+        }
+      ]
+    },
+    {
+      "file": "src/routes/api/mind/pairing/heartbeat.ts",
+      "path": "/api/mind/pairing/heartbeat",
+      "methods": [
+        "POST"
+      ],
+      "policy": "paired_device",
+      "notes": "Device token/revocation and optional fingerprint required; no cookie authorization.",
+      "evidence": [
+        {
+          "file": "src/routes/api/mind/pairing/heartbeat.ts",
+          "requires": [
+            "handleHeartbeat"
+          ]
+        },
+        {
+          "file": "src/lib/mind/pairing/pairing.server.ts",
+          "requires": [
+            "recordHeartbeat"
+          ]
+        }
+      ]
+    },
+    {
+      "file": "src/routes/api/mind/pairing/manifest.ts",
+      "path": "/api/mind/pairing/manifest",
+      "methods": [
+        "GET",
+        "POST"
+      ],
+      "policy": "public_verification",
+      "notes": "GET returns signed public agent manifest; POST op=verify checks supplied files/signature and performs no account mutation or command.",
+      "evidence": [
+        {
+          "file": "src/routes/api/mind/pairing/manifest.ts",
+          "requires": [
+            "verifyAgentFiles",
+            "requireSignature: true"
+          ]
+        }
+      ]
+    },
+    {
+      "file": "src/routes/api/mind/pairing/status.ts",
+      "path": "/api/mind/pairing/status",
+      "methods": [
+        "GET"
+      ],
+      "policy": "owner_read",
+      "notes": "Verified session/bearer owner scopes records and dispatch; origin guard precedes browser mutation.",
+      "evidence": [
+        {
+          "file": "src/lib/mind/pairing/pairing.server.ts",
+          "requires": [
+            "requireUserId"
+          ]
+        },
+        {
+          "file": "src/routes/api/mind/pairing/status.ts",
+          "requires": [
+            "handlePairingStatus"
+          ]
+        }
+      ]
+    },
+    {
+      "file": "src/routes/api/mind/pairing/stop.ts",
+      "path": "/api/mind/pairing/stop",
+      "methods": [
+        "POST"
+      ],
+      "policy": "mixed_owner_device",
+      "notes": "Stop: owner+origin or valid self-device token; clear: owner+origin. Resuming does not resurrect a revoked token.",
+      "evidence": [
+        {
+          "file": "src/routes/api/mind/pairing/stop.ts",
+          "requires": [
+            "handleEmergencyStop",
+            "handleClearEmergencyStop"
+          ]
+        },
+        {
+          "file": "src/lib/mind/pairing/pairing.server.ts",
+          "requires": [
+            "requireUserId",
+            "assertSameOrigin"
+          ]
+        }
+      ]
+    },
+    {
+      "file": "src/routes/api/mind/pc/approvals.ts",
+      "path": "/api/mind/pc/approvals",
+      "methods": [
+        "GET"
+      ],
+      "policy": "owner_read",
+      "notes": "Verified session/bearer owner scopes records and dispatch; origin guard precedes browser mutation.",
+      "evidence": [
+        {
+          "file": "src/routes/api/mind/pc/approvals.ts",
+          "requires": [
+            "requireUserId"
+          ]
+        }
+      ]
+    },
+    {
+      "file": "src/routes/api/mind/pc/approve.ts",
+      "path": "/api/mind/pc/approve",
+      "methods": [
+        "POST"
+      ],
+      "policy": "owner_origin",
+      "notes": "Verified session/bearer owner scopes records and dispatch; origin guard precedes browser mutation.",
+      "evidence": [
+        {
+          "file": "src/routes/api/mind/pc/approve.ts",
+          "requires": [
+            "requireUserId",
+            "assertSameOrigin"
+          ]
+        }
+      ]
+    },
+    {
+      "file": "src/routes/api/mind/pc/deny.ts",
+      "path": "/api/mind/pc/deny",
+      "methods": [
+        "POST"
+      ],
+      "policy": "owner_origin",
+      "notes": "Verified session/bearer owner scopes records and dispatch; origin guard precedes browser mutation.",
+      "evidence": [
+        {
+          "file": "src/routes/api/mind/pc/deny.ts",
+          "requires": [
+            "requireUserId",
+            "assertSameOrigin"
+          ]
+        }
+      ]
+    },
+    {
+      "file": "src/routes/api/mind/pc/events.ts",
+      "path": "/api/mind/pc/events",
+      "methods": [
+        "GET",
+        "POST"
+      ],
+      "policy": "mixed_owner_device",
+      "notes": "GET verifies owner and job owner; POST verifies device token and exact job/agent association.",
+      "evidence": [
+        {
+          "file": "src/routes/api/mind/pc/events.ts",
+          "requires": [
+            "requireUserId",
+            "findAgentByToken",
+            "job.ownerId !== ownerId"
+          ]
+        }
+      ]
+    },
+    {
+      "file": "src/routes/api/mind/pc/jobs.ts",
+      "path": "/api/mind/pc/jobs",
+      "methods": [
+        "GET",
+        "POST"
+      ],
+      "policy": "paired_device",
+      "notes": "Agent token and exact device/job association required; job transitions preserve halt/cancel/outcome authority.",
+      "evidence": [
+        {
+          "file": "src/routes/api/mind/pc/jobs.ts",
+          "requires": [
+            "findAgentByToken"
+          ]
+        }
+      ]
+    },
+    {
+      "file": "src/routes/api/mind/pc/register.ts",
+      "path": "/api/mind/pc/register",
+      "methods": [
+        "DELETE",
+        "POST"
+      ],
+      "policy": "mixed_owner_device",
+      "notes": "POST verifies owner+origin; DELETE verifies owner or explicit self-device token+origin before revocation.",
+      "evidence": [
+        {
+          "file": "src/routes/api/mind/pc/register.ts",
+          "requires": [
+            "requireUserId",
+            "findAgentByToken",
+            "assertSameOrigin"
+          ]
+        }
+      ]
+    },
+    {
+      "file": "src/routes/api/mind/pc/result.ts",
+      "path": "/api/mind/pc/result",
+      "methods": [
+        "POST"
+      ],
+      "policy": "paired_device",
+      "notes": "Agent token and exact device/job association required; job transitions preserve halt/cancel/outcome authority.",
+      "evidence": [
+        {
+          "file": "src/routes/api/mind/pc/result.ts",
+          "requires": [
+            "findAgentByToken"
+          ]
+        }
+      ]
+    },
+    {
+      "file": "src/routes/api/mind/pc/status.ts",
+      "path": "/api/mind/pc/status",
+      "methods": [
+        "GET",
+        "POST"
+      ],
+      "policy": "owner_origin",
+      "notes": "Verified session/bearer owner scopes records and dispatch; origin guard precedes browser mutation.",
+      "evidence": [
+        {
+          "file": "src/routes/api/mind/pc/status.ts",
+          "requires": [
+            "requireUserId",
+            "assertSameOrigin"
+          ]
+        }
+      ]
+    },
+    {
+      "file": "src/routes/api/mind/providers.ts",
+      "path": "/api/mind/providers",
+      "methods": [
+        "GET",
+        "POST"
+      ],
+      "policy": "owner_origin",
+      "notes": "Verified session/bearer owner scopes records and dispatch; origin guard precedes browser mutation.",
+      "evidence": [
+        {
+          "file": "src/routes/api/mind/providers.ts",
+          "requires": [
+            "requireUserId",
+            "assertSameOrigin"
+          ]
+        }
+      ]
+    },
+    {
+      "file": "src/routes/api/mind/receipts.ts",
+      "path": "/api/mind/receipts",
+      "methods": [
+        "POST"
+      ],
+      "policy": "owner_origin",
+      "notes": "Verified session/bearer owner scopes records and dispatch; origin guard precedes browser mutation.",
+      "evidence": [
+        {
+          "file": "src/routes/api/mind/receipts.ts",
+          "requires": [
+            "requireUserId",
+            "assertSameOrigin"
+          ]
+        }
+      ]
+    },
+    {
+      "file": "src/routes/api/mind/research-reports.ts",
+      "path": "/api/mind/research-reports",
+      "methods": [
+        "DELETE",
+        "GET",
+        "PATCH"
+      ],
+      "policy": "owner_origin",
+      "notes": "Verified session/bearer owner scopes records and dispatch; origin guard precedes browser mutation.",
+      "evidence": [
+        {
+          "file": "src/lib/mind/research-http.server.ts",
+          "requires": [
+            "requireUserId",
+            "assertSameOrigin"
+          ]
+        }
+      ]
+    },
+    {
+      "file": "src/routes/api/mind/resources.ts",
+      "path": "/api/mind/resources",
+      "methods": [
+        "GET",
+        "PUT"
+      ],
+      "policy": "owner_fetch_metadata",
+      "notes": "Verified session/bearer owner scopes records and dispatch; origin guard precedes browser mutation.",
+      "evidence": [
+        {
+          "file": "src/lib/mind/resource-http.server.ts",
+          "requires": [
+            "requireUserId",
+            "decideFetchSite"
+          ]
+        }
+      ]
+    },
+    {
+      "file": "src/routes/api/mind/schedules/tick.ts",
+      "path": "/api/mind/schedules/tick",
+      "methods": [
+        "POST"
+      ],
+      "policy": "schedule_worker",
+      "notes": "Rejects missing or mismatched worker authorization and checks stop state before a bounded pass.",
+      "evidence": [
+        {
+          "file": "src/lib/mind/schedule-tick.server.ts",
+          "requires": [
+            "MIND_SCHEDULE_WORKER_TOKEN",
+            "expected.length < 32",
+            "timingSafeEqual",
+            "runLocalSchedulePass",
+            "readHaltState"
+          ]
+        }
+      ]
+    },
+    {
+      "file": "src/routes/api/mind/session.ts",
+      "path": "/api/mind/session",
+      "methods": [
+        "GET"
+      ],
+      "policy": "session_probe",
+      "notes": "Returns the canonical signed-in owner, a signed-out response, an identity conflict or an unavailable status.",
+      "evidence": [
+        {
+          "file": "src/routes/api/mind/session.ts",
+          "requires": [
+            "getSessionUser",
+            "handleSessionIdentity"
+          ]
+        }
+      ]
+    },
+    {
+      "file": "src/routes/api/mind/sessions.ts",
+      "path": "/api/mind/sessions",
+      "methods": [
+        "GET",
+        "POST"
+      ],
+      "policy": "owner_origin",
+      "notes": "Lists the verified owner’s Better Auth devices and revokes only a reviewed session after the same-origin check.",
+      "evidence": [
+        {
+          "file": "src/routes/api/mind/sessions.ts",
+          "requires": [
+            "requireUserId",
+            "assertSameOrigin",
+            "session.user.id !== owner",
+            "sessionToRevoke"
+          ]
+        }
+      ]
+    },
+    {
+      "file": "src/routes/api/mind/skills.ts",
+      "path": "/api/mind/skills",
+      "methods": [
+        "GET",
+        "POST",
+        "PUT"
+      ],
+      "policy": "owner_origin",
+      "notes": "Verified session/bearer owner scopes records and dispatch; origin guard precedes browser mutation.",
+      "evidence": [
+        {
+          "file": "src/routes/api/mind/skills.ts",
+          "requires": [
+            "requireUserId",
+            "assertSameOrigin"
+          ]
+        }
+      ]
+    },
+    {
+      "file": "src/routes/api/mind/turn.ts",
+      "path": "/api/mind/turn",
+      "methods": [
+        "GET",
+        "POST"
+      ],
+      "policy": "owner_fetch_metadata",
+      "notes": "Verified session/bearer owner scopes records and dispatch; origin guard precedes browser mutation.",
+      "evidence": [
+        {
+          "file": "src/lib/mind/turn.server.ts",
+          "requires": [
+            "requireUserId",
+            "decideFetchSite"
+          ]
+        }
+      ]
+    },
+    {
+      "file": "src/routes/api/mind/usage.ts",
+      "path": "/api/mind/usage",
+      "methods": [
+        "DELETE",
+        "GET"
+      ],
+      "policy": "owner_fetch_metadata",
+      "notes": "Isolation and owner checks cover usage history and confirmed retention deletion.",
+      "evidence": [
+        {
+          "file": "src/routes/api/mind/usage.ts",
+          "requires": [
+            "decideRequestIsolation",
+            "requireUserId",
+            "body.body.ownerId !== owner",
+            "deleteUsageBefore"
+          ]
+        }
+      ]
+    },
+    {
+      "file": "src/routes/api/mind/voice/call.ts",
+      "path": "/api/mind/voice/call",
+      "methods": [
+        "POST"
+      ],
+      "policy": "owner_origin",
+      "notes": "Verified session/bearer owner scopes records and dispatch; origin guard precedes browser mutation.",
+      "evidence": [
+        {
+          "file": "src/lib/mind/voice/call.server.ts",
+          "requires": [
+            "requireUserId",
+            "assertSameOrigin"
+          ]
+        }
+      ]
+    },
+    {
+      "file": "src/routes/api/mind/voice/session.ts",
+      "path": "/api/mind/voice/session",
+      "methods": [
+        "POST"
+      ],
+      "policy": "owner_fetch_metadata",
+      "notes": "Verified session/bearer owner scopes records and dispatch; origin guard precedes browser mutation.",
+      "evidence": [
+        {
+          "file": "src/lib/mind/voice/http.server.ts",
+          "requires": [
+            "requireUserId",
+            "decideFetchSite"
+          ]
+        }
+      ]
+    },
+    {
+      "file": "src/routes/api/mind/voice/stt.ts",
+      "path": "/api/mind/voice/stt",
+      "methods": [
+        "POST"
+      ],
+      "policy": "owner_fetch_metadata",
+      "notes": "Verified session/bearer owner scopes records and dispatch; origin guard precedes browser mutation.",
+      "evidence": [
+        {
+          "file": "src/lib/mind/voice/http.server.ts",
+          "requires": [
+            "requireUserId",
+            "decideFetchSite"
+          ]
+        }
+      ]
+    },
+    {
+      "file": "src/routes/api/mind/voice/tts.ts",
+      "path": "/api/mind/voice/tts",
+      "methods": [
+        "POST"
+      ],
+      "policy": "owner_fetch_metadata",
+      "notes": "Verified session/bearer owner scopes records and dispatch; origin guard precedes browser mutation.",
+      "evidence": [
+        {
+          "file": "src/lib/mind/voice/http.server.ts",
+          "requires": [
+            "requireUserId",
+            "decideFetchSite"
+          ]
+        }
+      ]
+    },
+    {
+      "file": "src/routes/auth/callback.tsx",
+      "path": "/auth/callback",
+      "methods": [
+        "GET"
+      ],
+      "policy": "oauth_callback",
+      "notes": "Supabase PKCE/code exchange and safe redirect; active-identity continuity checked before replacing a session.",
+      "evidence": [
+        {
+          "file": "src/routes/auth/callback.tsx",
+          "requires": [
+            "handleAuthCallback(request)"
+          ]
+        },
+        {
+          "file": "src/lib/supabase/callback.server.ts",
+          "requires": [
+            "exchangeCodeForSession"
+          ]
+        }
+      ]
+    }
+  ],
+  "functions": [
+    {
+      "file": "src/lib/app-data/readiness.ts",
+      "name": "getConnectorReadiness",
+      "method": "POST",
+      "policy": "public_status",
+      "notes": "Public boolean connector readiness only; POST is a read and cannot dispatch.",
+      "evidence": [
+        {
+          "file": "src/lib/app-data/readiness.ts",
+          "requires": [
+            "isConnectorTokenReady()"
+          ]
+        }
+      ],
+      "requiredInExport": [
+        "isConnectorTokenReady()"
+      ]
+    },
+    {
+      "file": "src/lib/mind/custom-connection-fns.ts",
+      "name": "callCustomConnectionFn",
+      "method": "POST",
+      "policy": "owner_rpc",
+      "notes": "Verified owner and isolation via authMiddleware; handler scopes records/dispatch by context.userId.",
+      "evidence": [
+        {
+          "file": "src/lib/auth/middleware.ts",
+          "requires": [
+            "assertSameSiteRequest()",
+            "requireUserId(context.bearerToken)"
+          ]
+        }
+      ],
+      "requiredInExport": [
+        ".middleware([authMiddleware])"
+      ]
+    },
+    {
+      "file": "src/lib/mind/custom-connection-fns.ts",
+      "name": "listCustomConnectionsFn",
+      "method": "GET",
+      "policy": "owner_rpc",
+      "notes": "Verified owner and isolation via authMiddleware; handler scopes records/dispatch by context.userId.",
+      "evidence": [
+        {
+          "file": "src/lib/auth/middleware.ts",
+          "requires": [
+            "assertSameSiteRequest()",
+            "requireUserId(context.bearerToken)"
+          ]
+        }
+      ],
+      "requiredInExport": [
+        ".middleware([authMiddleware])"
+      ]
+    },
+    {
+      "file": "src/lib/mind/custom-connection-fns.ts",
+      "name": "refreshCustomConnectionFn",
+      "method": "POST",
+      "policy": "owner_rpc",
+      "notes": "Refreshes the signed-in owner’s connection while honoring the stop state.",
+      "evidence": [
+        {
+          "file": "src/lib/mind/custom-connection-fns.ts",
+          "requires": [
+            "authMiddleware",
+            "haltIsOn(context.userId)",
+            "refreshMcp(db, context.userId"
+          ]
+        }
+      ],
+      "requiredInExport": [
+        "authMiddleware",
+        "haltIsOn(context.userId)",
+        "refreshMcp(db, context.userId"
+      ]
+    },
+    {
+      "file": "src/lib/mind/custom-connection-fns.ts",
+      "name": "saveCustomConnectionFn",
+      "method": "POST",
+      "policy": "owner_rpc",
+      "notes": "Verified owner and isolation via authMiddleware; handler scopes records/dispatch by context.userId.",
+      "evidence": [
+        {
+          "file": "src/lib/auth/middleware.ts",
+          "requires": [
+            "assertSameSiteRequest()",
+            "requireUserId(context.bearerToken)"
+          ]
+        }
+      ],
+      "requiredInExport": [
+        ".middleware([authMiddleware])"
+      ]
+    },
+    {
+      "file": "src/lib/mind/dashboard/owner-connections.ts",
+      "name": "ownerConnections",
+      "method": "POST",
+      "policy": "owner_rpc",
+      "notes": "Verified owner and isolation via authMiddleware; handler scopes records/dispatch by context.userId.",
+      "evidence": [
+        {
+          "file": "src/lib/auth/middleware.ts",
+          "requires": [
+            "assertSameSiteRequest()",
+            "requireUserId(context.bearerToken)"
+          ]
+        }
+      ],
+      "requiredInExport": [
+        ".middleware([authMiddleware])"
+      ]
+    },
+    {
+      "file": "src/lib/mind/dashboard/require-dashboard-user.ts",
+      "name": "requireDashboardUser",
+      "method": "GET",
+      "policy": "session_probe",
+      "notes": "Verified actual session and configured owner gate; signed-out redirects, disallowed owner returns forbidden.",
+      "evidence": [
+        {
+          "file": "src/lib/mind/dashboard/require-dashboard-user.ts",
+          "requires": [
+            "getSessionUser()",
+            "isMindOwnerId(user.id)"
+          ]
+        }
+      ],
+      "requiredInExport": [
+        "getSessionUser()",
+        "isMindOwnerId(user.id)"
+      ]
+    },
+    {
+      "file": "src/lib/mind/notion-workspaces.ts",
+      "name": "listNotionWorkspaces",
+      "method": "GET",
+      "policy": "owner_rpc",
+      "notes": "Verified owner and isolation via authMiddleware; handler scopes records/dispatch by context.userId.",
+      "evidence": [
+        {
+          "file": "src/lib/auth/middleware.ts",
+          "requires": [
+            "assertSameSiteRequest()",
+            "requireUserId(context.bearerToken)"
+          ]
+        }
+      ],
+      "requiredInExport": [
+        ".middleware([authMiddleware])"
+      ]
+    },
+    {
+      "file": "src/lib/mind/notion-workspaces.ts",
+      "name": "selectNotionWorkspace",
+      "method": "POST",
+      "policy": "owner_rpc",
+      "notes": "Verified owner and isolation via authMiddleware; handler scopes records/dispatch by context.userId.",
+      "evidence": [
+        {
+          "file": "src/lib/auth/middleware.ts",
+          "requires": [
+            "assertSameSiteRequest()",
+            "requireUserId(context.bearerToken)"
+          ]
+        }
+      ],
+      "requiredInExport": [
+        ".middleware([authMiddleware])"
+      ]
+    },
+    {
+      "file": "src/lib/mind/owner-keys-fns.ts",
+      "name": "copyOwnerKeyFn",
+      "method": "POST",
+      "policy": "local_only",
+      "notes": "Origin-only middleware; underlying copy refuses hosted Vercel, absent request or non-loopback host. No remote credential-copy allowance.",
+      "evidence": [
+        {
+          "file": "src/lib/mind/owner-keys.server.ts",
+          "requires": [
+            "hostIsLocal(host)",
+            "process.env.VERCEL === \"1\""
+          ]
+        }
+      ],
+      "requiredInExport": [
+        ".middleware([isolationMiddleware])"
+      ]
+    },
+    {
+      "file": "src/lib/mind/owner-keys-fns.ts",
+      "name": "listOwnerKeySlotsFn",
+      "method": "GET",
+      "policy": "public_status",
+      "notes": "Public server slot presence and last-four metadata only; secret value requires separate local-only copy.",
+      "evidence": [
+        {
+          "file": "src/lib/mind/owner-keys-fns.ts",
+          "requires": [
+            "listOwnerKeySlots()"
+          ]
+        }
+      ],
+      "requiredInExport": [
+        "listOwnerKeySlots()"
+      ]
+    },
+    {
+      "file": "src/lib/mind/rea.ts",
+      "name": "reaDoctor",
+      "method": "POST",
+      "policy": "owner_rpc",
+      "notes": "Verified owner and isolation via authMiddleware; handler scopes records/dispatch by context.userId.",
+      "evidence": [
+        {
+          "file": "src/lib/auth/middleware.ts",
+          "requires": [
+            "assertSameSiteRequest()",
+            "requireUserId(context.bearerToken)"
+          ]
+        }
+      ],
+      "requiredInExport": [
+        ".middleware([authMiddleware])"
+      ]
+    },
+    {
+      "file": "src/lib/mind/rea.ts",
+      "name": "reaInspect",
+      "method": "POST",
+      "policy": "owner_rpc",
+      "notes": "Verified owner and isolation via authMiddleware; handler scopes records/dispatch by context.userId.",
+      "evidence": [
+        {
+          "file": "src/lib/auth/middleware.ts",
+          "requires": [
+            "assertSameSiteRequest()",
+            "requireUserId(context.bearerToken)"
+          ]
+        }
+      ],
+      "requiredInExport": [
+        ".middleware([authMiddleware])"
+      ]
+    },
+    {
+      "file": "src/lib/mind/server.ts",
+      "name": "analyzeImageFile",
+      "method": "POST",
+      "policy": "owner_rpc",
+      "notes": "Verified owner and isolation via authMiddleware; handler scopes records/dispatch by context.userId.",
+      "evidence": [
+        {
+          "file": "src/lib/auth/middleware.ts",
+          "requires": [
+            "assertSameSiteRequest()",
+            "requireUserId(context.bearerToken)"
+          ]
+        }
+      ],
+      "requiredInExport": [
+        ".middleware([authMiddleware])"
+      ]
+    },
+    {
+      "file": "src/lib/mind/server.ts",
+      "name": "createMindMemory",
+      "method": "POST",
+      "policy": "owner_rpc",
+      "notes": "Verified owner and isolation via authMiddleware; handler scopes records/dispatch by context.userId.",
+      "evidence": [
+        {
+          "file": "src/lib/auth/middleware.ts",
+          "requires": [
+            "assertSameSiteRequest()",
+            "requireUserId(context.bearerToken)"
+          ]
+        }
+      ],
+      "requiredInExport": [
+        ".middleware([authMiddleware])"
+      ]
+    },
+    {
+      "file": "src/lib/mind/server.ts",
+      "name": "createVoiceClientSecret",
+      "method": "POST",
+      "policy": "owner_rpc",
+      "notes": "Verified owner and isolation via authMiddleware; handler scopes records/dispatch by context.userId.",
+      "evidence": [
+        {
+          "file": "src/lib/auth/middleware.ts",
+          "requires": [
+            "assertSameSiteRequest()",
+            "requireUserId(context.bearerToken)"
+          ]
+        }
+      ],
+      "requiredInExport": [
+        ".middleware([authMiddleware])"
+      ]
+    },
+    {
+      "file": "src/lib/mind/server.ts",
+      "name": "deleteMindMemory",
+      "method": "POST",
+      "policy": "owner_rpc",
+      "notes": "Verified owner and isolation via authMiddleware; handler scopes records/dispatch by context.userId.",
+      "evidence": [
+        {
+          "file": "src/lib/auth/middleware.ts",
+          "requires": [
+            "assertSameSiteRequest()",
+            "requireUserId(context.bearerToken)"
+          ]
+        }
+      ],
+      "requiredInExport": [
+        ".middleware([authMiddleware])"
+      ]
+    },
+    {
+      "file": "src/lib/mind/server.ts",
+      "name": "editMindMemory",
+      "method": "POST",
+      "policy": "owner_rpc",
+      "notes": "Verified owner and isolation via authMiddleware; handler scopes records/dispatch by context.userId.",
+      "evidence": [
+        {
+          "file": "src/lib/auth/middleware.ts",
+          "requires": [
+            "assertSameSiteRequest()",
+            "requireUserId(context.bearerToken)"
+          ]
+        }
+      ],
+      "requiredInExport": [
+        ".middleware([authMiddleware])"
+      ]
+    },
+    {
+      "file": "src/lib/mind/server.ts",
+      "name": "inspectWebPage",
+      "method": "POST",
+      "policy": "owner_rpc",
+      "notes": "Verified owner and isolation via authMiddleware; handler scopes records/dispatch by context.userId.",
+      "evidence": [
+        {
+          "file": "src/lib/auth/middleware.ts",
+          "requires": [
+            "assertSameSiteRequest()",
+            "requireUserId(context.bearerToken)"
+          ]
+        }
+      ],
+      "requiredInExport": [
+        ".middleware([authMiddleware])"
+      ]
+    },
+    {
+      "file": "src/lib/mind/server.ts",
+      "name": "listMindMemories",
+      "method": "GET",
+      "policy": "owner_rpc",
+      "notes": "Verified owner and isolation via authMiddleware; handler scopes records/dispatch by context.userId.",
+      "evidence": [
+        {
+          "file": "src/lib/auth/middleware.ts",
+          "requires": [
+            "assertSameSiteRequest()",
+            "requireUserId(context.bearerToken)"
+          ]
+        }
+      ],
+      "requiredInExport": [
+        ".middleware([authMiddleware])"
+      ]
+    },
+    {
+      "file": "src/lib/mind/server.ts",
+      "name": "loadAccountAttachment",
+      "method": "POST",
+      "policy": "owner_rpc",
+      "notes": "Verifies the current owner before accessing the associated account operation.",
+      "evidence": [
+        {
+          "file": "src/lib/mind/server.ts",
+          "requires": [
+            "authMiddleware",
+            "context.userId",
+            "data.ownerId !== context.userId"
+          ]
+        }
+      ],
+      "requiredInExport": [
+        "authMiddleware",
+        "context.userId",
+        "data.ownerId !== context.userId"
+      ]
+    },
+    {
+      "file": "src/lib/mind/server.ts",
+      "name": "loadMindCopy",
+      "method": "POST",
+      "policy": "owner_rpc",
+      "notes": "Verified owner and isolation via authMiddleware; handler scopes records/dispatch by context.userId.",
+      "evidence": [
+        {
+          "file": "src/lib/auth/middleware.ts",
+          "requires": [
+            "assertSameSiteRequest()",
+            "requireUserId(context.bearerToken)"
+          ]
+        }
+      ],
+      "requiredInExport": [
+        ".middleware([authMiddleware])"
+      ]
+    },
+    {
+      "file": "src/lib/mind/server.ts",
+      "name": "mcpCommand",
+      "method": "POST",
+      "policy": "owner_rpc",
+      "notes": "Verified owner and isolation via authMiddleware; handler scopes records/dispatch by context.userId.",
+      "evidence": [
+        {
+          "file": "src/lib/auth/middleware.ts",
+          "requires": [
+            "assertSameSiteRequest()",
+            "requireUserId(context.bearerToken)"
+          ]
+        }
+      ],
+      "requiredInExport": [
+        ".middleware([authMiddleware])"
+      ]
+    },
+    {
+      "file": "src/lib/mind/server.ts",
+      "name": "mcpList",
+      "method": "GET",
+      "policy": "owner_rpc",
+      "notes": "Verified owner and isolation via authMiddleware; handler scopes records/dispatch by context.userId.",
+      "evidence": [
+        {
+          "file": "src/lib/auth/middleware.ts",
+          "requires": [
+            "assertSameSiteRequest()",
+            "requireUserId(context.bearerToken)"
+          ]
+        }
+      ],
+      "requiredInExport": [
+        ".middleware([authMiddleware])"
+      ]
+    },
+    {
+      "file": "src/lib/mind/server.ts",
+      "name": "mcpRegistryCall",
+      "method": "POST",
+      "policy": "owner_rpc",
+      "notes": "Verified owner and isolation via authMiddleware; handler scopes records/dispatch by context.userId.",
+      "evidence": [
+        {
+          "file": "src/lib/auth/middleware.ts",
+          "requires": [
+            "assertSameSiteRequest()",
+            "requireUserId(context.bearerToken)"
+          ]
+        }
+      ],
+      "requiredInExport": [
+        ".middleware([authMiddleware])"
+      ]
+    },
+    {
+      "file": "src/lib/mind/server.ts",
+      "name": "mcpRegistryList",
+      "method": "GET",
+      "policy": "optional_owner_rpc",
+      "notes": "Returns typed signed-out empty status; actual registry requires verified session/dev-only explicit identity policy.",
+      "evidence": [
+        {
+          "file": "src/lib/mind/server.ts",
+          "requires": [
+            "assertSameSiteRequest()",
+            "getSessionUser(context.bearerToken)",
+            "resolveMcpListUserId"
+          ]
+        }
+      ],
+      "requiredInExport": [
+        "assertSameSiteRequest()",
+        "getSessionUser(context.bearerToken)",
+        "resolveMcpListUserId"
+      ]
+    },
+    {
+      "file": "src/lib/mind/server.ts",
+      "name": "mcpRegistryToggle",
+      "method": "POST",
+      "policy": "owner_rpc",
+      "notes": "Verified owner and isolation via authMiddleware; handler scopes records/dispatch by context.userId.",
+      "evidence": [
+        {
+          "file": "src/lib/auth/middleware.ts",
+          "requires": [
+            "assertSameSiteRequest()",
+            "requireUserId(context.bearerToken)"
+          ]
+        }
+      ],
+      "requiredInExport": [
+        ".middleware([authMiddleware])"
+      ]
+    },
+    {
+      "file": "src/lib/mind/server.ts",
+      "name": "mcpRegistryTools",
+      "method": "GET",
+      "policy": "owner_rpc",
+      "notes": "Verified owner and isolation via authMiddleware; handler scopes records/dispatch by context.userId.",
+      "evidence": [
+        {
+          "file": "src/lib/auth/middleware.ts",
+          "requires": [
+            "assertSameSiteRequest()",
+            "requireUserId(context.bearerToken)"
+          ]
+        }
+      ],
+      "requiredInExport": [
+        ".middleware([authMiddleware])"
+      ]
+    },
+    {
+      "file": "src/lib/mind/server.ts",
+      "name": "mcpRemove",
+      "method": "POST",
+      "policy": "owner_rpc",
+      "notes": "Verified owner and isolation via authMiddleware; handler scopes records/dispatch by context.userId.",
+      "evidence": [
+        {
+          "file": "src/lib/auth/middleware.ts",
+          "requires": [
+            "assertSameSiteRequest()",
+            "requireUserId(context.bearerToken)"
+          ]
+        }
+      ],
+      "requiredInExport": [
+        ".middleware([authMiddleware])"
+      ]
+    },
+    {
+      "file": "src/lib/mind/server.ts",
+      "name": "mcpSave",
+      "method": "POST",
+      "policy": "owner_rpc",
+      "notes": "Verified owner and isolation via authMiddleware; handler scopes records/dispatch by context.userId.",
+      "evidence": [
+        {
+          "file": "src/lib/auth/middleware.ts",
+          "requires": [
+            "assertSameSiteRequest()",
+            "requireUserId(context.bearerToken)"
+          ]
+        }
+      ],
+      "requiredInExport": [
+        ".middleware([authMiddleware])"
+      ]
+    },
+    {
+      "file": "src/lib/mind/server.ts",
+      "name": "mindStatus",
+      "method": "GET",
+      "policy": "public_status",
+      "notes": "Public readiness plus optional verified current-owner halt status; no credentials.",
+      "evidence": [
+        {
+          "file": "src/lib/mind/server.ts",
+          "requires": [
+            "envCheck()"
+          ]
+        }
+      ],
+      "requiredInExport": [
+        "envCheck()"
+      ]
+    },
+    {
+      "file": "src/lib/mind/server.ts",
+      "name": "notionCommand",
+      "method": "POST",
+      "policy": "owner_rpc",
+      "notes": "Verified owner and isolation via authMiddleware; handler scopes records/dispatch by context.userId.",
+      "evidence": [
+        {
+          "file": "src/lib/auth/middleware.ts",
+          "requires": [
+            "assertSameSiteRequest()",
+            "requireUserId(context.bearerToken)"
+          ]
+        }
+      ],
+      "requiredInExport": [
+        ".middleware([authMiddleware])"
+      ]
+    },
+    {
+      "file": "src/lib/mind/server.ts",
+      "name": "notionDisconnect",
+      "method": "POST",
+      "policy": "owner_rpc",
+      "notes": "Verified owner and isolation via authMiddleware; handler scopes records/dispatch by context.userId.",
+      "evidence": [
+        {
+          "file": "src/lib/auth/middleware.ts",
+          "requires": [
+            "assertSameSiteRequest()",
+            "requireUserId(context.bearerToken)"
+          ]
+        }
+      ],
+      "requiredInExport": [
+        ".middleware([authMiddleware])"
+      ]
+    },
+    {
+      "file": "src/lib/mind/server.ts",
+      "name": "notionStatus",
+      "method": "GET",
+      "policy": "owner_rpc",
+      "notes": "Verified owner and isolation via authMiddleware; handler scopes records/dispatch by context.userId.",
+      "evidence": [
+        {
+          "file": "src/lib/auth/middleware.ts",
+          "requires": [
+            "assertSameSiteRequest()",
+            "requireUserId(context.bearerToken)"
+          ]
+        }
+      ],
+      "requiredInExport": [
+        ".middleware([authMiddleware])"
+      ]
+    },
+    {
+      "file": "src/lib/mind/server.ts",
+      "name": "paperclipStatus",
+      "method": "GET",
+      "policy": "owner_rpc",
+      "notes": "Verified owner and isolation via authMiddleware; handler scopes records/dispatch by context.userId.",
+      "evidence": [
+        {
+          "file": "src/lib/auth/middleware.ts",
+          "requires": [
+            "assertSameSiteRequest()",
+            "requireUserId(context.bearerToken)"
+          ]
+        }
+      ],
+      "requiredInExport": [
+        ".middleware([authMiddleware])"
+      ]
+    },
+    {
+      "file": "src/lib/mind/server.ts",
+      "name": "readExecutionControl",
+      "method": "GET",
+      "policy": "owner_rpc",
+      "notes": "Verified owner and isolation via authMiddleware; handler scopes records/dispatch by context.userId.",
+      "evidence": [
+        {
+          "file": "src/lib/auth/middleware.ts",
+          "requires": [
+            "assertSameSiteRequest()",
+            "requireUserId(context.bearerToken)"
+          ]
+        }
+      ],
+      "requiredInExport": [
+        ".middleware([authMiddleware])"
+      ]
+    },
+    {
+      "file": "src/lib/mind/server.ts",
+      "name": "recordAgentExecution",
+      "method": "POST",
+      "policy": "owner_rpc",
+      "notes": "Verified owner and isolation via authMiddleware; handler scopes records/dispatch by context.userId.",
+      "evidence": [
+        {
+          "file": "src/lib/auth/middleware.ts",
+          "requires": [
+            "assertSameSiteRequest()",
+            "requireUserId(context.bearerToken)"
+          ]
+        }
+      ],
+      "requiredInExport": [
+        ".middleware([authMiddleware])"
+      ]
+    },
+    {
+      "file": "src/lib/mind/server.ts",
+      "name": "refineDictationOptional",
+      "method": "POST",
+      "policy": "owner_rpc",
+      "notes": "Verified owner and isolation via authMiddleware; handler scopes records/dispatch by context.userId.",
+      "evidence": [
+        {
+          "file": "src/lib/auth/middleware.ts",
+          "requires": [
+            "assertSameSiteRequest()",
+            "requireUserId(context.bearerToken)"
+          ]
+        }
+      ],
+      "requiredInExport": [
+        ".middleware([authMiddleware])"
+      ]
+    },
+    {
+      "file": "src/lib/mind/server.ts",
+      "name": "runDurableCorePass",
+      "method": "POST",
+      "policy": "owner_rpc",
+      "notes": "Verified owner and isolation via authMiddleware; handler scopes records/dispatch by context.userId.",
+      "evidence": [
+        {
+          "file": "src/lib/auth/middleware.ts",
+          "requires": [
+            "assertSameSiteRequest()",
+            "requireUserId(context.bearerToken)"
+          ]
+        }
+      ],
+      "requiredInExport": [
+        ".middleware([authMiddleware])"
+      ]
+    },
+    {
+      "file": "src/lib/mind/server.ts",
+      "name": "runFleetModelStep",
+      "method": "POST",
+      "policy": "owner_rpc",
+      "notes": "Verifies the current owner before accessing the associated account operation.",
+      "evidence": [
+        {
+          "file": "src/lib/mind/server.ts",
+          "requires": [
+            "authMiddleware",
+            "context.userId"
+          ]
+        }
+      ],
+      "requiredInExport": [
+        "authMiddleware",
+        "context.userId"
+      ]
+    },
+    {
+      "file": "src/lib/mind/server.ts",
+      "name": "saveAccountAttachment",
+      "method": "POST",
+      "policy": "owner_rpc",
+      "notes": "Verifies the current owner before accessing the associated account operation.",
+      "evidence": [
+        {
+          "file": "src/lib/mind/server.ts",
+          "requires": [
+            "authMiddleware",
+            "context.userId",
+            "data.ownerId !== context.userId"
+          ]
+        }
+      ],
+      "requiredInExport": [
+        "authMiddleware",
+        "context.userId",
+        "data.ownerId !== context.userId"
+      ]
+    },
+    {
+      "file": "src/lib/mind/server.ts",
+      "name": "saveMindChanges",
+      "method": "POST",
+      "policy": "owner_rpc",
+      "notes": "Verifies the current owner before accessing the associated account operation.",
+      "evidence": [
+        {
+          "file": "src/lib/mind/server.ts",
+          "requires": [
+            "authMiddleware",
+            "context.userId",
+            "validateWorkspaceChanges"
+          ]
+        }
+      ],
+      "requiredInExport": [
+        "authMiddleware",
+        "context.userId",
+        "validateWorkspaceChanges"
+      ]
+    },
+    {
+      "file": "src/lib/mind/server.ts",
+      "name": "saveMindCopy",
+      "method": "POST",
+      "policy": "owner_rpc",
+      "notes": "Verified owner and isolation via authMiddleware; handler scopes records/dispatch by context.userId.",
+      "evidence": [
+        {
+          "file": "src/lib/auth/middleware.ts",
+          "requires": [
+            "assertSameSiteRequest()",
+            "requireUserId(context.bearerToken)"
+          ]
+        }
+      ],
+      "requiredInExport": [
+        ".middleware([authMiddleware])"
+      ]
+    },
+    {
+      "file": "src/lib/mind/server.ts",
+      "name": "searchWeb",
+      "method": "POST",
+      "policy": "owner_rpc",
+      "notes": "Verified owner and isolation via authMiddleware; handler scopes records/dispatch by context.userId.",
+      "evidence": [
+        {
+          "file": "src/lib/auth/middleware.ts",
+          "requires": [
+            "assertSameSiteRequest()",
+            "requireUserId(context.bearerToken)"
+          ]
+        }
+      ],
+      "requiredInExport": [
+        ".middleware([authMiddleware])"
+      ]
+    },
+    {
+      "file": "src/lib/mind/server.ts",
+      "name": "sendTurn",
+      "method": "POST",
+      "policy": "owner_rpc",
+      "notes": "Verified owner and isolation via authMiddleware; handler scopes records/dispatch by context.userId.",
+      "evidence": [
+        {
+          "file": "src/lib/auth/middleware.ts",
+          "requires": [
+            "assertSameSiteRequest()",
+            "requireUserId(context.bearerToken)"
+          ]
+        }
+      ],
+      "requiredInExport": [
+        ".middleware([authMiddleware])"
+      ]
+    },
+    {
+      "file": "src/lib/mind/server.ts",
+      "name": "setExecutionHalt",
+      "method": "POST",
+      "policy": "owner_rpc",
+      "notes": "Verified owner and isolation via authMiddleware; handler scopes records/dispatch by context.userId.",
+      "evidence": [
+        {
+          "file": "src/lib/auth/middleware.ts",
+          "requires": [
+            "assertSameSiteRequest()",
+            "requireUserId(context.bearerToken)"
+          ]
+        }
+      ],
+      "requiredInExport": [
+        ".middleware([authMiddleware])"
+      ]
+    },
+    {
+      "file": "src/lib/mind/server.ts",
+      "name": "speakText",
+      "method": "POST",
+      "policy": "owner_rpc",
+      "notes": "Verified owner and isolation via authMiddleware; handler scopes records/dispatch by context.userId.",
+      "evidence": [
+        {
+          "file": "src/lib/auth/middleware.ts",
+          "requires": [
+            "assertSameSiteRequest()",
+            "requireUserId(context.bearerToken)"
+          ]
+        }
+      ],
+      "requiredInExport": [
+        ".middleware([authMiddleware])"
+      ]
+    },
+    {
+      "file": "src/lib/mind/server.ts",
+      "name": "transcribeDictation",
+      "method": "POST",
+      "policy": "owner_rpc",
+      "notes": "Verified owner and isolation via authMiddleware; handler scopes records/dispatch by context.userId.",
+      "evidence": [
+        {
+          "file": "src/lib/auth/middleware.ts",
+          "requires": [
+            "assertSameSiteRequest()",
+            "requireUserId(context.bearerToken)"
+          ]
+        }
+      ],
+      "requiredInExport": [
+        ".middleware([authMiddleware])"
+      ]
+    },
+    {
+      "file": "src/lib/mind/server.ts",
+      "name": "workerHealth",
+      "method": "GET",
+      "policy": "public_status",
+      "notes": "Public worker heartbeat freshness only; no worker action.",
+      "evidence": [
+        {
+          "file": "src/lib/mind/server.ts",
+          "requires": [
+            "interpretWorkerHealth("
+          ]
+        }
+      ],
+      "requiredInExport": [
+        "interpretWorkerHealth("
+      ]
+    },
+    {
+      "file": "src/lib/mind/voice-cloning/server.ts",
+      "name": "vcsCreateChallenge",
+      "method": "POST",
+      "policy": "owner_rpc",
+      "notes": "Verified owner and isolation via authMiddleware; handler scopes records/dispatch by context.userId.",
+      "evidence": [
+        {
+          "file": "src/lib/auth/middleware.ts",
+          "requires": [
+            "assertSameSiteRequest()",
+            "requireUserId(context.bearerToken)"
+          ]
+        }
+      ],
+      "requiredInExport": [
+        ".middleware([authMiddleware])"
+      ]
+    },
+    {
+      "file": "src/lib/mind/voice-cloning/server.ts",
+      "name": "vcsCreateProfile",
+      "method": "POST",
+      "policy": "owner_rpc",
+      "notes": "Verified owner and isolation via authMiddleware; handler scopes records/dispatch by context.userId.",
+      "evidence": [
+        {
+          "file": "src/lib/auth/middleware.ts",
+          "requires": [
+            "assertSameSiteRequest()",
+            "requireUserId(context.bearerToken)"
+          ]
+        }
+      ],
+      "requiredInExport": [
+        ".middleware([authMiddleware])"
+      ]
+    },
+    {
+      "file": "src/lib/mind/voice-cloning/server.ts",
+      "name": "vcsDeleteProfile",
+      "method": "POST",
+      "policy": "owner_rpc",
+      "notes": "Verified owner and isolation via authMiddleware; handler scopes records/dispatch by context.userId.",
+      "evidence": [
+        {
+          "file": "src/lib/auth/middleware.ts",
+          "requires": [
+            "assertSameSiteRequest()",
+            "requireUserId(context.bearerToken)"
+          ]
+        }
+      ],
+      "requiredInExport": [
+        ".middleware([authMiddleware])"
+      ]
+    },
+    {
+      "file": "src/lib/mind/voice-cloning/server.ts",
+      "name": "vcsExportAudio",
+      "method": "POST",
+      "policy": "owner_rpc",
+      "notes": "Verified owner and isolation via authMiddleware; handler scopes records/dispatch by context.userId.",
+      "evidence": [
+        {
+          "file": "src/lib/auth/middleware.ts",
+          "requires": [
+            "assertSameSiteRequest()",
+            "requireUserId(context.bearerToken)"
+          ]
+        }
+      ],
+      "requiredInExport": [
+        ".middleware([authMiddleware])"
+      ]
+    },
+    {
+      "file": "src/lib/mind/voice-cloning/server.ts",
+      "name": "vcsExportConsent",
+      "method": "POST",
+      "policy": "owner_rpc",
+      "notes": "Verified owner and isolation via authMiddleware; handler scopes records/dispatch by context.userId.",
+      "evidence": [
+        {
+          "file": "src/lib/auth/middleware.ts",
+          "requires": [
+            "assertSameSiteRequest()",
+            "requireUserId(context.bearerToken)"
+          ]
+        }
+      ],
+      "requiredInExport": [
+        ".middleware([authMiddleware])"
+      ]
+    },
+    {
+      "file": "src/lib/mind/voice-cloning/server.ts",
+      "name": "vcsGenerate",
+      "method": "POST",
+      "policy": "owner_rpc",
+      "notes": "Verified owner and isolation via authMiddleware; handler scopes records/dispatch by context.userId.",
+      "evidence": [
+        {
+          "file": "src/lib/auth/middleware.ts",
+          "requires": [
+            "assertSameSiteRequest()",
+            "requireUserId(context.bearerToken)"
+          ]
+        }
+      ],
+      "requiredInExport": [
+        ".middleware([authMiddleware])"
+      ]
+    },
+    {
+      "file": "src/lib/mind/voice-cloning/server.ts",
+      "name": "vcsListProfiles",
+      "method": "GET",
+      "policy": "owner_rpc",
+      "notes": "Verified owner and isolation via authMiddleware; handler scopes records/dispatch by context.userId.",
+      "evidence": [
+        {
+          "file": "src/lib/auth/middleware.ts",
+          "requires": [
+            "assertSameSiteRequest()",
+            "requireUserId(context.bearerToken)"
+          ]
+        }
+      ],
+      "requiredInExport": [
+        ".middleware([authMiddleware])"
+      ]
+    },
+    {
+      "file": "src/lib/mind/voice-cloning/server.ts",
+      "name": "vcsProviderStatus",
+      "method": "GET",
+      "policy": "public_status",
+      "notes": "Public configured provider capability/status only; profiles and synthesis use authenticated RPCs.",
+      "evidence": [
+        {
+          "file": "src/lib/mind/voice-cloning/server.ts",
+          "requires": [
+            "getStatus()"
+          ]
+        }
+      ],
+      "requiredInExport": [
+        "getStatus()"
+      ]
+    },
+    {
+      "file": "src/lib/supabase/actions.ts",
+      "name": "endSupabaseSession",
+      "method": "POST",
+      "policy": "credential_establishment",
+      "notes": "Ends the current browser’s Supabase session after verifying origin and reports cleanup failures.",
+      "evidence": [
+        {
+          "file": "src/lib/supabase/actions.ts",
+          "requires": [
+            "isolationMiddleware",
+            "assertSameSiteRequest()",
+            "auth.signOut()"
+          ]
+        }
+      ],
+      "requiredInExport": [
+        "isolationMiddleware",
+        "assertSameSiteRequest()",
+        "auth.signOut()"
+      ]
+    },
+    {
+      "file": "src/lib/supabase/actions.ts",
+      "name": "getSupabaseAuthUser",
+      "method": "GET",
+      "policy": "session_probe",
+      "notes": "Supabase validates current session through getUser; public signed-out result contains no private account data.",
+      "evidence": [
+        {
+          "file": "src/lib/supabase/actions.ts",
+          "requires": [
+            "supabase.auth.getUser()"
+          ]
+        }
+      ],
+      "requiredInExport": [
+        "probeAuthUser()"
+      ]
+    },
+    {
+      "file": "src/lib/supabase/actions.ts",
+      "name": "requireDashboardUser",
+      "method": "GET",
+      "policy": "session_probe",
+      "notes": "Supabase validates current session through getUser; public signed-out result contains no private account data.",
+      "evidence": [
+        {
+          "file": "src/lib/supabase/actions.ts",
+          "requires": [
+            "supabase.auth.getUser()"
+          ]
+        }
+      ],
+      "requiredInExport": [
+        "probeAuthUser()"
+      ]
+    },
+    {
+      "file": "src/lib/supabase/actions.ts",
+      "name": "signInWithPassword",
+      "method": "POST",
+      "policy": "credential_establishment",
+      "notes": "Pre-login/sign-out action uses origin-only middleware, then Supabase credential/session SDK; no owner session prerequisite for login.",
+      "evidence": [
+        {
+          "file": "src/lib/supabase/actions.ts",
+          "requires": [
+            "supabase.auth.getUser()"
+          ]
+        },
+        {
+          "file": "src/lib/auth/middleware.ts",
+          "requires": [
+            "export const isolationMiddleware",
+            "assertSameSiteRequest()"
+          ]
+        }
+      ],
+      "requiredInExport": [
+        ".middleware([isolationMiddleware])"
+      ]
+    },
+    {
+      "file": "src/lib/supabase/actions.ts",
+      "name": "signOutSupabase",
+      "method": "POST",
+      "policy": "credential_establishment",
+      "notes": "Pre-login/sign-out action uses origin-only middleware, then Supabase credential/session SDK; no owner session prerequisite for login.",
+      "evidence": [
+        {
+          "file": "src/lib/supabase/actions.ts",
+          "requires": [
+            "supabase.auth.getUser()"
+          ]
+        },
+        {
+          "file": "src/lib/auth/middleware.ts",
+          "requires": [
+            "export const isolationMiddleware",
+            "assertSameSiteRequest()"
+          ]
+        }
+      ],
+      "requiredInExport": [
+        ".middleware([isolationMiddleware])"
+      ]
+    },
+    {
+      "file": "src/lib/supabase/actions.ts",
+      "name": "signUpWithPassword",
+      "method": "POST",
+      "policy": "credential_establishment",
+      "notes": "Pre-login/sign-out action uses origin-only middleware, then Supabase credential/session SDK; no owner session prerequisite for login.",
+      "evidence": [
+        {
+          "file": "src/lib/supabase/actions.ts",
+          "requires": [
+            "supabase.auth.getUser()"
+          ]
+        },
+        {
+          "file": "src/lib/auth/middleware.ts",
+          "requires": [
+            "export const isolationMiddleware",
+            "assertSameSiteRequest()"
+          ]
+        }
+      ],
+      "requiredInExport": [
+        ".middleware([isolationMiddleware])"
+      ]
+    },
+    {
+      "file": "src/lib/supabase/actions.ts",
+      "name": "startOAuth",
+      "method": "POST",
+      "policy": "credential_establishment",
+      "notes": "Pre-login/sign-out action uses origin-only middleware, then Supabase credential/session SDK; no owner session prerequisite for login.",
+      "evidence": [
+        {
+          "file": "src/lib/supabase/actions.ts",
+          "requires": [
+            "supabase.auth.getUser()"
+          ]
+        },
+        {
+          "file": "src/lib/auth/middleware.ts",
+          "requires": [
+            "export const isolationMiddleware",
+            "assertSameSiteRequest()"
+          ]
+        }
+      ],
+      "requiredInExport": [
+        ".middleware([isolationMiddleware])"
+      ]
+    }
+  ]
+}

@@ -1,3 +1,4 @@
+import { useAccountPreferences } from "@/components/mind/account-preferences-context";
 import { lazy, Suspense, useCallback, useEffect, useRef, useState, useSyncExternalStore } from "react";
 import { characterById, readStoredCharacterId } from "@/lib/mind/characters";
 import { sharedAudioOutput } from "@/lib/mind/voice/audio-output";
@@ -54,9 +55,10 @@ export function DigitalHuman({
   expression?: AvatarExpression | null;
   className?: string;
 }) {
+  const preferenceStorage = useAccountPreferences();
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const session = useSyncExternalStore(subscribeAvatarSession, readAvatarSession, readAvatarSession);
-  const [storedId, setStoredId] = useState(() => readStoredCharacterId(typeof localStorage === "undefined" ? null : localStorage));
+  const [storedId, setStoredId] = useState(() => readStoredCharacterId(preferenceStorage));
   const [failed, setFailed] = useState<string | null>(null);
   const [ready, setReady] = useState(false);
   // Three.js is browser-only. Keep the server render on the safe canvas path so
@@ -69,7 +71,7 @@ export function DigitalHuman({
   const character = characterById(id) ?? characterById("eve")!;
 
   useEffect(() => {
-    const sync = () => setStoredId(readStoredCharacterId(localStorage));
+    const sync = () => setStoredId(readStoredCharacterId(preferenceStorage));
     window.addEventListener("amcos-character", sync);
     return () => window.removeEventListener("amcos-character", sync);
   }, []);
@@ -198,18 +200,18 @@ export function DigitalHuman({
   );
 }
 
-export function readStoredFraming(): AvatarFraming {
+export function readStoredFraming(storage: Pick<Storage, "getItem"> | null = typeof localStorage === "undefined" ? null : localStorage): AvatarFraming {
   try {
-    const value = localStorage.getItem(FRAMING_KEY);
+    const value = storage?.getItem(FRAMING_KEY);
     return isAvatarFraming(value) ? value : "upper";
   } catch {
     return "upper";
   }
 }
 
-export function writeStoredFraming(value: AvatarFraming): void {
+export function writeStoredFraming(value: AvatarFraming, storage: Pick<Storage, "setItem"> | null = typeof localStorage === "undefined" ? null : localStorage): void {
   try {
-    localStorage.setItem(FRAMING_KEY, value);
+    storage?.setItem(FRAMING_KEY, value);
   } catch {
     /* private mode */
   }

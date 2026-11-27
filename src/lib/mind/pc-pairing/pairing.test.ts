@@ -5,6 +5,9 @@ import { join } from "node:path";
 import { describe, it } from "node:test";
 import {
   acceptJob,
+  cancelOwnerJobs,
+  readJob,
+  recordFileProtocol,
   appendJobEvent,
   offerNextJob,
   requestJobCancel,
@@ -114,8 +117,8 @@ describe("pc pairing", () => {
     assert.equal(offerNextJob("a"), null);
     assert.equal(acceptJob("a", job.id, "different"), null);
     assert.equal(requestJobCancel("owner", job.id)?.status, "cancel_requested");
-    assert.equal(completeJob({ jobId: job.id, agentId: "a", ok: true })?.status, "cancelled");
-    assert.equal(completeJob({ jobId: job.id, agentId: "a", ok: true })?.status, "cancelled");
+    assert.equal(completeJob({ jobId: job.id, agentId: "a", ok: true })?.status, "done");
+    assert.equal(completeJob({ jobId: job.id, agentId: "a", ok: true })?.status, "done");
   });
 
   it("preserves complete file results, terminal state and bounded shell logs", () => {
@@ -142,4 +145,46 @@ describe("pc pairing", () => {
     assert.equal(reg.ok, true);
     assert.equal(onlineAgents("owner", 1, Date.now() + 10_000).length, 0);
   });
+});
+
+
+it("C5 binds reviewed terminal execution to its selected computer and directory", async () => {
+  setPcPairingDirectory(mkdtempSync(join(tmpdir(), "pc-c5-target-")));
+  const first = registerAgent({ ownerId: "owner", label: "First" });
+  const second = registerAgent({ ownerId: "owner", label: "Selected" });
+  if (!first.ok || !second.ok) throw Error("fixture registration");
+  recordFileProtocol(second.agentId, true);
+  const pending = runOnPairedAgent({ ownerId: "owner", agentId: second.agentId, cwd: "/fixture/reviewed", command: "pwd", confirm: true, pollMs: 5, timeoutMs: 500 });
+  assert.equal(offerNextJob(first.agentId), null);
+  let offered = offerNextJob(second.agentId);
+  for (let attempt = 0; !offered && attempt < 25; attempt++) {
+    await new Promise(resolve => setTimeout(resolve, 5));
+    offered = offerNextJob(second.agentId);
+  }
+  assert.ok(offered);
+  assert.equal(offered.payload?.cwd, "/fixture/reviewed");
+  acceptJob(second.agentId, offered.id, "receipt");
+  completeJob({ jobId: offered.id, agentId: second.agentId, ok: true, output: "/fixture/reviewed" });
+  const result = await pending;
+  assert.equal(result?.ok, true);
+  assert.equal(result?.data?.agentId, second.agentId);
+  const missing = await runOnPairedAgent({ ownerId: "owner", agentId: "missing", command: "pwd", confirm: true });
+  assert.equal(missing?.ok, false);
+  assert.match(missing?.text ?? "", /No other computer was substituted/);
+  assert.equal(offerNextJob(first.agentId), null);
+});
+
+it("C5 stop cancels queued jobs and reports running cancellation as pending for the correct owner", () => {
+  setPcPairingDirectory(mkdtempSync(join(tmpdir(), "pc-c5-stop-")));
+  const agent = registerAgent({ ownerId: "owner" });
+  const other = registerAgent({ ownerId: "other" });
+  if (!agent.ok || !other.ok) throw Error("fixture registration");
+  const queued = enqueueJob({ ownerId: "owner", agentId: agent.agentId, kind: "kimi-acp", command: "fixture", confirm: false });
+  const running = enqueueJob({ ownerId: "owner", agentId: agent.agentId, kind: "shell", command: "fixture", confirm: true });
+  const unrelated = enqueueJob({ ownerId: "other", agentId: other.agentId, kind: "shell", command: "fixture", confirm: true });
+  acceptJob(agent.agentId, running.id, "fixture-running");
+  assert.deepEqual(cancelOwnerJobs("owner"), { cancelled: 1, pending: 1, unknown: 0 });
+  assert.equal(readJob(queued.id)?.status, "cancelled");
+  assert.equal(readJob(running.id)?.status, "cancel_requested");
+  assert.equal(readJob(unrelated.id)?.status, "queued");
 });

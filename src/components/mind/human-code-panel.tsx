@@ -1,4 +1,7 @@
-import { useEffect, useState } from "react";
+import { codeDraftScope, takeTemporaryCodeHandoff, MAX_CODE_HANDOFF_CHARS } from "@/lib/mind/code-handoff";
+import { useComposerDraft } from "@/lib/mind/use-composer-draft";
+import { useAccountPreferences } from "./account-preferences-context";
+import { useEffect, useRef, useState } from "react";
 import { NuanceCallCard } from "./nuance-call";
 
 export const HUMAN_CODE_NOTE = "Intelligence. This thread discusses code. File edits go to Build and are not claimed until Build reports them.";
@@ -10,6 +13,7 @@ export function isIntelligenceThread(value?: string) {
 export type HumanThread = {
   id: string;
   title: string;
+  temporary?: boolean;
   messages: { id?: string; role: string; content: string }[];
 };
 
@@ -19,17 +23,22 @@ type Attachment = { name: string; dataUrl?: string; text?: string };
 const SECRET_FILE = /(^|\/)\.env($|\.)|(^|\/)credentials?\.(json|txt|pem)$/i;
 
 export function HumanCodePanel(props: {
+  ownerId: string | null;
   threads: HumanThread[];
   activeId: string;
   busy: boolean;
   notice: string | null;
   onNew: () => void;
   onOpen: (id: string) => void;
-  onSend: (id: string, text: string, image?: { dataUrl: string; name: string }) => void;
+  onSend: (id: string, text: string, image?: { dataUrl: string; name: string }) => boolean | Promise<boolean>;
   onBuild: (text: string) => void;
   halted?: boolean;
 }) {
-  const [draft, setDraft] = useState("");
+  const preferenceStorage = useAccountPreferences();
+  const active = props.threads.find((thread) => thread.id === props.activeId) ?? props.threads[0] ?? null;
+  const scope = codeDraftScope(props.ownerId, active?.id ?? "none", active?.temporary === true);
+  const [draft, setDraft] = useComposerDraft(scope, "human-code", "", Boolean(props.ownerId) && !active?.temporary);
+  const surfaceIdentity = useRef(scope); surfaceIdentity.current = scope;
   const [fontSize, setFontSize] = useState(15);
   const [wrap, setWrap] = useState(true);
   const [files, setFiles] = useState<WorkspaceFile[]>([]);
@@ -42,16 +51,16 @@ export function HumanCodePanel(props: {
   const [attachment, setAttachment] = useState<Attachment | null>(null);
   const [fileNote, setFileNote] = useState("");
   useEffect(() => {
-    const savedSize = Number(localStorage.getItem("adrian-human-font"));
+    const savedSize = Number(preferenceStorage.getItem("adrian-human-font"));
     if (savedSize >= 13 && savedSize <= 22) setFontSize(savedSize);
-    setWrap(localStorage.getItem("adrian-human-wrap") !== "off");
-  }, []);
+    setWrap(preferenceStorage.getItem("adrian-human-wrap") !== "off");
+  }, [preferenceStorage]);
   useEffect(() => {
-    const handed = sessionStorage.getItem("adrian-human-draft");
-    if (!handed) return;
-    setDraft(handed);
-    sessionStorage.removeItem("adrian-human-draft");
-  }, [props.activeId]);
+    setAttachment(null);
+    if (!props.ownerId || !active?.temporary) return;
+    const handed = takeTemporaryCodeHandoff(props.ownerId, active.id);
+    if (handed !== undefined) setDraft(handed);
+  }, [props.ownerId, active?.id, active?.temporary, setDraft]);
   useEffect(() => {
     let stop = false;
     void (async () => {
@@ -68,17 +77,16 @@ export function HumanCodePanel(props: {
         const truncated = listed.truncated === true;
         setGitNote(git.ok ? `${nextFiles.length} files indexed${truncated ? ". The workspace is larger than 200 files, so the rest were not loaded" : ", capped at 200"}. Branch ${branch}.` : "Build could not list the workspace. Discussion-only mode is still available.");
         const key = `adrian-human-git:${props.activeId || "none"}`;
-        const previous = localStorage.getItem(key);
+        const previous = preferenceStorage.getItem(key);
         if (previous && previous !== status) setChangedNote("The workspace changed since this thread was last open.");
         else setChangedNote(previous ? "No workspace change since this thread was last open." : "");
-        localStorage.setItem(key, status);
+        preferenceStorage.setItem(key, status);
       } catch {
         if (!stop) setGitNote("Build is unavailable. You can still discuss code.");
       }
     })();
     return () => { stop = true; };
-  }, [props.activeId]);
-  const active = props.threads.find((thread) => thread.id === props.activeId) ?? props.threads[0] ?? null;
+  }, [props.activeId, preferenceStorage]);
   const latest = [...(active?.messages ?? [])].reverse().find((message) => message.role !== "user")?.content ?? "";
   const shown = files.filter((file) => file.path.toLowerCase().includes(fileQuery.trim().toLowerCase())).slice(0, 12);
 
@@ -100,7 +108,7 @@ export function HumanCodePanel(props: {
     }
     setFileNote("");
     const lines = data.content.split("\n").slice(Math.max(0, startLine - 1), Math.max(startLine, endLine));
-    props.onSend(active.id, `Explain ${filePath} lines ${startLine}-${endLine}. Do not claim a file changed.\n${lines.map((line, index) => `${startLine + index}|${line}`).join("\n").slice(0, 4000)}`);
+    props.onSend(active.id, `Explain ${filePath} lines ${startLine}-${endLine}. Do not claim a file changed.\n${lines.map((line, index) => `${startLine + index}|${line}`).join("\n")}`);
   }
 
   return (
@@ -148,9 +156,9 @@ export function HumanCodePanel(props: {
             {["/explain", "/review", "/diff", "/test", "/run", "/files"].map((command) => (
               <button key={command} type="button" disabled={!active || props.busy} className="min-h-11 rounded-panel border border-line px-3 text-xs disabled:opacity-50" onClick={() => { if (active) props.onSend(active.id, command); }}>{command}</button>
             ))}
-            <button type="button" className="min-h-11 rounded-panel border border-line px-3 text-xs" onClick={() => { const next = Math.max(13, fontSize - 1); setFontSize(next); localStorage.setItem("adrian-human-font", String(next)); }}>Smaller</button>
-            <button type="button" className="min-h-11 rounded-panel border border-line px-3 text-xs" onClick={() => { const next = Math.min(22, fontSize + 1); setFontSize(next); localStorage.setItem("adrian-human-font", String(next)); }}>Larger</button>
-            <button type="button" className="min-h-11 rounded-panel border border-line px-3 text-xs" aria-pressed={wrap} onClick={() => { const next = !wrap; setWrap(next); localStorage.setItem("adrian-human-wrap", next ? "on" : "off"); }}>{wrap ? "Wrap on" : "Wrap off"}</button>
+            <button type="button" className="min-h-11 rounded-panel border border-line px-3 text-xs" onClick={() => { const next = Math.max(13, fontSize - 1); setFontSize(next); preferenceStorage.setItem("adrian-human-font", String(next)); }}>Smaller</button>
+            <button type="button" className="min-h-11 rounded-panel border border-line px-3 text-xs" onClick={() => { const next = Math.min(22, fontSize + 1); setFontSize(next); preferenceStorage.setItem("adrian-human-font", String(next)); }}>Larger</button>
+            <button type="button" className="min-h-11 rounded-panel border border-line px-3 text-xs" aria-pressed={wrap} onClick={() => { const next = !wrap; setWrap(next); preferenceStorage.setItem("adrian-human-wrap", next ? "on" : "off"); }}>{wrap ? "Wrap on" : "Wrap off"}</button>
             </div>
           </section>
           <section className="intelligence-group" aria-label="Lines">
@@ -166,12 +174,14 @@ export function HumanCodePanel(props: {
           <section className="intelligence-group" aria-label="Message">
             <h3>Message</h3>
             {props.notice ? <p className="mb-2 text-sm text-muted" role="status">{props.notice}</p> : null}
-            <form className="human-code-composer flex flex-col gap-2" onSubmit={(event) => {
+            <form className="human-code-composer flex flex-col gap-2" onSubmit={async (event) => {
             event.preventDefault();
             if (!active || (!draft.trim() && !attachment)) return;
-            const text = attachment?.text ? `${draft.trim()}\nAttached log ${attachment.name}:\n${attachment.text.slice(0, 4000)}` : draft.trim() || `What is in the attached image ${attachment?.name}?`;
-            props.onSend(active.id, text, attachment?.dataUrl ? { dataUrl: attachment.dataUrl, name: attachment.name } : undefined);
-            setDraft("");
+            const text = attachment?.text ? `${draft.trim()}\nAttached log ${attachment.name}:\n${attachment.text}` : draft.trim() || `What is in the attached image ${attachment?.name}?`;
+            const capturedScope = scope, capturedDraft = draft;
+            const accepted = await props.onSend(active.id, text, attachment?.dataUrl ? { dataUrl: attachment.dataUrl, name: attachment.name } : undefined);
+            if (!accepted || surfaceIdentity.current !== capturedScope) return;
+            setDraft((current) => current === capturedDraft ? "" : current);
             setAttachment(null);
           }}>
             <textarea aria-label="Intelligence message" value={draft} onChange={(event) => setDraft(event.target.value)} placeholder="Ask about the code" className="min-h-24 rounded-panel border border-line bg-transparent px-3 py-2 text-sm" />
@@ -184,11 +194,15 @@ export function HumanCodePanel(props: {
                   const file = event.target.files?.[0];
                   event.target.value = "";
                   if (!file) return;
+                  if (file.size > 10_000_000) { setFileNote("This attachment exceeds 10 MB. Choose a smaller file; nothing was shortened or attached."); return; }
+                  const capturedScope = scope;
                   const reader = new FileReader();
                   reader.onload = () => {
+                    if (surfaceIdentity.current !== capturedScope) return;
                     const result = String(reader.result || "");
                     if (file.type.startsWith("image/") && result.startsWith("data:image/")) setAttachment({ name: file.name, dataUrl: result });
-                    else setAttachment({ name: file.name, text: result.slice(0, 4000) });
+                    else if (result.length > MAX_CODE_HANDOFF_CHARS) setFileNote("This log exceeds the supported handoff limit. Select a smaller excerpt; nothing was shortened or attached.");
+                    else setAttachment({ name: file.name, text: result });
                   };
                   if (file.type.startsWith("image/")) reader.readAsDataURL(file);
                   else reader.readAsText(file);

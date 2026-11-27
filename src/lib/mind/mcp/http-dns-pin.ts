@@ -7,6 +7,7 @@
 import dns from "node:dns/promises";
 import http from "node:http";
 import https from "node:https";
+import { Readable } from "node:stream";
 
 
 /** Hostnames that are always local by design (http allowed). */
@@ -133,7 +134,7 @@ export function pinnedHttpFetch(
   url: URL,
   pinnedAddress: string,
   hostname: string,
-  init: RequestInit & { signal?: AbortSignal } = {},
+  init: RequestInit & { signal?: AbortSignal; streamResponse?: boolean } = {},
 ): Promise<FetchLikeResponse> {
   const lib = url.protocol === "https:" ? https : http;
   const path = `${url.pathname}${url.search}`;
@@ -179,6 +180,15 @@ export function pinnedHttpFetch(
           if (Array.isArray(value)) return value[0] ?? null;
           return value ?? null;
         };
+        if (init.streamResponse && headerGet("content-type")?.includes("text/event-stream")) {
+          // Preserve the validated socket pin while allowing model answer deltas
+          // to arrive before upstream completion. Existing MCP callers retain
+          // their buffered transport unless they explicitly select this mode.
+          const body = Readable.toWeb(res) as ReadableStream<Uint8Array>;
+          const status = res.statusCode ?? 0;
+          resolve({ ok: status >= 200 && status < 300, status, headers: { get: headerGet }, body, text: () => new Response(body).text() });
+          return;
+        }
         const chunks: Buffer[] = [];
         res.on("data", (chunk: Buffer) => chunks.push(chunk));
         res.on("end", () => {

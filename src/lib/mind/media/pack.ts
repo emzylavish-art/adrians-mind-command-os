@@ -1,3 +1,4 @@
+import { imageMetadata } from "./image-metadata.ts";
 import { isImageDataUrl, normalizeImageDataUrl, parseImageDataUrl } from "./data-url.ts";
 import { sanitizeMediaLabel } from "./harden.ts";
 import type { ChatContent, ImageAttachment, MultimodalContentPart } from "./types.ts";
@@ -15,6 +16,7 @@ export function sanitizeAttachments(input: unknown): ImageAttachment[] {
     const parsed = parseImageDataUrl(normalized);
     out.push({
       dataUrl: normalized,
+      ...imageMetadata(item as { preparation?: unknown; lineage?: unknown }),
       ...(record.origin === "attached" || record.origin === "camera" || record.origin === "generated" || record.origin === "edited" ? { origin: record.origin } : {}),
       name: sanitizeMediaLabel(record.name),
       mime: parsed.ok ? parsed.mime : typeof record.mime === "string" ? record.mime : undefined,

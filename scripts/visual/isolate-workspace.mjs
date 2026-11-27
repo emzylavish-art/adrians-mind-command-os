@@ -4,6 +4,6 @@ export async function isolateWorkspace(context, origin) {
     const id = url.pathname.match(/\/_serverFn\/([\w-]+)$/)?.[1];
     if (!id || url.origin !== new URL(origin).origin) return false;
     const manifest = Buffer.from(id, "base64url").toString("utf8");
-    return /"export":"(?:loadMindCopy|saveMindCopy)_/.test(manifest);
+    return /"export":"(?:loadMindCopy|saveMindCopy|saveMindChanges)_/.test(manifest);
   }, (route) => route.abort("blockedbyclient"));
 }

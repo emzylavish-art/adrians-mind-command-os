@@ -1,3 +1,4 @@
+import { environmentModelReadiness, type EnvironmentModelCatalog } from "./environment-model-catalog.ts";
 /**
  * Single source of truth: UI model-tier picker → concrete xAI model id + request params.
  * Defaults use model ids verified live against api.x.ai (see xai-verification artifacts).
@@ -11,6 +12,11 @@ export const CONNECTED_GROK_MODELS = ["grok-4.3", "grok-4.5", "grok-4.6", "grok-
 export function isConnectedGrokModel(value: unknown): value is (typeof CONNECTED_GROK_MODELS)[number] {
   return typeof value === "string" && (CONNECTED_GROK_MODELS as readonly string[]).includes(value);
 }
+export function isAvailableGrokSelection(value: unknown, env: Record<string, string | undefined> = {}, catalog?: EnvironmentModelCatalog | null): value is string {
+  if (typeof value !== "string" || !isValidModelId(value)) return false;
+  const readiness = environmentModelReadiness(catalog, value);
+  return readiness.ok && (readiness.availability === "catalogued" || allowedModelIds(env).has(value));
+}
 export type ConcreteModelTier = Exclude<ModelTier, "Auto">;
 
 export type ModelRequestParams = {
@@ -19,6 +25,31 @@ export type ModelRequestParams = {
   /** xAI reasoning_effort when the model supports it; omitted for non-reasoning Fast/Build. */
   reasoning_effort?: "low" | "medium" | "high" | "xhigh";
 };
+
+export type ModelControls = { answerTokens?: number; reasoning?: "auto" | "none" | "low" | "medium" | "high" | "xhigh" };
+export const ANSWER_BUDGET_PRESETS = [400, 800, 2048, 4096, 8192] as const;
+export const MODEL_CONTROLS_KEY = "amcos.model-controls.v1";
+export function loadModelControls(storage: Pick<Storage, "getItem"> | null | undefined): ModelControls {
+  try { const raw = storage?.getItem(MODEL_CONTROLS_KEY); const parsed = parseModelControls(raw ? JSON.parse(raw) : null); return parsed.ok ? parsed.controls : {}; }
+  catch { return {}; }
+}
+export function parseModelControls(value: unknown): { ok: true; controls: ModelControls } | { ok: false; error: string } {
+  if (value == null) return { ok: true, controls: {} };
+  if (!value || typeof value !== "object" || Array.isArray(value)) return { ok: false, error: "Invalid answer controls." };
+  const raw = value as Record<string, unknown>;
+  if (raw.answerTokens !== undefined && (typeof raw.answerTokens !== "number" || !Number.isInteger(raw.answerTokens) || raw.answerTokens < 128 || raw.answerTokens > 16384)) return { ok: false, error: "Answer budget must be an integer from 128 to 16384 tokens." };
+  if (raw.reasoning !== undefined && !["auto", "none", "low", "medium", "high", "xhigh"].includes(String(raw.reasoning))) return { ok: false, error: "Invalid reasoning effort." };
+  return { ok: true, controls: { ...(raw.answerTokens === undefined ? {} : { answerTokens: raw.answerTokens as number }), ...(raw.reasoning === undefined ? {} : { reasoning: raw.reasoning as ModelControls["reasoning"] }) } };
+}
+
+export function supportsTierReasoning(model: string): boolean {
+  return ["grok-4.5", "grok-4.6", "grok-4.7"].includes(model);
+}
+export function reconcileTierParams(model: string, params: ModelRequestParams): ModelRequestParams {
+  const result = { ...params };
+  if (!supportsTierReasoning(model)) delete result.reasoning_effort;
+  return result;
+}
 
 export type ResolvedModelTier = {
   /** Tier the owner selected in the UI (may be Auto). */
@@ -132,8 +163,11 @@ export function defaultParamsFor(tier: ConcreteModelTier): ModelRequestParams {
  * 3) Medium analytical (length ≥ 320 or explain/analyze/design/plan/…) → Expert.
  * 4) Otherwise → Fast.
  */
-export function routeAutoTier(prompt: string): { tier: ConcreteModelTier; reason: string } {
+export function routeAutoTier(prompt: string, previousTier?: ConcreteModelTier): { tier: ConcreteModelTier; reason: string } {
   const text = prompt.trim();
+  if (previousTier && /^(?:next(?: analysis)?|continue(?: please)?|go on|keep going|carry on|finish(?: it)?|do the same|again)[.!?\s]*$/i.test(text)) {
+    return { tier: previousTier, reason: `Auto retained ${previousTier} for an explicit continuation of this conversation.` };
+  }
   const lower = text.toLowerCase();
   const length = text.length;
   const hasCode =
@@ -166,24 +200,30 @@ export function resolveModelTier(
   selectedRaw: unknown,
   prompt: string,
   env: Record<string, string | undefined> = {},
+  options: { previousTier?: ConcreteModelTier; controls?: ModelControls } = {},
 ): ResolvedModelTier {
   const selected: ModelTier = isModelTier(selectedRaw) ? selectedRaw : "Auto";
   const models = parseModelTierEnv(env);
   let resolved: ConcreteModelTier;
   let reason: string;
   if (selected === "Auto") {
-    const routed = routeAutoTier(prompt);
+    const routed = routeAutoTier(prompt, options.previousTier);
     resolved = routed.tier;
     reason = routed.reason;
   } else {
     resolved = selected;
     reason = `Owner selected ${selected}.`;
   }
+  const params = defaultParamsFor(resolved);
+  if (options.controls?.answerTokens !== undefined && parseModelControls(options.controls).ok) params.max_tokens = options.controls.answerTokens;
+  // An arbitrary environment model override cannot inherit another model's reasoning parameters.
+  if (!supportsTierReasoning(models[resolved]) || options.controls?.reasoning === "none") delete params.reasoning_effort;
+  else if (options.controls?.reasoning && options.controls.reasoning !== "auto") params.reasoning_effort = options.controls.reasoning;
   return {
     selected,
     resolved,
     model: models[resolved],
-    params: defaultParamsFor(resolved),
+    params,
     reason,
   };
 }
@@ -201,25 +241,40 @@ export function buildProviderModelFields(resolved: Pick<ResolvedModelTier, "mode
   return body;
 }
 
-export function modelTierCatalog(env: Record<string, string | undefined> = {}) {
+export function configuredModelReadiness(model: string, observedCatalog?: readonly string[] | EnvironmentModelCatalog) {
+  if (observedCatalog && !Array.isArray(observedCatalog)) {
+    const readiness = environmentModelReadiness(observedCatalog as EnvironmentModelCatalog, model);
+    return { verifiedInference: false as const, availability: readiness.availability };
+  }
+  const listed = observedCatalog as readonly string[] | undefined;
+  return { verifiedInference: false as const, availability: listed === undefined ? "unverified" as const : listed.includes(model) ? "catalogued" as const : "unavailable" as const };
+}
+
+export function modelTierCatalog(env: Record<string, string | undefined> = {}, observedCatalog?: readonly string[] | EnvironmentModelCatalog) {
   const models = parseModelTierEnv(env);
+  const readiness = Object.values(models).map(model => configuredModelReadiness(model, observedCatalog).availability);
+  const autoAvailability = readiness.includes("catalogued") ? "catalogued" as const : readiness.includes("unverified") ? "unverified" as const : readiness.includes("stale") ? "stale" as const : readiness.includes("unconfigured") ? "unconfigured" as const : "unavailable" as const;
   return MODEL_TIERS.map((tier) => {
     if (tier === "Auto") {
       return {
         id: tier,
         label: tier,
         model: null as string | null,
-        note: "Routes to Fast, Expert, Heavy, or Build from prompt shape.",
+        note: `Routes using this request and its prior confirmed tier. The resolved model is checked against the current catalogue; it never switches to an available alternative. Catalogue state: ${autoAvailability}.`,
+        verifiedInference: false as const,
+        availability: autoAvailability,
       };
     }
     return {
       id: tier,
       label: tier,
       model: models[tier],
-      note: `Uses ${models[tier]} (${DEFAULTS[tier].envKey}).`,
+      ...configuredModelReadiness(models[tier], observedCatalog),
+      note: `Configured to request ${models[tier]} (${DEFAULTS[tier].envKey}). ${configuredModelReadiness(models[tier], observedCatalog).availability === "catalogued" ? "Listed in the observed catalogue; inference has not been verified." : observedCatalog ? "The selected model is not currently confirmed available; refresh its catalogue or choose another model explicitly." : "Current account availability and inference are unverified."}`,
     };
   });
 }
+export type ModelTierCatalogRow = ReturnType<typeof modelTierCatalog>[number];
 
 /** Known allowed model ids for this app (defaults + any env override values). */
 export function allowedModelIds(env: Record<string, string | undefined> = {}): Set<string> {

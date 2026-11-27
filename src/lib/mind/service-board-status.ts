@@ -15,6 +15,12 @@ export type OauthStatusPayload = {
   workspaceName?: string;
   accountLabel?: string;
   connectedAt?: string;
+  workspaceId?: string;
+  scopes?: string[];
+  scopeEvidence?: "provider" | "requested" | "unknown";
+  authorization?: "saved" | "expired";
+  expiresAt?: string;
+  recovery?: { status: string; detail: string; at: string };
 };
 
 export const STATUS_UNAVAILABLE_DETAIL = "Connection status could not be read.";
@@ -89,6 +95,13 @@ export async function fetchOauthStatusPayload(
     if (typeof record.workspaceName === "string") status.workspaceName = record.workspaceName;
     if (typeof record.accountLabel === "string") status.accountLabel = record.accountLabel;
     if (typeof record.connectedAt === "string") status.connectedAt = record.connectedAt;
+    if (typeof record.workspaceId === "string") status.workspaceId = record.workspaceId.slice(0, 100);
+    if (Array.isArray(record.scopes)) status.scopes = record.scopes.filter((scope): scope is string => typeof scope === "string" && scope.length <= 500).slice(0, 80);
+    if (record.scopeEvidence === "provider" || record.scopeEvidence === "requested" || record.scopeEvidence === "unknown") status.scopeEvidence = record.scopeEvidence;
+    if (record.authorization === "saved" || record.authorization === "expired") status.authorization = record.authorization;
+    if (typeof record.expiresAt === "string") status.expiresAt = record.expiresAt;
+    const recovery = record.recovery as Record<string, unknown> | null;
+    if (recovery && typeof recovery.status === "string" && typeof recovery.detail === "string" && typeof recovery.at === "string") status.recovery = { status: recovery.status.slice(0, 80), detail: recovery.detail.slice(0, 600), at: recovery.at };
     return status;
   } catch {
     return unavailableStatus();

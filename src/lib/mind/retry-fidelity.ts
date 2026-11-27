@@ -1,10 +1,12 @@
+import { imageMetadata, type ImageEditLineage, type ImagePreparationReceipt } from "./media/image-metadata.ts";
 /**
  * Helpers so failure-banner Retry re-sends identical deliver parameters
  * (text, images, history) and reads the live workspace for halt/history.
  */
 
-export type RetryImage = { origin?: "attached" | "camera" | "generated" | "edited"; dataUrl: string; name?: string; mime?: string };
+export type RetryImage = { origin?: "attached" | "camera" | "generated" | "edited"; dataUrl: string; name?: string; mime?: string; lineage?: ImageEditLineage; preparation?: ImagePreparationReceipt };
 export type RetryHistoryItem = {
+  id?: string;
   role: "user" | "assistant" | "system" | string;
   content: string;
   images?: { dataUrl?: string; name?: string }[];
@@ -14,10 +16,10 @@ export type RetryHistoryItem = {
 export function historyForDeliver(
   messages: RetryHistoryItem[],
   resume: boolean,
-  limit = 12,
+  limit?: number,
 ): RetryHistoryItem[] {
   const base = resume ? messages.slice(0, -1) : messages;
-  return base.slice(-limit);
+  return limit === undefined ? base : limit <= 0 ? [] : base.slice(-Math.floor(limit));
 }
 
 /** Prefer the live chat from the current workspace so resume history is not stale. */
@@ -32,7 +34,7 @@ export function resolveChatMessages(
 /** Snapshot images so Retry keeps byte-identical attachments. */
 export function snapshotImages(images: RetryImage[]): RetryImage[] {
   return images.map((image) => {
-    const next: RetryImage = { dataUrl: image.dataUrl };
+    const next: RetryImage = { dataUrl: image.dataUrl, ...imageMetadata(image) };
     if (image.name !== undefined) next.name = image.name;
     if (image.origin !== undefined) next.origin = image.origin;
     if (image.mime !== undefined) next.mime = image.mime;

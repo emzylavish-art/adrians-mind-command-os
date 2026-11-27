@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import { RunCountsView, RunEvidence } from "./run-evidence";
 import { conversationSharePath } from "@/lib/mind/conversation-actions";
 import { BotBuilder } from "@/components/mind/bot-builder";
 import { zoneIsValid } from "@/lib/mind/schedule-clock";
@@ -9,7 +10,7 @@ import { oauthBoardState } from "@/lib/mind/connection-board";
 import { fetchOauthStatusPayload } from "@/lib/mind/service-board-status";
 import { LOGIC_ROUTES, logicMenuState, type LogicRoutePublic } from "@/lib/mind/logic-routes";
 import {
-  AGENT_TEMPLATES,
+  runDueSchedules, tickFleet, AGENT_TEMPLATES,
   FLEET_TOOLS,
   addAgentFromTemplate,
   addConnection,
@@ -17,14 +18,23 @@ import {
   addMailbox,
   addSchedule,
   setScheduleEnabled,
+  setSchedulePolicy,
   approveRunAction,
+  approveRunBatch,
+  clearFinishedRuns,
+  revokeRunApproval,
+  configureSchedulePolicy,
+  reviewMissedSchedule,
   cancelRun,
   deployAgent,
   enqueueRun,
+  enqueueConfiguredRun,
+  readFleet,
   pauseRun,
   resumeRun,
-  runDueSchedules,
-  tickFleet,
+  assignDelegation,
+  delegationGoals,
+  scheduleExecutionStatus,
   togglePin,
   toolCatalog,
   type FleetTool,
@@ -110,6 +120,7 @@ function botAvatarSrc(name: string) {
 }
 
 function readLocalTool(id: string, ws: Workspace): string {
+  if (ws.toolPermissions?.[id] === false) return "This tool is turned off for this workspace. Nothing was read.";
   if (id === "list_projects") {
     if (ws.projects.length === 0) return "No projects stored in this browser.";
     return ws.projects.map((project) => project.name).join("\n");
@@ -177,6 +188,15 @@ export function FleetPanel({
   const [connectionLabel, setConnectionLabel] = useState("");
   const [provider, setProvider] = useState<string>(providerChoice ?? "openai");
   const [gmailBoard, setGmailBoard] = useState<{ state: string; detail: string }>({ state: "Checking", detail: "Checking connection…" });
+  const [runGmailConnection, setRunGmailConnection] = useState<{ account: string; version: string } | null>(null);
+  const [runMailAccount, setRunMailAccount] = useState("");
+  const [runMailRecipients, setRunMailRecipients] = useState("");
+  const [runMailSubject, setRunMailSubject] = useState("");
+  const [runMailBody, setRunMailBody] = useState("");
+  const [connectedRunId, setConnectedRunId] = useState<string | null>(null);
+  const connectedRunInFlight = useRef(false);
+  const connectedGeneration = useRef(0);
+  const [batchApprovalIds, setBatchApprovalIds] = useState<string[]>([]);
   const [jobName, setJobName] = useState("");
   const [jobInstruction, setJobInstruction] = useState("");
   const [scheduleBand, setScheduleBand] = useState<"jobs" | "new">(initialAgentId ? "new" : "jobs");
@@ -357,15 +377,55 @@ export function FleetPanel({
   }
 
   useEffect(() => {
-    if (mode !== "connected") return;
+    if (mode !== "connected" && mode !== "runs") return;
     let cancel = false;
     void fetchOauthStatusPayload("/api/mind/oauth/gmail/status").then((status) => {
-      if (!cancel) setGmailBoard(oauthBoardState(status));
+      if (!cancel) {
+        setGmailBoard(oauthBoardState(status));
+        setRunGmailConnection(status.state === "connected" && status.accountLabel && status.connectedAt ? { account: status.accountLabel, version: status.connectedAt } : null);
+      }
     });
     return () => {
       cancel = true;
     };
   }, [mode]);
+
+  useEffect(() => () => { connectedGeneration.current++; }, []);
+
+  async function executeConnectedRun(runId: string, approvalId: string) {
+    if (connectedRunInFlight.current) return;
+    connectedRunInFlight.current = true;
+    setConnectedRunId(runId);
+    const generation = connectedGeneration.current;
+    const bearer = getBearerToken();
+    try {
+      const response = await fetch("/api/mind/fleet/execute", { method: "POST", credentials: "include", headers: { "content-type": "application/json", ...(bearer ? { authorization: `Bearer ${bearer}` } : {}) }, body: JSON.stringify({ runId, approvalId }), signal: AbortSignal.timeout(45_000) });
+      const result = await response.json() as { ok?: boolean; error?: string; run?: unknown };
+      if (generation !== connectedGeneration.current || bearer !== getBearerToken()) return;
+      const returned = result.run ? readFleet({ runs: [result.run] }).runs[0] : undefined;
+      if (returned?.id === runId) setWs(prev => prev.runs.some(run => run.id === runId) ? { ...prev, runs: prev.runs.map(run => run.id === runId ? returned : run) } : prev);
+      setNote(result.ok ? "The connected step returned a receipt. Review its evidence; the overall objective is still unverified." : result.error || "This connected step did not finish. Check its saved receipt before trying again.");
+    } catch {
+      if (generation === connectedGeneration.current) setNote("The connected-step response was lost. Refresh the saved run before any replacement; it will not be retried automatically.");
+    } finally {
+      connectedRunInFlight.current = false;
+      if (generation === connectedGeneration.current) setConnectedRunId(null);
+    }
+  }
+
+  async function clearSavedRunHistory(runIds: string[]) {
+    const bearer = getBearerToken();
+    const generation = connectedGeneration.current;
+    try {
+      const response = await fetch("/api/mind/fleet/history", { method: "POST", credentials: "include", headers: { "content-type": "application/json", ...(bearer ? { authorization: `Bearer ${bearer}` } : {}) }, body: JSON.stringify({ confirm: "delete-finished-run-history", runIds }), signal: AbortSignal.timeout(15_000) });
+      const result = await response.json() as { ok?: boolean; removedIds?: string[]; error?: string };
+      if (generation !== connectedGeneration.current || bearer !== getBearerToken()) return;
+      if (!result.ok || !Array.isArray(result.removedIds)) { setNote(result.error || "History deletion was not confirmed."); return; }
+      const removedIds = result.removedIds.filter(id => runIds.includes(id));
+      setWs(prev => clearFinishedRuns(prev, removedIds));
+      setNote(`Removed ${removedIds.length} saved finished records. Active runs and unresolved external outcomes were retained.`);
+    } catch { if (generation === connectedGeneration.current) setNote("History deletion could not be verified. Refresh the saved history before trying again."); }
+  }
 
   // After sign-in, refetch MCP list so servers appear without a full reload (one quiet notice).
   useEffect(() => {
@@ -415,7 +475,7 @@ export function FleetPanel({
       case "deploy":
         return deployAgent(current, params.agentId, params.target);
       case "enqueue":
-        return enqueueRun(current, params.agentId, params.goal);
+        return enqueueConfiguredRun(current, params.agentId, params.goal, params.inputs);
       case "enqueue_no_agent":
         return { ok: false, error: "Add an agent first." };
       case "add_connection":
@@ -546,7 +606,7 @@ export function FleetPanel({
       <section className="page-shell">
         <div className="page-hero mb-4">
         <h2 className="font-display text-3xl font-bold">Agent runs</h2>
-        <p className="text-sm text-muted">Events come from the local worker. This does not call a model, send mail, or invent browser screenshots.</p>
+        <p className="text-sm text-muted">Local steps use the device worker. Connected model and Gmail steps run only after you review their exact action and choose Run connected step.</p>
         </div>
         <div className="mt-4 grid gap-2 sm:grid-cols-[minmax(10rem,1fr)_minmax(12rem,2fr)]">
           <label className="grid gap-1 text-sm">Bot<select aria-label="Choose agent" value={active?.id ?? ""} onChange={(event) => setAgentId(event.target.value)} className="min-h-11 min-w-0 rounded-panel border border-line bg-surface px-3 text-sm">
@@ -556,6 +616,11 @@ export function FleetPanel({
             ))}
           </select></label>
           <label className="grid gap-1 text-sm">Task<input value={goal} onChange={(event) => setGoal(event.target.value)} placeholder="What should this run do?" className="min-h-11 min-w-0 rounded-panel border border-line bg-surface px-3 text-sm" /></label>
+          {active?.tools.some(tool => tool === "gmail_read" || tool === "gmail_send") && <div className="grid min-w-0 gap-2 sm:col-span-2">
+            <label className="grid gap-1 text-sm">Gmail account<select value={runMailAccount} onChange={event => setRunMailAccount(event.target.value)} className="min-h-11 rounded-panel border border-line bg-surface px-3"><option value="">Select the connected account</option>{runGmailConnection && <option value={runGmailConnection.account}>{runGmailConnection.account}</option>}</select></label>
+            {!runGmailConnection && <p className="text-sm text-muted">Connect Gmail in Settings, then reopen Runs to load its current account and permissions.</p>}
+            {active.tools.includes("gmail_send") && <><label className="grid gap-1 text-sm">Recipients<input value={runMailRecipients} onChange={event => setRunMailRecipients(event.target.value)} placeholder="recipient@example.com" className="min-h-11 rounded-panel border border-line bg-surface px-3" /></label><label className="grid gap-1 text-sm">Subject<input maxLength={1000} value={runMailSubject} onChange={event => setRunMailSubject(event.target.value)} className="min-h-11 rounded-panel border border-line bg-surface px-3" /></label><label className="grid gap-1 text-sm">Exact message<textarea maxLength={8000} value={runMailBody} onChange={event => setRunMailBody(event.target.value)} className="min-h-24 rounded-panel border border-line bg-surface p-3" /></label></>}
+          </div>}
           <button
             type="button"
             className="min-h-11 rounded-panel bg-accent px-4 text-sm font-semibold text-accent-ink"
@@ -565,7 +630,8 @@ export function FleetPanel({
                 runMutation(snapshotFleetMutationParams({ kind: "enqueue_no_agent", goal }));
                 return;
               }
-              if (runMutation(snapshotFleetMutationParams({ kind: "enqueue", agentId: active.id, goal }))) setGoal("");
+              const gmail = runGmailConnection && runMailAccount === runGmailConnection.account ? { accountId: runMailAccount, connectionVersion: runGmailConnection.version, recipients: runMailRecipients.split(",").map(value => value.trim()).filter(Boolean), subject: runMailSubject, body: runMailBody } : undefined;
+              if (runMutation(snapshotFleetMutationParams({ kind: "enqueue", agentId: active.id, goal, inputs: { gmail_read: gmail, gmail_send: gmail } }))) setGoal("");
             }}
           >
             Queue run
@@ -583,7 +649,29 @@ export function FleetPanel({
         <div className="mt-4 flex flex-wrap gap-2" aria-label="Run filters" role="group">
           <button type="button" aria-pressed={runFilter === "all"} className="min-h-11 rounded-panel border border-line px-3 text-sm" onClick={() => setRunFilter("all")}>All runs ({ws.runs.length})</button>
           <button type="button" aria-pressed={runFilter === "attention"} className="min-h-11 rounded-panel border border-line px-3 text-sm" onClick={() => setRunFilter("attention")}>Needs attention ({needsAttention.length})</button>
+          <button type="button" className="min-h-11 rounded-panel border border-line px-3 text-sm" onClick={() => {
+            const url = URL.createObjectURL(new Blob([JSON.stringify({ exportedAt: new Date().toISOString(), runs: ws.runs, events: ws.runEvents, browserSessions: ws.browserSessions }, null, 2)], { type: "application/json" }));
+            const anchor = document.createElement("a"); anchor.href = url; anchor.download = "adrian-run-history.json"; anchor.click(); setTimeout(() => URL.revokeObjectURL(url), 1000);
+          }}>Download run history</button>
+          <button type="button" className="min-h-11 rounded-panel border border-line px-3 text-sm" onClick={() => {
+            const finished = ws.runs.filter(run => ["completed", "failed", "canceled"].includes(run.state));
+            if (finished.length && window.confirm(`Delete ${finished.length} finished run records and their execution evidence? Download history first if you need a copy. Unresolved external outcomes and evidence needed by active parents will be retained.`)) void clearSavedRunHistory(finished.map(run => run.id));
+          }}>Clear finished history…</button>
         </div>
+        <details className="mt-3 rounded-panel border border-line p-3">
+          <summary className="min-h-11 cursor-pointer py-2 text-sm">Authorizations · {ws.runs.filter(run => run.pendingApproval?.state === "granted").length} active</summary>
+          <p className="text-sm text-muted">Every authorization covers its reviewed destination once and expires after five minutes. Select pending requests below to authorize a bounded batch in one project. Connected steps still require explicit dispatch.</p>
+          <button type="button" disabled={!batchApprovalIds.length || ws.halted} className="mt-2 min-h-11 rounded-panel border border-line px-3 text-sm" onClick={() => {
+            const requests = ws.runs.filter(run => run.pendingApproval && batchApprovalIds.includes(run.pendingApproval.id)).map(run => ({ runId: run.id, approvalId: run.pendingApproval!.id }));
+            if (requests.length !== batchApprovalIds.length) { setNote("A selected request changed. Review and select the current actions again."); return; }
+            const projectId = ws.runs.find(run => run.id === requests[0]?.runId)?.configuration?.projectId ?? null;
+            const result = approveRunBatch(ws, requests, projectId, 50);
+            if (!result.ok) { setNote(result.error); return; }
+            setWs(prev => { const checked = approveRunBatch(prev, requests, projectId, 50); return checked.ok ? checked.ws : prev; });
+            setBatchApprovalIds([]);
+          }}>Authorize {batchApprovalIds.length} selected actions once</button>
+          <ul className="mt-2 space-y-2 text-xs text-muted">{ws.runs.flatMap(run => [...(run.approvalHistory ?? []), ...(run.pendingApproval ? [run.pendingApproval] : [])].map(approval => ({ run, approval }))).sort((a, b) => b.approval.updatedAt.localeCompare(a.approval.updatedAt)).slice(0, 100).map(({ run, approval }) => <li key={`${run.id}:${approval.id}:${approval.state}`} className="break-words">{approval.tool} · {approval.destination} · {approval.state} · {new Date(approval.updatedAt).toLocaleString()}{approval.batchId ? " · batch authorization" : ""}</li>)}</ul>
+        </details>
         <ul className="mt-4 space-y-3">
           {ws.runs.length === 0 && (
             <li className="empty-state">
@@ -599,9 +687,30 @@ export function FleetPanel({
             <li key={run.id} id={`run-${run.id}`} tabIndex={-1} className={`rounded-panel border bg-surface p-3 text-sm ${run.id === focusRunId ? "border-accent" : "border-line"}`}>
               <p className="break-words font-semibold">{run.goal}</p>
               <p className="text-muted">{ws.agents.find((agent) => agent.id === run.agentId)?.name ?? "Agent"} · {run.state.replaceAll("_", " ")}</p>
+              {run.configuration && <p className="text-xs text-muted">Agent version {run.configuration.version} · Project {run.configuration.projectId ? ws.projects.find(project => project.id === run.configuration?.projectId)?.name ?? run.configuration.projectId : "workspace"} · Memory {run.configuration.memory}</p>}
               {run.plan.length > 0 && <p className="mt-1 text-xs text-muted">Plan: {run.plan.map((step) => step.tool).join(" → ")}. Missing tools wait. They are not marked done.</p>}
               {run.result ? <p className="mt-1 whitespace-pre-wrap">{run.result}</p> : null}
               {run.error ? <p className="mt-1 text-danger">{run.error}</p> : null}
+              {run.verification && <p className="mt-1 text-sm text-muted">{run.verification.state === "verified" ? "Objective verified" : run.verification.state === "not_met" ? "Objective not met" : "Objective not verified"}: {run.verification.detail}</p>}
+              {!!run.stepResults?.length && <details className="mt-2">
+                <summary className="min-h-11 cursor-pointer py-2">Execution evidence · {run.stepResults.length} steps</summary>
+                {run.stepResults.map(result => <section key={result.id} className="mt-2 border-t border-line pt-2">
+                  <p className="font-semibold">{result.tool} · {result.status} · {new Date(result.at).toLocaleString()}</p>
+                  {result.receipt && <p className="text-xs text-muted">Receipt: {result.receipt.provider ?? result.receipt.accountId} · {result.receipt.model ?? result.receipt.operationId}</p>}
+                  <p className="whitespace-pre-wrap break-words">{result.text}</p>
+                  {result.truncated && <p className="text-muted">Stored excerpt: {result.text.length.toLocaleString()} of {result.originalLength.toLocaleString()} characters. The omitted content is not available in this run.</p>}
+                  {result.sources.map(source => <p key={source.id} className="break-words">{source.title} · {/^https?:\/\//i.test(source.url) ? <a className="underline" href={source.url} target="_blank" rel="noreferrer">{source.url}</a> : source.url}</p>)}
+                </section>)}
+              </details>}
+              {run.pendingApproval && ["requested", "granted"].includes(run.pendingApproval.state) && <div className="mt-2 rounded-panel border border-line p-3" aria-label="Exact action authorization">
+                <p className="font-semibold">{run.pendingApproval.state === "granted" ? "Authorized once" : "Review action"}: {run.pendingApproval.tool}</p>
+                <p className="break-words">Destination: {run.pendingApproval.destination}</p>
+                <p className="text-xs text-muted">Expires {new Date(run.pendingApproval.expiresAt).toLocaleString()}. Changes to the task, plan or agent invalidate this authorization.</p>
+                {run.pendingApproval.tool === "model" && <p className="text-sm text-muted">One request to this selected provider. Its price may be unknown; no alternate provider or automatic retry is authorized.</p>}
+                {run.plan[run.step]?.input?.subject && <p>Subject: {run.plan[run.step]?.input?.subject}</p>}
+                {run.plan[run.step]?.input?.body && <p className="whitespace-pre-wrap">{run.plan[run.step]?.input?.body}</p>}
+                {run.pendingApproval.state === "requested" && <label className="mt-2 flex min-h-11 items-center gap-2 text-sm"><input type="checkbox" checked={batchApprovalIds.includes(run.pendingApproval.id)} onChange={event => { const id = run.pendingApproval!.id; setBatchApprovalIds(previous => event.target.checked ? [...new Set([...previous, id])] : previous.filter(item => item !== id)); }} />Include this exact action in the batch review</label>}
+              </div>}
               {events.length > 0 && <details className="mt-2">
                 <summary className="min-h-11 cursor-pointer py-2 text-sm">History · {events.length} events</summary>
                 <ul className="space-y-1 text-xs text-muted">
@@ -612,10 +721,9 @@ export function FleetPanel({
                 {(run.state === "queued" || run.state === "running") ? <button type="button" className="min-h-11 rounded-panel border border-line px-3" onClick={() => setWs((prev) => pauseRun(prev, run.id))}>Pause</button> : null}
                 {(run.state === "paused" || run.state === "waiting_external") ? <button type="button" className="min-h-11 rounded-panel border border-line px-3" onClick={() => setWs((prev) => resumeRun(prev, run.id))}>{run.state === "waiting_external" ? "Retry this step" : "Resume"}</button> : null}
                 {!["completed", "failed", "canceled"].includes(run.state) ? <button type="button" className="min-h-11 rounded-panel border border-line px-3" onClick={() => setWs((prev) => cancelRun(prev, run.id))}>Stop run</button> : null}
-                {run.state === "waiting_approval" ? <>
-                  {run.plan.some((step) => step.tool === "browser") ? <button type="button" className="min-h-11 rounded-panel border border-line px-3" onClick={() => setWs((prev) => approveRunAction(prev, run.id, "browser"))}>Approve browser</button> : null}
-                  {run.plan.some((step) => step.tool === "gmail_send") ? <button type="button" className="min-h-11 rounded-panel border border-line px-3" onClick={() => setWs((prev) => approveRunAction(prev, run.id, "gmail_send"))}>Approve send</button> : null}
-                </> : null}
+                {run.state === "waiting_approval" && run.pendingApproval?.state === "requested" ? <button type="button" className="min-h-11 rounded-panel border border-line px-3" onClick={() => setWs((prev) => approveRunAction(prev, run.id, run.pendingApproval!.id))}>Approve this action once</button> : null}
+                {run.pendingApproval && ["requested", "granted"].includes(run.pendingApproval.state) ? <button type="button" className="min-h-11 rounded-panel border border-line px-3" onClick={() => setWs((prev) => revokeRunApproval(prev, run.id))}>Revoke authorization</button> : null}
+                {run.pendingApproval?.state === "granted" && ["model", "gmail_read", "gmail_send"].includes(run.pendingApproval.tool) && !["paused", "failed", "canceled", "completed"].includes(run.state) && <button type="button" disabled={connectedRunId !== null || ws.halted} className="min-h-11 rounded-panel border border-line px-3" onClick={() => void executeConnectedRun(run.id, run.pendingApproval!.id)}>{connectedRunId === run.id ? "Running connected step…" : "Run connected step"}</button>}
               </div>
             </li>
           ); })}
@@ -675,7 +783,7 @@ export function FleetPanel({
         <ul className="mt-4 space-y-2">
           {ws.connections.length === 0 && <li className="text-sm text-muted">No extra connections yet. Chat still uses the server Grok key only when you press Send.</li>}
           {ws.connections.map((item) => (
-            <li key={item.id} className="dense-card dense-row text-sm">
+            <li key={item.id} id={`connection-${item.id}`} tabIndex={-1} className="dense-card dense-row text-sm">
               {item.label} · {item.provider} · {logicRoutes.find((row) => row.id === (item.provider as string))?.reason ?? (item.status === "server-configured" ? "Server key present. Live call not verified." : "Not configured. It cannot be selected.")} · secret stored: no
             </li>
           ))}
@@ -803,7 +911,7 @@ export function FleetPanel({
             const bot = ws.agents.find((agent) => agent.id === job.agentId);
             const blocked = !bot || bot.archived;
             return (
-            <li key={job.id} className="dense-card p-3 text-sm">
+            <li key={job.id} id={`schedule-${job.id}`} tabIndex={-1} className="dense-card p-3 text-sm">
               <p className="font-semibold">{job.name}</p>
               <p className="text-sm">Task: {job.instruction || job.name}</p>
               <p className="text-sm text-muted">Runs in an open browser or a running local schedule worker.</p>
@@ -812,9 +920,22 @@ export function FleetPanel({
               {blocked ? <p className="text-sm text-danger">{bot?.archived ? "Agent archived" : "Agent unavailable"}</p> : <p className="text-sm text-muted">Next due in your local time <time dateTime={job.nextRunAt}>{new Date(job.nextRunAt).toLocaleString()}</time></p>}
               {job.chatId && ws.chats.some((chat) => chat.id === job.chatId) && <a className="underline" href={conversationSharePath(job.chatId, ["chat"])}>Open conversation</a>}
               {job.lastQueuedRunId && <p>Last occurrence: {ws.runs.find((run) => run.id === job.lastQueuedRunId)?.state ?? "Run record unavailable"}</p>}
-              {job.lastRunAt && <p>Last completed: {new Date(job.lastRunAt).toLocaleString()}</p>}
+              {job.lastRunAt && <p>Last execution finished: {new Date(job.lastRunAt).toLocaleString()} · Objective {job.lastVerification === "verified" ? "verified" : "not verified"}</p>}
               {job.lastAttemptAt && <p>Last attempt: {new Date(job.lastAttemptAt).toLocaleString()}</p>}
               {job.lastError && <p className="text-sm text-danger">{job.lastError}</p>}
+              {!!job.missedOccurrences && <p>Missed occurrences detected: {job.missedOccurrences}</p>}
+              {job.clockHour == null && <label className="mt-2 block">Interval timing <select aria-label={`Interval timing for ${job.name}`} value={job.timing ?? "fixed_rate"} className="min-h-11 rounded-panel border border-line bg-surface px-2" onChange={event => setWs(prev => configureSchedulePolicy(prev, job.id, { timing: event.target.value === "fixed_delay" ? "fixed_delay" : "fixed_rate" }))}>
+                <option value="fixed_rate">Keep original time</option><option value="fixed_delay">Delay from each execution</option>
+              </select></label>}
+              {job.chatId && <label className="mt-2 block">Completed result destination
+                <select disabled={ws.halted} value={job.resultDelivery ?? "runs"} className="ml-2 min-h-11 rounded-panel border border-line bg-surface px-2" onChange={(event) => setWs((prev) => setSchedulePolicy(prev, job.id, { resultDelivery: event.target.value === "conversation" ? "conversation" : "runs" }))}>
+                  <option value="runs">Runs only</option><option value="conversation">Runs and linked conversation</option>
+                </select>
+              </label>}
+              <label className="mt-2 block">Missed work <select aria-label={`Missed work for ${job.name}`} value={job.missedPolicy ?? "latest"} className="min-h-11 rounded-panel border border-line bg-surface px-2" onChange={event => setWs(prev => configureSchedulePolicy(prev, job.id, { missedPolicy: event.target.value as "latest" | "skip" | "ask" | "all" }))}>
+                <option value="latest">Run the latest occurrence once</option><option value="skip">Skip late work</option><option value="ask">Ask before recovering late work</option><option value="all">Recover all occurrences, up to 10 per check</option>
+              </select></label>
+              {job.recoveryPending && <div className="mt-2 flex flex-wrap gap-2"><button type="button" className="min-h-11 rounded-panel border border-line px-3" onClick={() => setWs(prev => reviewMissedSchedule(prev, job.id, true))}>Recover latest missed occurrence</button><button type="button" className="min-h-11 rounded-panel border border-line px-3" onClick={() => setWs(prev => reviewMissedSchedule(prev, job.id, false))}>Skip missed work and resume</button></div>}
               {blocked && <label className="mt-2 block text-sm">Reassign bot
                 <select value="" className="ml-2 min-h-11 max-w-full rounded-panel border border-line bg-surface px-2" onChange={(event) => {
                   const id = event.target.value;
@@ -1227,7 +1348,7 @@ export function FleetPanel({
       <ul className="mt-4 space-y-2 text-sm">
         {ws.browserSessions.length === 0 && <li className="rounded-panel border border-line bg-surface p-3 text-muted">No browser sessions yet. Open page records one only after a successful inspect.</li>}
         {ws.browserSessions.map((session) => (
-          <li key={session.id} className="dense-card p-3">
+          <li key={session.id} id={`browser-${session.id}`} tabIndex={-1} className="dense-card p-3">
             <p className="font-semibold">{session.title || "No title"} · {session.status}</p>
             <p className="text-xs text-muted">{session.url}</p>
             <p className="mt-1">{session.excerpt || session.lastAction}</p>

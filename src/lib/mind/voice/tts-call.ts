@@ -7,7 +7,7 @@ export async function callXaiTts(input: {
   voiceId?: string;
   apiKey: string;
   fetchImpl?: typeof fetch;
-}): Promise<{ ok: true; audio: string; mime: "audio/mpeg" } | { ok: false; error: string }> {
+}): Promise<{ ok: true; audio: string; mime: "audio/mpeg" } | { ok: false; error: string; status?: number }> {
   const fetchImpl = input.fetchImpl ?? fetch;
   const voice_id = resolveXaiVoiceId(input.voiceId);
   let res: Response;
@@ -21,7 +21,7 @@ export async function callXaiTts(input: {
   } catch {
     return { ok: false, error: "Voice did not answer in time. Nothing was played." };
   }
-  if (!res.ok) return { ok: false, error: `Voice returned ${res.status}. Nothing was played.` };
+  if (!res.ok) return { ok: false, status: res.status, error: `Voice returned ${res.status}. Nothing was played.` };
   const contentLength = Number(res.headers.get("content-length") || 0);
   if (contentLength > 2_000_000) return { ok: false, error: "Voice returned audio that could not be played." };
   const bytes = Buffer.from(await res.arrayBuffer());

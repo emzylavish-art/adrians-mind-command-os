@@ -1,3 +1,12 @@
+import { readHelperReceipts } from "./execution-evidence.ts";
+import { readFailureEnvelope, type FailureEnvelope } from "./failure-envelope.ts";
+import { readModelExecutionPlan, type ModelExecutionPlan } from "./execution-plan.ts";
+import type { HelperReceipt, ConsultExecutionReceipt } from "./model-consult.ts";
+import { readExecutionReceipts, readPrimaryFailureReceipt, type PrimaryFailureReceipt } from "./execution-receipt.ts";
+import { normalizeSkillReceipts, type SkillApplicationReceipt } from "./skill-activation.ts";
+import { normalizeContextReceipt, type ContextReceipt } from "./conversation-context.ts";
+import { normalizeConsultation, type ConsultEvidence, normalizeConsultAttempts, type ConsultAttempt } from "./model-consult.ts";
+import { turnErrorCode, type TurnErrorCode } from "./turn-error.ts";
 /** Honest label when a done event did not confirm which model answered. */
 export const UNKNOWN_MODEL_LABEL = "model unknown";
 
@@ -7,9 +16,56 @@ export function reportedModel(value: unknown): string {
 
 export type ModelUsage = { prompt_tokens?: number; completion_tokens?: number };
 
+/** Receipts describe calls that actually returned, even when the answer did not finish. */
+export type TurnCallEvidence = PrimaryFailureReceipt & {
+  primaryDispatched?: boolean;
+  executions?: ConsultExecutionReceipt[];
+  helperReceipts?: HelperReceipt[];
+  failureEnvelope?: FailureEnvelope;
+  executionPlan?: ModelExecutionPlan;
+  resourceOperationId?: string;
+  finishReason?: string | null;
+  consult?: ConsultAttempt[];
+ consultation?: ConsultEvidence[]; usage?: ModelUsage | null; model?: string; provider?: string; requestId?: string | null; responseId?: string | null; actualCostMicros?: number; currency?: "USD"; approvalId?: string; dispatched?: false };
+export function normalizeTurnCallEvidence(value: unknown): TurnCallEvidence {
+  if (!value || typeof value !== "object") return {};
+  const row = value as Record<string, unknown>;
+  const evidence: TurnCallEvidence = readPrimaryFailureReceipt(row);
+  const envelope = readFailureEnvelope(row.failureEnvelope);
+  if (envelope) evidence.failureEnvelope = envelope;
+  const plan = readModelExecutionPlan(row.executionPlan);
+  if (plan) evidence.executionPlan = plan;
+  if (Array.isArray(row.helperReceipts)) evidence.helperReceipts = readHelperReceipts(row.helperReceipts);
+  if (Array.isArray(row.consult)) evidence.consult = normalizeConsultAttempts(row.consult);
+  if (typeof row.resourceOperationId === "string" && row.resourceOperationId.length <= 300) evidence.resourceOperationId = row.resourceOperationId;
+  if (typeof row.finishReason === "string") evidence.finishReason = row.finishReason.slice(0, 100);
+  // Only a server's explicit whole-turn no-dispatch receipt permits exact replay.
+  // Missing, truthy, or string values cannot establish that nothing was sent.
+  if (typeof row.primaryDispatched === "boolean") evidence.primaryDispatched = row.primaryDispatched;
+  if (row.dispatched === false) evidence.dispatched = false;
+  if (typeof row.actualCostMicros === "number" && Number.isSafeInteger(row.actualCostMicros) && row.actualCostMicros >= 0 && row.actualCostMicros <= 1_000_000_000_000 && row.currency === "USD") { evidence.actualCostMicros = row.actualCostMicros; evidence.currency = "USD"; }
+  if (typeof row.approvalId === "string" && /^[a-f0-9]{64}$/.test(row.approvalId)) evidence.approvalId = row.approvalId;
+  const consultation = normalizeConsultation(row.consultation);
+  if (consultation) evidence.consultation = consultation;
+  if ("usage" in row) {
+    const raw = row.usage && typeof row.usage === "object" ? row.usage as Record<string, unknown> : {};
+    const usage: ModelUsage = {};
+    for (const key of ["prompt_tokens", "completion_tokens"] as const) if (typeof raw[key] === "number" && Number.isSafeInteger(raw[key]) && raw[key] >= 0) usage[key] = raw[key];
+    evidence.usage = Object.keys(usage).length ? usage : null;
+  }
+  for (const key of ["model", "provider", "requestId", "responseId"] as const) {
+    const item = row[key];
+    if (typeof item === "string" && item.trim() && !/\p{Cc}/u.test(item)) evidence[key] = item.slice(0, 300);
+    else if ((key === "requestId" || key === "responseId") && item === null) evidence[key] = null;
+  }
+  return evidence;
+}
+
 export function readModelPayload(raw: string): { text: string; model?: string; streamed: boolean; usage: ModelUsage | null } {
   const body = raw.trim();
-  if (!body.includes("data:")) {
+  // A normal answer can itself contain the word "data:". Only protocol lines
+  // identify an SSE response; content inside a JSON string does not.
+  if (!/^data:/m.test(body)) {
     try {
       const parsed = JSON.parse(body) as {
         choices?: { message?: { content?: string } }[];
@@ -17,7 +73,7 @@ export function readModelPayload(raw: string): { text: string; model?: string; s
         usage?: ModelUsage;
       };
       return {
-        text: parsed.choices?.[0]?.message?.content?.trim() ?? "",
+        text: typeof parsed.choices?.[0]?.message?.content === "string" ? parsed.choices[0].message.content.trim() : "",
         model: reportedModel(parsed.model),
         streamed: false,
         usage: parsed.usage ?? null,
@@ -31,7 +87,7 @@ export function readModelPayload(raw: string): { text: string; model?: string; s
   return { text: fed.text.trim(), model: reportedModel(fed.model), streamed: true, usage: fed.usage };
 }
 
-export type SseFeed = { buffer: string; text: string; usage: ModelUsage | null; model?: string; bad: boolean };
+export type SseFeed = { buffer: string; text: string; usage: ModelUsage | null; model?: string; bad: boolean; done?: boolean };
 
 export function createSseFeed(): SseFeed {
   return { buffer: "", text: "", usage: null, bad: false };
@@ -39,7 +95,7 @@ export function createSseFeed(): SseFeed {
 
 export function pushSse(feed: SseFeed, chunk: string): SseFeed & { deltas: string[] } {
   const deltas: string[] = [];
-  if (feed.bad) return { ...feed, deltas };
+  if (feed.bad || feed.done) return { ...feed, deltas };
   feed.buffer += chunk;
   const lines = feed.buffer.split("\n");
   feed.buffer = lines.pop() ?? "";
@@ -47,14 +103,24 @@ export function pushSse(feed: SseFeed, chunk: string): SseFeed & { deltas: strin
     const trimmed = line.trim();
     if (!trimmed.startsWith("data:")) continue;
     const data = trimmed.slice(5).trim();
-    if (!data || data === "[DONE]") continue;
+    if (!data) continue;
+    if (data === "[DONE]") {
+      feed.done = true;
+      feed.buffer = "";
+      break;
+    }
     try {
       const parsed = JSON.parse(data) as {
         choices?: { delta?: { content?: string }; message?: { content?: string } }[];
         usage?: ModelUsage | null;
         model?: unknown;
+        error?: unknown;
       };
       const text = parsed.choices?.[0]?.delta?.content ?? parsed.choices?.[0]?.message?.content ?? "";
+      if (parsed.error != null || typeof text !== "string") {
+        feed.bad = true;
+        return { ...feed, deltas: [] };
+      }
       if (text) {
         feed.text += text;
         deltas.push(text);
@@ -71,11 +137,15 @@ export function pushSse(feed: SseFeed, chunk: string): SseFeed & { deltas: strin
 
 export type MindClientEvent =
   | { event: "delta"; text: string }
-  | { event: "done"; text: string; model: string; usage: ModelUsage | null; usedIds: string[]; requestId: string | null; modelTier?: string; resolvedTier?: string; tierReason?: string; memorySaved?: boolean; savedMemoryId?: string | null; provider?: string; requestedModel?: string; credentialFallback?: string | null }
-  | { event: "error"; error: string }
-  | { event: "canceled"; error: string };
+  | { event: "consultation"; consultation: ConsultEvidence[] }
+  | { event: "executions"; executions: ConsultExecutionReceipt[] }
+  | ({ event: "done"; text: string; model: string; usage: ModelUsage | null; usedIds: string[]; requestId: string | null; modelTier?: string; resolvedTier?: string; tierReason?: string; memorySaved?: boolean; savedMemoryId?: string | null; provider?: string; requestedModel?: string; credentialFallback?: string | null; contextReceipt?: ContextReceipt; consultation?: ConsultEvidence[]; skillReceipts?: SkillApplicationReceipt[]; delivery?: "streamed" | "buffered"; actualCostMicros?: number; currency?: "USD" } & TurnCallEvidence)
+  | ({ event: "error"; error: string; code?: TurnErrorCode } & TurnCallEvidence)
+  | ({ event: "canceled"; error: string; code?: TurnErrorCode } & TurnCallEvidence);
 
 export function pullMindEvents(buffer: string): { events: MindClientEvent[]; rest: string } {
+  const trailingCr = buffer.endsWith("\r");
+  buffer = (trailingCr ? buffer.slice(0, -1) : buffer).replace(/\r\n/g, "\n").replace(/\r/g, "\n") + (trailingCr ? "\r" : "");
   const complete = buffer.endsWith("\n\n");
   const parts = buffer.split("\n\n");
   const rest = complete ? "" : (parts.pop() ?? "");
@@ -93,18 +163,25 @@ export function pullMindEvents(buffer: string): { events: MindClientEvent[]; res
     try {
       parsed = JSON.parse(dataLines.join("\n"));
     } catch {
-      events.push({ event: "error", error: "The reply stream was unreadable. Nothing was saved as a success." });
+      events.push({ event: "error", error: "The reply stream was unreadable. Nothing was saved as a success.", code: "invalid_response" });
       continue;
     }
     if (!parsed || typeof parsed !== "object") continue;
     const record = parsed as Record<string, unknown>;
     if (name === "delta" && typeof record.text === "string") events.push({ event: "delta", text: record.text });
-    else if (name === "error" && typeof record.error === "string") events.push({ event: "error", error: record.error });
-    else if (name === "canceled" && typeof record.error === "string") events.push({ event: "canceled", error: record.error });
+    else if (name === "executions") events.push({ event: "executions", executions: readExecutionReceipts(record.executions) });
+    else if (name === "consultation") events.push({ event: "consultation", consultation: normalizeConsultation(record.consultation) ?? [] });
+    else if (name === "error" && typeof record.error === "string") events.push({ event: "error", error: record.error, ...(record.code !== undefined || typeof record.status === "number" ? { code: turnErrorCode(record.code, typeof record.status === "number" ? record.status : undefined) } : {}), ...normalizeTurnCallEvidence(record) });
+    else if (name === "canceled" && typeof record.error === "string") events.push({ event: "canceled", error: record.error, ...(record.code !== undefined ? { code: turnErrorCode(record.code) } : {}), ...normalizeTurnCallEvidence(record) });
     else if (name === "done" && typeof record.text === "string") {
       const modelRaw = typeof record.model === "string" ? record.model.trim() : "";
       events.push({
         event: "done",
+        contextReceipt: normalizeContextReceipt(record.contextReceipt),
+        consultation: normalizeConsultation(record.consultation),
+        ...normalizeTurnCallEvidence(record),
+        skillReceipts: normalizeSkillReceipts(record.skillReceipts),
+        delivery: record.delivery === "streamed" || record.delivery === "buffered" ? record.delivery : undefined,
         text: record.text,
         model: modelRaw || UNKNOWN_MODEL_LABEL,
         usage: record.usage && typeof record.usage === "object" ? (record.usage as ModelUsage) : null,
@@ -117,6 +194,7 @@ export function pullMindEvents(buffer: string): { events: MindClientEvent[]; res
         savedMemoryId: typeof record.savedMemoryId === "string" ? record.savedMemoryId : null,
         provider: typeof record.provider === "string" ? record.provider : undefined,
         requestedModel: typeof record.requestedModel === "string" ? record.requestedModel : undefined,
+        consult: record.consult === undefined ? undefined : normalizeConsultAttempts(record.consult),
         credentialFallback: typeof record.credentialFallback === "string" ? record.credentialFallback : null,
       });
     }

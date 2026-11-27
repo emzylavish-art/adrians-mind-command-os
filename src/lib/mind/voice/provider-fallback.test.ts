@@ -20,7 +20,7 @@ function scriptedFetch(openaiStatus: number) {
       const body = JSON.parse(String(init?.body));
       assert.equal(body.model, "gpt-4o-mini-tts");
       assert.equal(body.voice, "alloy");
-      assert.equal(openaiStatus, 200);
+      if (openaiStatus !== 200) return Response.json({ error: "fixture unavailable" }, { status: openaiStatus });
       return new Response(new Uint8Array(64).fill(7), { status: openaiStatus });
     }
     if (href.includes("/audio/transcriptions")) {
@@ -70,12 +70,13 @@ describe("voice provider fallback", () => {
     if (!spoken.ok) assert.match(spoken.error, /xAI voice is not configured/);
   });
 
-  it("uses OpenAI STT, TTS, and chat when xAI returns 400", async () => {
+  it("uses explicitly authorized OpenAI STT, TTS, and chat when xAI rejects the key", async () => {
     const stt = scriptedFetch(200);
     const heard = await transcribeWithFallback({
       bytes: new Uint8Array([1, 2, 3, 4]),
+      policy: { provider: "xai", allowFallback: true },
       xaiKey: XAI,
-      openaiKey: OPENAI,
+      openaiKey: OPENAI, fallbackProvider: "openai",
       fetchImpl: stt.fetchImpl,
     });
     assert.equal(heard.ok, true);
@@ -87,7 +88,7 @@ describe("voice provider fallback", () => {
     assert.ok(stt.seen.some((url) => url.includes("/audio/transcriptions")));
 
     const tts = scriptedFetch(200);
-    const spoken = await speakWithFallback({ text: "It is sunny.", xaiKey: XAI, openaiKey: OPENAI, fetchImpl: tts.fetchImpl });
+    const spoken = await speakWithFallback({ text: "It is sunny.", xaiKey: XAI, openaiKey: OPENAI, fallbackProvider: "openai", fetchImpl: tts.fetchImpl });
     assert.equal(spoken.ok, true);
     if (spoken.ok) assert.equal(spoken.provider, "OpenAI");
     assert.ok(tts.seen.some((url) => url.includes("/audio/speech")));
@@ -96,7 +97,7 @@ describe("voice provider fallback", () => {
     const reply = await directChatWithFallback({
       messages: [{ role: "user", content: "what is the weather" }],
       xaiKey: XAI,
-      openaiKey: OPENAI,
+      openaiKey: OPENAI, fallbackProvider: "openai",
       fetchImpl: chat.fetchImpl,
     });
     assert.equal(reply.ok, true);
@@ -113,24 +114,39 @@ describe("voice provider fallback", () => {
 
   it("returns an honest error when xAI and OpenAI both fail", async () => {
     for (const run of [
-      () => transcribeWithFallback({ bytes: new Uint8Array([1, 2, 3]), xaiKey: XAI, openaiKey: OPENAI, fetchImpl: scriptedFetch(500).fetchImpl }),
-      () => speakWithFallback({ text: "Hello", xaiKey: XAI, openaiKey: OPENAI, fetchImpl: scriptedFetch(500).fetchImpl }),
+      () => transcribeWithFallback({ bytes: new Uint8Array([1, 2, 3]), policy: { provider: "xai", allowFallback: true }, xaiKey: XAI, openaiKey: OPENAI, fallbackProvider: "openai", fetchImpl: scriptedFetch(500).fetchImpl }),
+      () => speakWithFallback({ text: "Hello", xaiKey: XAI, openaiKey: OPENAI, fallbackProvider: "openai", fetchImpl: scriptedFetch(500).fetchImpl }),
       () =>
         directChatWithFallback({
           messages: [{ role: "user", content: "Hello" }],
           xaiKey: XAI,
-          openaiKey: OPENAI,
+          openaiKey: OPENAI, fallbackProvider: "openai",
           fetchImpl: scriptedFetch(500).fetchImpl,
         }),
     ]) {
       const result = await run();
       assert.equal(result.ok, false);
       if (!result.ok) {
-        assert.match(result.error, /xAI and OpenAI did not produce a successful/);
+        assert.match(result.error, /xAI and OpenAI did not produce a successful|OpenAI transcription returned 500/);
         assert.equal(result.error.includes(XAI), false);
         assert.equal(result.error.includes(OPENAI), false);
         assert.equal(result.provider, null);
       }
     }
   });
+});
+
+it("losing a dispatched response never repeats audio or voice chat on another provider", async () => {
+  const calls: string[] = [];
+  const fetchImpl: typeof fetch = async (url) => { calls.push(String(url)); throw new TypeError("fixture response lost"); };
+  const shared = { xaiKey: XAI, openaiKey: OPENAI, fetchImpl, fallbackProvider: "openai" as const };
+  assert.equal((await transcribeWithFallback({ ...shared, bytes: new Uint8Array([1, 2, 3]) })).ok, false);
+  assert.equal((await speakWithFallback({ ...shared, text: "fixture" })).ok, false);
+  assert.equal((await directChatWithFallback({ ...shared, messages: [{ role: "user", content: "fixture" }] })).ok, false);
+  assert.equal(calls.length, 3);
+  assert.ok(calls.every(url => new URL(url).hostname === "api.x.ai"));
+  const rejected = scriptedFetch(200);
+  const reply = await directChatWithFallback({ messages: [{ role: "user", content: "fixture" }], xaiKey: XAI, openaiKey: OPENAI, fetchImpl: rejected.fetchImpl });
+  assert.equal(reply.ok, false);
+  assert.equal(rejected.seen.length, 1);
 });

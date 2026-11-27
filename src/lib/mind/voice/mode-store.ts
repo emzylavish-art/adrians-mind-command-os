@@ -11,6 +11,7 @@ type Listener = () => void;
 let current: VoiceRoutingMode = "direct";
 const listeners = new Set<Listener>();
 let storageBound = false;
+let storageKey = VOICE_MODE_STORAGE_KEY;
 
 function emit() {
   for (const listener of listeners) listener();
@@ -20,7 +21,7 @@ function bindStorage() {
   if (storageBound || typeof window === "undefined") return;
   storageBound = true;
   window.addEventListener("storage", (event) => {
-    if (event.key !== VOICE_MODE_STORAGE_KEY) return;
+    if (event.key !== storageKey) return;
     const next = parseVoiceMode(event.newValue);
     if (next === current) return;
     current = next;
@@ -32,6 +33,7 @@ function bindStorage() {
 export function hydrateVoiceModeStore(storage?: Pick<Storage, "getItem" | "setItem"> | null): VoiceRoutingMode {
   bindStorage();
   const store = storage ?? (typeof localStorage === "undefined" ? null : localStorage);
+  storageKey = (store as { keyFor?: (key: string) => string } | null)?.keyFor?.(VOICE_MODE_STORAGE_KEY) ?? VOICE_MODE_STORAGE_KEY;
   current = readStoredVoiceMode(store);
   emit();
   return current;

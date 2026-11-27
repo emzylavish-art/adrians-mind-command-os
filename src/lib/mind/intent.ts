@@ -16,7 +16,7 @@ export type CommandIntent =
   | { kind: "bot_missing"; reply: string };
 
 const REPLIES = {
-  gmail: "No Gmail account is connected. Nothing was read or sent.",
+  gmail: "Mailbox reading and sending are not available in ordinary chat. Open Plugins to check Gmail authorization. Nothing was read or sent.",
   search: "No search provider is configured. Nothing was searched and no citations were created.",
   media: "Image and video generation are not called. Nothing was created.",
   build: "Adrian Build cannot edit a repository, run a terminal, or commit from this page. No files were changed.",
@@ -27,6 +27,7 @@ export function interpretCommand(
   text: string,
   agents: { id: string; name: string; archived: boolean }[],
   mode: CommandMode = "ask",
+  connections?: { gmail?: { authorizationSaved: boolean } },
 ): CommandIntent {
   const raw = text.trim();
   const lower = raw.toLowerCase();
@@ -34,8 +35,15 @@ export function interpretCommand(
   const created = parseCreateBot(raw);
   if (created) return { kind: "create_bot", name: created.name, goal: created.goal };
 
-  if (/\b(gmail|inbox|my emails|send an email|draft an email|check email)\b/.test(lower)) {
-    return { kind: "blocked", area: "gmail", reply: REPLIES.gmail };
+  const informationOrDraft = /^(?:please\s+)?(?:explain|describe|what\b|why\b|how\b|write\s+(?:me\s+)?(?:an?\s+)?email|draft\b|compose\b)/.test(lower);
+  const mailboxAction = /\b(?:check|read|summari[sz]e|search|find|open|delete|archive)\b.{0,50}\b(?:gmail|inbox|my emails|my mail|email)\b|\bsend\b.{0,35}\b(?:email|mail|gmail)\b/.test(lower);
+  if (!informationOrDraft && mailboxAction) {
+    const gmail = connections?.gmail;
+    const reply = gmail?.authorizationSaved
+      ? "Gmail authorization is saved, but mailbox reading and sending are not implemented in ordinary chat. Nothing was read or sent."
+      : gmail ? "Gmail authorization is required for mailbox access. Reading and sending are not implemented in ordinary chat. Nothing was read or sent."
+      : REPLIES.gmail;
+    return { kind: "blocked", area: "gmail", reply };
   }
   if (/\b(generate|make|create)\b.{0,40}\b(image|video|picture|photo)\b/.test(lower)) {
     return { kind: "blocked", area: "media", reply: REPLIES.media };

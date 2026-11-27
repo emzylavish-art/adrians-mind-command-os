@@ -63,6 +63,19 @@ describe("selection persistence", () => {
 });
 
 describe("request carries the selection", () => {
+  it("preserves explicit helper authorization and free-only mode through the actual request body", () => {
+    const base = { text: "Review the implementation", memory: "off" as const, halted: false, history: [], memoryContext: [], provider: "grok", modelTier: "Auto" as const, logicRoute: null, images: [], composerMode: "orchestrator", orchestrator: "grok" };
+    for (const consent of [false, true]) {
+      const consult = { available: ["grok", "openai"], helpers: [], purpose: "Synthesize", helperIds: ["openai"], allowPaidHelpers: consent };
+      const body = JSON.parse(JSON.stringify(chatTurnBody({ ...base, consult, freeOnly: !consent })));
+      assert.deepEqual(body.consult.helperIds, ["openai"]);
+      assert.equal(body.consult.allowPaidHelpers, consent);
+      assert.equal(body.freeOnly, !consent);
+    }
+    assert.equal("freeOnly" in chatTurnBody(base), false);
+    assert.equal("consult" in chatTurnBody(base), false);
+  });
+
   it("puts a different logicRoute and provider on each selection and does not send {text} to model.generate", () => {
     const bodies = LOGIC_ROUTES.map((route) =>
       chatTurnBody({
@@ -251,9 +264,13 @@ it("drops the oldest historical image to fit the request while retaining text an
   const image = { dataUrl: "data:image/png;base64," + "a".repeat(980_000) };
   const history = [1, 2].map((n) => ({ role: "user", content: String(n), images: [image] }));
   const body = chatTurnBody({ text: "continue", memory: "off", halted: false, history, memoryContext: [],
-    provider: "gemini", modelTier: "Auto", logicRoute: null, images: [image] });
+    provider: "grok", modelTier: "Auto", logicRoute: null, images: [image] });
   assert.ok(Buffer.byteLength(JSON.stringify(body)) <= 2_500_000);
-  assert.deepEqual(body.history, [{ ...history[0], images: [] }, history[1]]);
+  const sent = body.history as typeof history;
+  assert.deepEqual(sent[0].images, []);
+  assert.match(sent[0].content, /not included because this request exceeded/);
+  assert.deepEqual(sent[1], history[1]);
+  assert.deepEqual(body.historyImageOmissions, [{ messageIndex: 0, name: "image 1", reason: "request_body_budget" }]);
   assert.deepEqual(body.images, [image]);
   assert.equal(history[0].images.length, 1);
 });

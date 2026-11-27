@@ -116,9 +116,10 @@ const SPEAK_NOT_RETRYABLE = /sign in is required|session expired|no speech key i
 /** A Retry button is honest only when repeating the same attempt can succeed. */
 export function speakCanRetry(
   message: string,
-  replay?: { chatCommitted?: boolean; audio?: string | null; reply?: string | null },
+  replay?: { chatCommitted?: boolean; audio?: string | null; reply?: string | null; inputDeliveryUncertain?: boolean },
 ): boolean {
   if (SPEAK_NOT_RETRYABLE.test(message)) return false;
+  if (replay?.inputDeliveryUncertain) return false;
   if (replay?.chatCommitted && !replay.reply && !replay.audio) return false;
   return true;
 }

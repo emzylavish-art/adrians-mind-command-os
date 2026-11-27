@@ -1,3 +1,4 @@
+import { selectContextHistory, type ContextMessage } from "./context-budget.ts";
 import { MIND_MAX_BODY_BYTES } from "./request-body.ts";
 /**
  * Chat model-picker selections for Astra, Sol, and Luna.
@@ -5,8 +6,10 @@ import { MIND_MAX_BODY_BYTES } from "./request-body.ts";
  * names the selection, the payload, and the honest not-ready copy.
  */
 
-import { isConnectedGrokModel, type ModelTier } from "./model-tiers.ts";
+import { isValidModelId, type ModelTier, type ModelControls } from "./model-tiers.ts";
 import { normalizeBotKnowledge, normalizeBotModel } from "./bot-model.ts";
+import { referencedHistoryImages, MAX_HISTORY_IMAGES, MAX_HISTORY_IMAGE_CHARS } from "./media/history.ts";
+import type { ConversationCheckpoint } from "./conversation-context.ts";
 
 export type { ModelTier };
 
@@ -209,7 +212,7 @@ export function readSelection(storage: Pick<Storage, "getItem"> | null | undefin
     if (tier === "Auto" || tier === "Fast" || tier === "Expert" || tier === "Heavy" || tier === "Build") modelTier = tier;
     logicRoute = readStoredLogicRoute(storage?.getItem(LOGIC_ROUTE_STORAGE_KEY) ?? null);
     const grokModel = storage?.getItem(GROK_MODEL_STORAGE_KEY);
-    if (provider === "grok" && !logicRoute && isConnectedGrokModel(grokModel)) {
+    if (provider === "grok" && !logicRoute && typeof grokModel === "string" && isValidModelId(grokModel)) {
       return { provider, modelTier, logicRoute, grokModel };
     }
   } catch {
@@ -223,7 +226,7 @@ export function writeSelection(storage: Pick<Storage, "setItem" | "removeItem"> 
   try {
     storage.setItem(PROVIDER_STORAGE_KEY, readStoredProvider(selection.provider));
     storage.setItem(MODEL_TIER_STORAGE_KEY, selection.modelTier);
-    if (selection.provider === "grok" && !selection.logicRoute && isConnectedGrokModel(selection.grokModel)) {
+    if (selection.provider === "grok" && !selection.logicRoute && typeof selection.grokModel === "string" && isValidModelId(selection.grokModel)) {
       storage.setItem(GROK_MODEL_STORAGE_KEY, selection.grokModel);
     } else {
       storage.removeItem(GROK_MODEL_STORAGE_KEY);
@@ -334,6 +337,8 @@ export function activePickerLabel(input: {
 }
 
 export type ChatTurnBodyInput = {
+  projectId?: string | null;
+  taskId?: string;
   chatId?: string;
   text: string;
   memory: "off" | "on";
@@ -341,48 +346,107 @@ export type ChatTurnBodyInput = {
   history: unknown[];
   memoryContext: unknown[];
   botKnowledge?: unknown;
+  projectInstructions?: string;
+  knowledgePassages?: unknown;
+  skillApplications?: unknown;
+  checkpoints?: ConversationCheckpoint[];
+  selectedImageMessageIds?: string[];
+  supportsHistoryImages?: boolean;
   provider: string;
   personalityId?: string;
   customPersonality?: string;
   modelTier: ModelTier;
+  modelControls?: ModelControls;
+  previousTier?: unknown;
   requestedModel?: string | null;
   logicRoute: LogicRouteId | null;
   orchestrator?: string | null;
   composerMode?: string;
+  usageChannel?: "chat" | "speak";
   identity?: string;
-  consult?: { available: string[]; helpers: { id: string; request: string }[]; purpose: string } | null;
+  freeOnly?: boolean;
+  consult?: { available: string[]; helpers: { id: string; request: string }[]; purpose: string; helperIds?: string[]; allowPaidHelpers?: boolean } | null;
   images: unknown[];
+  projectContext?: unknown;
+  memoryPolicyRevision?: string;
 };
 
 /** Client JSON for POST /api/mind/turn. The server re-resolves model and endpoint. */
+export type HistoryBodyOmission = { messageIndex: number; name: string; reason: "request_body_budget" | "route_image_limit" };
+
+/** Client JSON for POST /api/mind/turn. The server re-resolves model and endpoint. */
 export function chatTurnBody(input: ChatTurnBodyInput): Record<string, unknown> {
-  const body = {
+  const body: Record<string, unknown> & { history: unknown[]; historyImageOmissions?: HistoryBodyOmission[] } = {
     text: input.text,
+    ...(input.usageChannel ? { usageChannel: input.usageChannel } : {}),
     ...(input.chatId ? { chatId: input.chatId } : {}),
+    ...(input.projectId ? { projectId: input.projectId } : {}),
+    ...(input.taskId ? { taskId: input.taskId } : {}),
     memory: input.memory,
     halted: input.halted,
-    history: input.history.slice(-12),
-    memoryContext: input.memoryContext,
+    history: [...input.history],
+    memoryContext: input.memory === "on" ? input.memoryContext : [],
+    ...(input.projectContext ? { projectContext: input.projectContext } : {}),
+    ...(input.memoryPolicyRevision ? { memoryPolicyRevision: input.memoryPolicyRevision } : {}),
+    ...(input.projectInstructions ? { projectInstructions: input.projectInstructions } : {}),
+    ...(input.knowledgePassages ? { knowledgePassages: input.knowledgePassages } : {}),
+    ...(input.skillApplications ? { skillApplications: input.skillApplications } : {}),
+    ...(input.checkpoints?.length ? { checkpoints: input.checkpoints } : {}),
+    ...(input.selectedImageMessageIds?.length ? { selectedImageMessageIds: input.selectedImageMessageIds } : {}),
     ...(normalizeBotKnowledge(input.botKnowledge).knowledge ? { botKnowledge: normalizeBotKnowledge(input.botKnowledge).knowledge } : {}),
     personalityId: input.personalityId ?? "assistant",
     customPersonality: input.customPersonality ?? "",
     provider: input.logicRoute ?? input.provider,
     modelTier: input.modelTier,
+    ...(input.modelControls ? { modelControls: input.modelControls } : {}),
+    ...(input.previousTier !== undefined ? { previousTier: input.previousTier } : {}),
     ...(input.requestedModel ? { requestedModel: input.requestedModel } : {}),
     ...(input.logicRoute ? { logicRoute: input.logicRoute } : {}),
     ...(input.orchestrator ? { orchestrator: input.orchestrator } : {}),
     ...(input.composerMode ? { composerMode: input.composerMode } : {}),
     ...(input.identity ? { identity: input.identity } : {}),
     ...(input.consult ? { consult: input.consult } : {}),
+    ...(input.freeOnly !== undefined ? { freeOnly: input.freeOnly } : {}),
     images: input.images,
   };
   const size = () => new TextEncoder().encode(JSON.stringify(body)).byteLength;
-  if (body.history.length && size() > MIND_MAX_BODY_BYTES) {
-    for (let i = 0; i < body.history.length; i++) {
-      const turn = body.history[i];
-      if (!turn || typeof turn !== "object" || !("images" in turn) || !Array.isArray(turn.images) || !turn.images.length) continue;
-      body.history[i] = { ...turn, images: [] };
-      if (size() <= MIND_MAX_BODY_BYTES) break;
+  const imageLimit = (input.supportsHistoryImages ?? (input.provider === "grok" && !input.logicRoute)) ? MAX_HISTORY_IMAGES : 0;
+  const imageCount = input.history.reduce<number>((count, row) => count + (row && typeof row === "object" && "images" in row && Array.isArray(row.images) ? row.images.length : 0), 0);
+  body.contextReceipt = { includedMessages: body.history.length, excludedImages: 0, omittedMessages: 0 };
+  if (imageCount && (imageCount > imageLimit || size() > MIND_MAX_BODY_BYTES)) {
+    const originals = body.history;
+    const history = originals.map((turn) => turn && typeof turn === "object" && "images" in turn && Array.isArray(turn.images) ? turn as Record<string, unknown> & { images: unknown[] } : null);
+    const references = new Set(referencedHistoryImages(history.map((turn) => ({ images: turn?.images.map((image) => ({ name: image && typeof image === "object" && "name" in image && typeof image.name === "string" ? image.name : undefined })) })), input.text).map((image) => `${image.messageIndex}:${image.imageIndex}`));
+    for (const [index, turn] of history.entries()) if (turn && typeof turn.id === "string" && input.selectedImageMessageIds?.includes(turn.id)) {
+      turn.images.forEach((_image, imageIndex) => references.add(`${index}:${imageIndex}`));
+    }
+    const candidates = history.flatMap((turn, messageIndex) => (turn?.images ?? []).map((image, imageIndex) => ({
+      messageIndex, imageIndex, image, id: `${messageIndex}:${imageIndex}`,
+      name: image && typeof image === "object" && "name" in image && typeof image.name === "string" ? image.name.slice(0, 100) : `image ${imageIndex + 1}`,
+    }))).sort((a, b) => Number(references.has(b.id)) - Number(references.has(a.id)) || b.messageIndex - a.messageIndex || a.imageIndex - b.imageIndex);
+    const selected = new Set<string>();
+    const sizeRejected = new Set<string>();
+    const render = () => {
+      const omitted = candidates.filter((image) => !selected.has(image.id));
+      body.historyImageOmissions = omitted.map((image) => ({ messageIndex: image.messageIndex, name: image.name, reason: sizeRejected.has(image.id) ? "request_body_budget" : "route_image_limit" }));
+      body.contextReceipt = { includedMessages: body.history.length, excludedImages: omitted.length, omittedMessages: 0 };
+      body.history = originals.map((turn, messageIndex) => {
+        const original = history[messageIndex];
+        if (!original) return turn;
+        const images = original.images.filter((_image, imageIndex) => selected.has(`${messageIndex}:${imageIndex}`));
+        const missing = omitted.filter((image) => image.messageIndex === messageIndex);
+        const content = typeof original.content === "string" && missing.length
+          ? `${original.content}\n\n[Image context: ${missing.map((image) => image.name).join(", ")} not included because this request exceeded the selected route or byte allowance. Do not infer omitted image contents.]`
+          : original.content;
+        return { ...original, images, ...(typeof content === "string" ? { content } : {}) };
+      });
+    };
+    render();
+    for (const candidate of candidates) {
+      if (selected.size >= imageLimit) break;
+      selected.add(candidate.id);
+      render();
+      if (size() > MIND_MAX_BODY_BYTES) { selected.delete(candidate.id); sizeRejected.add(candidate.id); render(); }
     }
   }
   return body;

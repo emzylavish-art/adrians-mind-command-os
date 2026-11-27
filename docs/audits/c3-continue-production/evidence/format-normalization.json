@@ -1,0 +1,41 @@
+{
+  "reason": "Final staged whitespace check included newly added source files. Removed trailing whitespace/blank EOF lines only; TypeScript emitted JavaScript is byte-identical before and after for every changed runtime file.",
+  "browser_tested_runtime_sha256": "edf69eaabda0fbfe434629d43625563f7471ad1c3c534a8f29f41a70b8717a91",
+  "files": [
+    {
+      "path": "src/components/mind/chat-controls.tsx",
+      "before_sha256": "cb3c52a3486ccd01bd8e568762d1e623dacebd428ce60a46615b8df249c06aa1",
+      "after_sha256": "8acad9fd5d269dbcd5b23c09d8b17df2cd465d58832f4543121c8ca7dc0b0978",
+      "emitted_javascript_sha256": "bc6d336e41141a477a0cf642368f272cec10af3db8a5228c6e60e153a85d6ecb",
+      "emitted_javascript_identical": true
+    },
+    {
+      "path": "src/components/mind/chat-pane.tsx",
+      "before_sha256": "eb95dfb6757d9f75dabd74cc391abeac2331cd5fc5483e8bf20bbbb09c5180a4",
+      "after_sha256": "fc08f0ca91f40f8d17c99ca99d7de59aa264e408506454d83d73178677207b9f",
+      "emitted_javascript_sha256": "20818115480a3e6f84054c435792ee9117d397409d43f99ace5c9a9bf2c9bb07",
+      "emitted_javascript_identical": true
+    },
+    {
+      "path": "src/components/mind/chat-presentation.ts",
+      "before_sha256": "805ae527adf1bb45f9dfb0c42f29f4f81db2b04db2dd72f60d7c91f9c597b85f",
+      "after_sha256": "b637cb1512a6479af625ae9452d6cf8061f0b93c5e328637347af51a3d2ddaff",
+      "emitted_javascript_sha256": "5131efe49577ae0f4ff4331ce4d63b6952e89a003c346ede8bfbc22ef369eb10",
+      "emitted_javascript_identical": true
+    },
+    {
+      "path": "src/lib/mind/fleet-gmail.ts",
+      "before_sha256": "7e8386be697184faaa25992857d0849ec41c40ddfeba1b4a6d035b506817c694",
+      "after_sha256": "cc657b59b23b36954f223da35355bae1f196a82e8f3269719ce2611fea458b96",
+      "emitted_javascript_sha256": "04ca0911e7648e78784bea3939f178d2aaaab518b76688f9a00da69c5e61c640",
+      "emitted_javascript_identical": true
+    },
+    {
+      "path": "src/lib/mind/voice/provider-selection.ts",
+      "before_sha256": "e26aa507c6f408f296d824fd428f14be4b8665cf273b46bc1f04e86da1661abf",
+      "after_sha256": "70573f89aabd171c11d89a0d55beedc2b9afec0164637869f629da1e99ac1da8",
+      "emitted_javascript_sha256": "3a8b7018c35dbbee31fea1af20f21ab68949208b66d52fa5e87726c659c38cb0",
+      "emitted_javascript_identical": true
+    }
+  ]
+}

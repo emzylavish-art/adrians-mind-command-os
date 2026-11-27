@@ -2,6 +2,9 @@ import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import {
   addAgentFromTemplate,
+  assignDelegation,
+  claimFleetModelStep,
+  completeFleetModelStep,
   addConnection,
   addCustomAgent,
   addMailbox,
@@ -56,6 +59,10 @@ describe("local agent worker", () => {
   it("does not call search or invent a citation when no provider is passed", () => {
     let ws = started("Research", "pier");
     ws = tick(ws);
+    ws = approveRunAction(ws, ws.runs[0]!.id, ws.runs[0]!.pendingApproval!.id, LATER);
+    ws = tick(ws);
+    ws = tick(ws, "2026-04-01T12:01:00.000Z");
+    ws = approveRunAction(ws, ws.runs[0]!.id, ws.runs[0]!.pendingApproval!.id, "2026-04-01T12:01:00.000Z");
     ws = tick(ws, "2026-04-01T12:01:00.000Z");
     const run = ws.runs[0];
     assert.equal(run?.state, "waiting_external");
@@ -68,7 +75,7 @@ describe("local agent worker", () => {
     ws = tick(ws);
     assert.equal(ws.runs[0]?.state, "waiting_approval");
     assert.equal(ws.browserSessions.length, 0);
-    ws = approveRunAction(ws, ws.runs[0]!.id, "browser");
+    ws = approveRunAction(ws, ws.runs[0]!.id, ws.runs[0]!.pendingApproval!.id, LATER);
     ws = tick(ws, "2026-04-01T12:01:00.000Z", {
       browser: () => ({ ok: true, title: "Pier", excerpt: "Water is low." }),
     });
@@ -96,7 +103,7 @@ describe("local agent worker", () => {
     if (!queued.ok) return;
     let next = tick(queued.ws);
     assert.equal(next.runs[0]?.state, "waiting_approval");
-    next = approveRunAction(next, next.runs[0]!.id, "gmail_send");
+    next = approveRunAction(next, next.runs[0]!.id, next.runs[0]!.pendingApproval!.id, LATER);
     next = tick(next, "2026-04-01T12:01:00.000Z");
     assert.equal(next.runs[0]?.state, "waiting_external");
     assert.match(next.runs[0]?.error ?? "", /Nothing was read or sent/);
@@ -172,13 +179,15 @@ describe("local agent worker", () => {
     const queued = enqueueRun(made.ws, made.ws.agents[0]!.id, "Think", NOW);
     assert.equal(queued.ok, true);
     if (!queued.ok) return;
-    const ws = tick(queued.ws);
+    let ws = tick(queued.ws);
+    ws = approveRunAction(ws, ws.runs[0]!.id, ws.runs[0]!.pendingApproval!.id, LATER);
+    ws = tick(ws);
     assert.match(ws.runs[0]?.error ?? "", /does not call a model/);
   });
 
   it("builds an ordered plan and refuses a finished run going back to running", () => {
     const plan = buildTaskPlan("pier", ["list_projects", "search_notes", "delegate"]);
-    assert.deepEqual(plan.map((step) => step.tool), ["list_projects", "search_notes"]);
+    assert.deepEqual(plan.map((step) => step.tool), ["list_projects", "search_notes", "delegate"]);
     assert.deepEqual(plan[1]?.dependsOn, ["step-1"]);
     assert.equal(plan.every((step) => step.need === "none"), true);
     assert.equal(canTransition("completed", "running"), false);
@@ -258,4 +267,129 @@ it("cancels delegated children and preserves the third part of a goal", () => {
   for (const child of ws.runs.filter(r => r.parentId)) ws = cancelRun(ws, child.id);
   ws = tick(ws, "2026-04-01T12:02:00.000Z");
   assert.equal(ws.runs.find(r => r.id === parent.id)?.state, "canceled");
+});
+
+
+describe("C5 pinned fleet contracts", () => {
+  it("uses the queued plan after tools are reordered and rejects revoked tools", () => {
+    const ws = tick(started());
+    ws.agents[0].tools = ["search_notes", "list_projects", "list_chats"];
+    const next = tick(ws);
+    assert.equal(next.runs[0].step, 2);
+    assert.match(next.runEvents[0].detail, /chat|conversation/i);
+    ws.agents[0].tools = ["list_projects"];
+    const blocked = tick(ws).runs[0];
+    assert.equal(blocked.state, "paused");
+    assert.equal(blocked.step, ws.runs[0].step);
+  });
+  it("approval cannot authorize a changed goal, destination or agent revision", () => {
+    const waiting = tick(started("Browser operator", "Open https://one.example"));
+    const approved = approveRunAction(waiting, waiting.runs[0].id, "browser");
+    for (const change of ["goal", "version"] as const) {
+      const ws = structuredClone(approved);
+      if (change === "goal") ws.runs[0].goal = "Open https://two.example";
+      else ws.agents[0].version += 1;
+      let calls = 0;
+      const result = tick(ws, LATER, { browser: () => { calls++; return { ok: true, title: "x", excerpt: "x" }; } });
+      assert.equal(calls, 0);
+      assert.equal(result.runs[0].state, "waiting_approval");
+    }
+  });
+  it("delegation preserves its parent plan and selects explicitly assigned specialists", () => {
+    const manager = addAgentFromTemplate(emptyWorkspace(), "Project manager", NOW);
+    assert.ok(manager.ok);
+    manager.agent.tools = ["delegate", "search_notes", "list_projects"];
+    const queued = enqueueRun(manager.ws, manager.agent.id, "Delegate a project review and a note lookup", NOW);
+    assert.ok(queued.ok);
+    let ws = queued.ws;
+    const documents = addAgentFromTemplate(ws, "Documents", NOW);
+    assert.equal(documents.ok, true);
+    if (!documents.ok) return;
+    ws = assignDelegation(documents.ws, ws.runs[0].id, 1, documents.agent.id);
+    const parentId = ws.runs[0].id;
+    const plan = ws.runs[0].plan;
+    ws = tick(tick(ws));
+    assert.deepEqual(ws.runs.find((run) => run.id === parentId)?.plan, plan);
+    const child = ws.runs.find((run) => run.parentId === parentId && run.agentId === documents.agent.id);
+    assert.ok(child);
+    assert.deepEqual(child.plan.map((step) => step.tool), ["search_notes"]);
+    assert.deepEqual(child.approvedActions, []);
+    assert.equal(child.execution?.memory, "off");
+  });
+  it("claims one model call with pinned instructions and rejects mismatched provider results", () => {
+    const ws = started();
+    ws.agents[0] = { ...ws.agents[0], tools: ["model"], chatProvider: "gemini", instructions: "Fixture distinctive instruction" };
+    const queued = enqueueRun(ws, ws.agents[0].id, "A bounded answer", NOW);
+    assert.equal(queued.ok, true);
+    if (!queued.ok) return;
+    const claim = claimFleetModelStep(queued.ws, queued.run.id, "operation-1", NOW);
+    assert.equal(claim.ok, true);
+    if (!claim.ok) return;
+    assert.equal(claim.request.provider, "gemini");
+    assert.equal(claim.request.instructions, "Fixture distinctive instruction");
+    assert.equal(claim.request.maxCalls, 1);
+    assert.equal(claimFleetModelStep(claim.ws, queued.run.id, "operation-2", NOW).ok, false);
+    const wrong = completeFleetModelStep(claim.ws, claim.request, { ok: true, provider: "grok", text: "wrong" }, NOW);
+    assert.equal(wrong.runs[0].result, "");
+    const right = completeFleetModelStep(claim.ws, claim.request, { ok: true, provider: "gemini", model: "fixture", text: "verified fixture answer" }, NOW);
+    assert.equal(right.runs[0].result, "verified fixture answer");
+    assert.equal(right.runs[0].step, 1);
+  });
+});
+
+describe("C5 scheduled occurrences", () => {
+  function scheduled() {
+    const made = addAgentFromTemplate(emptyWorkspace(), "Coding", NOW);
+    if (!made.ok) throw new Error(made.error);
+    const scheduled = addSchedule(made.ws, "Hourly", made.agent.id, 60, NOW);
+    if (!scheduled.ok) throw new Error(scheduled.error);
+    return scheduled.ws;
+  }
+  it("applies missed run policies with bounded catch-up and deterministic identities", () => {
+    const after = "2026-04-01T14:00:00.000Z";
+    for (const policy of ["run-once", "skip", "review", "catch-up"] as const) {
+      const ws = scheduled(); ws.schedules[0].missedPolicy = policy; ws.schedules[0].overlapPolicy = "queue";
+      const next = runDueSchedules(ws, after);
+      assert.equal(next.runs.length, policy === "catch-up" ? 3 : policy === "run-once" ? 1 : 0);
+      assert.equal(new Set(next.runs.map((run) => run.id)).size, next.runs.length);
+      if (policy === "review") assert.equal(next.schedules[0].enabled, false);
+      if (policy === "skip") assert.equal(next.schedules[0].skippedCount, 3);
+    }
+  });
+  it("does not accumulate unreviewed occurrences by default and allows bounded explicit queueing", () => {
+    const ws = runDueSchedules(scheduled(), NOW);
+    ws.runs[0].state = "waiting_approval";
+    const later = "2026-04-02T12:00:00.000Z";
+    assert.equal(runDueSchedules(ws, later).runs.length, 1);
+    ws.schedules[0].overlapPolicy = "skip";
+    const skipped = runDueSchedules(ws, later);
+    assert.equal(skipped.runs.length, 1);
+    assert.ok(skipped.schedules[0].skippedCount! > 0);
+  });
+  it("retains chat destination across queue, completion and repeated worker ticks", () => {
+    const ws = scheduled();
+    ws.chats = ["A", "B"].map((id) => ({ id, title: id, memory: "off", temporary: false, autonomy: "ask", projectId: null, retrievalLog: [], messages: [] }));
+    ws.schedules[0].chatId = "A";
+    ws.schedules[0].resultDelivery = "conversation";
+    let next = runDueSchedules(ws, NOW);
+    assert.equal(next.runs[0].chatId, "A");
+    next = tick(tick(next));
+    next = tick(next);
+    assert.equal(next.chats[0].messages.length, 1);
+    assert.equal(next.chats[1].messages.length, 0);
+    assert.match(next.chats[0].messages[0].id, /^scheduled-result:/);
+  });
+});
+
+it("C5 a browser worker does not execute a queued occurrence assigned to another environment", () => {
+  const made = addAgentFromTemplate(emptyWorkspace(), "Coding", NOW);
+  if (!made.ok) throw Error(made.error);
+  const scheduled = addSchedule(made.ws, "Local job", made.agent.id, 60, NOW);
+  if (!scheduled.ok) throw Error(scheduled.error);
+  scheduled.ws.schedules[0].executionTarget = "local-worker";
+  const queued = runDueSchedules(scheduled.ws, NOW, "local-worker");
+  const ignored = tickFleet(queued, { now: NOW, workerId: "browser", environment: "browser" });
+  assert.equal(ignored.runs[0].step, 0);
+  const advanced = tickFleet(ignored, { now: NOW, workerId: "local", environment: "local-worker" });
+  assert.equal(advanced.runs[0].step, 1);
 });

@@ -165,6 +165,9 @@ export function dismissSpeak(gen: SpeakGeneration, ui: SpeakUiState): SpeakUiSta
 }
 
 export type SpeakMountedInput = {
+  inputProvider?: string;
+  answerProvider?: string;
+  outputProvider?: string;
   text: string;
   messageId: string;
   voiceId: string;
@@ -184,6 +187,7 @@ export async function runMountedSpeak(input: SpeakMountedInput): Promise<{ ok: b
         text: input.text,
         messageId: input.messageId,
         voiceId: input.voiceId,
+        inputProvider: input.inputProvider, answerProvider: input.answerProvider, outputProvider: input.outputProvider,
         chatCommitted: input.text.length > 0,
         reply: input.text.length > 0 ? input.text : null,
       });

@@ -1,4 +1,4 @@
-import { nextClock } from "./schedule-clock.ts";
+import { scheduleOccurrences, type ScheduleTiming } from "./schedule-policy.ts";
 
 export type TickJob = {
   id: string;
@@ -9,6 +9,7 @@ export type TickJob = {
   timeZone: string;
   clockHour: number | null;
   clockMinute: number | null;
+  timing?: ScheduleTiming;
 };
 
 export type TickLease = { workerId: string; until: string };
@@ -16,11 +17,7 @@ export type TickLease = { workerId: string; until: string };
 export type TickResult = { id: string; ownerId: string; status: "ran" | "skipped" | "failed"; detail: string };
 
 function advance(job: TickJob, now: string): string {
-  if (job.clockHour == null) {
-    const start = Date.parse(now);
-    return new Date((Number.isFinite(start) ? start : Date.now()) + job.intervalMinutes * 60_000).toISOString();
-  }
-  return nextClock(now, job.timeZone || "UTC", job.clockHour, job.clockMinute ?? 0, job.nextRunAt).at;
+  return scheduleOccurrences(job, now).nextRunAt;
 }
 
 export function tickSchedules(
@@ -39,7 +36,9 @@ export function tickSchedules(
       return job;
     }
     leases.set(`${job.ownerId}:${job.id}`, { workerId, until: new Date(Date.parse(now) + 60_000).toISOString() });
-    const outcome = run(job);
+    let outcome: { ok: boolean; detail: string };
+    try { outcome = run(job); }
+    catch { outcome = { ok: false, detail: "The executor threw after dispatch. Its outcome is unknown; reconcile before another attempt." }; }
     results.push({ id: job.id, ownerId: job.ownerId, status: outcome.ok ? "ran" : "failed", detail: outcome.detail });
     return { ...job, nextRunAt: advance(job, now) };
   });
