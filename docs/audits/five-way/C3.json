@@ -6853,7 +6853,14 @@
           "src/lib/mind/render-window.test.ts",
           "src/lib/mind/workspace-loader.test.ts"
         ],
-        "lookup": "Exact-head CI logs and named source fixtures must be checked individually; case-level proof has not yet been recorded."
+        "lookup": "Exact-head CI logs and named source fixtures must be checked individually; case-level proof has not yet been recorded.",
+        "combinedEvidence": {
+          "revision": "761fe89f94ec001ba17379d088b4ce8a761cda33",
+          "path": "scripts/visual/transition-fixtures.mjs",
+          "run": "https://github.com/emzylavish-art/adrians-mind-command-os/actions/runs/45940949066/artifacts/15172971055",
+          "assertion": "long-chat-reading-position; earlier-and-reveal-message; stream-to-markdown-tail",
+          "scope": "The full history was retained while 100 messages initially mounted, wheel position survived switching, the earliest result was focused through workspace search and streaming stayed at the tail. Production-mode and physical-device performance remain open."
+        }
       },
       "nextCheck": "Compare the named fixture cases and remaining source limits against this original acceptance. Live and physical evidence must be recorded separately when required."
     },
@@ -12299,7 +12306,14 @@
           "src/lib/mind/resource-state.test.ts",
           "src/lib/mind/workspace-loader.test.ts"
         ],
-        "lookup": "Exact-head CI logs and named source fixtures must be checked individually; case-level proof has not yet been recorded."
+        "lookup": "Exact-head CI logs and named source fixtures must be checked individually; case-level proof has not yet been recorded.",
+        "combinedEvidence": {
+          "revision": "761fe89f94ec001ba17379d088b4ce8a761cda33",
+          "path": "scripts/visual/transition-fixtures.mjs",
+          "run": "https://github.com/emzylavish-art/adrians-mind-command-os/actions/runs/45940949066/artifacts/15172971055",
+          "assertion": "page-reading-position; earlier-and-reveal-message",
+          "scope": "The fixture restores Projects scroll after Activity, and Settings Data after a switch, and reaches an older conversation message through the real search route. Return from every resource and physical-device behavior remain open."
+        }
       },
       "nextCheck": "Compare the named fixture cases and remaining source limits against this original acceptance. Live and physical evidence must be recorded separately when required."
     },

@@ -71,3 +71,31 @@ jobs:
             ${{ runner.temp }}/browser-transitions/*.json
             ${{ runner.temp }}/browser-transitions/server.log
           if-no-files-found: error
+  webkit-layout:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24.11.1'
+          cache: npm
+      - run: npm ci
+      - run: npx --no-install playwright install --with-deps webkit
+      - name: Run isolated headless WebKit layouts
+        run: node scripts/visual/run-c3-fixture.mjs
+        env:
+          BROWSER_ENGINE: webkit
+          VISUAL_ARTIFACT_DIR: ${{ runner.temp }}/webkit-layout
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: webkit-layout-${{ github.event.pull_request.head.sha || github.sha }}
+          path: |
+            ${{ runner.temp }}/webkit-layout/*.png
+            ${{ runner.temp }}/webkit-layout/*.json
+            ${{ runner.temp }}/webkit-layout/server.log
+          if-no-files-found: error

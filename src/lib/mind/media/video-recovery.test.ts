@@ -52,6 +52,40 @@ test("three transient status failures recover the same job without generation re
   assert.equal(readVideoRecovery(storage, "a")[0].state, "completed");
 });
 
+test("acceptance without a provider handle stays unconfirmed and retains the original conversation", async () => {
+  const job = await accepted(fixtureStore()), storage = memory();
+  let calls = 0;
+  const result = await beginRecoverableVideo(
+    { operationId, chatId: job.chatId, prompt: job.prompt, settings: job.settings, temporary: false },
+    { ownerId: job.ownerId, currentOwner: () => job.ownerId, storage, fetchImpl: async () => {
+      calls++;
+      return Response.json({ ok: true, state: "pending", job: { ...job, requestId: "" }, requestId: "" });
+    } },
+  );
+  assert.equal(result.ok, false);
+  assert.equal(calls, 1);
+  assert.equal(readVideoRecovery(storage, job.ownerId)[0].state, "unconfirmed");
+  assert.equal(readVideoRecovery(storage, job.ownerId)[0].chatId, job.chatId);
+});
+
+test("status cannot redirect a completed video to a different conversation or provider operation", async () => {
+  const job = await accepted(fixtureStore());
+  for (const changed of [{ chatId: "another-chat" }, { requestId: "another-provider-request" }]) {
+    const storage = memory();
+    let updates = 0;
+    const returned = { ...job, state: "completed", url: "https://video.example/fixture.mp4", ...changed };
+    const result = await pollRecoverableVideo(job, {
+      ownerId: job.ownerId,
+      currentOwner: () => job.ownerId,
+      storage,
+      fetchImpl: async () => Response.json({ ok: true, state: "done", job: returned, requestId: returned.requestId }),
+    }, { onUpdate: () => { updates++; }, maxChecks: 1 });
+    assert.equal(result.ok, false);
+    assert.equal(updates, 0);
+    assert.deepEqual(readVideoRecovery(storage, job.ownerId), []);
+  }
+});
+
 test("server lists retain missing local start receipts while refreshing matching owned jobs", async () => {
   const job = await accepted(fixtureStore());
   const unconfirmed = { ...job, operationId: "22222222-2222-4222-8222-222222222222", requestId: "", state: "unconfirmed" as const };

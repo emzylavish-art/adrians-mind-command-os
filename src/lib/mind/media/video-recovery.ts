@@ -43,6 +43,14 @@ async function request(context: VideoClientContext, body: Record<string, unknown
   return result;
 }
 
+function matchesVideoOperation(expected: VideoJob, result: VideoJobResult): boolean {
+  const received = result.job;
+  if (!received) return !result.ok;
+  if (received.ownerId !== expected.ownerId || received.operationId !== expected.operationId || received.chatId !== expected.chatId) return false;
+  if (expected.requestId && received.requestId !== expected.requestId) return false;
+  return !result.ok || (typeof received.requestId === "string" && received.requestId.trim().length > 0 && received.requestId === result.requestId);
+}
+
 /** The operation reference is saved before submission; this function never retries a start. */
 export async function beginRecoverableVideo(input: { operationId?: string; chatId: string; prompt: string; settings: VideoSettings; temporary: boolean; freeOnly?: boolean; projectId?: string; taskId?: string }, context: VideoClientContext): Promise<VideoJobResult> {
   if (!owns(context)) return canceled();
@@ -56,6 +64,7 @@ export async function beginRecoverableVideo(input: { operationId?: string; chatI
   try {
     const result = await request(context, { action: "start", operationId: job.operationId, projectId: input.projectId, taskId: input.taskId, chatId: job.chatId, prompt: input.prompt, ...settings.settings, temporary: input.temporary, freeOnly: false });
     if (!owns(context)) return canceled();
+    if (!matchesVideoOperation(job, result)) throw new Error("Unexpected video operation receipt.");
     if (result.job) rememberVideoJob(context, result.job);
     return result;
   } catch {
@@ -76,6 +85,7 @@ export async function retryBlockedVideo(job: VideoJob, context: VideoClientConte
   try {
     const result = await request(context, { action: "retry_blocked", operationId: job.operationId, projectId: job.projectId, taskId: job.taskId, chatId: job.chatId, prompt, ...job.settings, temporary: job.temporary, freeOnly: false });
     if (!owns(context)) return canceled();
+    if (!matchesVideoOperation(job, result)) throw new Error("Unexpected video operation receipt.");
     if (result.job) rememberVideoJob(context, result.job);
     return result;
   } catch {
@@ -107,8 +117,8 @@ export async function pollRecoverableVideo(initial: VideoJob, context: VideoClie
     try { result = await request(context, { action: "status", operationId: job.operationId }); }
     catch { result = { ok: false, status: 502, error: "The status check was interrupted. The saved operation remains recoverable." }; }
     if (!owns(context)) return canceled();
-    if (result.job && result.job.ownerId === context.ownerId && result.job.operationId === job.operationId) job = mergeVideoRecovery([job], [result.job], context.ownerId)[0];
-    else if (result.ok) return { ok: false, status: 502, error: "The status response did not identify this account's saved operation." };
+    if (!matchesVideoOperation(job, result)) return { ok: false, status: 502, error: "The status response did not identify this account's saved operation." };
+    if (result.job) job = mergeVideoRecovery([job], [result.job], context.ownerId)[0];
     if (result.ok) failures = 0;
     else { failures++; if (!["failed", "unconfirmed"].includes(job.state)) job = { ...job, state: "interrupted", error: result.error }; }
     rememberVideoJob(context, job); options.onUpdate?.(job);

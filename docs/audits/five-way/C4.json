@@ -26,7 +26,16 @@
         "reviewedFixtureFiles": [
           "src/lib/mind/audit-connection-integrity.test.ts"
         ],
-        "reviewedAssertionScope": "PGlite with synthetic transport checks acknowledged block-ID readback after restart, exact original page, account separation, duplicate old text, simultaneous confirmation, lost acknowledgement and no second PATCH. Real Notion grant repair and live readback remain unverified."
+        "reviewedAssertionScope": "PGlite with synthetic transport checks acknowledged block-ID readback after restart, exact original page, account separation, duplicate old text, simultaneous confirmation, lost acknowledgement and no second PATCH. Real Notion grant repair and live readback remain unverified.",
+        "combinedEvidence": {
+          "revision": "761fe89f94ec001ba17379d088b4ce8a761cda33",
+          "path": "src/lib/mind/audit-connection-integrity.test.ts",
+          "run": "https://github.com/emzylavish-art/adrians-mind-command-os/actions/runs/45940949081/job/140314862237",
+          "assertion": "AA001 simultaneous confirmation and lost acknowledgement issue at most one append",
+          "scope": "Simultaneous approval and lost acknowledgement reached synthetic Notion only once. Production-equivalent reconnect and original-destination readback remain open.",
+          "executedRevision": "c0d4ea708c6ac5a7187cd2d0ca498e17c80559d4",
+          "checkout": "GitHub PR merge ref had the identical Git tree 71762908a426062709d3d7876e04d5a57ef1073a. Browser artifacts use the exact head."
+        }
       },
       "nextCheck": "Compare the named fixture cases and remaining source limits against this original acceptance. Live and physical evidence must be recorded separately when required."
     },
@@ -1834,7 +1843,7 @@
       "expected": "New stream chunks must not reparse unchanged historical content.",
       "implementation": "docs/adrian-analysis-implementation-checklist.md#L81",
       "regression": "[G19](#g19-rendering-performance)",
-      "disposition": "Combined verification pending",
+      "disposition": "Fixed and tested on combined commit (handler fixture)",
       "recordUrl": "https://app.notion.com/p/4231aa276323817e8455cb3953a72033?pvs=204",
       "sourceDisposition": "fixed and tested",
       "sourceFiles": [
@@ -1852,9 +1861,15 @@
           "src/components/mind/message-rendering.test.ts",
           "scripts/profile-c4-render-counts.mjs"
         ],
-        "reviewedAssertionScope": "Mounted component checks parser and callback behavior. The separate before/after profiler exercises 20 updates across 20, 200 and 1,000 messages; run it independently to get parser counts."
-      },
-      "nextCheck": "Compare the named fixture cases and remaining source limits against this original acceptance. Live and physical evidence must be recorded separately when required."
+        "reviewedAssertionScope": "Mounted component checks parser and callback behavior. The separate before/after profiler exercises 20 updates across 20, 200 and 1,000 messages; run it independently to get parser counts.",
+        "combinedEvidence": {
+          "revision": "761fe89f94ec001ba17379d088b4ce8a761cda33",
+          "path": "scripts/profile-c4-render-counts.mjs",
+          "run": "https://github.com/emzylavish-art/adrians-mind-command-os/actions/runs/45940949066/artifacts/15172971055",
+          "assertion": "render-counts.json",
+          "scope": "The independent C4 profiler recorded 820→20, 8,020→20 and 40,020→20 parses per parser in 20 updates at 20, 200 and 1,000 messages. This measures parser invocations, while C1 separately checks the mounted rendering boundary."
+        }
+      }
     },
     {
       "finding": "C4/AA-064",
@@ -1862,7 +1877,7 @@
       "expected": "Hidden storage statistics must not serialize each workspace update.",
       "implementation": "docs/adrian-analysis-implementation-checklist.md#L82",
       "regression": "[G19](#g19-rendering-performance)",
-      "disposition": "Combined verification pending",
+      "disposition": "Fixed and tested on combined commit (handler fixture)",
       "recordUrl": "https://app.notion.com/p/4231aa276323817e8455cb3953a72033?pvs=204",
       "sourceDisposition": "fixed and tested",
       "sourceFiles": [
@@ -1879,9 +1894,17 @@
         "reviewedFixtureFiles": [
           "src/components/mind/message-rendering.test.ts"
         ],
-        "reviewedAssertionScope": "Mounted Data hook checks disabled work outside Settings Data and no extra serialization during unrelated state changes."
-      },
-      "nextCheck": "Compare the named fixture cases and remaining source limits against this original acceptance. Live and physical evidence must be recorded separately when required."
+        "reviewedAssertionScope": "Mounted Data hook checks disabled work outside Settings Data and no extra serialization during unrelated state changes.",
+        "combinedEvidence": {
+          "revision": "761fe89f94ec001ba17379d088b4ce8a761cda33",
+          "path": "src/components/mind/message-rendering.test.ts",
+          "run": "https://github.com/emzylavish-art/adrians-mind-command-os/actions/runs/45940949081/job/140314862240",
+          "assertion": "AA064 actual visibility-aware workspace hook serializes only visible Data and changed records",
+          "scope": "The integrated visible-Data assertion passed. C4 and C1 verify the same requirement through this one mounted hook.",
+          "executedRevision": "c0d4ea708c6ac5a7187cd2d0ca498e17c80559d4",
+          "checkout": "GitHub PR merge ref had the identical Git tree 71762908a426062709d3d7876e04d5a57ef1073a. Browser artifacts use the exact head."
+        }
+      }
     },
     {
       "finding": "C4/AA-065",

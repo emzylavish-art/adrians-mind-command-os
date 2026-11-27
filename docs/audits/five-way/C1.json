@@ -1027,7 +1027,7 @@
       "expected": "Switching chats preserves each conversation reading position and follow/detached intent.",
       "implementation": "src/components/mind/command-app.tsx; src/lib/mind/reading-position.ts; src/lib/mind/reading-position.test.ts",
       "regression": "reading-position.test.ts 3/3; actual Chromium long-chat-reading-position fixture passed with real wheel input and exact A→B→A restoration.",
-      "disposition": "Combined verification pending",
+      "disposition": "Fixed and tested on combined commit (handler fixture)",
       "sourceDisposition": "fixed and tested",
       "sourceLimits": "Local synthetic Chromium proof; physical mobile scrolling remains unverified.",
       "sourceFiles": "src/components/mind/command-app.tsx; src/lib/mind/reading-position.ts; src/lib/mind/reading-position.test.ts",
@@ -1036,9 +1036,15 @@
         "files": [
           "src/lib/mind/reading-position.test.ts"
         ],
-        "lookup": "Exact-head CI logs and named source fixtures must be checked individually; case-level proof has not yet been recorded."
-      },
-      "nextCheck": "Compare the named fixture cases and remaining source limits against this original acceptance. Live and physical evidence must be recorded separately when required."
+        "lookup": "Exact-head CI logs and named source fixtures must be checked individually; case-level proof has not yet been recorded.",
+        "combinedEvidence": {
+          "revision": "761fe89f94ec001ba17379d088b4ce8a761cda33",
+          "path": "scripts/visual/transition-fixtures.mjs",
+          "run": "https://github.com/emzylavish-art/adrians-mind-command-os/actions/runs/45940949066/artifacts/15172971055",
+          "assertion": "long-chat-reading-position",
+          "scope": "Synthetic Chromium restored the original reading position through A→B→A after real wheel input. Another chat opened at its tail. No physical-device scrolling evidence."
+        }
+      }
     },
     {
       "finding": "C1/AA-051",
@@ -1264,7 +1270,7 @@
       "expected": "Latest streaming text should not repeatedly rerender completed message bodies.",
       "implementation": "src/components/mind/stable-message-body.ts; src/components/mind/command-app.tsx; src/components/mind/message-rendering.test.ts",
       "regression": "Runtime lane actual mounted React fixture: 20 live updates do not reparse historical splitBlocks; real content edit reparses; action uses newest callback.",
-      "disposition": "Combined verification pending",
+      "disposition": "Fixed and tested on combined commit (handler fixture)",
       "sourceDisposition": "fixed and tested",
       "sourceLimits": "Large-browser performance depends on actual data/device. This fixture verifies the production component boundary, not production timing.",
       "sourceFiles": "src/components/mind/stable-message-body.ts; src/components/mind/command-app.tsx; src/components/mind/message-rendering.test.ts",
@@ -1275,9 +1281,17 @@
         "reviewedFixtureFiles": [
           "src/components/mind/message-rendering.test.ts"
         ],
-        "reviewedAssertionScope": "Twenty live-token updates do not reparse unchanged historical content. Editing history triggers parsing, and the image action uses the current handler."
-      },
-      "nextCheck": "Resolve the exact combined test for this record from its committed source evidence and execute its acceptance path before closure."
+        "reviewedAssertionScope": "Twenty live-token updates do not reparse unchanged historical content. Editing history triggers parsing, and the image action uses the current handler.",
+        "combinedEvidence": {
+          "revision": "761fe89f94ec001ba17379d088b4ce8a761cda33",
+          "path": "src/components/mind/message-rendering.test.ts",
+          "run": "https://github.com/emzylavish-art/adrians-mind-command-os/actions/runs/45940949081/job/140314862240",
+          "assertion": "AA062 actual historical message components do not reparse on stream updates and retain current action handlers",
+          "scope": "Mounted component fixture verified reuse across 20 streamed updates, editing invalidation and current callbacks.",
+          "executedRevision": "c0d4ea708c6ac5a7187cd2d0ca498e17c80559d4",
+          "checkout": "GitHub PR merge ref had the identical Git tree 71762908a426062709d3d7876e04d5a57ef1073a. Browser artifacts use the exact head."
+        }
+      }
     },
     {
       "finding": "C1/AA-063",
@@ -1302,7 +1316,7 @@
       "expected": "Storage-size display should not serialize the whole workspace while unrelated UI is active.",
       "implementation": "src/lib/mind/workspace-metrics.ts; src/components/mind/command-app.tsx; src/components/mind/message-rendering.test.ts",
       "regression": "Runtime lane actual mounted React serialization-count fixture; two combined component performance tests passed.",
-      "disposition": "Combined verification pending",
+      "disposition": "Fixed and tested on combined commit (handler fixture)",
       "sourceDisposition": "fixed and tested",
       "sourceLimits": "Figure explicitly excludes draft/separate binary stores and is not total disk usage.",
       "sourceFiles": "src/lib/mind/workspace-metrics.ts; src/components/mind/command-app.tsx; src/components/mind/message-rendering.test.ts",
@@ -1313,9 +1327,17 @@
         "reviewedFixtureFiles": [
           "src/components/mind/message-rendering.test.ts"
         ],
-        "reviewedAssertionScope": "The mounted Data hook serializes only the visible Data view, caches unchanged data, and processes changed data when Data becomes visible."
-      },
-      "nextCheck": "Resolve the exact combined test for this record from its committed source evidence and execute its acceptance path before closure."
+        "reviewedAssertionScope": "The mounted Data hook serializes only the visible Data view, caches unchanged data, and processes changed data when Data becomes visible.",
+        "combinedEvidence": {
+          "revision": "761fe89f94ec001ba17379d088b4ce8a761cda33",
+          "path": "src/components/mind/message-rendering.test.ts",
+          "run": "https://github.com/emzylavish-art/adrians-mind-command-os/actions/runs/45940949081/job/140314862240",
+          "assertion": "AA064 actual visibility-aware workspace hook serializes only visible Data and changed records",
+          "scope": "Mounted hook fixture verified that unrelated updates do not trigger serialization and Data refreshes scoped information when visible.",
+          "executedRevision": "c0d4ea708c6ac5a7187cd2d0ca498e17c80559d4",
+          "checkout": "GitHub PR merge ref had the identical Git tree 71762908a426062709d3d7876e04d5a57ef1073a. Browser artifacts use the exact head."
+        }
+      }
     },
     {
       "finding": "C1/AA-065",
@@ -1631,7 +1653,16 @@
         "files": [
           "src/lib/mind/media/operations.test.ts"
         ],
-        "lookup": "Exact-head CI logs and named source fixtures must be checked individually; case-level proof has not yet been recorded."
+        "lookup": "Exact-head CI logs and named source fixtures must be checked individually; case-level proof has not yet been recorded.",
+        "combinedEvidence": {
+          "revision": "761fe89f94ec001ba17379d088b4ce8a761cda33",
+          "path": "src/lib/mind/media/video-recovery.test.ts",
+          "run": "https://github.com/emzylavish-art/adrians-mind-command-os/actions/runs/45940949081/job/140314862237",
+          "assertion": "accepted jobs survive reload and duplicate operation starts never call a provider twice",
+          "scope": "Synthetic persistent recovery retained the owner, chat and provider request. The browser separately verified the submitting and accepted notices on delayed acknowledgement. Live generation and hosted database migration remain open.",
+          "executedRevision": "c0d4ea708c6ac5a7187cd2d0ca498e17c80559d4",
+          "checkout": "GitHub PR merge ref had the identical Git tree 71762908a426062709d3d7876e04d5a57ef1073a. Browser artifacts use the exact head."
+        }
       },
       "nextCheck": "Compare the named fixture cases and remaining source limits against this original acceptance. Live and physical evidence must be recorded separately when required."
     },
@@ -1660,7 +1691,7 @@
       "expected": "Transient video-status communication errors retry the same accepted job with bounded backoff.",
       "implementation": "src/components/mind/command-app.tsx; src/lib/mind/media/operations.server.ts; src/lib/mind/media/imagine-http.ts; src/lib/mind/media/video-poll.ts; src/lib/mind/media/video-poll.test.ts",
       "regression": "media/video-poll.test.ts 3/3 covers transient status failure/Retry-After/deadline and cancellation; observer only receives a status callback and cannot start generation.",
-      "disposition": "Combined verification pending",
+      "disposition": "Fixed and tested on combined commit (handler fixture)",
       "sourceDisposition": "fixed and tested",
       "sourceLimits": "Provider outage behavior is synthetic; resume uses the saved accepted request ID.",
       "sourceFiles": "src/components/mind/command-app.tsx; src/lib/mind/media/operations.server.ts; src/lib/mind/media/imagine-http.ts; src/lib/mind/media/video-poll.ts; src/lib/mind/media/video-poll.test.ts",
@@ -1669,9 +1700,17 @@
         "files": [
           "src/lib/mind/media/video-poll.test.ts"
         ],
-        "lookup": "Exact-head CI logs and named source fixtures must be checked individually; case-level proof has not yet been recorded."
-      },
-      "nextCheck": "Compare the named fixture cases and remaining source limits against this original acceptance. Live and physical evidence must be recorded separately when required."
+        "lookup": "Exact-head CI logs and named source fixtures must be checked individually; case-level proof has not yet been recorded.",
+        "combinedEvidence": {
+          "revision": "761fe89f94ec001ba17379d088b4ce8a761cda33",
+          "path": "src/lib/mind/media/video-recovery.test.ts",
+          "run": "https://github.com/emzylavish-art/adrians-mind-command-os/actions/runs/45940949081/job/140314862237",
+          "assertion": "three transient status failures recover the same job without generation retries",
+          "scope": "Controlled transport simulated three consecutive failures; polling reused the original job, observed bounded waits and dispatched no new generation.",
+          "executedRevision": "c0d4ea708c6ac5a7187cd2d0ca498e17c80559d4",
+          "checkout": "GitHub PR merge ref had the identical Git tree 71762908a426062709d3d7876e04d5a57ef1073a. Browser artifacts use the exact head."
+        }
+      }
     },
     {
       "finding": "C1/AA-085",

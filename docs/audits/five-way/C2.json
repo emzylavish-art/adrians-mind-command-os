@@ -85,7 +85,16 @@
         "reviewedFixtureFiles": [
           "src/lib/mind/audit-connection-integrity.test.ts"
         ],
-        "reviewedAssertionScope": "PGlite with synthetic transport checks acknowledged block-ID readback after restart, exact original page, account separation, duplicate old text, simultaneous confirmation, lost acknowledgement and no second PATCH. Real Notion grant repair and live readback remain unverified."
+        "reviewedAssertionScope": "PGlite with synthetic transport checks acknowledged block-ID readback after restart, exact original page, account separation, duplicate old text, simultaneous confirmation, lost acknowledgement and no second PATCH. Real Notion grant repair and live readback remain unverified.",
+        "combinedEvidence": {
+          "revision": "761fe89f94ec001ba17379d088b4ce8a761cda33",
+          "path": "src/lib/mind/audit-connection-integrity.test.ts",
+          "run": "https://github.com/emzylavish-art/adrians-mind-command-os/actions/runs/45940949081/job/140314862237",
+          "assertion": "AA001 acknowledged append uses its new block identity; recovery survives restart and never repeats PATCH",
+          "scope": "Synthetic Notion transport and PGlite confirmed original-page readback and no repeat PATCH after restart and lost acknowledgement. Real reconnect and delivery remain open.",
+          "executedRevision": "c0d4ea708c6ac5a7187cd2d0ca498e17c80559d4",
+          "checkout": "GitHub PR merge ref had the identical Git tree 71762908a426062709d3d7876e04d5a57ef1073a. Browser artifacts use the exact head."
+        }
       },
       "nextCheck": "Compare the named fixture cases and remaining source limits against this original acceptance. Live and physical evidence must be recorded separately when required."
     },
