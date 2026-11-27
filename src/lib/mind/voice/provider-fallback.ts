@@ -69,6 +69,7 @@ export async function openAiTranscribe(input: {
   bytes: Uint8Array;
   apiKey: string;
   filename?: string;
+  language?: string;
   mime?: string;
   fetchImpl: typeof fetch;
 }): Promise<SttResult> {
@@ -76,6 +77,7 @@ export async function openAiTranscribe(input: {
   const copy = new Uint8Array(input.bytes);
   form.append("file", new Blob([copy], { type: input.mime || "audio/webm" }), input.filename || "speak.webm");
   form.append("model", OPENAI_STT_MODEL);
+  if (input.language) form.append("language", input.language);
   let res: Response;
   try {
     res = await input.fetchImpl(OPENAI_STT_URL, {

@@ -1,3 +1,5 @@
+import { HelpResources } from "./help-resources";
+import { captureWorkflow, learningEnabled, replyWorkflow, workflowKind, type WorkflowKind } from "@/lib/mind/workflow-skills";
 import { failureEnvelopeFromAction, type FailureDetails } from "@/lib/mind/failure-envelope";
 import { memorySendRevision, checkMemorySendRevision } from "@/lib/mind/memory-send-policy";
 import type { StoredSelection } from "@/lib/mind/logic-routes";
@@ -9,6 +11,13 @@ import { checkpointReply, completedHistory } from "@/lib/mind/partial-reply";
 import { ResearchEvidence } from "@/components/mind/research-evidence";
 import { stageCodeHandoff } from "@/lib/mind/code-handoff";
 import type { TurnErrorCode } from "@/lib/mind/turn-error";
+import { DictationSettings } from "./dictation-settings";
+import { VOICE_PREFS, readVoicePreferences, defaultVoicePreferences, formatDictation, recordDictation, type VoicePreferences } from "@/lib/mind/voice-preferences";
+import { ChatBits } from "./chat-bits";
+import { AppearanceSettings, KeyboardSettings, SendKey, useInterfaceSettings } from "./interface-settings";
+import { ArchiveSettings, StorageSettings } from "./storage-settings";
+import { chord, submitOnKey, KEY_ACTIONS, type Action as ShortcutAction } from "@/lib/mind/interface-preferences";
+import type { SettingsPane } from "@/lib/mind/app-location";
 import { ChatPane } from "./chat-pane";
 import type { ChatReadingPositions } from "./chat-pane";
 import { BrowserDictationControl, VoiceModeButton, ComposerEffortControl, ProviderPicker } from "./chat-controls";
@@ -56,6 +65,7 @@ import { LibraryDocumentPreview } from "@/components/mind/library-document-previ
 import { accountOriginalFileStore, prepareLibraryDocument, saveLibraryDocument, updateLibraryDocument } from "@/lib/mind/library-documents";
 import { createResearchRunGuard, loadResearchReports, makeResearchReport, researchAttachment, researchReferencesInText, saveResearchReport, type ResearchReport } from "@/lib/mind/research-reports";
 import type { ResearchResult } from "@/lib/mind/research";
+import { WorkspaceProfile } from "./workspace-profile";
 import { NotificationInbox } from "./notification-inbox";
 import { workspaceNotices, isQuietHour, DEFAULT_NOTIFICATION_PREFERENCES, type NotificationPreferences } from "@/lib/mind/notifications";
 import { ARCHIVE_CATEGORIES, selectArchiveCategories, type ArchiveCategory, deleteLocalFile, deleteProject, refreshBotChat } from "@/lib/mind/workspace";
@@ -70,6 +80,10 @@ import "./command-search.css";
 import "./command-voice-mode.css";
 import "./gpt-shell.css";
 import "./visual-system.css";
+import "./workspace-navigation.css";
+import { ChatComposerExtras } from "./chat-composer-extras";
+import { WorkspaceDivider } from "./workspace-divider";
+import { WorkspaceControlCenter } from "./workspace-control-center";
 import "./workspace-layout.css";
 import { getBearerToken, signOut } from "@/lib/auth/client";
 import { loadMcpWithHttpFallback } from "@/lib/mind/mcp-list-http";
@@ -83,8 +97,7 @@ import { applyArchive, applyFavorite, applyProject, applyRename, conversationSha
 import { conversationSection, HIDDEN_SETTINGS_SECTIONS_KEY, hideSection, readHiddenSections, removeConversations, restoreSection } from "@/lib/mind/conversation-sections";
 import { settingsPaneFromSearch, resolveShare, sameShareLocation, shareMissLabel, shareWriteDropsMissing, shareWriteForView, writeShareSearch } from "@/lib/mind/app-location";
 import { routeForBotChat } from "@/lib/mind/bot-model";
-import { SignedOut, UserButton } from "@/lib/auth/gates";
-import { SupabaseAccountControls } from "@/components/mind/supabase-account";
+import { UserButton } from "@/lib/auth/gates";
 import {
   Activity,
   Bell,
@@ -374,6 +387,7 @@ import { applyPersonaHandoff, clearPersonaSelection, readHandoff } from "@/lib/m
 
 type View =
   | "command"
+  | "controls"
   | "intelligence"
   | "chat"
   | "projects"
@@ -477,6 +491,8 @@ const MORE_NAV: { id: View; label: string; icon: typeof Home }[] = [
 const NAV = NAV_GROUPS.flatMap((group) => group.items);
 
 const NAV_MARKS: Record<string, string> = {
+  dashboard: "/brand/marks/activity.png",
+  settings: "/brand/marks/settings.png",
   build: "/brand/marks/build.png",
   code: "/brand/marks/chat.png",
   research: "/brand/marks/research.png",
@@ -501,6 +517,7 @@ function navMark(id: string): string {
 
 const TITLES: Record<View, string> = {
   command: "Chat",
+  controls: "Control Center",
   intelligence: "Intelligence Layer",
   chat: "Thread",
   projects: "Projects",
@@ -785,6 +802,24 @@ export function CommandApp() {
 
 function CommandSession({ account, accountPending }: { account: ReturnType<typeof useCurrentUserState>["user"]; accountPending: boolean }) {
   const preferenceStorage = useAccountPreferences();
+  const interfaceSettings = useInterfaceSettings();
+  const [dictationPrefs, setDictationPrefs] = useState(defaultVoicePreferences);
+  const dictationPrefsRef = useRef(dictationPrefs);
+  dictationPrefsRef.current = dictationPrefs;
+  useEffect(() => { setDictationPrefs(readVoicePreferences(preferenceStorage)); }, [preferenceStorage]);
+  function updateDictationPreferences(next: VoicePreferences) {
+    try {
+      preferenceStorage.setItem(VOICE_PREFS, JSON.stringify(next));
+      setDictationPrefs(next); dictationPrefsRef.current = next;
+      if (!next.enabled) {
+        serverDictationRef.current?.cancel(); serverDictationRef.current = null;
+        cancelBrowserDictation(false);
+      }
+      window.dispatchEvent(new Event("adrian-dictation-preferences"));
+    } catch { setError("Your browser could not save dictation settings."); }
+  }
+  const [settingsQuery, setSettingsQuery] = useState("");
+  const [bitsPanel, setBitsPanel] = useState<HTMLDivElement | null>(null);
   const loopback = typeof window !== "undefined" && (window.location.hostname === "127.0.0.1" || window.location.hostname === "localhost");
   const { ws, setWs, ready, syncNote, serverHeld, saveError, retrySave, clearStoredCopy, ensureChatMedia, prioritizeChatMedia, mediaProgress } = useMindWorkspace(account?.id ?? null, account?.emailVerified ? account.primaryEmail : null);
   const applyAccessibility = (value: AccessibilityPreferences) => { document.documentElement.style.setProperty("--mind-text-scale", String(value.textScale / 100)); document.documentElement.dataset.contrast = value.contrast; document.documentElement.dataset.readingSpacing = value.spacing; };
@@ -797,6 +832,18 @@ function CommandSession({ account, accountPending }: { account: ReturnType<typeo
     return !["section", "chat", "project", "file", "bot", "agentId"].some((key) => params.has(key));
   });
   const [view, setViewState] = useState<View>("command");
+  const controlReturn = useRef<View>("command");
+  function openControlCenter() {
+    if (view !== "controls") controlReturn.current = view;
+    setView("controls");
+    setNavOpen(false);
+    closeMenus();
+  }
+  const [pluginOrigin, setPluginOrigin] = useState<"command" | "chat" | "build" | null>(null);
+  function browseComposerPlugins() {
+    if (view === "command" || view === "chat" || view === "build") setPluginOrigin(view);
+    setView("connected");
+  }
   const applyingLocation = useRef(false);
   const locationHistory = useRef<"push" | "replace">("push");
   function loginReturnPath(resumeSpeak = false) {
@@ -808,6 +855,7 @@ function CommandSession({ account, accountPending }: { account: ReturnType<typeo
     return params.size ? "/?" + params.toString() : "/";
   }
   function setView(next: View) {
+    if (next !== "connected") setPluginOrigin(null);
     setViewState(next);
   }
   const [imagineEdit, setImagineEdit] = useState<{ image: string; source: EditableImage; chatId: string | null; draftScope: string; text: string; operationId: string; result?: ImageAttachment; returnFocus: HTMLElement | null } | null>(null);
@@ -826,8 +874,11 @@ function CommandSession({ account, accountPending }: { account: ReturnType<typeo
     const frame = requestAnimationFrame(() => {
       const card = document.getElementById(cardFocus.id);
       if (card) {
-        const panel = card.closest("details");
-        if (panel) panel.open = true;
+        let panel = card.closest("details");
+        while (panel) {
+          panel.open = true;
+          panel = panel.parentElement?.closest("details") ?? null;
+        }
       }
       card?.focus({ preventScroll: true });
       card?.scrollIntoView({ block: cardFocus.id.startsWith("message-") ? "center" : "nearest" });
@@ -835,7 +886,7 @@ function CommandSession({ account, accountPending }: { account: ReturnType<typeo
     return () => cancelAnimationFrame(frame);
   }, [cardFocus, view]);
   const [homeAction, setHomeAction] = useState<"ask" | "image" | "video" | "write" | "search">("ask");
-  const [settingsPane, setSettingsPane] = useState<null | "general" | "connections" | "voice" | "pages" | "data" | "safety" | "keys" | "browser" | "personalization">(null);
+  const [settingsPane, setSettingsPane] = useState<SettingsPane | null>(null);
   const [wipeAsk, setWipeAsk] = useState<string | null>(null);
   const [wipeStatus, setWipeStatus] = useState<string | null>(null);
   const [hiddenSettings, setHiddenSettings] = useState<string[]>([]);
@@ -932,6 +983,12 @@ function CommandSession({ account, accountPending }: { account: ReturnType<typeo
     if (event.target === event.currentTarget) setNavOpen(false);
   };
   const [railCollapsed, setRailCollapsed] = useState(false);
+  useEffect(() => {
+    const wide = window.matchMedia("(min-width: 768px)");
+    const reset = () => { if (!wide.matches) setRailCollapsed(false); };
+    wide.addEventListener("change", reset);
+    return () => wide.removeEventListener("change", reset);
+  }, []);
   const [theme, setTheme] = useState<"dark" | "light" | "system">(() => {
     if (typeof window === "undefined") return "dark";
     try {
@@ -966,8 +1023,8 @@ function CommandSession({ account, accountPending }: { account: ReturnType<typeo
     try { localStorage.setItem(personalityKey, id); } catch { /* Keep the session preference. */ }
   }
   const draftChat = view === "chat" && activeId ? ws.chats.find((item) => item.id === activeId) : null;
-  const draftPrivate = draftChat?.temporary ?? temporary;
-  const draftScope = JSON.stringify([draftOwner, draftChat?.id ?? "home", draftPrivate]);
+  const draftPrivate = view === "build" ? false : draftChat?.temporary ?? temporary;
+  const draftScope = JSON.stringify([draftOwner, view === "build" ? "build" : draftChat?.id ?? "home", draftPrivate]);
   const persistDraft = Boolean(draftOwner) && !draftPrivate;
   const [draft, setDraft, setDraftInScope] = useComposerDraft(draftScope, "text", "", persistDraft);
   const [busy, setBusy] = useState(false);
@@ -1230,6 +1287,7 @@ function CommandSession({ account, accountPending }: { account: ReturnType<typeo
   const [memoryTab, setMemoryTab] = useState<"mine" | "project" | "chat" | "transfer">("mine");
   const memoryScope = memoryTab === "project" ? "project" : "global";
   const [researchText, setResearchText] = useState("");
+  const [researchDepth, setResearchDepth] = useState<"auto" | "quick" | "deep">("auto");
   const [researchBand, setResearchBand] = useState<"search" | "saved" | "files">("search");
   const [researchNote, setResearchNote] = useState<string | null>(null);
   const [lookupQuery, setLookupQuery] = useState("");
@@ -1304,6 +1362,7 @@ function CommandSession({ account, accountPending }: { account: ReturnType<typeo
   const [contextOpen, setContextOpen] = chromeMenus.bind("context");
   const [toolsOpen, setToolsOpen] = chromeMenus.bind("tools");
   const [accountOpen, setAccountOpen] = chromeMenus.bind("account");
+  const accountLabel = account?.isDevFallback ? "Local workspace" : account?.displayName || account?.primaryEmail || "Guest";
   const [bellOpen, setBellOpen] = chromeMenus.bind("notifications");
   const [readNotices, setReadNotices] = useState<string[]>([]);
   const [dismissedNotices, setDismissedNotices] = useState<string[]>([]);
@@ -1321,7 +1380,7 @@ function CommandSession({ account, accountPending }: { account: ReturnType<typeo
   const notifications = useMemo(() => workspaceNotices(ws, notificationPreferences, researchHistory), [ws.runs, ws.schedules, ws.audit, ws.agents, ws.chats, notificationPreferences, researchHistory]);
   const unreadNoticeCount = notifications.filter((entry) => !readNotices.includes(entry.id) && !dismissedNotices.includes(entry.id) && (entry.urgent || !isQuietHour(notificationPreferences, new Date().getHours()))).length;
   function markNoticesRead(ids: string[]) {
-    const retained = [...new Set(ids)].filter((id) => notifications.some((notice) => notice.id === id));
+    const retained = [...new Set([...readNotices, ...ids])].slice(-5000);
     setReadNotices(retained);
     try { preferenceStorage.setItem("notifications.read.v1", JSON.stringify(retained)); } catch { setNotice("Read marks apply for this session; browser storage is unavailable."); }
   }
@@ -2223,6 +2282,7 @@ function CommandSession({ account, accountPending }: { account: ReturnType<typeo
     setResearchHistory([]);
     setResearchCitations([]);
     setResearchText("");
+    setResearchDepth("auto");
     setResearchNote(null);
     setResearchReportQuestion("");
     setResearchSteps([]);
@@ -2547,7 +2607,7 @@ function CommandSession({ account, accountPending }: { account: ReturnType<typeo
     setPending(null);
   }
 
-  function recordToolTurn(chat: Chat, text: string, reply: string, mutate?: (prev: Workspace) => Workspace, meta?: { tool: string; ok: boolean; action: "chat" | "voice" }) {
+  function recordToolTurn(chat: Chat, text: string, reply: string, mutate?: (prev: Workspace) => Workspace, meta?: { tool: string; ok: boolean; action: "chat" | "voice" }, completedWorkflow?: WorkflowKind) {
     if (turnOwner.current !== draftOwner || !wsRef.current.chats.some((item) => item.id === chat.id)) return;
     const at = new Date().toISOString();
     const userMsg = { id: crypto.randomUUID(), role: "user" as const, content: text, at };
@@ -2559,7 +2619,7 @@ function CommandSession({ account, accountPending }: { account: ReturnType<typeo
       const base = mutate ? mutate(prev) : prev;
       const title = !current.messages.length && current.title === chat.title ? text.replace(/\s+/g, " ").slice(0, 48) : current.title;
       const chats = base.chats.map((item) => item.id === chat.id
-        ? { ...current, title, messages: [...current.messages, userMsg, assistant] }
+        ? { ...current, title, messages: [...current.messages, userMsg, { ...assistant, workflowKind: completedWorkflow && learningEnabled(preferenceStorage) ? captureWorkflow(chat, account?.id ?? null, completedWorkflow, current) : undefined }] }
         : item);
       return pushAudit({ ...base, chats }, "tool_turn", meta?.tool ?? chat.id, meta ? `${meta.action} ${meta.ok ? "completed" : "failed"}` : "no model");
     });
@@ -2703,7 +2763,7 @@ function CommandSession({ account, accountPending }: { account: ReturnType<typeo
       }
       const notes = relevantMemories(memoriesForChat(source, chat), text);
       const reply = notes.length ? `${turn.text}\n\nSaved note: ${notes.map((item) => item.text).join(" ")}` : turn.text;
-      recordToolTurn(chat, text, reply, undefined, { tool: toolId, ok: turn.status === "completed", action });
+      recordToolTurn(chat, text, reply, undefined, { tool: toolId, ok: turn.status === "completed", action }, turn.status === "completed" && turn.events.some(event => event.toolId === toolId && event.status === "completed") ? workflowKind(toolId) : undefined);
       if (turn.status === "failed" || turn.status === "timed_out" || turn.status === "cancelled") {
         reportFailure(turn.text, "tool_failed", toolId, () => {
           settleIntent(chat, text, source, action);
@@ -2768,7 +2828,7 @@ function CommandSession({ account, accountPending }: { account: ReturnType<typeo
         result.summary || `Research returned ${result.citations.length} source${result.citations.length === 1 ? "" : "s"}:`,
         ...result.citations.map((item) => `- ${item.title} — ${item.url}`),
       ];
-      recordToolTurn(chat, query, lines.join("\n"), undefined, { tool: "web_search", ok: true, action });
+      recordToolTurn(chat, query, lines.join("\n"), undefined, { tool: "web_search", ok: true, action }, result.citations.length ? "web_search" : undefined);
       setResearchNote(result.summary || "");
       setNotice(`Research kept ${result.citations.length} http(s) citation${result.citations.length === 1 ? "" : "s"}.`);
     } catch {
@@ -2847,7 +2907,7 @@ function CommandSession({ account, accountPending }: { account: ReturnType<typeo
       if (lines.length && epoch === notionEpoch.current) {
         setNotionPreview({ owner: draftOwner, chatId: chat.id, text: lines.join("\n") });
       }
-      recordToolTurn(chat, text, "Notion completed the request. Retrieved content is shown only in the current preview.");
+      recordToolTurn(chat, text, "Notion completed the request. Retrieved content is shown only in the current preview.", undefined, undefined, result.action === "read" && result.content ? "notion_read" : undefined);
     } catch {
       if (turnOwner.current !== draftOwner) return;
       setBusy(false);
@@ -3362,6 +3422,7 @@ function CommandSession({ account, accountPending }: { account: ReturnType<typeo
                       content: result.text,
                       at: new Date().toISOString(),
                       model: result.model,
+                      workflowKind: learningEnabled(preferenceStorage) ? captureWorkflow(chat, account?.id ?? null, replyWorkflow(result), item) : undefined,
                       memoryUsedIds: result.usedIds,
             contextReceipt: result.contextReceipt,
             consultation: result.consultation,
@@ -3761,7 +3822,7 @@ ${message.content}`;
     const researchGeneration = researchRunGuard.current.begin();
     setResearchPending(true);
     try {
-      const result: ResearchResult = await searchWeb({ data: { query, operationId, projectId, freeOnly: researchFreeOnly, retryQueries: retry?.steps?.filter((step) => !step.ok).map((step) => step.query) } });
+      const result: ResearchResult = await searchWeb({ data: { query, operationId, projectId, freeOnly: researchFreeOnly, deep: researchDepth === "auto" ? undefined : researchDepth === "deep", routeFingerprint: retry?.providerIdentity?.routeFingerprint, retryQueries: retry?.steps?.filter((step) => !step.ok).map((step) => step.query) } });
       if (!draftOwner || turnOwner.current !== draftOwner || !researchRunGuard.current.current(researchGeneration)) return;
       setError(null);
       setWs((prev) => pushAudit(prev, result.configured && result.ok ? "research_result" : "research_refused", "search", result.ok ? `${result.citations.length} sources` : "no citation"));
@@ -3902,9 +3963,9 @@ ${message.content}`;
     if (finished && !single) await releaseNextCue(onlyChatId);
   }
 
-  async function sendInChat() {
+  async function sendInChat(hold = false) {
     if (wsRef.current.halted) { setError("Emergency stop is on."); return; }
-    if (busy || turnInFlight.current) {
+    if (hold || busy || turnInFlight.current) {
       const text = draft.trim();
       if (!active || !draftOwner || !text) return;
       if (staged || pendingImages.length || parseImagineCommand(text) !== null) {
@@ -3916,6 +3977,7 @@ ${message.content}`;
         text,
         chatId: active.id,
         ownerId: draftOwner,
+        paused: hold,
         dispatch: (chat, source) => deliverPlanned(chat, text, source, []),
       });
       if (result.error) {
@@ -3925,7 +3987,7 @@ ${message.content}`;
       rememberCue(result.queue);
       setDraft("");
       setError(null);
-      setNotice("Queued. This message will send in this conversation.");
+      setNotice(hold ? "Prompt held. Open the conversation queue to send it." : "Queued. This message will send in this conversation.");
       return;
     }
     if (!active) {
@@ -4791,6 +4853,14 @@ ${message.content}`;
     setMcpSavedListState({ status: "ready", servers: servers.map((server) => ({ id: server.id, label: server.label, kind: "saved", enabled: server.state !== "failed" })) });
   }
 
+  function chooseDirectoryRemote(label: string, url: string) {
+    setMcpLabel(label);
+    setMcpUrl(url);
+    setMcpToken("");
+    setView("connected");
+    setCardFocus({ id: "owner-mcp-connect" });
+  }
+
   async function saveConnectedMcp() {
     if (ws.halted || !mcpUrl.trim() || mcpMutationInFlight.current || !mcpOwnerActive.current) return;
     mcpMutationInFlight.current = true;
@@ -5442,7 +5512,9 @@ ${message.content}`;
     let next = reduceDictation(prev, action);
     if (action.type === "stop_inserted") {
       const base = dictationBaseRef.current ?? draftRef.current;
-      next = { ...next, draft: appendDictationText(base, action.text) };
+      const transcript = formatDictation(action.text, dictationPrefsRef.current.dictionary);
+      next = { ...next, draft: appendDictationText(base, transcript) };
+      recordDictation(preferenceStorage, transcript);
       dictationBaseRef.current = null;
     }
     dictationRef.current = next;
@@ -5514,6 +5586,7 @@ ${message.content}`;
   }
 
   function startBrowserDictation() {
+    if (!dictationPrefsRef.current.enabled) { setNotice("Dictation is off in Voice settings."); return; }
     if (!voiceCanStart()) return;
     if (wsRef.current.halted) {
       setError("Emergency stop is on. Dictation was not started.");
@@ -5545,7 +5618,7 @@ ${message.content}`;
     commitDictation({ type: "start" });
     setDictationLevel(0.2);
     const rec = new Ctor();
-    rec.lang = "en-US";
+    rec.lang = dictationPrefsRef.current.language || navigator.language || "en-US";
     rec.continuous = true;
     rec.interimResults = true;
     dictationBufferRef.current = "";
@@ -5563,7 +5636,7 @@ ${message.content}`;
       dictationBufferRef.current = `${finalText} ${interim}`.trim();
       if (dictationBufferRef.current) {
         const next = appendDictationText(dictationBaseRef.current ?? "", dictationBufferRef.current);
-        if (next !== draftRef.current) {
+        if (dictationPrefsRef.current.live && next !== draftRef.current) {
           draftRef.current = next;
           setDraft(next);
         }
@@ -5599,7 +5672,7 @@ ${message.content}`;
     try {
       rec.start();
       dictationBaseRef.current = draftRef.current;
-      setNotice("Listening. Words appear in the field as they are recognised. Send stays separate.");
+      setNotice(dictationPrefsRef.current.live ? "Listening. Words appear as you speak." : "Listening. Your transcript will appear when you finish.");
     } catch {
       dictationRecRef.current = null;
       setDictationLevel(0);
@@ -5622,6 +5695,7 @@ ${message.content}`;
   }
 
   async function startServerDictation() {
+    if (!dictationPrefsRef.current.enabled) return;
     const inputProvider = loadVoiceStages(preferenceStorage).inputProvider;
     if (!draftOwner) { setError("Sign in before server dictation. Nothing was recorded."); return; }
     if (currentFreeOnly.current && inputProvider !== "handy") { setError("Free-only mode keeps the selected cloud transcription provider off. Choose Handy for local input."); return; }
@@ -5635,7 +5709,7 @@ ${message.content}`;
     }
     try {
       const recorder = await createDictationRecorder();
-      if (turnOwner.current !== draftOwner || currentVoiceScope.current !== voiceScope) { recorder.cancel(); return; }
+      if (!dictationPrefsRef.current.enabled || turnOwner.current !== draftOwner || currentVoiceScope.current !== voiceScope) { recorder.cancel(); return; }
       serverDictationRef.current = Object.assign(recorder, { captureOwner: draftOwner, captureScope: voiceScope, inputProvider, operationId: crypto.randomUUID(), projectId: active?.projectId ?? null });
       await recorder.start();
       if (serverDictationRef.current !== recorder || currentVoiceScope.current !== voiceScope) { recorder.cancel(); return; }
@@ -6218,14 +6292,81 @@ ${message.content}`;
           : { state: "Not connected", detail: mcpServers.find((server) => server.error)?.error || "No MCP server has answered a handshake. Nothing is called." };
   closeVoiceOverlayRef.current = closeVoiceOverlay;
   cancelDictationRef.current = cancelBrowserDictation;
-  const dictationDisabled = ws.halted || voiceListening || voiceOverlayOpen;
+  const shortcutHandler = useRef<(id: ShortcutAction, event: KeyboardEvent) => boolean>(() => false);
+  shortcutHandler.current = (id, event) => {
+    const target = event.target instanceof HTMLElement ? event.target : null;
+    if (target?.closest('[role="dialog"], [data-shortcut-capture="true"]')) return false;
+    if (id === "send" || id === "queue" || id === "background") {
+      if (!target?.matches('textarea') || !["command","chat"].includes(view)) return false;
+      if (id === "send") { target.closest("form")?.requestSubmit(); return true; }
+      if (!active || view !== "chat") { setNotice("Open the intended conversation to send or queue its draft."); return true; }
+      void sendInChat(id === "queue"); return true;
+    }
+    if (id === "newChat") { openChat(); return true; }
+    if (id === "branch") {
+      if (!active?.messages.length || busy) { setNotice("Open a completed conversation to branch it."); return true; }
+      const branchId = crypto.randomUUID();
+      const at = new Date().toISOString();
+      const branch: Chat = { ...active, id: branchId, title: (active.title.slice(0, 66) + " (branch)"), updatedAt: at,
+        archived: false, favorite: false, checkpoints: [], retrievalLog: [], forkedFrom: { chatId: active.id, messageId: active.messages.at(-1)!.id, at },
+        messages: active.messages.map(({ deliveryOperationId, deliveryRoute, delivery, partialReply, memorySaved, savedMemoryId, ...message }) => ({ ...message, id: crypto.randomUUID(), inheritedFrom: { chatId: active.id, messageId: message.id } })) };
+      setWs((current) => pushAudit({ ...current, chats: [branch, ...current.chats] }, "branch_chat", branchId, active.id));
+      setActiveId(branchId); setView("chat"); return true;
+    }
+    if (id === "documents") { setLibraryBand("files"); setView("files"); }
+    else if (id === "build") setView("build");
+    else { setSettingsPane(id === "pets" ? "bits" : null); setView("settings"); }
+    setNavOpen(false); return true;
+  };
+  useEffect(() => {
+    function handle(event: KeyboardEvent) {
+      if (event.defaultPrevented || event.repeat || event.isComposing) return;
+      if (document.querySelector('[role="dialog"][aria-modal="true"]')) return;
+      const combination = chord(event);
+      if (!combination) return;
+      const binding = KEY_ACTIONS.find(([id]) => interfaceSettings.prefs.bindings[id] === combination);
+      if (binding && shortcutHandler.current(binding[0], event)) event.preventDefault();
+    }
+    window.addEventListener("keydown", handle);
+    return () => window.removeEventListener("keydown", handle);
+  }, [interfaceSettings.prefs.bindings]);
+  const dictationDisabled = !dictationPrefs.enabled || ws.halted || voiceListening || voiceOverlayOpen;
 
+  const composerExtras = <ChatComposerExtras key={draftScope} files={ws.files}
+    onImage={file => void addImageAttachment(file)}
+    onSelect={file => {
+      const attachment = { name: file.name, text: file.text, ...(file.textSha256 ? { source: { fileId: file.id, revision: file.textSha256, name: file.name } } : {}) };
+      const limit = Math.max(0, 8000 - draft.length - file.name.length - 32);
+      if (attachment.text.length > limit) setExcerpt({ scope: draftScope, file: attachment, limit });
+      else { setStaged(attachment); setError(null); setNotice(`Attached ${file.name} from your library.`); }
+    }}
+    onResearch={() => { if (!researchText.trim()) setResearchText(draft); setResearchBand("search"); setView("research"); }}
+    onProject={() => { setView("projects"); setNavOpen(false); }}
+    onSearch={() => {
+      if (view === "command") { setHomeAction("search"); setCommandMode("research"); }
+      else setDraft(text => /^search the web/i.test(text) ? text : "Search the web for " + text);
+    }}
+  />;
   if (!initialLocationResolved) {
     return <main className="flex min-h-dvh items-center justify-center bg-bg p-4 text-fg" role="status">Opening workspace…</main>;
   }
 
   return (
     <div id="mind-workspace" data-workspace-ready={ready ? "true" : "false"} className="shell flex h-dvh flex-col bg-bg text-fg md:flex-row" data-view={view} data-search={paletteOpen ? "open" : "closed"}>
+      <ChatBits key={account?.id ?? "guest"} panel={bitsPanel} chats={ws.chats.filter(chat => !chat.archived && !chat.temporary).map(chat => ({ id: chat.id, title: shownChatTitle(chat) }))} onActivate={(id) => {
+        if (!account) { window.location.assign("/login?next=" + encodeURIComponent("?section=chat")); return; }
+        if (id && ws.chats.some(chat => chat.id === id && !chat.archived)) setActiveId(id);
+        setView("chat"); setNavOpen(false);
+      }} blockGeneration={!account ? "Sign in to generate a companion." : ws.halted ? "Emergency stop is active." : researchFreeOnly ? "Free-only mode is on." : undefined} generate={async (description) => {
+        if (!draftOwner || wsRef.current.halted || currentFreeOnly.current) throw new Error("Companion generation is unavailable with the current settings.");
+        const token = getBearerToken(), id = crypto.randomUUID();
+        const prefix = previewPathPrefix(window.location.hostname, window.location.pathname) ?? "";
+        const result = await fetch(prefix + "/api/mind/media/generate", { method:"POST", credentials:"include", headers: { "content-type":"application/json", ...(token ? {authorization:"Bearer " + token} : {}) },
+          body: JSON.stringify({prompt:"Create a single centered companion pet avatar with a simple background. " + description, operationId:id, taskId:id, n:1, freeOnly:currentFreeOnly.current}) });
+        const payload = await result.json();
+        if (!result.ok || !payload.ok || !payload.images?.[0]?.dataUrl) throw new Error(payload.error || "The image provider returned no companion.");
+        return payload.images[0].dataUrl;
+      }} />
       {notionSelection ? <Overlay labelledBy="notion-choice-title" onDismiss={() => setNotionSelection(null)}>
         <h2 id="notion-choice-title" className="text-lg font-semibold">Choose the Notion page</h2>
         <p className="mt-2 text-sm text-muted">Workspace: {notionSelection.workspaceId}. Select the exact destination. Selecting a page does not approve a write.</p>
@@ -6234,7 +6375,18 @@ ${message.content}`;
       </Overlay> : null}
       <MenuMotion />
       {navOpen ? <button type="button" className="fixed inset-0 md:hidden" aria-label="Close menu" style={{ zIndex: 150, background: "transparent" }} onClick={() => setNavOpen(false)} /> : null}
-      <aside ref={(node) => { navDrawerRef.current = node; pinRailFrame(node); }} onMouseDown={closeNavFromBackdrop} role={navOpen ? "dialog" : undefined} aria-modal={navOpen ? true : undefined} aria-label={navOpen ? "Workspace navigation" : undefined} className={`rail gpt-rail ${navOpen ? "nav-drawer-open flex" : "hidden"} fixed inset-0 z-40 w-full flex-col overflow-hidden md:static md:flex md:h-dvh ${railCollapsed ? "md:w-[4.5rem]" : "md:w-72"} md:shrink-0`}>
+      <nav className="workspace-shortcuts" aria-label="Workspace shortcuts">
+        <button type="button" title={railCollapsed ? "Open sidebar" : "Hide sidebar"} aria-label={railCollapsed ? "Open sidebar" : "Hide sidebar"} aria-controls="workspace-sidebar" aria-expanded={!railCollapsed} onClick={() => setRailCollapsed(value => !value)}><PanelLeft size={20} /></button>
+        {([
+          { label: "Home", icon: Home, current: view === "command", open: () => setView("command") },
+          { label: "Build", icon: Terminal, current: view === "build", open: () => setView("build") },
+          { label: "Speak", icon: Volume2, current: speakStageOpen, open: openSpeakStage },
+          { label: "Dashboard", icon: LayoutDashboard, current: view === "dashboard", open: () => setView("dashboard") },
+          { label: "Plugins", icon: Zap, current: view === "connected", open: () => setView("connected") },
+          { label: "Control Center", icon: Settings, current: view === "controls", open: openControlCenter },
+        ]).map(item => <button key={item.label} type="button" title={item.label} aria-label={`Go to ${item.label}`} aria-current={item.current ? "page" : undefined} onClick={item.open}><item.icon size={20} /></button>)}
+      </nav>
+      <aside id="workspace-sidebar" data-collapsed={railCollapsed} ref={(node) => { navDrawerRef.current = node; pinRailFrame(node); }} onMouseDown={closeNavFromBackdrop} role={navOpen ? "dialog" : undefined} aria-modal={navOpen ? true : undefined} aria-label={navOpen ? "Workspace navigation" : undefined} className={`rail gpt-rail ${navOpen ? "nav-drawer-open flex" : "hidden"} fixed inset-0 z-40 w-full flex-col overflow-hidden md:static md:flex md:h-dvh ${railCollapsed ? "md:w-[4.5rem]" : "md:w-72"} md:shrink-0`}>
         <div className="gpt-rail-head flex items-center gap-3 px-4 py-4">
           {!railCollapsed && (
             <p className="flex min-w-0 flex-1 items-center gap-2 text-2xl font-semibold tracking-tight">
@@ -6262,6 +6414,10 @@ ${message.content}`;
           </button>
         </div>
         <nav ref={pinRailScroll} className="min-h-0 flex-1 overflow-y-auto px-3 pb-3" data-testid="workspace-nav" style={{ overflowY: "auto", minHeight: 0 }}>
+          <div className="grid gap-1">
+            <button type="button" className="nav-item min-h-11 px-3 text-left text-sm font-semibold" onClick={() => { setTemporary(false); setActiveId(null); setView("command"); setNavOpen(false); }}>New chat</button>
+            <button type="button" className="nav-item min-h-11 px-3 text-left text-sm" onClick={() => { setTemporary(true); setActiveId(null); setView("command"); setNavOpen(false); }}>Temporary chat</button>
+          </div>
           <button
             type="button"
             data-testid="nav-route-dashboard"
@@ -6391,7 +6547,7 @@ ${message.content}`;
             </>
           )}
           {!railCollapsed && <div className="mx-3 my-3 border-t border-white/10" />}
-          {!railCollapsed && ws.chats.length > 0 && (
+          {!railCollapsed && (
             <div className="mb-4" data-testid="sidebar-recent">
               <p className="px-3 pb-2 text-xs font-medium text-muted">Recent conversations</p>
               <ConversationSections
@@ -6479,6 +6635,7 @@ ${message.content}`;
         </div>
       </aside>
 
+      <WorkspaceDivider collapsed={railCollapsed} />
       <main ref={pinMainColumn} className="main-stage page-enter flex min-h-0 min-w-0 flex-1 flex-col" inert={navOpen}>
         <h1 className="sr-only">Adrian’s Mind OS</h1>
         <header className="topbar flex flex-nowrap items-center gap-2 px-3 py-3 md:gap-3 md:px-5" ref={(node) => { if (view !== "chat" && view !== "command") node?.style.setProperty("overflow", "visible", "important"); else node?.style.removeProperty("overflow"); }}>
@@ -6758,6 +6915,19 @@ ${message.content}`;
                     </div>
                   ) : null}
                 </MenuCluster>
+                <MenuCluster label="Control center" wide>
+                  <button type="button" className="min-h-11 rounded-panel border border-line px-3 text-sm" onClick={openControlCenter}>Open Control Center</button>
+                  <div className="grid w-full grid-cols-2 gap-1">
+                    {([
+                      ["dashboard", "Fleet graph"], ["runs", "Runs and approvals"],
+                      ["scheduled", "Schedules"], ["activity", "Activity and receipts"],
+                      ["skills", "Reusable skills"], ["agents", "Bots"],
+                      ["connected", "Plugins and connections"], ["settings", "Account and preferences"],
+                    ] as const).map(([destination, label]) => <button type="button" key={destination} className="flex min-h-11 items-center gap-2 rounded-panel px-2 text-left text-sm hover:bg-surface-2" onClick={() => { setView(destination); if (destination === "settings") setSettingsPane(null); closeMenus(); }}>
+                      <img alt="" className="size-5 rounded" src={navMark(destination)} />{label}
+                    </button>)}
+                  </div>
+                </MenuCluster>
                 <MenuCluster label="Share">
                   <button
                     type="button"
@@ -6828,7 +6998,7 @@ ${message.content}`;
           <button
             type="button"
             className="flex h-11 min-h-11 items-center gap-2 rounded-full border border-line px-2"
-            aria-label="Account menu for Adrian"
+            aria-label={`Account menu for ${accountLabel}`}
             aria-expanded={accountOpen}
             aria-controls="account-panel"
             onClick={(event) => {
@@ -6838,12 +7008,17 @@ ${message.content}`;
               setAccountOpen(next);
             }}
           >
-            <img src="/brand/logo-mark.jpg" alt="" width={32} height={32} className="size-8 rounded-full object-cover" />
-            <span className="hidden text-sm md:inline">Adrian</span>
+            {account?.profileImageUrl ? <img src={account.profileImageUrl} alt="" width={32} height={32} className="size-8 rounded-full object-cover" /> : <span aria-hidden="true" className="grid size-8 place-items-center rounded-full bg-surface-2 font-semibold">{accountLabel.slice(0, 1).toUpperCase()}</span>}
+            <span className="hidden max-w-32 truncate text-sm md:inline">{accountLabel}</span>
           </button>
         </header>
+        {(inConversation || view === "build") && <nav className="workspace-mode-strip" aria-label="Conversation or work">
+          <div><button type="button" aria-pressed={inConversation} onClick={() => { if (!inConversation) setView(active && !active.archived ? isIntelligenceThread(active.customPersonality) ? "code" : "chat" : "command"); }}>Chat</button>
+          <button type="button" aria-pressed={view === "build"} onClick={() => { if (view !== "build") setView("build"); }}>Work</button></div>
+        </nav>}
+        {view === "connected" && pluginOrigin && <button type="button" className="mx-3 min-h-11 self-start rounded-panel border border-line px-3 text-sm" onClick={() => setView(pluginOrigin)}>Return to {pluginOrigin === "build" ? "Work" : "Chat"}</button>}
         {bellOpen && (
-          <AnchoredCard anchor={alertAnchor} label="Alerts" onClose={() => setBellOpen(false)} testId="alerts-panel" width={300} align="end">
+          <AnchoredCard anchor={alertAnchor} label="Alerts" onClose={() => setBellOpen(false)} testId="alerts-panel" width={420} align="end">
             <MenuGroup label="Status" first>
               {ws.halted ? <p className="px-3 py-2 text-sm text-danger">Emergency stop is on. Sending and approvals are blocked.</p> : null}
               {searchIssue && <button type="button" className="min-h-11 px-3 text-left text-sm text-danger" onClick={() => {
@@ -6876,15 +7051,16 @@ ${message.content}`;
           <AnchoredCard anchor={accountAnchor} label="Account" onClose={() => setAccountOpen(false)} testId="account-panel" width={440} align="end">
             <MenuShelf width="100%" testId="account-shelf">
             <MenuCluster label="Account" wide>
-              <p className="px-3 py-1 text-sm font-semibold">Adrian (Personal)</p>
-              <p className="px-3 pb-2 text-xs text-muted">This menu is not an account switcher. No second workspace exists.</p>
-              <UserButton />
-              <SupabaseAccountControls />
-              <SignedOut>
-                <Link to="/login" search={{ next: loginReturnPath() }} className="flex min-h-11 items-center rounded-2xl px-3 text-sm" style={menuChip}>
-                  Sign in
-                </Link>
-              </SignedOut>
+              {account ? <>
+                <UserButton />
+                {account.primaryEmail && !account.isDevFallback && <p className="break-all px-3 text-xs text-muted">{account.primaryEmail}</p>}
+              </> : <>
+                <Link to="/login" search={{ next: loginReturnPath() }} className="flex min-h-11 items-center rounded-2xl px-3 text-sm" style={menuChip}>Sign in</Link>
+                <Link to="/login" search={{ next: loginReturnPath(), mode: "sign-up" }} className="flex min-h-11 items-center rounded-2xl px-3 text-sm" style={menuChip}>Sign up</Link>
+              </>}
+              {account && <button type="button" className="min-h-11 px-3 text-left text-sm" onClick={() => { setSettingsPane("profile"); setView("settings"); closeMenus(); }}>Profile</button>}
+              <button type="button" className="min-h-11 px-3 text-left text-sm" onClick={() => { setSettingsPane("personalization"); setView("settings"); closeMenus(); }}>Personalization</button>
+              <button type="button" className="min-h-11 px-3 text-left text-sm" onClick={() => { setView("help"); closeMenus(); }}>Help</button>
             </MenuCluster>
             <MenuCluster label="Safety">
               <button type="button" className="flex min-h-11 items-center rounded-2xl px-3 text-left text-sm" style={menuChip} onClick={() => { setView("settings"); closeMenus(); }}>
@@ -7149,7 +7325,7 @@ ${message.content}`;
                     value={draft}
                     onChange={(event) => setDraft(event.target.value)}
                     onKeyDown={(event) => {
-                      if (event.key === "Enter" && !event.shiftKey) {
+                      if (submitOnKey(event.nativeEvent, interfaceSettings.prefs.sendKey)) {
                         event.preventDefault();
                         event.currentTarget.form?.requestSubmit();
                       }
@@ -7175,6 +7351,8 @@ ${message.content}`;
                   <div className="composer-toolbar mt-2 flex flex-wrap items-center gap-2">
                     <ComposerMore testId="home-composer-more-menu" onOpen={() => { setContextOpen(false); setToolsOpen(false); }}>
                         <MenuCluster label="Files">
+                          {composerExtras}
+                          <button type="button" style={menuChip} onClick={browseComposerPlugins}>Plugins</button>
                           <button type="button" className="inline-flex items-center gap-2 rounded-panel border border-line px-3 text-sm" style={menuChip} onClick={() => fileRef.current?.click()}>
                             <Paperclip className="size-4" /> Attach
                           </button>
@@ -7484,6 +7662,7 @@ ${message.content}`;
           )}
           {view === "chat" && (
             <ChatPane
+              shouldSubmit={(event) => submitOnKey(event, interfaceSettings.prefs.sendKey)}
               chatSettingsOpen={chatSettingsOpen}
               onChatSettingsToggle={(open) => {
                 setChatSettingsOpen(open);
@@ -7620,6 +7799,8 @@ ${message.content}`;
               stagedName={staged?.name ?? null}
               pendingImages={pendingImages}
               onRemoveImage={(index) => setPendingImages((prev) => prev.filter((_, i) => i !== index))}
+              composerExtras={composerExtras}
+              onBrowsePlugins={browseComposerPlugins}
               onAttach={() => fileRef.current?.click()}
               onAttachImage={() => imageInputRef.current?.click()}
               onOpenCamera={() => setCameraOpen(true)}
@@ -7689,7 +7870,7 @@ ${message.content}`;
             <section className="page-shell">
               <div className="page-hero mb-4 flex flex-wrap items-center justify-between gap-3">
                 <div className="flex items-center gap-3">
-                  <img src="/brand/logo-mark.jpg" alt="" className="size-10 rounded-xl" />
+                  <img src="/brand/marks/projects.png" alt="" className="size-10 rounded-xl" />
                   <div>
                     <h2 className="font-display text-3xl font-bold">Projects</h2>
                     <p className="text-sm text-muted">Group this device’s chats, notes, and files by project.</p>
@@ -7767,7 +7948,7 @@ ${message.content}`;
             <section className="page-shell p-4 md:p-6">
               <div className="page-hero">
                 <div className="flex items-center gap-3">
-                  <img src="/brand/logo-mark.jpg" alt="" className="size-8 rounded-lg" />
+                  <img src="/brand/marks/memory.png" alt="" className="size-8 rounded-lg" />
                   <div>
                     <h2 className="font-display text-3xl font-bold">Memory</h2>
                     <p className="text-sm text-muted">Keep useful notes and choose when a chat can use them.</p>
@@ -8016,9 +8197,11 @@ ${message.content}`;
           {view === "runs" && <FleetPanel key="runs" mode="runs" ws={ws} setWs={setWs} initialAgentId={botDestinationId} focusRunId={focusRunId} />}
           {view === "connected" && (
             <section className="page-shell">
-              <div className="page-hero mb-4 flex items-center gap-3"><img src="/brand/logo-mark.jpg" alt="" className="size-8 rounded-lg" /><div><h2 className="font-display text-3xl font-bold">Connected</h2><p className="text-sm text-muted">Setup explains what is missing. A service is connected only after the server says so.</p></div></div>
+              <div className="page-hero mb-4 flex items-center gap-3"><img src="/brand/marks/plugins.png" alt="" className="size-8 rounded-lg" /><div><h2 className="font-display text-3xl font-bold">Connected</h2><p className="text-sm text-muted">Setup explains what is missing. A service is connected only after the server says so.</p></div></div>
               {statusSignedIn === false ? <div className="sign-in-summary" role="status">Sign in to check your connections. <Link to="/login" search={{ next: loginReturnPath() }}>Sign in</Link></div> : null}
-              <ServiceBoard key={account?.id ?? "guest"}
+              <ServiceBoard onChooseRemote={chooseDirectoryRemote} key={account?.id ?? "guest"}
+                temporaryDraft={(pluginOrigin === "chat" && active?.temporary) || (pluginOrigin === "command" && temporary)}
+                oauthReturnTo={pluginOrigin === "build" ? "/?section=build" : pluginOrigin === "chat" && active && !active.temporary ? `/?section=chat&chat=${encodeURIComponent(active.id)}` : pluginOrigin === "command" ? "/?section=command" : undefined}
                 providers={customAiProviders}
                 savedMcp={mcpSavedListState.status === "ready" ? mcpServers : []}
                 grokConfigured={grokConfigured === true}
@@ -8095,7 +8278,7 @@ ${message.content}`;
                 <h3 className="font-semibold">MCP server</h3>
                 <p className="mt-1 text-sm text-muted">The token stays on the server. Connected means the server answered initialize and tools/list.</p>
                 <label className="mt-3 block text-sm">Connection name<input value={mcpLabel} onChange={(event) => setMcpLabel(event.target.value)} className="mt-1 min-h-11 w-full rounded-panel border border-line bg-bg px-3" /></label>
-                <label className="mt-3 block text-sm">Server URL<input type="url" required pattern="https://.+" title="Enter an HTTPS URL" value={mcpUrl} onChange={(event) => setMcpUrl(event.target.value)} placeholder="https://example.com/mcp" aria-label="MCP server address" className="mt-1 min-h-11 w-full rounded-panel border border-line bg-bg px-3" /></label>
+                <label className="mt-3 block text-sm">Server URL<input type="url" required pattern="https://.+" title="Enter an HTTPS URL" value={mcpUrl} onChange={(event) => { setMcpUrl(event.target.value); setMcpToken(""); }} placeholder="https://example.com/mcp" aria-label="MCP server address" className="mt-1 min-h-11 w-full rounded-panel border border-line bg-bg px-3" /></label>
                 <label className="mt-3 block text-sm">Access token (optional)<input value={mcpToken} onChange={(event) => setMcpToken(event.target.value)} type="password" autoComplete="off" className="mt-1 min-h-11 w-full rounded-panel border border-line bg-bg px-3" /></label>
                 <button type="submit" className="mt-3 min-h-11 rounded-panel bg-accent px-4 text-sm font-semibold text-accent-ink" disabled={ws.halted || mcpMutationBusy || !mcpUrl.trim()}>{mcpMutationBusy ? "Checking connection…" : "Test and save"}</button>
                 <ul className="mt-3 space-y-2">
@@ -8166,11 +8349,30 @@ ${message.content}`;
               </details>
             </section>
           )}
+          {view === "controls" && ready && <WorkspaceControlCenter account={accountLabel} thread={active} workspace={ws}
+            selectedModel={`${effectiveProvider} · ${modelTier}`} freeOnly={researchFreeOnly} listening={voiceListening}
+            onReturn={() => setView(controlReturn.current)} onOpen={(destination, id) => {
+              const panes = { account: null, models: "keys", permissions: "safety", voice: "voice", profile: "profile" } as const;
+              switch (destination) {
+                case "account": case "models": case "permissions": case "voice": case "profile":
+                  setSettingsPane(panes[destination]);
+                  setView("settings");
+                  break;
+                case "connections": setView("connected"); break;
+                case "runs": setFocusRunId(id ?? null); setView("runs"); break;
+                case "activity": setFocusAuditId(id ?? null); setActivityQuery(""); setView("activity"); break;
+                default: setView(destination);
+              }
+            }} />}
           {view === "scheduled" && <FleetPanel key="scheduled" mode="scheduled" ws={ws} setWs={setWs} initialAgentId={botDestinationId} />}
           {view === "tools" && <FleetPanel mode="tools" ws={ws} setWs={setWs} onFailure={(message, retry, surface) => reportFailure(message, surface === "mcp" ? "mcp_tool_failed" : "open_page_failed", surface === "mcp" ? "mcp:tools" : "browser", retry)} />}
           {view === "build" && (
             <section className="page-shell">
-              <BuildWorkspace plannerRef={buildPlanner} enabledSkills={enabledSkills} freeOnly={researchFreeOnly} key={draftOwner ?? "signed-out"} ownerId={draftOwner ?? undefined} onDiscuss={(text) => handToHumanCode(text, "From Build")} onResult={(text) => {
+              <BuildWorkspace planningCatalog={tierCatalog} sharedTier={modelTier} composer={{
+                staged, images: pendingImages, message: error || notice,
+                onFile: () => fileRef.current?.click(), onPhoto: () => imageInputRef.current?.click(), onCamera: () => setCameraOpen(true), onPlugins: browseComposerPlugins,
+                removeFile: () => setStaged(null), removeImage: index => setPendingImages(current => current.filter((_, i) => i !== index)),
+              }} plannerRef={buildPlanner} enabledSkills={enabledSkills} freeOnly={researchFreeOnly} key={draftOwner ?? "signed-out"} ownerId={draftOwner ?? undefined} onDiscuss={(text) => handToHumanCode(text, "From Build")} onResult={(text) => {
                 const id = sessionStorage.getItem(`adrian-human-return.${draftOwner || "signed-out"}`);
                 if (!id || !wsRef.current.chats.some((chat) => chat.id === id && isIntelligenceThread(chat.customPersonality))) { handToHumanCode(text, "Build result"); return; }
                 sessionStorage.removeItem(`adrian-human-return.${draftOwner || "signed-out"}`);
@@ -8219,6 +8421,11 @@ ${message.content}`;
                 <div hidden={researchBand !== "search"}>
                 <label className="text-sm" htmlFor="research-question">Question</label>
                 <textarea id="research-question" value={researchText} onChange={(event) => setResearchText(event.target.value)} placeholder="What do you want to research?" rows={3} className="input-glow mt-2 w-full rounded-panel border border-line bg-bg px-3 py-2 text-sm" />
+                <label className="mt-2 flex flex-wrap items-center gap-2 text-sm">Research depth
+                  <select className="min-h-11 rounded-panel border border-line bg-bg px-3" value={researchDepth} disabled={researchPending} onChange={(event) => setResearchDepth(event.target.value as typeof researchDepth)}>
+                    <option value="auto">Automatic</option><option value="quick">Quick · one search</option><option value="deep">Deep · up to three searches</option>
+                  </select>
+                </label>
                 <p className="mt-2 text-sm text-muted">{researchFreeOnly ? "Free-only selection. No verified free search provider is available." : `Research provider: ${searchProvider}. Provider usage may be billed.`}</p>
                 <button type="button" className="mt-3 min-h-11 rounded-panel bg-accent px-4 text-sm font-semibold text-accent-ink disabled:opacity-50" disabled={ws.halted || researchFreeOnly || searchProvider === "Unavailable" || searchProvider === "Checking search route" || researchPending || !researchText.trim()} onClick={() => void startResearch()}>
                   {researchPending ? "Searching…" : "Start research"}
@@ -8293,7 +8500,7 @@ ${message.content}`;
           <section className={view === "skills" ? "page-shell space-y-4" : "hidden"}>
               <div className="page-hero">
                 <div className="flex items-center gap-3">
-                  <img src="/brand/logo-mark.jpg" alt="" className="size-8 rounded-lg" />
+                  <img src="/brand/marks/skills.png" alt="" className="size-8 rounded-lg" />
                   <div>
                     <h2 className="font-display text-3xl font-bold">Skills</h2>
                     <p className="text-sm text-muted">Read tools show their current permission state. Approved instructions guide future chat or Build turns; service connections have separate workflows.</p>
@@ -8302,6 +8509,7 @@ ${message.content}`;
                 <button type="button" className="min-h-11 rounded-panel border border-line px-3 text-sm" data-testid="skill-refresh" data-asked-permission="false" onClick={() => setSkillRefreshNonce((n) => n + 1)}>Refresh</button>
               </div>
               <p role="status" className="text-sm text-muted" data-testid="skill-refresh-status">{skillInventoryStatus}</p>
+              <LocalSkillsTools chats={account && view === "skills" ? ws.chats : []} skills={visibleSkillCatalog} enabledSkills={Object.fromEntries(visibleSkillCatalog.map((skill) => [skill.id, skill.kind !== "not-installed" && enabledSkills[skill.id] !== false]))} />
               <input value={skillQuery} onChange={(event) => setSkillQuery(event.target.value)} placeholder="Search skills" aria-label="Search skills" className="min-h-11 w-full rounded-panel border border-line bg-surface px-3 text-sm" />
               <nav className="flex flex-wrap gap-2" aria-label="Skill groups">
                 {([
@@ -8373,16 +8581,13 @@ ${message.content}`;
               </div>
               {skillStorageError && <p className="rounded-panel border border-danger/40 p-3 text-sm text-danger" role="alert">{skillStorageError}</p>}
               {notice && <p className="voice-copy rounded-panel border border-line bg-surface px-3 py-2 text-sm text-muted">{presentVoiceCopy(notice)}</p>}
-              <details className="owner-fold">
-                <summary>Draft library</summary>
-                <LocalSkillsTools skills={visibleSkillCatalog} enabledSkills={Object.fromEntries(visibleSkillCatalog.map((skill) => [skill.id, skill.kind !== "not-installed" && enabledSkills[skill.id] !== false]))} />
-              </details>
+
           </section>
           {view === "files" && (
             <section className="page-shell">
               <div className="page-hero mb-4 flex flex-wrap items-center justify-between gap-3">
                 <div className="flex items-center gap-3">
-                  <img src="/brand/logo-mark.jpg" alt="" className="size-8 rounded-lg" />
+                  <img src="/brand/marks/library.png" alt="" className="size-8 rounded-lg" />
                   <div>
                     <h2 className="font-display text-3xl font-bold">Library</h2>
                   <p className="text-sm text-muted">Read saved text, Markdown, CSV, JSON, and text extracted from PDFs.</p>
@@ -8471,7 +8676,7 @@ ${message.content}`;
             <section className="page-shell">
               <div className="page-hero">
                 <div className="flex items-center gap-3">
-                  <img src="/brand/logo-mark.jpg" alt="" className="size-8 rounded-lg" />
+                  <img src="/brand/marks/integrations.png" alt="" className="size-8 rounded-lg" />
                   <div>
                     <h2 className="font-display text-3xl font-bold">Integrations</h2>
                     <p className="text-xs text-muted">Connections for the current account. Saved credentials and authorization are shown separately from a successful feature call. Provider status checked {stamp(checkedAt) || "when available"}.</p>
@@ -8479,7 +8684,7 @@ ${message.content}`;
                 </div>
               </div>
               <div id="owner-integrations" className="mt-4">
-                <ServiceBoard key={`integrations:${draftOwner ?? "guest"}`}
+                <ServiceBoard onChooseRemote={chooseDirectoryRemote} key={`integrations:${draftOwner ?? "guest"}`}
                   grokConfigured={grokConfigured}
                   providers={customAiProviders}
                   savedMcp={mcpSavedListState.status === "ready" ? mcpServers : []}
@@ -8507,7 +8712,7 @@ ${message.content}`;
             <section className="page-shell">
               <div className="page-hero">
                 <div className="flex items-center gap-3">
-                  <img src="/brand/logo-mark.jpg" alt="" className="size-8 rounded-lg" />
+                  <img src="/brand/marks/activity.png" alt="" className="size-8 rounded-lg" />
                   <div>
                     <h2 className="font-display text-3xl font-bold">Activity</h2>
                     <p className="text-sm text-muted">Recent workspace activity · up to 200 recorded events</p>
@@ -8558,10 +8763,10 @@ ${message.content}`;
             <section className="page-shell mx-auto w-full max-w-none space-y-4">
               <div className="page-hero">
                 <div className="flex items-center gap-3">
-                  <img src="/brand/logo-mark.jpg" alt="" className="size-8 rounded-lg" />
+                  <img src="/brand/marks/help.png" alt="" className="size-8 rounded-lg" />
                   <div>
-                    <h2 className="font-display text-3xl font-bold">Help</h2>
-                    <p className="text-sm text-muted">Pick a row. It opens that part of the app. Nothing here pretends a service is connected.</p>
+                    <h2 className="font-display text-3xl font-bold">Help center</h2>
+                    <p className="text-sm text-muted">Find a guide, manage privacy, or report an issue.</p>
                   </div>
                 </div>
               </div>
@@ -8572,26 +8777,27 @@ ${message.content}`;
                 aria-label="Search help"
                 className="input-glow min-h-11 w-full rounded-panel border border-line bg-surface/80 px-3 text-sm"
               />
+              <HelpResources query={helpQuery} privacy={() => { setSettingsPane("data"); setView("settings"); }} keyboard={() => { setSettingsPane("keyboard"); setView("settings"); }} />
               <div id="owner-help" className="adrian-layer grid gap-2">
                 {helpQuery.trim() && <button type="button" className="mb-2 min-h-11 text-sm text-accent" onClick={() => setHelpQuery("")}>Clear search</button>}
                 {(() => {
                   const topics = [
-                  { id: "keys", label: "Copy a saved API key", detail: "Copy my key, token, or credential. Owner key copying is available on the local device.", mark: "/brand/logo-mark.jpg", open: () => { setSettingsPane("keys"); setView("settings"); } },
-                  { id: "chat", label: "Send a chat", detail: "Type in the field and press Enter, or press the blue button. An empty field opens Speak.", mark: "/brand/logo-mark.jpg", open: () => setView("command") },
-                  { id: "speak", label: "Speak", detail: "Opens the call screen with camera, screen share, mute, and end.", mark: "/brand/logo-mark.jpg", open: openSpeakStage },
-                  { id: "settings", label: "Settings", detail: "Theme, voice, connections, and the pages that stay off the short sidebar.", mark: "/brand/logo-mark.jpg", open: () => setView("settings") },
-                  { id: "plugins", label: "Plugins", detail: "Catalog and connection marks. Opening a row does not connect the service.", mark: "/brand/logo-mark.jpg", open: () => setView("connected") },
-                  { id: "library", label: "Library", detail: "Text copies in this browser. Upload text or open a file you already attached.", mark: "/brand/logo-mark.jpg", open: () => setView("files") },
-                  { id: "projects", label: "Projects", detail: "Records on this device. Open chats or notes from a project card.", mark: "/brand/logo-mark.jpg", open: () => setView("projects") },
-                  { id: "scheduled", label: "Scheduled", detail: "Jobs that wait for a time. Nothing runs until you start it.", mark: "/brand/logo-mark.jpg", open: () => setView("scheduled") },
-                  { id: "build", label: "Build", detail: "Adrian Build workspace. A task can edit the hosted workspace, or a paired computer when one is connected.", mark: "/brand/logo-mark.jpg", open: () => setView("build") },
-                  { id: "explore", label: "Explore", detail: "Filter local templates, save one, then open it in Chat.", mark: "/brand/logo-mark.jpg", open: () => window.location.assign("/explore") },
-                  { id: "dashboard", label: "Dashboard", detail: "Opens the workspace map inside this app.", mark: "/brand/logo-mark.jpg", open: () => setView("dashboard") },
-                  { id: "research", label: "Research", detail: "Opens the free-first research website.", mark: "/brand/logo-mark.jpg", open: () => window.location.assign("/research") },
+                  { id: "keys", label: "Copy a saved API key", detail: "Copy my key, token, or credential. Owner key copying is available on the local device.", mark: "/brand/marks/keys.png", open: () => { setSettingsPane("keys"); setView("settings"); } },
+                  { id: "chat", label: "Send a chat", detail: "Type in the field and press Enter, or press the blue button. An empty field opens Speak.", mark: "/brand/marks/chat.png", open: () => setView("command") },
+                  { id: "speak", label: "Speak", detail: "Opens the call screen with camera, screen share, mute, and end.", mark: "/brand/marks/speak.png", open: openSpeakStage },
+                  { id: "settings", label: "Settings", detail: "Theme, voice, connections, and the pages that stay off the short sidebar.", mark: "/brand/marks/settings.png", open: () => setView("settings") },
+                  { id: "plugins", label: "Plugins", detail: "Catalog and connection marks. Opening a row does not connect the service.", mark: "/brand/marks/plugins.png", open: () => setView("connected") },
+                  { id: "library", label: "Library", detail: "Text copies in this browser. Upload text or open a file you already attached.", mark: "/brand/marks/library.png", open: () => setView("files") },
+                  { id: "projects", label: "Projects", detail: "Records on this device. Open chats or notes from a project card.", mark: "/brand/marks/projects.png", open: () => setView("projects") },
+                  { id: "scheduled", label: "Scheduled", detail: "Jobs that wait for a time. Nothing runs until you start it.", mark: "/brand/marks/scheduled.png", open: () => setView("scheduled") },
+                  { id: "build", label: "Build", detail: "Adrian Build workspace. A task can edit the hosted workspace, or a paired computer when one is connected.", mark: "/brand/marks/build.png", open: () => setView("build") },
+                  { id: "explore", label: "Explore", detail: "Filter local templates, save one, then open it in Chat.", mark: "/brand/marks/explore.png", open: () => window.location.assign("/explore") },
+                  { id: "dashboard", label: "Dashboard", detail: "Opens the workspace map inside this app.", mark: "/brand/marks/activity.png", open: () => setView("dashboard") },
+                  { id: "research", label: "Research", detail: "Opens the free-first research website.", mark: "/brand/marks/research.png", open: () => window.location.assign("/research") },
                   { id: "social", label: "Social", detail: "Adrian Social runs inside this software.", mark: "/apps/social/assets/mark.jpg", open: () => window.location.assign("/social") },
                   { id: "gpt-wrapper", label: "GPT wrapper", detail: "The GPT wrapper runs inside this software.", mark: "/brand/marks/gpt-wrapper.svg", open: () => window.location.assign("/gpt-wrapper") },
                   ].filter((item) => helpQuery.toLowerCase().trim().split(/\s+/).every((word) => `${item.label} ${item.detail}`.toLowerCase().includes(word)));
-                  if (topics.length === 0) return <p className="mt-2 text-sm text-muted" role="status">No help topics match this search. Try “key,” “Library,” or “chat.”</p>;
+                  if (topics.length === 0) return <p className="mt-2 text-sm text-muted" role="status">No matching workspace guides.</p>;
                   return topics.map((item) => (
                   <button key={item.id} type="button" className="adrian-row flex min-h-14 w-full items-center gap-3 rounded-2xl border border-line px-3 text-left text-sm" onClick={() => { item.open(); setNavOpen(false); }}>
 
@@ -8612,29 +8818,41 @@ ${message.content}`;
             <section className="page-shell intelligence-main mx-auto w-full max-w-none">
               <div className="page-hero">
                 <div className="flex items-center gap-3">
-                  <img src="/brand/logo-mark.jpg" alt="" className="size-8 rounded-lg" />
+                  <img src="/brand/marks/settings.png" alt="" className="size-8 rounded-lg" />
                   <div>
                     <h2 id="settings-heading" tabIndex={-1} className="font-display text-3xl font-bold">Settings</h2>
                     <p className="text-sm text-muted">Preferences stay in this browser. Open a group to reach its pages.</p>
                   </div>
                 </div>
               </div>
+              {interfaceSettings.saveError && <p role="alert">{interfaceSettings.saveError}</p>}
               <nav className="intelligence-main space-y-3" aria-label="Settings sections" hidden={settingsPane !== null}>
+                <input type="search" className="input-glow min-h-11 w-full rounded-panel border border-line bg-surface px-3 text-sm" aria-label="Search settings" placeholder="Search settings" value={settingsQuery} onChange={event => setSettingsQuery(event.target.value)} />
                 {([
                   { group: "Account", items: [
-                    ["sign-in", "Sign in", "Keep this account’s own copy", () => { window.location.assign("/login?next=" + encodeURIComponent(loginReturnPath())); }],
-                    ["sign-up", "Sign up", "A new account starts empty", () => { window.location.assign("/login?mode=sign-up"); }],
+                    ...(account ? [["profile", "Profile and usage", "Activity, showcase and token history", () => setSettingsPane("profile")]] as const : []),
+                    ...(!account ? [
+                      ["sign-in", "Sign in", "Open your workspace", () => window.location.assign("/login?next=" + encodeURIComponent(loginReturnPath()))],
+                      ["sign-up", "Sign up", "Create an account", () => window.location.assign("/login?mode=sign-up&next=" + encodeURIComponent(loginReturnPath()))],
+                    ] as const : []),
                     ["keys", "Safe keys", "Open a saved key and copy it", () => setSettingsPane("keys")],
                     ["data", "Data", "What stays in this browser", () => setSettingsPane("data")],
                     ["safety", "Safety", "Stops and confirmations", () => setSettingsPane("safety")],
                   ]},
                   { group: "Preferences", items: [
                     ["general", "Appearance", "Dark, light, motion, or follow this device", () => setSettingsPane("general")],
+                    ["keyboard", "Keyboard", "Search, edit and clear shortcuts and choose how Enter sends messages", () => setSettingsPane("keyboard")],
+                    ["bits", "Chat Bits", "Choose and deploy your pet companion", () => setSettingsPane("bits")],
                     ["browser", "Cloud browser", "Website permissions and browser data", () => setSettingsPane("browser")],
                     ["voice", "Voice", "Speak voice and pace", () => setSettingsPane("voice")],
                   ]},
                   { group: "Personalization", items: [
                     ["personalization", "Personalization", "Default style for new conversations", () => setSettingsPane("personalization")],
+                  ]},
+                  { group: "Data & Privacy", items: [
+                    ["archive", "Archived chats", "Review archived conversations and restore a thread", () => setSettingsPane("archived")],
+                    ["storage", "Storage", "See file and image usage", () => setSettingsPane("storage")],
+                    ["controls", "Data controls", "Export, import, retention and deletion", () => setSettingsPane("data")],
                   ]},
                   { group: "Connections", items: [
                     ["plugins", "Plugins", "Connected services and Build links", () => { setView("connected"); setNavOpen(false); }],
@@ -8650,12 +8868,13 @@ ${message.content}`;
                     ["activity", "Activity", "What this device recorded", () => { setView("activity"); setNavOpen(false); }],
                     ["help", "Help", "How the controls behave", () => { setView("help"); setNavOpen(false); }],
                   ]},
-                ] as const).filter((section) => !hiddenSettings.includes(section.group)).map((section) => (
+                ] as const).filter((section) => !hiddenSettings.includes(section.group)).map(section => ({ ...section, items: section.items.filter(([,label,detail]) => settingsQuery.toLowerCase().trim().split(/\s+/).every(word => (section.group + " " + label + " " + detail).toLowerCase().includes(word))) })).filter(section => section.items.length).map((section) => (
                   <section key={section.group} className="adrian-layer intelligence-group" aria-label={section.group}>
                     <div className="mb-2 flex items-center justify-between gap-2">
                       <h3 className="min-w-0">{section.group}</h3>
                       <ActionsButton label={`${section.group} section`} onOpen={() => setSettingsMenu(section.group)} />
                     </div>
+                    {section.group === "Account" && account && <div className="mb-2 rounded-panel bg-surface-2 p-3"><UserButton /></div>}
                     <div className="settings-index">
                     {section.items.map(([id, label, detail, open]) => (
                       <button key={id} type="button" className="adrian-row" onClick={open}>
@@ -8668,6 +8887,7 @@ ${message.content}`;
                     </div>
                   </section>
                 ))}
+                {settingsQuery && <p className="settings-search-empty text-sm text-muted">No settings match “{settingsQuery}”.</p>}
                 {hiddenSettings.length > 0 && (
                   <section className="adrian-layer intelligence-group" aria-label="Hidden sections">
                     <h3>Hidden sections</h3>
@@ -8687,6 +8907,12 @@ ${message.content}`;
               {settingsPane && (
                 <button type="button" className="text-sm text-muted" onClick={() => setSettingsPane(null)}>Back</button>
               )}
+              {settingsPane === "keyboard" && <KeyboardSettings {...interfaceSettings}/>}
+              {settingsPane === "bits" && <div ref={setBitsPanel}/>}
+              {settingsPane === "archived" && <ArchiveSettings chats={ws.chats} ready={ready} onRestore={(id)=>runConversationAction("archive",[id])}/>}
+              {settingsPane === "storage" && <StorageSettings ws={ws} ready={ready} onOpen={(kind)=>{setLibraryBand(kind);setLibraryProjectId(null);setView("files");}}/>}
+              {settingsPane === "general" && <><AppearanceSettings {...interfaceSettings} light={theme==="light" || (theme==="system" && typeof window!=="undefined" && window.matchMedia("(prefers-color-scheme: light)").matches)}/><div className="settings-card rounded-panel p-4"><SendKey {...interfaceSettings}/></div></>}
+              {settingsPane === "profile" && account && <WorkspaceProfile key={account.id} account={account} workspace={ws} onBuild={() => setView("build")} />}
               {settingsPane === "personalization" && <label className="settings-card grid gap-2 rounded-panel p-4 text-sm">
                 Default style for new conversations
                 <select value={defaultPersonalityId} onChange={(event) => setDefaultPersonalityId(resolvePersonalityId(event.target.value))} className="min-h-11 rounded-panel border border-line bg-surface px-3">
@@ -8768,11 +8994,13 @@ ${message.content}`;
               </div>}
               {settingsPane === "voice" && <div id="settings-voice">
                 <MediaRecoveryPanel ownerId={draftOwner} freeOnly={researchFreeOnly} onComplete={commitVideoJob} onOpenChat={(id) => { if (ws.chats.some((chat) => chat.id === id)) { setActiveId(id); setView("chat"); } else setNotice("The original conversation is no longer in this workspace. Its media operation remains separately recoverable."); }} />
+                <DictationSettings prefs={dictationPrefs} onChange={updateDictationPreferences}/>
                 <VoiceProviderSettings providers={customAiProviders} xaiAvailable={grokConfigured === true} openaiAvailable={liveProviders.openai === true} />
                 <VoiceSettingsBlock onReset={() => applyVoiceChoice(DEFAULT_XAI_VOICE)} />
                 <SpeakPanel />
               </div>}
               <div id="settings-data" hidden={settingsPane !== "data"} className="space-y-4">
+                {settingsPane === "data" && <div className="settings-card rounded-panel p-4 flex flex-wrap gap-3"><button className="min-h-11 rounded-panel border border-line px-3" type="button" onClick={()=>setSettingsPane("archived")}>Archived chats</button><button className="min-h-11 rounded-panel border border-line px-3" type="button" onClick={()=>setSettingsPane("storage")}>Manage storage</button><button className="min-h-11 rounded-panel border border-line px-3" type="button" disabled={!ready || !ws.chats.some(chat=>!chat.archived)} onClick={()=>runConversationAction("archive",ws.chats.filter(chat=>!chat.archived).map(chat=>chat.id))}>Archive all chats</button><button className="min-h-11 rounded-panel border border-danger px-3" type="button" disabled={!ready || !ws.chats.length} onClick={()=>runConversationAction("delete",ws.chats.map(chat=>chat.id))}>Delete all chats…</button></div>}
                 {settingsPane === "data" && <><SessionCenter />{draftOwner && <DataRetentionCenter ownerId={draftOwner} workspace={ws} syncNote={syncNote} onExport={() => void downloadArchive()} verifyServerCopy={() => loadMindCopy({ data: { ownerId: draftOwner } })} onLocalCleared={(targets) => { if (targets.includes("research")) { setResearchHistory([]); setActiveResearchId(null); setResearchCitations([]); setResearchNote(""); setResearchReportQuestion(""); } }} />}</>}
               <div className="settings-card rounded-panel p-4 text-sm">
                 <div className="settings-row">
@@ -8925,7 +9153,7 @@ ${message.content}`;
                 setError(`Select 1–${excerpt.limit} characters inside the file.`);
                 return;
               }
-              setStaged({ name: excerpt.file.name, text: selected }); setExcerpt(null); setError(null); setNotice("Selected excerpt attached.");
+              setStaged({ ...excerpt.file, text: selected }); setExcerpt(null); setError(null); setNotice("Selected excerpt attached.");
             }}>Attach selected text</button>
             <button type="button" className="min-h-11 rounded-panel px-3" onClick={() => setExcerpt(null)}>Cancel</button>
             {error && <p role="alert">{error}</p>}

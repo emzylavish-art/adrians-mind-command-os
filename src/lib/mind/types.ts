@@ -60,6 +60,7 @@ export type Msg = {
   /** Received but unfinished output. Never included as a completed model-history turn. */
   partialReply?: string;
   inheritedFrom?: { chatId: string; messageId: string };
+  workflowKind?: import("./workflow-skills.ts").WorkflowKind;
   skillReceipts?: SkillApplicationReceipt[];
   voiceStages?: VoiceStagesReceipt;
   researchRefs?: { reportId: string; version: number; question: string; at: string }[];

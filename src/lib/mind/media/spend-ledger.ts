@@ -12,6 +12,7 @@ export const DEFAULT_SPEND_LEDGER_PATH = ".data/media-imagine-spend.json";
 export const IMAGINE_COST_USD: Record<string, number> = {
   "grok-imagine-image": 0.07,
   "grok-imagine-image-quality": 0.14,
+  "grok-imagine-image-2.0": 0.14, // Conservative allowance for edits with multiple input images.
 };
 
 export type ImagineSpendEvent = {

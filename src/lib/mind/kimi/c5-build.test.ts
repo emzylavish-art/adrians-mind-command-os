@@ -129,9 +129,9 @@ test("C5 a new emergency stop survives an older pending release and reasserts th
 
 test("C5 actual Build handler distinguishes saved execution, verified save and failed save", async () => {
   const app = readFileSync(new URL("../../../components/mind/build-workspace.tsx", import.meta.url), "utf8");
-  const runBuild = app.slice(app.indexOf('  async function runBuild(policy:'), app.indexOf('  async function planWithGrok('));
+  const runBuild = app.slice(app.indexOf('  function withTaskFile('), app.indexOf('  async function planWithGrok('));
   const body = ts.transpileModule(`
-    const props = { ownerId: "owner-A", freeOnly: false }; const haltedRef = { current: false }; const planOwner = { current: "owner-A" };
+    const props = { ownerId: "owner-A", freeOnly: false, composer: { staged: { name: "brief.txt", text: "review brief contents" }, images: [] } }; const haltedRef = { current: false }; const planOwner = { current: "owner-A" };
     const prompt = "Inspect fixture file"; const cwd = "/fixture"; const mode = "plan"; const sessionId = "";
     const mounted = {current:true}; const selectedFile = "f"; const preferenceStorage = {}; const collectAccountSkillApplications = () => [];
     const companion = { onlineAgentIds: ["fixture-pc"] }; const active = false;
@@ -147,7 +147,7 @@ test("C5 actual Build handler distinguishes saved execution, verified save and f
   `, { compilerOptions: { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.None } }).outputText;
   for (const policy of ["saved", "save", "failure"] as const) {
     let writes = 0, dispatches = 0;
-    const h = new Function("fetch", "runFileOperation", body)(async () => { dispatches++; return Response.json({ ok: true, jobId: "fixture-job" }); }, async (_operation: string, _path: string, text: string, extra: { expectedContent: string }) => { writes++; assert.equal(extra.expectedContent, "revision A"); return policy === "failure" ? null : { path: "a.ts", before: "revision A", after: text }; });
+    const h = new Function("fetch", "runFileOperation", body)(async (_url: string, init: RequestInit) => { dispatches++; assert.match(JSON.parse(String(init.body)).prompt, /Attached file brief\.txt:\nreview brief contents/); return Response.json({ ok: true, jobId: "fixture-job" }); }, async (_operation: string, _path: string, text: string, extra: { expectedContent: string }) => { writes++; assert.equal(extra.expectedContent, "revision A"); return policy === "failure" ? null : { path: "a.ts", before: "revision A", after: text }; });
     await h.runBuild(policy === "saved" ? "saved" : "save");
     assert.equal(writes, policy === "saved" ? 0 : 1);
     assert.equal(dispatches, policy === "failure" ? 0 : 1);

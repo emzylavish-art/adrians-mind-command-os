@@ -269,8 +269,10 @@ app.whenReady().then(async () => {
     height: 800,
     title: "Adrian's Mind",
     autoHideMenuBar: true,
-    webPreferences: { contextIsolation: true, nodeIntegration: false },
+    webPreferences: { contextIsolation: true, nodeIntegration: false, sandbox: true, preload: path.join(__dirname, "chat-bits-preload.cjs") },
   });
+  const closeChatBits = require("./chat-bits.cjs").registerChatBits({ host: window, origin: `http://${HOST}:${PORT}`, electron: require("electron") });
+  app.on("before-quit", closeChatBits);
   try {
     await waitForServer(`http://${HOST}:${PORT}/`, child);
     await window.loadURL(`http://${HOST}:${PORT}/`);

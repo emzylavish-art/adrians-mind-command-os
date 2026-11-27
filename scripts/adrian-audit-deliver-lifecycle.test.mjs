@@ -3,6 +3,7 @@ import { memoryPolicyRevision, validateMemoryDispatch } from "../src/lib/mind/me
 import { effectiveContextPolicy } from "../src/lib/mind/memory/context-policy.ts";
 import { retrieveProjectPassages } from "../src/lib/mind/knowledge.ts";
 import { projectInstructionsForChat } from "../src/lib/mind/project-workspace.ts";
+import { captureWorkflow, learningEnabled, replyWorkflow } from "../src/lib/mind/workflow-skills.ts";
 import { collectAccountSkillApplications } from "../src/lib/mind/skill-activation.ts";
 import { loadModelControls } from "../src/lib/mind/model-tiers.ts";
 import { researchReferencesInText } from "../src/lib/mind/research-reports.ts";
@@ -69,7 +70,7 @@ function fixture(overrides = {}) {
     liveProviders: { gemini: true }, providerModels: { gemini: "selected-gemini-model" }, discovered: [], logicRoute: null, logicRoutes: [],
     composerEffort: "normal", consultModel: "grok", consultModules: [], failoverPolicy: "none", routingMode: "single", ADRIAN_MIND_IDENTITY: "fixture identity",
     memorySendRevision, checkMemorySendRevision, memoryPolicyRevision, validateMemoryDispatch, effectiveContextPolicy, retrieveProjectPassages,
-    projectInstructionsForChat, collectAccountSkillApplications, preferenceStorage: { getItem: () => null }, enabledSkills: {}, loadModelControls,
+    captureWorkflow, learningEnabled, replyWorkflow, projectInstructionsForChat, collectAccountSkillApplications, preferenceStorage: { getItem: () => null }, enabledSkills: {}, loadModelControls,
     currentFreeOnly: { current: false }, researchHistory: [], researchReferencesInText, memoriesForChat, withReplyVersion, failureKindForAction,
     ensureChatMedia: async (chat) => chat,
     snapshotImages, shouldBlockForEmergencyStop, routeForBotChat, isLogicRouteId, chosenProvider, failover, parseCustomProviderChoice,

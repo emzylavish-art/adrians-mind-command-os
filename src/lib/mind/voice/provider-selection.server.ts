@@ -20,7 +20,7 @@ export async function resolveSelectedSpeechCredential(userId: string, selected: 
   return key ? { ok: true, provider: choice as "xai" | "openai", key } : { ok: false, error: `The selected ${choice === "xai" ? "xAI" : "OpenAI"} speech provider is not configured. No fallback was called.` };
 }
 
-export async function transcribeSelected(input: { selected: SelectedSpeechCredential; bytes: Uint8Array; filename?: string; mime?: string; fetchImpl?: typeof fetch }) {
+export async function transcribeSelected(input: { selected: SelectedSpeechCredential; bytes: Uint8Array; filename?: string; mime?: string; language?: string; fetchImpl?: typeof fetch }) {
   if (!input.selected.ok) return { ok: false as const, error: input.selected.error, provider: null };
   const selected = input.selected;
   const result = selected.provider === "xai"

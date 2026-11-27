@@ -1,3 +1,4 @@
+import { workflowKind } from "./workflow-skills.ts";
 import { mergeUsageEntries } from "./usage-ledger.ts";
 import { readPdfEvidenceIndex } from "./pdf-evidence.ts";
 import { readExecutionEvidence } from "./execution-evidence.ts";
@@ -278,6 +279,7 @@ function normalizeChat(row: unknown): Chat | null {
         model: typeof msg.model === "string" ? msg.model : undefined,
         ...(isModelTier(msg.resolvedTier) && msg.resolvedTier !== "Auto" ? { resolvedTier: msg.resolvedTier } : {}),
         ...(normalizeContextReceipt(msg.contextReceipt) ? { contextReceipt: normalizeContextReceipt(msg.contextReceipt)! } : {}),
+        ...(msg.role === "assistant" && workflowKind(msg.workflowKind) ? { workflowKind: workflowKind(msg.workflowKind) } : {}),
         ...(normalizeSkillReceipts(msg.skillReceipts) ? { skillReceipts: normalizeSkillReceipts(msg.skillReceipts)! } : {}),
         ...(normalizeVoiceStagesReceipt(msg.voiceStages) ? { voiceStages: normalizeVoiceStagesReceipt(msg.voiceStages)! } : {}),
         ...(normalizeConsultation(msg.consultation) ? { consultation: normalizeConsultation(msg.consultation)! } : {}),

@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { it } from "node:test";
-import { addResearchClaim, createResearchRunGuard, loadResearchReports, makeResearchReport, researchAttachment, researchCoverage, researchReferencesInText, saveResearchReport } from "./research-reports.ts";
-import { normalizeCitations } from "./research.ts";
+import { addResearchClaim, createResearchRunGuard, loadResearchReports, makeResearchReport, researchAttachment, researchCoverage, researchReferencesInText, researchReportMarkdown, saveResearchReport } from "./research-reports.ts";
+import { fairResearchCitations, normalizeCitations, runDeepResearchPlan } from "./research.ts";
 
 const initial = () => makeResearchReport("Infrastructure", { ok: true, configured: true, error: "", summary: "Keep the original finding about storage.", citations: [{ title: "Official source", url: "https://example.com/a" }], steps: [{ query: "one", ok: true, count: 1 }, { query: "two", ok: false, count: 0 }] });
 
@@ -68,4 +68,44 @@ it("follow-up references keep the attached version even after the report is revi
   assert.equal(references[0]?.reportId, first.id);
   assert.equal(references[0]?.version, 1);
   assert.equal(researchReferencesInText("Research reference unrelated · version 1", [revised]).length, 0);
+});
+
+
+it("exports readable Markdown findings with the same source metadata kept across deep searches", () => {
+  const first = initial();
+  const citation = { ...first.citations[0]!, publishedAt: "2026-11-01", excerpt: "Observed passage.", query: "Infrastructure" };
+  const citations = fairResearchCitations([[citation]]);
+  assert.deepEqual(citations, [citation]);
+  const report = addResearchClaim({ ...first, citations }, { kind: "direct-evidence", text: "This is the finding", sourceUrls: [citation.url] });
+  assert(report);
+  const markdown = researchReportMarkdown(report);
+  for (const value of ["# Infrastructure", "## Findings", "This is the finding (sources 1)", "https://example.com/a", "Observed passage.", "2026-11-01", "## Search history"]) assert(markdown.includes(value));
+});
+
+
+it("retains all deep-search sources, per-query answers and route identity in the actual report", async () => {
+  const calls: string[] = [];
+  const result = await runDeepResearchPlan({ query: "Project plan" }, async (query) => {
+    calls.push(query);
+    const sources = Array.from({ length: 4 }, (_, index) => ({
+      title: `Source ${calls.length}-${index}`, url: `https://example.org/${calls.length}/${index}`,
+      query, status: "snippet" as const, excerpt: "An excerpt", fetchedAt: null, contentHash: null,
+    }));
+    return { ok: true, configured: true, citations: sources, evidence: sources, error: "", providerAnswer: `Finding for ${query}` };
+  });
+  assert.equal(calls.length, 3);
+  assert.equal(result.steps?.length, 3);
+  assert.equal(result.citations.length, 8);
+  assert.equal(result.evidence?.length, 12);
+  assert.match(result.providerAnswer!, /risks and limitations/);
+  const identity = { id: "configured-search", label: "Search", strategy: "multi_query" as const, routeFingerprint: "test-fingerprint" };
+  const report = makeResearchReport("Project plan", { ...result, providerIdentity: identity });
+  assert.equal(report.providerIdentity?.routeFingerprint, identity.routeFingerprint);
+  assert.equal(report.evidence?.length, 12);
+  assert.match(researchReportMarkdown(report), /https:\/\/example.org\/3\/3/);
+  const retry = await runDeepResearchPlan({ query: "Project plan", retryQueries: [calls[2]!] }, async (query) => {
+    assert.equal(query, calls[2]);
+    return { ok: true, configured: true, error: "", citations: result.citations };
+  });
+  assert.equal(retry.steps?.length, 1);
 });

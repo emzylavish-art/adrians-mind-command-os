@@ -46,6 +46,7 @@ import { ConversationComparison } from "./conversation-comparison";
 export type ChatReadingPositions = Map<string, { top: number; following: boolean; count: number }>;
 
 export function ChatPane({
+  shouldSubmit,
   chatSettingsOpen,
   onChatSettingsToggle,
   active,
@@ -139,6 +140,8 @@ export function ChatPane({
   onAttach,
   onAttachImage,
   onOpenCamera,
+  onBrowsePlugins,
+  composerExtras,
   onOpenCloud,
   driveConnected = false,
   onImagine,
@@ -165,6 +168,7 @@ export function ChatPane({
   systemStatus,
   onViewAudit,
 }: {
+  shouldSubmit: (event: KeyboardEvent) => boolean;
   chatSettingsOpen: boolean;
   onChatSettingsToggle: (open: boolean) => void;
   active: Chat | null;
@@ -258,6 +262,8 @@ export function ChatPane({
   onAttach: () => void;
   onAttachImage: () => void;
   onOpenCamera: () => void;
+  onBrowsePlugins?: () => void;
+  composerExtras?: import("react").ReactNode;
   onOpenCloud: () => void;
   driveConnected?: boolean;
   onImagine: () => void;
@@ -495,7 +501,7 @@ export function ChatPane({
             savePosition(pane.scrollTop);
           }
         }}>Jump to latest</button></div>}
-          <div ref={turns} className="space-y-3">
+          <div ref={turns} className="chat-reading-column space-y-3">
           {copyError ? <p role="alert" className="text-sm text-danger">{copyError}</p> : null}
           <ChatMediaGallery messages={active?.messages} onUseInComposer={onSaveImage} onEditImagine={onEditImagine} onDownload={onDownloadImage} />
           {(!active || active.messages.length === 0) && !busy && (
@@ -692,15 +698,12 @@ export function ChatPane({
           {busy && liveText && (
             <article className="turn turn-assistant w-full max-w-none px-1 py-2 text-sm">
               <p className="mb-1 text-xs text-muted">{modelTier} · writing</p>
-              <p className="whitespace-pre-wrap">{liveText}</p>
+              <p className="chat-live-answer whitespace-pre-wrap">{liveText}</p>
             </article>
           )}
           {busy && !liveText && toolTimeline.length === 0 && (
-            <div className="turn turn-assistant w-full max-w-none space-y-2 px-1 py-2" aria-live="polite">
+            <div className="turn turn-assistant w-full max-w-none px-1 py-2" role="status">
               <p className="text-xs text-muted">{active?.messages.at(-1)?.content.startsWith("/video") ? "Rendering the video." : active?.messages.at(-1)?.content.startsWith("/imagine") ? "Creating the image." : "Waiting for the selected provider."}</p>
-              <div className="skeleton h-3" style={{ width: "75%" }} />
-              <div className="skeleton h-3" style={{ width: "50%" }} />
-              <div className="skeleton h-3" style={{ width: "66%" }} />
             </div>
           )}
           {voiceListening ? <div className="flex items-center gap-2"><VoiceLevelMeter level={voiceLevel} listening={voiceListening} /></div> : null}
@@ -766,7 +769,7 @@ export function ChatPane({
             value={draft}
             onChange={(event) => setDraft(event.target.value)}
             onKeyDown={(event) => {
-              if (event.key === "Enter" && !event.shiftKey) {
+              if (shouldSubmit(event.nativeEvent)) {
                 event.preventDefault();
                 event.currentTarget.form?.requestSubmit();
               }
@@ -808,6 +811,8 @@ export function ChatPane({
           <div className="composer-toolbar mt-2 flex flex-wrap items-center gap-2">
             <ComposerMore testId="composer-more-menu">
                 <MenuCluster label="Files">
+                  {composerExtras}
+                  {onBrowsePlugins && <button type="button" style={menuChip} onClick={onBrowsePlugins}>Plugins</button>}
                   <button type="button" className="inline-flex items-center gap-2 rounded-panel border border-line/80 bg-white/5 px-3 text-sm" style={menuChip} onClick={onAttach}>
                     <Paperclip className="size-4" /> Attach
                   </button>

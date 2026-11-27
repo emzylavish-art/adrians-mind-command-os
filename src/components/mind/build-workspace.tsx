@@ -11,8 +11,12 @@ import { useAccountPreferences } from "@/components/mind/account-preferences-con
 import { collectAccountSkillApplications, skillReceiptSummary, type SkillApplicationReceipt } from "@/lib/mind/skill-activation";
 import { BrowserEnvironments } from "@/components/mind/browser-environments";
 import { OwnerFlow } from "@/components/mind/owner-flow";
-import { ActionOverlay } from "@/components/mind/conversation-menu";
+import { ActionsButton, ActionOverlay } from "@/components/mind/conversation-menu";
 import { getBearerToken } from "@/lib/auth/client";
+import { readVoicePreferences } from "@/lib/mind/voice-preferences";
+import type { ModelTier, ModelTierCatalogRow } from "@/lib/mind/model-tiers";
+import type { ImageAttachment } from "@/lib/mind/media";
+import { ComposerMore, MenuCluster, menuChip } from "@/components/mind/menu-material";
 import { chatTurnBody } from "@/lib/mind/logic-routes";
 import { consumeMindTurn, prepareTurnId } from "@/lib/mind/live-turn";
 import { boundAbortSignal } from "@/lib/mind/turn-timeouts";
@@ -78,6 +82,19 @@ function eventLabel(event: BuildEvent): string {
 }
 
 type BuildWorkspaceProps = {
+  planningCatalog?: ModelTierCatalogRow[];
+  sharedTier?: ModelTier;
+  composer?: {
+    staged: { name: string; text: string } | null;
+    images: ImageAttachment[];
+    message: string | null;
+    onFile: () => void;
+    onPhoto: () => void;
+    onCamera: () => void;
+    onPlugins: () => void;
+    removeFile: () => void;
+    removeImage: (index: number) => void;
+  };
   plannerRef?: { current: ((words: string, images: unknown[]) => Promise<string | undefined>) | null };
   ownerId?: string;
   enabledSkills?: Record<string, boolean>;
@@ -98,6 +115,13 @@ export function BuildWorkspace(props: BuildWorkspaceProps = {}) {
 
 function BuildWorkspaceSession(props: BuildWorkspaceProps) {
   const preferenceStorage = useAccountPreferences();
+  const [dictationEnabled, setDictationEnabled] = useState(() => readVoicePreferences(preferenceStorage).enabled);
+  useEffect(() => {
+    const refresh = () => setDictationEnabled(readVoicePreferences(preferenceStorage).enabled);
+    refresh();
+    window.addEventListener("adrian-dictation-preferences", refresh);
+    return () => window.removeEventListener("adrian-dictation-preferences", refresh);
+  }, [preferenceStorage]);
   const apiPrefix = typeof window === "undefined" ? "" : previewPathPrefix(window.location.hostname, window.location.pathname) || "";
   const mounted = useRef(true);
   useEffect(() => { mounted.current = true; return () => { mounted.current = false; }; }, []);
@@ -119,6 +143,7 @@ function BuildWorkspaceSession(props: BuildWorkspaceProps) {
   const [notice, setNotice] = useState<string | null>(null);
   const [plan, setPlan] = useState("");
   const [planModel, setPlanModel] = useState("");
+  const [planningTier, setPlanningTier] = useState<ModelTier | null>(null);
   const planFlight = useRef(false);
   const planAttempts = useRef(new Map<string, string>());
   const planOwner = useRef(props.ownerId);
@@ -463,7 +488,7 @@ function BuildWorkspaceSession(props: BuildWorkspaceProps) {
     try {
       const restored = parseBuildDraft(sessionStorage.getItem(buildDraftKey(owner)), owner);
       if (restored) {
-        setBuffers(restored.buffers); setTabs(restored.tabs); setSelectedFile(restored.selectedFile); setPrompt(restored.prompt);
+        setBuffers(restored.buffers); setTabs(restored.tabs); setSelectedFile(restored.selectedFile); setPrompt(restored.prompt); setCwd(restored.cwd ?? ""); setPlanningTier(restored.planningTier ?? null);
         if (Object.values(restored.buffers).some(buffer => buffer.saved !== buffer.draft)) setFileNotice("Recovered unsaved drafts for this account. Saving will check that each original file is unchanged.");
       }
     } catch { setFileNotice("Editor draft recovery could not be read. Existing files have not been changed."); }
@@ -473,9 +498,9 @@ function BuildWorkspaceSession(props: BuildWorkspaceProps) {
   useEffect(() => {
     if (!draftHydrated || !props.ownerId) return;
     try {
-      sessionStorage.setItem(buildDraftKey(props.ownerId), serializeBuildDraft({ owner: props.ownerId, buffers, tabs, selectedFile, prompt }));
+      sessionStorage.setItem(buildDraftKey(props.ownerId), serializeBuildDraft({ owner: props.ownerId, buffers, tabs, selectedFile, prompt, cwd, ...(planningTier ? { planningTier } : {}) }));
     } catch (error) { setFileNotice(error instanceof Error ? error.message : "Draft recovery could not be saved. Save or copy your changes before leaving Build."); }
-  }, [buffers, tabs, selectedFile, prompt, props.ownerId, draftHydrated]);
+  }, [buffers, tabs, selectedFile, prompt, cwd, planningTier, props.ownerId, draftHydrated]);
 
   useEffect(() => {
     void browseWorkspace();
@@ -546,11 +571,17 @@ function BuildWorkspaceSession(props: BuildWorkspaceProps) {
     await runBuild("saved");
   }
 
+  function withTaskFile(words: string) {
+    const file = props.composer?.staged;
+    return file ? [words.trim(), `Attached file ${file.name}:\n${file.text}`].join("\n\n") : words.trim();
+  }
+
   async function runBuild(policy: "saved" | "save") {
     setExecutionChoice(false);
     if (haltedRef.current) { setNotice("Emergency stop is on. No Build task was started."); return; }
     if (props.freeOnly) { setNotice("Free-only is selected. Build has no verified free coding model for this action."); return; }
-    const text = prompt.trim();
+    if (props.composer?.images.length) { setNotice("Use Plan with Grok to review these images, then remove them before running the text-only coding task."); return; }
+    const text = withTaskFile(prompt);
     if (!text) {
       setNotice("Describe the coding task before submitting.");
       return;
@@ -649,11 +680,11 @@ function BuildWorkspaceSession(props: BuildWorkspaceProps) {
     }
   }
 
-  async function planWithGrok(words = prompt, images: unknown[] = [], github = /^\/github(?:\s|$)/i.test(words)) {
+  async function planWithGrok(words = prompt, images: unknown[] = props.composer?.images ?? [], github = /^\/github(?:\s|$)/i.test(words)) {
     if (planFlight.current || props.halted) return;
     const owner = props.ownerId;
     if (props.freeOnly && !github) { setNotice("Free-only is selected. Build has no verified free coding model for this action."); return; }
-    const text = words.trim();
+    const text = github ? words.trim() : withTaskFile(words);
     if (!text) {
       setNotice("Describe the task before asking Grok for a plan.");
       return;
@@ -675,7 +706,7 @@ function BuildWorkspaceSession(props: BuildWorkspaceProps) {
           history: [],
           memoryContext: [],
           provider: "grok",
-          modelTier: "Heavy",
+          modelTier: planningTier ?? props.sharedTier ?? "Heavy",
           logicRoute: null,
           images,
       });
@@ -878,19 +909,23 @@ function BuildWorkspaceSession(props: BuildWorkspaceProps) {
       <section className="intelligence-group" aria-label="Workspace" hidden={band !== "files"}>
         <h3>Workspace</h3>
         {projects.length === 0 ? <p className="text-sm text-muted">No workspace is registered yet. Registering stores the label and path for this account. It does not prove the path is reachable.</p> : projects.map((project) => (
-          <button key={project.id} type="button" className="min-h-11 rounded-panel border border-line px-3 text-left text-sm" onPointerDown={(event) => { event.currentTarget.dataset.held = "0"; const timer = window.setTimeout(() => { event.currentTarget.dataset.held = "1"; setRowMenu(project.id); }, 550); event.currentTarget.dataset.hold = String(timer); }} onPointerUp={(event) => window.clearTimeout(Number(event.currentTarget.dataset.hold))} onPointerLeave={(event) => window.clearTimeout(Number(event.currentTarget.dataset.hold))} onClick={(event) => { if (event.currentTarget.dataset.held === "1") { event.currentTarget.dataset.held = "0"; return; } setCwd(project.cwd); setNotice(`Opened ${project.label}. File access still requires the runtime that owns this path.`); }}>
-            {project.label} · {project.cwd || "no path"}
-          </button>
+          <div key={project.id} className="flex items-center gap-1">
+            <button type="button" className="min-h-11 min-w-0 flex-1 rounded-panel border border-line px-3 text-left text-sm" onClick={() => { setCwd(project.cwd); setNotice(`Opened ${project.label}. File access still requires the runtime that owns this path.`); }}>
+              {project.label} · {project.cwd || "no path"}
+            </button>
+            <ActionsButton label={project.label} onOpen={() => setRowMenu(project.id)} />
+          </div>
         ))}
         {rowMenu && projects.some((project) => project.id === rowMenu) ? (
           <ActionOverlay label="Actions for workspace" title={projects.find((project) => project.id === rowMenu)?.label || "Workspace"} onClose={() => setRowMenu(null)}>
             <button type="button" className="flex min-h-11 w-full items-center rounded-2xl px-3 text-left text-sm" onClick={() => { const id = rowMenu; setRowMenu(null); void archiveRegisteredProject(id); }}>Archive</button>
           </ActionOverlay>
         ) : null}
-        {sessions.length === 0 ? <p className="text-sm text-muted">No saved session names yet.</p> : sessions.filter((session) => !session.archived).map((session) => (
-          <button key={session.jobId} type="button" className="min-h-11 rounded-panel border border-line px-3 text-left text-sm" onPointerDown={(event) => { const timer = window.setTimeout(() => setRowMenu(`session:${session.jobId}`), 550); event.currentTarget.dataset.hold = String(timer); }} onPointerUp={(event) => window.clearTimeout(Number(event.currentTarget.dataset.hold))} onPointerLeave={(event) => window.clearTimeout(Number(event.currentTarget.dataset.hold))}>
-            {session.name}
-          </button>
+        {sessions.every(session => session.archived) ? <p className="text-sm text-muted">No saved session names yet.</p> : sessions.filter((session) => !session.archived).map((session) => (
+          <div key={session.jobId} className="flex items-center gap-1">
+            <button type="button" className="min-h-11 min-w-0 flex-1 rounded-panel border border-line px-3 text-left text-sm" onClick={() => setRowMenu(`session:${session.jobId}`)}>{session.name}</button>
+            <ActionsButton label={session.name} onOpen={() => setRowMenu(`session:${session.jobId}`)} />
+          </div>
         ))}
         {rowMenu?.startsWith("session:") ? (
           <ActionOverlay label="Actions for session" title={sessions.find((session) => session.jobId === rowMenu.slice(8))?.name || "Session"} onClose={() => setRowMenu(null)}>
@@ -924,12 +959,47 @@ function BuildWorkspaceSession(props: BuildWorkspaceProps) {
           <p className="font-semibold">Adrian Build</p>
         </div>
         <textarea ref={taskField} value={prompt} onChange={(event) => setPrompt(event.target.value)} placeholder="Describe the change you want to build…" className="min-h-24 w-full rounded-panel border border-line bg-transparent p-3 text-sm outline-none focus:border-accent" aria-label="Coding task" />
+        {props.composer && <div className="flex flex-wrap items-center gap-2" aria-label="Work attachments and project">
+          <ComposerMore testId="work-composer-more-menu">
+            <MenuCluster label="Add to Work">
+              <button type="button" style={menuChip} onClick={props.composer.onCamera}>Camera</button>
+              <button type="button" style={menuChip} onClick={props.composer.onPhoto}>Photos</button>
+              <button type="button" style={menuChip} onClick={props.composer.onFile}>Files</button>
+              <button type="button" style={menuChip} onClick={props.composer.onPlugins}>Plugins</button>
+            </MenuCluster>
+          </ComposerMore>
+          <label className="flex min-h-11 flex-wrap items-center gap-2 text-sm">Choose project
+            <select className="min-h-11 max-w-full rounded-panel border border-line bg-transparent px-2" aria-label="Work project" value={cwd} onChange={event => setCwd(event.target.value)}>
+              <option value="">Runtime default</option>
+              {cwd && !projects.some(project => project.cwd === cwd) && <option value={cwd}>{cwd}</option>}
+              {projects.filter(project => project.cwd).map(project => <option key={project.id} value={project.cwd}>{project.label}</option>)}
+            </select>
+          </label>
+          <button type="button" className="min-h-11 rounded-panel border border-line px-3 text-sm" onClick={props.composer.onFile}>Files</button>
+          <button type="button" className="min-h-11 rounded-panel border border-line px-3 text-sm" onClick={props.composer.onPlugins}>Plugins</button>
+          {props.composer.staged && <button type="button" className="min-h-11 px-2 text-xs" onClick={props.composer.removeFile}>Remove {props.composer.staged.name}</button>}
+          {props.composer.images.map((image, index) => <button type="button" key={index} className="min-h-11 px-2 text-xs" onClick={() => props.composer?.removeImage(index)}>Remove {image.name}</button>)}
+          {props.composer.message && <p className="w-full text-xs text-muted" role="status">{props.composer.message}</p>}
+        </div>}
         <div className="flex flex-wrap items-center gap-2" aria-label="Build planning tools">
-          <button type="button" className="min-h-11 rounded-panel border border-line px-3" disabled={props.halted} onClick={() => { taskField.current?.focus(); window.dispatchEvent(new Event("adrian:handy-mic")); }}>Dictate task</button>
+          {Boolean(props.planningCatalog?.length) && <label className="flex flex-wrap items-center gap-2 text-sm">Planning model
+            <select aria-label="Work planning model" className="min-h-11 max-w-full rounded-panel border border-line bg-transparent px-2" value={planningTier ?? ""} onChange={event => setPlanningTier(event.target.value ? event.target.value as ModelTier : null)}>
+              <option value="">Use shared tier · {props.sharedTier ?? "Heavy"}</option>
+              {props.planningCatalog?.map(row => <option key={row.id} value={row.id} disabled={row.availability === "unavailable"}>{row.id}{row.model ? " · " + row.model : ""}</option>)}
+            </select>
+          </label>}
+          <button type="button" className="min-h-11 rounded-panel border border-line px-3" title={dictationEnabled ? "Dictate into the task" : "Enable dictation in Voice settings"} disabled={props.halted || !dictationEnabled} onClick={() => { taskField.current?.focus(); window.dispatchEvent(new Event("adrian:handy-mic")); }}>Dictate task</button>
           <button type="button" className="min-h-11 rounded-panel border border-line px-3" disabled={props.halted} onClick={props.onOpenSpeak}>Speak and attach images</button>
           <button type="button" className="min-h-11 rounded-panel border border-line px-3" disabled={props.halted || planning || !prompt.trim()} onClick={() => void planWithGrok()}>{planning ? "Working…" : /^\/github(?:\s|$)/i.test(prompt) ? "Run GitHub request" : "Plan with Grok"}</button>
           <button type="button" className="min-h-11 rounded-panel border border-line px-3" disabled={props.halted || planning} onClick={() => void planWithGrok("/github repos", [], true)}>Check GitHub repos</button>
         </div>
+        {!prompt && <div className="flex flex-wrap gap-2" aria-label="Work starters">
+          {[
+            ["Compare local models", "Compare local AI models for this computer. Ask for any missing hardware limits."],
+            ["Prepare a draft run", "Prepare a dry run for this project. List the inputs, steps and expected results before making changes."],
+            ["Review my writing style", "Use the writing samples I attach to identify my style and draft a reusable style guide."],
+          ].map(([label, text]) => <button key={label} type="button" className="min-h-11 rounded-panel border border-line px-3 text-sm" onClick={() => { setPrompt(text); taskField.current?.focus(); }}>{label}</button>)}
+        </div>}
         <details className="rounded-panel border border-line p-3">
           <summary className="cursor-pointer text-sm font-semibold">Workspace and advanced controls</summary>
           <div className="mt-3 flex gap-2"><input value={cwd} onChange={(event) => setCwd(event.target.value)} placeholder="Optional local path, or leave blank for the hosted workspace" className="min-h-11 min-w-0 flex-1 rounded-panel border border-line bg-transparent px-3 text-sm outline-none focus:border-accent" aria-label="Approved workspace path" /><button type="button" disabled={fileBusy} onClick={() => void browseWorkspace()} className="inline-flex min-h-11 items-center gap-2 rounded-panel border border-line px-3 text-sm disabled:opacity-50"><FolderOpen className="size-4" />{fileBusy ? "Loading…" : "Browse"}</button></div>
@@ -967,7 +1037,7 @@ function BuildWorkspaceSession(props: BuildWorkspaceProps) {
       </form>
 
       {notice ? <p className="dense-card text-sm" role="status">{notice}</p> : null}
-      {plan ? <section className="dense-card space-y-2"><h3 className="font-semibold">Build reply{planModel ? ` · ${planModel}` : ""}</h3><pre className="whitespace-pre-wrap text-sm">{plan}</pre></section> : null}
+      {plan ? <section className="dense-card min-w-0 space-y-2" aria-label="Build reply"><h3 className="font-semibold">Build reply{planModel ? ` · ${planModel}` : ""}</h3><div className="build-reading-result text-base">{plan}</div></section> : null}
       {fileNotice ? <p className="dense-card text-sm" role="status">{fileNotice}</p> : null}
 
       {!hasWorkspaceSurface ? <div className="promo-banner text-sm"><ShieldCheck className="size-5 text-accent" aria-hidden="true" /><div><p className="font-semibold">Honest runtime boundary</p><p className="text-muted">This workspace never fabricates agent output. It shows queued, running, permission, error, and completed states from the ACP event stream.</p></div></div> : null}
@@ -991,7 +1061,7 @@ function BuildWorkspaceSession(props: BuildWorkspaceProps) {
             {panel === "browser" ? <div className="space-y-2"><BrowserEnvironments /><p className="text-sm text-muted" role="status">{browserNotice || "The coding browser uses the in-repo package and the saved Grok key. It does not ask for a separate login."}</p>{browserFrame ? <><button type="button" className="min-h-11 rounded-panel border border-line px-3" onClick={() => void closeCodingBrowser()}>Close coding browser</button><iframe title="Coding browser" src={browserFrame} className="h-[32rem] w-full rounded-panel border border-line bg-black" /></> : null}</div> : null}
             {panel === "agent" ? <>
               {buildReceipt ? <details className="rounded-panel border border-line p-3 text-sm"><summary className="cursor-pointer font-semibold">Execution receipt · implementation unverified</summary><p className="mt-2 break-all text-xs text-muted">Operation: {buildReceipt.operationId || "not supplied"}</p><p className="text-xs text-muted">Builder instruction version: {buildReceipt.verification?.builderInstructionDigest || "not reported"}</p><ul className="mt-2 space-y-1">{buildReceipt.verification?.checks.map(check => <li key={check.id}>{check.id.replaceAll("_", " ")}: {check.status.replaceAll("_", " ")}</li>)}{buildReceipt.skillReceipts?.map(receipt => <li key={receipt.skillId}>{receipt.skillId} · version {receipt.version}: {skillReceiptSummary(receipt)}</li>)}{buildReceipt.toolReceipts?.map((receipt, index) => <li key={index}>{receipt.method}{receipt.path ? ` · ${receipt.path}` : ""}: {receipt.status.replaceAll("_", " ")}{receipt.detail ? ` — ${receipt.detail}` : ""}</li>)}</ul><p className="mt-2 text-xs text-muted">{buildReceipt.fileReviewScope}</p>{buildReceipt.fileReviewWarnings?.map((warning, index) => <p key={index} className="text-xs text-warning">{warning}</p>)}<p className="mt-2 text-xs text-muted">Provider statements are not independent test evidence. Review the changed files and run the required checks before accepting the implementation.</p></details> : null}
-              <div className="min-h-32 whitespace-pre-wrap rounded-panel border border-line bg-black/10 p-3 text-sm">{assistantText || job?.output || job?.error || "No active build task. Submit a task to stream agent output here."}</div>
+              <div className="build-reading-result min-h-32 rounded-panel border border-line bg-black/10 p-3 text-base">{assistantText || job?.output || job?.error || "No active build task. Submit a task to stream agent output here."}</div>
               {active ? <button type="button" disabled={job?.status === "cancel_requested"} onClick={() => void cancelBuild()} className="min-h-10 rounded-panel border border-danger/40 px-3 text-sm text-danger">{job?.status === "cancel_requested" ? "Stopping…" : "Stop task"}</button> : null}
               {job?.output ? <button type="button" className="min-h-10 rounded-panel border border-line px-3 text-sm" onClick={() => {
                 const url = URL.createObjectURL(new Blob([JSON.stringify({ job, receipt: buildReceipt }, null, 2)], { type: "application/json" }));

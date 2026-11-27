@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { it } from "node:test";
-import { researchEvidenceFromResponse, searchWithGrok } from "./xai-search.ts";
+import { extractResearchAnswer, researchEvidenceFromResponse, searchWithGrok } from "./xai-search.ts";
 
 it("keeps provider summary and links five explicitly cited spans to their own sources", async () => {
   const claims = Array.from({ length: 5 }, (_, i) => ({ text: `Finding ${i + 1}`, url: `https://example.com/${i + 1}` }));
@@ -15,4 +15,19 @@ it("does not turn unrelated bibliography links or invalid spans into claim verif
   const result = researchEvidenceFromResponse({ output_text: "Unverified conclusion", citations: ["https://example.com"], output: [{ content: [{ text: "Claim", annotations: [{ url: "https://example.com", start_index: -1, end_index: 100 }] }] }] }, [{ title: "Link", url: "https://example.com" }]);
   assert.equal(result.summary, "Unverified conclusion");
   assert.deepEqual(result.claims, []);
+});
+
+
+it("converts provider character offsets and keeps citation markers out of the findings", () => {
+  const text = "🌍 First claim [1](https://docs.example/)";
+  const url = "https://docs.example";
+  const response = { output: [{ content: [{ text, annotations: [
+    { url, start_index: 2, end_index: 13 },
+    { url, start_index: 14, end_index: [...text].length },
+  ] }] }] };
+  const answer = extractResearchAnswer(response);
+  const marker = answer.annotations[1]!;
+  assert.equal(text.slice(marker.start!, marker.end!), "[1](https://docs.example/)");
+  const evidence = researchEvidenceFromResponse(response, [{ title: "Docs", url: url + "/" }]);
+  assert.deepEqual(evidence.claims, [{ text: "First claim", sourceUrls: [url + "/"], kind: "provider-cited" }]);
 });

@@ -7505,3 +7505,5 @@ html[data-theme="light"] .shell[data-view="help"] .page-shell button.text-left.m
     text-align: center;
   }
 }
+
+nav[aria-label="Settings sections"] > .intelligence-group ~ .settings-search-empty { display: none; }

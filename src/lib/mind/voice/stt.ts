@@ -13,6 +13,7 @@ export async function transcribeWavBytes(input: {
   bytes: Uint8Array;
   apiKey: string;
   filename?: string;
+  language?: string;
   mime?: string;
   fetchImpl?: typeof fetch;
   timeoutMs?: number;
@@ -28,6 +29,7 @@ export async function transcribeWavBytes(input: {
   const copy = new Uint8Array(input.bytes);
   form.append("file", new Blob([copy], { type: mime }), filename);
   form.append("model", STT_MODEL);
+  if (input.language) form.append("language", input.language);
   let response: Response;
   try {
     response = await fetchImpl(STT_URL, {

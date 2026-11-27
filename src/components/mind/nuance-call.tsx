@@ -98,33 +98,38 @@ export function NuanceCallCard(props: { halted: boolean }) {
   const [status, setStatus] = useState("Checking the saved key.");
   const [mic, setMic] = useState("Microphone is off.");
   const [muted, setMuted] = useState(false);
+  const [changingMic, setChangingMic] = useState(false);
   const [live, setLive] = useState(false);
   const [transcript, setTranscript] = useState("");
 
   async function releaseServerCall(id: string) {
-    await fetch("/api/mind/nuance/session", {
+    return fetch("/api/mind/nuance/session", {
       method: "POST",
       credentials: "same-origin",
       headers: callHeaders(),
       body: JSON.stringify({ action: "end", id }),
-    }).catch(() => undefined);
+    }).then((response) => response.ok).catch(() => false);
   }
 
   async function hangUp() {
-    generation.current++;
+    const closing = ++generation.current;
     const current = conversationRef.current;
     conversationRef.current = null;
     mintOnce.current = false;
     tokenIssued.current = false;
     setLive(false);
     setMuted(false);
+    setChangingMic(false);
     setMic("Microphone is off.");
     if (current) {
+      setStatus("Ending the video call…");
+      let ended = true;
       try {
         await current.disconnect();
       } catch {
-        if (current.id) await releaseServerCall(current.id);
+        ended = !!current.id && await releaseServerCall(current.id);
       }
+      if (generation.current === closing) setStatus(ended ? "The video call ended." : "The connection closed. The provider could not confirm the call ended.");
     }
   }
 
@@ -187,16 +192,20 @@ export function NuanceCallCard(props: { halted: boolean }) {
 
   async function toggleMute() {
     const current = conversationRef.current;
-    if (!current) return;
-    if (muted) {
-      await current.user.unmuteAudio();
-      setMuted(false);
-      setMic("Microphone is live.");
-      return;
+    if (!current || changingMic) return;
+    setChangingMic(true);
+    const desired = !muted;
+    try {
+      if (desired) await current.user.muteAudio();
+      else await current.user.unmuteAudio();
+      if (conversationRef.current !== current) return;
+      setMuted(desired);
+      setMic(desired ? "Microphone is muted." : "Microphone is live.");
+    } catch {
+      if (conversationRef.current === current) setMic("Microphone change could not be confirmed. Try again or hang up.");
+    } finally {
+      if (conversationRef.current === current) setChangingMic(false);
     }
-    await current.user.muteAudio();
-    setMuted(true);
-    setMic("Microphone is muted.");
   }
 
   async function start() {
@@ -240,6 +249,7 @@ export function NuanceCallCard(props: { halted: boolean }) {
           if (!response.ok || typeof data.token !== "string") {
             throw new Error(data.error || "The video call could not start. Nothing was started.");
           }
+          if (attempt !== generation.current) throw new Error("The call was canceled.");
           return data.token;
         },
         mediaDevices: {
@@ -261,7 +271,10 @@ export function NuanceCallCard(props: { halted: boolean }) {
         if (event.type === "tracks-changed" && video && audio) {
           conversation.avatar.videoTrack?.attach(video);
           conversation.avatar.audioTrack?.attach(audio);
-          if (conversation.user.audioTrack) setMic(conversation.user.isMuted ? "Microphone is muted." : "Microphone is live.");
+          if (conversation.user.audioTrack) {
+            setMuted(!!conversation.user.isMuted);
+            setMic(conversation.user.isMuted ? "Microphone is muted." : "Microphone is live.");
+          }
         }
         if (event.type === "avatar-presented") {
           setStatus(`${choice.name} is on the call. ${choice.name} is an AI.`);
@@ -278,6 +291,8 @@ export function NuanceCallCard(props: { halted: boolean }) {
           tokenIssued.current = false;
           setLive(false);
           setMic("Microphone is off.");
+          setChangingMic(false);
+          setMuted(false);
           setStatus("The video call ended.");
         }
       });
@@ -317,7 +332,7 @@ export function NuanceCallCard(props: { halted: boolean }) {
       <div className="mt-3 flex flex-wrap gap-2">
         {live ? (
           <>
-            <button type="button" className="min-h-11 rounded-panel border border-line px-4 text-sm" data-testid="nuance-mute" onClick={() => void toggleMute()}>{muted ? "Unmute microphone" : "Mute microphone"}</button>
+            <button type="button" className="min-h-11 rounded-panel border border-line px-4 text-sm" data-testid="nuance-mute" disabled={changingMic} aria-pressed={muted} onClick={() => void toggleMute()}>{muted ? "Unmute microphone" : "Mute microphone"}</button>
             <button type="button" className="min-h-11 rounded-panel border border-line px-4 text-sm" data-testid="nuance-hangup" onClick={() => void hangUp()}>Hang up</button>
           </>
         ) : (

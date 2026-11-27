@@ -43,7 +43,7 @@ export type FetchLike = (url: string, init?: RequestInit) => Promise<{
   text: () => Promise<string>;
 }>;
 
-export type TokenAuthStyle = "basic" | "body" | "basic_and_body";
+export type TokenAuthStyle = "basic" | "body" | "basic_and_body" | "public";
 export type RevokeStyle = "none" | "notion_basic" | "form_token" | "github_basic" | "slack_auth_revoke";
 
 export type OAuthProviderEnv = {
@@ -83,6 +83,7 @@ export type OAuthProvider = {
   scopes: string[];
   pkce: boolean;
   tokenAuth: TokenAuthStyle;
+  resource?: string;
   revokeStyle: RevokeStyle;
   /** Extra authorize query params (e.g. Notion owner=user, Google access_type) */
   authorizeExtra?: Record<string, string>;
@@ -93,8 +94,8 @@ export type OAuthProvider = {
   notConfiguredDetail?: string;
 };
 
-export function providerConfigured(env: OAuthProviderEnv): boolean {
-  return Boolean(env.clientId && env.clientSecret && env.redirectUri);
+export function providerConfigured(env: OAuthProviderEnv, tokenAuth?: TokenAuthStyle): boolean {
+  return Boolean(env.clientId && (tokenAuth === "public" || env.clientSecret) && env.redirectUri);
 }
 
 function prepareAuthorizeUrl(
@@ -103,7 +104,7 @@ function prepareAuthorizeUrl(
 ): { ok: true; url: string; state: string; pending: PendingOAuth } | { ok: false; error: string } {
   const env = input.env ?? provider.readEnv();
   const name = provider.displayName;
-  if (!providerConfigured(env) || !env.clientId || !env.redirectUri || !env.authorizeUrl) {
+  if (!providerConfigured(env, provider.tokenAuth) || !env.clientId || !env.redirectUri || !env.authorizeUrl) {
     return {
       ok: false,
       error:
@@ -138,6 +139,7 @@ function prepareAuthorizeUrl(
   url.searchParams.set("response_type", "code");
   url.searchParams.set("redirect_uri", env.redirectUri);
   url.searchParams.set("state", state);
+  if (provider.resource) url.searchParams.set("resource", provider.resource);
   if (provider.scopes.length) {
     url.searchParams.set("scope", provider.scopes.join(" "));
   }
@@ -186,7 +188,7 @@ export async function exchangeAuthorizationCode(
 ): Promise<{ ok: true; public: ConnectionPublic } | { ok: false; error: string }> {
   const env = input.env ?? provider.readEnv();
   const name = provider.displayName;
-  if (!providerConfigured(env) || !env.clientId || !env.clientSecret || !env.tokenUrl) {
+  if (!providerConfigured(env, provider.tokenAuth) || !env.clientId || !env.tokenUrl) {
     return { ok: false, error: `${name} OAuth is not configured. Nothing was stored.` };
   }
   // Reject open-looking redirect_uri: pending.redirectUri must equal configured env redirect.
@@ -220,7 +222,9 @@ export async function exchangeAuthorizationCode(
   if (provider.tokenAuth === "basic" || provider.tokenAuth === "basic_and_body") {
     headers.Authorization = `Basic ${Buffer.from(`${env.clientId}:${env.clientSecret}`).toString("base64")}`;
   }
-  if (provider.tokenAuth === "body" || provider.tokenAuth === "basic_and_body") {
+  if (provider.resource) body.set("resource", provider.resource);
+  if (provider.tokenAuth === "public") body.set("client_id", env.clientId);
+  if ((provider.tokenAuth === "body" || provider.tokenAuth === "basic_and_body") && env.clientSecret) {
     body.set("client_id", env.clientId);
     body.set("client_secret", env.clientSecret);
   }
@@ -279,7 +283,7 @@ export function connectionStatus(
   env?: OAuthProviderEnv,
 ): ConnectionPublic {
   const cfg = env ?? provider.readEnv();
-  return withOAuthRecovery(toPublic(provider.id, readConnection(ownerId, provider.id), providerConfigured(cfg)), readLocalOAuthRecovery(ownerId, provider.id));
+  return withOAuthRecovery(toPublic(provider.id, readConnection(ownerId, provider.id), providerConfigured(cfg, provider.tokenAuth)), readLocalOAuthRecovery(ownerId, provider.id));
 }
 
 /** Production status reads persisted connection rows across serverless instances. */
@@ -296,7 +300,7 @@ export async function connectionStatusPersistent(
     && (provider.id === "gmail" || provider.id === "google_calendar" || provider.id === "google_drive" || provider.id === "youtube")
     ? await labelFromGoogle(ownerId, provider.id, conn)
     : conn;
-  return withOAuthRecovery(toPublic(provider.id, labeled, providerConfigured(cfg)), await readOAuthRecovery(ownerId, provider.id));
+  return withOAuthRecovery(toPublic(provider.id, labeled, providerConfigured(cfg, provider.tokenAuth)), await readOAuthRecovery(ownerId, provider.id));
 }
 /** Testable enrichment boundary: use one snapshot and reread after any asynchronous lookup. */
 export async function labelFromGoogle(ownerId: string, connector: ConnectorId, conn: NonNullable<Awaited<ReturnType<typeof readDurableConnection>>>, deps: {
@@ -342,7 +346,7 @@ export async function disconnectProvider(
         response = await fetchImpl(env.revokeUrl, {
           method: "POST",
           headers: { "Content-Type": "application/x-www-form-urlencoded" },
-          body: new URLSearchParams({ token }),
+          body: new URLSearchParams(provider.tokenAuth === "public" && env.clientId ? { token, client_id: env.clientId } : { token }),
         });
       } else if (provider.revokeStyle === "slack_auth_revoke") {
         response = await fetchImpl(env.revokeUrl, {
@@ -384,7 +388,7 @@ export async function disconnectProvider(
       });
     } catch { revokeDetail = `${revokeDetail ?? "Local access was removed."} The final revocation record could not be saved; the pending recovery record remains.`; }
   }
-  const pub = withOAuthRecovery(toPublic(provider.id, null, providerConfigured(env)), await readOAuthRecovery(input.ownerId, provider.id).catch(() => null));
+  const pub = withOAuthRecovery(toPublic(provider.id, null, providerConfigured(env, provider.tokenAuth)), await readOAuthRecovery(input.ownerId, provider.id).catch(() => null));
   const detail =
     revokeDetail && !pub.recovery
       ? `${pub.detail} ${revokeDetail}`

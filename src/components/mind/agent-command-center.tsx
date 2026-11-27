@@ -64,19 +64,17 @@ function AgentRow({ bot, onSelect }: { bot: BotNode; onSelect: (bot: BotNode) =>
 }
 
 export function AgentCommandCenter() {
-  // Keep the live fleet graph visible on first load. Account connections and
-  // operational health remain above it, but the primary dashboard must not be
-  // hidden behind an undiscoverable disclosure control.
   const [operations, setOperations] = useState(true);
   return <div className="h-full overflow-y-auto bg-bg text-fg">
-    <OwnerDashboard />
-    <OperationalHealthCenter />
-    <div className="mx-auto max-w-5xl px-4 pb-4 md:px-6">
+    <div className="mx-auto flex max-w-[1500px] items-center justify-between gap-4 px-4 py-4 md:px-6">
+      <h1 className="font-display text-3xl font-bold">Dashboard</h1>
       <button type="button" className="min-h-11 rounded-panel border border-line px-3" aria-expanded={operations} onClick={() => setOperations((open) => !open)}>
-        {operations ? "Hide development activity" : "View public development activity"}
+        {operations ? "Hide fleet activity" : "Show fleet activity"}
       </button>
     </div>
     {operations && <PublicOperations />}
+    <OwnerDashboard />
+    <OperationalHealthCenter />
   </div>;
 }
 
@@ -127,7 +125,7 @@ function PublicOperations() {
         </header>
         <div className="mx-auto max-w-[1500px] space-y-6 px-4 py-6 sm:px-7 sm:py-8">
           <nav className="flex gap-1 overflow-x-auto pb-1 lg:hidden">{sections.map(({id,icon:Icon})=><button key={id} onClick={()=>setSection(id)} className={`flex shrink-0 items-center gap-2 rounded-lg px-3 py-2 text-xs ${section===id ? "bg-white/10 text-white" : "text-slate-400"}`}><Icon size={14}/>{id}</button>)}<button onClick={()=>setSection("3D Map")} className="shrink-0 rounded-lg px-3 py-2 text-xs text-slate-400">3D map</button></nav>
-          <div className="flex flex-wrap items-end justify-between gap-4"><div><div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-[.18em] text-violet-300"><span className="h-1.5 w-1.5 rounded-full bg-violet-400"/> AI AGENT OPERATIONS</div><h1 className="mt-2 text-2xl font-semibold tracking-tight text-white sm:text-3xl">{section === "Overview" ? "Your agent fleet, at a glance." : section === "Agents" ? "Development lanes" : section === "Runs" ? "Development history" : section === "Tasks" ? "Task queue" : section === "3D Map" ? "3D fleet map" : "System activity"}</h1><p className="mt-2 max-w-2xl text-sm text-slate-400">{section === "Overview" ? "Review development locks, branches, and repository activity." : "Development activity does not verify production service readiness. Your operational health is shown above."}</p></div><div className="text-right text-xs text-slate-500">{data ? `${stale ? "Last good update" : "Last updated"} ${timeLabel(data.generatedAt)}` : telemetryLabel}</div></div>
+          <div className="flex flex-wrap items-end justify-between gap-4"><div><div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-[.18em] text-violet-300"><span className="h-1.5 w-1.5 rounded-full bg-violet-400"/> AI AGENT OPERATIONS</div><h1 className="mt-2 text-2xl font-semibold tracking-tight text-white sm:text-3xl">{section === "Overview" ? "Your agent fleet, at a glance." : section === "Agents" ? "Development lanes" : section === "Runs" ? "Development history" : section === "Tasks" ? "Task queue" : section === "3D Map" ? "3D fleet map" : "System activity"}</h1><p className="mt-2 max-w-2xl text-sm text-slate-400">{section === "Overview" ? "Review development locks, branches, and repository activity." : "Development activity does not verify production service readiness. See operational health below for service status."}</p></div><div className="text-right text-xs text-slate-500">{data ? `${stale ? "Last good update" : "Last updated"} ${timeLabel(data.generatedAt)}` : telemetryLabel}</div></div>
           {state.status === "error" && <div role="alert" className="rounded-xl border border-rose-400/20 bg-rose-400/[0.06] px-4 py-3 text-sm text-rose-200">Dashboard data unavailable. <button type="button" onClick={() => void refresh()} className="ml-2 min-h-11 underline">Retry telemetry</button></div>}
           {state.status === "loading" && !data && <div className="rounded-2xl border border-white/[0.08] bg-[#111a27] p-8 text-sm text-slate-400">Loading development telemetry…</div>}
           {data && <>

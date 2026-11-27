@@ -2,7 +2,7 @@
 
 This checked-in inventory covers every direct route handler and exported TanStack server function discovered from TypeScript AST. A new route, HTTP method, RPC export, removed guard marker or undocumented public exception fails the normal test runner. Guard-source checks establish code reachability contracts; they do not substitute for live penetration testing or prove that a browser/provider/device was exercised.
 
-81 routes · 118 HTTP method contracts · 64 RPC exports.
+81 routes · 118 HTTP method contracts · 65 RPC exports.
 
 ## Shared policies
 
@@ -120,6 +120,7 @@ This checked-in inventory covers every direct route handler and exported TanStac
 | `src/lib/mind/custom-connection-fns.ts#refreshCustomConnectionFn` | POST | owner_rpc | Refreshes the signed-in owner’s connection while honoring the stop state. |
 | `src/lib/mind/custom-connection-fns.ts#saveCustomConnectionFn` | POST | owner_rpc | Verified owner and isolation via authMiddleware; handler scopes records/dispatch by context.userId. |
 | `src/lib/mind/dashboard/owner-connections.ts#ownerConnections` | POST | owner_rpc | Verified owner and isolation via authMiddleware; handler scopes records/dispatch by context.userId. |
+| `src/lib/mind/dashboard/owner-connections.ts#ownerNotionGraph` | POST | owner_rpc | The verified owner supplies the active workspace grant. Shared demo users are rejected and the public dashboard never receives this response. |
 | `src/lib/mind/dashboard/require-dashboard-user.ts#requireDashboardUser` | GET | session_probe | Verified actual session and configured owner gate; signed-out redirects, disallowed owner returns forbidden. |
 | `src/lib/mind/notion-workspaces.ts#listNotionWorkspaces` | GET | owner_rpc | Verified owner and isolation via authMiddleware; handler scopes records/dispatch by context.userId. |
 | `src/lib/mind/notion-workspaces.ts#selectNotionWorkspace` | POST | owner_rpc | Verified owner and isolation via authMiddleware; handler scopes records/dispatch by context.userId. |

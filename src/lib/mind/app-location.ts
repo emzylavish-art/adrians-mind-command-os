@@ -14,7 +14,7 @@ export type ShareWrite = {
   bot: string | null;
 };
 
-export const SETTINGS_PANES = ["general", "connections", "voice", "pages", "data", "safety", "keys", "browser", "personalization"] as const;
+export const SETTINGS_PANES = ["general", "connections", "voice", "pages", "data", "safety", "keys", "browser", "keyboard", "bits", "archived", "storage", "profile", "personalization"] as const;
 export type SettingsPane = (typeof SETTINGS_PANES)[number];
 export function settingsPaneFromSearch(search: string): SettingsPane | null {
   const params = paramsFrom(search);

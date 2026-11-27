@@ -395,11 +395,16 @@ export async function refreshMcp(db: ConnectionDb | null, userId: string, id: st
   const publish = async (next: RegistryRecord, discoveryStatus?: CallStatus) => await publishDiscovery(db, userId, row, next) ? { ...toPublic(next)!, ...(discoveryStatus ? { discoveryStatus } : {}) }
     : { ...toPublic(row)!, state: "failed" as const, operations: [], error: "The connection changed during discovery. Refresh its current state." };
   const fail = (state: ConnectionState, error: string, status?: CallStatus) => publish({ ...row, state, error }, status);
+  const credential = row.id.startsWith("oauth-vercel-")
+    ? await (await import("./connectors/vercel-mcp.ts")).vercelMcpCredential(userId, row)
+    : { ok: true as const, token: row.token ?? "" };
+  if (!credential.ok) return fail("unauthorized", credential.error, "unauthorized");
+  const token = credential.token;
   const opened = await send(row.url, {
     method: "POST",
-    headers: { "content-type": "application/json", accept: "application/json, text/event-stream", ...(row.token ? { authorization: `Bearer ${row.token}` } : {}) },
+    headers: { "content-type": "application/json", accept: "application/json, text/event-stream", ...(token ? { authorization: `Bearer ${token}` } : {}) },
     body: JSON.stringify({ jsonrpc: "2.0", id: 1, method: "initialize", params: { protocolVersion: "2024-11-05", capabilities: {}, clientInfo: { name: "adrians-mind", version: "1" } } }),
-  }, deps, row.token ?? "");
+  }, deps, token);
   if (!opened.ok) return fail(opened.status === "unauthorized" ? "unauthorized" : "failed", opened.error, opened.status);
   if (!initialized(opened.text) && !opened.sessionId) return fail("failed", "The MCP initialize handshake failed. The connection is not connected.");
   const meta = rpcEnvelope(opened.text).result;
@@ -413,9 +418,9 @@ export async function refreshMcp(db: ConnectionDb | null, userId: string, id: st
   if (opened.sessionId) {
     const notified = await send(row.url, {
       method: "POST",
-      headers: { "content-type": "application/json", ...protocolHeaders, ...(row.token ? { authorization: `Bearer ${row.token}` } : {}) },
+      headers: { "content-type": "application/json", ...protocolHeaders, ...(token ? { authorization: `Bearer ${token}` } : {}) },
       body: JSON.stringify({ jsonrpc: "2.0", method: "notifications/initialized" }),
-    }, deps, row.token ?? "");
+    }, deps, token);
     if (!notified.ok) return fail("failed", notified.error, notified.status);
   }
   const operations: PublicOperation[] = [];
@@ -424,9 +429,9 @@ export async function refreshMcp(db: ConnectionDb | null, userId: string, id: st
   do {
     const listed = await send(row.url, {
       method: "POST",
-      headers: { "content-type": "application/json", accept: "application/json, text/event-stream", ...protocolHeaders, ...(row.token ? { authorization: `Bearer ${row.token}` } : {}) },
+      headers: { "content-type": "application/json", accept: "application/json, text/event-stream", ...protocolHeaders, ...(token ? { authorization: `Bearer ${token}` } : {}) },
       body: JSON.stringify({ jsonrpc: "2.0", id: 2 + cursors.size, method: "tools/list", params: cursor ? { cursor } : {} }),
-    }, deps, row.token ?? "");
+    }, deps, token);
     if (!listed.ok) return fail(listed.status === "unauthorized" ? "unauthorized" : "failed", listed.error, listed.status);
     const data = rpcEnvelope(listed.text).result as { tools?: Parameters<typeof operationFromTool>[0][]; nextCursor?: unknown } | undefined;
     if (!Array.isArray(data?.tools)) return fail("failed", "Tool discovery returned an unreadable page.");
@@ -487,8 +492,12 @@ export async function callCustomConnection(input: {
   }
   const checked = validateArgs(operation.inputSchema, input.args ?? {});
   if (!checked.ok) return { ok: false, status: "incompatible", text: checked.error, connection, transport: null, rpc: null };
-  const headers: Record<string, string> = { accept: "application/json", ...(row.token ? { authorization: `Bearer ${row.token}` } : {}) };
-  const token = row.token ?? "";
+  const credential = row.id.startsWith("oauth-vercel-")
+    ? await (await import("./connectors/vercel-mcp.ts")).vercelMcpCredential(input.userId, row)
+    : { ok: true as const, token: row.token ?? "" };
+  if (!credential.ok) return { ok: false, status: "unauthorized", text: credential.error, connection, transport: null, rpc: null };
+  const token = credential.token;
+  const headers: Record<string, string> = { accept: "application/json", ...(token ? { authorization: `Bearer ${token}` } : {}) };
   async function recordAccess(state: "ready" | "unauthorized", error: string) {
     if (!row || row.state === state) return;
     if (input.db) {

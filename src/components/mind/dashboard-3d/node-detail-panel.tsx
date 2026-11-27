@@ -187,7 +187,7 @@ export function NodeDetailPanel({
 
         {notionPage ? (
           <>
-            <h2 style={{ marginTop: bot ? "1.25rem" : 0 }}>Notion page</h2>
+            <h2 style={{ marginTop: bot ? "1.25rem" : 0 }}>{notionPage.kind.includes("agent") ? "Notion AI agent" : "Notion page"}</h2>
             <p className="dash3d-title">{notionPage.title || NO_SOURCE}</p>
             <p className="dash3d-muted" style={{ fontSize: "0.78rem" }}>
               {notionPage.excerpt || NO_SOURCE}
@@ -202,16 +202,16 @@ export function NodeDetailPanel({
               {notionNeighbors && notionNeighbors.length ? (
                 notionNeighbors.map((n) => (
                   <li key={n.id}>
-                    <a className="dash3d-pill" href={n.url} target="_blank" rel="noreferrer">
+                    {n.url ? <a className="dash3d-pill" href={n.url} target="_blank" rel="noreferrer">
                       {n.title || n.id}
-                    </a>
+                    </a> : <span>{n.title}</span>}
                   </li>
                 ))
               ) : (
                 <li className="dash3d-muted">{NO_SOURCE}</li>
               )}
             </ul>
-            <a
+            {notionPage.url && <a
               className="dash3d-pill"
               href={notionPage.url}
               target="_blank"
@@ -219,7 +219,7 @@ export function NodeDetailPanel({
               style={{ marginTop: "0.5rem", display: "inline-flex" }}
             >
               Open in Notion
-            </a>
+            </a>}
           </>
         ) : null}
       </div>

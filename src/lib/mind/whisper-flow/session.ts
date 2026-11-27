@@ -51,6 +51,9 @@ export type WhisperSessionHandlers = {
   llmRefineEnabled?: boolean;
   transcribe?: TranscribeFn;
   speechCtor?: () => BrowserSpeechCtor | null;
+  language?: () => string;
+  formatTranscript?: (raw: string) => string;
+  canInsert?: () => boolean;
   getUserMedia?: (c: MediaStreamConstraints) => Promise<MediaStream>;
 };
 
@@ -151,7 +154,8 @@ export function createWhisperSession(handlers: WhisperSessionHandlers): WhisperS
   };
 
   const commitSegment = (raw: string) => {
-    const result = applyCommandsAndRefine(raw, { addPunctuation: true });
+    if (handlers.canInsert && !handlers.canInsert()) return;
+    const result = applyCommandsAndRefine(handlers.formatTranscript?.(raw) ?? raw, { addPunctuation: true });
 
     for (const cmd of result.commands) {
       if (cmd.kind === "pause") {
@@ -293,7 +297,7 @@ export function createWhisperSession(handlers: WhisperSessionHandlers): WhisperS
     paused = false;
     finalBuffer = "";
     const recognition = new Ctor();
-    recognition.lang = "en-US";
+    recognition.lang = handlers.language?.() || "en-US";
     recognition.continuous = true;
     recognition.interimResults = true;
     recognition.onresult = (event) => {

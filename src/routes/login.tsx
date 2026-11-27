@@ -19,6 +19,7 @@ import {
   type LoginCallbackFailureKind,
   type LoginProviderId,
 } from "@/lib/auth/login-providers";
+import { useCurrentUserState } from "@/lib/auth/use-current-user";
 import { SignInGuide } from "@/components/mind/first-steps";
 
 const LazyMonoMotion = lazy(() =>
@@ -44,7 +45,7 @@ export const Route = createFileRoute("/login")({
       return { checkFailed: true as const, configured: false, user: null, brokerConfigured: false, supabaseOAuthProviders: [] };
     }
   },
-  component: Login,
+  component: LoginEntry,
 });
 
 type Mode = "sign-in" | "sign-up";
@@ -177,6 +178,30 @@ const oauthButtons: {
   { id: "apple", label: "Continue with Apple", icon: AppleIcon },
   { id: "x", label: "Continue with X", icon: XIcon },
 ];
+
+function LoginEntry() {
+  const session = useCurrentUserState();
+  const search = Route.useSearch();
+  const data = Route.useLoaderData();
+  const destination = safeRedirectPath(search.next);
+  const next = /^\/(?:login|auth)(?:[/?#]|$)/.test(destination) ? "/dashboard" : destination;
+  const authenticated = authEnabled ? Boolean(session.user && !session.user.isDevFallback) : Boolean(data.user);
+  useEffect(() => {
+    if (authenticated && !search.error) window.location.replace(next);
+  }, [authenticated, next, search.error]);
+
+  if (session.isPending || authenticated || session.error) {
+    return <main className="grid min-h-screen place-items-center bg-bg p-4"><AuthCard>
+      {session.error ? <><p role="alert">{session.error}</p>
+        <button className="min-h-11 underline" type="button" onClick={session.retry}>Retry account check</button>
+        <a href="/dashboard" className="block min-h-11 underline">Open account recovery</a></> :
+        authenticated ? <><AuthBrand title="Signed in" subtitle={search.error ? loginErrorBannerFromSearch(search.error) ?? "Your existing session is active." : "Opening your workspace…"} />
+          <a className="mt-3 block min-h-11 underline" href={next}>Continue to workspace</a></> :
+          <p role="status">Checking your account…</p>}
+    </AuthCard></main>;
+  }
+  return <Login />;
+}
 
 function Login() {
   const data = Route.useLoaderData();

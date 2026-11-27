@@ -5,14 +5,14 @@ import { sanitizeImaginePrompt } from "./harden.ts";
 /** Default Grok Imagine model (listed by GET /v1/image-generation-models). */
 export const GROK_IMAGINE_MODEL = "grok-imagine-image";
 
-/** Listed by GET /v1/image-generation-models (live 2026-11-01). */
-export const GROK_IMAGINE_QUALITY_MODEL = "grok-imagine-image-quality";
+/** xAI migrated the retired quality alias to Imagine 2.0 at low quality. */
+export const GROK_IMAGINE_QUALITY_MODEL = "grok-imagine-image-2.0";
 
 export const GROK_IMAGINE_MODELS = [GROK_IMAGINE_MODEL, GROK_IMAGINE_QUALITY_MODEL] as const;
 export type GrokImagineModel = (typeof GROK_IMAGINE_MODELS)[number];
 
 export function resolveImagineModel(value: unknown): GrokImagineModel {
-  return value === GROK_IMAGINE_QUALITY_MODEL ? GROK_IMAGINE_QUALITY_MODEL : GROK_IMAGINE_MODEL;
+  return value === GROK_IMAGINE_QUALITY_MODEL || value === "grok-imagine-image-quality" ? GROK_IMAGINE_QUALITY_MODEL : GROK_IMAGINE_MODEL;
 }
 
 export const XAI_IMAGES_GENERATIONS_URL = "https://api.x.ai/v1/images/generations";

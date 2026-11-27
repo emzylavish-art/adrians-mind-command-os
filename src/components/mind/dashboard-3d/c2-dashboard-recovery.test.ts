@@ -48,6 +48,7 @@ function dashboardFixture() {
   const modules: Record<string, any> = {
     react,
     "react/jsx-runtime": { jsx: (type: unknown, props: any) => ({ type, props }), jsxs: (type: unknown, props: any) => ({ type, props }), Fragment: "Fragment" },
+    "./use-workspace-graph": { useWorkspaceGraph: () => ({ scope: null, graph: null, summary: "", refresh() {} }) },
     "./use-dashboard-status": { useDashboardStatus: () => ({ state: { status: "ready", data }, refresh() {} }) },
     "./mobile-structure": { MobileChrome: "MobileChrome", MobilePanelCard: "MobilePanelCard", useMobilePanelFocus: () => ({ focused, setFocused(value: string | null) { focused = value; }, clear() { focused = null; } }) },
     "./operator-console": { OperatorConsole: "OperatorConsole", loadInitialOperatorPrefs: () => ({ layers: { sound: false, labels: true, charts: false, feed: true, time: true }, healthFilter: "all" }), useOperatorHotkey() {}, persistOperatorPrefs() {} },
@@ -181,7 +182,7 @@ test("C2 AA009: graph recovery initializes from the current filter without an ev
     highlighted: { current: new Set() }, hoverId: { current: null }, allowRef: { current: null },
     filterBotIds, sanitizeLabelText: (value: string) => value,
     document: new EventTarget(), window: { innerWidth: 800, innerHeight: 600 }, ResizeObserver: class { observe() {} disconnect() {} },
-    importGraph: async () => ({ default: () => () => { if (fail) throw new Error("Synthetic WebGL rejection"); return graph; } }),
+    importGraph: async () => ({ default: function Graph() { if (fail) throw new Error("Synthetic WebGL rejection"); return graph; } }),
   };
   runInNewContext(stripTypeScriptTypes(`${helpers}\nfunction mountEffect() {${effect}\n}\nglobalThis.cleanup = mountEffect();`), state);
   await new Promise((resolve) => setImmediate(resolve));

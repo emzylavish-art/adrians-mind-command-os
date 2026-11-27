@@ -5,17 +5,23 @@ import {
   fieldLabel,
   handyBarHeight,
   handyLiveLevels,
-  insertTranscript,
   isTypingField,
 } from "@/lib/mind/handy-dictation";
 import { createWhisperSession, type WhisperSession, type BrowserSpeechCtor } from "@/lib/mind/whisper-flow/session";
 import { SOKUJI_SOURCE, TRANSLATOR_TARGETS, translateVoice } from "@/lib/mind/voice-translator";
 import { readVoiceRoutePreferences } from "@/lib/mind/voice/route-preferences";
+import { useAccountPreferences } from "./account-preferences-context";
+import { readVoicePreferences, formatDictation, recordDictation } from "@/lib/mind/voice-preferences";
 import { finishDictation } from "@/lib/mind/system-dictation";
 
 type Phase = "idle" | "speak" | "saved";
 
 export function HandyDictation({ freeOnly = false, ownerId }: { freeOnly?: boolean; ownerId?: string | null }) {
+  const storage = useAccountPreferences();
+  const storageRef = useRef(storage);
+  storageRef.current = storage;
+  const destination = useRef<{ field: HTMLTextAreaElement | HTMLInputElement; owner: typeof ownerId } | null>(null);
+  const [interim, setInterim] = useState("");
   const currentOwner = useRef(ownerId);
   currentOwner.current = ownerId;
   const currentFreeOnly = useRef(freeOnly);
@@ -64,7 +70,16 @@ export function HandyDictation({ freeOnly = false, ownerId }: { freeOnly?: boole
     };
   }, []);
 
-  useEffect(() => { session.current?.cancel(); session.current = null; setPhase("idle"); setEngine(""); }, [ownerId]);
+  useEffect(() => { session.current?.cancel(); session.current = null; destination.current = null; field.current = null; setInterim(""); setPhase("idle"); setEngine(""); }, [ownerId]);
+  useEffect(() => {
+    const changed = () => {
+      const prefs = readVoicePreferences(storage);
+      if (!prefs.live) setInterim("");
+      if (!prefs.enabled) { session.current?.cancel(); destination.current = null; setPhase("idle"); }
+    };
+    window.addEventListener("adrian-dictation-preferences", changed);
+    return () => window.removeEventListener("adrian-dictation-preferences", changed);
+  }, [storage]);
 
   useEffect(() => {
     if (phase !== "speak") setLevels(Array.from({ length: 9 }, () => 0.08));
@@ -73,7 +88,12 @@ export function HandyDictation({ freeOnly = false, ownerId }: { freeOnly?: boole
   function liveSession() {
     if (session.current) return session.current;
     session.current = createWhisperSession({
+      language: () => readVoicePreferences(storageRef.current).language || navigator.language,
+      formatTranscript: raw => formatDictation(raw, readVoicePreferences(storageRef.current).dictionary),
+      canInsert: () => Boolean(destination.current?.field.isConnected && destination.current.owner === currentOwner.current && readVoicePreferences(storageRef.current).enabled),
+      onInterim: text => { if (readVoicePreferences(storageRef.current).live) setInterim(text); },
       speechCtor: () => {
+        if (readVoiceRoutePreferences(window.localStorage, currentOwner.current).sttProvider !== "browser") return null;
         const host = window as Window & {
           SpeechRecognition?: BrowserSpeechCtor;
           webkitSpeechRecognition?: BrowserSpeechCtor;
@@ -87,11 +107,11 @@ export function HandyDictation({ freeOnly = false, ownerId }: { freeOnly?: boole
         if (next.error) setNote(next.error);
       },
       onInserted: (text) => {
-        const current = field.current;
-        if (!current || !text.trim()) return;
-        current.focus();
-        insertTranscript(current, text);
-        setNote(`Words are in ${fieldLabel(current)}. Press Send yourself. Speak was not opened.`);
+        const target = destination.current;
+        if (!target?.field.isConnected || target.owner !== currentOwner.current || !text.trim()) return;
+        setInterim("");
+        recordDictation(storageRef.current, text);
+        setNote(`Words inserted in ${fieldLabel(target.field)}.`);
       },
       transcribe: async (input) => {
         if (currentFreeOnly.current) return { ok: false, error: "Free-only mode keeps cloud transcription off." };
@@ -104,6 +124,7 @@ export function HandyDictation({ freeOnly = false, ownerId }: { freeOnly?: boole
           body: JSON.stringify({
             audioBase64: input.audioBase64, freeOnly: currentFreeOnly.current,
             provider: route.sttProvider, fallbackProvider: route.sttFallbackProvider,
+            language: readVoicePreferences(storageRef.current).language || navigator.language,
             mime: input.mime || "audio/webm",
             filename: (input.mime || "").includes("mp4") ? "dictation.m4a" : "dictation.webm",
           }),
@@ -122,7 +143,10 @@ export function HandyDictation({ freeOnly = false, ownerId }: { freeOnly?: boole
   }
 
   async function start() {
-    setEngine("");
+    if (!readVoicePreferences(storageRef.current).enabled) { setPhase("saved"); setNote("Enable dictation in Voice settings to use the microphone."); return; }
+    if (!field.current?.isConnected) { setPhase("saved"); setNote("Choose a text field before starting dictation."); return; }
+    destination.current = { field: field.current, owner: currentOwner.current };
+    setInterim(""); setEngine("");
     setNote("Opening the microphone. The recording goes to your selected transcription service; text enters the field without sending a chat message.");
     field.current?.focus();
     try {
@@ -134,7 +158,7 @@ export function HandyDictation({ freeOnly = false, ownerId }: { freeOnly?: boole
   }
 
   async function mark() {
-    const current = field.current && document.contains(field.current) ? field.current : null;
+    const current = destination.current?.field.isConnected ? destination.current.field : null;
     const live = session.current;
     if (!live || live.getState().phase === "idle") {
       setNote("Press Mic and speak first. Nothing was inserted.");
@@ -142,9 +166,8 @@ export function HandyDictation({ freeOnly = false, ownerId }: { freeOnly?: boole
     }
     try {
       await live.stop();
-      const transcript = current?.value.trim() || "";
+      const transcript = live.segments.join(" ").trim();
       const decision = finishDictation({ transcript, hasFocusedField: Boolean(current && isTypingField(current)) });
-      if (decision.inserted && current && !current.value.includes(decision.transcript)) insertTranscript(current, decision.transcript);
       setPhase("saved");
       setNote(decision.note);
     } catch {
@@ -226,7 +249,8 @@ export function HandyDictation({ freeOnly = false, ownerId }: { freeOnly?: boole
           ))}
         </span>
       ) : null}
-      {phase === "speak" || phase === "saved" ? <strong data-testid="handy-speak-sign">Listening</strong> : null}
+      {phase === "speak" && <strong data-testid="handy-speak-sign">Listening</strong>}
+      {phase === "speak" && interim && <span role="status">{interim}</span>}
       <p className="min-w-0 flex-1 basis-full whitespace-normal text-xs leading-5 text-muted sm:basis-auto" data-testid="handy-note" title={note}>{note}</p>
       {translation ? <p className="text-sm" data-testid="voice-translation">{translation}</p> : null}
       {actionsOpen ? (

@@ -12,6 +12,7 @@ export const CONNECTOR_IDS = [
   "google_drive",
   "slack",
   "github",
+  "vercel",
 ] as const;
 
 export type ConnectorId = (typeof CONNECTOR_IDS)[number];
@@ -28,6 +29,7 @@ export const CONNECTOR_DISPLAY_NAMES: Record<ConnectorId, string> = {
   google_drive: "Google Drive",
   slack: "Slack",
   github: "GitHub",
+  vercel: "Vercel",
 };
 
 export type StoredConnection = {

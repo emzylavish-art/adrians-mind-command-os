@@ -53,6 +53,7 @@ export type AgentDefinition = {
   chatTier?: ModelTier | null;
   knowledge?: string;
   knowledgeDocumentIds?: string[];
+  telegramUsername?: string;
 };
 
 export type DeploymentRecord = {
@@ -492,6 +493,7 @@ export function readFleet(input: unknown): FleetShape {
         createdAt: typeof row.createdAt === "string" ? row.createdAt : stamp(),
         updatedAt: typeof row.updatedAt === "string" ? row.updatedAt : stamp(),
         ...normalizeBotModel(row),
+        telegramUsername: telegramBotUsername(row.telegramUsername),
         knowledge: normalizeBotKnowledge(row.knowledge).knowledge,
         ...(Array.isArray(row.knowledgeDocumentIds) ? { knowledgeDocumentIds: [...new Set(row.knowledgeDocumentIds.filter((id): id is string => typeof id === "string" && id.length <= 200))].slice(0, 100) } : {}),
       });
@@ -771,7 +773,14 @@ export type BotDraft = {
   chatTier?: ModelTier | null;
   knowledge?: string;
   knowledgeDocumentIds?: string[];
+  telegramUsername?: string;
 };
+
+function telegramBotUsername(value: unknown): string {
+  if (typeof value !== "string") return "";
+  const raw = value.trim().replace(/^@/, "");
+  return /^[a-z0-9_]{2,29}bot$/i.test(raw) ? raw : "";
+}
 
 export function addCustomAgent(
   ws: Workspace,
@@ -784,6 +793,8 @@ export function addCustomAgent(
   const tools = toolList(input.tools);
   if (tools.length === 0) return { ok: false, error: "Choose at least one tool." };
   const at = stamp(now);
+  const telegramUsername = telegramBotUsername(input.telegramUsername);
+  if (input.telegramUsername?.trim() && !telegramUsername) return { ok: false, error: "Use a Telegram bot username of 5–32 letters, numbers, or underscores ending in bot." };
   const knowledge = normalizeBotKnowledge(input.knowledge);
   if (knowledge.rejected) return { ok: false, error: knowledge.rejected };
   const agent: AgentDefinition = {
@@ -802,6 +813,7 @@ export function addCustomAgent(
     createdAt: at,
     updatedAt: at,
     ...normalizeBotModel(input),
+    telegramUsername,
     knowledge: knowledge.knowledge,
     knowledgeDocumentIds: [...new Set((input.knowledgeDocumentIds ?? []).filter((id) => typeof id === "string" && id.length <= 200))].slice(0, 100),
   };
@@ -826,7 +838,8 @@ export function editBot(ws: Workspace, id: string, draft: BotDraft): ReturnType<
     chatProvider: checked.agent.chatProvider ?? null,
     chatTier: checked.agent.chatTier ?? null,
     knowledge: checked.agent.knowledge ?? "",
-    knowledgeDocumentIds: checked.agent.knowledgeDocumentIds ?? [],
+    telegramUsername: draft.telegramUsername === undefined ? original.telegramUsername : checked.agent.telegramUsername,
+    knowledgeDocumentIds: draft.knowledgeDocumentIds === undefined ? original.knowledgeDocumentIds : checked.agent.knowledgeDocumentIds,
     approval: original.approval === "ask" ? "ask" as const : checked.agent.approval,
     maxSteps: checked.agent.maxSteps,
     updatedAt: checked.agent.updatedAt,

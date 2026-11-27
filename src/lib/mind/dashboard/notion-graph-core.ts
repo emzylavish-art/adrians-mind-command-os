@@ -19,7 +19,7 @@ export type NotionSnapshot = {
   pages: NotionSnapPage[];
   edges: NotionSnapEdge[];
   botPageMap: Partial<Record<DashboardBotId, string>>;
-  stats: { pages: number; edges: number; botsMapped: number };
+  stats: { pages: number; agents?: number; edges: number; botsMapped: number };
 };
 
 export type NotionGraph = {
@@ -30,7 +30,7 @@ export type NotionGraph = {
   pages: NotionSnapPage[];
   edges: Array<{ from: string; to: string; kind: string }>;
   botPageMap: Partial<Record<DashboardBotId, string>>;
-  stats: { pages: number; edges: number; botsMapped: number };
+  stats: { pages: number; agents?: number; edges: number; botsMapped: number };
 };
 
 export function parseNotionSnapshot(raw: unknown): NotionSnapshot | null {

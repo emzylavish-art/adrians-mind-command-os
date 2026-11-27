@@ -1699,6 +1699,25 @@
       ]
     },
     {
+      "file": "src/lib/mind/dashboard/owner-connections.ts",
+      "name": "ownerNotionGraph",
+      "method": "POST",
+      "policy": "owner_rpc",
+      "notes": "The verified owner supplies the active workspace grant. Shared demo users are rejected and the public dashboard never receives this response.",
+      "evidence": [
+        {
+          "file": "src/lib/auth/middleware.ts",
+          "requires": [
+            "assertSameSiteRequest()",
+            "requireUserId(context.bearerToken)"
+          ]
+        }
+      ],
+      "requiredInExport": [
+        ".middleware([authMiddleware])"
+      ]
+    },
+    {
       "file": "src/lib/mind/dashboard/require-dashboard-user.ts",
       "name": "requireDashboardUser",
       "method": "GET",

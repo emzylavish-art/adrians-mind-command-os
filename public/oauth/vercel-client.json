@@ -1,0 +1,10 @@
+{
+  "client_id": "https://adrians-mind.vercel.app/oauth/vercel-client.json",
+  "client_name": "Adrian Mind OS",
+  "client_uri": "https://adrians-mind.vercel.app/",
+  "logo_uri": "https://adrians-mind.vercel.app/brand/marks/adrian.png",
+  "redirect_uris": ["https://adrians-mind.vercel.app/api/mind/oauth/vercel/callback"],
+  "grant_types": ["authorization_code", "refresh_token"],
+  "response_types": ["code"],
+  "token_endpoint_auth_method": "none"
+}

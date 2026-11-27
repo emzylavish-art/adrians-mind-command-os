@@ -7,7 +7,7 @@ import { DEFAULT_GRAPH_FILTER, filterBotIds, type GraphFilterState } from "@/lib
 import { focusDashboardPanel } from "@/lib/mind/dashboard/view-state";
 import type { MobilePanelId } from "./mobile-structure";
 import type { BotNode } from "@/lib/mind/dashboard/types";
-import type { NotionSnapPage } from "@/lib/mind/dashboard/notion-graph-core";
+import { useWorkspaceGraph } from "./use-workspace-graph";
 import { NodeDetailPanel, resolveNotionNeighbors } from "./node-detail-panel";
 const FleetForceGraph = lazy(() => import("./fleet-force-graph").then((module) => ({ default: module.FleetForceGraph })));
 import { useDashboardStatus, type DashboardStatusController } from "./use-dashboard-status";
@@ -51,12 +51,18 @@ function ClientUniverseScene(props: UniverseProps) {
 
 export function DashboardApp({ embedded = false, status }: { embedded?: boolean; status?: DashboardStatusController }) {
   const ownStatus = useDashboardStatus(!status);
-  const { state, refresh, refreshing } = status ?? ownStatus;
-  const telemetry = telemetryDisplay(state, refreshing);
+  const { state: publicState, refresh, refreshing } = status ?? ownStatus;
   const [selectedBotId, setSelectedBotId] = useState<string | null>(null);
-  const [notionPage, setNotionPage] = useState<NotionSnapPage | null>(null);
+  const [selection, setSelection] = useState<{ scope: string | null; id: string } | null>(null);
   const [webglError, setWebglError] = useState<string | null>(null);
   const [rendererMode, setRendererMode] = useState<"graph" | "universe">("graph");
+  const workspace = useWorkspaceGraph(rendererMode === "graph");
+  const state = useMemo(() => publicState.status === "ready" && workspace.graph
+    ? { ...publicState, data: { ...publicState.data, notionGraph: workspace.graph } }
+    : publicState, [publicState, workspace.graph]);
+  const telemetry = telemetryDisplay(state, refreshing);
+  const notionPage = selection && selection.scope === workspace.scope && state.status === "ready"
+    ? state.data.notionGraph.pages.find((page) => page.id === selection.id) ?? null : null;
   const [fly, setFlyState] = useState<FlyState>(FLY_HOME);
   const [cityLayout, setCityLayout] = useState<CityLayout | null>(null);
   const onFlyoverChange = useCallback((next: FlyState, layout: CityLayout) => {
@@ -64,7 +70,7 @@ export function DashboardApp({ embedded = false, status }: { embedded?: boolean;
     setCityLayout(layout);
     if (next.level !== "universe") {
       setSelectedBotId(null);
-      setNotionPage(null);
+      setSelection(null);
     }
   }, []);
   const layoutForHud = useMemo(
@@ -241,13 +247,12 @@ export function DashboardApp({ embedded = false, status }: { embedded?: boolean;
     if (state.status !== "ready") return;
     setSelectedBotId(bot.id);
     const mapped = state.data.notionGraph.botPageMap[bot.id];
-    setNotionPage(mapped ? state.data.notionGraph.pages.find((p) => p.id === mapped) ?? null : null);
+    setSelection(mapped ? { scope: workspace.scope, id: mapped } : null);
   };
 
   const openNotion = (pageId: string) => {
     if (state.status !== "ready") return;
-    const page = state.data.notionGraph.pages.find((p) => p.id === pageId) ?? null;
-    setNotionPage(page);
+    setSelection({ scope: workspace.scope, id: pageId });
     setSelectedBotId(null);
   };
 
@@ -281,9 +286,10 @@ export function DashboardApp({ embedded = false, status }: { embedded?: boolean;
               {state.data.sources?.commitsSource === "snapshot" ? ` Historical commits: ${state.data.sources.commitsSnapshotAt || "date unknown"}.` : ""}
             </p>
             <p className="dash3d-muted" style={{ margin: "0.2rem 0 0", fontSize: "0.72rem" }}>
-              {state.data.notionGraph.pages.length
-                ? `${state.data.notionGraph.pages.length} Notion pages · ${state.data.notionGraph.mode}`
-                : "Private Notion pages are not shown in this public development map."}
+              {workspace.scope && <img src="/brand/logos/notion.svg" alt="" width="16" height="16" style={{ display: "inline-block", verticalAlign: "middle", marginRight: 4, background: "white", borderRadius: 3 }} />}
+              {workspace.summary || "Public fleet activity"}
+              {workspace.scope && <> · <button type="button" className="underline" onClick={workspace.refresh}>Refresh Notion</button>
+                {" · "}<a className="underline" href="/?section=connected#connection-notion">Manage Notion</a></>}
             </p>
           </div>
           <div className="dash3d-graph-chrome-tools">
@@ -351,7 +357,7 @@ export function DashboardApp({ embedded = false, status }: { embedded?: boolean;
               onClick={() => {
                 unlockSound();
                 setSelectedBotId(null);
-                setNotionPage(null);
+                setSelection(null);
                 document.dispatchEvent(new CustomEvent("dash3d-sky"));
               }}
             >
@@ -364,12 +370,13 @@ export function DashboardApp({ embedded = false, status }: { embedded?: boolean;
         <Suspense fallback={<div className="dash3d-fallback"><div className="dash3d-glass"><p className="dash3d-title">Loading 3D graph…</p></div></div>}>
         {rendererMode === "graph" ? (
           <FleetForceGraph
+            key={workspace.scope ?? "public-fleet"}
             data={sceneData}
             filter={graphFilter}
             reducedMotion={reducedMotion}
             onSelectBot={selectGraphBot}
             onSelectNotion={openNotion}
-            onSkyView={() => { setSelectedBotId(null); setNotionPage(null); }}
+            onSkyView={() => { setSelectedBotId(null); setSelection(null); }}
             onUnavailable={setWebglError}
           />
         ) : (
@@ -379,7 +386,7 @@ export function DashboardApp({ embedded = false, status }: { embedded?: boolean;
             reducedMotion={reducedMotion}
             onSelectBot={selectGraphBot}
             onSelectNotion={openNotion}
-            onSkyView={() => { setSelectedBotId(null); setNotionPage(null); }}
+            onSkyView={() => { setSelectedBotId(null); setSelection(null); }}
             onUnavailable={setWebglError}
             onFlyoverChange={onFlyoverChange}
           />
@@ -405,9 +412,14 @@ export function DashboardApp({ embedded = false, status }: { embedded?: boolean;
                     </button>
                   </li>
                 ))}
+                {state.data.notionGraph.pages.map((item) => (
+                  <li key={item.id}><button type="button" className="dash3d-pill" onClick={() => openNotion(item.id)}>
+                    {item.title} · {item.kind}
+                  </button></li>
+                ))}
               </ul>
             ) : null}
-            {!visibleBots.length ? <p className="dash3d-muted">No records match the selected filters.</p> : null}
+            {!visibleBots.length && !(state.status === "ready" && state.data.notionGraph.pages.length) ? <p className="dash3d-muted">No records match the selected filters.</p> : null}
           </div>
         </section>
       ) : null}
@@ -416,7 +428,7 @@ export function DashboardApp({ embedded = false, status }: { embedded?: boolean;
         <div className="dash3d-fallback">
           <div className="dash3d-glass">
             <h2>Adrian&apos;s Mind</h2>
-            <p className="dash3d-title">Painting the universe…</p>
+            <p className="dash3d-title">Loading fleet activity…</p>
           </div>
         </div>
       ) : null}
@@ -446,7 +458,7 @@ export function DashboardApp({ embedded = false, status }: { embedded?: boolean;
         <div className="dash3d-panel-stack" data-testid="dash3d-panel-stack">
         {sortHudCards([
           { id: "weather" as const, band: state.data.weather.tone === "blocked" || state.data.weather.tone === "stalled" ? "needs" as const : "status" as const, seq: 0, title: "System weather", summary: state.data.weather.label, col: "left" as const },
-          { id: "notion" as const, band: state.data.notionGraph.available ? "status" as const : "needs" as const, seq: 1, title: "Notion galaxy", summary: state.data.notionGraph.available ? `${state.data.notionGraph.stats.pages} pages` : "Unavailable", col: "left" as const },
+          { id: "notion" as const, band: state.data.notionGraph.available ? "status" as const : "needs" as const, seq: 1, title: "Notion workspace", summary: workspace.summary || "Unavailable", col: "left" as const },
           { id: "money" as const, band: state.data.money?.available ? "status" as const : "needs" as const, seq: 2, title: "Money", summary: state.data.money?.available ? "Spend" : "no spend source yet", col: "left" as const },
           { id: "fleet" as const, band: state.data.fleetPlan?.queueHead ? "status" as const : "needs" as const, seq: 3, title: "Fleet plan", summary: state.data.fleetPlan?.queueHead?.title ?? "Queue unavailable", col: "left" as const },
           { id: "compass" as const, band: state.data.bots.some((bot) => bot.health === "blocked") ? "needs" as const : "status" as const, seq: 4, title: "Universe list", summary: `${state.data.bots.length} from status`, col: "left" as const },
@@ -476,8 +488,8 @@ export function DashboardApp({ embedded = false, status }: { embedded?: boolean;
               ) : null}
               {card.id === "notion" ? (
                 <div className="dash3d-glass dash3d-skybar-card">
-                  <h2>Notion galaxy</h2>
-                  <p className="dash3d-title">{state.data.notionGraph.available ? `${state.data.notionGraph.stats.pages} pages · ${state.data.notionGraph.stats.edges} edges` : "Unavailable"}</p>
+                  <h2>Notion workspace</h2>
+                  <p className="dash3d-title">{state.data.notionGraph.available ? `${state.data.notionGraph.stats.pages} pages · ${state.data.notionGraph.stats.agents ?? 0} agents · ${state.data.notionGraph.stats.edges} links` : "Unavailable"}</p>
                   <p className="dash3d-muted">{state.data.notionGraph.mode}{state.data.notionGraph.reason ? ` — ${state.data.notionGraph.reason}` : ""}</p>
                 </div>
               ) : null}
@@ -574,7 +586,7 @@ export function DashboardApp({ embedded = false, status }: { embedded?: boolean;
         portraitSrc={selected ? `/dashboard-3d/art/portrait-${selected.id}.webp` : null}
         onClose={() => {
           setSelectedBotId(null);
-          setNotionPage(null);
+          setSelection(null);
         }}
       />
     </main>
