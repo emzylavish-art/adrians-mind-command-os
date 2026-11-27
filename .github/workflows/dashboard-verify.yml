@@ -173,6 +173,20 @@ jobs:
           npm run lint -- --format json --output-file "$report/eslint.json" || result=$?
           test "$result" -le 1
           test -s "$report/eslint.json"
+      - name: Record production baseline diagnostics
+        run: |
+          baseline=18d5b9364e6bdcfec028eeccf56fe596946ed8ce
+          report="$RUNNER_TEMP/mind-lint"
+          worktree="$RUNNER_TEMP/mind-lint-base"
+          git fetch --no-tags --depth=1 origin "$baseline"
+          git worktree add --detach "$worktree" "$baseline"
+          cd "$worktree"
+          npm ci
+          git rev-parse HEAD > "$report/baseline-revision.txt"
+          result=0
+          npm run lint -- --format json --output-file "$report/baseline-eslint.json" || result=$?
+          test "$result" -le 1
+          test -s "$report/baseline-eslint.json"
       - uses: actions/upload-artifact@v4
         with:
           name: lint-report-${{ github.event.pull_request.head.sha || github.sha }}

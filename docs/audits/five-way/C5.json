@@ -83,7 +83,7 @@
       "expected": "401 sign-in required, confirmed absent grant and unavailable status use distinct badges.",
       "implementation": "[P](#files-p); P37",
       "regression": "[P](#files-p); P37",
-      "disposition": "Combined verification pending",
+      "disposition": "Fixed and tested on combined commit (isolated fixture)",
       "sourceDisposition": "fixed and tested; actual React SSR for all three statuses.",
       "sourceFiles": [
         "src/components/mind/command-app.tsx",
@@ -111,9 +111,23 @@
           "src/lib/mind/connected-mcp.test.ts",
           "src/lib/mind/notion.test.ts"
         ],
-        "lookup": "Exact-head CI logs and named source fixtures must be checked individually; case-level proof has not yet been recorded."
-      },
-      "nextCheck": "Reviewed combined handler or model and its fixture path. Confirm passing outcomes in exact-head CI. External authenticated acceptance is separate."
+        "exactFixtureResults": {
+          "revision": "56f987e34187e12c63ae885b4c6e499465213e42",
+          "scope": "Combined fixture behavior using controlled test data and transports. External services and physical devices are separate acceptance checks.",
+          "checks": [
+            {
+              "path": "src/lib/mind/c5-provider-recovery.test.ts",
+              "assertion": "C5 AA001/003 integration views use account observations and never map inaccessible status to disconnected",
+              "run": "https://github.com/emzylavish-art/adrians-mind-command-os/actions/runs/45941873848/job/140317783450"
+            },
+            {
+              "path": "src/lib/mind/c5-provider-recovery.test.ts",
+              "assertion": "C5 AA003 rendered Plugins badges distinguish sign-in, unavailable and a confirmed absent grant",
+              "run": "https://github.com/emzylavish-art/adrians-mind-command-os/actions/runs/45941873848/job/140317783450"
+            }
+          ]
+        }
+      }
     },
     {
       "finding": "C5/AA-004",
@@ -140,9 +154,19 @@
           "src/lib/mind/selection-routing.test.ts",
           "src/lib/mind/selection-sync.test.ts"
         ],
-        "lookup": "Exact-head CI logs and named source fixtures must be checked individually; case-level proof has not yet been recorded."
+        "exactFixtureResults": {
+          "revision": "56f987e34187e12c63ae885b4c6e499465213e42",
+          "scope": "Combined fixture behavior using controlled test data and transports. External services and physical devices are separate acceptance checks.",
+          "checks": [
+            {
+              "path": "src/lib/mind/selection-sync.test.ts",
+              "assertion": "C5 changing tier in a stale tab preserves another tab's provider and isolates owners",
+              "run": "https://github.com/emzylavish-art/adrians-mind-command-os/actions/runs/45941873848/job/140317783421"
+            }
+          ]
+        }
       },
-      "nextCheck": "Compare the named fixture cases and remaining source limits against this original acceptance. Live and physical evidence must be recorded separately when required."
+      "nextCheck": "The linked assertions passed. Verify the remaining acceptance conditions and source limits before closing this finding."
     },
     {
       "finding": "C5/AA-005",
@@ -150,7 +174,7 @@
       "expected": "Bot-owned exact model is persisted/reloaded; a global ordinary-chat exact Grok choice cannot override the bot tier.",
       "implementation": "[S](#files-s); S28/S4",
       "regression": "[S](#files-s); S28/S4",
-      "disposition": "Combined verification pending",
+      "disposition": "Fixed and tested on combined commit (isolated fixture)",
       "sourceDisposition": "fixed and tested; bot routing and explicit reload regression.",
       "sourceFiles": [
         "src/lib/mind/selection-sync.ts",
@@ -169,9 +193,23 @@
           "src/lib/mind/selection-routing.test.ts",
           "src/lib/mind/selection-sync.test.ts"
         ],
-        "lookup": "Exact-head CI logs and named source fixtures must be checked individually; case-level proof has not yet been recorded."
-      },
-      "nextCheck": "Compare the named fixture cases and remaining source limits against this original acceptance. Live and physical evidence must be recorded separately when required."
+        "exactFixtureResults": {
+          "revision": "56f987e34187e12c63ae885b4c6e499465213e42",
+          "scope": "Combined fixture behavior using controlled test data and transports. External services and physical devices are separate acceptance checks.",
+          "checks": [
+            {
+              "path": "src/lib/mind/selection-sync.test.ts",
+              "assertion": "C5 global exact Grok choice never overrides a pinned bot tier",
+              "run": "https://github.com/emzylavish-art/adrians-mind-command-os/actions/runs/45941873848/job/140317783421"
+            },
+            {
+              "path": "src/lib/mind/selection-sync.test.ts",
+              "assertion": "C5 explicit bot exact model survives reload without changing another bot",
+              "run": "https://github.com/emzylavish-art/adrians-mind-command-os/actions/runs/45941873848/job/140317783421"
+            }
+          ]
+        }
+      }
     },
     {
       "finding": "C5/AA-006",
@@ -198,9 +236,19 @@
           "src/lib/mind/selection-routing.test.ts",
           "src/lib/mind/selection-sync.test.ts"
         ],
-        "lookup": "Exact-head CI logs and named source fixtures must be checked individually; case-level proof has not yet been recorded."
+        "exactFixtureResults": {
+          "revision": "56f987e34187e12c63ae885b4c6e499465213e42",
+          "scope": "Combined fixture behavior using controlled test data and transports. External services and physical devices are separate acceptance checks.",
+          "checks": [
+            {
+              "path": "src/lib/mind/selection-sync.test.ts",
+              "assertion": "C5 actual Effort handler clears the scoped override and retains the chosen provider",
+              "run": "https://github.com/emzylavish-art/adrians-mind-command-os/actions/runs/45941873848/job/140317783421"
+            }
+          ]
+        }
       },
-      "nextCheck": "Compare the named fixture cases and remaining source limits against this original acceptance. Live and physical evidence must be recorded separately when required."
+      "nextCheck": "The linked assertions passed. Verify the remaining acceptance conditions and source limits before closing this finding."
     },
     {
       "finding": "C5/AA-007",
@@ -237,9 +285,39 @@
           "src/lib/mind/voice/speak-mounted.test.ts",
           "src/lib/mind/voice/voice-input.test.ts"
         ],
-        "lookup": "Exact-head CI logs and named source fixtures must be checked individually; case-level proof has not yet been recorded."
+        "exactFixtureResults": {
+          "revision": "56f987e34187e12c63ae885b4c6e499465213e42",
+          "scope": "Combined fixture behavior using controlled test data and transports. External services and physical devices are separate acceptance checks.",
+          "checks": [
+            {
+              "path": "src/lib/mind/voice/composed-turn.test.ts",
+              "assertion": "sends one transcript to the selected text provider and its answer to a separate speech engine",
+              "run": "https://github.com/emzylavish-art/adrians-mind-command-os/actions/runs/45941873848/job/140317783598"
+            },
+            {
+              "path": "src/lib/mind/voice/composed-turn.test.ts",
+              "assertion": "never substitutes a different answer provider on authentication, rate limit, or timeout",
+              "run": "https://github.com/emzylavish-art/adrians-mind-command-os/actions/runs/45941873848/job/140317783598"
+            },
+            {
+              "path": "src/lib/mind/voice/composed-turn.test.ts",
+              "assertion": "ending a call during delayed recognition prevents answer dispatch",
+              "run": "https://github.com/emzylavish-art/adrians-mind-command-os/actions/runs/45941873848/job/140317783598"
+            },
+            {
+              "path": "src/lib/mind/voice/composed-turn.test.ts",
+              "assertion": "mute during delayed answer suppresses speech without resending the answer",
+              "run": "https://github.com/emzylavish-art/adrians-mind-command-os/actions/runs/45941873848/job/140317783598"
+            },
+            {
+              "path": "src/lib/mind/voice/composed-turn.test.ts",
+              "assertion": "persists explicit stages separately by owner and discards invalid fallback",
+              "run": "https://github.com/emzylavish-art/adrians-mind-command-os/actions/runs/45941873848/job/140317783598"
+            }
+          ]
+        }
       },
-      "nextCheck": "Compare the named fixture cases and remaining source limits against this original acceptance. Live and physical evidence must be recorded separately when required."
+      "nextCheck": "The linked assertions passed. Verify the remaining acceptance conditions and source limits before closing this finding."
     },
     {
       "finding": "C5/AA-008",
@@ -356,9 +434,19 @@
           "src/lib/mind/notion.test.ts",
           "src/lib/mind/usage-dispatch.test.ts"
         ],
-        "lookup": "Exact-head CI logs and named source fixtures must be checked individually; case-level proof has not yet been recorded."
+        "exactFixtureResults": {
+          "revision": "56f987e34187e12c63ae885b4c6e499465213e42",
+          "scope": "Combined fixture behavior using controlled test data and transports. External services and physical devices are separate acceptance checks.",
+          "checks": [
+            {
+              "path": "src/lib/mind/c5-provider-recovery.test.ts",
+              "assertion": "C5 AA010 marks custom dispatch only after the real preflight and DNS boundary",
+              "run": "https://github.com/emzylavish-art/adrians-mind-command-os/actions/runs/45941873848/job/140317783450"
+            }
+          ]
+        }
       },
-      "nextCheck": "Reviewed combined handler or model and its fixture path. Confirm passing outcomes in exact-head CI. External authenticated acceptance is separate."
+      "nextCheck": "The linked assertions passed. Verify the remaining acceptance conditions and source limits before closing this finding."
     },
     {
       "finding": "C5/AA-011",
@@ -394,9 +482,19 @@
           "src/lib/mind/connected-mcp.test.ts",
           "src/lib/mind/notion.test.ts"
         ],
-        "lookup": "Exact-head CI logs and named source fixtures must be checked individually; case-level proof has not yet been recorded."
+        "exactFixtureResults": {
+          "revision": "56f987e34187e12c63ae885b4c6e499465213e42",
+          "scope": "Combined fixture behavior using controlled test data and transports. External services and physical devices are separate acceptance checks.",
+          "checks": [
+            {
+              "path": "src/lib/mind/c5-provider-recovery.test.ts",
+              "assertion": "C5 AA011 repeated unsupported listings cannot heal a rejected credential",
+              "run": "https://github.com/emzylavish-art/adrians-mind-command-os/actions/runs/45941873848/job/140317783450"
+            }
+          ]
+        }
       },
-      "nextCheck": "Reviewed combined handler or model and its fixture path. Confirm passing outcomes in exact-head CI. External authenticated acceptance is separate."
+      "nextCheck": "The linked assertions passed. Verify the remaining acceptance conditions and source limits before closing this finding."
     },
     {
       "finding": "C5/AA-012",
@@ -432,9 +530,24 @@
           "src/lib/mind/connected-mcp.test.ts",
           "src/lib/mind/notion.test.ts"
         ],
-        "lookup": "Exact-head CI logs and named source fixtures must be checked individually; case-level proof has not yet been recorded."
+        "exactFixtureResults": {
+          "revision": "56f987e34187e12c63ae885b4c6e499465213e42",
+          "scope": "Combined fixture behavior using controlled test data and transports. External services and physical devices are separate acceptance checks.",
+          "checks": [
+            {
+              "path": "src/lib/mind/c5-provider-recovery.test.ts",
+              "assertion": "C5 AA012 late list responses cannot overwrite mutation refreshes or another owner",
+              "run": "https://github.com/emzylavish-art/adrians-mind-command-os/actions/runs/45941873848/job/140317783450"
+            },
+            {
+              "path": "src/lib/mind/c5-provider-recovery.test.ts",
+              "assertion": "C5 AA012/013/014 owner-scoped UI and canonical session are wired to guarded route",
+              "run": "https://github.com/emzylavish-art/adrians-mind-command-os/actions/runs/45941873848/job/140317783450"
+            }
+          ]
+        }
       },
-      "nextCheck": "Reviewed combined handler or model and its fixture path. Confirm passing outcomes in exact-head CI. External authenticated acceptance is separate."
+      "nextCheck": "The linked assertions passed. Verify the remaining acceptance conditions and source limits before closing this finding."
     },
     {
       "finding": "C5/AA-013",
@@ -462,9 +575,24 @@
           "src/lib/mind/connected-mcp.test.ts",
           "src/lib/mind/notion.test.ts"
         ],
-        "lookup": "Exact-head CI logs and named source fixtures must be checked individually; case-level proof has not yet been recorded."
+        "exactFixtureResults": {
+          "revision": "56f987e34187e12c63ae885b4c6e499465213e42",
+          "scope": "Combined fixture behavior using controlled test data and transports. External services and physical devices are separate acceptance checks.",
+          "checks": [
+            {
+              "path": "src/lib/mind/c5-provider-recovery.test.ts",
+              "assertion": "C5 AA013 actual provider route rejects a stale form owner before any mutation",
+              "run": "https://github.com/emzylavish-art/adrians-mind-command-os/actions/runs/45941873848/job/140317783450"
+            },
+            {
+              "path": "src/lib/mind/c5-provider-recovery.test.ts",
+              "assertion": "C5 AA012/013/014 owner-scoped UI and canonical session are wired to guarded route",
+              "run": "https://github.com/emzylavish-art/adrians-mind-command-os/actions/runs/45941873848/job/140317783450"
+            }
+          ]
+        }
       },
-      "nextCheck": "Reviewed combined handler or model and its fixture path. Confirm passing outcomes in exact-head CI. External authenticated acceptance is separate."
+      "nextCheck": "The linked assertions passed. Verify the remaining acceptance conditions and source limits before closing this finding."
     },
     {
       "finding": "C5/AA-014",
@@ -492,9 +620,24 @@
           "src/lib/mind/connected-mcp.test.ts",
           "src/lib/mind/notion.test.ts"
         ],
-        "lookup": "Exact-head CI logs and named source fixtures must be checked individually; case-level proof has not yet been recorded."
+        "exactFixtureResults": {
+          "revision": "56f987e34187e12c63ae885b4c6e499465213e42",
+          "scope": "Combined fixture behavior using controlled test data and transports. External services and physical devices are separate acceptance checks.",
+          "checks": [
+            {
+              "path": "src/lib/mind/c5-provider-recovery.test.ts",
+              "assertion": "C5 AA012/013/014 owner-scoped UI and canonical session are wired to guarded route",
+              "run": "https://github.com/emzylavish-art/adrians-mind-command-os/actions/runs/45941873848/job/140317783450"
+            },
+            {
+              "path": "src/lib/mind/c5-provider-recovery.test.ts",
+              "assertion": "C5 AA014 preview sign-out requires confirmed removal of all cookie sessions even without a bearer",
+              "run": "https://github.com/emzylavish-art/adrians-mind-command-os/actions/runs/45941873848/job/140317783450"
+            }
+          ]
+        }
       },
-      "nextCheck": "Reviewed combined handler or model and its fixture path. Confirm passing outcomes in exact-head CI. External authenticated acceptance is separate."
+      "nextCheck": "The linked assertions passed. Verify the remaining acceptance conditions and source limits before closing this finding."
     },
     {
       "finding": "C5/AA-015",
@@ -568,9 +711,19 @@
           "src/lib/mind/connected-mcp.test.ts",
           "src/lib/mind/notion.test.ts"
         ],
-        "lookup": "Exact-head CI logs and named source fixtures must be checked individually; case-level proof has not yet been recorded."
+        "exactFixtureResults": {
+          "revision": "56f987e34187e12c63ae885b4c6e499465213e42",
+          "scope": "Combined fixture behavior using controlled test data and transports. External services and physical devices are separate acceptance checks.",
+          "checks": [
+            {
+              "path": "src/lib/mind/c5-provider-recovery.test.ts",
+              "assertion": "C5 AA016 exact review and cancellation stay attached to the originating draft",
+              "run": "https://github.com/emzylavish-art/adrians-mind-command-os/actions/runs/45941873848/job/140317783450"
+            }
+          ]
+        }
       },
-      "nextCheck": "Reviewed combined handler or model and its fixture path. Confirm passing outcomes in exact-head CI. External authenticated acceptance is separate."
+      "nextCheck": "The linked assertions passed. Verify the remaining acceptance conditions and source limits before closing this finding."
     },
     {
       "finding": "C5/AA-017",
@@ -593,9 +746,24 @@
         "files": [
           "src/lib/mind/memory-send-preparation.test.ts"
         ],
-        "lookup": "Exact-head CI logs and named source fixtures must be checked individually; case-level proof has not yet been recorded."
+        "exactFixtureResults": {
+          "revision": "56f987e34187e12c63ae885b4c6e499465213e42",
+          "scope": "Combined fixture behavior using controlled test data and transports. External services and physical devices are separate acceptance checks.",
+          "checks": [
+            {
+              "path": "src/lib/mind/memory-send-preparation.test.ts",
+              "assertion": "unchanged uncertain retry checks exactly the original operation without posting its payload",
+              "run": "https://github.com/emzylavish-art/adrians-mind-command-os/actions/runs/45941873848/job/140317783421"
+            },
+            {
+              "path": "src/lib/mind/memory-send-preparation.test.ts",
+              "assertion": "refuses a stale supplied workspace that predates memory deletion",
+              "run": "https://github.com/emzylavish-art/adrians-mind-command-os/actions/runs/45941873848/job/140317783421"
+            }
+          ]
+        }
       },
-      "nextCheck": "Compare the named fixture cases and remaining source limits against this original acceptance. Live and physical evidence must be recorded separately when required."
+      "nextCheck": "The linked assertions passed. Verify the remaining acceptance conditions and source limits before closing this finding."
     },
     {
       "finding": "C5/AA-018",
@@ -725,7 +893,7 @@
       "expected": "Memory-only export includes notes and necessary scope labels; full workspace backup is separately described and retains broad data.",
       "implementation": "[M](#files-m); M8",
       "regression": "[M](#files-m); M8",
-      "disposition": "Combined verification pending",
+      "disposition": "Fixed and tested on combined commit (isolated fixture)",
       "sourceDisposition": "fixed and tested; unique note/transcript/file/activity markers and round trip.",
       "sourceFiles": [
         "src/lib/mind/memory-send-policy.ts",
@@ -740,9 +908,18 @@
         "files": [
           "src/lib/mind/archive-review.test.ts"
         ],
-        "lookup": "Exact-head CI logs and named source fixtures must be checked individually; case-level proof has not yet been recorded."
-      },
-      "nextCheck": "Compare the named fixture cases and remaining source limits against this original acceptance. Live and physical evidence must be recorded separately when required."
+        "exactFixtureResults": {
+          "revision": "56f987e34187e12c63ae885b4c6e499465213e42",
+          "scope": "Combined fixture behavior using controlled test data and transports. External services and physical devices are separate acceptance checks.",
+          "checks": [
+            {
+              "path": "src/lib/mind/archive-review.test.ts",
+              "assertion": "exports only notes and scope labels while keeping full workspace backup intact",
+              "run": "https://github.com/emzylavish-art/adrians-mind-command-os/actions/runs/45941873848/job/140317783450"
+            }
+          ]
+        }
+      }
     },
     {
       "finding": "C5/AA-022",
@@ -750,7 +927,7 @@
       "expected": "Proposed conservative privacy default implemented: preview conflicts, preserve local memory-off and default new imported chats off unless archived preferences explicitly restored.",
       "implementation": "[M](#files-m); M8",
       "regression": "[M](#files-m); M8",
-      "disposition": "Combined verification pending",
+      "disposition": "Fixed and tested on combined commit (isolated fixture)",
       "sourceDisposition": "fixed and tested; Merge/Replace default-off and opt-in. This is a chosen product default, not an independently established historical requirement.",
       "sourceFiles": [
         "src/lib/mind/memory-send-policy.ts",
@@ -765,9 +942,18 @@
         "files": [
           "src/lib/mind/archive-review.test.ts"
         ],
-        "lookup": "Exact-head CI logs and named source fixtures must be checked individually; case-level proof has not yet been recorded."
-      },
-      "nextCheck": "Compare the named fixture cases and remaining source limits against this original acceptance. Live and physical evidence must be recorded separately when required."
+        "exactFixtureResults": {
+          "revision": "56f987e34187e12c63ae885b4c6e499465213e42",
+          "scope": "Combined fixture behavior using controlled test data and transports. External services and physical devices are separate acceptance checks.",
+          "checks": [
+            {
+              "path": "src/lib/mind/archive-review.test.ts",
+              "assertion": "defaults matching and new imported conversations to safe memory preferences, with explicit restore opt-in",
+              "run": "https://github.com/emzylavish-art/adrians-mind-command-os/actions/runs/45941873848/job/140317783450"
+            }
+          ]
+        }
+      }
     },
     {
       "finding": "C5/AA-023",
@@ -775,7 +961,7 @@
       "expected": "Preview lists record conflicts and Merge keeps current project/file/agent/schedule records; Replace remains explicit.",
       "implementation": "[M](#files-m); M8",
       "regression": "[M](#files-m); M8",
-      "disposition": "Combined verification pending",
+      "disposition": "Fixed and tested on combined commit (isolated fixture)",
       "sourceDisposition": "fixed and tested; old archive versus four newer local record categories.",
       "sourceFiles": [
         "src/lib/mind/memory-send-policy.ts",
@@ -790,9 +976,18 @@
         "files": [
           "src/lib/mind/archive-review.test.ts"
         ],
-        "lookup": "Exact-head CI logs and named source fixtures must be checked individually; case-level proof has not yet been recorded."
-      },
-      "nextCheck": "Compare the named fixture cases and remaining source limits against this original acceptance. Live and physical evidence must be recorded separately when required."
+        "exactFixtureResults": {
+          "revision": "56f987e34187e12c63ae885b4c6e499465213e42",
+          "scope": "Combined fixture behavior using controlled test data and transports. External services and physical devices are separate acceptance checks.",
+          "checks": [
+            {
+              "path": "src/lib/mind/archive-review.test.ts",
+              "assertion": "previews record conflicts and keeps newer local project/file/agent/schedule records during Merge",
+              "run": "https://github.com/emzylavish-art/adrians-mind-command-os/actions/runs/45941873848/job/140317783450"
+            }
+          ]
+        }
+      }
     },
     {
       "finding": "C5/AA-024",
@@ -800,7 +995,7 @@
       "expected": "Unresolved/undeclared imported scope is quarantined; invalid scoped notes rejected. Manual unarchive cannot enable retrieval. Replace rechecks destinations; valid legacy hashes remain valid.",
       "implementation": "[M](#files-m); M8",
       "regression": "[M](#files-m); M8",
-      "disposition": "Combined verification pending",
+      "disposition": "Fixed and tested on combined commit (isolated fixture)",
       "sourceDisposition": "fixed and tested; orphan, missing-scope, invalid-scope, manual-unarchive, Replace and legacy integrity fixtures. No historical cross-project leak claimed.",
       "sourceFiles": [
         "src/lib/mind/memory-send-policy.ts",
@@ -815,9 +1010,33 @@
         "files": [
           "src/lib/mind/archive-review.test.ts"
         ],
-        "lookup": "Exact-head CI logs and named source fixtures must be checked individually; case-level proof has not yet been recorded."
-      },
-      "nextCheck": "Compare the named fixture cases and remaining source limits against this original acceptance. Live and physical evidence must be recorded separately when required."
+        "exactFixtureResults": {
+          "revision": "56f987e34187e12c63ae885b4c6e499465213e42",
+          "scope": "Combined fixture behavior using controlled test data and transports. External services and physical devices are separate acceptance checks.",
+          "checks": [
+            {
+              "path": "src/lib/mind/archive-review.test.ts",
+              "assertion": "quarantines unresolved and undeclared scopes even after manual unarchive, until explicitly resolved",
+              "run": "https://github.com/emzylavish-art/adrians-mind-command-os/actions/runs/45941873848/job/140317783450"
+            },
+            {
+              "path": "src/lib/mind/archive-review.test.ts",
+              "assertion": "rechecks associations for Replace because current-only destinations disappear",
+              "run": "https://github.com/emzylavish-art/adrians-mind-command-os/actions/runs/45941873848/job/140317783450"
+            },
+            {
+              "path": "src/lib/mind/archive-review.test.ts",
+              "assertion": "accepts unchanged legacy full-workspace integrity and quarantines missing scope only at import review",
+              "run": "https://github.com/emzylavish-art/adrians-mind-command-os/actions/runs/45941873848/job/140317783450"
+            },
+            {
+              "path": "src/lib/mind/archive-review.test.ts",
+              "assertion": "rejects unsupported scopes and quarantines undeclared scopes before global retrieval",
+              "run": "https://github.com/emzylavish-art/adrians-mind-command-os/actions/runs/45941873848/job/140317783450"
+            }
+          ]
+        }
+      }
     },
     {
       "finding": "C5/AA-025",
@@ -861,7 +1080,7 @@
       "expected": "Explicit run-once, skip, review and bounded catch-up policies with missed/skipped accounting; catch-up at most three per pass.",
       "implementation": "[F](#files-f); B52",
       "regression": "[F](#files-f); B52",
-      "disposition": "Combined verification pending",
+      "disposition": "Fixed and tested on combined commit (isolated fixture)",
       "sourceDisposition": "fixed and tested; three overdue occurrences under each supported policy.",
       "sourceFiles": [
         "src/lib/mind/fleet.ts",
@@ -887,9 +1106,18 @@
           "src/lib/mind/schedule-worker.test.ts",
           "src/lib/mind/worker-pass.test.ts"
         ],
-        "lookup": "Exact-head CI logs and named source fixtures must be checked individually; case-level proof has not yet been recorded."
-      },
-      "nextCheck": "Compare the named fixture cases and remaining source limits against this original acceptance. Live and physical evidence must be recorded separately when required."
+        "exactFixtureResults": {
+          "revision": "56f987e34187e12c63ae885b4c6e499465213e42",
+          "scope": "Combined fixture behavior using controlled test data and transports. External services and physical devices are separate acceptance checks.",
+          "checks": [
+            {
+              "path": "src/lib/mind/fleet.test.ts",
+              "assertion": "applies missed run policies with bounded catch-up and deterministic identities",
+              "run": "https://github.com/emzylavish-art/adrians-mind-command-os/actions/runs/45941873848/job/140317783598"
+            }
+          ]
+        }
+      }
     },
     {
       "finding": "C5/AA-027",
@@ -923,7 +1151,6 @@
           "src/lib/mind/schedule-worker.test.ts",
           "src/lib/mind/worker-pass.test.ts"
         ],
-        "lookup": "Exact-head CI logs and named source fixtures must be checked individually; case-level proof has not yet been recorded.",
         "reviewedFixtureFiles": [
           "src/lib/mind/fleet.test.ts",
           "src/lib/mind/fleet-audit-recovery.test.ts"
@@ -944,9 +1171,20 @@
               "assertion": "AA-028 never resurrects or substitutes a missing or archived result destination"
             }
           ]
+        },
+        "exactFixtureResults": {
+          "revision": "56f987e34187e12c63ae885b4c6e499465213e42",
+          "scope": "Combined fixture behavior using controlled test data and transports. External services and physical devices are separate acceptance checks.",
+          "checks": [
+            {
+              "path": "src/lib/mind/fleet.test.ts",
+              "assertion": "retains chat destination across queue, completion and repeated worker ticks",
+              "run": "https://github.com/emzylavish-art/adrians-mind-command-os/actions/runs/45941873848/job/140317783598"
+            }
+          ]
         }
       },
-      "nextCheck": "Compare the named fixture cases and remaining source limits against this original acceptance. Live and physical evidence must be recorded separately when required."
+      "nextCheck": "The linked assertions passed. Verify the remaining acceptance conditions and source limits before closing this finding."
     },
     {
       "finding": "C5/AA-028",
@@ -980,7 +1218,6 @@
           "src/lib/mind/schedule-worker.test.ts",
           "src/lib/mind/worker-pass.test.ts"
         ],
-        "lookup": "Exact-head CI logs and named source fixtures must be checked individually; case-level proof has not yet been recorded.",
         "reviewedFixtureFiles": [
           "src/lib/mind/fleet.test.ts",
           "src/lib/mind/fleet-audit-recovery.test.ts"
@@ -1001,9 +1238,20 @@
               "assertion": "AA-027 waits by default and tracks separately authorized overlapping outcomes"
             }
           ]
+        },
+        "exactFixtureResults": {
+          "revision": "56f987e34187e12c63ae885b4c6e499465213e42",
+          "scope": "Combined fixture behavior using controlled test data and transports. External services and physical devices are separate acceptance checks.",
+          "checks": [
+            {
+              "path": "src/lib/mind/fleet.test.ts",
+              "assertion": "does not accumulate unreviewed occurrences by default and allows bounded explicit queueing",
+              "run": "https://github.com/emzylavish-art/adrians-mind-command-os/actions/runs/45941873848/job/140317783598"
+            }
+          ]
         }
       },
-      "nextCheck": "Compare the named fixture cases and remaining source limits against this original acceptance. Live and physical evidence must be recorded separately when required."
+      "nextCheck": "The linked assertions passed. Verify the remaining acceptance conditions and source limits before closing this finding."
     },
     {
       "finding": "C5/AA-029",
@@ -1369,7 +1617,7 @@
       "expected": "Normalize reported native/custom provider tokens and request IDs; missing/invalid values remain unknown.",
       "implementation": "[U](#files-u); U4/UD9",
       "regression": "[U](#files-u); U4/UD9",
-      "disposition": "Combined verification pending",
+      "disposition": "Fixed and tested on combined commit (isolated fixture)",
       "sourceDisposition": "fixed and tested; native adapter and receipt fixtures. Full UI/live-provider accounting remains a release gate.",
       "sourceFiles": [
         "src/lib/mind/provider-usage.ts",
@@ -1400,9 +1648,18 @@
           "src/lib/mind/usage-dispatch.test.ts",
           "src/lib/mind/usage-ledger.test.ts"
         ],
-        "lookup": "Exact-head CI logs and named source fixtures must be checked individually; case-level proof has not yet been recorded."
-      },
-      "nextCheck": "Compare the named fixture cases and remaining source limits against this original acceptance. Live and physical evidence must be recorded separately when required."
+        "exactFixtureResults": {
+          "revision": "56f987e34187e12c63ae885b4c6e499465213e42",
+          "scope": "Combined fixture behavior using controlled test data and transports. External services and physical devices are separate acceptance checks.",
+          "checks": [
+            {
+              "path": "src/lib/mind/usage-ledger.test.ts",
+              "assertion": "C5 native adapters retain actual usage and request IDs without inventing missing counts",
+              "run": "https://github.com/emzylavish-art/adrians-mind-command-os/actions/runs/45941873848/job/140317783450"
+            }
+          ]
+        }
+      }
     },
     {
       "finding": "C5/AA-039",
@@ -1410,7 +1667,7 @@
       "expected": "Each helper emits independent stable stage receipt under its parent, separately aggregatable from primary answer.",
       "implementation": "[U](#files-u); U4/UD9",
       "regression": "[U](#files-u); U4/UD9",
-      "disposition": "Combined verification pending",
+      "disposition": "Fixed and tested on combined commit (isolated fixture)",
       "sourceDisposition": "fixed and tested; actual dispatchMindTurn uses real planModelConsult/collectConsultHelp/orchestratorInstruction with two fake helpers and primary. Three receipts total 21 input/27 output; unknown helper usage remains unknown (known 14/18).",
       "sourceFiles": [
         "src/lib/mind/provider-usage.ts",
@@ -1441,9 +1698,23 @@
           "src/lib/mind/usage-dispatch.test.ts",
           "src/lib/mind/usage-ledger.test.ts"
         ],
-        "lookup": "Exact-head CI logs and named source fixtures must be checked individually; case-level proof has not yet been recorded."
-      },
-      "nextCheck": "Compare the named fixture cases and remaining source limits against this original acceptance. Live and physical evidence must be recorded separately when required."
+        "exactFixtureResults": {
+          "revision": "56f987e34187e12c63ae885b4c6e499465213e42",
+          "scope": "Combined fixture behavior using controlled test data and transports. External services and physical devices are separate acceptance checks.",
+          "checks": [
+            {
+              "path": "src/lib/mind/usage-ledger.test.ts",
+              "assertion": "C5 usage captures split SSE, interrupted streams, and keeps helper execution identities distinct",
+              "run": "https://github.com/emzylavish-art/adrians-mind-command-os/actions/runs/45941873848/job/140317783450"
+            },
+            {
+              "path": "src/lib/mind/usage-dispatch.test.ts",
+              "assertion": "C5 actual orchestration records two helpers and one primary without losing unknown usage",
+              "run": "https://github.com/emzylavish-art/adrians-mind-command-os/actions/runs/45941873848/job/140317783598"
+            }
+          ]
+        }
+      }
     },
     {
       "finding": "C5/AA-040",
@@ -1451,7 +1722,7 @@
       "expected": "Execution ledger survives absent assistant message and interrupted/split streams; journal failure before dispatch prevents call, post-dispatch write failure preserves response and duplicate protection.",
       "implementation": "[U](#files-u); U4/UD9",
       "regression": "[U](#files-u); U4/UD9",
-      "disposition": "Combined verification pending",
+      "disposition": "Fixed and tested on combined commit (isolated fixture)",
       "sourceDisposition": "fixed and tested; actual HTTP turn and stream fixtures. No accounting replay allowed.",
       "sourceFiles": [
         "src/lib/mind/provider-usage.ts",
@@ -1482,9 +1753,28 @@
           "src/lib/mind/usage-dispatch.test.ts",
           "src/lib/mind/usage-ledger.test.ts"
         ],
-        "lookup": "Exact-head CI logs and named source fixtures must be checked individually; case-level proof has not yet been recorded."
-      },
-      "nextCheck": "Compare the named fixture cases and remaining source limits against this original acceptance. Live and physical evidence must be recorded separately when required."
+        "exactFixtureResults": {
+          "revision": "56f987e34187e12c63ae885b4c6e499465213e42",
+          "scope": "Combined fixture behavior using controlled test data and transports. External services and physical devices are separate acceptance checks.",
+          "checks": [
+            {
+              "path": "src/lib/mind/usage-ledger.test.ts",
+              "assertion": "C5 usage captures split SSE, interrupted streams, and keeps helper execution identities distinct",
+              "run": "https://github.com/emzylavish-art/adrians-mind-command-os/actions/runs/45941873848/job/140317783450"
+            },
+            {
+              "path": "src/lib/mind/usage-dispatch.test.ts",
+              "assertion": "C5 actual turn handler refuses dispatch when the initial durable usage write fails and permits retry",
+              "run": "https://github.com/emzylavish-art/adrians-mind-command-os/actions/runs/45941873848/job/140317783598"
+            },
+            {
+              "path": "src/lib/mind/usage-dispatch.test.ts",
+              "assertion": "C5 actual turn handler preserves response bytes after final accounting failure without repeating inference",
+              "run": "https://github.com/emzylavish-art/adrians-mind-command-os/actions/runs/45941873848/job/140317783598"
+            }
+          ]
+        }
+      }
     },
     {
       "finding": "C5/AA-041",
@@ -1523,9 +1813,34 @@
           "src/lib/mind/usage-dispatch.test.ts",
           "src/lib/mind/usage-ledger.test.ts"
         ],
-        "lookup": "Exact-head CI logs and named source fixtures must be checked individually; case-level proof has not yet been recorded."
+        "exactFixtureResults": {
+          "revision": "56f987e34187e12c63ae885b4c6e499465213e42",
+          "scope": "Combined fixture behavior using controlled test data and transports. External services and physical devices are separate acceptance checks.",
+          "checks": [
+            {
+              "path": "src/lib/mind/usage-ledger.test.ts",
+              "assertion": "C5 daily and monthly UTC usage groups retain provider/channel attribution and unknown counts",
+              "run": "https://github.com/emzylavish-art/adrians-mind-command-os/actions/runs/45941873848/job/140317783450"
+            },
+            {
+              "path": "src/lib/mind/usage-ledger.test.ts",
+              "assertion": "C5 period loading includes every page or exports explicit partial coverage at its bound",
+              "run": "https://github.com/emzylavish-art/adrians-mind-command-os/actions/runs/45941873848/job/140317783450"
+            },
+            {
+              "path": "src/lib/mind/usage-ledger.test.ts",
+              "assertion": "C5 confirmed retention deletes only a bounded owner batch strictly before the UTC cutoff",
+              "run": "https://github.com/emzylavish-art/adrians-mind-command-os/actions/runs/45941873848/job/140317783450"
+            },
+            {
+              "path": "src/lib/mind/usage-ledger.test.ts",
+              "assertion": "C5 actual usage HTTP handler requires exact owner confirmation and blocks cross-site deletion",
+              "run": "https://github.com/emzylavish-art/adrians-mind-command-os/actions/runs/45941873848/job/140317783450"
+            }
+          ]
+        }
       },
-      "nextCheck": "Compare the named fixture cases and remaining source limits against this original acceptance. Live and physical evidence must be recorded separately when required."
+      "nextCheck": "The linked assertions passed. Verify the remaining acceptance conditions and source limits before closing this finding."
     },
     {
       "finding": "C5/AA-042",
@@ -1533,7 +1848,7 @@
       "expected": "Owner + operation + stage is accounting identity; duplicate execution dedupes and completed receipt cannot downgrade; distinct helpers/operations stay distinct.",
       "implementation": "[U](#files-u), [M](#files-m); UD9",
       "regression": "[U](#files-u), [M](#files-m); UD9",
-      "disposition": "Combined verification pending",
+      "disposition": "Fixed and tested on combined commit (isolated fixture)",
       "sourceDisposition": "fixed and tested; pure reconciliation and real disposable PGlite upsert/pagination. Integration migration still required.",
       "sourceFiles": [
         "src/lib/mind/provider-usage.ts",
@@ -1564,9 +1879,23 @@
           "src/lib/mind/usage-dispatch.test.ts",
           "src/lib/mind/usage-ledger.test.ts"
         ],
-        "lookup": "Exact-head CI logs and named source fixtures must be checked individually; case-level proof has not yet been recorded."
-      },
-      "nextCheck": "Compare the named fixture cases and remaining source limits against this original acceptance. Live and physical evidence must be recorded separately when required."
+        "exactFixtureResults": {
+          "revision": "56f987e34187e12c63ae885b4c6e499465213e42",
+          "scope": "Combined fixture behavior using controlled test data and transports. External services and physical devices are separate acceptance checks.",
+          "checks": [
+            {
+              "path": "src/lib/mind/usage-ledger.test.ts",
+              "assertion": "C5 durable usage exceeds the UI cache, isolates owners, and never downgrades completed receipts",
+              "run": "https://github.com/emzylavish-art/adrians-mind-command-os/actions/runs/45941873848/job/140317783450"
+            },
+            {
+              "path": "src/lib/mind/usage-ledger.test.ts",
+              "assertion": "C5 usage captures split SSE, interrupted streams, and keeps helper execution identities distinct",
+              "run": "https://github.com/emzylavish-art/adrians-mind-command-os/actions/runs/45941873848/job/140317783450"
+            }
+          ]
+        }
+      }
     },
     {
       "finding": "C5/LEGACY-AA018",
