@@ -12,7 +12,7 @@ import { type LogicRouteId, type LogicRoutePublic } from "@/lib/mind/logic-route
 import { type ImageAttachment } from "@/lib/mind/media";
 import { type ModelTier, type ModelTierCatalogRow } from "@/lib/mind/model-tiers";
 import { agentActivityFromTimeline, connectedServicesRail, elapsedMs, formatElapsed, recentTasksFromAudit, systemStatusRail, timelineCounts, type ToolTimelineRow } from "@/lib/mind/tools-timeline";
-import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { ComposerBar, type ComposerModelId, DictationPill as PreviewDictationPill, LiveSpeakControl, LiveVoiceBar as PresentationalLiveVoiceBar, VoiceModeStage } from "@/components/mind/voice-ui";
 import { routeForBotChat } from "@/lib/mind/bot-model";
 import { INITIAL_MESSAGE_WINDOW, messageWindow } from "@/lib/mind/render-window";
@@ -94,7 +94,7 @@ export function ChatPane({
  onSpeak,
   onStopSpeak,
  onOpenSpeak,
-  onOpenBuild,
+  renderWorkHandoff,
   onOpenHuman,
   onListen,
   onListenStop,
@@ -216,7 +216,7 @@ export function ChatPane({
  onSpeak: (text: string, messageId?: string) => void;
   onStopSpeak?: () => void;
  onOpenSpeak?: () => void;
-  onOpenBuild: (text: string) => void;
+  renderWorkHandoff?: (messageId: string) => ReactNode;
   onOpenHuman: (text: string) => void;
   onListen: () => void;
   onListenStop?: () => void;
@@ -625,7 +625,7 @@ export function ChatPane({
                           {[1, 2, 3, 4, 5].map((score) => <option key={score} value={score}>{score} / 5</option>)}
                         </select>
                       </label>}
-                      <button type="button" className="min-h-11 px-3 text-left text-xs" onClick={() => onOpenBuild(msg.content)}>Open in Build</button>
+                      {renderWorkHandoff?.(msg.id)}
                       <button type="button" className="min-h-11 px-3 text-left text-xs" onClick={() => onOpenHuman(msg.content)}>Open in Intelligence</button>
                       {replyHasSources(msg.content) ? <p className="px-3 py-2 text-xs">Sources: {msg.content.match(/https?:\/\/\S+/g)?.join(" ")}</p> : null}
                       <p className="px-3 py-2 text-xs">Type list capabilities. Device actions are not verified until the PC or phone runs them.</p>

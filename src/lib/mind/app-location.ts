@@ -57,6 +57,11 @@ export function embeddedWorkspaceSearch(search: string): string {
   return result.size ? `?${result}` : "";
 }
 
+export function socialLegacyReturn(search: string): string | undefined {
+  const returnSearch = embeddedWorkspaceSearch(paramsFrom(search).get("socialReturn") ?? "");
+  return returnSearch ? `/${returnSearch}#mind-workspace` : undefined;
+}
+
 function paramsFrom(search: string) {
   const raw = search.startsWith("?") ? search.slice(1) : search;
   return new URLSearchParams(raw);

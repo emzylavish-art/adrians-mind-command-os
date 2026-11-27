@@ -23,6 +23,8 @@ import { boundAbortSignal } from "@/lib/mind/turn-timeouts";
 import { createBuildPlanningGate } from "@/lib/mind/kimi/build-lifecycle";
 import { applyBuildSave, buildBufferKey as bufferKey, buildDraftKey, buildResultHandoff, matchesBuildSave, parseBuildDraft, serializeBuildDraft, type BuildEditorBuffer as EditorBuffer, type BuildFileTarget as FileTarget } from "@/lib/mind/kimi/build-review";
 import { buildResultKey, parseBuildResult, serializeBuildResult, type BuildStoredReceipt } from "@/lib/mind/kimi/build-result";
+import { buildHandoffKey, parseChatBuildHandoff, type ChatBuildHandoff } from "@/lib/mind/kimi/build-handoff";
+import { MAX_BUILD_TASK_CHARACTERS } from "@/lib/mind/kimi/build-guidance";
 import { previewPathPrefix } from "@/lib/preview-path-prefix";
 
 type CompanionState = {
@@ -100,6 +102,7 @@ type BuildWorkspaceProps = {
   enabledSkills?: Record<string, boolean>;
   freeOnly?: boolean;
   onDiscuss?: (text: string) => void;
+  onOpenSourceChat?: (id: string) => void;
   onResult?: (text: string) => void;
   halted?: boolean;
   recording?: boolean;
@@ -129,7 +132,8 @@ function BuildWorkspaceSession(props: BuildWorkspaceProps) {
   const [companion, setCompanion] = useState<CompanionState>({});
   const [band, setBand] = useState<"actions" | "files" | "message" | "editor">("message");
   const [prompt, setPrompt] = useState("");
-  const [incomingTask, setIncomingTask] = useState<{ text: string; threadId: string | null; mode: string | null } | null>(null);
+  const [incomingTask, setIncomingTask] = useState<{ text: string; threadId: string | null; mode: string | null; chat?: ChatBuildHandoff } | null>(null);
+  const [sourceChatId, setSourceChatId] = useState<string>();
   const taskField = useRef<HTMLTextAreaElement>(null);
   const planningController = useRef<AbortController | null>(null);
   useEffect(() => {
@@ -496,11 +500,15 @@ function BuildWorkspaceSession(props: BuildWorkspaceProps) {
     try {
       const restored = parseBuildDraft(sessionStorage.getItem(buildDraftKey(owner)), owner);
       if (restored) {
-        setBuffers(restored.buffers); setTabs(restored.tabs); setSelectedFile(restored.selectedFile); setPrompt(restored.prompt); setCwd(restored.cwd ?? ""); setPlanningTier(restored.planningTier ?? null);
+        setBuffers(restored.buffers); setTabs(restored.tabs); setSelectedFile(restored.selectedFile); setPrompt(restored.prompt); setCwd(restored.cwd ?? ""); setPlanningTier(restored.planningTier ?? null); setSourceChatId(restored.sourceChatId);
         if (Object.values(restored.buffers).some(buffer => buffer.saved !== buffer.draft)) setFileNotice("Recovered unsaved drafts for this account. Saving will check that each original file is unchanged.");
       }
       const text = sessionStorage.getItem(`adrian-build-draft.${owner}`);
       if (text) setIncomingTask({ text, threadId: sessionStorage.getItem(`adrian-build-task-source.${owner}`), mode: sessionStorage.getItem(`adrian-build-mode.${owner}`) });
+      else {
+        const chat = parseChatBuildHandoff(sessionStorage.getItem(buildHandoffKey(owner)), owner);
+        if (chat) setIncomingTask({ text: chat.text, threadId: null, mode: null, chat });
+      }
     } catch { setFileNotice("Editor draft recovery could not be read. Existing files have not been changed."); }
     setDraftHydrated(true);
   }, [props.ownerId]);
@@ -508,9 +516,9 @@ function BuildWorkspaceSession(props: BuildWorkspaceProps) {
   useEffect(() => {
     if (!draftHydrated || !props.ownerId) return;
     try {
-      sessionStorage.setItem(buildDraftKey(props.ownerId), serializeBuildDraft({ owner: props.ownerId, buffers, tabs, selectedFile, prompt, cwd, ...(planningTier ? { planningTier } : {}) }));
+      sessionStorage.setItem(buildDraftKey(props.ownerId), serializeBuildDraft({ owner: props.ownerId, buffers, tabs, selectedFile, prompt, cwd, sourceChatId, ...(planningTier ? { planningTier } : {}) }));
     } catch (error) { setFileNotice(error instanceof Error ? error.message : "Draft recovery could not be saved. Save or copy your changes before leaving Build."); }
-  }, [buffers, tabs, selectedFile, prompt, cwd, planningTier, props.ownerId, draftHydrated]);
+  }, [buffers, tabs, selectedFile, prompt, cwd, planningTier, props.ownerId, draftHydrated, sourceChatId]);
 
   useEffect(() => {
     void browseWorkspace();
@@ -532,21 +540,42 @@ function BuildWorkspaceSession(props: BuildWorkspaceProps) {
     if (!incomingTask || !props.ownerId) return;
     const owner = props.ownerId;
     const nextPrompt = append && prompt.trim() ? `${prompt}\n\n${incomingTask.text}` : incomingTask.text;
+    if (nextPrompt.length > MAX_BUILD_TASK_CHARACTERS) {
+      setNotice("Shorten the current task before adding the handoff. Build accepts up to 8,000 characters.");
+      return;
+    }
+    const source = incomingTask.chat?.chatId;
     try {
-      const encoded = serializeBuildDraft({ owner, buffers: buffersRef.current, tabs, selectedFile, prompt: nextPrompt, cwd, ...(planningTier ? { planningTier } : {}) });
+      const encoded = serializeBuildDraft({ owner, buffers: buffersRef.current, tabs, selectedFile, prompt: nextPrompt, cwd, sourceChatId: source, ...(planningTier ? { planningTier } : {}) });
       sessionStorage.setItem(buildDraftKey(owner), encoded);
       if (sessionStorage.getItem(buildDraftKey(owner)) !== encoded) throw new Error("Build draft did not read back.");
       if (incomingTask.threadId) sessionStorage.setItem(`adrian-human-return.${owner}`, incomingTask.threadId);
       else sessionStorage.removeItem(`adrian-human-return.${owner}`);
-      sessionStorage.removeItem(`adrian-build-draft.${owner}`);
-      sessionStorage.removeItem(`adrian-build-task-source.${owner}`);
-      sessionStorage.removeItem(`adrian-build-mode.${owner}`);
+      removeIncomingTask(owner);
     } catch { setNotice("The handoff could not be saved. Your Build draft was kept."); return; }
     setPrompt(nextPrompt);
+    setSourceChatId(source);
     if (incomingTask.mode === "auto" || incomingTask.mode === "plan" || incomingTask.mode === "default") setMode(incomingTask.mode);
     setIncomingTask(null);
     setNotice(incomingTask.threadId ? "Task added from Intelligence. Review it before running. Its result returns to the source thread." : "Task added from Chat. Review it before running.");
     taskField.current?.focus();
+  }
+
+  function removeIncomingTask(owner: string) {
+    if (incomingTask?.chat) sessionStorage.removeItem(buildHandoffKey(owner));
+    else {
+      sessionStorage.removeItem(`adrian-build-draft.${owner}`);
+      sessionStorage.removeItem(`adrian-build-task-source.${owner}`);
+      sessionStorage.removeItem(`adrian-build-mode.${owner}`);
+    }
+  }
+
+  function dismissIncomingTask() {
+    if (!props.ownerId) return;
+    try {
+      removeIncomingTask(props.ownerId);
+      setIncomingTask(null);
+    } catch { setNotice("Your browser could not dismiss the pending handoff."); }
   }
 
   useEffect(() => {
@@ -982,10 +1011,15 @@ function BuildWorkspaceSession(props: BuildWorkspaceProps) {
           <p className="font-semibold">Adrian Build</p>
         </div>
         <textarea ref={taskField} value={prompt} onChange={(event) => setPrompt(event.target.value)} placeholder="Describe the change you want to build…" className="min-h-24 w-full rounded-panel border border-line bg-transparent p-3 text-sm outline-none focus:border-accent" aria-label="Coding task" />
+        {sourceChatId && props.onOpenSourceChat && <button type="button" className="min-h-11 underline" onClick={() => props.onOpenSourceChat?.(sourceChatId)}>Open source conversation</button>}
         {incomingTask && <details className="rounded-panel border border-line p-3">
           <summary className="min-h-11 cursor-pointer">Review task from {incomingTask.threadId ? "Intelligence" : "Chat"}</summary>
+          {incomingTask.chat && <p className="mb-2 text-sm text-muted">{incomingTask.chat.messageCount} selected {incomingTask.chat.messageCount === 1 ? "message" : "messages"} · {incomingTask.chat.fileCount} selected {incomingTask.chat.fileCount === 1 ? "file" : "files"}</p>}
           <p className="max-h-48 overflow-auto whitespace-pre-wrap break-words text-sm">{incomingTask.text}</p>
-          <button type="button" disabled={active || loading} className="min-h-11 underline" onClick={() => acceptIncomingTask(Boolean(prompt.trim()))}>{prompt.trim() ? "Add to current task" : "Use this task"}</button>
+          <div className="flex flex-wrap gap-3">
+            <button type="button" disabled={active || loading} className="min-h-11 underline" onClick={() => acceptIncomingTask(Boolean(prompt.trim()))}>{prompt.trim() ? "Add to current task" : "Use this task"}</button>
+            <button type="button" className="min-h-11 text-muted" onClick={dismissIncomingTask}>Dismiss handoff</button>
+          </div>
         </details>}
         {props.composer && <div className="flex flex-wrap items-center gap-2" aria-label="Work attachments and project">
           <ComposerMore testId="work-composer-more-menu">

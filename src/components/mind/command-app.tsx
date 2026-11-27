@@ -95,7 +95,7 @@ import { DesktopUpdateNote } from "@/components/mind/desktop-update-note";
 import { ActionOverlay, ActionsButton } from "@/components/mind/conversation-menu";
 import { applyArchive, applyFavorite, applyProject, applyRename, conversationSharePath, quoteIntoNewChat, scheduleConversation, type ConversationAction } from "@/lib/mind/conversation-actions";
 import { conversationSection, HIDDEN_SETTINGS_SECTIONS_KEY, hideSection, readHiddenSections, removeConversations, restoreSection } from "@/lib/mind/conversation-sections";
-import { embeddedWorkspaceSearch, settingsPaneFromSearch, resolveShare, sameShareLocation, shareMissLabel, shareWriteDropsMissing, shareWriteForView, writeShareSearch } from "@/lib/mind/app-location";
+import { embeddedWorkspaceSearch, settingsPaneFromSearch, resolveShare, sameShareLocation, shareMissLabel, shareWriteDropsMissing, shareWriteForView, socialLegacyReturn, writeShareSearch } from "@/lib/mind/app-location";
 import { routeForBotChat } from "@/lib/mind/bot-model";
 import { UserButton } from "@/lib/auth/gates";
 import {
@@ -244,10 +244,13 @@ import {
 } from "@/lib/mind/voice/spam-guard";
 import { createCallHistory, type CallHistory } from "@/lib/mind/voice/voice-chat-turn";
 import type { Chat, Msg, Workspace, MemoryScope } from "@/lib/mind/types";
+import { buildHandoffKey, prepareChatBuildHandoff, type BuildSelection } from "@/lib/mind/kimi/build-handoff";
+import { ChatBuildPicker } from "@/components/mind/chat-build-picker";
 import { ServiceBoard } from "@/components/mind/service-board";
 import { EveWorkbench } from "@/components/mind/eve-workbench";
 import { FleetPanel } from "@/components/mind/fleet-panels";
 const BuildWorkspace = lazy(() => import("@/components/mind/build-workspace").then((module) => ({ default: module.BuildWorkspace })));
+const SocialWorkspace = lazy(() => import("@/components/mind/social-workspace"));
 import { ResearchPanel } from "@/components/mind/surfaces/research-panel";
 import { AttachmentChips } from "@/components/mind/media/attachment-chips";
 import { CameraCapture } from "@/components/mind/media/camera-capture";
@@ -395,6 +398,7 @@ type View =
   | "agents"
   | "runs"
   | "research"
+  | "social"
   | "files"
   | "connected"
   | "tools"
@@ -525,6 +529,7 @@ const TITLES: Record<View, string> = {
   agents: "Bots & Agents",
   runs: "Runs",
   research: "Research",
+  social: "Social",
   files: "Library",
   build: "Build",
   code: "Intelligence",
@@ -835,6 +840,7 @@ function CommandSession({ account, accountPending }: { account: ReturnType<typeo
   const [workspaceReturn, setWorkspaceReturn] = useState<
     { surface: "controls"; origin: View } |
     { surface: "connected"; origin: "command" | "chat" | "build" } |
+    { surface: "social"; origin: View } |
     null
   >(null);
   const pluginOrigin = workspaceReturn?.surface === "connected" ? workspaceReturn.origin : null;
@@ -848,6 +854,11 @@ function CommandSession({ account, accountPending }: { account: ReturnType<typeo
     setView("connected");
     if (view === "command" || view === "chat" || view === "build") setWorkspaceReturn({ surface: "connected", origin: view });
   }
+  function openSocial() {
+    setView("social");
+    if (view !== "social") setWorkspaceReturn({ surface: "social", origin: view });
+    closeMenus();
+  }
   const applyingLocation = useRef(false);
   const locationHistory = useRef<"push" | "replace">("push");
   function loginReturnPath(resumeSpeak = false) {
@@ -857,6 +868,42 @@ function CommandSession({ account, accountPending }: { account: ReturnType<typeo
     if (view === "settings" && settingsPane) params.set("pane", settingsPane);
     if (resumeSpeak) params.set("resume", "speak");
     return params.size ? "/?" + params.toString() : "/";
+  }
+  function stageChatBuildSelection(selection: BuildSelection): string | undefined {
+    if (!draftOwner || accountPending || turnOwner.current !== draftOwner || activeId !== selection.chatId) return "The account or conversation changed. Reopen the Work handoff.";
+    const current = wsRef.current;
+    const result = prepareChatBuildHandoff(draftOwner, current.chats.find(chat => chat.id === selection.chatId), current.files, selection);
+    if ("error" in result) return result.error;
+    try {
+      const key = buildHandoffKey(draftOwner);
+      if (sessionStorage.getItem(key) || sessionStorage.getItem(`adrian-build-draft.${draftOwner}`)) {
+        return "Work already has an incoming task. Review or dismiss it before creating another.";
+      }
+      const saved = JSON.stringify(result.handoff);
+      sessionStorage.setItem(key, saved);
+      if (sessionStorage.getItem(key) !== saved) throw new Error();
+    } catch { return "Your browser could not save this handoff."; }
+    setView("build");
+    setNavOpen(false);
+  }
+  function stageIntelligenceBuild(id: string, text: string, mode: "auto" | null): string | undefined {
+    const owner = draftOwner;
+    const chat = wsRef.current.chats.find(item => item.id === id);
+    if (!owner || turnOwner.current !== owner || !chat || chat.temporary || chat.archived) {
+      return "Open a saved Intelligence thread to carry its task into Build.";
+    }
+    try {
+      const key = `adrian-build-draft.${owner}`;
+      if (sessionStorage.getItem(key) || sessionStorage.getItem(buildHandoffKey(owner))) {
+        return "Work already has an incoming task. Review or dismiss it before creating another.";
+      }
+      sessionStorage.setItem(`adrian-build-task-source.${owner}`, id);
+      if (mode) sessionStorage.setItem(`adrian-build-mode.${owner}`, mode);
+      else sessionStorage.removeItem(`adrian-build-mode.${owner}`);
+      sessionStorage.setItem(key, text);
+    } catch { return "Your browser could not save this handoff."; }
+    setView("build");
+    setNavOpen(false);
   }
   function setView(next: View) {
     setWorkspaceReturn((entry) => entry?.surface === next ? entry : null);
@@ -2427,7 +2474,8 @@ function CommandSession({ account, accountPending }: { account: ReturnType<typeo
       setLibraryBand("preview");
     }
     if (hit.view === "speak") openSpeakStage();
-    else if (hit.view === "social" || hit.view === "gpt-wrapper") window.location.assign("/" + hit.view);
+    else if (hit.view === "social") openSocial();
+    else if (hit.view === "gpt-wrapper") window.location.assign("/gpt-wrapper");
     else setView(hit.view);
     if (hit.focusId) setCardFocus({ id: hit.focusId });
     setQuery("");
@@ -3082,7 +3130,7 @@ function CommandSession({ account, accountPending }: { account: ReturnType<typeo
         return null;
       }
       const name = selectedProvider.slice("service:".length);
-      if (name === "social") window.location.assign("/social");
+      if (name === "social") openSocial();
       else if (name === "gpt-wrapper") window.location.assign("/gpt-wrapper");
       else if (name === "drive") openCloudPicker();
       else if (name === "notion") setView("connected");
@@ -5085,11 +5133,9 @@ ${message.content}`;
       : command === "/fix"
         ? `Fix only the files named here. ${rest}`.trim()
         : `Do this in the hosted workspace and report what changed. ${rest || text}`.trim();
-    sessionStorage.setItem(`adrian-build-draft.${draftOwner || "signed-out"}`, task);
-    sessionStorage.setItem(`adrian-build-task-source.${draftOwner || "signed-out"}`, id);
-    if (command === "/fix" || command === "/run" || command === "/test") sessionStorage.setItem(`adrian-build-mode.${draftOwner || "signed-out"}`, "auto");
+    const issue = stageIntelligenceBuild(id, task, "auto");
+    if (issue) return issue;
     setWs((prev) => appendHumanResult(prev, id, text, "Handed to Build. File changes happen only after you press Run build. This thread stays here."));
-    setView("build");
     return "Opened Build with this Intelligence task. The thread is still saved.";
   }
 
@@ -6347,6 +6393,8 @@ ${message.content}`;
   }, [interfaceSettings.prefs.bindings]);
   const dictationDisabled = !dictationPrefs.enabled || ws.halted || voiceListening || voiceOverlayOpen;
 
+  const compactRail = railCollapsed && !navOpen;
+
   const composerExtras = <ChatComposerExtras key={draftScope} files={ws.files}
     onImage={file => void addImageAttachment(file)}
     onSelect={file => {
@@ -6391,7 +6439,7 @@ ${message.content}`;
       <MenuMotion />
       {navOpen ? <button type="button" className="fixed inset-0 md:hidden" aria-label="Close menu" style={{ zIndex: 150, background: "transparent" }} onClick={() => setNavOpen(false)} /> : null}
       <nav className="workspace-shortcuts" aria-label="Workspace shortcuts">
-        <button type="button" title={railCollapsed ? "Open sidebar" : "Hide sidebar"} aria-label={railCollapsed ? "Open sidebar" : "Hide sidebar"} aria-controls="workspace-sidebar" aria-expanded={!railCollapsed} onClick={() => setRailCollapsed(value => !value)}><PanelLeft size={20} /></button>
+        <button id="workspace-sidebar-visibility" type="button" title={railCollapsed ? "Open sidebar" : "Hide sidebar"} aria-label={railCollapsed ? "Open sidebar" : "Hide sidebar"} aria-controls="workspace-sidebar" aria-expanded={!railCollapsed} onClick={() => setRailCollapsed(value => !value)}><PanelLeft size={20} /></button>
         {([
           { label: "Home", icon: Home, current: view === "command", open: () => setView("command") },
           { label: "Build", icon: Terminal, current: view === "build", open: () => setView("build") },
@@ -6401,9 +6449,9 @@ ${message.content}`;
           { label: "Control Center", icon: Settings, current: view === "controls", open: openControlCenter },
         ]).map(item => <button key={item.label} type="button" title={item.label} aria-label={`Go to ${item.label}`} aria-current={item.current ? "page" : undefined} onClick={item.open}><item.icon size={20} /></button>)}
       </nav>
-      <aside id="workspace-sidebar" data-collapsed={railCollapsed} ref={(node) => { navDrawerRef.current = node; pinRailFrame(node); }} onMouseDown={closeNavFromBackdrop} role={navOpen ? "dialog" : undefined} aria-modal={navOpen ? true : undefined} aria-label={navOpen ? "Workspace navigation" : undefined} className={`rail gpt-rail ${navOpen ? "nav-drawer-open flex" : "hidden"} fixed inset-0 z-40 w-full flex-col overflow-hidden md:static md:flex md:h-dvh ${railCollapsed ? "md:w-[4.5rem]" : "md:w-72"} md:shrink-0`}>
+      <aside id="workspace-sidebar" data-collapsed={compactRail} ref={(node) => { navDrawerRef.current = node; pinRailFrame(node); }} onMouseDown={closeNavFromBackdrop} role={navOpen ? "dialog" : undefined} aria-modal={navOpen ? true : undefined} aria-label={navOpen ? "Workspace navigation" : undefined} className={`rail gpt-rail ${navOpen ? "nav-drawer-open flex" : "hidden"} fixed inset-0 z-40 w-full flex-col overflow-hidden md:static md:flex md:h-dvh ${compactRail ? "md:w-[4.5rem]" : "md:w-72"} md:shrink-0`}>
         <div className="gpt-rail-head flex items-center gap-3 px-4 py-4">
-          {!railCollapsed && (
+          {!compactRail && (
             <p className="flex min-w-0 flex-1 items-center gap-2 text-2xl font-semibold tracking-tight">
               <img className="service-mark adrian-mark" src="/brand/logo-mark.jpg" alt="" width={32} height={32} />
               <span className="truncate">Adrian</span>
@@ -6424,7 +6472,10 @@ ${message.content}`;
           <button ref={navCloseRef} type="button" className="grid size-11 place-items-center rounded-full bg-white/8 md:hidden" aria-label="Close menu" onClick={() => setNavOpen(false)}>
             <span className="icon-x" aria-hidden="true" />
           </button>
-          <button type="button" className="hidden size-11 place-items-center rounded-full bg-white/8 md:grid" aria-label={railCollapsed ? "Expand sidebar" : "Collapse sidebar"} onClick={() => setRailCollapsed((value) => !value)}>
+          <button type="button" className="hidden size-11 place-items-center rounded-full bg-white/8 md:grid" aria-label="Collapse sidebar" onClick={() => {
+            setRailCollapsed(true);
+            requestAnimationFrame(() => document.getElementById("workspace-sidebar-visibility")?.focus());
+          }}>
             <PanelLeft className="size-4" />
           </button>
         </div>
@@ -6439,15 +6490,15 @@ ${message.content}`;
             title="Dashboard"
             aria-label="Dashboard"
             aria-current={view === "dashboard" ? "page" : undefined}
-            className={`nav-item mb-4 flex min-h-11 w-full items-center gap-3 rounded-2xl px-3 text-sm font-medium ${railCollapsed ? "justify-center px-0" : ""} ${view === "dashboard" ? "nav-item-active" : "text-muted"}`}
+            className={`nav-item mb-4 flex min-h-11 w-full items-center gap-3 rounded-2xl px-3 text-sm font-medium ${compactRail ? "justify-center px-0" : ""} ${view === "dashboard" ? "nav-item-active" : "text-muted"}`}
             onClick={() => { setView("dashboard"); setNavOpen(false); closeMenus(); }}
           >
             <LayoutDashboard size={20} className="shrink-0" aria-hidden="true" />
-            {!railCollapsed && "Dashboard"}
+            {!compactRail && "Dashboard"}
           </button>
           {NAV_GROUPS.map((group) => (
             <div key={group.label} className="mb-4">
-              {!railCollapsed && <p ref={showRailLabel} className="meta-label px-3 pb-2">{group.label}</p>}
+              {!compactRail && <p ref={showRailLabel} className="meta-label px-3 pb-2">{group.label}</p>}
               <div className="space-y-1">
                 {group.items.map((item, itemIndex) => {
                   const on = view === item.id;
@@ -6463,10 +6514,10 @@ ${message.content}`;
                         setNavOpen(false);
                         closeMenus();
                       }}
-                      className={`nav-item flex min-h-11 w-full items-center gap-3 rounded-2xl px-3 text-sm font-medium ${on ? "nav-item-active" : "text-muted hover:bg-white/5"} ${railCollapsed ? "justify-center px-0" : ""}`}
+                      className={`nav-item flex min-h-11 w-full items-center gap-3 rounded-2xl px-3 text-sm font-medium ${on ? "nav-item-active" : "text-muted hover:bg-white/5"} ${compactRail ? "justify-center px-0" : ""}`}
                     >
                       <img className="service-mark size-5 shrink-0 rounded-md object-cover" src={navMark(item.id)} alt="" width={22} height={22} />
-                      {!railCollapsed && item.label}
+                      {!compactRail && item.label}
                     </button>
                   );
                   return button;
@@ -6477,44 +6528,44 @@ ${message.content}`;
           <Link
             to="/explore"
             data-testid="nav-route-explore"
-            className={`nav-item flex min-h-11 items-center gap-3 rounded-2xl px-3 text-sm font-medium text-muted ${railCollapsed ? "justify-center" : ""}`}
+            className={`nav-item flex min-h-11 items-center gap-3 rounded-2xl px-3 text-sm font-medium text-muted ${compactRail ? "justify-center" : ""}`}
             onClick={() => setNavOpen(false)}
           >
             <img className="service-mark size-5 rounded-md object-cover" src="/brand/marks/explore.png" alt="" width={22} height={22} />
-            {!railCollapsed && "Explore"}
+            {!compactRail && "Explore"}
           </Link>
           <Link
             to="/research"
             data-testid="nav-route-research"
-            className={`nav-item flex min-h-11 items-center gap-3 rounded-2xl px-3 text-sm font-medium text-muted ${railCollapsed ? "justify-center" : ""}`}
+            className={`nav-item flex min-h-11 items-center gap-3 rounded-2xl px-3 text-sm font-medium text-muted ${compactRail ? "justify-center" : ""}`}
             onClick={() => setNavOpen(false)}
           >
             <img className="service-mark size-5 rounded-md object-cover" src="/brand/marks/research.png" alt="" width={22} height={22} />
-            {!railCollapsed && "Research"}
+            {!compactRail && "Research"}
           </Link>
-          <Link
-            to="/social"
-            search={{ workspace: embeddedWorkspaceSearch(router.state.location.searchStr) }}
+          <button
+            type="button"
             data-testid="nav-route-social"
-            aria-label="Social"
-            className={`nav-item flex min-h-11 items-center gap-3 rounded-2xl px-3 text-sm font-medium text-muted ${railCollapsed ? "justify-center" : ""}`}
-            onClick={() => setNavOpen(false)}
+            aria-label="Adrian Social"
+            aria-current={view === "social" ? "page" : undefined}
+            className={`nav-item flex min-h-11 w-full items-center gap-3 rounded-2xl px-3 text-sm font-medium ${view === "social" ? "nav-item-active" : "text-muted"} ${compactRail ? "justify-center" : ""}`}
+            onClick={openSocial}
           >
             <img className="service-mark size-5 rounded-md object-cover" src="/apps/social/assets/mark.jpg" alt="" width={22} height={22} />
-            {!railCollapsed && "Social"}
-          </Link>
+            {!compactRail && "Adrian Social"}
+          </button>
           <Link
             to="/gpt-wrapper"
             search={{ workspace: embeddedWorkspaceSearch(router.state.location.searchStr) }}
             data-testid="nav-route-gpt-wrapper"
             aria-label="GPT wrapper"
-            className={`nav-item flex min-h-11 items-center gap-3 rounded-2xl px-3 text-sm font-medium text-muted ${railCollapsed ? "justify-center" : ""}`}
+            className={`nav-item flex min-h-11 items-center gap-3 rounded-2xl px-3 text-sm font-medium text-muted ${compactRail ? "justify-center" : ""}`}
             onClick={() => setNavOpen(false)}
           >
             <img className="service-mark size-5 rounded-md object-cover" src="/brand/marks/gpt-wrapper.svg" alt="" width={22} height={22} />
-            {!railCollapsed && "GPT wrapper"}
+            {!compactRail && "GPT wrapper"}
           </Link>
-          {!railCollapsed && (
+          {!compactRail && (
             <>
             <button
               type="button"
@@ -6563,8 +6614,8 @@ ${message.content}`;
             ) : null}
             </>
           )}
-          {!railCollapsed && <div className="mx-3 my-3 border-t border-white/10" />}
-          {!railCollapsed && (
+          {!compactRail && <div className="mx-3 my-3 border-t border-white/10" />}
+          {!compactRail && (
             <div className="mb-4" data-testid="sidebar-recent">
               <p className="px-3 pb-2 text-xs font-medium text-muted">Recent conversations</p>
               <ConversationSections
@@ -6584,7 +6635,7 @@ ${message.content}`;
               />
             </div>
           )}
-          {ws.pins.length > 0 && !railCollapsed && (
+          {ws.pins.length > 0 && !compactRail && (
             <div className="mb-3">
               <p className="px-3 pb-1 text-xs font-medium text-muted">Pinned</p>
               {ws.pins.map((pin) => {
@@ -6622,7 +6673,7 @@ ${message.content}`;
             </div>
           )}
         </nav>
-        <div className={`gpt-rail-foot shrink-0 bg-bg p-3 ${railCollapsed ? "flex flex-col items-center gap-2" : "flex items-center justify-between gap-3"}`}>
+        <div className={`gpt-rail-foot shrink-0 bg-bg p-3 ${compactRail ? "flex flex-col items-center gap-2" : "flex items-center justify-between gap-3"}`}>
           <button
             type="button"
             className="gpt-chat-pill inline-flex min-h-11 items-center gap-2 rounded-full bg-[#2f6bff] px-4 text-sm font-semibold text-white"
@@ -6633,7 +6684,7 @@ ${message.content}`;
             }}
           >
             <MessageSquare className="size-4" />
-            {!railCollapsed && "Chat"}
+            {!compactRail && "Chat"}
           </button>
           <button
             type="button"
@@ -7178,6 +7229,12 @@ ${message.content}`;
           <p role="status" data-testid="share-notice" className="mx-3 mb-2 rounded-panel border border-line px-3 py-2 text-sm text-muted">{notice}</p>
         ) : null}
         <div ref={(node) => { pageScrollRef.current = node; pinPageScroller(node); }} onScroll={rememberPageScroll} className={`min-h-0 flex-1 ${view === "chat" || view === "dashboard" || view === "intelligence" ? "overflow-hidden" : "overflow-auto pb-24"}`}>
+          {view === "social" && <Suspense fallback={<p role="status" className="p-5">Loading Adrian Social…</p>}>
+            <SocialWorkspace
+              onReturn={() => setView(workspaceReturn?.surface === "social" ? workspaceReturn.origin : "command")}
+              returnHref={workspaceReturn?.surface === "social" ? undefined : socialLegacyReturn(locationSearch)}
+            />
+          </Suspense>}
           {view === "intelligence" && (
             <EveWorkbench
               workspace={ws}
@@ -7749,13 +7806,9 @@ ${message.content}`;
              onSpeak={(text, messageId) => void speak(text, messageId ?? "")}
               onStopSpeak={interruptSpeakPlayback}
               onOpenSpeak={openSpeakStage}
-              onOpenBuild={(text) => {
-                sessionStorage.removeItem(`adrian-build-task-source.${draftOwner || "signed-out"}`);
-                sessionStorage.removeItem(`adrian-build-mode.${draftOwner || "signed-out"}`);
-                sessionStorage.setItem(`adrian-build-draft.${draftOwner || "signed-out"}`, text);
-                setView("build");
-                setNavOpen(false);
-              }}
+              renderWorkHandoff={active && !active.temporary && !active.archived ? messageId => (
+                <ChatBuildPicker chat={active} files={ws.files} initialMessageId={messageId} onStage={stageChatBuildSelection} />
+              ) : undefined}
               onOpenHuman={(text) => handToHumanCode(text, "From Chat")}
               onListen={() => void listen()}
               onListenStop={() => void listen({ mode: "stop" })}
@@ -8387,11 +8440,17 @@ ${message.content}`;
           {view === "tools" && <FleetPanel mode="tools" ws={ws} setWs={setWs} onFailure={(message, retry, surface) => reportFailure(message, surface === "mcp" ? "mcp_tool_failed" : "open_page_failed", surface === "mcp" ? "mcp:tools" : "browser", retry)} />}
           {view === "build" && (
             <section className="page-shell">
+              <Suspense fallback={<p role="status" className="p-4">Opening Build…</p>}>
               <BuildWorkspace planningCatalog={tierCatalog} sharedTier={modelTier} composer={{
                 staged, images: pendingImages, message: error || notice,
                 onFile: () => fileRef.current?.click(), onPhoto: () => imageInputRef.current?.click(), onCamera: () => setCameraOpen(true), onPlugins: browseComposerPlugins,
                 removeFile: () => setStaged(null), removeImage: index => setPendingImages(current => current.filter((_, i) => i !== index)),
-              }} plannerRef={buildPlanner} enabledSkills={enabledSkills} freeOnly={researchFreeOnly} key={draftOwner ?? "signed-out"} ownerId={draftOwner ?? undefined} onDiscuss={(text) => handToHumanCode(text, "From Build")} onResult={(text) => {
+              }} plannerRef={buildPlanner} enabledSkills={enabledSkills} freeOnly={researchFreeOnly} key={draftOwner ?? "signed-out"} ownerId={draftOwner ?? undefined} onDiscuss={(text) => handToHumanCode(text, "From Build")} onOpenSourceChat={(id) => {
+                const source = wsRef.current.chats.find(chat => chat.id === id && !chat.temporary);
+                if (!source) { setNotice("This link points at a conversation that is no longer available."); return; }
+                setActiveId(source.id);
+                setView("chat");
+              }} onResult={(text) => {
                 const id = sessionStorage.getItem(`adrian-human-return.${draftOwner || "signed-out"}`);
                 if (!id || !wsRef.current.chats.some((chat) => chat.id === id && isIntelligenceThread(chat.customPersonality))) { handToHumanCode(text, "Build result"); return; }
                 sessionStorage.removeItem(`adrian-human-return.${draftOwner || "signed-out"}`);
@@ -8400,6 +8459,7 @@ ${message.content}`;
                 setView("code");
                 setNotice("Complete Build result added to the Intelligence thread on this device.");
               }} halted={ws.halted} recording={taskRecording} recordingSeconds={taskSeconds} onOpenSpeak={openSpeakStage} onToggleStop={() => { void toggleStop(); }} onStopRecording={() => void stopTaskRecording()} />
+              </Suspense>
             </section>
           )}
           {view === "code" && (
@@ -8412,7 +8472,7 @@ ${message.content}`;
               onNew={openHumanCode}
               onOpen={(id) => { setActiveId(id); setView("code"); }}
               onSend={(id, text, image) => sendHumanCode(id, text, image)}
-              onBuild={(text) => { if (activeId) sessionStorage.setItem(`adrian-build-task-source.${draftOwner || "signed-out"}`, activeId); else sessionStorage.removeItem(`adrian-build-task-source.${draftOwner || "signed-out"}`); sessionStorage.removeItem(`adrian-build-mode.${draftOwner || "signed-out"}`); sessionStorage.setItem(`adrian-build-draft.${draftOwner || "signed-out"}`, text); setView("build"); setNavOpen(false); }}
+              onBuild={(text) => { const issue = stageIntelligenceBuild(activeId || "", text, null); if (issue) setNotice(issue); }}
               halted={ws.halted}
             />
           )}
@@ -8813,7 +8873,7 @@ ${message.content}`;
                   { id: "explore", label: "Explore", detail: "Filter local templates, save one, then open it in Chat.", mark: "/brand/marks/explore.png", open: () => window.location.assign("/explore") },
                   { id: "dashboard", label: "Dashboard", detail: "Opens the workspace map inside this app.", mark: "/brand/marks/activity.png", open: () => setView("dashboard") },
                   { id: "research", label: "Research", detail: "Opens the free-first research website.", mark: "/brand/marks/research.png", open: () => window.location.assign("/research") },
-                  { id: "social", label: "Social", detail: "Adrian Social runs inside this software.", mark: "/apps/social/assets/mark.jpg", open: () => window.location.assign("/social") },
+                  { id: "social", label: "Adrian Social", detail: "Open accounts, drafts, and service controls.", mark: "/apps/social/assets/mark.jpg", open: openSocial },
                   { id: "gpt-wrapper", label: "GPT wrapper", detail: "The GPT wrapper runs inside this software.", mark: "/brand/marks/gpt-wrapper.svg", open: () => window.location.assign("/gpt-wrapper") },
                   ].filter((item) => helpQuery.toLowerCase().trim().split(/\s+/).every((word) => `${item.label} ${item.detail}`.toLowerCase().includes(word)));
                   if (topics.length === 0) return <p className="mt-2 text-sm text-muted" role="status">No matching workspace guides.</p>;

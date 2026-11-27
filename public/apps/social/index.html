@@ -10,81 +10,56 @@
   <link rel="stylesheet" href="styles.css">
 </head>
 <body>
-  <aside class="sidebar" aria-label="Panel categories">
-    <div class="brand">
-      <img src="assets/mark.jpg" alt="Adrian logo">
-      <div>
-        <p class="eyebrow">Service panel</p>
-        <strong>Adrian Social</strong>
-      </div>
-    </div>
-    <nav>
-      <p class="group">Operate</p>
-      <button type="button" class="nav on" data-panel="overview">Overview</button>
-      <button type="button" class="nav" data-panel="run">Run</button>
-      <button type="button" class="nav" data-panel="connect">Connect</button>
-      <button type="button" class="nav" data-panel="install">Install</button>
-      <p class="group">Inbox</p>
-      <button type="button" class="nav" data-panel="accounts">Accounts</button>
-      <button type="button" class="nav" data-panel="queue">Queue</button>
-      <button type="button" class="nav" data-panel="drafts">Drafts</button>
-      <p class="group">Guard</p>
-      <button type="button" class="nav" data-panel="guard">Guard</button>
-      <button type="button" class="nav" data-panel="limits">Limits</button>
-      <button type="button" class="nav" data-panel="machine">Machine</button>
-      <p class="group">Record</p>
-      <button type="button" class="nav" data-panel="records">Records</button>
-      <button type="button" class="nav" data-panel="tools">Tools</button>
-    </nav>
-  </aside>
-  <div class="shell">
-    <header class="top">
-      <div class="top-inner">
-        <img class="header-mark" src="assets/mark.jpg" alt="">
+  <div class="adrian-social" data-adrian-social data-standalone>
+    <header class="social-hero">
+      <div class="social-brand">
+        <img src="assets/mark.jpg" alt="" width="52" height="52">
         <div>
-          <p class="eyebrow" id="panel-group">Operate</p>
-          <h1 id="panel-title">Overview</h1>
+          <h1>Adrian Social</h1>
+          <p>Manage accounts, review drafts, and check your connected PC.</p>
         </div>
-        <p id="runtime-state" class="state" title="The global state of the PC service.">not connected</p>
       </div>
-      <nav class="section-nav" aria-label="Pages in this category">
-        <button type="button" data-panel="overview" data-group="operate">Overview</button>
-        <button type="button" data-panel="run" data-group="operate">Run</button>
-        <button type="button" data-panel="connect" data-group="operate">Connect</button>
-        <button type="button" data-panel="install" data-group="operate">Install</button>
-        <button type="button" data-panel="accounts" data-group="inbox">Accounts</button>
-        <button type="button" data-panel="queue" data-group="inbox">Queue</button>
-        <button type="button" data-panel="drafts" data-group="inbox">Drafts</button>
-        <button type="button" data-panel="guard" data-group="guard">Guard</button>
-        <button type="button" data-panel="limits" data-group="guard">Limits</button>
-        <button type="button" data-panel="machine" data-group="guard">Machine</button>
-        <button type="button" data-panel="records" data-group="record">Records</button>
-        <button type="button" data-panel="tools" data-group="record">Tools</button>
-      </nav>
+      <div class="social-hero-actions">
+        <span class="state" id="runtime-state" data-state="offline">Disconnected</span>
+        <button class="social-refresh" id="refresh-status" type="button">Refresh status</button>
+      </div>
     </header>
-    <p id="link-state" class="status-line" role="status">Not connected. The PC service is not answering this browser yet.</p>
+    <nav class="social-groups" aria-label="Social categories">
+      <button type="button" data-group="operate">Overview &amp; service</button>
+      <button type="button" data-group="inbox">Inbox</button>
+      <button type="button" data-group="guard">Safety &amp; limits</button>
+      <button type="button" data-group="record">Records &amp; tools</button>
+    </nav>
+    <nav class="section-nav" aria-label="Social pages">
+      <button type="button" data-panel="overview" data-group="operate">Overview</button>
+      <button type="button" data-panel="run" data-group="operate">Run</button>
+      <button type="button" data-panel="connect" data-group="operate">Connect</button>
+      <button type="button" data-panel="install" data-group="operate">Install</button>
+      <button type="button" data-panel="accounts" data-group="inbox">Accounts</button>
+      <button type="button" data-panel="queue" data-group="inbox">Queue</button>
+      <button type="button" data-panel="drafts" data-group="inbox">Drafts</button>
+      <button type="button" data-panel="guard" data-group="guard">Guard</button>
+      <button type="button" data-panel="limits" data-group="guard">Limits</button>
+      <button type="button" data-panel="machine" data-group="guard">Machine</button>
+      <button type="button" data-panel="records" data-group="record">Records</button>
+      <button type="button" data-panel="tools" data-group="record">Tools</button>
+    </nav>
+    <p id="link-state" class="status-line" role="status">Connect your PC to load current data and use service controls.</p>
     <p id="action-result" class="status-line" role="status" hidden></p>
-    <main>
+    <div class="social-content" aria-labelledby="panel-title">
+      <h2 id="panel-title" tabindex="-1">Overview</h3>
       <section id="overview" class="panel on" data-group="operate">
-        <p class="lead">This page asks the PC. It does not deliver a message.</p>
-        <p class="lead">This page asks the PC. It does not deliver a message. Not connected is correct until the EliteBook service answers.</p>
+        <p class="lead">Check what your Social service has recorded. Review each draft before it enters the queue.</p>
         <div class="counts">
           <button type="button" data-panel="accounts"><span>Accounts</span><strong id="count-accounts">—</strong></button>
           <button type="button" data-panel="queue"><span>Queue</span><strong id="count-ready">—</strong></button>
           <button type="button" data-panel="drafts"><span>Drafts</span><strong id="count-drafts">—</strong></button>
         </div>
         <div class="map">
-          <button type="button" data-panel="run"><span>Operate</span><strong>Run</strong><em>Start, pause, or stop the service.</em></button>
-          <button type="button" data-panel="connect"><span>Operate</span><strong>Connect</strong><em>PC address and local key.</em></button>
-          <button type="button" data-panel="install"><span>Operate</span><strong>Install</strong><em>The scripts that start the PC service.</em></button>
-          <button type="button" data-panel="accounts"><span>Inbox</span><strong>Accounts</strong><em>Up to ten accounts. One login window at a time.</em></button>
-          <button type="button" data-panel="queue"><span>Inbox</span><strong>Queue</strong><em>Contacts that already meet every ready rule.</em></button>
-          <button type="button" data-panel="drafts"><span>Inbox</span><strong>Drafts</strong><em>Approve queues a line. It is not sent until the session confirms it.</em></button>
-          <button type="button" data-panel="guard"><span>Guard</span><strong>Guard</strong><em>What writes, and what never sends.</em></button>
-          <button type="button" data-panel="limits"><span>Guard</span><strong>Limits</strong><em>Daily ceilings and the random gap.</em></button>
-          <button type="button" data-panel="machine"><span>Guard</span><strong>Machine</strong><em>CPU, RAM, free disk, and uptime.</em></button>
-          <button type="button" data-panel="records"><span>Record</span><strong>Records</strong><em>Opt-out, settings, and the audit log.</em></button>
-          <button type="button" data-panel="tools"><span>Record</span><strong>Tools</strong><em>Every control, and whether it sends.</em></button>
+          <button type="button" data-panel="connect"><strong>Connect your PC</strong><em>Verify your Social service and see current activity.</em></button>
+          <button type="button" data-panel="run"><strong>Service controls</strong><em>Start, pause, stop, and check for updates.</em></button>
+          <button type="button" data-panel="guard"><strong>Review safeguards</strong><em>Check approval, opt-out, and delivery rules.</em></button>
+          <button type="button" data-panel="records"><strong>View records</strong><em>Open the audit log, settings, and backups.</em></button>
         </div>
       </section>
 
@@ -97,7 +72,7 @@
           <a class="button" href="installer/README.txt" download>Download the steps</a>
         </div>
         <p class="hint">Copy the whole folder onto the EliteBook, then run install.ps1 from that folder. A download of these scripts alone is not the software. This site cannot hold the Dev weight file. The Jeff files were not downloaded because the public host returned authentication required.</p>
-        <p class="hint">After launch, the PC must show a listener on 127.0.0.1:8765. The tunnel command must be cloudflared tunnel --url http://127.0.0.1:8765. If it mentions port 9222, stop. Paste the https address and the local secret into Connect. Do not paste the secret into chat. The page stays Not connected until those four reads succeed.</p>
+        <p class="hint">After launch, the PC must show a listener on 127.0.0.1:8765. The tunnel command must be cloudflared tunnel --url http://127.0.0.1:8765. If it mentions port 9222, stop. Paste the https address and the local secret into Connect. Do not paste the secret into chat. The page stays Disconnected until the service verifies the connection.</p>
       </section>
 
       <section id="run" class="panel" data-group="operate">
@@ -115,7 +90,7 @@
       </section>
 
       <section id="connect" class="panel" data-group="operate">
-        <p class="hint">Paste the https address printed by the tunnel window, not 127.0.0.1. Paste the line from the secret command. Both stay in this browser.</p>
+        <p class="hint">Paste the https address printed by the tunnel window, not 127.0.0.1. Paste the line from the secret command. Use the credentials of your own Social service.</p>
         <div class="connect" id="connect-form">
           <label>Service URL
             <input id="api-base" inputmode="url" autocomplete="off" placeholder="https:// address from the tunnel window">
@@ -125,8 +100,8 @@
             <input id="api-secret" type="password" autocomplete="off" placeholder="Printed once on the PC">
             <span class="hint">A wrong key is rejected before any read or write.</span>
           </label>
-          <button id="save-connect" type="button">Save connection</button>
-          <p id="connect-note" class="hint">Find the address in the tunnel window. Find the key with the secret command on the PC. Save connection stores both in this browser, then reads status, config, opt-outs, and audit. Success says Live. A wrong key, a failed read, or a closed tunnel stays Not connected and writes nothing.</p>
+          <button id="save-connect" type="button">Connect to PC</button>
+          <p id="connect-note" class="hint">Connect checks status, settings, opt-outs, and audit records. On Mind OS, the key stays in this open workspace.</p>
         </div>
       </section>
 
@@ -142,13 +117,13 @@
 
       <section id="queue" class="panel" data-group="inbox">
         <p class="hint">Score at least 7, at least three exchanges, no opt-out, the follow-up window open, and an inbound message in the last 14 days.</p>
-        <div id="ready"><div class="card"><strong>Queue clear</strong><p class="meta">Ready contacts appear here after a live read.</p></div></div>
+        <div id="ready"><div class="card"><strong>Queue unavailable</strong><p class="meta">Connect your PC to check ready contacts.</p></div></div>
       </section>
 
       <section id="drafts" class="panel" data-group="inbox">
         <p class="hint">Approve queues the draft after the checks. Reject discards it. Nothing is marked sent unless the saved session shows that line.</p>
         <div id="draft-list"><div class="card"><strong>Drafts unavailable</strong><p class="meta">Connect to the PC to check pending drafts.</p></div></div>
-        <h2>PC checks, in order</h2>
+        <h3>PC checks, in order</h3>
         <ol class="checks">
           <li><strong>Key.</strong> A wrong key stops before this list. Nothing is written.</li>
           <li><strong>Pending draft.</strong> An unknown draft stops. Nothing is written.</li>
@@ -201,12 +176,12 @@
 
       <section id="records" class="panel" data-group="record">
         <p class="hint">A clear stop is permanent and cannot be cleared from this page. Export and import move settings. The audit log is append-only.</p>
-        <h2>Opt-out</h2>
-        <div id="optouts"><div class="card"><strong>None</strong><p class="meta">A clear stop locks here.</p></div></div>
-        <h2>Config</h2>
+        <h3>Opt-out</h3>
+        <div id="optouts"><div class="card"><strong>Opt-outs unavailable</strong><p class="meta">Connect your PC to check suppression records.</p></div></div>
+        <h3>Config</h3>
         <div class="controls">
-          <button id="export-config" type="button">Export</button>
-          <button id="import-config" type="button">Import</button>
+          <button id="export-config" type="button">Export settings</button>
+          <button id="import-config" type="button">Import settings</button>
           <button id="save-panel" type="button">Save panel state</button>
           <button id="screen-capture" type="button">Screen capture</button>
           <button id="remote-backup" type="button">Remote backup</button>
@@ -217,25 +192,25 @@
         <p id="capture-note" class="hint">Save panel state stores this page on the PC and lists it below. Screen capture is a slot for a separate tool and does not record the screen. Local backup writes an encrypted file on the PC and sends nothing. Download copies that file to this device. Restore writes settings back only if the backup key is already on the PC. A wrong key restores nothing. Remote backup sends nothing until a key is on the PC.</p>
         <div id="captures"></div>
         <textarea id="config-json" rows="6" spellcheck="false" aria-label="Config text" placeholder="Export fills this box. Import writes that text back to the PC."></textarea>
-        <h2>Audit log</h2>
-        <div id="audit"><div class="card"><strong>No audit rows</strong><p class="meta">Every accepted action is appended.</p></div></div>
+        <h3>Audit log</h3>
+        <div id="audit"><div class="card"><strong>Audit unavailable</strong><p class="meta">Connect your PC to check recent activity.</p></div></div>
       </section>
       <section id="tools" class="panel" data-group="record">
         <p class="lead">These are the tools in the application. This page can show them before the PC is connected. None of them delivers a message by itself.</p>
-        <h2>Operate</h2>
+        <h3>Operate</h3>
         <div class="map">
           <button type="button" data-panel="run"><span>Run</span><strong>Start, Pause, Stop</strong><em>Bookkeeping on the PC. Not a send.</em></button>
           <button type="button" data-panel="run"><span>Run</span><strong>Check for update</strong><em>Asks only. It does not download or install.</em></button>
           <button type="button" data-panel="connect"><span>Connect</span><strong>Save connection</strong><em>Stores the tunnel address and local secret in this browser. A wrong secret writes nothing.</em></button>
         </div>
-        <h2>Inbox</h2>
+        <h3>Inbox</h3>
         <div class="map">
           <button type="button" data-panel="accounts"><span>Accounts</span><strong>Add account</strong><em>Up to ten. It does not log in and does not send.</em></button>
           <button type="button" data-panel="accounts"><span>Accounts</span><strong>Start, Pause, Stop, Resume</strong><em>One account only. Resume is accepted only after a kill.</em></button>
           <button type="button" data-panel="queue"><span>Queue</span><strong>Refresh score</strong><em>Recalculates a ready contact. It does not send.</em></button>
           <button type="button" data-panel="drafts"><span>Drafts</span><strong>Approve and Reject</strong><em>Approve queues a line. It is sent only after the saved session shows it.</em></button>
         </div>
-        <h2>Guard and Record</h2>
+        <h3>Guard and Record</h3>
         <div class="map">
           <button type="button" data-panel="limits"><span>Guard</span><strong>Ceilings and timing</strong><em>Writes settings. It does not send.</em></button>
           <button type="button" data-panel="machine"><span>Guard</span><strong>Machine meters</strong><em>Read only. Blank until the PC answers.</em></button>
@@ -246,14 +221,8 @@
         </div>
         <p class="hint">Headed login, the secret command, and the tunnel stay on the PC. The two Jeff files are not downloaded by this page. A blank proof line is not a pass.</p>
       </section>
-    </main>
+    </div>
   </div>
-  <nav class="dock" aria-label="Categories">
-    <button type="button" data-group="operate" class="on">Operate</button>
-    <button type="button" data-group="inbox">Inbox</button>
-    <button type="button" data-group="guard">Guard</button>
-    <button type="button" data-group="record">Record</button>
-  </nav>
   <script src="app.js"></script>
 </body>
 </html>

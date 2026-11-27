@@ -1,5 +1,6 @@
 import { accountPreferenceKey } from "./account-preferences.ts";
 import { buildDraftKey } from "./kimi/build-review.ts";
+import { buildHandoffKey } from "./kimi/build-handoff.ts";
 import { researchArchiveKey } from "./research-reports.ts";
 import type { Workspace } from "./types.ts";
 
@@ -36,6 +37,7 @@ export async function clearLocalRetention(ownerId: string, targets: LocalRetenti
       if (target === "build-recovery") {
         for (const key of [buildDraftKey(ownerId), `amcos.build-result.v1.${encodeURIComponent(ownerId)}`, `adrian-build-last-job.${ownerId}`]) deps.local.removeItem(key);
         deps.session.removeItem(buildDraftKey(ownerId));
+        deps.session.removeItem(buildHandoffKey(ownerId));
         deps.session.removeItem(`adrian-build-draft.${ownerId}`);
         deps.session.removeItem(`adrian-build-task-source.${ownerId}`);
         deps.session.removeItem(`adrian-build-mode.${ownerId}`);

@@ -1,20 +1,12 @@
-import { EmbeddedWorkspacePage } from "@/components/mind/embedded-workspace-page";
-import { createFileRoute } from "@tanstack/react-router";
+import { embeddedWorkspaceSearch } from "@/lib/mind/app-location";
+import { createFileRoute, redirect } from "@tanstack/react-router";
 
 export const Route = createFileRoute("/social")({
-  component: SocialSectionPage,
   validateSearch: (search: Record<string, unknown>) => ({ workspace: typeof search.workspace === "string" ? search.workspace : undefined }),
-  head: () => ({
-    meta: [
-      { title: "Adrian's Mind · Social" },
-      {
-        name: "description",
-        content: "Adrian Social runs inside this software. The website is only a backup.",
-      },
-    ],
-  }),
+  beforeLoad: ({ search }) => {
+    const params = new URLSearchParams({ section: "social" });
+    const returnSearch = embeddedWorkspaceSearch(search.workspace ?? "");
+    if (returnSearch) params.set("socialReturn", returnSearch);
+    throw redirect({ href: "/?" + params });
+  },
 });
-
-function SocialSectionPage() {
-  return <EmbeddedWorkspacePage title="Adrian Social" src="/apps/social/index.html" workspace={Route.useSearch().workspace} />;
-}

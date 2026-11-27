@@ -1,9 +1,10 @@
 import type { ModelTier } from "../model-tiers";
+import { isShareId } from "../app-location.ts";
 
 export type BuildFileTarget = { workspace: string; cwd?: string };
 export type BuildEditorSelection = { anchor: number; head: number };
 export type BuildEditorBuffer = BuildFileTarget & { path: string; saved: string; draft: string; selection?: BuildEditorSelection };
-export type BuildDraft = { version: 1; owner: string; buffers: Record<string, BuildEditorBuffer>; tabs: string[]; selectedFile: string; prompt: string; cwd?: string; planningTier?: ModelTier };
+export type BuildDraft = { version: 1; owner: string; buffers: Record<string, BuildEditorBuffer>; tabs: string[]; selectedFile: string; prompt: string; cwd?: string; planningTier?: ModelTier; sourceChatId?: string };
 
 export function buildBufferKey(target: BuildFileTarget, path: string): string {
   return JSON.stringify([target.workspace, target.cwd || "", path]);
@@ -38,7 +39,7 @@ export function parseBuildDraft(raw: string | null, owner: string): BuildDraft |
     buffers[key] = { workspace: item.workspace, ...(item.cwd === undefined ? {} : { cwd: item.cwd }), path: item.path, saved: item.saved, draft: item.draft, ...(selection ? { selection } : {}) };
   }
   const tabs = data.tabs.filter((key: unknown): key is string => typeof key === "string" && Object.hasOwn(buffers, key));
-  return { version: 1, owner, buffers, ...(["Auto", "Fast", "Expert", "Heavy", "Build"].includes(data.planningTier) ? { planningTier: data.planningTier } : {}), ...(typeof data.cwd === "string" ? { cwd: data.cwd } : {}), tabs: [...new Set<string>(tabs)], selectedFile: Object.hasOwn(buffers, data.selectedFile) ? data.selectedFile : tabs[0] || "", prompt: typeof data.prompt === "string" ? data.prompt : "" };
+  return { version: 1, owner, buffers, ...(["Auto", "Fast", "Expert", "Heavy", "Build"].includes(data.planningTier) ? { planningTier: data.planningTier } : {}), ...(typeof data.cwd === "string" ? { cwd: data.cwd } : {}), ...(isShareId(data.sourceChatId) ? { sourceChatId: data.sourceChatId } : {}), tabs: [...new Set<string>(tabs)], selectedFile: Object.hasOwn(buffers, data.selectedFile) ? data.selectedFile : tabs[0] || "", prompt: typeof data.prompt === "string" ? data.prompt : "" };
 }
 
 export function normalizeBuildSelection(value: unknown, length: number): BuildEditorSelection | undefined {

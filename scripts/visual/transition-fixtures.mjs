@@ -215,55 +215,167 @@ try {
   const embedded = await browser.newContext({ viewport: { width: 1280, height: 840 }, serviceWorkers: "block", reducedMotion: "reduce" });
   await installVisualFixture(embedded, origin, "chat-interrupted", { preserveOnReload: true });
   let socialApprovals = 0;
+  let socialReads = 0;
+  let socialStatus = "running";
+  let refused = false;
+  const socialWrites = [];
+  let socialConfig = { limits: { per_contact_daily: { US: 1, NG: 1 }, per_account_daily: 1 }, timing: { gap_min_seconds: 1, gap_max_seconds: 2 } };
   const socialData = new Map([
-    ["/api/status", () => ({ state: "running", sessions: [], ready: [], drafts: [{ account_id: "fixture", draft_text: "Synthetic review draft", jeff_output: { draft_id: "fixture-draft" } }] })],
-    ["/api/config", () => ({ limits: { per_contact_daily: { US: 1, NG: 1 }, per_account_daily: 1 }, timing: { gap_min_seconds: 1, gap_max_seconds: 2 } })],
+    ["/api/status", () => {
+      socialReads++;
+      return { state: socialStatus, sessions: [{ account_id: "demo-account", status: "running" }], ready: [], drafts: socialApprovals ? [] : [{ account_id: "demo-account", draft_text: "Synthetic review draft", jeff_output: { draft_id: "fixture-draft" } }], health: { cpu_percent: 24, ram_percent: 36, uptime_seconds: 500 } };
+    }],
+    ["/api/config", request => {
+      if (request.method() === "PUT") { socialConfig = request.postDataJSON().config; return { ok: true }; }
+      return socialConfig;
+    }],
     ...["/api/optouts", "/api/audit", "/api/captures"].map(path => [path, () => ({ items: [] })]),
-    ["/api/drafts/approve", () => { socialApprovals++; return { status: "queued" }; }],
+    ["/api/drafts/approve", request => {
+      assert.equal(request.postDataJSON().draft_id, "fixture-draft");
+      socialApprovals++;
+      return { status: "queued" };
+    }],
+    ["/api/control", request => {
+      const { scope, action } = request.postDataJSON();
+      assert.equal(scope, "global");
+      socialStatus = { start: "running", pause: "paused", stop: "stopped" }[action];
+      return { ok: true };
+    }],
+    ["/api/config/export", () => ({ config: JSON.stringify(socialConfig) })],
+    ["/api/captures/screen", () => ({ status: "not_wired" })],
   ]);
-  await embedded.route(url => url.origin === origin && socialData.has(url.pathname), route => route.fulfill({ json: socialData.get(new URL(route.request().url()).pathname)() }));
+  await embedded.route(url => url.origin === origin && socialData.has(url.pathname), route => {
+    const request = route.request();
+    const path = new URL(request.url()).pathname;
+    if (request.headers()["x-adrian-secret"] !== "fixture-social-secret" || refused) return route.fulfill({ status: 401, json: {} });
+    if (request.method() !== "GET") socialWrites.push([request.method(), path]);
+    return route.fulfill({ json: socialData.get(path)(request) });
+  });
   await embedded.route(url => url.origin === "http://127.0.0.1:8000", route => route.fulfill({
     headers: { "access-control-allow-origin": "*", "access-control-allow-headers": "authorization, content-type" },
     json: new URL(route.request().url()).pathname === "/dashboard-data" ? { session: { logged_in: true }, health: { healthy: true } } : {},
   }));
   const embeddedPage = await embedded.newPage();
   const embeddedChat = `${origin}/?section=chat&chat=fixture-chat`;
-  for (const [id, title] of [["social", "Adrian Social"], ["gpt-wrapper", "GPT wrapper"]]) {
-    await embeddedPage.goto(embeddedChat, { waitUntil: "domcontentloaded" });
+  const social = embeddedPage.getByTestId("adrian-social-workspace");
+  await embeddedPage.goto(embeddedChat, { waitUntil: "domcontentloaded" });
+  await embeddedPage.locator("#message-fixture-message").waitFor();
+  await check(embeddedPage, "social-shared-workspace-entry-exit-and-resize", async () => {
+    const message = embeddedPage.locator("form.thread-composer").getByRole("textbox", { name: "Message", exact: true });
+    await message.fill("Synthetic Social return draft");
+    await embeddedPage.getByTestId("nav-route-social").click();
+    await social.getByRole("heading", { name: "Adrian Social", exact: true }).waitFor();
+    assert.equal(await social.locator("iframe").count(), 0);
+    assert.equal(await embeddedPage.getByTestId("nav-route-social").getAttribute("aria-current"), "page");
+    const divider = embeddedPage.getByRole("separator", { name: "Workspace sidebar width" });
+    const before = Number(await divider.getAttribute("aria-valuenow"));
+    const geometry = await divider.boundingBox();
+    assert.ok(geometry && geometry.width >= 12);
+    await embeddedPage.mouse.move(geometry.x + geometry.width / 2, geometry.y + geometry.height / 2);
+    await embeddedPage.mouse.down();
+    await embeddedPage.mouse.move(geometry.x + geometry.width / 2 + 32, geometry.y + geometry.height / 2);
+    await embeddedPage.mouse.up();
+    assert.equal(Number(await divider.getAttribute("aria-valuenow")), before + 32);
+    await divider.press("ArrowLeft");
+    assert.equal(Number(await divider.getAttribute("aria-valuenow")), before + 24);
+    await embeddedPage.getByRole("button", { name: "Collapse sidebar" }).click();
+    await divider.waitFor({ state: "hidden" });
+    await embeddedPage.getByRole("button", { name: "Open sidebar" }).click();
+    assert.equal(Number(await divider.getAttribute("aria-valuenow")), before + 24);
+    const exit = social.getByRole("button", { name: "Back to workspace" });
+    for (const viewport of [{ width: 390, height: 844 }, { width: 844, height: 390 }]) {
+      await embeddedPage.setViewportSize(viewport);
+      const box = await exit.boundingBox();
+      assert.ok(box && box.height >= 44 && box.y + box.height <= viewport.height);
+      const overflow = await social.evaluate(node => node.scrollWidth > node.clientWidth + 1);
+      assert.equal(overflow, false);
+      await embeddedPage.screenshot({ path: resolve(output, `transition-social-native-${viewport.width}.png`) });
+    }
+    await exit.press("Enter");
     await embeddedPage.locator("#message-fixture-message").waitFor();
-    await check(embeddedPage, `${id}-host-entry-and-exit`, async () => {
-      const draft = `Synthetic ${id} return draft`;
-      const message = embeddedPage.locator("form.thread-composer").getByRole("textbox", { name: "Message", exact: true });
-      await message.fill(draft);
-      await embeddedPage.getByTestId(`nav-route-${id}`).click();
-      await embeddedPage.getByTitle(title, { exact: true }).waitFor();
-      const exit = embeddedPage.getByRole("link", { name: "Back to workspace" });
-      assert.match(await exit.getAttribute("href"), /[?&]chat=fixture-chat/);
-      for (const viewport of [{ width: 390, height: 844 }, { width: 844, height: 390 }]) {
-        await embeddedPage.setViewportSize(viewport);
-        const box = await exit.boundingBox();
-        assert.ok(box && box.height >= 44 && box.y + box.height <= viewport.height);
-        await embeddedPage.screenshot({ path: resolve(output, `transition-${id}-host-${viewport.width}.png`) });
-      }
-      await exit.focus();
-      await embeddedPage.keyboard.press("Enter");
-      await embeddedPage.locator("#message-fixture-message").waitFor();
-      assert.equal(await message.inputValue(), draft);
-      await embeddedPage.setViewportSize({ width: 1280, height: 840 });
-      return { host: id, keyboardExit: true, destination: "original fixture chat", restoredDraft: true, portraitAndLandscape: true };
-    });
-  }
-  await embeddedPage.goto(`${origin}/social`, { waitUntil: "domcontentloaded" });
+    assert.equal(await message.inputValue(), "Synthetic Social return draft");
+    await embeddedPage.setViewportSize({ width: 1280, height: 840 });
+    await embeddedPage.reload({ waitUntil: "domcontentloaded" });
+    await embeddedPage.locator("#message-fixture-message").waitFor();
+    assert.equal(Number(await divider.getAttribute("aria-valuenow")), before + 24);
+    return { integrated: true, sidebarDrag: 32, keyboardResize: true, widthKeptAfterCollapseAndReload: true, restoredDraft: true, portraitAndLandscape: true };
+  });
+
+  await embeddedPage.goto(`${origin}/social?workspace=${encodeURIComponent("?section=chat&chat=fixture-chat")}`, { waitUntil: "domcontentloaded" });
   await check(embeddedPage, "social-internal-queue-receipt", async () => {
-    const frame = embeddedPage.frameLocator('iframe[title="Adrian Social"]');
-    await frame.locator('#overview button:has(#count-drafts)').click();
-    await frame.getByRole("heading", { name: "PC checks, in order" }).waitFor();
-    await frame.getByRole("button", { name: "Approve", exact: true }).click();
-    await frame.getByText("Queued. Delivery has not been confirmed.", { exact: true }).waitFor();
-    await frame.locator("#link-state").filter({ hasText: "Live. All reads finished." }).waitFor();
-    assert.equal(await frame.locator('[id="drafts"]').count(), 1);
+    await social.getByRole("heading", { name: "Adrian Social", exact: true }).waitFor();
+    assert.match(await social.getByRole("link", { name: "Back to workspace" }).getAttribute("href"), /[?&]chat=fixture-chat/);
+    assert.equal(socialReads, 0);
+    await social.getByRole("button", { name: "Connect your PC" }).click();
+    await social.getByLabel("Service URL").fill(origin);
+    await social.getByLabel("Local secret").fill("fixture-social-secret");
+    await social.getByRole("button", { name: "Connect to PC" }).click();
+    await social.locator("#runtime-state").filter({ hasText: "Running" }).waitFor();
+    const pages = social.getByRole("navigation", { name: "Social pages" });
+    const groups = social.getByRole("navigation", { name: "Social categories" });
+    await groups.getByRole("button", { name: "Inbox" }).click();
+    await pages.getByRole("button", { name: "Drafts" }).click();
+    await social.getByRole("heading", { name: "PC checks, in order" }).waitFor();
+    await social.getByRole("button", { name: "Approve", exact: true }).click();
+    await social.getByText("Queued. Delivery has not been confirmed.", { exact: true }).waitFor();
+    await social.getByText("No pending drafts", { exact: true }).waitFor();
+    assert.equal(await social.locator('[id="drafts"]').count(), 1);
     assert.equal(socialApprovals, 1);
-    return { queue: "fixture response", deliveryConfirmed: false, guardRetained: true };
+    await groups.getByRole("button", { name: "Overview & service" }).click();
+    await pages.getByRole("button", { name: "Run", exact: true }).click();
+    await social.getByRole("button", { name: "Pause", exact: true }).click();
+    await social.locator("#runtime-state").filter({ hasText: "Paused" }).waitFor();
+    await social.getByRole("button", { name: "Stop", exact: true }).click();
+    await social.locator("#runtime-state").filter({ hasText: "Stopped" }).waitFor();
+    await social.getByRole("button", { name: "Start", exact: true }).click();
+    await social.locator("#runtime-state").filter({ hasText: "Running" }).waitFor();
+    await groups.getByRole("button", { name: "Safety & limits" }).click();
+    await pages.getByRole("button", { name: "Limits" }).click();
+    await social.getByLabel("US daily").fill("4");
+    socialConfig.limits.per_contact_daily.US = 2;
+    const readsBeforeRefresh = socialReads;
+    const refresh = social.getByRole("button", { name: "Refresh status" });
+    await refresh.click();
+    await embeddedPage.waitForFunction(() => !document.querySelector("#refresh-status").disabled);
+    assert.ok(socialReads > readsBeforeRefresh);
+    assert.equal(await social.getByLabel("US daily").inputValue(), "4");
+    embeddedPage.once("dialog", dialog => { void dialog.dismiss(); });
+    await social.getByRole("button", { name: "Apply ceilings" }).click();
+    await social.getByText("Your draft is still here. The PC settings were kept.", { exact: true }).waitFor();
+    assert.equal(socialConfig.limits.per_contact_daily.US, 2);
+    embeddedPage.once("dialog", dialog => { void dialog.accept(); });
+    await social.getByRole("button", { name: "Apply ceilings" }).click();
+    await social.getByText("Settings saved on the PC.", { exact: true }).waitFor();
+    assert.equal(socialConfig.limits.per_contact_daily.US, 4);
+    await pages.getByRole("button", { name: "Machine" }).click();
+    await social.getByText("24%", { exact: true }).waitFor();
+    await groups.getByRole("button", { name: "Records & tools" }).click();
+    await social.getByRole("button", { name: "Export settings" }).click();
+    await social.getByText("Settings copied into the text field.", { exact: true }).waitFor();
+    await social.getByRole("button", { name: "Screen capture" }).click();
+    await social.getByText("Screen capture is unavailable. Nothing was recorded.", { exact: true }).waitFor();
+    refused = true;
+    await social.getByRole("button", { name: "Refresh status" }).click();
+    await social.locator("#runtime-state").filter({ hasText: "Access refused" }).waitFor();
+    assert.equal(await social.getByRole("button", { name: "Screen capture" }).isEnabled(), false);
+    assert.equal(await social.locator("#link-state").textContent().then(text => text.includes("fixture-social-secret")), false);
+    assert.equal(await embeddedPage.evaluate(() => Object.values(localStorage).some(value => value.includes("fixture-social-secret"))), false);
+    return { queue: "fixture response", deliveryConfirmed: false, guardRetained: true, reads: socialReads, writes: socialWrites, editedLimitsSurviveRefresh: true, conflictingChangeRequiresApproval: true, persistedSecret: false, controlsDisabledOnRefusal: true };
+  });
+
+  await embeddedPage.goto(embeddedChat, { waitUntil: "domcontentloaded" });
+  await embeddedPage.locator("#message-fixture-message").waitFor();
+  await check(embeddedPage, "gpt-wrapper-host-entry-and-exit", async () => {
+    const message = embeddedPage.locator("form.thread-composer").getByRole("textbox", { name: "Message", exact: true });
+    await message.fill("Synthetic wrapper return draft");
+    await embeddedPage.getByTestId("nav-route-gpt-wrapper").click();
+    await embeddedPage.getByTitle("GPT wrapper", { exact: true }).waitFor();
+    const exit = embeddedPage.getByRole("link", { name: "Back to workspace" });
+    assert.match(await exit.getAttribute("href"), /[?&]chat=fixture-chat/);
+    await exit.press("Enter");
+    await embeddedPage.locator("#message-fixture-message").waitFor();
+    assert.equal(await message.inputValue(), "Synthetic wrapper return draft");
+    return { keyboardExit: true, restoredDraft: true };
   });
   await embeddedPage.goto(`${origin}/gpt-wrapper`, { waitUntil: "domcontentloaded" });
   await check(embeddedPage, "wrapper-internal-signed-in-status", async () => {
@@ -272,6 +384,55 @@ try {
     return { signedIn: "fixture response", apiExecution: "unverified" };
   });
   await embedded.close();
+
+  const handoffContext = await browser.newContext({ viewport: { width: 1280, height: 840 }, serviceWorkers: "block" });
+  const base = VISUAL_FIXTURES["chat-interrupted"].workspace();
+  const handoffThread = {
+    ...base.chats[0], id: "handoff-chat", projectId: "handoff-project",
+    messages: [
+      { id: "reviewed-prompt", role: "user", content: "Fixture selected prompt", at },
+      { id: "excluded-prompt", role: "user", content: "Fixture excluded prompt", at },
+      { id: "reviewed-answer", role: "assistant", content: "Fixture selected answer", at },
+    ],
+  };
+  await installVisualFixture(handoffContext, origin, "chat-interrupted", { preserveOnReload: true,
+    workspace: { ...base, chats: [handoffThread], projects: [{ id: "handoff-project", name: "Fixture project", description: "", createdAt: at }],
+      files: [{ id: "reviewed-file", name: "handoff-notes.txt", text: "Fixture selected file bytes", bytes: 27, projectId: "handoff-project", createdAt: at }] } });
+  let automaticBuildRuns = 0;
+  await handoffContext.route(url => url.origin === origin && url.pathname === "/api/mind/build/session", route => {
+    if (route.request().method() === "POST") automaticBuildRuns++;
+    return route.fulfill({ status: 409, json: { ok: false, error: "No Build run in the handoff fixture." } });
+  });
+  const handoffPage = await handoffContext.newPage();
+  await handoffPage.goto(origin + "/?section=chat&chat=handoff-chat", { waitUntil: "domcontentloaded" });
+  await handoffPage.locator("#message-reviewed-answer").waitFor();
+  await check(handoffPage, "chat-selected-messages-and-files-to-work", async () => {
+    const continueButton = handoffPage.getByRole("button", { name: "Continue in Work", exact: true });
+    await handoffPage.locator('#message-reviewed-answer summary[aria-label="More"]').click();
+    await continueButton.click();
+    const dialog = handoffPage.getByRole("dialog", { name: "Continue in Work" });
+    await dialog.getByRole("checkbox", { name: /Fixture selected prompt/ }).check();
+    await dialog.getByRole("checkbox", { name: "handoff-notes.txt" }).check();
+    await handoffPage.screenshot({ path: resolve(output, "transition-work-selection-review.png") });
+    await dialog.getByRole("button", { name: "Review in Work" }).click();
+    const review = handoffPage.getByText("Review task from Chat", { exact: true });
+    await review.waitFor();
+    await handoffPage.reload({ waitUntil: "domcontentloaded" });
+    await review.click();
+    await handoffPage.getByText("2 selected messages · 1 selected file").waitFor();
+    await handoffPage.getByRole("button", { name: "Use this task" }).click();
+    const task = handoffPage.getByRole("textbox", { name: "Coding task", exact: true });
+    assert.match(await task.inputValue(), /Fixture selected prompt[\s\S]*Fixture selected answer[\s\S]*Fixture selected file bytes/);
+    assert.doesNotMatch(await task.inputValue(), /Fixture excluded prompt/);
+    await handoffPage.screenshot({ path: resolve(output, "transition-work-accepted-draft.png") });
+    await handoffPage.reload({ waitUntil: "domcontentloaded" });
+    await handoffPage.getByRole("button", { name: "Open source conversation" }).click();
+    await handoffPage.locator("#message-reviewed-answer").waitFor();
+    await handoffPage.locator("#message-excluded-prompt").waitFor();
+    assert.equal(automaticBuildRuns, 0);
+    return { selectedMessages: 2, selectedFiles: 1, pendingAndAcceptedDraftRecoverable: true, originalPreserved: true, automaticBuildRuns };
+  });
+  await handoffContext.close();
 
   const mobile = await browser.newContext({ viewport: { width: 390, height: 844 }, isMobile: true, serviceWorkers: "block" });
   const mobileTransport = await installVisualFixture(mobile, origin, "chat-interrupted", { workspace });
