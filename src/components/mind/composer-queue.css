@@ -56,6 +56,26 @@
   }
 }
 
+@media (max-width: 420px) {
+  #chat-thread form.thread-composer .composer-toolbar .queue-add {
+    width: auto;
+    padding-inline: .5rem !important;
+  }
+  #chat-thread form.thread-composer .composer-toolbar .queue-view {
+    width: 44px;
+    padding-inline: .3rem !important;
+  }
+  #chat-thread form.thread-composer .composer-toolbar button:is(.gpt-voice, .composer-mic-dictate) {
+    width: 44px;
+    min-width: 44px;
+    padding-inline: 0 !important;
+    gap: 0;
+    justify-content: center;
+    font-size: 0 !important;
+  }
+  #chat-thread form.thread-composer .composer-toolbar :is(.queue-add, .queue-view) svg { flex: none; }
+}
+
 @keyframes queue-appear {
   from { opacity: 0; transform: translateY(7px) scale(.985); }
   to { opacity: 1; transform: none; }

@@ -781,7 +781,10 @@ try {
         && pane && pane.scrollHeight - pane.scrollTop - pane.clientHeight <= 2;
     }, normalHeight);
     assert.equal(await message.inputValue(), draft);
-    return { normalHeight, keyboardHeight, input: "synthetic visual viewport resize", retainedDraftAndFocus: true };
+    const queueButton = await composer.getByRole("button", { name: "Queue", exact: true }).boundingBox();
+    const sendButton = await composer.getByRole("button", { name: "Send", exact: true }).boundingBox();
+    assert.ok(queueButton && sendButton && Math.abs(queueButton.y - sendButton.y) <= 3, "Queue and Send share the 390px composer row");
+    return { normalHeight, keyboardHeight, input: "synthetic visual viewport resize", retainedDraftAndFocus: true, queueAndSendShareRow: true };
   });
   await navigate(phone, "/?section=command", "command"); await phone.locator("#command-home").waitFor();
   await check(phone, "mobile-drawer-current-focus", async () => {
