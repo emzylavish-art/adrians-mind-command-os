@@ -28,9 +28,13 @@ export function readInterface(storage: Pick<PreferenceStorage, "getItem">): Inte
       if (/^#[\da-f]{6}$/i.test(value.appearance?.[key] || "")) appearance[key] = value.appearance[key];
     }
     if (fonts.includes(value.appearance?.font)) appearance.font = value.appearance.font;
-    const bindings = { ...defaultPrefs.bindings };
-    for (const [id] of KEY_ACTIONS) if (typeof value.bindings?.[id] === "string") bindings[id] = value.bindings[id];
-    return { appearance, bindings, sendKey: value.sendKey === "modified" ? "modified" : "enter" };
+    const prefs: InterfacePrefs = { appearance, bindings: {}, sendKey: value.sendKey === "modified" ? "modified" : "enter" };
+    for (const [id] of KEY_ACTIONS) {
+      const binding = typeof value.bindings?.[id] === "string" ? value.bindings[id] : defaultPrefs.bindings[id];
+      if (binding === "") prefs.bindings[id] = "";
+      else if (binding && /^(?:Mod\+(?:Alt\+)?|Alt\+)(?:Shift\+)?(?:[A-Z0-9]|Enter|F(?:[1-9]|1[0-2]))$/.test(binding) && !bindingConflict(id, binding, prefs)) prefs.bindings[id] = binding;
+    }
+    return prefs;
   } catch { return defaultPrefs; }
 }
 type Key = { key: string; ctrlKey: boolean; metaKey: boolean; shiftKey: boolean; altKey: boolean; isComposing?: boolean; keyCode?: number };
@@ -44,7 +48,7 @@ export function submitOnKey(event: Key, pref: InterfacePrefs["sendKey"]) {
     Boolean(event.ctrlKey || event.metaKey) === (pref === "modified");
 }
 export function bindingConflict(action: Action, combo: string, prefs: InterfacePrefs) {
-  if (["Mod+K", "Mod+Shift+V", "Mod+R", "Mod+T", "Mod+W", "Mod+L", "Mod+N", "Mod+Shift+T"].includes(combo)) return "This shortcut is already reserved.";
+  if (["Mod+K", "Mod+Shift+V", "Alt+P", "Mod+R", "Mod+T", "Mod+W", "Mod+L", "Mod+N", "Mod+Shift+T"].includes(combo)) return "This shortcut is already reserved.";
   if (combo === "Mod+Enter" && prefs.sendKey === "modified") return "This shortcut already sends the composer.";
   const conflict = KEY_ACTIONS.find(([id]) => id !== action && prefs.bindings[id] === combo);
   return conflict ? `This shortcut already runs ${conflict[2]}.` : "";

@@ -85,6 +85,7 @@ function fixture(options: { loseWriteResponse?: boolean; denied?: boolean; omitB
   runInNewContext(compiled, context);
   return {
     chat, wsRef, rows, requests,
+    recoverOnly: (operationId: string, pageId: string | null = "p1") => runNotionTurn({ text, confirmed: true, recoverOnly: true, pageId, workspaceId: "workspace-A", operationId, token: "fixture-only", disabled: false, fetch, operationStore: store }),
     ask: () => exports.askNotion!(chat, text),
     nextPage: () => exports.askNotion!(chat, text, false, null, chat.notionWorkspaceId, undefined, "fixture-cursor"),
     dismissPicker: () => { notionSearchRequest.current.picker++; },
@@ -110,6 +111,26 @@ test("late Notion pages cannot reopen a dismissed picker or cross conversations"
   app.finishPage(); await third;
   assert.equal(app.pickedPageCount, 1);
   assert.equal(app.writes, 0);
+});
+
+test("a recovery-only check refuses absent destinations and never dispatches a prepared append", async () => {
+  const app = fixture();
+  await app.ask();
+  const [operation] = app.rows.values();
+  assert.ok(operation);
+  assert.equal((await app.recoverOnly(operation.id)).outcome, "not_dispatched");
+  assert.equal((await app.recoverOnly(operation.id, null)).errorCode, "selection_changed");
+  assert.equal((await app.recoverOnly(operation.id, "p2")).errorCode, "selection_changed");
+  assert.equal((await app.recoverOnly("unknown-operation")).errorCode, "selection_changed");
+  assert.equal(app.writes, 0);
+  assert.equal(app.rows.size, 1);
+  app.allowRead();
+  app.confirm();
+  await until(() => app.rows.get(operation.id)?.state === "verified");
+  const recovered = await app.recoverOnly(operation.id);
+  assert.equal(recovered.verified, true);
+  assert.equal(recovered.operationId, operation.id);
+  assert.equal(app.writes, 1);
 });
 
 async function until(check: () => boolean) {

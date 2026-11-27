@@ -392,7 +392,7 @@ try {
   const originalHash = createHash("sha256").update(originalBytes).digest("hex");
   const handoffPixel = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==";
   const handoffThread = {
-    ...base.chats[0], id: "handoff-chat", projectId: "handoff-project",
+    ...base.chats[0], id: "handoff-chat", projectId: "handoff-project", notionWorkspaceId: "fixture-notion-space",
     messages: [
       { id: "reviewed-prompt", role: "user", content: "Fixture selected prompt", at },
       { id: "excluded-prompt", role: "user", content: "Fixture excluded prompt", at },
@@ -401,6 +401,7 @@ try {
   };
   await installVisualFixture(handoffContext, origin, "chat-interrupted", { preserveOnReload: true,
     workspace: { ...base, chats: [handoffThread], projects: [{ id: "handoff-project", name: "Fixture project", description: "", createdAt: at }, { id: "other-project", name: "Other fixture project", description: "", createdAt: at }],
+      recovery: [{ id: "fixture-notion-work", operationId: "fixture-notion-work", workspaceId: "fixture-notion-space", pageId: "fixture-notion-page", chatId: "handoff-chat", text: "Append synthetic note to Notion", message: "Synthetic uncertain acknowledgement", target: "notion", state: "open", action: "notion_operation", outcome: "uncertain", at }],
       files: [{ id: "reviewed-file", name: "handoff-notes.txt", text: "Fixture selected file bytes", bytes: 27, projectId: "handoff-project", createdAt: at },
         { id: "original-fixture", name: "fixture-original.bin", text: "", bytes: originalBytes.length, projectId: "handoff-project", createdAt: at, original: { blobId: `document_${originalHash}`, sha256: originalHash, bytes: originalBytes.length, mime: "application/octet-stream", name: "fixture-original.bin" } }] } });
   let automaticBuildRuns = 0;
@@ -410,6 +411,26 @@ try {
   let pairedRequest;
   let pairedSubmissions = 0;
   let pairedReads = 0;
+  let notionRecoveryCalls = 0;
+  await handoffContext.route(url => url.origin === origin && url.pathname === "/api/mind/dispatch-policy" && url.searchParams.get("section") === "financial", route => {
+    const owner = new URL(route.request().url()).searchParams.get("ownerId");
+    assert.ok(owner === "dev-user" || owner === "fixture-owner");
+    assert.equal(route.request().method(), "GET");
+    return route.fulfill({ json: { ok: true, financial: { ledger: [
+      { id: "fixture-cost", provider: "fixture-provider", model: "fixture-model", projectId: "handoff-project", actualMicros: 12000, costBasis: "provider_reported", state: "settled", updatedAt: at },
+      { id: "other-fixture-cost", provider: "other-project-provider", model: "other-model", projectId: "other-project", actualMicros: 1020000, costBasis: "provider_reported", state: "settled", updatedAt: "2026-01-02T00:00:00.000Z" },
+    ] } } });
+  });
+  await handoffContext.route(url => {
+    if (url.origin !== origin || !url.pathname.startsWith("/_serverFn/")) return false;
+    try { return /^notionCommand(?:_|$)/.test(JSON.parse(Buffer.from(url.pathname.split("/").at(-1), "base64url").toString("utf8")).export); }
+    catch { return false; }
+  }, route => {
+    const payload = route.request().postData() || "";
+    for (const value of ["recoverOnly", "fixture-notion-space", "fixture-notion-page", "fixture-notion-work"]) assert.ok(payload.includes(value));
+    notionRecoveryCalls++;
+    return route.fulfill({ json: { result: { ok: true, verified: true, operationId: "fixture-notion-work", pages: [{ id: "fixture-notion-page" }], outcome: "verified" }, context: {} } });
+  });
   await handoffContext.route(url => url.origin === origin && url.pathname === "/api/mind/pc/status", route => route.fulfill({ json: {
     ok: true, onlineAgentIds: dropPairedAcknowledgement ? ["fixture-paired"] : [], agents: [],
   } }));
@@ -519,6 +540,24 @@ try {
     assert.equal(await branch.inputValue(), "other-branch");
     return { separateProjectDrafts: true, branchRestored: true, originalSource: "handoff-chat", savedRunReopened: true, crossProjectLinkRefused: true, execution: "synthetic request and response" };
   });
+  await check(handoffPage, "control-center-work-cost-and-notion-recovery", async () => {
+    await navigate(handoffPage, "/?section=build&workProject=handoff-project", "build");
+    await handoffPage.getByRole("textbox", { name: "Target Git branch" }).waitFor();
+    await handoffPage.getByRole("button", { name: "Go to Control Center", exact: true }).click();
+    const center = handoffPage.getByRole("region", { name: "Control Center" });
+    await center.getByText("feature/fixture", { exact: true }).waitFor();
+    await center.getByText(/verified checkout feature\/fixture/).waitFor();
+    await center.getByText(/fixture-provider.*Actual \$0\.012/).waitFor();
+    assert.equal(await center.getByText(/other-project-provider/).count(), 0);
+    await center.getByText("Page · fixture-notion-page", { exact: true }).waitFor();
+    await handoffPage.screenshot({ path: resolve(output, "transition-control-center-exact-recovery.png") });
+    await center.getByRole("button", { name: "Check saved Notion write" }).click();
+    await center.getByText("Verified the saved write on the original Notion page.").waitFor();
+    assert.equal(notionRecoveryCalls, 1);
+    await center.getByRole("button", { name: "Return to workspace" }).click();
+    await handoffPage.getByRole("textbox", { name: "Target Git branch" }).waitFor();
+    return { scopedCostReceipt: true, selectedAndVerifiedBranches: true, exactNotionChecks: notionRecoveryCalls, liveOperations: 0 };
+  });
   await check(handoffPage, "work-reviewed-media-and-originals", async () => {
     await navigate(handoffPage, "/?section=chat&chat=handoff-chat", "chat");
     await handoffPage.locator('#message-reviewed-answer summary[aria-label="More"]').click();
@@ -595,6 +634,26 @@ try {
     await gemini.getByText("No confirmed answer receipt for this model.", { exact: true }).waitFor();
     assert.match(await gemini.locator("summary").innerText(), /Unavailable for Chat/);
     return { accountAvailabilitySeparateFromCapability: true, liveProviderCalls: 0 };
+  });
+  await check(handoffPage, "workspace-tool-pins-and-keyboard-focus", async () => {
+    const rail = handoffPage.getByRole("navigation", { name: "Workspace shortcuts" });
+    const customize = rail.getByRole("button", { name: "Customize shortcuts" });
+    const dialog = handoffPage.getByRole("dialog", { name: "Customize shortcuts" });
+    await customize.press("Enter");
+    await dialog.getByRole("checkbox", { name: "Tools", exact: true }).check();
+    await handoffPage.keyboard.press("Escape");
+    assert.equal(await rail.getByRole("button", { name: "Go to Tools" }).count(), 0);
+    assert.equal(await customize.evaluate(button => button === document.activeElement), true);
+    await customize.press("Enter");
+    await dialog.getByRole("checkbox", { name: "Tools", exact: true }).check();
+    await dialog.getByRole("checkbox", { name: "Dashboard", exact: true }).uncheck();
+    await dialog.getByRole("button", { name: "Save shortcuts" }).press("Enter");
+    await handoffPage.reload({ waitUntil: "domcontentloaded" });
+    await rail.getByRole("button", { name: "Go to Tools" }).waitFor();
+    assert.equal(await rail.getByRole("button", { name: "Go to Dashboard" }).count(), 0);
+    await rail.getByRole("button", { name: "Go to Tools" }).press("Enter");
+    await handoffPage.locator('#mind-workspace[data-view="tools"]').waitFor();
+    return { toggledPinsRetained: true, escapeRestoredFocus: true, canceledChangesDiscarded: true };
   });
   await handoffContext.close();
 

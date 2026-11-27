@@ -267,16 +267,26 @@ export const notionDisconnect = createServerFn({ method: "POST" })
 
 export const notionCommand = createServerFn({ method: "POST" })
   .middleware([authMiddleware])
-  .validator((input: { text?: string; confirmed?: boolean; pageId?: string | null; workspaceId?: string; cursor?: string | null; operationId?: string; chatId?: string }) => ({
+  .validator((input: { text?: string; confirmed?: boolean; pageId?: string | null; workspaceId?: string; cursor?: string | null; operationId?: string; chatId?: string; recoverOnly?: boolean; ownerId?: string }) => ({
     text: typeof input.text === "string" ? input.text.slice(0, 8001) : "",
     chatId: typeof input.chatId === "string" ? input.chatId.slice(0, 80) : undefined,
     workspaceId: typeof input.workspaceId === "string" ? input.workspaceId : undefined,
     cursor: typeof input.cursor === "string" ? input.cursor.slice(0, 200) : null,
     operationId: typeof input.operationId === "string" ? input.operationId.slice(0, 128) : undefined,
     confirmed: input.confirmed === true,
+    recoverOnly: input.recoverOnly === true,
+    ownerId: typeof input.ownerId === "string" ? input.ownerId.slice(0, 128) : undefined,
     pageId: typeof input.pageId === "string" ? input.pageId.slice(0, 80) : null,
   }))
   .handler(async ({ data, context }): Promise<NotionTurn> => {
+    if (data.recoverOnly && data.ownerId !== context.userId) return {
+      ok: false, state: "disconnected", action: "none", needsConfirmation: false, ambiguous: false,
+      pages: [], content: "", error: "The signed-in account changed. Reopen the saved Notion operation.", wrote: false, verified: false,
+    };
+    if (data.recoverOnly && (!data.workspaceId || !data.pageId || !data.operationId)) return {
+      ok: false, state: "connected", action: "none", needsConfirmation: false, ambiguous: false,
+      pages: [], content: "", error: "The existing operation, workspace and exact page are required for this check.", wrote: false, verified: false,
+    };
     const { haltIsOn } = await import("./halt.server");
     if (await haltIsOn(context.userId)) {
       return {
@@ -337,7 +347,8 @@ export const notionCommand = createServerFn({ method: "POST" })
       workspaceId: data.workspaceId,
       disabled: false,
       text: data.text,
-      confirmed: data.confirmed,
+      confirmed: data.confirmed && !data.recoverOnly,
+      recoverOnly: data.recoverOnly,
       pageId: data.pageId,
       cursor: data.cursor,
       fetch: globalThis.fetch,

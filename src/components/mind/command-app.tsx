@@ -84,6 +84,7 @@ import "./workspace-navigation.css";
 import { ChatComposerExtras } from "./chat-composer-extras";
 import { WorkspaceDivider } from "./workspace-divider";
 import { WorkspaceControlCenter } from "./workspace-control-center";
+import { WorkspaceShortcuts } from "./workspace-shortcuts";
 import "./workspace-layout.css";
 import { getBearerToken, signOut } from "@/lib/auth/client";
 import { loadMcpWithHttpFallback } from "@/lib/mind/mcp-list-http";
@@ -859,6 +860,7 @@ function CommandSession({ account, accountPending }: { account: ReturnType<typeo
   function openSocial() {
     setView("social");
     if (view !== "social") setWorkspaceReturn({ surface: "social", origin: view });
+    setNavOpen(false);
     closeMenus();
   }
   const applyingLocation = useRef(false);
@@ -3043,6 +3045,28 @@ function CommandSession({ account, accountPending }: { account: ReturnType<typeo
       if (emitFailure("notion", mountFailure({ message, action: "notion_unreachable", target: "notion" }, retry))) return;
       setError(message);
     }
+  }
+
+  async function reviewSavedNotionWrite(id: string): Promise<string> {
+    const owner = draftOwner;
+    const entry = wsRef.current.recovery?.find(item => item.id === id && item.state === "open" && item.action === "notion_operation");
+    if (!owner || turnOwner.current !== owner || accountPending || !entry?.operationId || !entry.workspaceId || !entry.pageId || !entry.text || !entry.chatId) return "This saved operation is unavailable for the current account.";
+    if (wsRef.current.halted) return "Emergency stop is active. Resume in Settings before checking the saved write.";
+    const chat = wsRef.current.chats.find(item => item.id === entry.chatId && !item.temporary && !item.archived);
+    if (!chat || chat.notionWorkspaceId !== entry.workspaceId) return "Open the original conversation and restore its Notion workspace before checking this write.";
+    try {
+      const result = await notionCommand({ data: { ownerId: owner, recoverOnly: true, confirmed: false, operationId: entry.operationId, workspaceId: entry.workspaceId, pageId: entry.pageId, text: entry.text, chatId: entry.chatId } });
+      if (turnOwner.current !== owner) return "The account changed while the operation was being checked.";
+      const verified = result.ok && result.verified && result.operationId === entry.operationId && result.pages.some(page => page.id === entry.pageId);
+      const message = verified ? "Verified the saved write on the original Notion page." : result.error || "The operation is still unconfirmed. Keep its original reference for the next check.";
+      setWs(current => {
+        const latest = current.recovery?.find(item => item.id === entry.id && item.state === "open");
+        if (!latest || latest.operationId !== entry.operationId || latest.workspaceId !== entry.workspaceId || latest.pageId !== entry.pageId) return current;
+        if (verified) return closeRecovery(current, entry.id, "resolved");
+        return saveRecovery(current, { ...latest, message, outcome: result.outcome ?? latest.outcome });
+      });
+      return message;
+    } catch { return "Notion could not be reached. The saved write remains open for review."; }
   }
 
   async function askMcp(chat: Chat, text: string, confirmed = false, approvalServerId?: string, approvalId?: string) {
@@ -6422,8 +6446,9 @@ ${message.content}`;
     const target = event.target instanceof HTMLElement ? event.target : null;
     if (target?.closest('[role="dialog"], [data-shortcut-capture="true"]')) return false;
     if (id === "send" || id === "queue" || id === "background") {
-      if (!target?.matches('textarea') || !["command","chat"].includes(view)) return false;
-      if (id === "send") { target.closest("form")?.requestSubmit(); return true; }
+      const composer = target?.matches("textarea") ? target.closest<HTMLFormElement>("form[data-mind-chat-composer]") : null;
+      if (!composer || !["command", "chat"].includes(view)) return false;
+      if (id === "send") { composer.requestSubmit(); return true; }
       if (!active || view !== "chat") { setNotice("Open the intended conversation to send or queue its draft."); return true; }
       void sendInChat(id === "queue"); return true;
     }
@@ -6502,17 +6527,14 @@ ${message.content}`;
       </Overlay> : null}
       <MenuMotion />
       {navOpen ? <button type="button" className="fixed inset-0 md:hidden" aria-label="Close menu" style={{ zIndex: 150, background: "transparent" }} onClick={() => setNavOpen(false)} /> : null}
-      <nav className="workspace-shortcuts" aria-label="Workspace shortcuts">
-        <button id="workspace-sidebar-visibility" type="button" title={railCollapsed ? "Open sidebar" : "Hide sidebar"} aria-label={railCollapsed ? "Open sidebar" : "Hide sidebar"} aria-controls="workspace-sidebar" aria-expanded={!railCollapsed} onClick={() => setRailCollapsed(value => !value)}><PanelLeft size={20} /></button>
-        {([
-          { label: "Home", icon: Home, current: view === "command", open: () => setView("command") },
-          { label: "Build", icon: Terminal, current: view === "build", open: () => setView("build") },
-          { label: "Speak", icon: Volume2, current: speakStageOpen, open: openSpeakStage },
-          { label: "Dashboard", icon: LayoutDashboard, current: view === "dashboard", open: () => setView("dashboard") },
-          { label: "Plugins", icon: Zap, current: view === "connected", open: () => setView("connected") },
-          { label: "Control Center", icon: Settings, current: view === "controls", open: openControlCenter },
-        ]).map(item => <button key={item.label} type="button" title={item.label} aria-label={`Go to ${item.label}`} aria-current={item.current ? "page" : undefined} onClick={item.open}><item.icon size={20} /></button>)}
-      </nav>
+      <WorkspaceShortcuts key={draftOwner ?? "guest"} collapsed={railCollapsed} onToggle={() => setRailCollapsed(value => !value)} items={[
+        { id: "command", label: "Home", icon: Home, current: view === "command", open: () => setView("command") },
+        { id: "speak", label: "Speak", icon: Volume2, current: speakStageOpen, open: openSpeakStage },
+        { id: "dashboard", label: "Dashboard", icon: LayoutDashboard, current: view === "dashboard", open: () => setView("dashboard") },
+        { id: "controls", label: "Control Center", icon: Settings, current: view === "controls", open: openControlCenter },
+        { id: "social", label: "Adrian Social", icon: MessageSquare, current: view === "social", open: openSocial },
+        ...[...NAV, ...MORE_NAV].map(item => ({ ...item, current: view === item.id, open: () => { setView(item.id); setNavOpen(false); closeMenus(); } })),
+      ]} />
       <aside id="workspace-sidebar" data-collapsed={compactRail} ref={(node) => { navDrawerRef.current = node; pinRailFrame(node); }} onMouseDown={closeNavFromBackdrop} role={navOpen ? "dialog" : undefined} aria-modal={navOpen ? true : undefined} aria-label={navOpen ? "Workspace navigation" : undefined} className={`rail gpt-rail ${navOpen ? "nav-drawer-open flex" : "hidden"} fixed inset-0 z-40 w-full flex-col overflow-hidden md:static md:flex md:h-dvh ${compactRail ? "md:w-[4.5rem]" : "md:w-72"} md:shrink-0`}>
         <div className="gpt-rail-head flex items-center gap-3 px-4 py-4">
           {!compactRail && (
@@ -7424,6 +7446,7 @@ ${message.content}`;
                 </details>
                 <form
                   className="mt-2"
+                  data-mind-chat-composer
                   onSubmit={(event) => {
                     event.preventDefault();
                     if (homeAction === "image") {
@@ -8486,7 +8509,8 @@ ${message.content}`;
               </details>
             </section>
           )}
-          {view === "controls" && ready && <WorkspaceControlCenter account={accountLabel} thread={active} workspace={ws}
+          {view === "controls" && ready && <WorkspaceControlCenter key={draftOwner ?? "guest"} account={accountLabel} ownerId={accountPending ? null : draftOwner} thread={active} workspace={ws}
+            workProjectId={workTarget.projectId} fromWork={workspaceReturn?.surface === "controls" && workspaceReturn.origin === "build"} onReviewNotion={reviewSavedNotionWrite}
             selectedModel={`${effectiveProvider} · ${modelTier}`} freeOnly={researchFreeOnly} listening={voiceListening}
             onReturn={() => setView(workspaceReturn?.surface === "controls" ? workspaceReturn.origin : "command")} onOpen={(destination, id) => {
               const panes = { account: null, models: "connections", permissions: "safety", voice: "voice", profile: "profile" } as const;
@@ -8498,6 +8522,11 @@ ${message.content}`;
                 case "connections": setView("connected"); break;
                 case "runs": setFocusRunId(id ?? null); setView("runs"); break;
                 case "activity": setFocusAuditId(id ?? null); setActivityQuery(""); setView("activity"); break;
+                case "conversation": {
+                  const source = wsRef.current.chats.find(chat => chat.id === id && !chat.archived && !chat.temporary);
+                  if (source) { setActiveId(source.id); setView(isIntelligenceThread(source.customPersonality) ? "code" : "chat"); }
+                  break;
+                }
                 default: setView(destination);
               }
             }} />}

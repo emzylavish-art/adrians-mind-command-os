@@ -744,6 +744,7 @@ export function ChatPane({
         </div>
         <form
           className="floating-composer command-card composer-dock thread-composer p-3" data-composer="floating" data-expanded={composerExpanded ? "true" : "false"}
+          data-mind-chat-composer
           onSubmit={(event) => {
             event.preventDefault();
             onSend();
