@@ -6,7 +6,7 @@ import { haltIsOn } from "../halt.server";
 import { enqueueJob, listJobEvents, onlineAgents, readJob } from "../pc-pairing/coordination.server.ts";
 import { readCodingFileSnapshot } from "./hosted/file-receipts.ts";
 import { HOSTED_BUILD_MODEL, adrianBuildCommand, adrianHostedWorkspace, closeHostedCodingSession, packageLabel, resolveBuildWorkspace, runCodingTurn, runHostedPrompt, type CodingMode } from "./hosted/acp-client.ts";
-import { snapshotHostedWorkspace } from "./hosted/shell.server.ts";
+import { readHostedGitBranch, snapshotHostedWorkspace } from "./hosted/shell.server.ts";
 import { recordKimiAttempt } from "./persist.ts";
 import { readBuildSourceReceipt } from "./source-receipt.ts";
 import { createHash } from "node:crypto";
@@ -15,6 +15,7 @@ import { prepareBuildTask } from "./build-guidance.ts";
 import { pairedBuildPayload, pairedBuildReceipt } from "./paired-build-receipt.ts";
 import { dispatchContext, reserveDispatchAttempt, runSettledDispatch } from "../dispatch-attempt.ts";
 import { resolveXaiInferenceApiKey } from "../media/xai-key.ts";
+import { buildBranchName } from "./build-scope.ts";
 
 const MAX_CWD = 500;
 
@@ -50,7 +51,7 @@ export async function handleKimiSession(request: Request, deps: { recordUsage?: 
     if (!origin.ok) return json({ ok: false, error: origin.error }, 403);
     try {
       const ownerId = await ownerIdFromRequest(request);
-      const body = (await request.json().catch(() => ({}))) as { prompt?: unknown; skillApplications?: unknown; cwd?: unknown; mode?: unknown; resumeSessionId?: unknown; fork?: unknown; action?: unknown; agentId?: unknown; jobKey?: unknown; operationId?: unknown; taskId?: unknown; projectId?: unknown; sourceReceipt?: unknown };
+      const body = (await request.json().catch(() => ({}))) as { prompt?: unknown; skillApplications?: unknown; cwd?: unknown; mode?: unknown; resumeSessionId?: unknown; fork?: unknown; action?: unknown; agentId?: unknown; jobKey?: unknown; operationId?: unknown; taskId?: unknown; projectId?: unknown; sourceReceipt?: unknown; expectedBranch?: unknown };
       if ((body as { action?: unknown }).action === "close") {
         if (ownerId !== "dev-user") return json({ ok: false, error: machineRequired }, 409);
         const sessionId = typeof body.resumeSessionId === "string" ? body.resumeSessionId.trim().slice(0, 80) : "";
@@ -73,16 +74,20 @@ export async function handleKimiSession(request: Request, deps: { recordUsage?: 
       if (body.agentId !== undefined && body.agentId !== "hosted" && !agent) return json({ ok: false, error: "The selected Build PC is offline. Reconnect it before submitting." }, 409);
       if (agent && !buildRuntimeCapabilities(ownerId, [agent])[1]?.coding) return json({ ok: false, error: "The selected computer has not reported an available coding runtime. Reconnect or update it before submitting." }, 409);
       if (body.jobKey !== undefined && (typeof body.jobKey !== "string" || !/^[a-f0-9]{32}$/.test(body.jobKey))) return json({ ok: false, error: "Invalid job ID." }, 400);
+      const expectedBranch = body.expectedBranch;
+      if (expectedBranch !== undefined && !buildBranchName(expectedBranch)) return json({ ok: false, error: "Invalid target branch. Nothing was started." }, 400);
+      if (expectedBranch && (agent || resumeSessionId)) return json({ ok: false, error: "A target branch requires a new coding session on a runtime that can verify its current Git branch. Nothing was started." }, 409);
       if (!agent) {
         if (ownerId !== "dev-user") return json({ ok: false, executed: false, error: machineRequired }, 409);
         if (!resolveXaiInferenceApiKey()) return json({ ok: false, executed: false, error: "The hosted Build provider is not configured. Nothing was sent." }, 503);
         const cwd = resolveBuildWorkspace(requestedCwd);
+        if (expectedBranch && await readHostedGitBranch(cwd) !== expectedBranch) return json({ ok: false, executed: false, error: "The active Git branch could not be verified against the target. Check the workspace and branch before running." }, 409);
         for (const file of sourceReceipt?.files ?? []) {
           const current = readCodingFileSnapshot(cwd || adrianHostedWorkspace(), file.path);
           if (!current.ok || !current.exists || createHash("sha256").update(current.content).digest("hex") !== file.sha256) return json({ ok: false, error: "A reviewed source file changed or is unavailable. Review it before running." }, 409);
         }
         const context = dispatchContext({ operationId: body.operationId || body.jobKey || request.headers.get("x-mind-operation-id"), taskId: body.taskId, projectId: body.projectId,
-          provider: "xai", model: HOSTED_BUILD_MODEL, stage: "hosted-build", args: { prompt, cwd, mode, resumeSessionId, sourceReceipt, fork: body.fork === true }, textOnly: false });
+          provider: "xai", model: HOSTED_BUILD_MODEL, stage: "hosted-build", args: { prompt, cwd, mode, resumeSessionId, sourceReceipt, expectedBranch, fork: body.fork === true }, textOnly: false });
         const reserved = await reserveDispatchAttempt(ownerId, context);
         if (!reserved.ok) return json({ ok: false, executed: false, error: reserved.error, approvalId: reserved.approvalId }, reserved.status);
         if (mode || resumeSessionId || body.fork === true) {
@@ -114,6 +119,7 @@ export async function handleKimiSession(request: Request, deps: { recordUsage?: 
             clientCalls: turn.clientCalls || [],
             toolReceipts: turn.toolReceipts || [],
             operationId: turn.operationId,
+            verifiedBranch: expectedBranch,
             outputComplete: turn.outputComplete,
             outputCharacters: turn.outputCharacters,
             verification: turn.verification,
@@ -138,6 +144,7 @@ export async function handleKimiSession(request: Request, deps: { recordUsage?: 
           loginRequired: hosted.status === "authentication_required",
           error: accepted ? undefined : hosted.error || "The coding package did not accept the task. No extra login is requested.",
           runtime: hosted.status,
+          verifiedBranch: expectedBranch,
           version: hosted.version,
           agent: hosted.agentName,
           output: hosted.output || "",

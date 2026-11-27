@@ -1,3 +1,5 @@
+import { buildRunId } from "./kimi/build-scope.ts";
+
 /** Stable share links for one chat, project, file, or bot.
  * Section history stays in `section`. This does not replace it.
  */
@@ -8,6 +10,8 @@ export type ShareItemKey = (typeof SHARE_ITEM_KEYS)[number];
 export type ShareWrite = {
   section: string;
   pane?: string | null;
+  workProject?: string | null;
+  workRun?: string | null;
   chat: string | null;
   project: string | null;
   file: string | null;
@@ -54,7 +58,32 @@ export function embeddedWorkspaceSearch(search: string): string {
     const value = source.get(key);
     if (isShareId(value)) result.set(key, value);
   }
+  if (source.get("section") === "build") {
+    const work = workLocation(search);
+    if (work.projectId) result.set("workProject", work.projectId);
+    if (work.runId) result.set("workRun", work.runId);
+  }
   return result.size ? `?${result}` : "";
+}
+
+export function workLocation(search: string) {
+  const params = paramsFrom(search);
+  if (params.get("section") !== "build") return { projectId: null, runId: null };
+  const project = params.get("workProject");
+  const run = params.get("workRun");
+  return { projectId: isShareId(project) ? project : null, runId: buildRunId(run) ? run : null };
+}
+
+export function buildRunPath(projectId: string | null, runId: string) {
+  const params = new URLSearchParams({ section: "build", workRun: runId });
+  if (projectId) params.set("workProject", projectId);
+  return `/?${params}`;
+}
+
+export function isWorkRunLink(href: string) {
+  if (!href.startsWith("/") || href.startsWith("//") || href.includes("\\")) return false;
+  const [path, search = ""] = href.split("?", 2);
+  return path.endsWith("/") && Boolean(workLocation(search).runId);
 }
 
 export function socialLegacyReturn(search: string): string | undefined {
@@ -82,11 +111,15 @@ export function shareWriteForView(
 
 export function writeShareSearch(current: string, next: ShareWrite, knownSections: readonly string[]): string {
   const params = paramsFrom(current);
-  for (const key of ["section", "pane", ...SHARE_ITEM_KEYS]) params.delete(key);
+  for (const key of ["section", "pane", "workProject", "workRun", ...SHARE_ITEM_KEYS]) params.delete(key);
   if (next.section && next.section !== "command" && knownSections.includes(next.section)) {
     params.set("section", next.section);
   }
   if (next.section === "settings" && SETTINGS_PANES.includes(next.pane as SettingsPane)) params.set("pane", next.pane!);
+  if (next.section === "build") {
+    if (isShareId(next.workProject)) params.set("workProject", next.workProject);
+    if (buildRunId(next.workRun)) params.set("workRun", next.workRun);
+  }
   for (const key of SHARE_ITEM_KEYS) {
     const value = next[key];
     if (isShareId(value)) params.set(key, value);

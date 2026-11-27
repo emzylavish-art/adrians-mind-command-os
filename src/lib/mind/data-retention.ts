@@ -1,6 +1,7 @@
 import { accountPreferenceKey } from "./account-preferences.ts";
 import { buildDraftKey } from "./kimi/build-review.ts";
 import { buildHandoffKey } from "./kimi/build-handoff.ts";
+import { workProjectStoragePrefix, workRunStoragePrefix } from "./kimi/build-scope.ts";
 import { researchArchiveKey } from "./research-reports.ts";
 import type { Workspace } from "./types.ts";
 
@@ -35,13 +36,17 @@ export async function clearLocalRetention(ownerId: string, targets: LocalRetenti
       if (target === "originals" || target === "images" || target === "videos" || target === "knowledge") await deps[target].clear();
       if (target === "research") deps.local.removeItem(researchArchiveKey(ownerId));
       if (target === "build-recovery") {
-        for (const key of [buildDraftKey(ownerId), `amcos.build-result.v1.${encodeURIComponent(ownerId)}`, `adrian-build-last-job.${ownerId}`]) deps.local.removeItem(key);
+        for (const key of [buildDraftKey(ownerId), `amcos.build-result.v1.${encodeURIComponent(ownerId)}`, `adrian-build-last-job.${ownerId}`, `adrian-build-pending-source.${ownerId}`]) deps.local.removeItem(key);
+        removePrefix(deps.local, workProjectStoragePrefix(ownerId));
+        removePrefix(deps.local, workRunStoragePrefix(ownerId));
+        removePrefix(deps.session, workProjectStoragePrefix(ownerId));
         deps.session.removeItem(buildDraftKey(ownerId));
         deps.session.removeItem(buildHandoffKey(ownerId));
         deps.session.removeItem(`adrian-build-draft.${ownerId}`);
         deps.session.removeItem(`adrian-build-task-source.${ownerId}`);
         deps.session.removeItem(`adrian-build-mode.${ownerId}`);
         deps.session.removeItem(`adrian-human-return.${ownerId}`);
+        deps.session.removeItem(`adrian-build-live-session.${ownerId}`);
       }
       if (target === "preferences") removePrefix(deps.local, accountPreferenceKey(ownerId, ""));
       if (target === "composer-drafts") { removePrefix(deps.session, "amcos.draft.v1.[" + JSON.stringify(ownerId) + ","); deps.afterDraftClear?.(); }

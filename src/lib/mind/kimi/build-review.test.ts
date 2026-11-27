@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { applyBuildSave, buildBufferKey, buildDiff, buildDraftKey, buildResultHandoff, matchesBuildSave, normalizeBuildSelection, parseBuildDraft, serializeBuildDraft } from "./build-review.ts";
+import { buildBranchName } from "./build-scope.ts";
 
 test("Build save requires a matching receipt and preserves typing added while saving", () => {
   const reviewed = { workspace: "pc-a", cwd: "fixture", path: "notes.txt", saved: "old", draft: "submitted" };
@@ -24,6 +25,20 @@ test("Build draft recovery preserves separate files and original save baselines 
   assert.equal(parseBuildDraft(raw, "B"), null);
   assert.notEqual(buildDraftKey("A"), buildDraftKey("B"));
   assert.equal(parseBuildDraft(raw, "A")?.buffers[keys[0]].saved, "old");
+});
+
+test("Work recovers only the matching project's branch, task and execution choices", () => {
+  const draft = { owner: "A", projectId: "project-a", buffers: {}, tabs: [], selectedFile: "", prompt: "Review the draft", branch: "feature/example", cwd: "/fixture", mode: "plan" as const };
+  const raw = serializeBuildDraft(draft);
+  assert.equal(parseBuildDraft(raw, "A", "project-a")?.branch, draft.branch);
+  assert.equal(parseBuildDraft(raw, "A", "project-a")?.cwd, draft.cwd);
+  assert.equal(parseBuildDraft(raw, "A", "project-a")?.mode, draft.mode);
+  assert.equal(parseBuildDraft(raw, "A", "project-b"), null);
+  assert.equal(parseBuildDraft(raw, "A"), null);
+  assert.equal(parseBuildDraft(raw, "B", "project-a"), null);
+  assert.notEqual(buildDraftKey("A", "project-a"), buildDraftKey("A", "project-b"));
+  assert.equal(buildBranchName(draft.branch), true);
+  for (const invalid of ["HEAD", "--force", "a//b", "a/.b", "a/..", "a.lock", "a\nnext"]) assert.equal(buildBranchName(invalid), false);
 });
 
 test("Build diff shows deletions, reordered and repeated lines, and long edits", () => {

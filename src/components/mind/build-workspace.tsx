@@ -8,7 +8,7 @@ import { KimiPhase4Panel } from "@/components/mind/kimi-phase4-panel";
 import { GitReview, type GitReport } from "@/components/mind/git-review";
 import { CodeIde } from "@/components/mind/code-ide";
 import { useAccountPreferences } from "@/components/mind/account-preferences-context";
-import { collectAccountSkillApplications, skillReceiptSummary, type SkillApplicationReceipt } from "@/lib/mind/skill-activation";
+import { collectAccountSkillApplications, skillReceiptSummary } from "@/lib/mind/skill-activation";
 import { BrowserEnvironments } from "@/components/mind/browser-environments";
 import { OwnerFlow } from "@/components/mind/owner-flow";
 import { ActionsButton, ActionOverlay } from "@/components/mind/conversation-menu";
@@ -22,8 +22,10 @@ import { consumeMindTurn, prepareTurnId } from "@/lib/mind/live-turn";
 import { boundAbortSignal } from "@/lib/mind/turn-timeouts";
 import { createBuildPlanningGate } from "@/lib/mind/kimi/build-lifecycle";
 import { applyBuildSave, buildBufferKey as bufferKey, buildDraftKey, buildResultHandoff, matchesBuildSave, parseBuildDraft, serializeBuildDraft, type BuildEditorBuffer as EditorBuffer, type BuildFileTarget as FileTarget } from "@/lib/mind/kimi/build-review";
-import { buildResultKey, parseBuildResult, serializeBuildResult, type BuildStoredReceipt } from "@/lib/mind/kimi/build-result";
-import { buildHandoffKey, parseChatBuildHandoff, type ChatBuildHandoff } from "@/lib/mind/kimi/build-handoff";
+import { buildResultKey, canReturnBuildResult, parseBuildResult, readBuildReturnSource, serializeBuildResult, type BuildReturnSource, type BuildStoredReceipt, type BuildStoredResult } from "@/lib/mind/kimi/build-result";
+import { buildBranchName, workRunStorageKey, workStorageKey } from "@/lib/mind/kimi/build-scope";
+import { buildHandoffKey, normalizeWorkMedia, parseChatBuildHandoff, workImageKey, type ChatBuildHandoff, type WorkImageRef, type WorkMedia, type WorkOriginalRef } from "@/lib/mind/kimi/build-handoff";
+import { MAX_IMAGES_PER_TURN } from "@/lib/mind/media/types";
 import { MAX_BUILD_TASK_CHARACTERS } from "@/lib/mind/kimi/build-guidance";
 import { previewPathPrefix } from "@/lib/preview-path-prefix";
 
@@ -99,6 +101,13 @@ type BuildWorkspaceProps = {
   };
   plannerRef?: { current: ((words: string, images: unknown[]) => Promise<string | undefined>) | null };
   ownerId?: string;
+  projectId?: string | null;
+  runId?: string | null;
+  workProjects?: { id: string; name: string }[];
+  onSelectProject?: (id: string | null) => void;
+  onReturnResult?: (result: BuildStoredResult) => string | undefined;
+  resolveWorkImages?: (source: string, refs: WorkImageRef[]) => Promise<ImageAttachment[]>;
+  downloadWorkOriginal?: (source: string, original: WorkOriginalRef) => Promise<void>;
   enabledSkills?: Record<string, boolean>;
   freeOnly?: boolean;
   onDiscuss?: (text: string) => void;
@@ -113,10 +122,36 @@ type BuildWorkspaceProps = {
 };
 
 export function BuildWorkspace(props: BuildWorkspaceProps = {}) {
-  return <BuildWorkspaceSession key={props.ownerId || "signed-out"} {...props} />;
+  const projectId = props.projectId ?? null;
+  const key = JSON.stringify([props.ownerId, projectId, props.runId]);
+  if (props.runId) return <BuildRunReview key={key} owner={props.ownerId} projectId={projectId} runId={props.runId} onBack={() => props.onSelectProject?.(projectId)} />;
+  return <BuildWorkspaceSession key={key} {...props} projectId={projectId} />;
 }
 
-function BuildWorkspaceSession(props: BuildWorkspaceProps) {
+function BuildRunReview({ owner, projectId, runId, onBack }: { owner?: string; projectId: string | null; runId: string; onBack: () => void }) {
+  const [result, setResult] = useState<BuildStoredResult | null>();
+  useEffect(() => {
+    try {
+      const saved = owner ? parseBuildResult(localStorage.getItem(workRunStorageKey(owner, projectId, runId)), owner, projectId) : null;
+      setResult(saved?.source?.runId === runId && canReturnBuildResult(saved.job, saved.source) ? saved : null);
+    } catch { setResult(null); }
+  }, [owner, projectId, runId]);
+  return <section className="dense-card min-w-0 space-y-3" aria-label="Saved Build run">
+    <button type="button" className="min-h-11 underline" onClick={onBack}>Back to Work draft</button>
+    <h2 className="font-semibold">Build run receipt</h2>
+    {result ? <>{result.receipt?.verifiedBranch && <p className="text-sm text-muted">Git branch verified before dispatch · {result.receipt.verifiedBranch}</p>}<div className="build-reading-result">{buildResultHandoff(result.receipt?.filesChanged || [], result.job.output, result.receipt?.operationId || runId, { outputComplete: result.receipt?.outputComplete })}</div></>
+      : <p role="status">{result === undefined ? "Loading saved receipt…" : "This receipt is unavailable for the current account, project, or browser. No task was started."}</p>}
+  </section>;
+}
+
+function BuildWorkspaceSession(props: BuildWorkspaceProps & { projectId: string | null }) {
+  const projectId = props.projectId;
+  const ownerKey = props.ownerId || "signed-out";
+  const draftKey = buildDraftKey(ownerKey, projectId);
+  const resultKey = buildResultKey(ownerKey, projectId);
+  const lastJobKey = workStorageKey(ownerKey, projectId, "last-job", `adrian-build-last-job.${ownerKey}`);
+  const liveKey = workStorageKey(ownerKey, projectId, "live-session", `adrian-build-live-session.${ownerKey}`);
+  const pendingSourceKey = workStorageKey(ownerKey, projectId, "pending-source", `adrian-build-pending-source.${ownerKey}`);
   const preferenceStorage = useAccountPreferences();
   const [dictationEnabled, setDictationEnabled] = useState(() => readVoicePreferences(preferenceStorage).enabled);
   useEffect(() => {
@@ -134,6 +169,7 @@ function BuildWorkspaceSession(props: BuildWorkspaceProps) {
   const [prompt, setPrompt] = useState("");
   const [incomingTask, setIncomingTask] = useState<{ text: string; threadId: string | null; mode: string | null; chat?: ChatBuildHandoff } | null>(null);
   const [sourceChatId, setSourceChatId] = useState<string>();
+  const [workMedia, setWorkMedia] = useState<WorkMedia>();
   const taskField = useRef<HTMLTextAreaElement>(null);
   const planningController = useRef<AbortController | null>(null);
   useEffect(() => {
@@ -141,7 +177,10 @@ function BuildWorkspaceSession(props: BuildWorkspaceProps) {
     return () => planningController.current?.abort();
   }, [props.halted]);
   const [cwd, setCwd] = useState("");
+  const [branch, setBranch] = useState("");
   const [job, setJob] = useState<BuildJob | null>(null);
+  const [resultSource, setResultSource] = useState<BuildReturnSource>();
+  const pendingSource = useRef<BuildReturnSource | undefined>(undefined);
   const [events, setEvents] = useState<BuildEvent[]>([]);
   const [loading, setLoading] = useState(false);
   const [rowMenu, setRowMenu] = useState<string | null>(null);
@@ -228,12 +267,13 @@ function BuildWorkspaceSession(props: BuildWorkspaceProps) {
       const response = await fetch(`/api/mind/build/session?jobId=${encodeURIComponent(jobId)}`, { credentials: "include", cache: "no-store" });
       const data = (await response.json()) as { ok?: boolean; job?: BuildJob; receipt?: BuildStoredReceipt | null; events?: BuildEvent[]; error?: string };
       if (!mounted.current || sequence !== pollSequence.current) return;
-      if (!response.ok || !data.ok || !data.job) {
+      if (!response.ok || !data.ok || data.job?.id !== jobId) {
         setNotice(data.error || "Build session status could not be read.");
         return;
       }
       setJob(data.job);
       setBuildReceipt(data.receipt ?? null);
+      setResultSource(pendingSource.current?.runtime === "paired" && pendingSource.current.runId === jobId ? pendingSource.current : undefined);
       setEvents(Array.isArray(data.events) ? data.events : []);
     } catch {
       if (!mounted.current || sequence !== pollSequence.current) return;
@@ -282,13 +322,13 @@ function BuildWorkspaceSession(props: BuildWorkspaceProps) {
     }
   }
 
-  async function browseWorkspace() {
+  async function browseWorkspace(openEditor = true) {
     const result = await runFileOperation("list");
     if (!result?.files) return;
     if (result.truncated) setFileNotice("Showing a limited file listing. Use Search for other paths.");
     setListingTarget({ workspace: result.workspace, cwd: result.cwd });
     setWorkspaceFiles(result.files);
-    setPanel("editor");
+    if (openEditor) setPanel("editor");
   }
 
   async function closeCodingBrowser() {
@@ -498,42 +538,50 @@ function BuildWorkspaceSession(props: BuildWorkspaceProps) {
     const owner = props.ownerId;
     if (!owner) { setDraftHydrated(true); return; }
     try {
-      const restored = parseBuildDraft(sessionStorage.getItem(buildDraftKey(owner)), owner);
+      const restored = parseBuildDraft(sessionStorage.getItem(draftKey), owner, projectId);
       if (restored) {
         setBuffers(restored.buffers); setTabs(restored.tabs); setSelectedFile(restored.selectedFile); setPrompt(restored.prompt); setCwd(restored.cwd ?? ""); setPlanningTier(restored.planningTier ?? null); setSourceChatId(restored.sourceChatId);
-        if (Object.values(restored.buffers).some(buffer => buffer.saved !== buffer.draft)) setFileNotice("Recovered unsaved drafts for this account. Saving will check that each original file is unchanged.");
+        setBranch(restored.branch ?? "");
+        setMode(restored.mode ?? "default");
+        setWorkMedia(restored.media);
+        if (Object.values(restored.buffers).some(buffer => buffer.saved !== buffer.draft)) setFileNotice("Recovered unsaved drafts for this Work project. Saving will check that each original file is unchanged.");
       }
-      const text = sessionStorage.getItem(`adrian-build-draft.${owner}`);
+      const text = projectId === null ? sessionStorage.getItem(`adrian-build-draft.${owner}`) : null;
       if (text) setIncomingTask({ text, threadId: sessionStorage.getItem(`adrian-build-task-source.${owner}`), mode: sessionStorage.getItem(`adrian-build-mode.${owner}`) });
       else {
         const chat = parseChatBuildHandoff(sessionStorage.getItem(buildHandoffKey(owner)), owner);
-        if (chat) setIncomingTask({ text: chat.text, threadId: null, mode: null, chat });
+        if (chat && chat.projectId === projectId) setIncomingTask({ text: chat.text, threadId: null, mode: null, chat });
       }
     } catch { setFileNotice("Editor draft recovery could not be read. Existing files have not been changed."); }
     setDraftHydrated(true);
-  }, [props.ownerId]);
+  }, [props.ownerId, projectId, draftKey]);
 
   useEffect(() => {
     if (!draftHydrated || !props.ownerId) return;
     try {
-      sessionStorage.setItem(buildDraftKey(props.ownerId), serializeBuildDraft({ owner: props.ownerId, buffers, tabs, selectedFile, prompt, cwd, sourceChatId, ...(planningTier ? { planningTier } : {}) }));
+      sessionStorage.setItem(draftKey, serializeBuildDraft({ owner: props.ownerId, projectId, buffers, tabs, selectedFile, prompt, cwd, branch, mode, sourceChatId, media: workMedia, planningTier: planningTier ?? undefined }));
     } catch (error) { setFileNotice(error instanceof Error ? error.message : "Draft recovery could not be saved. Save or copy your changes before leaving Build."); }
-  }, [buffers, tabs, selectedFile, prompt, cwd, planningTier, props.ownerId, draftHydrated, sourceChatId]);
+  }, [buffers, tabs, selectedFile, prompt, cwd, branch, mode, planningTier, props.ownerId, projectId, draftKey, draftHydrated, sourceChatId, workMedia]);
 
   useEffect(() => {
-    void browseWorkspace();
+    if (draftHydrated) void browseWorkspace(false);
+  }, [draftHydrated]);
+
+  useEffect(() => {
     if (props.ownerId) {
       try {
-        const saved = parseBuildResult(localStorage.getItem(buildResultKey(props.ownerId)), props.ownerId);
-        if (saved) { setJob(saved.job); setBuildReceipt(saved.receipt); }
+        const saved = parseBuildResult(localStorage.getItem(resultKey), props.ownerId, projectId);
+        if (saved) { setJob(saved.job); setBuildReceipt(saved.receipt); setResultSource(saved.source); }
       } catch (error) { setNotice(error instanceof Error ? error.message : "The previous Build receipt could not be recovered. Check your saved conversation before repeating the task."); }
     }
     void fetch(`${apiPrefix}/api/mind/build/browser`, { credentials: "include", cache: "no-store" }).then(response => { if (!response.ok) throw new Error("Browser status unavailable"); return response.json(); }).then(data => {
       if (!mounted.current) return;
       if (data.running === true) { setBrowserFrame(`${apiPrefix}/api/mind/build/browser?view=frame`); setBrowserNotice("Recovered this account's running local coding browser. Website handoff permissions are separate."); }
     }).catch(() => { if (mounted.current) setBrowserNotice("Coding browser status could not be verified. Starting a session is an explicit action."); });
-    const live = sessionStorage.getItem(`adrian-build-live-session.${props.ownerId || "signed-out"}`);
-    if (live) setSessionId(live);
+    try {
+      const live = sessionStorage.getItem(liveKey);
+      if (live) setSessionId(live);
+    } catch { /* The live runtime ID is optional for browser recovery. */ }
   }, []);
 
   function acceptIncomingTask(append: boolean) {
@@ -545,17 +593,26 @@ function BuildWorkspaceSession(props: BuildWorkspaceProps) {
       return;
     }
     const source = incomingTask.chat?.chatId;
+    const existing = append ? workMedia : undefined;
+    if (existing && source !== sourceChatId) { setNotice("Remove the current task’s carried images and originals before combining work from another conversation."); return; }
+    const added = incomingTask.chat?.media;
+    const images = [...new Map([...(existing?.images ?? []), ...(added?.images ?? [])].map(image => [workImageKey(image), image])).values()];
+    if (images.length > MAX_IMAGES_PER_TURN) { setNotice("Remove an image from the current task before adding more than four planning images."); return; }
+    const originals = [...new Map([...(existing?.originals ?? []), ...(added?.originals ?? [])].map(file => [file.fileId, file])).values()];
+    const media = normalizeWorkMedia({ images, originals });
+    const nextMode = incomingTask.mode === "auto" || incomingTask.mode === "plan" || incomingTask.mode === "default" ? incomingTask.mode : mode;
     try {
-      const encoded = serializeBuildDraft({ owner, buffers: buffersRef.current, tabs, selectedFile, prompt: nextPrompt, cwd, sourceChatId: source, ...(planningTier ? { planningTier } : {}) });
-      sessionStorage.setItem(buildDraftKey(owner), encoded);
-      if (sessionStorage.getItem(buildDraftKey(owner)) !== encoded) throw new Error("Build draft did not read back.");
+      const encoded = serializeBuildDraft({ owner, projectId, buffers: buffersRef.current, tabs, selectedFile, prompt: nextPrompt, cwd, branch, mode: nextMode, sourceChatId: source, media, planningTier: planningTier ?? undefined });
+      sessionStorage.setItem(draftKey, encoded);
+      if (sessionStorage.getItem(draftKey) !== encoded) throw new Error("Build draft did not read back.");
       if (incomingTask.threadId) sessionStorage.setItem(`adrian-human-return.${owner}`, incomingTask.threadId);
       else sessionStorage.removeItem(`adrian-human-return.${owner}`);
       removeIncomingTask(owner);
     } catch { setNotice("The handoff could not be saved. Your Build draft was kept."); return; }
     setPrompt(nextPrompt);
     setSourceChatId(source);
-    if (incomingTask.mode === "auto" || incomingTask.mode === "plan" || incomingTask.mode === "default") setMode(incomingTask.mode);
+    setWorkMedia(media);
+    setMode(nextMode);
     setIncomingTask(null);
     setNotice(incomingTask.threadId ? "Task added from Intelligence. Review it before running. Its result returns to the source thread." : "Task added from Chat. Review it before running.");
     taskField.current?.focus();
@@ -578,6 +635,24 @@ function BuildWorkspaceSession(props: BuildWorkspaceProps) {
     } catch { setNotice("Your browser could not dismiss the pending handoff."); }
   }
 
+  function returnResultToChat() {
+    const owner = props.ownerId;
+    if (!owner || !job || !resultSource || !props.onReturnResult || !canReturnBuildResult(job, resultSource)) return;
+    const result = { owner, projectId, job, receipt: buildReceipt, source: resultSource };
+    try {
+      const key = workRunStorageKey(owner, projectId, resultSource.runId);
+      const raw = serializeBuildResult(result);
+      localStorage.setItem(key, raw);
+      if (localStorage.getItem(key) !== raw) throw new Error();
+    } catch {
+      setNotice("The run receipt could not be saved for its Chat link. Download the full receipt before leaving Work.");
+      setBand("message");
+      return;
+    }
+    const issue = props.onReturnResult(result);
+    if (issue) { setNotice(issue); setBand("message"); }
+  }
+
   useEffect(() => {
     if (!editorDirty) return;
     const onLeave = (event: BeforeUnloadEvent) => {
@@ -590,7 +665,8 @@ function BuildWorkspaceSession(props: BuildWorkspaceProps) {
 
   useEffect(() => {
     try {
-      const savedJobId = localStorage.getItem(`adrian-build-last-job.${props.ownerId || "signed-out"}`);
+      pendingSource.current = readBuildReturnSource(JSON.parse(localStorage.getItem(pendingSourceKey) ?? "null"));
+      const savedJobId = localStorage.getItem(lastJobKey);
       if (savedJobId) void refreshJob(savedJobId);
     } catch { /* A new job can still run without browser storage. */ }
   }, []);
@@ -603,9 +679,9 @@ function BuildWorkspaceSession(props: BuildWorkspaceProps) {
 
   useEffect(() => {
     if (!props.ownerId || !job) return;
-    try { localStorage.setItem(buildResultKey(props.ownerId), serializeBuildResult({ owner: props.ownerId, job, receipt: buildReceipt })); }
+    try { localStorage.setItem(resultKey, serializeBuildResult({ owner: props.ownerId, projectId, job, receipt: buildReceipt, source: resultSource })); }
     catch (error) { setNotice(error instanceof Error ? error.message : "This browser could not preserve the Build receipt. Copy or download the result before leaving Build."); }
-  }, [job, buildReceipt, props.ownerId]);
+  }, [job, buildReceipt, resultSource, props.ownerId, projectId, resultKey]);
 
   useEffect(() => {
     if (!job?.id || !active) return;
@@ -629,7 +705,7 @@ function BuildWorkspaceSession(props: BuildWorkspaceProps) {
     setExecutionChoice(false);
     if (haltedRef.current) { setNotice("Emergency stop is on. No Build task was started."); return; }
     if (props.freeOnly) { setNotice("Free-only is selected. Build has no verified free coding model for this action."); return; }
-    if (props.composer?.images.length) { setNotice("Use Plan with Grok to review these images, then remove them before running the text-only coding task."); return; }
+    if (props.composer?.images.length || workMedia?.images.length) { setNotice("Use Plan with Grok to review these images, then remove them before running the text-only coding task."); return; }
     const text = withTaskFile(prompt);
     if (!text) {
       setNotice("Describe the coding task before submitting.");
@@ -646,12 +722,20 @@ function BuildWorkspaceSession(props: BuildWorkspaceProps) {
     const workspace = selectedBuffer?.workspace ?? companion.onlineAgentIds?.[0] ?? "hosted";
     const agentId = workspace === "hosted" ? undefined : workspace;
     const targetCwd = selectedBuffer?.cwd ?? cwd.trim();
+    const expectedBranch = branch.trim();
+    if (expectedBranch && (!buildBranchName(expectedBranch) || agentId || policy === "save")) {
+      submittingBuild.current = false;
+      setNotice(!buildBranchName(expectedBranch) ? "Enter a valid target branch before running." : agentId ? "This paired runtime cannot verify a target branch. No task was submitted." : "Save reviewed files separately before running with a named branch. No task was submitted.");
+      return;
+    }
     if (agentId && !companion.onlineAgentIds?.includes(agentId)) {
       submittingBuild.current = false;
       setNotice("The original computer is offline. Reconnect it before running this task.");
       return;
     }
-    const jobKey = agentId ? crypto.randomUUID().replaceAll("-", "") : undefined;
+    const runId = crypto.randomUUID().replaceAll("-", "");
+    const jobKey = agentId ? runId : undefined;
+    const runSource: BuildReturnSource | undefined = sourceChatId ? { chatId: sourceChatId, runId, runtime: agentId ? "paired" : "hosted" } : undefined;
     ++pollSequence.current;
     setLoading(true);
     setNotice(null);
@@ -683,15 +767,20 @@ function BuildWorkspaceSession(props: BuildWorkspaceProps) {
       const receipt = { ...target, files, policy };
       setExecutionReceipt(receipt);
       if (jobKey) {
-        try { localStorage.setItem(`adrian-build-last-job.${props.ownerId || "signed-out"}`, jobKey); } catch { /* Recovery remains available on this screen. */ }
+        pendingSource.current = runSource;
+        try {
+          if (runSource) localStorage.setItem(pendingSourceKey, JSON.stringify(runSource));
+          else localStorage.removeItem(pendingSourceKey);
+          localStorage.setItem(lastJobKey, jobKey);
+        } catch { /* Recovery remains available on this screen. */ }
       }
       const response = await fetch("/api/mind/build/session", {
         method: "POST",
         credentials: "include",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ prompt: text, skillApplications: collectAccountSkillApplications(preferenceStorage, text, props.enabledSkills, "build"), sourceReceipt: receipt, agentId: workspace, jobKey, cwd: targetCwd || undefined, mode, resumeSessionId: sessionId || undefined }),
+        body: JSON.stringify({ prompt: text, skillApplications: collectAccountSkillApplications(preferenceStorage, text, props.enabledSkills, "build"), sourceReceipt: receipt, agentId: workspace, jobKey, operationId: runId, projectId, expectedBranch: expectedBranch || undefined, cwd: targetCwd || undefined, mode, resumeSessionId: expectedBranch ? undefined : sessionId || undefined }),
       });
-      const data = (await response.json()) as { ok?: boolean; jobId?: string; receipt?: BuildStoredReceipt | null; executed?: boolean; error?: string; version?: string; agent?: string; loginRequired?: boolean; output?: string; package?: string; sessionId?: string; mode?: string; resumed?: boolean; forkedSessionId?: string; filesChanged?: { path: string; before: string; after: string }[]; skillReceipts?: SkillApplicationReceipt[]; operationId?: string; outputComplete?: boolean; requestDispatched?: boolean; fileReviewScope?: string; fileReviewWarnings?: string[]; verification?: { implementation: string; builderInstructionDigest?: string; checks: { id: string; status: string }[] }; toolReceipts?: { method: string; path?: string; status: string; detail?: string; durable?: boolean }[] };
+      const data = (await response.json()) as BuildStoredReceipt & { ok?: boolean; jobId?: string; receipt?: BuildStoredReceipt | null; executed?: boolean; error?: string; output?: string; package?: string; sessionId?: string; mode?: string; resumed?: boolean; forkedSessionId?: string; processAlive?: boolean; reused?: boolean };
       if (!mounted.current) return;
       if (!response.ok || !data.ok || !data.jobId) {
         if (data.executed || data.toolReceipts?.length || data.filesChanged?.length) {
@@ -700,28 +789,33 @@ function BuildWorkspaceSession(props: BuildWorkspaceProps) {
           setBuildReceipt(data);
           if (data.sessionId) {
             setSessionId(data.sessionId);
-            try { sessionStorage.setItem(`adrian-build-live-session.${props.ownerId || "signed-out"}`, data.sessionId); }
+            try { sessionStorage.setItem(liveKey, data.sessionId); }
             catch { sessionWarning = "The session ID could not be saved for restart recovery. Download the receipt. "; }
           }
           const change = data.filesChanged?.[0];
           if (change) setLastDiff(change);
-          const alive = (data as { processAlive?: boolean }).processAlive === true;
-          const reused = (data as { reused?: boolean }).reused === true;
+          const alive = data.processAlive === true;
+          const reused = data.reused === true;
           setNotice(`${completed ? "Coding request completed; implementation verification is still pending." : `Coding request did not complete: ${data.error || "Completion was not confirmed"}. Recorded changes were preserved for review.`} ${sessionWarning}${data.outputComplete === false ? "Output exceeded the supported limit; review the incomplete receipt. " : ""}${data.mode || mode} mode ${reused ? "used the same running process" : data.resumed ? "resumed the last session" : "was requested"}. ${alive ? "The process is still running for this session." : ""} ${change ? `Recorded change: ${change.path}.` : "No file change was reported."}`);
           const result = buildResultHandoff(data.filesChanged || [], data.output || "", data.operationId, { completed, error: data.error, outputComplete: data.outputComplete });
-          if (sessionStorage.getItem(`adrian-human-return.${props.ownerId || "signed-out"}`)) props.onResult?.(result);
+          if (projectId === null && !runSource && sessionStorage.getItem(`adrian-human-return.${ownerKey}`)) props.onResult?.(result);
           setJob({ id: "local", status: completed ? "done" : "error", output: [data.package, data.mode ? `mode ${data.mode}` : "", data.resumed ? "resumed" : "", data.forkedSessionId ? `fork ${data.forkedSessionId}` : "", data.output].filter(Boolean).join("\n") || "No textual output returned.", error: completed ? "" : data.error || "Coding request did not complete.", createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() });
+          setResultSource(runSource);
           setPanel("agent");
+          setBand("editor");
+          try { localStorage.removeItem(lastJobKey); } catch { /* The hosted receipt is visible in Work. */ }
           return;
         }
         setNotice(data.error || "The build session could not be queued.");
         return;
       }
       ++pollSequence.current;
+      if (data.jobId !== jobKey) { setNotice("The accepted Build job did not match the submitted run. Check session history before retrying."); return; }
       setJob({ id: data.jobId, status: "queued", output: "", error: "", createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() });
       setBuildReceipt(data.receipt ?? null);
+      setResultSource(runSource);
       setPanel("agent");
-      try { localStorage.setItem(`adrian-build-last-job.${props.ownerId || "signed-out"}`, data.jobId); } catch { /* The accepted job remains visible in this session. */ }
+      setBand("editor");
       setNotice("Task queued on the paired computer.");
     } catch {
       setNotice("Build could not verify the outcome. Check the session history before submitting again.");
@@ -751,6 +845,15 @@ function BuildWorkspaceSession(props: BuildWorkspaceProps) {
     const timeout = AbortSignal.timeout(30_000);
     const signal = typeof AbortSignal.any === "function" ? AbortSignal.any([controller.signal, timeout]) : timeout;
     try {
+      const carried = github ? [] : workMedia?.images ?? [];
+      if (carried.length + (github ? 0 : images.length) > MAX_IMAGES_PER_TURN) { setNotice("Choose up to four total planning images before submitting."); return; }
+      let resolved: ImageAttachment[] = [];
+      if (carried.length) {
+        if (!sourceChatId || !props.resolveWorkImages) { setNotice("The carried images are unavailable. Review or remove them before planning."); return; }
+        try { resolved = await props.resolveWorkImages(sourceChatId, carried); }
+        catch (error) { if (mounted.current) setNotice(error instanceof Error ? error.message : "The selected images could not be read."); return; }
+      }
+      if (!mounted.current || signal.aborted || planOwner.current !== owner) return;
       const body = chatTurnBody({
           text: github ? words : `Plan this Adrian Build task. Do not claim any file was written.\n\n${text}`,
           memory: "off",
@@ -760,7 +863,7 @@ function BuildWorkspaceSession(props: BuildWorkspaceProps) {
           provider: "grok",
           modelTier: planningTier ?? props.sharedTier ?? "Heavy",
           logicRoute: null,
-          images,
+          images: github ? [] : [...images, ...resolved],
       });
       const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(JSON.stringify(body)));
       const fingerprint = Array.from(new Uint8Array(digest), (byte) => byte.toString(16).padStart(2, "0")).join("");
@@ -826,7 +929,7 @@ function BuildWorkspaceSession(props: BuildWorkspaceProps) {
       const response = await fetch("/api/mind/build/session", { method: "POST", credentials: "include", headers: { "content-type": "application/json" }, body: JSON.stringify({ action: "close", resumeSessionId: sessionId }) });
       const data = (await response.json()) as { ok?: boolean; closed?: boolean; error?: string };
       if (!response.ok || !data.ok) { setNotice(data.error || "The coding process was not closed."); return; }
-      sessionStorage.removeItem(`adrian-build-live-session.${props.ownerId || "signed-out"}`);
+      sessionStorage.removeItem(liveKey);
       setSessionId("");
       setNotice(data.closed ? "The coding process for this session was closed." : "No coding process was still running.");
     } catch {
@@ -878,6 +981,7 @@ function BuildWorkspaceSession(props: BuildWorkspaceProps) {
 
   async function submitVoice() {
     if (props.freeOnly) { setNotice("Free-only is selected. A free Build voice task route is unavailable."); return; }
+    if (branch.trim()) { setNotice("Paste the transcript into the Coding task field to check the target Git branch before running."); return; }
     if (!transcript.trim()) return;
     const instructions = projects.find((project) => project.cwd === cwd)?.instructions || "";
     const response = await fetch("/api/mind/build/voice", { method: "POST", credentials: "include", headers: { "content-type": "application/json" }, body: JSON.stringify({ transcript, cwd, instructions }) });
@@ -885,7 +989,8 @@ function BuildWorkspaceSession(props: BuildWorkspaceProps) {
     if (data.jobId) {
       ++pollSequence.current;
       setJob({ id: data.jobId, status: "queued", output: "", error: "", createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() });
-      try { localStorage.setItem(`adrian-build-last-job.${props.ownerId || "signed-out"}`, data.jobId); } catch { /* The accepted job remains visible in this session. */ }
+      setResultSource(undefined);
+      try { localStorage.setItem(lastJobKey, data.jobId); } catch { /* The accepted job remains visible in this session. */ }
     }
     setNotice(data.ok ? data.limitation || "Voice transcript queued." : data.error || "Voice transcript was not queued.");
   }
@@ -935,6 +1040,13 @@ function BuildWorkspaceSession(props: BuildWorkspaceProps) {
 
       <nav className="intelligence-group" aria-label="Build sections">
         <h3>Sections</h3>
+        {props.onSelectProject && <label className="mb-2 flex min-h-11 flex-wrap items-center gap-2 text-sm">Work project
+          <select aria-label="Work project" className="min-h-11 max-w-full rounded-panel border border-line bg-transparent px-2" value={projectId ?? ""} disabled={!draftHydrated || loading || fileBusy || props.recording}
+            onChange={event => props.onSelectProject?.(event.target.value || null)}>
+            <option value="">General Work</option>
+            {props.workProjects?.map(project => <option key={project.id} value={project.id}>{project.name}</option>)}
+          </select>
+        </label>}
         <div className="flex flex-wrap gap-2">
           {([
             ["actions", "Actions"],
@@ -1015,12 +1127,26 @@ function BuildWorkspaceSession(props: BuildWorkspaceProps) {
         {incomingTask && <details className="rounded-panel border border-line p-3">
           <summary className="min-h-11 cursor-pointer">Review task from {incomingTask.threadId ? "Intelligence" : "Chat"}</summary>
           {incomingTask.chat && <p className="mb-2 text-sm text-muted">{incomingTask.chat.messageCount} selected {incomingTask.chat.messageCount === 1 ? "message" : "messages"} · {incomingTask.chat.fileCount} selected {incomingTask.chat.fileCount === 1 ? "file" : "files"}</p>}
+          {incomingTask.chat?.media && <p className="mb-2 text-sm text-muted">{incomingTask.chat.media.images.length} planning images · {incomingTask.chat.media.originals.length} downloadable originals</p>}
           <p className="max-h-48 overflow-auto whitespace-pre-wrap break-words text-sm">{incomingTask.text}</p>
           <div className="flex flex-wrap gap-3">
             <button type="button" disabled={active || loading} className="min-h-11 underline" onClick={() => acceptIncomingTask(Boolean(prompt.trim()))}>{prompt.trim() ? "Add to current task" : "Use this task"}</button>
             <button type="button" className="min-h-11 text-muted" onClick={dismissIncomingTask}>Dismiss handoff</button>
           </div>
         </details>}
+        {sourceChatId && workMedia && <fieldset className="rounded-panel border border-line px-3">
+          <legend className="px-1 text-sm font-semibold">Carried from Chat</legend>
+          {workMedia.images.length > 0 && <p className="text-sm text-muted">Selected images can be sent with a plan. Build execution uses text.</p>}
+          {workMedia.originals.length > 0 && <p className="text-sm text-muted">Download exact originals from this device. Build uses the retained text shown in the task.</p>}
+          {workMedia.images.map(image => <div key={workImageKey(image)} className="flex flex-wrap items-center gap-x-3 text-sm">
+            <span className="min-w-0 break-all">{image.name}</span>
+            <button type="button" disabled={planning} className="min-h-11 underline" onClick={() => setWorkMedia(normalizeWorkMedia({ ...workMedia, images: workMedia.images.filter(item => item !== image) }))}>Remove image<span className="sr-only"> {image.name}</span></button>
+          </div>)}
+          {workMedia.originals.map(original => <div key={original.fileId} className="flex flex-wrap items-center gap-x-3 text-sm">
+            <button type="button" className="min-h-11 min-w-0 break-all text-left underline" onClick={() => void props.downloadWorkOriginal?.(sourceChatId, original).catch(error => { if (mounted.current) setNotice(error instanceof Error ? error.message : "The original file could not be opened."); })}>Download {original.name}</button>
+            <button type="button" className="min-h-11 underline" onClick={() => setWorkMedia(normalizeWorkMedia({ ...workMedia, originals: workMedia.originals.filter(item => item !== original) }))}>Remove original<span className="sr-only"> {original.name}</span></button>
+          </div>)}
+        </fieldset>}
         {props.composer && <div className="flex flex-wrap items-center gap-2" aria-label="Work attachments and project">
           <ComposerMore testId="work-composer-more-menu">
             <MenuCluster label="Add to Work">
@@ -1030,8 +1156,8 @@ function BuildWorkspaceSession(props: BuildWorkspaceProps) {
               <button type="button" style={menuChip} onClick={props.composer.onPlugins}>Plugins</button>
             </MenuCluster>
           </ComposerMore>
-          <label className="flex min-h-11 flex-wrap items-center gap-2 text-sm">Choose project
-            <select className="min-h-11 max-w-full rounded-panel border border-line bg-transparent px-2" aria-label="Work project" value={cwd} onChange={event => setCwd(event.target.value)}>
+          <label className="flex min-h-11 flex-wrap items-center gap-2 text-sm">Execution workspace
+            <select className="min-h-11 max-w-full rounded-panel border border-line bg-transparent px-2" aria-label="Execution workspace" value={cwd} onChange={event => setCwd(event.target.value)}>
               <option value="">Runtime default</option>
               {cwd && !projects.some(project => project.cwd === cwd) && <option value={cwd}>{cwd}</option>}
               {projects.filter(project => project.cwd).map(project => <option key={project.id} value={project.cwd}>{project.label}</option>)}
@@ -1043,6 +1169,11 @@ function BuildWorkspaceSession(props: BuildWorkspaceProps) {
           {props.composer.images.map((image, index) => <button type="button" key={index} className="min-h-11 px-2 text-xs" onClick={() => props.composer?.removeImage(index)}>Remove {image.name}</button>)}
           {props.composer.message && <p className="w-full text-xs text-muted" role="status">{props.composer.message}</p>}
         </div>}
+        <label className="flex min-h-11 flex-wrap items-center gap-2 text-sm">Target Git branch
+          <input value={branch} maxLength={160} aria-label="Target Git branch" aria-describedby="work-branch-help" placeholder="Optional branch name" onChange={event => setBranch(event.target.value)} className="min-h-11 max-w-full rounded-panel border border-line bg-transparent px-2" />
+        </label>
+        <p id="work-branch-help" className="text-xs text-muted">Saved with this Work project. A named branch requires a runtime that can verify its active checkout.</p>
+        {job && <button type="button" className="min-h-11 underline" onClick={() => { setPanel("agent"); setBand("editor"); }}>Open latest Build run</button>}
         <div className="flex flex-wrap items-center gap-2" aria-label="Build planning tools">
           {Boolean(props.planningCatalog?.length) && <label className="flex flex-wrap items-center gap-2 text-sm">Planning model
             <select aria-label="Work planning model" className="min-h-11 max-w-full rounded-panel border border-line bg-transparent px-2" value={planningTier ?? ""} onChange={event => setPlanningTier(event.target.value ? event.target.value as ModelTier : null)}>
@@ -1122,6 +1253,7 @@ function BuildWorkspaceSession(props: BuildWorkspaceProps) {
             </div>
             {panel === "browser" ? <div className="space-y-2"><BrowserEnvironments /><p className="text-sm text-muted" role="status">{browserNotice || "The coding browser uses the in-repo package and the saved Grok key. It does not ask for a separate login."}</p>{browserFrame ? <><button type="button" className="min-h-11 rounded-panel border border-line px-3" onClick={() => void closeCodingBrowser()}>Close coding browser</button><iframe title="Coding browser" src={browserFrame} className="h-[32rem] w-full rounded-panel border border-line bg-black" /></> : null}</div> : null}
             {panel === "agent" ? <>
+              {buildReceipt?.verifiedBranch && <p className="text-xs text-muted">Git branch verified before dispatch · {buildReceipt.verifiedBranch}</p>}
               {buildReceipt ? <details className="rounded-panel border border-line p-3 text-sm"><summary className="cursor-pointer font-semibold">Execution receipt · implementation unverified</summary><p className="mt-2 break-all text-xs text-muted">Operation: {buildReceipt.operationId || "not supplied"}</p><p className="text-xs text-muted">Builder instruction version: {buildReceipt.verification?.builderInstructionDigest || "not reported"}</p><ul className="mt-2 space-y-1">{buildReceipt.verification?.checks.map(check => <li key={check.id}>{check.id.replaceAll("_", " ")}: {check.status.replaceAll("_", " ")}</li>)}{buildReceipt.skillReceipts?.map(receipt => <li key={receipt.skillId}>{receipt.skillId} · version {receipt.version}: {skillReceiptSummary(receipt)}</li>)}{buildReceipt.toolReceipts?.map((receipt, index) => <li key={index}>{receipt.method}{receipt.path ? ` · ${receipt.path}` : ""}: {receipt.status.replaceAll("_", " ")}{receipt.detail ? ` — ${receipt.detail}` : ""}</li>)}</ul><p className="mt-2 text-xs text-muted">{buildReceipt.fileReviewScope}</p>{buildReceipt.fileReviewWarnings?.map((warning, index) => <p key={index} className="text-xs text-warning">{warning}</p>)}<p className="mt-2 text-xs text-muted">Provider statements are not independent test evidence. Review the changed files and run the required checks before accepting the implementation.</p></details> : null}
               <div className="build-reading-result min-h-32 rounded-panel border border-line bg-black/10 p-3 text-base">{assistantText || job?.output || job?.error || "No active build task. Submit a task to stream agent output here."}</div>
               {active ? <button type="button" disabled={job?.status === "cancel_requested"} onClick={() => void cancelBuild()} className="min-h-10 rounded-panel border border-danger/40 px-3 text-sm text-danger">{job?.status === "cancel_requested" ? "Stopping…" : "Stop task"}</button> : null}
@@ -1129,6 +1261,7 @@ function BuildWorkspaceSession(props: BuildWorkspaceProps) {
                 const url = URL.createObjectURL(new Blob([JSON.stringify({ job, receipt: buildReceipt }, null, 2)], { type: "application/json" }));
                 const link = document.createElement("a"); link.href = url; link.download = `build-${buildReceipt?.operationId || job.id}.json`; link.click(); setTimeout(() => URL.revokeObjectURL(url), 1000);
               }}>Download full receipt</button> : null}
+              {props.onReturnResult && canReturnBuildResult(job, resultSource) && <button type="button" className="min-h-11 rounded-panel border border-line px-3 text-sm" onClick={returnResultToChat}>Return result to source chat</button>}
               {sessionId ? <button type="button" onClick={() => void endCodingSession()} className="min-h-10 rounded-panel border border-line px-3 text-sm">End coding session</button> : null}
               {job?.error ? <p className="text-sm text-danger" role="alert">{job.error}</p> : null}
             </> : null}

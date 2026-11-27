@@ -37,3 +37,15 @@ test("rejects private conversations, changed selections, unrelated files and ove
   const largerFile = { ...retained, text: "x".repeat(8001) };
   assert.match(prepareChatBuildHandoff("owner-a", chat, [largerFile], { ...selected, files: ["file-a"] }).error ?? "", /8,000/);
 });
+
+test("Work carries explicitly selected images and exact available original references without copying unchecked content", () => {
+  const source = { ...chat, messages: [{ ...chat.messages[0], images: [{ blobId: "image-a", name: "chosen.png" }, { blobId: "image-b", name: "unchosen.png" }] }] };
+  const binary = { ...retained, name: "original.bin", text: "", original: { blobId: "binary", sha256: "a".repeat(64), bytes: 3, mime: "application/octet-stream", name: "original.bin" } };
+  const handoff = prepareChatBuildHandoff("owner-a", source, [binary], { chatId: source.id, messages: [], files: [binary.id], images: ["first:0"] });
+  assert.ok(handoff.handoff);
+  assert.deepEqual(handoff.handoff.media, { images: [{ messageId: "first", index: 0, name: "chosen.png", imageId: "image-a" }], originals: [{ fileId: "file-a", name: "original.bin", sha256: "a".repeat(64) }] });
+  assert.match(handoff.handoff.text, /Original file for review/);
+  assert.doesNotMatch(handoff.handoff.text, /unchosen.png/);
+  assert.deepEqual(parseChatBuildHandoff(JSON.stringify(handoff.handoff), "owner-a"), handoff.handoff);
+  assert.ok(prepareChatBuildHandoff("owner-a", source, [], { chatId: source.id, messages: [], files: [], images: ["missing:0"] }).error);
+});

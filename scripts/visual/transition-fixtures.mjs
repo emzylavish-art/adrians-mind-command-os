@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import { mkdirSync, writeFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { execFileSync } from "node:child_process";
+import { createHash } from "node:crypto";
 import { chromium } from "playwright";
 import { installVisualFixture, VISUAL_FIXTURES } from "./fixture-states.mjs";
 
@@ -387,21 +388,61 @@ try {
 
   const handoffContext = await browser.newContext({ viewport: { width: 1280, height: 840 }, serviceWorkers: "block" });
   const base = VISUAL_FIXTURES["chat-interrupted"].workspace();
+  const originalBytes = "Synthetic binary original\u0000fixture";
+  const originalHash = createHash("sha256").update(originalBytes).digest("hex");
+  const handoffPixel = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==";
   const handoffThread = {
     ...base.chats[0], id: "handoff-chat", projectId: "handoff-project",
     messages: [
       { id: "reviewed-prompt", role: "user", content: "Fixture selected prompt", at },
       { id: "excluded-prompt", role: "user", content: "Fixture excluded prompt", at },
-      { id: "reviewed-answer", role: "assistant", content: "Fixture selected answer", at },
+      { id: "reviewed-answer", role: "assistant", content: "Fixture selected answer", at, images: [{ name: "fixture-handoff.png", dataUrl: handoffPixel }] },
     ],
   };
   await installVisualFixture(handoffContext, origin, "chat-interrupted", { preserveOnReload: true,
-    workspace: { ...base, chats: [handoffThread], projects: [{ id: "handoff-project", name: "Fixture project", description: "", createdAt: at }],
-      files: [{ id: "reviewed-file", name: "handoff-notes.txt", text: "Fixture selected file bytes", bytes: 27, projectId: "handoff-project", createdAt: at }] } });
+    workspace: { ...base, chats: [handoffThread], projects: [{ id: "handoff-project", name: "Fixture project", description: "", createdAt: at }, { id: "other-project", name: "Other fixture project", description: "", createdAt: at }],
+      files: [{ id: "reviewed-file", name: "handoff-notes.txt", text: "Fixture selected file bytes", bytes: 27, projectId: "handoff-project", createdAt: at },
+        { id: "original-fixture", name: "fixture-original.bin", text: "", bytes: originalBytes.length, projectId: "handoff-project", createdAt: at, original: { blobId: `document_${originalHash}`, sha256: originalHash, bytes: originalBytes.length, mime: "application/octet-stream", name: "fixture-original.bin" } }] } });
   let automaticBuildRuns = 0;
+  let runRequested = false;
+  let observedBuildRequest;
+  let dropPairedAcknowledgement = false;
+  let pairedRequest;
+  let pairedSubmissions = 0;
+  let pairedReads = 0;
+  await handoffContext.route(url => url.origin === origin && url.pathname === "/api/mind/pc/status", route => route.fulfill({ json: {
+    ok: true, onlineAgentIds: dropPairedAcknowledgement ? ["fixture-paired"] : [], agents: [],
+  } }));
   await handoffContext.route(url => url.origin === origin && url.pathname === "/api/mind/build/session", route => {
-    if (route.request().method() === "POST") automaticBuildRuns++;
+    if (dropPairedAcknowledgement) {
+      if (route.request().method() === "POST") {
+        pairedRequest = route.request().postDataJSON();
+        pairedSubmissions++;
+        return route.abort("failed");
+      }
+      const jobId = new URL(route.request().url()).searchParams.get("jobId");
+      if (jobId === pairedRequest?.jobKey) {
+        pairedReads++;
+        return route.fulfill({ json: { ok: true, job: { id: jobId, status: "done", output: "Synthetic recovered paired output", error: "", createdAt: at, updatedAt: at }, receipt: { operationId: jobId }, events: [] } });
+      }
+    }
+    if (route.request().method() === "POST") {
+      if (!runRequested) automaticBuildRuns++;
+      else {
+        observedBuildRequest = route.request().postDataJSON();
+        return route.fulfill({ json: { ok: true, executed: true, operationId: "fixture-build-receipt", verifiedBranch: "feature/fixture", output: "Synthetic completed Build output", outputComplete: true } });
+      }
+    }
     return route.fulfill({ status: 409, json: { ok: false, error: "No Build run in the handoff fixture." } });
+  });
+  let planningImages = [];
+  await handoffContext.route(url => url.origin === origin && url.pathname === "/api/mind/turn", route => {
+    const request = route.request();
+    if (request.method() === "GET") return route.fulfill({ json: { operationId: `1760000000000-${crypto.randomUUID()}` } });
+    if (request.method() !== "POST") return route.abort("blockedbyclient");
+    planningImages = request.postDataJSON().images ?? [];
+    const done = { text: "Synthetic image-aware plan", provider: "grok", model: "fixture-planning-model", usage: null, usedIds: [], requestId: "fixture-image-plan" };
+    return route.fulfill({ contentType: "text/event-stream", body: `event: done\ndata: ${JSON.stringify(done)}\n\n` });
   });
   const handoffPage = await handoffContext.newPage();
   await handoffPage.goto(origin + "/?section=chat&chat=handoff-chat", { waitUntil: "domcontentloaded" });
@@ -431,6 +472,129 @@ try {
     await handoffPage.locator("#message-excluded-prompt").waitFor();
     assert.equal(automaticBuildRuns, 0);
     return { selectedMessages: 2, selectedFiles: 1, pendingAndAcceptedDraftRecoverable: true, originalPreserved: true, automaticBuildRuns };
+  });
+  await check(handoffPage, "work-project-recovery-and-result-handback", async () => {
+    await navigate(handoffPage, "/?section=build&workProject=handoff-project", "build");
+    const project = handoffPage.getByRole("combobox", { name: "Work project", exact: true });
+    const task = handoffPage.getByRole("textbox", { name: "Coding task", exact: true });
+    const branch = handoffPage.getByRole("textbox", { name: "Target Git branch", exact: true });
+    await project.waitFor();
+    assert.equal(await project.inputValue(), "handoff-project");
+    assert.match(await task.inputValue(), /Fixture selected prompt/);
+    await branch.fill("feature/fixture");
+    await project.selectOption("other-project");
+    await handoffPage.waitForURL(/workProject=other-project/);
+    await task.fill("A different project's task");
+    await branch.fill("other-branch");
+    await project.selectOption("handoff-project");
+    await handoffPage.waitForURL(/workProject=handoff-project/);
+    await handoffPage.reload({ waitUntil: "domcontentloaded" });
+    await handoffPage.getByRole("button", { name: "Open source conversation" }).waitFor();
+    assert.equal(await branch.inputValue(), "feature/fixture");
+    assert.doesNotMatch(await task.inputValue(), /different project/);
+    runRequested = true;
+    await handoffPage.getByRole("button", { name: "Review build", exact: true }).click();
+    const returnButton = handoffPage.getByRole("button", { name: "Return result to source chat" });
+    await returnButton.waitFor();
+    assert.equal(observedBuildRequest.projectId, "handoff-project");
+    assert.equal(observedBuildRequest.expectedBranch, "feature/fixture");
+    assert.equal(automaticBuildRuns, 0);
+    await handoffPage.screenshot({ path: resolve(output, "transition-work-completed-run.png") });
+    await returnButton.click();
+    await handoffPage.locator("#message-reviewed-answer").waitFor();
+    const link = handoffPage.getByRole("link", { name: "Open Build run", exact: true });
+    const href = await link.getAttribute("href");
+    assert.match(href, /workProject=handoff-project/);
+    await link.click();
+    await handoffPage.getByRole("heading", { name: "Build run receipt" }).waitFor();
+    await handoffPage.getByText(/Synthetic completed Build output/).waitFor();
+    await handoffPage.reload({ waitUntil: "domcontentloaded" });
+    await handoffPage.getByText(/Synthetic completed Build output/).waitFor();
+    await handoffPage.screenshot({ path: resolve(output, "transition-work-saved-run-link.png") });
+    await handoffPage.goto(origin + href.replace("handoff-project", "other-project"), { waitUntil: "domcontentloaded" });
+    await handoffPage.getByText(/This receipt is unavailable for the current account, project, or browser/).waitFor();
+    await handoffPage.getByRole("button", { name: "Back to Work draft" }).click();
+    await task.waitFor();
+    assert.equal(await task.inputValue(), "A different project's task");
+    assert.equal(await branch.inputValue(), "other-branch");
+    return { separateProjectDrafts: true, branchRestored: true, originalSource: "handoff-chat", savedRunReopened: true, crossProjectLinkRefused: true, execution: "synthetic request and response" };
+  });
+  await check(handoffPage, "work-reviewed-media-and-originals", async () => {
+    await navigate(handoffPage, "/?section=chat&chat=handoff-chat", "chat");
+    await handoffPage.locator('#message-reviewed-answer summary[aria-label="More"]').click();
+    await handoffPage.getByRole("button", { name: "Continue in Work", exact: true }).click();
+    const dialog = handoffPage.getByRole("dialog", { name: "Continue in Work" });
+    await dialog.getByRole("checkbox", { name: /Fixture selected answer/ }).uncheck();
+    await dialog.getByRole("checkbox", { name: "fixture-handoff.png" }).check();
+    await dialog.getByRole("checkbox", { name: /fixture-original.bin/ }).check();
+    await dialog.getByRole("button", { name: "Review in Work" }).click();
+    await handoffPage.getByText("Review task from Chat", { exact: true }).click();
+    await handoffPage.getByRole("button", { name: "Add to current task" }).click();
+    await handoffPage.reload({ waitUntil: "domcontentloaded" });
+    await handoffPage.getByRole("group", { name: "Carried from Chat" }).waitFor();
+    await handoffPage.evaluate(({ bytes, id }) => new Promise((resolve, reject) => {
+      const draft = Object.keys(sessionStorage).find(key => key.startsWith("amcos.work-project.v1.") && key.endsWith('.editor') && key.includes('"handoff-project"'));
+      const owner = JSON.parse(sessionStorage.getItem(draft)).owner;
+      if (owner !== "dev-user" && owner !== "fixture-owner") return reject(Error("Unexpected synthetic owner"));
+      const request = indexedDB.open(`amcos.documents.v1.owner.${encodeURIComponent(owner)}`, 1);
+      request.onupgradeneeded = () => request.result.createObjectStore("originals");
+      request.onerror = () => reject(request.error);
+      request.onsuccess = () => {
+        const db = request.result;
+        const tx = db.transaction("originals", "readwrite");
+        tx.objectStore("originals").put(new Blob([bytes], { type: "application/octet-stream" }), id);
+        tx.oncomplete = () => { db.close(); resolve(); };
+        tx.onerror = () => reject(tx.error);
+      };
+    }), { bytes: originalBytes, id: `document_${originalHash}` });
+    const downloading = handoffPage.waitForEvent("download");
+    await handoffPage.getByRole("button", { name: "Download fixture-original.bin" }).click();
+    const download = await downloading;
+    assert.equal(download.suggestedFilename(), "fixture-original.bin");
+    const chunks = [];
+    for await (const chunk of await download.createReadStream()) chunks.push(chunk);
+    assert.equal(Buffer.concat(chunks).toString(), originalBytes);
+    const confirmedRuns = observedBuildRequest?.operationId;
+    await handoffPage.getByRole("button", { name: "Review build", exact: true }).click();
+    await handoffPage.getByText(/Use Plan with Grok to review these images/).waitFor();
+    assert.equal(observedBuildRequest?.operationId, confirmedRuns);
+    await handoffPage.getByRole("button", { name: "Plan with Grok", exact: true }).click();
+    await handoffPage.getByText("Synthetic image-aware plan", { exact: true }).waitFor();
+    assert.equal(planningImages.length, 1);
+    assert.equal(planningImages[0].dataUrl, handoffPixel);
+    return { binaryBytesMatched: true, selectedImagesReachedPlanningFixture: planningImages.length, textOnlyExecutionRefusedAttachedImages: true };
+  });
+  await check(handoffPage, "work-paired-lost-acknowledgement-recovery", async () => {
+    dropPairedAcknowledgement = true;
+    await handoffPage.reload({ waitUntil: "domcontentloaded" });
+    await handoffPage.getByRole("button", { name: "Remove image fixture-handoff.png" }).click();
+    await handoffPage.getByRole("textbox", { name: "Target Git branch" }).fill("");
+    await handoffPage.getByRole("navigation", { name: "Build sections" }).getByRole("button", { name: "Actions", exact: true }).click();
+    await handoffPage.getByText("Ready to queue", { exact: true }).waitFor();
+    await handoffPage.getByRole("navigation", { name: "Build sections" }).getByRole("button", { name: "Task", exact: true }).click();
+    await handoffPage.getByRole("button", { name: "Review build", exact: true }).click();
+    await handoffPage.getByText(/Build could not verify the outcome/).waitFor();
+    await handoffPage.getByRole("button", { name: "Open latest Build run" }).click();
+    await handoffPage.getByText("Synthetic recovered paired output", { exact: true }).waitFor();
+    const returnButton = handoffPage.getByRole("button", { name: "Return result to source chat" });
+    await returnButton.waitFor();
+    assert.equal(pairedRequest.agentId, "fixture-paired");
+    assert.equal(pairedRequest.projectId, "handoff-project");
+    assert.equal(pairedSubmissions, 1);
+    assert.ok(pairedReads >= 1);
+    return { pairedSubmissions, pairedReads, exactJob: pairedRequest.jobKey, automaticRetry: false, fixture: true };
+  });
+  await check(handoffPage, "provider-capability-inventory", async () => {
+    await navigate(handoffPage, "/?section=settings&pane=connections", "settings");
+    const inventory = handoffPage.getByRole("region", { name: "Provider capabilities" });
+    const xai = inventory.locator("details").filter({ has: handoffPage.getByText("xAI", { exact: true }) });
+    const gemini = inventory.locator("details").filter({ has: handoffPage.getByText("Gemini", { exact: true }) });
+    await xai.locator("summary").click();
+    await xai.getByText("Realtime audio", { exact: true }).waitFor();
+    await gemini.locator("summary").click();
+    await gemini.getByText("No confirmed answer receipt for this model.", { exact: true }).waitFor();
+    assert.match(await gemini.locator("summary").innerText(), /Unavailable for Chat/);
+    return { accountAvailabilitySeparateFromCapability: true, liveProviderCalls: 0 };
   });
   await handoffContext.close();
 

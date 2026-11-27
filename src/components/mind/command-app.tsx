@@ -62,7 +62,7 @@ import { ModelResponseSettings } from "@/components/mind/model-response-settings
 import { canRetryAgentRequest, snapshotAgentRequest, summarizeAgentModelRounds, type AgentRequestSnapshot } from "@/lib/mind/agent-request";
 import { loadModelControls, supportsTierReasoning } from "@/lib/mind/model-tiers";
 import { LibraryDocumentPreview } from "@/components/mind/library-document-preview";
-import { accountOriginalFileStore, prepareLibraryDocument, saveLibraryDocument, updateLibraryDocument } from "@/lib/mind/library-documents";
+import { accountOriginalFileStore, prepareLibraryDocument, readAccountOriginal, saveLibraryDocument, updateLibraryDocument } from "@/lib/mind/library-documents";
 import { createResearchRunGuard, loadResearchReports, makeResearchReport, researchAttachment, researchReferencesInText, saveResearchReport, type ResearchReport } from "@/lib/mind/research-reports";
 import type { ResearchResult } from "@/lib/mind/research";
 import { WorkspaceProfile } from "./workspace-profile";
@@ -95,7 +95,7 @@ import { DesktopUpdateNote } from "@/components/mind/desktop-update-note";
 import { ActionOverlay, ActionsButton } from "@/components/mind/conversation-menu";
 import { applyArchive, applyFavorite, applyProject, applyRename, conversationSharePath, quoteIntoNewChat, scheduleConversation, type ConversationAction } from "@/lib/mind/conversation-actions";
 import { conversationSection, HIDDEN_SETTINGS_SECTIONS_KEY, hideSection, readHiddenSections, removeConversations, restoreSection } from "@/lib/mind/conversation-sections";
-import { embeddedWorkspaceSearch, settingsPaneFromSearch, resolveShare, sameShareLocation, shareMissLabel, shareWriteDropsMissing, shareWriteForView, socialLegacyReturn, writeShareSearch } from "@/lib/mind/app-location";
+import { buildRunPath, embeddedWorkspaceSearch, settingsPaneFromSearch, resolveShare, sameShareLocation, shareMissLabel, shareWriteDropsMissing, shareWriteForView, socialLegacyReturn, workLocation, writeShareSearch } from "@/lib/mind/app-location";
 import { routeForBotChat } from "@/lib/mind/bot-model";
 import { UserButton } from "@/lib/auth/gates";
 import {
@@ -147,6 +147,7 @@ import { focusConnection } from "./focus-connection";
 import { listNotionWorkspaces } from "@/lib/mind/notion-workspaces";
 import { SafeKeysPanel } from "@/components/mind/safe-keys-panel";
 import { AiProviderConnections } from "@/components/mind/ai-provider-connections";
+import { ProviderCapabilityInventory } from "@/components/mind/provider-capability-inventory";
 import type { PublicAiProvider } from "@/lib/mind/ai-provider-config.server";
 import { VoiceWaveform } from "@/components/mind/voice-waveform";
 import { VoiceLevelMeter } from "@/components/mind/voice-level-meter";
@@ -244,7 +245,8 @@ import {
 } from "@/lib/mind/voice/spam-guard";
 import { createCallHistory, type CallHistory } from "@/lib/mind/voice/voice-chat-turn";
 import type { Chat, Msg, Workspace, MemoryScope } from "@/lib/mind/types";
-import { buildHandoffKey, prepareChatBuildHandoff, type BuildSelection } from "@/lib/mind/kimi/build-handoff";
+import { buildHandoffKey, chatBuildFiles, chatBuildImages, prepareChatBuildHandoff, workImageKey, type BuildSelection, type WorkImageRef, type WorkOriginalRef } from "@/lib/mind/kimi/build-handoff";
+import { appendBuildResultToChat, type BuildStoredResult } from "@/lib/mind/kimi/build-result";
 import { ChatBuildPicker } from "@/components/mind/chat-build-picker";
 import { ServiceBoard } from "@/components/mind/service-board";
 import { EveWorkbench } from "@/components/mind/eve-workbench";
@@ -861,11 +863,18 @@ function CommandSession({ account, accountPending }: { account: ReturnType<typeo
   }
   const applyingLocation = useRef(false);
   const locationHistory = useRef<"push" | "replace">("push");
+  const [workTarget, setWorkTarget] = useState<{ projectId: string | null; runId: string | null }>({ projectId: null, runId: null });
+  function openWorkProject(projectId: string | null) {
+    setWorkTarget({ projectId, runId: null });
+    setView("build");
+  }
   function loginReturnPath(resumeSpeak = false) {
     const params = new URLSearchParams();
     if (view !== "command") params.set("section", view);
     if (view === "chat" && activeId && !draftPrivate) params.set("chat", activeId);
     if (view === "settings" && settingsPane) params.set("pane", settingsPane);
+    if (view === "build" && workTarget.projectId) params.set("workProject", workTarget.projectId);
+    if (view === "build" && workTarget.runId) params.set("workRun", workTarget.runId);
     if (resumeSpeak) params.set("resume", "speak");
     return params.size ? "/?" + params.toString() : "/";
   }
@@ -874,6 +883,7 @@ function CommandSession({ account, accountPending }: { account: ReturnType<typeo
     const current = wsRef.current;
     const result = prepareChatBuildHandoff(draftOwner, current.chats.find(chat => chat.id === selection.chatId), current.files, selection);
     if ("error" in result) return result.error;
+    if (result.handoff.projectId && !current.projects.some(project => project.id === result.handoff.projectId && !project.archived && project.lifecycle !== "archived")) return "This conversation’s project is unavailable in Work.";
     try {
       const key = buildHandoffKey(draftOwner);
       if (sessionStorage.getItem(key) || sessionStorage.getItem(`adrian-build-draft.${draftOwner}`)) {
@@ -883,8 +893,60 @@ function CommandSession({ account, accountPending }: { account: ReturnType<typeo
       sessionStorage.setItem(key, saved);
       if (sessionStorage.getItem(key) !== saved) throw new Error();
     } catch { return "Your browser could not save this handoff."; }
-    setView("build");
+    openWorkProject(result.handoff.projectId);
     setNavOpen(false);
+  }
+  function returnBuildResult(result: BuildStoredResult): string | undefined {
+    const { owner, source, job, projectId = null } = result;
+    if (!source || !draftOwner || owner !== draftOwner || turnOwner.current !== owner || workTarget.projectId !== projectId || accountPending) return "The account or Work project changed. Reopen it before returning the result.";
+    const prefix = previewPathPrefix(window.location.hostname, window.location.pathname) || "";
+    const href = `${prefix}${buildRunPath(projectId, source.runId)}`;
+    if (!appendBuildResultToChat(wsRef.current, projectId, source, job, href)) return "The source conversation was deleted, moved, or archived. This result remains in Work.";
+    setWs(current => appendBuildResultToChat(current, projectId, source, job, href) ?? current);
+    setActiveId(source.chatId);
+    setView("chat");
+    setNotice("Build result added to the source conversation.");
+  }
+  function currentWorkSource(id: string, owner: string, projectId: string | null) {
+    const destination = uploadDestination.current;
+    if (turnOwner.current !== owner || destination.view !== "build" || destination.projectId !== projectId || destination.workRunId) return;
+    return wsRef.current.chats.find(chat => chat.id === id && chat.projectId === projectId && !chat.archived && !chat.temporary);
+  }
+  async function resolveWorkImages(chatId: string, refs: WorkImageRef[]): Promise<ImageAttachment[]> {
+    const owner = draftOwner;
+    if (!owner) throw new Error("Sign in to review the selected Chat images.");
+    const projectId = workTarget.projectId;
+    const read = async (ref: WorkImageRef) => {
+      const chat = currentWorkSource(chatId, owner, projectId);
+      const verified = chat && chatBuildImages(chat).some(image => workImageKey(image) === workImageKey(ref) && image.imageId === ref.imageId);
+      const image = verified && chat.messages.find(message => message.id === ref.messageId)?.images?.[ref.index];
+      if (!image) throw new Error(`Selected image is unavailable · ${ref.name}`);
+      const result = await resolveEditableImage({ source: image, ownerId: owner, currentOwner: () => turnOwner.current, authorizedImages: [image], getOwnedBlob: id => accountImageStore(owner).getOwned(id) });
+      if (!result.ok) throw new Error(result.error);
+      const latest = currentWorkSource(chatId, owner, projectId)?.messages.find(message => message.id === ref.messageId)?.images?.[ref.index];
+      if (latest !== image) throw new Error("The selected image or source changed. No plan was sent.");
+      return { dataUrl: result.image.dataUrl, name: ref.name, mime: image.mime };
+    };
+    return Promise.all(refs.map(read));
+  }
+  async function downloadWorkOriginal(chatId: string, ref: WorkOriginalRef) {
+    const owner = draftOwner;
+    if (!owner) throw new Error("Sign in to open the selected original file.");
+    const projectId = workTarget.projectId;
+    const find = () => {
+      const chat = currentWorkSource(chatId, owner, projectId);
+      return chat && chatBuildFiles(chat, wsRef.current.files).find(file => file.id === ref.fileId && file.original?.sha256 === ref.sha256);
+    };
+    const file = find();
+    if (!file) throw new Error("The selected original was changed or is unavailable in this project.");
+    const bytes = await readAccountOriginal(file, owner);
+    if (find() !== file) throw new Error("The project or original changed while reading it.");
+    const url = URL.createObjectURL(bytes);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = ref.name;
+    link.click();
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
   }
   function stageIntelligenceBuild(id: string, text: string, mode: "auto" | null): string | undefined {
     const owner = draftOwner;
@@ -902,7 +964,7 @@ function CommandSession({ account, accountPending }: { account: ReturnType<typeo
       else sessionStorage.removeItem(`adrian-build-mode.${owner}`);
       sessionStorage.setItem(key, text);
     } catch { return "Your browser could not save this handoff."; }
-    setView("build");
+    openWorkProject(null);
     setNavOpen(false);
   }
   function setView(next: View) {
@@ -1075,7 +1137,7 @@ function CommandSession({ account, accountPending }: { account: ReturnType<typeo
   }
   const draftChat = view === "chat" && activeId ? ws.chats.find((item) => item.id === activeId) : null;
   const draftPrivate = view === "build" ? false : draftChat?.temporary ?? temporary;
-  const draftScope = JSON.stringify([draftOwner, view === "build" ? "build" : draftChat?.id ?? "home", draftPrivate]);
+  const draftScope = JSON.stringify([draftOwner, view === "build" ? workTarget.projectId ? ["build", workTarget.projectId] : "build" : draftChat?.id ?? "home", draftPrivate]);
   const persistDraft = Boolean(draftOwner) && !draftPrivate;
   const [draft, setDraft, setDraftInScope] = useComposerDraft(draftScope, "text", "", persistDraft);
   const [busy, setBusy] = useState(false);
@@ -1512,6 +1574,7 @@ function CommandSession({ account, accountPending }: { account: ReturnType<typeo
       locationHistory.current = "push";
       const resolved = resolveShare(window.location.search, wsRef.current, known);
       setViewState(resolved.view as View);
+      if (resolved.view === "build") setWorkTarget(workLocation(window.location.search));
       setSettingsPane(settingsPaneFromSearch(window.location.search));
       if (params.get("resume") === "speak") {
         setSpeakStageOpen(true);
@@ -1555,7 +1618,7 @@ function CommandSession({ account, accountPending }: { account: ReturnType<typeo
       locationHistory.current = "push";
       return;
     }
-    const search = writeShareSearch(window.location.search, { ...nextWrite, pane: settingsPane }, Object.keys(TITLES));
+    const search = writeShareSearch(window.location.search, { ...nextWrite, pane: settingsPane, workProject: workTarget.projectId, workRun: workTarget.runId }, Object.keys(TITLES));
     if (sameShareLocation(window.location.pathname, window.location.hash, window.location.search, search)) {
       locationHistory.current = "push";
       return;
@@ -1565,7 +1628,7 @@ function CommandSession({ account, accountPending }: { account: ReturnType<typeo
     locationHistory.current = "push";
     if (mode === "replace") router.history.replace(next);
     else router.history.push(next);
-  }, [ready, view, settingsPane, activeId, shareProjectId, openFileId, shareBotId, router]);
+  }, [ready, view, settingsPane, activeId, shareProjectId, openFileId, shareBotId, router, workTarget]);
 
   const personaHandoffDone = useRef(false);
   useEffect(() => {
@@ -4637,8 +4700,9 @@ ${message.content}`;
     }
   }
 
-  const uploadDestination = useRef({ owner: draftOwner, view, projectId: view === "files" ? libraryProjectId || null : projectChoice || null, scope: draftScope });
-  uploadDestination.current = { owner: draftOwner, view, projectId: view === "files" ? libraryProjectId || null : projectChoice || null, scope: draftScope };
+  const currentUploadDestination = { owner: draftOwner, view, projectId: view === "build" ? workTarget.projectId : view === "files" ? libraryProjectId || null : projectChoice || null, scope: draftScope, workRunId: workTarget.runId };
+  const uploadDestination = useRef(currentUploadDestination);
+  uploadDestination.current = currentUploadDestination;
   async function onPicked(file: File, inspection: View | null) {
     const destination = { ...uploadDestination.current };
     const isCurrent = () => turnOwner.current === destination.owner && uploadDestination.current.view === destination.view && uploadDestination.current.projectId === destination.projectId && uploadDestination.current.scope === destination.scope;
@@ -7988,6 +8052,7 @@ ${message.content}`;
                       <div className="mt-3 flex flex-wrap gap-2">
                         <button type="button" className="min-h-11 rounded-panel border border-line px-3 text-sm" onClick={() => setShareProjectId(project.id)}>Workspace and tasks</button>
                         <button type="button" className="workspace-primary min-h-11 rounded-panel px-3 text-sm" onClick={() => { setChatProjectId(project.id); setProjectChoice(project.id); setActiveId(ws.chats.find((chat) => chat.projectId === project.id)?.id ?? null); setView("chat"); }}>Open chats</button>
+                        {!project.archived && project.lifecycle !== "archived" && <button type="button" className="min-h-11 rounded-panel border border-line px-3 text-sm" onClick={() => openWorkProject(project.id)}>Open in Work</button>}
                         <button type="button" className="min-h-11 rounded-panel border border-line px-3 text-sm" onClick={() => { setMemoryTab("project"); setMemoryProject(project.id); setView("memory"); }}>Notes</button>
                         <button type="button" className="min-h-11 rounded-panel border border-line px-3 text-sm" onClick={() => { setLibraryProjectId(project.id); setLibraryBand("files"); setView("files"); }}>Files</button>
                         <button
@@ -8424,7 +8489,7 @@ ${message.content}`;
           {view === "controls" && ready && <WorkspaceControlCenter account={accountLabel} thread={active} workspace={ws}
             selectedModel={`${effectiveProvider} · ${modelTier}`} freeOnly={researchFreeOnly} listening={voiceListening}
             onReturn={() => setView(workspaceReturn?.surface === "controls" ? workspaceReturn.origin : "command")} onOpen={(destination, id) => {
-              const panes = { account: null, models: "keys", permissions: "safety", voice: "voice", profile: "profile" } as const;
+              const panes = { account: null, models: "connections", permissions: "safety", voice: "voice", profile: "profile" } as const;
               switch (destination) {
                 case "account": case "models": case "permissions": case "voice": case "profile":
                   setSettingsPane(panes[destination]);
@@ -8440,8 +8505,13 @@ ${message.content}`;
           {view === "tools" && <FleetPanel mode="tools" ws={ws} setWs={setWs} onFailure={(message, retry, surface) => reportFailure(message, surface === "mcp" ? "mcp_tool_failed" : "open_page_failed", surface === "mcp" ? "mcp:tools" : "browser", retry)} />}
           {view === "build" && (
             <section className="page-shell">
+              {workTarget.projectId && !ws.projects.some(project => project.id === workTarget.projectId && !project.archived && project.lifecycle !== "archived") ? (
+                <div className="dense-card"><p role="status">This Work project is unavailable in the current workspace.</p><button type="button" className="min-h-11 underline" onClick={() => openWorkProject(null)}>Open general Work</button></div>
+              ) : (
               <Suspense fallback={<p role="status" className="p-4">Opening Build…</p>}>
-              <BuildWorkspace planningCatalog={tierCatalog} sharedTier={modelTier} composer={{
+              <BuildWorkspace planningCatalog={tierCatalog} sharedTier={modelTier} projectId={workTarget.projectId} runId={workTarget.runId}
+                workProjects={ws.projects.filter(project => !project.archived && project.lifecycle !== "archived").map(project => ({ id: project.id, name: project.name }))}
+                onSelectProject={openWorkProject} onReturnResult={returnBuildResult} resolveWorkImages={resolveWorkImages} downloadWorkOriginal={downloadWorkOriginal} composer={{
                 staged, images: pendingImages, message: error || notice,
                 onFile: () => fileRef.current?.click(), onPhoto: () => imageInputRef.current?.click(), onCamera: () => setCameraOpen(true), onPlugins: browseComposerPlugins,
                 removeFile: () => setStaged(null), removeImage: index => setPendingImages(current => current.filter((_, i) => i !== index)),
@@ -8460,6 +8530,7 @@ ${message.content}`;
                 setNotice("Complete Build result added to the Intelligence thread on this device.");
               }} halted={ws.halted} recording={taskRecording} recordingSeconds={taskSeconds} onOpenSpeak={openSpeakStage} onToggleStop={() => { void toggleStop(); }} onStopRecording={() => void stopTaskRecording()} />
               </Suspense>
+              )}
             </section>
           )}
           {view === "code" && (
@@ -9044,6 +9115,8 @@ ${message.content}`;
               </div>
               {settingsPane === "connections" && <div id="settings-connections" className="space-y-4">
                 <SpendingControls usage={ws.usage} />
+                <ProviderCapabilityInventory catalogs={environmentCatalogs} configured={{ ...liveProviders, grok: grokConfigured }} selected={effectiveProvider}
+                  models={{ ...providerModels, grok: grokModel }} choices={providerOptions} custom={customAiProviders} usage={ws.usage} />
                 <ModelResponseSettings reasoningEnabled={supportsTierReasoning(grokModel || "")} />
               <div className="settings-card rounded-panel p-4 text-sm">
                 <p className="font-semibold">Provider failover</p>

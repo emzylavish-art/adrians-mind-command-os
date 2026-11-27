@@ -4,7 +4,7 @@ import { readFileSync } from "node:fs";
 import * as React from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import ts from "typescript";
-import { resolveShare, shareWriteForView, shareWriteDropsMissing, writeShareSearch, sameShareLocation, settingsPaneFromSearch, shareMissLabel } from "../src/lib/mind/app-location.ts";
+import { resolveShare, shareWriteForView, shareWriteDropsMissing, writeShareSearch, sameShareLocation, settingsPaneFromSearch, shareMissLabel, workLocation } from "../src/lib/mind/app-location.ts";
 import { prepareLibraryDocument, saveLibraryDocument } from "../src/lib/mind/library-documents.ts";
 import { addLocalFile } from "../src/lib/mind/workspace.ts";
 import { togglePin } from "../src/lib/mind/fleet.ts";
@@ -42,12 +42,12 @@ test("AA006/007/008: actual location effects preserve first Back entry, Settings
   const listeners = new Map();
   const frames = [];
   let initialLocationResolved = false;
-  const state = { view: "command", settingsPane: null, activeId: null, shareProjectId: null, openFileId: null, shareBotId: null };
+  const state = { view: "command", settingsPane: null, activeId: null, shareProjectId: null, openFileId: null, shareBotId: null, workTarget: { projectId: null, runId: null } };
   const context = {
     ready: true, applyingLocation: { current: false }, locationHistory: { current: "replace" },
     wsRef: { current: { chats: [{ id: "thread-a" }, { id: "thread-b" }], projects: [], files: [], agents: [] } },
-    TITLES: { command: "Home", settings: "Settings", code: "Intelligence", chat: "Chat", files: "Library", connected: "Plugins" },
-    resolveShare, shareWriteForView, shareWriteDropsMissing, writeShareSearch, sameShareLocation, settingsPaneFromSearch, shareMissLabel,
+    TITLES: { command: "Home", settings: "Settings", code: "Intelligence", chat: "Chat", files: "Library", connected: "Plugins", build: "Build" },
+    resolveShare, shareWriteForView, shareWriteDropsMissing, writeShareSearch, sameShareLocation, settingsPaneFromSearch, shareMissLabel, workLocation,
     requestAnimationFrame: (work) => frames.push(work),
     window: { location, addEventListener: (type, callback) => listeners.set(type, callback), removeEventListener: (type) => listeners.delete(type), history: { state: null, replaceState: (_s, _t, path) => { entries[index] = path; updateLocation(path); } } },
     router: { history: {
@@ -56,6 +56,7 @@ test("AA006/007/008: actual location effects preserve first Back entry, Settings
     } },
     setInitialLocationResolved: (value) => { initialLocationResolved = value; },
     setViewState: (value) => { state.view = value; }, setSettingsPane: (value) => { state.settingsPane = value; },
+    setWorkTarget: (value) => { state.workTarget = value; },
     setActiveId: (value) => { state.activeId = value; }, setShareProjectId: (value) => { state.shareProjectId = value; },
     setShareBotId: (value) => { state.shareBotId = value; }, setOpenFileId: (value) => { state.openFileId = value; },
     setSpeakStageOpen: () => {}, setLibraryBand: () => {}, setLibraryProjectId: () => {}, setCardFocus: () => {}, setNotice: () => {},
@@ -83,6 +84,11 @@ test("AA006/007/008: actual location effects preserve first Back entry, Settings
   assert.equal(location.search, "?section=settings&pane=general");
   state.view = "connected"; write();
   assert.equal(location.search.includes("pane="), false);
+  state.view = "build"; state.workTarget = { projectId: "project-a", runId: "abcde123".repeat(4) }; write();
+  assert.match(location.search, /workProject=project-a/);
+  state.view = "code"; write();
+  assert.equal(location.search.includes("workRun="), false);
+  back(); assert.equal(state.workTarget.projectId, "project-a");
   cleanup();
 });
 

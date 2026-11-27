@@ -98,6 +98,7 @@ test("the mounted paired Build queue, polling and browser recovery paths carry t
   assert.doesNotMatch(route, /queued_for_coding/);
   assert.match(component, /setJob\(data\.job\);\s*setBuildReceipt\(data\.receipt \?\? null\)/);
   assert.match(component, /setJob\(\{ id: data\.jobId,[\s\S]*?setBuildReceipt\(data\.receipt \?\? null\)/);
-  assert.match(component, /if \(!props\.ownerId \|\| !job\) return;\s*try \{ localStorage\.setItem\(buildResultKey/);
-  assert.match(component, /if \(saved\) \{ setJob\(saved\.job\); setBuildReceipt\(saved\.receipt\); \}/);
+  assert.match(component, /const resultKey = buildResultKey\(ownerKey, projectId\)/);
+  assert.match(component, /if \(!props\.ownerId \|\| !job\) return;\s*try \{ localStorage\.setItem\(resultKey, serializeBuildResult\(\{[^\n]*projectId, job, receipt: buildReceipt, source: resultSource/);
+  assert.match(component, /if \(saved\) \{ setJob\(saved\.job\); setBuildReceipt\(saved\.receipt\); setResultSource\(saved\.source\); \}/);
 });

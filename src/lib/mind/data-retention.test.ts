@@ -4,6 +4,8 @@ import { clearLocalRetention, verifyDeletionAcknowledgement } from "./data-reten
 import { accountPreferenceKey } from "./account-preferences.ts";
 import { researchArchiveKey } from "./research-reports.ts";
 import { emptyWorkspace } from "./workspace.ts";
+import { buildDraftKey } from "./kimi/build-review.ts";
+import { workRunStorageKey } from "./kimi/build-scope.ts";
 
 function storage(entries: [string, string][]) { const rows = new Map(entries); return { rows, get length() { return rows.size; }, getItem: (key: string) => rows.get(key) ?? null, key: (index: number) => [...rows.keys()][index] ?? null, removeItem: (key: string) => { rows.delete(key); } }; }
 
@@ -25,11 +27,20 @@ test("partial local failures remain failures while independent selected removals
 test("build recovery removal retains files and other account recovery pointers", async () => {
   const local = storage([["amcos.build-editor.v1.owner", "draft"], ["amcos.build-result.v1.owner", "result"], ["adrian-build-last-job.owner", "job"], ["adrian-build-last-job.other", "other"], ["saved-file", "code"]]);
   const session = storage([["amcos.build-editor.v1.owner", "draft"], ["adrian-build-draft.owner", "prompt"], ["adrian-build-draft.other", "other"], ["adrian-build-task-source.owner", "source"], ["adrian-build-task-source.other", "other source"]]);
+  const ownRun = workRunStorageKey("owner", "project", "a".repeat(32));
+  const otherRun = workRunStorageKey("owner.other", "project", "a".repeat(32));
+  local.rows.set(ownRun, "own archived receipt"); local.rows.set(otherRun, "other receipt");
+  session.rows.set(buildDraftKey("owner", "project"), "own scoped editor");
+  session.rows.set(buildDraftKey("owner.other", "project"), "other scoped editor");
   await clearLocalRetention("owner", ["build-recovery"], { local, session, originals: { clear: async () => {} }, images: { clear: async () => {} }, videos: { clear: async () => {} }, knowledge: { clear: async () => {} } });
   assert.equal(local.getItem("amcos.build-editor.v1.owner"), null); assert.equal(local.getItem("adrian-build-last-job.other"), "other"); assert.equal(local.getItem("saved-file"), "code"); assert.equal(session.getItem("adrian-build-draft.other"), "other");
   assert.equal(session.getItem("amcos.build-editor.v1.owner"), null);
   assert.equal(session.getItem("adrian-build-task-source.owner"), null);
   assert.equal(session.getItem("adrian-build-task-source.other"), "other source");
+  assert.equal(local.getItem(ownRun), null);
+  assert.equal(local.getItem(otherRun), "other receipt");
+  assert.equal(session.getItem(buildDraftKey("owner", "project")), null);
+  assert.equal(session.getItem(buildDraftKey("owner.other", "project")), "other scoped editor");
 });
 
 test("server deletion confirmation requires both the tombstone and absent resource", () => {
