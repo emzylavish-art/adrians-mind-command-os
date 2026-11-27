@@ -810,14 +810,28 @@ try {
     await record.press("Enter");
     const detail = fleetPage.getByTestId("node-detail");
     await detail.getByText("Synthetic fleet lane", { exact: true }).waitFor();
+    await fleetPage.waitForFunction(() => document.activeElement === document.querySelector('[data-testid="node-detail"]'));
     fleetHealth = "blocked";
     await fleetPage.clock.fastForward(21000);
-    await detail.getByText("Synthetic fleet lane is hidden by the current fleet filters. Its details remain open.", { exact: true }).waitFor();
+    const filterNotice = detail.getByText("Synthetic fleet lane is hidden by the current fleet filters. Its details remain open.", { exact: true });
+    await filterNotice.waitFor();
     assert.equal(await detail.getByText("blocked", { exact: true }).count(), 1);
+    assert.equal(await detail.evaluate((element) => {
+      const list = element.closest('[data-fleet-list="1"]').querySelector(".dash3d-fleet-list");
+      return element.getBoundingClientRect().top >= list.getBoundingClientRect().bottom;
+    }), true);
+    await filterNotice.evaluate((element) => element.scrollIntoView({ block: "center", inline: "nearest" }));
+    assert.equal(await filterNotice.evaluate((element) => {
+      const position = element.getBoundingClientRect();
+      return element.contains(document.elementFromPoint(position.x + 8, position.y + position.height / 2));
+    }), true);
+    await fleetPage.screenshot({ path: resolve(output, "transition-fleet-filter-explanation.png") });
+    await detail.getByRole("button", { name: "Close details", exact: true }).press("Enter");
+    await fleetPage.waitForFunction(() => document.activeElement?.textContent?.trim() === "List");
     assert.equal(await list.getByRole("button", { name: /^Synthetic fleet lane,/ }).count(), 0);
     assert.equal(await chrome.getByRole("button", { name: "List", exact: true }).getAttribute("aria-pressed"), "true");
     assert.equal(await fleetPage.locator("canvas").count(), 0);
-    return { statusChange: "healthy to blocked", selectedRecordRetained: true, filteredRecordExcluded: true, listIsExplicit: true, transport: "synthetic snapshot" };
+    return { statusChange: "healthy to blocked", selectedRecordRetained: true, filteredRecordExcluded: true, listIsExplicit: true, detailFocusAndReturn: true, transport: "synthetic snapshot" };
   });
   report.fleetTransport = fleetTransport.summary(); await fleetContext.close();
 

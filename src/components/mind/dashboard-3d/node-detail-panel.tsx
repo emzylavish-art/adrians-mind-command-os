@@ -1,3 +1,4 @@
+import { useEffect, useRef } from "react";
 import type { BotNode } from "@/lib/mind/dashboard/types";
 import type { NotionSnapPage } from "@/lib/mind/dashboard/notion-graph-core";
 import {
@@ -150,6 +151,7 @@ export function NodeDetailPanel({
   portraitSrc,
   healthTimeLabel,
   hiddenByFilters,
+  inlineView,
 }: {
   bot: BotNode | null;
   notionPage: NotionSnapPage | null;
@@ -161,6 +163,7 @@ export function NodeDetailPanel({
   portraitSrc?: string | null;
   healthTimeLabel?: string;
   hiddenByFilters?: boolean;
+  inlineView?: boolean;
 }) {
   const detail =
     bot && status
@@ -176,8 +179,14 @@ export function NodeDetailPanel({
       : null;
 
   const visible = open && Boolean(bot || notionPage);
+  const panel = useRef<HTMLElement | null>(null);
+  useEffect(() => {
+    if (!inlineView || !visible) return;
+    panel.current?.focus({ preventScroll: true });
+    panel.current?.scrollIntoView({ block: "start", inline: "nearest" });
+  }, [inlineView, visible]);
   return (
-    <aside className={`dash3d-side ${visible ? "is-open" : ""}`} aria-hidden={!visible} inert={!visible} data-testid="node-detail">
+    <aside ref={panel} className={`dash3d-side ${visible ? "is-open" : ""}`} aria-hidden={!visible} inert={!visible} tabIndex={inlineView && visible ? -1 : undefined} aria-label={inlineView ? "Fleet record details" : undefined} data-testid="node-detail">
       <div className="dash3d-glass">
         <button type="button" className="dash3d-side-close" onClick={onClose} aria-label="Close details">
           ×

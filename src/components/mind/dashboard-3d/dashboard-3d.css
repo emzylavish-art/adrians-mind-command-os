@@ -80,6 +80,25 @@
   max-height: none;
   overflow: visible;
 }
+.dash3d-root[data-fleet-list="1"] .dash3d-side {
+  display: none;
+  position: relative;
+  inset: auto;
+  flex: 0 0 auto;
+  width: auto;
+  margin: 0 0.75rem 0.75rem;
+  transform: none;
+  scroll-margin-block-start: 4.75rem;
+}
+.dash3d-root[data-fleet-list="1"] .dash3d-side.is-open {
+  display: block;
+}
+.dash3d-root[data-fleet-list="1"] .dash3d-side .dash3d-glass {
+  background-image: none !important;
+  height: auto;
+  max-height: none;
+  overflow: visible;
+}
 .dash3d-root button:disabled {
   opacity: 0.45;
   cursor: not-allowed;

@@ -101,6 +101,7 @@ export function DashboardApp({ embedded = false, status }: { embedded?: boolean;
   const [operatorOpen, setOperatorOpen] = useState(false);
   const [operatorPrefs, setOperatorPrefs] = useState<OperatorPrefs>(() => loadInitialOperatorPrefs());
   const [supportOpen, setSupportOpen] = useState(false);
+  const listControl = useRef<HTMLButtonElement | null>(null);
   const navigationOriginRef = useRef<HTMLElement | null>(null);
   const jumpToPanel = (id: MobilePanelId) => {
     navigationOriginRef.current = document.activeElement instanceof HTMLElement ? document.activeElement : null;
@@ -309,7 +310,7 @@ export function DashboardApp({ embedded = false, status }: { embedded?: boolean;
               Graph
             </button>
             {rendererMode === "graph" && (
-              <button type="button" className="dash3d-glass dash3d-zoomout" aria-pressed={fleetList} onClick={() => setPreferFleetList(true)}>
+              <button ref={listControl} type="button" className="dash3d-glass dash3d-zoomout" aria-pressed={fleetList} onClick={() => setPreferFleetList(true)}>
                 List
               </button>
             )}
@@ -590,6 +591,7 @@ export function DashboardApp({ embedded = false, status }: { embedded?: boolean;
 
       <NodeDetailPanel
         bot={selected}
+        inlineView={fleetList}
         healthTimeLabel={scrubView.mode !== "live" ? healthTimeLabel : undefined}
         hiddenByFilters={selectionIsFiltered}
         notionPage={notionPage}
@@ -601,6 +603,7 @@ export function DashboardApp({ embedded = false, status }: { embedded?: boolean;
         onClose={() => {
           setSelectedBotId(null);
           setSelection(null);
+          if (fleetList) listControl.current?.focus();
         }}
       />
     </main>
