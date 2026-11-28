@@ -3,7 +3,7 @@ import { machineRequired } from "./account-workspace.ts";
 import { requireUserId } from "../../auth/verify.server";
 import { assertSameOrigin } from "../connectors/oauth-csrf";
 import { haltIsOn } from "../halt.server";
-import { enqueueJob, listJobEvents, onlineAgents, readJob } from "../pc-pairing/coordination.server.ts";
+import { enqueueJob, listAgents, listJobEvents, onlineAgents, readJob } from "../pc-pairing/coordination.server.ts";
 import { readCodingFileSnapshot } from "./hosted/file-receipts.ts";
 import { HOSTED_BUILD_MODEL, adrianBuildCommand, adrianHostedWorkspace, closeHostedCodingSession, packageLabel, resolveBuildWorkspace, runCodingTurn, runHostedPrompt, type CodingMode } from "./hosted/acp-client.ts";
 import { readHostedGitBranch, snapshotHostedWorkspace } from "./hosted/shell.server.ts";
@@ -65,18 +65,26 @@ export async function handleKimiSession(request: Request, deps: { recordUsage?: 
       const requestedCwd = typeof body.cwd === "string" && body.cwd.trim() ? body.cwd.trim().slice(0, MAX_CWD) : undefined;
       const mode = body.mode === "plan" || body.mode === "auto" || body.mode === "yolo" || body.mode === "default" ? body.mode as CodingMode : undefined;
       const resumeSessionId = typeof body.resumeSessionId === "string" ? body.resumeSessionId.trim().slice(0, 80) : "";
+      const expectedBranch = body.expectedBranch;
+      if (expectedBranch !== undefined && !buildBranchName(expectedBranch)) return json({ ok: false, error: "Invalid target branch. Nothing was started." }, 400);
       const agents = await onlineAgents(ownerId);
       if (body.agentId === undefined && agents.length > 1) return json({ ok: false, error: "Choose the computer for this Build task. No alternate was selected." }, 409);
-      const agent = body.agentId === "hosted" ? undefined : body.agentId === undefined ? agents[0] : agents.find((item) => item.id === body.agentId);
+      const onlineAgent = body.agentId === "hosted" ? undefined : body.agentId === undefined ? agents[0] : agents.find((item) => item.id === body.agentId);
+      const savedAgent = !onlineAgent && expectedBranch && typeof body.agentId === "string" && body.agentId !== "hosted"
+        ? (await listAgents(ownerId)).find(item => item.id === body.agentId && item.capabilities?.codingRuntime === true) : undefined;
+      const agent = onlineAgent || savedAgent;
       const sourceReceipt = readBuildSourceReceipt(body.sourceReceipt);
       if (body.sourceReceipt !== undefined && !sourceReceipt) return json({ ok: false, error: "The source revision receipt is invalid. Nothing was started." }, 400);
       if (sourceReceipt && (sourceReceipt.workspace !== (agent?.id || "hosted") || sourceReceipt.cwd !== (requestedCwd || ""))) return json({ ok: false, error: "The reviewed source belongs to a different execution workspace. Review it again." }, 409);
       if (body.agentId !== undefined && body.agentId !== "hosted" && !agent) return json({ ok: false, error: "The selected Build PC is offline. Reconnect it before submitting." }, 409);
-      if (agent && !buildRuntimeCapabilities(ownerId, [agent])[1]?.coding) return json({ ok: false, error: "The selected computer has not reported an available coding runtime. Reconnect or update it before submitting." }, 409);
+      if (onlineAgent && !buildRuntimeCapabilities(ownerId, [onlineAgent])[1]?.coding && !(expectedBranch && onlineAgent.capabilities?.codingRuntime === true)) {
+        return json({ ok: false, error: "The selected computer has not reported an available coding runtime. Reconnect or update it before submitting." }, 409);
+      }
       if (body.jobKey !== undefined && (typeof body.jobKey !== "string" || !/^[a-f0-9]{32}$/.test(body.jobKey))) return json({ ok: false, error: "Invalid job ID." }, 400);
-      const expectedBranch = body.expectedBranch;
-      if (expectedBranch !== undefined && !buildBranchName(expectedBranch)) return json({ ok: false, error: "Invalid target branch. Nothing was started." }, 400);
-      if (expectedBranch && (agent || resumeSessionId)) return json({ ok: false, error: "A target branch requires a new coding session on a runtime that can verify its current Git branch. Nothing was started." }, 409);
+      if (expectedBranch && resumeSessionId) return json({ ok: false, error: "A target branch requires a new coding session." }, 409);
+      if (expectedBranch && agent && (!sourceReceipt?.files.length || sourceReceipt.policy !== "saved" || !requestedCwd || !body.jobKey)) {
+        return json({ ok: false, error: "Review at least one saved source file before queuing a branch-checked Build job." }, 409);
+      }
       if (!agent) {
         if (ownerId !== "dev-user") return json({ ok: false, executed: false, error: machineRequired }, 409);
         if (!resolveXaiInferenceApiKey()) return json({ ok: false, executed: false, error: "The hosted Build provider is not configured. Nothing was sent." }, 503);
@@ -159,7 +167,7 @@ export async function handleKimiSession(request: Request, deps: { recordUsage?: 
         kind: "kimi-acp",
         command: "kimi acp",
         confirm: false,
-        payload: { ...pairedBuildPayload(prompt, prepared.skillReceipts, requestedCwd), sourceReceipt },
+        payload: { ...pairedBuildPayload(prompt, prepared.skillReceipts, requestedCwd), sourceReceipt, ...(expectedBranch ? { expectedBranch } : {}) },
       });
       await observePairedJob(ownerId, job, record);
       return json({
@@ -185,6 +193,12 @@ export async function handleKimiSession(request: Request, deps: { recordUsage?: 
       const job = await readJob(jobId);
       if (!job || job.ownerId !== ownerId || job.kind !== "kimi-acp") return json({ ok: false, error: "Kimi job not found." }, 404);
       await observePairedJob(ownerId, job, record);
+      const sourceReceipt = readBuildSourceReceipt(job.payload?.sourceReceipt);
+      const events = await listJobEvents(ownerId, job.id);
+      const sourceDigest = sourceReceipt?.files.length ? createHash("sha256").update(JSON.stringify(sourceReceipt)).digest("hex") : null;
+      const revisionVerified = sourceDigest !== null && events.some(event => event.type === "source_verified"
+        && event.payload.sourceDigest === sourceDigest && event.payload.fileCount === sourceReceipt?.files.length
+        && (job.payload?.expectedBranch === undefined || event.payload.branch === job.payload.expectedBranch));
       return json({
         ok: true,
         job: {
@@ -195,8 +209,8 @@ export async function handleKimiSession(request: Request, deps: { recordUsage?: 
           output: job.output || "",
           error: job.error || "",
         },
-        sourceReceipt: readBuildSourceReceipt(job.payload?.sourceReceipt), revisionVerified: false,
-        events: await listJobEvents(ownerId, job.id),
+        sourceReceipt, revisionVerified,
+        events,
         receipt: pairedBuildReceipt(job, ownerId),
       });
     } catch (error) {

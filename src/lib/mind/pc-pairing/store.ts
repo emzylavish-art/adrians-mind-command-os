@@ -327,6 +327,7 @@ export function claimNextJob(agentId: string): PcJob | null {
   const offered = offerNextJob(agentId);
   if (!offered) return null;
   const payload = offered.payload;
+  if (offered.kind === "kimi-acp" && payload?.expectedBranch) return null;
   if (offered.kind === "file-op" && (payload?.expectedContent !== undefined || payload?.expectedMissing === true || payload?.expectedRevision !== undefined)) {
     changeJob(offered.id, (job) => job.status === "queued" ? { status: "error", error: "Update the paired Companion before making reviewed changes. Nothing was executed." } : null);
     return null;

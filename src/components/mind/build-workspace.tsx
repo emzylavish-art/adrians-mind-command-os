@@ -222,7 +222,7 @@ function BuildWorkspaceSession(props: BuildWorkspaceProps & { projectId: string 
   const [tabs, setTabs] = useState<string[]>([]);
   const [buffers, setBuffers] = useState<Record<string, EditorBuffer>>({});
   const [executionChoice, setExecutionChoice] = useState(false);
-  const [executionReceipt, setExecutionReceipt] = useState<{ workspace: string; cwd: string; files: { path: string; sha256: string }[]; policy: string } | null>(null);
+  const [executionReceipt, setExecutionReceipt] = useState<(NonNullable<BuildStoredReceipt["sourceReceipt"]> & { checked?: boolean }) | null>(null);
   const haltedRef = useRef(props.halted);
   haltedRef.current = props.halted;
   const buffersRef = useRef(buffers);
@@ -295,7 +295,7 @@ function BuildWorkspaceSession(props: BuildWorkspaceProps & { projectId: string 
     const sequence = ++pollSequence.current;
     try {
       const response = await fetch(`/api/mind/build/session?jobId=${encodeURIComponent(jobId)}`, { credentials: "include", cache: "no-store" });
-      const data = (await response.json()) as { ok?: boolean; job?: BuildJob; receipt?: BuildStoredReceipt | null; events?: BuildEvent[]; error?: string };
+      const data = (await response.json()) as { ok?: boolean; job?: BuildJob; receipt?: BuildStoredReceipt | null; sourceReceipt?: BuildStoredReceipt["sourceReceipt"]; revisionVerified?: boolean; events?: BuildEvent[]; error?: string };
       if (!mounted.current || sequence !== pollSequence.current) return;
       if (!response.ok || !data.ok || data.job?.id !== jobId) {
         setNotice(data.error || "Build session status could not be read.");
@@ -303,6 +303,7 @@ function BuildWorkspaceSession(props: BuildWorkspaceProps & { projectId: string 
       }
       setJob(data.job);
       setBuildReceipt(data.receipt ?? null);
+      if (data.sourceReceipt) setExecutionReceipt({ ...data.sourceReceipt, checked: data.revisionVerified === true });
       setResultSource(pendingSource.current?.runtime === "paired" && pendingSource.current.runId === jobId ? pendingSource.current : undefined);
       setEvents(Array.isArray(data.events) ? data.events : []);
     } catch {
@@ -864,12 +865,12 @@ function BuildWorkspaceSession(props: BuildWorkspaceProps & { projectId: string 
     const agentId = workspace === "hosted" ? undefined : workspace;
     const targetCwd = selectedBuffer?.cwd ?? cwd.trim();
     const expectedBranch = branch.trim();
-    if (expectedBranch && (!buildBranchName(expectedBranch) || agentId || policy === "save")) {
+    if (expectedBranch && (!buildBranchName(expectedBranch) || policy === "save")) {
       submittingBuild.current = false;
-      setNotice(!buildBranchName(expectedBranch) ? "Enter a valid target branch before running." : agentId ? "This paired runtime cannot verify a target branch. No task was submitted." : "Save reviewed files separately before running with a named branch. No task was submitted.");
+      setNotice(!buildBranchName(expectedBranch) ? "Enter a valid target branch before running." : "Save reviewed files separately before running with a named branch.");
       return;
     }
-    if (agentId && !companion.onlineAgentIds?.includes(agentId)) {
+    if (agentId && !expectedBranch && !companion.onlineAgentIds?.includes(agentId)) {
       submittingBuild.current = false;
       setNotice("The original computer is offline. Reconnect it before running this task.");
       return;
@@ -904,6 +905,7 @@ function BuildWorkspaceSession(props: BuildWorkspaceProps & { projectId: string 
         const hash = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(content));
         files.push({ path: buffer.path, sha256: Array.from(new Uint8Array(hash), (byte) => byte.toString(16).padStart(2, "0")).join("") });
       }
+      if (agentId && expectedBranch && (!files.length || !targetCwd)) { setNotice("Open a saved file in the chosen checkout before queuing a branch-checked Build job."); return; }
       if (!mounted.current || haltedRef.current || planOwner.current !== props.ownerId || relevant.some(([key, buffer]) => !buffersRef.current[key] || (policy === "save" && buffersRef.current[key].draft !== buffer.draft))) { setNotice(`Build stopped before submission.${partialSaves()}`); return; }
       const receipt = { ...target, files, policy };
       setExecutionReceipt(receipt);
@@ -957,7 +959,7 @@ function BuildWorkspaceSession(props: BuildWorkspaceProps & { projectId: string 
       setResultSource(runSource);
       setPanel("agent");
       setBand("editor");
-      setNotice("Task queued on the paired computer.");
+      setNotice(expectedBranch ? "Task queued. The updated paired runner will check the branch and reviewed files before the coding prompt." : "Task queued on the paired computer.");
     } catch {
       setNotice("Build could not verify the outcome. Check the session history before submitting again.");
       if (jobKey) await refreshJob(jobKey);
@@ -1330,7 +1332,9 @@ function BuildWorkspaceSession(props: BuildWorkspaceProps & { projectId: string 
         <button type="button" disabled={loading || fileBusy || props.halted} onClick={() => void runBuild("saved")}>Run saved version</button>
         <button type="button" onClick={() => setExecutionChoice(false)}>Cancel</button>
       </ActionOverlay>}
-      {executionReceipt && <details className="text-xs text-muted"><summary>Submitted source receipt</summary><p>Workspace {executionReceipt.workspace} · {executionReceipt.cwd || "runtime default"} · {executionReceipt.policy === "save" ? "Verified save before submission" : "Saved versions; drafts kept"}. These hashes identify the submitted baseline; runtime readback is required to confirm which revision executed.</p><ul>{executionReceipt.files.map((file) => <li key={file.path}>{file.path} · {file.sha256}</li>)}</ul></details>}
+      {executionReceipt && <details className="text-xs text-muted"><summary>Submitted source receipt</summary><p>Workspace {executionReceipt.workspace} · {executionReceipt.cwd || "runtime default"} · {executionReceipt.policy === "save" ? "Verified save before submission" : "Saved versions; drafts kept"}.</p>
+        <p>{executionReceipt.checked ? "The paired runner checked these files before submitting the coding prompt." : "These hashes identify the submitted baseline. The coding runtime's source check is unconfirmed."}</p>
+        <ul>{executionReceipt.files.map((file) => <li key={file.path}>{file.path} · {file.sha256}</li>)}</ul></details>}
       {props.composer?.browserActivity}
       <div className="build-task-and-reply">
       <form className="min-w-0 space-y-3" onSubmit={submit}>

@@ -1311,12 +1311,14 @@
         "POST"
       ],
       "policy": "paired_device",
-      "notes": "Agent token and exact device/job association required; job transitions preserve halt/cancel/outcome authority.",
+      "notes": "Agent token and device/job binding protect delivery. Branch-checked jobs require the reviewed-source protocol and honor halt and cancellation.",
       "evidence": [
         {
           "file": "src/routes/api/mind/pc/jobs.ts",
           "requires": [
-            "findAgentByToken"
+            "findAgentByToken",
+            "x-adrian-build-review",
+            "offeredJob?.agentId === agent.id"
           ]
         }
       ]

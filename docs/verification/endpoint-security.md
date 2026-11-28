@@ -94,7 +94,7 @@ This checked-in inventory covers every direct route handler and exported TanStac
 | `/api/mind/pc/approve` | POST | owner_origin | Verified session/bearer owner scopes records and dispatch; origin guard precedes browser mutation. Sources: `src/routes/api/mind/pc/approve.ts` |
 | `/api/mind/pc/deny` | POST | owner_origin | Verified session/bearer owner scopes records and dispatch; origin guard precedes browser mutation. Sources: `src/routes/api/mind/pc/deny.ts` |
 | `/api/mind/pc/events` | GET, POST | mixed_owner_device | GET verifies owner and job owner; POST verifies device token and exact job/agent association. Sources: `src/routes/api/mind/pc/events.ts` |
-| `/api/mind/pc/jobs` | GET, POST | paired_device | Agent token and exact device/job association required; job transitions preserve halt/cancel/outcome authority. Sources: `src/routes/api/mind/pc/jobs.ts` |
+| `/api/mind/pc/jobs` | GET, POST | paired_device | Agent token and device/job binding protect delivery. Branch-checked jobs require the reviewed-source protocol and honor halt and cancellation. Sources: `src/routes/api/mind/pc/jobs.ts` |
 | `/api/mind/pc/register` | DELETE, POST | mixed_owner_device | POST verifies owner+origin; DELETE verifies owner or explicit self-device token+origin before revocation. Sources: `src/routes/api/mind/pc/register.ts` |
 | `/api/mind/pc/result` | POST | paired_device | Agent token and exact device/job association required; job transitions preserve halt/cancel/outcome authority. Sources: `src/routes/api/mind/pc/result.ts` |
 | `/api/mind/pc/status` | GET, POST | owner_origin | Verified session/bearer owner scopes records and dispatch; origin guard precedes browser mutation. Sources: `src/routes/api/mind/pc/status.ts` |
