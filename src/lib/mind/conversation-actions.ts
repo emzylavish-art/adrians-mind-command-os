@@ -6,6 +6,7 @@ import { createChat } from "./workspace.ts";
 export const CONVERSATION_ACTIONS = [
   { id: "project", label: "Add to project" },
   { id: "copy", label: "Copy task link" },
+  { id: "share-text", label: "Share conversation text" },
   { id: "rename", label: "Rename" },
   { id: "files", label: "View all files" },
   { id: "scheduled", label: "Scheduled" },

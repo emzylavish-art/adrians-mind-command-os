@@ -17,6 +17,7 @@ import { Route as LoginRouteImport } from './routes/login'
 import { Route as MemoryRouteImport } from './routes/memory'
 import { Route as PersonasRouteImport } from './routes/personas'
 import { Route as ResearchRouteImport } from './routes/research'
+import { Route as SharedChatRouteImport } from './routes/shared-chat'
 import { Route as SocialRouteImport } from './routes/social'
 import { Route as UnauthorizedRouteImport } from './routes/unauthorized'
 import { Route as AuthCallbackRouteImport } from './routes/auth/callback'
@@ -31,6 +32,7 @@ import { Route as ApiMindResearchReportsRouteImport } from './routes/api/mind/re
 import { Route as ApiMindResourcesRouteImport } from './routes/api/mind/resources'
 import { Route as ApiMindSessionRouteImport } from './routes/api/mind/session'
 import { Route as ApiMindSessionsRouteImport } from './routes/api/mind/sessions'
+import { Route as ApiMindSharedChatsRouteImport } from './routes/api/mind/shared-chats'
 import { Route as ApiMindSkillsRouteImport } from './routes/api/mind/skills'
 import { Route as ApiMindTurnRouteImport } from './routes/api/mind/turn'
 import { Route as ApiMindUsageRouteImport } from './routes/api/mind/usage'
@@ -141,6 +143,11 @@ const ResearchRoute = ResearchRouteImport.update({
   path: '/research',
   getParentRoute: () => rootRouteImport,
 } as any)
+const SharedChatRoute = SharedChatRouteImport.update({
+  id: '/shared-chat',
+  path: '/shared-chat',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const SocialRoute = SocialRouteImport.update({
   id: '/social',
   path: '/social',
@@ -209,6 +216,11 @@ const ApiMindSessionRoute = ApiMindSessionRouteImport.update({
 const ApiMindSessionsRoute = ApiMindSessionsRouteImport.update({
   id: '/api/mind/sessions',
   path: '/api/mind/sessions',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ApiMindSharedChatsRoute = ApiMindSharedChatsRouteImport.update({
+  id: '/api/mind/shared-chats',
+  path: '/api/mind/shared-chats',
   getParentRoute: () => rootRouteImport,
 } as any)
 const ApiMindSkillsRoute = ApiMindSkillsRouteImport.update({
@@ -576,6 +588,7 @@ export interface FileRoutesByFullPath {
   '/memory': typeof MemoryRoute
   '/personas': typeof PersonasRoute
   '/research': typeof ResearchRoute
+  '/shared-chat': typeof SharedChatRoute
   '/social': typeof SocialRoute
   '/unauthorized': typeof UnauthorizedRoute
   '/auth/callback': typeof AuthCallbackRoute
@@ -590,6 +603,7 @@ export interface FileRoutesByFullPath {
   '/api/mind/resources': typeof ApiMindResourcesRoute
   '/api/mind/session': typeof ApiMindSessionRoute
   '/api/mind/sessions': typeof ApiMindSessionsRoute
+  '/api/mind/shared-chats': typeof ApiMindSharedChatsRoute
   '/api/mind/skills': typeof ApiMindSkillsRoute
   '/api/mind/turn': typeof ApiMindTurnRoute
   '/api/mind/usage': typeof ApiMindUsageRoute
@@ -669,6 +683,7 @@ export interface FileRoutesByTo {
   '/memory': typeof MemoryRoute
   '/personas': typeof PersonasRoute
   '/research': typeof ResearchRoute
+  '/shared-chat': typeof SharedChatRoute
   '/social': typeof SocialRoute
   '/unauthorized': typeof UnauthorizedRoute
   '/auth/callback': typeof AuthCallbackRoute
@@ -683,6 +698,7 @@ export interface FileRoutesByTo {
   '/api/mind/resources': typeof ApiMindResourcesRoute
   '/api/mind/session': typeof ApiMindSessionRoute
   '/api/mind/sessions': typeof ApiMindSessionsRoute
+  '/api/mind/shared-chats': typeof ApiMindSharedChatsRoute
   '/api/mind/skills': typeof ApiMindSkillsRoute
   '/api/mind/turn': typeof ApiMindTurnRoute
   '/api/mind/usage': typeof ApiMindUsageRoute
@@ -763,6 +779,7 @@ export interface FileRoutesById {
   '/memory': typeof MemoryRoute
   '/personas': typeof PersonasRoute
   '/research': typeof ResearchRoute
+  '/shared-chat': typeof SharedChatRoute
   '/social': typeof SocialRoute
   '/unauthorized': typeof UnauthorizedRoute
   '/auth/callback': typeof AuthCallbackRoute
@@ -777,6 +794,7 @@ export interface FileRoutesById {
   '/api/mind/resources': typeof ApiMindResourcesRoute
   '/api/mind/session': typeof ApiMindSessionRoute
   '/api/mind/sessions': typeof ApiMindSessionsRoute
+  '/api/mind/shared-chats': typeof ApiMindSharedChatsRoute
   '/api/mind/skills': typeof ApiMindSkillsRoute
   '/api/mind/turn': typeof ApiMindTurnRoute
   '/api/mind/usage': typeof ApiMindUsageRoute
@@ -858,6 +876,7 @@ export interface FileRouteTypes {
     | '/memory'
     | '/personas'
     | '/research'
+    | '/shared-chat'
     | '/social'
     | '/unauthorized'
     | '/auth/callback'
@@ -872,6 +891,7 @@ export interface FileRouteTypes {
     | '/api/mind/resources'
     | '/api/mind/session'
     | '/api/mind/sessions'
+    | '/api/mind/shared-chats'
     | '/api/mind/skills'
     | '/api/mind/turn'
     | '/api/mind/usage'
@@ -951,6 +971,7 @@ export interface FileRouteTypes {
     | '/memory'
     | '/personas'
     | '/research'
+    | '/shared-chat'
     | '/social'
     | '/unauthorized'
     | '/auth/callback'
@@ -965,6 +986,7 @@ export interface FileRouteTypes {
     | '/api/mind/resources'
     | '/api/mind/session'
     | '/api/mind/sessions'
+    | '/api/mind/shared-chats'
     | '/api/mind/skills'
     | '/api/mind/turn'
     | '/api/mind/usage'
@@ -1044,6 +1066,7 @@ export interface FileRouteTypes {
     | '/memory'
     | '/personas'
     | '/research'
+    | '/shared-chat'
     | '/social'
     | '/unauthorized'
     | '/auth/callback'
@@ -1058,6 +1081,7 @@ export interface FileRouteTypes {
     | '/api/mind/resources'
     | '/api/mind/session'
     | '/api/mind/sessions'
+    | '/api/mind/shared-chats'
     | '/api/mind/skills'
     | '/api/mind/turn'
     | '/api/mind/usage'
@@ -1138,6 +1162,7 @@ export interface RootRouteChildren {
   MemoryRoute: typeof MemoryRoute
   PersonasRoute: typeof PersonasRoute
   ResearchRoute: typeof ResearchRoute
+  SharedChatRoute: typeof SharedChatRoute
   SocialRoute: typeof SocialRoute
   UnauthorizedRoute: typeof UnauthorizedRoute
   AuthCallbackRoute: typeof AuthCallbackRoute
@@ -1152,6 +1177,7 @@ export interface RootRouteChildren {
   ApiMindResourcesRoute: typeof ApiMindResourcesRoute
   ApiMindSessionRoute: typeof ApiMindSessionRoute
   ApiMindSessionsRoute: typeof ApiMindSessionsRoute
+  ApiMindSharedChatsRoute: typeof ApiMindSharedChatsRoute
   ApiMindSkillsRoute: typeof ApiMindSkillsRoute
   ApiMindTurnRoute: typeof ApiMindTurnRoute
   ApiMindUsageRoute: typeof ApiMindUsageRoute
@@ -1281,6 +1307,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ResearchRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/shared-chat': {
+      id: '/shared-chat'
+      path: '/shared-chat'
+      fullPath: '/shared-chat'
+      preLoaderRoute: typeof SharedChatRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/social': {
       id: '/social'
       path: '/social'
@@ -1377,6 +1410,13 @@ declare module '@tanstack/react-router' {
       path: '/api/mind/sessions'
       fullPath: '/api/mind/sessions'
       preLoaderRoute: typeof ApiMindSessionsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/mind/shared-chats': {
+      id: '/api/mind/shared-chats'
+      path: '/api/mind/shared-chats'
+      fullPath: '/api/mind/shared-chats'
+      preLoaderRoute: typeof ApiMindSharedChatsRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/api/mind/skills': {
@@ -1874,6 +1914,7 @@ const rootRouteChildren: RootRouteChildren = {
   MemoryRoute: MemoryRoute,
   PersonasRoute: PersonasRoute,
   ResearchRoute: ResearchRoute,
+  SharedChatRoute: SharedChatRoute,
   SocialRoute: SocialRoute,
   UnauthorizedRoute: UnauthorizedRoute,
   AuthCallbackRoute: AuthCallbackRoute,
@@ -1888,6 +1929,7 @@ const rootRouteChildren: RootRouteChildren = {
   ApiMindResourcesRoute: ApiMindResourcesRoute,
   ApiMindSessionRoute: ApiMindSessionRoute,
   ApiMindSessionsRoute: ApiMindSessionsRoute,
+  ApiMindSharedChatsRoute: ApiMindSharedChatsRoute,
   ApiMindSkillsRoute: ApiMindSkillsRoute,
   ApiMindTurnRoute: ApiMindTurnRoute,
   ApiMindUsageRoute: ApiMindUsageRoute,

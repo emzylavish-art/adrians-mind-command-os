@@ -202,7 +202,7 @@ export async function readSnapshot(sql: Sql, userId: string): Promise<unknown | 
   return parsedPayload(rows[0]?.payload);
 }
 
-function parsedPayload(payload: unknown): unknown {
+export function parsedPayload(payload: unknown): unknown {
   return typeof payload === "string" ? JSON.parse(payload) : payload ?? null;
 }
 

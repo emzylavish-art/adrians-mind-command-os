@@ -1,3 +1,4 @@
+export { SharedChatLinks } from "./shared-chat-links";
 import type { Chat, Workspace } from "@/lib/mind/types";
 
 export function ArchiveSettings({ chats, ready, onRestore }: { chats: Chat[]; ready: boolean; onRestore:(id:string)=>void }) {

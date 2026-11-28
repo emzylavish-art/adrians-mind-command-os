@@ -15,7 +15,7 @@ import { DictationSettings } from "./dictation-settings";
 import { VOICE_PREFS, readVoicePreferences, defaultVoicePreferences, formatDictation, recordDictation, type VoicePreferences } from "@/lib/mind/voice-preferences";
 import { ChatBits } from "./chat-bits";
 import { AppearanceSettings, KeyboardSettings, SendKey, useInterfaceSettings } from "./interface-settings";
-import { ArchiveSettings, StorageSettings } from "./storage-settings";
+import { ArchiveSettings, StorageSettings, SharedChatLinks } from "./storage-settings";
 import { chord, submitOnKey, KEY_ACTIONS, type Action as ShortcutAction } from "@/lib/mind/interface-preferences";
 import type { SettingsPane } from "@/lib/mind/app-location";
 import { ChatPane, ComposerQueue } from "./chat-pane";
@@ -2606,6 +2606,12 @@ function CommandSession({ account, accountPending }: { account: ReturnType<typeo
     if (targets.length === 0) return;
     if (action === "delete") {
       deleteSavedChats(ids, ids.length === 1 ? `Delete “${shownChatTitle(targets[0]!)}”` : `Delete ${targets.length} conversations`);
+      return;
+    }
+    if (action === "share-text") {
+      if (!account || account.isDevFallback) { setNotice("Sign in to share conversation text."); return; }
+      if (targets.length !== 1 || targets[0].temporary) { setNotice("Choose one saved, non-temporary conversation to share."); return; }
+      setActiveId(targets[0].id); setView("settings"); setSettingsPane("data"); setNavOpen(false);
       return;
     }
     if (action === "copy") {
@@ -9226,7 +9232,7 @@ ${message.content}`;
               </div>}
               <div id="settings-data" hidden={settingsPane !== "data"} className="space-y-4">
                 {settingsPane === "data" && <div className="settings-card rounded-panel p-4 flex flex-wrap gap-3"><button className="min-h-11 rounded-panel border border-line px-3" type="button" onClick={()=>setSettingsPane("archived")}>Archived chats</button><button className="min-h-11 rounded-panel border border-line px-3" type="button" onClick={()=>setSettingsPane("storage")}>Manage storage</button><button className="min-h-11 rounded-panel border border-line px-3" type="button" disabled={!ready || !ws.chats.some(chat=>!chat.archived)} onClick={()=>runConversationAction("archive",ws.chats.filter(chat=>!chat.archived).map(chat=>chat.id))}>Archive all chats</button><button className="min-h-11 rounded-panel border border-danger px-3" type="button" disabled={!ready || !ws.chats.length} onClick={()=>runConversationAction("delete",ws.chats.map(chat=>chat.id))}>Delete all chats…</button></div>}
-                {settingsPane === "data" && <><SessionCenter />{draftOwner && <DataRetentionCenter ownerId={draftOwner} workspace={ws} syncNote={syncNote} onExport={() => void downloadArchive()} verifyServerCopy={() => loadMindCopy({ data: { ownerId: draftOwner } })} onLocalCleared={(targets) => { if (targets.includes("research")) { setResearchHistory([]); setActiveResearchId(null); setResearchCitations([]); setResearchNote(""); setResearchReportQuestion(""); } }} />}</>}
+                {settingsPane === "data" && <><SessionCenter />{account && !account.isDevFallback && <SharedChatLinks key={account.id} owner={account.id} chats={ws.chats} initialChatId={active?.id} />}{draftOwner && <DataRetentionCenter ownerId={draftOwner} workspace={ws} syncNote={syncNote} onExport={() => void downloadArchive()} verifyServerCopy={() => loadMindCopy({ data: { ownerId: draftOwner } })} onLocalCleared={(targets) => { if (targets.includes("research")) { setResearchHistory([]); setActiveResearchId(null); setResearchCitations([]); setResearchNote(""); setResearchReportQuestion(""); } }} />}</>}
               <div className="settings-card rounded-panel p-4 text-sm">
                 <div className="settings-row">
                   <div>

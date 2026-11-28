@@ -5,7 +5,7 @@ import { finishMenu, MenuCluster, MenuMotion, MenuShelf, menuChip } from "@/comp
 
 const GROUPS: { label: string; ids: ConversationAction[] }[] = [
   { label: "Move", ids: ["project"] },
-  { label: "Edit", ids: ["copy", "rename", "files", "scheduled"] },
+  { label: "Edit", ids: ["copy", "share-text", "rename", "files", "scheduled"] },
   { label: "Keep", ids: ["pin", "favorite", "archive", "quote"] },
   { label: "Remove", ids: ["delete"] },
 ];
