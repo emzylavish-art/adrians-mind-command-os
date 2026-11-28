@@ -66,7 +66,7 @@ import { accountOriginalFileStore, prepareLibraryDocument, readAccountOriginal, 
 import { createResearchRunGuard, loadResearchReports, makeResearchReport, researchAttachment, researchReferencesInText, saveResearchReport, type ResearchReport } from "@/lib/mind/research-reports";
 import type { ResearchResult } from "@/lib/mind/research";
 import { WorkspaceProfile } from "./workspace-profile";
-import { NotificationInbox, useWorkspaceInbox } from "./notification-inbox";
+import { InboxNotificationSettings, NotificationInbox, useWorkspaceInbox } from "./notification-inbox";
 import { BackgroundNotifications } from "./background-notifications";
 import { ARCHIVE_CATEGORIES, selectArchiveCategories, type ArchiveCategory, deleteLocalFile, deleteProject, refreshBotChat } from "@/lib/mind/workspace";
 import { WorkspaceDialog as Overlay } from "./workspace-dialog";
@@ -7268,19 +7268,9 @@ ${message.content}`;
               if (entry.view === "research") { const report = researchHistory.find((item) => item.id === entry.target); if (report) { setActiveResearchId(report.id); setResearchText(report.question); setResearchReportQuestion(report.question); setResearchNote(report.summary); setResearchCitations(report.citations); setResearchSteps(report.steps); setResearchBand("search"); } }
               setView(entry.view); closeMenus();
             }} />
-            <details className="p-3 text-xs"><summary>Inbox notification preferences</summary>
-              <label className="flex min-h-11 items-center gap-2"><input type="checkbox" checked={notificationPreferences.completedRuns} onChange={(event) => changeNotificationPreferences({ ...notificationPreferences, completedRuns: event.target.checked })} />Completed runs</label>
-              <label className="flex min-h-11 items-center gap-2"><input type="checkbox" checked={notificationPreferences.activity} onChange={(event) => changeNotificationPreferences({ ...notificationPreferences, activity: event.target.checked })} />Activity updates</label>
-              <label className="flex min-h-11 items-center gap-2"><input type="checkbox" checked={notificationPreferences.research !== false} onChange={(event) => changeNotificationPreferences({ ...notificationPreferences, research: event.target.checked })} />Research reports</label>
-              <label className="flex min-h-11 items-center gap-2"><input type="checkbox" checked={notificationPreferences.media !== false} onChange={(event) => changeNotificationPreferences({ ...notificationPreferences, media: event.target.checked })} />Generated media</label>
-              <label className="block">Quiet hours start <select className="min-h-11" value={notificationPreferences.quietStart ?? ""} onChange={(event) => changeNotificationPreferences({ ...notificationPreferences, quietStart: event.target.value === "" ? null : Number(event.target.value) })}><option value="">Off</option>{Array.from({ length: 24 }, (_, h) => <option key={h} value={h}>{h}:00</option>)}</select></label>
-              <label className="block">Quiet hours end <select className="min-h-11" value={notificationPreferences.quietEnd ?? ""} onChange={(event) => changeNotificationPreferences({ ...notificationPreferences, quietEnd: event.target.value === "" ? null : Number(event.target.value) })}><option value="">Off</option>{Array.from({ length: 24 }, (_, h) => <option key={h} value={h}>{h}:00</option>)}</select></label>
-              <button type="button" className="min-h-11 rounded-panel border border-line px-3" disabled={!browserNotices.available} aria-pressed={browserNotices.enabled} onClick={() => void browserNotices.toggle()}>{browserNotices.enabled ? "Disable open-browser alerts" : "Enable open-browser alerts"}</button>
-              <p>{browserNotices.available ? "Browser alerts use the selected inbox events while Adrian is open." : "Open-browser alerts are unavailable in this browser."}</p>
-              {browserNotices.status && <p role="status">{browserNotices.status}</p>}
-              <p>Quiet hours use this device's time zone. Approvals and errors remain visible.</p>
-            </details>
-            <BackgroundNotifications key={account?.id ?? ""} owner={account?.isDevFallback ? null : account?.id ?? null} storage={preferenceStorage} preferences={notificationPreferences} />
+            <button type="button" className="m-3 min-h-11 rounded-panel border border-line px-3 text-sm" onClick={() => {
+              setView("settings"); setSettingsPane("notifications"); setBellOpen(false);
+            }}>Notification settings</button>
           </AnchoredCard>
         )}
         {accountOpen && (
@@ -9129,6 +9119,7 @@ ${message.content}`;
                     ["bits", "Chat Bits", "Choose and deploy your pet companion", () => setSettingsPane("bits")],
                     ["browser", "Cloud browser", "Website permissions and browser data", () => setSettingsPane("browser")],
                     ["voice", "Voice", "Speak voice and pace", () => setSettingsPane("voice")],
+                    ["notifications", "Notifications", "Inbox, browser alerts, email, and quiet hours", () => setSettingsPane("notifications")],
                   ]},
                   { group: "Personalization", items: [
                     ["personalization", "Personalization", "Default style for new conversations", () => setSettingsPane("personalization")],
@@ -9207,6 +9198,11 @@ ${message.content}`;
               </label>}
               {settingsPane === "personalization" && <><ModeInstructionsSettings key={draftOwner ?? "guest"} /><AccessibilitySettings onChange={applyAccessibility} /></>}
               {settingsPane === "browser" && <CloudBrowserSettings key={draftOwner ?? "signed-out"} owner={draftOwner} halted={ws.halted} />}
+              {settingsPane === "notifications" && <div className="space-y-3">
+                <InboxNotificationSettings preferences={notificationPreferences} change={changeNotificationPreferences} browser={browserNotices} />
+                <BackgroundNotifications key={account?.id ?? ""} owner={account?.isDevFallback ? null : account?.id ?? null}
+                  storage={preferenceStorage} preferences={notificationPreferences} />
+              </div>}
               <div id="settings-general" hidden={settingsPane !== "general"} className="settings-card card-texture rounded-panel p-4 text-sm">
                 <div className="settings-row">
                   <div>

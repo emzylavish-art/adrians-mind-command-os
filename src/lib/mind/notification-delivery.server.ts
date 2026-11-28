@@ -1,8 +1,9 @@
 import { createHash, randomUUID } from "node:crypto";
 import type { Sql } from "../db.ts";
+import { decryptSecret, encryptSecret } from "./connectors/crypto.ts";
 import { deliveryAllowed, deliveryPreferences, notificationDeviceId, type DeliveryChannel, type DeliveryPreferences, type NotificationStatus } from "./notification-delivery.ts";
-import { parseDeviceSubscription, type NotificationTransports } from "./notification-transports.server.ts";
-import { workspaceNotices } from "./notifications.ts";
+import { parseDeviceSubscription, type DeliveryOutcome, type NotificationTransports } from "./notification-transports.server.ts";
+import { workspaceNotices, type WorkspaceNotice } from "./notifications.ts";
 import { readSnapshot } from "./store.ts";
 import { normalizeWorkspace } from "./workspace.ts";
 
@@ -20,6 +21,13 @@ const problem = (status: number, error: string) => result(status, { error });
 async function verifiedAddress(sql: Sql, owner: string) {
   const [account] = await sql.query<VerifiedAddress>('select email from "user" where id=$1 and "emailVerified"=true', [owner]);
   return account?.email ?? null;
+}
+
+function storedBrowserSubscription(value: unknown, push: NonNullable<NotificationTransports["push"]>) {
+  if (!value || typeof value !== "object" || !("sealed" in value)) return parseDeviceSubscription(value);
+  if (typeof value.sealed !== "string" || !("key" in value) || value.key !== push.publicKey) return null;
+  const text = decryptSecret(value.sealed, push.storageSecret);
+  try { return text ? parseDeviceSubscription(JSON.parse(text)) : null; } catch { return null; }
 }
 
 export async function notificationStatus(sql: Sql, owner: string, device: string | null, transports: NotificationTransports, workerConfigured: boolean): Promise<NotificationStatus> {
@@ -71,19 +79,26 @@ export async function updateNotificationDelivery(sql: Sql, owner: string, body: 
     const [account] = await tx.query<{ email: string; emailVerified: boolean }>('select email,"emailVerified" from "user" where id=$1 for update', [owner]);
     if (!account) return problem(409, "This signed-in account has no delivery profile.");
     if (channel === "email" && !account.emailVerified) return problem(409, "Verify your account email first.");
-    const endpoint = subscription?.endpoint ?? null;
-    const destination = JSON.stringify(subscription ?? account.email);
-    const [present] = await tx.query<{ id: string; same_destination: boolean }>(
-      "select id,destination=$4::jsonb as same_destination from mind_notification_target where user_id=$1 and channel=$2 and device_id is not distinct from $3::uuid",
-      [owner, channel, deviceFor(channel, device), destination],
+    const endpoint = subscription ? digest(subscription.endpoint) : null;
+    const push = transports.push;
+    const destination = subscription && push
+      ? { sealed: encryptSecret(JSON.stringify(subscription), push.storageSecret).ciphertext, key: push.publicKey }
+      : account.email;
+    const [present] = await tx.query<{ id: string; destination: unknown }>(
+      "select id,destination from mind_notification_target where user_id=$1 and channel=$2 and device_id is not distinct from $3::uuid",
+      [owner, channel, deviceFor(channel, device)],
     );
-    if (present?.same_destination) {
-      await tx.query("update mind_notification_target set preferences=$2::jsonb where id=$1", [present.id, JSON.stringify(prefs)]);
+    const same = present && (subscription && push
+      ? JSON.stringify(storedBrowserSubscription(present.destination, push)) === JSON.stringify(subscription)
+      : present.destination === account.email);
+    if (same) {
+      await tx.query("update mind_notification_target set preferences=$2::jsonb,destination=$3::jsonb,endpoint=$4 where id=$1",
+        [present.id, JSON.stringify(prefs), JSON.stringify(destination), endpoint]);
       return result(200, { saved: true });
     }
     if (endpoint) {
-      const [collision] = await tx.query("select id from mind_notification_target where endpoint=$1", [endpoint]);
-      if (collision && collision.id !== present?.id) return problem(409, "This browser subscription is already registered to another account.");
+      const [collision] = await tx.query("select id from mind_notification_target where endpoint in ($1,$2)", [endpoint, subscription?.endpoint]);
+      if (collision && collision.id !== present?.id) return problem(409, "This browser subscription is already registered.");
     }
     if (!present && channel === "push") {
       const [count] = await tx.query<{ count: number | string }>("select count(*) from mind_notification_target where user_id=$1 and channel='push'", [owner]);
@@ -91,7 +106,7 @@ export async function updateNotificationDelivery(sql: Sql, owner: string, body: 
     }
     if (present) await tx.query("delete from mind_notification_target where id=$1", [present.id]);
     await tx.query("insert into mind_notification_target(id,user_id,channel,device_id,endpoint,destination,preferences) values($1,$2,$3,$4,$5,$6::jsonb,$7::jsonb)",
-      [randomUUID(), owner, channel, deviceFor(channel, device), endpoint, destination, JSON.stringify(prefs)]);
+      [randomUUID(), owner, channel, deviceFor(channel, device), endpoint, JSON.stringify(destination), JSON.stringify(prefs)]);
     return result(200, { saved: true });
   });
 }
@@ -121,10 +136,42 @@ async function targetNotices(sql: Sql, owner: string, prefs: DeliveryPreferences
   return workspaceNotices(workspace, prefs, reports);
 }
 
+async function finishNotificationClaim(sql: Sql, target: Target, event: WorkspaceNotice, hash: string, at: Date,
+  prefs: DeliveryPreferences, transports: NotificationTransports): Promise<Exclude<DeliveryOutcome, "expired">> {
+  return sql.transaction!(async tx => {
+    // The earlier transaction committed the one-attempt receipt. Keep the
+    // live account, stop and consent locked through the bounded provider call.
+    const [account] = await tx.query<{ email: string; emailVerified: boolean }>('select email,"emailVerified" from "user" where id=$1 for share', [target.user_id]);
+    const [control] = await tx.query<{ halted: boolean }>("select halted from mind_control where user_id=$1 for share", [target.user_id]);
+    const [current] = await tx.query<Pick<Target, "destination" | "device_id">>(
+      "select destination,device_id from mind_notification_target where id=$1 and user_id=$2 and channel=$3 and preferences=$4::jsonb for update",
+      [target.id, target.user_id, target.channel, JSON.stringify(prefs)],
+    );
+    let outcome: DeliveryOutcome = "rejected";
+    if (account && control?.halted === false && current && deliveryAllowed(event, prefs, at)) {
+      try {
+        if (target.channel === "email" && transports.email && account.emailVerified && current.destination === account.email) {
+          outcome = await transports.email.send(account.email, `adrian-${target.id}-${hash}`);
+        } else if (target.channel === "push" && transports.push && current.device_id) {
+          const subscription = storedBrowserSubscription(current.destination, transports.push);
+          if (subscription) outcome = await transports.push.send(subscription, current.device_id, hash);
+        }
+      } catch { outcome = "unknown"; }
+    }
+    if (outcome === "expired") {
+      await tx.query("delete from mind_notification_target where id=$1 and user_id=$2", [target.id, target.user_id]);
+      return "rejected";
+    }
+    await tx.query("update mind_notification_delivery set state=$3 where target_id=$1 and event_hash=$2 and state='attempted'", [target.id, hash, outcome]);
+    return outcome;
+  });
+}
+
 /** Each committed ledger row permits one external attempt. Ambiguous outcomes stay recorded. */
 export async function runNotificationPass(sql: Sql, transports: NotificationTransports, now = new Date()) {
   const counts = { checked: 0, accepted: 0, rejected: 0, unknown: 0 };
   if (!transports.push && !transports.email) return counts;
+  const started = Date.now();
   const targets = await sql.query<Target>(`with selected as (
     select id from mind_notification_target where (channel='push' and $1) or (channel='email' and $2)
     order by last_checked nulls first,id limit 4 for update skip locked
@@ -162,22 +209,11 @@ export async function runNotificationPass(sql: Sql, transports: NotificationTran
           values($1,$2,$3,'attempted',$4) on conflict do nothing returning target_id`, [target.id, hash, notice.urgent, now.toISOString()]) : [];
       });
       if (!claim) continue;
-      let outcome: Awaited<ReturnType<NonNullable<NotificationTransports["push"]>["send"]>> = "unknown";
       try {
-        if (target.channel === "email" && typeof target.destination === "string") {
-          outcome = await transports.email!.send(target.destination, `adrian-${target.id}-${hash}`);
-        } else if (target.channel === "push" && target.device_id) {
-          const subscription = parseDeviceSubscription(target.destination);
-          outcome = subscription ? await transports.push!.send(subscription, target.device_id, hash) : "expired";
-        }
-      } catch { /* A provider failure after the attempt was recorded must not replay the event. */ }
-      if (outcome === "expired") {
-        await sql.query("delete from mind_notification_target where id=$1", [target.id]);
-        counts.rejected++;
-      } else {
-        await sql.query("update mind_notification_delivery set state=$3 where target_id=$1 and event_hash=$2", [target.id, hash, outcome]);
+        const at = new Date(now.getTime() + Math.max(0, Date.now() - started));
+        const outcome = await finishNotificationClaim(sql, target, notice, hash, at, prefs, transports);
         counts[outcome]++;
-      }
+      } catch { counts.unknown++; }
       break;
     }
   }

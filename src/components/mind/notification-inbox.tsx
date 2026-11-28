@@ -71,6 +71,29 @@ export function NotificationInbox({ notices, read, dismissed = [], onRead, onDis
   </section>;
 }
 
+export function InboxNotificationSettings({ preferences, change, browser }: {
+  preferences: NotificationPreferences; change: (value: NotificationPreferences) => void;
+  browser: ReturnType<typeof useBrowserNotices>;
+}) {
+  const toggles = [["completedRuns", "Completed runs"], ["activity", "Activity updates"], ["research", "Research reports"], ["media", "Generated media"]] as const;
+  return <section className="settings-card space-y-2 rounded-panel p-4" aria-label="Inbox and open-browser alerts">
+    <h3 className="font-semibold">Inbox and open-browser alerts</h3>
+    {toggles.map(([field, label]) => <label key={field} className="flex min-h-11 items-center gap-2">
+      <input type="checkbox" checked={preferences[field] !== false} onChange={event => change({ ...preferences, [field]: event.target.checked })} />{label}
+    </label>)}
+    {([["quietStart", "Quiet hours start"], ["quietEnd", "Quiet hours end"]] as const).map(([field, label]) => <label key={field} className="block text-sm">
+      {label}{" "}<select className="min-h-11" value={preferences[field] ?? ""} onChange={event => change({ ...preferences, [field]: event.target.value === "" ? null : Number(event.target.value) })}>
+        <option value="">Off</option>{Array.from({ length: 24 }, (_, h) => <option key={h} value={h}>{h}:00</option>)}
+      </select>
+    </label>)}
+    <p className="text-sm text-muted">These quiet hours use this device’s time zone. Approvals and errors remain visible.</p>
+    <button type="button" className="min-h-11 rounded-panel border border-line px-3" disabled={!browser.available} aria-pressed={browser.enabled}
+      onClick={() => void browser.toggle()}>{browser.enabled ? "Disable open-browser alerts" : "Enable open-browser alerts"}</button>
+    <p className="text-sm text-muted">{browser.available ? "Browser alerts use the selected inbox events while Adrian is open." : "Open-browser alerts are unavailable in this browser."}</p>
+    {browser.status && <p role="status" className="text-sm">{browser.status}</p>}
+  </section>;
+}
+
 export function useWorkspaceInbox(ws: Workspace, researchHistory: Parameters<typeof workspaceNotices>[2], preferenceStorage: PreferenceStorage, setNotice: (value: string) => void) {
   function loadNoticeState() {
     return {

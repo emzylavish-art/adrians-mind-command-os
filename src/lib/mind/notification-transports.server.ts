@@ -1,12 +1,13 @@
 import { createECDH } from "node:crypto";
 import webPush from "web-push";
+import { connectorTokenSecretStatus } from "./connectors/crypto.ts";
 import type { DeviceSubscription } from "./notification-delivery.ts";
 
 type Vapid = { publicKey: string; privateKey: string; subject: string };
 type EmailSender = { from: string; key: string };
 export type DeliveryOutcome = "accepted" | "rejected" | "unknown" | "expired";
 export type NotificationTransports = {
-  push?: { publicKey: string; send: (destination: DeviceSubscription, device: string, hash: string) => Promise<DeliveryOutcome> };
+  push?: { publicKey: string; storageSecret: string; send: (destination: DeviceSubscription, device: string, hash: string) => Promise<DeliveryOutcome> };
   email?: { send: (to: string, idempotencyKey: string) => Promise<DeliveryOutcome> };
 };
 
@@ -59,20 +60,23 @@ function providerOutcome(status: number, push = false): DeliveryOutcome {
 
 export function notificationTransports(env = process.env, fetchImpl = fetch): NotificationTransports {
   const push = vapidConfig(env);
+  const storage = connectorTokenSecretStatus(env.MIND_NOTIFICATION_STORAGE_SECRET ?? env.CONNECTOR_TOKEN_SECRET ?? "");
   const email = emailConfig(env);
   return {
-    push: push && { publicKey: push.publicKey, async send(destination, device, hash) {
+    push: push && storage.ok ? { publicKey: push.publicKey, storageSecret: storage.secret, async send(destination, device, hash) {
       const subscription = parseDeviceSubscription(destination);
       if (!subscription) return "rejected";
       try {
-        const result = await webPush.sendNotification(subscription, JSON.stringify({ device, hash }), {
-          vapidDetails: push, TTL: 300, timeout: 5000, topic: hash.slice(0, 32), contentEncoding: "aes128gcm",
+        const request = webPush.generateRequestDetails(subscription, JSON.stringify({ device, hash }), {
+          vapidDetails: push, TTL: 300, topic: hash.slice(0, 32), contentEncoding: "aes128gcm",
         });
-        return providerOutcome(result.statusCode, true);
-      } catch (error) {
-        return providerOutcome(Number((error as { statusCode?: number } | null)?.statusCode), true);
-      }
-    } },
+        const result = await fetchImpl(subscription.endpoint, {
+          method: request.method, headers: request.headers as Record<string, string>,
+          body: new Uint8Array(request.body), redirect: "error", signal: AbortSignal.timeout(5000),
+        });
+        return providerOutcome(result.status, true);
+      } catch { return "unknown"; }
+    } } : undefined,
     email: email && { async send(to, idempotencyKey) {
       try {
         const result = await fetchImpl("https://api.resend.com/emails", {
@@ -80,7 +84,9 @@ export function notificationTransports(env = process.env, fetchImpl = fetch): No
           headers: { authorization: `Bearer ${email.key}`, "content-type": "application/json", "idempotency-key": idempotencyKey },
           body: JSON.stringify({ from: email.from, to: [to], subject: "Adrian workspace update", text: concealmentText }),
         });
-        return providerOutcome(result.status);
+        if (!result.ok) return providerOutcome(result.status);
+        const receipt: unknown = await result.json();
+        return receipt && typeof receipt === "object" && "id" in receipt && typeof receipt.id === "string" && receipt.id ? "accepted" : "unknown";
       } catch { return "unknown"; }
     } },
   };

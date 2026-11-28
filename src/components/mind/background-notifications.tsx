@@ -1,8 +1,9 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { getBearerToken } from "@/lib/auth/client";
 import type { PreferenceStorage } from "@/lib/mind/account-preferences";
 import { BACKGROUND_PUSH_CHANGED, BACKGROUND_PUSH_KEY, notificationDeviceId, type DeliveryChannel, type NotificationStatus } from "@/lib/mind/notification-delivery";
 import type { NotificationPreferences } from "@/lib/mind/notifications";
+import { previewPathPrefix } from "@/lib/preview-path-prefix";
 
 const deviceStorageKey = "notifications.browser-device.v1";
 const endpoint = "/api/mind/notifications";
@@ -22,7 +23,7 @@ async function notificationRequest(params: URLSearchParams, body?: object, signa
   const token = getBearerToken();
   const headers = new Headers(token ? { authorization: `Bearer ${token}` } : {});
   if (body) headers.set("content-type", "application/json");
-  const response = await fetch(endpoint + (body ? "" : "?" + params), {
+  const response = await fetch((previewPathPrefix(location.hostname, location.pathname) ?? "") + endpoint + (body ? "" : "?" + params), {
     method: body ? "POST" : "GET", credentials: "same-origin", cache: "no-store", headers, signal,
     body: body && JSON.stringify(body),
   });
@@ -67,8 +68,10 @@ export function BackgroundNotifications({ owner, storage, preferences }: {
   const [worker, setWorker] = useState<ServiceWorkerRegistration | null>(null);
   const [working, setWorking] = useState(false);
   const [message, setMessage] = useState("");
+  const mutation = useRef<AbortController | null>(null);
   const browserSupported = typeof window !== "undefined" && window.isSecureContext && "Notification" in window
     && "PushManager" in window && "serviceWorker" in navigator;
+  useEffect(() => () => mutation.current?.abort(), [owner]);
 
   useEffect(() => {
     if (!open || !owner) return;
@@ -89,14 +92,18 @@ export function BackgroundNotifications({ owner, storage, preferences }: {
   useEffect(() => {
     if (!open || !device || !browserSupported || !status?.push.available || !status.workerConfigured) return;
     let current = true;
-    void navigator.serviceWorker.register("/adrian-notifications-sw.js").then(() => navigator.serviceWorker.ready).then(registration => {
+    const prefix = previewPathPrefix(location.hostname, location.pathname) ?? "";
+    void navigator.serviceWorker.register(prefix + "/adrian-notifications-sw.js").then(() => navigator.serviceWorker.ready).then(registration => {
       if (current) setWorker(registration);
     }).catch(() => { if (current) setMessage("This browser could not start its notification worker."); });
     return () => { current = false; };
   }, [open, device, browserSupported, status?.push.available, status?.workerConfigured]);
 
   async function update(action: "enable" | "disable" | "preferences", channel?: DeliveryChannel) {
-    if (!owner || working) return;
+    if (!owner || mutation.current) return;
+    const controller = new AbortController();
+    mutation.current = controller;
+    const { signal } = controller;
     setWorking(true);
     setMessage("");
     const query = new URLSearchParams({ owner, ...(device ? { device } : {}) });
@@ -105,21 +112,21 @@ export function BackgroundNotifications({ owner, storage, preferences }: {
       zone: Intl.DateTimeFormat().resolvedOptions().timeZone,
     };
     let subscription: PushSubscription | null = null;
-    let newSubscription = false;
     try {
       if (action === "enable" && channel === "push") {
         if (!worker || !device || !status?.push.publicKey) throw new Error("This browser cannot subscribe to push notifications here.");
         if (await Notification.requestPermission() !== "granted") throw new Error("Browser permission was not granted. You can change it in site settings.");
+        signal.throwIfAborted();
         subscription = await worker.pushManager.getSubscription();
         if (!subscription) {
           subscription = await worker.pushManager.subscribe({
             userVisibleOnly: true, applicationServerKey: applicationKey(status.push.publicKey),
           });
-          newSubscription = true;
         }
       }
-      await notificationRequest(query, { owner, device, channel, action, preferences: scopedPreferences, subscription: subscription?.toJSON() });
-      newSubscription = false;
+      signal.throwIfAborted();
+      await notificationRequest(query, { owner, device, channel, action, preferences: scopedPreferences, subscription: subscription?.toJSON() }, signal);
+      signal.throwIfAborted();
       if (channel === "push") {
         syncBrowserDelivery(storage, action === "enable");
         if (action === "disable") {
@@ -128,11 +135,14 @@ export function BackgroundNotifications({ owner, storage, preferences }: {
         }
       }
       setMessage(action === "enable" ? "Registered for delivery." : action === "disable" ? "Delivery turned off." : "Event choices saved for this email and browser.");
-      setStatus(await notificationRequest(query));
+      const confirmed: NotificationStatus = await notificationRequest(query, undefined, signal);
+      if (!signal.aborted) setStatus(confirmed);
     } catch (error) {
-      if (newSubscription) await subscription?.unsubscribe().catch(() => {});
-      setMessage(error instanceof Error ? error.message : "Notification settings could not be confirmed.");
-    } finally { setWorking(false); }
+      if (!signal.aborted) setMessage(error instanceof Error ? error.message : "Notification settings could not be confirmed.");
+    } finally {
+      mutation.current = null;
+      if (!signal.aborted) setWorking(false);
+    }
   }
 
   return <details className="p-3 text-xs" onToggle={event => setOpen(event.currentTarget.open)}>

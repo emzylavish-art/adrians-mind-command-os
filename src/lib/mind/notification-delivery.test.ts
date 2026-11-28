@@ -2,6 +2,8 @@ import assert from "node:assert/strict";
 import { createECDH, randomBytes, randomUUID } from "node:crypto";
 import { readFile } from "node:fs/promises";
 import test from "node:test";
+import { runInNewContext } from "node:vm";
+import webPush from "web-push";
 import { PGlite, type Transaction } from "@electric-sql/pglite";
 import type { Sql } from "../db.ts";
 import { deliveryAllowed, deliveryPreferences } from "./notification-delivery.ts";
@@ -59,6 +61,71 @@ test("email adapter uses a fixed transport and generic content with an idempoten
   });
   assert.equal(await transport.email?.send(recipient, "stable-operation"), "accepted");
   assert.equal(sent, 1);
+  const withoutReceipt = notificationTransports({
+    MIND_NOTIFICATION_EMAIL_KEY: "fixture", MIND_NOTIFICATION_EMAIL_FROM: "alerts@example.invalid",
+  }, async () => Response.json({}));
+  assert.equal(await withoutReceipt.email?.send(recipient, "stable-operation"), "unknown");
+});
+
+test("Web Push encrypts receipts and sends only to the validated endpoint without redirects", async () => {
+  const vapid = webPush.generateVAPIDKeys();
+  const subscription = deviceSubscription();
+  const hash = "b".repeat(64);
+  const device = randomUUID();
+  const env = {
+    MIND_PUSH_PUBLIC_KEY: vapid.publicKey, MIND_PUSH_PRIVATE_KEY: vapid.privateKey,
+    MIND_PUSH_SUBJECT: "mailto:operator@example.invalid", MIND_NOTIFICATION_STORAGE_SECRET: "synthetic push encryption test key",
+  };
+  const transport = notificationTransports(env, async (resource, init) => {
+    assert.equal(resource, subscription.endpoint);
+    assert.equal(init?.redirect, "error");
+    assert.equal(init?.method, "POST");
+    const headers = new Headers(init?.headers);
+    assert.equal(headers.get("content-encoding"), "aes128gcm");
+    assert.equal(headers.get("topic"), hash.slice(0, 32));
+    assert.ok(headers.get("authorization")?.startsWith("vapid t="));
+    assert.ok(init?.body instanceof Uint8Array);
+    assert.equal(Buffer.from(init.body).includes(Buffer.from(device)), false);
+    return new Response(null, { status: 201 });
+  });
+  assert.equal(await transport.push?.send(subscription, device, hash), "accepted");
+  assert.equal(notificationTransports({ ...env, MIND_NOTIFICATION_STORAGE_SECRET: "" }).push, undefined);
+});
+
+test("the browser worker honors the verified display receipt and opens Alerts in the same workspace", async () => {
+  const source = await readFile(new URL("../../../public/adrian-notifications-sw.js", import.meta.url), "utf8");
+  const listeners = new Map<string, (event: Record<string, unknown>) => void>();
+  const shown: unknown[][] = [];
+  const opened: string[] = [];
+  const requested: string[] = [];
+  let response = 404;
+  let completed = Promise.resolve();
+  const waitUntil = (work: Promise<void>) => { completed = Promise.resolve(work); };
+  runInNewContext(source, {
+    URL, URLSearchParams,
+    fetch: async (url: string) => { requested.push(url); return { status: response }; },
+    self: {
+      addEventListener: (type: string, handler: (event: Record<string, unknown>) => void) => listeners.set(type, handler),
+      registration: { scope: "https://example.invalid/preview/", showNotification: (...args: unknown[]) => { shown.push(args); } },
+      clients: { openWindow: (href: string) => { opened.push(href); } },
+    },
+  });
+  const device = randomUUID();
+  const hash = "b".repeat(64);
+  const push = { data: { json: () => ({ device, hash, body: "private content" }) }, waitUntil };
+  listeners.get("push")?.(push);
+  await completed;
+  assert.equal(shown.length, 0);
+  response = 204;
+  listeners.get("push")?.(push);
+  await completed;
+  assert.equal(requested[1], `https://example.invalid/preview/api/mind/notifications?device=${device}&receipt=${hash}`);
+  assert.equal(shown.length, 1);
+  assert.equal(JSON.stringify(shown).includes("private content"), false);
+  listeners.get("notificationclick")?.({ notification: { tag: "adrian-workspace-" + hash, close() {} }, waitUntil });
+  await completed;
+  assert.deepEqual(opened, ["https://example.invalid/preview/#alerts"]);
+  assert.equal(listeners.has("fetch"), false);
 });
 
 test("durable delivery binds consent and current recipient, deduplicates competing passes and refuses stale display", async () => {
@@ -76,7 +143,7 @@ test("durable delivery binds consent and current recipient, deduplicates competi
     const attemptedPush: string[] = [];
     const mail: string[] = [];
     const transports: NotificationTransports = {
-      push: { publicKey: "fixture", send: async (received, target, hash) => {
+      push: { publicKey: "fixture", storageSecret: "synthetic browser subscription secret", send: async (received, target, hash) => {
         assert.deepEqual(received, subscription);
         assert.equal(target, device);
         attemptedPush.push(hash);
@@ -88,6 +155,9 @@ test("durable delivery binds consent and current recipient, deduplicates competi
     const email = { action: "enable", channel: "email", address: "requested-other@example.invalid", preferences: settings };
     assert.equal((await updateNotificationDelivery(sql, "a", push, transports)).status, 200);
     assert.equal((await updateNotificationDelivery(sql, "a", push, transports)).status, 200);
+    const stored = JSON.stringify(await sql.query("select endpoint,destination from mind_notification_target where channel='push'"));
+    assert.equal(stored.includes(subscription.endpoint), false);
+    assert.equal(stored.includes(subscription.keys.auth), false);
     assert.equal((await updateNotificationDelivery(sql, "b", push, transports)).status, 409);
     assert.equal((await updateNotificationDelivery(sql, "b", email, transports)).status, 409);
     assert.equal((await updateNotificationDelivery(sql, "a", email, transports)).status, 200);
@@ -119,6 +189,7 @@ test("durable delivery binds consent and current recipient, deduplicates competi
     assert.equal(await mayDisplayScheduledPush(sql, "a", device, attemptedPush[0], now), false);
     assert.equal(attemptedPush.length, 1);
     assert.deepEqual(mail, [recipient]);
+
     await sql.query("update mind_control set halted=false where user_id=$1", ["a"]);
     await sql.query('update "user" set email=$2 where id=$1', ["a", "changed@example.invalid"]);
     await updateNotificationDelivery(sql, "b", { action: "disable", channel: "push", device }, transports);
@@ -127,6 +198,31 @@ test("durable delivery binds consent and current recipient, deduplicates competi
     await runNotificationPass(sql, transports, new Date(enrolled + 70_000));
     assert.equal(await mayDisplayScheduledPush(sql, "a", device, attemptedPush[0], now), false);
     assert.equal(attemptedPush.length, 1);
+    assert.deepEqual(mail, [recipient]);
+
+    // Revoke only after the attempt was committed, before dispatch obtains its locks.
+    await updateNotificationDelivery(sql, "a", email, transports);
+    const baseTransaction = sql.transaction!;
+    let revokedAfterClaim = false;
+    sql.transaction = async work => {
+      let claimed = false;
+      const result = await baseTransaction(async tx => {
+        const query = tx.query;
+        tx.query = async function <T>(statement: string, params?: unknown[]) {
+          const rows = await query<T>(statement, params);
+          if (statement.includes("insert into mind_notification_delivery") && rows.length) claimed = true;
+          return rows;
+        };
+        return work(tx);
+      });
+      if (claimed && !revokedAfterClaim) {
+        revokedAfterClaim = true;
+        await updateNotificationDelivery(sql, "a", { action: "disable", channel: "email" }, transports);
+      }
+      return result;
+    };
+    await runNotificationPass(sql, transports, new Date(enrolled + 70_000));
+    assert.equal(revokedAfterClaim, true);
     assert.deepEqual(mail, [recipient]);
   } finally { await db.close(); }
 });
