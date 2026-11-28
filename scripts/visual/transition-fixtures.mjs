@@ -759,7 +759,7 @@ try {
   await handoffContext.close();
 
   const mobile = await browser.newContext({ viewport: { width: 390, height: 844 }, isMobile: true, serviceWorkers: "block" });
-  const mobileTransport = await installVisualFixture(mobile, origin, "chat-interrupted", { workspace });
+  const mobileTransport = await installVisualFixture(mobile, origin, "chat-interrupted", { workspace, preserveOnReload: true });
   // A seeded message exists only after client hydration; the SSR home alone is not an interaction-ready signal.
   const phone = await mobile.newPage(); await phone.goto(origin + "/?section=chat&chat=long-a", { waitUntil: "domcontentloaded" }); await phone.locator(lastLongMessage).waitFor();
   await check(phone, "mobile-keyboard-viewport-and-draft", async () => {
