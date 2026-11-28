@@ -270,7 +270,7 @@ function renderReview() {
   });
 }
 function renderCampaigns() {
-  $("#campaign-list").innerHTML=data.campaigns.map(c=>'<article class="campaign-card"><small>'+esc(c.platform)+' · '+esc(c.business)+'</small><h3>'+esc(c.name)+'</h3><p>'+esc(c.offer)+'</p><strong>'+c.leads+' captured leads</strong><p>'+esc(c.goal)+' · '+esc(c.status)+'</p><button class="secondary" data-campaign="'+esc(c.id)+'">View leads</button></article>').join("") || empty("Give your next campaign a home","Add the offer and provider campaign ID. Only attributed captured inquiries contribute to its lead count.");
+  $("#campaign-list").innerHTML=data.campaigns.map(c=>'<article class="campaign-card"><small>'+esc(c.platform)+' · '+esc(c.business)+'</small><h3>'+esc(c.name)+'</h3><p>'+esc(c.offer)+'</p><strong>'+c.leads+' captured leads</strong><p>'+esc(c.goal)+' · '+esc(c.status)+'</p><button class="secondary" data-campaign="'+esc(c.id)+'">View leads</button><button class="secondary" data-edit-campaign="'+esc(c.id)+'">Edit campaign</button><button class="secondary" data-archive-campaign="'+esc(c.id)+'">Archive campaign</button></article>').join("") || empty("Give your next campaign a home","Add the offer and provider campaign ID. Only attributed captured inquiries contribute to its lead count.");
 }
 $("#x-import").addEventListener("click", async () => {
   const result = await act("/api/sources/x/import", {});
@@ -616,16 +616,43 @@ document.addEventListener("click",async event=>{
   if(!el) return;
   if(el.dataset.filter) {$("#lead-filter").value=el.dataset.filter;campaignFilter="";renderLeads();}
   if(el.dataset.campaign) {campaignFilter=el.dataset.campaign;$("#lead-filter").value="all";location.hash="leads";renderLeads();}
+  if(el.dataset.editCampaign) {
+    const campaign=data.campaigns.find(item=>item.id===el.dataset.editCampaign);
+    const form=$("#campaign-form");
+    if(!campaign||!form) return;
+    form.dataset.id=campaign.id;
+    form.querySelector("h2").textContent="Edit campaign";
+    for (const [key,value] of Object.entries({name:campaign.name,business:campaign.business,offer:campaign.offer,platform:campaign.platform,external_id:campaign.external_id||"",goal:campaign.goal||"inquiry"})) {
+      if(form.elements[key]) form.elements[key].value=value;
+    }
+    form.hidden=false;
+    location.hash="campaigns";
+    return;
+  }
+  if(el.dataset.archiveCampaign) {
+    await act("/api/campaigns/"+encodeURIComponent(el.dataset.archiveCampaign)+"/archive",{});
+    return;
+  }
   if(el.dataset.stage) {
     const id=el.dataset.stage;
     await act("/api/pipeline",{contact_id:id,stage:$("#stage-value").value,notes:$("#stage-notes").value});
+    return;
+  }
+  if(el.dataset.repair) {
+    const campaignId=$("#repair-campaign")?.value;
+    if(!campaignId) return;
+    await act("/api/attribution/repair",{inbound_id:el.dataset.repair,campaign_id:campaignId});
     return;
   }
   if(el.dataset.lead) {
     if (el.dataset.resolve) return;
     try {
       const result=await call("/api/leads/"+encodeURIComponent(el.dataset.lead));
-      $("#lead-detail-body").innerHTML='<h2>'+esc(result.contact.display_name)+'</h2>'+'<div class="pipeline-editor"><label>Stage<select id="stage-value">'+["new","qualified","conversation","booked","won","lost","support"].map(stage=>'<option>'+stage+'</option>').join("")+'</select></label><label>Outcome or next step<textarea id="stage-notes" maxlength="4000"></textarea></label><button data-stage="'+esc(result.contact.id)+'">Save stage</button></div>'+result.messages.map(m=>'<div class="message"><small>'+esc(m.direction)+' · '+esc(m.sent_at)+'</small>'+esc(m.body)+'</div>').join("");
+      if(!data.campaigns.length){try{data.campaigns=(await call("/api/campaigns")).items;}catch{}}
+      const repairChoices=(data.campaigns||[]).map(c=>'<option value="'+esc(c.id)+'">'+esc(c.name)+'</option>').join("");
+      const repairRows=(result.inbounds||[]).map(row=>'<button class="secondary" type="button" data-repair="'+esc(row.id)+'">Move this inquiry</button>').join("");
+      const repair=repairRows&&repairChoices?'<div class="pipeline-editor"><label>Local campaign<select id="repair-campaign">'+repairChoices+'</select></label>'+repairRows+'<p>This moves a stored inquiry. It does not send.</p></div>':'';
+      $("#lead-detail-body").innerHTML='<h2>'+esc(result.contact.display_name)+'</h2>'+'<div class="pipeline-editor"><label>Stage<select id="stage-value">'+["new","qualified","conversation","booked","won","lost","support"].map(stage=>'<option>'+stage+'</option>').join("")+'</select></label><label>Outcome or next step<textarea id="stage-notes" maxlength="4000"></textarea></label><button data-stage="'+esc(result.contact.id)+'">Save stage</button></div>'+repair+result.messages.map(m=>'<div class="message"><small>'+esc(m.direction)+' · '+esc(m.sent_at)+'</small>'+esc(m.body)+'</div>').join("");
       let pipeline = data.pipeline;
       if (currentPage !== "pipeline") {
         try { pipeline = (await call("/api/pipeline")).items; }
@@ -688,15 +715,17 @@ $("#telegram-test").onclick=async()=>{
   const result=await act("/api/connections/telegram/test",{});
   if(result)setNote(result.sent?"Telegram confirmed test message "+result.message_id+".":result.reason);
 };
-$("#new-campaign").onclick=()=>{$("#campaign-form").hidden=false;$("#campaign-form input").focus();};
+$("#new-campaign").onclick=()=>{const form=$("#campaign-form");delete form.dataset.id;form.querySelector("h2").textContent="Add a campaign";form.hidden=false;form.querySelector("input").focus();};
 $("#cancel-campaign").onclick=()=>{$("#campaign-form").hidden=true;$("#new-campaign").focus();};
 $("#campaign-form").onsubmit=async event=>{
   event.preventDefault();
   const button=event.target.querySelector('[type=submit]');
   button.disabled=true;
-  const result=await act("/api/campaigns",Object.fromEntries(new FormData(event.target)));
+  const id=event.target.dataset.id;
+  const path=id?"/api/campaigns/"+encodeURIComponent(id):"/api/campaigns";
+  const result=await act(path,Object.fromEntries(new FormData(event.target)));
   button.disabled=false;
-  if(result?.id){event.target.reset();event.target.hidden=true;$("#new-campaign").focus();}
+  if(result?.id){event.target.reset();delete event.target.dataset.id;event.target.hidden=true;$("#new-campaign").focus();}
 };
 function formatBytes(n){return Number.isFinite(n)?(n/1024**3).toFixed(1)+" GB":"Unknown";}
 document.querySelector("#global-controls").onclick = async (event) => {
