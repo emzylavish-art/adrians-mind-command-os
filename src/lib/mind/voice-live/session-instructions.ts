@@ -1,3 +1,4 @@
+import { parseModeInstruction, scopedInstruction } from "../mode-instructions.ts";
 import { characterById } from "../characters/index.ts";
 import { personalityInstruction } from "../personalities/index.ts";
 import type { VoiceRoutingMode } from "../voice/mode.ts";
@@ -15,6 +16,7 @@ export type VoiceProfileInput = {
   personalityId?: unknown;
   customPersonality?: unknown;
   characterId?: unknown;
+  modeInstruction?: unknown;
 };
 
 export function voiceSessionInstructions(input: VoiceProfileInput): {
@@ -26,6 +28,7 @@ export function voiceSessionInstructions(input: VoiceProfileInput): {
     return { instructions: SILENT_TRANSCRIPTION_INSTRUCTIONS, suggestedVoiceId: null, silent: true };
   }
   const character = characterById(input.characterId);
+  const guidance = parseModeInstruction(input.modeInstruction);
   const style = personalityInstruction(input.personalityId, input.customPersonality);
   const identity = character
     ? `Speaking identity: ${character.name}, ${character.role}. ${character.speakingStyle} This identity is presentation only.`
@@ -37,7 +40,8 @@ export function voiceSessionInstructions(input: VoiceProfileInput): {
       DEFAULT_DIRECT_VOICE_INSTRUCTIONS,
       identity,
       style,
+      guidance.ok ? scopedInstruction(guidance.text) : "",
       "Do not claim that tools, agents or browsers ran. Do not bypass approvals, credentials or the emergency stop. Personality and character never grant permission.",
-    ].join(" "),
+    ].filter(Boolean).join(" "),
   };
 }

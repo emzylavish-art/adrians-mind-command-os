@@ -45,7 +45,7 @@ export type LiveVoiceBarProps = {
   onNotice?: (message: string) => void;
   onChatSend?: (text: string) => void;
   onChatAttachText?: (text: string, name: string) => void;
-  getVoiceProfile?: () => Pick<VoiceProfileInput, "personalityId" | "customPersonality" | "characterId"> | null;
+  getVoiceProfile?: () => Pick<VoiceProfileInput, "personalityId" | "customPersonality" | "characterId" | "modeInstruction"> | null;
   onChatAttachImage?: (image: { dataUrl: string; name: string; mime: string }) => void;
   dictating?: boolean;
   onDictateToggle?: () => void;

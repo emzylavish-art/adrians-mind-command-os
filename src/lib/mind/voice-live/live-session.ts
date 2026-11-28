@@ -76,7 +76,7 @@ export type LiveSessionDeps = {
   getMode?: () => VoiceRoutingMode;
   getVoiceId?: () => string;
   /** Active chat personality and selected character. Absent keeps the previous default prompts. */
-  getVoiceProfile?: () => Pick<VoiceProfileInput, "personalityId" | "customPersonality" | "characterId"> | null;
+  getVoiceProfile?: () => Pick<VoiceProfileInput, "personalityId" | "customPersonality" | "characterId" | "modeInstruction"> | null;
   output?: SharedAudioOutput; // unused for playback; kept for API compat
   speaker?: LiveSpeakerGain;
   socketFactory?: (url: string, protocols: string[]) => WsLike;

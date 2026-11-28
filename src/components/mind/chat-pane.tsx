@@ -24,7 +24,7 @@ import { ConversationSections } from "@/components/mind/conversation-sections";
 import { MemoryChatToggle } from "@/components/mind/memory-chat-toggle";
 import { ChatMediaGallery } from "@/components/mind/media/chat-media-gallery";
 import { ChatEmptyHero } from "@/components/mind/chat-empty-hero";
-import { AnswerTabs, MessageBody } from "@/components/mind/message-body";
+import { AnswerTabs, MessageBody, RunActivity, serviceLogo } from "@/components/mind/message-body";
 import { ContextReceiptDetails } from "@/components/mind/context-receipt";
 import { VoiceStageReceipt } from "@/components/mind/voice-stage-receipt";
 import { replyActions, replyHasSources } from "@/lib/mind/reply-actions";
@@ -149,6 +149,7 @@ export function ChatPane({
   onOpenCamera,
   onBrowsePlugins,
   composerExtras,
+  browserActivity,
   onOpenCloud,
   driveConnected = false,
   onImagine,
@@ -275,6 +276,7 @@ export function ChatPane({
   onAttachImage: () => void;
   onOpenCamera: () => void;
   onBrowsePlugins?: () => void;
+  browserActivity?: ReactNode;
   composerExtras?: import("react").ReactNode;
   onOpenCloud: () => void;
   driveConnected?: boolean;
@@ -681,30 +683,13 @@ export function ChatPane({
                   </p>
                 );
               })()}
-              <ul className="space-y-2">
-                {toolTimeline.map((row) => {
-                  const ms = elapsedMs(row, timelineNowMs);
-                  const failed = row.status === "failed" || row.status === "timed_out" || row.status === "cancelled";
-                  const done = row.endedAtMs != null && !failed;
-                  return (
-                    <li key={row.id} className="flex flex-wrap items-center gap-2 rounded-panel border border-line bg-bg px-3 py-2 text-sm" data-testid="tool-timeline-row" data-status={row.status}>
-                      <span className={`size-2 shrink-0 rounded-full ${failed ? "bg-danger" : done ? "bg-ok" : "bg-accent"}`} />
-                      <span className="min-w-0 flex-1 font-medium">{row.name}</span>
-                      <span className={`text-xs ${failed ? "text-danger" : "text-muted"}`}>{row.status}</span>
-                      <span className="text-xs text-muted tabular-nums">{formatElapsed(ms)}</span>
-                      {row.auditId ? (
-                        <button type="button" className="min-h-11 text-xs text-accent" onClick={() => onViewAudit(row.auditId!)}>
-                          View
-                        </button>
-                      ) : (
-                        <span className="text-xs text-muted">—</span>
-                      )}
-                    </li>
-                  );
-                })}
-              </ul>
+              <RunActivity label="Tool activity" rows={toolTimeline.map(row => ({
+                id: row.id, label: row.name, detail: row.text, state: row.status, meta: formatElapsed(elapsedMs(row, timelineNowMs)),
+                logo: serviceLogo(row.toolId), receipt: row.auditId ? () => onViewAudit(row.auditId) : undefined,
+              }))} />
             </div>
           )}
+          {browserActivity}
           {error && <p className="rounded-panel border border-line bg-surface px-3 py-2 text-sm text-danger" role="status">{error}</p>}
           {videoStatus && <p data-testid="video-operation-status" role="status" className={`rounded-panel border border-line bg-surface px-3 py-2 text-sm ${videoStatus.failed ? "text-danger" : "text-muted"}`}>{videoStatus.text}</p>}
           {busy && liveText && (

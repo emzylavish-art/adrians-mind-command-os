@@ -1,5 +1,5 @@
 import { useAccountPreferences } from "./account-preferences-context";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import { captureComposedSpeech, playComposedSpeech } from "@/lib/mind/voice/composed-browser";
 import { runComposedVoiceTurn, type VoiceAnswer, type VoiceStageReceipt } from "@/lib/mind/voice/composed-turn";
 import { DEFAULT_VOICE_ROUTE, readVoiceRoutePreferences, writeVoiceRoutePreferences, speechEngineLabel, type VoiceRoutePreferences, type SpeechEngine } from "@/lib/mind/voice/route-preferences";
@@ -49,6 +49,7 @@ type ActivationId = (typeof ACTIVATION)[number]["id"];
  */
 export function SpeakStage(props: {
   open: boolean;
+  browserActivity?: ReactNode;
   signedIn: boolean;
   freeOnly?: boolean;
   live?: boolean;
@@ -388,6 +389,7 @@ export function SpeakStage(props: {
   const stage = (
     <div ref={dialogRef} tabIndex={-1} className="speak-stage speak-call" role="dialog" aria-modal="true" aria-label="Speak" data-testid="speak-stage"
       onKeyDownCapture={(event) => {
+        if (event.target instanceof Element && event.target.closest("dialog[open]")) return;
         if (event.key === "Escape") {
           event.preventDefault();
           event.stopPropagation();
@@ -425,6 +427,7 @@ export function SpeakStage(props: {
         {showTranscript && transcript && <p className="speak-call__transcript" data-testid="speak-transcript">{transcript}</p>}
       </section>
       <div className="speak-call__dock">
+      <details className="mx-2 mb-2 max-h-[34dvh] overflow-auto rounded-panel border border-line bg-surface p-2 text-fg"><summary className="min-h-10 cursor-pointer py-2 text-sm">Browser activity and screenshots</summary>{props.browserActivity}</details>
       <div className="speak-call__pills" aria-label="Call controls">
         <button type="button" aria-label="Camera" aria-pressed={source === "camera"} disabled={props.halted} onClick={() => void show("camera")}><Camera /></button>
         {source !== "none" && <button type="button" disabled={props.halted || !props.onAttachImage} onClick={() => void attachFrame()}>Attach frame</button>}

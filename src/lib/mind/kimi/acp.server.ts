@@ -51,7 +51,7 @@ export async function handleKimiSession(request: Request, deps: { recordUsage?: 
     if (!origin.ok) return json({ ok: false, error: origin.error }, 403);
     try {
       const ownerId = await ownerIdFromRequest(request);
-      const body = (await request.json().catch(() => ({}))) as { prompt?: unknown; skillApplications?: unknown; cwd?: unknown; mode?: unknown; resumeSessionId?: unknown; fork?: unknown; action?: unknown; agentId?: unknown; jobKey?: unknown; operationId?: unknown; taskId?: unknown; projectId?: unknown; sourceReceipt?: unknown; expectedBranch?: unknown };
+      const body = (await request.json().catch(() => ({}))) as { prompt?: unknown; modeInstruction?: unknown; skillApplications?: unknown; cwd?: unknown; mode?: unknown; resumeSessionId?: unknown; fork?: unknown; action?: unknown; agentId?: unknown; jobKey?: unknown; operationId?: unknown; taskId?: unknown; projectId?: unknown; sourceReceipt?: unknown; expectedBranch?: unknown };
       if ((body as { action?: unknown }).action === "close") {
         if (ownerId !== "dev-user") return json({ ok: false, error: machineRequired }, 409);
         const sessionId = typeof body.resumeSessionId === "string" ? body.resumeSessionId.trim().slice(0, 80) : "";
@@ -59,7 +59,7 @@ export async function handleKimiSession(request: Request, deps: { recordUsage?: 
         return json({ ok: true, closed: closeHostedCodingSession(sessionId), sessionId });
       }
       if (await haltIsOn(ownerId)) return json({ ok: false, error: "Emergency stop is on. No Kimi session was queued." }, 403);
-      const prepared = prepareBuildTask(body.prompt, body.skillApplications);
+      const prepared = prepareBuildTask(body.prompt, body.skillApplications, body.modeInstruction);
       if (!prepared.ok) return json({ ok: false, error: prepared.error }, 400);
       const prompt = prepared.prompt;
       const requestedCwd = typeof body.cwd === "string" && body.cwd.trim() ? body.cwd.trim().slice(0, MAX_CWD) : undefined;

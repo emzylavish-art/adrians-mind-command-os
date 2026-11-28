@@ -112,3 +112,5 @@ export function KeyboardSettings(settings: Settings) {
     {rows.length + fixed.length === 0 && <p>No matching shortcuts.</p>}<p role="status">{status}</p>
   </section>;
 }
+
+export { ModeInstructionsSettings } from "./mode-instructions-settings";

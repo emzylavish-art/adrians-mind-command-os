@@ -1,3 +1,4 @@
+import { activityOwnerPrefix } from "./browser-activity.ts";
 import { accountPreferenceKey } from "./account-preferences.ts";
 import { buildDraftKey } from "./kimi/build-review.ts";
 import { buildHandoffKey } from "./kimi/build-handoff.ts";
@@ -5,7 +6,7 @@ import { workProjectStoragePrefix, workRunStoragePrefix } from "./kimi/build-sco
 import { researchArchiveKey } from "./research-reports.ts";
 import type { Workspace } from "./types.ts";
 
-export const LOCAL_RETENTION_TARGETS = ["originals", "images", "videos", "knowledge", "research", "build-recovery", "preferences", "composer-drafts"] as const;
+export const LOCAL_RETENTION_TARGETS = ["originals", "images", "videos", "knowledge", "research", "build-recovery", "preferences", "browser-activity", "composer-drafts"] as const;
 export type LocalRetentionTarget = typeof LOCAL_RETENTION_TARGETS[number];
 type KeyStorage = Pick<Storage, "getItem" | "removeItem" | "key" | "length">;
 export type RetentionReceipt = { target: LocalRetentionTarget; state: "locally-cleared" | "failed"; detail: string; at: string };
@@ -17,6 +18,7 @@ export const RETENTION_DESCRIPTIONS: Record<LocalRetentionTarget, { name: string
   research: { name: "Research archive on this device", scope: "Saved research reports and their versions for this account in this browser.", retained: "Excerpts already attached to chats, exported reports and external source pages remain." },
   "build-recovery": { name: "Build recovery on this device", scope: "Local editor drafts, last-job pointer and result receipt for this account.", retained: "Saved project files, accepted server jobs, repository code and server execution records remain." },
   preferences: { name: "Browser preferences for this account", scope: "Provider choices, layout and other account-scoped settings saved in this browser.", retained: "Server credentials, account memory suspension and provider connections remain. Reload to apply default preferences." },
+  "browser-activity": { name: "Browser activity and screenshots", scope: "Saved website handoff receipts and screenshots for this account on this device.", retained: "Screenshots already sent in messages and files downloaded elsewhere remain." },
   "composer-drafts": { name: "Drafts in this tab", scope: "Saved and currently mounted composer drafts for this account in this tab, including temporary draft fields.", retained: "Already sent messages and another tab's drafts remain." },
 };
 
@@ -48,6 +50,7 @@ export async function clearLocalRetention(ownerId: string, targets: LocalRetenti
         deps.session.removeItem(`adrian-human-return.${ownerId}`);
         deps.session.removeItem(`adrian-build-live-session.${ownerId}`);
       }
+      if (target === "browser-activity") removePrefix(deps.local, activityOwnerPrefix(ownerId));
       if (target === "preferences") removePrefix(deps.local, accountPreferenceKey(ownerId, ""));
       if (target === "composer-drafts") { removePrefix(deps.session, "amcos.draft.v1.[" + JSON.stringify(ownerId) + ","); deps.afterDraftClear?.(); }
       receipts.push({ target, state: "locally-cleared", detail: `${RETENTION_DESCRIPTIONS[target].name} acknowledged removal. ${RETENTION_DESCRIPTIONS[target].retained}`, at: deps.now?.() ?? new Date().toISOString() });

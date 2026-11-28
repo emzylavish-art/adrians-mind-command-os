@@ -1,6 +1,8 @@
 import { useEffect, useRef, useState, type PointerEvent } from "react";
 import type { LocalFile } from "@/lib/mind/types";
 import { ActionOverlay } from "./conversation-menu";
+import { BrowserActivity } from "./browser-activity";
+export { BrowserActivity };
 import { menuChip } from "./menu-material";
 
 type Point = { x: number; y: number };
@@ -40,64 +42,24 @@ function SketchPad({ onSave }: { onSave: (file: File) => void }) {
 export function ChatComposerExtras({ files, onSelect, onImage, onResearch, onSearch, onProject }: {
   files: LocalFile[]; onSelect: (file: LocalFile) => void; onImage: (file: File) => void; onResearch: () => void; onSearch: () => void; onProject: () => void;
 }) {
-  const [panel, setPanel] = useState<"library" | "sketch" | "tab" | null>(null);
+  const [panel, setPanel] = useState<"library" | "sketch" | null>(null);
   const [query, setQuery] = useState("");
-  const [note, setNote] = useState("");
-  const recording = useRef<MediaStream | null>(null);
-  const captureId = useRef(0);
-  function stop() {
-    captureId.current++;
-    recording.current?.getTracks().forEach(track => track.stop());
-    recording.current = null;
-  }
-  useEffect(() => stop, []);
   function open(next: typeof panel) {
-    stop(); setNote(""); setQuery(""); setPanel(next);
+    setQuery(""); setPanel(next);
     document.querySelectorAll("details.composer-more[open]").forEach(menu => menu.removeAttribute("open"));
-  }
-  async function captureTab() {
-    stop();
-    const id = captureId.current;
-    const video = document.createElement("video");
-    let stream: MediaStream | undefined;
-    try {
-      stream = await navigator.mediaDevices.getDisplayMedia({ video: { displaySurface: "browser" }, audio: false });
-      if (id !== captureId.current) return;
-      recording.current = stream;
-      if (stream.getVideoTracks()[0]?.getSettings().displaySurface !== "browser") { setNote("Choose a browser tab to attach a snapshot."); return; }
-      video.muted = true; video.playsInline = true; video.srcObject = stream;
-      await video.play();
-      if (id !== captureId.current) return;
-      const canvas = document.createElement("canvas");
-      const scale = Math.min(1, 1600 / Math.max(video.videoWidth, video.videoHeight));
-      canvas.width = Math.round(video.videoWidth * scale); canvas.height = Math.round(video.videoHeight * scale);
-      const context = canvas.getContext("2d");
-      if (!context || !canvas.width || !canvas.height) { setNote("The tab did not supply a frame. Select the tab again."); return; }
-      context.drawImage(video, 0, 0, canvas.width, canvas.height);
-      const blob = await new Promise<Blob | null>(resolve => canvas.toBlob(resolve, "image/jpeg", .85));
-      if (id !== captureId.current) return;
-      if (!blob) { setNote("The tab did not supply an image."); return; }
-      onImage(new File([blob], "Selected browser tab.jpg", { type:"image/jpeg" })); setPanel(null);
-    } catch { if (id === captureId.current) setNote("Tab selection ended without a snapshot."); }
-    finally { video.pause(); video.srcObject = null; stream?.getTracks().forEach(track => track.stop()); if (recording.current === stream) recording.current = null; }
   }
   const matches = files.filter(file => !file.archived && file.text && file.name.toLowerCase().includes(query.toLowerCase()));
   return <>
     <button type="button" style={menuChip} onClick={() => open("library")}>Add from library</button>
-    <button type="button" style={menuChip} onClick={() => open("tab")}>Add browser tab</button>
     <button type="button" style={menuChip} onClick={() => open("sketch")}>Sketch</button>
     <button type="button" style={menuChip} onClick={() => { open(null); onSearch(); }}>Web search</button>
     <button type="button" style={menuChip} onClick={() => { open(null); onProject(); }}>Work in a project</button>
     <button type="button" style={menuChip} onClick={() => { open(null); onResearch(); }}>Deep research</button>
-    {panel && <ActionOverlay label="Composer tool" title={{library:"Add from library", sketch:"Sketch", tab:"Add browser tab"}[panel]} onClose={() => open(null)}>
+    {panel && <ActionOverlay label="Composer tool" title={{library:"Add from library", sketch:"Sketch"}[panel]} onClose={() => open(null)}>
       {panel === "library" && <><input type="search" value={query} aria-label="Search library files" placeholder="Search files" className="min-h-11 w-full px-2" onChange={event => setQuery(event.target.value)} />
         {matches.map(file => <button type="button" className="min-h-11 px-2 text-left" key={file.id} onClick={() => { onSelect(file); open(null); }}>{file.name}</button>)}
         {!matches.length && <p className="text-sm text-muted">No matching files with readable text.</p>}</>}
       {panel === "sketch" && <SketchPad onSave={file => { onImage(file); open(null); }} />}
-      {panel === "tab" && (typeof navigator.mediaDevices?.getDisplayMedia === "function"
-        ? <button type="button" className="min-h-11 px-2" onClick={() => void captureTab()}>Select a tab and attach one snapshot</button>
-        : <p className="text-sm text-muted">This browser cannot capture a tab. Attach a screenshot from Photos or Files.</p>)}
-      {note && <p role="status" className="text-sm text-muted">{note}</p>}
     </ActionOverlay>}
   </>;
 }

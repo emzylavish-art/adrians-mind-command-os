@@ -82,6 +82,7 @@ export type TurnBody = {
   provider?: unknown;
   personalityId?: unknown;
   customPersonality?: unknown;
+  modeInstruction?: unknown;
   /** UI picker: Auto | Fast | Expert | Heavy | Build */
   modelTier?: unknown;
   /** A live xAI model id. Used only when it is in the connected Grok list. */
@@ -136,7 +137,7 @@ function directTurnContext(body: TurnBody, text: string, history: HistoryInputMe
   const sized = checkTurnSize({ text, history, memoryContext, images });
   if (!sized.ok) return sized;
   const assembled = assembleTurn({ text, history, images, memory: body.memory === "on" ? "on" : "off", memoryContext,
-    personalityId: body.personalityId, customPersonality: body.customPersonality, botKnowledge: body.botKnowledge, skillApplications: body.skillApplications, projectContext: body.projectContext, knowledgePassages: body.knowledgePassages, projectInstructions: body.projectInstructions, contextOptions: { model: selected.model ?? (typeof body.requestedModel === "string" ? body.requestedModel : undefined), contextWindowTokens: selected.capabilities?.contextWindowTokens, maxInputTokens: selected.capabilities?.maxInputTokens, outputTokens: loadParsedControls(body.modelControls).answerTokens, supportsImages: selected.supportsImages === true, selectedImageMessageIds: Array.isArray(body.selectedImageMessageIds) ? body.selectedImageMessageIds.filter((id): id is string => typeof id === "string") : [] }, checkpoints: readCheckpoints(body.checkpoints), consultHelp });
+    personalityId: body.personalityId, customPersonality: body.customPersonality, modeInstruction: body.modeInstruction, botKnowledge: body.botKnowledge, skillApplications: body.skillApplications, projectContext: body.projectContext, knowledgePassages: body.knowledgePassages, projectInstructions: body.projectInstructions, contextOptions: { model: selected.model ?? (typeof body.requestedModel === "string" ? body.requestedModel : undefined), contextWindowTokens: selected.capabilities?.contextWindowTokens, maxInputTokens: selected.capabilities?.maxInputTokens, outputTokens: loadParsedControls(body.modelControls).answerTokens, supportsImages: selected.supportsImages === true, selectedImageMessageIds: Array.isArray(body.selectedImageMessageIds) ? body.selectedImageMessageIds.filter((id): id is string => typeof id === "string") : [] }, checkpoints: readCheckpoints(body.checkpoints), consultHelp });
   if (!assembled.ok) return assembled;
   const selectedHistory = assembled.messages.slice(1, -1).flatMap((message) => message.role === "user" || message.role === "assistant"
     ? [{ role: message.role, content: typeof message.content === "string" ? message.content : "[Historical image omitted: this route is text only.]" }]
@@ -210,6 +211,7 @@ export async function prepareMindTurnWithHelp(userId: string, data: TurnBody, co
     images,
     personalityId: data.personalityId,
     customPersonality: data.customPersonality,
+    modeInstruction: data.modeInstruction,
     botKnowledge: data.botKnowledge,
     skillApplications: data.skillApplications,
     projectContext: data.projectContext, knowledgePassages: data.knowledgePassages,
@@ -313,7 +315,7 @@ async function handleLogicTurn(userId: string, data: TurnBody, route: LogicRoute
   if (!memory) return json({ ok: false, error: "Memory setting is invalid." }, 400);
   const gate = envCheck();
   if (!gate.ok) return json({ ok: false, error: gate.error });
-  const assembled = assembleTurn({ memory, history, text, memoryContext, images: [], personalityId: data.personalityId, customPersonality: data.customPersonality, botKnowledge: data.botKnowledge, skillApplications: data.skillApplications, projectContext: data.projectContext, knowledgePassages: data.knowledgePassages, projectInstructions: data.projectInstructions, checkpoints: readCheckpoints(data.checkpoints), contextOptions: { supportsImages: false, outputTokens: loadParsedControls(data.modelControls).answerTokens } });
+  const assembled = assembleTurn({ memory, history, text, memoryContext, images: [], personalityId: data.personalityId, customPersonality: data.customPersonality, modeInstruction: data.modeInstruction, botKnowledge: data.botKnowledge, skillApplications: data.skillApplications, projectContext: data.projectContext, knowledgePassages: data.knowledgePassages, projectInstructions: data.projectInstructions, checkpoints: readCheckpoints(data.checkpoints), contextOptions: { supportsImages: false, outputTokens: loadParsedControls(data.modelControls).answerTokens } });
   if (!assembled.ok) return json({ ok: false, error: assembled.error }, 400);
   const flat = toAdapterMessages(assembled.messages);
   if (!flat.ok) return json({ ok: false, error: flat.error }, 400);
@@ -689,7 +691,7 @@ async function dispatchMindTurn(request: Request, userId: string, data: Record<s
       if (!sized.ok) return json(sized, 400);
       const gate = envCheck();
       if (!gate.ok) return json({ ok: false, error: gate.error }, 503);
-      const assembled = assembleTurn({ memory, history, text, memoryContext, images, personalityId: body.personalityId, customPersonality: body.customPersonality, botKnowledge: body.botKnowledge, skillApplications: body.skillApplications, projectContext: body.projectContext, knowledgePassages: body.knowledgePassages, projectInstructions: body.projectInstructions, contextOptions: { model: chosen.model, contextWindowTokens: selectedCapabilities?.contextWindowTokens, maxInputTokens: selectedCapabilities?.maxInputTokens, outputTokens: controls.controls.answerTokens, supportsImages: selectedCapabilities?.imageInput === "supported", selectedImageMessageIds: Array.isArray(body.selectedImageMessageIds) ? body.selectedImageMessageIds.filter((id): id is string => typeof id === "string") : [] }, checkpoints: readCheckpoints(body.checkpoints), consultHelp });
+      const assembled = assembleTurn({ memory, history, text, memoryContext, images, personalityId: body.personalityId, customPersonality: body.customPersonality, modeInstruction: body.modeInstruction, botKnowledge: body.botKnowledge, skillApplications: body.skillApplications, projectContext: body.projectContext, knowledgePassages: body.knowledgePassages, projectInstructions: body.projectInstructions, contextOptions: { model: chosen.model, contextWindowTokens: selectedCapabilities?.contextWindowTokens, maxInputTokens: selectedCapabilities?.maxInputTokens, outputTokens: controls.controls.answerTokens, supportsImages: selectedCapabilities?.imageInput === "supported", selectedImageMessageIds: Array.isArray(body.selectedImageMessageIds) ? body.selectedImageMessageIds.filter((id): id is string => typeof id === "string") : [] }, checkpoints: readCheckpoints(body.checkpoints), consultHelp });
       if (!assembled.ok) return json({ ok: false, error: assembled.error }, 400);
       const formatted = toNativeProviderTurns(assembled.messages);
       if (!formatted.ok) return json({ ok: false, error: formatted.error }, 400);

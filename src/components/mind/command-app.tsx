@@ -14,7 +14,7 @@ import type { TurnErrorCode } from "@/lib/mind/turn-error";
 import { DictationSettings } from "./dictation-settings";
 import { VOICE_PREFS, readVoicePreferences, defaultVoicePreferences, formatDictation, recordDictation, type VoicePreferences } from "@/lib/mind/voice-preferences";
 import { ChatBits } from "./chat-bits";
-import { AppearanceSettings, KeyboardSettings, SendKey, useInterfaceSettings } from "./interface-settings";
+import { AppearanceSettings, KeyboardSettings, ModeInstructionsSettings, SendKey, useInterfaceSettings } from "./interface-settings";
 import { ArchiveSettings, StorageSettings, SharedChatLinks } from "./storage-settings";
 import { chord, submitOnKey, KEY_ACTIONS, type Action as ShortcutAction } from "@/lib/mind/interface-preferences";
 import type { SettingsPane } from "@/lib/mind/app-location";
@@ -80,7 +80,7 @@ import "./command-voice-mode.css";
 import "./gpt-shell.css";
 import "./visual-system.css";
 import "./workspace-navigation.css";
-import { ChatComposerExtras } from "./chat-composer-extras";
+import { BrowserActivity, ChatComposerExtras } from "./chat-composer-extras";
 import { WorkspaceDivider } from "./workspace-divider";
 import { WorkspaceControlCenter } from "./workspace-control-center";
 import { SocialWorkspace, TradingWorkspace } from "./sidebar-desks";
@@ -299,7 +299,7 @@ import { useMcpFailureMount, type McpReportedOutcome } from "./use-mcp-failure-m
 import { routeFailureAction, type RouteFailureAction } from "@/lib/mind/route-failure";
 import {
   LOGIC_ROUTES,
-  chatTurnBody,
+  chatTurnBody, loadModeInstructions,
   isLogicRouteId,
   logicMenuState,
   readSelection,
@@ -1342,7 +1342,9 @@ function CommandSession({ account, accountPending }: { account: ReturnType<typeo
     });
   }
   const reportFailureRef = useRef<(message: string, action: string, target: string, retry: (() => void) | null) => void>(() => undefined);
+  const [toolActivityScope, setToolActivityScope] = useState("");
   const [toolTimeline, setToolTimeline] = useState<ToolTimelineRow[]>([]);
+  const visibleToolTimeline = toolActivityScope === JSON.stringify([draftOwner, activeId]) ? toolTimeline : [];
   const [timelineTickMs, setTimelineTickMs] = useState(0);
   const [statusSignedIn, setStatusSignedIn] = useState<boolean | null>(null);
   const [databaseConfigured, setDatabaseConfigured] = useState(false);
@@ -2832,6 +2834,7 @@ function CommandSession({ account, accountPending }: { account: ReturnType<typeo
     if (intent.kind === "chat") return false;
     if (intent.kind === "local" || intent.kind === "skill" || intent.kind === "save_skill") {
       const toolId = intent.kind === "save_skill" ? "save_chat_skill" : intent.kind === "skill" ? "search_skills" : intent.tool;
+      setToolActivityScope(JSON.stringify([draftOwner, chat.id]));
       setToolTimeline([]);
       setError(null);
       const turn = runAgentTurn({
@@ -2853,6 +2856,8 @@ function CommandSession({ account, accountPending }: { account: ReturnType<typeo
           detail: turn.text,
           confirm: "This runs only the action you just asked for.",
           run: () => {
+            if (turnOwner.current !== draftOwner) return;
+            setToolActivityScope(JSON.stringify([draftOwner, chat.id]));
             setToolTimeline([]);
             const again = runAgentTurn({
               userId: "local-owner",
@@ -3172,7 +3177,7 @@ function CommandSession({ account, accountPending }: { account: ReturnType<typeo
     source: Workspace,
     resume = false,
     images: ImageAttachment[] = [],
-    options?: { onFailure?: (failure: { error: string; dispatched: false; approvalId?: string; answerRequest: NonNullable<SpeakRetryParams["answerRequest"]> }) => void; onReply?: (reply: TurnReplyReceipt) => void; provider?: string; taskId?: string; logicRoute?: LogicRouteId | null; skipUserMessage?: boolean; isolateOutputs?: boolean; accessNotes?: { id: string; text: string }[]; request?: TurnRequest; selectedProviderOnly?: boolean; knownUnsent?: boolean; operationId?: string; replaceReplyId?: string; recovery?: Msg["deliveryRoute"] },
+    options?: { onFailure?: (failure: { error: string; dispatched: false; approvalId?: string; answerRequest: NonNullable<SpeakRetryParams["answerRequest"]> }) => void; onReply?: (reply: TurnReplyReceipt) => void; provider?: string; taskId?: string; logicRoute?: LogicRouteId | null; skipUserMessage?: boolean; isolateOutputs?: boolean; accessNotes?: { id: string; text: string }[]; request?: TurnRequest; selectedProviderOnly?: boolean; knownUnsent?: boolean; operationId?: string; replaceReplyId?: string; recovery?: Msg["deliveryRoute"]; companion?: boolean },
   ): Promise<string | null> {
     if (accountPending || !selectionLoaded || turnInFlight.current || turnOwner.current !== draftOwner) return null;
     if (options?.request && !options.knownUnsent) {
@@ -3429,6 +3434,7 @@ function CommandSession({ account, accountPending }: { account: ReturnType<typeo
           images: snapped.map((image) => ({ dataUrl: image.dataUrl, name: image.name, origin: image.origin, lineage: image.lineage, preparation: image.preparation })),
           personalityId: chat.personalityId ?? "assistant",
           customPersonality: chat.customPersonality ?? "",
+          modeInstruction: loadModeInstructions(preferenceStorage)[options?.companion ? "companion" : "chat"],
         }),
     };
     if (helperConsent && orchestrating) setApprovedHelperDraft(null);
@@ -5300,6 +5306,7 @@ ${message.content}`;
       // Direct recorded voice retains its explicitly selected answer provider.
       // When Orchestrator is selected, Speak uses the same selected orchestrator
       // and helper plan as the normal chat composer.
+      companion: true,
       selectedProviderOnly: resolveSendPath(composerEffort).path !== "orchestrator",
       ...(replay ? { knownUnsent: true, request: { id: replay.operationId, body: replay.body } } : {}),
       onFailure: (failure) => { returned.failure = failure; }, onReply: (receipt) => { returned.receipt = receipt; }, provider: options?.provider, taskId: options?.taskId, accessNotes: chat.memory === "on" && !chat.temporary ? eveAccessNotes(workspaceForChat(source, chat)) : [] });
@@ -6211,6 +6218,7 @@ ${message.content}`;
         mode: sessionMode,
         personalityId: speakStylePersonality(typeof localStorage === "undefined" ? null : preferenceStorage.getItem("adrian-speak-style")),
         customPersonality: voiceChat?.customPersonality ?? "",
+        modeInstruction: loadModeInstructions(preferenceStorage).companion,
         characterId: readStoredCharacterId(preferenceStorage),
       });
       const record = makeCallHistory();
@@ -6509,6 +6517,7 @@ ${message.content}`;
 
   const compactRail = railCollapsed && !navOpen;
 
+  const browserActivity = <BrowserActivity owner={draftOwner} scope={draftScope} persistent={persistDraft} onAttach={addImageAttachment} />;
   const composerExtras = <ChatComposerExtras key={draftScope} files={ws.files}
     onImage={file => void addImageAttachment(file)}
     onSelect={file => {
@@ -7443,6 +7452,7 @@ ${message.content}`;
                 </div>
               </div>
               <section className="floating-composer command-card composer-dock rounded-panel p-3 md:p-4" data-composer="floating">
+                {browserActivity}
                 <details className="composer-advanced">
                   <summary>Controls</summary>
                 <div className="mt-2 flex flex-wrap items-center gap-2">
@@ -8001,7 +8011,7 @@ ${message.content}`;
               stagedName={staged?.name ?? null}
               pendingImages={pendingImages}
               onRemoveImage={(index) => setPendingImages((prev) => prev.filter((_, i) => i !== index))}
-              composerExtras={composerExtras}
+              browserActivity={browserActivity} composerExtras={composerExtras}
               onBrowsePlugins={browseComposerPlugins}
               onAttach={() => fileRef.current?.click()}
               onAttachImage={() => imageInputRef.current?.click()}
@@ -8042,9 +8052,9 @@ ${message.content}`;
               logicRoute={logicRoute}
               logicRoutes={logicRoutes}
               onChooseLogic={selectProviderInChat}
-              toolTimeline={toolTimeline}
+              toolTimeline={visibleToolTimeline}
               timelineNowMs={timelineTickMs || Date.now()}
-              agentActivity={agentActivityFromTimeline(toolTimeline)}
+              agentActivity={agentActivityFromTimeline(visibleToolTimeline)}
               recentTasks={recentTasksFromAudit(ws.audit)}
               connectedServices={connectedServicesRail({
                 grokConfigured,
@@ -8585,7 +8595,7 @@ ${message.content}`;
               <BuildWorkspace planningCatalog={tierCatalog} sharedTier={modelTier} projectId={workTarget.projectId} runId={workTarget.runId}
                 workProjects={ws.projects.filter(project => !project.archived && project.lifecycle !== "archived").map(project => ({ id: project.id, name: project.name }))}
                 onSelectProject={openWorkProject} onReturnResult={returnBuildResult} resolveWorkImages={resolveWorkImages} downloadWorkOriginal={downloadWorkOriginal} composer={{
-                staged, images: pendingImages, message: error || notice,
+                staged, images: pendingImages, message: error || notice, browserActivity,
                 onFile: () => fileRef.current?.click(), onPhoto: () => imageInputRef.current?.click(), onCamera: () => setCameraOpen(true), onPlugins: browseComposerPlugins,
                 removeFile: () => setStaged(null), removeImage: index => setPendingImages(current => current.filter((_, i) => i !== index)),
               }} plannerRef={buildPlanner} enabledSkills={enabledSkills} freeOnly={researchFreeOnly} key={draftOwner ?? "signed-out"} ownerId={draftOwner ?? undefined} onDiscuss={(text) => handToHumanCode(text, "From Build")} onOpenSourceChat={(id) => {
@@ -9148,7 +9158,7 @@ ${message.content}`;
                   {CONVERSATIONAL_PERSONALITIES.map((profile) => <option key={profile.id} value={profile.id}>{profile.label}</option>)}
                 </select>
               </label>}
-              {settingsPane === "personalization" && <AccessibilitySettings onChange={applyAccessibility} />}
+              {settingsPane === "personalization" && <><ModeInstructionsSettings key={draftOwner ?? "guest"} /><AccessibilitySettings onChange={applyAccessibility} /></>}
               {settingsPane === "browser" && <CloudBrowserSettings key={draftOwner ?? "signed-out"} owner={draftOwner} />}
               <div id="settings-general" hidden={settingsPane !== "general"} className="settings-card card-texture rounded-panel p-4 text-sm">
                 <div className="settings-row">
@@ -9584,6 +9594,7 @@ ${message.content}`;
       />
       <SpeakStage
         open={speakStageOpen}
+        browserActivity={speakStageOpen ? <BrowserActivity owner={draftOwner} scope={draftScope} persistent={persistDraft} onAttach={addImageAttachment} /> : undefined}
         freeOnly={researchFreeOnly}
         signedIn={statusSignedIn === true || (typeof window !== "undefined" && (window.location.hostname === "127.0.0.1" || window.location.hostname === "localhost"))}
         live={voiceListening}
@@ -9685,6 +9696,7 @@ ${message.content}`;
           return {
             personalityId: chat?.personalityId ?? "assistant",
             customPersonality: chat?.customPersonality ?? "",
+            modeInstruction: loadModeInstructions(preferenceStorage).companion,
             characterId: readStoredCharacterId(preferenceStorage),
           };
         }}

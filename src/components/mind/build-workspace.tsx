@@ -2,13 +2,15 @@ import { knownCodeFilesFor, reviewedRelatedNavigation, type CodeBufferSource } f
 import type { BuilderInstructionReceipt } from "@/lib/mind/kimi/hosted/builder-instructions";
 import type { FileReconciliation } from "@/lib/mind/kimi/file-reconciliation";
 import { checkpointListOutcome, type BuildRuntime } from "@/lib/mind/kimi/runtime-capabilities";
-import { useEffect, useMemo, useRef, useState, type FormEvent } from "react";
+import { useEffect, useMemo, useRef, useState, type FormEvent, type ReactNode } from "react";
 import { Activity, Code2, FileDiff, FolderOpen, RefreshCw, Send, ShieldCheck, Square, Terminal, WifiOff } from "lucide-react";
 import { KimiPhase4Panel } from "@/components/mind/kimi-phase4-panel";
 import { GitReview, type GitReport } from "@/components/mind/git-review";
 import { CodeIde } from "@/components/mind/code-ide";
 import { useAccountPreferences } from "@/components/mind/account-preferences-context";
 import { collectAccountSkillApplications, skillReceiptSummary } from "@/lib/mind/skill-activation";
+import { InlineImage } from "./media/inline-image";
+import { RunActivity } from "./run-activity";
 import { BrowserEnvironments } from "@/components/mind/browser-environments";
 import { OwnerFlow } from "@/components/mind/owner-flow";
 import { ActionsButton, ActionOverlay } from "@/components/mind/conversation-menu";
@@ -20,7 +22,7 @@ import { ComposerMore, MenuCluster, menuChip } from "@/components/mind/menu-mate
 import { ComposerQueue } from "@/components/mind/composer-queue";
 import { cueMessage, dropCued, EMPTY_CUE, moveCued, readCue } from "@/lib/mind/message-cue";
 import { useComposerDraft } from "@/lib/mind/use-composer-draft";
-import { chatTurnBody } from "@/lib/mind/logic-routes";
+import { chatTurnBody, loadModeInstructions } from "@/lib/mind/logic-routes";
 import { checkTurnReceipt, consumeMindTurn, prepareTurnId } from "@/lib/mind/live-turn";
 import { boundAbortSignal } from "@/lib/mind/turn-timeouts";
 import { applyBuildSave, buildBufferKey as bufferKey, buildDraftKey, buildResultHandoff, matchesBuildSave, parseBuildDraft, serializeBuildDraft, type BuildPlanReply, type BuildEditorBuffer as EditorBuffer, type BuildFileTarget as FileTarget } from "@/lib/mind/kimi/build-review";
@@ -91,6 +93,7 @@ type BuildWorkspaceProps = {
   planningCatalog?: ModelTierCatalogRow[];
   sharedTier?: ModelTier;
   composer?: {
+    browserActivity?: ReactNode;
     staged: { name: string; text: string } | null;
     images: ImageAttachment[];
     message: string | null;
@@ -822,7 +825,7 @@ function BuildWorkspaceSession(props: BuildWorkspaceProps & { projectId: string 
         method: "POST",
         credentials: "include",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ prompt: text, skillApplications: collectAccountSkillApplications(preferenceStorage, text, props.enabledSkills, "build"), sourceReceipt: receipt, agentId: workspace, jobKey, operationId: runId, projectId, expectedBranch: expectedBranch || undefined, cwd: targetCwd || undefined, mode, resumeSessionId: expectedBranch ? undefined : sessionId || undefined }),
+        body: JSON.stringify({ prompt: text, modeInstruction: loadModeInstructions(preferenceStorage).build || undefined, skillApplications: collectAccountSkillApplications(preferenceStorage, text, props.enabledSkills, "build"), sourceReceipt: receipt, agentId: workspace, jobKey, operationId: runId, projectId, expectedBranch: expectedBranch || undefined, cwd: targetCwd || undefined, mode, resumeSessionId: expectedBranch ? undefined : sessionId || undefined }),
       });
       const data = (await response.json()) as BuildStoredReceipt & { ok?: boolean; jobId?: string; receipt?: BuildStoredReceipt | null; executed?: boolean; error?: string; output?: string; package?: string; sessionId?: string; mode?: string; resumed?: boolean; forkedSessionId?: string; processAlive?: boolean; reused?: boolean };
       if (!mounted.current) return;
@@ -898,6 +901,7 @@ function BuildWorkspaceSession(props: BuildWorkspaceProps & { projectId: string 
       const body = chatTurnBody({
           text: github ? words : `Plan this Adrian Build task. Do not claim any file was written.\n\n${text}`,
           memory: "off",
+          modeInstruction: github ? undefined : loadModeInstructions(preferenceStorage).build,
           halted: false,
           history: [],
           memoryContext: [],
@@ -1209,6 +1213,7 @@ function BuildWorkspaceSession(props: BuildWorkspaceProps & { projectId: string 
             <button type="button" className="min-h-11 underline" onClick={() => setWorkMedia(normalizeWorkMedia({ ...workMedia, originals: workMedia.originals.filter(item => item !== original) }))}>Remove original<span className="sr-only"> {original.name}</span></button>
           </div>)}
         </fieldset>}
+        {props.composer?.browserActivity}
         {props.composer && <div className="flex flex-wrap items-center gap-2" aria-label="Work attachments and project">
           <ComposerMore testId="work-composer-more-menu">
             <MenuCluster label="Add to Work">
@@ -1228,7 +1233,10 @@ function BuildWorkspaceSession(props: BuildWorkspaceProps & { projectId: string 
           <button type="button" className="min-h-11 rounded-panel border border-line px-3 text-sm" onClick={props.composer.onFile}>Files</button>
           <button type="button" className="min-h-11 rounded-panel border border-line px-3 text-sm" onClick={props.composer.onPlugins}>Plugins</button>
           {props.composer.staged && <button type="button" className="min-h-11 px-2 text-xs" onClick={props.composer.removeFile}>Remove {props.composer.staged.name}</button>}
-          {props.composer.images.map((image, index) => <button type="button" key={index} className="min-h-11 px-2 text-xs" onClick={() => props.composer?.removeImage(index)}>Remove {image.name}</button>)}
+          {props.composer.images.length > 0 && <div className="grid w-full grid-cols-2 gap-2 sm:grid-cols-4" aria-label="Work image previews">{props.composer.images.map((image, index) => <figure className="min-w-0" key={index}>
+            <InlineImage src={image.dataUrl} alt={image.name || "Work image"} />
+            <button type="button" className="min-h-11 break-words px-2 text-left text-xs" onClick={() => props.composer?.removeImage(index)}>Remove {image.name}</button>
+          </figure>)}</div>}
           {props.composer.message && <p className="w-full text-xs text-muted" role="status">{props.composer.message}</p>}
         </div>}
         <label className="flex min-h-11 flex-wrap items-center gap-2 text-sm">Target Git branch
@@ -1330,7 +1338,9 @@ function BuildWorkspaceSession(props: BuildWorkspaceProps & { projectId: string 
               {sessionId ? <button type="button" onClick={() => void endCodingSession()} className="min-h-10 rounded-panel border border-line px-3 text-sm">End coding session</button> : null}
               {job?.error ? <p className="text-sm text-danger" role="alert">{job.error}</p> : null}
             </> : null}
-            {panel === "timeline" ? <ol className="max-h-96 space-y-2 overflow-auto text-sm">{events.map((item) => <li key={item.id} className="rounded-panel border border-line p-2"><div className="flex items-center justify-between gap-2"><span className="font-medium">{eventLabel(item)}</span><time className="text-xs text-muted">{new Date(item.createdAt).toLocaleTimeString()}</time></div>{updateText(item) ? <p className="mt-1 text-xs text-muted">{updateText(item).slice(0, 240)}</p> : null}</li>)}{!events.length ? <li className="text-sm text-muted">No events yet.</li> : null}</ol> : null}
+            {panel === "timeline" && (events.length ? <div className="max-h-96 overflow-auto"><RunActivity label="Build execution activity" rows={events.map(item => ({
+              id: item.id, label: eventLabel(item), detail: updateText(item).slice(0, 240), meta: new Date(item.createdAt).toLocaleTimeString(),
+            }))} /></div> : <p className="text-sm text-muted">No events yet.</p>)}
             {panel === "changes" ? <GitReview report={gitReport} busy={fileBusy} onRead={() => void readGit(false)} onInit={() => void readGit(true)} onCommit={(message) => void commitGit(message)} onBranch={(name) => void branchGit(name)} onOpen={(path) => { setPanel("editor"); void openFile(path, { workspace: "hosted" }); }} /> : null}
             {panel === "changes" ? <div className="space-y-2">{changedFiles.map((path) => <div key={path} className="rounded-panel border border-line p-3 text-sm"><FileDiff className="mr-2 inline size-4 text-accent" />{path}<span className="ml-2 text-xs text-muted">written by ACP</span></div>)}{(buildReceipt?.filesChanged || []).filter(change => change.path !== lastDiff?.path).map(change => <details key={change.path} className="rounded-panel border border-line p-3 text-xs"><summary>{change.path} · verified local change</summary><p className="mt-2 whitespace-pre-wrap text-danger">{change.before}</p><hr className="my-2 border-line" /><p className="whitespace-pre-wrap text-success">{change.after}</p></details>)}{lastDiff ? <div className="rounded-panel border border-line p-3 text-xs"><p className="font-semibold">Reviewed save: {lastDiff.path}</p><p className="mt-2 whitespace-pre-wrap text-danger">{lastDiff.before}</p><hr className="my-2 border-line" /><p className="whitespace-pre-wrap text-success">{lastDiff.after}</p></div> : null}{!changedFiles.length && !lastDiff ? <p className="text-sm text-muted">No file-write events have been reported for this session.</p> : null}<p className="text-xs text-muted">Reviewed file saves return before/after content for bounded change review.</p></div> : null}
             {panel === "changes" ? <button type="button" className="min-h-11 rounded-panel border border-line px-3 text-sm" onClick={() => void restoreLatestCheckpoint()}>Restore last checkpoint</button> : null}
