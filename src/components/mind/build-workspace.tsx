@@ -1182,6 +1182,7 @@ function BuildWorkspaceSession(props: BuildWorkspaceProps & { projectId: string 
         <button type="button" onClick={() => setExecutionChoice(false)}>Cancel</button>
       </ActionOverlay>}
       {executionReceipt && <details className="text-xs text-muted"><summary>Submitted source receipt</summary><p>Workspace {executionReceipt.workspace} · {executionReceipt.cwd || "runtime default"} · {executionReceipt.policy === "save" ? "Verified save before submission" : "Saved versions; drafts kept"}. These hashes identify the submitted baseline; runtime readback is required to confirm which revision executed.</p><ul>{executionReceipt.files.map((file) => <li key={file.path}>{file.path} · {file.sha256}</li>)}</ul></details>}
+      {props.composer?.browserActivity}
       <div className="build-task-and-reply">
       <form className="min-w-0 space-y-3" onSubmit={submit}>
         <div className="flex items-center gap-2">
@@ -1213,7 +1214,6 @@ function BuildWorkspaceSession(props: BuildWorkspaceProps & { projectId: string 
             <button type="button" className="min-h-11 underline" onClick={() => setWorkMedia(normalizeWorkMedia({ ...workMedia, originals: workMedia.originals.filter(item => item !== original) }))}>Remove original<span className="sr-only"> {original.name}</span></button>
           </div>)}
         </fieldset>}
-        {props.composer?.browserActivity}
         {props.composer && <div className="flex flex-wrap items-center gap-2" aria-label="Work attachments and project">
           <ComposerMore testId="work-composer-more-menu">
             <MenuCluster label="Add to Work">
