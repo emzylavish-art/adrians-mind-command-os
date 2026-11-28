@@ -28,6 +28,7 @@ import { checkTurnReceipt, consumeMindTurn, prepareTurnId } from "@/lib/mind/liv
 import { boundAbortSignal } from "@/lib/mind/turn-timeouts";
 import { applyBuildSave, buildBufferKey as bufferKey, buildDraftKey, buildResultHandoff, matchesBuildSave, parseBuildDraft, serializeBuildDraft, type BuildPlanReply, type BuildEditorBuffer as EditorBuffer, type BuildFileTarget as FileTarget } from "@/lib/mind/kimi/build-review";
 import { buildResultKey, canReturnBuildResult, parseBuildResult, readBuildReturnSource, serializeBuildResult, type BuildReturnSource, type BuildStoredReceipt, type BuildStoredResult } from "@/lib/mind/kimi/build-result";
+import type { BuildSourceReceipt } from "@/lib/mind/kimi/source-receipt";
 import { buildBranchName, workRunStorageKey, workStorageKey } from "@/lib/mind/kimi/build-scope";
 import { buildHandoffKey, normalizeWorkMedia, parseChatBuildHandoff, workImageKey, type ChatBuildHandoff, type WorkImageRef, type WorkMedia, type WorkOriginalRef } from "@/lib/mind/kimi/build-handoff";
 import { MAX_IMAGES_PER_TURN } from "@/lib/mind/media/types";
@@ -222,7 +223,7 @@ function BuildWorkspaceSession(props: BuildWorkspaceProps & { projectId: string 
   const [tabs, setTabs] = useState<string[]>([]);
   const [buffers, setBuffers] = useState<Record<string, EditorBuffer>>({});
   const [executionChoice, setExecutionChoice] = useState(false);
-  const [executionReceipt, setExecutionReceipt] = useState<(NonNullable<BuildStoredReceipt["sourceReceipt"]> & { checked?: boolean }) | null>(null);
+  const [executionReceipt, setExecutionReceipt] = useState<(BuildSourceReceipt & { checked?: boolean }) | null>(null);
   const haltedRef = useRef(props.halted);
   haltedRef.current = props.halted;
   const buffersRef = useRef(buffers);
@@ -295,7 +296,7 @@ function BuildWorkspaceSession(props: BuildWorkspaceProps & { projectId: string 
     const sequence = ++pollSequence.current;
     try {
       const response = await fetch(`/api/mind/build/session?jobId=${encodeURIComponent(jobId)}`, { credentials: "include", cache: "no-store" });
-      const data = (await response.json()) as { ok?: boolean; job?: BuildJob; receipt?: BuildStoredReceipt | null; sourceReceipt?: BuildStoredReceipt["sourceReceipt"]; revisionVerified?: boolean; events?: BuildEvent[]; error?: string };
+      const data = (await response.json()) as { ok?: boolean; job?: BuildJob; receipt?: BuildStoredReceipt | null; sourceReceipt?: BuildSourceReceipt | null; revisionVerified?: boolean; events?: BuildEvent[]; error?: string };
       if (!mounted.current || sequence !== pollSequence.current) return;
       if (!response.ok || !data.ok || data.job?.id !== jobId) {
         setNotice(data.error || "Build session status could not be read.");
