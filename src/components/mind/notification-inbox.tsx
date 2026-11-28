@@ -5,6 +5,7 @@ import { workspaceNotices, isQuietHour, notificationIds, readNotificationPrefere
 import { useState, useMemo, useEffect } from "react";
 import { Activity, Bell, CalendarClock, CheckCheck, FileSearch, Image, ListChecks, X } from "lucide-react";
 import type { WorkspaceNotice } from "@/lib/mind/notifications";
+import { useSharedInboxMarks } from "./shared-inbox-marks";
 
 const categories = {
   runs: [ListChecks, "Run"],
@@ -21,9 +22,10 @@ type InboxProps = {
   onRead: (ids: string[]) => void;
   onDismiss?: (id: string) => void;
   onOpen: (notice: WorkspaceNotice) => void;
+  syncError?: string;
 };
 
-export function NotificationInbox({ notices, read, dismissed = [], onRead, onDismiss, onOpen }: InboxProps) {
+export function NotificationInbox({ notices, read, dismissed = [], onRead, onDismiss, onOpen, syncError }: InboxProps) {
   const [filter, setFilter] = useState<"All" | "Unread" | "Urgent">("Unread");
   const [count, setCount] = useState(30);
   const readIds = new Set(read);
@@ -41,6 +43,7 @@ export function NotificationInbox({ notices, read, dismissed = [], onRead, onDis
         <CheckCheck size={16} aria-hidden="true" />Mark all as read
       </button>
     </header>
+    {syncError && <p className="text-sm text-muted" role="status">{syncError}</p>}
     <div className="flex flex-wrap gap-1 rounded-panel bg-surface-2 p-1" aria-label="Notification filters" role="group">
       {(["Unread", "Urgent", "All"] as const).map(value => <button key={value} type="button" aria-pressed={filter === value}
         className="min-h-11 flex-1 rounded-panel px-2 text-xs font-medium aria-pressed:bg-fg aria-pressed:text-bg"
@@ -94,7 +97,8 @@ export function InboxNotificationSettings({ preferences, change, browser }: {
   </section>;
 }
 
-export function useWorkspaceInbox(ws: Workspace, researchHistory: Parameters<typeof workspaceNotices>[2], preferenceStorage: PreferenceStorage, setNotice: (value: string) => void) {
+export function useWorkspaceInbox(ws: Workspace, researchHistory: Parameters<typeof workspaceNotices>[2], preferenceStorage: PreferenceStorage,
+  setNotice: (value: string) => void, owner: string | null, open: boolean) {
   function loadNoticeState() {
     return {
       owner: preferenceStorage,
@@ -105,7 +109,7 @@ export function useWorkspaceInbox(ws: Workspace, researchHistory: Parameters<typ
   }
   const [storedNotices, setStoredNotices] = useState(loadNoticeState);
   const noticeState = storedNotices.owner === preferenceStorage ? storedNotices : loadNoticeState();
-  const { read: readNotices, dismissed: dismissedNotices, preferences: notificationPreferences } = noticeState;
+  const { read: localRead, dismissed: localDismissed, preferences: notificationPreferences } = noticeState;
   useEffect(() => {
     setStoredNotices(loadNoticeState());
     const keys = ["notifications.read.v1", "notifications.dismissed.v1", "notifications.preferences.v1"]
@@ -117,6 +121,9 @@ export function useWorkspaceInbox(ws: Workspace, researchHistory: Parameters<typ
     return () => window.removeEventListener("storage", sync);
   }, [preferenceStorage]);
   const notifications = useMemo(() => workspaceNotices(ws, notificationPreferences, researchHistory), [ws.runs, ws.schedules, ws.audit, ws.agents, ws.chats, notificationPreferences, researchHistory]);
+  const shared = useSharedInboxMarks(owner, open, { read: localRead, dismissed: localDismissed }, notifications.map(entry => entry.id));
+  const readNotices = [...new Set([...localRead, ...shared.marks.read])];
+  const dismissedNotices = [...new Set([...localDismissed, ...shared.marks.dismissed])];
   const browserNotices = useBrowserNotices(preferenceStorage, notifications, notificationPreferences);
   const unreadNoticeCount = notifications.filter((entry) => !readNotices.includes(entry.id) && !dismissedNotices.includes(entry.id) && (entry.urgent || !isQuietHour(notificationPreferences, new Date().getHours()))).length;
   function markNotices(field: "read" | "dismissed", ids: string[]) {
@@ -125,6 +132,7 @@ export function useWorkspaceInbox(ws: Workspace, researchHistory: Parameters<typ
     setStoredNotices({ ...noticeState, [field]: next });
     try { preferenceStorage.setItem(key, JSON.stringify(next)); }
     catch { setNotice("Notification marks apply for this session. Device storage is unavailable."); }
+    if (owner) shared.sync();
   }
   function markNoticesRead(ids: string[]) { markNotices("read", ids); }
   function changeNotificationPreferences(next: NotificationPreferences) {
@@ -132,5 +140,5 @@ export function useWorkspaceInbox(ws: Workspace, researchHistory: Parameters<typ
     try { preferenceStorage.setItem("notifications.preferences.v1", JSON.stringify(next)); } catch { setNotice("Notification preferences apply for this session; browser storage is unavailable."); }
   }
 
-  return { notifications, unreadNoticeCount, notificationPreferences, readNotices, dismissedNotices, browserNotices, markNotices, markNoticesRead, changeNotificationPreferences };
+  return { notifications, unreadNoticeCount, notificationPreferences, readNotices, dismissedNotices, browserNotices, markNotices, markNoticesRead, changeNotificationPreferences, notificationSyncError: shared.error };
 }

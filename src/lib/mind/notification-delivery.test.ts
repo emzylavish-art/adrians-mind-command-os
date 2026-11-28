@@ -9,6 +9,8 @@ import type { Sql } from "../db.ts";
 import { deliveryAllowed, deliveryPreferences } from "./notification-delivery.ts";
 import { mayDisplayScheduledPush, notificationStatus, runNotificationPass, updateNotificationDelivery } from "./notification-delivery.server.ts";
 import { notificationTransports, parseDeviceSubscription, type NotificationTransports } from "./notification-transports.server.ts";
+import { notificationKey } from "./notification-marks.ts";
+import { listNotificationMarks, saveNotificationMarks } from "./notification-marks.server.ts";
 import { emptyWorkspace } from "./workspace.ts";
 
 const settings = { completedRuns: true, activity: true, research: false, media: false, quietStart: null, quietEnd: null, zone: "UTC" };
@@ -126,6 +128,31 @@ test("the browser worker honors the verified display receipt and opens Alerts in
   await completed;
   assert.deepEqual(opened, ["https://example.invalid/preview/#alerts"]);
   assert.equal(listeners.has("fetch"), false);
+});
+
+test("account inbox visibility synchronizes by hash without letting a stale device undo a dismissal", async () => {
+  const db = await PGlite.create();
+  try {
+    for (const name of ["0002_mind.sql", "0027_notification_inbox_marks.sql"]) {
+      await db.exec(await readFile(new URL("../../../migrations/" + name, import.meta.url), "utf8"));
+    }
+    const client = sqlAdapter(db);
+    const key = await notificationKey("notice with an owner-only detail");
+    const first = await saveNotificationMarks(client, "owner", [{ key, visibility: 1 }]);
+    assert.equal(first.status, 200);
+    assert.deepEqual(await listNotificationMarks(client, "owner"), [{ key, visibility: 1 }]);
+    assert.deepEqual(await listNotificationMarks(client, "other"), []);
+    await Promise.all([
+      saveNotificationMarks(client, "owner", [{ key, visibility: 2 }]),
+      saveNotificationMarks(client, "owner", [{ key, visibility: 1 }]),
+    ]);
+    assert.deepEqual(await listNotificationMarks(client, "owner"), [{ key, visibility: 2 }]);
+    assert.deepEqual(await listNotificationMarks(client, "other"), []);
+    assert.equal((await saveNotificationMarks(client, "owner", [{ key: "not-a-digest", visibility: 1 }])).status, 400);
+    assert.equal((await saveNotificationMarks(client, "owner", [{ key, visibility: 3 }])).status, 400);
+    assert.equal((await saveNotificationMarks(client, "owner", Array(501).fill({ key, visibility: 1 }))).status, 400);
+    assert.equal(JSON.stringify(await client.query("select * from mind_notification_mark")).includes("owner-only detail"), false);
+  } finally { await db.close(); }
 });
 
 test("durable delivery binds consent and current recipient, deduplicates competing passes and refuses stale display", async () => {

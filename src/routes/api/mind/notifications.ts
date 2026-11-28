@@ -6,6 +6,7 @@ import { assertSameOrigin } from "@/lib/mind/connectors/oauth-csrf";
 import { notificationDeviceId } from "@/lib/mind/notification-delivery";
 import { mayDisplayScheduledPush, notificationStatus, updateNotificationDelivery } from "@/lib/mind/notification-delivery.server";
 import { notificationTransports } from "@/lib/mind/notification-transports.server";
+import { listNotificationMarks, saveNotificationMarks } from "@/lib/mind/notification-marks.server";
 import { readJsonObjectBody } from "@/lib/mind/request-body";
 
 const headers = { "cache-control": "private, no-store" };
@@ -28,13 +29,19 @@ async function handle(request: Request) {
     const workerConfigured = (process.env.MIND_NOTIFICATION_WORKER_TOKEN?.length ?? 0) >= 32;
     if (request.method === "GET") {
       if (params.get("owner") !== owner) return json({ error: "The account changed. Reopen Alerts." }, 409);
+      if (params.get("marks") === "1") return json({ marks: await listNotificationMarks(sql, owner) });
       const device = params.get("device");
       if (device && !notificationDeviceId(device)) return json({ error: "Invalid browser registration." }, 400);
       return json(await notificationStatus(sql, owner, device, transports, workerConfigured));
     }
-    const payload = await readJsonObjectBody(request, 8192);
+    const payload = await readJsonObjectBody(request, 50000);
     if (!payload.ok) return json({ error: payload.error }, payload.status);
     if (payload.body.owner !== owner) return json({ error: "The account changed. Reopen Alerts." }, 409);
+    if (payload.body.action === "mark") {
+      const saved = await saveNotificationMarks(sql, owner, payload.body.marks);
+      return json(saved.body, saved.status);
+    }
+    if (Buffer.byteLength(JSON.stringify(payload.body)) > 8192) return json({ error: "The notification request is too large." }, 413);
     if (payload.body.action === "enable" && !workerConfigured) return json({ error: "The notification worker is not configured." }, 503);
     const updated = await updateNotificationDelivery(sql, owner, payload.body, transports);
     return json(updated.body, updated.status);

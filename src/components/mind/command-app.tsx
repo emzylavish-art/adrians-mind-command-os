@@ -1494,8 +1494,8 @@ function CommandSession({ account, accountPending }: { account: ReturnType<typeo
     setBellOpen(true);
   }, [setBellOpen]);
   const { notifications, unreadNoticeCount, notificationPreferences, readNotices, dismissedNotices,
-    browserNotices, markNotices, markNoticesRead, changeNotificationPreferences } =
-    useWorkspaceInbox(ws, researchHistory, preferenceStorage, setNotice);
+    browserNotices, markNotices, markNoticesRead, changeNotificationPreferences, notificationSyncError } =
+    useWorkspaceInbox(ws, researchHistory, preferenceStorage, setNotice, account?.isDevFallback ? null : account?.id ?? null, bellOpen);
 
   const [now, setNow] = useState<Date | null>(null);
   const greet = typeof document !== "undefined" && document.querySelector("[data-greeting]")?.getAttribute("data-greeting") || greeting(now ?? new Date());
@@ -7260,7 +7260,8 @@ ${message.content}`;
               {ws.schedules.some((job) => job.lastError) && <button type="button" className="min-h-11 px-3 text-left text-sm text-danger" onClick={() => { setView("scheduled"); closeMenus(); }}>Schedules need attention · Review individual jobs below</button>}
               {!ws.halted && !searchIssue && !alertFailure && !ws.schedules.some((job) => job.lastError) && <p className="px-3 py-2 text-sm text-muted">No current warnings.</p>}
             </MenuGroup>
-            <NotificationInbox notices={notifications} read={readNotices} dismissed={dismissedNotices} onDismiss={(id) => markNotices("dismissed", [id])} onRead={markNoticesRead} onOpen={(entry) => {
+            <NotificationInbox notices={notifications} read={readNotices} dismissed={dismissedNotices} syncError={notificationSyncError}
+              onDismiss={(id) => markNotices("dismissed", [id])} onRead={markNoticesRead} onOpen={(entry) => {
               if (entry.view === "runs") setFocusRunId(entry.target);
               if (entry.view === "activity") { setFocusAuditId(entry.target); setActivityQuery(""); }
               if (entry.view === "scheduled") setCardFocus({ id: `schedule-${entry.target}` });

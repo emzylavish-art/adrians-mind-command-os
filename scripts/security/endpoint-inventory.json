@@ -793,7 +793,7 @@
         "POST"
       ],
       "policy": "owner_origin",
-      "notes": "The current owner manages consent and may confirm only their own current push receipt. Email is derived from the verified account.",
+      "notes": "The current owner manages consent and inbox marks, and may confirm only their own current push receipt. Email is derived from the verified account.",
       "evidence": [
         {
           "file": "src/routes/api/mind/notifications.ts",
@@ -801,7 +801,9 @@
             "assertSameOrigin(request)",
             "requireUserId",
             "payload.body.owner !== owner",
-            "mayDisplayScheduledPush(sql, owner"
+            "mayDisplayScheduledPush(sql, owner",
+            "listNotificationMarks(sql, owner)",
+            "saveNotificationMarks(sql, owner"
           ]
         },
         {
