@@ -70,8 +70,13 @@ async function call(path, options={}) {
   if (!response.ok) {
     if (response.status === 401) throw new Error("Your connection needs authorization. Update it in Connections.");
     let detail = "Request failed ("+response.status+"). Your work is preserved.";
-    try {const body=await response.json();if(typeof body.detail === "string") detail=body.detail;} catch {}
-    throw new Error(detail);
+    let payload;
+    try {payload = await response.json();} catch {}
+    if (typeof payload?.detail === "string") detail = payload.detail;
+    else if (typeof payload?.detail?.message === "string") detail = payload.detail.message;
+    const error = new Error(detail);
+    error.detail = payload?.detail;
+    throw error;
   }
   return response.json();
 }
@@ -98,7 +103,7 @@ function leadRow(lead) {
 function renderLeads() {
   const filter=$("#lead-filter").value;
   const search=$("#search").value.toLowerCase();
-  const rows=data.leads.filter(l=>(!campaignFilter || l.campaign === campaignFilter) &&
+  const rows=data.leads.filter(l=>(!campaignFilter || l.campaign_id === campaignFilter) &&
     (filter==="all" || (filter==="overdue" ? l.age_hours>=24 && ["first_reply","reply_due"].includes(l.status) : l.status===filter)) &&
     [l.display_name,l.latest_message,l.campaign,l.account_id].join(" ").toLowerCase().includes(search));
   leadPage=Math.min(leadPage,Math.max(0,Math.ceil(rows.length/25)-1));
@@ -125,7 +130,13 @@ function renderReview() {
   const reviewMarkup = data.drafts.slice(reviewIndex,reviewIndex+1).map(d=>{
     const id=d.jeff_output.draft_id;
     const lead=data.leads.find(l=>l.id===d.contact_id);
-    return '<article class="review-card">'+(d.action==='draft_held'?'<p class="badge urgent">Manual handling required</p>':'')+'<h3>'+esc(lead?.display_name || d.account_id)+'</h3><small>'+esc(lead?.campaign || "Campaign unknown")+' · '+esc(d.timestamp)+'</small><div class="review-columns"><div><small>Original conversation</small><blockquote>'+esc(lead?.latest_message || "Open the conversation to verify its context.")+'</blockquote><button class="secondary" data-lead="'+esc(d.contact_id)+'">Conversation</button></div><label>Your reply<textarea data-draft="'+esc(id)+'" aria-label="Reply for '+esc(lead?.display_name || d.account_id)+'">'+esc(edited.get(id) ?? d.draft_text)+'</textarea></label></div><div class="actions"><button data-approve="'+esc(id)+'" '+(d.action==='draft_held'?'disabled data-held="true"':'')+'>Approve reply</button><button class="secondary" data-save="'+esc(id)+'">Save revision</button><button class="secondary" data-reject="'+esc(id)+'">Reject</button></div></article>';
+    const unsupported = lead?.reply_supported === false;
+    const stale = Boolean(lead && d.jeff_output.conversation_at && d.jeff_output.conversation_at !== lead.last_inbound);
+    const notice = d.action==="draft_held" ? "Manual handling required"
+      : unsupported ? "No reply adapter for this source. Approval will not send it."
+      : stale ? "A newer customer message arrived. Review it before approving this reply." : "";
+    const hold = d.action==="draft_held" || unsupported || stale;
+    return '<article class="review-card">'+(notice?'<p class="badge urgent">'+esc(notice)+'</p>':'')+'<h3>'+esc(lead?.display_name || d.account_id)+'</h3><small>'+esc(lead?.campaign || "Campaign unknown")+' · '+esc(d.timestamp)+'</small><div class="review-columns"><div><small>Latest customer message</small><blockquote>'+esc(lead?.latest_message || "Open the conversation to verify its context.")+'</blockquote><button class="secondary" data-lead="'+esc(d.contact_id)+'">Conversation</button></div><label>Your reply<textarea data-draft="'+esc(id)+'" aria-label="Reply for '+esc(lead?.display_name || d.account_id)+'">'+esc(edited.get(id) ?? d.draft_text)+'</textarea></label></div><div class="actions"><button data-approve="'+esc(id)+'" '+(hold?'disabled data-held="true"':'')+'>Approve reply</button><button class="secondary" data-save="'+esc(id)+'">Save revision</button><button class="secondary" data-reject="'+esc(id)+'">Reject</button></div></article>';
   }).join("") || empty("All caught up","Replies appear here when the drafter has prepared them. New leads stay in Today while drafting is unavailable.");
   paintList("#draft-list", reviewMarkup);
   $("#draft-list").querySelectorAll("[data-approve],[data-save],[data-reject]").forEach(button => {
@@ -133,7 +144,7 @@ function renderReview() {
   });
 }
 function renderCampaigns() {
-  $("#campaign-list").innerHTML=data.campaigns.map(c=>'<article class="campaign-card"><small>'+esc(c.platform)+' · '+esc(c.business)+'</small><h3>'+esc(c.name)+'</h3><p>'+esc(c.offer)+'</p><strong>'+c.leads+' captured leads</strong><p>'+esc(c.goal)+' · '+esc(c.status)+'</p><button class="secondary" data-campaign="'+esc(c.name)+'">View leads</button></article>').join("") || empty("Give your next campaign a home","Add the offer and provider campaign ID. Only attributed captured inquiries contribute to its lead count.");
+  $("#campaign-list").innerHTML=data.campaigns.map(c=>'<article class="campaign-card"><small>'+esc(c.platform)+' · '+esc(c.business)+'</small><h3>'+esc(c.name)+'</h3><p>'+esc(c.offer)+'</p><strong>'+c.leads+' captured leads</strong><p>'+esc(c.goal)+' · '+esc(c.status)+'</p><button class="secondary" data-campaign="'+esc(c.id)+'">View leads</button></article>').join("") || empty("Give your next campaign a home","Add the offer and provider campaign ID. Only attributed captured inquiries contribute to its lead count.");
 }
 $("#x-import").addEventListener("click", async () => {
   const result = await act("/api/sources/x/import", {});
@@ -484,8 +495,33 @@ document.addEventListener("click",async event=>{
   }
   if(el.dataset.save) {
     const id=el.dataset.save;
-    const result=await act("/api/drafts/revise",{draft_id:id,text:edited.get(id)});
-    if(result?.status==="draft_pending")edited.delete(id);
+    if(!fresh){setNote("Refresh your connection before changing this item.");return;}
+    const field=el.closest("article")?.querySelector("[data-draft]");
+    const body={draft_id:id,text:edited.get(id) ?? field?.value};
+    if(el.dataset.acknowledge) body.acknowledge_conversation_at=el.dataset.acknowledge;
+    try {
+      const result=await call("/api/drafts/revise",{method:"POST",body:JSON.stringify(body)});
+      if(result?.status==="draft_pending") edited.delete(id);
+      setNote("Saved.");
+      await refresh();
+    } catch(error) {
+      const detail=error.detail;
+      if(detail && detail.reason==="conversation_changed") {
+        setNote("Newer customer message: "+detail.latest_message);
+        const card=el.closest("article");
+        if(card && !card.querySelector("[data-acknowledge]")) {
+          const button=document.createElement("button");
+          button.type="button";
+          button.className="secondary";
+          button.dataset.save=id;
+          button.dataset.acknowledge=detail.conversation_at;
+          button.textContent="I reviewed the new message. Save this reply against it.";
+          card.querySelector(".actions").appendChild(button);
+        }
+        return;
+      }
+      setNote(explain(error));
+    }
   }
 });
 $("#telegram-form").onsubmit=async event=>{
