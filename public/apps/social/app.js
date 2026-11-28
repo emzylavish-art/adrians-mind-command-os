@@ -100,6 +100,20 @@ function leadRow(lead) {
   const urgent = lead.age_hours>=24 && ["first_reply","reply_due"].includes(lead.status);
   return '<article class="lead-row"><div><strong>'+esc(lead.display_name || lead.tiktok_user_id)+'</strong><small>'+esc(lead.account_id)+' · '+esc(lead.campaign || "Campaign unknown")+'</small></div><p class="excerpt">'+esc(lead.latest_message)+'</p><div><span class="badge '+(urgent?"urgent":"")+'">'+esc(statusNames[lead.status])+' · '+esc(lead.age_hours)+'h</span><br><button class="secondary" data-lead="'+esc(lead.id)+'">Open</button></div></article>';
 }
+function renderAbandoned(items) {
+  const panel = $("#abandoned-attempts");
+  if (!panel) return;
+  const rows = Array.isArray(items) ? items : [];
+  if (!rows.length) {
+    panel.hidden = true;
+    panel.replaceChildren();
+    return;
+  }
+  panel.hidden = false;
+  panel.innerHTML = '<article class="lead-row"><div><strong>Abandoned delivery attempts</strong><small>Reserved before an interruption. Not sent again automatically.</small></div><p class="excerpt">'
+    + rows.map(item => esc(item.draft_id) + " · " + esc(item.timestamp)).join("<br>")
+    + '</p></article>';
+}
 function renderLeads() {
   const filter=$("#lead-filter").value;
   const search=$("#search").value.toLowerCase();
@@ -131,11 +145,13 @@ function renderReview() {
     const id=d.jeff_output.draft_id;
     const lead=data.leads.find(l=>l.id===d.contact_id);
     const unsupported = lead?.reply_supported === false;
+    const unverified = lead?.identity_quality === "unverified_import" || lead?.source === "unverified_import";
     const stale = Boolean(lead && d.jeff_output.conversation_at && d.jeff_output.conversation_at !== lead.last_inbound);
     const notice = d.action==="draft_held" ? "Manual handling required"
+      : unverified ? "Imported without a verified platform message. Approval will not send it."
       : unsupported ? "No reply adapter for this source. Approval will not send it."
       : stale ? "A newer customer message arrived. Review it before approving this reply." : "";
-    const hold = d.action==="draft_held" || unsupported || stale;
+    const hold = d.action==="draft_held" || unsupported || unverified || stale;
     return '<article class="review-card">'+(notice?'<p class="badge urgent">'+esc(notice)+'</p>':'')+'<h3>'+esc(lead?.display_name || d.account_id)+'</h3><small>'+esc(lead?.campaign || "Campaign unknown")+' · '+esc(d.timestamp)+'</small><div class="review-columns"><div><small>Latest customer message</small><blockquote>'+esc(lead?.latest_message || "Open the conversation to verify its context.")+'</blockquote><button class="secondary" data-lead="'+esc(d.contact_id)+'">Conversation</button></div><label>Your reply<textarea data-draft="'+esc(id)+'" aria-label="Reply for '+esc(lead?.display_name || d.account_id)+'">'+esc(edited.get(id) ?? d.draft_text)+'</textarea></label></div><div class="actions"><button data-approve="'+esc(id)+'" '+(hold?'disabled data-held="true"':'')+'>Approve reply</button><button class="secondary" data-save="'+esc(id)+'">Save revision</button><button class="secondary" data-reject="'+esc(id)+'">Reject</button></div></article>';
   }).join("") || empty("All caught up","Replies appear here when the drafter has prepared them. New leads stay in Today while drafting is unavailable.");
   paintList("#draft-list", reviewMarkup);
@@ -392,6 +408,7 @@ async function refresh(replace = false) {
       field?.setSelectionRange(start, end);
     }
     $("#runtime-state").textContent = "Service " + status.state;
+    renderAbandoned(status.abandoned_attempts);
     $("#link-state").dataset.state = "online";
     $("#link-state").textContent = "Connected · Updated " + new Date().toLocaleTimeString([], {hour:"2-digit",minute:"2-digit"});
     $("#sessions").innerHTML=(status.sessions || []).map(s=>'<div class="row"><strong>'+esc(s.account_id)+'</strong><p>'+esc(s.status)+' · '+esc(s.kill_reason || "")+'</p>'+["start","pause","stop"].map(a=>'<button class="secondary" data-account="'+esc(s.account_id)+'" data-account-action="'+a+'">'+a+'</button>').join("")+(s.status==="killed"?'<button class="secondary" data-account="'+esc(s.account_id)+'" data-resume="resume">Resume after reconnect</button>':"")+'</div>').join("");
