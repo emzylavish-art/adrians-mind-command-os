@@ -14,6 +14,7 @@ export type CuedMessage = {
   text: string;
   paused?: boolean;
   claimed?: boolean;
+  planningOperation?: string;
   attachments?: CueAttachments;
   attachmentsUnavailable?: boolean;
 };
@@ -89,6 +90,7 @@ export function readCue(value: unknown): CuedMessage[] {
       id: item.id, text: item.text,
       paused: item.paused !== false || item.claimed === true || Boolean(attachments) || attachmentsUnavailable,
       claimed: item.claimed === true,
+      ...(item.claimed === true && typeof item.planningOperation === "string" && /^\d{13}-[a-f0-9-]{36}$/i.test(item.planningOperation) ? { planningOperation: item.planningOperation } : {}),
       ...(attachments ? { attachments } : {}),
       ...(attachmentsUnavailable ? { attachmentsUnavailable: true } : {}),
     });

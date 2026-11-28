@@ -202,9 +202,11 @@ function BuildWorkspaceSession(props: BuildWorkspaceProps & { projectId: string 
   const [planModel, setPlanModel] = useState("");
   const [planningTier, setPlanningTier] = useState<ModelTier | null>(null);
   const planFlight = useRef(false);
-  const activePlan = useRef<{ id: string; scope: string } | null>(null);
-  const queuedPlan = useRef<(QueuedPlanApproval & { buffers: typeof buffersRef.current; instruction: string }) | null>(null);
+  const activePlan = useRef<{ id: string; scope: string; context: typeof planningContext } | null>(null);
+  const queuedPlan = useRef<(QueuedPlanApproval & { context: typeof planningContext; instruction: string }) | null>(null);
   const [armedPlan, setArmedPlan] = useState<string | null>(null);
+  const checkingPlan = useRef(false);
+  const [planReceiptNotice, setPlanReceiptNotice] = useState<{ id: string; message: string } | null>(null);
   const [legacyReview, setLegacyReview] = useState("");
   const [separatePlan, setSeparatePlan] = useState("");
   const planAttempts = useRef(new Map<string, string>());
@@ -248,9 +250,16 @@ function BuildWorkspaceSession(props: BuildWorkspaceProps & { projectId: string 
   const [mode, setMode] = useState<"default" | "plan" | "auto">("default");
   const [buildReceipt, setBuildReceipt] = useState<BuildStoredReceipt | null>(null);
   const [sessionId, setSessionId] = useState("");
-  const planScope = useRef<string | null>(null);
-  planScope.current = props.ownerId && !props.halted && !props.freeOnly && !sourceChatId
+  const planScope = props.ownerId && !props.halted && !props.freeOnly && !sourceChatId
     ? JSON.stringify([props.ownerId, projectId, cwd, branch, mode, planningTier ?? props.sharedTier ?? "Heavy", selectedFile]) : null;
+  const planningContext = useMemo(() => ({ scope: planScope, buffers }), [planScope, buffers]);
+  const currentPlanContext = useRef(planningContext);
+  currentPlanContext.current = planningContext;
+  useEffect(() => {
+    if (!queuedPlan.current || queuedPlan.current.context === planningContext) return;
+    queuedPlan.current = null;
+    setArmedPlan(null);
+  }, [planningContext]);
 
   const assistantText = useMemo(
     () => events.map(updateText).filter(Boolean).join(""),
@@ -748,19 +757,50 @@ function BuildWorkspaceSession(props: BuildWorkspaceProps & { projectId: string 
   }
 
   function renderPlanApproval(item: CuedMessage) {
+    const receiptStatus = planReceiptNotice?.id === item.id
+      ? <p className="queue-description" role="status">{planReceiptNotice.message}</p> : null;
+    if (item.claimed && item.planningOperation) return <div>
+      <button className="queue-action" type="button" disabled={planning} onClick={() => void reviewPlanningReceipt(item)}>Check planning receipt</button>
+      {receiptStatus}
+    </div>;
     const previous = activePlan.current;
-    if (!previous || previous.scope !== planScope.current || !canQueuePlan(item)) return null;
+    if (!previous || previous.context !== currentPlanContext.current || !canQueuePlan(item)) return receiptStatus;
     if (armedPlan === item.id) return <button className="queue-action" type="button" onClick={() => revokePlanApproval(item.id)}>Cancel approved follow-up</button>;
     if (armedPlan) return null;
     return <details>
       <summary className="queue-action">Review automatic plan</summary>
       <p className="queue-description">Send this exact text to Grok after the current plan succeeds in this open tab. This is one model request using the selected planning tier and may incur a charge.</p>
       <button className="queue-action" type="button" onClick={() => {
-        if (activePlan.current !== previous || previous.scope !== planScope.current || queuedPlan.current) return;
-        queuedPlan.current = { predecessor: previous.id, scope: previous.scope, itemId: item.id, text: item.text, buffers: buffersRef.current, instruction: loadModeInstructions(preferenceStorage).build };
+        if (activePlan.current !== previous || previous.context !== currentPlanContext.current || queuedPlan.current) return;
+        queuedPlan.current = { predecessor: previous.id, scope: previous.scope, itemId: item.id, text: item.text, context: previous.context, instruction: loadModeInstructions(preferenceStorage).build };
         setArmedPlan(item.id);
       }}>Approve one follow-up plan</button>
     </details>;
+  }
+
+  async function reviewPlanningReceipt(item: CuedMessage) {
+    const owner = props.ownerId;
+    const operation = item.planningOperation;
+    if (!owner || !operation || planFlight.current || checkingPlan.current) return;
+    checkingPlan.current = true;
+    setPlanReceiptNotice({ id: item.id, message: "Checking the recorded request." });
+    try {
+      const bearer = getBearerToken();
+      const receipt = await checkTurnReceipt("/api/mind/turn", operation, bearer ? { authorization: `Bearer ${bearer}` } : {});
+      if (!mounted.current || planOwner.current !== owner) return;
+      if (receipt.ownerId !== owner) throw new Error("The account changed.");
+      let message = receipt.state === "responded" ? "The earlier request reached the app. No new request was sent." : "The earlier outcome is still unconfirmed. No new request was sent.";
+      if (receipt.state === "not_dispatched") {
+        const restored = setQueuedTasks(current => readCue(current).map(row => row.id === item.id && row.planningOperation === operation
+          ? { ...row, claimed: false, planningOperation: undefined } : row));
+        message = restored ? "The earlier request was not dispatched. The draft is held for review." : "The earlier request was not dispatched. The queue could not save the release.";
+      }
+      setPlanReceiptNotice({ id: item.id, message });
+    } catch {
+      if (mounted.current && planOwner.current === owner) setPlanReceiptNotice({ id: item.id, message: "The receipt could not be checked. No new request was sent." });
+    } finally {
+      checkingPlan.current = false;
+    }
   }
 
   const canRestoreTask = !prompt.trim() && !sourceChatId && !props.composer?.staged && !props.composer?.images.length;
@@ -927,7 +967,7 @@ function BuildWorkspaceSession(props: BuildWorkspaceProps & { projectId: string 
     }
   }
 
-  async function planWithGrok(words = prompt, images: unknown[] = props.composer?.images ?? [], github = /^\/github(?:\s|$)/i.test(words), queued?: { scope: string; instruction: string; buffers: Record<string, EditorBuffer>; onDispatch: () => void }) {
+  async function planWithGrok(words = prompt, images: unknown[] = props.composer?.images ?? [], github = /^\/github(?:\s|$)/i.test(words), queued?: { context: typeof planningContext; instruction: string; onDispatch: (id: string) => boolean }) {
     if (planFlight.current || props.halted) return;
     const owner = props.ownerId;
     if (props.freeOnly && !github) { setNotice("Free-only is selected. Build has no verified free coding model for this action."); return; }
@@ -937,7 +977,8 @@ function BuildWorkspaceSession(props: BuildWorkspaceProps & { projectId: string 
       return;
     }
     planFlight.current = true;
-    const previous = !queued && !github && planScope.current ? { id: crypto.randomUUID(), scope: planScope.current } : null;
+    const context = currentPlanContext.current;
+    const previous = !queued && !github && context.scope ? { id: crypto.randomUUID(), scope: context.scope, context } : null;
     activePlan.current = previous;
     let succeeded = false;
     let leftForeground = false;
@@ -1000,16 +1041,18 @@ function BuildWorkspaceSession(props: BuildWorkspaceProps & { projectId: string 
       setSeparatePlan("");
       id ??= await prepareTurnId("/api/mind/turn", headers, signal);
       if (!mounted.current || planOwner.current !== owner || signal.aborted) return;
-      if (queued && (leftForeground || document.hidden || haltedRef.current || planScope.current !== queued.scope ||
-        buffersRef.current !== queued.buffers || loadModeInstructions(preferenceStorage).build !== queued.instruction)) {
+      if (queued && (leftForeground || document.hidden || haltedRef.current || currentPlanContext.current !== queued.context || loadModeInstructions(preferenceStorage).build !== queued.instruction)) {
         setNotice("The planning context changed. The follow-up is held for review.");
+        return;
+      }
+      if (queued && !queued.onDispatch(id)) {
+        setNotice("The queue could not record this planning request. The model was not called.");
         return;
       }
       planAttempts.current.set(key, id);
       try { sessionStorage.setItem(key, id); } catch { /* retained in this tab */ }
       setPlan("");
       setPlanModel("");
-      queued?.onDispatch();
       const result = await consumeMindTurn({
         url: "/api/mind/turn",
         signal,
@@ -1050,21 +1093,27 @@ function BuildWorkspaceSession(props: BuildWorkspaceProps & { projectId: string 
   async function releaseApprovedPlan(previous: { id: string; succeeded: boolean }) {
     const approval = queuedPlan.current;
     revokePlanApproval();
-    if (!approval || document.hidden || approval.buffers !== buffersRef.current || approval.instruction !== loadModeInstructions(preferenceStorage).build) return;
+    if (!approval || document.hidden || approval.context !== currentPlanContext.current || approval.instruction !== loadModeInstructions(preferenceStorage).build) return;
     let claimed = false;
     const saved = setQueuedTasks(current => {
       const rows = readCue(current);
-      const item = approvedPlan(approval, previous, planScope.current, rows);
+      const item = approvedPlan(approval, previous, currentPlanContext.current.scope, rows);
       if (!item) return current;
       claimed = true;
       return rows.map(row => row.id === item.id ? { ...row, claimed: true, paused: true } : row);
     });
     if (!saved || !claimed) return;
     let attempted = false;
-    const reply = await planWithGrok(approval.text, [], false, {
-      scope: approval.scope, instruction: approval.instruction, buffers: approval.buffers,
-      onDispatch: () => { attempted = true; },
-    });
+    const reply = await planWithGrok(approval.text, [], false, { context: approval.context, instruction: approval.instruction, onDispatch: id => {
+      let recorded = false;
+      const written = setQueuedTasks(current => readCue(current).map(item => {
+        if (item.id !== approval.itemId || !item.claimed) return item;
+        recorded = true;
+        return { ...item, planningOperation: id };
+      }));
+      attempted = written && recorded;
+      return attempted;
+    } });
     if (!mounted.current || planOwner.current !== props.ownerId) return;
     if (reply) setQueuedTasks(current => dropCued(readCue(current), approval.itemId));
     else if (!attempted) setQueuedTasks(current => readCue(current).map(row => row.id === approval.itemId ? { ...row, claimed: false, paused: true } : row));

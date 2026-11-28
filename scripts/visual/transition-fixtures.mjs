@@ -331,9 +331,15 @@ try {
     await queuePage.evaluate(() => {
       const fetchBefore = window.fetch.bind(window);
       window.workPlanAttempts = [];
+      window.workPlanningReceiptReads = [];
+      window.workPlanningReceiptState = "processing_or_unknown";
       window.fetch = async (input, init) => {
         const url = new URL(typeof input === "string" ? input : input.url, location.href);
         if (url.origin !== location.origin || url.pathname !== "/api/mind/turn") return fetchBefore(input, init);
+        if (init?.method === "GET" && url.searchParams.has("operationId")) {
+          window.workPlanningReceiptReads.push(url.searchParams.get("operationId"));
+          return Response.json({ ownerId: "dev-user", state: window.workPlanningReceiptState });
+        }
         if (init?.method !== "POST") {
           if (window.holdNextWorkPlanId) {
             window.holdNextWorkPlanId = false;
@@ -342,7 +348,9 @@ try {
           return Response.json({ operationId: `1760000000000-${crypto.randomUUID()}` });
         }
         window.workPlanAttempts.push(JSON.parse(init.body));
+        window.latestWorkPlanId = new Headers(init.headers).get("x-mind-turn-id");
         return new Response(new ReadableStream({ start(controller) {
+          window.failWorkPlan = () => controller.close();
           window.finishWorkPlan = () => {
             controller.enqueue(new TextEncoder().encode(`event: done\ndata: ${JSON.stringify({ text: "Follow-up plan fixture completed", model: "fixture", provider: "grok", usage: null, usedIds: [] })}\n\n`));
             controller.close();
@@ -383,11 +391,48 @@ try {
     await sheet.getByText("Review automatic plan", { exact: true }).waitFor({ state: "detached" });
     await sheet.getByText("Held for review", { exact: true }).waitFor();
     assert.equal(await queuePage.evaluate(() => window.workPlanAttempts.length), 3);
+    await sheet.getByRole("button", { name: "Close queue", exact: true }).click();
+    await field.fill("Start the stale branch fixture");
+    await domain.getByRole("button", { name: "Plan with Grok", exact: true }).click();
+    await queuePage.waitForFunction(() => window.workPlanAttempts.length === 4);
+    await domain.getByRole("button", { name: "Open work and build queue, 1 waiting", exact: true }).click();
+    await sheet.getByText("Review automatic plan", { exact: true }).click();
+    await sheet.getByRole("button", { name: "Approve one follow-up plan", exact: true }).click();
+    await sheet.getByRole("button", { name: "Close queue", exact: true }).click();
+    const branch = domain.getByRole("textbox", { name: "Target Git branch", exact: true });
+    const originalBranch = await branch.inputValue();
+    await branch.fill("fixture-changed-branch");
+    await branch.fill(originalBranch);
+    await domain.getByRole("button", { name: "Open work and build queue, 1 waiting", exact: true }).click();
+    await sheet.getByText("Held for review", { exact: true }).waitFor();
+    assert.equal(await sheet.getByText("Review automatic plan", { exact: true }).count(), 0);
+    await queuePage.evaluate(() => window.finishWorkPlan());
+    await domain.getByText("Grok returned a plan. No file was written.", { exact: true }).waitFor();
+    assert.equal(await queuePage.evaluate(() => window.workPlanAttempts.length), 4);
+    await sheet.getByRole("button", { name: "Close queue", exact: true }).click();
+    await field.fill("Start the lost receipt fixture");
+    await domain.getByRole("button", { name: "Plan with Grok", exact: true }).click();
+    await queuePage.waitForFunction(() => window.workPlanAttempts.length === 5);
+    await domain.getByRole("button", { name: "Open work and build queue, 1 waiting", exact: true }).click();
+    await sheet.getByText("Review automatic plan", { exact: true }).click();
+    await sheet.getByRole("button", { name: "Approve one follow-up plan", exact: true }).click();
+    await queuePage.evaluate(() => window.finishWorkPlan());
+    await queuePage.waitForFunction(() => window.workPlanAttempts.length === 6);
+    await queuePage.evaluate(() => window.failWorkPlan());
+    const checkReceipt = sheet.getByRole("button", { name: "Check planning receipt", exact: true });
+    await checkReceipt.click();
+    await sheet.getByText("The earlier outcome is still unconfirmed. No new request was sent.", { exact: true }).waitFor();
+    await queuePage.evaluate(() => { window.workPlanningReceiptState = "not_dispatched"; });
+    await checkReceipt.click();
+    await sheet.getByText("The earlier request was not dispatched. The draft is held for review.", { exact: true }).waitFor();
+    assert.deepEqual(await queuePage.evaluate(() => window.workPlanningReceiptReads),
+      await queuePage.evaluate(() => [window.latestWorkPlanId, window.latestWorkPlanId]));
+    assert.equal(await queuePage.evaluate(() => window.workPlanAttempts.length), 6);
     await sheet.getByRole("button", { name: "Remove queued message 1", exact: true }).click();
     await sheet.getByRole("button", { name: "Close queue", exact: true }).click();
     await field.fill("Start the late visibility fixture");
     await domain.getByRole("button", { name: "Plan with Grok", exact: true }).click();
-    await queuePage.waitForFunction(() => window.workPlanAttempts.length === 4);
+    await queuePage.waitForFunction(() => window.workPlanAttempts.length === 7);
     await field.fill("Hold this draft if the tab goes into the background");
     await domain.getByRole("button", { name: "Queue", exact: true }).click();
     await domain.getByRole("button", { name: "Open work and build queue, 1 waiting", exact: true }).click();
@@ -403,8 +448,12 @@ try {
       window.releaseWorkPlanId();
     });
     await sheet.getByText("Held for review", { exact: true }).waitFor();
-    assert.equal(await queuePage.evaluate(() => window.workPlanAttempts.length), 4);
-    return { explicitApproval: true, followUpRequests: 1, cancelledDraftHeld: true, lateBackgroundDraftHeld: true, confirmedProject: attempt.projectId, buildSubmissions };
+    assert.equal(await queuePage.evaluate(() => window.workPlanAttempts.length), 7);
+    assert.equal(buildSubmissions, 0);
+    return {
+      explicitApproval: true, followUpRequests: 1, cancelledDraftHeld: true, revertedBranchStillInvalidatesApproval: true,
+      uncertainReceiptCheckedWithoutReplay: true, lateBackgroundDraftHeld: true, confirmedProject: attempt.projectId, buildSubmissions,
+    };
   });
   report.queueTransport = queueTransport.summary(); await queueContext.close();
 

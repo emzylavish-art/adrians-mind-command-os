@@ -66,7 +66,7 @@ export function ComposerQueue({ title, items, description, canQueue, canRestore,
             </> : <>
               {item.text && <p className="queue-message">{item.text}</p>}
               <div className="queue-actions">
-                {item.claimed ? <p className="queue-description">Check the conversation for this message before sending it again.</p> : <>
+                {item.claimed ? <p className="queue-description">{item.planningOperation ? "Check the planning receipt before issuing this request again." : "Check the conversation for this message before sending it again."}</p> : <>
                   <button type="button" className="queue-action" onClick={() => { onPause?.(); onEditStart?.(item.id); setEdit({ id: item.id, text: item.text }); }}>Edit</button>
                   <button type="button" className="queue-action" disabled={!canRestore || (!item.text.trim() && !hasCueAttachments(item.attachments))} onClick={() => { onRestore(item.id); close(); }}>To draft</button>
                   <button type="button" className="queue-icon" aria-label={`Move queued message ${index + 1} up`} disabled={index === 0} onClick={() => onMove(item.id, -1)}><ArrowUp size={16} aria-hidden="true" /></button>
@@ -74,7 +74,7 @@ export function ComposerQueue({ title, items, description, canQueue, canRestore,
                 </>}
                 <button type="button" className="queue-action" aria-label={`Remove queued message ${index + 1}`} onClick={() => onRemove(item.id)}>{item.claimed ? "Dismiss notice" : "Remove"}</button>
               </div>
-              {!item.claimed && renderFollowUp?.(item)}
+              {renderFollowUp?.(item)}
             </>}
           </li>)}
         </ol>}
