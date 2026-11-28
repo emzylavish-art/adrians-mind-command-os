@@ -5,6 +5,7 @@ import { sessionErrorStatus } from "@/lib/auth/session-resolution";
 import { publicSessionRows, sessionToRevoke } from "@/lib/auth/session-center";
 import { assertSameOrigin } from "@/lib/mind/connectors/oauth-csrf";
 import { readJsonObjectBody } from "@/lib/mind/request-body";
+import { passkeyConfiguration } from "@/lib/auth/passkey-policy";
 const reply = (body: unknown, status = 200) => Response.json(body, { status, headers: { "cache-control": "no-store" } });
 async function current(request: Request) {
   const bearer = request.headers.get("authorization")?.replace(/^Bearer\s+/i, "");
@@ -14,7 +15,7 @@ async function current(request: Request) {
   return { owner, session, rows: await auth.api.listSessions({ headers: request.headers }) };
 }
 export const Route = createFileRoute("/api/mind/sessions")({ server: { handlers: {
-  GET: async ({ request }) => { try { const result = await current(request); return result ? reply({ ok: true, source: "Better Auth", sessions: publicSessionRows(result.rows, result.owner, result.session.session.id) }) : reply({ ok: false, error: "This account’s sign-in provider does not expose device sessions through Adrian. Manage sessions with that provider. No device list was inferred." }, 409); } catch (error) { return reply({ ok: false, error: error instanceof Error ? error.message : "Session verification is unavailable." }, sessionErrorStatus(error)); } },
+  GET: async ({ request }) => { try { const result = await current(request); return result ? reply({ ok: true, source: "Better Auth", passkeys: passkeyConfiguration(process.env)?.origin === new URL(request.url).origin, sessions: publicSessionRows(result.rows, result.owner, result.session.session.id) }) : reply({ ok: false, error: "This account’s sign-in provider does not expose device sessions through Adrian. Manage sessions with that provider. No device list was inferred." }, 409); } catch (error) { return reply({ ok: false, error: error instanceof Error ? error.message : "Session verification is unavailable." }, sessionErrorStatus(error)); } },
   POST: async ({ request }) => {
     const origin = assertSameOrigin(request); if (!origin.ok) return reply({ ok: false, error: origin.error }, 403);
     try {

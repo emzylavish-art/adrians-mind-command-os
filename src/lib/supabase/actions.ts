@@ -8,6 +8,7 @@ import { redirect } from "@tanstack/react-router";
 import { safeRedirectPath } from "./safe-redirect";
 import { buildAuthCallbackUrl } from "./oauth-redirect";
 import { decideDashboardGate, type SupabaseGateUser } from "./gate";
+import { passkeyConfiguration } from "@/lib/auth/passkey-policy";
 import {
   dashboardLoginSearch,
   isOwnerBrokerConfigured,
@@ -75,10 +76,14 @@ export type AuthUserResult = {
   user: SupabaseGateUser | null;
   brokerConfigured: boolean;
   supabaseOAuthProviders: SupabaseOAuthProviderId[];
+  passkeysConfigured?: boolean;
 };
 
 export const getSupabaseAuthUser = createServerFn({ method: "GET" }).handler(
-  async (): Promise<AuthUserResult> => probeAuthUser(),
+  async (): Promise<AuthUserResult> => {
+    const config = passkeyConfiguration(process.env);
+    return { ...await probeAuthUser(), passkeysConfigured: Boolean(config && config.origin === await requestOrigin()) };
+  },
 );
 
 export const requireDashboardUser = createServerFn({ method: "GET" }).handler(

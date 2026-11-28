@@ -30,6 +30,7 @@
  * a verified id via `@/lib/auth/middleware`.
  */
 import { betterAuth } from "better-auth";
+import { passkey } from "@better-auth/passkey";
 import { bearer, genericOAuth } from "better-auth/plugins";
 import { tanstackStartCookies } from "better-auth/tanstack-start";
 import { getCookie } from "@tanstack/react-start/server";
@@ -37,6 +38,7 @@ import { randomBytes } from "node:crypto";
 import { ensureDbReady, getPglite } from "../db";
 import { resolveDatabaseUrl } from "../env.server.ts";
 import { emailAndPasswordEnabled } from "./email-password";
+import { passkeyConfiguration } from "./passkey-policy";
 import { postgresPool } from "./pg-pool";
 import { vercelRuntimeHosts } from "./runtime-origins";
 import { GATE_PROVIDER_ID, gateIdentitySessions } from "./gate-session.server";
@@ -96,6 +98,7 @@ export const authConfigured =
 // preview allowlist, which makes the OAuth `redirect_uri` the concrete preview URL
 // the broker's preview client accepts.
 const explicitBaseURL = env("BETTER_AUTH_URL");
+const passkeys = passkeyConfiguration(process.env);
 // Explicit `string[]` (not a readonly tuple) — Better Auth's DynamicBaseURLConfig
 // requires a mutable `allowedHosts: string[]`.
 const previewAllowedHosts: string[] = [...PREVIEW_ALLOWED_HOSTS];
@@ -236,11 +239,18 @@ function createAuth() {
       session_data: { name: "__Host-grok-auth.session_data" },
       account_data: { name: "__Host-grok-auth.account_data" },
       dont_remember: { name: "__Host-grok-auth.dont_remember" },
+      passkey_challenge: { name: "__Host-adrian.passkey_challenge" },
     },
   },
 
   plugins: [
     gateIdentitySessions(),
+    ...(passkeys ? [passkey({
+      rpID: passkeys.rpID, rpName: "Adrian's Mind", origin: passkeys.origin,
+      advanced: { webAuthnChallengeCookie: "passkey_challenge" },
+      registration: { requireSession: true },
+      authenticatorSelection: { userVerification: "required", residentKey: "required" },
+    })] : []),
 
     // One genericOAuth provider per upstream (when auth is on), all federating
     // to the broker with the SAME client and differing only by the `idp` hint.

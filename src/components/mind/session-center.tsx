@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { getBearerToken } from "@/lib/auth/client";
+import { PasskeySettings } from "./passkey-settings";
 
 type Device = { id: string; current: boolean; device: string; lastActiveAt: string; expiresAt: string };
 
@@ -8,6 +9,7 @@ export function SessionCenter() {
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
   const [busy, setBusy] = useState(false);
+  const [passkeys, setPasskeys] = useState(false);
 
   async function load(revokeId?: string, lockdownId?: string) {
     if (busy) return;
@@ -45,6 +47,7 @@ export function SessionCenter() {
       const body = await response.json();
       if (!response.ok || !body.ok || !Array.isArray(body.sessions)) throw new Error(body.error || "Session details are unavailable.");
       setDevices(body.sessions);
+      setPasskeys(body.passkeys === true);
       if (revokeId) {
         setNotice(body.sessions.some((row: Device) => row.id === revokeId)
           ? "The provider acknowledged revocation. This session still appears in its list."
@@ -80,5 +83,6 @@ export function SessionCenter() {
       <p className="text-xs text-muted">Last active {device.lastActiveAt} · Expires {device.expiresAt}</p>
       {!device.current && <button type="button" disabled={busy} className="min-h-11 text-warning" onClick={() => void load(device.id)}>Revoke this session</button>}
     </article>)}
+    {passkeys && <PasskeySettings />}
   </section>;
 }

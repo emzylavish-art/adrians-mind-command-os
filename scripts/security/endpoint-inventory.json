@@ -10,12 +10,16 @@
         "POST"
       ],
       "policy": "framework_auth",
-      "notes": "Better Auth handler and explicit trustedOrigins own login/session/callback policy.",
+      "notes": "Better Auth and explicit trusted origins own login and callbacks. Passkey routes check the configured origin and protect account credential changes with a fresh verified session.",
       "evidence": [
         {
           "file": "src/routes/api/auth/$.ts",
           "requires": [
-            "auth.handler(request)"
+            "auth.handler(request)",
+            "passkeyConfiguration",
+            "assertSameOrigin(request)",
+            "session.user.id !== owner.id",
+            "freshPasskeySession"
           ]
         },
         {

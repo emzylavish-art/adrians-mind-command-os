@@ -1,4 +1,5 @@
 import { createAuthClient } from "better-auth/react";
+import { passkeyClient } from "@better-auth/passkey/client";
 import { runPreSignInSignOut, runSignOut, settleWithin } from "../../../scripts/sign-out-plan.mjs";
 import { GROK_PROVIDERS } from "./providers";
 import { waitForPopupToken } from "./popup-message";
@@ -20,6 +21,7 @@ import { previewPathPrefix } from "../preview-path-prefix";
  * the visitor stays signed in.
  */
 export const authClient = createAuthClient({
+  plugins: [passkeyClient()],
   fetchOptions: {
     onRequest(ctx) {
       const token = getBearerToken();

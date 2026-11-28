@@ -223,6 +223,21 @@ function Login() {
   );
   const [info, setInfo] = useState<string | null>(null);
 
+  async function onPasskey() {
+    if (busy) return;
+    setBusy(true);
+    setBanner(null);
+    setBannerKind(null);
+    try {
+      const result = await authClient.signIn.passkey();
+      if (result.error) throw Error(result.error.message || "Passkey sign-in did not complete.");
+      window.location.assign(next);
+    } catch (error) {
+      setBanner(error instanceof Error ? error.message : "Passkey sign-in did not complete.");
+      setBannerKind("auth_error");
+    } finally { setBusy(false); }
+  }
+
   // Drop ?error= after mount so a refresh/stale restore does not re-paint the banner.
   useEffect(() => {
     if (typeof window === "undefined" || !search.error) return;
@@ -468,6 +483,10 @@ function Login() {
             {info}
           </div>
         )}
+
+        {mode === "sign-in" && "passkeysConfigured" in data && data.passkeysConfigured && <button type="button"
+          className="mt-4 min-h-11 w-full rounded-panel border border-line px-3 text-sm" disabled={busy}
+          onClick={() => void onPasskey()}>Sign in with a passkey</button>}
 
         <form className="mt-5 flex flex-col gap-3.5" onSubmit={onPasswordSubmit}>
           <label className="block text-sm">
