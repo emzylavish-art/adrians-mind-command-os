@@ -11,7 +11,9 @@ const success = (body: object) => ({ status: 200, body });
 export async function runQueueTransfer(sql: Sql, owner: string, input: Record<string, unknown>) {
   const scope = readTransferScope(input.scope);
   if (!scope) return issue(400, "Choose the original queue.");
-  if ("id" in scope && scope.id !== null) {
+  const action = input.action;
+  const needsActiveScope = action === "list" || action === "save" || action === "claim";
+  if (needsActiveScope && "id" in scope && scope.id !== null) {
     const ws = normalizeWorkspace(await readSnapshot(sql, owner));
     const allowed = scope.kind === "chat"
       ? ws.chats.some(chat => chat.id === scope.id && !chat.temporary && !chat.archived) && !ws.deletedChatIds?.includes(scope.id)
@@ -19,7 +21,6 @@ export async function runQueueTransfer(sql: Sql, owner: string, input: Record<st
     if (!allowed) return issue(409, "Save and reopen the original active conversation or project before transferring a draft.");
   }
   const destination = JSON.stringify(scope);
-  const action = input.action;
   if (action === "list") {
     const rows = await sql.query<{ id: string; state: string; createdAt: unknown }>(
       "select cue_id as id,state,created_at as \"createdAt\" from mind_composer_queue_transfer where user_id=$1 and scope=$2 and state in ('waiting','claimed') order by created_at,cue_id",

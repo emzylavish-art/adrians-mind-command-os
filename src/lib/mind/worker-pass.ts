@@ -98,8 +98,17 @@ export async function runLocalSchedulePass(sql: Sql, now: string, workerId: stri
       summary.skipped++;
       continue;
     }
-    const result = await updateOwnerWorkspace(sql, owner.user_id, (current) => {
-      if (current.halted || stop === "on") {
+    const result = await updateOwnerWorkspace(sql, owner.user_id, async (current, _raw, tx) => {
+      let sharedStop = false;
+      if (environment === "hosted-worker") {
+        // The row used by setDurableHalt serializes a committed stop with the
+        // scheduled work's snapshot transaction, including first use.
+        await tx.query("insert into mind_control(user_id,halted) values($1,false) on conflict do nothing", [owner.user_id]);
+        const [control] = await tx.query<{ halted: boolean }>("select halted from mind_control where user_id=$1 for update", [owner.user_id]);
+        if (typeof control?.halted !== "boolean") throw new Error("The schedule could not confirm the account stop.");
+        sharedStop = control.halted;
+      }
+      if (current.halted || stop === "on" || sharedStop) {
         const pending = current.schedules.some((job) => job.enabled) || current.runs.some((run) => !["completed", "failed", "canceled"].includes(run.state));
         if (!pending) return { result: { ran: 0, failed: 0 } };
         const stopped = haltFleet({ ...current, halted: true }, now);
