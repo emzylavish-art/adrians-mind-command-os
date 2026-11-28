@@ -887,7 +887,8 @@ try {
     await phone.getByRole("button", { name: "Restore default colors" }).click();
     assert.equal(await preset.inputValue(), "device");
     const colors = phone.getByRole("region", { name: "Theme colors and fonts" });
-    await colors.locator('input[type="color"]').first().fill("#dd8844");
+    await colors.locator("summary").click();
+    await colors.getByLabel("Font", { exact: true }).selectOption("Monospace");
     assert.equal(await colors.getByRole("status").textContent(), "");
     assert.equal(await preset.inputValue(), "custom");
     const send = phone.getByLabel("Send message key");
