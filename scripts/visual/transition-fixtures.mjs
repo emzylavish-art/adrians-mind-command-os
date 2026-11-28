@@ -340,6 +340,28 @@ try {
   const social = embeddedPage.getByTestId("adrian-social-workspace");
   await embeddedPage.goto(embeddedChat, { waitUntil: "domcontentloaded" });
   await embeddedPage.locator("#message-fixture-message").waitFor();
+  await check(embeddedPage, "trading-snapshot-loads-only-on-request", async () => {
+    let reads = 0;
+    const snapshot = "https://fleet-paper-desk.operation-beat-magnus.workers.dev/";
+    await embeddedPage.route(snapshot, route => {
+      reads++;
+      return route.fulfill({ contentType: "text/html", body: "<h1>Synthetic published snapshot</h1>" });
+    });
+    await embeddedPage.locator("#workspace-sidebar").getByRole("button", { name: "Trading", exact: true }).click();
+    const desk = embeddedPage.getByRole("region", { name: "Paper trading desk" });
+    await desk.waitFor();
+    assert.equal(reads, 0);
+    assert.equal(await desk.locator("iframe").count(), 0);
+    assert.equal(await desk.getByRole("link", { name: "Open private desk in new tab" }).getAttribute("href"), "https://fleet-control-desk.operation-beat-magnus.workers.dev/login");
+    await desk.getByRole("button", { name: "View published snapshot" }).click();
+    await desk.frameLocator("iframe").getByRole("heading", { name: "Synthetic published snapshot" }).waitFor();
+    assert.equal(reads, 1);
+    assert.equal(await desk.locator("iframe").getAttribute("sandbox"), "");
+    await desk.getByRole("button", { name: "Close snapshot" }).click();
+    assert.equal(await desk.locator("iframe").count(), 0);
+    return { externalReadsBeforeOpen: 0, syntheticReads: reads, commands: 0 };
+  });
+  await navigate(embeddedPage, embeddedChat, "chat");
   await check(embeddedPage, "social-shared-workspace-entry-exit-and-resize", async () => {
     const message = embeddedPage.locator("form.thread-composer").getByRole("textbox", { name: "Message", exact: true });
     await message.fill("Synthetic Social return draft");

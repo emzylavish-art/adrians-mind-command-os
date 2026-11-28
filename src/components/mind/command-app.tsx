@@ -253,6 +253,7 @@ import { ServiceBoard } from "@/components/mind/service-board";
 import { EveWorkbench } from "@/components/mind/eve-workbench";
 import { FleetPanel } from "@/components/mind/fleet-panels";
 const BuildWorkspace = lazy(() => import("@/components/mind/build-workspace").then((module) => ({ default: module.BuildWorkspace })));
+const TradingWorkspace = lazy(() => import("@/components/mind/trading-workspace"));
 const SocialWorkspace = lazy(() => import("@/components/mind/social-workspace"));
 import { ResearchPanel } from "@/components/mind/surfaces/research-panel";
 import { AttachmentChips } from "@/components/mind/media/attachment-chips";
@@ -402,6 +403,7 @@ type View =
   | "runs"
   | "research"
   | "social"
+  | "trading"
   | "files"
   | "connected"
   | "tools"
@@ -468,6 +470,7 @@ const NAV_GROUPS: { label: string; items: { id: View; label: string; icon: typeo
     label: "Work",
     items: [
       { id: "build", label: "Build", icon: Terminal },
+      { id: "trading", label: "Trading", icon: Activity },
       { id: "code", label: "Intelligence", icon: MessageSquare },
       { id: "research", label: "Research", icon: Search },
       { id: "projects", label: "Projects", icon: Folder },
@@ -499,6 +502,7 @@ const NAV = NAV_GROUPS.flatMap((group) => group.items);
 
 const NAV_MARKS: Record<string, string> = {
   dashboard: "/brand/marks/activity.png",
+  trading: "/brand/marks/activity.png",
   settings: "/brand/marks/settings.png",
   build: "/brand/marks/build.png",
   code: "/brand/marks/chat.png",
@@ -533,6 +537,7 @@ const TITLES: Record<View, string> = {
   runs: "Runs",
   research: "Research",
   social: "Social",
+  trading: "Trading",
   files: "Library",
   build: "Build",
   code: "Intelligence",
@@ -7351,6 +7356,7 @@ ${message.content}`;
           <p role="status" data-testid="share-notice" className="mx-3 mb-2 rounded-panel border border-line px-3 py-2 text-sm text-muted">{notice}</p>
         ) : null}
         <div ref={(node) => { pageScrollRef.current = node; pinPageScroller(node); }} onScroll={rememberPageScroll} className={`min-h-0 flex-1 ${view === "chat" || view === "dashboard" || view === "intelligence" ? "overflow-hidden" : "overflow-auto pb-24"}`}>
+          {view === "trading" && <Suspense fallback={<p role="status" className="p-5">Loading Trading…</p>}><TradingWorkspace /></Suspense>}
           {view === "social" && <Suspense fallback={<p role="status" className="p-5">Loading Adrian Social…</p>}>
             <SocialWorkspace
               onReturn={() => setView(workspaceReturn?.surface === "social" ? workspaceReturn.origin : "command")}
